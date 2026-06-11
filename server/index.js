@@ -273,7 +273,7 @@ app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
   const patch = {};
   for (const k of str) if (k in req.body) patch[k] = req.body[k];
   for (const k of bool) if (k in req.body) patch[k] = req.body[k] ? 1 : 0;
-  if ('agent_steps' in req.body) patch.agent_steps = Math.max(1, Math.min(30, parseInt(req.body.agent_steps) || 10));
+  if ('agent_steps' in req.body) patch.agent_steps = Math.max(1, parseInt(req.body.agent_steps) || 10);
   if ('num_ctx' in req.body) patch.num_ctx = Math.max(0, parseInt(req.body.num_ctx) || 0);
   if ('summary_padding' in req.body) patch.summary_padding = Math.max(0.03, Math.min(0.6, parseFloat(req.body.summary_padding) || 0.125));
   const numF = ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'repetition_penalty', 'min_p'];
@@ -313,24 +313,59 @@ app.post('/api/admin/models/reorder', authMiddleware, adminOnly, (req, res) => {
 });
 
 app.get('/api/admin/settings', authMiddleware, adminOnly, (req, res) =>
-  res.json({ apiBaseUrl: getSetting('api_base_url'), apiKey: getSetting('api_key') }));
+  res.json({ apiBaseUrl: getSetting('api_base_url'), apiKey: getSetting('api_key'), uploadLimitMb: Number(getSetting('upload_limit_mb', '8')), modelQueue: getSetting('model_queue', '0') === '1' }));
 app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
   if ('apiBaseUrl' in req.body) setSetting('api_base_url', req.body.apiBaseUrl);
   if ('apiKey' in req.body) setSetting('api_key', req.body.apiKey);
+  if ('uploadLimitMb' in req.body) { const n = Number(req.body.uploadLimitMb); setSetting('upload_limit_mb', String(n > 0 ? n : 8)); }
+  if ('modelQueue' in req.body) setSetting('model_queue', req.body.modelQueue ? '1' : '0');
   res.json({ ok: true });
 });
 
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: UPLOADS,
-    filename: (_r, file, cb) => cb(null, uid() + path.extname(file.originalname || '.png'))
-  }),
-  limits: { fileSize: 8 * 1024 * 1024 }
+let activeModel = null;
+let activeCount = 0;
+let waiters = [];
+function acquireModel(modelId, onWait) {
+  if (activeModel === null || activeModel === modelId) {
+    if (activeModel === null) activeModel = modelId;
+    activeCount++;
+    return Promise.resolve();
+  }
+  onWait();
+  return new Promise(resolve => waiters.push({ modelId, resolve }));
+}
+function releaseModel() {
+  activeCount--;
+  if (activeCount > 0) return;
+  if (!waiters.length) { activeModel = null; return; }
+  const next = waiters[0].modelId;
+  activeModel = next; activeCount = 0;
+  const stay = [];
+  for (const w of waiters) { if (w.modelId === next) { activeCount++; w.resolve(); } else stay.push(w); }
+  waiters = stay;
+}
+async function runQueued(enabled, modelId, onWait, fn) {
+  if (!enabled) return fn();
+  await acquireModel(modelId, onWait);
+  try { return await fn(); }
+  finally { releaseModel(); }
+}
+
+const diskStore = multer.diskStorage({
+  destination: UPLOADS,
+  filename: (_r, file, cb) => cb(null, uid() + path.extname(file.originalname || '.bin'))
 });
+const upload = multer({ storage: diskStore, limits: { fileSize: 8 * 1024 * 1024 } });
 app.post('/api/admin/upload', authMiddleware, adminOnly, upload.single('file'), (req, res) =>
   res.json({ url: `/uploads/${req.file.filename}` }));
-app.post('/api/upload', authMiddleware, upload.array('files', 10), (req, res) =>
-  res.json({ files: (req.files || []).map(f => ({ url: `/uploads/${f.filename}`, name: f.originalname, type: f.mimetype, size: f.size })) }));
+app.post('/api/upload', authMiddleware, (req, res) => {
+  const mb = Number(getSetting('upload_limit_mb', '8')) || 8;
+  const mw = multer({ storage: diskStore, limits: { fileSize: Math.max(1, mb) * 1024 * 1024 } }).array('files', 10);
+  mw(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? `That file is too large (max ${mb} MB).` : 'Upload failed.' });
+    res.json({ files: (req.files || []).map(f => ({ url: `/uploads/${f.filename}`, name: f.originalname, type: f.mimetype, size: f.size })) });
+  });
+});
 
 const TEXT_EXT = new Set(['.txt', '.md', '.markdown', '.csv', '.tsv', '.json', '.js', '.jsx', '.ts', '.tsx', '.py', '.lua', '.html', '.css', '.xml', '.yml', '.yaml', '.sh', '.c', '.cpp', '.h', '.java', '.rb', '.go', '.rs', '.php', '.sql', '.ini', '.cfg', '.log']);
 function isTextLike(a) {
@@ -652,8 +687,10 @@ wss.on('connection', (ws, req) => {
     const model = db.models.byId(msg.modelId);
     if (!chat || chat.user_id !== u.id || !model) { ws.send(JSON.stringify({ type: 'error', error: 'Invalid chat or model.' })); return; }
 
-    const sandboxOn = !!msg.sandbox;
-    if (!!chat.sandbox !== sandboxOn) db.chats.update(chat.id, { sandbox: sandboxOn ? 1 : 0 });
+    const userSandbox = !!msg.sandbox;
+    if (!!chat.sandbox !== userSandbox) db.chats.update(chat.id, { sandbox: userSandbox ? 1 : 0 });
+    const hasFileAttach = Array.isArray(msg.attachments) && msg.attachments.some(a => !(a.type && a.type.startsWith('image/')));
+    const sandboxOn = userSandbox || (hasFileAttach && model.sandbox_allowed !== 0);
     ensureChain(chat.id);
 
     if (msg.type === 'regenerate') {
@@ -675,15 +712,20 @@ wss.on('connection', (ws, req) => {
       if (sandboxOn && Array.isArray(msg.attachments) && msg.attachments.length) {
         for (const a of msg.attachments) {
           try {
-            const src = path.join(UPLOADS, path.basename(a.url || ''));
-            if (fs.existsSync(src)) sandbox.importBuffer(chat.id, path.basename(a.name || a.url || 'file'), fs.readFileSync(src));
-          } catch {}
+            const fname = path.basename(a.url || '');
+            const src = fname ? path.join(UPLOADS, fname) : '';
+            if (src && fs.existsSync(src)) sandbox.importBuffer(chat.id, path.basename(a.name || fname || 'file'), fs.readFileSync(src));
+            else console.warn('[sandbox import] upload not found for', a.name, '->', src);
+          } catch (e) { console.warn('[sandbox import] failed for', a && a.name, e.message); }
         }
         ws.send(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
       }
     }
 
-    await runCompletion(ws, state, chat, model, !!msg.extended, sandboxOn);
+    const queueOn = getSetting('model_queue', '0') === '1';
+    await runQueued(queueOn, model.id,
+      () => { try { ws.send(JSON.stringify({ type: 'queued', chatId: chat.id })); } catch {} },
+      () => runCompletion(ws, state, chat, model, !!msg.extended, sandboxOn));
   });
 
   ws.on('close', () => clients.delete(ws));

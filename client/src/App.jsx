@@ -115,6 +115,7 @@ export default function App() {
   const [artifactsOpen, setArtifactsOpen] = useState(false);
 
   const [streaming, setStreaming] = useState(false);
+  const [queued, setQueued] = useState(false);
   const [dispContent, setDispContent] = useState('');
   const [dispReason, setDispReason] = useState('');
   const [phase, setPhase] = useState('static');
@@ -205,7 +206,9 @@ export default function App() {
     if (m.type === 'compacting') { setCompacting(true); return; }
     if (m.type === 'compacted') { setCompacting(false); setHasSummary(true); return; }
     if (m.type === 'title') { setChats(cs => cs.map(c => c.id === m.chatId ? { ...c, title: m.title } : c)); return; }
+    if (m.type === 'queued') { setQueued(true); return; }
     if (m.type === 'start') {
+      setQueued(false);
       setCompacting(false); setLiveFile(null); refreshSeq.current++;
       targetContent.current = ''; targetReason.current = ''; pendingDone.current = false;
       assistantIdRef.current = m.messageId; dispLen.current = 0;
@@ -228,7 +231,7 @@ export default function App() {
       return;
     }
     if (m.type === 'error') {
-      if (!streaming && !targetContent.current) { setMessages(ms => [...ms, { id: 'e' + Date.now(), role: 'assistant', content: `_Error: ${m.error}_` }]); return; }
+      if (!streaming && !targetContent.current) { setQueued(false); setMessages(ms => [...ms, { id: 'e' + Date.now(), role: 'assistant', content: `_Error: ${m.error}_` }]); return; }
       targetContent.current += `\n\n_Error: ${m.error}_`;
       if (!animateRef.current) { setDispContent(targetContent.current); dispLen.current = targetContent.current.length; }
       pendingDone.current = true;
@@ -270,7 +273,7 @@ export default function App() {
     const content = targetContent.current;
     const reasoning = targetReason.current;
     const id = assistantIdRef.current || ('a' + Date.now());
-    setStreaming(false); setPhase('static');
+    setStreaming(false); setPhase('static'); setQueued(false);
     setMessages(ms => [...ms, { id, role: 'assistant', content, reasoning, model_id: currentIdRef.current }]);
     setDispContent(''); setDispReason('');
     setLiveFile(null);
@@ -344,7 +347,7 @@ export default function App() {
   }
 
   async function send(attachments = [], overrideText) {
-    if (streaming) return;
+    if (streaming || queued) return;
     const text = (overrideText != null ? overrideText : input).trim();
     if ((!text && attachments.length === 0) || !currentId) return;
     let chatId = activeId;
@@ -374,7 +377,7 @@ export default function App() {
     ws.current?.send(JSON.stringify({ type: 'edit', chatId: activeId, modelId: currentId, extended, messageId, content: newContent, sandbox }));
   }, [streaming, activeId, currentId, extended, sandbox]);
 
-  function stop() { ws.current?.send(JSON.stringify({ type: 'stop' })); pendingDone.current = true; }
+  function stop() { ws.current?.send(JSON.stringify({ type: 'stop' })); pendingDone.current = true; setQueued(false); }
   async function logout() { await api.post('/api/auth/logout'); location.href = '/'; }
 
   if (user === undefined) return <div style={{ height: '100%', background: 'var(--bg)' }} />;
@@ -384,10 +387,11 @@ export default function App() {
   const sandboxAllowed = model ? model.sandboxAllowed !== false : true;
   const empty = !activeId && messages.length === 0;
   const composerProps = {
-    value: input, onChange: setInput, onSend: send, onStop: stop, streaming,
+    value: input, onChange: setInput, onSend: send, onStop: stop, streaming: streaming || queued,
     models, currentId, onSelect: setCurrentId, extended, onToggleExtended: () => setExtended(e => !e),
     visionSupported: !!model?.hasVision,
-    sandbox, sandboxAllowed, onToggleSandbox: () => { if (sandboxAllowed) setSandbox(s => !s); }
+    sandbox, sandboxAllowed, onToggleSandbox: () => { if (sandboxAllowed) setSandbox(s => !s); },
+    onWantSandbox: () => { if (sandboxAllowed) setSandbox(true); }
   };
   const showArtifactsBtn = sandbox || files.length > 0;
 
@@ -444,6 +448,9 @@ export default function App() {
                 {streaming && (
                   <Message msg={{ role: 'assistant', content: dispContent, reasoning: dispReason }}
                     model={model} streaming phase={phase} />
+                )}
+                {queued && !streaming && (
+                  <div className="msg assistant"><div className="queue-wait"><img src="/starburst.svg" className="pulse think-dot" alt="" /> Waiting for queue…</div></div>
                 )}
                 {compacting && <CompactingBar />}
                 <div className="thread-pad" />

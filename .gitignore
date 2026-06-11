@@ -20,7 +20,7 @@ server/sandbox/
 *.log
 npm-debug.log*
 
-# OS / editor junk
+# OS
 .DS_Store
 Thumbs.db
 .idea/

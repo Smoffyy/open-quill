@@ -21,7 +21,7 @@
 - [highlight.js](https://highlightjs.org) - syntax highlighting
 
 ## Fonts
-- [Source Serif 4](https://fonts.google.com/specimen/Source+Serif+4) and [Open Sans](https://fonts.google.com/specimen/Open+Sans), bundled locally via [Fontsource](https://fontsource.org)
+- [Source Serif 4](https://fonts.google.com/specimen/Source+Serif+4) and [Open Sans](https://fonts.google.com/specimen/Open+Sans).
 
 ## Acknowledgements
 - Interface design inspired by Anthropics style.

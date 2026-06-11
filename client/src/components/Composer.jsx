@@ -31,7 +31,7 @@ function dominantColor(url) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, models,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, sandbox, sandboxAllowed = true, onToggleSandbox
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
@@ -56,19 +56,30 @@ export default function Composer({
   useEffect(() => { if (autoFocus || focusKey !== undefined) ta.current?.focus(); }, [autoFocus, focusKey]);
   useEffect(() => () => files.forEach(f => f.preview && URL.revokeObjectURL(f.preview)), []);
 
+  const [upErr, setUpErr] = useState('');
   function addFiles(list) {
     let picked = Array.from(list || []);
     if (!visionSupported) picked = picked.filter(f => !f.type.startsWith('image/'));
     if (!picked.length) return;
+    setUpErr('');
     const mapped = picked.map(file => ({
       id: Math.random().toString(36).slice(2), file, name: file.name, type: file.type, size: file.size,
       preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
     }));
     setFiles(fs => [...fs, ...mapped]);
+    if (sandboxAllowed && !sandbox && mapped.some(f => !f.preview)) onWantSandbox?.();
     const lastImg = [...mapped].reverse().find(f => f.preview);
     if (lastImg) dominantColor(lastImg.preview).then(c => c && setGlow(c));
   }
   function pickFiles(e) { addFiles(e.target.files); e.target.value = ''; }
+  // ctrl+v / cmd+v an image (or any file) straight into the box
+  function onPaste(e) {
+    const dt = e.clipboardData; if (!dt) return;
+    const found = [];
+    if (dt.files && dt.files.length) found.push(...Array.from(dt.files));
+    else if (dt.items) for (const it of dt.items) if (it.kind === 'file') { const f = it.getAsFile(); if (f) found.push(f); }
+    if (found.length) { e.preventDefault(); addFiles(found); }
+  }
   function removeFile(id) {
     setFiles(fs => { const t = fs.find(f => f.id === id); if (t?.preview) URL.revokeObjectURL(t.preview); return fs.filter(f => f.id !== id); });
   }
@@ -85,7 +96,7 @@ export default function Composer({
     if (files.length) {
       setUploading(true);
       try { const r = await api.uploadFiles(files.map(f => f.file)); attachments = r.files || []; }
-      catch { setUploading(false); return; }
+      catch (e) { setUploading(false); setUpErr(e?.message || 'Upload failed — the file may be too large.'); return; }
       setUploading(false);
     }
     files.forEach(f => f.preview && URL.revokeObjectURL(f.preview));
@@ -114,8 +125,9 @@ export default function Composer({
           ))}
         </div>
       )}
+      {upErr && <div className="attach-err">{upErr}</div>}
       <textarea ref={ta} rows={1} value={value} placeholder={placeholder || 'How can I help you today?'}
-        onChange={(e) => onChange(e.target.value)} onKeyDown={key} />
+        onChange={(e) => onChange(e.target.value)} onKeyDown={key} onPaste={onPaste} />
       <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}
         accept={(visionSupported ? 'image/*,' : '') + FILE_ACCEPT} />
       <div className="composer-bar">
