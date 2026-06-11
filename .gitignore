@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+*/node_modules/
+
+# build output
+client/dist/
+dist/
+build/
+
+# local datastore & runtime data 
+server/data.json
+server/uploads/
+server/sandbox/
+
+# env (isnt needed anymore)
+.env
+.env.*
+
+# logs / caches 
+*.log
+.vite/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

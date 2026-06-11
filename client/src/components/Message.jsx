@@ -1,0 +1,117 @@
+import React, { useState, useRef, useEffect } from 'react';
+import Markdown from './Markdown.jsx';
+import ReasoningBlock from './ReasoningBlock.jsx';
+import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil } from './icons.jsx';
+
+function BranchNav({ msg, onSelectBranch }) {
+  if (!msg.branchCount || msg.branchCount < 2) return null;
+  const i = msg.branchIndex ?? 0;
+  const go = (d) => { const t = msg.siblings?.[i + d]; if (t) onSelectBranch?.(t); };
+  return (
+    <span className="branch-nav">
+      <button className="branch-arrow" disabled={i <= 0} onClick={() => go(-1)} title="Previous version">‹</button>
+      <span className="branch-count">{i + 1}/{msg.branchCount}</span>
+      <button className="branch-arrow" disabled={i >= msg.branchCount - 1} onClick={() => go(1)} title="Next version">›</button>
+    </span>
+  );
+}
+
+function Attachments({ items }) {
+  if (!items || !items.length) return null;
+  return (
+    <div className="msg-attachments">
+      {items.map((a, i) => a.type && a.type.startsWith('image/') ? (
+        <a key={i} className="att image" href={a.url} target="_blank" rel="noreferrer"><img src={a.url} alt={a.name} /></a>
+      ) : (
+        <a key={i} className="att file" href={a.url} target="_blank" rel="noreferrer">
+          <FileText style={{ width: 18 }} />
+          <div className="att-meta"><div className="att-name">{a.name}</div><div className="att-type">{(a.name.split('.').pop() || 'file').toUpperCase()}</div></div>
+        </a>
+      ))}
+    </div>
+  );
+}
+
+function ModelIcon({ model, phase, below }) {
+  const map = {
+    static: model?.staticIcon || '/starburst.svg',
+    generating: model?.generatingIcon || '/starburst-generating.svg',
+    thinking: model?.thinkingIcon || '/starburst-thinking.svg'
+  };
+  const cls = phase === 'generating' ? 'spin' : phase === 'thinking' ? 'pulse' : '';
+  return <div className={'msg-icon' + (below ? ' below' : '')}><img src={map[phase] || map.static} className={cls} alt="" /></div>;
+}
+
+function Message({ msg, model, streaming, phase, onRegenerate, onEdit, onSelectBranch, showIcon = true }) {
+  const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const taRef = useRef(null);
+  useEffect(() => {
+    if (editing && taRef.current) { const el = taRef.current; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight + 2, 460) + 'px'; }
+  }, [editing, draft]);
+  function copyText() {
+    navigator.clipboard?.writeText(msg.content);
+    setCopied(true); setTimeout(() => setCopied(false), 1400);
+  }
+  function startEdit() { setDraft(msg.content || ''); setEditing(true); }
+  function saveEdit() { const v = draft.trim(); setEditing(false); if (v && v !== msg.content) onEdit?.(msg.id, v); }
+  if (msg.role === 'user') {
+    return (
+      <div className={'msg user' + (msg._enter ? ' enter' : '')}>
+        <div className="user-col">
+          <Attachments items={msg.attachments} />
+          {editing ? (
+            <div className="edit-box">
+              <textarea ref={taRef} value={draft} autoFocus onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit(); if (e.key === 'Escape') setEditing(false); }} />
+              <div className="edit-actions">
+                <button className="btn ghost" onClick={() => setEditing(false)}>Cancel</button>
+                <button className="btn primary" onClick={saveEdit}>Save &amp; submit</button>
+              </div>
+            </div>
+          ) : (
+            msg.content && <div className="bubble-user"><Markdown>{msg.content}</Markdown></div>
+          )}
+          {msg.content && !editing && (
+            <div className="actions user-actions">
+              <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
+              <button className="action-btn" onClick={copyText} title="Copy">{copied ? <Check /> : <Copy />}</button>
+              {onEdit && <button className="action-btn" onClick={startEdit} title="Edit"><Pencil style={{ width: 15 }} /></button>}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+  const pos = model?.iconPosition || 'below';
+  const iconPhase = streaming ? phase : 'static';
+  const showIt = showIcon || streaming;
+  const icon = showIt ? <ModelIcon model={model} phase={iconPhase} below={pos === 'below'} /> : null;
+
+  return (
+    <div className={'msg assistant' + (msg._enter ? ' enter' : '')}>
+      {pos === 'above' && icon}
+      <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} />
+      {(msg.content || !streaming) && (
+        <div className={'assistant-body' + (streaming ? ' streaming' : '')}>
+          <Markdown streaming={streaming}>{msg.content}</Markdown>
+        </div>
+      )}
+      {pos === 'below' && icon}
+      {!streaming && msg.content && (
+        <div className="actions">
+          <button className="action-btn" onClick={copyText} title="Copy">{copied ? <Check /> : <Copy />}</button>
+          {/* Thumbs up/down — disabled for now, kept for later use
+          <button className="action-btn" title="Good"><ThumbUp /></button>
+          <button className="action-btn" title="Bad"><ThumbDown /></button>
+          */}
+          <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
+          <button className="action-btn" title="Retry" onClick={() => onRegenerate?.(msg.id)}><Retry /></button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default React.memo(Message);

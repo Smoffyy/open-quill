@@ -1,0 +1,153 @@
+import React, { useState } from 'react';
+import { api } from '../api.js';
+import { applyPrefs, ACCENT_PRESETS } from '../prefs.js';
+import { Sun, Moon, Gear, Sliders } from './icons.jsx';
+
+export default function SettingsModal({ user, onClose, onUpdated, onDeleted }) {
+  const [tab, setTab] = useState('general');
+  const [name, setName] = useState(user.displayName);
+  const [prefs, setPrefs] = useState({ animations: true, autoscroll: true, theme: 'dark', accent: '', density: 'comfortable', messageEntrance: true, ...user.prefs });
+  const [saved, setSaved] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [delErr, setDelErr] = useState('');
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [clearMsg, setClearMsg] = useState('');
+
+  async function clearChats() {
+    setClearMsg('');
+    try { const r = await api.del('/api/me/chats'); setConfirmClear(false); setClearMsg(`Deleted ${r.deleted || 0} chat${r.deleted === 1 ? '' : 's'}.`); setTimeout(() => { location.href = '/'; }, 700); }
+    catch { setClearMsg('Could not delete chats.'); }
+  }
+  async function deleteAccount() {
+    setDelErr('');
+    try { await api.del('/api/me'); onDeleted?.(); }
+    catch (e) { setDelErr(e?.message || 'Could not delete account.'); }
+  }
+
+  function setPref(k, v) { setPrefs(p => { const next = { ...p, [k]: v }; applyPrefs(next); return next; }); }
+
+  async function save() {
+    const { user: u } = await api.patch('/api/me', { displayName: name, prefs });
+    onUpdated(u);
+    setSaved(true); setTimeout(() => setSaved(false), 1500);
+  }
+
+  const Toggle = ({ k, label, desc }) => (
+    <div className="field row">
+      <div><label>{label}</label><div className="muted-note">{desc}</div></div>
+      <div className={'switch' + (prefs[k] ? ' on' : '')} onClick={() => setPrefs(p => ({ ...p, [k]: !p[k] }))} />
+    </div>
+  );
+  const Seg = ({ value, options, onPick }) => (
+    <div className="seg">
+      {options.map(o => (
+        <button key={o.v} className={value === o.v ? 'on' : ''} onClick={() => onPick(o.v)}>{o.label}</button>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="overlay" onMouseDown={(e) => e.target.classList.contains('overlay') && onClose()}>
+      <div className="modal" style={{ position: 'relative' }}>
+        <button className="modal-close" onClick={onClose}>✕</button>
+        <div className="modal-side">
+          <div className="ms-label">Settings</div>
+          <button className={'modal-tab' + (tab === 'general' ? ' active' : '')} onClick={() => setTab('general')}><Gear /> General</button>
+          <button className={'modal-tab' + (tab === 'appearance' ? ' active' : '')} onClick={() => setTab('appearance')}><Sun /> Appearance</button>
+          <button className={'modal-tab' + (tab === 'chat' ? ' active' : '')} onClick={() => setTab('chat')}><Sliders /> Chat</button>
+        </div>
+        <div className="modal-main">
+          {tab === 'general' && (
+            <>
+              <h2>General</h2>
+              <div className="hint">Your account basics.</div>
+              <div className="field">
+                <label>What should we call you?</label>
+                <input value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+              <div className="danger-zone">
+                  <div className="dz-title">Danger zone</div>
+                  {!confirmClear ? (
+                    <div className="field row">
+                      <div><label>Delete all saved chats</label><div className="muted-note">Removes every chat and its files. Your account stays.</div></div>
+                      <button className="btn danger" onClick={() => { setConfirmClear(true); setClearMsg(''); }}>Delete all chats</button>
+                    </div>
+                  ) : (
+                    <div className="dz-confirm">
+                      <div className="muted-note" style={{ marginBottom: 10 }}>Delete every saved chat? This can't be undone.</div>
+                      <div className="edit-actions">
+                        <button className="btn ghost" onClick={() => setConfirmClear(false)}>Cancel</button>
+                        <button className="btn danger" onClick={clearChats}>Yes, delete all chats</button>
+                      </div>
+                    </div>
+                  )}
+                  {clearMsg && <div className="muted-note" style={{ marginTop: 8 }}>{clearMsg}</div>}
+                  {!user.isOwner && (!confirmDel ? (
+                    <div className="field row" style={{ marginTop: 14 }}>
+                      <div><label>Delete account</label><div className="muted-note">Permanently removes your account, all chats, and files. This cannot be undone.</div></div>
+                      <button className="btn danger" onClick={() => setConfirmDel(true)}>Delete account</button>
+                    </div>
+                  ) : (
+                    <div className="dz-confirm" style={{ marginTop: 14 }}>
+                      <div className="muted-note" style={{ marginBottom: 10 }}>Are you absolutely sure? This permanently deletes your account and everything in it.</div>
+                      {delErr && <div className="dz-err">{delErr}</div>}
+                      <div className="edit-actions">
+                        <button className="btn ghost" onClick={() => setConfirmDel(false)}>Cancel</button>
+                        <button className="btn danger" onClick={deleteAccount}>Yes, delete my account</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+            </>
+          )}
+          {tab === 'appearance' && (
+            <>
+              <h2>Appearance</h2>
+              <div className="hint">Choose how open-quill looks.</div>
+              <div className="field row">
+                <div><label>Theme</label><div className="muted-note">Follow your system, or pick one</div></div>
+                <Seg value={prefs.theme || 'dark'} onPick={(v) => setPref('theme', v)}
+                  options={[{ v: 'system', label: 'System' }, { v: 'light', label: 'Light' }, { v: 'dark', label: 'Dark' }]} />
+              </div>
+              <div className="field">
+                <label>Accent color</label>
+                <div className="muted-note">Used across buttons, highlights and accents</div>
+                <div className="accent-row">
+                  {ACCENT_PRESETS.map(c => (
+                    <button key={c} className={'accent-swatch' + (prefs.accent === c ? ' on' : '')} style={{ background: c }} onClick={() => setPref('accent', c)} title={c} />
+                  ))}
+                  <label className="accent-swatch custom" title="Custom color">
+                    <input type="color" value={prefs.accent || '#d97757'} onChange={(e) => setPref('accent', e.target.value)} />
+                    <span>+</span>
+                  </label>
+                  {prefs.accent && <button className="btn ghost accent-reset" onClick={() => setPref('accent', '')}>Reset</button>}
+                </div>
+              </div>
+              <div className="field row">
+                <div><label>Message density</label><div className="muted-note">Spacing between messages</div></div>
+                <Seg value={prefs.density || 'comfortable'} onPick={(v) => setPref('density', v)}
+                  options={[{ v: 'comfortable', label: 'Comfortable' }, { v: 'compact', label: 'Compact' }]} />
+              </div>
+            </>
+          )}
+          {tab === 'chat' && (
+            <>
+              <h2>Chat</h2>
+              <div className="hint">How responses behave.</div>
+              <Toggle k="animations" label="Streaming text animation" desc="Reveal the response as it generates" />
+              <div className="field row">
+                <div><label>Message entrance animation</label><div className="muted-note">Gently animate new messages into view</div></div>
+                <div className={'switch' + (prefs.messageEntrance !== false ? ' on' : '')} onClick={() => setPref('messageEntrance', prefs.messageEntrance === false)} />
+              </div>
+              <Toggle k="autoscroll" label="Auto-scroll while generating" desc="Follow the response unless you scroll up" />
+            </>
+          )}
+          <div className="btn-row">
+            <button className="btn primary" onClick={save}>Save changes</button>
+            {saved && <span className="saved-flash" style={{ alignSelf: 'center' }}>Saved ✓</span>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

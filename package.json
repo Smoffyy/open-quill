@@ -1,0 +1,19 @@
+{
+  "name": "open-quill",
+  "version": "2026.2.0",
+  "private": true,
+  "description": "Local Claude-style chat UI for OpenAI-compatible servers",
+  "scripts": {
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "build": "cd client && npm run build",
+    "dev": "concurrently -n server,client -c blue,magenta \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "start": "cd server && npm start",
+    "update:deps": "node update-deps.mjs",
+    "check:deps": "node update-deps.mjs --check"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

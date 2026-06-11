@@ -1,0 +1,156 @@
+import React, { useRef, useEffect, useState } from 'react';
+import ModelDropdown from './ModelDropdown.jsx';
+import { api } from '../api.js';
+import { Plus, Mic, Wave, Up, Stop, FileText, Wrench, Check } from './icons.jsx';
+
+const FILE_ACCEPT = '.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.py,.lua,.html,.css,.xml,.yml,.yaml,.pdf,.log';
+
+// grab the most common solid color from an image
+function dominantColor(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const s = 24; const c = document.createElement('canvas'); c.width = s; c.height = s;
+        const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, s, s);
+        const data = ctx.getImageData(0, 0, s, s).data;
+        const counts = {}; let best = null, bestN = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i + 3] < 128) continue;
+          const key = (data[i] >> 4) + ',' + (data[i + 1] >> 4) + ',' + (data[i + 2] >> 4);
+          counts[key] = (counts[key] || 0) + 1;
+          if (counts[key] > bestN) { bestN = counts[key]; best = [data[i], data[i + 1], data[i + 2]]; }
+        }
+        resolve(best ? `rgb(${best[0]},${best[1]},${best[2]})` : null);
+      } catch { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+export default function Composer({
+  value, onChange, onSend, onStop, streaming, models,
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, sandbox, sandboxAllowed = true, onToggleSandbox
+}) {
+  const ta = useRef(null);
+  const fileInput = useRef(null);
+  const dragDepth = useRef(0);
+  const plusRef = useRef(null);
+  const [files, setFiles] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const [glow, setGlow] = useState('var(--accent)');
+  const [plusMenu, setPlusMenu] = useState(false);
+
+  useEffect(() => {
+    if (!plusMenu) return;
+    const h = (e) => { if (plusRef.current && !plusRef.current.contains(e.target)) setPlusMenu(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [plusMenu]);
+
+  useEffect(() => {
+    if (ta.current) { ta.current.style.height = 'auto'; ta.current.style.height = Math.min(ta.current.scrollHeight, 280) + 'px'; }
+  }, [value]);
+  useEffect(() => { if (autoFocus || focusKey !== undefined) ta.current?.focus(); }, [autoFocus, focusKey]);
+  useEffect(() => () => files.forEach(f => f.preview && URL.revokeObjectURL(f.preview)), []);
+
+  function addFiles(list) {
+    let picked = Array.from(list || []);
+    if (!visionSupported) picked = picked.filter(f => !f.type.startsWith('image/'));
+    if (!picked.length) return;
+    const mapped = picked.map(file => ({
+      id: Math.random().toString(36).slice(2), file, name: file.name, type: file.type, size: file.size,
+      preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
+    }));
+    setFiles(fs => [...fs, ...mapped]);
+    const lastImg = [...mapped].reverse().find(f => f.preview);
+    if (lastImg) dominantColor(lastImg.preview).then(c => c && setGlow(c));
+  }
+  function pickFiles(e) { addFiles(e.target.files); e.target.value = ''; }
+  function removeFile(id) {
+    setFiles(fs => { const t = fs.find(f => f.id === id); if (t?.preview) URL.revokeObjectURL(t.preview); return fs.filter(f => f.id !== id); });
+  }
+
+  function onDragEnter(e) { e.preventDefault(); dragDepth.current++; setDragActive(true); }
+  function onDragOver(e) { e.preventDefault(); }
+  function onDragLeave(e) { e.preventDefault(); dragDepth.current--; if (dragDepth.current <= 0) { dragDepth.current = 0; setDragActive(false); } }
+  function onDrop(e) { e.preventDefault(); dragDepth.current = 0; setDragActive(false); addFiles(e.dataTransfer.files); }
+
+  async function doSend() {
+    if (streaming || uploading) return;
+    if (!value.trim() && files.length === 0) return;
+    let attachments = [];
+    if (files.length) {
+      setUploading(true);
+      try { const r = await api.uploadFiles(files.map(f => f.file)); attachments = r.files || []; }
+      catch { setUploading(false); return; }
+      setUploading(false);
+    }
+    files.forEach(f => f.preview && URL.revokeObjectURL(f.preview));
+    setFiles([]); setGlow('var(--accent)');
+    onSend(attachments);
+  }
+
+  function key(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } }
+  const hasImage = files.some(f => f.preview);
+  const canSend = (value.trim().length > 0 || files.length > 0) && !uploading;
+  const cls = 'composer' + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '');
+
+  return (
+    <div className={cls} style={{ '--glow': glow }}
+      onDragEnter={onDragEnter} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
+      {dragActive && <div className="drop-hint">Drop to attach{visionSupported ? '' : ' files'}</div>}
+      {files.length > 0 && (
+        <div className="attach-row">
+          {files.map(f => (
+            <div key={f.id} className={'attach-chip' + (f.preview ? ' image' : '')}>
+              {f.preview
+                ? <img src={f.preview} alt={f.name} />
+                : <div className="attach-file"><FileText style={{ width: 18 }} /><div className="attach-meta"><div className="attach-name">{f.name}</div><div className="attach-type">{(f.name.split('.').pop() || 'file').toUpperCase()}</div></div></div>}
+              <button className="attach-x" onClick={() => removeFile(f.id)} title="Remove">✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <textarea ref={ta} rows={1} value={value} placeholder={placeholder || 'How can I help you today?'}
+        onChange={(e) => onChange(e.target.value)} onKeyDown={key} />
+      <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}
+        accept={(visionSupported ? 'image/*,' : '') + FILE_ACCEPT} />
+      <div className="composer-bar">
+        <div className="composer-left">
+          <div className="plus-wrap" ref={plusRef}>
+            <button className="plus" onClick={() => setPlusMenu(m => !m)} title="More"><Plus style={{ width: 17, height: 17 }} /></button>
+            {plusMenu && (
+              <div className="plus-menu">
+                <button onClick={() => { setPlusMenu(false); fileInput.current?.click(); }}>
+                  <FileText style={{ width: 16 }} /> {visionSupported ? 'Upload images or files' : 'Upload files'}
+                </button>
+                {sandboxAllowed && (
+                  <button onClick={() => onToggleSandbox && onToggleSandbox()}>
+                    <Wrench style={{ width: 16 }} /> Enable Sandbox Tools
+                    <span className={'mini-switch' + (sandbox ? ' on' : '')}>{sandbox && <Check style={{ width: 12 }} />}</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          {sandbox && <span className="sandbox-pill"><Wrench style={{ width: 12 }} /> Sandbox</span>}
+        </div>
+        <div className="composer-right">
+          <ModelDropdown models={models} currentId={currentId} onSelect={onSelect}
+            extended={extended} onToggleExtended={onToggleExtended} up={modelUp} />
+          <button className="mic"><Mic style={{ width: 18, height: 18 }} /></button>
+          {streaming ? (
+            <button className="send stop" onClick={onStop}><Stop style={{ width: 16, height: 16 }} /></button>
+          ) : canSend ? (
+            <button className="send" onClick={doSend} disabled={uploading}><Up style={{ width: 17, height: 17 }} /></button>
+          ) : (
+            <button className="mic"><Wave style={{ width: 20, height: 20 }} /></button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
