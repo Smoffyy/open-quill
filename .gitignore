@@ -4,24 +4,25 @@ node_modules/
 
 # build output
 client/dist/
-dist/
-build/
 
-# local datastore & runtime data 
+# runtime data
 server/data.json
+server/data.json.tmp
 server/uploads/
 server/sandbox/
 
-# env (isnt needed anymore)
+# secrets
 .env
 .env.*
+*.local
 
-# logs / caches 
+# logs
 *.log
-.vite/
+npm-debug.log*
 
-# OS / editor cruft
+# OS
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
+*.swp

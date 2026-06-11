@@ -126,8 +126,8 @@ function ModelCard({ m, index, onChange, onSave, onDelete, saved, drag }) {
             </div>
           )}
           <div className="field"><label>Agent step cap</label>
-            <input type="number" min="1" max="30" value={m.agent_steps ?? 10} onChange={(e) => set('agent_steps', parseInt(e.target.value) || 10)} />
-            <div className="muted-note">Max tool rounds per response (default 10).</div>
+            <input type="number" min="1" value={m.agent_steps ?? 10} onChange={(e) => set('agent_steps', parseInt(e.target.value) || 10)} />
+            <div className="muted-note">Max tool rounds per response (default 10, no upper limit).</div>
           </div>
 
           <div className="field row">
@@ -164,6 +164,11 @@ function ModelCard({ m, index, onChange, onSave, onDelete, saved, drag }) {
           <div className="field row">
             <div><label>Show icon in model dropdown</label><div className="muted-note">Display this model's static icon next to its name in the model picker.</div></div>
             <div className={'switch' + (m.dropdown_icon !== 0 ? ' on' : '')} onClick={() => set('dropdown_icon', m.dropdown_icon !== 0 ? 0 : 1)} />
+          </div>
+
+          <div className="field row">
+            <div><label>Default model</label><div className="muted-note">Pre-selected when a user first logs in. Only one model can be the default.</div></div>
+            <div className={'switch' + (m.is_default ? ' on' : '')} onClick={() => set('is_default', m.is_default ? 0 : 1)} />
           </div>
 
           <div className="field"><label>Sampling parameters</label>
@@ -208,7 +213,7 @@ export default function AdminPanel({ user, onClose }) {
   const [usersList, setUsersList] = useState([]);
   const [cfg, setCfg] = useState({ appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [] });
   const [cfgSaved, setCfgSaved] = useState(false);
-  const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '' });
+  const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitMb: 8, modelQueue: false });
   const [saved, setSaved] = useState(null);
   const [setSavedFlash, setSetSaved] = useState(false);
   const [dragOver, setDragOver] = useState(null);
@@ -370,6 +375,12 @@ export default function AdminPanel({ user, onClose }) {
                 <input value={settings.apiBaseUrl || ''} onChange={(e) => setSettings(s => ({ ...s, apiBaseUrl: e.target.value }))} placeholder="http://localhost:1234/v1" /></div>
               <div className="field"><label>API key</label>
                 <input value={settings.apiKey || ''} onChange={(e) => setSettings(s => ({ ...s, apiKey: e.target.value }))} placeholder="lm-studio" /></div>
+              <div className="field"><label>Upload size limit (MB)</label>
+                <div className="muted-note">Max size for files users attach. Applies to everyone. Default 8.</div>
+                <input type="number" min="1" step="1" value={settings.uploadLimitMb ?? 8} onChange={(e) => setSettings(s => ({ ...s, uploadLimitMb: e.target.value }))} placeholder="8" /></div>
+              <div className="field row">
+                <div><label>Model queue</label><div className="muted-note">Only one model runs at a time. Requests for the same model run together; a request for a different model waits until the current one finishes, instead of swapping it out mid-response. Useful for local servers that load a single model.</div></div>
+                <div className={'switch' + (settings.modelQueue ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, modelQueue: !s.modelQueue }))} /></div>
               <div className="btn-row">
                 <button className="btn primary" onClick={saveSettings}>Save</button>
                 {setSavedFlash && <span className="saved-flash" style={{ alignSelf: 'center' }}>Saved ✓</span>}

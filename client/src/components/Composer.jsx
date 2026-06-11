@@ -31,7 +31,7 @@ function dominantColor(url) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, models,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, sandbox, sandboxAllowed = true, onToggleSandbox
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
@@ -50,25 +50,43 @@ export default function Composer({
     return () => document.removeEventListener('mousedown', h);
   }, [plusMenu]);
 
+  const grewOnce = useRef(false);
   useEffect(() => {
-    if (ta.current) { ta.current.style.height = 'auto'; ta.current.style.height = Math.min(ta.current.scrollHeight, 280) + 'px'; }
+    const el = ta.current; if (!el) return;
+    const prev = el.style.height;
+    el.style.height = 'auto';
+    const next = Math.min(el.scrollHeight, 280) + 'px';
+    if (!grewOnce.current) { el.style.height = next; grewOnce.current = true; return; } // no animation on first paint
+    el.style.height = prev || next;
+    requestAnimationFrame(() => { if (ta.current) ta.current.style.height = next; });
   }, [value]);
   useEffect(() => { if (autoFocus || focusKey !== undefined) ta.current?.focus(); }, [autoFocus, focusKey]);
   useEffect(() => () => files.forEach(f => f.preview && URL.revokeObjectURL(f.preview)), []);
 
+  const [upErr, setUpErr] = useState('');
   function addFiles(list) {
     let picked = Array.from(list || []);
     if (!visionSupported) picked = picked.filter(f => !f.type.startsWith('image/'));
     if (!picked.length) return;
+    setUpErr('');
     const mapped = picked.map(file => ({
       id: Math.random().toString(36).slice(2), file, name: file.name, type: file.type, size: file.size,
       preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
     }));
     setFiles(fs => [...fs, ...mapped]);
+    if (sandboxAllowed && !sandbox && mapped.some(f => !f.preview)) onWantSandbox?.();
     const lastImg = [...mapped].reverse().find(f => f.preview);
     if (lastImg) dominantColor(lastImg.preview).then(c => c && setGlow(c));
   }
   function pickFiles(e) { addFiles(e.target.files); e.target.value = ''; }
+  // ctrl+v / cmd+v an image (or any file) straight into the box
+  function onPaste(e) {
+    const dt = e.clipboardData; if (!dt) return;
+    const found = [];
+    if (dt.files && dt.files.length) found.push(...Array.from(dt.files));
+    else if (dt.items) for (const it of dt.items) if (it.kind === 'file') { const f = it.getAsFile(); if (f) found.push(f); }
+    if (found.length) { e.preventDefault(); addFiles(found); }
+  }
   function removeFile(id) {
     setFiles(fs => { const t = fs.find(f => f.id === id); if (t?.preview) URL.revokeObjectURL(t.preview); return fs.filter(f => f.id !== id); });
   }
@@ -85,7 +103,7 @@ export default function Composer({
     if (files.length) {
       setUploading(true);
       try { const r = await api.uploadFiles(files.map(f => f.file)); attachments = r.files || []; }
-      catch { setUploading(false); return; }
+      catch (e) { setUploading(false); setUpErr(e?.message || 'Upload failed — the file may be too large.'); return; }
       setUploading(false);
     }
     files.forEach(f => f.preview && URL.revokeObjectURL(f.preview));
@@ -114,8 +132,9 @@ export default function Composer({
           ))}
         </div>
       )}
+      {upErr && <div className="attach-err">{upErr}</div>}
       <textarea ref={ta} rows={1} value={value} placeholder={placeholder || 'How can I help you today?'}
-        onChange={(e) => onChange(e.target.value)} onKeyDown={key} />
+        onChange={(e) => onChange(e.target.value)} onKeyDown={key} onPaste={onPaste} />
       <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}
         accept={(visionSupported ? 'image/*,' : '') + FILE_ACCEPT} />
       <div className="composer-bar">
@@ -143,11 +162,11 @@ export default function Composer({
             extended={extended} onToggleExtended={onToggleExtended} up={modelUp} />
           <button className="mic"><Mic style={{ width: 18, height: 18 }} /></button>
           {streaming ? (
-            <button className="send stop" onClick={onStop}><Stop style={{ width: 16, height: 16 }} /></button>
+            <button key="stop" className="send stop" onClick={onStop}><Stop style={{ width: 16, height: 16 }} /></button>
           ) : canSend ? (
-            <button className="send" onClick={doSend} disabled={uploading}><Up style={{ width: 17, height: 17 }} /></button>
+            <button key="send" className="send" onClick={doSend} disabled={uploading}><Up style={{ width: 17, height: 17 }} /></button>
           ) : (
-            <button className="mic"><Wave style={{ width: 20, height: 20 }} /></button>
+            <button key="mic" className="mic"><Wave style={{ width: 20, height: 20 }} /></button>
           )}
         </div>
       </div>

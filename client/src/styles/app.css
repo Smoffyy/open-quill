@@ -163,6 +163,7 @@ input, textarea { font-family: inherit; color: inherit; }
 .composer textarea {
   width: 100%; background: none; border: none; outline: none; resize: none; font-family: var(--font-sans);
   font-size: 15.5px; line-height: 1.55; color: var(--text); max-height: 280px; min-height: 26px;
+  transition: height .16s cubic-bezier(.22, 1, .36, 1);
 }
 .composer textarea::placeholder { color: var(--text-faint); }
 .composer-bar { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
@@ -265,9 +266,9 @@ input, textarea { font-family: inherit; color: inherit; }
 .reasoning-head svg { width: 15px; height: 15px; transition: transform .2s; }
 .reasoning-head.open svg.chev { transform: rotate(90deg); }
 .reasoning-body {
-  border-left: 2px solid var(--border); margin: 6px 0 4px 6px; padding: 4px 0 4px 16px;
+  border-left: 2px solid var(--border); margin-left: 6px; padding: 6px 0 4px 16px;
   color: var(--text-muted); font-size: 14.5px; line-height: 1.7; white-space: pre-wrap;
-  font-family: var(--font-sans); animation: fadeUp .2s ease both;
+  font-family: var(--font-sans);
 }
 .thinking-live { color: var(--text-muted); font-size: 14.5px; display: inline-flex; align-items: center; gap: 9px; }
 
@@ -703,3 +704,49 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 
 /* artifacts button pulse while a file is being written */
 .paper-btn.writing { color: var(--accent); animation: writing-pulse 1.1s ease-in-out infinite; }
+
+/* upload error line in the composer */
+.attach-err { margin: 2px 4px 8px; font-size: 13px; color: #e0567f; }
+
+/* waiting-for-queue indicator */
+.queue-wait { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 14px; padding: 2px 0; }
+.queue-wait .think-dot { width: 16px; height: 16px; }
+
+/* ============ fluid animation pass ============ */
+:root { --ease-out: cubic-bezier(.22, 1, .36, 1); --ease-soft: cubic-bezier(.4, 0, .2, 1); }
+
+/* modal: backdrop fade + content rise/scale */
+.overlay { animation: ovIn .18s ease both; }
+.modal { animation: modalIn .26s var(--ease-out) both; }
+@keyframes ovIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modalIn { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: none; } }
+
+/* artifacts panel slides in from the right */
+.artifacts { animation: panelIn .26s var(--ease-out) both; }
+@keyframes panelIn { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: none; } }
+
+/* reasoning expand/collapse — smooth height via grid rows */
+.reasoning-collapse { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .26s var(--ease-out), opacity .2s ease; opacity: .0; }
+.reasoning-collapse.open { grid-template-rows: 1fr; opacity: 1; }
+.reasoning-collapse > .reasoning-body { overflow: hidden; min-height: 0; }
+
+/* send / stop / mic swap */
+.send, .composer .mic { animation: btnPop .2s var(--ease-out) both; }
+@keyframes btnPop { from { opacity: 0; transform: scale(.8); } to { opacity: 1; transform: scale(1); } }
+
+/* copy check bounce */
+.copy-pop { animation: copyPop .26s var(--ease-out) both; }
+@keyframes copyPop { 0% { opacity: 0; transform: scale(.5); } 60% { transform: scale(1.18); } 100% { opacity: 1; transform: scale(1); } }
+
+/* chat rows ease in (new chat at the top, list on load) */
+.chat-row { animation: rowIn .22s ease backwards; }
+@keyframes rowIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* model dropdown menu rise */
+.model-menu { animation: menuIn .16s var(--ease-out) both; }
+@keyframes menuIn { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
+
+/* honor OS reduce-motion: drop all of the above to instant */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+}
