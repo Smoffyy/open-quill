@@ -25,7 +25,7 @@ export default function CodeBlock({ lang, code }) {
       <div className="code-bar">
         <span>{lang || 'text'}</span>
         <button className="code-copy" onClick={copy}>
-          {copied ? <Check /> : <Copy />} {copied ? 'Copied' : 'Copy'}
+          {copied ? <Check key="c" className="copy-pop" /> : <Copy key="o" />} {copied ? 'Copied' : 'Copy'}
         </button>
       </div>
       <pre><code className={'hljs' + (lang ? ` language-${lang}` : '')} dangerouslySetInnerHTML={{ __html: html }} /></pre>

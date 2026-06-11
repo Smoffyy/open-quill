@@ -13,6 +13,21 @@ import { Down, ChevDown, Paper, Compact } from './components/icons.jsx';
 
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: 'Assistants can make mistakes, double-check responses.', greetings: ['How can I help you?'], appIcon: '', quickPrompts: [], version: '' };
 
+// paths of every finished create_file/str_replace block in the stream (so files
+// done earlier in the same response show in the tree before the server confirms them)
+function parseStreamedPaths(text) {
+  const paths = [];
+  const re = /```tool\s*([\s\S]*?)```/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const tool = (m[1].match(/"tool"\s*:\s*"([^"]+)"/) || [])[1];
+    if (tool !== 'create_file' && tool !== 'str_replace') continue;
+    const p = (m[1].match(/"path"\s*:\s*"((?:[^"\\]|\\.)*)"/) || [])[1];
+    if (p) paths.push(p);
+  }
+  return paths;
+}
+
 // peek at the file being written from a not-yet-closed tool block
 function parseLiveFile(text) {
   const at = text.lastIndexOf('```tool');
@@ -109,6 +124,7 @@ export default function App() {
   const [sandbox, setSandbox] = useState(false);
   const [files, setFiles] = useState([]);
   const [liveFile, setLiveFile] = useState(null);
+  const [pendingPaths, setPendingPaths] = useState([]);
   const [compacting, setCompacting] = useState(false);
   const [hasSummary, setHasSummary] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -177,7 +193,8 @@ export default function App() {
   async function loadModels() {
     const m = await api.get('/api/models');
     setModels(m);
-    setCurrentId(id => id && m.find(x => x.id === id) ? id : m[0]?.id || null);
+    // keep the user's current pick; on first load (login) fall back to the default model, else the first
+    setCurrentId(id => id && m.find(x => x.id === id) ? id : (m.find(x => x.isDefault)?.id || m[0]?.id || null));
   }
   async function loadChats() { try { setChats(await api.get('/api/chats')); } finally { setChatsLoaded(true); } }
   async function loadAppConfig() { try { applyCfg(await api.get('/api/app-config')); } catch {} }
@@ -209,7 +226,7 @@ export default function App() {
     if (m.type === 'queued') { setQueued(true); return; }
     if (m.type === 'start') {
       setQueued(false);
-      setCompacting(false); setLiveFile(null); refreshSeq.current++;
+      setCompacting(false); setLiveFile(null); setPendingPaths([]); refreshSeq.current++;
       targetContent.current = ''; targetReason.current = ''; pendingDone.current = false;
       assistantIdRef.current = m.messageId; dispLen.current = 0;
       setDispContent(''); setDispReason(''); setPhase('generating'); setStreaming(true);
@@ -227,6 +244,7 @@ export default function App() {
       setPhase('generating');
       const lf = parseLiveFile(targetContent.current);
       if (lf) setLiveFile(lf);
+      setPendingPaths(parseStreamedPaths(targetContent.current));
       if (!animateRef.current) { setDispContent(targetContent.current); dispLen.current = targetContent.current.length; }
       return;
     }
@@ -276,7 +294,7 @@ export default function App() {
     setStreaming(false); setPhase('static'); setQueued(false);
     setMessages(ms => [...ms, { id, role: 'assistant', content, reasoning, model_id: currentIdRef.current }]);
     setDispContent(''); setDispReason('');
-    setLiveFile(null);
+    setLiveFile(null); setPendingPaths([]);
     setTimeout(() => scrollBottom(false), 0);
     loadChats();
     const aid = activeIdRef.current;
@@ -328,7 +346,7 @@ export default function App() {
   }
   function newChat(fromPop) {
     setActiveId(null); setMessages([]); setInput('');
-    setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null);
+    setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingPaths([]);
     const m = models.find(m => m.id === currentId);
     setSandbox(m?.sandboxAllowed !== false && !!m?.sandboxAuto);
     setFocusTick(t => t + 1);
@@ -466,7 +484,7 @@ export default function App() {
       </div>
 
       {artifactsOpen && activeId && (
-        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} onClose={() => setArtifactsOpen(false)} />
+        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} pending={pendingPaths} onClose={() => setArtifactsOpen(false)} />
       )}
 
       {summaryOpen && activeId && (

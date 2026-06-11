@@ -204,7 +204,7 @@ function TreeChildren({ node, depth, chatId, onOpen, sel, live }) {
 
 function clampW(w) { return Math.max(320, Math.min(w, Math.round(window.innerWidth * 0.8))); }
 
-export default function ArtifactsPanel({ chatId, files, live, onClose }) {
+export default function ArtifactsPanel({ chatId, files, live, pending = [], onClose }) {
   const [sel, setSel] = useState(null);
   const [width, setWidth] = useState(() => { const s = parseInt(localStorage.getItem('oq-art-w')); return s ? clampW(s) : Math.min(460, Math.round(window.innerWidth * 0.42)); });
   const autoRef = useRef(null);
@@ -225,9 +225,10 @@ export default function ArtifactsPanel({ chatId, files, live, onClose }) {
   }
 
   const liveText = live && sel === live.path ? live.content : null;
-  const treeFiles = live && live.path && !files.find(f => f.path === live.path)
-    ? [...files, { path: live.path, ext: (live.path.split('.').pop() || ''), v: 0 }]
-    : files;
+  const byPath = new Map(files.map(f => [f.path, f]));
+  for (const p of pending) if (!byPath.has(p)) byPath.set(p, { path: p, ext: (p.split('.').pop() || ''), v: 0 });
+  if (live && live.path && !byPath.has(live.path)) byPath.set(live.path, { path: live.path, ext: (live.path.split('.').pop() || ''), v: 0 });
+  const treeFiles = [...byPath.values()];
 
   return (
     <div className="artifacts" style={{ width }}>

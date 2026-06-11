@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Configurable user upload limit in the Admin panel.
 - Model queueing, model awareness, if a new model is requested it will wait in queue. (Not recommended for external models, configurable in admin panel)
+- More small animations.
 
 ### Changed
 - Updated `baseline-browser-mapping` package. (2.10.34 -> 2.10.35)
@@ -20,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - User uploaded zip file can't be extracted by assistant in artifacts sandbox on large files.
+- Client and Server sync with files in sandbox.
 
 ### Removed
 - `shell-quote` is a dev-only, transitive dependency (it comes in through concurrently, which only runs npm run dev). Never used during runtime at all.

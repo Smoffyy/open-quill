@@ -12,7 +12,9 @@ export default function ReasoningBlock({ text, live }) {
         <span>{label}</span>
         <Chevron className="chev" />
       </button>
-      {open && <div className="reasoning-body">{text}</div>}
+      <div className={'reasoning-collapse' + (open ? ' open' : '')}>
+        <div className="reasoning-body">{text}</div>
+      </div>
     </div>
   );
 }

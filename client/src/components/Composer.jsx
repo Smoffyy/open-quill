@@ -50,8 +50,15 @@ export default function Composer({
     return () => document.removeEventListener('mousedown', h);
   }, [plusMenu]);
 
+  const grewOnce = useRef(false);
   useEffect(() => {
-    if (ta.current) { ta.current.style.height = 'auto'; ta.current.style.height = Math.min(ta.current.scrollHeight, 280) + 'px'; }
+    const el = ta.current; if (!el) return;
+    const prev = el.style.height;
+    el.style.height = 'auto';
+    const next = Math.min(el.scrollHeight, 280) + 'px';
+    if (!grewOnce.current) { el.style.height = next; grewOnce.current = true; return; } // no animation on first paint
+    el.style.height = prev || next;
+    requestAnimationFrame(() => { if (ta.current) ta.current.style.height = next; });
   }, [value]);
   useEffect(() => { if (autoFocus || focusKey !== undefined) ta.current?.focus(); }, [autoFocus, focusKey]);
   useEffect(() => () => files.forEach(f => f.preview && URL.revokeObjectURL(f.preview)), []);
@@ -155,11 +162,11 @@ export default function Composer({
             extended={extended} onToggleExtended={onToggleExtended} up={modelUp} />
           <button className="mic"><Mic style={{ width: 18, height: 18 }} /></button>
           {streaming ? (
-            <button className="send stop" onClick={onStop}><Stop style={{ width: 16, height: 16 }} /></button>
+            <button key="stop" className="send stop" onClick={onStop}><Stop style={{ width: 16, height: 16 }} /></button>
           ) : canSend ? (
-            <button className="send" onClick={doSend} disabled={uploading}><Up style={{ width: 17, height: 17 }} /></button>
+            <button key="send" className="send" onClick={doSend} disabled={uploading}><Up style={{ width: 17, height: 17 }} /></button>
           ) : (
-            <button className="mic"><Wave style={{ width: 20, height: 20 }} /></button>
+            <button key="mic" className="mic"><Wave style={{ width: 20, height: 20 }} /></button>
           )}
         </div>
       </div>

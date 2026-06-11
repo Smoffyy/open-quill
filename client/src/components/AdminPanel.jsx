@@ -166,6 +166,11 @@ function ModelCard({ m, index, onChange, onSave, onDelete, saved, drag }) {
             <div className={'switch' + (m.dropdown_icon !== 0 ? ' on' : '')} onClick={() => set('dropdown_icon', m.dropdown_icon !== 0 ? 0 : 1)} />
           </div>
 
+          <div className="field row">
+            <div><label>Default model</label><div className="muted-note">Pre-selected when a user first logs in. Only one model can be the default.</div></div>
+            <div className={'switch' + (m.is_default ? ' on' : '')} onClick={() => set('is_default', m.is_default ? 0 : 1)} />
+          </div>
+
           <div className="field"><label>Sampling parameters</label>
             <div className="muted-note">Override what's sent to the API. Leave blank to use the server/model default. Non-standard params (top_k, min_p, repetition_penalty) apply on servers that support them, e.g. LM Studio.</div>
             <div className="sampling-grid">
