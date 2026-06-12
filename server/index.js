@@ -86,6 +86,20 @@ app.get('/api/chats', authMiddleware, (req, res) => {
     .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred }));
   res.json(list);
 });
+app.get('/api/chats-overview', authMiddleware, (req, res) => {
+  const offset = Math.max(0, parseInt(req.query.offset) || 0);
+  const limit = Math.min(60, Math.max(1, parseInt(req.query.limit) || 18));
+  const all = db.chats.filter(c => c.user_id === req.user.id).sort((a, b) => b.updated_at - a.updated_at);
+  const page = all.slice(offset, offset + limit).map(c => {
+    const msgs = sortedMsgs(c.id);
+    let preview = '';
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === 'user' && typeof msgs[i].content === 'string' && msgs[i].content.trim()) { preview = msgs[i].content.slice(0, 220); break; }
+    }
+    return { id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred, preview };
+  });
+  res.json({ chats: page, total: all.length, offset, hasMore: offset + page.length < all.length });
+});
 app.post('/api/chats', authMiddleware, (req, res) => {
   const t = now();
   const c = db.chats.insert({ id: uid(), user_id: req.user.id, title: 'New chat', starred: 0, sandbox: 0, created_at: t, updated_at: t });

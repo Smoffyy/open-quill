@@ -75,7 +75,7 @@ function ChatRow({ c, active, showTrash, onOpen, onDelete, onToggleStar }) {
 
 export default function Sidebar({
   user, chats, chatsLoaded = true, activeId, appName, onNew, onOpen, onDelete, onToggleStar,
-  collapsed, onToggle, onSettings, onAdmin, onCredits, onChangelog, onLogout, version
+  collapsed, onToggle, onSettings, onAdmin, onCredits, onChangelog, onLogout, version, onChatsOverview
 }) {
   const [menu, setMenu] = useState(false);
   const [shiftHeld, setShiftHeld] = useState(false);
@@ -110,7 +110,7 @@ export default function Sidebar({
           onClick={(e) => { if (e.ctrlKey || e.metaKey) { window.open('/', '_blank', 'noopener'); return; } onNew(); }}
           onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); window.open('/', '_blank', 'noopener'); } }}
           onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}><Plus /> <span className="nav-label">New chat</span></button>
-        <button className="nav-item" title="Chats"><Chat /> <span className="nav-label">Chats</span></button>
+        <button className="nav-item" title="Chats" onClick={onChatsOverview}><Chat /> <span className="nav-label">Chats</span></button>
       </div>
       <div className="chats">
         {!chatsLoaded ? (

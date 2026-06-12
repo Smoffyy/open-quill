@@ -55,9 +55,13 @@ function Viewer({ chatId, path, onBack, liveText, writingElsewhere, onJumpToLive
   const shownText = fromStream ? streamText : (data?.text != null ? data.text : null);
   const html = useMemo(() => {
     if (shownText == null) return '';
+    const esc = (s) => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
     const lang = EXT_LANG[(fromStream ? ext.toLowerCase() : (data?.ext || '').toLowerCase())];
-    try { return lang && hljs.getLanguage(lang) ? hljs.highlight(shownText, { language: lang, ignoreIllegals: true }).value : hljs.highlightAuto(shownText).value; }
-    catch { return shownText.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+    try {
+      if (lang && hljs.getLanguage(lang)) return hljs.highlight(shownText, { language: lang, ignoreIllegals: true }).value;
+      if (isLive) return esc(shownText);
+      return hljs.highlightAuto(shownText).value;
+    } catch { return esc(shownText); }
   }, [shownText, fromStream]);
   const lines = shownText != null ? shownText.split('\n') : [];
   const diffRows = useMemo(() => {

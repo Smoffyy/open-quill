@@ -9,6 +9,7 @@ import SettingsModal from './components/SettingsModal.jsx';
 import AdminPanel from './components/AdminPanel.jsx';
 import DocModal from './components/DocModal.jsx';
 import ArtifactsPanel from './components/ArtifactsPanel.jsx';
+import ChatsOverview from './components/ChatsOverview.jsx';
 import { Down, ChevDown, Paper, Compact } from './components/icons.jsx';
 
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: 'Assistants can make mistakes, double-check responses.', greetings: ['How can I help you?'], appIcon: '', quickPrompts: [], version: '' };
@@ -139,6 +140,7 @@ export default function App() {
   const [hasSummary, setHasSummary] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [artifactsOpen, setArtifactsOpen] = useState(false);
+  const [chatsOverview, setChatsOverview] = useState(false);
 
   const [streaming, setStreaming] = useState(false);
   const [queued, setQueued] = useState(false);
@@ -150,6 +152,7 @@ export default function App() {
   const targetContent = useRef('');
   const targetReason = useRef('');
   const pendingDone = useRef(false);
+  const doneBlocksRef = useRef(0);
   const assistantIdRef = useRef(null);
   const revealTimer = useRef(null);
   const followRaf = useRef(0);
@@ -236,7 +239,7 @@ export default function App() {
     if (m.type === 'queued') { setQueued(true); return; }
     if (m.type === 'start') {
       setQueued(false);
-      setCompacting(false); setLiveFile(null); setPendingFiles({}); refreshSeq.current++;
+      setCompacting(false); setLiveFile(null); setPendingFiles({}); doneBlocksRef.current = 0; refreshSeq.current++;
       targetContent.current = ''; targetReason.current = ''; pendingDone.current = false;
       assistantIdRef.current = m.messageId; dispLen.current = 0;
       setDispContent(''); setDispReason(''); setPhase('generating'); setStreaming(true);
@@ -254,7 +257,10 @@ export default function App() {
       setPhase('generating');
       const lf = parseLiveFile(targetContent.current);
       if (lf) setLiveFile(lf);
-      setPendingFiles(parseStreamedFiles(targetContent.current));
+      const blocks = (targetContent.current.match(/```tool/g) || []).length;
+      const closed = blocks > 0 && targetContent.current.split('```').length % 2 === 1;
+      const doneBlocks = closed ? blocks : blocks - 1;
+      if (doneBlocks !== doneBlocksRef.current) { doneBlocksRef.current = doneBlocks; setPendingFiles(parseStreamedFiles(targetContent.current)); }
       if (!animateRef.current) { setDispContent(targetContent.current); dispLen.current = targetContent.current.length; }
       return;
     }
@@ -304,7 +310,7 @@ export default function App() {
     setStreaming(false); setPhase('static'); setQueued(false);
     setMessages(ms => [...ms, { id, role: 'assistant', content, reasoning, model_id: currentIdRef.current }]);
     setDispContent(''); setDispReason('');
-    setLiveFile(null); setPendingFiles({});
+    setLiveFile(null); setPendingFiles({}); doneBlocksRef.current = 0;
     setTimeout(() => scrollBottom(false), 0);
     loadChats();
     const aid = activeIdRef.current;
@@ -429,7 +435,8 @@ export default function App() {
         onNew={newChat} onOpen={openChat} onDelete={deleteChat} onToggleStar={toggleStar}
         collapsed={collapsed} onToggle={() => setCollapsed(c => !c)}
         onSettings={() => setShowSettings(true)} onAdmin={() => setShowAdmin(true)}
-        onCredits={() => setShowCredits(true)} onChangelog={() => setShowChangelog(true)} onLogout={logout} version={cfg.version} />
+        onCredits={() => setShowCredits(true)} onChangelog={() => setShowChangelog(true)} onLogout={logout} version={cfg.version}
+        onChatsOverview={() => setChatsOverview(true)} />
 
       <div className="main">
         {empty ? (
@@ -503,6 +510,7 @@ export default function App() {
       )}
 
       {showSettings && <SettingsModal user={user} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} />}
+      {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} />}
       {showAdmin && <AdminPanel user={user} onClose={() => setShowAdmin(false)} />}
       {showCredits && <DocModal title="Credits" name="credits" serif onClose={() => setShowCredits(false)} />}
       {showChangelog && <DocModal title="Changelog" name="changelog" onClose={() => setShowChangelog(false)} />}
