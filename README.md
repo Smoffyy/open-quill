@@ -56,3 +56,7 @@ Open http://localhost:5173.
 
 - All data lives in `server/data.json` and uploaded logos in `server/uploads/`. Delete `data.json` to reset.
 - To change the port, set `PORT` before `npm start`.
+
+## Updates / Version info
+
+The scheme is `YEAR.QUARTER.PATCH`, but may not follow closely to accurate date as major releases will release earlier than the specified year.

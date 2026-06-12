@@ -13,23 +13,29 @@ import { Down, ChevDown, Paper, Compact } from './components/icons.jsx';
 
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: 'Assistants can make mistakes, double-check responses.', greetings: ['How can I help you?'], appIcon: '', quickPrompts: [], version: '' };
 
-function parseStreamedPaths(text) {
-  const set = new Set();
+function parseStreamedFiles(text) {
+  const files = {};
   const re = /```tool\s*([\s\S]*?)```/g;
   let m;
   while ((m = re.exec(text)) !== null) {
-    const body = m[1];
-    const tool = (body.match(/"tool"\s*:\s*"([^"]+)"/) || [])[1];
-    const p = (body.match(/"path"\s*:\s*"((?:[^"\\]|\\.)*)"/) || [])[1];
-    if (tool === 'create_file' || tool === 'str_replace') { if (p) set.add(p); }
-    else if (tool === 'delete_file') { if (p) set.delete(p); }
+    const body = m[1].trim();
+    let obj = null;
+    try { obj = JSON.parse(body); } catch {}
+    if (!obj) {
+      const tool = (body.match(/"tool"\s*:\s*"([^"]+)"/) || [])[1];
+      const p = (body.match(/"path"\s*:\s*"((?:[^"\\]|\\.)*)"/) || [])[1];
+      obj = { tool, path: p };
+    }
+    const tool = obj.tool, p = obj.path;
+    if (tool === 'create_file') { if (p) files[p] = typeof obj.content === 'string' ? obj.content : null; }
+    else if (tool === 'str_replace') { if (p && !(p in files)) files[p] = null; }
+    else if (tool === 'delete_file') { if (p) delete files[p]; }
     else if (tool === 'rename_file') {
-      if (p) set.delete(p);
-      const np = (body.match(/"(?:new_path|to)"\s*:\s*"((?:[^"\\]|\\.)*)"/) || [])[1];
-      if (np) set.add(np);
+      const np = obj.new_path || obj.to;
+      if (p) { if (np) files[np] = files[p] ?? null; delete files[p]; }
     }
   }
-  return [...set];
+  return files;
 }
 
 // peek at the file being written from a not-yet-closed tool block
@@ -128,7 +134,7 @@ export default function App() {
   const [sandbox, setSandbox] = useState(false);
   const [files, setFiles] = useState([]);
   const [liveFile, setLiveFile] = useState(null);
-  const [pendingPaths, setPendingPaths] = useState([]);
+  const [pendingFiles, setPendingFiles] = useState({});
   const [compacting, setCompacting] = useState(false);
   const [hasSummary, setHasSummary] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -230,7 +236,7 @@ export default function App() {
     if (m.type === 'queued') { setQueued(true); return; }
     if (m.type === 'start') {
       setQueued(false);
-      setCompacting(false); setLiveFile(null); setPendingPaths([]); refreshSeq.current++;
+      setCompacting(false); setLiveFile(null); setPendingFiles({}); refreshSeq.current++;
       targetContent.current = ''; targetReason.current = ''; pendingDone.current = false;
       assistantIdRef.current = m.messageId; dispLen.current = 0;
       setDispContent(''); setDispReason(''); setPhase('generating'); setStreaming(true);
@@ -248,7 +254,7 @@ export default function App() {
       setPhase('generating');
       const lf = parseLiveFile(targetContent.current);
       if (lf) setLiveFile(lf);
-      setPendingPaths(parseStreamedPaths(targetContent.current));
+      setPendingFiles(parseStreamedFiles(targetContent.current));
       if (!animateRef.current) { setDispContent(targetContent.current); dispLen.current = targetContent.current.length; }
       return;
     }
@@ -298,7 +304,7 @@ export default function App() {
     setStreaming(false); setPhase('static'); setQueued(false);
     setMessages(ms => [...ms, { id, role: 'assistant', content, reasoning, model_id: currentIdRef.current }]);
     setDispContent(''); setDispReason('');
-    setLiveFile(null); setPendingPaths([]);
+    setLiveFile(null); setPendingFiles({});
     setTimeout(() => scrollBottom(false), 0);
     loadChats();
     const aid = activeIdRef.current;
@@ -350,7 +356,7 @@ export default function App() {
   }
   function newChat(fromPop) {
     setActiveId(null); setMessages([]); setInput('');
-    setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingPaths([]);
+    setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingFiles({});
     const m = models.find(m => m.id === currentId);
     setSandbox(m?.sandboxAllowed !== false && !!m?.sandboxAuto);
     setFocusTick(t => t + 1);
@@ -488,7 +494,7 @@ export default function App() {
       </div>
 
       {artifactsOpen && activeId && (
-        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} pending={pendingPaths} onClose={() => setArtifactsOpen(false)} />
+        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} pending={pendingFiles} onClose={() => setArtifactsOpen(false)} />
       )}
 
       {summaryOpen && activeId && (
