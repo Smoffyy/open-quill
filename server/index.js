@@ -465,8 +465,8 @@ app.get('/api/docs/:name', authMiddleware, (req, res) => {
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
 if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
-  app.get('*', (req, res) => {
-    if (req.path.startsWith('/api')) return res.status(404).end();
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' || req.path.startsWith('/api')) return next();
     res.sendFile(path.join(clientDist, 'index.html'));
   });
 }
@@ -591,26 +591,35 @@ function estimateTokens(messages) {
 }
 
 // once we get near the context limit, fold older turns into chat.summary
-async function maybeCompact(ws, chat, model, extended, sandboxOn) {
-  if (!model.enable_summaries || !model.num_ctx) return;
+// one summarization pass over older persisted turns; returns true if it compacted
+async function compactStep(ws, chat, model) {
+  const fresh = db.chats.byId(chat.id);
+  const upto = fresh.summary && fresh.summary_upto ? fresh.summary_upto : 0;
+  const after = activePath(chat.id).filter(m => m.created_at > upto);
+  if (after.length <= 1) return false;
+  const toSummarize = after.slice(0, after.length - 1);
+  const marker = toSummarize[toSummarize.length - 1].created_at;
+  try { ws.send(JSON.stringify({ type: 'compacting' })); } catch {}
+  const summary = await summarizeConversation(model, fresh.summary, toSummarize);
+  db.chats.update(chat.id, { summary, summary_upto: marker });
+  try { ws.send(JSON.stringify({ type: 'compacted' })); } catch {}
+  return !!summary;
+}
+function compactThreshold(model) {
+  if (!model.enable_summaries || !model.num_ctx) return Infinity;
   const padding = Math.max(0.03, Math.min(0.6, model.summary_padding || 0.125));
-  const threshold = Math.floor(model.num_ctx * (1 - padding));
+  return Math.floor(model.num_ctx * (1 - padding));
+}
+async function maybeCompact(ws, chat, model, extended, sandboxOn) {
+  const threshold = compactThreshold(model);
+  if (threshold === Infinity) return;
   let guard = 0;
   while (guard++ < 3) {
     const fresh = db.chats.byId(chat.id);
     const sandboxP = sandboxOn ? sandboxPromptFor(chat.id) : null;
     const convo = buildMessages(model, chatHistory(chat, model), extended, sandboxP, fresh.summary);
     if (estimateTokens(convo) < threshold) return;
-    const upto = fresh.summary && fresh.summary_upto ? fresh.summary_upto : 0;
-    const after = activePath(chat.id).filter(m => m.created_at > upto);
-    if (after.length <= 1) return; // only the newest message remains; can't compact further
-    const toSummarize = after.slice(0, after.length - 1); // keep newest message verbatim
-    const marker = toSummarize[toSummarize.length - 1].created_at;
-    try { ws.send(JSON.stringify({ type: 'compacting' })); } catch {}
-    const summary = await summarizeConversation(model, fresh.summary, toSummarize);
-    db.chats.update(chat.id, { summary, summary_upto: marker });
-    try { ws.send(JSON.stringify({ type: 'compacted' })); } catch {}
-    if (!summary) return;
+    if (!(await compactStep(ws, chat, model))) return;
   }
 }
 
@@ -623,7 +632,9 @@ wss.on('connection', (ws, req) => {
     await maybeCompact(ws, chat, model, extended, sandboxOn);
     const history = chatHistory(chat, model);
     const chatRow = db.chats.byId(chat.id) || chat;
-    let convo = buildMessages(model, history, extended, sandboxOn ? sandboxPromptFor(chat.id) : null, chatRow.summary);
+    const sandboxP = () => sandboxOn ? sandboxPromptFor(chat.id) : null;
+    let base = buildMessages(model, history, extended, sandboxP(), chatRow.summary);
+    let inTurn = []; // assistant/tool exchanges accumulated during this response
     const assistantId = uid();
     const assistantParent = (db.chats.byId(chat.id) || {}).active_leaf || null;
     let content = '', reasoning = '';
@@ -631,9 +642,15 @@ wss.on('connection', (ws, req) => {
     state.abort = controller;
     ws.send(JSON.stringify({ type: 'start', messageId: assistantId }));
 
+    const threshold = compactThreshold(model);
     const maxSteps = sandboxOn ? (model.agent_steps || 10) : 1;
     try {
       for (let step = 0; step < maxSteps; step++) {
+        // running low on context mid-response? summarize older turns, then carry on where we left off
+        if (threshold !== Infinity && inTurn.length && estimateTokens([...base, ...inTurn]) >= threshold) {
+          if (await compactStep(ws, chat, model)) base = buildMessages(model, chatHistory(chat, model), extended, sandboxP(), (db.chats.byId(chat.id) || {}).summary);
+        }
+        const convo = [...base, ...inTurn];
         let stepText = '';
         await streamCompletion({
           model, messages: convo, signal: controller.signal,
@@ -655,7 +672,7 @@ wss.on('connection', (ws, req) => {
         const sep = '\n\n';
         content += sep;
         ws.send(JSON.stringify({ type: 'content', text: sep }));
-        convo = [...convo, { role: 'assistant', content: stepText }, { role: 'user', content: 'Tool results:\n' + results.join('\n\n') }];
+        inTurn = [...inTurn, { role: 'assistant', content: stepText }, { role: 'user', content: 'Tool results:\n' + results.join('\n\n') }];
       }
     } catch (err) {
       if (err.name !== 'AbortError') ws.send(JSON.stringify({ type: 'error', error: String(err.message || err) }));
