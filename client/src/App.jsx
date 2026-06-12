@@ -13,19 +13,23 @@ import { Down, ChevDown, Paper, Compact } from './components/icons.jsx';
 
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: 'Assistants can make mistakes, double-check responses.', greetings: ['How can I help you?'], appIcon: '', quickPrompts: [], version: '' };
 
-// paths of every finished create_file/str_replace block in the stream (so files
-// done earlier in the same response show in the tree before the server confirms them)
 function parseStreamedPaths(text) {
-  const paths = [];
+  const set = new Set();
   const re = /```tool\s*([\s\S]*?)```/g;
   let m;
   while ((m = re.exec(text)) !== null) {
-    const tool = (m[1].match(/"tool"\s*:\s*"([^"]+)"/) || [])[1];
-    if (tool !== 'create_file' && tool !== 'str_replace') continue;
-    const p = (m[1].match(/"path"\s*:\s*"((?:[^"\\]|\\.)*)"/) || [])[1];
-    if (p) paths.push(p);
+    const body = m[1];
+    const tool = (body.match(/"tool"\s*:\s*"([^"]+)"/) || [])[1];
+    const p = (body.match(/"path"\s*:\s*"((?:[^"\\]|\\.)*)"/) || [])[1];
+    if (tool === 'create_file' || tool === 'str_replace') { if (p) set.add(p); }
+    else if (tool === 'delete_file') { if (p) set.delete(p); }
+    else if (tool === 'rename_file') {
+      if (p) set.delete(p);
+      const np = (body.match(/"(?:new_path|to)"\s*:\s*"((?:[^"\\]|\\.)*)"/) || [])[1];
+      if (np) set.add(np);
+    }
   }
-  return paths;
+  return [...set];
 }
 
 // peek at the file being written from a not-yet-closed tool block
