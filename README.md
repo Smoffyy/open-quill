@@ -3,10 +3,48 @@
 A fully local chat UI for OpenAI-compatible model servers, inspired by Anthropic’s design and enhanced with additional features all running entirely on your machine!
 
 <p align="center">
-  <img src="assets\banner.png" alt="Starburst Logo" width="1250"/>
+  <img src="assets\v2026\banner.png" alt="Starburst Logo" width="1250"/>
 </p>
 
+## Preview
 
+<p align="center">
+  <img src="assets\v2026\artifacts-showcase-screen.png" alt="Chat Interface with Artifacts"/>
+  <br>
+  <sub>The open-quill chat interface showcasing chats and artifacts.</sub>
+</p>
+
+<details>
+  <summary>More Screenshots.</summary>
+  <br>
+
+  <p align="center">
+    <img src="assets\v2026\first-login-screen.png" alt="First Login"/>
+    <br>
+    <sub>Web page upon first login.</sub>
+  </p>
+
+  <p align="center">
+    <img src="assets\v2026\response-showcase-screen.png" alt="Normal chat response"/>
+    <br>
+    <sub>Response showcase.</sub>
+  </p>
+
+  <p align="center">
+    <img src="assets\v2026\admin-models-screen.png" alt="Admin panel"/>
+    <br>
+    <sub>Models tab in Admin Panel.</sub>
+  </p>
+
+  <p align="center">
+    <img src="assets\v2026\your-chats-showcase-screen.png" alt="Saved Chats"/>
+    <br>
+    <sub>Your Chats panel.</sub>
+  </p>
+
+</details>
+
+---
 
 ## Features
 
