@@ -61,7 +61,7 @@ export default function Login({ onLogin }) {
             </>
           )}
         </div>
-        <div className="sub">open-quill is an fully open-sourced webUI for inference<br />with large language models.</div>
+        <div className="sub">open-quill is a fully open-source web interface for large language model inference.</div>
         <div className="byline">BY SMOFFYY</div>
       </div>
     </div>

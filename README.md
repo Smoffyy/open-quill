@@ -3,8 +3,10 @@
 A fully local chat UI for OpenAI-compatible model servers, inspired by Anthropic’s design and enhanced with additional features all running entirely on your machine!
 
 <p align="center">
-  <img src="banner.png" alt="Starburst Logo" width="1250"/>
+  <img src="assets\banner.png" alt="Starburst Logo" width="1250"/>
 </p>
+
+
 
 ## Features
 
