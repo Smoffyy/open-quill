@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import hljs from 'highlight.js';
 import { api } from '../api.js';
+import { copyText } from '../clipboard.js';
 import { Download, Refresh, FileText, Copy, Check, ChevDown, Folder } from './icons.jsx';
 
 const EXT_LANG = { rs: 'rust', py: 'python', js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript', html: 'xml', htm: 'xml', css: 'css', scss: 'scss', json: 'json', md: 'markdown', markdown: 'markdown', sh: 'bash', bash: 'bash', c: 'c', cpp: 'cpp', h: 'cpp', java: 'java', rb: 'ruby', go: 'go', php: 'php', sql: 'sql', yml: 'yaml', yaml: 'yaml', toml: 'ini', ini: 'ini', lua: 'lua', glsl: 'glsl', vert: 'glsl', frag: 'glsl', xml: 'xml', svg: 'xml', kt: 'kotlin', swift: 'swift', vue: 'xml' };
@@ -25,7 +26,7 @@ function diffLines(a, b) {
   return out;
 }
 
-function Viewer({ chatId, path, onBack, liveText, writingElsewhere, onJumpToLive }) {
+function Viewer({ chatId, path, onBack, liveText, writingElsewhere, onJumpToLive, committed = true, pendingText = null }) {
   const [data, setData] = useState(null);
   const [copied, setCopied] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -33,13 +34,15 @@ function Viewer({ chatId, path, onBack, liveText, writingElsewhere, onJumpToLive
   const [prev, setPrev] = useState(null);
   const ext = (path.split('.').pop() || '').toUpperCase();
   const isLive = liveText != null;
+  const streamText = isLive ? liveText : (!committed && pendingText != null ? pendingText : null);
+  const fromStream = streamText != null;
 
   async function load(v) {
     setData(null);
     try { setData(await api.get(`/api/chats/${chatId}/file?path=${encodeURIComponent(path)}${v ? '&v=' + v : ''}`)); }
     catch { setData({ error: true }); }
   }
-  useEffect(() => { if (!isLive) { setDiff(false); setPrev(null); load(); } }, [path, isLive]);
+  useEffect(() => { if (isLive) return; if (committed) { setDiff(false); setPrev(null); load(); } else setData(null); }, [path, isLive, committed]);
 
   const viewingV = data?.viewing;
   useEffect(() => {
@@ -50,20 +53,24 @@ function Viewer({ chatId, path, onBack, liveText, writingElsewhere, onJumpToLive
     return () => { on = false; };
   }, [diff, viewingV, path, chatId]);
 
-  const shownText = isLive ? liveText : (data?.text != null ? data.text : null);
+  const shownText = fromStream ? streamText : (data?.text != null ? data.text : null);
   const html = useMemo(() => {
     if (shownText == null) return '';
-    const lang = EXT_LANG[(isLive ? ext.toLowerCase() : (data?.ext || '').toLowerCase())];
-    try { return lang && hljs.getLanguage(lang) ? hljs.highlight(shownText, { language: lang, ignoreIllegals: true }).value : hljs.highlightAuto(shownText).value; }
-    catch { return shownText.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
-  }, [shownText, isLive]);
+    const esc = (s) => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    const lang = EXT_LANG[(fromStream ? ext.toLowerCase() : (data?.ext || '').toLowerCase())];
+    try {
+      if (lang && hljs.getLanguage(lang)) return hljs.highlight(shownText, { language: lang, ignoreIllegals: true }).value;
+      if (isLive) return esc(shownText);
+      return hljs.highlightAuto(shownText).value;
+    } catch { return esc(shownText); }
+  }, [shownText, fromStream]);
   const lines = shownText != null ? shownText.split('\n') : [];
   const diffRows = useMemo(() => {
     if (!diff || prev == null || data?.text == null) return null;
     return diffLines(prev.split('\n'), data.text.split('\n'));
   }, [diff, prev, data]);
 
-  function copy() { if (data?.text != null) { navigator.clipboard.writeText(data.text); setCopied(true); setTimeout(() => setCopied(false), 1400); } }
+  async function copy() { const t = data?.text != null ? data.text : shownText; if (t != null && await copyText(t)) { setCopied(true); setTimeout(() => setCopied(false), 1400); } }
 
   const bodyRef = useRef(null);
   useEffect(() => { if (isLive && bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight; }, [shownText, isLive]);
@@ -113,25 +120,26 @@ function Viewer({ chatId, path, onBack, liveText, writingElsewhere, onJumpToLive
       )}
       {stale && <button className="art-stale-bar" onClick={() => load()}>Viewing older version v{viewing} — jump to latest (v{current})</button>}
       <div className="art-vbody" ref={bodyRef}>
-        {isLive && (
-          <div className="art-code live">
+        {fromStream && (
+          <div className={'art-code' + (isLive ? ' live' : '')}>
             <div className="art-gutter">{lines.map((_, i) => <div key={i}>{i + 1}</div>)}</div>
-            <pre><code className="hljs" dangerouslySetInnerHTML={{ __html: html }} /><span className="live-caret" /></pre>
+            <pre><code className="hljs" dangerouslySetInnerHTML={{ __html: html }} />{isLive && <span className="live-caret" />}</pre>
           </div>
         )}
-        {!isLive && !data && (
+        {!fromStream && !committed && <div className="art-empty">This file is still being written…</div>}
+        {!fromStream && committed && !data && (
           <div className="art-skel">
             {Array.from({ length: 14 }).map((_, i) => <span key={i} className="skeleton" style={{ width: (35 + ((i * 53) % 55)) + '%' }} />)}
           </div>
         )}
-        {!isLive && data?.error && <div className="art-empty">Couldn't load file.</div>}
-        {!isLive && data && data.text != null && !diff && (
+        {!fromStream && committed && data?.error && <div className="art-empty">Couldn't load file.</div>}
+        {!fromStream && committed && data && data.text != null && !diff && (
           <div className="art-code">
             <div className="art-gutter">{lines.map((_, i) => <div key={i}>{i + 1}</div>)}</div>
             <pre><code className="hljs" dangerouslySetInnerHTML={{ __html: html }} /></pre>
           </div>
         )}
-        {!isLive && data && data.text != null && diff && (
+        {!fromStream && data && data.text != null && diff && (
           prev == null ? <div className="art-empty">Loading diff…</div>
             : diffRows == null ? <div className="art-empty">File too large to diff.</div>
               : <div className="art-diff">
@@ -204,7 +212,7 @@ function TreeChildren({ node, depth, chatId, onOpen, sel, live }) {
 
 function clampW(w) { return Math.max(320, Math.min(w, Math.round(window.innerWidth * 0.8))); }
 
-export default function ArtifactsPanel({ chatId, files, live, pending = [], onClose }) {
+export default function ArtifactsPanel({ chatId, files, live, pending = {}, onClose }) {
   const [sel, setSel] = useState(null);
   const [width, setWidth] = useState(() => { const s = parseInt(localStorage.getItem('oq-art-w')); return s ? clampW(s) : Math.min(460, Math.round(window.innerWidth * 0.42)); });
   const autoRef = useRef(null);
@@ -226,7 +234,7 @@ export default function ArtifactsPanel({ chatId, files, live, pending = [], onCl
 
   const liveText = live && sel === live.path ? live.content : null;
   const byPath = new Map(files.map(f => [f.path, f]));
-  for (const p of pending) if (!byPath.has(p)) byPath.set(p, { path: p, ext: (p.split('.').pop() || ''), v: 0 });
+  for (const p of Object.keys(pending)) if (!byPath.has(p)) byPath.set(p, { path: p, ext: (p.split('.').pop() || ''), v: 0 });
   if (live && live.path && !byPath.has(live.path)) byPath.set(live.path, { path: live.path, ext: (live.path.split('.').pop() || ''), v: 0 });
   const treeFiles = [...byPath.values()];
 
@@ -235,6 +243,8 @@ export default function ArtifactsPanel({ chatId, files, live, pending = [], onCl
       <div className="art-resizer" onMouseDown={startResize} onTouchStart={startResize} ref={dragRef} title="Drag to resize" />
       {sel ? (
         <Viewer chatId={chatId} path={sel} liveText={liveText} onBack={() => setSel(null)}
+          committed={!!files.find(f => f.path === sel)}
+          pendingText={sel in pending ? pending[sel] : null}
           writingElsewhere={live && live.path && sel !== live.path ? live.path : null}
           onJumpToLive={() => live && setSel(live.path)} />
       ) : (

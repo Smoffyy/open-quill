@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
-import { Cube, Sliders, Plus, Trash, Chevron, Users, Sparkles } from './icons.jsx';
+import { Cube, Sliders, Plus, Trash, Users, Sparkles } from './icons.jsx';
 
 const Grip = (p) => (
   <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" {...p}>
@@ -36,8 +36,8 @@ function IconSlot({ label, value, def, anim, onChange }) {
   );
 }
 
-function ModelCard({ m, index, onChange, onSave, onDelete, saved, drag }) {
-  const [open, setOpen] = useState(false);
+function ModelEditor({ m, onChange, onSave, onDelete, saved }) {
+  const [section, setSection] = useState('general');
   const [detecting, setDetecting] = useState(false);
   const [detectMsg, setDetectMsg] = useState('');
   const set = (k, v) => onChange({ ...m, [k]: v });
@@ -50,58 +50,60 @@ function ModelCard({ m, index, onChange, onSave, onDelete, saved, drag }) {
     } catch { setDetectMsg('Could not detect from the server — enter it manually.'); }
     setDetecting(false);
   }
+  const Toggle = ({ k, label, note, inverted }) => (
+    <div className="field row">
+      <div><label>{label}</label>{note && <div className="muted-note">{note}</div>}</div>
+      <div className={'switch' + ((inverted ? m[k] !== 0 : !!m[k]) ? ' on' : '')} onClick={() => set(k, (inverted ? m[k] !== 0 : !!m[k]) ? 0 : 1)} />
+    </div>
+  );
+  const sections = [
+    ['general', 'General'], ['reasoning', 'Reasoning'], ['capabilities', 'Capabilities'],
+    ['context', 'Context'], ['appearance', 'Appearance'], ['sampling', 'Sampling']
+  ];
   return (
-    <div className={'model-card' + (drag.dragging === index ? ' dragging' : '') + (drag.over === index ? ' drag-over' : '')}
-      onDragOver={(e) => { e.preventDefault(); drag.onOver(index); }}
-      onDrop={(e) => { e.preventDefault(); drag.onDrop(index); }}>
-      <div className="model-card-head"
-        draggable onDragStart={() => drag.onStart(index)} onDragEnd={drag.onEnd}
-        onClick={() => setOpen(o => !o)}>
-        <span className="grip" onClick={(e) => e.stopPropagation()}><Grip /></span>
-        <Chevron className={'mc-chev' + (open ? ' open' : '')} style={{ width: 16 }} />
-        <div className="mc-left">
+    <div className="model-editor">
+      <div className="me-head">
+        <div className="me-title">
           <span className="mc-title">{m.display_name || 'Untitled model'}</span>
           <span className="mc-sub">{m.internal_name}</span>
         </div>
-        <button className="btn danger" onClick={(e) => { e.stopPropagation(); onDelete(m.id); }}><Trash style={{ width: 15 }} /></button>
+        <button className="btn danger" onClick={() => onDelete(m.id)}><Trash style={{ width: 15 }} /></button>
       </div>
-
-      {open && (
-        <div className="model-card-body">
+      <div className="me-sections">
+        {sections.map(([k, label]) => (
+          <button key={k} className={'me-sec' + (section === k ? ' on' : '')} onClick={() => setSection(k)}>{label}</button>
+        ))}
+      </div>
+      <div className="me-body">
+        {section === 'general' && <>
           <div className="two-col">
             <div className="field"><label>Model name (shown in dropdown)</label>
-              <input value={m.display_name} onChange={(e) => set('display_name', e.target.value)} /></div>
+              <input value={m.display_name || ''} onChange={(e) => set('display_name', e.target.value)} /></div>
             <div className="field"><label>Internal model name (API id)</label>
-              <input value={m.internal_name} onChange={(e) => set('internal_name', e.target.value)} /></div>
+              <input value={m.internal_name || ''} onChange={(e) => set('internal_name', e.target.value)} /></div>
           </div>
           <div className="field"><label>Description</label>
-            <input value={m.description} onChange={(e) => set('description', e.target.value)} /></div>
+            <input value={m.description || ''} onChange={(e) => set('description', e.target.value)} placeholder="For complex tasks" /></div>
           <div className="field"><label>System prompt</label>
-            <textarea value={m.system_prompt} onChange={(e) => set('system_prompt', e.target.value)} /></div>
-
-          <div className="field row">
-            <div><label>Tuck under "More models"</label><div className="muted-note">Hidden from the main list</div></div>
-            <div className={'switch' + (m.in_more_models ? ' on' : '')} onClick={() => set('in_more_models', m.in_more_models ? 0 : 1)} />
-          </div>
+            <textarea rows={5} value={m.system_prompt || ''} onChange={(e) => set('system_prompt', e.target.value)} /></div>
+          <Toggle k="in_more_models" label={'Tuck under "More models"'} note="Hidden from the main list" />
           {!!m.in_more_models && (
             <div className="field"><label>More-models label</label>
-              <input value={m.more_models_label} onChange={(e) => set('more_models_label', e.target.value)} /></div>
+              <input value={m.more_models_label || ''} onChange={(e) => set('more_models_label', e.target.value)} placeholder="Other models" /></div>
           )}
-
-          <div className="field row">
-            <div><label>Model has reasoning capability</label><div className="muted-note">Enables the Extended button</div></div>
-            <div className={'switch' + (m.has_reasoning ? ' on' : '')} onClick={() => set('has_reasoning', m.has_reasoning ? 0 : 1)} />
-          </div>
-          {!!m.has_reasoning && (
+          <Toggle k="is_default" label="Default model" note="Pre-selected when a user first logs in. Only one model can be the default." />
+        </>}
+        {section === 'reasoning' && <>
+          <Toggle k="has_reasoning" label="Model has reasoning capability" note="Enables the Extended button" />
+          {!!m.has_reasoning && <>
             <div className="two-col">
               <div className="field"><label>Reasoning token</label>
-                <input value={m.reasoning_token} onChange={(e) => set('reasoning_token', e.target.value)} placeholder="/think" /></div>
+                <input value={m.reasoning_token || ''} onChange={(e) => set('reasoning_token', e.target.value)} /></div>
               <div className="field"><label>Non-reasoning token</label>
-                <input value={m.non_reasoning_token} onChange={(e) => set('non_reasoning_token', e.target.value)} placeholder="/no_think" /></div>
+                <input value={m.non_reasoning_token || ''} onChange={(e) => set('non_reasoning_token', e.target.value)} /></div>
             </div>
-          )}
-          <div className="muted-note">Tokens are appended to the end of the system prompt on a new line.</div>
-
+            <div className="muted-note">Tokens are appended to the end of the system prompt on a new line.</div>
+          </>}
           <div className="two-col" style={{ marginTop: 12 }}>
             <div className="field"><label>Thinking open tag</label>
               <input value={m.think_open || ''} onChange={(e) => set('think_open', e.target.value)} placeholder="<think>" /></div>
@@ -109,85 +111,51 @@ function ModelCard({ m, index, onChange, onSave, onDelete, saved, drag }) {
               <input value={m.think_close || ''} onChange={(e) => set('think_close', e.target.value)} placeholder="</think>" /></div>
           </div>
           <div className="muted-note">Override the tags used to detect inline reasoning in the stream. Leave blank to use the default {'<think>…</think>'}.</div>
-
-          <div className="field row">
-            <div><label>Vision supported</label><div className="muted-note">Allow image uploads (sent to the model). Off = files only.</div></div>
-            <div className={'switch' + (m.has_vision ? ' on' : '')} onClick={() => set('has_vision', m.has_vision ? 0 : 1)} />
-          </div>
-
-          <div className="field row">
-            <div><label>Sandbox tools available</label><div className="muted-note">Allow users to enable sandbox tools for this model. If off, sandbox can't be turned on.</div></div>
-            <div className={'switch' + (m.sandbox_allowed !== 0 ? ' on' : '')} onClick={() => set('sandbox_allowed', m.sandbox_allowed !== 0 ? 0 : 1)} />
-          </div>
-          {m.sandbox_allowed !== 0 && (
-            <div className="field row">
-              <div><label>Sandbox tools auto-enabled</label><div className="muted-note">Start new chats with this model in sandbox mode.</div></div>
-              <div className={'switch' + (m.sandbox_auto ? ' on' : '')} onClick={() => set('sandbox_auto', m.sandbox_auto ? 0 : 1)} />
-            </div>
-          )}
+        </>}
+        {section === 'capabilities' && <>
+          <Toggle k="has_vision" label="Vision supported" note="Allow image uploads (sent to the model). Off = files only." />
+          <Toggle k="sandbox_allowed" inverted label="Sandbox tools available" note="Allow users to enable sandbox tools for this model. If off, sandbox can't be turned on." />
+          {m.sandbox_allowed !== 0 && <Toggle k="sandbox_auto" label="Sandbox tools auto-enabled" note="Start new chats with this model in sandbox mode." />}
           <div className="field"><label>Agent step cap</label>
-            <input type="number" min="1" value={m.agent_steps ?? 10} onChange={(e) => set('agent_steps', parseInt(e.target.value) || 10)} />
+            <input type="number" min="1" value={m.agent_steps ?? 10} onChange={(e) => set('agent_steps', e.target.value)} style={{ maxWidth: 140 }} />
             <div className="muted-note">Max tool rounds per response (default 10, no upper limit).</div>
           </div>
-
-          <div className="field row">
-            <div><label>Enable conversation summaries</label><div className="muted-note">Compact older turns when the chat nears the context window so it can keep going.</div></div>
-            <div className={'switch' + (m.enable_summaries ? ' on' : '')} onClick={() => set('enable_summaries', m.enable_summaries ? 0 : 1)} />
-          </div>
-          {!!m.enable_summaries && (
-            <>
-              <div className="field"><label>Context window (tokens)</label>
-                <div className="ctx-row">
-                  <input type="number" min="0" value={m.num_ctx ?? 0} onChange={(e) => set('num_ctx', parseInt(e.target.value) || 0)} placeholder="e.g. 8192" />
-                  <button className="btn" type="button" onClick={detect} disabled={detecting}>{detecting ? 'Detecting…' : 'Detect'}</button>
-                </div>
-                <div className="muted-note">{detectMsg || 'The model’s max context. Detect tries LM Studio; otherwise enter it manually.'}</div>
+        </>}
+        {section === 'context' && <>
+          <Toggle k="enable_summaries" label="Enable conversation summaries" note="Compact older turns when the chat nears the context window so it can keep going." />
+          {!!m.enable_summaries && <>
+            <div className="field"><label>Context window (tokens)</label>
+              <div className="ctx-row">
+                <input type="number" min="0" value={m.num_ctx ?? ''} onChange={(e) => set('num_ctx', e.target.value)} placeholder="e.g. 32768" />
+                <button className="btn" type="button" onClick={detect} disabled={detecting}>{detecting ? 'Detecting…' : 'Detect'}</button>
               </div>
-              <div className="field"><label>Safety padding (fraction)</label>
-                <input type="number" step="0.005" min="0.03" max="0.6" value={m.summary_padding ?? 0.125} onChange={(e) => set('summary_padding', parseFloat(e.target.value) || 0.125)} />
-                <div className="muted-note">
-                  {m.num_ctx ? `Summarizes when usage passes ${Math.floor(m.num_ctx * (1 - (m.summary_padding || 0.125))).toLocaleString()} tokens` : 'Set a context window above'} (= context × (1 − padding)). Default 0.125 = 1/8.
-                </div>
-              </div>
-            </>
-          )}
-
-          <div className="field" style={{ marginTop: 14 }}><label>Model logos</label>
+              <div className="muted-note">{detectMsg || 'The model’s max context. Detect tries LM Studio; otherwise enter it manually.'}</div>
+            </div>
+            <div className="field"><label>Safety padding (fraction)</label>
+              <input type="number" step="0.01" min="0.03" max="0.6" value={m.summary_padding ?? 0.125} onChange={(e) => set('summary_padding', e.target.value)} style={{ maxWidth: 140 }} />
+              <div className="muted-note">Summarize when the conversation reaches (1 − padding) × context. 0.125 leaves 12.5% headroom.</div>
+            </div>
+          </>}
+        </>}
+        {section === 'appearance' && <>
+          <div className="field"><label>Model logos</label>
             <div className="icon-grid">
-              <IconSlot label="Static" value={m.static_icon} def="/starburst.svg" anim="" onChange={(v) => set('static_icon', v)} />
-              <IconSlot label="Generating" value={m.generating_icon} def="/starburst-generating.svg" anim="spin" onChange={(v) => set('generating_icon', v)} />
-              <IconSlot label="Thinking" value={m.thinking_icon} def="/starburst-thinking.svg" anim="pulse" onChange={(v) => set('thinking_icon', v)} />
+              <IconSlot label="Static" value={m.static_icon} def="/starburst.svg" onChange={(v) => set('static_icon', v)} />
+              <IconSlot label="Generating" value={m.generating_icon} def="/starburst-generating.svg" anim={(m.generating_anim || 'spin') === 'none' ? '' : (m.generating_anim || 'spin')} onChange={(v) => set('generating_icon', v)} />
+              <IconSlot label="Thinking" value={m.thinking_icon} def="/starburst-thinking.svg" anim={(m.thinking_anim || 'pulse') === 'none' ? '' : (m.thinking_anim || 'pulse')} onChange={(v) => set('thinking_icon', v)} />
+            </div>
+            <div className="icon-grid anim-row">
+              <div />
+              <select className="anim-sel" value={m.generating_anim || 'spin'} onChange={(e) => set('generating_anim', e.target.value)}>
+                <option value="spin">Spin</option><option value="pulse">Breathe</option><option value="bounce">Bounce</option><option value="wobble">Wobble</option><option value="fade">Fade</option><option value="none">No motion</option>
+              </select>
+              <select className="anim-sel" value={m.thinking_anim || 'pulse'} onChange={(e) => set('thinking_anim', e.target.value)}>
+                <option value="pulse">Breathe</option><option value="spin">Spin</option><option value="bounce">Bounce</option><option value="wobble">Wobble</option><option value="fade">Fade</option><option value="none">No motion</option>
+              </select>
             </div>
             <div className="muted-note">Click an icon to upload a png, svg, jpeg, or gif. Previews animate as they will in chat.</div>
           </div>
-
-          <div className="field row">
-            <div><label>Show icon in model dropdown</label><div className="muted-note">Display this model's static icon next to its name in the model picker.</div></div>
-            <div className={'switch' + (m.dropdown_icon !== 0 ? ' on' : '')} onClick={() => set('dropdown_icon', m.dropdown_icon !== 0 ? 0 : 1)} />
-          </div>
-
-          <div className="field row">
-            <div><label>Default model</label><div className="muted-note">Pre-selected when a user first logs in. Only one model can be the default.</div></div>
-            <div className={'switch' + (m.is_default ? ' on' : '')} onClick={() => set('is_default', m.is_default ? 0 : 1)} />
-          </div>
-
-          <div className="field"><label>Sampling parameters</label>
-            <div className="muted-note">Override what's sent to the API. Leave blank to use the server/model default. Non-standard params (top_k, min_p, repetition_penalty) apply on servers that support them, e.g. LM Studio.</div>
-            <div className="sampling-grid">
-              {[
-                ['temperature', 'Temperature', '0.0 – 2.0'], ['top_p', 'Top P', '0.0 – 1.0'],
-                ['top_k', 'Top K', 'e.g. 40'], ['min_p', 'Min P', '0.0 – 1.0'],
-                ['repetition_penalty', 'Repetition penalty', 'e.g. 1.1'], ['presence_penalty', 'Presence penalty', '-2.0 – 2.0'],
-                ['frequency_penalty', 'Frequency penalty', '-2.0 – 2.0'], ['seed', 'Seed', 'integer']
-              ].map(([k, label, ph]) => (
-                <div className="samp-field" key={k}>
-                  <label>{label}</label>
-                  <input type="number" step="any" placeholder={ph} value={m[k] ?? ''} onChange={(e) => set(k, e.target.value)} />
-                </div>
-              ))}
-            </div>
-          </div>
-
+          <Toggle k="dropdown_icon" inverted label="Show icon in model dropdown" note="Display this model's static icon next to its name in the model picker." />
           <div className="field">
             <label>Model icon position</label>
             <div className="seg">
@@ -196,13 +164,28 @@ function ModelCard({ m, index, onChange, onSave, onDelete, saved, drag }) {
             </div>
             <div className="muted-note">Where the logo sits relative to the message it generates.</div>
           </div>
-
-          <div className="btn-row">
-            <button className="btn primary" onClick={() => onSave(m)}>Save</button>
-            {saved === m.id && <span className="saved-flash" style={{ alignSelf: 'center' }}>Saved — pushed to all clients ✓</span>}
+        </>}
+        {section === 'sampling' && <>
+          <div className="muted-note">Override what's sent to the API. Leave blank to use the server/model default. Non-standard params (top_k, min_p, repetition_penalty) apply on servers that support them, e.g. LM Studio.</div>
+          <div className="sampling-grid">
+            {[
+              ['temperature', 'Temperature', '0.0 – 2.0'], ['top_p', 'Top P', '0.0 – 1.0'],
+              ['top_k', 'Top K', 'e.g. 40'], ['min_p', 'Min P', '0.0 – 1.0'],
+              ['repetition_penalty', 'Repetition penalty', 'e.g. 1.1'], ['presence_penalty', 'Presence penalty', '-2.0 – 2.0'],
+              ['frequency_penalty', 'Frequency penalty', '-2.0 – 2.0'], ['seed', 'Seed', 'integer']
+            ].map(([k, label, ph]) => (
+              <div className="samp-field" key={k}>
+                <label>{label}</label>
+                <input type="number" step="any" placeholder={ph} value={m[k] ?? ''} onChange={(e) => set(k, e.target.value)} />
+              </div>
+            ))}
           </div>
-        </div>
-      )}
+        </>}
+      </div>
+      <div className="btn-row me-foot">
+        <button className="btn primary" onClick={() => onSave(m)}>Save</button>
+        {saved === m.id && <span className="saved-flash" style={{ alignSelf: 'center' }}>Saved — pushed to all clients ✓</span>}
+      </div>
     </div>
   );
 }
@@ -213,8 +196,9 @@ export default function AdminPanel({ user, onClose }) {
   const [usersList, setUsersList] = useState([]);
   const [cfg, setCfg] = useState({ appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [] });
   const [cfgSaved, setCfgSaved] = useState(false);
-  const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitMb: 8, modelQueue: false });
+  const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256, modelQueue: false });
   const [saved, setSaved] = useState(null);
+  const [selModel, setSelModel] = useState(null);
   const [setSavedFlash, setSetSaved] = useState(false);
   const [dragOver, setDragOver] = useState(null);
   const [ask, setAsk] = useState(null); // { message, danger, onConfirm }
@@ -254,12 +238,12 @@ export default function AdminPanel({ user, onClose }) {
   async function save(m) { await api.patch('/api/admin/models/' + m.id, m); setSaved(m.id); setTimeout(() => setSaved(null), 1800); }
   async function add() {
     const { id } = await api.post('/api/admin/models', { display_name: 'New model', internal_name: 'local-model' });
-    await load(); setSaved(id);
+    await load(); setSaved(id); setSelModel(id);
   }
   function del(id) {
     setAsk({
       message: 'Delete this model? This cannot be undone.', danger: 'Delete model',
-      onConfirm: async () => { await api.del('/api/admin/models/' + id); setModels(ms => ms.filter(m => m.id !== id)); }
+      onConfirm: async () => { await api.del('/api/admin/models/' + id); setModels(ms => ms.filter(m => m.id !== id)); setSelModel(s => s === id ? null : s); }
     });
   }
   async function saveSettings() {
@@ -294,14 +278,43 @@ export default function AdminPanel({ user, onClose }) {
           <button className={'modal-tab' + (tab === 'connection' ? ' active' : '')} onClick={() => setTab('connection')}><Sliders /> Connection</button>
         </div>
         <div className="modal-main">
-          {tab === 'models' && (
-            <>
-              <h2>Models</h2>
-              <div className="hint">Drag to reorder. Changes save instantly and push to every connected client in real time.</div>
-              {models.map((m, i) => <ModelCard key={m.id} m={m} index={i} onChange={change} onSave={save} onDelete={del} saved={saved} drag={drag} />)}
-              <button className="btn" onClick={add}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> Add model</button>
-            </>
-          )}
+          {tab === 'models' && (() => {
+            const sel = models.find(x => x.id === selModel) || models[0] || null;
+            return (
+              <>
+                <h2>Models</h2>
+                <div className="hint">Pick a model to edit. Drag to reorder — order changes save instantly.</div>
+                <div className="models-split">
+                  <div className="models-list">
+                    {models.map((m, i) => (
+                      <div key={m.id}
+                        className={'model-row' + (sel && sel.id === m.id ? ' active' : '') + (drag.dragging === i ? ' dragging' : '') + (drag.over === i ? ' drag-over' : '')}
+                        draggable onDragStart={() => drag.onStart(i)} onDragEnd={drag.onEnd}
+                        onDragOver={(e) => { e.preventDefault(); drag.onOver(i); }}
+                        onDrop={(e) => { e.preventDefault(); drag.onDrop(i); }}
+                        onClick={() => setSelModel(m.id)}>
+                        <span className="grip"><Grip /></span>
+                        <div className="mr-meta">
+                          <span className="mr-name">{m.display_name || 'Untitled model'}</span>
+                          <span className="mr-sub">{m.internal_name}</span>
+                        </div>
+                        <span className="mr-badges">
+                          {!!m.is_default && <span className="mr-badge">default</span>}
+                          {!!m.in_more_models && <span className="mr-badge dim">hidden</span>}
+                        </span>
+                      </div>
+                    ))}
+                    <button className="btn add-model" onClick={add}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> Add model</button>
+                  </div>
+                  <div className="models-detail">
+                    {sel
+                      ? <ModelEditor key={sel.id} m={sel} onChange={change} onSave={save} onDelete={del} saved={saved} />
+                      : <div className="muted-note" style={{ padding: 20 }}>No models yet — add one to get started.</div>}
+                  </div>
+                </div>
+              </>
+            );
+          })()}
           {tab === 'customization' && (
             <>
               <h2>Customization</h2>
@@ -376,8 +389,21 @@ export default function AdminPanel({ user, onClose }) {
               <div className="field"><label>API key</label>
                 <input value={settings.apiKey || ''} onChange={(e) => setSettings(s => ({ ...s, apiKey: e.target.value }))} placeholder="lm-studio" /></div>
               <div className="field"><label>Upload size limit (MB)</label>
-                <div className="muted-note">Max size for files users attach. Applies to everyone. Default 8.</div>
-                <input type="number" min="1" step="1" value={settings.uploadLimitMb ?? 8} onChange={(e) => setSettings(s => ({ ...s, uploadLimitMb: e.target.value }))} placeholder="8" /></div>
+                <div className="muted-note">Max size for files attached to messages, per role. 0 = unlimited.</div>
+                <div className="two-col">
+                  <div className="field"><label className="sub">Admins</label>
+                    <input type="number" min="0" step="1" value={settings.uploadLimitAdminMb ?? 8} onChange={(e) => setSettings(s => ({ ...s, uploadLimitAdminMb: e.target.value }))} placeholder="8" /></div>
+                  <div className="field"><label className="sub">Users</label>
+                    <input type="number" min="0" step="1" value={settings.uploadLimitUserMb ?? 8} onChange={(e) => setSettings(s => ({ ...s, uploadLimitUserMb: e.target.value }))} placeholder="8" /></div>
+                </div></div>
+              <div className="field"><label>Sandbox storage limit (MB)</label>
+                <div className="muted-note">Max total size of a chat's sandbox files, per role. Writes beyond it are rejected. 0 = unlimited.</div>
+                <div className="two-col">
+                  <div className="field"><label className="sub">Admins</label>
+                    <input type="number" min="0" step="1" value={settings.sandboxLimitAdminMb ?? 1024} onChange={(e) => setSettings(s => ({ ...s, sandboxLimitAdminMb: e.target.value }))} placeholder="1024" /></div>
+                  <div className="field"><label className="sub">Users</label>
+                    <input type="number" min="0" step="1" value={settings.sandboxLimitUserMb ?? 256} onChange={(e) => setSettings(s => ({ ...s, sandboxLimitUserMb: e.target.value }))} placeholder="256" /></div>
+                </div></div>
               <div className="field row">
                 <div><label>Model queue</label><div className="muted-note">Only one model runs at a time. Requests for the same model run together; a request for a different model waits until the current one finishes, instead of swapping it out mid-response. Useful for local servers that load a single model.</div></div>
                 <div className={'switch' + (settings.modelQueue ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, modelQueue: !s.modelQueue }))} /></div>

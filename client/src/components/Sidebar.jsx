@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, Chat, Search, Panel, Gear, Shield, Logout, Dots, Trash, Heart, FileText, Star, Download } from './icons.jsx';
 
-function ProfileMenu({ user, version, onSettings, onAdmin, onCredits, onChangelog, onLogout, onClose }) {
+function ProfileMenu({ user, version, onSettings, onAdmin, onCredits, onChangelog, onLicense, onLogout, onClose }) {
   const ref = useRef(null);
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
@@ -15,6 +15,7 @@ function ProfileMenu({ user, version, onSettings, onAdmin, onCredits, onChangelo
       <button onClick={onSettings}><Gear /> Settings</button>
       <button onClick={onCredits}><Heart /> Credits</button>
       <button onClick={onChangelog}><FileText /> Changelog</button>
+      <button onClick={onLicense}><FileText /> Licensing</button>
       <hr />
       <button onClick={onLogout}><Logout /> Log out</button>
       {version && <div className="pm-version">open-quill v{version}</div>}
@@ -75,7 +76,7 @@ function ChatRow({ c, active, showTrash, onOpen, onDelete, onToggleStar }) {
 
 export default function Sidebar({
   user, chats, chatsLoaded = true, activeId, appName, onNew, onOpen, onDelete, onToggleStar,
-  collapsed, onToggle, onSettings, onAdmin, onCredits, onChangelog, onLogout, version
+  collapsed, onToggle, onSettings, onAdmin, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview
 }) {
   const [menu, setMenu] = useState(false);
   const [shiftHeld, setShiftHeld] = useState(false);
@@ -110,7 +111,7 @@ export default function Sidebar({
           onClick={(e) => { if (e.ctrlKey || e.metaKey) { window.open('/', '_blank', 'noopener'); return; } onNew(); }}
           onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); window.open('/', '_blank', 'noopener'); } }}
           onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}><Plus /> <span className="nav-label">New chat</span></button>
-        <button className="nav-item" title="Chats"><Chat /> <span className="nav-label">Chats</span></button>
+        <button className="nav-item" title="Chats" onClick={onChatsOverview}><Chat /> <span className="nav-label">Chats</span></button>
       </div>
       <div className="chats">
         {!chatsLoaded ? (
@@ -139,6 +140,7 @@ export default function Sidebar({
           onAdmin={() => { setMenu(false); onAdmin(); }}
           onCredits={() => { setMenu(false); onCredits(); }}
           onChangelog={() => { setMenu(false); onChangelog(); }}
+          onLicense={() => { setMenu(false); onLicense(); }}
           onLogout={onLogout} onClose={() => setMenu(false)} />}
         <button className="profile-btn" onClick={() => setMenu(m => !m)}>
           <div className="avatar">{(user.displayName || user.email)[0].toUpperCase()}</div>

@@ -23,7 +23,7 @@ app.use(parseCookies);
 
 const UPLOADS = path.join(__dirname, 'uploads');
 fs.mkdirSync(UPLOADS, { recursive: true });
-app.use('/uploads', express.static(UPLOADS));
+app.use('/uploads', (req, res, next) => { res.setHeader('Content-Security-Policy', "script-src 'none'; object-src 'none'"); res.setHeader('X-Content-Type-Options', 'nosniff'); next(); }, express.static(UPLOADS));
 
 const setCookie = (res, token) =>
   res.setHeader('Set-Cookie', `token=${token}; HttpOnly; Path=/; Max-Age=${60 * 60 * 24 * 30}; SameSite=Lax`);
@@ -34,13 +34,29 @@ app.post('/api/auth/check-email', (req, res) => {
   res.json({ exists: !!db.users.find(u => u.email === email) });
 });
 
+const loginFails = new Map();
+function loginLimited(ip) {
+  const rec = loginFails.get(ip);
+  if (!rec) return false;
+  if (Date.now() - rec.t > 10 * 60 * 1000) { loginFails.delete(ip); return false; }
+  return rec.n >= 8;
+}
+function noteLoginFail(ip) {
+  const rec = loginFails.get(ip);
+  if (rec && Date.now() - rec.t < 10 * 60 * 1000) { rec.n++; rec.t = Date.now(); }
+  else loginFails.set(ip, { n: 1, t: Date.now() });
+  if (loginFails.size > 5000) loginFails.clear();
+}
 app.post('/api/auth/login', (req, res) => {
+  const ip = req.socket.remoteAddress || '';
+  if (loginLimited(ip)) return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
   const email = (req.body.email || '').trim().toLowerCase();
   const pw = req.body.password || '';
   if (!email || pw.length < 4) return res.status(400).json({ error: 'Invalid email or password (min 4 chars).' });
   let u = db.users.find(x => x.email === email);
   if (u) {
-    if (!check(pw, u.password_hash)) return res.status(401).json({ error: 'Incorrect password.' });
+    if (!check(pw, u.password_hash)) { noteLoginFail(ip); return res.status(401).json({ error: 'Incorrect password.' }); }
+    loginFails.delete(ip);
   } else {
     const isFirst = db.users.count() === 0;
     u = db.users.insert({ id: uid(), email, password_hash: hash(pw), display_name: '', is_admin: isFirst ? 1 : 0, is_owner: isFirst ? 1 : 0, prefs: {}, created_at: now() });
@@ -85,6 +101,20 @@ app.get('/api/chats', authMiddleware, (req, res) => {
     .sort((a, b) => b.updated_at - a.updated_at)
     .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred }));
   res.json(list);
+});
+app.get('/api/chats-overview', authMiddleware, (req, res) => {
+  const offset = Math.max(0, parseInt(req.query.offset) || 0);
+  const limit = Math.min(60, Math.max(1, parseInt(req.query.limit) || 18));
+  const all = db.chats.filter(c => c.user_id === req.user.id).sort((a, b) => b.updated_at - a.updated_at);
+  const page = all.slice(offset, offset + limit).map(c => {
+    const msgs = sortedMsgs(c.id);
+    let preview = '';
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === 'user' && typeof msgs[i].content === 'string' && msgs[i].content.trim()) { preview = msgs[i].content.slice(0, 220); break; }
+    }
+    return { id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred, preview };
+  });
+  res.json({ chats: page, total: all.length, offset, hasMore: offset + page.length < all.length });
 });
 app.post('/api/chats', authMiddleware, (req, res) => {
   const t = now();
@@ -232,7 +262,7 @@ function publicModels() {
     .map(m => ({
       id: m.id, displayName: m.display_name, description: m.description,
       hasReasoning: !!m.has_reasoning, inMoreModels: !!m.in_more_models, moreModelsLabel: m.more_models_label,
-      staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon,
+      staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon, generatingAnim: m.generating_anim || 'spin', thinkingAnim: m.thinking_anim || 'pulse',
       iconPosition: m.icon_position || 'below', hasVision: !!m.has_vision,
       sandboxAuto: !!m.sandbox_auto, sandboxAllowed: m.sandbox_allowed !== 0, dropdownIcon: m.dropdown_icon !== 0, isDefault: !!m.is_default, agentSteps: m.agent_steps || 10,
       enableSummaries: !!m.enable_summaries, numCtx: m.num_ctx || 0, summaryPadding: m.summary_padding || 0.125
@@ -268,7 +298,7 @@ app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
 app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
   const cur = db.models.byId(req.params.id);
   if (!cur) return res.status(404).json({ error: 'not found' });
-  const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close'];
+  const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim'];
   const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries'];
   const patch = {};
   for (const k of str) if (k in req.body) patch[k] = req.body[k];
@@ -314,12 +344,28 @@ app.post('/api/admin/models/reorder', authMiddleware, adminOnly, (req, res) => {
   res.json({ ok: true });
 });
 
+function roleLimit(key, isAdmin, fallback) {
+  const v = getSetting(key + (isAdmin ? '_admin' : '_user'));
+  if (v != null) return Number(v);
+  return Number(getSetting(key, String(fallback)));
+}
 app.get('/api/admin/settings', authMiddleware, adminOnly, (req, res) =>
-  res.json({ apiBaseUrl: getSetting('api_base_url'), apiKey: getSetting('api_key'), uploadLimitMb: Number(getSetting('upload_limit_mb', '8')), modelQueue: getSetting('model_queue', '0') === '1' }));
+  res.json({
+    apiBaseUrl: getSetting('api_base_url'), apiKey: getSetting('api_key'),
+    uploadLimitAdminMb: roleLimit('upload_limit_mb', true, 8),
+    uploadLimitUserMb: roleLimit('upload_limit_mb', false, 8),
+    sandboxLimitAdminMb: roleLimit('sandbox_limit_mb', true, 1024),
+    sandboxLimitUserMb: roleLimit('sandbox_limit_mb', false, 256),
+    modelQueue: getSetting('model_queue', '0') === '1'
+  }));
 app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
   if ('apiBaseUrl' in req.body) setSetting('api_base_url', req.body.apiBaseUrl);
   if ('apiKey' in req.body) setSetting('api_key', req.body.apiKey);
-  if ('uploadLimitMb' in req.body) { const n = Number(req.body.uploadLimitMb); setSetting('upload_limit_mb', String(n > 0 ? n : 8)); }
+  const lim = (k, v, def) => { const n = Number(v); setSetting(k, String(Number.isFinite(n) && n >= 0 ? n : def)); };
+  if ('uploadLimitAdminMb' in req.body) lim('upload_limit_mb_admin', req.body.uploadLimitAdminMb, 8);
+  if ('uploadLimitUserMb' in req.body) lim('upload_limit_mb_user', req.body.uploadLimitUserMb, 8);
+  if ('sandboxLimitAdminMb' in req.body) lim('sandbox_limit_mb_admin', req.body.sandboxLimitAdminMb, 1024);
+  if ('sandboxLimitUserMb' in req.body) lim('sandbox_limit_mb_user', req.body.sandboxLimitUserMb, 256);
   if ('modelQueue' in req.body) setSetting('model_queue', req.body.modelQueue ? '1' : '0');
   res.json({ ok: true });
 });
@@ -361,7 +407,7 @@ const upload = multer({ storage: diskStore, limits: { fileSize: 8 * 1024 * 1024 
 app.post('/api/admin/upload', authMiddleware, adminOnly, upload.single('file'), (req, res) =>
   res.json({ url: `/uploads/${req.file.filename}` }));
 app.post('/api/upload', authMiddleware, (req, res) => {
-  const mb = Number(getSetting('upload_limit_mb', '8')) || 8;
+  const mb = roleLimit('upload_limit_mb', !!req.user.is_admin, 8) || 8;
   const mw = multer({ storage: diskStore, limits: { fileSize: Math.max(1, mb) * 1024 * 1024 } }).array('files', 10);
   mw(req, res, (err) => {
     if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? `That file is too large (max ${mb} MB).` : 'Upload failed.' });
@@ -424,9 +470,9 @@ function appConfig() {
   return {
     appName: getSetting('app_name', 'open-quill'),
     disclaimer: getSetting('disclaimer', 'Assistants can make mistakes, double-check responses.'),
-    greetings: JSON.parse(getSetting('greetings', '["How can I help you?"]')),
+    greetings: (() => { const g = JSON.parse(getSetting('greetings', '[]')); return g.length ? g : ['How can I help you?', 'What are we building today?', 'Where should we start?']; })(),
     appIcon: getSetting('app_icon', ''),
-    quickPrompts: JSON.parse(getSetting('quick_prompts', '[]')),
+    quickPrompts: (() => { const q = JSON.parse(getSetting('quick_prompts', '[]')); return q.length ? q : [{ label: 'Summarize', prompt: 'Summarize the following text for me:' }, { label: 'Write code', prompt: 'Help me write a small program. Ask me what it should do first.' }, { label: 'Brainstorm', prompt: 'Help me brainstorm ideas about a topic. Ask me for the topic.' }]; })(),
     version: APP_VERSION
   };
 }
@@ -451,7 +497,7 @@ app.patch('/api/admin/app-config', authMiddleware, adminOnly, (req, res) => {
 });
 
 // ---------- docs (credits / changelog) ----------
-const DOCS = { credits: 'CREDITS.md', changelog: 'CHANGELOG.md' };
+const DOCS = { credits: 'CREDITS.md', changelog: 'CHANGELOG.md', license: 'LICENSE' };
 app.get('/api/docs/:name', authMiddleware, (req, res) => {
   const file = DOCS[req.params.name];
   if (!file) return res.status(404).json({ error: 'not found' });
@@ -465,8 +511,8 @@ app.get('/api/docs/:name', authMiddleware, (req, res) => {
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
 if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
-  app.get('*', (req, res) => {
-    if (req.path.startsWith('/api')) return res.status(404).end();
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' || req.path.startsWith('/api')) return next();
     res.sendFile(path.join(clientDist, 'index.html'));
   });
 }
@@ -591,26 +637,35 @@ function estimateTokens(messages) {
 }
 
 // once we get near the context limit, fold older turns into chat.summary
-async function maybeCompact(ws, chat, model, extended, sandboxOn) {
-  if (!model.enable_summaries || !model.num_ctx) return;
+// one summarization pass over older persisted turns; returns true if it compacted
+async function compactStep(ws, chat, model) {
+  const fresh = db.chats.byId(chat.id);
+  const upto = fresh.summary && fresh.summary_upto ? fresh.summary_upto : 0;
+  const after = activePath(chat.id).filter(m => m.created_at > upto);
+  if (after.length <= 1) return false; // only the newest message remains; can't compact further
+  const toSummarize = after.slice(0, after.length - 1); // keep newest message verbatim
+  const marker = toSummarize[toSummarize.length - 1].created_at;
+  try { ws.send(JSON.stringify({ type: 'compacting' })); } catch {}
+  const summary = await summarizeConversation(model, fresh.summary, toSummarize);
+  db.chats.update(chat.id, { summary, summary_upto: marker });
+  try { ws.send(JSON.stringify({ type: 'compacted' })); } catch {}
+  return !!summary;
+}
+function compactThreshold(model) {
+  if (!model.enable_summaries || !model.num_ctx) return Infinity;
   const padding = Math.max(0.03, Math.min(0.6, model.summary_padding || 0.125));
-  const threshold = Math.floor(model.num_ctx * (1 - padding));
+  return Math.floor(model.num_ctx * (1 - padding));
+}
+async function maybeCompact(ws, chat, model, extended, sandboxOn) {
+  const threshold = compactThreshold(model);
+  if (threshold === Infinity) return;
   let guard = 0;
   while (guard++ < 3) {
     const fresh = db.chats.byId(chat.id);
     const sandboxP = sandboxOn ? sandboxPromptFor(chat.id) : null;
     const convo = buildMessages(model, chatHistory(chat, model), extended, sandboxP, fresh.summary);
     if (estimateTokens(convo) < threshold) return;
-    const upto = fresh.summary && fresh.summary_upto ? fresh.summary_upto : 0;
-    const after = activePath(chat.id).filter(m => m.created_at > upto);
-    if (after.length <= 1) return; // only the newest message remains; can't compact further
-    const toSummarize = after.slice(0, after.length - 1); // keep newest message verbatim
-    const marker = toSummarize[toSummarize.length - 1].created_at;
-    try { ws.send(JSON.stringify({ type: 'compacting' })); } catch {}
-    const summary = await summarizeConversation(model, fresh.summary, toSummarize);
-    db.chats.update(chat.id, { summary, summary_upto: marker });
-    try { ws.send(JSON.stringify({ type: 'compacted' })); } catch {}
-    if (!summary) return;
+    if (!(await compactStep(ws, chat, model))) return;
   }
 }
 
@@ -618,53 +673,67 @@ wss.on('connection', (ws, req) => {
   const u = userFromRequest(req);
   if (!u) { ws.close(); return; }
   clients.set(ws, { userId: u.id, abort: null });
+  const safeSend = (s) => { if (ws.readyState === 1) { try { ws.send(s); } catch {} } };
 
-  async function runCompletion(ws, state, chat, model, extended, sandboxOn) {
+  async function runCompletion(ws, state, chat, model, extended, sandboxOn, sandboxCap = 0) {
     await maybeCompact(ws, chat, model, extended, sandboxOn);
     const history = chatHistory(chat, model);
     const chatRow = db.chats.byId(chat.id) || chat;
-    let convo = buildMessages(model, history, extended, sandboxOn ? sandboxPromptFor(chat.id) : null, chatRow.summary);
+    const sandboxP = () => sandboxOn ? sandboxPromptFor(chat.id) : null;
+    let base = buildMessages(model, history, extended, sandboxP(), chatRow.summary);
+    let inTurn = []; // assistant/tool exchanges accumulated during this response
     const assistantId = uid();
     const assistantParent = (db.chats.byId(chat.id) || {}).active_leaf || null;
     let content = '', reasoning = '';
     const controller = new AbortController();
     state.abort = controller;
-    ws.send(JSON.stringify({ type: 'start', messageId: assistantId }));
+    safeSend(JSON.stringify({ type: 'start', messageId: assistantId }));
 
+    const threshold = compactThreshold(model);
     const maxSteps = sandboxOn ? (model.agent_steps || 10) : 1;
     try {
       for (let step = 0; step < maxSteps; step++) {
-        let stepText = '';
-        await streamCompletion({
-          model, messages: convo, signal: controller.signal,
-          onEvent: (e) => {
-            if (e.type === 'reasoning') { reasoning += e.text; ws.send(JSON.stringify({ type: 'reasoning', text: e.text })); }
-            else { content += e.text; stepText += e.text; ws.send(JSON.stringify({ type: 'content', text: e.text })); }
-          }
-        });
-        if (!sandboxOn || controller.signal.aborted) break;
-        const calls = sandbox.parseToolCalls(stepText);
-        if (!calls.length) break;
-        const results = [];
-        for (const call of calls) {
-          const r = sandbox.execTool(chat.id, call);
-          ws.send(JSON.stringify({ type: 'tool', tool: call.tool, path: r.path || call.path || null, ok: !!r.ok, error: r.error || null }));
-          results.push(formatToolResult(call, r));
+        // running low on context mid-response? summarize older turns, then carry on where we left off
+        if (threshold !== Infinity && inTurn.length && estimateTokens([...base, ...inTurn]) >= threshold) {
+          if (await compactStep(ws, chat, model)) base = buildMessages(model, chatHistory(chat, model), extended, sandboxP(), (db.chats.byId(chat.id) || {}).summary);
         }
-        ws.send(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
-        const sep = '\n\n';
-        content += sep;
-        ws.send(JSON.stringify({ type: 'content', text: sep }));
-        convo = [...convo, { role: 'assistant', content: stepText }, { role: 'user', content: 'Tool results:\n' + results.join('\n\n') }];
+        const convo = [...base, ...inTurn];
+        let stepText = '';
+        let aborted = false;
+        try {
+          await streamCompletion({
+            model, messages: convo, signal: controller.signal,
+            onEvent: (e) => {
+              if (e.type === 'reasoning') { reasoning += e.text; safeSend(JSON.stringify({ type: 'reasoning', text: e.text })); }
+              else { content += e.text; stepText += e.text; safeSend(JSON.stringify({ type: 'content', text: e.text })); }
+            }
+          });
+        } catch (err) {
+          if (err.name === 'AbortError') aborted = true; else throw err;
+        }
+        if (!sandboxOn) break;
+        const calls = sandbox.parseToolCalls(stepText);
+        if (calls.length) {
+          const results = [];
+          for (const call of calls) {
+            const r = sandbox.execTool(chat.id, call, sandboxCap);
+            safeSend(JSON.stringify({ type: 'tool', tool: call.tool, path: r.path || call.path || null, ok: !!r.ok, error: r.error || null }));
+            results.push(formatToolResult(call, r));
+          }
+          safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
+          if (!aborted) { content += '\n\n'; safeSend(JSON.stringify({ type: 'content', text: '\n\n' })); }
+          inTurn = [...inTurn, { role: 'assistant', content: stepText }, { role: 'user', content: 'Tool results:\n' + results.join('\n\n') }];
+        }
+        if (aborted || !calls.length) break;
       }
     } catch (err) {
-      if (err.name !== 'AbortError') ws.send(JSON.stringify({ type: 'error', error: String(err.message || err) }));
+      if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', error: String(err.message || err) }));
     }
     state.abort = null;
 
     db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, model_id: model.id, parent_id: assistantParent, created_at: now() });
     db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
-    ws.send(JSON.stringify({ type: 'done', messageId: assistantId }));
+    safeSend(JSON.stringify({ type: 'done', messageId: assistantId }));
 
     const fresh = db.chats.byId(chat.id);
     const lastUser = [...history].reverse().find(h => h.role === 'user');
@@ -675,62 +744,70 @@ wss.on('connection', (ws, req) => {
     if (cleanContent && fresh && fresh.title === 'New chat' && lastUserText) {
       const title = await generateTitle(model, lastUserText, cleanContent);
       db.chats.update(chat.id, { title });
-      ws.send(JSON.stringify({ type: 'title', chatId: chat.id, title }));
+      safeSend(JSON.stringify({ type: 'title', chatId: chat.id, title }));
     }
   }
 
   ws.on('message', async (raw) => {
     let msg; try { msg = JSON.parse(raw); } catch { return; }
     const state = clients.get(ws);
+    if (!state) return;
     if (msg.type === 'stop') { state.abort?.abort(); return; }
     if (msg.type !== 'chat' && msg.type !== 'regenerate' && msg.type !== 'edit') return;
+    try {
+      const chat = db.chats.byId(msg.chatId);
+      const model = db.models.byId(msg.modelId);
+      if (!chat || chat.user_id !== u.id || !model) { safeSend(JSON.stringify({ type: 'error', error: 'Invalid chat or model.' })); return; }
 
-    const chat = db.chats.byId(msg.chatId);
-    const model = db.models.byId(msg.modelId);
-    if (!chat || chat.user_id !== u.id || !model) { ws.send(JSON.stringify({ type: 'error', error: 'Invalid chat or model.' })); return; }
+      const sandboxCap = roleLimit('sandbox_limit_mb', !!u.is_admin, u.is_admin ? 1024 : 256) * 1024 * 1024;
+      const userSandbox = !!msg.sandbox;
+      if (!!chat.sandbox !== userSandbox) db.chats.update(chat.id, { sandbox: userSandbox ? 1 : 0 });
+      const hasFileAttach = Array.isArray(msg.attachments) && msg.attachments.some(a => !(a.type && a.type.startsWith('image/')));
+      const sandboxOn = userSandbox || (hasFileAttach && model.sandbox_allowed !== 0);
+      ensureChain(chat.id);
 
-    const userSandbox = !!msg.sandbox;
-    if (!!chat.sandbox !== userSandbox) db.chats.update(chat.id, { sandbox: userSandbox ? 1 : 0 });
-    const hasFileAttach = Array.isArray(msg.attachments) && msg.attachments.some(a => !(a.type && a.type.startsWith('image/')));
-    const sandboxOn = userSandbox || (hasFileAttach && model.sandbox_allowed !== 0);
-    ensureChain(chat.id);
-
-    if (msg.type === 'regenerate') {
-      const target = db.messages.byId(msg.messageId) || activePath(chat.id).slice().reverse().find(m => m.role === 'assistant');
-      if (!target) { ws.send(JSON.stringify({ type: 'error', error: 'Nothing to regenerate.' })); return; }
-      const parent = target.role === 'assistant' ? (target.parent_id ?? null) : target.id;
-      db.chats.update(chat.id, { active_leaf: parent });
-    } else if (msg.type === 'edit') {
-      const orig = db.messages.byId(msg.messageId);
-      if (!orig || orig.chat_id !== chat.id) { ws.send(JSON.stringify({ type: 'error', error: 'Message not found.' })); return; }
-      const umid = uid();
-      db.messages.insert({ id: umid, chat_id: chat.id, role: 'user', content: msg.content || '', reasoning: '', model_id: null, attachments: orig.attachments || [], parent_id: orig.parent_id ?? null, created_at: now() });
-      db.chats.update(chat.id, { active_leaf: umid });
-    } else {
-      const parent = (db.chats.byId(chat.id) || {}).active_leaf || null;
-      const umid = uid();
-      db.messages.insert({ id: umid, chat_id: chat.id, role: 'user', content: msg.content, reasoning: '', model_id: null, attachments: Array.isArray(msg.attachments) ? msg.attachments : [], parent_id: parent, created_at: now() });
-      db.chats.update(chat.id, { active_leaf: umid });
-      if (sandboxOn && Array.isArray(msg.attachments) && msg.attachments.length) {
-        for (const a of msg.attachments) {
-          try {
-            const fname = path.basename(a.url || '');
-            const src = fname ? path.join(UPLOADS, fname) : '';
-            if (src && fs.existsSync(src)) sandbox.importBuffer(chat.id, path.basename(a.name || fname || 'file'), fs.readFileSync(src));
-            else console.warn('[sandbox import] upload not found for', a.name, '->', src);
-          } catch (e) { console.warn('[sandbox import] failed for', a && a.name, e.message); }
+      if (msg.type === 'regenerate') {
+        const target = db.messages.byId(msg.messageId) || activePath(chat.id).slice().reverse().find(m => m.role === 'assistant');
+        if (!target) { safeSend(JSON.stringify({ type: 'error', error: 'Nothing to regenerate.' })); return; }
+        const parent = target.role === 'assistant' ? (target.parent_id ?? null) : target.id;
+        db.chats.update(chat.id, { active_leaf: parent });
+      } else if (msg.type === 'edit') {
+        const orig = db.messages.byId(msg.messageId);
+        if (!orig || orig.chat_id !== chat.id) { safeSend(JSON.stringify({ type: 'error', error: 'Message not found.' })); return; }
+        const umid = uid();
+        db.messages.insert({ id: umid, chat_id: chat.id, role: 'user', content: msg.content || '', reasoning: '', model_id: null, attachments: orig.attachments || [], parent_id: orig.parent_id ?? null, created_at: now() });
+        db.chats.update(chat.id, { active_leaf: umid });
+      } else {
+        const parent = (db.chats.byId(chat.id) || {}).active_leaf || null;
+        const umid = uid();
+        db.messages.insert({ id: umid, chat_id: chat.id, role: 'user', content: msg.content, reasoning: '', model_id: null, attachments: Array.isArray(msg.attachments) ? msg.attachments : [], parent_id: parent, created_at: now() });
+        db.chats.update(chat.id, { active_leaf: umid });
+        if (sandboxOn && Array.isArray(msg.attachments) && msg.attachments.length) {
+          for (const a of msg.attachments) {
+            try {
+              const fname = path.basename(a.url || '');
+              const src = fname ? path.join(UPLOADS, fname) : '';
+              if (src && fs.existsSync(src)) sandbox.importBuffer(chat.id, path.basename(a.name || fname || 'file'), fs.readFileSync(src), sandboxCap);
+              else console.warn('[sandbox import] upload not found for', a.name, '->', src);
+            } catch (e) { console.warn('[sandbox import] failed for', a && a.name, e.message); }
+          }
+          safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
         }
-        ws.send(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
       }
-    }
 
-    const queueOn = getSetting('model_queue', '0') === '1';
-    await runQueued(queueOn, model.id,
-      () => { try { ws.send(JSON.stringify({ type: 'queued', chatId: chat.id })); } catch {} },
-      () => runCompletion(ws, state, chat, model, !!msg.extended, sandboxOn));
+      const queueOn = getSetting('model_queue', '0') === '1';
+      await runQueued(queueOn, model.id,
+        () => { safeSend(JSON.stringify({ type: 'queued', chatId: chat.id })); },
+        () => runCompletion(ws, state, chat, model, !!msg.extended, sandboxOn, sandboxCap));
+    } catch (err) {
+      state.abort = null;
+      safeSend(JSON.stringify({ type: 'error', error: String(err.message || err) }));
+      safeSend(JSON.stringify({ type: 'done' }));
+    }
   });
 
-  ws.on('close', () => clients.delete(ws));
+  ws.on('error', () => {});
+  ws.on('close', () => { const st = clients.get(ws); try { st?.abort?.abort(); } catch {} clients.delete(ws); });
 });
 
 server.listen(PORT, () => console.log(`open-quill running on http://localhost:${PORT}`));

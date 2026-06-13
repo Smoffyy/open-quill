@@ -3,8 +3,48 @@
 A fully local chat UI for OpenAI-compatible model servers, inspired by Anthropic’s design and enhanced with additional features all running entirely on your machine!
 
 <p align="center">
-  <img src="banner.png" alt="Starburst Logo" width="1250"/>
+  <img src="assets\v2026\banner.png" alt="Starburst Logo" width="1250"/>
 </p>
+
+## Preview
+
+<p align="center">
+  <img src="assets\v2026\artifacts-showcase-screen.png" alt="Chat Interface with Artifacts"/>
+  <br>
+  <sub>The open-quill chat interface showcasing chats and artifacts.</sub>
+</p>
+
+<details>
+  <summary>More Screenshots.</summary>
+  <br>
+
+  <p align="center">
+    <img src="assets\v2026\first-login-screen.png" alt="First Login"/>
+    <br>
+    <sub>Web page upon first login.</sub>
+  </p>
+
+  <p align="center">
+    <img src="assets\v2026\response-showcase-screen.png" alt="Normal chat response"/>
+    <br>
+    <sub>Response showcase.</sub>
+  </p>
+
+  <p align="center">
+    <img src="assets\v2026\admin-models-screen.png" alt="Admin panel"/>
+    <br>
+    <sub>Models tab in Admin Panel.</sub>
+  </p>
+
+  <p align="center">
+    <img src="assets\v2026\your-chats-showcase-screen.png" alt="Saved Chats"/>
+    <br>
+    <sub>Your Chats panel.</sub>
+  </p>
+
+</details>
+
+---
 
 ## Features
 
@@ -20,6 +60,10 @@ A fully local chat UI for OpenAI-compatible model servers, inspired by Anthropic
 - Zero native dependencies — data is stored in a local JSON file (`server/data.json`)
 - Artifacts, enabling users to create entire projects natively inside the UI!
 - And much more!
+
+## Why was this project made?
+
+This project was made mainly because I was fascinated by the Anthropic interface and colors. There's many other apps that have recreated simliar styles of other interfaces and I wanted to contribute openly for others to build upon what I've created. This entire project will **FOREVER** be listed under the MIT License. The front end aims to keep a balance between useful functionality and a clean, aesthetically pleasing experience.
 
 ## Requirements
 
@@ -56,3 +100,7 @@ Open http://localhost:5173.
 
 - All data lives in `server/data.json` and uploaded logos in `server/uploads/`. Delete `data.json` to reset.
 - To change the port, set `PORT` before `npm start`.
+
+## Updates / Version info
+
+The scheme is `YEAR.QUARTER.PATCH`, but may not follow closely to accurate date as major releases will release earlier than the specified year.

@@ -28,14 +28,15 @@ export const now = () => { const t = Date.now(); lastTs = t > lastTs ? t : lastT
 
 // generic collection wrapper
 function collection(arr) {
+  const idx = new Map(arr.map(r => [r.id, r]));
   return {
     all: () => arr.slice(),
     filter: (fn) => arr.filter(fn),
     find: (fn) => arr.find(fn),
-    byId: (id) => arr.find(r => r.id === id),
-    insert: (obj) => { arr.push(obj); persist(); return obj; },
-    update: (id, patch) => { const r = arr.find(x => x.id === id); if (r) { Object.assign(r, patch); persist(); } return r; },
-    remove: (fn) => { for (let i = arr.length - 1; i >= 0; i--) if (fn(arr[i])) arr.splice(i, 1); persist(); },
+    byId: (id) => idx.get(id),
+    insert: (obj) => { arr.push(obj); idx.set(obj.id, obj); persist(); return obj; },
+    update: (id, patch) => { const r = idx.get(id); if (r) { Object.assign(r, patch); persist(); } return r; },
+    remove: (fn) => { for (let i = arr.length - 1; i >= 0; i--) if (fn(arr[i])) { idx.delete(arr[i].id); arr.splice(i, 1); } persist(); },
     count: (fn) => fn ? arr.filter(fn).length : arr.length
   };
 }
