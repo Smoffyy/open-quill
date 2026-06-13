@@ -7,9 +7,9 @@ export default function ReasoningBlock({ text, live }) {
   const label = live ? 'Thinking…' : (open ? 'Hide reasoning' : 'Thought process');
   return (
     <div className="reasoning">
-      <button className={'reasoning-head' + (open ? ' open' : '')} onClick={() => setOpen(o => !o)}>
+      <button className={'reasoning-head' + (open ? ' open' : '') + (live ? ' live' : '')} onClick={() => setOpen(o => !o)}>
         {live && <img src="/starburst.svg" className="pulse think-dot" alt="" />}
-        <span>{label}</span>
+        <span><span className="rb-label">{label}</span></span>
         <Chevron className="chev" />
       </button>
       <div className={'reasoning-collapse' + (open ? ' open' : '')}>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import hljs from 'highlight.js';
 import { api } from '../api.js';
+import { copyText } from '../clipboard.js';
 import { Download, Refresh, FileText, Copy, Check, ChevDown, Folder } from './icons.jsx';
 
 const EXT_LANG = { rs: 'rust', py: 'python', js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript', html: 'xml', htm: 'xml', css: 'css', scss: 'scss', json: 'json', md: 'markdown', markdown: 'markdown', sh: 'bash', bash: 'bash', c: 'c', cpp: 'cpp', h: 'cpp', java: 'java', rb: 'ruby', go: 'go', php: 'php', sql: 'sql', yml: 'yaml', yaml: 'yaml', toml: 'ini', ini: 'ini', lua: 'lua', glsl: 'glsl', vert: 'glsl', frag: 'glsl', xml: 'xml', svg: 'xml', kt: 'kotlin', swift: 'swift', vue: 'xml' };
@@ -69,7 +70,7 @@ function Viewer({ chatId, path, onBack, liveText, writingElsewhere, onJumpToLive
     return diffLines(prev.split('\n'), data.text.split('\n'));
   }, [diff, prev, data]);
 
-  function copy() { const t = data?.text != null ? data.text : shownText; if (t != null) { navigator.clipboard.writeText(t); setCopied(true); setTimeout(() => setCopied(false), 1400); } }
+  async function copy() { const t = data?.text != null ? data.text : shownText; if (t != null && await copyText(t)) { setCopied(true); setTimeout(() => setCopied(false), 1400); } }
 
   const bodyRef = useRef(null);
   useEffect(() => { if (isLive && bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight; }, [shownText, isLive]);

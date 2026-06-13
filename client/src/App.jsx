@@ -161,6 +161,9 @@ export default function App() {
   const stick = useRef(true);
   const [showJump, setShowJump] = useState(false);
   const animate = user?.prefs?.animations !== false;
+  const revealMs = (() => { const v = user?.prefs?.revealMs; return v == null || isNaN(parseInt(v)) ? 40 : Math.max(0, Math.min(100, parseInt(v))); })();
+  const [threadStagger, setThreadStagger] = useState(false);
+  const staggerTimer = useRef(null);
 
   const activeIdRef = useRef(null);
   const currentIdRef = useRef(null);
@@ -169,6 +172,8 @@ export default function App() {
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
   useEffect(() => { currentIdRef.current = currentId; }, [currentId]);
   useEffect(() => { animateRef.current = animate; }, [animate]);
+  const revealRef = useRef(revealMs);
+  useEffect(() => { revealRef.current = revealMs; }, [revealMs]);
 
   useEffect(() => { dispLen.current = dispContent.length; }, [dispContent]);
 
@@ -226,7 +231,19 @@ export default function App() {
     const sock = new WebSocket(`${proto}://${location.host}/ws`);
     ws.current = sock;
     sock.onmessage = (ev) => handleWs(JSON.parse(ev.data));
+    sock.onerror = () => { try { sock.close(); } catch {} };
     sock.onclose = () => { setTimeout(() => { if (user) connect(); }, 1500); };
+  }
+
+  function wsSend(obj) {
+    const sock = ws.current;
+    if (!sock || sock.readyState !== 1) {
+      if (!sock || sock.readyState >= 2) connect();
+      setMessages(ms => [...ms, { id: 'e' + Date.now(), role: 'assistant', content: '_Connection lost — reconnecting. Try again in a moment._' }]);
+      return false;
+    }
+    try { sock.send(JSON.stringify(obj)); return true; }
+    catch { return false; }
   }
 
   function handleWs(m) {
@@ -278,17 +295,22 @@ export default function App() {
     clearInterval(revealTimer.current);
     cancelAnimationFrame(followRaf.current);
     follow();
+    const period = Math.max(8, Math.min(100, revealRef.current || 0)) ;
     revealTimer.current = setInterval(() => {
       const target = targetContent.current;
       if (dispLen.current >= target.length) { if (pendingDone.current) finalize(); return; }
       setDispContent(prev => {
         const remaining = target.length - prev.length;
-        const n = animateRef.current ? Math.max(4, Math.ceil(remaining / 5)) : remaining;
+        const instant = !animateRef.current || revealRef.current <= 0;
+        const n = instant ? remaining
+          : remaining > 1200 ? Math.ceil(remaining / 3)
+          : remaining > 240 ? Math.ceil(remaining / 6)
+          : Math.max(2, Math.ceil(remaining / 9));
         const next = target.slice(0, prev.length + n);
         dispLen.current = next.length;
         return next;
       });
-    }, 40);
+    }, period);
   }
 
   function follow() {
@@ -351,6 +373,11 @@ export default function App() {
     try {
       const { chat, messages } = await api.get('/api/chats/' + id);
       setMessages(messages);
+      if (user?.prefs?.chatStagger !== false && user?.prefs?.messageEntrance !== false) {
+        clearTimeout(staggerTimer.current);
+        setThreadStagger(true);
+        staggerTimer.current = setTimeout(() => setThreadStagger(false), 700);
+      }
       setSandbox(!!chat.sandbox);
       setHasSummary(!!chat.hasSummary);
       try { const f = await api.get('/api/chats/' + id + '/files'); setFiles(f.files || []); setArtifactsOpen((f.files || []).length > 0 && artifactsOpen); }
@@ -391,27 +418,27 @@ export default function App() {
       setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false }, ...cs]);
       history.pushState({}, '', '/chat/' + chatId);
     }
+    if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, content: text, attachments, sandbox })) return;
     setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     setInput('');
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
-    ws.current?.send(JSON.stringify({ type: 'chat', chatId, modelId: currentId, extended, content: text, attachments, sandbox }));
   }
 
   const regenerate = useCallback((messageId) => {
     if (streaming || !activeId || !currentId) return;
+    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, messageId, sandbox })) return;
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
-    ws.current?.send(JSON.stringify({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, messageId, sandbox }));
   }, [streaming, activeId, currentId, extended, sandbox]);
 
   const editMessage = useCallback((messageId, newContent) => {
     if (streaming || !activeId || !currentId) return;
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); if (idx === -1) return ms; const copy = ms.slice(0, idx + 1); copy[idx] = { ...copy[idx], content: newContent }; return copy; });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
-    ws.current?.send(JSON.stringify({ type: 'edit', chatId: activeId, modelId: currentId, extended, messageId, content: newContent, sandbox }));
+    if (!wsSend({ type: 'edit', chatId: activeId, modelId: currentId, extended, messageId, content: newContent, sandbox })) return;
   }, [streaming, activeId, currentId, extended, sandbox]);
 
-  function stop() { ws.current?.send(JSON.stringify({ type: 'stop' })); pendingDone.current = true; setQueued(false); }
+  function stop() { try { ws.current?.readyState === 1 && ws.current.send(JSON.stringify({ type: 'stop' })); } catch {} pendingDone.current = true; setQueued(false); }
   async function logout() { await api.post('/api/auth/logout'); location.href = '/'; }
 
   if (user === undefined) return <div style={{ height: '100%', background: 'var(--bg)' }} />;
@@ -448,7 +475,7 @@ export default function App() {
             {cfg.quickPrompts && cfg.quickPrompts.length > 0 && (
               <div className="quick-prompts">
                 {cfg.quickPrompts.map((q, i) => (
-                  <button key={i} className="quick-prompt" onClick={() => send([], q.prompt)} disabled={streaming}>
+                  <button key={i} className="quick-prompt" style={{ animationDelay: i * 45 + 'ms' }} onClick={() => send([], q.prompt)} disabled={streaming}>
                     {q.icon && <span className="qp-icon">{q.icon}</span>}{q.label}
                   </button>
                 ))}
@@ -476,7 +503,7 @@ export default function App() {
               </div>
             </div>
             <div className="scroll-area" ref={scrollRef} onScroll={onScroll} onWheel={onWheel} onTouchMove={onTouchMove}>
-              <div className="thread">
+              <div className={'thread' + (threadStagger ? ' stagger' : '')}>
                 {(() => { const lastA = !streaming ? [...messages].reverse().find(m => m.role === 'assistant') : null; return messages.map(msg => (
                   <Message key={msg._k || msg.id} msg={msg} model={models.find(x => x.id === msg.model_id) || model} onRegenerate={regenerate} onEdit={editMessage} onSelectBranch={selectBranch} showIcon={msg.role === 'assistant' && lastA && msg.id === lastA.id} />
                 )); })()}

@@ -89,7 +89,7 @@ function ModelEditor({ m, onChange, onSave, onDelete, saved }) {
           <Toggle k="in_more_models" label={'Tuck under "More models"'} note="Hidden from the main list" />
           {!!m.in_more_models && (
             <div className="field"><label>More-models label</label>
-              <input value={m.more_label || ''} onChange={(e) => set('more_label', e.target.value)} placeholder="Other models" /></div>
+              <input value={m.more_models_label || ''} onChange={(e) => set('more_models_label', e.target.value)} placeholder="Other models" /></div>
           )}
           <Toggle k="is_default" label="Default model" note="Pre-selected when a user first logs in. Only one model can be the default." />
         </>}
@@ -100,7 +100,7 @@ function ModelEditor({ m, onChange, onSave, onDelete, saved }) {
               <div className="field"><label>Reasoning token</label>
                 <input value={m.reasoning_token || ''} onChange={(e) => set('reasoning_token', e.target.value)} /></div>
               <div className="field"><label>Non-reasoning token</label>
-                <input value={m.no_reasoning_token || ''} onChange={(e) => set('no_reasoning_token', e.target.value)} /></div>
+                <input value={m.non_reasoning_token || ''} onChange={(e) => set('non_reasoning_token', e.target.value)} /></div>
             </div>
             <div className="muted-note">Tokens are appended to the end of the system prompt on a new line.</div>
           </>}
@@ -140,9 +140,18 @@ function ModelEditor({ m, onChange, onSave, onDelete, saved }) {
         {section === 'appearance' && <>
           <div className="field"><label>Model logos</label>
             <div className="icon-grid">
-              <IconSlot label="Static" value={m.icon_static} def="/starburst.svg" onChange={(v) => set('icon_static', v)} />
-              <IconSlot label="Generating" value={m.icon_generating} def="/starburst-generating.svg" anim="spin" onChange={(v) => set('icon_generating', v)} />
-              <IconSlot label="Thinking" value={m.icon_thinking} def="/starburst-thinking.svg" anim="pulse" onChange={(v) => set('icon_thinking', v)} />
+              <IconSlot label="Static" value={m.static_icon} def="/starburst.svg" onChange={(v) => set('static_icon', v)} />
+              <IconSlot label="Generating" value={m.generating_icon} def="/starburst-generating.svg" anim={(m.generating_anim || 'spin') === 'none' ? '' : (m.generating_anim || 'spin')} onChange={(v) => set('generating_icon', v)} />
+              <IconSlot label="Thinking" value={m.thinking_icon} def="/starburst-thinking.svg" anim={(m.thinking_anim || 'pulse') === 'none' ? '' : (m.thinking_anim || 'pulse')} onChange={(v) => set('thinking_icon', v)} />
+            </div>
+            <div className="icon-grid anim-row">
+              <div />
+              <select className="anim-sel" value={m.generating_anim || 'spin'} onChange={(e) => set('generating_anim', e.target.value)}>
+                <option value="spin">Spin</option><option value="pulse">Breathe</option><option value="bounce">Bounce</option><option value="wobble">Wobble</option><option value="fade">Fade</option><option value="none">No motion</option>
+              </select>
+              <select className="anim-sel" value={m.thinking_anim || 'pulse'} onChange={(e) => set('thinking_anim', e.target.value)}>
+                <option value="pulse">Breathe</option><option value="spin">Spin</option><option value="bounce">Bounce</option><option value="wobble">Wobble</option><option value="fade">Fade</option><option value="none">No motion</option>
+              </select>
             </div>
             <div className="muted-note">Click an icon to upload a png, svg, jpeg, or gif. Previews animate as they will in chat.</div>
           </div>
@@ -187,7 +196,7 @@ export default function AdminPanel({ user, onClose }) {
   const [usersList, setUsersList] = useState([]);
   const [cfg, setCfg] = useState({ appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [] });
   const [cfgSaved, setCfgSaved] = useState(false);
-  const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitMb: 8, modelQueue: false });
+  const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256, modelQueue: false });
   const [saved, setSaved] = useState(null);
   const [selModel, setSelModel] = useState(null);
   const [setSavedFlash, setSetSaved] = useState(false);
@@ -380,8 +389,21 @@ export default function AdminPanel({ user, onClose }) {
               <div className="field"><label>API key</label>
                 <input value={settings.apiKey || ''} onChange={(e) => setSettings(s => ({ ...s, apiKey: e.target.value }))} placeholder="lm-studio" /></div>
               <div className="field"><label>Upload size limit (MB)</label>
-                <div className="muted-note">Max size for files users attach. Applies to everyone. Default 8.</div>
-                <input type="number" min="1" step="1" value={settings.uploadLimitMb ?? 8} onChange={(e) => setSettings(s => ({ ...s, uploadLimitMb: e.target.value }))} placeholder="8" /></div>
+                <div className="muted-note">Max size for files attached to messages, per role. 0 = unlimited.</div>
+                <div className="two-col">
+                  <div className="field"><label className="sub">Admins</label>
+                    <input type="number" min="0" step="1" value={settings.uploadLimitAdminMb ?? 8} onChange={(e) => setSettings(s => ({ ...s, uploadLimitAdminMb: e.target.value }))} placeholder="8" /></div>
+                  <div className="field"><label className="sub">Users</label>
+                    <input type="number" min="0" step="1" value={settings.uploadLimitUserMb ?? 8} onChange={(e) => setSettings(s => ({ ...s, uploadLimitUserMb: e.target.value }))} placeholder="8" /></div>
+                </div></div>
+              <div className="field"><label>Sandbox storage limit (MB)</label>
+                <div className="muted-note">Max total size of a chat's sandbox files, per role. Writes beyond it are rejected. 0 = unlimited.</div>
+                <div className="two-col">
+                  <div className="field"><label className="sub">Admins</label>
+                    <input type="number" min="0" step="1" value={settings.sandboxLimitAdminMb ?? 1024} onChange={(e) => setSettings(s => ({ ...s, sandboxLimitAdminMb: e.target.value }))} placeholder="1024" /></div>
+                  <div className="field"><label className="sub">Users</label>
+                    <input type="number" min="0" step="1" value={settings.sandboxLimitUserMb ?? 256} onChange={(e) => setSettings(s => ({ ...s, sandboxLimitUserMb: e.target.value }))} placeholder="256" /></div>
+                </div></div>
               <div className="field row">
                 <div><label>Model queue</label><div className="muted-note">Only one model runs at a time. Requests for the same model run together; a request for a different model waits until the current one finishes, instead of swapping it out mid-response. Useful for local servers that load a single model.</div></div>
                 <div className={'switch' + (settings.modelQueue ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, modelQueue: !s.modelQueue }))} /></div>

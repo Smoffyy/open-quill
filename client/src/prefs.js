@@ -5,9 +5,20 @@ export function resolveTheme(t) {
 }
 export function applyPrefs(prefs) {
   const root = document.documentElement;
-  root.setAttribute('data-theme', resolveTheme(prefs?.theme));
+  const nextTheme = resolveTheme(prefs?.theme);
+  if (prefs?.themeFade !== false && root.getAttribute('data-theme') && root.getAttribute('data-theme') !== nextTheme) {
+    root.classList.add('theme-anim');
+    clearTimeout(applyPrefs._t);
+    applyPrefs._t = setTimeout(() => root.classList.remove('theme-anim'), 340);
+  }
+  root.setAttribute('data-theme', nextTheme);
   root.setAttribute('data-density', prefs?.density === 'compact' ? 'compact' : 'comfortable');
   root.setAttribute('data-entrance', prefs?.messageEntrance === false ? 'off' : 'on');
+  root.setAttribute('data-cursor', prefs?.streamCursor ? (prefs?.cursorStyle === 'circle' ? 'circle' : 'block') : 'off');
+  root.setAttribute('data-microfx', prefs?.microFx === false ? 'off' : 'on');
+  root.setAttribute('data-composerfx', prefs?.composerFx === false ? 'off' : 'on');
+  root.setAttribute('data-focusglow', prefs?.focusGlow ? 'on' : 'off');
+  root.setAttribute('data-iconglow', prefs?.iconGlow ? 'on' : 'off');
   if (prefs?.accent) root.style.setProperty('--accent', prefs.accent);
   else root.style.removeProperty('--accent');
 }

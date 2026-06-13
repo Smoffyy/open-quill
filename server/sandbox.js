@@ -30,6 +30,28 @@ function resolveSafe(chatId, rel) {
   return p;
 }
 export function extOf(name) { const e = path.extname(name || '').slice(1).toLowerCase(); return e; }
+
+export function dirSize(chatId) {
+  const root = dirFor(chatId);
+  if (!fs.existsSync(root)) return 0;
+  let total = 0;
+  const walk = (d) => {
+    for (const ent of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, ent.name);
+      if (ent.isDirectory()) walk(p);
+      else { try { total += fs.statSync(p).size; } catch {} }
+    }
+  };
+  try { walk(root); } catch {}
+  return total;
+}
+function capError(maxBytes) {
+  return { ok: false, error: `Sandbox storage limit reached (${Math.round(maxBytes / 1048576)} MB). Delete files to free space.` };
+}
+function overCap(chatId, incomingBytes, maxBytes) {
+  if (!maxBytes || maxBytes <= 0) return false;
+  return dirSize(chatId) + incomingBytes > maxBytes;
+}
 export function isText(name) { return TEXT_EXT.has(extOf(name)); }
 
 export function list(chatId) {
@@ -203,15 +225,19 @@ function unzipBuffer(buf) {
   }
   return out;
 }
-export function extractZip(chatId, rel, dest) {
+export function extractZip(chatId, rel, dest, budget = 0) {
   const p = resolveSafe(chatId, rel);
   if (!fs.existsSync(p)) return { ok: false, error: `File not found: ${rel}` };
   let entries;
   try { entries = unzipBuffer(fs.readFileSync(p)); } catch (e) { return { ok: false, error: 'Could not read zip: ' + e.message }; }
   if (!entries.length) return { ok: false, error: 'Zip is empty or uses an unsupported compression method.' };
+  const MAX_ENTRIES = 500, MAX_TOTAL = budget > 0 ? Math.min(budget, 150 * 1024 * 1024) : 150 * 1024 * 1024;
+  let total = 0, skipped = 0;
   const base = String(dest || '').replace(/^\/+|\/+$/g, '');
   const created = [];
   for (const e of entries) {
+    if (created.length >= MAX_ENTRIES || total + e.data.length > MAX_TOTAL) { skipped++; continue; }
+    total += e.data.length;
     const rel2 = (base ? base + '/' : '') + e.name;
     try {
       const outP = resolveSafe(chatId, rel2);
@@ -222,9 +248,10 @@ export function extractZip(chatId, rel, dest) {
       created.push(rel2);
     } catch {}
   }
-  return { ok: true, path: rel, count: created.length, files: created };
+  return { ok: true, path: rel, count: created.length, files: created, ...(skipped ? { note: skipped + ' entries skipped (size/count limit)' } : {}) };
 }
-export function importBuffer(chatId, destRel, buffer) {
+export function importBuffer(chatId, destRel, buffer, maxBytes = 0) {
+  if (overCap(chatId, buffer.length, maxBytes)) return capError(maxBytes);
   try {
     const p = resolveSafe(chatId, destRel);
     fs.mkdirSync(path.dirname(p), { recursive: true });
@@ -235,17 +262,17 @@ export function importBuffer(chatId, destRel, buffer) {
   } catch (e) { return { ok: false, error: String(e.message || e) }; }
 }
 
-export function execTool(chatId, call) {
+export function execTool(chatId, call, maxBytes = 0) {
   try {
     switch (call.tool) {
-      case 'create_file': return createFile(chatId, call.path, call.content);
+      case 'create_file': { const sz = Buffer.byteLength(String(call.content ?? ''), 'utf8'); if (overCap(chatId, sz, maxBytes)) return capError(maxBytes); return createFile(chatId, call.path, call.content); }
       case 'str_replace': return strReplace(chatId, call.path, call.old_str, call.new_str);
       case 'view': return view(chatId, call.path, call.start, call.end);
       case 'list_files': return { ok: true, files: list(chatId) };
       case 'delete_file': return deleteFile(chatId, call.path);
       case 'rename_file': return renameFile(chatId, call.path, call.new_path || call.to);
       case 'search': return search(chatId, call.query, call.path);
-      case 'extract_zip': return extractZip(chatId, call.path, call.dest);
+      case 'extract_zip': { if (overCap(chatId, 0, maxBytes)) return capError(maxBytes); return extractZip(chatId, call.path, call.dest, maxBytes ? Math.max(0, maxBytes - dirSize(chatId)) : 0); }
       case 'bundle_zip': return bundleZip(chatId, call.name, call.paths);
       default: return { ok: false, error: `Unknown tool: ${call.tool}` };
     }

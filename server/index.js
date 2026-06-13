@@ -23,7 +23,7 @@ app.use(parseCookies);
 
 const UPLOADS = path.join(__dirname, 'uploads');
 fs.mkdirSync(UPLOADS, { recursive: true });
-app.use('/uploads', express.static(UPLOADS));
+app.use('/uploads', (req, res, next) => { res.setHeader('Content-Security-Policy', "script-src 'none'; object-src 'none'"); res.setHeader('X-Content-Type-Options', 'nosniff'); next(); }, express.static(UPLOADS));
 
 const setCookie = (res, token) =>
   res.setHeader('Set-Cookie', `token=${token}; HttpOnly; Path=/; Max-Age=${60 * 60 * 24 * 30}; SameSite=Lax`);
@@ -34,13 +34,29 @@ app.post('/api/auth/check-email', (req, res) => {
   res.json({ exists: !!db.users.find(u => u.email === email) });
 });
 
+const loginFails = new Map();
+function loginLimited(ip) {
+  const rec = loginFails.get(ip);
+  if (!rec) return false;
+  if (Date.now() - rec.t > 10 * 60 * 1000) { loginFails.delete(ip); return false; }
+  return rec.n >= 8;
+}
+function noteLoginFail(ip) {
+  const rec = loginFails.get(ip);
+  if (rec && Date.now() - rec.t < 10 * 60 * 1000) { rec.n++; rec.t = Date.now(); }
+  else loginFails.set(ip, { n: 1, t: Date.now() });
+  if (loginFails.size > 5000) loginFails.clear();
+}
 app.post('/api/auth/login', (req, res) => {
+  const ip = req.socket.remoteAddress || '';
+  if (loginLimited(ip)) return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
   const email = (req.body.email || '').trim().toLowerCase();
   const pw = req.body.password || '';
   if (!email || pw.length < 4) return res.status(400).json({ error: 'Invalid email or password (min 4 chars).' });
   let u = db.users.find(x => x.email === email);
   if (u) {
-    if (!check(pw, u.password_hash)) return res.status(401).json({ error: 'Incorrect password.' });
+    if (!check(pw, u.password_hash)) { noteLoginFail(ip); return res.status(401).json({ error: 'Incorrect password.' }); }
+    loginFails.delete(ip);
   } else {
     const isFirst = db.users.count() === 0;
     u = db.users.insert({ id: uid(), email, password_hash: hash(pw), display_name: '', is_admin: isFirst ? 1 : 0, is_owner: isFirst ? 1 : 0, prefs: {}, created_at: now() });
@@ -246,7 +262,7 @@ function publicModels() {
     .map(m => ({
       id: m.id, displayName: m.display_name, description: m.description,
       hasReasoning: !!m.has_reasoning, inMoreModels: !!m.in_more_models, moreModelsLabel: m.more_models_label,
-      staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon,
+      staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon, generatingAnim: m.generating_anim || 'spin', thinkingAnim: m.thinking_anim || 'pulse',
       iconPosition: m.icon_position || 'below', hasVision: !!m.has_vision,
       sandboxAuto: !!m.sandbox_auto, sandboxAllowed: m.sandbox_allowed !== 0, dropdownIcon: m.dropdown_icon !== 0, isDefault: !!m.is_default, agentSteps: m.agent_steps || 10,
       enableSummaries: !!m.enable_summaries, numCtx: m.num_ctx || 0, summaryPadding: m.summary_padding || 0.125
@@ -282,7 +298,7 @@ app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
 app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
   const cur = db.models.byId(req.params.id);
   if (!cur) return res.status(404).json({ error: 'not found' });
-  const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close'];
+  const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim'];
   const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries'];
   const patch = {};
   for (const k of str) if (k in req.body) patch[k] = req.body[k];
@@ -328,12 +344,28 @@ app.post('/api/admin/models/reorder', authMiddleware, adminOnly, (req, res) => {
   res.json({ ok: true });
 });
 
+function roleLimit(key, isAdmin, fallback) {
+  const v = getSetting(key + (isAdmin ? '_admin' : '_user'));
+  if (v != null) return Number(v);
+  return Number(getSetting(key, String(fallback)));
+}
 app.get('/api/admin/settings', authMiddleware, adminOnly, (req, res) =>
-  res.json({ apiBaseUrl: getSetting('api_base_url'), apiKey: getSetting('api_key'), uploadLimitMb: Number(getSetting('upload_limit_mb', '8')), modelQueue: getSetting('model_queue', '0') === '1' }));
+  res.json({
+    apiBaseUrl: getSetting('api_base_url'), apiKey: getSetting('api_key'),
+    uploadLimitAdminMb: roleLimit('upload_limit_mb', true, 8),
+    uploadLimitUserMb: roleLimit('upload_limit_mb', false, 8),
+    sandboxLimitAdminMb: roleLimit('sandbox_limit_mb', true, 1024),
+    sandboxLimitUserMb: roleLimit('sandbox_limit_mb', false, 256),
+    modelQueue: getSetting('model_queue', '0') === '1'
+  }));
 app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
   if ('apiBaseUrl' in req.body) setSetting('api_base_url', req.body.apiBaseUrl);
   if ('apiKey' in req.body) setSetting('api_key', req.body.apiKey);
-  if ('uploadLimitMb' in req.body) { const n = Number(req.body.uploadLimitMb); setSetting('upload_limit_mb', String(n > 0 ? n : 8)); }
+  const lim = (k, v, def) => { const n = Number(v); setSetting(k, String(Number.isFinite(n) && n >= 0 ? n : def)); };
+  if ('uploadLimitAdminMb' in req.body) lim('upload_limit_mb_admin', req.body.uploadLimitAdminMb, 8);
+  if ('uploadLimitUserMb' in req.body) lim('upload_limit_mb_user', req.body.uploadLimitUserMb, 8);
+  if ('sandboxLimitAdminMb' in req.body) lim('sandbox_limit_mb_admin', req.body.sandboxLimitAdminMb, 1024);
+  if ('sandboxLimitUserMb' in req.body) lim('sandbox_limit_mb_user', req.body.sandboxLimitUserMb, 256);
   if ('modelQueue' in req.body) setSetting('model_queue', req.body.modelQueue ? '1' : '0');
   res.json({ ok: true });
 });
@@ -375,7 +407,7 @@ const upload = multer({ storage: diskStore, limits: { fileSize: 8 * 1024 * 1024 
 app.post('/api/admin/upload', authMiddleware, adminOnly, upload.single('file'), (req, res) =>
   res.json({ url: `/uploads/${req.file.filename}` }));
 app.post('/api/upload', authMiddleware, (req, res) => {
-  const mb = Number(getSetting('upload_limit_mb', '8')) || 8;
+  const mb = roleLimit('upload_limit_mb', !!req.user.is_admin, 8) || 8;
   const mw = multer({ storage: diskStore, limits: { fileSize: Math.max(1, mb) * 1024 * 1024 } }).array('files', 10);
   mw(req, res, (err) => {
     if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? `That file is too large (max ${mb} MB).` : 'Upload failed.' });
@@ -438,9 +470,9 @@ function appConfig() {
   return {
     appName: getSetting('app_name', 'open-quill'),
     disclaimer: getSetting('disclaimer', 'Assistants can make mistakes, double-check responses.'),
-    greetings: JSON.parse(getSetting('greetings', '["How can I help you?"]')),
+    greetings: (() => { const g = JSON.parse(getSetting('greetings', '[]')); return g.length ? g : ['How can I help you?', 'What are we building today?', 'Where should we start?']; })(),
     appIcon: getSetting('app_icon', ''),
-    quickPrompts: JSON.parse(getSetting('quick_prompts', '[]')),
+    quickPrompts: (() => { const q = JSON.parse(getSetting('quick_prompts', '[]')); return q.length ? q : [{ label: 'Summarize', prompt: 'Summarize the following text for me:' }, { label: 'Write code', prompt: 'Help me write a small program. Ask me what it should do first.' }, { label: 'Brainstorm', prompt: 'Help me brainstorm ideas about a topic. Ask me for the topic.' }]; })(),
     version: APP_VERSION
   };
 }
@@ -643,7 +675,7 @@ wss.on('connection', (ws, req) => {
   clients.set(ws, { userId: u.id, abort: null });
   const safeSend = (s) => { if (ws.readyState === 1) { try { ws.send(s); } catch {} } };
 
-  async function runCompletion(ws, state, chat, model, extended, sandboxOn) {
+  async function runCompletion(ws, state, chat, model, extended, sandboxOn, sandboxCap = 0) {
     await maybeCompact(ws, chat, model, extended, sandboxOn);
     const history = chatHistory(chat, model);
     const chatRow = db.chats.byId(chat.id) || chat;
@@ -684,7 +716,7 @@ wss.on('connection', (ws, req) => {
         if (calls.length) {
           const results = [];
           for (const call of calls) {
-            const r = sandbox.execTool(chat.id, call);
+            const r = sandbox.execTool(chat.id, call, sandboxCap);
             safeSend(JSON.stringify({ type: 'tool', tool: call.tool, path: r.path || call.path || null, ok: !!r.ok, error: r.error || null }));
             results.push(formatToolResult(call, r));
           }
@@ -727,6 +759,7 @@ wss.on('connection', (ws, req) => {
       const model = db.models.byId(msg.modelId);
       if (!chat || chat.user_id !== u.id || !model) { safeSend(JSON.stringify({ type: 'error', error: 'Invalid chat or model.' })); return; }
 
+      const sandboxCap = roleLimit('sandbox_limit_mb', !!u.is_admin, u.is_admin ? 1024 : 256) * 1024 * 1024;
       const userSandbox = !!msg.sandbox;
       if (!!chat.sandbox !== userSandbox) db.chats.update(chat.id, { sandbox: userSandbox ? 1 : 0 });
       const hasFileAttach = Array.isArray(msg.attachments) && msg.attachments.some(a => !(a.type && a.type.startsWith('image/')));
@@ -754,7 +787,7 @@ wss.on('connection', (ws, req) => {
             try {
               const fname = path.basename(a.url || '');
               const src = fname ? path.join(UPLOADS, fname) : '';
-              if (src && fs.existsSync(src)) sandbox.importBuffer(chat.id, path.basename(a.name || fname || 'file'), fs.readFileSync(src));
+              if (src && fs.existsSync(src)) sandbox.importBuffer(chat.id, path.basename(a.name || fname || 'file'), fs.readFileSync(src), sandboxCap);
               else console.warn('[sandbox import] upload not found for', a.name, '->', src);
             } catch (e) { console.warn('[sandbox import] failed for', a && a.name, e.message); }
           }
@@ -765,7 +798,7 @@ wss.on('connection', (ws, req) => {
       const queueOn = getSetting('model_queue', '0') === '1';
       await runQueued(queueOn, model.id,
         () => { safeSend(JSON.stringify({ type: 'queued', chatId: chat.id })); },
-        () => runCompletion(ws, state, chat, model, !!msg.extended, sandboxOn));
+        () => runCompletion(ws, state, chat, model, !!msg.extended, sandboxOn, sandboxCap));
     } catch (err) {
       state.abort = null;
       safeSend(JSON.stringify({ type: 'error', error: String(err.message || err) }));
