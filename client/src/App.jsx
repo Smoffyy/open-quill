@@ -411,28 +411,43 @@ export default function App() {
   }
 
   async function createFolder(name = 'New folder') {
-    const f = await api.post('/api/folders', { name });
-    setFolders(fs => [...fs, { id: f.id, name: f.name, collapsed: false, sortOrder: f.sortOrder }]);
-    return f.id;
+    try {
+      const f = await api.post('/api/folders', { name });
+      setFolders(fs => [...fs, { id: f.id, name: f.name, collapsed: false, sortOrder: f.sortOrder }]);
+      return f.id;
+    } catch { return null; }
   }
   function renameFolder(id, name) {
+    const prev = folders.find(f => f.id === id)?.name;
     setFolders(fs => fs.map(f => f.id === id ? { ...f, name } : f));
-    api.patch('/api/folders/' + id, { name }).catch(() => {});
+    api.patch('/api/folders/' + id, { name }).catch(() => {
+      setFolders(fs => fs.map(f => f.id === id ? { ...f, name: prev } : f));
+    });
   }
   function toggleFolder(id) {
     const cur = folders.find(f => f.id === id);
     const next = !cur?.collapsed;
     setFolders(fs => fs.map(f => f.id === id ? { ...f, collapsed: next } : f));
-    api.patch('/api/folders/' + id, { collapsed: next }).catch(() => {});
+    api.patch('/api/folders/' + id, { collapsed: next }).catch(() => {
+      setFolders(fs => fs.map(f => f.id === id ? { ...f, collapsed: !next } : f));
+    });
   }
   async function deleteFolder(id) {
-    await api.del('/api/folders/' + id);
+    const prevFolders = folders;
+    const prevChats = chats;
     setFolders(fs => fs.filter(f => f.id !== id));
     setChats(cs => cs.map(c => c.folderId === id ? { ...c, folderId: null } : c));
+    try { await api.del('/api/folders/' + id); }
+    catch { setFolders(prevFolders); setChats(prevChats); }
   }
   function moveChatToFolder(chatId, folderId) {
-    setChats(cs => cs.map(c => c.id === chatId ? { ...c, folderId: folderId || null } : c));
-    api.patch('/api/chats/' + chatId, { folderId: folderId || '' }).catch(() => {});
+    const prev = chats.find(c => c.id === chatId)?.folderId ?? null;
+    const target = folderId || null;
+    if (prev === target) return;
+    setChats(cs => cs.map(c => c.id === chatId ? { ...c, folderId: target } : c));
+    api.patch('/api/chats/' + chatId, { folderId: target || '' }).catch(() => {
+      setChats(cs => cs.map(c => c.id === chatId ? { ...c, folderId: prev } : c));
+    });
   }
 
   async function send(attachments = [], overrideText) {

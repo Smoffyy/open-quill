@@ -191,7 +191,7 @@ export default function SettingsModal({ user, onClose, onUpdated, onDeleted }) {
                     <div className={'switch' + (prefs.focusGlow ? ' on' : '')} onClick={() => setPref('focusGlow', !prefs.focusGlow)} />
                   </div>
                   <div className="field row">
-                    <div><label>Fluid motion <span className="premium-tag">Premium</span></label><div className="muted-note">Springy, water-like motion across buttons, menus, the composer and the greeting. Heavier than the defaults — best on a capable machine.</div></div>
+                    <div><label>Fluid motion</label><div className="muted-note">Springy, water-like motion across buttons, menus, the composer and the greeting. Heavier than the defaults — best on a capable machine.</div></div>
                     <div className={'switch' + (prefs.fluidMotion ? ' on' : '')} onClick={() => setPref('fluidMotion', !prefs.fluidMotion)} />
                   </div>
                   {!!prefs.fluidMotion && (

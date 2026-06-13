@@ -35,8 +35,15 @@ function ChatRow({ c, active, showTrash, folders, onOpen, onDelete, onToggleStar
       if (menuRef.current && menuRef.current.contains(e.target)) return;
       setMenu(null); setSubOpen(false);
     };
+    const dismiss = () => { setMenu(null); setSubOpen(false); };
     document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
+    window.addEventListener('resize', dismiss);
+    window.addEventListener('scroll', dismiss, true);
+    return () => {
+      document.removeEventListener('mousedown', h);
+      window.removeEventListener('resize', dismiss);
+      window.removeEventListener('scroll', dismiss, true);
+    };
   }, [menu]);
   function openMenu(e) {
     e.stopPropagation();
@@ -106,7 +113,7 @@ function FolderSection({ f, chats, active, showTrash, folders, dragChatId, onTog
     <div className={'folder' + (dragOver ? ' drag-over' : '')}
       onDragOver={(e) => { if (dragChatId) { e.preventDefault(); setDragOver(true); } }}
       onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => { e.preventDefault(); setDragOver(false); if (dragChatId) onDrop(dragChatId, f.id); }}>
+      onDrop={(e) => { e.preventDefault(); setDragOver(false); const id = e.dataTransfer.getData('text/plain') || dragChatId; if (id) onDrop(id, f.id); }}>
       <div className="folder-head" onClick={() => !editing && onToggle(f.id)}>
         <Chevron className="fl-chev" style={{ width: 13, transform: f.collapsed ? 'none' : 'rotate(90deg)' }} />
         <Folder style={{ width: 14 }} className="fl-icon" />
@@ -210,7 +217,7 @@ export default function Sidebar({
             <div className={'section-label' + (rootDragOver ? ' drag-over' : '')}
               onDragOver={(e) => { if (dragChatId) { e.preventDefault(); setRootDragOver(true); } }}
               onDragLeave={() => setRootDragOver(false)}
-              onDrop={(e) => { e.preventDefault(); setRootDragOver(false); if (dragChatId) onMoveChat(dragChatId, null); }}>Chats</div>
+              onDrop={(e) => { e.preventDefault(); setRootDragOver(false); const id = e.dataTransfer.getData('text/plain') || dragChatId; if (id) onMoveChat(id, null); }}>Chats</div>
             {others.length === 0 && <div className="chats-empty">No chats yet</div>}
             {others.map(row)}
           </>
