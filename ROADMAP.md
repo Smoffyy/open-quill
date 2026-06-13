@@ -1,16 +1,3 @@
-# Updates / Features to be implemented.
-
-[x] Model queueing
-[] Text-To-Speech 
-[] Call mode
-[] Refactor models list / editable parameters per model
-
-# UI implementations
-
-[] Glass style interface option. (Will be like Liquid Glass)
-
-
-
 # Roadmap
 
 This roadmap outlines the planned direction of the project. Priorities may shift over time as the project evolves, community feedback is incorporated, and new ideas emerge.
@@ -20,6 +7,7 @@ This roadmap outlines the planned direction of the project. Priorities may shift
 ## Completed
 
 * [x] Model queueing
+* [x] Refactor models list / editable parameters per model
 
 ---
 
@@ -30,6 +18,9 @@ This roadmap outlines the planned direction of the project. Priorities may shift
 * [ ] Refactor all UIs
 * [ ] Smoother animations
 * [ ] Stronger security database
+* [ ] Text-To-Speech 
+* [ ] Speech-To-Text
+* [ ] Call mode
 
 ---
 
