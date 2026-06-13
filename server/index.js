@@ -497,7 +497,7 @@ app.patch('/api/admin/app-config', authMiddleware, adminOnly, (req, res) => {
 });
 
 // ---------- docs (credits / changelog) ----------
-const DOCS = { credits: 'CREDITS.md', changelog: 'CHANGELOG.md' };
+const DOCS = { credits: 'CREDITS.md', changelog: 'CHANGELOG.md', license: 'LICENSE' };
 app.get('/api/docs/:name', authMiddleware, (req, res) => {
   const file = DOCS[req.params.name];
   if (!file) return res.status(404).json({ error: 'not found' });

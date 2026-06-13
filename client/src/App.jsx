@@ -129,6 +129,7 @@ export default function App() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [showCredits, setShowCredits] = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
+  const [showLicense, setShowLicense] = useState(false);
   const [focusTick, setFocusTick] = useState(0);
   const [cfg, setCfg] = useState(DEFAULT_CFG);
   const [greeting, setGreeting] = useState(DEFAULT_CFG.greetings[0]);
@@ -462,7 +463,7 @@ export default function App() {
         onNew={newChat} onOpen={openChat} onDelete={deleteChat} onToggleStar={toggleStar}
         collapsed={collapsed} onToggle={() => setCollapsed(c => !c)}
         onSettings={() => setShowSettings(true)} onAdmin={() => setShowAdmin(true)}
-        onCredits={() => setShowCredits(true)} onChangelog={() => setShowChangelog(true)} onLogout={logout} version={cfg.version}
+        onCredits={() => setShowCredits(true)} onChangelog={() => setShowChangelog(true)} onLicense={() => setShowLicense(true)} onLogout={logout} version={cfg.version}
         onChatsOverview={() => setChatsOverview(true)} />
 
       <div className="main">
@@ -540,6 +541,7 @@ export default function App() {
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} />}
       {showAdmin && <AdminPanel user={user} onClose={() => setShowAdmin(false)} />}
       {showCredits && <DocModal title="Credits" name="credits" serif onClose={() => setShowCredits(false)} />}
+      {showLicense && <DocModal title="Licensing" name="license" onClose={() => setShowLicense(false)} />}
       {showChangelog && <DocModal title="Changelog" name="changelog" onClose={() => setShowChangelog(false)} />}
     </div>
   );
