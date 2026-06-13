@@ -120,6 +120,7 @@ export default function App() {
   const [currentId, setCurrentId] = useState(null);
   const [extended, setExtended] = useState(false);
   const [chats, setChats] = useState([]);
+  const [folders, setFolders] = useState([]);
   const [chatsLoaded, setChatsLoaded] = useState(false);
   const [activeId, setActiveId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -191,7 +192,7 @@ export default function App() {
       return () => mq.removeEventListener?.('change', h);
     }
   }, [user]);
-  useEffect(() => { if (user) { loadModels(); loadChats(); loadAppConfig(); connect(); openFromUrl(); } }, [!!user]);
+  useEffect(() => { if (user) { loadModels(); loadChats(); loadFolders(); loadAppConfig(); connect(); openFromUrl(); } }, [!!user]);
 
   useEffect(() => {
     const onPop = () => openFromUrl();
@@ -216,6 +217,7 @@ export default function App() {
     setCurrentId(id => id && m.find(x => x.id === id) ? id : (m.find(x => x.isDefault)?.id || m[0]?.id || null));
   }
   async function loadChats() { try { setChats(await api.get('/api/chats')); } finally { setChatsLoaded(true); } }
+  async function loadFolders() { try { setFolders(await api.get('/api/folders')); } catch {} }
   async function loadAppConfig() { try { applyCfg(await api.get('/api/app-config')); } catch {} }
   function applyCfg(c) {
     setCfg(c);
@@ -408,6 +410,31 @@ export default function App() {
     api.patch('/api/chats/' + id, { starred: next }).catch(() => {});
   }
 
+  async function createFolder(name = 'New folder') {
+    const f = await api.post('/api/folders', { name });
+    setFolders(fs => [...fs, { id: f.id, name: f.name, collapsed: false, sortOrder: f.sortOrder }]);
+    return f.id;
+  }
+  function renameFolder(id, name) {
+    setFolders(fs => fs.map(f => f.id === id ? { ...f, name } : f));
+    api.patch('/api/folders/' + id, { name }).catch(() => {});
+  }
+  function toggleFolder(id) {
+    const cur = folders.find(f => f.id === id);
+    const next = !cur?.collapsed;
+    setFolders(fs => fs.map(f => f.id === id ? { ...f, collapsed: next } : f));
+    api.patch('/api/folders/' + id, { collapsed: next }).catch(() => {});
+  }
+  async function deleteFolder(id) {
+    await api.del('/api/folders/' + id);
+    setFolders(fs => fs.filter(f => f.id !== id));
+    setChats(cs => cs.map(c => c.folderId === id ? { ...c, folderId: null } : c));
+  }
+  function moveChatToFolder(chatId, folderId) {
+    setChats(cs => cs.map(c => c.id === chatId ? { ...c, folderId: folderId || null } : c));
+    api.patch('/api/chats/' + chatId, { folderId: folderId || '' }).catch(() => {});
+  }
+
   async function send(attachments = [], overrideText) {
     if (streaming || queued) return;
     const text = (overrideText != null ? overrideText : input).trim();
@@ -416,7 +443,7 @@ export default function App() {
     if (!chatId) {
       const c = await api.post('/api/chats');
       chatId = c.id; setActiveId(chatId);
-      setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false }, ...cs]);
+      setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false, folderId: null }, ...cs]);
       history.pushState({}, '', '/chat/' + chatId);
     }
     if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, content: text, attachments, sandbox })) return;
@@ -460,6 +487,7 @@ export default function App() {
   return (
     <div className="app">
       <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName}
+        folders={folders} onCreateFolder={createFolder} onRenameFolder={renameFolder} onToggleFolder={toggleFolder} onDeleteFolder={deleteFolder} onMoveChat={moveChatToFolder}
         onNew={newChat} onOpen={openChat} onDelete={deleteChat} onToggleStar={toggleStar}
         collapsed={collapsed} onToggle={() => setCollapsed(c => !c)}
         onSettings={() => setShowSettings(true)} onAdmin={() => setShowAdmin(true)}

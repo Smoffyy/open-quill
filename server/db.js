@@ -8,8 +8,8 @@ const FILE = path.join(__dirname, 'data.json');
 
 const data = fs.existsSync(FILE)
   ? JSON.parse(fs.readFileSync(FILE, 'utf8'))
-  : { users: [], chats: [], messages: [], models: [], settings: {} };
-for (const k of ['users', 'chats', 'messages', 'models']) data[k] ||= [];
+  : { users: [], chats: [], messages: [], models: [], folders: [], settings: {} };
+for (const k of ['users', 'chats', 'messages', 'models', 'folders']) data[k] ||= [];
 data.settings ||= {};
 
 let saveTimer = null;
@@ -45,7 +45,8 @@ export const db = {
   users: collection(data.users),
   chats: collection(data.chats),
   messages: collection(data.messages),
-  models: collection(data.models)
+  models: collection(data.models),
+  folders: collection(data.folders)
 };
 
 export function getSetting(key, fallback = null) {

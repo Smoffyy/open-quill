@@ -7,7 +7,7 @@ export default function SettingsModal({ user, onClose, onUpdated, onDeleted }) {
   const [tab, setTab] = useState('general');
   const [chatSec, setChatSec] = useState('streaming');
   const [name, setName] = useState(user.displayName);
-  const [prefs, setPrefs] = useState({ animations: true, autoscroll: true, theme: 'dark', accent: '', density: 'comfortable', messageEntrance: true, streamCursor: false, cursorStyle: 'block', revealMs: 40, chatStagger: true, themeFade: true, microFx: true, composerFx: true, iconGlow: false, focusGlow: false, ...user.prefs });
+  const [prefs, setPrefs] = useState({ animations: true, autoscroll: true, theme: 'dark', accent: '', density: 'comfortable', messageEntrance: true, streamCursor: false, cursorStyle: 'block', revealMs: 40, chatStagger: true, themeFade: true, microFx: true, composerFx: true, iconGlow: false, focusGlow: false, fluidMotion: false, fluidLevel: 'balanced', ...user.prefs });
   const [saved, setSaved] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const [delErr, setDelErr] = useState('');
@@ -190,6 +190,18 @@ export default function SettingsModal({ user, onClose, onUpdated, onDeleted }) {
                     <div><label>Composer focus glow</label><div className="muted-note">Soft accent ring around the input bar while it's focused</div></div>
                     <div className={'switch' + (prefs.focusGlow ? ' on' : '')} onClick={() => setPref('focusGlow', !prefs.focusGlow)} />
                   </div>
+                  <div className="field row">
+                    <div><label>Fluid motion <span className="premium-tag">Premium</span></label><div className="muted-note">Springy, water-like motion across buttons, menus, the composer and the greeting. Heavier than the defaults — best on a capable machine.</div></div>
+                    <div className={'switch' + (prefs.fluidMotion ? ' on' : '')} onClick={() => setPref('fluidMotion', !prefs.fluidMotion)} />
+                  </div>
+                  {!!prefs.fluidMotion && (
+                    <div className="field">
+                      <label>Motion intensity</label>
+                      <Seg value={prefs.fluidLevel || 'balanced'} onPick={(v) => setPref('fluidLevel', v)}
+                        options={[{ v: 'gentle', label: 'Gentle' }, { v: 'balanced', label: 'Balanced' }, { v: 'expressive', label: 'Expressive' }]} />
+                      <div className="muted-note">How far things stretch, wobble and bounce. Gentle is subtle; Expressive leans into the springs.</div>
+                    </div>
+                  )}
                 </>}
               </>
             );
