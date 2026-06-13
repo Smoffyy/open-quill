@@ -44,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tool chips no longer replay their entrance animation on every streamed token.
 - Assistant messages no longer flash invisible for a moment when a response finishes.
 - Sidebar chat rows kept their hover nudge after the entrance animation.
-- The admin icon previews animate in a loop like they do in chat, and the reset ✕ is centered.
+- The admin icon previews animate in a loop like they do in chat, and the reset X is centered.
 - A disconnecting client now aborts its in-flight generation instead of leaving it running.
 
 ---
