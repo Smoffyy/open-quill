@@ -2,7 +2,7 @@
   "name": "open-quill",
   "version": "2026.2.2",
   "private": true,
-  "description": "Local Claude-style chat UI for OpenAI-compatible servers",
+  "description": "Local Anthropic-style chat UI for OpenAI-compatible servers",
   "scripts": {
     "install:all": "npm install && cd server && npm install && cd ../client && npm install",
     "build": "cd client && npm run build",

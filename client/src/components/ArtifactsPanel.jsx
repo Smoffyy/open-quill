@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import hljs from 'highlight.js';
 import { api } from '../api.js';
+import { copyText } from '../clipboard.js';
 import { Download, Refresh, FileText, Copy, Check, ChevDown, Folder } from './icons.jsx';
 
 const EXT_LANG = { rs: 'rust', py: 'python', js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript', html: 'xml', htm: 'xml', css: 'css', scss: 'scss', json: 'json', md: 'markdown', markdown: 'markdown', sh: 'bash', bash: 'bash', c: 'c', cpp: 'cpp', h: 'cpp', java: 'java', rb: 'ruby', go: 'go', php: 'php', sql: 'sql', yml: 'yaml', yaml: 'yaml', toml: 'ini', ini: 'ini', lua: 'lua', glsl: 'glsl', vert: 'glsl', frag: 'glsl', xml: 'xml', svg: 'xml', kt: 'kotlin', swift: 'swift', vue: 'xml' };
@@ -55,9 +56,13 @@ function Viewer({ chatId, path, onBack, liveText, writingElsewhere, onJumpToLive
   const shownText = fromStream ? streamText : (data?.text != null ? data.text : null);
   const html = useMemo(() => {
     if (shownText == null) return '';
+    const esc = (s) => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
     const lang = EXT_LANG[(fromStream ? ext.toLowerCase() : (data?.ext || '').toLowerCase())];
-    try { return lang && hljs.getLanguage(lang) ? hljs.highlight(shownText, { language: lang, ignoreIllegals: true }).value : hljs.highlightAuto(shownText).value; }
-    catch { return shownText.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+    try {
+      if (lang && hljs.getLanguage(lang)) return hljs.highlight(shownText, { language: lang, ignoreIllegals: true }).value;
+      if (isLive) return esc(shownText);
+      return hljs.highlightAuto(shownText).value;
+    } catch { return esc(shownText); }
   }, [shownText, fromStream]);
   const lines = shownText != null ? shownText.split('\n') : [];
   const diffRows = useMemo(() => {
@@ -65,7 +70,7 @@ function Viewer({ chatId, path, onBack, liveText, writingElsewhere, onJumpToLive
     return diffLines(prev.split('\n'), data.text.split('\n'));
   }, [diff, prev, data]);
 
-  function copy() { const t = data?.text != null ? data.text : shownText; if (t != null) { navigator.clipboard.writeText(t); setCopied(true); setTimeout(() => setCopied(false), 1400); } }
+  async function copy() { const t = data?.text != null ? data.text : shownText; if (t != null && await copyText(t)) { setCopied(true); setTimeout(() => setCopied(false), 1400); } }
 
   const bodyRef = useRef(null);
   useEffect(() => { if (isLive && bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight; }, [shownText, isLive]);

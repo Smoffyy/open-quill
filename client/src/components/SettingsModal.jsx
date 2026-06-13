@@ -5,8 +5,9 @@ import { Sun, Moon, Gear, Sliders } from './icons.jsx';
 
 export default function SettingsModal({ user, onClose, onUpdated, onDeleted }) {
   const [tab, setTab] = useState('general');
+  const [chatSec, setChatSec] = useState('streaming');
   const [name, setName] = useState(user.displayName);
-  const [prefs, setPrefs] = useState({ animations: true, autoscroll: true, theme: 'dark', accent: '', density: 'comfortable', messageEntrance: true, ...user.prefs });
+  const [prefs, setPrefs] = useState({ animations: true, autoscroll: true, theme: 'dark', accent: '', density: 'comfortable', messageEntrance: true, streamCursor: false, cursorStyle: 'block', revealMs: 40, chatStagger: true, themeFade: true, microFx: true, composerFx: true, iconGlow: false, focusGlow: false, ...user.prefs });
   const [saved, setSaved] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const [delErr, setDelErr] = useState('');
@@ -130,18 +131,69 @@ export default function SettingsModal({ user, onClose, onUpdated, onDeleted }) {
               </div>
             </>
           )}
-          {tab === 'chat' && (
-            <>
-              <h2>Chat</h2>
-              <div className="hint">How responses behave.</div>
-              <Toggle k="animations" label="Streaming text animation" desc="Reveal the response as it generates" />
-              <div className="field row">
-                <div><label>Message entrance animation</label><div className="muted-note">Gently animate new messages into view</div></div>
-                <div className={'switch' + (prefs.messageEntrance !== false ? ' on' : '')} onClick={() => setPref('messageEntrance', prefs.messageEntrance === false)} />
-              </div>
-              <Toggle k="autoscroll" label="Auto-scroll while generating" desc="Follow the response unless you scroll up" />
-            </>
-          )}
+          {tab === 'chat' && (() => {
+            const rv = prefs.revealMs == null || isNaN(parseInt(prefs.revealMs)) ? 40 : Math.max(0, Math.min(100, parseInt(prefs.revealMs)));
+            return (
+              <>
+                <h2>Chat</h2>
+                <div className="hint">How responses look, move, and feel.</div>
+                <div className="me-sections" style={{ marginBottom: 14 }}>
+                  {[['streaming', 'Streaming'], ['motion', 'Motion'], ['effects', 'Effects']].map(([k, label]) => (
+                    <button key={k} className={'me-sec' + (chatSec === k ? ' on' : '')} onClick={() => setChatSec(k)}>{label}</button>
+                  ))}
+                </div>
+                {chatSec === 'streaming' && <>
+                  <Toggle k="animations" label="Streaming text animation" desc="Reveal the response as it generates" />
+                  {prefs.animations !== false && (
+                    <div className="field">
+                      <label>Reveal speed</label>
+                      <div className="reveal-row">
+                        <input type="range" min="0" max="100" step="5" value={rv} onChange={(e) => setPref('revealMs', parseInt(e.target.value))} />
+                        <span className="reveal-val">{rv === 0 ? 'Instant' : rv + ' ms'}</span>
+                      </div>
+                      <div className="muted-note">Time between reveal steps. Lower is faster; 0 shows responses instantly. Default 40 ms.</div>
+                    </div>
+                  )}
+                  <Toggle k="autoscroll" label="Auto-scroll while generating" desc="Follow the response unless you scroll up" />
+                  <div className="field row">
+                    <div><label>Streaming cursor</label><div className="muted-note">Show a soft cursor at the write position while the response streams</div></div>
+                    <div className={'switch' + (prefs.streamCursor ? ' on' : '')} onClick={() => setPref('streamCursor', !prefs.streamCursor)} />
+                  </div>
+                  {!!prefs.streamCursor && (
+                    <div className="field">
+                      <label>Cursor style</label>
+                      <div className="seg">
+                        <button className={(prefs.cursorStyle || 'block') === 'block' ? 'on' : ''} onClick={() => setPref('cursorStyle', 'block')}>Block</button>
+                        <button className={prefs.cursorStyle === 'circle' ? 'on' : ''} onClick={() => setPref('cursorStyle', 'circle')}>Circle</button>
+                      </div>
+                    </div>
+                  )}
+                </>}
+                {chatSec === 'motion' && <>
+                  <div className="field row">
+                    <div><label>Message entrance animation</label><div className="muted-note">Gently animate new messages into view — yours slide from the right, replies from the left</div></div>
+                    <div className={'switch' + (prefs.messageEntrance !== false ? ' on' : '')} onClick={() => setPref('messageEntrance', prefs.messageEntrance === false)} />
+                  </div>
+                  {prefs.messageEntrance !== false && (
+                    <Toggle k="chatStagger" label="Stagger messages on chat open" desc="Messages assemble into view when opening a chat" />
+                  )}
+                  <Toggle k="themeFade" label="Theme cross-fade" desc="Fade colors smoothly when switching light and dark" />
+                </>}
+                {chatSec === 'effects' && <>
+                  <Toggle k="microFx" label="Micro-interactions" desc="Hover rises, copy flashes, thinking shimmer, button pops" />
+                  <div className="field row">
+                    <div><label>Model icon glow</label><div className="muted-note">Soft glow on the icon while generating or thinking, tinted by the logo's colors</div></div>
+                    <div className={'switch' + (prefs.iconGlow ? ' on' : '')} onClick={() => setPref('iconGlow', !prefs.iconGlow)} />
+                  </div>
+                  <Toggle k="composerFx" label="Composer effects" desc="Attachment animations and press feedback" />
+                  <div className="field row">
+                    <div><label>Composer focus glow</label><div className="muted-note">Soft accent ring around the input bar while it's focused</div></div>
+                    <div className={'switch' + (prefs.focusGlow ? ' on' : '')} onClick={() => setPref('focusGlow', !prefs.focusGlow)} />
+                  </div>
+                </>}
+              </>
+            );
+          })()}
           <div className="btn-row">
             <button className="btn primary" onClick={save}>Save changes</button>
             {saved && <span className="saved-flash" style={{ alignSelf: 'center' }}>Saved ✓</span>}

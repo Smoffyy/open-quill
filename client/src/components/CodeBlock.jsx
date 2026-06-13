@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { copyText } from '../clipboard.js';
 import hljs from 'highlight.js';
 import { Copy, Check } from './icons.jsx';
 
@@ -15,14 +16,15 @@ export default function CodeBlock({ lang, code }) {
       return hljs.highlightAuto(code).value;
     } catch { return escapeHtml(code); }
   }, [code, lang]);
-  function copy() {
-    navigator.clipboard?.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1400);
+  async function copy() {
+    if (await copyText(code)) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    }
   }
   return (
     <div className="code-wrap">
-      <div className="code-bar">
+      <div className={'code-bar' + (copied ? ' flash' : '')}>
         <span>{lang || 'text'}</span>
         <button className="code-copy" onClick={copy}>
           {copied ? <Check key="c" className="copy-pop" /> : <Copy key="o" />} {copied ? 'Copied' : 'Copy'}
