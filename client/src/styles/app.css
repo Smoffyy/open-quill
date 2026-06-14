@@ -90,6 +90,7 @@
 :root[data-theme="anthropic"] .folder-head:hover svg { color: #ffffff; }
 :root[data-theme="anthropic"] .chat-row.active,
 :root[data-theme="anthropic"] .chat-row:hover { background: var(--user-bubble); }
+:root[data-theme="anthropic"] .send { color: #fff; }
 :root[data-theme="anthropic"] .greeting { color: rgba(255,255,255,.8); }
 :root[data-theme="anthropic"] ::selection { background: #3d3d3d; color: #fff; }
 :root[data-theme="anthropic"] ::-moz-selection { background: #121212; color: #fff; }
@@ -229,7 +230,7 @@ input, textarea { font-family: inherit; color: inherit; }
 .composer textarea::placeholder { color: var(--text-faint); }
 .composer-bar { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
 .composer-left, .composer-right { display: flex; align-items: center; gap: 6px; }
-.plus { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; color: var(--text-muted); position: relative; }
+.plus { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; color: var(--text); position: relative; }
 .plus-badge { position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--accent); color: #2a1a12; font-size: 11px; font-weight: 600; font-family: var(--font-sans); display: grid; place-items: center; line-height: 1; box-shadow: 0 0 0 2px var(--surface); }
 .plus:hover { background: var(--surface-hover); color: var(--text); }
 .send { width: 32px; height: 32px; border-radius: 9px; background: var(--accent); color: #2a1a12; display: grid; place-items: center; transition: opacity .15s, transform .1s; }
@@ -504,9 +505,9 @@ button { transition: transform .12s ease, background .15s ease, color .15s ease,
 .greeting-row .btn.danger { padding: 9px 11px; flex-shrink: 0; }
 
 /* ---------- attachments ---------- */
-.attach-row { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px 2px; }
+.attach-row { display: flex; flex-wrap: wrap; gap: 8px; padding: 0px 0 2px; }
 .attach-chip { position: relative; animation: pop .14s ease; }
-.attach-chip.image img { width: 54px; height: 54px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); display: block; }
+.attach-chip.image img { width: 90px; height: 90px; object-fit: cover; border-radius: 12px; border: 1px solid var(--border); display: block; }
 .attach-file { display: flex; align-items: center; gap: 9px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 10px; padding: 8px 11px; }
 .attach-file svg { color: var(--text-muted); flex-shrink: 0; }
 .attach-meta { min-width: 0; }
@@ -514,7 +515,7 @@ button { transition: transform .12s ease, background .15s ease, color .15s ease,
 .attach-type { font-size: 10.5px; color: var(--text-faint); letter-spacing: .04em; }
 .attach-x { position: absolute; top: -7px; right: -7px; width: 19px; height: 19px; border-radius: 50%; background: var(--menu-bg); border: 1px solid var(--border); color: var(--text-muted); display: grid; place-items: center; font-size: 10px; opacity: 0; transition: opacity .12s, color .12s, transform .12s; }
 .attach-chip:hover .attach-x { opacity: 1; }
-.attach-x:hover { color: #e06a52; transform: scale(1.12); }
+.attach-x:hover { color: var(--accent); transform: scale(1.12); }
 
 .msg-attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 9px; justify-content: flex-end; }
 .att { display: block; border-radius: 11px; text-decoration: none; transition: transform .12s ease; }
@@ -1100,12 +1101,14 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .composer.blocked .composer-input,
 .composer.blocked textarea { opacity: .6; }
 .unavail-banner {
-  margin: 0 0 10px; padding: 13px 18px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
+  margin: 0 0 -16px; padding: 12px 18px 26px;
+  background: var(--bg);
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
   font-size: 13.5px;
+  position: relative; z-index: 0;
 }
+.composer.unavailable { position: relative; z-index: 1; }
 .unavail-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .unavail-msg { color: var(--text); }
 .unavail-msg strong { font-weight: 700; }

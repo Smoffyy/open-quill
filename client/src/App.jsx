@@ -572,7 +572,7 @@ export default function App() {
             </div>
             {incognito ? (
               <div className="incognito-note">Incognito chats aren't saved to your history.</div>
-            ) : cfg.quickPrompts && cfg.quickPrompts.length > 0 && (
+            ) : !input.trim() && cfg.quickPrompts && cfg.quickPrompts.length > 0 && (
               <div className="quick-prompts">
                 {cfg.quickPrompts.map((q, i) => (
                   <button key={i} className="quick-prompt" style={{ animationDelay: i * 45 + 'ms' }} onClick={() => send([], q.prompt)} disabled={streaming}>

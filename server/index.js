@@ -547,7 +547,7 @@ function appConfig() {
     disclaimer: getSetting('disclaimer', 'Assistants can make mistakes, double-check responses.'),
     greetings: (() => { const g = JSON.parse(getSetting('greetings', '[]')); return g.length ? g : ['How can I help you?', 'What are we building today?', 'Where should we start?']; })(),
     appIcon: getSetting('app_icon', ''),
-    quickPrompts: (() => { const q = JSON.parse(getSetting('quick_prompts', '[]')); return q.length ? q : [{ label: 'Summarize', prompt: 'Summarize the following text for me:' }, { label: 'Write code', prompt: 'Help me write a small program. Ask me what it should do first.' }, { label: 'Brainstorm', prompt: 'Help me brainstorm ideas about a topic. Ask me for the topic.' }]; })(),
+    quickPrompts: (() => { const q = JSON.parse(getSetting('quick_prompts', '[]')); return q.length ? q : [{ icon: 'file', label: 'Summarize', prompt: 'Summarize the following text for me:' }, { icon: 'code', label: 'Write code', prompt: 'Help me write a small program. Ask me what it should do first.' }, { icon: 'bulb', label: 'Brainstorm', prompt: 'Help me brainstorm ideas about a topic. Ask me for the topic.' }]; })(),
     version: APP_VERSION
   };
 }
@@ -561,8 +561,9 @@ app.patch('/api/admin/app-config', authMiddleware, adminOnly, (req, res) => {
     setSetting('greetings', JSON.stringify(list.length ? list : ['How can I help you?']));
   }
   if ('quickPrompts' in b) {
+    const QP_ICONS = ['none', 'bulb', 'pencil', 'code', 'coffee', 'learn', 'sparkles', 'search', 'chat', 'file', 'star'];
     const list = (Array.isArray(b.quickPrompts) ? b.quickPrompts : [])
-      .map(q => ({ label: String(q.label || '').trim().slice(0, 40), icon: String(q.icon || '').trim().slice(0, 4), prompt: String(q.prompt || '').trim() }))
+      .map(q => ({ label: String(q.label || '').trim().slice(0, 40), icon: QP_ICONS.includes(String(q.icon || '').trim()) ? String(q.icon).trim() : 'none', prompt: String(q.prompt || '').trim() }))
       .filter(q => q.label && q.prompt).slice(0, 8);
     setSetting('quick_prompts', JSON.stringify(list));
   }

@@ -17,16 +17,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-paint theme bootstrap so the saved theme is applied before first render.
 - **Anthropic style theme** - Different color pallet, same functional interface!
 - **Configurable Capability Icons** - Adds a little icon within the model, as well as making it compacted with just an info icon.
+- **Quick prompt icons** - Each quick-prompt button now displays a themed icon (file, code, bulb, etc.) and can be set per-button in the admin panel. Default prompts include icons.
+- **Sandbox tools badge** - Toggled tools in the + menu now show a small numbered badge on the icon itself rather than a separate pill.
 
 ### Fixed
 - **Theme flash on load** - the page no longer flashes light mode before switching to dark on startup.
 - **Composer focus/blur** - the input bar now eases smoothly in both directions instead of snapping on blur.
 - **Model dropdown z-index** - the menu no longer renders behind the quick-prompt buttons on the home screen.
+- **Model dropdown "More models" submenu** - Fixed selection closing the menu, added hover delay and invisible bridge so models are now selectable without the submenu vanishing.
+- **Quick prompt icon truncation** - Icons longer than 4 characters (pencil, coffee, learn, sparkles, search) were being silently corrupted. Now validates against the full allowed list.
+- **Incognito transition smoothness** - Background colors and the incognito bar now fade in over 0.45s instead of snapping.
+- **Sampling input visibility** - The number inputs in the admin sampling panel are now properly styled with visible text and themed backgrounds across all themes.
+- **Image preview memory leak** - File preview blob URLs were never revoked on component unmount due to a stale closure in the cleanup effect.
 - Removed the gradient sheen ("fade") on user message bubbles.
 - Hardened folder operations with optimistic rollback on network failure, and made chat drag-and-drop read from the drag payload to avoid race conditions.
 - The chat-row menu now dismisses on scroll/resize so it can't float detached.
 
 ### Changed
+- **Composer input bar** - Raised minimum height from 26px to 31px for better visual balance.
+- **Composer width** - Narrowed max-width from 760px to 675px to match official Claude interface proportions.
+- **Active chat highlighting** - In the Anthropic theme, both hover and active states now use the user-message color (#121212) for consistency.
+- **Model dropdown** - The + icon border outline has been removed, and models button styling refined.
+- **Sandbox icon** - Changed from wrench to cube to better represent a sandboxed environment.
+- **Anthropic theme refinements:**
+  - Quick-prompt button background: #313130
+  - Menu backgrounds (model dropdown, + menu, submenus): #313130
+  - Greeting text opacity: lowered to 80%
+  - Text selection: #121212 background with white text
 - **Theme switching no longer animates** - the light/dark transition was removed entirely (it only ever risked flashing); the change is now instant.
 - Models tab: removed the per-model Save button in favor of autosave-to-draft, with a new "Push to all Clients" control and a dirty-state indicator.
 - Reverted the experimental "Fluid motion" animation tier and removed its settings toggle.
