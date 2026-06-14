@@ -5,6 +5,31 @@ All notable changes to **open-quill** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2026.2.3] — 2026-06-13
+
+### Added
+- **Folders** - organize chats into collapsible folders with drag-to-move and a "Move to folder" submenu in each chat's menu.
+- **Incognito chat** - an ephemeral, fully local chat that's never written to disk. Toggle from the top-right ghost icon; the viewport fills with a white outline and the canvas switches to a dark palette. Sandbox and attachments are disabled in incognito.
+- **Model draft / publish workflow** - admins now edit a private draft. Changes autosave and are visible only to admins (live across admin sessions), while clients keep using the last published config until an admin clicks **Push to all Clients**.
+- **Mark models as unavailable** - admins can disable a model in real time. It stays in the dropdown but shows a banner with the model name and a developer-written "Learn more" reason, and clients are blocked from sending to it. Admins can still use unavailable models for testing.
+- Pre-paint theme bootstrap so the saved theme is applied before first render.
+- **Anthropic style theme** - Different color pallet, same functional interface!
+- **Configurable Capability Icons** - Adds a little icon within the model, as well as making it compacted with just an info icon.
+
+### Fixed
+- **Theme flash on load** - the page no longer flashes light mode before switching to dark on startup.
+- **Composer focus/blur** - the input bar now eases smoothly in both directions instead of snapping on blur.
+- **Model dropdown z-index** - the menu no longer renders behind the quick-prompt buttons on the home screen.
+- Removed the gradient sheen ("fade") on user message bubbles.
+- Hardened folder operations with optimistic rollback on network failure, and made chat drag-and-drop read from the drag payload to avoid race conditions.
+- The chat-row menu now dismisses on scroll/resize so it can't float detached.
+
+### Changed
+- **Theme switching no longer animates** - the light/dark transition was removed entirely (it only ever risked flashing); the change is now instant.
+- Models tab: removed the per-model Save button in favor of autosave-to-draft, with a new "Push to all Clients" control and a dirty-state indicator.
+- Reverted the experimental "Fluid motion" animation tier and removed its settings toggle.
+- Sidebar widened slightly (250px → 290px).
+
 ## [2026.2.2] — 2026-06-12
 
 ### Added

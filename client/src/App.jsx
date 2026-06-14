@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from './api.js';
 import { applyPrefs } from './prefs.js';
+import { QpIcon } from './qpIcons.jsx';
 import Login from './components/Login.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import Composer from './components/Composer.jsx';
@@ -10,7 +11,7 @@ import AdminPanel from './components/AdminPanel.jsx';
 import DocModal from './components/DocModal.jsx';
 import ArtifactsPanel from './components/ArtifactsPanel.jsx';
 import ChatsOverview from './components/ChatsOverview.jsx';
-import { Down, ChevDown, Paper, Compact } from './components/icons.jsx';
+import { Down, ChevDown, Paper, Compact, Ghost } from './components/icons.jsx';
 
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: 'Assistants can make mistakes, double-check responses.', greetings: ['How can I help you?'], appIcon: '', quickPrompts: [], version: '' };
 
@@ -142,6 +143,8 @@ export default function App() {
   const [hasSummary, setHasSummary] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [artifactsOpen, setArtifactsOpen] = useState(false);
+  const [incognito, setIncognito] = useState(false);
+  const [incognitoGreeting, setIncognitoGreeting] = useState('Greetings, whoever you are');
   const [chatsOverview, setChatsOverview] = useState(false);
 
   const [streaming, setStreaming] = useState(false);
@@ -170,6 +173,8 @@ export default function App() {
   const activeIdRef = useRef(null);
   const currentIdRef = useRef(null);
   const animateRef = useRef(animate);
+  const incognitoRef = useRef(false);
+  useEffect(() => { incognitoRef.current = incognito; }, [incognito]);
   const refreshSeq = useRef(0);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
   useEffect(() => { currentIdRef.current = currentId; }, [currentId]);
@@ -250,7 +255,7 @@ export default function App() {
   }
 
   function handleWs(m) {
-    if (m.type === 'config') { loadModels(); loadAppConfig(); return; }
+    if (m.type === 'config') { loadModels(); loadAppConfig(); try { window.dispatchEvent(new CustomEvent('oq-config')); } catch {} return; }
     if (m.type === 'files') { setFiles(m.files || []); setLiveFile(null); return; }
     if (m.type === 'tool') { return; }
     if (m.type === 'compacting') { setCompacting(true); return; }
@@ -337,6 +342,7 @@ export default function App() {
     setDispContent(''); setDispReason('');
     setLiveFile(null); setPendingFiles({}); doneBlocksRef.current = 0;
     setTimeout(() => scrollBottom(false), 0);
+    if (incognitoRef.current) return;
     loadChats();
     const aid = activeIdRef.current;
     if (aid) refreshMessages(aid);
@@ -372,6 +378,7 @@ export default function App() {
   function jumpDown() { stick.current = true; setShowJump(false); scrollBottom(true); }
 
   async function openChat(id, push = true) {
+    if (incognito) setIncognito(false);
     setActiveId(id);
     try {
       const { chat, messages } = await api.get('/api/chats/' + id);
@@ -391,12 +398,30 @@ export default function App() {
     } catch { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); }
   }
   function newChat(fromPop) {
+    if (incognito) setIncognito(false);
     setActiveId(null); setMessages([]); setInput('');
     setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingFiles({});
     const m = models.find(m => m.id === currentId);
     setSandbox(m?.sandboxAllowed !== false && !!m?.sandboxAuto);
     setFocusTick(t => t + 1);
     if (fromPop !== true) history.pushState({}, '', '/');
+  }
+  function toggleIncognito() {
+    if (streaming || queued) return;
+    if (incognito) {
+      setIncognito(false);
+      setMessages([]); setInput('');
+      setFocusTick(t => t + 1);
+    } else {
+      setActiveId(null); setMessages([]); setInput('');
+      setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingFiles({});
+      setSandbox(false);
+      const gs = ['Greetings, whoever you are', 'No names, no traces', 'This one stays between us', 'Off the record'];
+      setIncognitoGreeting(gs[Math.floor(Math.random() * gs.length)]);
+      setIncognito(true);
+      setFocusTick(t => t + 1);
+      if (location.pathname !== '/') history.pushState({}, '', '/');
+    }
   }
   async function deleteChat(id) {
     await api.del('/api/chats/' + id);
@@ -454,6 +479,19 @@ export default function App() {
     if (streaming || queued) return;
     const text = (overrideText != null ? overrideText : input).trim();
     if ((!text && attachments.length === 0) || !currentId) return;
+
+    if (incognito) {
+      const history = [...messages
+        .filter(m => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+        .map(m => ({ role: m.role, content: m.content })),
+        { role: 'user', content: text }];
+      if (!wsSend({ type: 'incognito', modelId: currentId, extended, messages: history })) return;
+      setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments: [], _enter: true }]);
+      setInput('');
+      stick.current = true; setTimeout(() => scrollBottom(true), 20);
+      return;
+    }
+
     let chatId = activeId;
     if (!chatId) {
       const c = await api.post('/api/chats');
@@ -488,19 +526,20 @@ export default function App() {
   if (!user) return <Login onLogin={(u) => setUser(u)} />;
 
   const model = models.find(m => m.id === currentId);
-  const sandboxAllowed = model ? model.sandboxAllowed !== false : true;
+  const sandboxAllowed = incognito ? false : (model ? model.sandboxAllowed !== false : true);
+  const sandboxOn = sandboxAllowed && sandbox;
   const empty = !activeId && messages.length === 0;
   const composerProps = {
     value: input, onChange: setInput, onSend: send, onStop: stop, streaming: streaming || queued,
     models, currentId, onSelect: setCurrentId, extended, onToggleExtended: () => setExtended(e => !e),
-    visionSupported: !!model?.hasVision,
-    sandbox, sandboxAllowed, onToggleSandbox: () => { if (sandboxAllowed) setSandbox(s => !s); },
+    visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin,
+    sandbox: sandboxOn, sandboxAllowed, onToggleSandbox: () => { if (sandboxAllowed) setSandbox(s => !s); },
     onWantSandbox: () => { if (sandboxAllowed) setSandbox(true); }
   };
-  const showArtifactsBtn = sandbox || files.length > 0;
+  const showArtifactsBtn = sandboxOn || files.length > 0;
 
   return (
-    <div className="app">
+    <div className={'app' + (incognito ? ' app-incognito' : '')}>
       <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName}
         folders={folders} onCreateFolder={createFolder} onRenameFolder={renameFolder} onToggleFolder={toggleFolder} onDeleteFolder={deleteFolder} onMoveChat={moveChatToFolder}
         onNew={newChat} onOpen={openChat} onDelete={deleteChat} onToggleStar={toggleStar}
@@ -509,18 +548,35 @@ export default function App() {
         onCredits={() => setShowCredits(true)} onChangelog={() => setShowChangelog(true)} onLicense={() => setShowLicense(true)} onLogout={logout} version={cfg.version}
         onChatsOverview={() => setChatsOverview(true)} />
 
-      <div className="main">
+      <div className={'main' + (incognito ? ' incognito' : '')} data-incognito={incognito ? 'on' : undefined}>
+        {incognito && (
+          <div className="incognito-bar">
+            <div className="incognito-title"><Ghost style={{ width: 18 }} /> Incognito chat</div>
+            <button className="incognito-close" onClick={toggleIncognito} title="Exit incognito" disabled={streaming || queued}>✕</button>
+          </div>
+        )}
+        {!incognito && empty && (
+          <button className="incognito-fab" onClick={toggleIncognito} title="Incognito chat — not saved" disabled={streaming || queued}>
+            <Ghost style={{ width: 18 }} />
+          </button>
+        )}
         {empty ? (
           <div className="center-wrap">
-            <div className="greeting"><img src={model?.staticIcon || cfg.appIcon || '/starburst.svg'} alt="" /> {greeting}</div>
+            <div className="greeting">
+              {incognito
+                ? <><Ghost style={{ width: 30 }} /> {incognitoGreeting}</>
+                : <><img src={model?.staticIcon || cfg.appIcon || '/starburst.svg'} alt="" /> {greeting}</>}
+            </div>
             <div className="composer-wrap">
               <Composer {...composerProps} autoFocus modelUp focusKey={focusTick} />
             </div>
-            {cfg.quickPrompts && cfg.quickPrompts.length > 0 && (
+            {incognito ? (
+              <div className="incognito-note">Incognito chats aren't saved to your history.</div>
+            ) : cfg.quickPrompts && cfg.quickPrompts.length > 0 && (
               <div className="quick-prompts">
                 {cfg.quickPrompts.map((q, i) => (
                   <button key={i} className="quick-prompt" style={{ animationDelay: i * 45 + 'ms' }} onClick={() => send([], q.prompt)} disabled={streaming}>
-                    {q.icon && <span className="qp-icon">{q.icon}</span>}{q.label}
+                    {q.icon && q.icon !== 'none' && <span className="qp-icon"><QpIcon name={q.icon} style={{ width: 15, height: 15 }} /></span>}{q.label}
                   </button>
                 ))}
               </div>
@@ -531,6 +587,11 @@ export default function App() {
             <div className="topbar">
               <div className="chat-name">{chats.find(c => c.id === activeId)?.title || 'New chat'} <ChevDown style={{ width: 15 }} /></div>
               <div className="topbar-actions">
+                {!incognito && (
+                  <button className="paper-btn" onClick={toggleIncognito} title="Incognito chat — not saved" disabled={streaming || queued}>
+                    <Ghost style={{ width: 18 }} />
+                  </button>
+                )}
                 {hasSummary && (
                   <button className="paper-btn" onClick={() => setSummaryOpen(true)} title="Conversation memory">
                     <Compact style={{ width: 18 }} />

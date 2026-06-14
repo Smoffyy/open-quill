@@ -296,19 +296,27 @@ app.get('/api/chats/:id/zip', authMiddleware, (req, res) => {
 });
 
 // ---------- models (public sanitized) ----------
-function publicModels() {
-  return db.models.filter(m => m.enabled)
-    .sort((a, b) => a.sort_order - b.sort_order)
-    .map(m => ({
-      id: m.id, displayName: m.display_name, description: m.description,
-      hasReasoning: !!m.has_reasoning, inMoreModels: !!m.in_more_models, moreModelsLabel: m.more_models_label,
-      staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon, generatingAnim: m.generating_anim || 'spin', thinkingAnim: m.thinking_anim || 'pulse',
-      iconPosition: m.icon_position || 'below', hasVision: !!m.has_vision,
-      sandboxAuto: !!m.sandbox_auto, sandboxAllowed: m.sandbox_allowed !== 0, dropdownIcon: m.dropdown_icon !== 0, isDefault: !!m.is_default, agentSteps: m.agent_steps || 10,
-      enableSummaries: !!m.enable_summaries, numCtx: m.num_ctx || 0, summaryPadding: m.summary_padding || 0.125
-    }));
+function shapePublic(m) {
+  return {
+    id: m.id, displayName: m.display_name, description: m.description,
+    hasReasoning: !!m.has_reasoning, inMoreModels: !!m.in_more_models, moreModelsLabel: m.more_models_label,
+    staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon, generatingAnim: m.generating_anim || 'spin', thinkingAnim: m.thinking_anim || 'pulse',
+    iconPosition: m.icon_position || 'below', hasVision: !!m.has_vision,
+    sandboxAuto: !!m.sandbox_auto, sandboxAllowed: m.sandbox_allowed !== 0, dropdownIcon: m.dropdown_icon !== 0, isDefault: !!m.is_default, agentSteps: m.agent_steps || 10,
+    enableSummaries: !!m.enable_summaries, numCtx: m.num_ctx || 0, summaryPadding: m.summary_padding || 0.125,
+    unavailable: !!m.unavailable, unavailableReason: m.unavailable_reason || '',
+    capVision: !!m.cap_vision, capReasoning: !!m.cap_reasoning, capText: !!m.cap_text, capCompact: !!m.cap_compact
+  };
 }
-app.get('/api/models', authMiddleware, (req, res) => res.json(publicModels()));
+function draftModels() {
+  return db.models.filter(m => m.enabled).sort((a, b) => a.sort_order - b.sort_order).map(shapePublic);
+}
+function publicModels() {
+  const snap = getSetting('published_models', null);
+  if (!Array.isArray(snap)) return draftModels();
+  return snap.filter(m => m.enabled).sort((a, b) => a.sort_order - b.sort_order).map(shapePublic);
+}
+app.get('/api/models', authMiddleware, (req, res) => res.json(req.user.is_admin ? draftModels() : publicModels()));
 
 // ---------- admin ----------
 app.get('/api/admin/models', authMiddleware, adminOnly, (req, res) =>
@@ -326,20 +334,22 @@ app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
     sandbox_auto: b.sandbox_auto ? 1 : 0, sandbox_allowed: b.sandbox_allowed === false ? 0 : 1, dropdown_icon: b.dropdown_icon === false ? 0 : 1, is_default: 0, agent_steps: Number.isInteger(b.agent_steps) ? b.agent_steps : 10,
     enable_summaries: b.enable_summaries ? 1 : 0, num_ctx: parseInt(b.num_ctx) || 0, summary_padding: typeof b.summary_padding === 'number' ? b.summary_padding : 0.125,
     in_more_models: b.in_more_models ? 1 : 0, more_models_label: b.more_models_label || 'More models',
+    unavailable: b.unavailable ? 1 : 0, unavailable_reason: b.unavailable_reason || '',
+    cap_vision: b.cap_vision ? 1 : 0, cap_reasoning: b.cap_reasoning ? 1 : 0, cap_text: b.cap_text ? 1 : 0, cap_compact: b.cap_compact ? 1 : 0,
     static_icon: b.static_icon || '', generating_icon: b.generating_icon || '', thinking_icon: b.thinking_icon || '',
     icon_position: b.icon_position || 'below',
     temperature: null, top_p: null, presence_penalty: null, frequency_penalty: null, repetition_penalty: null, min_p: null, top_k: null, seed: null,
     sort_order: max + 1, enabled: 1
   });
-  broadcastConfig();
+  broadcastAdminConfig();
   res.json({ id: m.id });
 });
 
 app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
   const cur = db.models.byId(req.params.id);
   if (!cur) return res.status(404).json({ error: 'not found' });
-  const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim'];
-  const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries'];
+  const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason'];
+  const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact'];
   const patch = {};
   for (const k of str) if (k in req.body) patch[k] = req.body[k];
   for (const k of bool) if (k in req.body) patch[k] = req.body[k] ? 1 : 0;
@@ -353,13 +363,13 @@ app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
   // only one model can be the login default
   if (patch.is_default === 1) for (const other of db.models.all()) if (other.id !== cur.id && other.is_default) db.models.update(other.id, { is_default: 0 });
   db.models.update(cur.id, patch);
-  broadcastConfig();
+  broadcastAdminConfig();
   res.json({ ok: true });
 });
 
 app.delete('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
   db.models.remove(m => m.id === req.params.id);
-  broadcastConfig();
+  broadcastAdminConfig();
   res.json({ ok: true });
 });
 
@@ -380,9 +390,34 @@ app.get('/api/admin/detect-ctx', authMiddleware, adminOnly, async (req, res) => 
 
 app.post('/api/admin/models/reorder', authMiddleware, adminOnly, (req, res) => {
   (req.body.ids || []).forEach((id, i) => db.models.update(id, { sort_order: i }));
-  broadcastConfig();
+  broadcastAdminConfig();
   res.json({ ok: true });
 });
+
+// publish the current draft (full model rows) to all clients
+app.post('/api/admin/models/publish', authMiddleware, adminOnly, (req, res) => {
+  const snapshot = db.models.all().map(m => ({ ...m }));
+  setSetting('published_models', snapshot);
+  setSetting('published_at', now());
+  broadcastConfig();
+  res.json({ ok: true, count: snapshot.length, publishedAt: getSetting('published_at') });
+});
+
+// has the draft diverged from what is published?
+app.get('/api/admin/models/publish-state', authMiddleware, adminOnly, (req, res) => {
+  const snap = getSetting('published_models', null);
+  const draft = db.models.all().map(m => ({ ...m }));
+  const dirty = JSON.stringify(snap) !== JSON.stringify(snap === null ? null : draft);
+  res.json({ published: Array.isArray(snap), dirty: snap === null ? true : dirty, publishedAt: getSetting('published_at', null) });
+});
+
+// resolve the model used to RUN a completion: admins use live draft, clients use the published snapshot
+function resolveModel(modelId, isAdmin) {
+  if (isAdmin) return db.models.byId(modelId);
+  const snap = getSetting('published_models', null);
+  if (!Array.isArray(snap)) return db.models.byId(modelId);
+  return snap.find(m => m.id === modelId) || null;
+}
 
 function roleLimit(key, isAdmin, fallback) {
   const v = getSetting(key + (isAdmin ? '_admin' : '_user'));
@@ -566,6 +601,11 @@ function broadcastConfig() {
   const msg = JSON.stringify({ type: 'config' });
   for (const ws of clients.keys()) if (ws.readyState === 1) ws.send(msg);
 }
+// notify only admin sessions to refresh their draft view (live editing)
+function broadcastAdminConfig() {
+  const msg = JSON.stringify({ type: 'config' });
+  for (const [ws, st] of clients.entries()) if (ws.readyState === 1 && st.isAdmin) ws.send(msg);
+}
 
 let SKILLS_CACHE = null;
 function sandboxPromptFor(chatId) {
@@ -712,7 +752,7 @@ async function maybeCompact(ws, chat, model, extended, sandboxOn) {
 wss.on('connection', (ws, req) => {
   const u = userFromRequest(req);
   if (!u) { ws.close(); return; }
-  clients.set(ws, { userId: u.id, abort: null });
+  clients.set(ws, { userId: u.id, isAdmin: !!u.is_admin, abort: null });
   const safeSend = (s) => { if (ws.readyState === 1) { try { ws.send(s); } catch {} } };
 
   async function runCompletion(ws, state, chat, model, extended, sandboxOn, sandboxCap = 0) {
@@ -793,11 +833,47 @@ wss.on('connection', (ws, req) => {
     const state = clients.get(ws);
     if (!state) return;
     if (msg.type === 'stop') { state.abort?.abort(); return; }
+    if (msg.type === 'incognito') {
+      try {
+        const model = resolveModel(msg.modelId, state.isAdmin);
+        if (!model) { safeSend(JSON.stringify({ type: 'error', error: 'Invalid model.' })); safeSend(JSON.stringify({ type: 'done' })); return; }
+        if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', error: (model.unavailable_reason || 'This model is currently unavailable.') })); safeSend(JSON.stringify({ type: 'done' })); return; }
+        const history = (Array.isArray(msg.messages) ? msg.messages : [])
+          .filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+          .slice(-40)
+          .map(m => ({ role: m.role, content: m.content }));
+        if (!history.length || history[history.length - 1].role !== 'user') {
+          safeSend(JSON.stringify({ type: 'error', error: 'Nothing to send.' })); safeSend(JSON.stringify({ type: 'done' })); return;
+        }
+        const messages = buildMessages(model, history, !!msg.extended, null, null);
+        const assistantId = 'inc-' + uid();
+        const controller = new AbortController();
+        state.abort = controller;
+        safeSend(JSON.stringify({ type: 'start', messageId: assistantId }));
+        try {
+          await streamCompletion({
+            model, messages, signal: controller.signal,
+            onEvent: (e) => {
+              if (e.type === 'reasoning') safeSend(JSON.stringify({ type: 'reasoning', text: e.text }));
+              else safeSend(JSON.stringify({ type: 'content', text: e.text }));
+            }
+          });
+        } catch (err) { if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', error: String(err.message || err) })); }
+        state.abort = null;
+        safeSend(JSON.stringify({ type: 'done', messageId: assistantId }));
+      } catch (err) {
+        state.abort = null;
+        safeSend(JSON.stringify({ type: 'error', error: String(err.message || err) }));
+        safeSend(JSON.stringify({ type: 'done' }));
+      }
+      return;
+    }
     if (msg.type !== 'chat' && msg.type !== 'regenerate' && msg.type !== 'edit') return;
     try {
       const chat = db.chats.byId(msg.chatId);
-      const model = db.models.byId(msg.modelId);
+      const model = resolveModel(msg.modelId, state.isAdmin);
       if (!chat || chat.user_id !== u.id || !model) { safeSend(JSON.stringify({ type: 'error', error: 'Invalid chat or model.' })); return; }
+      if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', error: (model.unavailable_reason || 'This model is currently unavailable.') })); return; }
 
       const sandboxCap = roleLimit('sandbox_limit_mb', !!u.is_admin, u.is_admin ? 1024 : 256) * 1024 * 1024;
       const userSandbox = !!msg.sandbox;

@@ -31,7 +31,7 @@ function dominantColor(url) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, models,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
@@ -42,6 +42,7 @@ export default function Composer({
   const [dragActive, setDragActive] = useState(false);
   const [glow, setGlow] = useState('var(--accent)');
   const [plusMenu, setPlusMenu] = useState(false);
+  const [showReason, setShowReason] = useState(false);
 
   useEffect(() => {
     if (!plusMenu) return;
@@ -98,6 +99,7 @@ export default function Composer({
 
   async function doSend() {
     if (streaming || uploading) return;
+    if (blockSend) return;
     if (!value.trim() && files.length === 0) return;
     let attachments = [];
     if (files.length) {
@@ -111,12 +113,31 @@ export default function Composer({
     onSend(attachments);
   }
 
+  useEffect(() => { setShowReason(false); }, [currentId]);
+
   function key(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } }
+  const activeModel = models?.find(m => m.id === currentId) || null;
+  const unavailable = !!activeModel?.unavailable;
+  const blockSend = unavailable && !canUseUnavailable;
   const hasImage = files.some(f => f.preview);
-  const canSend = (value.trim().length > 0 || files.length > 0) && !uploading;
-  const cls = 'composer' + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '');
+  const canSend = (value.trim().length > 0 || files.length > 0) && !uploading && !blockSend;
+  const cls = 'composer' + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + (unavailable ? ' unavailable' : '') + (blockSend ? ' blocked' : '');
 
   return (
+    <>
+    {unavailable && (
+      <div className={'unavail-banner' + (showReason ? ' open' : '')}>
+        <div className="unavail-row">
+          <span className="unavail-msg"><strong>{activeModel.displayName}</strong> is currently unavailable.</span>
+          {(activeModel.unavailableReason || '').trim() && (
+            <button className="unavail-learn" onClick={() => setShowReason(s => !s)}>{showReason ? 'Hide' : 'Learn more'}</button>
+          )}
+        </div>
+        {showReason && (activeModel.unavailableReason || '').trim() && (
+          <div className="unavail-reason">{activeModel.unavailableReason}</div>
+        )}
+      </div>
+    )}
     <div className={cls} style={{ '--glow': glow }}
       onDragEnter={onDragEnter} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
       {dragActive && <div className="drop-hint">Drop to attach{visionSupported ? '' : ' files'}</div>}
@@ -171,5 +192,6 @@ export default function Composer({
         </div>
       </div>
     </div>
+    </>
   );
 }

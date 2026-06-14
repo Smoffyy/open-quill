@@ -1,6 +1,35 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
-import { Cube, Sliders, Plus, Trash, Users, Sparkles } from './icons.jsx';
+import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron } from './icons.jsx';
+import { QP_ICON_LIST, QpIcon } from '../qpIcons.jsx';
+
+function QpIconPicker({ value, onPick }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+  return (
+    <div className="qp-iconpick" ref={ref}>
+      <button type="button" className="qp-iconbtn" onClick={() => setOpen(o => !o)} title="Choose an icon">
+        {value && value !== 'none' ? <QpIcon name={value} style={{ width: 16, height: 16 }} /> : <span className="qp-iconnone">—</span>}
+      </button>
+      {open && (
+        <div className="qp-iconmenu">
+          {QP_ICON_LIST.map(name => (
+            <button type="button" key={name} className={'qp-iconopt' + (name === (value || 'none') ? ' on' : '')}
+              onClick={() => { onPick(name); setOpen(false); }} title={name}>
+              {name === 'none' ? <span className="qp-iconnone">—</span> : <QpIcon name={name} style={{ width: 16, height: 16 }} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const Grip = (p) => (
   <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" {...p}>
@@ -36,7 +65,7 @@ function IconSlot({ label, value, def, anim, onChange }) {
   );
 }
 
-function ModelEditor({ m, onChange, onSave, onDelete, saved }) {
+function ModelEditor({ m, onChange, onDelete, autosaveState }) {
   const [section, setSection] = useState('general');
   const [detecting, setDetecting] = useState(false);
   const [detectMsg, setDetectMsg] = useState('');
@@ -45,7 +74,7 @@ function ModelEditor({ m, onChange, onSave, onDelete, saved }) {
     setDetecting(true); setDetectMsg('');
     try {
       const r = await api.get('/api/admin/detect-ctx?model=' + encodeURIComponent(m.internal_name || ''));
-      if (r.ok && r.numCtx) { set('num_ctx', r.numCtx); setDetectMsg('Detected ' + r.numCtx.toLocaleString() + ' tokens. Remember to save.'); }
+      if (r.ok && r.numCtx) { set('num_ctx', r.numCtx); setDetectMsg('Detected ' + r.numCtx.toLocaleString() + ' tokens.'); }
       else setDetectMsg('Could not detect from the server — enter it manually.');
     } catch { setDetectMsg('Could not detect from the server — enter it manually.'); }
     setDetecting(false);
@@ -92,6 +121,11 @@ function ModelEditor({ m, onChange, onSave, onDelete, saved }) {
               <input value={m.more_models_label || ''} onChange={(e) => set('more_models_label', e.target.value)} placeholder="Other models" /></div>
           )}
           <Toggle k="is_default" label="Default model" note="Pre-selected when a user first logs in. Only one model can be the default." />
+          <Toggle k="unavailable" label="Mark as unavailable" note="Keeps the model in the dropdown but blocks clients from using it, with a banner. Admins can still use it for testing." />
+          {!!m.unavailable && (
+            <div className="field"><label>Unavailable reason <span className="muted-note" style={{ display: 'inline' }}>(shown in the banner's “Learn more”)</span></label>
+              <textarea rows={3} value={m.unavailable_reason || ''} onChange={(e) => set('unavailable_reason', e.target.value)} placeholder="e.g. Down for maintenance — back shortly. Use Quillku 2 in the meantime." /></div>
+          )}
         </>}
         {section === 'reasoning' && <>
           <Toggle k="has_reasoning" label="Model has reasoning capability" note="Enables the Extended button" />
@@ -114,6 +148,14 @@ function ModelEditor({ m, onChange, onSave, onDelete, saved }) {
         </>}
         {section === 'capabilities' && <>
           <Toggle k="has_vision" label="Vision supported" note="Allow image uploads (sent to the model). Off = files only." />
+          <div className="cap-icons-block">
+            <label>Dropdown capability icons</label>
+            <div className="muted-note" style={{ marginBottom: 8 }}>Small icons shown to the right of this model in the picker. Each is independent — off by default.</div>
+            <Toggle k="cap_text" label="Text-Only icon" note="T icon — indicates the model takes text input only." />
+            <Toggle k="cap_vision" label="Vision icon" note="Eye icon — indicates the model accepts images." />
+            <Toggle k="cap_reasoning" label="Reasoning icon" note="Brain icon — indicates the model can reason." />
+            <Toggle k="cap_compact" label="Compact capabilities" note="Collapse the icons into a single ⓘ that reveals the capabilities on hover." />
+          </div>
           <Toggle k="sandbox_allowed" inverted label="Sandbox tools available" note="Allow users to enable sandbox tools for this model. If off, sandbox can't be turned on." />
           {m.sandbox_allowed !== 0 && <Toggle k="sandbox_auto" label="Sandbox tools auto-enabled" note="Start new chats with this model in sandbox mode." />}
           <div className="field"><label>Agent step cap</label>
@@ -183,8 +225,9 @@ function ModelEditor({ m, onChange, onSave, onDelete, saved }) {
         </>}
       </div>
       <div className="btn-row me-foot">
-        <button className="btn primary" onClick={() => onSave(m)}>Save</button>
-        {saved === m.id && <span className="saved-flash" style={{ alignSelf: 'center' }}>Saved — pushed to all clients ✓</span>}
+        <span className="autosave-status">
+          {autosaveState === 'saving' ? 'Saving…' : autosaveState === 'saved' ? 'All changes saved to draft ✓' : 'Edits save automatically to your draft'}
+        </span>
       </div>
     </div>
   );
@@ -197,14 +240,33 @@ export default function AdminPanel({ user, onClose }) {
   const [cfg, setCfg] = useState({ appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [] });
   const [cfgSaved, setCfgSaved] = useState(false);
   const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256, modelQueue: false });
-  const [saved, setSaved] = useState(null);
   const [selModel, setSelModel] = useState(null);
   const [setSavedFlash, setSetSaved] = useState(false);
   const [dragOver, setDragOver] = useState(null);
   const [ask, setAsk] = useState(null); // { message, danger, onConfirm }
+  const [autosave, setAutosave] = useState('idle'); // idle | saving | saved
+  const [pub, setPub] = useState({ dirty: false, publishedAt: null });
+  const [publishing, setPublishing] = useState(false);
+  const [pubFlash, setPubFlash] = useState(false);
+  const saveTimers = useRef({});
+  const pendingIds = useRef(new Set());
+  const selModelRef = useRef(null);
   const dragIndex = useRef(null);
   const modelsRef = useRef([]);
   useEffect(() => { modelsRef.current = models; }, [models]);
+  useEffect(() => { selModelRef.current = selModel; }, [selModel]);
+
+  useEffect(() => {
+    async function onConfig() {
+      try {
+        const fresh = await api.get('/api/admin/models');
+        setModels(cur => fresh.map(fm => (pendingIds.current.has(fm.id) ? (cur.find(c => c.id === fm.id) || fm) : fm)));
+        refreshPubState();
+      } catch {}
+    }
+    window.addEventListener('oq-config', onConfig);
+    return () => window.removeEventListener('oq-config', onConfig);
+  }, []);
 
   async function load() {
     setModels(await api.get('/api/admin/models'));
@@ -216,7 +278,8 @@ export default function AdminPanel({ user, onClose }) {
     loadUsers();
   }
   async function loadUsers() { try { setUsersList(await api.get('/api/admin/users')); } catch {} }
-  useEffect(() => { load(); }, []);
+  async function refreshPubState() { try { setPub(await api.get('/api/admin/models/publish-state')); } catch {} }
+  useEffect(() => { load(); refreshPubState(); }, []);
 
   async function saveCfg() {
     await api.patch('/api/admin/app-config', { ...cfg, greetings: cfg.greetings.map(g => g.trim()).filter(Boolean), quickPrompts: (cfg.quickPrompts || []).filter(q => (q.label || '').trim() && (q.prompt || '').trim()) });
@@ -234,16 +297,41 @@ export default function AdminPanel({ user, onClose }) {
     });
   }
 
-  function change(updated) { setModels(ms => ms.map(m => m.id === updated.id ? updated : m)); }
-  async function save(m) { await api.patch('/api/admin/models/' + m.id, m); setSaved(m.id); setTimeout(() => setSaved(null), 1800); }
+  function change(updated) {
+    setModels(ms => ms.map(m => {
+      if (m.id === updated.id) return updated;
+      if (updated.is_default && m.is_default) return { ...m, is_default: 0 };
+      return m;
+    }));
+    setAutosave('saving');
+    pendingIds.current.add(updated.id);
+    clearTimeout(saveTimers.current[updated.id]);
+    saveTimers.current[updated.id] = setTimeout(async () => {
+      try {
+        await api.patch('/api/admin/models/' + updated.id, updated);
+        setAutosave('saved');
+        setPub(p => ({ ...p, dirty: true }));
+        setTimeout(() => setAutosave(s => s === 'saved' ? 'idle' : s), 1600);
+      } catch { setAutosave('idle'); }
+      finally { pendingIds.current.delete(updated.id); }
+    }, 500);
+  }
   async function add() {
     const { id } = await api.post('/api/admin/models', { display_name: 'New model', internal_name: 'local-model' });
-    await load(); setSaved(id); setSelModel(id);
+    await load(); setSelModel(id); setPub(p => ({ ...p, dirty: true }));
+  }
+  async function publish() {
+    setPublishing(true);
+    try {
+      const r = await api.post('/api/admin/models/publish', {});
+      setPub({ dirty: false, published: true, publishedAt: r.publishedAt });
+      setPubFlash(true); setTimeout(() => setPubFlash(false), 2200);
+    } finally { setPublishing(false); }
   }
   function del(id) {
     setAsk({
       message: 'Delete this model? This cannot be undone.', danger: 'Delete model',
-      onConfirm: async () => { await api.del('/api/admin/models/' + id); setModels(ms => ms.filter(m => m.id !== id)); setSelModel(s => s === id ? null : s); }
+      onConfirm: async () => { await api.del('/api/admin/models/' + id); setModels(ms => ms.filter(m => m.id !== id)); setSelModel(s => s === id ? null : s); setPub(p => ({ ...p, dirty: true })); }
     });
   }
   async function saveSettings() {
@@ -263,6 +351,7 @@ export default function AdminPanel({ user, onClose }) {
       const [item] = arr.splice(from, 1); arr.splice(to, 0, item);
       setModels(arr);
       api.post('/api/admin/models/reorder', { ids: arr.map(m => m.id) }).catch(() => {});
+      setPub(p => ({ ...p, dirty: true }));
     }
   };
 
@@ -282,8 +371,22 @@ export default function AdminPanel({ user, onClose }) {
             const sel = models.find(x => x.id === selModel) || models[0] || null;
             return (
               <>
-                <h2>Models</h2>
-                <div className="hint">Pick a model to edit. Drag to reorder — order changes save instantly.</div>
+                <div className="models-head">
+                  <div>
+                    <h2>Models</h2>
+                    <div className="hint">Edits save to your draft automatically and only you (and other admins) see them. Use <strong>Push to all Clients</strong> to make them live for everyone.</div>
+                  </div>
+                  <div className="publish-area">
+                    <button className={'btn primary push-btn' + (pub.dirty ? ' dirty' : '')} onClick={publish} disabled={publishing || (!pub.dirty && pub.published)}>
+                      {publishing ? 'Pushing…' : 'Push to all Clients'}
+                    </button>
+                    {pubFlash
+                      ? <span className="saved-flash">Pushed to all clients ✓</span>
+                      : pub.dirty
+                        ? <span className="pub-note dirty">Unpublished draft changes</span>
+                        : <span className="pub-note">{pub.published ? 'Clients are up to date' : 'Nothing published yet'}</span>}
+                  </div>
+                </div>
                 <div className="models-split">
                   <div className="models-list">
                     {models.map((m, i) => (
@@ -300,6 +403,7 @@ export default function AdminPanel({ user, onClose }) {
                         </div>
                         <span className="mr-badges">
                           {!!m.is_default && <span className="mr-badge">default</span>}
+                          {!!m.unavailable && <span className="mr-badge warn">unavailable</span>}
                           {!!m.in_more_models && <span className="mr-badge dim">hidden</span>}
                         </span>
                       </div>
@@ -308,7 +412,7 @@ export default function AdminPanel({ user, onClose }) {
                   </div>
                   <div className="models-detail">
                     {sel
-                      ? <ModelEditor key={sel.id} m={sel} onChange={change} onSave={save} onDelete={del} saved={saved} />
+                      ? <ModelEditor key={sel.id} m={sel} onChange={change} onDelete={del} autosaveState={autosave} />
                       : <div className="muted-note" style={{ padding: 20 }}>No models yet — add one to get started.</div>}
                   </div>
                 </div>
@@ -337,13 +441,13 @@ export default function AdminPanel({ user, onClose }) {
                 <label>Quick prompt buttons <span className="muted-note" style={{ display: 'inline' }}>(shown under the input on the home screen; clicking sends the prompt)</span></label>
                 {(cfg.quickPrompts || []).map((q, i) => (
                   <div key={i} className="qp-row">
-                    <input className="qp-emoji" value={q.icon || ''} maxLength={4} placeholder="🔮" onChange={(e) => setCfg(c => ({ ...c, quickPrompts: c.quickPrompts.map((x, j) => j === i ? { ...x, icon: e.target.value } : x) }))} />
+                    <QpIconPicker value={q.icon || 'none'} onPick={(name) => setCfg(c => ({ ...c, quickPrompts: c.quickPrompts.map((x, j) => j === i ? { ...x, icon: name } : x) }))} />
                     <input className="qp-label" value={q.label || ''} placeholder="Button label" onChange={(e) => setCfg(c => ({ ...c, quickPrompts: c.quickPrompts.map((x, j) => j === i ? { ...x, label: e.target.value } : x) }))} />
                     <input className="qp-prompt" value={q.prompt || ''} placeholder="Prompt sent when clicked" onChange={(e) => setCfg(c => ({ ...c, quickPrompts: c.quickPrompts.map((x, j) => j === i ? { ...x, prompt: e.target.value } : x) }))} />
                     <button className="btn danger" onClick={() => setCfg(c => ({ ...c, quickPrompts: c.quickPrompts.filter((_, j) => j !== i) }))}><Trash style={{ width: 14 }} /></button>
                   </div>
                 ))}
-                {(cfg.quickPrompts || []).length < 8 && <button className="btn" style={{ marginTop: 8 }} onClick={() => setCfg(c => ({ ...c, quickPrompts: [...(c.quickPrompts || []), { icon: '', label: '', prompt: '' }] }))}><Plus style={{ width: 14, verticalAlign: '-2px' }} /> Add button</button>}
+                {(cfg.quickPrompts || []).length < 8 && <button className="btn" style={{ marginTop: 8 }} onClick={() => setCfg(c => ({ ...c, quickPrompts: [...(c.quickPrompts || []), { icon: 'none', label: '', prompt: '' }] }))}><Plus style={{ width: 14, verticalAlign: '-2px' }} /> Add button</button>}
               </div>
               <div className="field"><label>App icon (browser tab + greeting)</label>
                 <div className="icon-grid" style={{ gridTemplateColumns: '1fr' }}>

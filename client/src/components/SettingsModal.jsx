@@ -7,7 +7,7 @@ export default function SettingsModal({ user, onClose, onUpdated, onDeleted }) {
   const [tab, setTab] = useState('general');
   const [chatSec, setChatSec] = useState('streaming');
   const [name, setName] = useState(user.displayName);
-  const [prefs, setPrefs] = useState({ animations: true, autoscroll: true, theme: 'dark', accent: '', density: 'comfortable', messageEntrance: true, streamCursor: false, cursorStyle: 'block', revealMs: 40, chatStagger: true, themeFade: true, microFx: true, composerFx: true, iconGlow: false, focusGlow: false, fluidMotion: false, fluidLevel: 'balanced', ...user.prefs });
+  const [prefs, setPrefs] = useState({ animations: true, autoscroll: true, theme: 'system', accent: '', density: 'comfortable', messageEntrance: true, streamCursor: false, cursorStyle: 'block', revealMs: 40, chatStagger: true, themeFade: true, microFx: true, composerFx: true, iconGlow: false, focusGlow: false, ...user.prefs });
   const [saved, setSaved] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const [delErr, setDelErr] = useState('');
@@ -107,8 +107,8 @@ export default function SettingsModal({ user, onClose, onUpdated, onDeleted }) {
               <div className="hint">Choose how open-quill looks.</div>
               <div className="field row">
                 <div><label>Theme</label><div className="muted-note">Follow your system, or pick one</div></div>
-                <Seg value={prefs.theme || 'dark'} onPick={(v) => setPref('theme', v)}
-                  options={[{ v: 'system', label: 'System' }, { v: 'light', label: 'Light' }, { v: 'dark', label: 'Dark' }]} />
+                <Seg value={prefs.theme || 'system'} onPick={(v) => setPref('theme', v)}
+                  options={[{ v: 'system', label: 'System' }, { v: 'light', label: 'Light' }, { v: 'dark', label: 'Dark' }, { v: 'anthropic', label: 'Anthropic' }]} />
               </div>
               <div className="field">
                 <label>Accent color</label>
@@ -177,7 +177,6 @@ export default function SettingsModal({ user, onClose, onUpdated, onDeleted }) {
                   {prefs.messageEntrance !== false && (
                     <Toggle k="chatStagger" label="Stagger messages on chat open" desc="Messages assemble into view when opening a chat" />
                   )}
-                  <Toggle k="themeFade" label="Theme cross-fade" desc="Fade colors smoothly when switching light and dark" />
                 </>}
                 {chatSec === 'effects' && <>
                   <Toggle k="microFx" label="Micro-interactions" desc="Hover rises, copy flashes, thinking shimmer, button pops" />
@@ -190,18 +189,6 @@ export default function SettingsModal({ user, onClose, onUpdated, onDeleted }) {
                     <div><label>Composer focus glow</label><div className="muted-note">Soft accent ring around the input bar while it's focused</div></div>
                     <div className={'switch' + (prefs.focusGlow ? ' on' : '')} onClick={() => setPref('focusGlow', !prefs.focusGlow)} />
                   </div>
-                  <div className="field row">
-                    <div><label>Fluid motion</label><div className="muted-note">Springy, water-like motion across buttons, menus, the composer and the greeting. Heavier than the defaults — best on a capable machine.</div></div>
-                    <div className={'switch' + (prefs.fluidMotion ? ' on' : '')} onClick={() => setPref('fluidMotion', !prefs.fluidMotion)} />
-                  </div>
-                  {!!prefs.fluidMotion && (
-                    <div className="field">
-                      <label>Motion intensity</label>
-                      <Seg value={prefs.fluidLevel || 'balanced'} onPick={(v) => setPref('fluidLevel', v)}
-                        options={[{ v: 'gentle', label: 'Gentle' }, { v: 'balanced', label: 'Balanced' }, { v: 'expressive', label: 'Expressive' }]} />
-                      <div className="muted-note">How far things stretch, wobble and bounce. Gentle is subtle; Expressive leans into the springs.</div>
-                    </div>
-                  )}
                 </>}
               </>
             );

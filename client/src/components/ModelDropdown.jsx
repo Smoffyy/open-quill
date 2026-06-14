@@ -1,5 +1,39 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Check, ChevDown, Chevron } from './icons.jsx';
+import { Check, ChevDown, Chevron, ImageIcon, Brain, Info, TextIcon } from './icons.jsx';
+
+const CAP_ICONS = [
+  { key: 'capText', label: 'Text-Only', Icon: TextIcon },
+  { key: 'capVision', label: 'Vision', Icon: ImageIcon },
+  { key: 'capReasoning', label: 'Reasoning', Icon: Brain }
+];
+function CapRow({ m }) {
+  const active = CAP_ICONS.filter(c => m[c.key]);
+  if (!active.length) return null;
+  return (
+    <div className="mo-caps">
+      {active.map(({ key, label, Icon }) => (
+        <span key={key} className="mo-cap-ic" title={label}>
+          <Icon style={{ width: 12, height: 12 }} />
+          <span className="mo-cap-lbl">{label}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+function CapInfo({ m }) {
+  const active = CAP_ICONS.filter(c => m[c.key]);
+  if (!active.length) return null;
+  return (
+    <span className="mo-capinfo">
+      <Info style={{ width: 14, height: 14 }} />
+      <span className="mo-capinfo-pop">
+        {active.map(({ key, label, Icon }) => (
+          <span key={key} className="mo-capinfo-item"><Icon style={{ width: 12, height: 12 }} /> {label}</span>
+        ))}
+      </span>
+    </span>
+  );
+}
 
 export default function ModelDropdown({ models, currentId, onSelect, extended, onToggleExtended, up }) {
   const [open, setOpen] = useState(false);
@@ -18,13 +52,19 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
   const list = showMore ? more : main;
 
   const Opt = (m) => (
-    <button key={m.id} className="model-opt" onClick={() => { onSelect(m.id); setOpen(false); setShowMore(false); }}>
+    <button key={m.id} className={'model-opt' + (m.unavailable ? ' unavail' : '')} onClick={() => { onSelect(m.id); setOpen(false); setShowMore(false); }}
+      title={m.unavailable ? (m.displayName + ' is currently unavailable.') : undefined}>
       {m.dropdownIcon !== false && <img className="mo-icon" src={m.staticIcon || '/starburst.svg'} alt="" />}
       <div className="mo-main">
-        <div className="mo-name">{m.displayName}</div>
+        <div className="mo-name">
+          {m.displayName}
+          {m.unavailable && <span className="mo-unavail"><span className="mo-unavail-dot">ⓘ</span> Currently unavailable</span>}
+        </div>
         {m.description && <div className="mo-desc">{m.description}</div>}
+        {!m.capCompact && <CapRow m={m} />}
       </div>
       {m.id === currentId && <Check className="check" />}
+      {m.capCompact && <CapInfo m={m} />}
     </button>
   );
 
