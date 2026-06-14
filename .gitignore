@@ -8,6 +8,7 @@ client/dist/
 # runtime data
 server/data.json
 server/data.json.tmp
+server/data.json.corrupt.*
 server/uploads/
 server/sandbox/
 
@@ -20,9 +21,10 @@ server/sandbox/
 *.log
 npm-debug.log*
 
-# OS
+# OS / editors
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
 *.swp
+*~

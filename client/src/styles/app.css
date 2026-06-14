@@ -322,7 +322,8 @@ input, textarea { font-family: inherit; color: inherit; }
 @keyframes pulse { 0%,100% { opacity: .55; transform: scale(.9);} 50% { opacity: 1; transform: scale(1.08);} }
 
 .actions { display: flex; gap: 4px; margin-top: 6px; opacity: 0; transition: opacity .15s; }
-.msg.assistant:hover .actions { opacity: 1; }
+.msg.assistant .actions { height: 0; margin-top: 0; overflow: hidden; transition: height .22s cubic-bezier(.2,.7,.3,1), margin-top .22s cubic-bezier(.2,.7,.3,1), opacity .16s ease; }
+.msg.assistant:hover .actions { height: 28px; margin-top: 6px; opacity: 1; }
 .action-btn { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; color: var(--text-muted); }
 .action-btn:hover { background: var(--surface-hover); color: var(--text); }
 .action-btn svg { width: 15px; height: 15px; }

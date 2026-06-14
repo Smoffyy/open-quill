@@ -139,7 +139,6 @@ function Message({ msg, model, streaming, phase, onRegenerate, onEdit, onSelectB
           <Markdown streaming={streaming}>{msg.content}</Markdown>
         </div>
       )}
-      {pos === 'below' && icon}
       {!streaming && msg.content && (
         <div className="actions">
           <button className="action-btn" onClick={doCopy} title="Copy">{copied ? <Check /> : <Copy />}</button>
@@ -151,6 +150,7 @@ function Message({ msg, model, streaming, phase, onRegenerate, onEdit, onSelectB
           <button className="action-btn" title="Retry" onClick={() => onRegenerate?.(msg.id)}><Retry /></button>
         </div>
       )}
+      {pos === 'below' && icon}
     </div>
   );
 }
