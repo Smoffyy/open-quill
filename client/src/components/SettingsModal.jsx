@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { api } from '../api.js';
 import { applyPrefs, ACCENT_PRESETS } from '../prefs.js';
-import { Sun, Moon, Gear, Sliders } from './icons.jsx';
+import { Sun, Moon, Gear, Sliders, Info } from './icons.jsx';
+import Markdown from './Markdown.jsx';
 
-export default function SettingsModal({ user, onClose, onUpdated, onDeleted }) {
+export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted }) {
   const [tab, setTab] = useState('general');
   const [chatSec, setChatSec] = useState('streaming');
   const [name, setName] = useState(user.displayName);
@@ -54,6 +55,9 @@ export default function SettingsModal({ user, onClose, onUpdated, onDeleted }) {
         <div className="modal-side">
           <div className="ms-label">Settings</div>
           <button className={'modal-tab' + (tab === 'general' ? ' active' : '')} onClick={() => setTab('general')}><Gear /> General</button>
+          {(tab === 'general' || tab === 'version') && (
+            <button className={'modal-tab sub' + (tab === 'version' ? ' active' : '')} onClick={() => setTab('version')}><Info /> Version</button>
+          )}
           <button className={'modal-tab' + (tab === 'appearance' ? ' active' : '')} onClick={() => setTab('appearance')}><Sun /> Appearance</button>
           <button className={'modal-tab' + (tab === 'chat' ? ' active' : '')} onClick={() => setTab('chat')}><Sliders /> Chat</button>
         </div>
@@ -99,6 +103,22 @@ export default function SettingsModal({ user, onClose, onUpdated, onDeleted }) {
                     </div>
                   ))}
                 </div>
+            </>
+          )}
+          {tab === 'version' && (
+            <>
+              <h2>Version</h2>
+              <div className="hint">About this build.</div>
+              <div className="version-card">
+                {cfg?.uiVersionIcon ? <img className="version-icon" src={cfg.uiVersionIcon} alt="" /> : <div className="version-icon placeholder" />}
+                <div className="version-meta">
+                  <div className="version-name">{cfg?.appName || 'open-quill'}</div>
+                  <div className="version-num">Version {cfg?.uiVersion || cfg?.version || '—'}</div>
+                </div>
+              </div>
+              {(cfg?.uiVersionDesc || '').trim() && (
+                <div className="version-desc doc-body"><Markdown>{cfg.uiVersionDesc}</Markdown></div>
+              )}
             </>
           )}
           {tab === 'appearance' && (
@@ -193,10 +213,12 @@ export default function SettingsModal({ user, onClose, onUpdated, onDeleted }) {
               </>
             );
           })()}
-          <div className="btn-row">
-            <button className="btn primary" onClick={save}>Save changes</button>
-            {saved && <span className="saved-flash" style={{ alignSelf: 'center' }}>Saved ✓</span>}
-          </div>
+          {tab !== 'version' && (
+            <div className="btn-row">
+              <button className="btn primary" onClick={save}>Save changes</button>
+              {saved && <span className="saved-flash" style={{ alignSelf: 'center' }}>Saved ✓</span>}
+            </div>
+          )}
         </div>
       </div>
     </div>

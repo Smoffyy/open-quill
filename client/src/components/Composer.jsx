@@ -121,23 +121,35 @@ export default function Composer({
   const activeModel = models?.find(m => m.id === currentId) || null;
   const unavailable = !!activeModel?.unavailable;
   const blockSend = unavailable && !canUseUnavailable;
+  const [bannerMounted, setBannerMounted] = useState(unavailable);
+  const [bannerOut, setBannerOut] = useState(false);
+  const bannerInfo = useRef(null);
+  if (unavailable && activeModel) bannerInfo.current = { name: activeModel.displayName, reason: (activeModel.unavailableReason || '').trim() };
+  useEffect(() => {
+    if (unavailable) { setBannerMounted(true); setBannerOut(false); return; }
+    if (!bannerMounted) return;
+    setBannerOut(true);
+    const t = setTimeout(() => { setBannerMounted(false); setShowReason(false); }, 300);
+    return () => clearTimeout(t);
+  }, [unavailable]);
   const hasImage = files.some(f => f.preview);
   const enabledCount = (sandbox ? 1 : 0);
   const canSend = (value.trim().length > 0 || files.length > 0) && !uploading && !blockSend;
   const cls = 'composer' + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + (unavailable ? ' unavailable' : '') + (blockSend ? ' blocked' : '');
 
   return (
-    <>
-    {unavailable && (
-      <div className={'unavail-banner' + (showReason ? ' open' : '')}>
+    <div className={'composer-stack' + (bannerMounted ? ' has-banner' : '')}>
+    {bannerMounted && <div className={'unavail-bg' + (bannerOut ? ' out' : '')} />}
+    {bannerMounted && bannerInfo.current && (
+      <div className={'unavail-banner' + (bannerOut ? ' out' : '') + (showReason ? ' open' : '')}>
         <div className="unavail-row">
-          <span className="unavail-msg"><strong>{activeModel.displayName}</strong> is currently unavailable.</span>
-          {(activeModel.unavailableReason || '').trim() && (
+          <span className="unavail-msg"><strong>{bannerInfo.current.name}</strong> is currently unavailable.</span>
+          {bannerInfo.current.reason && (
             <button className="unavail-learn" onClick={() => setShowReason(s => !s)}>{showReason ? 'Hide' : 'Learn more'}</button>
           )}
         </div>
-        {showReason && (activeModel.unavailableReason || '').trim() && (
-          <div className="unavail-reason">{activeModel.unavailableReason}</div>
+        {showReason && bannerInfo.current.reason && (
+          <div className="unavail-reason">{bannerInfo.current.reason}</div>
         )}
       </div>
     )}
@@ -197,6 +209,6 @@ export default function Composer({
         </div>
       </div>
     </div>
-    </>
+    </div>
   );
 }

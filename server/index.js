@@ -541,6 +541,26 @@ app.delete('/api/admin/users/:id', authMiddleware, adminOnly, (req, res) => {
 });
 
 // ---------- app customization ----------
+function detectVersionIcon() {
+  const dirs = [path.join(__dirname, '..', 'client', 'public'), path.join(__dirname, '..', 'client', 'dist')];
+  for (const d of dirs) {
+    try {
+      const f = fs.readdirSync(d).find(n => /-ui-version/i.test(n) && /\.(png|svg|jpe?g|gif|webp)$/i.test(n));
+      if (f) return '/' + f;
+    } catch {}
+  }
+  return '';
+}
+function readVersionText() {
+  const dirs = [path.join(__dirname, '..', 'client', 'public'), path.join(__dirname, '..', 'client', 'dist')];
+  for (const d of dirs) {
+    try {
+      const f = fs.readdirSync(d).find(n => /^ui-version-text\.txt$/i.test(n));
+      if (f) { const t = fs.readFileSync(path.join(d, f), 'utf8'); if (t.trim()) return t; }
+    } catch {}
+  }
+  return '';
+}
 function appConfig() {
   return {
     appName: getSetting('app_name', 'open-quill'),
@@ -548,7 +568,10 @@ function appConfig() {
     greetings: (() => { const g = JSON.parse(getSetting('greetings', '[]')); return g.length ? g : ['How can I help you?', 'What are we building today?', 'Where should we start?']; })(),
     appIcon: getSetting('app_icon', ''),
     quickPrompts: (() => { const q = JSON.parse(getSetting('quick_prompts', '[]')); return q.length ? q : [{ icon: 'file', label: 'Summarize', prompt: 'Summarize the following text for me:' }, { icon: 'code', label: 'Write code', prompt: 'Help me write a small program. Ask me what it should do first.' }, { icon: 'bulb', label: 'Brainstorm', prompt: 'Help me brainstorm ideas about a topic. Ask me for the topic.' }]; })(),
-    version: APP_VERSION
+    version: APP_VERSION,
+    uiVersion: APP_VERSION,
+    uiVersionDesc: readVersionText(),
+    uiVersionIcon: detectVersionIcon()
   };
 }
 app.get('/api/app-config', authMiddleware, (req, res) => res.json(appConfig()));

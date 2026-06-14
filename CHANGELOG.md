@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Configurable Capability Icons** - Adds a little icon within the model, as well as making it compacted with just an info icon.
 - **Quick prompt icons** - Each quick-prompt button now displays a themed icon (file, code, bulb, etc.) and can be set per-button in the admin panel. Default prompts include icons.
 - **Sandbox tools badge** - Toggled tools in the + menu now show a small numbered badge on the icon itself rather than a separate pill.
+- **Versioning** - General -> Version for a brief overview of the current version of the software.
 
 ### Fixed
 - **Theme flash on load** - the page no longer flashes light mode before switching to dark on startup.

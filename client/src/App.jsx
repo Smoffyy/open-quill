@@ -15,6 +15,30 @@ import { Down, ChevDown, Paper, Compact, Ghost } from './components/icons.jsx';
 
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: 'Assistants can make mistakes, double-check responses.', greetings: ['How can I help you?'], appIcon: '', quickPrompts: [], version: '' };
 
+function QuickPrompts({ prompts, visible, disabled, onPick }) {
+  const [render, setRender] = useState(visible);
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    if (visible) { setRender(true); setLeaving(false); return; }
+    if (!render) return;
+    setLeaving(true);
+    const off = document.documentElement.getAttribute('data-entrance') === 'off';
+    const dur = off ? 0 : 260 + prompts.length * 45 + 60;
+    const t = setTimeout(() => setRender(false), dur);
+    return () => clearTimeout(t);
+  }, [visible]);
+  if (!render) return null;
+  return (
+    <div className={'quick-prompts' + (leaving ? ' leaving' : '')}>
+      {prompts.map((q, i) => (
+        <button key={i} className="quick-prompt" style={{ animationDelay: i * 45 + 'ms' }} onClick={() => onPick(q.prompt)} disabled={disabled}>
+          {q.icon && q.icon !== 'none' && <span className="qp-icon"><QpIcon name={q.icon} style={{ width: 15, height: 15 }} /></span>}{q.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function parseStreamedFiles(text) {
   const files = {};
   const re = /```tool\s*([\s\S]*?)```/g;
@@ -570,17 +594,13 @@ export default function App() {
             <div className="composer-wrap">
               <Composer {...composerProps} autoFocus modelUp focusKey={focusTick} />
             </div>
-            {incognito ? (
-              <div className="incognito-note">Incognito chats aren't saved to your history.</div>
-            ) : !input.trim() && cfg.quickPrompts && cfg.quickPrompts.length > 0 && (
-              <div className="quick-prompts">
-                {cfg.quickPrompts.map((q, i) => (
-                  <button key={i} className="quick-prompt" style={{ animationDelay: i * 45 + 'ms' }} onClick={() => send([], q.prompt)} disabled={streaming}>
-                    {q.icon && q.icon !== 'none' && <span className="qp-icon"><QpIcon name={q.icon} style={{ width: 15, height: 15 }} /></span>}{q.label}
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className="qp-slot">
+              {incognito ? (
+                <div className="incognito-note">Incognito chats aren't saved to your history.</div>
+              ) : cfg.quickPrompts && cfg.quickPrompts.length > 0 && (
+                <QuickPrompts prompts={cfg.quickPrompts} visible={!input.trim()} disabled={streaming} onPick={(p) => send([], p)} />
+              )}
+            </div>
           </div>
         ) : (
           <>
@@ -641,7 +661,7 @@ export default function App() {
           onChanged={(has) => { setHasSummary(has); }} />
       )}
 
-      {showSettings && <SettingsModal user={user} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} />}
+      {showSettings && <SettingsModal user={user} cfg={cfg} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} />}
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} />}
       {showAdmin && <AdminPanel user={user} onClose={() => setShowAdmin(false)} />}
       {showCredits && <DocModal title="Credits" name="credits" serif onClose={() => setShowCredits(false)} />}
