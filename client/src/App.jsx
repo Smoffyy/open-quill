@@ -141,6 +141,7 @@ function SummaryModal({ chatId, onClose, onChanged }) {
 
 export default function App() {
   const [user, setUser] = useState(undefined);
+  const [intro, setIntro] = useState(false);
   const [models, setModels] = useState([]);
   const [currentId, setCurrentId] = useState(null);
   const [extended, setExtended] = useState(false);
@@ -207,6 +208,12 @@ export default function App() {
   useEffect(() => { revealRef.current = revealMs; }, [revealMs]);
 
   useEffect(() => { dispLen.current = dispContent.length; }, [dispContent]);
+
+  useEffect(() => {
+    if (!intro) return;
+    const t = setTimeout(() => setIntro(false), 3400);
+    return () => clearTimeout(t);
+  }, [intro]);
 
   useEffect(() => {
     api.get('/api/me').then(({ user }) => setUser(user)).catch(() => setUser(null));
@@ -547,7 +554,7 @@ export default function App() {
   async function logout() { await api.post('/api/auth/logout'); location.href = '/'; }
 
   if (user === undefined) return <div style={{ height: '100%', background: 'var(--bg)' }} />;
-  if (!user) return <Login onLogin={(u) => setUser(u)} />;
+  if (!user) return <Login onLogin={(u) => { setUser(u); setIntro(true); }} />;
 
   const model = models.find(m => m.id === currentId);
   const sandboxAllowed = incognito ? false : (model ? model.sandboxAllowed !== false : true);
@@ -563,7 +570,8 @@ export default function App() {
   const showArtifactsBtn = sandboxOn || files.length > 0;
 
   return (
-    <div className={'app' + (incognito ? ' app-incognito' : '')}>
+    <div className={'app' + (incognito ? ' app-incognito' : '') + (intro ? ' intro' : '')}>
+      {intro && <div className="intro-curtain" />}
       <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName}
         folders={folders} onCreateFolder={createFolder} onRenameFolder={renameFolder} onToggleFolder={toggleFolder} onDeleteFolder={deleteFolder} onMoveChat={moveChatToFolder}
         onNew={newChat} onOpen={openChat} onDelete={deleteChat} onToggleStar={toggleStar}

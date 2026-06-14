@@ -152,6 +152,8 @@ export default function Sidebar({
   const [hover, setHover] = useState(false);
   const [dragChatId, setDragChatId] = useState(null);
   const [rootDragOver, setRootDragOver] = useState(false);
+  const [recentsCollapsed, setRecentsCollapsed] = useState(() => { try { return localStorage.getItem('oq-recents-collapsed') === '1'; } catch { return false; } });
+  const toggleRecents = () => setRecentsCollapsed(v => { const n = !v; try { localStorage.setItem('oq-recents-collapsed', n ? '1' : '0'); } catch {} return n; });
   useEffect(() => {
     const down = (e) => { if (e.key === 'Shift') setShiftHeld(true); };
     const up = (e) => { if (e.key === 'Shift') setShiftHeld(false); };
@@ -190,7 +192,7 @@ export default function Sidebar({
       <div className="chats">
         {!chatsLoaded ? (
           <>
-            <div className="section-label">Chats</div>
+            <div className="section-label">Recents</div>
             {Array.from({ length: 7 }).map((_, i) => (
               <div key={i} className="chat-skel"><span className="skeleton" style={{ width: (55 + ((i * 37) % 40)) + '%' }} /></div>
             ))}
@@ -214,12 +216,17 @@ export default function Sidebar({
                 rowProps={rowProps} />
             ))}
 
-            <div className={'section-label' + (rootDragOver ? ' drag-over' : '')}
+            <div className={'section-label recents-label' + (rootDragOver ? ' drag-over' : '') + (recentsCollapsed ? ' collapsed' : '')}
+              onClick={toggleRecents}
               onDragOver={(e) => { if (dragChatId) { e.preventDefault(); setRootDragOver(true); } }}
               onDragLeave={() => setRootDragOver(false)}
-              onDrop={(e) => { e.preventDefault(); setRootDragOver(false); const id = e.dataTransfer.getData('text/plain') || dragChatId; if (id) onMoveChat(id, null); }}>Chats</div>
-            {others.length === 0 && <div className="chats-empty">No chats yet</div>}
-            {others.map(row)}
+              onDrop={(e) => { e.preventDefault(); setRootDragOver(false); const id = e.dataTransfer.getData('text/plain') || dragChatId; if (id) onMoveChat(id, null); }}>
+              <Chevron className="rl-chev" style={{ width: 13 }} /> Recents
+            </div>
+            {!recentsCollapsed && <>
+              {others.length === 0 && <div className="chats-empty">No chats yet</div>}
+              {others.map(row)}
+            </>}
           </>
         )}
       </div>

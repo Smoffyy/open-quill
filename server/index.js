@@ -555,7 +555,8 @@ function readVersionText() {
   const dirs = [path.join(__dirname, '..', 'client', 'public'), path.join(__dirname, '..', 'client', 'dist')];
   for (const d of dirs) {
     try {
-      const f = fs.readdirSync(d).find(n => /^ui-version-text\.txt$/i.test(n));
+      const files = fs.readdirSync(d);
+      const f = files.find(n => /^ui-version(-text)?\.md$/i.test(n)) || files.find(n => /^ui-version-text\.txt$/i.test(n));
       if (f) { const t = fs.readFileSync(path.join(d, f), 'utf8'); if (t.trim()) return t; }
     } catch {}
   }

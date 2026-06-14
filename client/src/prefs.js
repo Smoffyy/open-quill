@@ -15,6 +15,7 @@ export function applyPrefs(prefs) {
   root.setAttribute('data-composerfx', prefs?.composerFx === false ? 'off' : 'on');
   root.setAttribute('data-focusglow', prefs?.focusGlow ? 'on' : 'off');
   root.setAttribute('data-iconglow', prefs?.iconGlow ? 'on' : 'off');
+  root.setAttribute('data-oled', prefs?.oledShift ? 'on' : 'off');
   if (prefs?.accent) root.style.setProperty('--accent', prefs.accent);
   else root.style.removeProperty('--accent');
 }

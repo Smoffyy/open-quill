@@ -162,6 +162,10 @@ input, textarea { font-family: inherit; color: inherit; }
 .nav-item:hover { background: var(--surface-hover); }
 .nav-item svg { width: 17px; height: 17px; opacity: .85; flex-shrink: 0; transition: color .15s ease; }
 .section-label { padding: 16px 18px 6px; font-size: 12px; color: var(--text-faint); font-family: var(--font-sans); }
+.recents-label { display: flex; align-items: center; gap: 5px; cursor: pointer; user-select: none; border-radius: 7px; transition: color .15s; }
+.recents-label:hover { color: var(--text-muted); }
+.recents-label .rl-chev { transform: rotate(90deg); transition: transform .2s cubic-bezier(.2,.7,.3,1); flex-shrink: 0; opacity: .7; }
+.recents-label.collapsed .rl-chev { transform: rotate(0deg); }
 .chats { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
 .chat-row {
   display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 10px;
@@ -392,6 +396,11 @@ input, textarea { font-family: inherit; color: inherit; }
 .modal-tab.active { background: var(--surface-hover); color: var(--text); }
 .modal-tab svg { width: 16px; height: 16px; }
 .modal-tab.sub { padding-left: 32px; font-size: 13px; animation: subIn .2s ease both; }
+.modal-tab.has-sub .tab-chev { margin-left: auto; opacity: .55; transition: transform .2s cubic-bezier(.2,.7,.3,1); }
+.modal-tab.has-sub.open .tab-chev { transform: rotate(90deg); }
+.autosave-note { display: flex; align-items: center; gap: 8px; margin-top: 18px; font-size: 12.5px; color: var(--text-faint); font-family: var(--font-sans); }
+.autosave-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint); transition: background .25s, box-shadow .25s; }
+.autosave-dot.flash { background: #6fbf73; box-shadow: 0 0 8px #6fbf73aa; }
 @keyframes subIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 .version-card { display: flex; align-items: center; gap: 16px; padding: 16px; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 14px; margin-top: 6px; }
 .version-icon { width: 60px; height: 60px; border-radius: 14px; object-fit: cover; flex-shrink: 0; }
@@ -400,6 +409,12 @@ input, textarea { font-family: inherit; color: inherit; }
 .version-name { font-size: 16px; font-weight: 600; color: var(--text); }
 .version-num { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
 .version-desc { margin-top: 14px; font-size: 13.5px; line-height: 1.55; color: var(--text-muted); }
+.version-desc h1, .version-desc h2, .version-desc h3 { color: var(--text); font-family: var(--font-serif); margin: 18px 0 8px; }
+.version-desc h1 { font-size: 21px; } .version-desc h2 { font-size: 18px; } .version-desc h3 { font-size: 16px; }
+.version-desc h1:first-child, .version-desc h2:first-child, .version-desc h3:first-child { margin-top: 0; }
+.version-desc p { margin: 0 0 12px; }
+.version-desc code { background: var(--hover-mid); padding: 2px 7px; border-radius: 6px; font-family: ui-monospace, monospace; font-size: .88em; color: var(--text); }
+.version-desc a { color: var(--accent); }
 .version-admin { margin-top: 18px; border-top: 1px solid var(--border-soft); padding-top: 16px; display: flex; flex-direction: column; gap: 10px; }
 .version-admin code { background: var(--surface-hover); padding: 1px 5px; border-radius: 5px; font-size: 12px; }
 .modal-main { flex: 1; overflow-y: auto; padding: 26px 30px; }
@@ -490,7 +505,7 @@ button { transition: transform .12s ease, background .15s ease, color .15s ease,
 /* ---------- view transitions ---------- */
 @keyframes composerDrop { from { opacity: 0; transform: translateY(-16vh); } to { opacity: 1; transform: translateY(0); } }
 @keyframes greetingIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-.active-composer { animation: composerDrop .42s cubic-bezier(.2,.7,.3,1) both; }
+.active-composer { position: relative; z-index: 14; animation: composerDrop .42s cubic-bezier(.2,.7,.3,1) both; }
 .greeting { animation: greetingIn .4s ease both; }
 
 /* ---------- theme toggle ---------- */
@@ -1162,3 +1177,69 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .mo-capinfo-item { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text); font-weight: 500; }
 .mo-capinfo-item svg { opacity: .8; }
 :root[data-theme="anthropic"] .mo-capinfo-item { color: #fefefe; }
+
+/* ---------- cinematic intro ---------- */
+.app.intro { overflow: hidden; }
+.intro-curtain { position: fixed; inset: 0; z-index: 999; pointer-events: none; background: radial-gradient(120% 120% at 50% 40%, color-mix(in srgb, var(--accent) 22%, transparent), var(--bg) 55%, var(--bg) 100%); animation: introCurtain 1.5s cubic-bezier(.4,0,.2,1) forwards; }
+@keyframes introCurtain { 0% { opacity: 1; } 55% { opacity: 1; } 100% { opacity: 0; } }
+
+.app.intro .sidebar { animation: introSidebar 1s cubic-bezier(.18,.9,.28,1) both; }
+.app.intro .brand { animation: introDrop .8s .25s cubic-bezier(.18,.9,.28,1) both; }
+.app.intro .sidebar-head-actions { animation: introDrop .7s .35s cubic-bezier(.18,.9,.28,1) both; }
+.app.intro .nav .nav-item { animation: introRise .7s cubic-bezier(.18,.9,.28,1) both; }
+.app.intro .nav .nav-item:nth-child(1) { animation-delay: .4s; }
+.app.intro .nav .nav-item:nth-child(2) { animation-delay: .48s; }
+.app.intro .chats .section-label { animation: introRise .6s .55s cubic-bezier(.18,.9,.28,1) both; }
+.app.intro .chats .chat-row { animation: introRise .55s cubic-bezier(.18,.9,.28,1) both; }
+.app.intro .chats .chat-row:nth-child(1) { animation-delay: .6s; }
+.app.intro .chats .chat-row:nth-child(2) { animation-delay: .66s; }
+.app.intro .chats .chat-row:nth-child(3) { animation-delay: .72s; }
+.app.intro .chats .chat-row:nth-child(4) { animation-delay: .78s; }
+.app.intro .chats .chat-row:nth-child(5) { animation-delay: .84s; }
+.app.intro .chats .chat-row:nth-child(6) { animation-delay: .9s; }
+.app.intro .chats .chat-row:nth-child(7) { animation-delay: .96s; }
+.app.intro .chats .chat-row:nth-child(n+8) { animation-delay: 1s; }
+.app.intro .profile { animation: introRise .7s 1s cubic-bezier(.18,.9,.28,1) both; }
+
+.app.intro .main { animation: introMain 1.1s .3s cubic-bezier(.18,.9,.28,1) both; }
+.app.intro .topbar { animation: introDrop .8s .5s cubic-bezier(.18,.9,.28,1) both; }
+.app.intro .incognito-fab { animation: introDrop .7s .7s cubic-bezier(.18,.9,.28,1) both; }
+.app.intro .greeting { animation: introGreeting 1s .65s cubic-bezier(.18,.9,.28,1) both; }
+.app.intro .composer-wrap { animation: introComposer 1.05s .8s cubic-bezier(.18,.9,.28,1) both; }
+.app.intro .quick-prompts .quick-prompt { animation: introPop .6s cubic-bezier(.2,.85,.3,1.2) both; }
+.app.intro .quick-prompts .quick-prompt:nth-child(1) { animation-delay: 1.15s; }
+.app.intro .quick-prompts .quick-prompt:nth-child(2) { animation-delay: 1.25s; }
+.app.intro .quick-prompts .quick-prompt:nth-child(3) { animation-delay: 1.35s; }
+.app.intro .quick-prompts .quick-prompt:nth-child(n+4) { animation-delay: 1.45s; }
+.app.intro .scroll-area { animation: introMain 1s .55s cubic-bezier(.18,.9,.28,1) both; }
+.app.intro .disclaimer { animation: introDrop .8s 1.25s cubic-bezier(.18,.9,.28,1) both; }
+
+@keyframes introSidebar { 0% { opacity: 0; transform: translateX(-100%); } 100% { opacity: 1; transform: none; } }
+@keyframes introMain { 0% { opacity: 0; transform: translateY(22px) scale(.985); filter: blur(6px); } 100% { opacity: 1; transform: none; filter: blur(0); } }
+@keyframes introGreeting { 0% { opacity: 0; transform: translateY(26px) scale(.9); filter: blur(8px); } 100% { opacity: 1; transform: none; filter: blur(0); } }
+@keyframes introComposer { 0% { opacity: 0; transform: translateY(48px) scale(.96); } 60% { opacity: 1; } 100% { opacity: 1; transform: none; } }
+@keyframes introRise { 0% { opacity: 0; transform: translateY(14px); } 100% { opacity: 1; transform: none; } }
+@keyframes introDrop { 0% { opacity: 0; transform: translateY(-12px); } 100% { opacity: 1; transform: none; } }
+@keyframes introPop { 0% { opacity: 0; transform: translateY(12px) scale(.85); } 100% { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .intro-curtain { animation-duration: .5s; }
+  .app.intro .sidebar, .app.intro .main, .app.intro .greeting, .app.intro .composer-wrap,
+  .app.intro .scroll-area, .app.intro .brand, .app.intro .nav .nav-item, .app.intro .chats .section-label,
+  .app.intro .chats .chat-row, .app.intro .profile, .app.intro .topbar, .app.intro .quick-prompts .quick-prompt,
+  .app.intro .disclaimer, .app.intro .sidebar-head-actions, .app.intro .incognito-fab { animation: none !important; }
+}
+
+/* ---------- OLED burn-in protection ---------- */
+:root[data-oled="on"] body { filter: brightness(.94); }
+:root[data-oled="on"] .app { animation: oledShift 210s linear infinite; }
+@keyframes oledShift {
+  0%   { transform: translate(0, 0); }
+  25%  { transform: translate(1px, 1px); }
+  50%  { transform: translate(0, 2px); }
+  75%  { transform: translate(-1px, 1px); }
+  100% { transform: translate(0, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-oled="on"] .app { animation: none; }
+}

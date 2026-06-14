@@ -1,19 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { api } from '../api.js';
 import { applyPrefs, ACCENT_PRESETS } from '../prefs.js';
-import { Sun, Moon, Gear, Sliders, Info } from './icons.jsx';
+import { Sun, Moon, Gear, Sliders, Info, Chevron } from './icons.jsx';
 import Markdown from './Markdown.jsx';
 
 export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted }) {
   const [tab, setTab] = useState('general');
   const [chatSec, setChatSec] = useState('streaming');
   const [name, setName] = useState(user.displayName);
-  const [prefs, setPrefs] = useState({ animations: true, autoscroll: true, theme: 'system', accent: '', density: 'comfortable', messageEntrance: true, streamCursor: false, cursorStyle: 'block', revealMs: 40, chatStagger: true, themeFade: true, microFx: true, composerFx: true, iconGlow: false, focusGlow: false, ...user.prefs });
+  const [prefs, setPrefs] = useState({ animations: true, autoscroll: true, theme: 'system', accent: '', density: 'comfortable', messageEntrance: true, streamCursor: false, cursorStyle: 'block', revealMs: 40, chatStagger: true, themeFade: true, microFx: true, composerFx: true, iconGlow: false, focusGlow: false, oledShift: false, ...user.prefs });
   const [saved, setSaved] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const [delErr, setDelErr] = useState('');
   const [confirmClear, setConfirmClear] = useState(false);
   const [clearMsg, setClearMsg] = useState('');
+  const saveTimer = useRef(null);
+  useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
+
+  function scheduleSave(nextName, nextPrefs) {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      try {
+        const { user: u } = await api.patch('/api/me', { displayName: nextName, prefs: nextPrefs });
+        onUpdated(u);
+        setSaved(true); setTimeout(() => setSaved(false), 1300);
+      } catch {}
+    }, 450);
+  }
+  function changeName(v) { setName(v); scheduleSave(v, prefs); }
 
   async function clearChats() {
     setClearMsg('');
@@ -26,18 +40,12 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
     catch (e) { setDelErr(e?.message || 'Could not delete account.'); }
   }
 
-  function setPref(k, v) { setPrefs(p => { const next = { ...p, [k]: v }; applyPrefs(next); return next; }); }
-
-  async function save() {
-    const { user: u } = await api.patch('/api/me', { displayName: name, prefs });
-    onUpdated(u);
-    setSaved(true); setTimeout(() => setSaved(false), 1500);
-  }
+  function setPref(k, v) { setPrefs(p => { const next = { ...p, [k]: v }; applyPrefs(next); scheduleSave(name, next); return next; }); }
 
   const Toggle = ({ k, label, desc }) => (
     <div className="field row">
       <div><label>{label}</label><div className="muted-note">{desc}</div></div>
-      <div className={'switch' + (prefs[k] ? ' on' : '')} onClick={() => setPrefs(p => ({ ...p, [k]: !p[k] }))} />
+      <div className={'switch' + (prefs[k] ? ' on' : '')} onClick={() => setPref(k, !prefs[k])} />
     </div>
   );
   const Seg = ({ value, options, onPick }) => (
@@ -54,7 +62,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
         <button className="modal-close" onClick={onClose}>✕</button>
         <div className="modal-side">
           <div className="ms-label">Settings</div>
-          <button className={'modal-tab' + (tab === 'general' ? ' active' : '')} onClick={() => setTab('general')}><Gear /> General</button>
+          <button className={'modal-tab has-sub' + (tab === 'general' ? ' active' : '') + ((tab === 'general' || tab === 'version') ? ' open' : '')} onClick={() => setTab('general')}><Gear /> General <Chevron className="tab-chev" style={{ width: 13 }} /></button>
           {(tab === 'general' || tab === 'version') && (
             <button className={'modal-tab sub' + (tab === 'version' ? ' active' : '')} onClick={() => setTab('version')}><Info /> Version</button>
           )}
@@ -68,7 +76,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
               <div className="hint">Your account basics.</div>
               <div className="field">
                 <label>What should we call you?</label>
-                <input value={name} onChange={(e) => setName(e.target.value)} />
+                <input value={name} onChange={(e) => changeName(e.target.value)} />
               </div>
               <div className="danger-zone">
                   <div className="dz-title">Danger zone</div>
@@ -117,7 +125,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                 </div>
               </div>
               {(cfg?.uiVersionDesc || '').trim() && (
-                <div className="version-desc doc-body"><Markdown>{cfg.uiVersionDesc}</Markdown></div>
+                <div className="version-desc"><Markdown>{cfg.uiVersionDesc}</Markdown></div>
               )}
             </>
           )}
@@ -148,6 +156,10 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                 <div><label>Message density</label><div className="muted-note">Spacing between messages</div></div>
                 <Seg value={prefs.density || 'comfortable'} onPick={(v) => setPref('density', v)}
                   options={[{ v: 'comfortable', label: 'Comfortable' }, { v: 'compact', label: 'Compact' }]} />
+              </div>
+              <div className="field row">
+                <div><label>OLED screen protection</label><div className="muted-note">Slowly shifts the interface by a few pixels and softens peak brightness to reduce burn-in on OLED displays</div></div>
+                <div className={'switch' + (prefs.oledShift ? ' on' : '')} onClick={() => setPref('oledShift', !prefs.oledShift)} />
               </div>
             </>
           )}
@@ -214,9 +226,9 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
             );
           })()}
           {tab !== 'version' && (
-            <div className="btn-row">
-              <button className="btn primary" onClick={save}>Save changes</button>
-              {saved && <span className="saved-flash" style={{ alignSelf: 'center' }}>Saved ✓</span>}
+            <div className="autosave-note">
+              <span className={'autosave-dot' + (saved ? ' flash' : '')} />
+              {saved ? 'Saved' : 'Changes save automatically'}
             </div>
           )}
         </div>
