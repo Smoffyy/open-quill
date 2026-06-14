@@ -37,22 +37,25 @@ function CapInfo({ m }) {
 
 export default function ModelDropdown({ models, currentId, onSelect, extended, onToggleExtended, up }) {
   const [open, setOpen] = useState(false);
-  const [showMore, setShowMore] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const ref = useRef(null);
+  const moreTimer = useRef(null);
   useEffect(() => {
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setShowMore(false); } };
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setMoreOpen(false); } };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, []);
+  useEffect(() => () => clearTimeout(moreTimer.current), []);
+  const openMore = () => { clearTimeout(moreTimer.current); setMoreOpen(true); };
+  const closeMore = () => { clearTimeout(moreTimer.current); moreTimer.current = setTimeout(() => setMoreOpen(false), 160); };
 
   const current = models.find(m => m.id === currentId);
   const main = models.filter(m => !m.inMoreModels);
   const more = models.filter(m => m.inMoreModels);
   const moreLabel = more[0]?.moreModelsLabel || 'More models';
-  const list = showMore ? more : main;
 
   const Opt = (m) => (
-    <button key={m.id} className={'model-opt' + (m.unavailable ? ' unavail' : '')} onClick={() => { onSelect(m.id); setOpen(false); setShowMore(false); }}
+    <button key={m.id} className={'model-opt' + (m.unavailable ? ' unavail' : '')} onClick={() => { onSelect(m.id); setOpen(false); setMoreOpen(false); }}
       title={m.unavailable ? (m.displayName + ' is currently unavailable.') : undefined}>
       {m.dropdownIcon !== false && <img className="mo-icon" src={m.staticIcon || '/starburst.svg'} alt="" />}
       <div className="mo-main">
@@ -77,14 +80,8 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
       </button>
       {open && (
         <div className={'model-menu' + (up ? ' up' : '')}>
-          {showMore && (
-            <button className="submenu-row" onClick={() => setShowMore(false)} style={{ color: 'var(--text-muted)' }}>
-              <span style={{ transform: 'rotate(180deg)', display: 'inline-flex' }}><Chevron style={{ width: 15 }} /></span>
-              <span style={{ marginLeft: 6 }}>{moreLabel}</span>
-            </button>
-          )}
-          {list.map(Opt)}
-          {!showMore && current?.hasReasoning && (
+          {main.map(Opt)}
+          {current?.hasReasoning && (
             <>
               <hr />
               <div className="toggle-row" onClick={onToggleExtended}>
@@ -96,12 +93,19 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
               </div>
             </>
           )}
-          {!showMore && more.length > 0 && (
+          {more.length > 0 && (
             <>
               <hr />
-              <button className="submenu-row" onClick={() => setShowMore(true)}>
-                <span>{moreLabel}</span><Chevron style={{ width: 15 }} />
-              </button>
+              <div className="more-wrap" onMouseEnter={openMore} onMouseLeave={closeMore}>
+                <button className={'submenu-row' + (moreOpen ? ' active' : '')} onClick={() => (moreOpen ? closeMore() : openMore())}>
+                  <span>{moreLabel}</span><Chevron style={{ width: 15 }} />
+                </button>
+                {moreOpen && (
+                  <div className="model-submenu" onMouseEnter={openMore} onMouseLeave={closeMore}>
+                    {more.map(Opt)}
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>

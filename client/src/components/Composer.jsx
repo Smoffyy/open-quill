@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import ModelDropdown from './ModelDropdown.jsx';
 import { api } from '../api.js';
-import { Plus, Mic, Wave, Up, Stop, FileText, Wrench, Check } from './icons.jsx';
+import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check } from './icons.jsx';
 
 const FILE_ACCEPT = '.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.py,.lua,.html,.css,.xml,.yml,.yaml,.pdf,.log';
 
@@ -62,7 +62,9 @@ export default function Composer({
     requestAnimationFrame(() => { if (ta.current) ta.current.style.height = next; });
   }, [value]);
   useEffect(() => { if (autoFocus || focusKey !== undefined) ta.current?.focus(); }, [autoFocus, focusKey]);
-  useEffect(() => () => files.forEach(f => f.preview && URL.revokeObjectURL(f.preview)), []);
+  const filesRef = useRef(files);
+  filesRef.current = files;
+  useEffect(() => () => filesRef.current.forEach(f => f.preview && URL.revokeObjectURL(f.preview)), []);
 
   const [upErr, setUpErr] = useState('');
   function addFiles(list) {
@@ -120,6 +122,7 @@ export default function Composer({
   const unavailable = !!activeModel?.unavailable;
   const blockSend = unavailable && !canUseUnavailable;
   const hasImage = files.some(f => f.preview);
+  const enabledCount = (sandbox ? 1 : 0);
   const canSend = (value.trim().length > 0 || files.length > 0) && !uploading && !blockSend;
   const cls = 'composer' + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + (unavailable ? ' unavailable' : '') + (blockSend ? ' blocked' : '');
 
@@ -161,7 +164,10 @@ export default function Composer({
       <div className="composer-bar">
         <div className="composer-left">
           <div className="plus-wrap" ref={plusRef}>
-            <button className="plus" onClick={() => setPlusMenu(m => !m)} title="More"><Plus style={{ width: 17, height: 17 }} /></button>
+            <button className="plus" onClick={() => setPlusMenu(m => !m)} title="More">
+              <Plus style={{ width: 17, height: 17 }} />
+              {enabledCount > 0 && <span className="plus-badge">{enabledCount}</span>}
+            </button>
             {plusMenu && (
               <div className="plus-menu">
                 <button onClick={() => { setPlusMenu(false); fileInput.current?.click(); }}>
@@ -169,14 +175,13 @@ export default function Composer({
                 </button>
                 {sandboxAllowed && (
                   <button onClick={() => onToggleSandbox && onToggleSandbox()}>
-                    <Wrench style={{ width: 16 }} /> Enable Sandbox Tools
+                    <Cube style={{ width: 16 }} /> Enable Sandbox Tools
                     <span className={'mini-switch' + (sandbox ? ' on' : '')}>{sandbox && <Check style={{ width: 12 }} />}</span>
                   </button>
                 )}
               </div>
             )}
           </div>
-          {sandbox && <span className="sandbox-pill"><Wrench style={{ width: 12 }} /> Sandbox</span>}
         </div>
         <div className="composer-right">
           <ModelDropdown models={models} currentId={currentId} onSelect={onSelect}
