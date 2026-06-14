@@ -761,6 +761,15 @@ function compactThreshold(model) {
   const padding = Math.max(0.03, Math.min(0.6, model.summary_padding || 0.125));
   return Math.floor(model.num_ctx * (1 - padding));
 }
+function promptVars(userId) {
+  const u = userId ? db.users.byId(userId) : null;
+  const name = u ? (u.display_name || (u.email ? u.email.split('@')[0] : '') || 'User') : 'User';
+  const now = new Date();
+  let dt;
+  try { dt = now.toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' }); }
+  catch { dt = now.toString(); }
+  return { currentUser: name, currentDateTime: dt };
+}
 async function maybeCompact(ws, chat, model, extended, sandboxOn) {
   const threshold = compactThreshold(model);
   if (threshold === Infinity) return;
@@ -768,7 +777,7 @@ async function maybeCompact(ws, chat, model, extended, sandboxOn) {
   while (guard++ < 3) {
     const fresh = db.chats.byId(chat.id);
     const sandboxP = sandboxOn ? sandboxPromptFor(chat.id) : null;
-    const convo = buildMessages(model, chatHistory(chat, model), extended, sandboxP, fresh.summary);
+    const convo = buildMessages(model, chatHistory(chat, model), extended, sandboxP, fresh.summary, promptVars(chat.user_id));
     if (estimateTokens(convo) < threshold) return;
     if (!(await compactStep(ws, chat, model))) return;
   }
@@ -785,7 +794,7 @@ wss.on('connection', (ws, req) => {
     const history = chatHistory(chat, model);
     const chatRow = db.chats.byId(chat.id) || chat;
     const sandboxP = () => sandboxOn ? sandboxPromptFor(chat.id) : null;
-    let base = buildMessages(model, history, extended, sandboxP(), chatRow.summary);
+    let base = buildMessages(model, history, extended, sandboxP(), chatRow.summary, promptVars(chat.user_id));
     let inTurn = []; // assistant/tool exchanges accumulated during this response
     const assistantId = uid();
     const assistantParent = (db.chats.byId(chat.id) || {}).active_leaf || null;
@@ -800,7 +809,7 @@ wss.on('connection', (ws, req) => {
       for (let step = 0; step < maxSteps; step++) {
         // running low on context mid-response? summarize older turns, then carry on where we left off
         if (threshold !== Infinity && inTurn.length && estimateTokens([...base, ...inTurn]) >= threshold) {
-          if (await compactStep(ws, chat, model)) base = buildMessages(model, chatHistory(chat, model), extended, sandboxP(), (db.chats.byId(chat.id) || {}).summary);
+          if (await compactStep(ws, chat, model)) base = buildMessages(model, chatHistory(chat, model), extended, sandboxP(), (db.chats.byId(chat.id) || {}).summary, promptVars(chat.user_id));
         }
         const convo = [...base, ...inTurn];
         let stepText = '';
@@ -870,7 +879,7 @@ wss.on('connection', (ws, req) => {
         if (!history.length || history[history.length - 1].role !== 'user') {
           safeSend(JSON.stringify({ type: 'error', error: 'Nothing to send.' })); safeSend(JSON.stringify({ type: 'done' })); return;
         }
-        const messages = buildMessages(model, history, !!msg.extended, null, null);
+        const messages = buildMessages(model, history, !!msg.extended, null, null, promptVars(u.id));
         const assistantId = 'inc-' + uid();
         const controller = new AbortController();
         state.abort = controller;

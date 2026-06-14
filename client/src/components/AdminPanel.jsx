@@ -65,8 +65,50 @@ function IconSlot({ label, value, def, anim, onChange }) {
   );
 }
 
+function SystemPromptEditor({ value, onChange, onClose }) {
+  const taRef = useRef(null);
+  const dt = '{{currentDateTime}}';
+  const cu = '{{currentUser}}';
+  function insert(token) {
+    const ta = taRef.current;
+    const v = value || '';
+    if (!ta) { onChange(v + token); return; }
+    const s = ta.selectionStart ?? v.length, e = ta.selectionEnd ?? v.length;
+    const next = v.slice(0, s) + token + v.slice(e);
+    onChange(next);
+    requestAnimationFrame(() => { ta.focus(); const p = s + token.length; ta.setSelectionRange(p, p); });
+  }
+  return (
+    <div className="overlay sp-overlay" onMouseDown={(e) => e.target.classList.contains('sp-overlay') && onClose()}>
+      <div className="sp-modal">
+        <div className="sp-head">
+          <div>
+            <h3>System prompt</h3>
+            <div className="muted-note">Define how this model behaves. Variables below are filled in locally on each message.</div>
+          </div>
+          <button className="modal-close" style={{ position: 'static' }} onClick={onClose}>✕</button>
+        </div>
+        <div className="sp-vars">
+          <button className="sp-chip" onClick={() => insert(dt)}><code>{dt}</code> Insert local date &amp; time</button>
+          <button className="sp-chip" onClick={() => insert(cu)}><code>{cu}</code> Insert the user's name</button>
+        </div>
+        <textarea ref={taRef} className="sp-text" value={value || ''} onChange={(e) => onChange(e.target.value)} placeholder="You are a helpful assistant…" autoFocus />
+        <div className="sp-tips">
+          <div className="sp-tip"><b>{dt}</b> — replaced with the current date and time from this device, in your local timezone.</div>
+          <div className="sp-tip"><b>{cu}</b> — replaced with the signed-in user's name. Everything stays on your machine.</div>
+        </div>
+        <div className="sp-foot">
+          <span className="muted-note">Edits save to your draft automatically.</span>
+          <button className="btn primary" onClick={onClose}>Done</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ModelEditor({ m, onChange, onDelete, autosaveState }) {
   const [section, setSection] = useState('general');
+  const [spOpen, setSpOpen] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [detectMsg, setDetectMsg] = useState('');
   const set = (k, v) => onChange({ ...m, [k]: v });
@@ -114,7 +156,14 @@ function ModelEditor({ m, onChange, onDelete, autosaveState }) {
           <div className="field"><label>Description</label>
             <input value={m.description || ''} onChange={(e) => set('description', e.target.value)} placeholder="For complex tasks" /></div>
           <div className="field"><label>System prompt</label>
-            <textarea rows={5} value={m.system_prompt || ''} onChange={(e) => set('system_prompt', e.target.value)} /></div>
+            <button type="button" className="sp-preview" onClick={() => setSpOpen(true)}>
+              {(m.system_prompt || '').trim()
+                ? <><div className="sp-preview-text">{m.system_prompt}</div><div className="sp-preview-fade" /></>
+                : <div className="sp-preview-empty">Click to write a system prompt…</div>}
+              <div className="sp-preview-hint">Click to edit</div>
+            </button>
+          </div>
+          {spOpen && <SystemPromptEditor value={m.system_prompt || ''} onChange={(v) => set('system_prompt', v)} onClose={() => setSpOpen(false)} />}
           <Toggle k="in_more_models" label={'Tuck under "More models"'} note="Hidden from the main list" />
           {!!m.in_more_models && (
             <div className="field"><label>More-models label</label>

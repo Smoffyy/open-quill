@@ -9,9 +9,16 @@ function authHeaders() {
   return { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) };
 }
 
+function applyPromptVars(text, vars) {
+  if (!text) return text || '';
+  return text
+    .replace(/\{\{\s*currentDateTime\s*\}\}/gi, (vars && vars.currentDateTime) || '')
+    .replace(/\{\{\s*currentUser\s*\}\}/gi, (vars && vars.currentUser) || '');
+}
+
 // system prompt order: base, summary, sandbox, then the reasoning toggle token last
-export function buildMessages(model, history, extended, sandboxPrompt, summaryText) {
-  let sys = model.system_prompt || '';
+export function buildMessages(model, history, extended, sandboxPrompt, summaryText, vars = {}) {
+  let sys = applyPromptVars(model.system_prompt || '', vars);
   if (summaryText && summaryText.trim()) sys = (sys ? sys + '\n\n' : '') + 'Summary of the earlier part of this conversation (older messages were compacted to save context — treat this as established context):\n' + summaryText.trim();
   if (sandboxPrompt) sys = (sys ? sys + '\n\n' : '') + sandboxPrompt;
   if (model.has_reasoning) {
