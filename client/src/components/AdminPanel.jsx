@@ -152,7 +152,7 @@ function ModelEditor({ m, onChange, onDelete, autosaveState }) {
             <label>Dropdown capability icons</label>
             <div className="muted-note" style={{ marginBottom: 8 }}>Small icons shown to the right of this model in the picker. Each is independent — off by default.</div>
             <Toggle k="cap_text" label="Text-Only icon" note="T icon — indicates the model takes text input only." />
-            <Toggle k="cap_vision" label="Vision icon" note="Eye icon — indicates the model accepts images." />
+            <Toggle k="cap_vision" label="Vision icon" note="Vison icon — indicates the model accepts images." />
             <Toggle k="cap_reasoning" label="Reasoning icon" note="Brain icon — indicates the model can reason." />
             <Toggle k="cap_compact" label="Compact capabilities" note="Collapse the icons into a single ⓘ that reveals the capabilities on hover." />
           </div>
