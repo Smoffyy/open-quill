@@ -139,6 +139,46 @@ function SummaryModal({ chatId, onClose, onChanged }) {
   );
 }
 
+function CommandPalette({ commands, onClose }) {
+  const [q, setQ] = useState('');
+  const [idx, setIdx] = useState(0);
+  const inputRef = useRef(null);
+  const listRef = useRef(null);
+  useEffect(() => { inputRef.current?.focus(); }, []);
+  const filtered = commands.filter(c => {
+    const s = (c.label + ' ' + (c.keywords || '')).toLowerCase();
+    return q.trim().toLowerCase().split(/\s+/).every(t => s.includes(t));
+  });
+  useEffect(() => { setIdx(0); }, [q]);
+  function run(c) { onClose(); c.action(); }
+  function onKey(e) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(i + 1, filtered.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setIdx(i => Math.max(i - 1, 0)); }
+    else if (e.key === 'Enter') { e.preventDefault(); const c = filtered[idx]; if (c) run(c); }
+    else if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+  }
+  useEffect(() => {
+    const el = listRef.current?.children[idx];
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, [idx]);
+  return (
+    <div className="overlay cmdk-overlay" onMouseDown={(e) => e.target.classList.contains('cmdk-overlay') && onClose()}>
+      <div className="cmdk">
+        <input ref={inputRef} className="cmdk-input" placeholder="Type a command…" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} />
+        <div className="cmdk-list" ref={listRef}>
+          {filtered.length === 0 && <div className="cmdk-empty">No matching commands</div>}
+          {filtered.map((c, i) => (
+            <button key={c.id} className={'cmdk-item' + (i === idx ? ' active' : '')} onMouseMove={() => setIdx(i)} onClick={() => run(c)}>
+              <span className="cmdk-label">{c.label}</span>
+              {c.shortcut && <span className="cmdk-shortcut">{c.shortcut}</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState(undefined);
   const [intro, setIntro] = useState(false);
@@ -171,6 +211,7 @@ export default function App() {
   const [incognito, setIncognito] = useState(false);
   const [incognitoGreeting, setIncognitoGreeting] = useState('Greetings, whoever you are');
   const [chatsOverview, setChatsOverview] = useState(false);
+  const [cmdkOpen, setCmdkOpen] = useState(false);
 
   const [streaming, setStreaming] = useState(false);
   const [queued, setQueued] = useState(false);
@@ -236,6 +277,17 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPop);
   }, []);
   useEffect(() => {
+    if (!user) return;
+    const onKey = (e) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.shiftKey && (e.key === 'S' || e.key === 's')) { e.preventDefault(); setCollapsed(c => !c); return; }
+      if (mod && !e.shiftKey && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); setCmdkOpen(o => !o); return; }
+      if (mod && e.shiftKey && (e.key === 'O' || e.key === 'o')) { e.preventDefault(); newChat(); return; }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [user]);
+  useEffect(() => {
     const m = models.find(x => x.id === currentId);
     if (m && m.sandboxAllowed === false) { setSandbox(false); return; }
     if (!activeId && messages.length === 0) setSandbox(!!m?.sandboxAuto);
@@ -252,7 +304,7 @@ export default function App() {
     // keep the user's current pick; on first load (login) fall back to the default model, else the first
     setCurrentId(id => id && m.find(x => x.id === id) ? id : (m.find(x => x.isDefault)?.id || m[0]?.id || null));
   }
-  async function loadChats() { try { setChats(await api.get('/api/chats')); } finally { setChatsLoaded(true); } }
+  async function loadChats() { try { setChats(await api.get('/api/chats')); } catch {} finally { setChatsLoaded(true); } }
   async function loadFolders() { try { setFolders(await api.get('/api/folders')); } catch {} }
   async function loadAppConfig() { try { applyCfg(await api.get('/api/app-config')); } catch {} }
   function applyCfg(c) {
@@ -266,12 +318,14 @@ export default function App() {
   }
 
   function connect() {
+    const existing = ws.current;
+    if (existing && (existing.readyState === 0 || existing.readyState === 1)) return;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const sock = new WebSocket(`${proto}://${location.host}/ws`);
     ws.current = sock;
-    sock.onmessage = (ev) => handleWs(JSON.parse(ev.data));
+    sock.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch { return; } handleWs(m); };
     sock.onerror = () => { try { sock.close(); } catch {} };
-    sock.onclose = () => { setTimeout(() => { if (user) connect(); }, 1500); };
+    sock.onclose = () => { if (ws.current === sock) ws.current = null; setTimeout(() => { if (user) connect(); }, 1500); };
   }
 
   function wsSend(obj) {
@@ -569,6 +623,19 @@ export default function App() {
   };
   const showArtifactsBtn = sandboxOn || files.length > 0;
 
+  const commands = [
+    { id: 'new', label: 'New chat', shortcut: 'Ctrl Shift O', keywords: 'create start', action: () => newChat() },
+    { id: 'sidebar', label: collapsed ? 'Show sidebar' : 'Hide sidebar', shortcut: 'Ctrl Shift S', keywords: 'toggle collapse panel', action: () => setCollapsed(c => !c) },
+    { id: 'chats', label: 'Browse all chats', keywords: 'overview history search', action: () => setChatsOverview(true) },
+    { id: 'incognito', label: incognito ? 'Exit incognito' : 'Start incognito chat', keywords: 'private ghost', action: () => toggleIncognito() },
+    { id: 'settings', label: 'Open settings', keywords: 'preferences account theme', action: () => setShowSettings(true) },
+    ...(user?.isAdmin ? [{ id: 'admin', label: 'Open admin panel', keywords: 'models users connection', action: () => setShowAdmin(true) }] : []),
+    { id: 'changelog', label: 'View changelog', keywords: 'updates version', action: () => setShowChangelog(true) },
+    { id: 'credits', label: 'View credits', keywords: 'about', action: () => setShowCredits(true) },
+    { id: 'license', label: 'View licensing', keywords: 'legal', action: () => setShowLicense(true) },
+    { id: 'logout', label: 'Log out', keywords: 'sign out exit', action: () => logout() }
+  ];
+
   return (
     <div className={'app' + (incognito ? ' app-incognito' : '') + (intro ? ' intro' : '')}>
       {intro && <div className="intro-curtain" />}
@@ -675,6 +742,7 @@ export default function App() {
       {showCredits && <DocModal title="Credits" name="credits" serif onClose={() => setShowCredits(false)} />}
       {showLicense && <DocModal title="Licensing" name="license" onClose={() => setShowLicense(false)} />}
       {showChangelog && <DocModal title="Changelog" name="changelog" onClose={() => setShowChangelog(false)} />}
+      {cmdkOpen && <CommandPalette commands={commands} onClose={() => setCmdkOpen(false)} />}
     </div>
   );
 }

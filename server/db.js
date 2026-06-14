@@ -6,21 +6,41 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FILE = path.join(__dirname, 'data.json');
 
-const data = fs.existsSync(FILE)
-  ? JSON.parse(fs.readFileSync(FILE, 'utf8'))
-  : { users: [], chats: [], messages: [], models: [], folders: [], settings: {} };
+function loadData() {
+  if (!fs.existsSync(FILE)) return null;
+  try {
+    const raw = fs.readFileSync(FILE, 'utf8');
+    if (!raw.trim()) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    const backup = FILE + '.corrupt.' + Date.now();
+    try { fs.copyFileSync(FILE, backup); } catch {}
+    console.error(`[db] data.json is unreadable (${e.message}). Backed up to ${backup} and starting fresh.`);
+    return null;
+  }
+}
+const data = loadData() || { users: [], chats: [], messages: [], models: [], folders: [], settings: {} };
 for (const k of ['users', 'chats', 'messages', 'models', 'folders']) data[k] ||= [];
 data.settings ||= {};
 
 let saveTimer = null;
-function persist() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
+function writeNow() {
+  clearTimeout(saveTimer); saveTimer = null;
+  try {
     const tmp = FILE + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(data));
     fs.renameSync(tmp, FILE);
-  }, 80);
+  } catch (e) { console.error('[db] write failed:', e.message); }
 }
+function persist() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(writeNow, 80);
+}
+let flushed = false;
+function flushOnExit() { if (flushed) return; flushed = true; if (saveTimer) writeNow(); }
+process.on('exit', flushOnExit);
+process.on('SIGINT', () => { flushOnExit(); process.exit(0); });
+process.on('SIGTERM', () => { flushOnExit(); process.exit(0); });
 
 export const uid = () => crypto.randomUUID();
 let lastTs = 0;

@@ -322,6 +322,22 @@ app.get('/api/models', authMiddleware, (req, res) => res.json(req.user.is_admin 
 app.get('/api/admin/models', authMiddleware, adminOnly, (req, res) =>
   res.json(db.models.all().sort((a, b) => a.sort_order - b.sort_order)));
 
+app.get('/api/admin/discover-models', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const base = (getSetting('api_base_url') || 'http://localhost:1234/v1').replace(/\/$/, '');
+    const key = getSetting('api_key') || '';
+    const r = await fetch(base + '/models', { headers: key ? { Authorization: `Bearer ${key}` } : {} });
+    if (!r.ok) return res.status(502).json({ error: `Backend returned ${r.status}.` });
+    const j = await r.json().catch(() => ({}));
+    const raw = Array.isArray(j?.data) ? j.data : (Array.isArray(j?.models) ? j.models : []);
+    const ids = [...new Set(raw.map(x => (typeof x === 'string' ? x : (x?.id || x?.name))).filter(Boolean))];
+    const existing = new Set(db.models.all().map(m => (m.internal_name || '').toLowerCase()));
+    res.json({ models: ids.map(id => ({ id, added: existing.has(String(id).toLowerCase()) })) });
+  } catch {
+    res.status(502).json({ error: 'Could not reach the backend. Check the Connection settings.' });
+  }
+});
+
 app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
   const max = db.models.all().reduce((a, m) => Math.max(a, m.sort_order || 0), 0);
   const b = req.body;
@@ -562,13 +578,14 @@ function readVersionText() {
   }
   return '';
 }
+function safeParse(v, fallback) { try { const p = JSON.parse(v); return p == null ? fallback : p; } catch { return fallback; } }
 function appConfig() {
   return {
     appName: getSetting('app_name', 'open-quill'),
     disclaimer: getSetting('disclaimer', 'Assistants can make mistakes, double-check responses.'),
-    greetings: (() => { const g = JSON.parse(getSetting('greetings', '[]')); return g.length ? g : ['How can I help you?', 'What are we building today?', 'Where should we start?']; })(),
+    greetings: (() => { const g = safeParse(getSetting('greetings', '[]'), []); return Array.isArray(g) && g.length ? g : ['How can I help you?', 'What are we building today?', 'Where should we start?']; })(),
     appIcon: getSetting('app_icon', ''),
-    quickPrompts: (() => { const q = JSON.parse(getSetting('quick_prompts', '[]')); return q.length ? q : [{ icon: 'file', label: 'Summarize', prompt: 'Summarize the following text for me:' }, { icon: 'code', label: 'Write code', prompt: 'Help me write a small program. Ask me what it should do first.' }, { icon: 'bulb', label: 'Brainstorm', prompt: 'Help me brainstorm ideas about a topic. Ask me for the topic.' }]; })(),
+    quickPrompts: (() => { const q = safeParse(getSetting('quick_prompts', '[]'), []); return Array.isArray(q) && q.length ? q : [{ icon: 'file', label: 'Summarize', prompt: 'Summarize the following text for me:' }, { icon: 'code', label: 'Write code', prompt: 'Help me write a small program. Ask me what it should do first.' }, { icon: 'bulb', label: 'Brainstorm', prompt: 'Help me brainstorm ideas about a topic. Ask me for the topic.' }]; })(),
     version: APP_VERSION,
     uiVersion: APP_VERSION,
     uiVersionDesc: readVersionText(),

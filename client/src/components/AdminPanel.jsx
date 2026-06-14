@@ -165,6 +165,10 @@ function ModelEditor({ m, onChange, onDelete, autosaveState }) {
           </div>
           {spOpen && <SystemPromptEditor value={m.system_prompt || ''} onChange={(v) => set('system_prompt', v)} onClose={() => setSpOpen(false)} />}
           <Toggle k="in_more_models" label={'Tuck under "More models"'} note="Hidden from the main list" />
+          <div className="field row">
+            <div><label>Hide from clients</label><div className="muted-note">Keeps the model in your admin list but removes it from everyone's dropdown.</div></div>
+            <div className={'switch' + (!m.enabled ? ' on' : '')} onClick={() => set('enabled', m.enabled ? 0 : 1)} />
+          </div>
           {!!m.in_more_models && (
             <div className="field"><label>More-models label</label>
               <input value={m.more_models_label || ''} onChange={(e) => set('more_models_label', e.target.value)} placeholder="Other models" /></div>
@@ -369,6 +373,21 @@ export default function AdminPanel({ user, onClose }) {
     const { id } = await api.post('/api/admin/models', { display_name: 'New model', internal_name: 'local-model' });
     await load(); setSelModel(id); setPub(p => ({ ...p, dirty: true }));
   }
+  const [discover, setDiscover] = useState(null);
+  async function openDiscover() {
+    setDiscover({ loading: true, error: '', list: [] });
+    try {
+      const r = await api.get('/api/admin/discover-models');
+      setDiscover({ loading: false, error: '', list: r.models || [] });
+    } catch (e) { setDiscover({ loading: false, error: e?.message || 'Could not reach the backend.', list: [] }); }
+  }
+  async function addDiscovered(id) {
+    setDiscover(d => d ? { ...d, list: d.list.map(x => x.id === id ? { ...x, busy: true } : x) } : d);
+    await api.post('/api/admin/models', { display_name: id, internal_name: id });
+    await load();
+    setDiscover(d => d ? { ...d, list: d.list.map(x => x.id === id ? { ...x, added: true, busy: false } : x) } : d);
+    setPub(p => ({ ...p, dirty: true }));
+  }
   async function publish() {
     setPublishing(true);
     try {
@@ -452,12 +471,14 @@ export default function AdminPanel({ user, onClose }) {
                         </div>
                         <span className="mr-badges">
                           {!!m.is_default && <span className="mr-badge">default</span>}
+                          {!m.enabled && <span className="mr-badge dim">hidden</span>}
                           {!!m.unavailable && <span className="mr-badge warn">unavailable</span>}
-                          {!!m.in_more_models && <span className="mr-badge dim">hidden</span>}
+                          {!!m.in_more_models && <span className="mr-badge dim">tucked</span>}
                         </span>
                       </div>
                     ))}
                     <button className="btn add-model" onClick={add}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> Add model</button>
+                    <button className="btn ghost discover-btn" onClick={openDiscover}><Cube style={{ width: 14, verticalAlign: '-2px' }} /> Discover from backend</button>
                   </div>
                   <div className="models-detail">
                     {sel
@@ -568,6 +589,36 @@ export default function AdminPanel({ user, onClose }) {
           )}
         </div>
       </div>
+      {discover && (
+        <div className="overlay sp-overlay" onMouseDown={(e) => e.target.classList.contains('sp-overlay') && setDiscover(null)}>
+          <div className="sp-modal" style={{ maxHeight: '80vh' }}>
+            <div className="sp-head">
+              <div>
+                <h3>Discover models</h3>
+                <div className="muted-note">Models your backend currently exposes. Add the ones you want — added models can be hidden or deleted like any other.</div>
+              </div>
+              <button className="modal-close" style={{ position: 'static' }} onClick={() => setDiscover(null)}>✕</button>
+            </div>
+            <div className="discover-list">
+              {discover.loading && <div className="muted-note" style={{ padding: 14 }}>Reaching the backend…</div>}
+              {discover.error && <div className="dz-err">{discover.error}</div>}
+              {!discover.loading && !discover.error && discover.list.length === 0 && <div className="muted-note" style={{ padding: 14 }}>No models returned by the backend.</div>}
+              {discover.list.map(x => (
+                <div key={x.id} className="discover-row">
+                  <span className="discover-id">{x.id}</span>
+                  {x.added
+                    ? <span className="discover-added">Added ✓</span>
+                    : <button className="btn" disabled={x.busy} onClick={() => addDiscovered(x.id)}>{x.busy ? 'Adding…' : 'Add'}</button>}
+                </div>
+              ))}
+            </div>
+            <div className="sp-foot">
+              <button className="btn ghost" onClick={openDiscover} disabled={discover.loading}>Refresh</button>
+              <button className="btn primary" onClick={() => setDiscover(null)}>Done</button>
+            </div>
+          </div>
+        </div>
+      )}
       {ask && (
         <div className="confirm-overlay" onMouseDown={(e) => e.target.classList.contains('confirm-overlay') && setAsk(null)}>
           <div className="confirm-box">
