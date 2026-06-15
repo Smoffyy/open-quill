@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Models tab: removed the per-model Save button in favor of autosave-to-draft, with a new "Push to all Clients" control and a dirty-state indicator.
 - Reverted the experimental "Fluid motion" animation tier and removed its settings toggle.
 - Sidebar widened slightly (250px → 290px).
+- **Artifacts Overhaul** - Overhauled Artifacts and tool-calling.
 
 ---
 
