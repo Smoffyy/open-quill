@@ -199,7 +199,6 @@ function ModelEditor({ m, onChange, onDelete, autosaveState }) {
           </div>
           <div className="muted-note">Override the tags used to detect inline reasoning in the stream. Leave blank to use the default {'<think>…</think>'}.</div>
           <div style={{ marginTop: 14 }}>
-            <Toggle k="use_thinking_icon" inverted label="Use thinking icon while reasoning" note="Show the dedicated thinking icon during reasoning. Off uses the generating icon instead." />
             <Toggle k="reasoning_collapsible" inverted label="Let users expand reasoning" note="Off hides the thought process — users still see the 'Thinking…' status, but can't click to read the full reasoning." />
           </div>
         </>}
@@ -253,6 +252,14 @@ function ModelEditor({ m, onChange, onDelete, autosaveState }) {
               </select>
             </div>
             <div className="muted-note">Click an icon to upload a png, svg, jpeg, or gif. Previews animate as they will in chat.</div>
+          </div>
+          <div className="field">
+            <label>Icon size <span className="muted-note" style={{ display: 'inline' }}>{(m.icon_size || 26)}px</span></label>
+            <div className="icon-size-row">
+              <input type="range" min="14" max="64" value={m.icon_size || 26} onChange={(e) => set('icon_size', parseInt(e.target.value))} />
+              <button className="btn ghost icon-size-reset" disabled={!m.icon_size} onClick={() => set('icon_size', 0)}>Reset</button>
+            </div>
+            <div className="muted-note">Size of the model's icon shown beside its messages. Default is 26px.</div>
           </div>
           <Toggle k="dropdown_icon" inverted label="Show icon in model dropdown" note="Display this model's static icon next to its name in the model picker." />
           <div className="field">

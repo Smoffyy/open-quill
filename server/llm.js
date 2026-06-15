@@ -115,18 +115,23 @@ export async function generateTitle(model, userText, assistantText) {
         model: model.internal_name,
         stream: false,
         messages: [
-          { role: 'system', content: 'Generate a short 2-5 word title for this conversation. Reply with the title only, no quotes, no punctuation at the end.' },
+          { role: 'system', content: 'Generate a short 2-5 word title for this conversation. Respond with ONLY a single JSON object in exactly this format and nothing else: {"title": "your concise title here"}. No markdown, no code fences, no commentary. The title must be plain text with no surrounding quotes or trailing punctuation.' },
           { role: 'user', content: `User: ${userText}\nAssistant: ${assistantText}`.slice(0, 1500) }
         ]
       })
     });
     const json = await res.json();
-    let t = json.choices?.[0]?.message?.content?.trim() || '';
+    let raw = json.choices?.[0]?.message?.content?.trim() || '';
     const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const to = (model.think_open && model.think_open.trim()) || '<think>';
     const tc = (model.think_close && model.think_close.trim()) || '</think>';
-    t = t.replace(/^["'#\s]+|["'.\s]+$/g, '').replace(new RegExp(esc(to) + '[\\s\\S]*?' + esc(tc), 'g'), '').trim();
-    return t.split('\n').pop().slice(0, 60) || 'New chat';
+    raw = raw.replace(new RegExp(esc(to) + '[\\s\\S]*?' + esc(tc), 'g'), '').replace(/```(?:json)?/gi, '').trim();
+    let t = '';
+    const match = raw.match(/\{[\s\S]*?\}/);
+    if (match) { try { const parsed = JSON.parse(match[0]); if (parsed && typeof parsed.title === 'string') t = parsed.title; } catch {} }
+    if (!t) t = raw.replace(/^["'#\s]+|["'.\s]+$/g, '').split('\n').pop();
+    t = (t || '').replace(/^["'\s]+|["'.\s]+$/g, '').slice(0, 60);
+    return t || 'New chat';
   } catch { return 'New chat'; }
 }
 

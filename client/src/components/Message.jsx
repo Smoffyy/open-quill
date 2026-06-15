@@ -41,6 +41,16 @@ function useLogoGlow(src) {
   return color;
 }
 
+function fmtTime(ts) {
+  if (!ts) return null;
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return null;
+  return {
+    short: d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+    full: d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+  };
+}
+
 function BranchNav({ msg, onSelectBranch }) {
   if (!msg.branchCount || msg.branchCount < 2) return null;
   const i = msg.branchIndex ?? 0;
@@ -71,17 +81,17 @@ function Attachments({ items }) {
 }
 
 function ModelIcon({ model, phase, below }) {
-  const usePhase = (phase === 'thinking' && model?.useThinkingIcon === false) ? 'generating' : phase;
   const map = {
     static: model?.staticIcon || '/starburst.svg',
     generating: model?.generatingIcon || '/starburst-generating.svg',
     thinking: model?.thinkingIcon || '/starburst-thinking.svg'
   };
-  const src = map[usePhase] || map.static;
-  const glow = useLogoGlow(usePhase === 'generating' || usePhase === 'thinking' ? src : null);
-  const anim = usePhase === 'generating' ? (model?.generatingAnim || 'spin') : usePhase === 'thinking' ? (model?.thinkingAnim || 'pulse') : '';
+  const src = map[phase] || map.static;
+  const glow = useLogoGlow(phase === 'generating' || phase === 'thinking' ? src : null);
+  const anim = phase === 'generating' ? (model?.generatingAnim || 'spin') : phase === 'thinking' ? (model?.thinkingAnim || 'pulse') : '';
   const cls = anim === 'none' ? '' : anim;
-  return <div className={'msg-icon' + (below ? ' below' : '')}><img src={src} className={cls} style={glow ? { '--icon-glow': glow } : undefined} alt="" /></div>;
+  const sz = model?.iconSize > 0 ? { width: model.iconSize, height: model.iconSize } : undefined;
+  return <div className={'msg-icon' + (below ? ' below' : '')} style={sz}><img src={src} className={cls} style={glow ? { '--icon-glow': glow } : undefined} alt="" /></div>;
 }
 
 function Message({ msg, model, streaming, phase, onRegenerate, onEdit, onSelectBranch, showIcon = true }) {
@@ -117,6 +127,7 @@ function Message({ msg, model, streaming, phase, onRegenerate, onEdit, onSelectB
           )}
           {msg.content && !editing && (
             <div className="actions user-actions">
+              {(() => { const t = fmtTime(msg.created_at); return t ? <span className="msg-time" data-full={t.full}>{t.short}</span> : null; })()}
               <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
               <button className="action-btn" onClick={doCopy} title="Copy">{copied ? <Check /> : <Copy />}</button>
               {onEdit && <button className="action-btn" onClick={startEdit} title="Edit"><Pencil style={{ width: 15 }} /></button>}
@@ -132,7 +143,7 @@ function Message({ msg, model, streaming, phase, onRegenerate, onEdit, onSelectB
   const icon = showIt ? <ModelIcon model={model} phase={iconPhase} below={pos === 'below'} /> : null;
 
   return (
-    <div className={'msg assistant' + (msg._enter ? ' enter' : '')}>
+    <div className={'msg assistant' + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '')}>
       {pos === 'above' && icon}
       <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} collapsible={model?.reasoningCollapsible !== false} />
       {(msg.content || !streaming) && (

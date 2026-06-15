@@ -183,10 +183,10 @@ export default function Sidebar({
         </div>
       </div>
       <div className="nav">
-        <button className="nav-item" title="New chat"
+        <button className="nav-item new-chat" title="New chat"
           onClick={(e) => { if (e.ctrlKey || e.metaKey) { window.open('/', '_blank', 'noopener'); return; } onNew(); }}
           onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); window.open('/', '_blank', 'noopener'); } }}
-          onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}><Plus /> <span className="nav-label">New chat</span></button>
+          onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}><span className="new-chat-plus"><Plus /></span> <span className="nav-label">New chat</span></button>
         <button className="nav-item" title="Chats" onClick={onChatsOverview}><Chat /> <span className="nav-label">Chats</span></button>
       </div>
       <div className="chats">
