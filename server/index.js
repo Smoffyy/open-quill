@@ -588,7 +588,7 @@ function appConfig() {
     disclaimer: getSetting('disclaimer', 'Assistants can make mistakes, double-check responses.'),
     greetings: (() => { const g = safeParse(getSetting('greetings', '[]'), []); return Array.isArray(g) && g.length ? g : ['How can I help you?', 'What are we building today?', 'Where should we start?']; })(),
     appIcon: getSetting('app_icon', ''),
-    quickPrompts: (() => { const q = safeParse(getSetting('quick_prompts', '[]'), []); return Array.isArray(q) && q.length ? q : [{ icon: 'file', label: 'Summarize', prompt: 'Summarize the following text for me:' }, { icon: 'code', label: 'Write code', prompt: 'Help me write a small program. Ask me what it should do first.' }, { icon: 'bulb', label: 'Brainstorm', prompt: 'Help me brainstorm ideas about a topic. Ask me for the topic.' }]; })(),
+    quickPrompts: (() => { const q = safeParse(getSetting('quick_prompts', '[]'), []); return Array.isArray(q) && q.length ? q : [{ icon: 'sparkles', label: 'Ideas', prompt: 'Give me ideas on what I should do today.' }, { icon: 'pencil', label: 'Write', prompt: 'Write a one paragraph summary about how Large Language Models (LLMs) work.' }, { icon: 'code', label: 'Code', prompt: 'Write a Python function that checks whether a string is a palindrome.' }, { icon: 'learn', label: 'Learn', prompt: 'How far away is the sun from Earth?' }, { icon: 'coffee', label: 'Life stuff', prompt: 'Give me practical advice for a life problem.' }]; })(),
     version: APP_VERSION,
     uiVersion: APP_VERSION,
     uiVersionDesc: readVersionText(),
