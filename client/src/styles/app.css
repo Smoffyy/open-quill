@@ -335,8 +335,10 @@ input, textarea { font-family: inherit; color: inherit; }
 .stream-text { white-space: pre-wrap; word-break: break-word; }
 
 /* ---------- reasoning ---------- */
-.reasoning { margin-bottom: 14px; }
-.reasoning-head { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 14.5px; padding: 5px 0; cursor: pointer; transition: color .15s; }
+.reasoning { margin-bottom: 6px; }
+.reasoning-head { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 14.5px; padding: 3px 0; cursor: pointer; transition: color .15s; }
+.reasoning-head.static { cursor: default; }
+.reasoning-head.static:hover { color: var(--text-muted); }
 .reasoning-head:hover { color: var(--text); }
 .reasoning-head svg { width: 15px; height: 15px; transition: transform .2s; }
 .reasoning-head.open svg.chev { transform: rotate(90deg); }

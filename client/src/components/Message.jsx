@@ -71,14 +71,15 @@ function Attachments({ items }) {
 }
 
 function ModelIcon({ model, phase, below }) {
+  const usePhase = (phase === 'thinking' && model?.useThinkingIcon === false) ? 'generating' : phase;
   const map = {
     static: model?.staticIcon || '/starburst.svg',
     generating: model?.generatingIcon || '/starburst-generating.svg',
     thinking: model?.thinkingIcon || '/starburst-thinking.svg'
   };
-  const src = map[phase] || map.static;
-  const glow = useLogoGlow(phase === 'generating' || phase === 'thinking' ? src : null);
-  const anim = phase === 'generating' ? (model?.generatingAnim || 'spin') : phase === 'thinking' ? (model?.thinkingAnim || 'pulse') : '';
+  const src = map[usePhase] || map.static;
+  const glow = useLogoGlow(usePhase === 'generating' || usePhase === 'thinking' ? src : null);
+  const anim = usePhase === 'generating' ? (model?.generatingAnim || 'spin') : usePhase === 'thinking' ? (model?.thinkingAnim || 'pulse') : '';
   const cls = anim === 'none' ? '' : anim;
   return <div className={'msg-icon' + (below ? ' below' : '')}><img src={src} className={cls} style={glow ? { '--icon-glow': glow } : undefined} alt="" /></div>;
 }
@@ -133,7 +134,7 @@ function Message({ msg, model, streaming, phase, onRegenerate, onEdit, onSelectB
   return (
     <div className={'msg assistant' + (msg._enter ? ' enter' : '')}>
       {pos === 'above' && icon}
-      <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} />
+      <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} collapsible={model?.reasoningCollapsible !== false} />
       {(msg.content || !streaming) && (
         <div className={'assistant-body' + (streaming ? ' streaming' : '')}>
           <Markdown streaming={streaming}>{msg.content}</Markdown>

@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed the gradient sheen ("fade") on user message bubbles.
 - Hardened folder operations with optimistic rollback on network failure, and made chat drag-and-drop read from the drag payload to avoid race conditions.
 - The chat-row menu now dismisses on scroll/resize so it can't float detached.
+- **Sticky Auto-Scroll** - Sticky Auto-Scroll causes screen glitches when scrolling while the assistant is generating text, resulting in an unsmooth transition between automatic and manual scrolling
 
 ### Changed
 - **Composer input bar** - Raised minimum height from 26px to 31px for better visual balance.

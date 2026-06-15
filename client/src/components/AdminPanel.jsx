@@ -198,6 +198,10 @@ function ModelEditor({ m, onChange, onDelete, autosaveState }) {
               <input value={m.think_close || ''} onChange={(e) => set('think_close', e.target.value)} placeholder="</think>" /></div>
           </div>
           <div className="muted-note">Override the tags used to detect inline reasoning in the stream. Leave blank to use the default {'<think>…</think>'}.</div>
+          <div style={{ marginTop: 14 }}>
+            <Toggle k="use_thinking_icon" inverted label="Use thinking icon while reasoning" note="Show the dedicated thinking icon during reasoning. Off uses the generating icon instead." />
+            <Toggle k="reasoning_collapsible" inverted label="Let users expand reasoning" note="Off hides the thought process — users still see the 'Thinking…' status, but can't click to read the full reasoning." />
+          </div>
         </>}
         {section === 'capabilities' && <>
           <Toggle k="has_vision" label="Vision supported" note="Allow image uploads (sent to the model). Off = files only." />

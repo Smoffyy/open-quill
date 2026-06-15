@@ -14,6 +14,9 @@ This roadmap outlines the planned direction of the project. Priorities may shift
 * [ ] Proper support for Ollama, OpenAI API, VLLM, llama.cpp-server, LM-Studio, Open Router, MoonshotAI Kimi, Mistral, Meta. (Properly support these API endpoints, and all editable parameters properly.)
 * [ ] Track Usage / Token Consumption. (Allow users to view their token consumption as well as the cost per their model for that API endpoint.)
 * [ ] Revamp Database. (Current database is NOT secure for professional deployment, everything is stored in a json file for now.) <- Major overhaul.
+* [ ] Revamp Sandbox. (Whole terminal rework)
+* [ ] Toggle allow users to display reasoning.
+* [ ] Revamp toolcalling view.
 
 ---
 

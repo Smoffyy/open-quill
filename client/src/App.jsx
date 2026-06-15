@@ -230,6 +230,8 @@ export default function App() {
   const dispLen = useRef(0);
   const scrollRef = useRef(null);
   const stick = useRef(true);
+  const lastTop = useRef(0);
+  const programmatic = useRef(false);
   const [showJump, setShowJump] = useState(false);
   const animate = user?.prefs?.animations !== false;
   const revealMs = (() => { const v = user?.prefs?.revealMs; return v == null || isNaN(parseInt(v)) ? 40 : Math.max(0, Math.min(100, parseInt(v))); })();
@@ -411,7 +413,7 @@ export default function App() {
     if (el && stick.current) {
       const target = el.scrollHeight - el.clientHeight;
       const diff = target - el.scrollTop;
-      if (diff > 0) el.scrollTop = el.scrollTop + Math.max(1, diff * 0.2);
+      if (diff > 0.5) { programmatic.current = true; el.scrollTop = el.scrollTop + Math.max(1, diff * 0.2); }
     }
     followRaf.current = requestAnimationFrame(follow);
   }
@@ -426,7 +428,7 @@ export default function App() {
     setMessages(ms => [...ms, { id, role: 'assistant', content, reasoning, model_id: currentIdRef.current }]);
     setDispContent(''); setDispReason('');
     setLiveFile(null); setPendingFiles({}); doneBlocksRef.current = 0;
-    setTimeout(() => scrollBottom(false), 0);
+    if (stick.current) setTimeout(() => scrollBottom(false), 0);
     if (incognitoRef.current) return;
     loadChats();
     const aid = activeIdRef.current;
@@ -450,16 +452,21 @@ export default function App() {
 
   function scrollBottom(smooth) {
     const el = scrollRef.current; if (!el) return;
+    programmatic.current = true;
     el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
   }
   function onScroll() {
     const el = scrollRef.current; if (!el) return;
-    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (dist < 80) stick.current = true;
+    const top = el.scrollTop;
+    const dist = el.scrollHeight - top - el.clientHeight;
     setShowJump(dist > 200);
+    if (programmatic.current) { programmatic.current = false; lastTop.current = top; return; }
+    if (top < lastTop.current - 1) stick.current = false;
+    else if (dist < 24) stick.current = true;
+    lastTop.current = top;
   }
-  function onWheel(e) { if (e.deltaY < 0) stick.current = false; }
-  function onTouchMove() { const el = scrollRef.current; if (el && el.scrollHeight - el.scrollTop - el.clientHeight > 80) stick.current = false; }
+  function onWheel(e) { if (e.deltaY < -1) stick.current = false; }
+  function onTouchMove() { const el = scrollRef.current; if (el && el.scrollHeight - el.scrollTop - el.clientHeight > 24) stick.current = false; }
   function jumpDown() { stick.current = true; setShowJump(false); scrollBottom(true); }
 
   async function openChat(id, push = true) {
