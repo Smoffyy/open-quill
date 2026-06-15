@@ -770,10 +770,10 @@ async function compactStep(ws, chat, model) {
   if (after.length <= 1) return false; // only the newest message remains; can't compact further
   const toSummarize = after.slice(0, after.length - 1); // keep newest message verbatim
   const marker = toSummarize[toSummarize.length - 1].created_at;
-  try { ws.send(JSON.stringify({ type: 'compacting' })); } catch {}
+  try { ws.send(JSON.stringify({ type: 'compacting', chatId: chat.id })); } catch {}
   const summary = await summarizeConversation(model, fresh.summary, toSummarize);
   db.chats.update(chat.id, { summary, summary_upto: marker });
-  try { ws.send(JSON.stringify({ type: 'compacted' })); } catch {}
+  try { ws.send(JSON.stringify({ type: 'compacted', chatId: chat.id })); } catch {}
   return !!summary;
 }
 function compactThreshold(model) {
@@ -806,7 +806,7 @@ async function maybeCompact(ws, chat, model, extended, sandboxOn) {
 wss.on('connection', (ws, req) => {
   const u = userFromRequest(req);
   if (!u) { ws.close(); return; }
-  clients.set(ws, { userId: u.id, isAdmin: !!u.is_admin, abort: null });
+  clients.set(ws, { userId: u.id, isAdmin: !!u.is_admin, aborts: new Map() });
   const safeSend = (s) => { if (ws.readyState === 1) { try { ws.send(s); } catch {} } };
 
   async function runCompletion(ws, state, chat, model, extended, sandboxOn, sandboxCap = 0) {
@@ -820,8 +820,8 @@ wss.on('connection', (ws, req) => {
     const assistantParent = (db.chats.byId(chat.id) || {}).active_leaf || null;
     let content = '', reasoning = '';
     const controller = new AbortController();
-    state.abort = controller;
-    safeSend(JSON.stringify({ type: 'start', messageId: assistantId }));
+    state.aborts.set(chat.id, controller);
+    safeSend(JSON.stringify({ type: 'start', chatId: chat.id, messageId: assistantId }));
 
     const threshold = compactThreshold(model);
     const maxSteps = sandboxOn ? (model.agent_steps || 10) : 1;
@@ -838,8 +838,8 @@ wss.on('connection', (ws, req) => {
           await streamCompletion({
             model, messages: convo, signal: controller.signal,
             onEvent: (e) => {
-              if (e.type === 'reasoning') { reasoning += e.text; safeSend(JSON.stringify({ type: 'reasoning', text: e.text })); }
-              else { content += e.text; stepText += e.text; safeSend(JSON.stringify({ type: 'content', text: e.text })); }
+              if (e.type === 'reasoning') { reasoning += e.text; safeSend(JSON.stringify({ type: 'reasoning', chatId: chat.id, text: e.text })); }
+              else { content += e.text; stepText += e.text; safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: e.text })); }
             }
           });
         } catch (err) {
@@ -851,23 +851,23 @@ wss.on('connection', (ws, req) => {
           const results = [];
           for (const call of calls) {
             const r = sandbox.execTool(chat.id, call, sandboxCap);
-            safeSend(JSON.stringify({ type: 'tool', tool: call.tool, path: r.path || call.path || null, ok: !!r.ok, error: r.error || null }));
+            safeSend(JSON.stringify({ type: 'tool', chatId: chat.id, tool: call.tool, path: r.path || call.path || null, ok: !!r.ok, error: r.error || null }));
             results.push(formatToolResult(call, r));
           }
           safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
-          if (!aborted) { content += '\n\n'; safeSend(JSON.stringify({ type: 'content', text: '\n\n' })); }
+          if (!aborted) { content += '\n\n'; safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: '\n\n' })); }
           inTurn = [...inTurn, { role: 'assistant', content: stepText }, { role: 'user', content: 'Tool results:\n' + results.join('\n\n') }];
         }
         if (aborted || !calls.length) break;
       }
     } catch (err) {
-      if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', error: String(err.message || err) }));
+      if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: String(err.message || err) }));
     }
-    state.abort = null;
+    state.aborts.delete(chat.id);
 
     db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, model_id: model.id, parent_id: assistantParent, created_at: now() });
     db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
-    safeSend(JSON.stringify({ type: 'done', messageId: assistantId }));
+    safeSend(JSON.stringify({ type: 'done', chatId: chat.id, messageId: assistantId }));
 
     const fresh = db.chats.byId(chat.id);
     const lastUser = [...history].reverse().find(h => h.role === 'user');
@@ -886,7 +886,7 @@ wss.on('connection', (ws, req) => {
     let msg; try { msg = JSON.parse(raw); } catch { return; }
     const state = clients.get(ws);
     if (!state) return;
-    if (msg.type === 'stop') { state.abort?.abort(); return; }
+    if (msg.type === 'stop') { const c = state.aborts.get(msg.chatId); if (c) { c.abort(); state.aborts.delete(msg.chatId); } return; }
     if (msg.type === 'incognito') {
       try {
         const model = resolveModel(msg.modelId, state.isAdmin);
@@ -902,23 +902,23 @@ wss.on('connection', (ws, req) => {
         const messages = buildMessages(model, history, !!msg.extended, null, null, promptVars(u.id));
         const assistantId = 'inc-' + uid();
         const controller = new AbortController();
-        state.abort = controller;
-        safeSend(JSON.stringify({ type: 'start', messageId: assistantId }));
+        state.aborts.set('incognito', controller);
+        safeSend(JSON.stringify({ type: 'start', chatId: 'incognito', messageId: assistantId }));
         try {
           await streamCompletion({
             model, messages, signal: controller.signal,
             onEvent: (e) => {
-              if (e.type === 'reasoning') safeSend(JSON.stringify({ type: 'reasoning', text: e.text }));
-              else safeSend(JSON.stringify({ type: 'content', text: e.text }));
+              if (e.type === 'reasoning') safeSend(JSON.stringify({ type: 'reasoning', chatId: 'incognito', text: e.text }));
+              else safeSend(JSON.stringify({ type: 'content', chatId: 'incognito', text: e.text }));
             }
           });
-        } catch (err) { if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', error: String(err.message || err) })); }
-        state.abort = null;
-        safeSend(JSON.stringify({ type: 'done', messageId: assistantId }));
+        } catch (err) { if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', chatId: 'incognito', error: String(err.message || err) })); }
+        state.aborts.delete('incognito');
+        safeSend(JSON.stringify({ type: 'done', chatId: 'incognito', messageId: assistantId }));
       } catch (err) {
-        state.abort = null;
-        safeSend(JSON.stringify({ type: 'error', error: String(err.message || err) }));
-        safeSend(JSON.stringify({ type: 'done' }));
+        state.aborts.delete('incognito');
+        safeSend(JSON.stringify({ type: 'error', chatId: 'incognito', error: String(err.message || err) }));
+        safeSend(JSON.stringify({ type: 'done', chatId: 'incognito' }));
       }
       return;
     }
@@ -926,8 +926,8 @@ wss.on('connection', (ws, req) => {
     try {
       const chat = db.chats.byId(msg.chatId);
       const model = resolveModel(msg.modelId, state.isAdmin);
-      if (!chat || chat.user_id !== u.id || !model) { safeSend(JSON.stringify({ type: 'error', error: 'Invalid chat or model.' })); return; }
-      if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', error: (model.unavailable_reason || 'This model is currently unavailable.') })); return; }
+      if (!chat || chat.user_id !== u.id || !model) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'Invalid chat or model.' })); return; }
+      if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: (model.unavailable_reason || 'This model is currently unavailable.') })); return; }
 
       const sandboxCap = roleLimit('sandbox_limit_mb', !!u.is_admin, u.is_admin ? 1024 : 256) * 1024 * 1024;
       const userSandbox = !!msg.sandbox;
@@ -938,12 +938,12 @@ wss.on('connection', (ws, req) => {
 
       if (msg.type === 'regenerate') {
         const target = db.messages.byId(msg.messageId) || activePath(chat.id).slice().reverse().find(m => m.role === 'assistant');
-        if (!target) { safeSend(JSON.stringify({ type: 'error', error: 'Nothing to regenerate.' })); return; }
+        if (!target) { safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: 'Nothing to regenerate.' })); return; }
         const parent = target.role === 'assistant' ? (target.parent_id ?? null) : target.id;
         db.chats.update(chat.id, { active_leaf: parent });
       } else if (msg.type === 'edit') {
         const orig = db.messages.byId(msg.messageId);
-        if (!orig || orig.chat_id !== chat.id) { safeSend(JSON.stringify({ type: 'error', error: 'Message not found.' })); return; }
+        if (!orig || orig.chat_id !== chat.id) { safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: 'Message not found.' })); return; }
         const umid = uid();
         db.messages.insert({ id: umid, chat_id: chat.id, role: 'user', content: msg.content || '', reasoning: '', model_id: null, attachments: orig.attachments || [], parent_id: orig.parent_id ?? null, created_at: now() });
         db.chats.update(chat.id, { active_leaf: umid });
@@ -970,14 +970,14 @@ wss.on('connection', (ws, req) => {
         () => { safeSend(JSON.stringify({ type: 'queued', chatId: chat.id })); },
         () => runCompletion(ws, state, chat, model, !!msg.extended, sandboxOn, sandboxCap));
     } catch (err) {
-      state.abort = null;
-      safeSend(JSON.stringify({ type: 'error', error: String(err.message || err) }));
-      safeSend(JSON.stringify({ type: 'done' }));
+      if (msg && msg.chatId) state.aborts.delete(msg.chatId);
+      safeSend(JSON.stringify({ type: 'error', chatId: msg && msg.chatId, error: String(err.message || err) }));
+      safeSend(JSON.stringify({ type: 'done', chatId: msg && msg.chatId }));
     }
   });
 
   ws.on('error', () => {});
-  ws.on('close', () => { const st = clients.get(ws); try { st?.abort?.abort(); } catch {} clients.delete(ws); });
+  ws.on('close', () => { const st = clients.get(ws); try { if (st) for (const c of st.aborts.values()) c.abort(); } catch {} clients.delete(ws); });
 });
 
 server.listen(PORT, () => console.log(`open-quill running on http://localhost:${PORT}`));

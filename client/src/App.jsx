@@ -220,6 +220,7 @@ export default function App() {
   const [phase, setPhase] = useState('static');
 
   const ws = useRef(null);
+  const gen = useRef(new Map());
   const targetContent = useRef('');
   const targetReason = useRef('');
   const pendingDone = useRef(false);
@@ -274,10 +275,17 @@ export default function App() {
   useEffect(() => { if (user) { loadModels(); loadChats(); loadFolders(); loadAppConfig(); connect(); openFromUrl(); } }, [!!user]);
 
   useEffect(() => {
+    const root = document.documentElement;
+    if (intro) root.setAttribute('data-entrance', 'off');
+    else root.setAttribute('data-entrance', user?.prefs?.messageEntrance === false ? 'off' : 'on');
+  }, [intro, user]);
+
+  useEffect(() => {
     const onPop = () => openFromUrl();
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
+  useEffect(() => { syncView(); }, [activeId, incognito]);
   useEffect(() => {
     if (!user) return;
     const onKey = (e) => {
@@ -341,49 +349,87 @@ export default function App() {
     catch { return false; }
   }
 
+  function activeKey() { return incognitoRef.current ? 'incognito' : activeIdRef.current; }
+  function recFor(key) {
+    let r = gen.current.get(key);
+    if (!r) { r = { content: '', reasoning: '', phase: 'generating', done: false, assistantId: null, model_id: currentIdRef.current, blocks: 0 }; gen.current.set(key, r); }
+    return r;
+  }
+
   function handleWs(m) {
     if (m.type === 'config') { loadModels(); loadAppConfig(); try { window.dispatchEvent(new CustomEvent('oq-config')); } catch {} return; }
-    if (m.type === 'files') { setFiles(m.files || []); setLiveFile(null); return; }
+    if (m.type === 'files') { if (m.chatId && m.chatId !== activeIdRef.current) return; setFiles(m.files || []); setLiveFile(null); return; }
     if (m.type === 'tool') { return; }
-    if (m.type === 'compacting') { setCompacting(true); return; }
-    if (m.type === 'compacted') { setCompacting(false); setHasSummary(true); return; }
+    if (m.type === 'compacting') { if (m.chatId === activeKey()) setCompacting(true); return; }
+    if (m.type === 'compacted') { if (m.chatId === activeKey()) { setCompacting(false); setHasSummary(true); } return; }
     if (m.type === 'title') { setChats(cs => cs.map(c => c.id === m.chatId ? { ...c, title: m.title } : c)); return; }
-    if (m.type === 'queued') { setQueued(true); return; }
+    if (m.type === 'queued') {
+      const r = recFor(m.chatId); r.phase = 'queued';
+      if (m.chatId === activeKey()) setQueued(true);
+      return;
+    }
     if (m.type === 'start') {
-      setQueued(false);
-      setCompacting(false); setLiveFile(null); setPendingFiles({}); doneBlocksRef.current = 0; refreshSeq.current++;
-      targetContent.current = ''; targetReason.current = ''; pendingDone.current = false;
-      assistantIdRef.current = m.messageId; dispLen.current = 0;
-      setDispContent(''); setDispReason(''); setPhase('generating'); setStreaming(true);
-      startStream();
+      const r = recFor(m.chatId);
+      r.content = ''; r.reasoning = ''; r.phase = 'generating'; r.done = false; r.error = false; r.assistantId = m.messageId; r.blocks = 0;
+      if (m.chatId === activeKey()) {
+        refreshSeq.current++;
+        setCompacting(false); setLiveFile(null); setPendingFiles({}); doneBlocksRef.current = 0;
+        targetContent.current = ''; targetReason.current = ''; pendingDone.current = false;
+        assistantIdRef.current = m.messageId; dispLen.current = 0;
+        setDispContent(''); setDispReason(''); setPhase('generating'); setStreaming(true); setQueued(false);
+        startStream();
+      }
       return;
     }
     if (m.type === 'reasoning') {
-      targetReason.current += m.text;
-      setDispReason(targetReason.current);
-      if (!targetContent.current) setPhase('thinking');
+      const r = recFor(m.chatId); r.reasoning += m.text;
+      if (!r.content) r.phase = 'thinking';
+      if (m.chatId === activeKey()) {
+        targetReason.current = r.reasoning;
+        setDispReason(r.reasoning);
+        if (!targetContent.current) setPhase('thinking');
+      }
       return;
     }
     if (m.type === 'content') {
-      targetContent.current += m.text;
-      setPhase('generating');
-      const lf = parseLiveFile(targetContent.current);
-      if (lf) setLiveFile(lf);
-      const blocks = (targetContent.current.match(/```tool/g) || []).length;
-      const closed = blocks > 0 && targetContent.current.split('```').length % 2 === 1;
-      const doneBlocks = closed ? blocks : blocks - 1;
-      if (doneBlocks !== doneBlocksRef.current) { doneBlocksRef.current = doneBlocks; setPendingFiles(parseStreamedFiles(targetContent.current)); }
-      if (!animateRef.current) { setDispContent(targetContent.current); dispLen.current = targetContent.current.length; }
+      const r = recFor(m.chatId); r.content += m.text; r.phase = 'generating';
+      const blocks = (r.content.match(/```tool/g) || []).length;
+      const closed = blocks > 0 && r.content.split('```').length % 2 === 1;
+      r.blocks = closed ? blocks : blocks - 1;
+      if (m.chatId === activeKey()) {
+        targetContent.current = r.content;
+        setPhase('generating');
+        const lf = parseLiveFile(r.content);
+        if (lf) setLiveFile(lf);
+        if (r.blocks !== doneBlocksRef.current) { doneBlocksRef.current = r.blocks; setPendingFiles(parseStreamedFiles(r.content)); }
+        if (!animateRef.current) { setDispContent(r.content); dispLen.current = r.content.length; }
+      }
       return;
     }
     if (m.type === 'error') {
-      if (!streaming && !targetContent.current) { setQueued(false); setMessages(ms => [...ms, { id: 'e' + Date.now(), role: 'assistant', content: `_Error: ${m.error}_` }]); return; }
-      targetContent.current += `\n\n_Error: ${m.error}_`;
-      if (!animateRef.current) { setDispContent(targetContent.current); dispLen.current = targetContent.current.length; }
-      pendingDone.current = true;
+      const r = gen.current.get(m.chatId);
+      if (!r || !r.content) {
+        gen.current.delete(m.chatId);
+        if (m.chatId === activeKey()) {
+          setQueued(false); setStreaming(false); setPhase('static');
+          setMessages(ms => [...ms, { id: 'e' + Date.now(), role: 'assistant', content: `_Error: ${m.error}_` }]);
+        }
+        return;
+      }
+      r.content += `\n\n_Error: ${m.error}_`;
+      if (m.chatId === activeKey()) {
+        targetContent.current = r.content;
+        if (!animateRef.current) { setDispContent(r.content); dispLen.current = r.content.length; }
+        pendingDone.current = true;
+      }
       return;
     }
-    if (m.type === 'done') { pendingDone.current = true; if (!animateRef.current) finalize(); return; }
+    if (m.type === 'done') {
+      const r = recFor(m.chatId); r.done = true;
+      if (m.chatId === activeKey()) { pendingDone.current = true; if (!animateRef.current) finalize(); }
+      else finalizeBackground(m.chatId);
+      return;
+    }
   }
 
   function startStream() {
@@ -419,20 +465,53 @@ export default function App() {
   }
 
   function finalize() {
+    const key = activeKey();
+    const r = gen.current.get(key);
+    if (!r && !streaming) return;
     clearInterval(revealTimer.current);
     cancelAnimationFrame(followRaf.current);
-    const content = targetContent.current;
-    const reasoning = targetReason.current;
-    const id = assistantIdRef.current || ('a' + Date.now());
+    const content = r ? r.content : targetContent.current;
+    const reasoning = r ? r.reasoning : targetReason.current;
+    const id = (r && r.assistantId) || assistantIdRef.current || ('a' + Date.now());
+    const mid = r ? r.model_id : currentIdRef.current;
+    gen.current.delete(key);
     setStreaming(false); setPhase('static'); setQueued(false);
-    setMessages(ms => [...ms, { id, role: 'assistant', content, reasoning, model_id: currentIdRef.current }]);
+    setMessages(ms => [...ms, { id, role: 'assistant', content, reasoning, model_id: mid }]);
     setDispContent(''); setDispReason('');
     setLiveFile(null); setPendingFiles({}); doneBlocksRef.current = 0;
+    targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
     if (stick.current) setTimeout(() => scrollBottom(false), 0);
-    if (incognitoRef.current) return;
+    if (key === 'incognito') return;
     loadChats();
-    const aid = activeIdRef.current;
-    if (aid) refreshMessages(aid);
+    if (key) refreshMessages(key);
+  }
+
+  function finalizeBackground(key) {
+    gen.current.delete(key);
+    if (key !== 'incognito') loadChats();
+  }
+
+  function syncView() {
+    clearInterval(revealTimer.current);
+    cancelAnimationFrame(followRaf.current);
+    const key = activeKey();
+    const r = gen.current.get(key);
+    if (r && !r.done) {
+      refreshSeq.current++;
+      targetContent.current = r.content; targetReason.current = r.reasoning;
+      assistantIdRef.current = r.assistantId; pendingDone.current = false;
+      doneBlocksRef.current = r.blocks || 0; dispLen.current = r.content.length;
+      setDispContent(r.content); setDispReason(r.reasoning);
+      setLiveFile(null); setPendingFiles(parseStreamedFiles(r.content));
+      setPhase(r.phase === 'thinking' ? 'thinking' : 'generating');
+      setStreaming(true); setQueued(r.phase === 'queued');
+      startStream();
+    } else {
+      if (r && r.done) gen.current.delete(key);
+      targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
+      setStreaming(false); setQueued(false); setPhase('static');
+      setDispContent(''); setDispReason('');
+    }
   }
   async function refreshMessages(id) {
     const seq = ++refreshSeq.current;
@@ -578,6 +657,7 @@ export default function App() {
         .map(m => ({ role: m.role, content: m.content })),
         { role: 'user', content: text }];
       if (!wsSend({ type: 'incognito', modelId: currentId, extended, messages: history })) return;
+      gen.current.set('incognito', { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, blocks: 0 });
       setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments: [], _enter: true }]);
       setInput('');
       stick.current = true; setTimeout(() => scrollBottom(true), 20);
@@ -592,6 +672,7 @@ export default function App() {
       history.pushState({}, '', '/chat/' + chatId);
     }
     if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, content: text, attachments, sandbox })) return;
+    gen.current.set(chatId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, blocks: 0 });
     setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     setInput('');
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
@@ -600,6 +681,7 @@ export default function App() {
   const regenerate = useCallback((messageId) => {
     if (streaming || !activeId || !currentId) return;
     if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, messageId, sandbox })) return;
+    gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, blocks: 0 });
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
   }, [streaming, activeId, currentId, extended, sandbox]);
@@ -609,9 +691,10 @@ export default function App() {
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); if (idx === -1) return ms; const copy = ms.slice(0, idx + 1); copy[idx] = { ...copy[idx], content: newContent }; return copy; });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
     if (!wsSend({ type: 'edit', chatId: activeId, modelId: currentId, extended, messageId, content: newContent, sandbox })) return;
+    gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, blocks: 0 });
   }, [streaming, activeId, currentId, extended, sandbox]);
 
-  function stop() { try { ws.current?.readyState === 1 && ws.current.send(JSON.stringify({ type: 'stop' })); } catch {} pendingDone.current = true; setQueued(false); }
+  function stop() { const key = activeKey(); try { ws.current?.readyState === 1 && ws.current.send(JSON.stringify({ type: 'stop', chatId: key })); } catch {} pendingDone.current = true; setQueued(false); }
   async function logout() { await api.post('/api/auth/logout'); location.href = '/'; }
 
   if (user === undefined) return <div style={{ height: '100%', background: 'var(--bg)' }} />;

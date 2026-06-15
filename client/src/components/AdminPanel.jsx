@@ -106,6 +106,16 @@ function SystemPromptEditor({ value, onChange, onClose }) {
   );
 }
 
+function Toggle({ m, set, k, label, note, inverted }) {
+  const on = inverted ? m[k] !== 0 : !!m[k];
+  return (
+    <div className="field row">
+      <div><label>{label}</label>{note && <div className="muted-note">{note}</div>}</div>
+      <div className={'switch' + (on ? ' on' : '')} onClick={() => set(k, on ? 0 : 1)} />
+    </div>
+  );
+}
+
 function ModelEditor({ m, onChange, onDelete, autosaveState }) {
   const [section, setSection] = useState('general');
   const [spOpen, setSpOpen] = useState(false);
@@ -121,12 +131,6 @@ function ModelEditor({ m, onChange, onDelete, autosaveState }) {
     } catch { setDetectMsg('Could not detect from the server — enter it manually.'); }
     setDetecting(false);
   }
-  const Toggle = ({ k, label, note, inverted }) => (
-    <div className="field row">
-      <div><label>{label}</label>{note && <div className="muted-note">{note}</div>}</div>
-      <div className={'switch' + ((inverted ? m[k] !== 0 : !!m[k]) ? ' on' : '')} onClick={() => set(k, (inverted ? m[k] !== 0 : !!m[k]) ? 0 : 1)} />
-    </div>
-  );
   const sections = [
     ['general', 'General'], ['reasoning', 'Reasoning'], ['capabilities', 'Capabilities'],
     ['context', 'Context'], ['appearance', 'Appearance'], ['sampling', 'Sampling']
@@ -164,7 +168,7 @@ function ModelEditor({ m, onChange, onDelete, autosaveState }) {
             </button>
           </div>
           {spOpen && <SystemPromptEditor value={m.system_prompt || ''} onChange={(v) => set('system_prompt', v)} onClose={() => setSpOpen(false)} />}
-          <Toggle k="in_more_models" label={'Tuck under "More models"'} note="Hidden from the main list" />
+          <Toggle m={m} set={set} k="in_more_models" label={'Tuck under "More models"'} note="Hidden from the main list" />
           <div className="field row">
             <div><label>Hide from clients</label><div className="muted-note">Keeps the model in your admin list but removes it from everyone's dropdown.</div></div>
             <div className={'switch' + (!m.enabled ? ' on' : '')} onClick={() => set('enabled', m.enabled ? 0 : 1)} />
@@ -173,15 +177,15 @@ function ModelEditor({ m, onChange, onDelete, autosaveState }) {
             <div className="field"><label>More-models label</label>
               <input value={m.more_models_label || ''} onChange={(e) => set('more_models_label', e.target.value)} placeholder="Other models" /></div>
           )}
-          <Toggle k="is_default" label="Default model" note="Pre-selected when a user first logs in. Only one model can be the default." />
-          <Toggle k="unavailable" label="Mark as unavailable" note="Keeps the model in the dropdown but blocks clients from using it, with a banner. Admins can still use it for testing." />
+          <Toggle m={m} set={set} k="is_default" label="Default model" note="Pre-selected when a user first logs in. Only one model can be the default." />
+          <Toggle m={m} set={set} k="unavailable" label="Mark as unavailable" note="Keeps the model in the dropdown but blocks clients from using it, with a banner. Admins can still use it for testing." />
           {!!m.unavailable && (
             <div className="field"><label>Unavailable reason <span className="muted-note" style={{ display: 'inline' }}>(shown in the banner's “Learn more”)</span></label>
               <textarea rows={3} value={m.unavailable_reason || ''} onChange={(e) => set('unavailable_reason', e.target.value)} placeholder="e.g. Down for maintenance — back shortly. Use Quillku 2 in the meantime." /></div>
           )}
         </>}
         {section === 'reasoning' && <>
-          <Toggle k="has_reasoning" label="Model has reasoning capability" note="Enables the Extended button" />
+          <Toggle m={m} set={set} k="has_reasoning" label="Model has reasoning capability" note="Enables the Extended button" />
           {!!m.has_reasoning && <>
             <div className="two-col">
               <div className="field"><label>Reasoning token</label>
@@ -199,28 +203,28 @@ function ModelEditor({ m, onChange, onDelete, autosaveState }) {
           </div>
           <div className="muted-note">Override the tags used to detect inline reasoning in the stream. Leave blank to use the default {'<think>…</think>'}.</div>
           <div style={{ marginTop: 14 }}>
-            <Toggle k="reasoning_collapsible" inverted label="Let users expand reasoning" note="Off hides the thought process — users still see the 'Thinking…' status, but can't click to read the full reasoning." />
+            <Toggle m={m} set={set} k="reasoning_collapsible" inverted label="Let users expand reasoning" note="Off hides the thought process — users still see the 'Thinking…' status, but can't click to read the full reasoning." />
           </div>
         </>}
         {section === 'capabilities' && <>
-          <Toggle k="has_vision" label="Vision supported" note="Allow image uploads (sent to the model). Off = files only." />
+          <Toggle m={m} set={set} k="has_vision" label="Vision supported" note="Allow image uploads (sent to the model). Off = files only." />
           <div className="cap-icons-block">
             <label>Dropdown capability icons</label>
             <div className="muted-note" style={{ marginBottom: 8 }}>Small icons shown to the right of this model in the picker. Each is independent — off by default.</div>
-            <Toggle k="cap_text" label="Text-Only icon" note="T icon — indicates the model takes text input only." />
-            <Toggle k="cap_vision" label="Vision icon" note="Vison icon — indicates the model accepts images." />
-            <Toggle k="cap_reasoning" label="Reasoning icon" note="Brain icon — indicates the model can reason." />
-            <Toggle k="cap_compact" label="Compact capabilities" note="Collapse the icons into a single ⓘ that reveals the capabilities on hover." />
+            <Toggle m={m} set={set} k="cap_text" label="Text-Only icon" note="T icon — indicates the model takes text input only." />
+            <Toggle m={m} set={set} k="cap_vision" label="Vision icon" note="Vison icon — indicates the model accepts images." />
+            <Toggle m={m} set={set} k="cap_reasoning" label="Reasoning icon" note="Brain icon — indicates the model can reason." />
+            <Toggle m={m} set={set} k="cap_compact" label="Compact capabilities" note="Collapse the icons into a single ⓘ that reveals the capabilities on hover." />
           </div>
-          <Toggle k="sandbox_allowed" inverted label="Sandbox tools available" note="Allow users to enable sandbox tools for this model. If off, sandbox can't be turned on." />
-          {m.sandbox_allowed !== 0 && <Toggle k="sandbox_auto" label="Sandbox tools auto-enabled" note="Start new chats with this model in sandbox mode." />}
+          <Toggle m={m} set={set} k="sandbox_allowed" inverted label="Sandbox tools available" note="Allow users to enable sandbox tools for this model. If off, sandbox can't be turned on." />
+          {m.sandbox_allowed !== 0 && <Toggle m={m} set={set} k="sandbox_auto" label="Sandbox tools auto-enabled" note="Start new chats with this model in sandbox mode." />}
           <div className="field"><label>Agent step cap</label>
             <input type="number" min="1" value={m.agent_steps ?? 10} onChange={(e) => set('agent_steps', e.target.value)} style={{ maxWidth: 140 }} />
             <div className="muted-note">Max tool rounds per response (default 10, no upper limit).</div>
           </div>
         </>}
         {section === 'context' && <>
-          <Toggle k="enable_summaries" label="Enable conversation summaries" note="Compact older turns when the chat nears the context window so it can keep going." />
+          <Toggle m={m} set={set} k="enable_summaries" label="Enable conversation summaries" note="Compact older turns when the chat nears the context window so it can keep going." />
           {!!m.enable_summaries && <>
             <div className="field"><label>Context window (tokens)</label>
               <div className="ctx-row">
@@ -261,7 +265,7 @@ function ModelEditor({ m, onChange, onDelete, autosaveState }) {
             </div>
             <div className="muted-note">Size of the model's icon shown beside its messages. Default is 26px.</div>
           </div>
-          <Toggle k="dropdown_icon" inverted label="Show icon in model dropdown" note="Display this model's static icon next to its name in the model picker." />
+          <Toggle m={m} set={set} k="dropdown_icon" inverted label="Show icon in model dropdown" note="Display this model's static icon next to its name in the model picker." />
           <div className="field">
             <label>Model icon position</label>
             <div className="seg">

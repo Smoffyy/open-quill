@@ -4,6 +4,25 @@ import { applyPrefs, ACCENT_PRESETS } from '../prefs.js';
 import { Sun, Moon, Gear, Sliders, Info, Chevron } from './icons.jsx';
 import Markdown from './Markdown.jsx';
 
+function Toggle({ prefs, setPref, k, label, desc }) {
+  return (
+    <div className="field row">
+      <div><label>{label}</label><div className="muted-note">{desc}</div></div>
+      <div className={'switch' + (prefs[k] ? ' on' : '')} onClick={() => setPref(k, !prefs[k])} />
+    </div>
+  );
+}
+
+function Seg({ value, options, onPick }) {
+  return (
+    <div className="seg">
+      {options.map(o => (
+        <button key={o.v} className={value === o.v ? 'on' : ''} onClick={() => onPick(o.v)}>{o.label}</button>
+      ))}
+    </div>
+  );
+}
+
 export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted }) {
   const [tab, setTab] = useState('general');
   const [chatSec, setChatSec] = useState('streaming');
@@ -41,20 +60,6 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
   }
 
   function setPref(k, v) { setPrefs(p => { const next = { ...p, [k]: v }; applyPrefs(next); scheduleSave(name, next); return next; }); }
-
-  const Toggle = ({ k, label, desc }) => (
-    <div className="field row">
-      <div><label>{label}</label><div className="muted-note">{desc}</div></div>
-      <div className={'switch' + (prefs[k] ? ' on' : '')} onClick={() => setPref(k, !prefs[k])} />
-    </div>
-  );
-  const Seg = ({ value, options, onPick }) => (
-    <div className="seg">
-      {options.map(o => (
-        <button key={o.v} className={value === o.v ? 'on' : ''} onClick={() => onPick(o.v)}>{o.label}</button>
-      ))}
-    </div>
-  );
 
   return (
     <div className="overlay" onMouseDown={(e) => e.target.classList.contains('overlay') && onClose()}>
@@ -175,7 +180,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                   ))}
                 </div>
                 {chatSec === 'streaming' && <>
-                  <Toggle k="animations" label="Streaming text animation" desc="Reveal the response as it generates" />
+                  <Toggle prefs={prefs} setPref={setPref} k="animations" label="Streaming text animation" desc="Reveal the response as it generates" />
                   {prefs.animations !== false && (
                     <div className="field">
                       <label>Reveal speed</label>
@@ -186,7 +191,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                       <div className="muted-note">Time between reveal steps. Lower is faster; 0 shows responses instantly. Default 40 ms.</div>
                     </div>
                   )}
-                  <Toggle k="autoscroll" label="Auto-scroll while generating" desc="Follow the response unless you scroll up" />
+                  <Toggle prefs={prefs} setPref={setPref} k="autoscroll" label="Auto-scroll while generating" desc="Follow the response unless you scroll up" />
                   <div className="field row">
                     <div><label>Streaming cursor</label><div className="muted-note">Show a soft cursor at the write position while the response streams</div></div>
                     <div className={'switch' + (prefs.streamCursor ? ' on' : '')} onClick={() => setPref('streamCursor', !prefs.streamCursor)} />
@@ -207,16 +212,16 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                     <div className={'switch' + (prefs.messageEntrance !== false ? ' on' : '')} onClick={() => setPref('messageEntrance', prefs.messageEntrance === false)} />
                   </div>
                   {prefs.messageEntrance !== false && (
-                    <Toggle k="chatStagger" label="Stagger messages on chat open" desc="Messages assemble into view when opening a chat" />
+                    <Toggle prefs={prefs} setPref={setPref} k="chatStagger" label="Stagger messages on chat open" desc="Messages assemble into view when opening a chat" />
                   )}
                 </>}
                 {chatSec === 'effects' && <>
-                  <Toggle k="microFx" label="Micro-interactions" desc="Hover rises, copy flashes, thinking shimmer, button pops" />
+                  <Toggle prefs={prefs} setPref={setPref} k="microFx" label="Micro-interactions" desc="Hover rises, copy flashes, thinking shimmer, button pops" />
                   <div className="field row">
                     <div><label>Model icon glow</label><div className="muted-note">Soft glow on the icon while generating or thinking, tinted by the logo's colors</div></div>
                     <div className={'switch' + (prefs.iconGlow ? ' on' : '')} onClick={() => setPref('iconGlow', !prefs.iconGlow)} />
                   </div>
-                  <Toggle k="composerFx" label="Composer effects" desc="Attachment animations and press feedback" />
+                  <Toggle prefs={prefs} setPref={setPref} k="composerFx" label="Composer effects" desc="Attachment animations and press feedback" />
                   <div className="field row">
                     <div><label>Composer focus glow</label><div className="muted-note">Soft accent ring around the input bar while it's focused</div></div>
                     <div className={'switch' + (prefs.focusGlow ? ' on' : '')} onClick={() => setPref('focusGlow', !prefs.focusGlow)} />
