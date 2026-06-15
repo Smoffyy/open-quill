@@ -212,13 +212,14 @@ function TreeChildren({ node, depth, chatId, onOpen, sel, live }) {
 
 function clampW(w) { return Math.max(320, Math.min(w, Math.round(window.innerWidth * 0.8))); }
 
-export default function ArtifactsPanel({ chatId, files, live, pending = {}, onClose }) {
+export default function ArtifactsPanel({ chatId, files, live, pending = {}, focus = null, onClose }) {
   const [sel, setSel] = useState(null);
   const [width, setWidth] = useState(() => { const s = parseInt(localStorage.getItem('oq-art-w')); return s ? clampW(s) : Math.min(460, Math.round(window.innerWidth * 0.42)); });
   const autoRef = useRef(null);
   const dragRef = useRef(null);
 
   useEffect(() => { setSel(null); autoRef.current = null; }, [chatId]);
+  useEffect(() => { if (focus && focus.path) setSel(focus.path); }, [focus]);
   useEffect(() => { if (sel && !(live && sel === live.path) && !files.find(f => f.path === sel)) setSel(null); }, [files]);
   // we don't yank focus to a file that's being written; it shows "writing…" in the tree if they want it
 

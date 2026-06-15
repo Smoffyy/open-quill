@@ -103,7 +103,8 @@ function Message({ msg, model, streaming, phase, onRegenerate, onEdit, onSelectB
     if (editing && taRef.current) { const el = taRef.current; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight + 2, 460) + 'px'; }
   }, [editing, draft]);
   async function doCopy() {
-    if (!(await copyText(msg.content))) return;
+    const clean = (msg.content || '').replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
+    if (!(await copyText(clean))) return;
     setCopied(true); setTimeout(() => setCopied(false), 1400);
   }
   function startEdit() { setDraft(msg.content || ''); setEditing(true); }

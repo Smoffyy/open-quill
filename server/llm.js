@@ -142,6 +142,7 @@ export async function summarizeConversation(model, priorSummary, msgs) {
     let text = '';
     if (typeof m.content === 'string') text = m.content;
     else if (Array.isArray(m.content)) text = m.content.map(p => p.type === 'text' ? p.text : '[image]').join(' ');
+    text = text.replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '');
     return `${(m.role || 'user').toUpperCase()}: ${text}`;
   }).join('\n\n');
   const user = (priorSummary && priorSummary.trim())

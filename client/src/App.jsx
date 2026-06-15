@@ -208,6 +208,7 @@ export default function App() {
   const [hasSummary, setHasSummary] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [artifactsOpen, setArtifactsOpen] = useState(false);
+  const [artifactFocus, setArtifactFocus] = useState(null);
   const [incognito, setIncognito] = useState(false);
   const [incognitoGreeting, setIncognitoGreeting] = useState('Greetings, whoever you are');
   const [chatsOverview, setChatsOverview] = useState(false);
@@ -286,6 +287,16 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPop);
   }, []);
   useEffect(() => { syncView(); }, [activeId, incognito]);
+  useEffect(() => {
+    const h = (e) => {
+      const p = e.detail?.path;
+      if (!p || !activeIdRef.current) return;
+      setArtifactsOpen(true);
+      setArtifactFocus(f => ({ path: p, n: (f?.n || 0) + 1 }));
+    };
+    window.addEventListener('oq-open-file', h);
+    return () => window.removeEventListener('oq-open-file', h);
+  }, []);
   useEffect(() => {
     if (!user) return;
     const onKey = (e) => {
@@ -402,7 +413,9 @@ export default function App() {
         const lf = parseLiveFile(r.content);
         if (lf) setLiveFile(lf);
         if (r.blocks !== doneBlocksRef.current) { doneBlocksRef.current = r.blocks; setPendingFiles(parseStreamedFiles(r.content)); }
-        if (!animateRef.current) { setDispContent(r.content); dispLen.current = r.content.length; }
+        // a tool result just landed — snap the reveal forward so the card finalizes immediately
+        if (m.text.indexOf('[[OQR:') !== -1) { dispLen.current = r.content.length; setDispContent(r.content); }
+        else if (!animateRef.current) { setDispContent(r.content); dispLen.current = r.content.length; }
       }
       return;
     }
@@ -818,7 +831,7 @@ export default function App() {
       </div>
 
       {artifactsOpen && activeId && (
-        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} pending={pendingFiles} onClose={() => setArtifactsOpen(false)} />
+        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} pending={pendingFiles} focus={artifactFocus} onClose={() => setArtifactsOpen(false)} />
       )}
 
       {summaryOpen && activeId && (

@@ -655,6 +655,53 @@ button { transition: transform .12s ease, background .15s ease, color .15s ease,
 .tc-dots i:nth-child(2) { animation-delay: .2s; }
 .tc-dots i:nth-child(3) { animation-delay: .4s; }
 @keyframes tooldot { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+.tc-note { color: var(--text-muted); font-size: 12px; padding-left: 2px; }
+.tc-note.err, .tool-chip.err .tc-verb { color: var(--danger, #e5635b); }
+.tool-chip.err svg { color: var(--danger, #e5635b); }
+
+/* tool line — understated grey status for file ops & misc tools */
+.tool-line { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; margin: 5px 0; font-family: var(--font-sans); font-size: 13.5px; color: var(--text-muted); animation: chipIn .26s var(--ease-out) backwards; vertical-align: middle; }
+.tool-line .tl-icon { color: var(--text-muted); opacity: .85; flex-shrink: 0; }
+.tool-line.err .tl-icon { color: var(--danger, #e5635b); }
+.tl-verb { color: var(--text-muted); }
+.tl-name { font-family: ui-monospace, monospace; font-size: 12.5px; color: var(--text); opacity: .92; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-diff { display: inline-flex; gap: 6px; font-family: ui-monospace, monospace; font-size: 12px; margin-left: 1px; }
+.tl-diff .add { color: var(--diff-add, #46b46a); }
+.tl-diff .del { color: var(--diff-del, #e5635b); }
+.tl-note { color: var(--text-muted); font-size: 12px; opacity: .85; }
+.tl-err { color: var(--danger, #e5635b); font-size: 12px; }
+.tool-line.pending .tl-icon { animation: toolpulse 1s ease-in-out infinite; }
+.tool-line.clickable { cursor: pointer; border-radius: 7px; padding: 2px 5px; margin: 3px -5px; transition: background .14s; }
+.tool-line.clickable:hover { background: var(--surface-2); }
+.tool-line.clickable:hover .tl-name { text-decoration: underline; text-underline-offset: 2px; }
+
+/* bash / terminal — collapsible */
+.tool-bash { margin: 6px 0; animation: chipIn .26s var(--ease-out) backwards; }
+.tb-head { display: flex; align-items: center; gap: 8px; width: 100%; max-width: 100%; padding: 4px 0; background: none; border: none; cursor: pointer; font-family: var(--font-sans); font-size: 13.5px; color: var(--text-muted); transition: color .15s; text-align: left; }
+.tb-head:hover { color: var(--text); }
+.tb-head > svg:first-child { color: var(--text-muted); opacity: .85; flex-shrink: 0; }
+.tb-label { flex-shrink: 0; }
+.tb-peek { flex: 1; min-width: 0; font-family: ui-monospace, monospace; font-size: 12px; color: var(--text-muted); opacity: .8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tb-badge { font-family: ui-monospace, monospace; font-size: 11px; flex-shrink: 0; }
+.tb-badge.err { color: var(--danger, #e5635b); }
+.tb-chev { width: 14px; height: 14px; flex-shrink: 0; transition: transform .2s; color: var(--text-muted); }
+.tool-bash.open .tb-chev { transform: rotate(90deg); }
+.tb-collapse { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .26s var(--ease-out), opacity .2s ease; opacity: 0; }
+.tb-collapse.open { grid-template-rows: 1fr; opacity: 1; }
+.tb-inner { overflow: hidden; min-height: 0; }
+.tool-bash.open .tb-inner { border: 1px solid var(--border-soft); border-radius: 12px; overflow: hidden; margin-top: 6px; background: var(--code-bg, var(--surface-2)); }
+.tool-bash.open.err .tb-inner { border-color: color-mix(in srgb, var(--danger, #e5635b) 45%, var(--border-soft)); }
+.tb-cmdrow { display: flex; align-items: flex-start; gap: 8px; }
+.tb-cmd { margin: 0; flex: 1; min-width: 0; padding: 11px 4px 11px 14px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; color: var(--text); }
+.tb-cmd .tb-prompt { color: var(--accent); user-select: none; margin-right: 4px; }
+.tb-cmd code { background: none; padding: 0; font-size: inherit; }
+.tb-copy { flex-shrink: 0; display: inline-flex; align-items: center; background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 9px 12px 0 0; transition: color .15s; }
+.tb-copy:hover { color: var(--text); }
+.tb-out { border-top: 1px solid var(--border-soft); }
+.tb-out-head { padding: 7px 14px 2px; font-family: var(--font-sans); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); }
+.tool-bash.err .tb-out-head { color: var(--danger, #e5635b); }
+.tb-out-body { margin: 0; padding: 4px 14px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: var(--text); max-height: 360px; overflow: auto; }
+.tb-out-empty { padding: 4px 14px 12px; font-family: var(--font-sans); font-size: 12.5px; color: var(--text-muted); font-style: italic; }
 
 /* conversation compaction indicator */
 .compacting { display: flex; align-items: center; gap: 14px; max-width: 760px; margin: 6px auto 2px; padding: 4px 4px; width: 100%; }
@@ -1000,7 +1047,7 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 [data-microfx="off"] .reasoning-head.live .rb-label { background: none; -webkit-background-clip: initial; background-clip: initial; color: inherit; animation: none; }
 [data-microfx="off"] .to-bottom { animation: none; }
 [data-microfx="off"] .to-bottom:hover, [data-microfx="off"] .to-bottom:active { transform: none; }
-[data-microfx="off"] .tool-chip { animation: none; }
+[data-microfx="off"] .tool-chip, [data-microfx="off"] .tool-line, [data-microfx="off"] .tool-bash { animation: none; }
 [data-microfx="off"] .msg-icon img.spin, [data-microfx="off"] .msg-icon img.pulse { }
 [data-iconglow="off"] .msg-icon img.spin, [data-iconglow="off"] .msg-icon img.pulse { filter: none; }
 [data-composerfx="off"] .composer:focus-within { border-color: var(--border); box-shadow: none; }
@@ -1013,7 +1060,7 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .reveal-val { font-size: 13px; color: var(--text-muted); min-width: 58px; text-align: right; }
 
 /* fixes: no chip replay during stream re-renders; focus glow opt-in */
-.assistant-body.streaming .tool-chip { animation: none; }
+.assistant-body.streaming .tool-chip, .assistant-body.streaming .tool-line, .assistant-body.streaming .tool-bash { animation: none; }
 .composer:focus-within { border-color: var(--border); box-shadow: none; }
 [data-focusglow="on"] .composer:focus-within { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent), 0 4px 22px #00000022; }
 
