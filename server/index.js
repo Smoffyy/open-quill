@@ -952,12 +952,19 @@ wss.on('connection', (ws, req) => {
           while (true) {
             const open = stepText.indexOf('```tool', execCursor);
             if (open === -1) { execCursor = Math.max(execCursor, stepText.length - 8); break; }
-            const nl = stepText.indexOf('\n', open);
-            if (nl === -1) break;
-            const close = stepText.indexOf('```', nl + 1);
-            if (close === -1) break;
-            const body = stepText.slice(nl + 1, close);
-            execCursor = close + 3;
+            let i = stepText.indexOf('{', open + 7);
+            if (i === -1) break;
+            let depth = 0, inStr = false, esc = false, endIdx = -1;
+            for (let j = i; j < stepText.length; j++) {
+              const c = stepText[j];
+              if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; }
+              else if (c === '"') inStr = true;
+              else if (c === '{') depth++;
+              else if (c === '}') { depth--; if (depth === 0) { endIdx = j + 1; break; } }
+            }
+            if (endIdx === -1) break; // JSON object not complete yet
+            const body = stepText.slice(i, endIdx);
+            execCursor = endIdx;
             const call = sandbox.parseToolBody(body);
             if (!call || !call.tool) continue;
             let r, payload, formatted;

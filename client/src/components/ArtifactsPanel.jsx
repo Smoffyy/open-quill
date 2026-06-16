@@ -2,11 +2,25 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import hljs from 'highlight.js';
 import { api } from '../api.js';
 import { copyText } from '../clipboard.js';
-import { Download, Refresh, FileText, Copy, Check, ChevDown, Folder } from './icons.jsx';
+import { Download, Refresh, FileText, Copy, Check, ChevDown, Folder, Chevron } from './icons.jsx';
 
 const EXT_LANG = { rs: 'rust', py: 'python', js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript', html: 'xml', htm: 'xml', css: 'css', scss: 'scss', json: 'json', md: 'markdown', markdown: 'markdown', sh: 'bash', bash: 'bash', c: 'c', cpp: 'cpp', h: 'cpp', java: 'java', rb: 'ruby', go: 'go', php: 'php', sql: 'sql', yml: 'yaml', yaml: 'yaml', toml: 'ini', ini: 'ini', lua: 'lua', glsl: 'glsl', vert: 'glsl', frag: 'glsl', xml: 'xml', svg: 'xml', kt: 'kotlin', swift: 'swift', vue: 'xml' };
+const EXT_COLOR = { py: '#4b8bf4', js: '#e6b73a', jsx: '#e6b73a', mjs: '#e6b73a', ts: '#3a8ddb', tsx: '#3a8ddb', html: '#e3683c', htm: '#e3683c', css: '#3f7ff0', scss: '#cd6799', json: '#9aa0a6', md: '#8a93a0', markdown: '#8a93a0', sh: '#5bbd6a', bash: '#5bbd6a', rs: '#d6a07a', c: '#6b78c4', cpp: '#6b78c4', h: '#6b78c4', java: '#c0824a', rb: '#c5413b', go: '#39c0d4', php: '#8a8fd0', sql: '#d99440', yml: '#cb4b3e', yaml: '#cb4b3e', toml: '#b08b54', lua: '#5b8df0', svg: '#e3683c', xml: '#e3683c', txt: '#9aa0a6', csv: '#5bbd6a', zip: '#b48ad6' };
 
 function baseName(p) { return p.split('/').pop(); }
+function extOf(p) { return (p.split('.').pop() || '').toLowerCase(); }
+function fmtSize(n) {
+  if (n == null) return '';
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(n < 10240 ? 1 : 0) + ' KB';
+  return (n / 1048576).toFixed(1) + ' MB';
+}
+function FileChip({ ext, size = 'sm' }) {
+  const e = (ext || '').toLowerCase();
+  const color = EXT_COLOR[e] || '#9aa0a6';
+  const label = (ext || 'file').toUpperCase().slice(0, 4);
+  return <span className={'file-chip ' + size} style={{ color, background: color + '24' }}>{label}</span>;
+}
 
 // rough line diff (LCS); bails out if the file is too big
 function diffLines(a, b) {
@@ -26,16 +40,45 @@ function diffLines(a, b) {
   return out;
 }
 
-function Viewer({ chatId, path, onBack, liveText, writingElsewhere, onJumpToLive, committed = true, pendingText = null }) {
+function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writingElsewhere, onJumpToLive, committed = true, pendingText = null }) {
   const [data, setData] = useState(null);
   const [copied, setCopied] = useState(false);
   const [menu, setMenu] = useState(false);
   const [diff, setDiff] = useState(false);
+  const [wrap, setWrap] = useState(false);
   const [prev, setPrev] = useState(null);
-  const ext = (path.split('.').pop() || '').toUpperCase();
+  const [baseText, setBaseText] = useState(null);
+  const ext = extOf(path);
   const isLive = liveText != null;
+  const liveEdit = isLive && liveInfo && liveInfo.tool === 'str_replace';
   const streamText = isLive ? liveText : (!committed && pendingText != null ? pendingText : null);
   const fromStream = streamText != null;
+
+  // for a live edit, pull the current on-disk content as the diff base
+  useEffect(() => {
+    if (!liveEdit) { setBaseText(null); return; }
+    if (baseText != null) return;
+    let on = true;
+    api.get(`/api/chats/${chatId}/file?path=${encodeURIComponent(path)}`)
+      .then(r => { if (on) setBaseText(r.text ?? ''); }).catch(() => { if (on) setBaseText(''); });
+    return () => { on = false; };
+  }, [liveEdit, path, chatId]);
+
+  // live applied-diff: splice the streaming new_str into the base where old_str sits
+  const liveDiff = useMemo(() => {
+    if (!liveEdit || baseText == null) return null;
+    const oldStr = liveInfo.oldStr;
+    const newStr = liveText || '';
+    let result;
+    if (oldStr && baseText.includes(oldStr)) {
+      const idx = baseText.indexOf(oldStr);
+      result = baseText.slice(0, idx) + newStr + baseText.slice(idx + oldStr.length);
+    } else {
+      result = baseText; // can't locate the target yet; show the file unchanged
+    }
+    const rows = diffLines(baseText.split('\n'), result.split('\n'));
+    return { rows, result };
+  }, [liveEdit, baseText, liveText, liveInfo]);
 
   async function load(v) {
     setData(null);
@@ -57,7 +100,7 @@ function Viewer({ chatId, path, onBack, liveText, writingElsewhere, onJumpToLive
   const html = useMemo(() => {
     if (shownText == null) return '';
     const esc = (s) => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-    const lang = EXT_LANG[(fromStream ? ext.toLowerCase() : (data?.ext || '').toLowerCase())];
+    const lang = EXT_LANG[(fromStream ? ext : (data?.ext || '').toLowerCase())];
     try {
       if (lang && hljs.getLanguage(lang)) return hljs.highlight(shownText, { language: lang, ignoreIllegals: true }).value;
       if (isLive) return esc(shownText);
@@ -73,29 +116,42 @@ function Viewer({ chatId, path, onBack, liveText, writingElsewhere, onJumpToLive
   async function copy() { const t = data?.text != null ? data.text : shownText; if (t != null && await copyText(t)) { setCopied(true); setTimeout(() => setCopied(false), 1400); } }
 
   const bodyRef = useRef(null);
-  useEffect(() => { if (isLive && bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight; }, [shownText, isLive]);
+  const stickRef = useRef(true);
+  function onBodyScroll() {
+    const el = bodyRef.current; if (!el) return;
+    stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+  }
+  useEffect(() => { if ((isLive || liveEdit) && stickRef.current && bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight; }, [shownText, liveDiff, isLive, liveEdit]);
+  useEffect(() => { stickRef.current = true; }, [path]);
 
   const versions = data?.versions || [];
   const viewing = data?.viewing;
   const current = data?.v;
   const stale = viewing && current && viewing !== current;
+  const showText = (fromStream || (committed && data && data.text != null));
 
   return (
     <div className="art-viewer">
       <div className="art-vhead">
         <div className="art-vtitle">
-          {baseName(path)} <span className="art-dot">·</span> {ext}
-          {isLive && <span className="art-ver writing">{liveText && liveText.length ? 'writing…' : 'creating…'}</span>}
+          {canBack && <button className="art-back" onClick={onBack} title="Back to files"><Chevron style={{ width: 16, transform: 'rotate(180deg)' }} /></button>}
+          <FileChip ext={ext} />
+          <span className="art-vname">{baseName(path)}</span>
+          {isLive && <span className="art-ver writing">{liveEdit ? 'editing…' : (liveText && liveText.length ? 'writing…' : 'creating…')}</span>}
           {!isLive && viewing && <span className={'art-ver' + (stale ? ' stale' : '')}>v{viewing}{stale ? ` of ${current}` : ''}</span>}
         </div>
         <div className="art-vactions">
+          {showText && !diff && <button className={'art-btn icon' + (wrap ? ' on' : '')} onClick={() => setWrap(w => !w)} title="Toggle word wrap">↩</button>}
+          {!isLive && data?.text != null && viewing > 1 && (
+            <button className={'art-btn icon' + (diff ? ' on' : '')} onClick={() => setDiff(d => !d)} title="Show changes from previous version">Diff</button>
+          )}
           {!isLive && data?.text != null && (
             <div className="art-copy-wrap">
               <button className="art-btn copy" onClick={copy}>{copied ? <Check style={{ width: 14 }} /> : <Copy style={{ width: 14 }} />} {copied ? 'Copied' : 'Copy'}</button>
               <button className="art-btn caret" onClick={() => setMenu(m => !m)}><ChevDown style={{ width: 13 }} /></button>
               {menu && (
                 <div className="art-menu" onMouseLeave={() => setMenu(false)}>
-                  <a className="art-menu-item" href={`/api/chats/${chatId}/download?path=${encodeURIComponent(path)}${stale ? '&v=' + viewing : ''}`}>Download as {ext}</a>
+                  <a className="art-menu-item" href={`/api/chats/${chatId}/download?path=${encodeURIComponent(path)}${stale ? '&v=' + viewing : ''}`}>Download as {ext.toUpperCase()}</a>
                   {versions.length > 1 && <>
                     <div className="art-menu-label">Version history</div>
                     {[...versions].reverse().map(v => (
@@ -108,37 +164,42 @@ function Viewer({ chatId, path, onBack, liveText, writingElsewhere, onJumpToLive
               )}
             </div>
           )}
-          {!isLive && data?.text != null && viewing > 1 && (
-            <button className={'art-btn icon' + (diff ? ' on' : '')} onClick={() => setDiff(d => !d)} title="Show changes from previous version">Diff</button>
-          )}
           {!isLive && <button className="art-btn icon" onClick={() => load(viewing)} title="Refresh"><Refresh style={{ width: 15 }} /></button>}
-          <button className="art-btn icon" onClick={onBack} title="Close">✕</button>
         </div>
       </div>
       {!isLive && writingElsewhere && (
         <button className="art-writing-bar" onClick={onJumpToLive}>✍ Writing {baseName(writingElsewhere)}… — view live</button>
       )}
       {stale && <button className="art-stale-bar" onClick={() => load()}>Viewing older version v{viewing} — jump to latest (v{current})</button>}
-      <div className="art-vbody" ref={bodyRef}>
-        {fromStream && (
-          <div className={'art-code' + (isLive ? ' live' : '')}>
+      <div className="art-vbody" ref={bodyRef} onScroll={onBodyScroll}>
+        {liveEdit && (
+          baseText == null
+            ? <div className="art-skel">{Array.from({ length: 14 }).map((_, i) => <span key={i} className="skeleton" style={{ width: (32 + ((i * 53) % 58)) + '%' }} />)}</div>
+            : liveDiff && liveDiff.rows == null
+              ? <div className={'art-code live wrap'}><pre><code className="hljs">{liveDiff.result}</code><span className="live-caret" /></pre></div>
+              : <div className="art-diff live">
+                  {(liveDiff?.rows || []).map((r, i) => (
+                    <div key={i} className={'art-diff-line ' + r.type}>
+                      <span className="art-diff-sign">{r.type === 'add' ? '+' : r.type === 'del' ? '−' : ''}</span>
+                      <span className="art-diff-text">{r.text || ' '}</span>
+                    </div>
+                  ))}
+                  <span className="live-caret diff" />
+                </div>
+        )}
+        {!liveEdit && showText && !diff && (
+          <div className={'art-code' + (isLive ? ' live' : '') + (wrap ? ' wrap' : '')}>
             <div className="art-gutter">{lines.map((_, i) => <div key={i}>{i + 1}</div>)}</div>
             <pre><code className="hljs" dangerouslySetInnerHTML={{ __html: html }} />{isLive && <span className="live-caret" />}</pre>
           </div>
         )}
-        {!fromStream && !committed && <div className="art-empty">This file is still being written…</div>}
+        {!fromStream && !committed && <div className="art-empty"><div className="art-empty-spin" />This file is still being written…</div>}
         {!fromStream && committed && !data && (
           <div className="art-skel">
-            {Array.from({ length: 14 }).map((_, i) => <span key={i} className="skeleton" style={{ width: (35 + ((i * 53) % 55)) + '%' }} />)}
+            {Array.from({ length: 16 }).map((_, i) => <span key={i} className="skeleton" style={{ width: (32 + ((i * 53) % 58)) + '%' }} />)}
           </div>
         )}
-        {!fromStream && committed && data?.error && <div className="art-empty">Couldn't load file.</div>}
-        {!fromStream && committed && data && data.text != null && !diff && (
-          <div className="art-code">
-            <div className="art-gutter">{lines.map((_, i) => <div key={i}>{i + 1}</div>)}</div>
-            <pre><code className="hljs" dangerouslySetInnerHTML={{ __html: html }} /></pre>
-          </div>
-        )}
+        {!fromStream && committed && data?.error && <div className="art-empty">Couldn't load this file.</div>}
         {!fromStream && data && data.text != null && diff && (
           prev == null ? <div className="art-empty">Loading diff…</div>
             : diffRows == null ? <div className="art-empty">File too large to diff.</div>
@@ -153,9 +214,9 @@ function Viewer({ chatId, path, onBack, liveText, writingElsewhere, onJumpToLive
         )}
         {!isLive && data && data.binary && (
           <div className="art-binary">
-            <FileText style={{ width: 40 }} />
+            <div className="art-binary-icon"><FileChip ext={ext} size="lg" /></div>
             <div className="art-bname">{baseName(path)}</div>
-            <a className="btn primary" href={data.downloadUrl}>Download</a>
+            <a className="btn primary" href={data.downloadUrl}><Download style={{ width: 15, verticalAlign: '-2px' }} /> Download</a>
           </div>
         )}
       </div>
@@ -177,11 +238,11 @@ function FileRow({ f, chatId, depth, onOpen, sel, live }) {
   const active = sel === f.path;
   const writing = live && live.path === f.path;
   return (
-    <div className={'art-row tree' + (active ? ' active' : '')} style={{ paddingLeft: 10 + depth * 15 }} onClick={() => onOpen(f.path)}>
-      <div className="art-ricon"><FileText style={{ width: 18 }} /></div>
+    <div className={'art-row tree' + (active ? ' active' : '')} style={{ paddingLeft: 10 + depth * 14 }} onClick={() => onOpen(f.path)}>
+      <FileChip ext={f.ext} />
       <div className="art-rmeta">
         <div className="art-rname">{baseName(f.path)}</div>
-        <div className="art-rext">{writing ? <span className="row-writing">writing…</span> : <>{(f.ext || 'file').toUpperCase()}{f.v ? ' · v' + f.v : ''}</>}</div>
+        <div className="art-rext">{writing ? <span className="row-writing">writing…</span> : <>{(f.ext || 'file').toUpperCase()}{f.v ? ' · v' + f.v : ''}{f.size != null ? ' · ' + fmtSize(f.size) : ''}</>}</div>
       </div>
       {!writing && <a className="art-btn icon dl" href={`/api/chats/${chatId}/download?path=${encodeURIComponent(f.path)}`} onClick={(e) => e.stopPropagation()} title="Download"><Download style={{ width: 15 }} /></a>}
     </div>
@@ -191,9 +252,9 @@ function TreeFolder({ name, node, depth, chatId, onOpen, sel, live }) {
   const [open, setOpen] = useState(true);
   return (
     <>
-      <div className="art-tree-folder" style={{ paddingLeft: 10 + depth * 15 }} onClick={() => setOpen(o => !o)}>
+      <div className="art-tree-folder" style={{ paddingLeft: 10 + depth * 14 }} onClick={() => setOpen(o => !o)}>
         <ChevDown className={'tf-chev' + (open ? ' open' : '')} style={{ width: 13 }} />
-        <Folder style={{ width: 16 }} /><span className="tf-name">{name}</span>
+        <Folder style={{ width: 15 }} /><span className="tf-name">{name}</span>
       </div>
       {open && <TreeChildren node={node} depth={depth + 1} chatId={chatId} onOpen={onOpen} sel={sel} live={live} />}
     </>
@@ -214,36 +275,38 @@ function clampW(w) { return Math.max(320, Math.min(w, Math.round(window.innerWid
 
 export default function ArtifactsPanel({ chatId, files, live, pending = {}, focus = null, onClose }) {
   const [sel, setSel] = useState(null);
-  const [width, setWidth] = useState(() => { const s = parseInt(localStorage.getItem('oq-art-w')); return s ? clampW(s) : Math.min(460, Math.round(window.innerWidth * 0.42)); });
+  const [width, setWidth] = useState(() => { const s = parseInt(localStorage.getItem('oq-art-w')); return s ? clampW(s) : Math.min(480, Math.round(window.innerWidth * 0.42)); });
+  const [resizing, setResizing] = useState(false);
   const autoRef = useRef(null);
   const dragRef = useRef(null);
 
   useEffect(() => { setSel(null); autoRef.current = null; }, [chatId]);
   useEffect(() => { if (focus && focus.path) setSel(focus.path); }, [focus]);
   useEffect(() => { if (sel && !(live && sel === live.path) && !files.find(f => f.path === sel)) setSel(null); }, [files]);
-  // we don't yank focus to a file that's being written; it shows "writing…" in the tree if they want it
 
   useEffect(() => () => { document.body.style.cursor = ''; }, []);
   function startResize(e) {
     e.preventDefault();
+    setResizing(true);
     const move = (ev) => { const x = ev.touches ? ev.touches[0].clientX : ev.clientX; setWidth(clampW(window.innerWidth - x)); };
-    const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); document.removeEventListener('touchmove', move); document.removeEventListener('touchend', up); document.body.style.cursor = ''; document.body.style.userSelect = ''; setWidth(w => { localStorage.setItem('oq-art-w', String(w)); return w; }); };
+    const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); document.removeEventListener('touchmove', move); document.removeEventListener('touchend', up); document.body.style.cursor = ''; document.body.style.userSelect = ''; setResizing(false); setWidth(w => { localStorage.setItem('oq-art-w', String(w)); return w; }); };
     document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
     document.addEventListener('touchmove', move, { passive: false }); document.addEventListener('touchend', up);
     document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
   }
 
   const liveText = live && sel === live.path ? live.content : null;
+  const liveInfo = live && sel === live.path ? live : null;
   const byPath = new Map(files.map(f => [f.path, f]));
-  for (const p of Object.keys(pending)) if (!byPath.has(p)) byPath.set(p, { path: p, ext: (p.split('.').pop() || ''), v: 0 });
-  if (live && live.path && !byPath.has(live.path)) byPath.set(live.path, { path: live.path, ext: (live.path.split('.').pop() || ''), v: 0 });
+  for (const p of Object.keys(pending)) if (!byPath.has(p)) byPath.set(p, { path: p, ext: extOf(p), v: 0 });
+  if (live && live.path && !byPath.has(live.path)) byPath.set(live.path, { path: live.path, ext: extOf(live.path), v: 0 });
   const treeFiles = [...byPath.values()];
 
   return (
-    <div className="artifacts" style={{ width }}>
-      <div className="art-resizer" onMouseDown={startResize} onTouchStart={startResize} ref={dragRef} title="Drag to resize" />
+    <div className={'artifacts' + (resizing ? ' resizing' : '')} style={{ width }}>
+      <div className="art-resizer" onMouseDown={startResize} onTouchStart={startResize} ref={dragRef} title="Drag to resize"><span /></div>
       {sel ? (
-        <Viewer chatId={chatId} path={sel} liveText={liveText} onBack={() => setSel(null)}
+        <Viewer chatId={chatId} path={sel} liveText={liveText} liveInfo={liveInfo} onBack={() => setSel(null)} canBack={treeFiles.length > 1}
           committed={!!files.find(f => f.path === sel)}
           pendingText={sel in pending ? pending[sel] : null}
           writingElsewhere={live && live.path && sel !== live.path ? live.path : null}
@@ -252,15 +315,24 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
         <>
           <div className="art-head">
             <div className="art-title">Artifacts{treeFiles.length > 0 && <span className="art-count">{treeFiles.length}</span>}</div>
-            <div className="art-head-actions">
-              {files.length > 0 && <a className="art-dl-all" href={`/api/chats/${chatId}/zip`}><Download style={{ width: 15 }} /> Download all</a>}
-              <button className="art-btn icon" onClick={onClose} title="Close panel">✕</button>
-            </div>
+            <button className="art-btn icon" onClick={onClose} title="Close panel">✕</button>
           </div>
           <div className="art-list">
-            {treeFiles.length === 0 && <div className="art-empty">No files yet. When the assistant creates files, they'll appear here.</div>}
+            {treeFiles.length === 0 && (
+              <div className="art-empty big">
+                <div className="art-empty-icon"><FileText style={{ width: 26 }} /></div>
+                <div className="art-empty-title">No files yet</div>
+                <div>When the assistant creates or edits files, they'll show up here — ready to view, diff, and download.</div>
+              </div>
+            )}
             {treeFiles.length > 0 && <TreeChildren node={buildTree(treeFiles)} depth={0} chatId={chatId} onOpen={setSel} sel={sel} live={live} />}
           </div>
+          {files.length > 0 && (
+            <div className="art-foot">
+              <span className="art-foot-count">{files.length} file{files.length === 1 ? '' : 's'}</span>
+              <a className="art-dl-all" href={`/api/chats/${chatId}/zip`}><Download style={{ width: 15 }} /> Download all</a>
+            </div>
+          )}
         </>
       )}
     </div>

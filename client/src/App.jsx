@@ -39,12 +39,31 @@ function QuickPrompts({ prompts, visible, disabled, onPick }) {
   );
 }
 
+function extractToolBodies(text) {
+  const out = [];
+  let from = 0;
+  while (true) {
+    const open = text.indexOf('```tool', from);
+    if (open === -1) break;
+    let i = text.indexOf('{', open + 7);
+    if (i === -1) break;
+    let depth = 0, inStr = false, esc = false, end = -1;
+    for (let j = i; j < text.length; j++) {
+      const c = text[j];
+      if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; }
+      else if (c === '"') inStr = true;
+      else if (c === '{') depth++;
+      else if (c === '}') { depth--; if (depth === 0) { end = j + 1; break; } }
+    }
+    if (end === -1) break;
+    out.push(text.slice(i, end));
+    from = end;
+  }
+  return out;
+}
 function parseStreamedFiles(text) {
   const files = {};
-  const re = /```tool\s*([\s\S]*?)```/g;
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    const body = m[1].trim();
+  for (const body of extractToolBodies(text)) {
     let obj = null;
     try { obj = JSON.parse(body); } catch {}
     if (!obj) {
@@ -69,7 +88,18 @@ function parseLiveFile(text) {
   const at = text.lastIndexOf('```tool');
   if (at === -1) return null;
   const after = text.slice(at + 7);
-  if (after.includes('```')) return null; // block already closed; the real file will load
+  // a balanced JSON object means the block already closed; the committed file will load
+  let bi = after.indexOf('{');
+  if (bi !== -1) {
+    let depth = 0, inS = false, es = false;
+    for (let j = bi; j < after.length; j++) {
+      const c = after[j];
+      if (inS) { if (es) es = false; else if (c === '\\') es = true; else if (c === '"') inS = false; }
+      else if (c === '"') inS = true;
+      else if (c === '{') depth++;
+      else if (c === '}') { depth--; if (depth === 0) return null; }
+    }
+  }
   const tool = (after.match(/"tool"\s*:\s*"([^"]+)"/) || [])[1];
   if (tool !== 'create_file' && tool !== 'str_replace') return null;
   const path = (after.match(/"path"\s*:\s*"((?:[^"\\]|\\.)*)"/) || [])[1];
@@ -77,18 +107,25 @@ function parseLiveFile(text) {
   const field = tool === 'create_file' ? 'content' : 'new_str';
   const key = '"' + field + '"';
   const ki = after.indexOf(key);
-  if (ki === -1) return { path, content: '', tool };
-  let rest = after.slice(ki + key.length).replace(/^\s*:\s*"/, '');
-  // stop at the closing quote if the value already finished inside the open block
-  let outChars = [], esc = false;
-  for (let i = 0; i < rest.length; i++) {
-    const ch = rest[i];
-    if (esc) { outChars.push(ch === 'n' ? '\n' : ch === 't' ? '\t' : ch === 'r' ? '' : ch); esc = false; continue; }
-    if (ch === '\\') { esc = true; continue; }
-    if (ch === '"') break;
-    outChars.push(ch);
+  const readStr = (src) => {
+    let out = [], esc = false;
+    for (let i = 0; i < src.length; i++) {
+      const ch = src[i];
+      if (esc) { out.push(ch === 'n' ? '\n' : ch === 't' ? '\t' : ch === 'r' ? '' : ch); esc = false; continue; }
+      if (ch === '\\') { esc = true; continue; }
+      if (ch === '"') return { text: out.join(''), closed: true };
+      out.push(ch);
+    }
+    return { text: out.join(''), closed: false };
+  };
+  let oldStr = null;
+  if (tool === 'str_replace') {
+    const oi = after.indexOf('"old_str"');
+    if (oi !== -1) { const r = readStr(after.slice(oi + 9).replace(/^\s*:\s*"/, '')); if (r.closed) oldStr = r.text; }
   }
-  return { path, content: outChars.join(''), tool };
+  if (ki === -1) return { path, content: '', tool, oldStr };
+  const rest = after.slice(ki + key.length).replace(/^\s*:\s*"/, '');
+  return { path, content: readStr(rest).text, tool, oldStr };
 }
 
 function CompactingBar() {
