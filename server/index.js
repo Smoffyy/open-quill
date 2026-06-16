@@ -9,6 +9,7 @@ import { db, uid, now, getSetting, setSetting } from './db.js';
 import { hash, check, sign, publicUser, authMiddleware, adminOnly, userFromRequest, parseCookies } from './auth.js';
 import { buildMessages, streamCompletion, generateTitle, summarizeConversation } from './llm.js';
 import { getProviders, resolveProvider, providerSpec, typesForClient, PROVIDER_TYPES } from './providers.js';
+import * as websearch from './websearch.js';
 import * as sandbox from './sandbox.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -473,11 +474,23 @@ app.get('/api/admin/settings', authMiddleware, adminOnly, (req, res) =>
     uploadLimitUserMb: roleLimit('upload_limit_mb', false, 8),
     sandboxLimitAdminMb: roleLimit('sandbox_limit_mb', true, 1024),
     sandboxLimitUserMb: roleLimit('sandbox_limit_mb', false, 256),
-    modelQueue: getSetting('model_queue', '0') === '1'
+    modelQueue: getSetting('model_queue', '0') === '1',
+    webSearchEnabled: getSetting('web_search_enabled', '0') === '1',
+    webSearchEngine: getSetting('web_search_engine', 'searxng'),
+    searxngUrl: getSetting('searxng_url', ''),
+    webSearchCount: parseInt(getSetting('web_search_count', '5')) || 5,
+    webSearchDomains: (() => { try { const d = JSON.parse(getSetting('web_search_domains', '[]')); return Array.isArray(d) ? d.join('\n') : ''; } catch { return ''; } })(),
+    webSearchPrompt: getSetting('web_search_prompt', websearch.DEFAULT_WS_PROMPT)
   }));
 app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
   if ('apiBaseUrl' in req.body) setSetting('api_base_url', req.body.apiBaseUrl);
   if ('apiKey' in req.body) setSetting('api_key', req.body.apiKey);
+  if ('webSearchEnabled' in req.body) setSetting('web_search_enabled', req.body.webSearchEnabled ? '1' : '0');
+  if ('webSearchEngine' in req.body) setSetting('web_search_engine', req.body.webSearchEngine || 'searxng');
+  if ('searxngUrl' in req.body) setSetting('searxng_url', (req.body.searxngUrl || '').trim());
+  if ('webSearchCount' in req.body) { const n = parseInt(req.body.webSearchCount); setSetting('web_search_count', String(Number.isFinite(n) && n > 0 ? Math.min(20, n) : 5)); }
+  if ('webSearchDomains' in req.body) { const list = String(req.body.webSearchDomains || '').split(/[\n,]+/).map(s => s.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase()).filter(Boolean); setSetting('web_search_domains', JSON.stringify(list)); }
+  if ('webSearchPrompt' in req.body) setSetting('web_search_prompt', req.body.webSearchPrompt || '');
   const lim = (k, v, def) => { const n = Number(v); setSetting(k, String(Number.isFinite(n) && n >= 0 ? n : def)); };
   if ('uploadLimitAdminMb' in req.body) lim('upload_limit_mb_admin', req.body.uploadLimitAdminMb, 8);
   if ('uploadLimitUserMb' in req.body) lim('upload_limit_mb_user', req.body.uploadLimitUserMb, 8);
@@ -648,6 +661,7 @@ function appConfig() {
     quickPrompts: (() => { const q = safeParse(getSetting('quick_prompts', '[]'), []); return Array.isArray(q) && q.length ? q : [{ icon: 'sparkles', label: 'Ideas', prompt: 'Give me ideas on what I should do today.' }, { icon: 'pencil', label: 'Write', prompt: 'Write a one paragraph summary about how Large Language Models (LLMs) work.' }, { icon: 'code', label: 'Code', prompt: 'Write a Python function that checks whether a string is a palindrome.' }, { icon: 'learn', label: 'Learn', prompt: 'How far away is the sun from Earth?' }, { icon: 'coffee', label: 'Life stuff', prompt: 'Give me practical advice for a life problem.' }]; })(),
     version: APP_VERSION,
     uiVersion: APP_VERSION,
+    webSearchAvailable: websearch.webSearchAvailable(),
     uiVersionDesc: readVersionText(),
     uiVersionIcon: detectVersionIcon()
   };
@@ -669,7 +683,6 @@ app.patch('/api/admin/app-config', authMiddleware, adminOnly, (req, res) => {
     setSetting('quick_prompts', JSON.stringify(list));
   }
   if ('appIcon' in b) setSetting('app_icon', b.appIcon || '');
-  broadcastConfig();
   res.json({ ok: true });
 });
 
@@ -898,37 +911,44 @@ wss.on('connection', (ws, req) => {
   clients.set(ws, { userId: u.id, isAdmin: !!u.is_admin, aborts: new Map() });
   const safeSend = (s) => { if (ws.readyState === 1) { try { ws.send(s); } catch {} } };
 
-  async function runCompletion(ws, state, chat, model, extended, sandboxOn, sandboxCap = 0) {
+  async function runCompletion(ws, state, chat, model, extended, sandboxOn, sandboxCap = 0, webSearchOn = false) {
     await maybeCompact(ws, chat, model, extended, sandboxOn);
     const history = chatHistory(chat, model);
     const chatRow = db.chats.byId(chat.id) || chat;
-    const sandboxP = () => sandboxOn ? sandboxPromptFor(chat.id) : null;
-    let base = buildMessages(model, history, extended, sandboxP(), chatRow.summary, promptVars(chat.user_id));
+    const toolsOn = sandboxOn || webSearchOn;
+    const toolsP = () => {
+      const parts = [];
+      if (sandboxOn) parts.push(sandboxPromptFor(chat.id));
+      if (webSearchOn) { parts.push(websearch.webSearchConfig().prompt); parts.push(websearch.webSearchToolPrompt()); }
+      return parts.filter(Boolean).join('\n\n') || null;
+    };
+    let base = buildMessages(model, history, extended, toolsP(), chatRow.summary, promptVars(chat.user_id));
     let inTurn = []; // assistant/tool exchanges accumulated during this response
     const assistantId = uid();
     const assistantParent = (db.chats.byId(chat.id) || {}).active_leaf || null;
     let content = '', reasoning = '';
-    const controller = new AbortController();
-    state.aborts.set(chat.id, controller);
     safeSend(JSON.stringify({ type: 'start', chatId: chat.id, messageId: assistantId }));
 
     const threshold = compactThreshold(model);
     const stepCap = (model.agent_steps && model.agent_steps > 0) ? model.agent_steps : 1000;
-    const maxSteps = sandboxOn ? stepCap : 1;
+    const maxSteps = toolsOn ? stepCap : 1;
     try {
       for (let step = 0; step < maxSteps; step++) {
         // running low on context mid-response? summarize older turns, then carry on where we left off
         if (threshold !== Infinity && inTurn.length && estimateTokens([...base, ...inTurn]) >= threshold) {
-          if (await compactStep(ws, chat, model)) base = buildMessages(model, chatHistory(chat, model), extended, sandboxP(), (db.chats.byId(chat.id) || {}).summary, promptVars(chat.user_id));
+          if (await compactStep(ws, chat, model)) base = buildMessages(model, chatHistory(chat, model), extended, toolsP(), (db.chats.byId(chat.id) || {}).summary, promptVars(chat.user_id));
         }
         const convo = [...base, ...inTurn];
+        const controller = new AbortController();
+        state.aborts.set(chat.id, controller);
         let stepText = '';
         let aborted = false;
+        let toolStop = false;
         let execCursor = 0;
         const stepResults = [];
         // run each ```tool block the instant it finishes, so files/cards finalize live
-        const execPending = () => {
-          if (!sandboxOn) return;
+        const execPending = async () => {
+          if (!toolsOn) return;
           while (true) {
             const open = stepText.indexOf('```tool', execCursor);
             if (open === -1) { execCursor = Math.max(execCursor, stepText.length - 8); break; }
@@ -940,12 +960,23 @@ wss.on('connection', (ws, req) => {
             execCursor = close + 3;
             const call = sandbox.parseToolBody(body);
             if (!call || !call.tool) continue;
-            const r = sandbox.execTool(chat.id, call, sandboxCap);
-            stepResults.push({ call, r });
-            const block = '\n\n[[OQR:' + Buffer.from(JSON.stringify({ call: cleanCall(call), result: resultPayload(call, r) }), 'utf8').toString('base64') + ']]\n';
+            let r, payload, formatted;
+            if (call.tool === 'web_search') {
+              if (!webSearchOn) continue;
+              r = await websearch.runWebSearch(call);
+              payload = websearch.webSearchResultPayload(call, r);
+              formatted = websearch.formatWebSearchResult(call, r);
+            } else {
+              if (!sandboxOn) continue;
+              r = sandbox.execTool(chat.id, call, sandboxCap);
+              payload = resultPayload(call, r);
+              formatted = formatToolResult(call, r);
+            }
+            stepResults.push({ call, r, formatted });
+            const block = '\n\n[[OQR:' + Buffer.from(JSON.stringify({ call: cleanCall(call), result: payload }), 'utf8').toString('base64') + ']]\n';
             content += block;
             safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: block }));
-            safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
+            if (sandboxOn) safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
           }
         };
         try {
@@ -953,18 +984,31 @@ wss.on('connection', (ws, req) => {
             model, messages: convo, signal: controller.signal,
             onEvent: (e) => {
               if (e.type === 'reasoning') { reasoning += e.text; safeSend(JSON.stringify({ type: 'reasoning', chatId: chat.id, text: e.text })); }
-              else { content += e.text; stepText += e.text; safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: e.text })); try { execPending(); } catch {} }
+              else {
+                content += e.text; stepText += e.text;
+                safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: e.text }));
+                if (webSearchOn && !toolStop) {
+                  const o = stepText.lastIndexOf('```tool');
+                  if (o !== -1) {
+                    const nl = stepText.indexOf('\n', o);
+                    const close = nl !== -1 ? stepText.indexOf('```', nl + 1) : -1;
+                    if (close !== -1 && stepText.slice(nl + 1, close).includes('web_search')) { toolStop = true; try { controller.abort(); } catch {} }
+                  }
+                }
+              }
             }
           });
         } catch (err) {
           if (err.name === 'AbortError') aborted = true; else throw err;
         }
-        try { execPending(); } catch {}
+        try { await execPending(); } catch {}
         if (stepResults.length) {
-          const results = stepResults.map(({ call, r }) => formatToolResult(call, r));
+          const results = stepResults.map(({ formatted }) => formatted);
           inTurn = [...inTurn, { role: 'assistant', content: stepText }, { role: 'user', content: 'Tool results:\n' + results.join('\n\n') }];
         }
-        if (aborted || !sandboxOn || !stepResults.length) break;
+        if (!toolsOn) break;
+        if (aborted && !toolStop) break;
+        if (!stepResults.length) break;
       }
     } catch (err) {
       if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: String(err.message || err) }));
@@ -1040,6 +1084,7 @@ wss.on('connection', (ws, req) => {
       if (!!chat.sandbox !== userSandbox) db.chats.update(chat.id, { sandbox: userSandbox ? 1 : 0 });
       const hasFileAttach = Array.isArray(msg.attachments) && msg.attachments.some(a => !(a.type && a.type.startsWith('image/')));
       const sandboxOn = userSandbox || (hasFileAttach && model.sandbox_allowed !== 0);
+      const webSearchOn = !!msg.webSearch && websearch.webSearchAvailable();
       ensureChain(chat.id);
 
       if (msg.type === 'regenerate') {
@@ -1074,7 +1119,7 @@ wss.on('connection', (ws, req) => {
       const queueOn = getSetting('model_queue', '0') === '1';
       await runQueued(queueOn, model.id,
         () => { safeSend(JSON.stringify({ type: 'queued', chatId: chat.id })); },
-        () => runCompletion(ws, state, chat, model, !!msg.extended, sandboxOn, sandboxCap));
+        () => runCompletion(ws, state, chat, model, !!msg.extended, sandboxOn, sandboxCap, webSearchOn));
     } catch (err) {
       if (msg && msg.chatId) state.aborts.delete(msg.chatId);
       safeSend(JSON.stringify({ type: 'error', chatId: msg && msg.chatId, error: String(err.message || err) }));

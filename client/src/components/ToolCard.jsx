@@ -15,6 +15,7 @@ const VERBS = {
   delete_all: ['Clearing sandbox', 'Cleared sandbox'],
   rename_file: ['Moving', 'Moved'],
   search: ['Searching', 'Searched'],
+  web_search: ['Searching the web', 'Searched the web'],
   extract_zip: ['Extracting', 'Extracted'],
   bundle_zip: ['Bundling', 'Bundled']
 };
@@ -157,8 +158,44 @@ function ChipCard({ call, result }) {
   );
 }
 
+function WebSearchCard({ call, result }) {
+  const [open, setOpen] = useState(false);
+  const pending = !result;
+  const failed = result && !result.ok;
+  const results = (result && result.results) || [];
+  return (
+    <div className={'tool-bash' + (failed ? ' err' : '') + (open ? ' open' : '')}>
+      <button className="tb-head" onClick={() => setOpen(o => !o)}>
+        <Search style={{ width: 14 }} />
+        <span className="tb-label">{pending ? 'Searching the web' : 'Web search'}</span>
+        <code className="tb-peek">{call.query ? `"${call.query}"` : ''}</code>
+        {!failed && result && <span className="tl-note">{result.count} result{result.count === 1 ? '' : 's'}</span>}
+        {failed && <span className="tb-badge err">error</span>}
+        {pending && <span className="tc-dots"><i /><i /><i /></span>}
+        <Chevron className="tb-chev" />
+      </button>
+      <div className={'tb-collapse' + (open ? ' open' : '')}>
+        <div className="tb-inner">
+          {failed
+            ? <div className="tb-out"><div className="tb-out-head">Error</div><div className="tb-out-empty">{result.error}</div></div>
+            : results.length
+              ? <div className="ws-results">{results.map((r, i) => (
+                  <a key={i} className="ws-result" href={r.url} target="_blank" rel="noopener noreferrer">
+                    <span className="ws-title">{r.title || r.url}</span>
+                    <span className="ws-url">{r.url}</span>
+                    {r.chars != null && <span className="ws-chars">{r.chars.toLocaleString()} chars read</span>}
+                  </a>
+                ))}</div>
+              : <div className="tb-out-empty" style={{ padding: '8px 12px' }}>No results.</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ToolCard({ call, result }) {
   if (!call || !call.tool) return null;
+  if (call.tool === 'web_search') return <WebSearchCard call={call} result={result} />;
   if (call.tool === 'bash' || call.tool === 'run') return <BashCard call={call} result={result} />;
   if (FILE_TOOLS.has(call.tool)) return <FileCard call={call} result={result} />;
   return <ChipCard call={call} result={result} />;

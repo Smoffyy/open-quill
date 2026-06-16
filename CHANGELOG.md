@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sandbox tools badge** - Toggled tools in the + menu now show a small numbered badge on the icon itself rather than a separate pill.
 - **Versioning** - General -> Version for a brief overview of the current version of the software.
 - **OLED Burn-in protection setting** Enable the `OLED screen protection` setting in the Appearance menu.
+- **Searxng Web Search** - Allows the assistant to call the web search tool (currently only searxng), with a custom web search prompt and more!
 
 ### Fixed
 - **Theme flash on load** - the page no longer flashes light mode before switching to dark on startup.

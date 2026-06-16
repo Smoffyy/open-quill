@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
-import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield } from './icons.jsx';
+import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield, Globe } from './icons.jsx';
 import { QP_ICON_LIST, QpIcon } from '../qpIcons.jsx';
 
 function QpIconPicker({ value, onPick }) {
@@ -150,6 +150,7 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
     <div className="model-editor">
       <div className="me-head">
         <div className="me-title">
+          <img className="me-title-icon" src={m.static_icon || '/starburst.svg'} alt="" />
           <span className="mc-title">{m.display_name || 'Untitled model'}</span>
           <span className="mc-sub">{m.internal_name}</span>
         </div>
@@ -341,6 +342,10 @@ export default function AdminPanel({ user, onClose }) {
   const [pubFlash, setPubFlash] = useState(false);
   const saveTimers = useRef({});
   const pendingIds = useRef(new Set());
+  const readyRef = useRef(false);
+  const setSaveTimer = useRef(null);
+  const cfgSaveTimer = useRef(null);
+  const [setAutoStatus, setSetAutoStatus] = useState('idle');
   const selModelRef = useRef(null);
   const dragIndex = useRef(null);
   const modelsRef = useRef([]);
@@ -371,7 +376,27 @@ export default function AdminPanel({ user, onClose }) {
   }
   async function loadUsers() { try { setUsersList(await api.get('/api/admin/users')); } catch {} }
   async function refreshPubState() { try { setPub(await api.get('/api/admin/models/publish-state')); } catch {} }
-  useEffect(() => { load(); refreshPubState(); }, []);
+  useEffect(() => { load().then(() => { readyRef.current = true; }); refreshPubState(); }, []);
+
+  useEffect(() => {
+    if (!readyRef.current) return;
+    if (setSaveTimer.current) clearTimeout(setSaveTimer.current);
+    setSetAutoStatus('saving');
+    setSaveTimer.current = setTimeout(async () => {
+      try { await api.patch('/api/admin/settings', settings); setPub(p => ({ ...p, dirty: true })); setSetAutoStatus('saved'); }
+      catch { setSetAutoStatus('idle'); }
+    }, 500);
+  }, [settings]);
+
+  useEffect(() => {
+    if (!readyRef.current) return;
+    if (cfgSaveTimer.current) clearTimeout(cfgSaveTimer.current);
+    setSetAutoStatus('saving');
+    cfgSaveTimer.current = setTimeout(async () => {
+      try { await api.patch('/api/admin/app-config', { ...cfg, greetings: cfg.greetings.map(g => g.trim()).filter(Boolean), quickPrompts: (cfg.quickPrompts || []).filter(q => (q.label || '').trim() && (q.prompt || '').trim()) }); setPub(p => ({ ...p, dirty: true })); setSetAutoStatus('saved'); }
+      catch { setSetAutoStatus('idle'); }
+    }, 500);
+  }, [cfg]);
 
   async function saveCfg() {
     await api.patch('/api/admin/app-config', { ...cfg, greetings: cfg.greetings.map(g => g.trim()).filter(Boolean), quickPrompts: (cfg.quickPrompts || []).filter(q => (q.label || '').trim() && (q.prompt || '').trim()) });
@@ -487,6 +512,7 @@ export default function AdminPanel({ user, onClose }) {
         <button className={'ar-tab' + (tab === 'customization' ? ' active' : '')} onClick={() => setTab('customization')}><Sparkles /> Appearance</button>
         <button className={'ar-tab' + (tab === 'users' ? ' active' : '')} onClick={() => setTab('users')}><Users /> Users</button>
         <button className={'ar-tab' + (tab === 'limits' ? ' active' : '')} onClick={() => setTab('limits')}><Shield /> Limits &amp; Safety</button>
+        <button className={'ar-tab' + (tab === 'websearch' ? ' active' : '')} onClick={() => setTab('websearch')}><Globe /> Web Search</button>
         <button className="ar-back" onClick={onClose}><Chevron style={{ transform: 'rotate(90deg)', width: 16 }} /> Back to chat</button>
       </nav>
       <div className="admin-content">
@@ -535,6 +561,7 @@ export default function AdminPanel({ user, onClose }) {
                         onDrop={(e) => { e.preventDefault(); drag.onDrop(i); }}
                         onClick={() => setSelModel(m.id)}>
                         <span className="grip"><Grip /></span>
+                        <img className="mr-icon" src={m.static_icon || '/starburst.svg'} alt="" />
                         <div className="mr-meta">
                           <span className="mr-name">{m.display_name || 'Untitled model'}</span>
                           <span className="mr-sub">{m.internal_name}</span>
@@ -594,9 +621,9 @@ export default function AdminPanel({ user, onClose }) {
                   <IconSlot label="Click to upload (png, svg, jpeg, gif)" value={cfg.appIcon} def="/starburst.svg" anim="" onChange={(v) => setCfg(c => ({ ...c, appIcon: v }))} />
                 </div>
               </div>
-              <div className="btn-row">
-                <button className="btn primary" onClick={saveCfg}>Save</button>
-                {cfgSaved && <span className="saved-flash" style={{ alignSelf: 'center' }}>Saved — pushed to all clients ✓</span>}
+              <div className="settings-autosave">
+                <span className={'autosave-dot' + (setAutoStatus === 'saved' ? ' flash' : '')} />
+                {setAutoStatus === 'saving' ? 'Saving…' : setAutoStatus === 'saved' ? 'Saved to draft — use Push to all clients to make it live' : 'Changes save automatically to your draft'}
               </div>
             </>
           )}
@@ -679,9 +706,48 @@ export default function AdminPanel({ user, onClose }) {
               <div className="field row">
                 <div><label>Model queue</label><div className="muted-note">Only one model runs at a time. Requests for the same model run together; a request for a different model waits until the current one finishes, instead of swapping it out mid-response. Useful for local servers that load a single model.</div></div>
                 <div className={'switch' + (settings.modelQueue ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, modelQueue: !s.modelQueue }))} /></div>
-              <div className="btn-row">
-                <button className="btn primary" onClick={saveSettings}>Save</button>
-                {setSavedFlash && <span className="saved-flash" style={{ alignSelf: 'center' }}>Saved ✓</span>}
+              <div className="settings-autosave">
+                <span className={'autosave-dot' + (setAutoStatus === 'saved' ? ' flash' : '')} />
+                {setAutoStatus === 'saving' ? 'Saving…' : setAutoStatus === 'saved' ? 'Saved — applies immediately' : 'Changes save automatically'}
+              </div>
+            </>
+          )}
+          {tab === 'websearch' && (
+            <>
+              <h2>Web Search</h2>
+              <div className="hint">Give models a web search tool backed by your own SearXNG instance. Everything stays local — the server queries your instance and reads the result pages itself. Takes effect immediately, no publish needed.</div>
+              <div className="field row">
+                <div><label>Enable web search</label><div className="muted-note">When on, users get a Web Search toggle in the + menu. The model can call the tool whenever it's enabled for a chat.</div></div>
+                <div className={'switch' + (settings.webSearchEnabled ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, webSearchEnabled: !s.webSearchEnabled }))} />
+              </div>
+              {settings.webSearchEnabled && <>
+                <div className="field"><label>Search engine</label>
+                  <select value={settings.webSearchEngine || 'searxng'} onChange={(e) => setSettings(s => ({ ...s, webSearchEngine: e.target.value }))}>
+                    <option value="searxng">SearXNG</option>
+                  </select>
+                </div>
+                {(settings.webSearchEngine || 'searxng') === 'searxng' && (
+                  <div className="field"><label>SearXNG query URL</label>
+                    <input value={settings.searxngUrl || ''} onChange={(e) => setSettings(s => ({ ...s, searxngUrl: e.target.value }))} placeholder="http://localhost:8888" />
+                    <div className="muted-note">Base URL of your SearXNG instance. The server calls <code>/search?q=…&amp;format=json</code>, so JSON output must be enabled in your SearXNG settings.</div>
+                  </div>
+                )}
+                <div className="field"><label>Result count limit</label>
+                  <input type="number" min="1" max="20" value={settings.webSearchCount ?? 5} onChange={(e) => setSettings(s => ({ ...s, webSearchCount: e.target.value }))} style={{ maxWidth: 140 }} />
+                  <div className="muted-note">How many result pages to fetch and read per search (1–20). Higher means more context but slower and heavier.</div>
+                </div>
+                <div className="field"><label>Allowed domains</label>
+                  <textarea rows={3} value={settings.webSearchDomains || ''} onChange={(e) => setSettings(s => ({ ...s, webSearchDomains: e.target.value }))} placeholder={'wikipedia.org\narxiv.org'} />
+                  <div className="muted-note">One domain per line (or comma-separated). When set, the assistant can only read results from these domains and their subdomains — everything else is dropped. Leave empty to allow any site.</div>
+                </div>
+                <div className="field"><label>Web search system prompt</label>
+                  <textarea rows={6} value={settings.webSearchPrompt ?? ''} onChange={(e) => setSettings(s => ({ ...s, webSearchPrompt: e.target.value }))} />
+                  <div className="muted-note">Appended to a model's system prompt only when web search is enabled for the chat. Use it to tell the model to search only when asked or when information is missing or outdated.</div>
+                </div>
+              </>}
+              <div className="settings-autosave">
+                <span className={'autosave-dot' + (setAutoStatus === 'saved' ? ' flash' : '')} />
+                {setAutoStatus === 'saving' ? 'Saving…' : setAutoStatus === 'saved' ? 'Saved — applies immediately' : 'Changes save automatically'}
               </div>
             </>
           )}

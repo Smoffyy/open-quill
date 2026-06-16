@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import ModelDropdown from './ModelDropdown.jsx';
 import { api } from '../api.js';
-import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check } from './icons.jsx';
+import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe } from './icons.jsx';
 
 const FILE_ACCEPT = '.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.py,.lua,.html,.css,.xml,.yml,.yaml,.pdf,.log';
 
@@ -31,7 +31,7 @@ function dominantColor(url) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, models,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
@@ -133,7 +133,7 @@ export default function Composer({
     return () => clearTimeout(t);
   }, [unavailable]);
   const hasImage = files.some(f => f.preview);
-  const enabledCount = (sandbox ? 1 : 0);
+  const enabledCount = (sandbox ? 1 : 0) + (webSearch ? 1 : 0);
   const canSend = (value.trim().length > 0 || files.length > 0) && !uploading && !blockSend;
   const cls = 'composer' + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + (unavailable ? ' unavailable' : '') + (blockSend ? ' blocked' : '');
 
@@ -189,6 +189,12 @@ export default function Composer({
                   <button onClick={() => onToggleSandbox && onToggleSandbox()}>
                     <Cube style={{ width: 16 }} /> Enable Sandbox Tools
                     <span className={'mini-switch' + (sandbox ? ' on' : '')}>{sandbox && <Check style={{ width: 12 }} />}</span>
+                  </button>
+                )}
+                {webSearchAvailable && (
+                  <button onClick={() => onToggleWebSearch && onToggleWebSearch()}>
+                    <Globe style={{ width: 16 }} /> Web Search
+                    <span className={'mini-switch' + (webSearch ? ' on' : '')}>{webSearch && <Check style={{ width: 12 }} />}</span>
                   </button>
                 )}
               </div>

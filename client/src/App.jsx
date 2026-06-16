@@ -201,6 +201,7 @@ export default function App() {
   const [cfg, setCfg] = useState(DEFAULT_CFG);
   const [greeting, setGreeting] = useState(DEFAULT_CFG.greetings[0]);
   const [sandbox, setSandbox] = useState(false);
+  const [webSearch, setWebSearch] = useState(false);
   const [files, setFiles] = useState([]);
   const [liveFile, setLiveFile] = useState(null);
   const [pendingFiles, setPendingFiles] = useState({});
@@ -574,6 +575,7 @@ export default function App() {
         staggerTimer.current = setTimeout(() => setThreadStagger(false), 700);
       }
       setSandbox(!!chat.sandbox);
+      setWebSearch(false);
       setHasSummary(!!chat.hasSummary);
       try { const f = await api.get('/api/chats/' + id + '/files'); setFiles(f.files || []); setArtifactsOpen((f.files || []).length > 0 && artifactsOpen); }
       catch { setFiles([]); }
@@ -588,6 +590,7 @@ export default function App() {
     setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingFiles({});
     const m = models.find(m => m.id === currentId);
     setSandbox(m?.sandboxAllowed !== false && !!m?.sandboxAuto);
+    setWebSearch(false);
     setFocusTick(t => t + 1);
     if (fromPop !== true) history.pushState({}, '', '/');
   }
@@ -685,7 +688,7 @@ export default function App() {
       setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false, folderId: null }, ...cs]);
       history.pushState({}, '', '/chat/' + chatId);
     }
-    if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, content: text, attachments, sandbox })) return;
+    if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, content: text, attachments, sandbox, webSearch })) return;
     gen.current.set(chatId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, blocks: 0 });
     setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     setInput('');
@@ -694,19 +697,19 @@ export default function App() {
 
   const regenerate = useCallback((messageId) => {
     if (streaming || !activeId || !currentId) return;
-    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, messageId, sandbox })) return;
+    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, messageId, sandbox, webSearch })) return;
     gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, blocks: 0 });
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
-  }, [streaming, activeId, currentId, extended, sandbox]);
+  }, [streaming, activeId, currentId, extended, sandbox, webSearch]);
 
   const editMessage = useCallback((messageId, newContent) => {
     if (streaming || !activeId || !currentId) return;
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); if (idx === -1) return ms; const copy = ms.slice(0, idx + 1); copy[idx] = { ...copy[idx], content: newContent }; return copy; });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
-    if (!wsSend({ type: 'edit', chatId: activeId, modelId: currentId, extended, messageId, content: newContent, sandbox })) return;
+    if (!wsSend({ type: 'edit', chatId: activeId, modelId: currentId, extended, messageId, content: newContent, sandbox, webSearch })) return;
     gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, blocks: 0 });
-  }, [streaming, activeId, currentId, extended, sandbox]);
+  }, [streaming, activeId, currentId, extended, sandbox, webSearch]);
 
   function stop() { const key = activeKey(); try { ws.current?.readyState === 1 && ws.current.send(JSON.stringify({ type: 'stop', chatId: key })); } catch {} pendingDone.current = true; setQueued(false); }
   async function logout() { await api.post('/api/auth/logout'); location.href = '/'; }
@@ -717,13 +720,16 @@ export default function App() {
   const model = models.find(m => m.id === currentId);
   const sandboxAllowed = incognito ? false : (model ? model.sandboxAllowed !== false : true);
   const sandboxOn = sandboxAllowed && sandbox;
+  const webSearchAvailable = !incognito && !!cfg.webSearchAvailable;
+  const webSearchOn = webSearchAvailable && webSearch;
   const empty = !activeId && messages.length === 0;
   const composerProps = {
     value: input, onChange: setInput, onSend: send, onStop: stop, streaming: streaming || queued,
     models, currentId, onSelect: setCurrentId, extended, onToggleExtended: () => setExtended(e => !e),
     visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin,
     sandbox: sandboxOn, sandboxAllowed, onToggleSandbox: () => { if (sandboxAllowed) setSandbox(s => !s); },
-    onWantSandbox: () => { if (sandboxAllowed) setSandbox(true); }
+    onWantSandbox: () => { if (sandboxAllowed) setSandbox(true); },
+    webSearch: webSearchOn, webSearchAvailable, onToggleWebSearch: () => { if (webSearchAvailable) setWebSearch(s => !s); }
   };
   const showArtifactsBtn = sandboxOn || files.length > 0;
 
