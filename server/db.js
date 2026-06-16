@@ -77,14 +77,25 @@ export function setSetting(key, value) { data.settings[key] = value; persist(); 
 if (!getSetting('seeded')) {
   setSetting('api_base_url', 'http://localhost:1234/v1');
   setSetting('api_key', 'lm-studio');
+  const pid = uid();
+  setSetting('providers', [{ id: pid, name: 'LM Studio', type: 'lmstudio', base_url: 'http://localhost:1234/v1', api_key: 'lm-studio' }]);
   db.models.insert({
     id: uid(), display_name: 'Quillku 1', description: 'Fastest for quick answers',
-    internal_name: 'local-model', system_prompt: 'You are a helpful assistant.',
+    internal_name: 'local-model', system_prompt: 'You are a helpful assistant.', provider_id: pid,
     has_reasoning: 0, reasoning_token: '', non_reasoning_token: '',
     in_more_models: 0, more_models_label: 'More models',
     static_icon: '', generating_icon: '', thinking_icon: '', icon_position: 'below', sort_order: 0, enabled: 1
   });
   setSetting('seeded', '1');
+}
+
+if (!getSetting('providers_migrated')) {
+  if (!Array.isArray(getSetting('providers', null))) {
+    const pid = uid();
+    setSetting('providers', [{ id: pid, name: 'Default', type: 'lmstudio', base_url: getSetting('api_base_url') || 'http://localhost:1234/v1', api_key: getSetting('api_key') || '' }]);
+    for (const m of db.models.all()) if (!m.provider_id) db.models.update(m.id, { provider_id: pid });
+  }
+  setSetting('providers_migrated', '1');
 }
 
 // one-time: rename the original default model on existing installs

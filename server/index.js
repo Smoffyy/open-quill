@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import { db, uid, now, getSetting, setSetting } from './db.js';
 import { hash, check, sign, publicUser, authMiddleware, adminOnly, userFromRequest, parseCookies } from './auth.js';
 import { buildMessages, streamCompletion, generateTitle, summarizeConversation } from './llm.js';
+import { getProviders, resolveProvider, providerSpec, typesForClient, PROVIDER_TYPES } from './providers.js';
 import * as sandbox from './sandbox.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -325,13 +326,23 @@ app.get('/api/admin/models', authMiddleware, adminOnly, (req, res) =>
 
 app.get('/api/admin/discover-models', authMiddleware, adminOnly, async (req, res) => {
   try {
-    const base = (getSetting('api_base_url') || 'http://localhost:1234/v1').replace(/\/$/, '');
-    const key = getSetting('api_key') || '';
-    const r = await fetch(base + '/models', { headers: key ? { Authorization: `Bearer ${key}` } : {} });
-    if (!r.ok) return res.status(502).json({ error: `Backend returned ${r.status}.` });
-    const j = await r.json().catch(() => ({}));
-    const raw = Array.isArray(j?.data) ? j.data : (Array.isArray(j?.models) ? j.models : []);
-    const ids = [...new Set(raw.map(x => (typeof x === 'string' ? x : (x?.id || x?.name))).filter(Boolean))];
+    const prov = req.query.provider ? resolveProvider(req.query.provider) : getProviders()[0];
+    const { spec, base, key } = providerSpec(prov);
+    const headers = key ? { Authorization: `Bearer ${key}` } : {};
+    let ids = [];
+    if (spec.protocol === 'ollama') {
+      const r = await fetch(base.replace(/\/v1$/, '') + '/api/tags', { headers });
+      if (!r.ok) return res.status(502).json({ error: `Backend returned ${r.status}.` });
+      const j = await r.json().catch(() => ({}));
+      ids = (Array.isArray(j?.models) ? j.models : []).map(x => x?.name || x?.model).filter(Boolean);
+    } else {
+      const r = await fetch(base + '/models', { headers });
+      if (!r.ok) return res.status(502).json({ error: `Backend returned ${r.status}.` });
+      const j = await r.json().catch(() => ({}));
+      const raw = Array.isArray(j?.data) ? j.data : (Array.isArray(j?.models) ? j.models : []);
+      ids = raw.map(x => (typeof x === 'string' ? x : (x?.id || x?.name))).filter(Boolean);
+    }
+    ids = [...new Set(ids)];
     const existing = new Set(db.models.all().map(m => (m.internal_name || '').toLowerCase()));
     res.json({ models: ids.map(id => ({ id, added: existing.has(String(id).toLowerCase()) })) });
   } catch {
@@ -345,6 +356,7 @@ app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
   const m = db.models.insert({
     id: uid(), display_name: b.display_name || 'New model', description: b.description || '',
     internal_name: b.internal_name || 'local-model', system_prompt: b.system_prompt || '',
+    provider_id: b.provider_id || (getProviders()[0]?.id || null), max_tokens: parseInt(b.max_tokens) || null,
     has_reasoning: b.has_reasoning ? 1 : 0, reasoning_token: b.reasoning_token || '', non_reasoning_token: b.non_reasoning_token || '',
     reasoning_collapsible: b.reasoning_collapsible === false ? 0 : 1, icon_size: parseInt(b.icon_size) || 0,
     has_vision: b.has_vision ? 1 : 0,
@@ -366,7 +378,7 @@ app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
 app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
   const cur = db.models.byId(req.params.id);
   if (!cur) return res.status(404).json({ error: 'not found' });
-  const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason'];
+  const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id'];
   const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact', 'reasoning_collapsible'];
   const patch = {};
   for (const k of str) if (k in req.body) patch[k] = req.body[k];
@@ -376,7 +388,7 @@ app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
   if ('icon_size' in req.body) patch.icon_size = Math.max(0, Math.min(80, parseInt(req.body.icon_size) || 0));
   if ('summary_padding' in req.body) patch.summary_padding = Math.max(0.03, Math.min(0.6, parseFloat(req.body.summary_padding) || 0.125));
   const numF = ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'repetition_penalty', 'min_p'];
-  const numI = ['top_k', 'seed'];
+  const numI = ['top_k', 'seed', 'max_tokens'];
   for (const k of numF) if (k in req.body) { const v = req.body[k]; patch[k] = (v === '' || v == null || isNaN(Number(v))) ? null : Number(v); }
   for (const k of numI) if (k in req.body) { const v = req.body[k]; patch[k] = (v === '' || v == null || isNaN(parseInt(v))) ? null : parseInt(v); }
   // only one model can be the login default
@@ -394,9 +406,20 @@ app.delete('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
 
 app.get('/api/admin/detect-ctx', authMiddleware, adminOnly, async (req, res) => {
   const internal = req.query.model || '';
-  const base = (getSetting('api_base_url') || 'http://localhost:1234/v1').replace(/\/$/, '');
+  const prov = req.query.provider ? resolveProvider(req.query.provider) : getProviders()[0];
+  const { spec, base, key } = providerSpec(prov);
+  const headers = { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) };
   const root = base.replace(/\/v1$/, '');
   try {
+    if (spec.protocol === 'ollama') {
+      const r = await fetch(root + '/api/show', { method: 'POST', headers, body: JSON.stringify({ model: internal }) });
+      if (!r.ok) return res.json({ numCtx: 0, ok: false });
+      const json = await r.json();
+      const info = json.model_info || {};
+      const ctxKey = Object.keys(info).find(k => k.endsWith('.context_length'));
+      const ctx = ctxKey ? info[ctxKey] : 0;
+      return res.json({ numCtx: parseInt(ctx) || 0, ok: !!ctx });
+    }
     const r = await fetch(root + '/api/v0/models', { headers: { 'Content-Type': 'application/json' } });
     if (!r.ok) return res.json({ numCtx: 0, ok: false });
     const json = await r.json();
@@ -461,6 +484,40 @@ app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
   if ('sandboxLimitAdminMb' in req.body) lim('sandbox_limit_mb_admin', req.body.sandboxLimitAdminMb, 1024);
   if ('sandboxLimitUserMb' in req.body) lim('sandbox_limit_mb_user', req.body.sandboxLimitUserMb, 256);
   if ('modelQueue' in req.body) setSetting('model_queue', req.body.modelQueue ? '1' : '0');
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/provider-types', authMiddleware, adminOnly, (req, res) => res.json(typesForClient()));
+app.get('/api/admin/providers', authMiddleware, adminOnly, (req, res) => res.json({ providers: getProviders(), types: typesForClient() }));
+app.post('/api/admin/providers', authMiddleware, adminOnly, (req, res) => {
+  const b = req.body || {};
+  const type = PROVIDER_TYPES[b.type] ? b.type : 'lmstudio';
+  const prov = { id: uid(), name: (b.name || PROVIDER_TYPES[type].label).trim(), type, base_url: (b.base_url || '').trim() || PROVIDER_TYPES[type].defaultBaseUrl, api_key: b.api_key || '' };
+  setSetting('providers', [...getProviders(), prov]);
+  res.json({ id: prov.id });
+});
+app.patch('/api/admin/providers/:id', authMiddleware, adminOnly, (req, res) => {
+  const b = req.body || {};
+  const list = getProviders();
+  const i = list.findIndex(p => p.id === req.params.id);
+  if (i === -1) return res.status(404).json({ error: 'not found' });
+  const p = { ...list[i] };
+  if ('name' in b) p.name = (b.name || '').trim() || p.name;
+  if ('type' in b && PROVIDER_TYPES[b.type]) p.type = b.type;
+  if ('base_url' in b) p.base_url = (b.base_url || '').trim() || PROVIDER_TYPES[p.type].defaultBaseUrl;
+  if ('api_key' in b) p.api_key = b.api_key || '';
+  list[i] = p;
+  setSetting('providers', list);
+  res.json({ ok: true });
+});
+app.delete('/api/admin/providers/:id', authMiddleware, adminOnly, (req, res) => {
+  const list = getProviders();
+  if (list.length <= 1) return res.status(400).json({ error: 'At least one provider is required.' });
+  const next = list.filter(p => p.id !== req.params.id);
+  const fallback = next[0].id;
+  for (const m of db.models.all()) if (m.provider_id === req.params.id) db.models.update(m.id, { provider_id: fallback });
+  setSetting('providers', next);
+  broadcastAdminConfig();
   res.json({ ok: true });
 });
 

@@ -116,16 +116,19 @@ function Toggle({ m, set, k, label, note, inverted }) {
   );
 }
 
-function ModelEditor({ m, onChange, onDelete, autosaveState }) {
+function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], providerTypes = {} }) {
   const [section, setSection] = useState('general');
   const [spOpen, setSpOpen] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [detectMsg, setDetectMsg] = useState('');
   const set = (k, v) => onChange({ ...m, [k]: v });
+  const curProvider = providers.find(p => p.id === m.provider_id) || providers[0];
+  const curType = curProvider ? providerTypes[curProvider.type] : null;
+  const allowedSamplers = curType?.samplers || ['temperature', 'top_p', 'top_k', 'min_p', 'repetition_penalty', 'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens'];
   async function detect() {
     setDetecting(true); setDetectMsg('');
     try {
-      const r = await api.get('/api/admin/detect-ctx?model=' + encodeURIComponent(m.internal_name || ''));
+      const r = await api.get('/api/admin/detect-ctx?model=' + encodeURIComponent(m.internal_name || '') + '&provider=' + encodeURIComponent(m.provider_id || ''));
       if (r.ok && r.numCtx) { set('num_ctx', r.numCtx); setDetectMsg('Detected ' + r.numCtx.toLocaleString() + ' tokens.'); }
       else setDetectMsg('Could not detect from the server — enter it manually.');
     } catch { setDetectMsg('Could not detect from the server — enter it manually.'); }
@@ -156,6 +159,12 @@ function ModelEditor({ m, onChange, onDelete, autosaveState }) {
               <input value={m.display_name || ''} onChange={(e) => set('display_name', e.target.value)} /></div>
             <div className="field"><label>Internal model name (API id)</label>
               <input value={m.internal_name || ''} onChange={(e) => set('internal_name', e.target.value)} /></div>
+          </div>
+          <div className="field"><label>Provider</label>
+            <select value={m.provider_id || (providers[0]?.id || '')} onChange={(e) => set('provider_id', e.target.value)}>
+              {providers.map(p => <option key={p.id} value={p.id}>{p.name} ({providerTypes[p.type]?.label || p.type})</option>)}
+            </select>
+            <div className="muted-note">Which connection this model runs through. Manage providers in the Connection tab.</div>
           </div>
           <div className="field"><label>Description</label>
             <input value={m.description || ''} onChange={(e) => set('description', e.target.value)} placeholder="For complex tasks" /></div>
@@ -276,14 +285,15 @@ function ModelEditor({ m, onChange, onDelete, autosaveState }) {
           </div>
         </>}
         {section === 'sampling' && <>
-          <div className="muted-note">Override what's sent to the API. Leave blank to use the server/model default. Non-standard params (top_k, min_p, repetition_penalty) apply on servers that support them, e.g. LM Studio.</div>
+          <div className="muted-note">Override what's sent to the API. Leave blank to use the server/model default. Only parameters supported by this model's provider ({curType?.label || 'unknown'}) are shown.</div>
           <div className="sampling-grid">
             {[
               ['temperature', 'Temperature', '0.0 – 2.0'], ['top_p', 'Top P', '0.0 – 1.0'],
               ['top_k', 'Top K', 'e.g. 40'], ['min_p', 'Min P', '0.0 – 1.0'],
               ['repetition_penalty', 'Repetition penalty', 'e.g. 1.1'], ['presence_penalty', 'Presence penalty', '-2.0 – 2.0'],
-              ['frequency_penalty', 'Frequency penalty', '-2.0 – 2.0'], ['seed', 'Seed', 'integer']
-            ].map(([k, label, ph]) => (
+              ['frequency_penalty', 'Frequency penalty', '-2.0 – 2.0'], ['seed', 'Seed', 'integer'],
+              ['max_tokens', 'Max tokens', 'e.g. 2048']
+            ].filter(([k]) => allowedSamplers.includes(k)).map(([k, label, ph]) => (
               <div className="samp-field" key={k}>
                 <label>{label}</label>
                 <input type="number" step="any" placeholder={ph} value={m[k] ?? ''} onChange={(e) => set(k, e.target.value)} />
@@ -308,6 +318,8 @@ export default function AdminPanel({ user, onClose }) {
   const [cfg, setCfg] = useState({ appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [] });
   const [cfgSaved, setCfgSaved] = useState(false);
   const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256, modelQueue: false });
+  const [providers, setProviders] = useState([]);
+  const [providerTypes, setProviderTypes] = useState({});
   const [selModel, setSelModel] = useState(null);
   const [setSavedFlash, setSetSaved] = useState(false);
   const [dragOver, setDragOver] = useState(null);
@@ -339,6 +351,7 @@ export default function AdminPanel({ user, onClose }) {
   async function load() {
     setModels(await api.get('/api/admin/models'));
     setSettings(await api.get('/api/admin/settings'));
+    try { const p = await api.get('/api/admin/providers'); setProviders(p.providers || []); setProviderTypes(p.types || {}); } catch {}
     try {
       const c = await api.get('/api/app-config');
       setCfg({ appName: c.appName || '', disclaimer: c.disclaimer || '', greetings: c.greetings?.length ? c.greetings : [''], appIcon: c.appIcon || '', quickPrompts: Array.isArray(c.quickPrompts) ? c.quickPrompts : [] });
@@ -389,16 +402,17 @@ export default function AdminPanel({ user, onClose }) {
     await load(); setSelModel(id); setPub(p => ({ ...p, dirty: true }));
   }
   const [discover, setDiscover] = useState(null);
-  async function openDiscover() {
-    setDiscover({ loading: true, error: '', list: [] });
+  async function openDiscover(providerId) {
+    const pid = (typeof providerId === 'string' && providerId) ? providerId : (providers[0]?.id || '');
+    setDiscover({ loading: true, error: '', list: [], providerId: pid });
     try {
-      const r = await api.get('/api/admin/discover-models');
-      setDiscover({ loading: false, error: '', list: r.models || [] });
-    } catch (e) { setDiscover({ loading: false, error: e?.message || 'Could not reach the backend.', list: [] }); }
+      const r = await api.get('/api/admin/discover-models?provider=' + encodeURIComponent(pid));
+      setDiscover({ loading: false, error: '', list: r.models || [], providerId: pid });
+    } catch (e) { setDiscover({ loading: false, error: e?.message || 'Could not reach the backend.', list: [], providerId: pid }); }
   }
   async function addDiscovered(id) {
     setDiscover(d => d ? { ...d, list: d.list.map(x => x.id === id ? { ...x, busy: true } : x) } : d);
-    await api.post('/api/admin/models', { display_name: id, internal_name: id });
+    await api.post('/api/admin/models', { display_name: id, internal_name: id, provider_id: discover?.providerId || (providers[0]?.id || undefined) });
     await load();
     setDiscover(d => d ? { ...d, list: d.list.map(x => x.id === id ? { ...x, added: true, busy: false } : x) } : d);
     setPub(p => ({ ...p, dirty: true }));
@@ -420,6 +434,21 @@ export default function AdminPanel({ user, onClose }) {
   async function saveSettings() {
     await api.patch('/api/admin/settings', settings);
     setSetSaved(true); setTimeout(() => setSetSaved(false), 1500);
+  }
+  async function reloadProviders() {
+    try { const p = await api.get('/api/admin/providers'); setProviders(p.providers || []); setProviderTypes(p.types || {}); } catch {}
+  }
+  async function addProvider() {
+    await api.post('/api/admin/providers', { type: 'lmstudio' });
+    await reloadProviders();
+  }
+  async function patchProvider(id, patch) {
+    setProviders(ps => ps.map(p => p.id === id ? { ...p, ...patch } : p));
+    await api.patch('/api/admin/providers/' + id, patch);
+  }
+  async function deleteProvider(id) {
+    try { await api.del('/api/admin/providers/' + id); await reloadProviders(); await load(); }
+    catch (e) { setAsk({ message: e?.message || 'Could not delete provider.', onConfirm: () => setAsk(null) }); }
   }
 
   const drag = {
@@ -497,7 +526,7 @@ export default function AdminPanel({ user, onClose }) {
                   </div>
                   <div className="models-detail">
                     {sel
-                      ? <ModelEditor key={sel.id} m={sel} onChange={change} onDelete={del} autosaveState={autosave} />
+                      ? <ModelEditor key={sel.id} m={sel} onChange={change} onDelete={del} autosaveState={autosave} providers={providers} providerTypes={providerTypes} />
                       : <div className="muted-note" style={{ padding: 20 }}>No models yet — add one to get started.</div>}
                   </div>
                 </div>
@@ -572,11 +601,33 @@ export default function AdminPanel({ user, onClose }) {
           {tab === 'connection' && (
             <>
               <h2>Connection</h2>
-              <div className="hint">Point this at any OpenAI-compatible server (LM Studio, llama.cpp, vLLM, etc.).</div>
-              <div className="field"><label>API base URL</label>
-                <input value={settings.apiBaseUrl || ''} onChange={(e) => setSettings(s => ({ ...s, apiBaseUrl: e.target.value }))} placeholder="http://localhost:1234/v1" /></div>
-              <div className="field"><label>API key</label>
-                <input value={settings.apiKey || ''} onChange={(e) => setSettings(s => ({ ...s, apiKey: e.target.value }))} placeholder="lm-studio" /></div>
+              <div className="hint">Add one or more providers. Each model runs through the provider you assign it (in the model's General tab).</div>
+              <div className="provider-list">
+                {providers.map(p => {
+                  const t = providerTypes[p.type] || {};
+                  return (
+                    <div className="provider-card" key={p.id}>
+                      <div className="two-col">
+                        <div className="field"><label>Name</label>
+                          <input value={p.name || ''} onChange={(e) => patchProvider(p.id, { name: e.target.value })} placeholder="My provider" /></div>
+                        <div className="field"><label>Provider type</label>
+                          <select value={p.type} onChange={(e) => patchProvider(p.id, { type: e.target.value })}>
+                            {Object.entries(providerTypes).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                          </select></div>
+                      </div>
+                      <div className="field"><label>API base URL</label>
+                        <input value={p.base_url || ''} onChange={(e) => patchProvider(p.id, { base_url: e.target.value })} placeholder={t.defaultBaseUrl || ''} /></div>
+                      <div className="field"><label>API key {t.keyOptional && <span className="muted-note" style={{ display: 'inline' }}>(optional)</span>}</label>
+                        <input value={p.api_key || ''} onChange={(e) => patchProvider(p.id, { api_key: e.target.value })} placeholder={t.keyOptional ? 'Not required for local servers' : 'Required'} /></div>
+                      <div className="btn-row">
+                        <button className="btn ghost" onClick={() => openDiscover(p.id)}><Cube style={{ width: 13, verticalAlign: '-2px' }} /> Discover models</button>
+                        <button className="btn danger" disabled={providers.length <= 1} onClick={() => deleteProvider(p.id)}><Trash style={{ width: 13 }} /></button>
+                      </div>
+                    </div>
+                  );
+                })}
+                <button className="btn add-model" onClick={addProvider}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> Add provider</button>
+              </div>
               <div className="field"><label>Upload size limit (MB)</label>
                 <div className="muted-note">Max size for files attached to messages, per role. 0 = unlimited.</div>
                 <div className="two-col">
@@ -628,7 +679,7 @@ export default function AdminPanel({ user, onClose }) {
               ))}
             </div>
             <div className="sp-foot">
-              <button className="btn ghost" onClick={openDiscover} disabled={discover.loading}>Refresh</button>
+              <button className="btn ghost" onClick={() => openDiscover(discover.providerId)} disabled={discover.loading}>Refresh</button>
               <button className="btn primary" onClick={() => setDiscover(null)}>Done</button>
             </div>
           </div>

@@ -1,4 +1,5 @@
 :root {
+  color-scheme: dark;
   --bg: #262624;
   --sidebar: #1d1c1b;
   --surface: #30302e;
@@ -24,6 +25,7 @@
 }
 
 :root[data-theme="light"] {
+  color-scheme: light;
   --bg: #f4f3ee;
   --sidebar: #eceae1;
   --surface: #faf9f5;
@@ -47,6 +49,7 @@
 :root[data-theme="light"] .code-wrap { background: #1f1f1d; }
 
 :root[data-theme="anthropic"] {
+  color-scheme: dark;
   --bg: #1f1f1e;
   --sidebar: #1d1d1c;
   --surface: #2c2c2a;
@@ -433,8 +436,9 @@ input, textarea { font-family: inherit; color: inherit; }
 .field label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; font-family: var(--font-sans); }
 .field input, .field textarea, .field select {
   width: 100%; padding: 10px 12px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 9px;
-  font-size: 14px; outline: none; font-family: var(--font-sans);
+  font-size: 14px; outline: none; font-family: var(--font-sans); color: var(--text);
 }
+.field select:focus { border-color: var(--accent); }
 .field input:focus, .field textarea:focus { border-color: var(--accent); }
 .field textarea { resize: vertical; min-height: 70px; line-height: 1.5; }
 .field.row { display: flex; align-items: center; justify-content: space-between; }
@@ -848,6 +852,9 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 
 /* admin sampling parameters grid */
 .sampling-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 12px; }
+.provider-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px; }
+.provider-card { border: 1px solid var(--border); border-radius: 12px; padding: 14px; background: var(--surface); display: flex; flex-direction: column; gap: 12px; }
+.provider-card .field { margin: 0; }
 .samp-field { display: flex; flex-direction: column; gap: 5px; }
 .samp-field label { font-size: 12.5px; color: var(--text-muted); }
 .samp-field input {
