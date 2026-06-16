@@ -1347,6 +1347,7 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 
 /* ---------- new chat circled plus ---------- */
 .new-chat-plus { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #2f2f2f; border: 1.5px solid #2f2f2f; flex-shrink: 0; }
+:root[data-theme="light"] .new-chat-plus { background: #e5e4e1; border-color: #e5e4e1; }
 .new-chat-plus svg { width: 13px; height: 13px; opacity: 1; }
 .nav-item.new-chat { color: var(--text); font-weight: 500; }
 .nav-item.new-chat .nav-label { color: var(--text); }

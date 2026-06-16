@@ -310,8 +310,7 @@ export default function App() {
   }, [user]);
   useEffect(() => {
     const m = models.find(x => x.id === currentId);
-    if (m && m.sandboxAllowed === false) { setSandbox(false); return; }
-    if (!activeId && messages.length === 0) setSandbox(!!m?.sandboxAuto);
+    if (m && m.sandboxAllowed === false) setSandbox(false);
   }, [currentId, activeId]);
   function openFromUrl() {
     const m = location.pathname.match(/^\/chat\/(.+)$/);
