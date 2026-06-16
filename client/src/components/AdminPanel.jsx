@@ -152,7 +152,7 @@ function ModelEditor({ m, onChange, onDelete, autosaveState }) {
       <div className="me-body">
         {section === 'general' && <>
           <div className="two-col">
-            <div className="field"><label>Model name (shown in dropdown)</label>
+            <div className="field"><label>Display name</label>
               <input value={m.display_name || ''} onChange={(e) => set('display_name', e.target.value)} /></div>
             <div className="field"><label>Internal model name (API id)</label>
               <input value={m.internal_name || ''} onChange={(e) => set('internal_name', e.target.value)} /></div>
