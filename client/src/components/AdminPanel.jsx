@@ -219,8 +219,8 @@ function ModelEditor({ m, onChange, onDelete, autosaveState }) {
           <Toggle m={m} set={set} k="sandbox_allowed" inverted label="Sandbox tools available" note="Allow users to enable sandbox tools for this model. If off, sandbox can't be turned on." />
           {m.sandbox_allowed !== 0 && <Toggle m={m} set={set} k="sandbox_auto" label="Sandbox tools auto-enabled" note="Start new chats with this model in sandbox mode." />}
           <div className="field"><label>Agent step cap</label>
-            <input type="number" min="1" value={m.agent_steps ?? 10} onChange={(e) => set('agent_steps', e.target.value)} style={{ maxWidth: 140 }} />
-            <div className="muted-note">Max tool rounds per response (default 10, no upper limit).</div>
+            <input type="number" min="0" value={m.agent_steps || ''} placeholder="Unlimited" onChange={(e) => set('agent_steps', e.target.value)} style={{ maxWidth: 140 }} />
+            <div className="muted-note">Max tool rounds per response. Leave blank (or 0) for unlimited.</div>
           </div>
         </>}
         {section === 'context' && <>

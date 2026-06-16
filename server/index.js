@@ -303,7 +303,7 @@ function shapePublic(m) {
     reasoningCollapsible: m.reasoning_collapsible !== 0,
     staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon, generatingAnim: m.generating_anim || 'spin', thinkingAnim: m.thinking_anim || 'pulse',
     iconPosition: m.icon_position || 'below', hasVision: !!m.has_vision, iconSize: m.icon_size || 0,
-    sandboxAuto: !!m.sandbox_auto, sandboxAllowed: m.sandbox_allowed !== 0, dropdownIcon: m.dropdown_icon !== 0, isDefault: !!m.is_default, agentSteps: m.agent_steps || 10,
+    sandboxAuto: !!m.sandbox_auto, sandboxAllowed: m.sandbox_allowed !== 0, dropdownIcon: m.dropdown_icon !== 0, isDefault: !!m.is_default, agentSteps: m.agent_steps || 0,
     enableSummaries: !!m.enable_summaries, numCtx: m.num_ctx || 0, summaryPadding: m.summary_padding || 0.125,
     unavailable: !!m.unavailable, unavailableReason: m.unavailable_reason || '',
     capVision: !!m.cap_vision, capReasoning: !!m.cap_reasoning, capText: !!m.cap_text, capCompact: !!m.cap_compact
@@ -349,7 +349,7 @@ app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
     reasoning_collapsible: b.reasoning_collapsible === false ? 0 : 1, icon_size: parseInt(b.icon_size) || 0,
     has_vision: b.has_vision ? 1 : 0,
     think_open: b.think_open || '', think_close: b.think_close || '',
-    sandbox_auto: b.sandbox_auto ? 1 : 0, sandbox_allowed: b.sandbox_allowed === false ? 0 : 1, dropdown_icon: b.dropdown_icon === false ? 0 : 1, is_default: 0, agent_steps: Number.isInteger(b.agent_steps) ? b.agent_steps : 10,
+    sandbox_auto: b.sandbox_auto ? 1 : 0, sandbox_allowed: b.sandbox_allowed === false ? 0 : 1, dropdown_icon: b.dropdown_icon === false ? 0 : 1, is_default: 0, agent_steps: Number.isInteger(b.agent_steps) ? Math.max(0, b.agent_steps) : 0,
     enable_summaries: b.enable_summaries ? 1 : 0, num_ctx: parseInt(b.num_ctx) || 0, summary_padding: typeof b.summary_padding === 'number' ? b.summary_padding : 0.125,
     in_more_models: b.in_more_models ? 1 : 0, more_models_label: b.more_models_label || 'More models',
     unavailable: b.unavailable ? 1 : 0, unavailable_reason: b.unavailable_reason || '',
@@ -371,7 +371,7 @@ app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
   const patch = {};
   for (const k of str) if (k in req.body) patch[k] = req.body[k];
   for (const k of bool) if (k in req.body) patch[k] = req.body[k] ? 1 : 0;
-  if ('agent_steps' in req.body) patch.agent_steps = Math.max(1, parseInt(req.body.agent_steps) || 10);
+  if ('agent_steps' in req.body) patch.agent_steps = Math.max(0, parseInt(req.body.agent_steps) || 0);
   if ('num_ctx' in req.body) patch.num_ctx = Math.max(0, parseInt(req.body.num_ctx) || 0);
   if ('icon_size' in req.body) patch.icon_size = Math.max(0, Math.min(80, parseInt(req.body.icon_size) || 0));
   if ('summary_padding' in req.body) patch.summary_padding = Math.max(0.03, Math.min(0.6, parseFloat(req.body.summary_padding) || 0.125));
@@ -675,18 +675,50 @@ function sandboxPromptFor(chatId) {
     p += `\n### ${f.path} (v${f.v})\n\`\`\`${f.ext || ''}\n${txt}\n\`\`\`\n`;
     budget -= txt.length;
   }
-  p += '\n---\nREMINDER: The sandbox is ON. Build directly with tool calls — use `create_file`/`str_replace` for any file or script. Do NOT paste full file contents into the chat; the user reads them in the artifacts panel.';
+  p += '\n---\nREMINDER: The sandbox is ON. Build directly with tool calls — use `bash` to run/test things and `create_file`/`str_replace` for files. Do NOT paste full file contents or fake terminal output into the chat; the user sees real results as cards and reads files in the artifacts panel.';
   return p;
+}
+function cleanCall(call) {
+  const o = { tool: call.tool };
+  if (call.path != null) o.path = call.path;
+  if (call.tool === 'bash' || call.tool === 'run') o.cmd = call.cmd ?? call.command ?? '';
+  if (call.new_path != null || call.to != null) o.new_path = call.new_path ?? call.to;
+  if (call.query != null) o.query = call.query;
+  if (call.name != null) o.name = call.name;
+  if (call.dest != null) o.dest = call.dest;
+  if (call.start != null) o.start = call.start;
+  if (call.end != null) o.end = call.end;
+  return o;
+}
+function resultPayload(call, r) {
+  const o = { ok: !!r.ok };
+  if (r.error) o.error = r.error;
+  if (r.v != null) o.v = r.v;
+  if (r.adds != null) o.adds = r.adds;
+  if (r.dels != null) o.dels = r.dels;
+  if (r.bytes != null) o.bytes = r.bytes;
+  if (r.lines != null) o.lines = r.lines;
+  if (r.count != null) o.count = r.count;
+  if (r.cleared != null) o.cleared = r.cleared;
+  if (r.path != null) o.path = r.path;
+  if (r.from != null) o.from = r.from;
+  if ((call.tool === 'bash' || call.tool === 'run')) { o.output = (r.output || '').slice(0, 8000); o.exit = r.exit ?? null; }
+  if (call.tool === 'list_files' && Array.isArray(r.files)) o.files = r.files.slice(0, 100).map(f => ({ path: f.path, size: f.size }));
+  if (call.tool === 'extract_zip' && Array.isArray(r.files)) o.files = r.files.slice(0, 60);
+  if (call.tool === 'search' && Array.isArray(r.matches)) o.matches = r.matches.slice(0, 40);
+  return o;
 }
 function formatToolResult(call, r) {
   const head = `${call.tool}${call.path ? ' ' + call.path : ''}`;
-  if (!r.ok) return `${head} → ERROR: ${r.error}`;
+  if (!r.ok) return `${head} → ERROR: ${r.error}` + (r.output ? `\n${r.output}` : '');
   switch (call.tool) {
-    case 'create_file': return `${head} → created (v${r.v}, ${r.bytes} bytes)`;
-    case 'str_replace': return `${head} → edited (now v${r.v})`;
+    case 'bash': case 'run': return `bash$ ${call.cmd ?? call.command ?? ''}\n${r.output || '(no output)'}\n(exit ${r.exit ?? 0})`;
+    case 'create_file': return `${head} → created (v${r.v}, ${r.bytes} bytes, +${r.adds ?? 0}/-${r.dels ?? 0})`;
+    case 'str_replace': return `${head} → edited (now v${r.v}, +${r.adds ?? 0}/-${r.dels ?? 0})`;
     case 'view': return `${head} →\n${r.content}`;
     case 'list_files': return `list_files →\n${(r.files || []).map(f => `${f.path} (${f.size}b)`).join('\n') || '(empty)'}`;
     case 'delete_file': return `${head} → deleted`;
+    case 'clear_sandbox': case 'delete_all': return `clear_sandbox → removed ${r.cleared} item(s); sandbox is now empty`;
     case 'rename_file': return `${head} → renamed to ${r.path}`;
     case 'search': return `search "${call.query}" → ${r.count} match(es)` + (r.matches.length ? '\n' + r.matches.map(m => `${m.path}:${m.line}: ${m.text}`).join('\n') : '');
     case 'extract_zip': return `extract_zip ${call.path} → ${r.count} file(s)` + (r.files && r.files.length ? ':\n' + r.files.join('\n') : '');
@@ -729,7 +761,7 @@ function chatHistory(chat, model) {
   let rows = activePath(chat.id);
   if (upto) rows = rows.filter(m => m.created_at > upto);
   return rows.map(m => {
-    let text = m.content || '';
+    let text = (m.content || '').replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '').replace(/\n{3,}/g, '\n\n');
     const atts = m.attachments || [];
     const images = [];
     if (atts.length) {
@@ -824,7 +856,8 @@ wss.on('connection', (ws, req) => {
     safeSend(JSON.stringify({ type: 'start', chatId: chat.id, messageId: assistantId }));
 
     const threshold = compactThreshold(model);
-    const maxSteps = sandboxOn ? (model.agent_steps || 10) : 1;
+    const stepCap = (model.agent_steps && model.agent_steps > 0) ? model.agent_steps : 1000;
+    const maxSteps = sandboxOn ? stepCap : 1;
     try {
       for (let step = 0; step < maxSteps; step++) {
         // running low on context mid-response? summarize older turns, then carry on where we left off
@@ -834,31 +867,47 @@ wss.on('connection', (ws, req) => {
         const convo = [...base, ...inTurn];
         let stepText = '';
         let aborted = false;
+        let execCursor = 0;
+        const stepResults = [];
+        // run each ```tool block the instant it finishes, so files/cards finalize live
+        const execPending = () => {
+          if (!sandboxOn) return;
+          while (true) {
+            const open = stepText.indexOf('```tool', execCursor);
+            if (open === -1) { execCursor = Math.max(execCursor, stepText.length - 8); break; }
+            const nl = stepText.indexOf('\n', open);
+            if (nl === -1) break;
+            const close = stepText.indexOf('```', nl + 1);
+            if (close === -1) break;
+            const body = stepText.slice(nl + 1, close);
+            execCursor = close + 3;
+            const call = sandbox.parseToolBody(body);
+            if (!call || !call.tool) continue;
+            const r = sandbox.execTool(chat.id, call, sandboxCap);
+            stepResults.push({ call, r });
+            const block = '\n\n[[OQR:' + Buffer.from(JSON.stringify({ call: cleanCall(call), result: resultPayload(call, r) }), 'utf8').toString('base64') + ']]\n';
+            content += block;
+            safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: block }));
+            safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
+          }
+        };
         try {
           await streamCompletion({
             model, messages: convo, signal: controller.signal,
             onEvent: (e) => {
               if (e.type === 'reasoning') { reasoning += e.text; safeSend(JSON.stringify({ type: 'reasoning', chatId: chat.id, text: e.text })); }
-              else { content += e.text; stepText += e.text; safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: e.text })); }
+              else { content += e.text; stepText += e.text; safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: e.text })); try { execPending(); } catch {} }
             }
           });
         } catch (err) {
           if (err.name === 'AbortError') aborted = true; else throw err;
         }
-        if (!sandboxOn) break;
-        const calls = sandbox.parseToolCalls(stepText);
-        if (calls.length) {
-          const results = [];
-          for (const call of calls) {
-            const r = sandbox.execTool(chat.id, call, sandboxCap);
-            safeSend(JSON.stringify({ type: 'tool', chatId: chat.id, tool: call.tool, path: r.path || call.path || null, ok: !!r.ok, error: r.error || null }));
-            results.push(formatToolResult(call, r));
-          }
-          safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
-          if (!aborted) { content += '\n\n'; safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: '\n\n' })); }
+        try { execPending(); } catch {}
+        if (stepResults.length) {
+          const results = stepResults.map(({ call, r }) => formatToolResult(call, r));
           inTurn = [...inTurn, { role: 'assistant', content: stepText }, { role: 'user', content: 'Tool results:\n' + results.join('\n\n') }];
         }
-        if (aborted || !calls.length) break;
+        if (aborted || !sandboxOn || !stepResults.length) break;
       }
     } catch (err) {
       if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: String(err.message || err) }));
@@ -874,7 +923,7 @@ wss.on('connection', (ws, req) => {
     const lastUserText = lastUser && (Array.isArray(lastUser.content)
       ? (lastUser.content.find(p => p.type === 'text')?.text || 'Image')
       : lastUser.content);
-    const cleanContent = content.replace(/```tool[\s\S]*?```/g, '').trim();
+    const cleanContent = content.replace(/```tool[\s\S]*?```/g, '').replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '').trim();
     if (cleanContent && fresh && fresh.title === 'New chat' && lastUserText) {
       const title = await generateTitle(model, lastUserText, cleanContent);
       db.chats.update(chat.id, { title });

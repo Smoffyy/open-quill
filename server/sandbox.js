@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
+import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -54,6 +55,18 @@ function overCap(chatId, incomingBytes, maxBytes) {
 }
 export function isText(name) { return TEXT_EXT.has(extOf(name)); }
 
+function lineDelta(prev, next) {
+  const na = next == null ? [] : String(next).split('\n');
+  if (prev == null) return { adds: (na.length === 1 && na[0] === '') ? 0 : na.length, dels: 0 };
+  const pa = String(prev).split('\n');
+  const count = new Map();
+  for (const l of pa) count.set(l, (count.get(l) || 0) - 1);
+  for (const l of na) count.set(l, (count.get(l) || 0) + 1);
+  let adds = 0, dels = 0;
+  for (const v of count.values()) { if (v > 0) adds += v; else if (v < 0) dels += -v; }
+  return { adds, dels };
+}
+
 export function list(chatId) {
   const root = dirFor(chatId);
   const meta = readMeta(chatId);
@@ -71,15 +84,25 @@ export function list(chatId) {
   return out.sort((a, b) => a.path.localeCompare(b.path));
 }
 export function remove(chatId) { try { fs.rmSync(dirFor(chatId), { recursive: true, force: true }); } catch {} try { fs.rmSync(metaPath(chatId), { force: true }); } catch {} try { fs.rmSync(histRoot(chatId), { recursive: true, force: true }); } catch {} }
+export function clearAll(chatId) {
+  const root = dirFor(chatId);
+  let cleared = 0;
+  try { for (const e of fs.readdirSync(root)) { fs.rmSync(path.join(root, e), { recursive: true, force: true }); cleared++; } } catch {}
+  try { fs.rmSync(metaPath(chatId), { force: true }); } catch {}
+  try { fs.rmSync(histRoot(chatId), { recursive: true, force: true }); } catch {}
+  return { ok: true, cleared };
+}
 
 export function createFile(chatId, rel, content) {
   const p = resolveSafe(chatId, rel);
+  const prev = (fs.existsSync(p) && isText(rel)) ? fs.readFileSync(p, 'utf8') : null;
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, content ?? '', 'utf8');
   bumpVersion(chatId, rel);
   const v = versionOf(chatId, rel);
   if (isText(rel)) saveSnapshot(chatId, rel, v, content ?? '');
-  return { ok: true, path: rel, bytes: Buffer.byteLength(content ?? ''), v };
+  const { adds, dels } = lineDelta(prev, content ?? '');
+  return { ok: true, path: rel, bytes: Buffer.byteLength(content ?? ''), v, adds, dels };
 }
 export function strReplace(chatId, rel, oldStr, newStr) {
   const p = resolveSafe(chatId, rel);
@@ -93,7 +116,8 @@ export function strReplace(chatId, rel, oldStr, newStr) {
   bumpVersion(chatId, rel);
   const v = versionOf(chatId, rel);
   saveSnapshot(chatId, rel, v, next);
-  return { ok: true, path: rel, v };
+  const { adds, dels } = lineDelta(oldStr ?? '', newStr ?? '');
+  return { ok: true, path: rel, v, adds, dels };
 }
 export function view(chatId, rel, start, end) {
   const p = resolveSafe(chatId, rel);
@@ -262,14 +286,44 @@ export function importBuffer(chatId, destRel, buffer, maxBytes = 0) {
   } catch (e) { return { ok: false, error: String(e.message || e) }; }
 }
 
+const OUT_CAP = 14000;
+function capOut(s) { s = String(s ?? ''); return s.length > OUT_CAP ? s.slice(0, OUT_CAP) + `\n… [output truncated at ${OUT_CAP} characters]` : s; }
+let SHELL_CACHE;
+function pickShell() {
+  if (SHELL_CACHE !== undefined) return SHELL_CACHE;
+  if (process.platform === 'win32') { SHELL_CACHE = process.env.ComSpec || true; return SHELL_CACHE; }
+  for (const s of ['/bin/bash', '/usr/bin/bash', '/usr/local/bin/bash', '/bin/sh', '/usr/bin/sh']) {
+    try { if (fs.existsSync(s)) { SHELL_CACHE = s; return s; } } catch {}
+  }
+  SHELL_CACHE = true;
+  return SHELL_CACHE;
+}
+export function bash(chatId, cmd, timeoutMs = 60000) {
+  if (!cmd || !String(cmd).trim()) return { ok: false, error: 'cmd required', output: '' };
+  const cwd = dirFor(chatId);
+  try { fs.mkdirSync(cwd, { recursive: true }); } catch {}
+  try {
+    const out = execSync(String(cmd), { cwd, timeout: timeoutMs, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'], shell: pickShell() });
+    return { ok: true, output: capOut(out), exit: 0 };
+  } catch (e) {
+    const combined = String(e.stdout || '') + String(e.stderr || '');
+    if (e.code === 'ETIMEDOUT' || e.signal === 'SIGTERM' || e.killed) return { ok: false, output: capOut(combined), error: `Timed out after ${Math.round(timeoutMs / 1000)}s`, exit: null };
+    const code = typeof e.status === 'number' ? e.status : 1;
+    const msg = combined ? capOut(combined) : String(e.message || e);
+    return { ok: false, output: msg, exit: code, error: typeof e.status === 'number' ? `Exited with code ${code}` : String(e.message || e) };
+  }
+}
+
 export function execTool(chatId, call, maxBytes = 0) {
   try {
     switch (call.tool) {
+      case 'bash': case 'run': return bash(chatId, call.cmd ?? call.command);
       case 'create_file': { const sz = Buffer.byteLength(String(call.content ?? ''), 'utf8'); if (overCap(chatId, sz, maxBytes)) return capError(maxBytes); return createFile(chatId, call.path, call.content); }
       case 'str_replace': return strReplace(chatId, call.path, call.old_str, call.new_str);
       case 'view': return view(chatId, call.path, call.start, call.end);
       case 'list_files': return { ok: true, files: list(chatId) };
       case 'delete_file': return deleteFile(chatId, call.path);
+      case 'clear_sandbox': case 'delete_all': return clearAll(chatId);
       case 'rename_file': return renameFile(chatId, call.path, call.new_path || call.to);
       case 'search': return search(chatId, call.query, call.path);
       case 'extract_zip': { if (overCap(chatId, 0, maxBytes)) return capError(maxBytes); return extractZip(chatId, call.path, call.dest, maxBytes ? Math.max(0, maxBytes - dirSize(chatId)) : 0); }
@@ -280,14 +334,42 @@ export function execTool(chatId, call, maxBytes = 0) {
 }
 
 // pull ```tool JSON blocks out of the reply
+function lenientJson(s) {
+  let out = '', inStr = false, esc = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (esc) { out += c; esc = false; continue; }
+    if (c === '\\') { out += c; esc = true; continue; }
+    if (c === '"') { inStr = !inStr; out += c; continue; }
+    if (inStr && (c === '\n' || c === '\r' || c === '\t')) { out += c === '\n' ? '\\n' : c === '\r' ? '\\r' : '\\t'; continue; }
+    out += c;
+  }
+  return out;
+}
+export function parseToolBody(body) {
+  const b = String(body || '').trim();
+  if (!b) return null;
+  try { const o = JSON.parse(b); if (o && o.tool) return o; } catch {}
+  try { const o = JSON.parse(lenientJson(b)); if (o && o.tool) return o; } catch {}
+  const g = (re) => (b.match(re) || [])[1];
+  const tool = g(/"tool"\s*:\s*"([^"]+)"/);
+  if (!tool) return null;
+  return {
+    tool,
+    path: g(/"path"\s*:\s*"((?:[^"\\]|\\.)*)"/),
+    cmd: g(/"(?:cmd|command)"\s*:\s*"((?:[^"\\]|\\.)*)"/),
+    name: g(/"name"\s*:\s*"((?:[^"\\]|\\.)*)"/),
+    query: g(/"query"\s*:\s*"((?:[^"\\]|\\.)*)"/),
+    new_path: g(/"new_path"\s*:\s*"((?:[^"\\]|\\.)*)"/)
+  };
+}
 export function parseToolCalls(text) {
   const calls = [];
   const re = /```tool\b\s*([\s\S]*?)```/gi;
   let m;
   while ((m = re.exec(text))) {
-    const body = m[1].trim();
-    try { const obj = JSON.parse(body); if (obj && obj.tool) calls.push(obj); }
-    catch { /* ignore malformed */ }
+    const obj = parseToolBody(m[1]);
+    if (obj) calls.push(obj);
   }
   return calls;
 }

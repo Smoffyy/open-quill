@@ -5,39 +5,66 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import CodeBlock from './CodeBlock.jsx';
-import { Wrench, FileText, Trash, Folder, Download, Check, Search } from './icons.jsx';
+import ToolCard from './ToolCard.jsx';
 
-const VERBS = {
-  create_file: ['Creating', 'Created'],
-  str_replace: ['Editing', 'Edited'],
-  view: ['Reading', 'Read'],
-  list_files: ['Listing files', 'Listed files'],
-  delete_file: ['Deleting', 'Deleted'],
-  rename_file: ['Moving', 'Moved'],
-  search: ['Searching', 'Searched'],
-  extract_zip: ['Extracting', 'Extracted'],
-  bundle_zip: ['Bundling', 'Bundled']
-};
-function toolName(c) {
-  if (c.tool === 'bundle_zip') return (c.name || 'bundle') + '.zip';
-  if (c.tool === 'rename_file') return c.path && (c.new_path || c.to) ? `${c.path} → ${c.new_path || c.to}` : (c.path || '');
-  if (c.tool === 'search') return c.query ? `"${c.query}"` : '';
-  return c.path || '';
+function b64encode(str) { try { return btoa(unescape(encodeURIComponent(str))); } catch { return ''; } }
+function b64decode(b64) { try { return decodeURIComponent(escape(atob(b64))); } catch { return ''; } }
+
+function parseCall(body) {
+  try { return JSON.parse(body); } catch {}
+  const g = (re) => (body.match(re) || [])[1];
+  return {
+    tool: g(/"tool"\s*:\s*"([^"]+)"/),
+    path: g(/"path"\s*:\s*"([^"]*)"/),
+    cmd: g(/"(?:cmd|command)"\s*:\s*"([^"]*)"/),
+    name: g(/"name"\s*:\s*"([^"]*)"/),
+    query: g(/"query"\s*:\s*"([^"]*)"/),
+    new_path: g(/"new_path"\s*:\s*"([^"]*)"/)
+  };
 }
-function ToolChip({ call, pending }) {
-  const v = VERBS[call.tool];
-  const verb = v ? v[pending ? 0 : 1] : (call.tool || 'Working');
-  const name = toolName(call);
-  const Icon = call.tool === 'delete_file' ? Trash : call.tool === 'list_files' ? Folder : (call.tool === 'bundle_zip' || call.tool === 'extract_zip') ? Download : call.tool === 'search' ? Search : call.tool === 'view' ? FileText : Wrench;
-  return (
-    <span className={'tool-chip' + (pending ? ' pending' : '')}>
-      <Icon style={{ width: 14 }} /><span className="tc-verb">{verb}</span>{name && <span className="tc-name">{name}</span>}
-      {pending && <span className="tc-dots"><i /><i /><i /></span>}
-    </span>
-  );
+
+function targetKey(call) {
+  if (!call || !call.tool) return '';
+  return call.tool + '|' + (call.path || call.cmd || call.name || call.query || call.new_path || '');
+}
+
+function transformTools(text) {
+  if (!text || (text.indexOf('```tool') === -1 && text.indexOf('[[OQR:') === -1)) return text;
+  const results = [];
+  text = text.replace(/\[\[OQR:([A-Za-z0-9+/=]+)\]\]/g, (_, b64) => {
+    try { const r = JSON.parse(b64decode(b64)); if (r) results.push(r); } catch {}
+    return '';
+  });
+  text = text.replace(/\[\[OQR:[A-Za-z0-9+/=]*$/, '');
+  const used = new Array(results.length).fill(false);
+  const take = (call) => {
+    const key = targetKey(call);
+    let i = key ? results.findIndex((r, k) => !used[k] && targetKey(r.call) === key) : -1;
+    if (i < 0 && call && call.tool) i = results.findIndex((r, k) => !used[k] && r.call && r.call.tool === call.tool);
+    if (i < 0) i = results.findIndex((_, k) => !used[k]);
+    if (i < 0) return null;
+    used[i] = true; return results[i];
+  };
+  // closed tool blocks → paired toolcall cards
+  text = text.replace(/```tool[ \t]*\r?\n([\s\S]*?)```/g, (_full, body) => {
+    const parsed = parseCall(body.trim());
+    const r = take(parsed);
+    const call = (r && r.call) || parsed;
+    const payload = { call, result: r ? (r.result ?? null) : null };
+    return '```toolcall\n' + b64encode(JSON.stringify(payload)) + '\n```';
+  });
+  // a still-open tool block at the very end (model mid-write) → show it as pending now
+  text = text.replace(/```tool[ \t]*\r?\n([\s\S]*)$/, (full, body) => {
+    if (body.indexOf('```') !== -1) return full;
+    const call = parseCall(body.trim());
+    if (!call || !call.tool) return full;
+    return '```toolcall\n' + b64encode(JSON.stringify({ call, result: null })) + '\n```';
+  });
+  return text;
 }
 
 function Markdown({ children, streaming }) {
+  const text = typeof children === 'string' ? transformTools(children) : children;
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath]}
@@ -47,25 +74,23 @@ function Markdown({ children, streaming }) {
           const el = Array.isArray(children) ? children[0] : children;
           const props = el?.props || {};
           const m = /language-(\w+)/.exec(props.className || '');
-          const text = String(props.children || '').replace(/\n$/, '');
-          if (m && m[1].toLowerCase() === 'tool') {
-            try { return <ToolChip call={JSON.parse(text)} />; }
-            catch {
-              const tool = (text.match(/"tool"\s*:\s*"([^"]+)"/) || [])[1];
-              const path = (text.match(/"path"\s*:\s*"([^"]*)"/) || [])[1];
-              const name = (text.match(/"name"\s*:\s*"([^"]*)"/) || [])[1];
-              const query = (text.match(/"query"\s*:\s*"([^"]*)"/) || [])[1];
-              const new_path = (text.match(/"new_path"\s*:\s*"([^"]*)"/) || [])[1];
-              return <ToolChip pending={!!streaming} call={{ tool, path, name, query, new_path }} />;
-            }
+          const raw = String(props.children || '').replace(/\n$/, '');
+          const lang = m ? m[1].toLowerCase() : '';
+          if (lang === 'toolcall') {
+            const data = (() => { try { return JSON.parse(b64decode(raw)); } catch { return null; } })();
+            if (data && data.call) return <ToolCard call={data.call} result={data.result} />;
+            return null;
           }
-          return <CodeBlock lang={m ? m[1] : ''} code={text} />;
+          if (lang === 'tool') {
+            return <ToolCard call={parseCall(raw)} result={null} />;
+          }
+          return <CodeBlock lang={m ? m[1] : ''} code={raw} />;
         },
         code({ className, children }) {
           return <code className={className}>{children}</code>;
         }
       }}
-    >{children}</ReactMarkdown>
+    >{text}</ReactMarkdown>
   );
 }
 
