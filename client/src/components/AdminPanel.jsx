@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
-import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron } from './icons.jsx';
+import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield } from './icons.jsx';
 import { QP_ICON_LIST, QpIcon } from '../qpIcons.jsx';
 
 function QpIconPicker({ value, onPick }) {
@@ -116,8 +116,20 @@ function Toggle({ m, set, k, label, note, inverted }) {
   );
 }
 
+function Accordion({ title, sub, children, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className={'me-acc' + (open ? ' open' : '')}>
+      <button type="button" className="me-acc-head" onClick={() => setOpen(o => !o)}>
+        <span className="me-acc-titles"><span className="me-acc-title">{title}</span>{sub && <span className="me-acc-sub">{sub}</span>}</span>
+        <Chevron className="me-acc-chev" />
+      </button>
+      {open && <div className="me-acc-body">{children}</div>}
+    </div>
+  );
+}
+
 function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], providerTypes = {} }) {
-  const [section, setSection] = useState('general');
   const [spOpen, setSpOpen] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [detectMsg, setDetectMsg] = useState('');
@@ -134,10 +146,6 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
     } catch { setDetectMsg('Could not detect from the server — enter it manually.'); }
     setDetecting(false);
   }
-  const sections = [
-    ['general', 'General'], ['reasoning', 'Reasoning'], ['capabilities', 'Capabilities'],
-    ['context', 'Context'], ['appearance', 'Appearance'], ['sampling', 'Sampling']
-  ];
   return (
     <div className="model-editor">
       <div className="me-head">
@@ -147,24 +155,19 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
         </div>
         <button className="btn danger" onClick={() => onDelete(m.id)}><Trash style={{ width: 15 }} /></button>
       </div>
-      <div className="me-sections">
-        {sections.map(([k, label]) => (
-          <button key={k} className={'me-sec' + (section === k ? ' on' : '')} onClick={() => setSection(k)}>{label}</button>
-        ))}
-      </div>
       <div className="me-body">
-        {section === 'general' && <>
+        <div className="me-essentials">
           <div className="two-col">
             <div className="field"><label>Display name</label>
               <input value={m.display_name || ''} onChange={(e) => set('display_name', e.target.value)} /></div>
-            <div className="field"><label>Internal model name (API id)</label>
-              <input value={m.internal_name || ''} onChange={(e) => set('internal_name', e.target.value)} /></div>
+            <div className="field"><label>Model ID</label>
+              <input value={m.internal_name || ''} onChange={(e) => set('internal_name', e.target.value)} placeholder="llama-3.1-8b-instruct" /></div>
           </div>
           <div className="field"><label>Provider</label>
             <select value={m.provider_id || (providers[0]?.id || '')} onChange={(e) => set('provider_id', e.target.value)}>
               {providers.map(p => <option key={p.id} value={p.id}>{p.name} ({providerTypes[p.type]?.label || p.type})</option>)}
             </select>
-            <div className="muted-note">Which connection this model runs through. Manage providers in the Connection tab.</div>
+            <div className="muted-note">The connection this model runs through. Add or edit providers in the Providers tab.</div>
           </div>
           <div className="field"><label>Description</label>
             <input value={m.description || ''} onChange={(e) => set('description', e.target.value)} placeholder="For complex tasks" /></div>
@@ -177,78 +180,85 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
             </button>
           </div>
           {spOpen && <SystemPromptEditor value={m.system_prompt || ''} onChange={(v) => set('system_prompt', v)} onClose={() => setSpOpen(false)} />}
-          <Toggle m={m} set={set} k="in_more_models" label={'Tuck under "More models"'} note="Hidden from the main list" />
+          <Toggle m={m} set={set} k="is_default" label="Set as default" note="Pre-selected for users on first login. Only one model can be the default." />
+          <Toggle m={m} set={set} k="has_reasoning" label="Extended thinking" note="Adds the Extended toggle so users can request deeper reasoning. Configure it under Reasoning below." />
           <div className="field row">
-            <div><label>Hide from clients</label><div className="muted-note">Keeps the model in your admin list but removes it from everyone's dropdown.</div></div>
+            <div><label>Hidden</label><div className="muted-note">Stays in your admin list but is removed from every user's model picker.</div></div>
             <div className={'switch' + (!m.enabled ? ' on' : '')} onClick={() => set('enabled', m.enabled ? 0 : 1)} />
           </div>
+        </div>
+
+        <Accordion title="Visibility & access" sub="Grouping and availability">
+          <Toggle m={m} set={set} k="in_more_models" label={'Group under "More models"'} note="Moves the model out of the main list into a collapsible group." />
           {!!m.in_more_models && (
-            <div className="field"><label>More-models label</label>
-              <input value={m.more_models_label || ''} onChange={(e) => set('more_models_label', e.target.value)} placeholder="Other models" /></div>
+            <div className="field"><label>Group label</label>
+              <input value={m.more_models_label || ''} onChange={(e) => set('more_models_label', e.target.value)} placeholder="More models" /></div>
           )}
-          <Toggle m={m} set={set} k="is_default" label="Default model" note="Pre-selected when a user first logs in. Only one model can be the default." />
-          <Toggle m={m} set={set} k="unavailable" label="Mark as unavailable" note="Keeps the model in the dropdown but blocks clients from using it, with a banner. Admins can still use it for testing." />
+          <Toggle m={m} set={set} k="unavailable" label="Temporarily unavailable" note="The model stays visible in the picker but users can't select it, and a banner explains why. Admins can still use it for testing." />
           {!!m.unavailable && (
-            <div className="field"><label>Unavailable reason <span className="muted-note" style={{ display: 'inline' }}>(shown in the banner's “Learn more”)</span></label>
+            <div className="field"><label>Unavailability message <span className="muted-note" style={{ display: 'inline' }}>(shown in the banner's “Learn more”)</span></label>
               <textarea rows={3} value={m.unavailable_reason || ''} onChange={(e) => set('unavailable_reason', e.target.value)} placeholder="e.g. Down for maintenance — back shortly. Use Quillku 2 in the meantime." /></div>
           )}
-        </>}
-        {section === 'reasoning' && <>
-          <Toggle m={m} set={set} k="has_reasoning" label="Model has reasoning capability" note="Enables the Extended button" />
+        </Accordion>
+
+        <Accordion title="Reasoning" sub="Mode triggers, output tags & visibility">
           {!!m.has_reasoning && <>
             <div className="two-col">
-              <div className="field"><label>Reasoning token</label>
-                <input value={m.reasoning_token || ''} onChange={(e) => set('reasoning_token', e.target.value)} /></div>
-              <div className="field"><label>Non-reasoning token</label>
-                <input value={m.non_reasoning_token || ''} onChange={(e) => set('non_reasoning_token', e.target.value)} /></div>
+              <div className="field"><label>Extended-mode trigger</label>
+                <input value={m.reasoning_token || ''} onChange={(e) => set('reasoning_token', e.target.value)} placeholder="/think" /></div>
+              <div className="field"><label>Standard-mode trigger</label>
+                <input value={m.non_reasoning_token || ''} onChange={(e) => set('non_reasoning_token', e.target.value)} placeholder="/no_think" /></div>
             </div>
-            <div className="muted-note">Tokens are appended to the end of the system prompt on a new line.</div>
+            <div className="muted-note">Appended to the system prompt, on its own line, depending on whether the user has Extended turned on.</div>
           </>}
           <div className="two-col" style={{ marginTop: 12 }}>
-            <div className="field"><label>Thinking open tag</label>
+            <div className="field"><label>Reasoning start tag</label>
               <input value={m.think_open || ''} onChange={(e) => set('think_open', e.target.value)} placeholder="<think>" /></div>
-            <div className="field"><label>Thinking close tag</label>
+            <div className="field"><label>Reasoning end tag</label>
               <input value={m.think_close || ''} onChange={(e) => set('think_close', e.target.value)} placeholder="</think>" /></div>
           </div>
-          <div className="muted-note">Override the tags used to detect inline reasoning in the stream. Leave blank to use the default {'<think>…</think>'}.</div>
+          <div className="muted-note">How the model delimits its reasoning in the output stream. Leave blank to use the default {'<think>…</think>'}.</div>
           <div style={{ marginTop: 14 }}>
-            <Toggle m={m} set={set} k="reasoning_collapsible" inverted label="Let users expand reasoning" note="Off hides the thought process — users still see the 'Thinking…' status, but can't click to read the full reasoning." />
+            <Toggle m={m} set={set} k="reasoning_collapsible" inverted label="Show reasoning to users" note="When on, users can expand and read the thought process. When off, they see only a 'Thinking…' status." />
           </div>
-        </>}
-        {section === 'capabilities' && <>
-          <Toggle m={m} set={set} k="has_vision" label="Vision supported" note="Allow image uploads (sent to the model). Off = files only." />
-          <div className="cap-icons-block">
-            <label>Dropdown capability icons</label>
-            <div className="muted-note" style={{ marginBottom: 8 }}>Small icons shown to the right of this model in the picker. Each is independent — off by default.</div>
-            <Toggle m={m} set={set} k="cap_text" label="Text-Only icon" note="T icon — indicates the model takes text input only." />
-            <Toggle m={m} set={set} k="cap_vision" label="Vision icon" note="Vison icon — indicates the model accepts images." />
-            <Toggle m={m} set={set} k="cap_reasoning" label="Reasoning icon" note="Brain icon — indicates the model can reason." />
-            <Toggle m={m} set={set} k="cap_compact" label="Compact capabilities" note="Collapse the icons into a single ⓘ that reveals the capabilities on hover." />
-          </div>
-          <Toggle m={m} set={set} k="sandbox_allowed" inverted label="Sandbox tools available" note="Allow users to enable sandbox tools for this model. If off, sandbox can't be turned on." />
-          {m.sandbox_allowed !== 0 && <Toggle m={m} set={set} k="sandbox_auto" label="Sandbox tools auto-enabled" note="Start new chats with this model in sandbox mode." />}
-          <div className="field"><label>Agent step cap</label>
+        </Accordion>
+
+        <Accordion title="Capabilities & tools" sub="Image input, sandbox, picker badges">
+          <Toggle m={m} set={set} k="has_vision" label="Image input" note="Let users attach images for the model to see. Off = non-image files only." />
+          <Toggle m={m} set={set} k="sandbox_allowed" inverted label="Allow sandbox tools" note="Lets users enable code and file tools for this model. Off means sandbox can't be turned on." />
+          {m.sandbox_allowed !== 0 && <Toggle m={m} set={set} k="sandbox_auto" label="Enable sandbox by default" note="New chats with this model start with sandbox tools on." />}
+          <div className="field"><label>Tool-call limit</label>
             <input type="number" min="0" value={m.agent_steps || ''} placeholder="Unlimited" onChange={(e) => set('agent_steps', e.target.value)} style={{ maxWidth: 140 }} />
-            <div className="muted-note">Max tool rounds per response. Leave blank (or 0) for unlimited.</div>
+            <div className="muted-note">Maximum tool rounds per response. Leave blank or 0 for unlimited.</div>
           </div>
-        </>}
-        {section === 'context' && <>
-          <Toggle m={m} set={set} k="enable_summaries" label="Enable conversation summaries" note="Compact older turns when the chat nears the context window so it can keep going." />
+          <div className="cap-icons-block">
+            <label>Picker badges</label>
+            <div className="muted-note" style={{ marginBottom: 8 }}>Cosmetic labels shown beside the model in the picker. They don't change behaviour — set them to reflect the model's real capabilities.</div>
+            <Toggle m={m} set={set} k="cap_text" label="Text-only badge" note="Marks the model as accepting text input only." />
+            <Toggle m={m} set={set} k="cap_vision" label="Image badge" note="Marks the model as accepting images." />
+            <Toggle m={m} set={set} k="cap_reasoning" label="Reasoning badge" note="Marks the model as able to reason." />
+            <Toggle m={m} set={set} k="cap_compact" label="Combine into a single badge" note="Collapse the badges into one ⓘ that reveals them on hover." />
+          </div>
+        </Accordion>
+
+        <Accordion title="Context management" sub="Auto-summarize long conversations">
+          <Toggle m={m} set={set} k="enable_summaries" label="Auto-summarize long chats" note="When a conversation nears the context window, older turns are compacted into a summary so it can keep going." />
           {!!m.enable_summaries && <>
-            <div className="field"><label>Context window (tokens)</label>
+            <div className="field"><label>Context window</label>
               <div className="ctx-row">
                 <input type="number" min="0" value={m.num_ctx ?? ''} onChange={(e) => set('num_ctx', e.target.value)} placeholder="e.g. 32768" />
                 <button className="btn" type="button" onClick={detect} disabled={detecting}>{detecting ? 'Detecting…' : 'Detect'}</button>
               </div>
-              <div className="muted-note">{detectMsg || 'The model’s max context. Detect tries LM Studio; otherwise enter it manually.'}</div>
+              <div className="muted-note">{detectMsg || 'The model\u2019s maximum context in tokens. Detect asks the provider; otherwise enter it manually.'}</div>
             </div>
-            <div className="field"><label>Safety padding (fraction)</label>
-              <input type="number" step="0.01" min="0.03" max="0.6" value={m.summary_padding ?? 0.125} onChange={(e) => set('summary_padding', e.target.value)} style={{ maxWidth: 140 }} />
-              <div className="muted-note">Summarize when the conversation reaches (1 − padding) × context. 0.125 leaves 12.5% headroom.</div>
+            <div className="field"><label>Context headroom <span className="muted-note" style={{ display: 'inline' }}>(%)</span></label>
+              <input type="number" step="1" min="3" max="60" value={Math.round((m.summary_padding ?? 0.125) * 100)} onChange={(e) => set('summary_padding', (parseFloat(e.target.value) || 0) / 100)} style={{ maxWidth: 140 }} />
+              <div className="muted-note">Summarize once the chat fills past this much of the context window's free space. 12% leaves a safety margin before the limit.</div>
             </div>
           </>}
-        </>}
-        {section === 'appearance' && <>
+        </Accordion>
+
+        <Accordion title="Appearance" sub="Logos, icon size & position">
           <div className="field"><label>Model logos</label>
             <div className="icon-grid">
               <IconSlot label="Static" value={m.static_icon} def="/starburst.svg" onChange={(v) => set('static_icon', v)} />
@@ -274,24 +284,25 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
             </div>
             <div className="muted-note">Size of the model's icon shown beside its messages. Default is 26px.</div>
           </div>
-          <Toggle m={m} set={set} k="dropdown_icon" inverted label="Show icon in model dropdown" note="Display this model's static icon next to its name in the model picker." />
+          <Toggle m={m} set={set} k="dropdown_icon" inverted label="Show logo in picker" note="Display this model's static logo next to its name in the model picker." />
           <div className="field">
-            <label>Model icon position</label>
+            <label>Logo position</label>
             <div className="seg">
               <button className={(m.icon_position || 'below') === 'above' ? 'on' : ''} onClick={() => set('icon_position', 'above')}>Above text</button>
               <button className={(m.icon_position || 'below') === 'below' ? 'on' : ''} onClick={() => set('icon_position', 'below')}>Below text</button>
             </div>
             <div className="muted-note">Where the logo sits relative to the message it generates.</div>
           </div>
-        </>}
-        {section === 'sampling' && <>
-          <div className="muted-note">Override what's sent to the API. Leave blank to use the server/model default. Only parameters supported by this model's provider ({curType?.label || 'unknown'}) are shown.</div>
+        </Accordion>
+
+        <Accordion title="Sampling" sub={curType ? curType.label : 'Provider parameters'}>
+          <div className="muted-note">Optional overrides sent with each request. Leave a field blank to use the provider's default. Only parameters supported by {curType?.label || 'this provider'} are shown.</div>
           <div className="sampling-grid">
             {[
-              ['temperature', 'Temperature', '0.0 – 2.0'], ['top_p', 'Top P', '0.0 – 1.0'],
-              ['top_k', 'Top K', 'e.g. 40'], ['min_p', 'Min P', '0.0 – 1.0'],
-              ['repetition_penalty', 'Repetition penalty', 'e.g. 1.1'], ['presence_penalty', 'Presence penalty', '-2.0 – 2.0'],
-              ['frequency_penalty', 'Frequency penalty', '-2.0 – 2.0'], ['seed', 'Seed', 'integer'],
+              ['temperature', 'Temperature', '0.0 \u2013 2.0'], ['top_p', 'Top P', '0.0 \u2013 1.0'],
+              ['top_k', 'Top K', 'e.g. 40'], ['min_p', 'Min P', '0.0 \u2013 1.0'],
+              ['repetition_penalty', 'Repetition penalty', 'e.g. 1.1'], ['presence_penalty', 'Presence penalty', '-2.0 \u2013 2.0'],
+              ['frequency_penalty', 'Frequency penalty', '-2.0 \u2013 2.0'], ['seed', 'Seed', 'integer'],
               ['max_tokens', 'Max tokens', 'e.g. 2048']
             ].filter(([k]) => allowedSamplers.includes(k)).map(([k, label, ph]) => (
               <div className="samp-field" key={k}>
@@ -300,7 +311,7 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
               </div>
             ))}
           </div>
-        </>}
+        </Accordion>
       </div>
       <div className="btn-row me-foot">
         <span className="autosave-status">
@@ -468,35 +479,50 @@ export default function AdminPanel({ user, onClose }) {
   };
 
   return (
-    <div className="overlay" onMouseDown={(e) => e.target.classList.contains('overlay') && onClose()}>
-      <div className="modal" style={{ position: 'relative' }}>
-        <button className="modal-close" onClick={onClose}>✕</button>
-        <div className="modal-side">
-          <div className="ms-label">Admin Panel</div>
-          <button className={'modal-tab' + (tab === 'models' ? ' active' : '')} onClick={() => setTab('models')}><Cube /> Models</button>
-          <button className={'modal-tab' + (tab === 'customization' ? ' active' : '')} onClick={() => setTab('customization')}><Sparkles /> Customization</button>
-          <button className={'modal-tab' + (tab === 'users' ? ' active' : '')} onClick={() => setTab('users')}><Users /> Users</button>
-          <button className={'modal-tab' + (tab === 'connection' ? ' active' : '')} onClick={() => setTab('connection')}><Sliders /> Connection</button>
-        </div>
-        <div className="modal-main">
+    <div className="admin-page">
+      <nav className="admin-rail">
+        <div className="ar-brand">Admin Panel</div>
+        <button className={'ar-tab' + (tab === 'models' ? ' active' : '')} onClick={() => setTab('models')}><Cube /> Models</button>
+        <button className={'ar-tab' + (tab === 'providers' ? ' active' : '')} onClick={() => setTab('providers')}><Sliders /> Providers</button>
+        <button className={'ar-tab' + (tab === 'customization' ? ' active' : '')} onClick={() => setTab('customization')}><Sparkles /> Appearance</button>
+        <button className={'ar-tab' + (tab === 'users' ? ' active' : '')} onClick={() => setTab('users')}><Users /> Users</button>
+        <button className={'ar-tab' + (tab === 'limits' ? ' active' : '')} onClick={() => setTab('limits')}><Shield /> Limits &amp; Safety</button>
+        <button className="ar-back" onClick={onClose}><Chevron style={{ transform: 'rotate(90deg)', width: 16 }} /> Back to chat</button>
+      </nav>
+      <div className="admin-content">
+        <header className="admin-topbar">
+          <div className="atb-status">
+            {pubFlash
+              ? <span className="saved-flash">Pushed to all clients ✓</span>
+              : pub.dirty
+                ? <span className="pub-note dirty">Unpublished draft changes</span>
+                : <span className="pub-note">{pub.published ? 'Clients are up to date' : 'Nothing published yet'}</span>}
+          </div>
+          <button className={'btn primary push-btn' + (pub.dirty ? ' dirty' : '')} onClick={publish} disabled={publishing || (!pub.dirty && pub.published)}>
+            {publishing ? 'Pushing…' : 'Push to all clients'}
+          </button>
+        </header>
+        <div className={'admin-body' + (tab === 'models' ? ' wide' : '')}>
           {tab === 'models' && (() => {
             const sel = models.find(x => x.id === selModel) || models[0] || null;
+            if (!models.length) return (
+              <div className="admin-empty">
+                <div className="ae-icon"><Cube style={{ width: 30 }} /></div>
+                <h2>Add your first model</h2>
+                <p>Models are what users pick in the chat. Each one points at a provider (your LLM backend) and carries its own prompt, sampling, and capabilities.</p>
+                <div className="ae-actions">
+                  <button className="btn primary" onClick={add}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> Add model</button>
+                  <button className="btn ghost" onClick={() => openDiscover(providers[0]?.id)}><Cube style={{ width: 14, verticalAlign: '-2px' }} /> Discover from a provider</button>
+                </div>
+                <div className="ae-hint">No provider set up yet? Head to the <button className="linklike" onClick={() => setTab('providers')}>Providers</button> tab first.</div>
+              </div>
+            );
             return (
               <>
                 <div className="models-head">
                   <div>
                     <h2>Models</h2>
-                    <div className="hint">Edits save to your draft automatically and only you (and other admins) see them. Use <strong>Push to all Clients</strong> to make them live for everyone.</div>
-                  </div>
-                  <div className="publish-area">
-                    <button className={'btn primary push-btn' + (pub.dirty ? ' dirty' : '')} onClick={publish} disabled={publishing || (!pub.dirty && pub.published)}>
-                      {publishing ? 'Pushing…' : 'Push to all Clients'}
-                    </button>
-                    {pubFlash
-                      ? <span className="saved-flash">Pushed to all clients ✓</span>
-                      : pub.dirty
-                        ? <span className="pub-note dirty">Unpublished draft changes</span>
-                        : <span className="pub-note">{pub.published ? 'Clients are up to date' : 'Nothing published yet'}</span>}
+                    <div className="hint">Edits save to your draft automatically and only you (and other admins) see them. Use <strong>Push to all clients</strong> (top right) to make them live for everyone.</div>
                   </div>
                 </div>
                 <div className="models-split">
@@ -517,7 +543,7 @@ export default function AdminPanel({ user, onClose }) {
                           {!!m.is_default && <span className="mr-badge">default</span>}
                           {!m.enabled && <span className="mr-badge dim">hidden</span>}
                           {!!m.unavailable && <span className="mr-badge warn">unavailable</span>}
-                          {!!m.in_more_models && <span className="mr-badge dim">tucked</span>}
+                          {!!m.in_more_models && <span className="mr-badge dim">grouped</span>}
                         </span>
                       </div>
                     ))}
@@ -598,9 +624,9 @@ export default function AdminPanel({ user, onClose }) {
               ))}
             </>
           )}
-          {tab === 'connection' && (
+          {tab === 'providers' && (
             <>
-              <h2>Connection</h2>
+              <h2>Providers</h2>
               <div className="hint">Add one or more providers. Each model runs through the provider you assign it (in the model's General tab).</div>
               <div className="provider-list">
                 {providers.map(p => {
@@ -628,6 +654,12 @@ export default function AdminPanel({ user, onClose }) {
                 })}
                 <button className="btn add-model" onClick={addProvider}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> Add provider</button>
               </div>
+            </>
+          )}
+          {tab === 'limits' && (
+            <>
+              <h2>Limits &amp; Safety</h2>
+              <div className="hint">Guardrails applied across the app. These take effect immediately — no publish needed.</div>
               <div className="field"><label>Upload size limit (MB)</label>
                 <div className="muted-note">Max size for files attached to messages, per role. 0 = unlimited.</div>
                 <div className="two-col">

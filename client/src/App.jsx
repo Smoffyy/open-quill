@@ -313,6 +313,8 @@ export default function App() {
     if (m && m.sandboxAllowed === false) setSandbox(false);
   }, [currentId, activeId]);
   function openFromUrl() {
+    if (/^\/admin(\/|$)/.test(location.pathname)) { if (user?.isAdmin) { setShowAdmin(true); return; } history.replaceState({}, '', '/'); }
+    else setShowAdmin(false);
     const m = location.pathname.match(/^\/chat\/(.+)$/);
     if (m) openChat(decodeURIComponent(m[1]), false);
     else { setActiveId(null); setMessages([]); }
@@ -731,7 +733,7 @@ export default function App() {
     { id: 'chats', label: 'Browse all chats', keywords: 'overview history search', action: () => setChatsOverview(true) },
     { id: 'incognito', label: incognito ? 'Exit incognito' : 'Start incognito chat', keywords: 'private ghost', action: () => toggleIncognito() },
     { id: 'settings', label: 'Open settings', keywords: 'preferences account theme', action: () => setShowSettings(true) },
-    ...(user?.isAdmin ? [{ id: 'admin', label: 'Open admin panel', keywords: 'models users connection', action: () => setShowAdmin(true) }] : []),
+    ...(user?.isAdmin ? [{ id: 'admin', label: 'Open admin panel', keywords: 'models users connection providers', action: () => { history.pushState({}, '', '/admin'); setShowAdmin(true); } }] : []),
     { id: 'changelog', label: 'View changelog', keywords: 'updates version', action: () => setShowChangelog(true) },
     { id: 'credits', label: 'View credits', keywords: 'about', action: () => setShowCredits(true) },
     { id: 'license', label: 'View licensing', keywords: 'legal', action: () => setShowLicense(true) },
@@ -745,7 +747,7 @@ export default function App() {
         folders={folders} onCreateFolder={createFolder} onRenameFolder={renameFolder} onToggleFolder={toggleFolder} onDeleteFolder={deleteFolder} onMoveChat={moveChatToFolder}
         onNew={newChat} onOpen={openChat} onDelete={deleteChat} onToggleStar={toggleStar}
         collapsed={collapsed} onToggle={() => setCollapsed(c => !c)}
-        onSettings={() => setShowSettings(true)} onAdmin={() => setShowAdmin(true)}
+        onSettings={() => setShowSettings(true)} onAdmin={() => { history.pushState({}, '', '/admin'); setShowAdmin(true); }}
         onCredits={() => setShowCredits(true)} onChangelog={() => setShowChangelog(true)} onLicense={() => setShowLicense(true)} onLogout={logout} version={cfg.version}
         onChatsOverview={() => setChatsOverview(true)} />
 
@@ -840,7 +842,7 @@ export default function App() {
 
       {showSettings && <SettingsModal user={user} cfg={cfg} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} />}
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} />}
-      {showAdmin && <AdminPanel user={user} onClose={() => setShowAdmin(false)} />}
+      {showAdmin && <AdminPanel user={user} onClose={() => { setShowAdmin(false); if (/^\/admin(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} />}
       {showCredits && <DocModal title="Credits" name="credits" serif onClose={() => setShowCredits(false)} />}
       {showLicense && <DocModal title="Licensing" name="license" onClose={() => setShowLicense(false)} />}
       {showChangelog && <DocModal title="Changelog" name="changelog" onClose={() => setShowChangelog(false)} />}
