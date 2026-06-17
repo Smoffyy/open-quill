@@ -975,7 +975,7 @@ wss.on('connection', (ws, req) => {
               formatted = websearch.formatWebSearchResult(call, r);
             } else {
               if (!sandboxOn) continue;
-              r = sandbox.execTool(chat.id, call, sandboxCap);
+              r = await sandbox.execTool(chat.id, call, sandboxCap);
               payload = resultPayload(call, r);
               formatted = formatToolResult(call, r);
             }

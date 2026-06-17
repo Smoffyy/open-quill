@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
-import { execSync } from 'child_process';
+import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -175,24 +175,27 @@ export function readText(chatId, rel) {
   return fs.readFileSync(p, 'utf8');
 }
 
-// store-only zip writer, no native deps
 const CRC = (() => { const t = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
 function crc32(buf) { let c = 0xFFFFFFFF; for (let i = 0; i < buf.length; i++) c = CRC[(c ^ buf[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
-export function zipBuffer(entries) { // entries: [{name, data:Buffer}]
+export function zipBuffer(entries) {
   const local = [], central = []; let offset = 0;
   for (const f of entries) {
     const name = Buffer.from(f.name, 'utf8'), data = f.data, crc = crc32(data);
+    let comp = data, method = 0;
+    if (data.length > 64) {
+      try { const d = zlib.deflateRawSync(data, { level: 6 }); if (d.length < data.length) { comp = d; method = 8; } } catch {}
+    }
     const lh = Buffer.alloc(30);
-    lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt16LE(0, 6); lh.writeUInt16LE(0, 8);
+    lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt16LE(0, 6); lh.writeUInt16LE(method, 8);
     lh.writeUInt16LE(0, 10); lh.writeUInt16LE(0x21, 12); lh.writeUInt32LE(crc, 14);
-    lh.writeUInt32LE(data.length, 18); lh.writeUInt32LE(data.length, 22); lh.writeUInt16LE(name.length, 26); lh.writeUInt16LE(0, 28);
-    local.push(lh, name, data);
+    lh.writeUInt32LE(comp.length, 18); lh.writeUInt32LE(data.length, 22); lh.writeUInt16LE(name.length, 26); lh.writeUInt16LE(0, 28);
+    local.push(lh, name, comp);
     const ch = Buffer.alloc(46);
-    ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6); ch.writeUInt16LE(0, 8); ch.writeUInt16LE(0, 10);
-    ch.writeUInt16LE(0, 12); ch.writeUInt16LE(0x21, 14); ch.writeUInt32LE(crc, 16); ch.writeUInt32LE(data.length, 20); ch.writeUInt32LE(data.length, 24);
+    ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6); ch.writeUInt16LE(0, 8); ch.writeUInt16LE(method, 10);
+    ch.writeUInt16LE(0, 12); ch.writeUInt16LE(0x21, 14); ch.writeUInt32LE(crc, 16); ch.writeUInt32LE(comp.length, 20); ch.writeUInt32LE(data.length, 24);
     ch.writeUInt16LE(name.length, 28); ch.writeUInt16LE(0, 30); ch.writeUInt16LE(0, 32); ch.writeUInt16LE(0, 34); ch.writeUInt16LE(0, 36); ch.writeUInt32LE(0, 38); ch.writeUInt32LE(offset, 42);
     central.push(ch, name);
-    offset += lh.length + name.length + data.length;
+    offset += lh.length + name.length + comp.length;
   }
   const cdSize = central.reduce((a, b) => a + b.length, 0);
   const end = Buffer.alloc(22);
@@ -299,25 +302,36 @@ function pickShell() {
   return SHELL_CACHE;
 }
 export function bash(chatId, cmd, timeoutMs = 60000) {
-  if (!cmd || !String(cmd).trim()) return { ok: false, error: 'cmd required', output: '' };
+  if (!cmd || !String(cmd).trim()) return Promise.resolve({ ok: false, error: 'cmd required', output: '' });
   const cwd = dirFor(chatId);
   try { fs.mkdirSync(cwd, { recursive: true }); } catch {}
-  try {
-    const out = execSync(String(cmd), { cwd, timeout: timeoutMs, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'], shell: pickShell() });
-    return { ok: true, output: capOut(out), exit: 0 };
-  } catch (e) {
-    const combined = String(e.stdout || '') + String(e.stderr || '');
-    if (e.code === 'ETIMEDOUT' || e.signal === 'SIGTERM' || e.killed) return { ok: false, output: capOut(combined), error: `Timed out after ${Math.round(timeoutMs / 1000)}s`, exit: null };
-    const code = typeof e.status === 'number' ? e.status : 1;
-    const msg = combined ? capOut(combined) : String(e.message || e);
-    return { ok: false, output: msg, exit: code, error: typeof e.status === 'number' ? `Exited with code ${code}` : String(e.message || e) };
-  }
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(String(cmd), { cwd, shell: pickShell(), stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    } catch (e) { return resolve({ ok: false, output: '', error: String(e.message || e), exit: null }); }
+    const MAX = 8 * 1024 * 1024;
+    let out = '', size = 0, killed = false, timedOut = false, settled = false;
+    const grab = (b) => { if (killed) return; size += b.length; out += b.toString('utf8'); if (size > MAX) { killed = true; out = out.slice(0, MAX); try { child.kill('SIGKILL'); } catch {} } };
+    child.stdout.on('data', grab);
+    child.stderr.on('data', grab);
+    const timer = setTimeout(() => { timedOut = true; try { child.kill('SIGKILL'); } catch {} }, timeoutMs);
+    const done = (r) => { if (settled) return; settled = true; clearTimeout(timer); resolve(r); };
+    child.on('error', (e) => done({ ok: false, output: capOut(out), error: String(e.message || e), exit: null }));
+    child.on('close', (code) => {
+      if (timedOut) return done({ ok: false, output: capOut(out), error: `Timed out after ${Math.round(timeoutMs / 1000)}s`, exit: null });
+      if (killed) return done({ ok: false, output: capOut(out), error: `Output exceeded ${Math.round(MAX / 1048576)} MB; process killed.`, exit: null });
+      const exit = typeof code === 'number' ? code : 1;
+      if (exit === 0) return done({ ok: true, output: capOut(out), exit: 0 });
+      return done({ ok: false, output: capOut(out) || `Exited with code ${exit}`, exit, error: `Exited with code ${exit}` });
+    });
+  });
 }
 
-export function execTool(chatId, call, maxBytes = 0) {
+export async function execTool(chatId, call, maxBytes = 0) {
   try {
     switch (call.tool) {
-      case 'bash': case 'run': return bash(chatId, call.cmd ?? call.command);
+      case 'bash': case 'run': return await bash(chatId, call.cmd ?? call.command);
       case 'create_file': { const sz = Buffer.byteLength(String(call.content ?? ''), 'utf8'); if (overCap(chatId, sz, maxBytes)) return capError(maxBytes); return createFile(chatId, call.path, call.content); }
       case 'str_replace': return strReplace(chatId, call.path, call.old_str, call.new_str);
       case 'view': return view(chatId, call.path, call.start, call.end);
@@ -346,22 +360,48 @@ function lenientJson(s) {
   }
   return out;
 }
+const TOOL_NAMES = ['web_search', 'bash', 'run', 'create_file', 'str_replace', 'view', 'list_files', 'delete_file', 'clear_sandbox', 'delete_all', 'rename_file', 'search', 'extract_zip', 'bundle_zip'];
+function normalizeCall(o) {
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return null;
+  let call = o;
+  if (!call.tool) {
+    const key = TOOL_NAMES.find(t => t in call);
+    if (!key) return null;
+    const v = call[key];
+    call = { tool: key, ...call };
+    delete call[key];
+    if (typeof v === 'string') {
+      if (key === 'web_search') { if (call.query == null) call.query = v; }
+      else if (key === 'bash' || key === 'run') { if (call.cmd == null && call.command == null) call.cmd = v; }
+      else if (call.path == null) call.path = v;
+    }
+  }
+  if (call.tool === 'web_search' && call.query == null) call.query = call.search ?? call.q ?? call.input ?? call.text;
+  if ((call.tool === 'bash' || call.tool === 'run') && call.cmd == null && call.command != null) call.cmd = call.command;
+  return call.tool ? call : null;
+}
 export function parseToolBody(body) {
   const b = String(body || '').trim();
   if (!b) return null;
-  try { const o = JSON.parse(b); if (o && o.tool) return o; } catch {}
-  try { const o = JSON.parse(lenientJson(b)); if (o && o.tool) return o; } catch {}
+  let o = null;
+  try { o = JSON.parse(b); } catch {}
+  if (!o) { try { o = JSON.parse(lenientJson(b)); } catch {} }
+  const norm = normalizeCall(o);
+  if (norm) return norm;
   const g = (re) => (b.match(re) || [])[1];
-  const tool = g(/"tool"\s*:\s*"([^"]+)"/);
+  let tool = g(/"tool"\s*:\s*"([^"]+)"/);
+  if (!tool) { const m = b.match(/"(web_search|bash|run|create_file|str_replace|view|list_files|delete_file|clear_sandbox|delete_all|rename_file|search|extract_zip|bundle_zip)"\s*:/); if (m) tool = m[1]; }
   if (!tool) return null;
-  return {
+  const call = {
     tool,
     path: g(/"path"\s*:\s*"((?:[^"\\]|\\.)*)"/),
     cmd: g(/"(?:cmd|command)"\s*:\s*"((?:[^"\\]|\\.)*)"/),
     name: g(/"name"\s*:\s*"((?:[^"\\]|\\.)*)"/),
-    query: g(/"query"\s*:\s*"((?:[^"\\]|\\.)*)"/),
+    query: g(/"(?:query|search|q|input)"\s*:\s*"((?:[^"\\]|\\.)*)"/),
     new_path: g(/"new_path"\s*:\s*"((?:[^"\\]|\\.)*)"/)
   };
+  if (call.tool === 'web_search' && !call.query) { const wq = g(/"web_search"\s*:\s*"((?:[^"\\]|\\.)*)"/); if (wq) call.query = wq; }
+  return call;
 }
 export function parseToolCalls(text) {
   const calls = [];

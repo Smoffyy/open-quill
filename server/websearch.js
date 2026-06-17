@@ -82,11 +82,10 @@ export async function runWebSearch(call) {
     let hits = Array.isArray(data.results) ? data.results : [];
     if (cfg.domains.length) hits = hits.filter(h => { const host = hostOf(h.url); return cfg.domains.some(d => host === d || host.endsWith('.' + d)); });
     hits = hits.slice(0, want);
-    const results = [];
-    for (const h of hits) {
+    const results = await Promise.all(hits.map(async (h) => {
       const page = await ingestPage(h.url);
-      results.push({ title: h.title || h.url, url: h.url, snippet: (h.content || '').slice(0, 400), content: page.text, chars: page.chars, truncated: page.truncated });
-    }
+      return { title: h.title || h.url, url: h.url, snippet: (h.content || '').slice(0, 400), content: page.text, chars: page.chars, truncated: page.truncated };
+    }));
     return { ok: true, query, count: results.length, results };
   } catch (e) {
     return { ok: false, error: 'Search failed: ' + String(e.message || e).slice(0, 200) };

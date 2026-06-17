@@ -87,21 +87,25 @@ export async function streamCompletion({ model, messages, signal, onEvent }) {
     });
     if (!res.ok || !res.body) { const t = await res.text().catch(() => ''); throw new Error(`Upstream error ${res.status}: ${t.slice(0, 300)}`); }
     const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
+    const handle = (line) => {
+      const t = line.trim(); if (!t) return false;
+      try {
+        const json = JSON.parse(t);
+        const msg = json.message || {};
+        if (msg.thinking) onEvent({ type: 'reasoning', text: msg.thinking });
+        if (msg.content) emitContent(msg.content);
+        if (json.done) return true;
+      } catch {}
+      return false;
+    };
     while (true) {
       const { done, value } = await reader.read(); if (done) break;
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n'); buffer = lines.pop();
-      for (const line of lines) {
-        const t = line.trim(); if (!t) continue;
-        try {
-          const json = JSON.parse(t);
-          const msg = json.message || {};
-          if (msg.thinking) onEvent({ type: 'reasoning', text: msg.thinking });
-          if (msg.content) emitContent(msg.content);
-          if (json.done) { flush(); return; }
-        } catch {}
-      }
+      for (const line of lines) if (handle(line)) { flush(); return; }
     }
+    buffer += decoder.decode();
+    handle(buffer);
     flush(); return;
   }
 
@@ -111,24 +115,28 @@ export async function streamCompletion({ model, messages, signal, onEvent }) {
   });
   if (!res.ok || !res.body) { const t = await res.text().catch(() => ''); throw new Error(`Upstream error ${res.status}: ${t.slice(0, 300)}`); }
   const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
+  const handle = (line) => {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('data:')) return false;
+    const data = trimmed.slice(5).trim();
+    if (data === '[DONE]') return true;
+    try {
+      const json = JSON.parse(data);
+      const delta = json.choices?.[0]?.delta || {};
+      if (delta.reasoning_content) onEvent({ type: 'reasoning', text: delta.reasoning_content });
+      if (delta.reasoning) onEvent({ type: 'reasoning', text: delta.reasoning });
+      if (delta.content) emitContent(delta.content);
+    } catch {}
+    return false;
+  };
   while (true) {
     const { done, value } = await reader.read(); if (done) break;
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n'); buffer = lines.pop();
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith('data:')) continue;
-      const data = trimmed.slice(5).trim();
-      if (data === '[DONE]') { flush(); return; }
-      try {
-        const json = JSON.parse(data);
-        const delta = json.choices?.[0]?.delta || {};
-        if (delta.reasoning_content) onEvent({ type: 'reasoning', text: delta.reasoning_content });
-        if (delta.reasoning) onEvent({ type: 'reasoning', text: delta.reasoning });
-        if (delta.content) emitContent(delta.content);
-      } catch {}
-    }
+    for (const line of lines) if (handle(line)) { flush(); return; }
   }
+  buffer += decoder.decode();
+  handle(buffer);
   flush();
 }
 
@@ -139,6 +147,7 @@ async function oneShot(model, messages) {
       method: 'POST', headers: authHeaders(key),
       body: JSON.stringify({ model: model.internal_name, messages, stream: false, think: false, options: ollamaOptions(model, spec) })
     });
+    if (!res.ok) return '';
     const json = await res.json();
     return json.message?.content?.trim() || '';
   }
@@ -146,6 +155,7 @@ async function oneShot(model, messages) {
     method: 'POST', headers: authHeaders(key),
     body: JSON.stringify({ model: model.internal_name, stream: false, messages })
   });
+  if (!res.ok) return '';
   const json = await res.json();
   return json.choices?.[0]?.message?.content?.trim() || '';
 }
