@@ -14,12 +14,16 @@ const VERBS = {
   clear_sandbox: ['Clearing sandbox', 'Cleared sandbox'],
   delete_all: ['Clearing sandbox', 'Cleared sandbox'],
   rename_file: ['Moving', 'Moved'],
+  move_file: ['Moving', 'Moved'],
+  copy_file: ['Copying', 'Copied'],
+  make_dir: ['Creating folder', 'Created folder'],
+  mkdir: ['Creating folder', 'Created folder'],
   search: ['Searching', 'Searched'],
   web_search: ['Searching the web', 'Searched the web'],
   extract_zip: ['Extracting', 'Extracted'],
   bundle_zip: ['Bundling', 'Bundled']
 };
-const FILE_TOOLS = new Set(['create_file', 'str_replace', 'delete_file', 'rename_file']);
+const FILE_TOOLS = new Set(['create_file', 'str_replace', 'delete_file', 'rename_file', 'move_file', 'copy_file', 'make_dir', 'mkdir']);
 
 function escapeHtml(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
 function stripAnsi(s) { return String(s || '').replace(/\u001b\[[0-9;]*m/g, ''); }
@@ -28,7 +32,7 @@ function baseName(p) { return (p || '').split('/').pop(); }
 function openPathFor(call) {
   if (!call) return null;
   if (call.tool === 'create_file' || call.tool === 'str_replace' || call.tool === 'view') return call.path || null;
-  if (call.tool === 'rename_file') return call.new_path || call.path || null;
+  if (call.tool === 'rename_file' || call.tool === 'move_file' || call.tool === 'copy_file') return call.new_path || call.path || null;
   return null;
 }
 function openArtifact(path) {
@@ -40,17 +44,19 @@ function iconFor(tool) {
   if (tool === 'bash' || tool === 'run') return Terminal;
   if (tool === 'delete_file' || tool === 'clear_sandbox' || tool === 'delete_all') return Trash;
   if (tool === 'list_files') return Folder;
+  if (tool === 'make_dir' || tool === 'mkdir') return Folder;
   if (tool === 'bundle_zip' || tool === 'extract_zip') return Download;
   if (tool === 'search') return Search;
   if (tool === 'view') return FileText;
   if (tool === 'create_file') return Plus;
-  if (tool === 'str_replace' || tool === 'rename_file') return Pencil;
+  if (tool === 'copy_file') return Copy;
+  if (tool === 'str_replace' || tool === 'rename_file' || tool === 'move_file') return Pencil;
   return Wrench;
 }
 function targetName(call) {
   if (!call) return '';
   if (call.tool === 'bundle_zip') return (call.name || 'bundle') + '.zip';
-  if (call.tool === 'rename_file') return call.path && call.new_path ? `${baseName(call.path)} → ${baseName(call.new_path)}` : baseName(call.path);
+  if (call.tool === 'rename_file' || call.tool === 'move_file' || call.tool === 'copy_file') return call.path && call.new_path ? `${baseName(call.path)} → ${baseName(call.new_path)}` : baseName(call.path);
   if (call.tool === 'search') return call.query ? `"${call.query}"` : '';
   if (call.tool === 'list_files' || call.tool === 'clear_sandbox' || call.tool === 'delete_all') return '';
   return baseName(call.path) || '';
@@ -193,10 +199,12 @@ function WebSearchCard({ call, result }) {
   );
 }
 
-export default function ToolCard({ call, result }) {
+function ToolCard({ call, result }) {
   if (!call || !call.tool) return null;
   if (call.tool === 'web_search') return <WebSearchCard call={call} result={result} />;
   if (call.tool === 'bash' || call.tool === 'run') return <BashCard call={call} result={result} />;
   if (FILE_TOOLS.has(call.tool)) return <FileCard call={call} result={result} />;
   return <ChipCard call={call} result={result} />;
 }
+export default React.memo(ToolCard, (a, b) =>
+  JSON.stringify(a.call) === JSON.stringify(b.call) && JSON.stringify(a.result) === JSON.stringify(b.result));

@@ -152,6 +152,35 @@ export function renameFile(chatId, rel, newRel) {
   try { const a = histDir(chatId, rel), b = histDir(chatId, newRel); if (fs.existsSync(a)) fs.renameSync(a, b); } catch {}
   return { ok: true, path: newRel, from: rel };
 }
+export function copyFile(chatId, rel, newRel, maxBytes = 0) {
+  const src = resolveSafe(chatId, rel);
+  if (!fs.existsSync(src)) return { ok: false, error: `File not found: ${rel}` };
+  if (!newRel) return { ok: false, error: 'new_path required' };
+  const dst = resolveSafe(chatId, newRel);
+  let incoming = 0;
+  try { incoming = dirEntrySize(src); } catch {}
+  if (overCap(chatId, incoming, maxBytes)) return capError(maxBytes);
+  fs.mkdirSync(path.dirname(dst), { recursive: true });
+  fs.cpSync(src, dst, { recursive: true, force: true });
+  const created = [];
+  const stamp = (r) => { bumpVersion(chatId, r); if (isText(r)) { try { saveSnapshot(chatId, r, versionOf(chatId, r), fs.readFileSync(resolveSafe(chatId, r), 'utf8')); } catch {} } created.push(r); };
+  if (fs.statSync(dst).isDirectory()) { for (const f of list(chatId)) if (f.path === newRel || f.path.startsWith(newRel + '/')) stamp(f.path); }
+  else stamp(newRel);
+  return { ok: true, path: newRel, from: rel, count: created.length };
+}
+export function makeDir(chatId, rel) {
+  if (!rel) return { ok: false, error: 'path required' };
+  const p = resolveSafe(chatId, rel);
+  fs.mkdirSync(p, { recursive: true });
+  return { ok: true, path: rel };
+}
+function dirEntrySize(p) {
+  const st = fs.statSync(p);
+  if (!st.isDirectory()) return st.size;
+  let total = 0;
+  for (const e of fs.readdirSync(p, { withFileTypes: true })) total += dirEntrySize(path.join(p, e.name));
+  return total;
+}
 export function search(chatId, query, filter) {
   if (!query) return { ok: false, error: 'query required' };
   const q = String(query).toLowerCase();
@@ -303,6 +332,22 @@ function pickShell() {
 }
 export function bash(chatId, cmd, timeoutMs = 60000) {
   if (!cmd || !String(cmd).trim()) return Promise.resolve({ ok: false, error: 'cmd required', output: '' });
+  const trimmed = String(cmd).trim();
+  if (process.platform === 'win32') {
+    const first = trimmed.split(/\s+/)[0].toLowerCase().replace(/.*[\\/]/, '');
+    const redirect = {
+      cp: 'copy_file', rm: 'delete_file', mv: 'move_file', mkdir: 'make_dir',
+      touch: 'create_file', zip: 'bundle_zip', unzip: 'extract_zip', cat: 'view', ls: 'list_files', grep: 'search'
+    };
+    if (redirect[first]) {
+      return Promise.resolve({ ok: false, exit: null, output: '',
+        error: `This host shell does not have \`${first}\`. Use the \`${redirect[first]}\` tool instead — it is cross-platform and works on this sandbox. Do not retry the shell command.` });
+    }
+    if (/(^|\s)\/tmp(\/|\s|$)|(^|\s)\/(home|var|usr|etc)(\/|\s|$)/.test(trimmed)) {
+      return Promise.resolve({ ok: false, exit: null, output: '',
+        error: 'Absolute Unix paths like /tmp are not available. All work happens in the sandbox using relative paths (e.g. "build/out.txt"). For copying/moving/zipping use copy_file, move_file, make_dir and bundle_zip.' });
+    }
+  }
   const cwd = dirFor(chatId);
   try { fs.mkdirSync(cwd, { recursive: true }); } catch {}
   return new Promise((resolve) => {
@@ -338,7 +383,9 @@ export async function execTool(chatId, call, maxBytes = 0) {
       case 'list_files': return { ok: true, files: list(chatId) };
       case 'delete_file': return deleteFile(chatId, call.path);
       case 'clear_sandbox': case 'delete_all': return clearAll(chatId);
-      case 'rename_file': return renameFile(chatId, call.path, call.new_path || call.to);
+      case 'rename_file': case 'move_file': return renameFile(chatId, call.path, call.new_path || call.to);
+      case 'copy_file': return copyFile(chatId, call.path, call.new_path || call.to, maxBytes);
+      case 'make_dir': case 'mkdir': return makeDir(chatId, call.path);
       case 'search': return search(chatId, call.query, call.path);
       case 'extract_zip': { if (overCap(chatId, 0, maxBytes)) return capError(maxBytes); return extractZip(chatId, call.path, call.dest, maxBytes ? Math.max(0, maxBytes - dirSize(chatId)) : 0); }
       case 'bundle_zip': return bundleZip(chatId, call.name, call.paths);
@@ -360,7 +407,7 @@ function lenientJson(s) {
   }
   return out;
 }
-const TOOL_NAMES = ['web_search', 'bash', 'run', 'create_file', 'str_replace', 'view', 'list_files', 'delete_file', 'clear_sandbox', 'delete_all', 'rename_file', 'search', 'extract_zip', 'bundle_zip'];
+const TOOL_NAMES = ['web_search', 'bash', 'run', 'create_file', 'str_replace', 'view', 'list_files', 'delete_file', 'clear_sandbox', 'delete_all', 'rename_file', 'move_file', 'copy_file', 'make_dir', 'mkdir', 'search', 'extract_zip', 'bundle_zip'];
 function normalizeCall(o) {
   if (!o || typeof o !== 'object' || Array.isArray(o)) return null;
   let call = o;
@@ -390,7 +437,7 @@ export function parseToolBody(body) {
   if (norm) return norm;
   const g = (re) => (b.match(re) || [])[1];
   let tool = g(/"tool"\s*:\s*"([^"]+)"/);
-  if (!tool) { const m = b.match(/"(web_search|bash|run|create_file|str_replace|view|list_files|delete_file|clear_sandbox|delete_all|rename_file|search|extract_zip|bundle_zip)"\s*:/); if (m) tool = m[1]; }
+  if (!tool) { const m = b.match(/"(web_search|bash|run|create_file|str_replace|view|list_files|delete_file|clear_sandbox|delete_all|rename_file|move_file|copy_file|make_dir|mkdir|search|extract_zip|bundle_zip)"\s*:/); if (m) tool = m[1]; }
   if (!tool) return null;
   const call = {
     tool,

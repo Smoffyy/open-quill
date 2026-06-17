@@ -40,7 +40,7 @@ function diffLines(a, b) {
   return out;
 }
 
-function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writingElsewhere, onJumpToLive, committed = true, pendingText = null }) {
+function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writingElsewhere, onJumpToLive, committed = true, pendingText = null, fileV = 0 }) {
   const [data, setData] = useState(null);
   const [copied, setCopied] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -87,6 +87,14 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
   }
   useEffect(() => { if (isLive) return; if (committed) { setDiff(false); setPrev(null); load(); } else setData(null); }, [path, isLive, committed]);
 
+  const pinnedOld = data && data.viewing && data.v && data.viewing !== data.v;
+  useEffect(() => {
+    if (isLive || !committed || !fileV) return;
+    if (pinnedOld) return;
+    if (data && data.v === fileV) return;
+    load();
+  }, [fileV]);
+
   const viewingV = data?.viewing;
   useEffect(() => {
     if (!diff || !viewingV || viewingV <= 1) { setPrev(null); return; }
@@ -116,13 +124,32 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
   async function copy() { const t = data?.text != null ? data.text : shownText; if (t != null && await copyText(t)) { setCopied(true); setTimeout(() => setCopied(false), 1400); } }
 
   const bodyRef = useRef(null);
-  const stickRef = useRef(true);
-  function onBodyScroll() {
-    const el = bodyRef.current; if (!el) return;
-    stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
-  }
-  useEffect(() => { if ((isLive || liveEdit) && stickRef.current && bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight; }, [shownText, liveDiff, isLive, liveEdit]);
-  useEffect(() => { stickRef.current = true; }, [path]);
+  const followRef = useRef(true);
+  const rafRef = useRef(0);
+  const touchY = useRef(0);
+  const liveActive = isLive || liveEdit;
+
+  useEffect(() => { followRef.current = true; }, [path]);
+  useEffect(() => {
+    if (!liveActive) { cancelAnimationFrame(rafRef.current); return; }
+    const tick = () => {
+      const el = bodyRef.current;
+      if (el && followRef.current) {
+        const target = el.scrollHeight - el.clientHeight;
+        const d = target - el.scrollTop;
+        if (d > 0.5) el.scrollTop += Math.max(1, d * 0.16);
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [liveActive]);
+
+  function nearBottom() { const el = bodyRef.current; return el && el.scrollHeight - el.scrollTop - el.clientHeight < 28; }
+  function onBodyScroll() { if (nearBottom()) followRef.current = true; }
+  function onBodyWheel(e) { if (e.deltaY < 0) followRef.current = false; }
+  function onBodyTouchStart(e) { touchY.current = e.touches[0]?.clientY || 0; }
+  function onBodyTouchMove(e) { const y = e.touches[0]?.clientY || 0; if (y > touchY.current + 2) followRef.current = false; touchY.current = y; }
 
   const versions = data?.versions || [];
   const viewing = data?.viewing;
@@ -171,7 +198,7 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
         <button className="art-writing-bar" onClick={onJumpToLive}>✍ Writing {baseName(writingElsewhere)}… — view live</button>
       )}
       {stale && <button className="art-stale-bar" onClick={() => load()}>Viewing older version v{viewing} — jump to latest (v{current})</button>}
-      <div className="art-vbody" ref={bodyRef} onScroll={onBodyScroll}>
+      <div className="art-vbody" ref={bodyRef} onScroll={onBodyScroll} onWheel={onBodyWheel} onTouchStart={onBodyTouchStart} onTouchMove={onBodyTouchMove}>
         {liveEdit && (
           baseText == null
             ? <div className="art-skel">{Array.from({ length: 14 }).map((_, i) => <span key={i} className="skeleton" style={{ width: (32 + ((i * 53) % 58)) + '%' }} />)}</div>
@@ -282,7 +309,7 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
 
   useEffect(() => { setSel(null); autoRef.current = null; }, [chatId]);
   useEffect(() => { if (focus && focus.path) setSel(focus.path); }, [focus]);
-  useEffect(() => { if (sel && !(live && sel === live.path) && !files.find(f => f.path === sel)) setSel(null); }, [files]);
+  useEffect(() => { if (sel && !(live && sel === live.path) && !(pending && sel in pending) && !files.find(f => f.path === sel)) setSel(null); }, [files]);
 
   useEffect(() => () => { document.body.style.cursor = ''; }, []);
   function startResize(e) {
@@ -308,6 +335,7 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
       {sel ? (
         <Viewer chatId={chatId} path={sel} liveText={liveText} liveInfo={liveInfo} onBack={() => setSel(null)} canBack={treeFiles.length > 1}
           committed={!!files.find(f => f.path === sel)}
+          fileV={byPath.get(sel)?.v || 0}
           pendingText={sel in pending ? pending[sel] : null}
           writingElsewhere={live && live.path && sel !== live.path ? live.path : null}
           onJumpToLive={() => live && setSel(live.path)} />

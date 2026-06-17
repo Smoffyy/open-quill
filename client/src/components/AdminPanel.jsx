@@ -278,12 +278,12 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
             <div className="muted-note">Click an icon to upload a png, svg, jpeg, or gif. Previews animate as they will in chat.</div>
           </div>
           <div className="field">
-            <label>Icon size <span className="muted-note" style={{ display: 'inline' }}>{(m.icon_size || 26)}px</span></label>
+            <label>Icon size <span className="muted-note" style={{ display: 'inline' }}>{(m.icon_size || 40)}px</span></label>
             <div className="icon-size-row">
-              <input type="range" min="14" max="64" value={m.icon_size || 26} onChange={(e) => set('icon_size', parseInt(e.target.value))} />
+              <input type="range" min="14" max="64" value={m.icon_size || 40} onChange={(e) => set('icon_size', parseInt(e.target.value))} />
               <button className="btn ghost icon-size-reset" disabled={!m.icon_size} onClick={() => set('icon_size', 0)}>Reset</button>
             </div>
-            <div className="muted-note">Size of the model's icon shown beside its messages. Default is 26px.</div>
+            <div className="muted-note">Size of the model's icon shown beside its messages. Default is 40px. Legacy is 26px.</div>
           </div>
           <Toggle m={m} set={set} k="dropdown_icon" inverted label="Show logo in picker" note="Display this model's static logo next to its name in the model picker." />
           <div className="field">

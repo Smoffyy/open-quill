@@ -731,11 +731,14 @@ function sandboxPromptFor(chatId) {
   let p = SKILLS_CACHE;
   const files = sandbox.list(chatId);
   if (!files.length) return p + '\n\n## Current sandbox\nThe sandbox is empty.';
+  const LIST_CAP = 200, INLINE_CAP = 12;
   p += '\n\n## Current sandbox files\nThese are the LATEST versions on disk. Always edit these directly — never assume older content. The version number (vN) increases each time a file changes.\n';
-  for (const f of files) p += `- ${f.path} (v${f.v}, ${f.size} bytes)\n`;
-  p += '\n## Latest file contents\n';
-  let budget = 40000;
+  for (const f of files.slice(0, LIST_CAP)) p += `- ${f.path} (v${f.v}, ${f.size} bytes)\n`;
+  if (files.length > LIST_CAP) p += `- … and ${files.length - LIST_CAP} more file(s). The list is truncated to protect context — use \`list_files\`, \`search\`, or \`view\` to inspect anything not shown here.\n`;
+  p += '\n## Latest file contents (a sample; use `view` for anything not shown)\n';
+  let budget = 40000, inlined = 0;
   for (const f of files) {
+    if (inlined >= INLINE_CAP || budget <= 0) break;
     if (f.ext === 'zip' || !sandbox.isText(f.path)) continue;
     const txt = sandbox.readText(chatId, f.path) || '';
     if (txt.length > 8000 || txt.length > budget) {
@@ -743,9 +746,9 @@ function sandboxPromptFor(chatId) {
       continue;
     }
     p += `\n### ${f.path} (v${f.v})\n\`\`\`${f.ext || ''}\n${txt}\n\`\`\`\n`;
-    budget -= txt.length;
+    budget -= txt.length; inlined++;
   }
-  p += '\n---\nREMINDER: The sandbox is ON. Build directly with tool calls — use `bash` to run/test things and `create_file`/`str_replace` for files. Do NOT paste full file contents or fake terminal output into the chat; the user sees real results as cards and reads files in the artifacts panel.';
+  p += '\n---\nREMINDER: The sandbox is ON and these files above are the current truth. Edit existing files with `str_replace` (never recreate them from scratch). For file operations use the dedicated tools — `copy_file`, `move_file`, `make_dir`, `delete_file`, `bundle_zip`, `extract_zip` — never shell commands like cp/rm/mkdir/zip, and never absolute paths like /tmp. Keep working through the task with tool calls until it is fully done; do not stop to ask permission, do not paste file contents or fake terminal output into the chat, and do not repeat a tool call that just failed — read the error and change approach.';
   return p;
 }
 function cleanCall(call) {
@@ -789,7 +792,9 @@ function formatToolResult(call, r) {
     case 'list_files': return `list_files →\n${(r.files || []).map(f => `${f.path} (${f.size}b)`).join('\n') || '(empty)'}`;
     case 'delete_file': return `${head} → deleted`;
     case 'clear_sandbox': case 'delete_all': return `clear_sandbox → removed ${r.cleared} item(s); sandbox is now empty`;
-    case 'rename_file': return `${head} → renamed to ${r.path}`;
+    case 'rename_file': case 'move_file': return `${head} → moved to ${r.path}`;
+    case 'copy_file': return `${head} → copied to ${r.path}${r.count > 1 ? ` (${r.count} files)` : ''}`;
+    case 'make_dir': case 'mkdir': return `${head} → directory ready`;
     case 'search': return `search "${call.query}" → ${r.count} match(es)` + (r.matches.length ? '\n' + r.matches.map(m => `${m.path}:${m.line}: ${m.text}`).join('\n') : '');
     case 'extract_zip': return `extract_zip ${call.path} → ${r.count} file(s)` + (r.files && r.files.length ? ':\n' + r.files.join('\n') : '');
     case 'bundle_zip': return `bundle_zip ${r.path} → created (${r.count} files)`;

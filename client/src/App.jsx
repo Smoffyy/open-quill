@@ -45,8 +45,10 @@ function extractToolBodies(text) {
   while (true) {
     const open = text.indexOf('```tool', from);
     if (open === -1) break;
+    if (text.slice(open, open + 11) === '```toolcall') { from = open + 11; continue; }
     let i = text.indexOf('{', open + 7);
-    if (i === -1) break;
+    const nextOpen = text.indexOf('```tool', open + 7);
+    if (i === -1 || (nextOpen !== -1 && nextOpen < i)) { from = open + 7; continue; }
     let depth = 0, inStr = false, esc = false, end = -1;
     for (let j = i; j < text.length; j++) {
       const c = text[j];
@@ -75,9 +77,13 @@ function parseStreamedFiles(text) {
     if (tool === 'create_file') { if (p) files[p] = typeof obj.content === 'string' ? obj.content : null; }
     else if (tool === 'str_replace') { if (p && !(p in files)) files[p] = null; }
     else if (tool === 'delete_file') { if (p) delete files[p]; }
-    else if (tool === 'rename_file') {
+    else if (tool === 'rename_file' || tool === 'move_file') {
       const np = obj.new_path || obj.to;
       if (p) { if (np) files[np] = files[p] ?? null; delete files[p]; }
+    }
+    else if (tool === 'copy_file') {
+      const np = obj.new_path || obj.to;
+      if (np) files[np] = files[p] ?? null;
     }
   }
   return files;
@@ -408,7 +414,13 @@ export default function App() {
 
   function handleWs(m) {
     if (m.type === 'config') { loadModels(); loadAppConfig(); try { window.dispatchEvent(new CustomEvent('oq-config')); } catch {} return; }
-    if (m.type === 'files') { if (m.chatId && m.chatId !== activeIdRef.current) return; setFiles(m.files || []); setLiveFile(null); return; }
+    if (m.type === 'files') {
+      if (m.chatId && m.chatId !== activeIdRef.current) return;
+      setFiles(m.files || []);
+      const r = gen.current.get(m.chatId);
+      setLiveFile(r && !r.done ? parseLiveFile(r.content) : null);
+      return;
+    }
     if (m.type === 'tool') { return; }
     if (m.type === 'compacting') { if (m.chatId === activeKey()) setCompacting(true); return; }
     if (m.type === 'compacted') { if (m.chatId === activeKey()) { setCompacting(false); setHasSummary(true); } return; }
