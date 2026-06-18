@@ -17,6 +17,7 @@ This roadmap outlines the planned direction of the project. Priorities may shift
 * [X] Revamp Sandbox. (Whole terminal rework)
 * [X] Toggle allow users to display reasoning.
 * [X] Revamp toolcalling view.
+* [ ] Fix tool calling. (Make the tool calling better instead of a ```tool block, it keeps interfearing with the outputs of the assistant.) <- Major, when this is fixed the release will come out.
 
 ---
 
