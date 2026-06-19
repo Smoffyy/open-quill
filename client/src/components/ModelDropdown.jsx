@@ -1,30 +1,73 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Check, ChevDown, Chevron } from './icons.jsx';
+import { Check, ChevDown, Chevron, ImageIcon, Brain, Info, TextIcon } from './icons.jsx';
+
+const CAP_ICONS = [
+  { key: 'capText', label: 'Text-Only', Icon: TextIcon },
+  { key: 'capVision', label: 'Vision', Icon: ImageIcon },
+  { key: 'capReasoning', label: 'Reasoning', Icon: Brain }
+];
+function CapRow({ m }) {
+  const active = CAP_ICONS.filter(c => m[c.key]);
+  if (!active.length) return null;
+  return (
+    <div className="mo-caps">
+      {active.map(({ key, label, Icon }) => (
+        <span key={key} className="mo-cap-ic" title={label}>
+          <Icon style={{ width: 12, height: 12 }} />
+          <span className="mo-cap-lbl">{label}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+function CapInfo({ m }) {
+  const active = CAP_ICONS.filter(c => m[c.key]);
+  if (!active.length) return null;
+  return (
+    <span className="mo-capinfo">
+      <Info style={{ width: 14, height: 14 }} />
+      <span className="mo-capinfo-pop">
+        {active.map(({ key, label, Icon }) => (
+          <span key={key} className="mo-capinfo-item"><Icon style={{ width: 12, height: 12 }} /> {label}</span>
+        ))}
+      </span>
+    </span>
+  );
+}
 
 export default function ModelDropdown({ models, currentId, onSelect, extended, onToggleExtended, up }) {
   const [open, setOpen] = useState(false);
-  const [showMore, setShowMore] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const ref = useRef(null);
+  const moreTimer = useRef(null);
   useEffect(() => {
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setShowMore(false); } };
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setMoreOpen(false); } };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, []);
+  useEffect(() => () => clearTimeout(moreTimer.current), []);
+  const openMore = () => { clearTimeout(moreTimer.current); setMoreOpen(true); };
+  const closeMore = () => { clearTimeout(moreTimer.current); moreTimer.current = setTimeout(() => setMoreOpen(false), 160); };
 
   const current = models.find(m => m.id === currentId);
   const main = models.filter(m => !m.inMoreModels);
   const more = models.filter(m => m.inMoreModels);
   const moreLabel = more[0]?.moreModelsLabel || 'More models';
-  const list = showMore ? more : main;
 
   const Opt = (m) => (
-    <button key={m.id} className="model-opt" onClick={() => { onSelect(m.id); setOpen(false); setShowMore(false); }}>
+    <button key={m.id} className={'model-opt' + (m.unavailable ? ' unavail' : '')} onClick={() => { onSelect(m.id); setOpen(false); setMoreOpen(false); }}
+      title={m.unavailable ? (m.displayName + ' is currently unavailable.') : undefined}>
       {m.dropdownIcon !== false && <img className="mo-icon" src={m.staticIcon || '/starburst.svg'} alt="" />}
       <div className="mo-main">
-        <div className="mo-name">{m.displayName}</div>
+        <div className="mo-name">
+          {m.displayName}
+          {m.unavailable && <span className="mo-unavail"><span className="mo-unavail-dot">ⓘ</span> Currently unavailable</span>}
+        </div>
         {m.description && <div className="mo-desc">{m.description}</div>}
+        {!m.capCompact && <CapRow m={m} />}
       </div>
       {m.id === currentId && <Check className="check" />}
+      {m.capCompact && <CapInfo m={m} />}
     </button>
   );
 
@@ -37,14 +80,8 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
       </button>
       {open && (
         <div className={'model-menu' + (up ? ' up' : '')}>
-          {showMore && (
-            <button className="submenu-row" onClick={() => setShowMore(false)} style={{ color: 'var(--text-muted)' }}>
-              <span style={{ transform: 'rotate(180deg)', display: 'inline-flex' }}><Chevron style={{ width: 15 }} /></span>
-              <span style={{ marginLeft: 6 }}>{moreLabel}</span>
-            </button>
-          )}
-          {list.map(Opt)}
-          {!showMore && current?.hasReasoning && (
+          {main.map(Opt)}
+          {current?.hasReasoning && (
             <>
               <hr />
               <div className="toggle-row" onClick={onToggleExtended}>
@@ -56,12 +93,19 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
               </div>
             </>
           )}
-          {!showMore && more.length > 0 && (
+          {more.length > 0 && (
             <>
               <hr />
-              <button className="submenu-row" onClick={() => setShowMore(true)}>
-                <span>{moreLabel}</span><Chevron style={{ width: 15 }} />
-              </button>
+              <div className="more-wrap" onMouseEnter={openMore} onMouseLeave={closeMore}>
+                <button className={'submenu-row' + (moreOpen ? ' active' : '')} onClick={() => (moreOpen ? closeMore() : openMore())}>
+                  <span>{moreLabel}</span><Chevron style={{ width: 15 }} />
+                </button>
+                {moreOpen && (
+                  <div className="model-submenu" onMouseEnter={openMore} onMouseLeave={closeMore}>
+                    {more.map(Opt)}
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>

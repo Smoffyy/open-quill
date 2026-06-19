@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
+import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -54,6 +55,18 @@ function overCap(chatId, incomingBytes, maxBytes) {
 }
 export function isText(name) { return TEXT_EXT.has(extOf(name)); }
 
+function lineDelta(prev, next) {
+  const na = next == null ? [] : String(next).split('\n');
+  if (prev == null) return { adds: (na.length === 1 && na[0] === '') ? 0 : na.length, dels: 0 };
+  const pa = String(prev).split('\n');
+  const count = new Map();
+  for (const l of pa) count.set(l, (count.get(l) || 0) - 1);
+  for (const l of na) count.set(l, (count.get(l) || 0) + 1);
+  let adds = 0, dels = 0;
+  for (const v of count.values()) { if (v > 0) adds += v; else if (v < 0) dels += -v; }
+  return { adds, dels };
+}
+
 export function list(chatId) {
   const root = dirFor(chatId);
   const meta = readMeta(chatId);
@@ -71,15 +84,25 @@ export function list(chatId) {
   return out.sort((a, b) => a.path.localeCompare(b.path));
 }
 export function remove(chatId) { try { fs.rmSync(dirFor(chatId), { recursive: true, force: true }); } catch {} try { fs.rmSync(metaPath(chatId), { force: true }); } catch {} try { fs.rmSync(histRoot(chatId), { recursive: true, force: true }); } catch {} }
+export function clearAll(chatId) {
+  const root = dirFor(chatId);
+  let cleared = 0;
+  try { for (const e of fs.readdirSync(root)) { fs.rmSync(path.join(root, e), { recursive: true, force: true }); cleared++; } } catch {}
+  try { fs.rmSync(metaPath(chatId), { force: true }); } catch {}
+  try { fs.rmSync(histRoot(chatId), { recursive: true, force: true }); } catch {}
+  return { ok: true, cleared };
+}
 
 export function createFile(chatId, rel, content) {
   const p = resolveSafe(chatId, rel);
+  const prev = (fs.existsSync(p) && isText(rel)) ? fs.readFileSync(p, 'utf8') : null;
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, content ?? '', 'utf8');
   bumpVersion(chatId, rel);
   const v = versionOf(chatId, rel);
   if (isText(rel)) saveSnapshot(chatId, rel, v, content ?? '');
-  return { ok: true, path: rel, bytes: Buffer.byteLength(content ?? ''), v };
+  const { adds, dels } = lineDelta(prev, content ?? '');
+  return { ok: true, path: rel, bytes: Buffer.byteLength(content ?? ''), v, adds, dels };
 }
 export function strReplace(chatId, rel, oldStr, newStr) {
   const p = resolveSafe(chatId, rel);
@@ -93,7 +116,8 @@ export function strReplace(chatId, rel, oldStr, newStr) {
   bumpVersion(chatId, rel);
   const v = versionOf(chatId, rel);
   saveSnapshot(chatId, rel, v, next);
-  return { ok: true, path: rel, v };
+  const { adds, dels } = lineDelta(oldStr ?? '', newStr ?? '');
+  return { ok: true, path: rel, v, adds, dels };
 }
 export function view(chatId, rel, start, end) {
   const p = resolveSafe(chatId, rel);
@@ -128,6 +152,35 @@ export function renameFile(chatId, rel, newRel) {
   try { const a = histDir(chatId, rel), b = histDir(chatId, newRel); if (fs.existsSync(a)) fs.renameSync(a, b); } catch {}
   return { ok: true, path: newRel, from: rel };
 }
+export function copyFile(chatId, rel, newRel, maxBytes = 0) {
+  const src = resolveSafe(chatId, rel);
+  if (!fs.existsSync(src)) return { ok: false, error: `File not found: ${rel}` };
+  if (!newRel) return { ok: false, error: 'new_path required' };
+  const dst = resolveSafe(chatId, newRel);
+  let incoming = 0;
+  try { incoming = dirEntrySize(src); } catch {}
+  if (overCap(chatId, incoming, maxBytes)) return capError(maxBytes);
+  fs.mkdirSync(path.dirname(dst), { recursive: true });
+  fs.cpSync(src, dst, { recursive: true, force: true });
+  const created = [];
+  const stamp = (r) => { bumpVersion(chatId, r); if (isText(r)) { try { saveSnapshot(chatId, r, versionOf(chatId, r), fs.readFileSync(resolveSafe(chatId, r), 'utf8')); } catch {} } created.push(r); };
+  if (fs.statSync(dst).isDirectory()) { for (const f of list(chatId)) if (f.path === newRel || f.path.startsWith(newRel + '/')) stamp(f.path); }
+  else stamp(newRel);
+  return { ok: true, path: newRel, from: rel, count: created.length };
+}
+export function makeDir(chatId, rel) {
+  if (!rel) return { ok: false, error: 'path required' };
+  const p = resolveSafe(chatId, rel);
+  fs.mkdirSync(p, { recursive: true });
+  return { ok: true, path: rel };
+}
+function dirEntrySize(p) {
+  const st = fs.statSync(p);
+  if (!st.isDirectory()) return st.size;
+  let total = 0;
+  for (const e of fs.readdirSync(p, { withFileTypes: true })) total += dirEntrySize(path.join(p, e.name));
+  return total;
+}
 export function search(chatId, query, filter) {
   if (!query) return { ok: false, error: 'query required' };
   const q = String(query).toLowerCase();
@@ -151,24 +204,27 @@ export function readText(chatId, rel) {
   return fs.readFileSync(p, 'utf8');
 }
 
-// store-only zip writer, no native deps
 const CRC = (() => { const t = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
 function crc32(buf) { let c = 0xFFFFFFFF; for (let i = 0; i < buf.length; i++) c = CRC[(c ^ buf[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
-export function zipBuffer(entries) { // entries: [{name, data:Buffer}]
+export function zipBuffer(entries) {
   const local = [], central = []; let offset = 0;
   for (const f of entries) {
     const name = Buffer.from(f.name, 'utf8'), data = f.data, crc = crc32(data);
+    let comp = data, method = 0;
+    if (data.length > 64) {
+      try { const d = zlib.deflateRawSync(data, { level: 6 }); if (d.length < data.length) { comp = d; method = 8; } } catch {}
+    }
     const lh = Buffer.alloc(30);
-    lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt16LE(0, 6); lh.writeUInt16LE(0, 8);
+    lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt16LE(0, 6); lh.writeUInt16LE(method, 8);
     lh.writeUInt16LE(0, 10); lh.writeUInt16LE(0x21, 12); lh.writeUInt32LE(crc, 14);
-    lh.writeUInt32LE(data.length, 18); lh.writeUInt32LE(data.length, 22); lh.writeUInt16LE(name.length, 26); lh.writeUInt16LE(0, 28);
-    local.push(lh, name, data);
+    lh.writeUInt32LE(comp.length, 18); lh.writeUInt32LE(data.length, 22); lh.writeUInt16LE(name.length, 26); lh.writeUInt16LE(0, 28);
+    local.push(lh, name, comp);
     const ch = Buffer.alloc(46);
-    ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6); ch.writeUInt16LE(0, 8); ch.writeUInt16LE(0, 10);
-    ch.writeUInt16LE(0, 12); ch.writeUInt16LE(0x21, 14); ch.writeUInt32LE(crc, 16); ch.writeUInt32LE(data.length, 20); ch.writeUInt32LE(data.length, 24);
+    ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6); ch.writeUInt16LE(0, 8); ch.writeUInt16LE(method, 10);
+    ch.writeUInt16LE(0, 12); ch.writeUInt16LE(0x21, 14); ch.writeUInt32LE(crc, 16); ch.writeUInt32LE(comp.length, 20); ch.writeUInt32LE(data.length, 24);
     ch.writeUInt16LE(name.length, 28); ch.writeUInt16LE(0, 30); ch.writeUInt16LE(0, 32); ch.writeUInt16LE(0, 34); ch.writeUInt16LE(0, 36); ch.writeUInt32LE(0, 38); ch.writeUInt32LE(offset, 42);
     central.push(ch, name);
-    offset += lh.length + name.length + data.length;
+    offset += lh.length + name.length + comp.length;
   }
   const cdSize = central.reduce((a, b) => a + b.length, 0);
   const end = Buffer.alloc(22);
@@ -262,32 +318,78 @@ export function importBuffer(chatId, destRel, buffer, maxBytes = 0) {
   } catch (e) { return { ok: false, error: String(e.message || e) }; }
 }
 
-export function execTool(chatId, call, maxBytes = 0) {
+const OUT_CAP = 14000;
+function capOut(s) { s = String(s ?? ''); return s.length > OUT_CAP ? s.slice(0, OUT_CAP) + `\n… [output truncated at ${OUT_CAP} characters]` : s; }
+let SHELL_CACHE;
+function pickShell() {
+  if (SHELL_CACHE !== undefined) return SHELL_CACHE;
+  if (process.platform === 'win32') { SHELL_CACHE = process.env.ComSpec || true; return SHELL_CACHE; }
+  for (const s of ['/bin/bash', '/usr/bin/bash', '/usr/local/bin/bash', '/bin/sh', '/usr/bin/sh']) {
+    try { if (fs.existsSync(s)) { SHELL_CACHE = s; return s; } } catch {}
+  }
+  SHELL_CACHE = true;
+  return SHELL_CACHE;
+}
+export function bash(chatId, cmd, timeoutMs = 60000) {
+  if (!cmd || !String(cmd).trim()) return Promise.resolve({ ok: false, error: 'cmd required', output: '' });
+  const trimmed = String(cmd).trim();
+  if (process.platform === 'win32') {
+    const first = trimmed.split(/\s+/)[0].toLowerCase().replace(/.*[\\/]/, '');
+    const redirect = {
+      cp: 'copy_file', rm: 'delete_file', mv: 'move_file', mkdir: 'make_dir',
+      touch: 'create_file', zip: 'bundle_zip', unzip: 'extract_zip', cat: 'view', ls: 'list_files', grep: 'search'
+    };
+    if (redirect[first]) {
+      return Promise.resolve({ ok: false, exit: null, output: '',
+        error: `This host shell does not have \`${first}\`. Use the \`${redirect[first]}\` tool instead — it is cross-platform and works on this sandbox. Do not retry the shell command.` });
+    }
+    if (/(^|\s)\/tmp(\/|\s|$)|(^|\s)\/(home|var|usr|etc)(\/|\s|$)/.test(trimmed)) {
+      return Promise.resolve({ ok: false, exit: null, output: '',
+        error: 'Absolute Unix paths like /tmp are not available. All work happens in the sandbox using relative paths (e.g. "build/out.txt"). For copying/moving/zipping use copy_file, move_file, make_dir and bundle_zip.' });
+    }
+  }
+  const cwd = dirFor(chatId);
+  try { fs.mkdirSync(cwd, { recursive: true }); } catch {}
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(String(cmd), { cwd, shell: pickShell(), stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    } catch (e) { return resolve({ ok: false, output: '', error: String(e.message || e), exit: null }); }
+    const MAX = 8 * 1024 * 1024;
+    let out = '', size = 0, killed = false, timedOut = false, settled = false;
+    const grab = (b) => { if (killed) return; size += b.length; out += b.toString('utf8'); if (size > MAX) { killed = true; out = out.slice(0, MAX); try { child.kill('SIGKILL'); } catch {} } };
+    child.stdout.on('data', grab);
+    child.stderr.on('data', grab);
+    const timer = setTimeout(() => { timedOut = true; try { child.kill('SIGKILL'); } catch {} }, timeoutMs);
+    const done = (r) => { if (settled) return; settled = true; clearTimeout(timer); resolve(r); };
+    child.on('error', (e) => done({ ok: false, output: capOut(out), error: String(e.message || e), exit: null }));
+    child.on('close', (code) => {
+      if (timedOut) return done({ ok: false, output: capOut(out), error: `Timed out after ${Math.round(timeoutMs / 1000)}s`, exit: null });
+      if (killed) return done({ ok: false, output: capOut(out), error: `Output exceeded ${Math.round(MAX / 1048576)} MB; process killed.`, exit: null });
+      const exit = typeof code === 'number' ? code : 1;
+      if (exit === 0) return done({ ok: true, output: capOut(out), exit: 0 });
+      return done({ ok: false, output: capOut(out) || `Exited with code ${exit}`, exit, error: `Exited with code ${exit}` });
+    });
+  });
+}
+
+export async function execTool(chatId, call, maxBytes = 0) {
   try {
     switch (call.tool) {
+      case 'bash': case 'run': return await bash(chatId, call.cmd ?? call.command);
       case 'create_file': { const sz = Buffer.byteLength(String(call.content ?? ''), 'utf8'); if (overCap(chatId, sz, maxBytes)) return capError(maxBytes); return createFile(chatId, call.path, call.content); }
       case 'str_replace': return strReplace(chatId, call.path, call.old_str, call.new_str);
       case 'view': return view(chatId, call.path, call.start, call.end);
       case 'list_files': return { ok: true, files: list(chatId) };
       case 'delete_file': return deleteFile(chatId, call.path);
-      case 'rename_file': return renameFile(chatId, call.path, call.new_path || call.to);
+      case 'clear_sandbox': case 'delete_all': return clearAll(chatId);
+      case 'rename_file': case 'move_file': return renameFile(chatId, call.path, call.new_path || call.to);
+      case 'copy_file': return copyFile(chatId, call.path, call.new_path || call.to, maxBytes);
+      case 'make_dir': case 'mkdir': return makeDir(chatId, call.path);
       case 'search': return search(chatId, call.query, call.path);
       case 'extract_zip': { if (overCap(chatId, 0, maxBytes)) return capError(maxBytes); return extractZip(chatId, call.path, call.dest, maxBytes ? Math.max(0, maxBytes - dirSize(chatId)) : 0); }
       case 'bundle_zip': return bundleZip(chatId, call.name, call.paths);
       default: return { ok: false, error: `Unknown tool: ${call.tool}` };
     }
   } catch (e) { return { ok: false, error: String(e.message || e) }; }
-}
-
-// pull ```tool JSON blocks out of the reply
-export function parseToolCalls(text) {
-  const calls = [];
-  const re = /```tool\b\s*([\s\S]*?)```/gi;
-  let m;
-  while ((m = re.exec(text))) {
-    const body = m[1].trim();
-    try { const obj = JSON.parse(body); if (obj && obj.tool) calls.push(obj); }
-    catch { /* ignore malformed */ }
-  }
-  return calls;
 }

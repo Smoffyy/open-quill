@@ -1,9 +1,20 @@
 import React, { useState } from 'react';
 import { Chevron } from './icons.jsx';
 
-export default function ReasoningBlock({ text, live }) {
+export default function ReasoningBlock({ text, live, collapsible = true }) {
   const [open, setOpen] = useState(false);
   if (!text) return null;
+  if (!collapsible) {
+    if (!live) return null;
+    return (
+      <div className="reasoning">
+        <div className="reasoning-head static">
+          <img src="/starburst.svg" className="pulse think-dot" alt="" />
+          <span><span className="rb-label">Thinking…</span></span>
+        </div>
+      </div>
+    );
+  }
   const label = live ? 'Thinking…' : (open ? 'Hide reasoning' : 'Thought process');
   return (
     <div className="reasoning">

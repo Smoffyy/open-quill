@@ -1,17 +1,23 @@
-import { getSetting } from './db.js';
+import { resolveProvider, providerSpec } from './providers.js';
 
-function endpoint(p) {
-  const base = (getSetting('api_base_url') || 'http://localhost:1234/v1').replace(/\/$/, '');
-  return base + p;
+function modelProvider(model) {
+  return providerSpec(resolveProvider(model?.provider_id));
 }
-function authHeaders() {
-  const key = getSetting('api_key') || '';
+function endpoint(base, p) { return base.replace(/\/$/, '') + p; }
+function authHeaders(key) {
   return { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) };
 }
 
+function applyPromptVars(text, vars) {
+  if (!text) return text || '';
+  return text
+    .replace(/\{\{\s*currentDateTime\s*\}\}/gi, (vars && vars.currentDateTime) || '')
+    .replace(/\{\{\s*currentUser\s*\}\}/gi, (vars && vars.currentUser) || '');
+}
+
 // system prompt order: base, summary, sandbox, then the reasoning toggle token last
-export function buildMessages(model, history, extended, sandboxPrompt, summaryText) {
-  let sys = model.system_prompt || '';
+export function buildMessages(model, history, extended, sandboxPrompt, summaryText, vars = {}) {
+  let sys = applyPromptVars(model.system_prompt || '', vars);
   if (summaryText && summaryText.trim()) sys = (sys ? sys + '\n\n' : '') + 'Summary of the earlier part of this conversation (older messages were compacted to save context — treat this as established context):\n' + summaryText.trim();
   if (sandboxPrompt) sys = (sys ? sys + '\n\n' : '') + sandboxPrompt;
   if (model.has_reasoning) {
@@ -24,40 +30,32 @@ export function buildMessages(model, history, extended, sandboxPrompt, summaryTe
   return msgs;
 }
 
-// only the params the admin actually filled in get sent; everything else is left to the server default
-export function samplingParams(model) {
-  const out = {};
+export function samplingParams(model, spec) {
+  const allowed = spec?.samplers || [];
+  const remap = spec?.remap || {};
   const fl = (v) => (v === '' || v == null || isNaN(Number(v))) ? null : Number(v);
   const it = (v) => (v === '' || v == null || isNaN(parseInt(v))) ? null : parseInt(v);
-  const map = { temperature: fl, top_p: fl, presence_penalty: fl, frequency_penalty: fl, repetition_penalty: fl, min_p: fl, top_k: it, seed: it };
-  for (const [k, conv] of Object.entries(map)) { const v = conv(model[k]); if (v != null) out[k] = v; }
+  const map = { temperature: fl, top_p: fl, presence_penalty: fl, frequency_penalty: fl, repetition_penalty: fl, min_p: fl, top_k: it, seed: it, max_tokens: it };
+  const out = {};
+  for (const k of allowed) {
+    const conv = map[k]; if (!conv) continue;
+    const v = conv(model[k]); if (v == null) continue;
+    out[remap[k] || k] = v;
+  }
   return out;
 }
-export async function streamCompletion({ model, messages, signal, onEvent }) {
-  const res = await fetch(endpoint('/chat/completions'), {
-    method: 'POST',
-    headers: authHeaders(),
-    signal,
-    body: JSON.stringify({ model: model.internal_name, messages, stream: true, ...samplingParams(model) })
-  });
-  if (!res.ok || !res.body) {
-    const t = await res.text().catch(() => '');
-    throw new Error(`Upstream error ${res.status}: ${t.slice(0, 300)}`);
-  }
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let inThink = false;
-  let carry = '';
+function ollamaOptions(model, spec) {
+  const params = samplingParams(model, spec);
+  const ctx = parseInt(model.num_ctx); if (Number.isFinite(ctx) && ctx > 0) params.num_ctx = ctx;
+  return params;
+}
+
+function makeEmitter(model, onEvent) {
+  let inThink = false, carry = '';
   const TOPEN = (model.think_open && model.think_open.trim()) || '<think>';
   const TCLOSE = (model.think_close && model.think_close.trim()) || '</think>';
-
-  // longest suffix of s that is a prefix of tag — so a tag split across chunks isn't missed
-  const heldBack = (s, tag) => {
-    for (let n = Math.min(s.length, tag.length - 1); n > 0; n--) if (s.endsWith(tag.slice(0, n))) return n;
-    return 0;
-  };
+  const heldBack = (s, tag) => { for (let n = Math.min(s.length, tag.length - 1); n > 0; n--) if (s.endsWith(tag.slice(0, n))) return n; return 0; };
   const emitContent = (raw) => {
     let text = carry + raw; carry = '';
     while (text.length) {
@@ -75,51 +73,113 @@ export async function streamCompletion({ model, messages, signal, onEvent }) {
     }
   };
   const flush = () => { if (carry) { onEvent({ type: inThink ? 'reasoning' : 'content', text: carry }); carry = ''; } };
+  return { emitContent, flush };
+}
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop();
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith('data:')) continue;
-      const data = trimmed.slice(5).trim();
-      if (data === '[DONE]') { flush(); return; }
+export async function streamCompletion({ model, messages, signal, onEvent }) {
+  const { spec, base, key } = modelProvider(model);
+  const { emitContent, flush } = makeEmitter(model, onEvent);
+
+  if (spec.protocol === 'ollama') {
+    const res = await fetch(endpoint(base, '/api/chat'), {
+      method: 'POST', headers: authHeaders(key), signal,
+      body: JSON.stringify({ model: model.internal_name, messages, stream: true, think: !!model.has_reasoning, options: ollamaOptions(model, spec) })
+    });
+    if (!res.ok || !res.body) { const t = await res.text().catch(() => ''); throw new Error(`Upstream error ${res.status}: ${t.slice(0, 300)}`); }
+    const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
+    const handle = (line) => {
+      const t = line.trim(); if (!t) return false;
       try {
-        const json = JSON.parse(data);
-        const delta = json.choices?.[0]?.delta || {};
-        if (delta.reasoning_content) onEvent({ type: 'reasoning', text: delta.reasoning_content });
-        if (delta.reasoning) onEvent({ type: 'reasoning', text: delta.reasoning });
-        if (delta.content) emitContent(delta.content);
-      } catch { /* keep-alive / partial line */ }
+        const json = JSON.parse(t);
+        const msg = json.message || {};
+        if (msg.thinking) onEvent({ type: 'reasoning', text: msg.thinking });
+        if (msg.content) emitContent(msg.content);
+        if (json.done) return true;
+      } catch {}
+      return false;
+    };
+    while (true) {
+      const { done, value } = await reader.read(); if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n'); buffer = lines.pop();
+      for (const line of lines) if (handle(line)) { flush(); return; }
     }
+    buffer += decoder.decode();
+    handle(buffer);
+    flush(); return;
   }
+
+  const res = await fetch(endpoint(base, '/chat/completions'), {
+    method: 'POST', headers: authHeaders(key), signal,
+    body: JSON.stringify({ model: model.internal_name, messages, stream: true, ...samplingParams(model, spec) })
+  });
+  if (!res.ok || !res.body) { const t = await res.text().catch(() => ''); throw new Error(`Upstream error ${res.status}: ${t.slice(0, 300)}`); }
+  const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
+  const handle = (line) => {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('data:')) return false;
+    const data = trimmed.slice(5).trim();
+    if (data === '[DONE]') return true;
+    try {
+      const json = JSON.parse(data);
+      const delta = json.choices?.[0]?.delta || {};
+      if (delta.reasoning_content) onEvent({ type: 'reasoning', text: delta.reasoning_content });
+      if (delta.reasoning) onEvent({ type: 'reasoning', text: delta.reasoning });
+      if (delta.content) emitContent(delta.content);
+    } catch {}
+    return false;
+  };
+  while (true) {
+    const { done, value } = await reader.read(); if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n'); buffer = lines.pop();
+    for (const line of lines) if (handle(line)) { flush(); return; }
+  }
+  buffer += decoder.decode();
+  handle(buffer);
   flush();
+}
+
+async function oneShot(model, messages) {
+  const { spec, base, key } = modelProvider(model);
+  if (spec.protocol === 'ollama') {
+    const res = await fetch(endpoint(base, '/api/chat'), {
+      method: 'POST', headers: authHeaders(key),
+      body: JSON.stringify({ model: model.internal_name, messages, stream: false, think: false, options: ollamaOptions(model, spec) })
+    });
+    if (!res.ok) return '';
+    const json = await res.json();
+    return json.message?.content?.trim() || '';
+  }
+  const res = await fetch(endpoint(base, '/chat/completions'), {
+    method: 'POST', headers: authHeaders(key),
+    body: JSON.stringify({ model: model.internal_name, stream: false, messages })
+  });
+  if (!res.ok) return '';
+  const json = await res.json();
+  return json.choices?.[0]?.message?.content?.trim() || '';
+}
+
+function stripThink(model, raw) {
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const to = (model.think_open && model.think_open.trim()) || '<think>';
+  const tc = (model.think_close && model.think_close.trim()) || '</think>';
+  return raw.replace(new RegExp(esc(to) + '[\\s\\S]*?' + esc(tc), 'g'), '');
 }
 
 export async function generateTitle(model, userText, assistantText) {
   try {
-    const res = await fetch(endpoint('/chat/completions'), {
-      method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify({
-        model: model.internal_name,
-        stream: false,
-        messages: [
-          { role: 'system', content: 'Generate a short 2-5 word title for this conversation. Reply with the title only, no quotes, no punctuation at the end.' },
-          { role: 'user', content: `User: ${userText}\nAssistant: ${assistantText}`.slice(0, 1500) }
-        ]
-      })
-    });
-    const json = await res.json();
-    let t = json.choices?.[0]?.message?.content?.trim() || '';
-    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const to = (model.think_open && model.think_open.trim()) || '<think>';
-    const tc = (model.think_close && model.think_close.trim()) || '</think>';
-    t = t.replace(/^["'#\s]+|["'.\s]+$/g, '').replace(new RegExp(esc(to) + '[\\s\\S]*?' + esc(tc), 'g'), '').trim();
-    return t.split('\n').pop().slice(0, 60) || 'New chat';
+    let raw = await oneShot(model, [
+      { role: 'system', content: 'Generate a short 2-5 word title for this conversation. Respond with ONLY a single JSON object in exactly this format and nothing else: {"title": "your concise title here"}. No markdown, no code fences, no commentary. The title must be plain text with no surrounding quotes or trailing punctuation.' },
+      { role: 'user', content: `User: ${userText}\nAssistant: ${assistantText}`.slice(0, 1500) }
+    ]);
+    raw = stripThink(model, raw).replace(/```(?:json)?/gi, '').trim();
+    let t = '';
+    const match = raw.match(/\{[\s\S]*?\}/);
+    if (match) { try { const parsed = JSON.parse(match[0]); if (parsed && typeof parsed.title === 'string') t = parsed.title; } catch {} }
+    if (!t) t = raw.replace(/^["'#\s]+|["'.\s]+$/g, '').split('\n').pop();
+    t = (t || '').replace(/^["'\s]+|["'.\s]+$/g, '').slice(0, 60);
+    return t || 'New chat';
   } catch { return 'New chat'; }
 }
 
@@ -130,23 +190,15 @@ export async function summarizeConversation(model, priorSummary, msgs) {
     let text = '';
     if (typeof m.content === 'string') text = m.content;
     else if (Array.isArray(m.content)) text = m.content.map(p => p.type === 'text' ? p.text : '[image]').join(' ');
+    text = text.replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '');
     return `${(m.role || 'user').toUpperCase()}: ${text}`;
   }).join('\n\n');
   const user = (priorSummary && priorSummary.trim())
     ? `Summary of the conversation up to an earlier point:\n${priorSummary.trim()}\n\nNewer messages to fold into the summary:\n\n${flat}`
     : `Conversation to summarize:\n\n${flat}`;
   try {
-    const res = await fetch(endpoint('/chat/completions'), {
-      method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify({ model: model.internal_name, stream: false, messages: [{ role: 'system', content: SUMMARY_SYSTEM }, { role: 'user', content: user }] })
-    });
-    const json = await res.json();
-    let t = json.choices?.[0]?.message?.content?.trim() || '';
-    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const to = (model.think_open && model.think_open.trim()) || '<think>';
-    const tc = (model.think_close && model.think_close.trim()) || '</think>';
-    t = t.replace(new RegExp(esc(to) + '[\\s\\S]*?' + esc(tc), 'g'), '').trim();
+    let t = await oneShot(model, [{ role: 'system', content: SUMMARY_SYSTEM }, { role: 'user', content: user }]);
+    t = stripThink(model, t).trim();
     return t || priorSummary || '';
   } catch { return priorSummary || ''; }
 }

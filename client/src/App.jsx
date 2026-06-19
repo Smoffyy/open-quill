@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from './api.js';
 import { applyPrefs } from './prefs.js';
+import { QpIcon } from './qpIcons.jsx';
 import Login from './components/Login.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import Composer from './components/Composer.jsx';
@@ -10,60 +11,66 @@ import AdminPanel from './components/AdminPanel.jsx';
 import DocModal from './components/DocModal.jsx';
 import ArtifactsPanel from './components/ArtifactsPanel.jsx';
 import ChatsOverview from './components/ChatsOverview.jsx';
-import { Down, ChevDown, Paper, Compact } from './components/icons.jsx';
+import { Down, ChevDown, Paper, Compact, Ghost } from './components/icons.jsx';
+import { scanTools } from './toolproto.js';
 
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: 'Assistants can make mistakes, double-check responses.', greetings: ['How can I help you?'], appIcon: '', quickPrompts: [], version: '' };
 
-function parseStreamedFiles(text) {
+function QuickPrompts({ prompts, visible, disabled, onPick }) {
+  const [render, setRender] = useState(visible);
+  const [leaving, setLeaving] = useState(false);
+  useEffect(() => {
+    if (visible) { setRender(true); setLeaving(false); return; }
+    if (!render) return;
+    setLeaving(true);
+    const off = document.documentElement.getAttribute('data-entrance') === 'off';
+    const dur = off ? 0 : 260 + prompts.length * 45 + 60;
+    const t = setTimeout(() => setRender(false), dur);
+    return () => clearTimeout(t);
+  }, [visible]);
+  if (!render) return null;
+  return (
+    <div className={'quick-prompts' + (leaving ? ' leaving' : '')}>
+      {prompts.map((q, i) => (
+        <button key={i} className="quick-prompt" style={{ animationDelay: i * 45 + 'ms' }} onClick={() => onPick(q.prompt)} disabled={disabled}>
+          {q.icon && q.icon !== 'none' && <span className="qp-icon"><QpIcon name={q.icon} style={{ width: 15, height: 15 }} /></span>}{q.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function filesFromCalls(calls) {
   const files = {};
-  const re = /```tool\s*([\s\S]*?)```/g;
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    const body = m[1].trim();
-    let obj = null;
-    try { obj = JSON.parse(body); } catch {}
-    if (!obj) {
-      const tool = (body.match(/"tool"\s*:\s*"([^"]+)"/) || [])[1];
-      const p = (body.match(/"path"\s*:\s*"((?:[^"\\]|\\.)*)"/) || [])[1];
-      obj = { tool, path: p };
-    }
-    const tool = obj.tool, p = obj.path;
-    if (tool === 'create_file') { if (p) files[p] = typeof obj.content === 'string' ? obj.content : null; }
+  for (const { call } of calls) {
+    const tool = call.tool, p = call.path;
+    if (tool === 'create_file') { if (p) files[p] = typeof call.content === 'string' ? call.content : null; }
     else if (tool === 'str_replace') { if (p && !(p in files)) files[p] = null; }
     else if (tool === 'delete_file') { if (p) delete files[p]; }
-    else if (tool === 'rename_file') {
-      const np = obj.new_path || obj.to;
+    else if (tool === 'rename_file' || tool === 'move_file') {
+      const np = call.new_path;
       if (p) { if (np) files[np] = files[p] ?? null; delete files[p]; }
+    }
+    else if (tool === 'copy_file') {
+      const np = call.new_path;
+      if (np) files[np] = files[p] ?? null;
     }
   }
   return files;
 }
+function parseStreamedFiles(text) { return filesFromCalls(scanTools(text).calls); }
 
-// peek at the file being written from a not-yet-closed tool block
 function parseLiveFile(text) {
-  const at = text.lastIndexOf('```tool');
-  if (at === -1) return null;
-  const after = text.slice(at + 7);
-  if (after.includes('```')) return null; // block already closed; the real file will load
-  const tool = (after.match(/"tool"\s*:\s*"([^"]+)"/) || [])[1];
-  if (tool !== 'create_file' && tool !== 'str_replace') return null;
-  const path = (after.match(/"path"\s*:\s*"((?:[^"\\]|\\.)*)"/) || [])[1];
-  if (!path) return null;
-  const field = tool === 'create_file' ? 'content' : 'new_str';
-  const key = '"' + field + '"';
-  const ki = after.indexOf(key);
-  if (ki === -1) return { path, content: '', tool };
-  let rest = after.slice(ki + key.length).replace(/^\s*:\s*"/, '');
-  // stop at the closing quote if the value already finished inside the open block
-  let outChars = [], esc = false;
-  for (let i = 0; i < rest.length; i++) {
-    const ch = rest[i];
-    if (esc) { outChars.push(ch === 'n' ? '\n' : ch === 't' ? '\t' : ch === 'r' ? '' : ch); esc = false; continue; }
-    if (ch === '\\') { esc = true; continue; }
-    if (ch === '"') break;
-    outChars.push(ch);
-  }
-  return { path, content: outChars.join(''), tool };
+  const re = /(^|\n)([<\[(|]\s*[|]?\s*tool\b)/gi;
+  let lastOpen = -1, m;
+  while ((m = re.exec(text))) lastOpen = m.index + (m[1] ? m[1].length : 0);
+  if (lastOpen === -1) return null;
+  const seg = text.slice(lastOpen);
+  if (seg.indexOf('[[OQR:') !== -1) return null;
+  const { live } = scanTools(seg);
+  if (!live || !live.path) return null;
+  if (live.tool !== 'create_file' && live.tool !== 'str_replace') return null;
+  return { path: live.path, content: live.content || '', tool: live.tool, oldStr: live.oldStr ?? null };
 }
 
 function CompactingBar() {
@@ -114,12 +121,54 @@ function SummaryModal({ chatId, onClose, onChanged }) {
   );
 }
 
+function CommandPalette({ commands, onClose }) {
+  const [q, setQ] = useState('');
+  const [idx, setIdx] = useState(0);
+  const inputRef = useRef(null);
+  const listRef = useRef(null);
+  useEffect(() => { inputRef.current?.focus(); }, []);
+  const filtered = commands.filter(c => {
+    const s = (c.label + ' ' + (c.keywords || '')).toLowerCase();
+    return q.trim().toLowerCase().split(/\s+/).every(t => s.includes(t));
+  });
+  useEffect(() => { setIdx(0); }, [q]);
+  function run(c) { onClose(); c.action(); }
+  function onKey(e) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(i + 1, filtered.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setIdx(i => Math.max(i - 1, 0)); }
+    else if (e.key === 'Enter') { e.preventDefault(); const c = filtered[idx]; if (c) run(c); }
+    else if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+  }
+  useEffect(() => {
+    const el = listRef.current?.children[idx];
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, [idx]);
+  return (
+    <div className="overlay cmdk-overlay" onMouseDown={(e) => e.target.classList.contains('cmdk-overlay') && onClose()}>
+      <div className="cmdk">
+        <input ref={inputRef} className="cmdk-input" placeholder="Type a command…" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} />
+        <div className="cmdk-list" ref={listRef}>
+          {filtered.length === 0 && <div className="cmdk-empty">No matching commands</div>}
+          {filtered.map((c, i) => (
+            <button key={c.id} className={'cmdk-item' + (i === idx ? ' active' : '')} onMouseMove={() => setIdx(i)} onClick={() => run(c)}>
+              <span className="cmdk-label">{c.label}</span>
+              {c.shortcut && <span className="cmdk-shortcut">{c.shortcut}</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState(undefined);
+  const [intro, setIntro] = useState(false);
   const [models, setModels] = useState([]);
   const [currentId, setCurrentId] = useState(null);
   const [extended, setExtended] = useState(false);
   const [chats, setChats] = useState([]);
+  const [folders, setFolders] = useState([]);
   const [chatsLoaded, setChatsLoaded] = useState(false);
   const [activeId, setActiveId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -134,6 +183,7 @@ export default function App() {
   const [cfg, setCfg] = useState(DEFAULT_CFG);
   const [greeting, setGreeting] = useState(DEFAULT_CFG.greetings[0]);
   const [sandbox, setSandbox] = useState(false);
+  const [webSearch, setWebSearch] = useState(false);
   const [files, setFiles] = useState([]);
   const [liveFile, setLiveFile] = useState(null);
   const [pendingFiles, setPendingFiles] = useState({});
@@ -141,7 +191,11 @@ export default function App() {
   const [hasSummary, setHasSummary] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [artifactsOpen, setArtifactsOpen] = useState(false);
+  const [artifactFocus, setArtifactFocus] = useState(null);
+  const [incognito, setIncognito] = useState(false);
+  const [incognitoGreeting, setIncognitoGreeting] = useState('Greetings, whoever you are');
   const [chatsOverview, setChatsOverview] = useState(false);
+  const [cmdkOpen, setCmdkOpen] = useState(false);
 
   const [streaming, setStreaming] = useState(false);
   const [queued, setQueued] = useState(false);
@@ -150,16 +204,20 @@ export default function App() {
   const [phase, setPhase] = useState('static');
 
   const ws = useRef(null);
+  const gen = useRef(new Map());
   const targetContent = useRef('');
   const targetReason = useRef('');
   const pendingDone = useRef(false);
   const doneBlocksRef = useRef(0);
+  const liveRef = useRef(null);
   const assistantIdRef = useRef(null);
   const revealTimer = useRef(null);
   const followRaf = useRef(0);
   const dispLen = useRef(0);
   const scrollRef = useRef(null);
   const stick = useRef(true);
+  const lastTop = useRef(0);
+  const programmatic = useRef(false);
   const [showJump, setShowJump] = useState(false);
   const animate = user?.prefs?.animations !== false;
   const revealMs = (() => { const v = user?.prefs?.revealMs; return v == null || isNaN(parseInt(v)) ? 40 : Math.max(0, Math.min(100, parseInt(v))); })();
@@ -169,14 +227,23 @@ export default function App() {
   const activeIdRef = useRef(null);
   const currentIdRef = useRef(null);
   const animateRef = useRef(animate);
+  const incognitoRef = useRef(false);
+  useEffect(() => { incognitoRef.current = incognito; }, [incognito]);
   const refreshSeq = useRef(0);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
+  useEffect(() => { liveRef.current = liveFile; }, [liveFile]);
   useEffect(() => { currentIdRef.current = currentId; }, [currentId]);
   useEffect(() => { animateRef.current = animate; }, [animate]);
   const revealRef = useRef(revealMs);
   useEffect(() => { revealRef.current = revealMs; }, [revealMs]);
 
   useEffect(() => { dispLen.current = dispContent.length; }, [dispContent]);
+
+  useEffect(() => {
+    if (!intro) return;
+    const t = setTimeout(() => setIntro(false), 3400);
+    return () => clearTimeout(t);
+  }, [intro]);
 
   useEffect(() => {
     api.get('/api/me').then(({ user }) => setUser(user)).catch(() => setUser(null));
@@ -191,19 +258,48 @@ export default function App() {
       return () => mq.removeEventListener?.('change', h);
     }
   }, [user]);
-  useEffect(() => { if (user) { loadModels(); loadChats(); loadAppConfig(); connect(); openFromUrl(); } }, [!!user]);
+  useEffect(() => { if (user) { loadModels(); loadChats(); loadFolders(); loadAppConfig(); connect(); openFromUrl(); } }, [!!user]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (intro) root.setAttribute('data-entrance', 'off');
+    else root.setAttribute('data-entrance', user?.prefs?.messageEntrance === false ? 'off' : 'on');
+  }, [intro, user]);
 
   useEffect(() => {
     const onPop = () => openFromUrl();
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
+  useEffect(() => { syncView(); }, [activeId, incognito]);
+  useEffect(() => {
+    const h = (e) => {
+      const p = e.detail?.path;
+      if (!p || !activeIdRef.current) return;
+      setArtifactsOpen(true);
+      setArtifactFocus(f => ({ path: p, n: (f?.n || 0) + 1 }));
+    };
+    window.addEventListener('oq-open-file', h);
+    return () => window.removeEventListener('oq-open-file', h);
+  }, []);
+  useEffect(() => {
+    if (!user) return;
+    const onKey = (e) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && e.shiftKey && (e.key === 'S' || e.key === 's')) { e.preventDefault(); setCollapsed(c => !c); return; }
+      if (mod && !e.shiftKey && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); setCmdkOpen(o => !o); return; }
+      if (mod && e.shiftKey && (e.key === 'O' || e.key === 'o')) { e.preventDefault(); newChat(); return; }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [user]);
   useEffect(() => {
     const m = models.find(x => x.id === currentId);
-    if (m && m.sandboxAllowed === false) { setSandbox(false); return; }
-    if (!activeId && messages.length === 0) setSandbox(!!m?.sandboxAuto);
+    if (m && m.sandboxAllowed === false) setSandbox(false);
   }, [currentId, activeId]);
   function openFromUrl() {
+    if (/^\/admin(\/|$)/.test(location.pathname)) { if (user?.isAdmin) { setShowAdmin(true); return; } history.replaceState({}, '', '/'); }
+    else setShowAdmin(false);
     const m = location.pathname.match(/^\/chat\/(.+)$/);
     if (m) openChat(decodeURIComponent(m[1]), false);
     else { setActiveId(null); setMessages([]); }
@@ -215,7 +311,8 @@ export default function App() {
     // keep the user's current pick; on first load (login) fall back to the default model, else the first
     setCurrentId(id => id && m.find(x => x.id === id) ? id : (m.find(x => x.isDefault)?.id || m[0]?.id || null));
   }
-  async function loadChats() { try { setChats(await api.get('/api/chats')); } finally { setChatsLoaded(true); } }
+  async function loadChats() { try { setChats(await api.get('/api/chats')); } catch {} finally { setChatsLoaded(true); } }
+  async function loadFolders() { try { setFolders(await api.get('/api/folders')); } catch {} }
   async function loadAppConfig() { try { applyCfg(await api.get('/api/app-config')); } catch {} }
   function applyCfg(c) {
     setCfg(c);
@@ -228,12 +325,14 @@ export default function App() {
   }
 
   function connect() {
+    const existing = ws.current;
+    if (existing && (existing.readyState === 0 || existing.readyState === 1)) return;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const sock = new WebSocket(`${proto}://${location.host}/ws`);
     ws.current = sock;
-    sock.onmessage = (ev) => handleWs(JSON.parse(ev.data));
+    sock.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch { return; } handleWs(m); };
     sock.onerror = () => { try { sock.close(); } catch {} };
-    sock.onclose = () => { setTimeout(() => { if (user) connect(); }, 1500); };
+    sock.onclose = () => { if (ws.current === sock) ws.current = null; setTimeout(() => { if (user) connect(); }, 1500); };
   }
 
   function wsSend(obj) {
@@ -247,49 +346,97 @@ export default function App() {
     catch { return false; }
   }
 
+  function activeKey() { return incognitoRef.current ? 'incognito' : activeIdRef.current; }
+  function recFor(key) {
+    let r = gen.current.get(key);
+    if (!r) { r = { content: '', reasoning: '', phase: 'generating', done: false, assistantId: null, model_id: currentIdRef.current, blocks: 0 }; gen.current.set(key, r); }
+    return r;
+  }
+
   function handleWs(m) {
-    if (m.type === 'config') { loadModels(); loadAppConfig(); return; }
-    if (m.type === 'files') { setFiles(m.files || []); setLiveFile(null); return; }
+    if (m.type === 'config') { loadModels(); loadAppConfig(); try { window.dispatchEvent(new CustomEvent('oq-config')); } catch {} return; }
+    if (m.type === 'files') {
+      if (m.chatId && m.chatId !== activeIdRef.current) return;
+      setFiles(m.files || []);
+      const r = gen.current.get(m.chatId);
+      setLiveFile(r && !r.done ? parseLiveFile(r.content) : null);
+      return;
+    }
     if (m.type === 'tool') { return; }
-    if (m.type === 'compacting') { setCompacting(true); return; }
-    if (m.type === 'compacted') { setCompacting(false); setHasSummary(true); return; }
+    if (m.type === 'compacting') { if (m.chatId === activeKey()) setCompacting(true); return; }
+    if (m.type === 'compacted') { if (m.chatId === activeKey()) { setCompacting(false); setHasSummary(true); } return; }
     if (m.type === 'title') { setChats(cs => cs.map(c => c.id === m.chatId ? { ...c, title: m.title } : c)); return; }
-    if (m.type === 'queued') { setQueued(true); return; }
+    if (m.type === 'queued') {
+      const r = recFor(m.chatId); r.phase = 'queued';
+      if (m.chatId === activeKey()) setQueued(true);
+      return;
+    }
     if (m.type === 'start') {
-      setQueued(false);
-      setCompacting(false); setLiveFile(null); setPendingFiles({}); doneBlocksRef.current = 0; refreshSeq.current++;
-      targetContent.current = ''; targetReason.current = ''; pendingDone.current = false;
-      assistantIdRef.current = m.messageId; dispLen.current = 0;
-      setDispContent(''); setDispReason(''); setPhase('generating'); setStreaming(true);
-      startStream();
+      const r = recFor(m.chatId);
+      r.content = ''; r.reasoning = ''; r.phase = 'generating'; r.done = false; r.error = false; r.assistantId = m.messageId; r.blocks = 0;
+      if (m.chatId === activeKey()) {
+        refreshSeq.current++;
+        setCompacting(false); setLiveFile(null); setPendingFiles({}); doneBlocksRef.current = 0;
+        targetContent.current = ''; targetReason.current = ''; pendingDone.current = false;
+        assistantIdRef.current = m.messageId; dispLen.current = 0;
+        setDispContent(''); setDispReason(''); setPhase('generating'); setStreaming(true); setQueued(false);
+        startStream();
+      }
       return;
     }
     if (m.type === 'reasoning') {
-      targetReason.current += m.text;
-      setDispReason(targetReason.current);
-      if (!targetContent.current) setPhase('thinking');
+      const r = recFor(m.chatId); r.reasoning += m.text;
+      if (!r.content) r.phase = 'thinking';
+      if (m.chatId === activeKey()) {
+        targetReason.current = r.reasoning;
+        setDispReason(r.reasoning);
+        if (!targetContent.current) setPhase('thinking');
+      }
       return;
     }
     if (m.type === 'content') {
-      targetContent.current += m.text;
-      setPhase('generating');
-      const lf = parseLiveFile(targetContent.current);
-      if (lf) setLiveFile(lf);
-      const blocks = (targetContent.current.match(/```tool/g) || []).length;
-      const closed = blocks > 0 && targetContent.current.split('```').length % 2 === 1;
-      const doneBlocks = closed ? blocks : blocks - 1;
-      if (doneBlocks !== doneBlocksRef.current) { doneBlocksRef.current = doneBlocks; setPendingFiles(parseStreamedFiles(targetContent.current)); }
-      if (!animateRef.current) { setDispContent(targetContent.current); dispLen.current = targetContent.current.length; }
+      const r = recFor(m.chatId); r.content += m.text; r.phase = 'generating';
+      if (m.chatId === activeKey()) {
+        targetContent.current = r.content;
+        setPhase('generating');
+        if (/[|<]/.test(m.text) || liveRef.current) {
+          const lf = parseLiveFile(r.content);
+          liveRef.current = lf;
+          setLiveFile(lf);
+        }
+        if (/[|<]/.test(m.text)) {
+          const { calls } = scanTools(r.content);
+          if (calls.length !== doneBlocksRef.current) { doneBlocksRef.current = calls.length; setPendingFiles(filesFromCalls(calls)); }
+        }
+        if (m.text.indexOf('[[OQR:') !== -1) { dispLen.current = r.content.length; setDispContent(r.content); }
+        else if (!animateRef.current) { setDispContent(r.content); dispLen.current = r.content.length; }
+      }
       return;
     }
     if (m.type === 'error') {
-      if (!streaming && !targetContent.current) { setQueued(false); setMessages(ms => [...ms, { id: 'e' + Date.now(), role: 'assistant', content: `_Error: ${m.error}_` }]); return; }
-      targetContent.current += `\n\n_Error: ${m.error}_`;
-      if (!animateRef.current) { setDispContent(targetContent.current); dispLen.current = targetContent.current.length; }
-      pendingDone.current = true;
+      const r = gen.current.get(m.chatId);
+      if (!r || !r.content) {
+        gen.current.delete(m.chatId);
+        if (m.chatId === activeKey()) {
+          setQueued(false); setStreaming(false); setPhase('static');
+          setMessages(ms => [...ms, { id: 'e' + Date.now(), role: 'assistant', content: `_Error: ${m.error}_` }]);
+        }
+        return;
+      }
+      r.content += `\n\n_Error: ${m.error}_`;
+      if (m.chatId === activeKey()) {
+        targetContent.current = r.content;
+        if (!animateRef.current) { setDispContent(r.content); dispLen.current = r.content.length; }
+        pendingDone.current = true;
+      }
       return;
     }
-    if (m.type === 'done') { pendingDone.current = true; if (!animateRef.current) finalize(); return; }
+    if (m.type === 'done') {
+      const r = recFor(m.chatId); r.done = true;
+      if (m.chatId === activeKey()) { pendingDone.current = true; if (!animateRef.current) finalize(); }
+      else finalizeBackground(m.chatId);
+      return;
+    }
   }
 
   function startStream() {
@@ -319,25 +466,59 @@ export default function App() {
     if (el && stick.current) {
       const target = el.scrollHeight - el.clientHeight;
       const diff = target - el.scrollTop;
-      if (diff > 0) el.scrollTop = el.scrollTop + Math.max(1, diff * 0.2);
+      if (diff > 0.5) { programmatic.current = true; el.scrollTop = el.scrollTop + Math.max(1, diff * 0.2); }
     }
     followRaf.current = requestAnimationFrame(follow);
   }
 
   function finalize() {
+    const key = activeKey();
+    const r = gen.current.get(key);
+    if (!r && !streaming) return;
     clearInterval(revealTimer.current);
     cancelAnimationFrame(followRaf.current);
-    const content = targetContent.current;
-    const reasoning = targetReason.current;
-    const id = assistantIdRef.current || ('a' + Date.now());
+    const content = r ? r.content : targetContent.current;
+    const reasoning = r ? r.reasoning : targetReason.current;
+    const id = (r && r.assistantId) || assistantIdRef.current || ('a' + Date.now());
+    const mid = r ? r.model_id : currentIdRef.current;
+    gen.current.delete(key);
     setStreaming(false); setPhase('static'); setQueued(false);
-    setMessages(ms => [...ms, { id, role: 'assistant', content, reasoning, model_id: currentIdRef.current }]);
+    setMessages(ms => [...ms, { id, role: 'assistant', content, reasoning, model_id: mid }]);
     setDispContent(''); setDispReason('');
     setLiveFile(null); setPendingFiles({}); doneBlocksRef.current = 0;
-    setTimeout(() => scrollBottom(false), 0);
+    targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
+    if (stick.current) setTimeout(() => scrollBottom(false), 0);
+    if (key === 'incognito') return;
     loadChats();
-    const aid = activeIdRef.current;
-    if (aid) refreshMessages(aid);
+    if (key) refreshMessages(key);
+  }
+
+  function finalizeBackground(key) {
+    gen.current.delete(key);
+    if (key !== 'incognito') loadChats();
+  }
+
+  function syncView() {
+    clearInterval(revealTimer.current);
+    cancelAnimationFrame(followRaf.current);
+    const key = activeKey();
+    const r = gen.current.get(key);
+    if (r && !r.done) {
+      refreshSeq.current++;
+      targetContent.current = r.content; targetReason.current = r.reasoning;
+      assistantIdRef.current = r.assistantId; pendingDone.current = false;
+      doneBlocksRef.current = r.blocks || 0; dispLen.current = r.content.length;
+      setDispContent(r.content); setDispReason(r.reasoning);
+      setLiveFile(null); setPendingFiles(parseStreamedFiles(r.content));
+      setPhase(r.phase === 'thinking' ? 'thinking' : 'generating');
+      setStreaming(true); setQueued(r.phase === 'queued');
+      startStream();
+    } else {
+      if (r && r.done) gen.current.delete(key);
+      targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
+      setStreaming(false); setQueued(false); setPhase('static');
+      setDispContent(''); setDispReason('');
+    }
   }
   async function refreshMessages(id) {
     const seq = ++refreshSeq.current;
@@ -357,19 +538,26 @@ export default function App() {
 
   function scrollBottom(smooth) {
     const el = scrollRef.current; if (!el) return;
+    programmatic.current = true;
     el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
   }
   function onScroll() {
     const el = scrollRef.current; if (!el) return;
-    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (dist < 80) stick.current = true;
+    const top = el.scrollTop;
+    const dist = el.scrollHeight - top - el.clientHeight;
     setShowJump(dist > 200);
+    if (programmatic.current) { programmatic.current = false; lastTop.current = top; return; }
+    if (top < lastTop.current - 1) stick.current = false;
+    else if (dist < 24) stick.current = true;
+    lastTop.current = top;
   }
-  function onWheel(e) { if (e.deltaY < 0) stick.current = false; }
-  function onTouchMove() { const el = scrollRef.current; if (el && el.scrollHeight - el.scrollTop - el.clientHeight > 80) stick.current = false; }
+  function onWheel(e) { if (e.deltaY < -1) stick.current = false; }
+  function onTouchMove() { const el = scrollRef.current; if (el && el.scrollHeight - el.scrollTop - el.clientHeight > 24) stick.current = false; }
   function jumpDown() { stick.current = true; setShowJump(false); scrollBottom(true); }
 
   async function openChat(id, push = true) {
+    if (incognito) setIncognito(false);
+    if (id !== activeIdRef.current) { setLiveFile(null); setPendingFiles({}); setArtifactFocus(null); doneBlocksRef.current = 0; }
     setActiveId(id);
     try {
       const { chat, messages } = await api.get('/api/chats/' + id);
@@ -380,6 +568,7 @@ export default function App() {
         staggerTimer.current = setTimeout(() => setThreadStagger(false), 700);
       }
       setSandbox(!!chat.sandbox);
+      setWebSearch(false);
       setHasSummary(!!chat.hasSummary);
       try { const f = await api.get('/api/chats/' + id + '/files'); setFiles(f.files || []); setArtifactsOpen((f.files || []).length > 0 && artifactsOpen); }
       catch { setFiles([]); }
@@ -389,12 +578,31 @@ export default function App() {
     } catch { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); }
   }
   function newChat(fromPop) {
+    if (incognito) setIncognito(false);
     setActiveId(null); setMessages([]); setInput('');
-    setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingFiles({});
+    setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingFiles({}); setArtifactFocus(null);
     const m = models.find(m => m.id === currentId);
     setSandbox(m?.sandboxAllowed !== false && !!m?.sandboxAuto);
+    setWebSearch(false);
     setFocusTick(t => t + 1);
     if (fromPop !== true) history.pushState({}, '', '/');
+  }
+  function toggleIncognito() {
+    if (streaming || queued) return;
+    if (incognito) {
+      setIncognito(false);
+      setMessages([]); setInput('');
+      setFocusTick(t => t + 1);
+    } else {
+      setActiveId(null); setMessages([]); setInput('');
+      setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingFiles({}); setArtifactFocus(null);
+      setSandbox(false);
+      const gs = ['Greetings, whoever you are', 'No names, no traces', 'This one stays between us', 'Off the record'];
+      setIncognitoGreeting(gs[Math.floor(Math.random() * gs.length)]);
+      setIncognito(true);
+      setFocusTick(t => t + 1);
+      if (location.pathname !== '/') history.pushState({}, '', '/');
+    }
   }
   async function deleteChat(id) {
     await api.del('/api/chats/' + id);
@@ -408,18 +616,73 @@ export default function App() {
     api.patch('/api/chats/' + id, { starred: next }).catch(() => {});
   }
 
+  async function createFolder(name = 'New folder') {
+    try {
+      const f = await api.post('/api/folders', { name });
+      setFolders(fs => [...fs, { id: f.id, name: f.name, collapsed: false, sortOrder: f.sortOrder }]);
+      return f.id;
+    } catch { return null; }
+  }
+  function renameFolder(id, name) {
+    const prev = folders.find(f => f.id === id)?.name;
+    setFolders(fs => fs.map(f => f.id === id ? { ...f, name } : f));
+    api.patch('/api/folders/' + id, { name }).catch(() => {
+      setFolders(fs => fs.map(f => f.id === id ? { ...f, name: prev } : f));
+    });
+  }
+  function toggleFolder(id) {
+    const cur = folders.find(f => f.id === id);
+    const next = !cur?.collapsed;
+    setFolders(fs => fs.map(f => f.id === id ? { ...f, collapsed: next } : f));
+    api.patch('/api/folders/' + id, { collapsed: next }).catch(() => {
+      setFolders(fs => fs.map(f => f.id === id ? { ...f, collapsed: !next } : f));
+    });
+  }
+  async function deleteFolder(id) {
+    const prevFolders = folders;
+    const prevChats = chats;
+    setFolders(fs => fs.filter(f => f.id !== id));
+    setChats(cs => cs.map(c => c.folderId === id ? { ...c, folderId: null } : c));
+    try { await api.del('/api/folders/' + id); }
+    catch { setFolders(prevFolders); setChats(prevChats); }
+  }
+  function moveChatToFolder(chatId, folderId) {
+    const prev = chats.find(c => c.id === chatId)?.folderId ?? null;
+    const target = folderId || null;
+    if (prev === target) return;
+    setChats(cs => cs.map(c => c.id === chatId ? { ...c, folderId: target } : c));
+    api.patch('/api/chats/' + chatId, { folderId: target || '' }).catch(() => {
+      setChats(cs => cs.map(c => c.id === chatId ? { ...c, folderId: prev } : c));
+    });
+  }
+
   async function send(attachments = [], overrideText) {
     if (streaming || queued) return;
     const text = (overrideText != null ? overrideText : input).trim();
     if ((!text && attachments.length === 0) || !currentId) return;
+
+    if (incognito) {
+      const history = [...messages
+        .filter(m => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+        .map(m => ({ role: m.role, content: m.content })),
+        { role: 'user', content: text }];
+      if (!wsSend({ type: 'incognito', modelId: currentId, extended, messages: history })) return;
+      gen.current.set('incognito', { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, blocks: 0 });
+      setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments: [], _enter: true }]);
+      setInput('');
+      stick.current = true; setTimeout(() => scrollBottom(true), 20);
+      return;
+    }
+
     let chatId = activeId;
     if (!chatId) {
       const c = await api.post('/api/chats');
       chatId = c.id; setActiveId(chatId);
-      setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false }, ...cs]);
+      setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false, folderId: null }, ...cs]);
       history.pushState({}, '', '/chat/' + chatId);
     }
-    if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, content: text, attachments, sandbox })) return;
+    if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, content: text, attachments, sandbox, webSearch })) return;
+    gen.current.set(chatId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, blocks: 0 });
     setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     setInput('');
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
@@ -427,67 +690,106 @@ export default function App() {
 
   const regenerate = useCallback((messageId) => {
     if (streaming || !activeId || !currentId) return;
-    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, messageId, sandbox })) return;
+    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, messageId, sandbox, webSearch })) return;
+    gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, blocks: 0 });
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
-  }, [streaming, activeId, currentId, extended, sandbox]);
+  }, [streaming, activeId, currentId, extended, sandbox, webSearch]);
 
   const editMessage = useCallback((messageId, newContent) => {
     if (streaming || !activeId || !currentId) return;
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); if (idx === -1) return ms; const copy = ms.slice(0, idx + 1); copy[idx] = { ...copy[idx], content: newContent }; return copy; });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
-    if (!wsSend({ type: 'edit', chatId: activeId, modelId: currentId, extended, messageId, content: newContent, sandbox })) return;
-  }, [streaming, activeId, currentId, extended, sandbox]);
+    if (!wsSend({ type: 'edit', chatId: activeId, modelId: currentId, extended, messageId, content: newContent, sandbox, webSearch })) return;
+    gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, blocks: 0 });
+  }, [streaming, activeId, currentId, extended, sandbox, webSearch]);
 
-  function stop() { try { ws.current?.readyState === 1 && ws.current.send(JSON.stringify({ type: 'stop' })); } catch {} pendingDone.current = true; setQueued(false); }
+  function stop() { const key = activeKey(); try { ws.current?.readyState === 1 && ws.current.send(JSON.stringify({ type: 'stop', chatId: key })); } catch {} pendingDone.current = true; setQueued(false); }
   async function logout() { await api.post('/api/auth/logout'); location.href = '/'; }
 
   if (user === undefined) return <div style={{ height: '100%', background: 'var(--bg)' }} />;
-  if (!user) return <Login onLogin={(u) => setUser(u)} />;
+  if (!user) return <Login onLogin={(u) => { setUser(u); setIntro(true); }} />;
 
   const model = models.find(m => m.id === currentId);
-  const sandboxAllowed = model ? model.sandboxAllowed !== false : true;
+  const sandboxAllowed = incognito ? false : (model ? model.sandboxAllowed !== false : true);
+  const sandboxOn = sandboxAllowed && sandbox;
+  const webSearchAvailable = !incognito && !!cfg.webSearchAvailable;
+  const webSearchOn = webSearchAvailable && webSearch;
   const empty = !activeId && messages.length === 0;
   const composerProps = {
     value: input, onChange: setInput, onSend: send, onStop: stop, streaming: streaming || queued,
     models, currentId, onSelect: setCurrentId, extended, onToggleExtended: () => setExtended(e => !e),
-    visionSupported: !!model?.hasVision,
-    sandbox, sandboxAllowed, onToggleSandbox: () => { if (sandboxAllowed) setSandbox(s => !s); },
-    onWantSandbox: () => { if (sandboxAllowed) setSandbox(true); }
+    visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin,
+    sandbox: sandboxOn, sandboxAllowed, onToggleSandbox: () => { if (sandboxAllowed) setSandbox(s => !s); },
+    onWantSandbox: () => { if (sandboxAllowed) setSandbox(true); },
+    webSearch: webSearchOn, webSearchAvailable, onToggleWebSearch: () => { if (webSearchAvailable) setWebSearch(s => !s); }
   };
-  const showArtifactsBtn = sandbox || files.length > 0;
+  const showArtifactsBtn = sandboxOn || files.length > 0;
+
+  const commands = [
+    { id: 'new', label: 'New chat', shortcut: 'Ctrl Shift O', keywords: 'create start', action: () => newChat() },
+    { id: 'sidebar', label: collapsed ? 'Show sidebar' : 'Hide sidebar', shortcut: 'Ctrl Shift S', keywords: 'toggle collapse panel', action: () => setCollapsed(c => !c) },
+    { id: 'chats', label: 'Browse all chats', keywords: 'overview history search', action: () => setChatsOverview(true) },
+    { id: 'incognito', label: incognito ? 'Exit incognito' : 'Start incognito chat', keywords: 'private ghost', action: () => toggleIncognito() },
+    { id: 'settings', label: 'Open settings', keywords: 'preferences account theme', action: () => setShowSettings(true) },
+    ...(user?.isAdmin ? [{ id: 'admin', label: 'Open admin panel', keywords: 'models users connection providers', action: () => { history.pushState({}, '', '/admin'); setShowAdmin(true); } }] : []),
+    { id: 'changelog', label: 'View changelog', keywords: 'updates version', action: () => setShowChangelog(true) },
+    { id: 'credits', label: 'View credits', keywords: 'about', action: () => setShowCredits(true) },
+    { id: 'license', label: 'View licensing', keywords: 'legal', action: () => setShowLicense(true) },
+    { id: 'logout', label: 'Log out', keywords: 'sign out exit', action: () => logout() }
+  ];
 
   return (
-    <div className="app">
+    <div className={'app' + (incognito ? ' app-incognito' : '') + (intro ? ' intro' : '')}>
+      {intro && <div className="intro-curtain" />}
       <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName}
+        folders={folders} onCreateFolder={createFolder} onRenameFolder={renameFolder} onToggleFolder={toggleFolder} onDeleteFolder={deleteFolder} onMoveChat={moveChatToFolder}
         onNew={newChat} onOpen={openChat} onDelete={deleteChat} onToggleStar={toggleStar}
         collapsed={collapsed} onToggle={() => setCollapsed(c => !c)}
-        onSettings={() => setShowSettings(true)} onAdmin={() => setShowAdmin(true)}
+        onSettings={() => setShowSettings(true)} onAdmin={() => { history.pushState({}, '', '/admin'); setShowAdmin(true); }}
         onCredits={() => setShowCredits(true)} onChangelog={() => setShowChangelog(true)} onLicense={() => setShowLicense(true)} onLogout={logout} version={cfg.version}
         onChatsOverview={() => setChatsOverview(true)} />
 
-      <div className="main">
+      <div className={'main' + (incognito ? ' incognito' : '')} data-incognito={incognito ? 'on' : undefined}>
+        {incognito && (
+          <div className="incognito-bar">
+            <div className="incognito-title"><Ghost style={{ width: 18 }} /> Incognito chat</div>
+            <button className="incognito-close" onClick={toggleIncognito} title="Exit incognito" disabled={streaming || queued}>✕</button>
+          </div>
+        )}
+        {!incognito && empty && (
+          <button className="incognito-fab" onClick={toggleIncognito} title="Incognito chat — not saved" disabled={streaming || queued}>
+            <Ghost style={{ width: 18 }} />
+          </button>
+        )}
         {empty ? (
           <div className="center-wrap">
-            <div className="greeting"><img src={model?.staticIcon || cfg.appIcon || '/starburst.svg'} alt="" /> {greeting}</div>
+            <div className="greeting">
+              {incognito
+                ? <><Ghost style={{ width: 40 }} /> {incognitoGreeting}</>
+                : <><img src={model?.staticIcon || cfg.appIcon || '/starburst.svg'} alt="" style={{ width: 40, height: 40, objectFit: 'contain' }} /> {greeting}</>}
+            </div>
             <div className="composer-wrap">
               <Composer {...composerProps} autoFocus modelUp focusKey={focusTick} />
             </div>
-            {cfg.quickPrompts && cfg.quickPrompts.length > 0 && (
-              <div className="quick-prompts">
-                {cfg.quickPrompts.map((q, i) => (
-                  <button key={i} className="quick-prompt" style={{ animationDelay: i * 45 + 'ms' }} onClick={() => send([], q.prompt)} disabled={streaming}>
-                    {q.icon && <span className="qp-icon">{q.icon}</span>}{q.label}
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className="qp-slot">
+              {incognito ? (
+                <div className="incognito-note">Incognito chats aren't saved to your history.</div>
+              ) : cfg.quickPrompts && cfg.quickPrompts.length > 0 && (
+                <QuickPrompts prompts={cfg.quickPrompts} visible={!input.trim()} disabled={streaming} onPick={(p) => send([], p)} />
+              )}
+            </div>
           </div>
         ) : (
           <>
             <div className="topbar">
               <div className="chat-name">{chats.find(c => c.id === activeId)?.title || 'New chat'} <ChevDown style={{ width: 15 }} /></div>
               <div className="topbar-actions">
+                {!incognito && (
+                  <button className="paper-btn" onClick={toggleIncognito} title="Incognito chat — not saved" disabled={streaming || queued}>
+                    <Ghost style={{ width: 18 }} />
+                  </button>
+                )}
                 {hasSummary && (
                   <button className="paper-btn" onClick={() => setSummaryOpen(true)} title="Conversation memory">
                     <Compact style={{ width: 18 }} />
@@ -529,7 +831,7 @@ export default function App() {
       </div>
 
       {artifactsOpen && activeId && (
-        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} pending={pendingFiles} onClose={() => setArtifactsOpen(false)} />
+        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} pending={pendingFiles} focus={artifactFocus} onClose={() => setArtifactsOpen(false)} />
       )}
 
       {summaryOpen && activeId && (
@@ -537,12 +839,13 @@ export default function App() {
           onChanged={(has) => { setHasSummary(has); }} />
       )}
 
-      {showSettings && <SettingsModal user={user} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} />}
+      {showSettings && <SettingsModal user={user} cfg={cfg} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} />}
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} />}
-      {showAdmin && <AdminPanel user={user} onClose={() => setShowAdmin(false)} />}
+      {showAdmin && <AdminPanel user={user} onClose={() => { setShowAdmin(false); if (/^\/admin(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} />}
       {showCredits && <DocModal title="Credits" name="credits" serif onClose={() => setShowCredits(false)} />}
       {showLicense && <DocModal title="Licensing" name="license" onClose={() => setShowLicense(false)} />}
       {showChangelog && <DocModal title="Changelog" name="changelog" onClose={() => setShowChangelog(false)} />}
+      {cmdkOpen && <CommandPalette commands={commands} onClose={() => setCmdkOpen(false)} />}
     </div>
   );
 }

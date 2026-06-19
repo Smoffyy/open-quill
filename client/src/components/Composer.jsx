@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import ModelDropdown from './ModelDropdown.jsx';
 import { api } from '../api.js';
-import { Plus, Mic, Wave, Up, Stop, FileText, Wrench, Check } from './icons.jsx';
+import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe } from './icons.jsx';
 
 const FILE_ACCEPT = '.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.py,.lua,.html,.css,.xml,.yml,.yaml,.pdf,.log';
 
@@ -31,7 +31,7 @@ function dominantColor(url) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, models,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
@@ -42,6 +42,7 @@ export default function Composer({
   const [dragActive, setDragActive] = useState(false);
   const [glow, setGlow] = useState('var(--accent)');
   const [plusMenu, setPlusMenu] = useState(false);
+  const [showReason, setShowReason] = useState(false);
 
   useEffect(() => {
     if (!plusMenu) return;
@@ -61,7 +62,9 @@ export default function Composer({
     requestAnimationFrame(() => { if (ta.current) ta.current.style.height = next; });
   }, [value]);
   useEffect(() => { if (autoFocus || focusKey !== undefined) ta.current?.focus(); }, [autoFocus, focusKey]);
-  useEffect(() => () => files.forEach(f => f.preview && URL.revokeObjectURL(f.preview)), []);
+  const filesRef = useRef(files);
+  filesRef.current = files;
+  useEffect(() => () => filesRef.current.forEach(f => f.preview && URL.revokeObjectURL(f.preview)), []);
 
   const [upErr, setUpErr] = useState('');
   function addFiles(list) {
@@ -98,6 +101,7 @@ export default function Composer({
 
   async function doSend() {
     if (streaming || uploading) return;
+    if (blockSend) return;
     if (!value.trim() && files.length === 0) return;
     let attachments = [];
     if (files.length) {
@@ -111,12 +115,44 @@ export default function Composer({
     onSend(attachments);
   }
 
+  useEffect(() => { setShowReason(false); }, [currentId]);
+
   function key(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } }
+  const activeModel = models?.find(m => m.id === currentId) || null;
+  const unavailable = !!activeModel?.unavailable;
+  const blockSend = unavailable && !canUseUnavailable;
+  const [bannerMounted, setBannerMounted] = useState(unavailable);
+  const [bannerOut, setBannerOut] = useState(false);
+  const bannerInfo = useRef(null);
+  if (unavailable && activeModel) bannerInfo.current = { name: activeModel.displayName, reason: (activeModel.unavailableReason || '').trim() };
+  useEffect(() => {
+    if (unavailable) { setBannerMounted(true); setBannerOut(false); return; }
+    if (!bannerMounted) return;
+    setBannerOut(true);
+    const t = setTimeout(() => { setBannerMounted(false); setShowReason(false); }, 300);
+    return () => clearTimeout(t);
+  }, [unavailable]);
   const hasImage = files.some(f => f.preview);
-  const canSend = (value.trim().length > 0 || files.length > 0) && !uploading;
-  const cls = 'composer' + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '');
+  const enabledCount = (sandbox ? 1 : 0) + (webSearch ? 1 : 0);
+  const canSend = (value.trim().length > 0 || files.length > 0) && !uploading && !blockSend;
+  const cls = 'composer' + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + (unavailable ? ' unavailable' : '') + (blockSend ? ' blocked' : '');
 
   return (
+    <div className={'composer-stack' + (bannerMounted ? ' has-banner' : '')}>
+    {bannerMounted && <div className={'unavail-bg' + (bannerOut ? ' out' : '')} />}
+    {bannerMounted && bannerInfo.current && (
+      <div className={'unavail-banner' + (bannerOut ? ' out' : '') + (showReason ? ' open' : '')}>
+        <div className="unavail-row">
+          <span className="unavail-msg"><strong>{bannerInfo.current.name}</strong> is currently unavailable.</span>
+          {bannerInfo.current.reason && (
+            <button className="unavail-learn" onClick={() => setShowReason(s => !s)}>{showReason ? 'Hide' : 'Learn more'}</button>
+          )}
+        </div>
+        {showReason && bannerInfo.current.reason && (
+          <div className="unavail-reason">{bannerInfo.current.reason}</div>
+        )}
+      </div>
+    )}
     <div className={cls} style={{ '--glow': glow }}
       onDragEnter={onDragEnter} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
       {dragActive && <div className="drop-hint">Drop to attach{visionSupported ? '' : ' files'}</div>}
@@ -140,7 +176,10 @@ export default function Composer({
       <div className="composer-bar">
         <div className="composer-left">
           <div className="plus-wrap" ref={plusRef}>
-            <button className="plus" onClick={() => setPlusMenu(m => !m)} title="More"><Plus style={{ width: 17, height: 17 }} /></button>
+            <button className="plus" onClick={() => setPlusMenu(m => !m)} title="More">
+              <Plus style={{ width: 17, height: 17 }} />
+              {enabledCount > 0 && <span className="plus-badge">{enabledCount}</span>}
+            </button>
             {plusMenu && (
               <div className="plus-menu">
                 <button onClick={() => { setPlusMenu(false); fileInput.current?.click(); }}>
@@ -148,14 +187,19 @@ export default function Composer({
                 </button>
                 {sandboxAllowed && (
                   <button onClick={() => onToggleSandbox && onToggleSandbox()}>
-                    <Wrench style={{ width: 16 }} /> Enable Sandbox Tools
+                    <Cube style={{ width: 16 }} /> Enable Sandbox Tools
                     <span className={'mini-switch' + (sandbox ? ' on' : '')}>{sandbox && <Check style={{ width: 12 }} />}</span>
+                  </button>
+                )}
+                {webSearchAvailable && (
+                  <button onClick={() => onToggleWebSearch && onToggleWebSearch()}>
+                    <Globe style={{ width: 16 }} /> Web Search
+                    <span className={'mini-switch' + (webSearch ? ' on' : '')}>{webSearch && <Check style={{ width: 12 }} />}</span>
                   </button>
                 )}
               </div>
             )}
           </div>
-          {sandbox && <span className="sandbox-pill"><Wrench style={{ width: 12 }} /> Sandbox</span>}
         </div>
         <div className="composer-right">
           <ModelDropdown models={models} currentId={currentId} onSelect={onSelect}
@@ -170,6 +214,7 @@ export default function Composer({
           )}
         </div>
       </div>
+    </div>
     </div>
   );
 }

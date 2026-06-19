@@ -5,6 +5,57 @@ All notable changes to **open-quill** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+---
+
+## [2026.2.3] — 2026-06-13
+
+### Added
+- **Folders** - organize chats into collapsible folders with drag-to-move and a "Move to folder" submenu in each chat's menu.
+- **Incognito chat** - an ephemeral, fully local chat that's never written to disk. Toggle from the top-right ghost icon; the viewport fills with a white outline and the canvas switches to a dark palette. Sandbox and attachments are disabled in incognito.
+- **Model draft / publish workflow** - admins now edit a private draft. Changes autosave and are visible only to admins (live across admin sessions), while clients keep using the last published config until an admin clicks **Push to all Clients**.
+- **Mark models as unavailable** - admins can disable a model in real time. It stays in the dropdown but shows a banner with the model name and a developer-written "Learn more" reason, and clients are blocked from sending to it. Admins can still use unavailable models for testing.
+- Pre-paint theme bootstrap so the saved theme is applied before first render.
+- **Anthropic style theme** - Different color pallet, same functional interface!
+- **Configurable Capability Icons** - Adds a little icon within the model, as well as making it compacted with just an info icon.
+- **Quick prompt icons** - Each quick-prompt button now displays a themed icon (file, code, bulb, etc.) and can be set per-button in the admin panel. Default prompts include icons.
+- **Sandbox tools badge** - Toggled tools in the + menu now show a small numbered badge on the icon itself rather than a separate pill.
+- **Versioning** - General -> Version for a brief overview of the current version of the software.
+- **OLED Burn-in protection setting** Enable the `OLED screen protection` setting in the Appearance menu.
+- **Searxng Web Search** - Allows the assistant to call the web search tool (currently only searxng), with a custom web search prompt and more!
+
+### Fixed
+- **Theme flash on load** - the page no longer flashes light mode before switching to dark on startup.
+- **Composer focus/blur** - the input bar now eases smoothly in both directions instead of snapping on blur.
+- **Model dropdown z-index** - the menu no longer renders behind the quick-prompt buttons on the home screen.
+- **Model dropdown "More models" submenu** - Fixed selection closing the menu, added hover delay and invisible bridge so models are now selectable without the submenu vanishing.
+- **Quick prompt icon truncation** - Icons longer than 4 characters (pencil, coffee, learn, sparkles, search) were being silently corrupted. Now validates against the full allowed list.
+- **Incognito transition smoothness** - Background colors and the incognito bar now fade in over 0.45s instead of snapping.
+- **Sampling input visibility** - The number inputs in the admin sampling panel are now properly styled with visible text and themed backgrounds across all themes.
+- **Image preview memory leak** - File preview blob URLs were never revoked on component unmount due to a stale closure in the cleanup effect.
+- Removed the gradient sheen ("fade") on user message bubbles.
+- Hardened folder operations with optimistic rollback on network failure, and made chat drag-and-drop read from the drag payload to avoid race conditions.
+- The chat-row menu now dismisses on scroll/resize so it can't float detached.
+- **Sticky Auto-Scroll** - Sticky Auto-Scroll causes screen glitches when scrolling while the assistant is generating text, resulting in an unsmooth transition between automatic and manual scrolling
+
+### Changed
+- **Composer input bar** - Raised minimum height from 26px to 31px for better visual balance.
+- **Composer width** - Narrowed max-width from 760px to 675px to match official Claude interface proportions.
+- **Active chat highlighting** - In the Anthropic theme, both hover and active states now use the user-message color (#121212) for consistency.
+- **Model dropdown** - The + icon border outline has been removed, and models button styling refined.
+- **Sandbox icon** - Changed from wrench to cube to better represent a sandboxed environment.
+- **Anthropic theme refinements:**
+  - Quick-prompt button background: #313130
+  - Menu backgrounds (model dropdown, + menu, submenus): #313130
+  - Greeting text opacity: lowered to 80%
+  - Text selection: #121212 background with white text
+- **Theme switching no longer animates** - the light/dark transition was removed entirely (it only ever risked flashing); the change is now instant.
+- Models tab: removed the per-model Save button in favor of autosave-to-draft, with a new "Push to all Clients" control and a dirty-state indicator.
+- Reverted the experimental "Fluid motion" animation tier and removed its settings toggle.
+- Sidebar widened slightly (250px → 290px).
+- **Artifacts Overhaul** - Overhauled Artifacts and tool-calling.
+
+---
+
 ## [2026.2.2] — 2026-06-12
 
 ### Added

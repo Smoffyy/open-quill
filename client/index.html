@@ -4,6 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>open-quill</title>
+    <script>
+      (function () {
+        var BG = { light: '#f4f3ee', dark: '#262624', anthropic: '#1f1f1e' };
+        try {
+          var t = localStorage.getItem('oq-theme');
+          if (t !== 'light' && t !== 'dark' && t !== 'anthropic') {
+            t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+          }
+          document.documentElement.setAttribute('data-theme', t);
+          document.documentElement.style.background = BG[t] || BG.dark;
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+          document.documentElement.style.background = '#262624';
+        }
+      })();
+    </script>
+    <style>html{background:#262624}html[data-theme="light"]{background:#f4f3ee}html[data-theme="anthropic"]{background:#1f1f1e}</style>
   </head>
   <body>
     <div id="root"></div>

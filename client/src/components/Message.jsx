@@ -41,6 +41,16 @@ function useLogoGlow(src) {
   return color;
 }
 
+function fmtTime(ts) {
+  if (!ts) return null;
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return null;
+  return {
+    short: d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+    full: d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+  };
+}
+
 function BranchNav({ msg, onSelectBranch }) {
   if (!msg.branchCount || msg.branchCount < 2) return null;
   const i = msg.branchIndex ?? 0;
@@ -80,7 +90,8 @@ function ModelIcon({ model, phase, below }) {
   const glow = useLogoGlow(phase === 'generating' || phase === 'thinking' ? src : null);
   const anim = phase === 'generating' ? (model?.generatingAnim || 'spin') : phase === 'thinking' ? (model?.thinkingAnim || 'pulse') : '';
   const cls = anim === 'none' ? '' : anim;
-  return <div className={'msg-icon' + (below ? ' below' : '')}><img src={src} className={cls} style={glow ? { '--icon-glow': glow } : undefined} alt="" /></div>;
+  const sz = model?.iconSize > 0 ? { width: model.iconSize, height: model.iconSize } : undefined;
+  return <div className={'msg-icon' + (below ? ' below' : '')} style={sz}><img src={src} className={cls} style={glow ? { '--icon-glow': glow } : undefined} alt="" /></div>;
 }
 
 function Message({ msg, model, streaming, phase, onRegenerate, onEdit, onSelectBranch, showIcon = true }) {
@@ -92,7 +103,8 @@ function Message({ msg, model, streaming, phase, onRegenerate, onEdit, onSelectB
     if (editing && taRef.current) { const el = taRef.current; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight + 2, 460) + 'px'; }
   }, [editing, draft]);
   async function doCopy() {
-    if (!(await copyText(msg.content))) return;
+    const clean = (msg.content || '').replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
+    if (!(await copyText(clean))) return;
     setCopied(true); setTimeout(() => setCopied(false), 1400);
   }
   function startEdit() { setDraft(msg.content || ''); setEditing(true); }
@@ -116,6 +128,7 @@ function Message({ msg, model, streaming, phase, onRegenerate, onEdit, onSelectB
           )}
           {msg.content && !editing && (
             <div className="actions user-actions">
+              {(() => { const t = fmtTime(msg.created_at); return t ? <span className="msg-time" data-full={t.full}>{t.short}</span> : null; })()}
               <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
               <button className="action-btn" onClick={doCopy} title="Copy">{copied ? <Check /> : <Copy />}</button>
               {onEdit && <button className="action-btn" onClick={startEdit} title="Edit"><Pencil style={{ width: 15 }} /></button>}
@@ -131,15 +144,14 @@ function Message({ msg, model, streaming, phase, onRegenerate, onEdit, onSelectB
   const icon = showIt ? <ModelIcon model={model} phase={iconPhase} below={pos === 'below'} /> : null;
 
   return (
-    <div className={'msg assistant' + (msg._enter ? ' enter' : '')}>
+    <div className={'msg assistant' + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '')}>
       {pos === 'above' && icon}
-      <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} />
+      <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} collapsible={model?.reasoningCollapsible !== false} />
       {(msg.content || !streaming) && (
         <div className={'assistant-body' + (streaming ? ' streaming' : '')}>
           <Markdown streaming={streaming}>{msg.content}</Markdown>
         </div>
       )}
-      {pos === 'below' && icon}
       {!streaming && msg.content && (
         <div className="actions">
           <button className="action-btn" onClick={doCopy} title="Copy">{copied ? <Check /> : <Copy />}</button>
@@ -151,6 +163,7 @@ function Message({ msg, model, streaming, phase, onRegenerate, onEdit, onSelectB
           <button className="action-btn" title="Retry" onClick={() => onRegenerate?.(msg.id)}><Retry /></button>
         </div>
       )}
+      {pos === 'below' && icon}
     </div>
   );
 }

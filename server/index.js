@@ -8,7 +8,39 @@ import { fileURLToPath } from 'url';
 import { db, uid, now, getSetting, setSetting } from './db.js';
 import { hash, check, sign, publicUser, authMiddleware, adminOnly, userFromRequest, parseCookies } from './auth.js';
 import { buildMessages, streamCompletion, generateTitle, summarizeConversation } from './llm.js';
+import { getProviders, resolveProvider, providerSpec, typesForClient, PROVIDER_TYPES } from './providers.js';
+import * as websearch from './websearch.js';
 import * as sandbox from './sandbox.js';
+import * as toolproto from './toolproto.js';
+
+function stripToolSyntax(text) {
+  let s = String(text || '');
+  const { calls, live } = toolproto.scanTools(s);
+  for (let i = calls.length - 1; i >= 0; i--) s = s.slice(0, calls[i].start) + s.slice(calls[i].end);
+  if (live && live.start != null) {
+    const after = toolproto.scanTools(s).live;
+    if (after && after.start != null) {
+      const oi = s.indexOf('[[OQR:', after.start);
+      s = s.slice(0, after.start) + (oi === -1 ? '' : s.slice(oi));
+    }
+  }
+  return s.replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '').replace(/```tool[\s\S]*?```/g, '');
+}
+
+function compactAssistant(text, eofCloses) {
+  const s = String(text || '');
+  const { calls } = toolproto.scanTools(s, { eofCloses });
+  if (!calls.length) return s;
+  let out = '', cursor = 0;
+  for (const { call, start, end } of calls) {
+    out += s.slice(cursor, start);
+    const ref = call.path || call.cmd || call.query || call.name || '';
+    out += `[${call.tool}${ref ? ' ' + ref : ''}]`;
+    cursor = end;
+  }
+  out += s.slice(cursor);
+  return out;
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3001;
@@ -99,8 +131,43 @@ app.delete('/api/me', authMiddleware, (req, res) => {
 app.get('/api/chats', authMiddleware, (req, res) => {
   const list = db.chats.filter(c => c.user_id === req.user.id)
     .sort((a, b) => b.updated_at - a.updated_at)
-    .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred }));
+    .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred, folderId: c.folder_id || null }));
   res.json(list);
+});
+
+// ---------- folders ----------
+app.get('/api/folders', authMiddleware, (req, res) => {
+  const list = db.folders.filter(f => f.user_id === req.user.id)
+    .sort((a, b) => (a.sort_order - b.sort_order) || (a.created_at - b.created_at))
+    .map(f => ({ id: f.id, name: f.name, collapsed: !!f.collapsed, sortOrder: f.sort_order || 0 }));
+  res.json(list);
+});
+app.post('/api/folders', authMiddleware, (req, res) => {
+  const t = now();
+  const mine = db.folders.filter(f => f.user_id === req.user.id);
+  const maxOrder = mine.reduce((m, f) => Math.max(m, f.sort_order || 0), -1);
+  const name = String(req.body?.name || 'New folder').slice(0, 80).trim() || 'New folder';
+  const f = db.folders.insert({ id: uid(), user_id: req.user.id, name, collapsed: 0, sort_order: maxOrder + 1, created_at: t });
+  res.json({ id: f.id, name: f.name, collapsed: false, sortOrder: f.sort_order });
+});
+app.patch('/api/folders/:id', authMiddleware, (req, res) => {
+  const f = db.folders.byId(req.params.id);
+  if (!f || f.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+  const patch = {};
+  if ('name' in req.body) patch.name = String(req.body.name || '').slice(0, 80).trim() || 'New folder';
+  if ('collapsed' in req.body) patch.collapsed = req.body.collapsed ? 1 : 0;
+  if ('sortOrder' in req.body) patch.sort_order = parseInt(req.body.sortOrder) || 0;
+  db.folders.update(f.id, patch);
+  res.json({ ok: true });
+});
+app.delete('/api/folders/:id', authMiddleware, (req, res) => {
+  const f = db.folders.byId(req.params.id);
+  if (f && f.user_id === req.user.id) {
+    // chats in this folder fall back to the default (no folder)
+    for (const c of db.chats.filter(c => c.user_id === req.user.id && c.folder_id === f.id)) db.chats.update(c.id, { folder_id: null });
+    db.folders.remove(x => x.id === f.id);
+  }
+  res.json({ ok: true });
 });
 app.get('/api/chats-overview', authMiddleware, (req, res) => {
   const offset = Math.max(0, parseInt(req.query.offset) || 0);
@@ -130,7 +197,7 @@ app.get('/api/chats/:id', authMiddleware, (req, res) => {
   const messages = path.map(m => {
     const sibs = kidsByParent.get(m.parent_id ?? null) || [];
     return {
-      id: m.id, role: m.role, content: m.content, reasoning: m.reasoning, model_id: m.model_id, attachments: m.attachments || [],
+      id: m.id, role: m.role, content: m.content, reasoning: m.reasoning, model_id: m.model_id, attachments: m.attachments || [], created_at: m.created_at,
       parentId: m.parent_id ?? null, branchIndex: sibs.findIndex(s => s.id === m.id), branchCount: sibs.length,
       siblings: sibs.map(s => s.id)
     };
@@ -203,6 +270,11 @@ app.patch('/api/chats/:id', authMiddleware, (req, res) => {
     if ('title' in req.body) patch.title = req.body.title || 'New chat';
     if ('starred' in req.body) patch.starred = req.body.starred ? 1 : 0;
     if ('sandbox' in req.body) patch.sandbox = req.body.sandbox ? 1 : 0;
+    if ('folderId' in req.body) {
+      const fid = req.body.folderId;
+      if (fid === null || fid === '') patch.folder_id = null;
+      else { const f = db.folders.byId(fid); if (f && f.user_id === req.user.id) patch.folder_id = fid; }
+    }
     db.chats.update(c.id, patch);
   }
   res.json({ ok: true });
@@ -256,23 +328,58 @@ app.get('/api/chats/:id/zip', authMiddleware, (req, res) => {
 });
 
 // ---------- models (public sanitized) ----------
-function publicModels() {
-  return db.models.filter(m => m.enabled)
-    .sort((a, b) => a.sort_order - b.sort_order)
-    .map(m => ({
-      id: m.id, displayName: m.display_name, description: m.description,
-      hasReasoning: !!m.has_reasoning, inMoreModels: !!m.in_more_models, moreModelsLabel: m.more_models_label,
-      staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon, generatingAnim: m.generating_anim || 'spin', thinkingAnim: m.thinking_anim || 'pulse',
-      iconPosition: m.icon_position || 'below', hasVision: !!m.has_vision,
-      sandboxAuto: !!m.sandbox_auto, sandboxAllowed: m.sandbox_allowed !== 0, dropdownIcon: m.dropdown_icon !== 0, isDefault: !!m.is_default, agentSteps: m.agent_steps || 10,
-      enableSummaries: !!m.enable_summaries, numCtx: m.num_ctx || 0, summaryPadding: m.summary_padding || 0.125
-    }));
+function shapePublic(m) {
+  return {
+    id: m.id, displayName: m.display_name, description: m.description,
+    hasReasoning: !!m.has_reasoning, inMoreModels: !!m.in_more_models, moreModelsLabel: m.more_models_label,
+    reasoningCollapsible: m.reasoning_collapsible !== 0,
+    staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon, generatingAnim: m.generating_anim || 'spin', thinkingAnim: m.thinking_anim || 'pulse',
+    iconPosition: m.icon_position || 'below', hasVision: !!m.has_vision, iconSize: m.icon_size || 0,
+    sandboxAuto: !!m.sandbox_auto, sandboxAllowed: m.sandbox_allowed !== 0, dropdownIcon: m.dropdown_icon !== 0, isDefault: !!m.is_default, agentSteps: m.agent_steps || 0,
+    enableSummaries: !!m.enable_summaries, numCtx: m.num_ctx || 0, summaryPadding: m.summary_padding || 0.125,
+    unavailable: !!m.unavailable, unavailableReason: m.unavailable_reason || '',
+    capVision: !!m.cap_vision, capReasoning: !!m.cap_reasoning, capText: !!m.cap_text, capCompact: !!m.cap_compact
+  };
 }
-app.get('/api/models', authMiddleware, (req, res) => res.json(publicModels()));
+function draftModels() {
+  return db.models.filter(m => m.enabled).sort((a, b) => a.sort_order - b.sort_order).map(shapePublic);
+}
+function publicModels() {
+  const snap = getSetting('published_models', null);
+  if (!Array.isArray(snap)) return draftModels();
+  return snap.filter(m => m.enabled).sort((a, b) => a.sort_order - b.sort_order).map(shapePublic);
+}
+app.get('/api/models', authMiddleware, (req, res) => res.json(req.user.is_admin ? draftModels() : publicModels()));
 
 // ---------- admin ----------
 app.get('/api/admin/models', authMiddleware, adminOnly, (req, res) =>
   res.json(db.models.all().sort((a, b) => a.sort_order - b.sort_order)));
+
+app.get('/api/admin/discover-models', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const prov = req.query.provider ? resolveProvider(req.query.provider) : getProviders()[0];
+    const { spec, base, key } = providerSpec(prov);
+    const headers = key ? { Authorization: `Bearer ${key}` } : {};
+    let ids = [];
+    if (spec.protocol === 'ollama') {
+      const r = await fetch(base.replace(/\/v1$/, '') + '/api/tags', { headers });
+      if (!r.ok) return res.status(502).json({ error: `Backend returned ${r.status}.` });
+      const j = await r.json().catch(() => ({}));
+      ids = (Array.isArray(j?.models) ? j.models : []).map(x => x?.name || x?.model).filter(Boolean);
+    } else {
+      const r = await fetch(base + '/models', { headers });
+      if (!r.ok) return res.status(502).json({ error: `Backend returned ${r.status}.` });
+      const j = await r.json().catch(() => ({}));
+      const raw = Array.isArray(j?.data) ? j.data : (Array.isArray(j?.models) ? j.models : []);
+      ids = raw.map(x => (typeof x === 'string' ? x : (x?.id || x?.name))).filter(Boolean);
+    }
+    ids = [...new Set(ids)];
+    const existing = new Set(db.models.all().map(m => (m.internal_name || '').toLowerCase()));
+    res.json({ models: ids.map(id => ({ id, added: existing.has(String(id).toLowerCase()) })) });
+  } catch {
+    res.status(502).json({ error: 'Could not reach the backend. Check the Connection settings.' });
+  }
+});
 
 app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
   const max = db.models.all().reduce((a, m) => Math.max(a, m.sort_order || 0), 0);
@@ -280,54 +387,70 @@ app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
   const m = db.models.insert({
     id: uid(), display_name: b.display_name || 'New model', description: b.description || '',
     internal_name: b.internal_name || 'local-model', system_prompt: b.system_prompt || '',
+    provider_id: b.provider_id || (getProviders()[0]?.id || null), max_tokens: parseInt(b.max_tokens) || null,
     has_reasoning: b.has_reasoning ? 1 : 0, reasoning_token: b.reasoning_token || '', non_reasoning_token: b.non_reasoning_token || '',
+    reasoning_collapsible: b.reasoning_collapsible === false ? 0 : 1, icon_size: parseInt(b.icon_size) || 0,
     has_vision: b.has_vision ? 1 : 0,
     think_open: b.think_open || '', think_close: b.think_close || '',
-    sandbox_auto: b.sandbox_auto ? 1 : 0, sandbox_allowed: b.sandbox_allowed === false ? 0 : 1, dropdown_icon: b.dropdown_icon === false ? 0 : 1, is_default: 0, agent_steps: Number.isInteger(b.agent_steps) ? b.agent_steps : 10,
+    sandbox_auto: b.sandbox_auto ? 1 : 0, sandbox_allowed: b.sandbox_allowed === false ? 0 : 1, dropdown_icon: b.dropdown_icon === false ? 0 : 1, is_default: 0, agent_steps: Number.isInteger(b.agent_steps) ? Math.max(0, b.agent_steps) : 0,
     enable_summaries: b.enable_summaries ? 1 : 0, num_ctx: parseInt(b.num_ctx) || 0, summary_padding: typeof b.summary_padding === 'number' ? b.summary_padding : 0.125,
     in_more_models: b.in_more_models ? 1 : 0, more_models_label: b.more_models_label || 'More models',
+    unavailable: b.unavailable ? 1 : 0, unavailable_reason: b.unavailable_reason || '',
+    cap_vision: b.cap_vision ? 1 : 0, cap_reasoning: b.cap_reasoning ? 1 : 0, cap_text: b.cap_text ? 1 : 0, cap_compact: b.cap_compact ? 1 : 0,
     static_icon: b.static_icon || '', generating_icon: b.generating_icon || '', thinking_icon: b.thinking_icon || '',
     icon_position: b.icon_position || 'below',
     temperature: null, top_p: null, presence_penalty: null, frequency_penalty: null, repetition_penalty: null, min_p: null, top_k: null, seed: null,
     sort_order: max + 1, enabled: 1
   });
-  broadcastConfig();
+  broadcastAdminConfig();
   res.json({ id: m.id });
 });
 
 app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
   const cur = db.models.byId(req.params.id);
   if (!cur) return res.status(404).json({ error: 'not found' });
-  const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim'];
-  const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries'];
+  const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id'];
+  const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact', 'reasoning_collapsible'];
   const patch = {};
   for (const k of str) if (k in req.body) patch[k] = req.body[k];
   for (const k of bool) if (k in req.body) patch[k] = req.body[k] ? 1 : 0;
-  if ('agent_steps' in req.body) patch.agent_steps = Math.max(1, parseInt(req.body.agent_steps) || 10);
+  if ('agent_steps' in req.body) patch.agent_steps = Math.max(0, parseInt(req.body.agent_steps) || 0);
   if ('num_ctx' in req.body) patch.num_ctx = Math.max(0, parseInt(req.body.num_ctx) || 0);
+  if ('icon_size' in req.body) patch.icon_size = Math.max(0, Math.min(80, parseInt(req.body.icon_size) || 0));
   if ('summary_padding' in req.body) patch.summary_padding = Math.max(0.03, Math.min(0.6, parseFloat(req.body.summary_padding) || 0.125));
   const numF = ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'repetition_penalty', 'min_p'];
-  const numI = ['top_k', 'seed'];
+  const numI = ['top_k', 'seed', 'max_tokens'];
   for (const k of numF) if (k in req.body) { const v = req.body[k]; patch[k] = (v === '' || v == null || isNaN(Number(v))) ? null : Number(v); }
   for (const k of numI) if (k in req.body) { const v = req.body[k]; patch[k] = (v === '' || v == null || isNaN(parseInt(v))) ? null : parseInt(v); }
   // only one model can be the login default
   if (patch.is_default === 1) for (const other of db.models.all()) if (other.id !== cur.id && other.is_default) db.models.update(other.id, { is_default: 0 });
   db.models.update(cur.id, patch);
-  broadcastConfig();
+  broadcastAdminConfig();
   res.json({ ok: true });
 });
 
 app.delete('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
   db.models.remove(m => m.id === req.params.id);
-  broadcastConfig();
+  broadcastAdminConfig();
   res.json({ ok: true });
 });
 
 app.get('/api/admin/detect-ctx', authMiddleware, adminOnly, async (req, res) => {
   const internal = req.query.model || '';
-  const base = (getSetting('api_base_url') || 'http://localhost:1234/v1').replace(/\/$/, '');
+  const prov = req.query.provider ? resolveProvider(req.query.provider) : getProviders()[0];
+  const { spec, base, key } = providerSpec(prov);
+  const headers = { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) };
   const root = base.replace(/\/v1$/, '');
   try {
+    if (spec.protocol === 'ollama') {
+      const r = await fetch(root + '/api/show', { method: 'POST', headers, body: JSON.stringify({ model: internal }) });
+      if (!r.ok) return res.json({ numCtx: 0, ok: false });
+      const json = await r.json();
+      const info = json.model_info || {};
+      const ctxKey = Object.keys(info).find(k => k.endsWith('.context_length'));
+      const ctx = ctxKey ? info[ctxKey] : 0;
+      return res.json({ numCtx: parseInt(ctx) || 0, ok: !!ctx });
+    }
     const r = await fetch(root + '/api/v0/models', { headers: { 'Content-Type': 'application/json' } });
     if (!r.ok) return res.json({ numCtx: 0, ok: false });
     const json = await r.json();
@@ -340,9 +463,34 @@ app.get('/api/admin/detect-ctx', authMiddleware, adminOnly, async (req, res) => 
 
 app.post('/api/admin/models/reorder', authMiddleware, adminOnly, (req, res) => {
   (req.body.ids || []).forEach((id, i) => db.models.update(id, { sort_order: i }));
-  broadcastConfig();
+  broadcastAdminConfig();
   res.json({ ok: true });
 });
+
+// publish the current draft (full model rows) to all clients
+app.post('/api/admin/models/publish', authMiddleware, adminOnly, (req, res) => {
+  const snapshot = db.models.all().map(m => ({ ...m }));
+  setSetting('published_models', snapshot);
+  setSetting('published_at', now());
+  broadcastConfig();
+  res.json({ ok: true, count: snapshot.length, publishedAt: getSetting('published_at') });
+});
+
+// has the draft diverged from what is published?
+app.get('/api/admin/models/publish-state', authMiddleware, adminOnly, (req, res) => {
+  const snap = getSetting('published_models', null);
+  const draft = db.models.all().map(m => ({ ...m }));
+  const dirty = JSON.stringify(snap) !== JSON.stringify(snap === null ? null : draft);
+  res.json({ published: Array.isArray(snap), dirty: snap === null ? true : dirty, publishedAt: getSetting('published_at', null) });
+});
+
+// resolve the model used to RUN a completion: admins use live draft, clients use the published snapshot
+function resolveModel(modelId, isAdmin) {
+  if (isAdmin) return db.models.byId(modelId);
+  const snap = getSetting('published_models', null);
+  if (!Array.isArray(snap)) return db.models.byId(modelId);
+  return snap.find(m => m.id === modelId) || null;
+}
 
 function roleLimit(key, isAdmin, fallback) {
   const v = getSetting(key + (isAdmin ? '_admin' : '_user'));
@@ -356,17 +504,63 @@ app.get('/api/admin/settings', authMiddleware, adminOnly, (req, res) =>
     uploadLimitUserMb: roleLimit('upload_limit_mb', false, 8),
     sandboxLimitAdminMb: roleLimit('sandbox_limit_mb', true, 1024),
     sandboxLimitUserMb: roleLimit('sandbox_limit_mb', false, 256),
-    modelQueue: getSetting('model_queue', '0') === '1'
+    modelQueue: getSetting('model_queue', '0') === '1',
+    webSearchEnabled: getSetting('web_search_enabled', '0') === '1',
+    webSearchEngine: getSetting('web_search_engine', 'searxng'),
+    searxngUrl: getSetting('searxng_url', ''),
+    webSearchCount: parseInt(getSetting('web_search_count', '5')) || 5,
+    webSearchDomains: (() => { try { const d = JSON.parse(getSetting('web_search_domains', '[]')); return Array.isArray(d) ? d.join('\n') : ''; } catch { return ''; } })(),
+    webSearchPrompt: getSetting('web_search_prompt', websearch.DEFAULT_WS_PROMPT)
   }));
 app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
   if ('apiBaseUrl' in req.body) setSetting('api_base_url', req.body.apiBaseUrl);
   if ('apiKey' in req.body) setSetting('api_key', req.body.apiKey);
+  if ('webSearchEnabled' in req.body) setSetting('web_search_enabled', req.body.webSearchEnabled ? '1' : '0');
+  if ('webSearchEngine' in req.body) setSetting('web_search_engine', req.body.webSearchEngine || 'searxng');
+  if ('searxngUrl' in req.body) setSetting('searxng_url', (req.body.searxngUrl || '').trim());
+  if ('webSearchCount' in req.body) { const n = parseInt(req.body.webSearchCount); setSetting('web_search_count', String(Number.isFinite(n) && n > 0 ? Math.min(20, n) : 5)); }
+  if ('webSearchDomains' in req.body) { const list = String(req.body.webSearchDomains || '').split(/[\n,]+/).map(s => s.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase()).filter(Boolean); setSetting('web_search_domains', JSON.stringify(list)); }
+  if ('webSearchPrompt' in req.body) setSetting('web_search_prompt', req.body.webSearchPrompt || '');
   const lim = (k, v, def) => { const n = Number(v); setSetting(k, String(Number.isFinite(n) && n >= 0 ? n : def)); };
   if ('uploadLimitAdminMb' in req.body) lim('upload_limit_mb_admin', req.body.uploadLimitAdminMb, 8);
   if ('uploadLimitUserMb' in req.body) lim('upload_limit_mb_user', req.body.uploadLimitUserMb, 8);
   if ('sandboxLimitAdminMb' in req.body) lim('sandbox_limit_mb_admin', req.body.sandboxLimitAdminMb, 1024);
   if ('sandboxLimitUserMb' in req.body) lim('sandbox_limit_mb_user', req.body.sandboxLimitUserMb, 256);
   if ('modelQueue' in req.body) setSetting('model_queue', req.body.modelQueue ? '1' : '0');
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/provider-types', authMiddleware, adminOnly, (req, res) => res.json(typesForClient()));
+app.get('/api/admin/providers', authMiddleware, adminOnly, (req, res) => res.json({ providers: getProviders(), types: typesForClient() }));
+app.post('/api/admin/providers', authMiddleware, adminOnly, (req, res) => {
+  const b = req.body || {};
+  const type = PROVIDER_TYPES[b.type] ? b.type : 'lmstudio';
+  const prov = { id: uid(), name: (b.name || PROVIDER_TYPES[type].label).trim(), type, base_url: (b.base_url || '').trim() || PROVIDER_TYPES[type].defaultBaseUrl, api_key: b.api_key || '' };
+  setSetting('providers', [...getProviders(), prov]);
+  res.json({ id: prov.id });
+});
+app.patch('/api/admin/providers/:id', authMiddleware, adminOnly, (req, res) => {
+  const b = req.body || {};
+  const list = getProviders();
+  const i = list.findIndex(p => p.id === req.params.id);
+  if (i === -1) return res.status(404).json({ error: 'not found' });
+  const p = { ...list[i] };
+  if ('name' in b) p.name = (b.name || '').trim() || p.name;
+  if ('type' in b && PROVIDER_TYPES[b.type]) p.type = b.type;
+  if ('base_url' in b) p.base_url = (b.base_url || '').trim() || PROVIDER_TYPES[p.type].defaultBaseUrl;
+  if ('api_key' in b) p.api_key = b.api_key || '';
+  list[i] = p;
+  setSetting('providers', list);
+  res.json({ ok: true });
+});
+app.delete('/api/admin/providers/:id', authMiddleware, adminOnly, (req, res) => {
+  const list = getProviders();
+  if (list.length <= 1) return res.status(400).json({ error: 'At least one provider is required.' });
+  const next = list.filter(p => p.id !== req.params.id);
+  const fallback = next[0].id;
+  for (const m of db.models.all()) if (m.provider_id === req.params.id) db.models.update(m.id, { provider_id: fallback });
+  setSetting('providers', next);
+  broadcastAdminConfig();
   res.json({ ok: true });
 });
 
@@ -466,14 +660,40 @@ app.delete('/api/admin/users/:id', authMiddleware, adminOnly, (req, res) => {
 });
 
 // ---------- app customization ----------
+function detectVersionIcon() {
+  const dirs = [path.join(__dirname, '..', 'client', 'public'), path.join(__dirname, '..', 'client', 'dist')];
+  for (const d of dirs) {
+    try {
+      const f = fs.readdirSync(d).find(n => /-ui-version/i.test(n) && /\.(png|svg|jpe?g|gif|webp)$/i.test(n));
+      if (f) return '/' + f;
+    } catch {}
+  }
+  return '';
+}
+function readVersionText() {
+  const dirs = [path.join(__dirname, '..', 'client', 'public'), path.join(__dirname, '..', 'client', 'dist')];
+  for (const d of dirs) {
+    try {
+      const files = fs.readdirSync(d);
+      const f = files.find(n => /^ui-version(-text)?\.md$/i.test(n)) || files.find(n => /^ui-version-text\.txt$/i.test(n));
+      if (f) { const t = fs.readFileSync(path.join(d, f), 'utf8'); if (t.trim()) return t; }
+    } catch {}
+  }
+  return '';
+}
+function safeParse(v, fallback) { try { const p = JSON.parse(v); return p == null ? fallback : p; } catch { return fallback; } }
 function appConfig() {
   return {
     appName: getSetting('app_name', 'open-quill'),
     disclaimer: getSetting('disclaimer', 'Assistants can make mistakes, double-check responses.'),
-    greetings: (() => { const g = JSON.parse(getSetting('greetings', '[]')); return g.length ? g : ['How can I help you?', 'What are we building today?', 'Where should we start?']; })(),
+    greetings: (() => { const g = safeParse(getSetting('greetings', '[]'), []); return Array.isArray(g) && g.length ? g : ['How can I help you?', 'What are we building today?', 'Where should we start?']; })(),
     appIcon: getSetting('app_icon', ''),
-    quickPrompts: (() => { const q = JSON.parse(getSetting('quick_prompts', '[]')); return q.length ? q : [{ label: 'Summarize', prompt: 'Summarize the following text for me:' }, { label: 'Write code', prompt: 'Help me write a small program. Ask me what it should do first.' }, { label: 'Brainstorm', prompt: 'Help me brainstorm ideas about a topic. Ask me for the topic.' }]; })(),
-    version: APP_VERSION
+    quickPrompts: (() => { const q = safeParse(getSetting('quick_prompts', '[]'), []); return Array.isArray(q) && q.length ? q : [{ icon: 'sparkles', label: 'Ideas', prompt: 'Give me ideas on what I should do today.' }, { icon: 'pencil', label: 'Write', prompt: 'Write a one paragraph summary about how Large Language Models (LLMs) work.' }, { icon: 'code', label: 'Code', prompt: 'Write a Python function that checks whether a string is a palindrome.' }, { icon: 'learn', label: 'Learn', prompt: 'How far away is the sun from Earth?' }, { icon: 'coffee', label: 'Life stuff', prompt: 'Give me practical advice for a life problem.' }]; })(),
+    version: APP_VERSION,
+    uiVersion: APP_VERSION,
+    webSearchAvailable: websearch.webSearchAvailable(),
+    uiVersionDesc: readVersionText(),
+    uiVersionIcon: detectVersionIcon()
   };
 }
 app.get('/api/app-config', authMiddleware, (req, res) => res.json(appConfig()));
@@ -486,13 +706,13 @@ app.patch('/api/admin/app-config', authMiddleware, adminOnly, (req, res) => {
     setSetting('greetings', JSON.stringify(list.length ? list : ['How can I help you?']));
   }
   if ('quickPrompts' in b) {
+    const QP_ICONS = ['none', 'bulb', 'pencil', 'code', 'coffee', 'learn', 'sparkles', 'search', 'chat', 'file', 'star'];
     const list = (Array.isArray(b.quickPrompts) ? b.quickPrompts : [])
-      .map(q => ({ label: String(q.label || '').trim().slice(0, 40), icon: String(q.icon || '').trim().slice(0, 4), prompt: String(q.prompt || '').trim() }))
+      .map(q => ({ label: String(q.label || '').trim().slice(0, 40), icon: QP_ICONS.includes(String(q.icon || '').trim()) ? String(q.icon).trim() : 'none', prompt: String(q.prompt || '').trim() }))
       .filter(q => q.label && q.prompt).slice(0, 8);
     setSetting('quick_prompts', JSON.stringify(list));
   }
   if ('appIcon' in b) setSetting('app_icon', b.appIcon || '');
-  broadcastConfig();
   res.json({ ok: true });
 });
 
@@ -526,6 +746,11 @@ function broadcastConfig() {
   const msg = JSON.stringify({ type: 'config' });
   for (const ws of clients.keys()) if (ws.readyState === 1) ws.send(msg);
 }
+// notify only admin sessions to refresh their draft view (live editing)
+function broadcastAdminConfig() {
+  const msg = JSON.stringify({ type: 'config' });
+  for (const [ws, st] of clients.entries()) if (ws.readyState === 1 && st.isAdmin) ws.send(msg);
+}
 
 let SKILLS_CACHE = null;
 function sandboxPromptFor(chatId) {
@@ -536,11 +761,14 @@ function sandboxPromptFor(chatId) {
   let p = SKILLS_CACHE;
   const files = sandbox.list(chatId);
   if (!files.length) return p + '\n\n## Current sandbox\nThe sandbox is empty.';
+  const LIST_CAP = 200, INLINE_CAP = 12;
   p += '\n\n## Current sandbox files\nThese are the LATEST versions on disk. Always edit these directly — never assume older content. The version number (vN) increases each time a file changes.\n';
-  for (const f of files) p += `- ${f.path} (v${f.v}, ${f.size} bytes)\n`;
-  p += '\n## Latest file contents\n';
-  let budget = 40000;
+  for (const f of files.slice(0, LIST_CAP)) p += `- ${f.path} (v${f.v}, ${f.size} bytes)\n`;
+  if (files.length > LIST_CAP) p += `- … and ${files.length - LIST_CAP} more file(s). The list is truncated to protect context — use \`list_files\`, \`search\`, or \`view\` to inspect anything not shown here.\n`;
+  p += '\n## Latest file contents (a sample; use `view` for anything not shown)\n';
+  let budget = 40000, inlined = 0;
   for (const f of files) {
+    if (inlined >= INLINE_CAP || budget <= 0) break;
     if (f.ext === 'zip' || !sandbox.isText(f.path)) continue;
     const txt = sandbox.readText(chatId, f.path) || '';
     if (txt.length > 8000 || txt.length > budget) {
@@ -548,21 +776,55 @@ function sandboxPromptFor(chatId) {
       continue;
     }
     p += `\n### ${f.path} (v${f.v})\n\`\`\`${f.ext || ''}\n${txt}\n\`\`\`\n`;
-    budget -= txt.length;
+    budget -= txt.length; inlined++;
   }
-  p += '\n---\nREMINDER: The sandbox is ON. Build directly with tool calls — use `create_file`/`str_replace` for any file or script. Do NOT paste full file contents into the chat; the user reads them in the artifacts panel.';
+  p += '\n---\nREMINDER: The sandbox is ON and these files above are the current truth. Edit existing files with `str_replace` (never recreate them from scratch). For file operations use the dedicated tools — `copy_file`, `move_file`, `make_dir`, `delete_file`, `bundle_zip`, `extract_zip` — never shell commands like cp/rm/mkdir/zip, and never absolute paths like /tmp. Emit tool calls using the `|TOOL|` line protocol exactly as described above (never JSON, never code fences). Keep working through the task with tool calls until it is fully done; do not stop to ask permission, do not paste file contents or fake terminal output into the chat, and do not repeat a tool call that just failed — read the error and change approach.';
   return p;
+}
+function cleanCall(call) {
+  const o = { tool: call.tool };
+  if (call.path != null) o.path = call.path;
+  if (call.tool === 'bash' || call.tool === 'run') o.cmd = call.cmd ?? call.command ?? '';
+  if (call.new_path != null || call.to != null) o.new_path = call.new_path ?? call.to;
+  if (call.query != null) o.query = call.query;
+  if (call.name != null) o.name = call.name;
+  if (call.dest != null) o.dest = call.dest;
+  if (call.start != null) o.start = call.start;
+  if (call.end != null) o.end = call.end;
+  return o;
+}
+function resultPayload(call, r) {
+  const o = { ok: !!r.ok };
+  if (r.error) o.error = r.error;
+  if (r.v != null) o.v = r.v;
+  if (r.adds != null) o.adds = r.adds;
+  if (r.dels != null) o.dels = r.dels;
+  if (r.bytes != null) o.bytes = r.bytes;
+  if (r.lines != null) o.lines = r.lines;
+  if (r.count != null) o.count = r.count;
+  if (r.cleared != null) o.cleared = r.cleared;
+  if (r.path != null) o.path = r.path;
+  if (r.from != null) o.from = r.from;
+  if ((call.tool === 'bash' || call.tool === 'run')) { o.output = (r.output || '').slice(0, 8000); o.exit = r.exit ?? null; }
+  if (call.tool === 'list_files' && Array.isArray(r.files)) o.files = r.files.slice(0, 100).map(f => ({ path: f.path, size: f.size }));
+  if (call.tool === 'extract_zip' && Array.isArray(r.files)) o.files = r.files.slice(0, 60);
+  if (call.tool === 'search' && Array.isArray(r.matches)) o.matches = r.matches.slice(0, 40);
+  return o;
 }
 function formatToolResult(call, r) {
   const head = `${call.tool}${call.path ? ' ' + call.path : ''}`;
-  if (!r.ok) return `${head} → ERROR: ${r.error}`;
+  if (!r.ok) return `${head} → ERROR: ${r.error}` + (r.output ? `\n${r.output}` : '');
   switch (call.tool) {
-    case 'create_file': return `${head} → created (v${r.v}, ${r.bytes} bytes)`;
-    case 'str_replace': return `${head} → edited (now v${r.v})`;
+    case 'bash': case 'run': return `bash$ ${call.cmd ?? call.command ?? ''}\n${r.output || '(no output)'}\n(exit ${r.exit ?? 0})`;
+    case 'create_file': return `${head} → created (v${r.v}, ${r.bytes} bytes, +${r.adds ?? 0}/-${r.dels ?? 0})`;
+    case 'str_replace': return `${head} → edited (now v${r.v}, +${r.adds ?? 0}/-${r.dels ?? 0})`;
     case 'view': return `${head} →\n${r.content}`;
     case 'list_files': return `list_files →\n${(r.files || []).map(f => `${f.path} (${f.size}b)`).join('\n') || '(empty)'}`;
     case 'delete_file': return `${head} → deleted`;
-    case 'rename_file': return `${head} → renamed to ${r.path}`;
+    case 'clear_sandbox': case 'delete_all': return `clear_sandbox → removed ${r.cleared} item(s); sandbox is now empty`;
+    case 'rename_file': case 'move_file': return `${head} → moved to ${r.path}`;
+    case 'copy_file': return `${head} → copied to ${r.path}${r.count > 1 ? ` (${r.count} files)` : ''}`;
+    case 'make_dir': case 'mkdir': return `${head} → directory ready`;
     case 'search': return `search "${call.query}" → ${r.count} match(es)` + (r.matches.length ? '\n' + r.matches.map(m => `${m.path}:${m.line}: ${m.text}`).join('\n') : '');
     case 'extract_zip': return `extract_zip ${call.path} → ${r.count} file(s)` + (r.files && r.files.length ? ':\n' + r.files.join('\n') : '');
     case 'bundle_zip': return `bundle_zip ${r.path} → created (${r.count} files)`;
@@ -604,7 +866,7 @@ function chatHistory(chat, model) {
   let rows = activePath(chat.id);
   if (upto) rows = rows.filter(m => m.created_at > upto);
   return rows.map(m => {
-    let text = m.content || '';
+    let text = stripToolSyntax(m.content || '').replace(/\n{3,}/g, '\n\n');
     const atts = m.attachments || [];
     const images = [];
     if (atts.length) {
@@ -645,16 +907,25 @@ async function compactStep(ws, chat, model) {
   if (after.length <= 1) return false; // only the newest message remains; can't compact further
   const toSummarize = after.slice(0, after.length - 1); // keep newest message verbatim
   const marker = toSummarize[toSummarize.length - 1].created_at;
-  try { ws.send(JSON.stringify({ type: 'compacting' })); } catch {}
+  try { ws.send(JSON.stringify({ type: 'compacting', chatId: chat.id })); } catch {}
   const summary = await summarizeConversation(model, fresh.summary, toSummarize);
   db.chats.update(chat.id, { summary, summary_upto: marker });
-  try { ws.send(JSON.stringify({ type: 'compacted' })); } catch {}
+  try { ws.send(JSON.stringify({ type: 'compacted', chatId: chat.id })); } catch {}
   return !!summary;
 }
 function compactThreshold(model) {
   if (!model.enable_summaries || !model.num_ctx) return Infinity;
   const padding = Math.max(0.03, Math.min(0.6, model.summary_padding || 0.125));
   return Math.floor(model.num_ctx * (1 - padding));
+}
+function promptVars(userId) {
+  const u = userId ? db.users.byId(userId) : null;
+  const name = u ? (u.display_name || (u.email ? u.email.split('@')[0] : '') || 'User') : 'User';
+  const now = new Date();
+  let dt;
+  try { dt = now.toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' }); }
+  catch { dt = now.toString(); }
+  return { currentUser: name, currentDateTime: dt };
 }
 async function maybeCompact(ws, chat, model, extended, sandboxOn) {
   const threshold = compactThreshold(model);
@@ -663,7 +934,7 @@ async function maybeCompact(ws, chat, model, extended, sandboxOn) {
   while (guard++ < 3) {
     const fresh = db.chats.byId(chat.id);
     const sandboxP = sandboxOn ? sandboxPromptFor(chat.id) : null;
-    const convo = buildMessages(model, chatHistory(chat, model), extended, sandboxP, fresh.summary);
+    const convo = buildMessages(model, chatHistory(chat, model), extended, sandboxP, fresh.summary, promptVars(chat.user_id));
     if (estimateTokens(convo) < threshold) return;
     if (!(await compactStep(ws, chat, model))) return;
   }
@@ -672,75 +943,120 @@ async function maybeCompact(ws, chat, model, extended, sandboxOn) {
 wss.on('connection', (ws, req) => {
   const u = userFromRequest(req);
   if (!u) { ws.close(); return; }
-  clients.set(ws, { userId: u.id, abort: null });
+  clients.set(ws, { userId: u.id, isAdmin: !!u.is_admin, aborts: new Map() });
   const safeSend = (s) => { if (ws.readyState === 1) { try { ws.send(s); } catch {} } };
 
-  async function runCompletion(ws, state, chat, model, extended, sandboxOn, sandboxCap = 0) {
+  async function runCompletion(ws, state, chat, model, extended, sandboxOn, sandboxCap = 0, webSearchOn = false) {
     await maybeCompact(ws, chat, model, extended, sandboxOn);
     const history = chatHistory(chat, model);
     const chatRow = db.chats.byId(chat.id) || chat;
-    const sandboxP = () => sandboxOn ? sandboxPromptFor(chat.id) : null;
-    let base = buildMessages(model, history, extended, sandboxP(), chatRow.summary);
+    const toolsOn = sandboxOn || webSearchOn;
+    const toolsP = () => {
+      const parts = [];
+      if (sandboxOn) parts.push(sandboxPromptFor(chat.id));
+      if (webSearchOn) { parts.push(websearch.webSearchConfig().prompt); parts.push(websearch.webSearchToolPrompt()); }
+      return parts.filter(Boolean).join('\n\n') || null;
+    };
+    let base = buildMessages(model, history, extended, toolsP(), chatRow.summary, promptVars(chat.user_id));
     let inTurn = []; // assistant/tool exchanges accumulated during this response
     const assistantId = uid();
     const assistantParent = (db.chats.byId(chat.id) || {}).active_leaf || null;
     let content = '', reasoning = '';
-    const controller = new AbortController();
-    state.abort = controller;
-    safeSend(JSON.stringify({ type: 'start', messageId: assistantId }));
+    safeSend(JSON.stringify({ type: 'start', chatId: chat.id, messageId: assistantId }));
 
     const threshold = compactThreshold(model);
-    const maxSteps = sandboxOn ? (model.agent_steps || 10) : 1;
+    const stepCap = (model.agent_steps && model.agent_steps > 0) ? model.agent_steps : 1000;
+    const maxSteps = toolsOn ? stepCap : 1;
     try {
       for (let step = 0; step < maxSteps; step++) {
         // running low on context mid-response? summarize older turns, then carry on where we left off
         if (threshold !== Infinity && inTurn.length && estimateTokens([...base, ...inTurn]) >= threshold) {
-          if (await compactStep(ws, chat, model)) base = buildMessages(model, chatHistory(chat, model), extended, sandboxP(), (db.chats.byId(chat.id) || {}).summary);
+          if (await compactStep(ws, chat, model)) base = buildMessages(model, chatHistory(chat, model), extended, toolsP(), (db.chats.byId(chat.id) || {}).summary, promptVars(chat.user_id));
         }
         const convo = [...base, ...inTurn];
+        const controller = new AbortController();
+        state.aborts.set(chat.id, controller);
         let stepText = '';
         let aborted = false;
+        let toolStop = false;
+        let execIndex = 0;
+        let abortScanFrom = 0;
+        const stepResults = [];
+        const execPending = async (eofCloses) => {
+          if (!toolsOn) return;
+          const { calls } = toolproto.scanTools(stepText, { eofCloses });
+          for (; execIndex < calls.length; execIndex++) {
+            const call = calls[execIndex].call;
+            if (!call || !call.tool) continue;
+            let r, payload, formatted;
+            if (call.tool === 'web_search') {
+              if (!webSearchOn) continue;
+              r = await websearch.runWebSearch(call);
+              payload = websearch.webSearchResultPayload(call, r);
+              formatted = websearch.formatWebSearchResult(call, r);
+            } else {
+              if (!sandboxOn) continue;
+              r = await sandbox.execTool(chat.id, call, sandboxCap);
+              payload = resultPayload(call, r);
+              formatted = formatToolResult(call, r);
+            }
+            stepResults.push({ call, r, formatted });
+            const block = '\n\n[[OQR:' + Buffer.from(JSON.stringify({ call: cleanCall(call), result: payload }), 'utf8').toString('base64') + ']]\n';
+            content += block;
+            safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: block }));
+            if (sandboxOn) safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
+          }
+        };
         try {
           await streamCompletion({
             model, messages: convo, signal: controller.signal,
             onEvent: (e) => {
-              if (e.type === 'reasoning') { reasoning += e.text; safeSend(JSON.stringify({ type: 'reasoning', text: e.text })); }
-              else { content += e.text; stepText += e.text; safeSend(JSON.stringify({ type: 'content', text: e.text })); }
+              if (e.type === 'reasoning') { reasoning += e.text; safeSend(JSON.stringify({ type: 'reasoning', chatId: chat.id, text: e.text })); }
+              else {
+                content += e.text; stepText += e.text;
+                safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: e.text }));
+                if (toolsOn && !toolStop) {
+                  const tail = stepText.slice(Math.max(0, abortScanFrom - 16));
+                  abortScanFrom = stepText.length;
+                  if (/\/\s*\|?\s*tool\b/i.test(tail)) {
+                    const { calls } = toolproto.scanTools(stepText);
+                    if (calls.length) {
+                      const last = calls[calls.length - 1].call;
+                      if (last && toolproto.READ_TOOLS.has(last.tool)) { toolStop = true; try { controller.abort(); } catch {} }
+                    }
+                  }
+                }
+              }
             }
           });
         } catch (err) {
           if (err.name === 'AbortError') aborted = true; else throw err;
         }
-        if (!sandboxOn) break;
-        const calls = sandbox.parseToolCalls(stepText);
-        if (calls.length) {
-          const results = [];
-          for (const call of calls) {
-            const r = sandbox.execTool(chat.id, call, sandboxCap);
-            safeSend(JSON.stringify({ type: 'tool', tool: call.tool, path: r.path || call.path || null, ok: !!r.ok, error: r.error || null }));
-            results.push(formatToolResult(call, r));
-          }
-          safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
-          if (!aborted) { content += '\n\n'; safeSend(JSON.stringify({ type: 'content', text: '\n\n' })); }
-          inTurn = [...inTurn, { role: 'assistant', content: stepText }, { role: 'user', content: 'Tool results:\n' + results.join('\n\n') }];
+        const eof = !toolStop;
+        try { await execPending(eof); } catch {}
+        if (stepResults.length) {
+          const results = stepResults.map(({ formatted }) => formatted);
+          inTurn = [...inTurn, { role: 'assistant', content: compactAssistant(stepText, eof) }, { role: 'user', content: 'Tool results:\n' + results.join('\n\n') }];
         }
-        if (aborted || !calls.length) break;
+        if (!toolsOn) break;
+        if (aborted && !toolStop) break;
+        if (!stepResults.length) break;
       }
     } catch (err) {
-      if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', error: String(err.message || err) }));
+      if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: String(err.message || err) }));
     }
-    state.abort = null;
+    state.aborts.delete(chat.id);
 
     db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, model_id: model.id, parent_id: assistantParent, created_at: now() });
     db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
-    safeSend(JSON.stringify({ type: 'done', messageId: assistantId }));
+    safeSend(JSON.stringify({ type: 'done', chatId: chat.id, messageId: assistantId }));
 
     const fresh = db.chats.byId(chat.id);
     const lastUser = [...history].reverse().find(h => h.role === 'user');
     const lastUserText = lastUser && (Array.isArray(lastUser.content)
       ? (lastUser.content.find(p => p.type === 'text')?.text || 'Image')
       : lastUser.content);
-    const cleanContent = content.replace(/```tool[\s\S]*?```/g, '').trim();
+    const cleanContent = stripToolSyntax(content).trim();
     if (cleanContent && fresh && fresh.title === 'New chat' && lastUserText) {
       const title = await generateTitle(model, lastUserText, cleanContent);
       db.chats.update(chat.id, { title });
@@ -752,28 +1068,65 @@ wss.on('connection', (ws, req) => {
     let msg; try { msg = JSON.parse(raw); } catch { return; }
     const state = clients.get(ws);
     if (!state) return;
-    if (msg.type === 'stop') { state.abort?.abort(); return; }
+    if (msg.type === 'stop') { const c = state.aborts.get(msg.chatId); if (c) { c.abort(); state.aborts.delete(msg.chatId); } return; }
+    if (msg.type === 'incognito') {
+      try {
+        const model = resolveModel(msg.modelId, state.isAdmin);
+        if (!model) { safeSend(JSON.stringify({ type: 'error', error: 'Invalid model.' })); safeSend(JSON.stringify({ type: 'done' })); return; }
+        if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', error: (model.unavailable_reason || 'This model is currently unavailable.') })); safeSend(JSON.stringify({ type: 'done' })); return; }
+        const history = (Array.isArray(msg.messages) ? msg.messages : [])
+          .filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+          .slice(-40)
+          .map(m => ({ role: m.role, content: m.content }));
+        if (!history.length || history[history.length - 1].role !== 'user') {
+          safeSend(JSON.stringify({ type: 'error', error: 'Nothing to send.' })); safeSend(JSON.stringify({ type: 'done' })); return;
+        }
+        const messages = buildMessages(model, history, !!msg.extended, null, null, promptVars(u.id));
+        const assistantId = 'inc-' + uid();
+        const controller = new AbortController();
+        state.aborts.set('incognito', controller);
+        safeSend(JSON.stringify({ type: 'start', chatId: 'incognito', messageId: assistantId }));
+        try {
+          await streamCompletion({
+            model, messages, signal: controller.signal,
+            onEvent: (e) => {
+              if (e.type === 'reasoning') safeSend(JSON.stringify({ type: 'reasoning', chatId: 'incognito', text: e.text }));
+              else safeSend(JSON.stringify({ type: 'content', chatId: 'incognito', text: e.text }));
+            }
+          });
+        } catch (err) { if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', chatId: 'incognito', error: String(err.message || err) })); }
+        state.aborts.delete('incognito');
+        safeSend(JSON.stringify({ type: 'done', chatId: 'incognito', messageId: assistantId }));
+      } catch (err) {
+        state.aborts.delete('incognito');
+        safeSend(JSON.stringify({ type: 'error', chatId: 'incognito', error: String(err.message || err) }));
+        safeSend(JSON.stringify({ type: 'done', chatId: 'incognito' }));
+      }
+      return;
+    }
     if (msg.type !== 'chat' && msg.type !== 'regenerate' && msg.type !== 'edit') return;
     try {
       const chat = db.chats.byId(msg.chatId);
-      const model = db.models.byId(msg.modelId);
-      if (!chat || chat.user_id !== u.id || !model) { safeSend(JSON.stringify({ type: 'error', error: 'Invalid chat or model.' })); return; }
+      const model = resolveModel(msg.modelId, state.isAdmin);
+      if (!chat || chat.user_id !== u.id || !model) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'Invalid chat or model.' })); return; }
+      if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: (model.unavailable_reason || 'This model is currently unavailable.') })); return; }
 
       const sandboxCap = roleLimit('sandbox_limit_mb', !!u.is_admin, u.is_admin ? 1024 : 256) * 1024 * 1024;
       const userSandbox = !!msg.sandbox;
       if (!!chat.sandbox !== userSandbox) db.chats.update(chat.id, { sandbox: userSandbox ? 1 : 0 });
       const hasFileAttach = Array.isArray(msg.attachments) && msg.attachments.some(a => !(a.type && a.type.startsWith('image/')));
       const sandboxOn = userSandbox || (hasFileAttach && model.sandbox_allowed !== 0);
+      const webSearchOn = !!msg.webSearch && websearch.webSearchAvailable();
       ensureChain(chat.id);
 
       if (msg.type === 'regenerate') {
         const target = db.messages.byId(msg.messageId) || activePath(chat.id).slice().reverse().find(m => m.role === 'assistant');
-        if (!target) { safeSend(JSON.stringify({ type: 'error', error: 'Nothing to regenerate.' })); return; }
+        if (!target) { safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: 'Nothing to regenerate.' })); return; }
         const parent = target.role === 'assistant' ? (target.parent_id ?? null) : target.id;
         db.chats.update(chat.id, { active_leaf: parent });
       } else if (msg.type === 'edit') {
         const orig = db.messages.byId(msg.messageId);
-        if (!orig || orig.chat_id !== chat.id) { safeSend(JSON.stringify({ type: 'error', error: 'Message not found.' })); return; }
+        if (!orig || orig.chat_id !== chat.id) { safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: 'Message not found.' })); return; }
         const umid = uid();
         db.messages.insert({ id: umid, chat_id: chat.id, role: 'user', content: msg.content || '', reasoning: '', model_id: null, attachments: orig.attachments || [], parent_id: orig.parent_id ?? null, created_at: now() });
         db.chats.update(chat.id, { active_leaf: umid });
@@ -798,16 +1151,16 @@ wss.on('connection', (ws, req) => {
       const queueOn = getSetting('model_queue', '0') === '1';
       await runQueued(queueOn, model.id,
         () => { safeSend(JSON.stringify({ type: 'queued', chatId: chat.id })); },
-        () => runCompletion(ws, state, chat, model, !!msg.extended, sandboxOn, sandboxCap));
+        () => runCompletion(ws, state, chat, model, !!msg.extended, sandboxOn, sandboxCap, webSearchOn));
     } catch (err) {
-      state.abort = null;
-      safeSend(JSON.stringify({ type: 'error', error: String(err.message || err) }));
-      safeSend(JSON.stringify({ type: 'done' }));
+      if (msg && msg.chatId) state.aborts.delete(msg.chatId);
+      safeSend(JSON.stringify({ type: 'error', chatId: msg && msg.chatId, error: String(err.message || err) }));
+      safeSend(JSON.stringify({ type: 'done', chatId: msg && msg.chatId }));
     }
   });
 
   ws.on('error', () => {});
-  ws.on('close', () => { const st = clients.get(ws); try { st?.abort?.abort(); } catch {} clients.delete(ws); });
+  ws.on('close', () => { const st = clients.get(ws); try { if (st) for (const c of st.aborts.values()) c.abort(); } catch {} clients.delete(ws); });
 });
 
 server.listen(PORT, () => console.log(`open-quill running on http://localhost:${PORT}`));
