@@ -61,7 +61,7 @@ function legacyBlocks(text) {
 }
 
 function transformTools(text) {
-  const hasNew = text.indexOf('|TOOL|') !== -1 || /\|\s*tool\s*\|/i.test(text);
+  const hasNew = /[|<]\s*\/?\s*\|?\s*tool/i.test(text);
   const hasOqr = text.indexOf('[[OQR:') !== -1;
   const hasLegacy = text.indexOf('```tool') !== -1;
   if (!hasNew && !hasOqr && !hasLegacy) return text;
@@ -82,7 +82,11 @@ function transformTools(text) {
   if (hasNew) {
     const { calls, live } = scanTools(text);
     for (const c of calls) spans.push({ kind: 'block', start: c.start, end: c.end, call: slim(c.call) });
-    if (live && live.tool && live.start != null) spans.push({ kind: 'live', start: live.start, end: text.length, call: slim(live) });
+    if (live && live.tool && live.start != null) {
+      const oi = text.indexOf('[[OQR:', live.start);
+      if (oi === -1) spans.push({ kind: 'live', start: live.start, end: text.length, call: slim(live) });
+      else spans.push({ kind: 'strip', start: live.start, end: oi });
+    }
   } else if (hasLegacy) {
     for (const b of legacyBlocks(text)) spans.push(b);
   }

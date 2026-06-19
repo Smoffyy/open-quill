@@ -309,7 +309,7 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
 
   useEffect(() => { setSel(null); autoRef.current = null; }, [chatId]);
   useEffect(() => { if (focus && focus.path) setSel(focus.path); }, [focus]);
-  useEffect(() => { if (sel && !(live && sel === live.path) && !(pending && sel in pending) && !files.find(f => f.path === sel)) setSel(null); }, [files]);
+  useEffect(() => { if (sel && !(live && sel === live.path) && !(pending && sel in pending) && !files.find(f => f.path === sel)) setSel(null); }, [files, live, pending]);
 
   useEffect(() => () => { document.body.style.cursor = ''; }, []);
   function startResize(e) {

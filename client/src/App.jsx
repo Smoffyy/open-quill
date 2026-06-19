@@ -61,7 +61,13 @@ function filesFromCalls(calls) {
 function parseStreamedFiles(text) { return filesFromCalls(scanTools(text).calls); }
 
 function parseLiveFile(text) {
-  const { live } = scanTools(text);
+  const re = /(^|\n)([<\[(|]\s*[|]?\s*tool\b)/gi;
+  let lastOpen = -1, m;
+  while ((m = re.exec(text))) lastOpen = m.index + (m[1] ? m[1].length : 0);
+  if (lastOpen === -1) return null;
+  const seg = text.slice(lastOpen);
+  if (seg.indexOf('[[OQR:') !== -1) return null;
+  const { live } = scanTools(seg);
   if (!live || !live.path) return null;
   if (live.tool !== 'create_file' && live.tool !== 'str_replace') return null;
   return { path: live.path, content: live.content || '', tool: live.tool, oldStr: live.oldStr ?? null };
@@ -203,6 +209,7 @@ export default function App() {
   const targetReason = useRef('');
   const pendingDone = useRef(false);
   const doneBlocksRef = useRef(0);
+  const liveRef = useRef(null);
   const assistantIdRef = useRef(null);
   const revealTimer = useRef(null);
   const followRaf = useRef(0);
@@ -224,6 +231,7 @@ export default function App() {
   useEffect(() => { incognitoRef.current = incognito; }, [incognito]);
   const refreshSeq = useRef(0);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
+  useEffect(() => { liveRef.current = liveFile; }, [liveFile]);
   useEffect(() => { currentIdRef.current = currentId; }, [currentId]);
   useEffect(() => { animateRef.current = animate; }, [animate]);
   const revealRef = useRef(revealMs);
@@ -391,10 +399,13 @@ export default function App() {
       if (m.chatId === activeKey()) {
         targetContent.current = r.content;
         setPhase('generating');
-        if (m.text.includes('|') || m.text.indexOf('[[OQR:') !== -1) {
-          const { calls, live } = scanTools(r.content);
-          setLiveFile(live && (live.tool === 'create_file' || live.tool === 'str_replace') && live.path
-            ? { path: live.path, content: live.content || '', tool: live.tool, oldStr: live.oldStr ?? null } : null);
+        if (/[|<]/.test(m.text) || liveRef.current) {
+          const lf = parseLiveFile(r.content);
+          liveRef.current = lf;
+          setLiveFile(lf);
+        }
+        if (/[|<]/.test(m.text)) {
+          const { calls } = scanTools(r.content);
           if (calls.length !== doneBlocksRef.current) { doneBlocksRef.current = calls.length; setPendingFiles(filesFromCalls(calls)); }
         }
         if (m.text.indexOf('[[OQR:') !== -1) { dispLen.current = r.content.length; setDispContent(r.content); }
@@ -546,6 +557,7 @@ export default function App() {
 
   async function openChat(id, push = true) {
     if (incognito) setIncognito(false);
+    if (id !== activeIdRef.current) { setLiveFile(null); setPendingFiles({}); setArtifactFocus(null); doneBlocksRef.current = 0; }
     setActiveId(id);
     try {
       const { chat, messages } = await api.get('/api/chats/' + id);
@@ -568,7 +580,7 @@ export default function App() {
   function newChat(fromPop) {
     if (incognito) setIncognito(false);
     setActiveId(null); setMessages([]); setInput('');
-    setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingFiles({});
+    setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingFiles({}); setArtifactFocus(null);
     const m = models.find(m => m.id === currentId);
     setSandbox(m?.sandboxAllowed !== false && !!m?.sandboxAuto);
     setWebSearch(false);
@@ -583,7 +595,7 @@ export default function App() {
       setFocusTick(t => t + 1);
     } else {
       setActiveId(null); setMessages([]); setInput('');
-      setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingFiles({});
+      setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingFiles({}); setArtifactFocus(null);
       setSandbox(false);
       const gs = ['Greetings, whoever you are', 'No names, no traces', 'This one stays between us', 'Off the record'];
       setIncognitoGreeting(gs[Math.floor(Math.random() * gs.length)]);

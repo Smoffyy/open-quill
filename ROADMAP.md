@@ -17,7 +17,7 @@ This roadmap outlines the planned direction of the project. Priorities may shift
 * [X] Revamp Sandbox. (Whole terminal rework)
 * [X] Toggle allow users to display reasoning.
 * [X] Revamp toolcalling view.
-* [ ] Fix tool calling. (Make the tool calling better instead of a ```tool block, it keeps interfearing with the outputs of the assistant.) <- Major, when this is fixed the release will come out.
+* [X] Fix tool calling. (Make the tool calling better instead of a ```tool block, it keeps interfearing with the outputs of the assistant.) <- Major, when this is fixed the release will come out.
 * [ ] File Memory Bank. (Allow admins to upload files, and have a small system prompt that'll append to all models system prompt on tools for the model to view a certain file, or only certain lines of a file for best context management. It allows the assistant to learn in real time when needed without web search.)
 
 ---

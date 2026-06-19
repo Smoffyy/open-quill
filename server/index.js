@@ -15,9 +15,31 @@ import * as toolproto from './toolproto.js';
 
 function stripToolSyntax(text) {
   let s = String(text || '');
-  const { calls } = toolproto.scanTools(s);
+  const { calls, live } = toolproto.scanTools(s);
   for (let i = calls.length - 1; i >= 0; i--) s = s.slice(0, calls[i].start) + s.slice(calls[i].end);
+  if (live && live.start != null) {
+    const after = toolproto.scanTools(s).live;
+    if (after && after.start != null) {
+      const oi = s.indexOf('[[OQR:', after.start);
+      s = s.slice(0, after.start) + (oi === -1 ? '' : s.slice(oi));
+    }
+  }
   return s.replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '').replace(/```tool[\s\S]*?```/g, '');
+}
+
+function compactAssistant(text, eofCloses) {
+  const s = String(text || '');
+  const { calls } = toolproto.scanTools(s, { eofCloses });
+  if (!calls.length) return s;
+  let out = '', cursor = 0;
+  for (const { call, start, end } of calls) {
+    out += s.slice(cursor, start);
+    const ref = call.path || call.cmd || call.query || call.name || '';
+    out += `[${call.tool}${ref ? ' ' + ref : ''}]`;
+    cursor = end;
+  }
+  out += s.slice(cursor);
+  return out;
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -958,10 +980,11 @@ wss.on('connection', (ws, req) => {
         let aborted = false;
         let toolStop = false;
         let execIndex = 0;
+        let abortScanFrom = 0;
         const stepResults = [];
-        const execPending = async () => {
+        const execPending = async (eofCloses) => {
           if (!toolsOn) return;
-          const { calls } = toolproto.scanTools(stepText);
+          const { calls } = toolproto.scanTools(stepText, { eofCloses });
           for (; execIndex < calls.length; execIndex++) {
             const call = calls[execIndex].call;
             if (!call || !call.tool) continue;
@@ -992,11 +1015,15 @@ wss.on('connection', (ws, req) => {
               else {
                 content += e.text; stepText += e.text;
                 safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: e.text }));
-                if (toolsOn && !toolStop && e.text.includes('|')) {
-                  const { calls } = toolproto.scanTools(stepText);
-                  if (calls.length) {
-                    const last = calls[calls.length - 1].call;
-                    if (last && toolproto.READ_TOOLS.has(last.tool)) { toolStop = true; try { controller.abort(); } catch {} }
+                if (toolsOn && !toolStop) {
+                  const tail = stepText.slice(Math.max(0, abortScanFrom - 16));
+                  abortScanFrom = stepText.length;
+                  if (/\/\s*\|?\s*tool\b/i.test(tail)) {
+                    const { calls } = toolproto.scanTools(stepText);
+                    if (calls.length) {
+                      const last = calls[calls.length - 1].call;
+                      if (last && toolproto.READ_TOOLS.has(last.tool)) { toolStop = true; try { controller.abort(); } catch {} }
+                    }
                   }
                 }
               }
@@ -1005,10 +1032,11 @@ wss.on('connection', (ws, req) => {
         } catch (err) {
           if (err.name === 'AbortError') aborted = true; else throw err;
         }
-        try { await execPending(); } catch {}
+        const eof = !toolStop;
+        try { await execPending(eof); } catch {}
         if (stepResults.length) {
           const results = stepResults.map(({ formatted }) => formatted);
-          inTurn = [...inTurn, { role: 'assistant', content: stepText }, { role: 'user', content: 'Tool results:\n' + results.join('\n\n') }];
+          inTurn = [...inTurn, { role: 'assistant', content: compactAssistant(stepText, eof) }, { role: 'user', content: 'Tool results:\n' + results.join('\n\n') }];
         }
         if (!toolsOn) break;
         if (aborted && !toolStop) break;
