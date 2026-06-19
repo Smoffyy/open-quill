@@ -11,6 +11,36 @@ import { buildMessages, streamCompletion, generateTitle, summarizeConversation }
 import { getProviders, resolveProvider, providerSpec, typesForClient, PROVIDER_TYPES } from './providers.js';
 import * as websearch from './websearch.js';
 import * as sandbox from './sandbox.js';
+import * as toolproto from './toolproto.js';
+
+function stripToolSyntax(text) {
+  let s = String(text || '');
+  const { calls, live } = toolproto.scanTools(s);
+  for (let i = calls.length - 1; i >= 0; i--) s = s.slice(0, calls[i].start) + s.slice(calls[i].end);
+  if (live && live.start != null) {
+    const after = toolproto.scanTools(s).live;
+    if (after && after.start != null) {
+      const oi = s.indexOf('[[OQR:', after.start);
+      s = s.slice(0, after.start) + (oi === -1 ? '' : s.slice(oi));
+    }
+  }
+  return s.replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '').replace(/```tool[\s\S]*?```/g, '');
+}
+
+function compactAssistant(text, eofCloses) {
+  const s = String(text || '');
+  const { calls } = toolproto.scanTools(s, { eofCloses });
+  if (!calls.length) return s;
+  let out = '', cursor = 0;
+  for (const { call, start, end } of calls) {
+    out += s.slice(cursor, start);
+    const ref = call.path || call.cmd || call.query || call.name || '';
+    out += `[${call.tool}${ref ? ' ' + ref : ''}]`;
+    cursor = end;
+  }
+  out += s.slice(cursor);
+  return out;
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3001;
@@ -748,7 +778,7 @@ function sandboxPromptFor(chatId) {
     p += `\n### ${f.path} (v${f.v})\n\`\`\`${f.ext || ''}\n${txt}\n\`\`\`\n`;
     budget -= txt.length; inlined++;
   }
-  p += '\n---\nREMINDER: The sandbox is ON and these files above are the current truth. Edit existing files with `str_replace` (never recreate them from scratch). For file operations use the dedicated tools — `copy_file`, `move_file`, `make_dir`, `delete_file`, `bundle_zip`, `extract_zip` — never shell commands like cp/rm/mkdir/zip, and never absolute paths like /tmp. Keep working through the task with tool calls until it is fully done; do not stop to ask permission, do not paste file contents or fake terminal output into the chat, and do not repeat a tool call that just failed — read the error and change approach.';
+  p += '\n---\nREMINDER: The sandbox is ON and these files above are the current truth. Edit existing files with `str_replace` (never recreate them from scratch). For file operations use the dedicated tools — `copy_file`, `move_file`, `make_dir`, `delete_file`, `bundle_zip`, `extract_zip` — never shell commands like cp/rm/mkdir/zip, and never absolute paths like /tmp. Emit tool calls using the `|TOOL|` line protocol exactly as described above (never JSON, never code fences). Keep working through the task with tool calls until it is fully done; do not stop to ask permission, do not paste file contents or fake terminal output into the chat, and do not repeat a tool call that just failed — read the error and change approach.';
   return p;
 }
 function cleanCall(call) {
@@ -836,7 +866,7 @@ function chatHistory(chat, model) {
   let rows = activePath(chat.id);
   if (upto) rows = rows.filter(m => m.created_at > upto);
   return rows.map(m => {
-    let text = (m.content || '').replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '').replace(/\n{3,}/g, '\n\n');
+    let text = stripToolSyntax(m.content || '').replace(/\n{3,}/g, '\n\n');
     const atts = m.attachments || [];
     const images = [];
     if (atts.length) {
@@ -949,28 +979,14 @@ wss.on('connection', (ws, req) => {
         let stepText = '';
         let aborted = false;
         let toolStop = false;
-        let execCursor = 0;
+        let execIndex = 0;
+        let abortScanFrom = 0;
         const stepResults = [];
-        // run each ```tool block the instant it finishes, so files/cards finalize live
-        const execPending = async () => {
+        const execPending = async (eofCloses) => {
           if (!toolsOn) return;
-          while (true) {
-            const open = stepText.indexOf('```tool', execCursor);
-            if (open === -1) { execCursor = Math.max(execCursor, stepText.length - 8); break; }
-            let i = stepText.indexOf('{', open + 7);
-            if (i === -1) break;
-            let depth = 0, inStr = false, esc = false, endIdx = -1;
-            for (let j = i; j < stepText.length; j++) {
-              const c = stepText[j];
-              if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; }
-              else if (c === '"') inStr = true;
-              else if (c === '{') depth++;
-              else if (c === '}') { depth--; if (depth === 0) { endIdx = j + 1; break; } }
-            }
-            if (endIdx === -1) break; // JSON object not complete yet
-            const body = stepText.slice(i, endIdx);
-            execCursor = endIdx;
-            const call = sandbox.parseToolBody(body);
+          const { calls } = toolproto.scanTools(stepText, { eofCloses });
+          for (; execIndex < calls.length; execIndex++) {
+            const call = calls[execIndex].call;
             if (!call || !call.tool) continue;
             let r, payload, formatted;
             if (call.tool === 'web_search') {
@@ -999,12 +1015,15 @@ wss.on('connection', (ws, req) => {
               else {
                 content += e.text; stepText += e.text;
                 safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: e.text }));
-                if (webSearchOn && !toolStop) {
-                  const o = stepText.lastIndexOf('```tool');
-                  if (o !== -1) {
-                    const nl = stepText.indexOf('\n', o);
-                    const close = nl !== -1 ? stepText.indexOf('```', nl + 1) : -1;
-                    if (close !== -1 && stepText.slice(nl + 1, close).includes('web_search')) { toolStop = true; try { controller.abort(); } catch {} }
+                if (toolsOn && !toolStop) {
+                  const tail = stepText.slice(Math.max(0, abortScanFrom - 16));
+                  abortScanFrom = stepText.length;
+                  if (/\/\s*\|?\s*tool\b/i.test(tail)) {
+                    const { calls } = toolproto.scanTools(stepText);
+                    if (calls.length) {
+                      const last = calls[calls.length - 1].call;
+                      if (last && toolproto.READ_TOOLS.has(last.tool)) { toolStop = true; try { controller.abort(); } catch {} }
+                    }
                   }
                 }
               }
@@ -1013,10 +1032,11 @@ wss.on('connection', (ws, req) => {
         } catch (err) {
           if (err.name === 'AbortError') aborted = true; else throw err;
         }
-        try { await execPending(); } catch {}
+        const eof = !toolStop;
+        try { await execPending(eof); } catch {}
         if (stepResults.length) {
           const results = stepResults.map(({ formatted }) => formatted);
-          inTurn = [...inTurn, { role: 'assistant', content: stepText }, { role: 'user', content: 'Tool results:\n' + results.join('\n\n') }];
+          inTurn = [...inTurn, { role: 'assistant', content: compactAssistant(stepText, eof) }, { role: 'user', content: 'Tool results:\n' + results.join('\n\n') }];
         }
         if (!toolsOn) break;
         if (aborted && !toolStop) break;
@@ -1036,7 +1056,7 @@ wss.on('connection', (ws, req) => {
     const lastUserText = lastUser && (Array.isArray(lastUser.content)
       ? (lastUser.content.find(p => p.type === 'text')?.text || 'Image')
       : lastUser.content);
-    const cleanContent = content.replace(/```tool[\s\S]*?```/g, '').replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '').trim();
+    const cleanContent = stripToolSyntax(content).trim();
     if (cleanContent && fresh && fresh.title === 'New chat' && lastUserText) {
       const title = await generateTitle(model, lastUserText, cleanContent);
       db.chats.update(chat.id, { title });
