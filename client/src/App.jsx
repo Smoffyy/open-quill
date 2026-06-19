@@ -12,6 +12,7 @@ import DocModal from './components/DocModal.jsx';
 import ArtifactsPanel from './components/ArtifactsPanel.jsx';
 import ChatsOverview from './components/ChatsOverview.jsx';
 import { Down, ChevDown, Paper, Compact, Ghost } from './components/icons.jsx';
+import { scanTools } from './toolproto.js';
 
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: 'Assistants can make mistakes, double-check responses.', greetings: ['How can I help you?'], appIcon: '', quickPrompts: [], version: '' };
 
@@ -39,99 +40,31 @@ function QuickPrompts({ prompts, visible, disabled, onPick }) {
   );
 }
 
-function extractToolBodies(text) {
-  const out = [];
-  let from = 0;
-  while (true) {
-    const open = text.indexOf('```tool', from);
-    if (open === -1) break;
-    if (text.slice(open, open + 11) === '```toolcall') { from = open + 11; continue; }
-    let i = text.indexOf('{', open + 7);
-    const nextOpen = text.indexOf('```tool', open + 7);
-    if (i === -1 || (nextOpen !== -1 && nextOpen < i)) { from = open + 7; continue; }
-    let depth = 0, inStr = false, esc = false, end = -1;
-    for (let j = i; j < text.length; j++) {
-      const c = text[j];
-      if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; }
-      else if (c === '"') inStr = true;
-      else if (c === '{') depth++;
-      else if (c === '}') { depth--; if (depth === 0) { end = j + 1; break; } }
-    }
-    if (end === -1) break;
-    out.push(text.slice(i, end));
-    from = end;
-  }
-  return out;
-}
-function parseStreamedFiles(text) {
+function filesFromCalls(calls) {
   const files = {};
-  for (const body of extractToolBodies(text)) {
-    let obj = null;
-    try { obj = JSON.parse(body); } catch {}
-    if (!obj) {
-      const tool = (body.match(/"tool"\s*:\s*"([^"]+)"/) || [])[1];
-      const p = (body.match(/"path"\s*:\s*"((?:[^"\\]|\\.)*)"/) || [])[1];
-      obj = { tool, path: p };
-    }
-    const tool = obj.tool, p = obj.path;
-    if (tool === 'create_file') { if (p) files[p] = typeof obj.content === 'string' ? obj.content : null; }
+  for (const { call } of calls) {
+    const tool = call.tool, p = call.path;
+    if (tool === 'create_file') { if (p) files[p] = typeof call.content === 'string' ? call.content : null; }
     else if (tool === 'str_replace') { if (p && !(p in files)) files[p] = null; }
     else if (tool === 'delete_file') { if (p) delete files[p]; }
     else if (tool === 'rename_file' || tool === 'move_file') {
-      const np = obj.new_path || obj.to;
+      const np = call.new_path;
       if (p) { if (np) files[np] = files[p] ?? null; delete files[p]; }
     }
     else if (tool === 'copy_file') {
-      const np = obj.new_path || obj.to;
+      const np = call.new_path;
       if (np) files[np] = files[p] ?? null;
     }
   }
   return files;
 }
+function parseStreamedFiles(text) { return filesFromCalls(scanTools(text).calls); }
 
-// peek at the file being written from a not-yet-closed tool block
 function parseLiveFile(text) {
-  const at = text.lastIndexOf('```tool');
-  if (at === -1) return null;
-  const after = text.slice(at + 7);
-  // a balanced JSON object means the block already closed; the committed file will load
-  let bi = after.indexOf('{');
-  if (bi !== -1) {
-    let depth = 0, inS = false, es = false;
-    for (let j = bi; j < after.length; j++) {
-      const c = after[j];
-      if (inS) { if (es) es = false; else if (c === '\\') es = true; else if (c === '"') inS = false; }
-      else if (c === '"') inS = true;
-      else if (c === '{') depth++;
-      else if (c === '}') { depth--; if (depth === 0) return null; }
-    }
-  }
-  const tool = (after.match(/"tool"\s*:\s*"([^"]+)"/) || [])[1];
-  if (tool !== 'create_file' && tool !== 'str_replace') return null;
-  const path = (after.match(/"path"\s*:\s*"((?:[^"\\]|\\.)*)"/) || [])[1];
-  if (!path) return null;
-  const field = tool === 'create_file' ? 'content' : 'new_str';
-  const key = '"' + field + '"';
-  const ki = after.indexOf(key);
-  const readStr = (src) => {
-    let out = [], esc = false;
-    for (let i = 0; i < src.length; i++) {
-      const ch = src[i];
-      if (esc) { out.push(ch === 'n' ? '\n' : ch === 't' ? '\t' : ch === 'r' ? '' : ch); esc = false; continue; }
-      if (ch === '\\') { esc = true; continue; }
-      if (ch === '"') return { text: out.join(''), closed: true };
-      out.push(ch);
-    }
-    return { text: out.join(''), closed: false };
-  };
-  let oldStr = null;
-  if (tool === 'str_replace') {
-    const oi = after.indexOf('"old_str"');
-    if (oi !== -1) { const r = readStr(after.slice(oi + 9).replace(/^\s*:\s*"/, '')); if (r.closed) oldStr = r.text; }
-  }
-  if (ki === -1) return { path, content: '', tool, oldStr };
-  const rest = after.slice(ki + key.length).replace(/^\s*:\s*"/, '');
-  return { path, content: readStr(rest).text, tool, oldStr };
+  const { live } = scanTools(text);
+  if (!live || !live.path) return null;
+  if (live.tool !== 'create_file' && live.tool !== 'str_replace') return null;
+  return { path: live.path, content: live.content || '', tool: live.tool, oldStr: live.oldStr ?? null };
 }
 
 function CompactingBar() {
@@ -455,16 +388,15 @@ export default function App() {
     }
     if (m.type === 'content') {
       const r = recFor(m.chatId); r.content += m.text; r.phase = 'generating';
-      const blocks = (r.content.match(/```tool/g) || []).length;
-      const closed = blocks > 0 && r.content.split('```').length % 2 === 1;
-      r.blocks = closed ? blocks : blocks - 1;
       if (m.chatId === activeKey()) {
         targetContent.current = r.content;
         setPhase('generating');
-        const lf = parseLiveFile(r.content);
-        if (lf) setLiveFile(lf);
-        if (r.blocks !== doneBlocksRef.current) { doneBlocksRef.current = r.blocks; setPendingFiles(parseStreamedFiles(r.content)); }
-        // a tool result just landed — snap the reveal forward so the card finalizes immediately
+        if (m.text.includes('|') || m.text.indexOf('[[OQR:') !== -1) {
+          const { calls, live } = scanTools(r.content);
+          setLiveFile(live && (live.tool === 'create_file' || live.tool === 'str_replace') && live.path
+            ? { path: live.path, content: live.content || '', tool: live.tool, oldStr: live.oldStr ?? null } : null);
+          if (calls.length !== doneBlocksRef.current) { doneBlocksRef.current = calls.length; setPendingFiles(filesFromCalls(calls)); }
+        }
         if (m.text.indexOf('[[OQR:') !== -1) { dispLen.current = r.content.length; setDispContent(r.content); }
         else if (!animateRef.current) { setDispContent(r.content); dispLen.current = r.content.length; }
       }

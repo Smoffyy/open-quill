@@ -24,13 +24,14 @@ export function webSearchAvailable() {
 
 export function webSearchToolPrompt() {
   return `## Web search tool
-When web search is enabled you can run searches by emitting a fenced \`tool\` block. Each block is a single JSON object. Run a search like this:
+When web search is enabled you can run searches with the \`|TOOL|\` line protocol. Run a search like this:
 
-\`\`\`tool
-{"tool": "web_search", "query": "your search query", "count": 5}
-\`\`\`
+|TOOL| web_search
+query: your search query
+count: 5
+|/TOOL|
 
-After each block, wait for the tool results (provided back to you as page contents with their URLs), then continue. "count" is optional and capped by the server. Keep queries focused; issue multiple searches if needed.`;
+After the call, stop and wait for the tool results (provided back to you as page contents with their URLs), then continue. "count" is optional and capped by the server. Keep queries focused; issue multiple searches if needed, one at a time.`;
 }
 
 function hostOf(u) { try { return new URL(u).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; } }
