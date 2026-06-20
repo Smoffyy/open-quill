@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2026.2.4] — 2026-06-13
 
 
+
+### Fixed
+- **Model Dropdown** - fixed a bug where if an input is too large, model dropdown would clip and not allow users to select models.
+
 ---
 
 ## [2026.2.3] — 2026-06-13

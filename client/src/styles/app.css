@@ -282,6 +282,7 @@ input, textarea { font-family: inherit; color: inherit; }
   border: 1px solid var(--border); border-radius: 13px; padding: 7px; box-shadow: 0 14px 44px #00000066;
   z-index: 60; animation: pop .14s ease; transform-origin: top left;
 }
+.model-submenu.up { top: auto; bottom: -7px; transform-origin: bottom left; }
 .model-submenu::before { content: ''; position: absolute; top: 0; bottom: 0; left: -14px; width: 14px; }
 
 /* ---------- messages ---------- */

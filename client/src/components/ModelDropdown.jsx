@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Check, ChevDown, Chevron, ImageIcon, Brain, Info, TextIcon } from './icons.jsx';
 
 const CAP_ICONS = [
@@ -38,7 +38,12 @@ function CapInfo({ m }) {
 export default function ModelDropdown({ models, currentId, onSelect, extended, onToggleExtended, up }) {
   const [open, setOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [place, setPlace] = useState({ down: !!up, maxH: 0 });
+  const [subPlace, setSubPlace] = useState({ up: false, maxH: 0 });
   const ref = useRef(null);
+  const menuRef = useRef(null);
+  const moreRef = useRef(null);
+  const subRef = useRef(null);
   const moreTimer = useRef(null);
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setMoreOpen(false); } };
@@ -46,6 +51,30 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
     return () => document.removeEventListener('mousedown', h);
   }, []);
   useEffect(() => () => clearTimeout(moreTimer.current), []);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const trig = ref.current && ref.current.querySelector('.model-trigger');
+    if (!trig) return;
+    const r = trig.getBoundingClientRect();
+    const menuH = (menuRef.current && menuRef.current.scrollHeight) || 340;
+    const below = window.innerHeight - r.bottom;
+    const above = r.top;
+    const down = below >= menuH + 14 ? true : below >= above;
+    const avail = (down ? below : above) - 16;
+    setPlace({ down, maxH: menuH > avail ? Math.max(160, avail) : 0 });
+  }, [open]);
+  useLayoutEffect(() => {
+    if (!moreOpen) return;
+    const row = moreRef.current, sub = subRef.current;
+    if (!row || !sub) return;
+    const rr = row.getBoundingClientRect();
+    const subH = sub.scrollHeight;
+    const below = window.innerHeight - rr.top;
+    const above = rr.bottom;
+    const flip = below < subH + 14 && above > below;
+    const avail = (flip ? above : below) - 16;
+    setSubPlace({ up: flip, maxH: subH > avail ? Math.max(140, avail) : 0 });
+  }, [moreOpen]);
   const openMore = () => { clearTimeout(moreTimer.current); setMoreOpen(true); };
   const closeMore = () => { clearTimeout(moreTimer.current); moreTimer.current = setTimeout(() => setMoreOpen(false), 160); };
 
@@ -79,7 +108,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
         <ChevDown style={{ width: 15, height: 15 }} />
       </button>
       {open && (
-        <div className={'model-menu' + (up ? ' up' : '')}>
+        <div ref={menuRef} className={'model-menu' + (place.down ? ' up' : '')} style={place.maxH ? { maxHeight: place.maxH, overflowY: 'auto' } : undefined}>
           {main.map(Opt)}
           {current?.hasReasoning && (
             <>
@@ -96,12 +125,12 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
           {more.length > 0 && (
             <>
               <hr />
-              <div className="more-wrap" onMouseEnter={openMore} onMouseLeave={closeMore}>
+              <div className="more-wrap" ref={moreRef} onMouseEnter={openMore} onMouseLeave={closeMore}>
                 <button className={'submenu-row' + (moreOpen ? ' active' : '')} onClick={() => (moreOpen ? closeMore() : openMore())}>
                   <span>{moreLabel}</span><Chevron style={{ width: 15 }} />
                 </button>
                 {moreOpen && (
-                  <div className="model-submenu" onMouseEnter={openMore} onMouseLeave={closeMore}>
+                  <div ref={subRef} className={'model-submenu' + (subPlace.up ? ' up' : '')} style={subPlace.maxH ? { maxHeight: subPlace.maxH, overflowY: 'auto' } : undefined} onMouseEnter={openMore} onMouseLeave={closeMore}>
                     {more.map(Opt)}
                   </div>
                 )}
