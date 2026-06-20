@@ -6,7 +6,7 @@ This roadmap outlines the planned direction of the project. Priorities may shift
 
 ## Planned in the Future
 
-* [ ] New Model Showcase. (Customizable interface background when model is selected (toggleable per model), smooth transition animation between switching models and if they have a background, as well as making other UI elements frosted glass to blend in well with custom backgrounds. Toggle button for IF background persists during conversation or uses default theme background.)
+* [X] New Model Showcase. (Customizable interface background when model is selected (toggleable per model), smooth transition animation between switching models and if they have a background, as well as making other UI elements frosted glass to blend in well with custom backgrounds. Toggle button for IF background persists during conversation or uses default theme background.)
 * [ ] Frosted Glass theme. (All UI elements get a nice frosted glass theme such as input bar, side bar, chats, and settings as well as menus such as model dropdown.)
 * [X] Web Search Support. (Implementing a way to enable web search, url fetch, locally all on machine without using API's.)
 * [ ] Text-To-Speech / Speech-To-Text (Ability to transcribe input microphone audio as well as playback from assistant responses) v2027?

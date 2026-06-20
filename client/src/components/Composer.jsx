@@ -31,7 +31,7 @@ function dominantColor(url) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, models,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
@@ -203,7 +203,8 @@ export default function Composer({
         </div>
         <div className="composer-right">
           <ModelDropdown models={models} currentId={currentId} onSelect={onSelect}
-            extended={extended} onToggleExtended={onToggleExtended} up={modelUp} />
+            extended={extended} onToggleExtended={onToggleExtended} up={modelUp}
+            modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />
           <button className="mic"><Mic style={{ width: 18, height: 18 }} /></button>
           {streaming ? (
             <button key="stop" className="send stop" onClick={onStop}><Stop style={{ width: 16, height: 16 }} /></button>

@@ -35,7 +35,7 @@ function CapInfo({ m }) {
   );
 }
 
-export default function ModelDropdown({ models, currentId, onSelect, extended, onToggleExtended, up }) {
+export default function ModelDropdown({ models, currentId, onSelect, extended, onToggleExtended, up, modelHasBg, bgInChat, onToggleBgInChat }) {
   const [open, setOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [place, setPlace] = useState({ down: !!up, maxH: 0 });
@@ -119,6 +119,18 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
                   <div className="mo-desc">Always uses deep reasoning</div>
                 </div>
                 <div className={'switch' + (extended ? ' on' : '')} />
+              </div>
+            </>
+          )}
+          {modelHasBg && (
+            <>
+              <hr />
+              <div className="toggle-row" onClick={onToggleBgInChat}>
+                <div className="tr-main">
+                  <div className="mo-name">Background in chat</div>
+                  <div className="mo-desc">Keep this model's backdrop during conversations</div>
+                </div>
+                <div className={'switch' + (bgInChat ? ' on' : '')} />
               </div>
             </>
           )}
