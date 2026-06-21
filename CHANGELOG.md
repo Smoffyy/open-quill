@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Default Theme** - updated default theme to `anthropic`.
+- **Interface Aligment** - updated interface to match closely to anthropics official layout.
 
 ---
 
