@@ -1,13 +1,15 @@
 import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
+import argon2 from 'argon2';
 import * as cookie from 'cookie';
 import { db, uid, getSetting, setSetting } from './db.js';
 
 let SECRET = getSetting('jwt_secret');
 if (!SECRET) { SECRET = uid() + uid(); setSetting('jwt_secret', SECRET); }
 
-export function hash(pw) { return bcrypt.hashSync(pw, 10); }
-export function check(pw, h) { return bcrypt.compareSync(pw, h); }
+const ARGON_OPTS = { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 };
+
+export function hash(pw) { return argon2.hash(pw, ARGON_OPTS); }
+export async function check(pw, h) { try { return await argon2.verify(h, pw); } catch { return false; } }
 export function sign(user) { return jwt.sign({ id: user.id }, SECRET, { expiresIn: '30d' }); }
 
 export function publicUser(u) {

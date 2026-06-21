@@ -9,9 +9,13 @@
 - [Express](https://expressjs.com) - HTTP server and routing
 - [ws](https://github.com/websockets/ws) - WebSocket streaming
 - [jsonwebtoken](https://github.com/auth0/node-jsonwebtoken) - session tokens
-- [bcryptjs](https://github.com/dcodeIO/bcrypt.js) - password hashing
+- [argon2](https://github.com/ranisalt/node-argon2) - argon2id password hashing
 - [multer](https://github.com/expressjs/multer) - file uploads
 - [cookie](https://github.com/jshttp/cookie) - cookie parsing
+
+## Database
+- [better-sqlite3-multiple-ciphers](https://github.com/m4heshd/better-sqlite3-multiple-ciphers) - encrypted SQLite storage (AES-256 / SQLCipher)
+- [SQLite](https://www.sqlite.org) - the underlying database engine
 
 ## Client
 - [React](https://react.dev) and [React DOM](https://react.dev)

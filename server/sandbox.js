@@ -5,7 +5,7 @@ import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const SANDBOX_ROOT = path.join(__dirname, 'sandbox');
+export const SANDBOX_ROOT = path.join(__dirname, 'data', 'sandbox');
 const META_DIR = path.join(SANDBOX_ROOT, '.meta');
 function metaPath(chatId) { return path.join(META_DIR, String(chatId).replace(/[^a-zA-Z0-9_-]/g, '') + '.json'); }
 function readMeta(chatId) { try { return JSON.parse(fs.readFileSync(metaPath(chatId), 'utf8')); } catch { return {}; } }

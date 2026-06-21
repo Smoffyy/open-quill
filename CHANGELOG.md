@@ -9,7 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2027.0.0] — 2026-06-21
 
+> **Breaking:** This release replaces the plaintext `data.json` store with an encrypted SQLite database and is **not backward compatible** with previous versions. There is no automatic import; a fresh database is created on first run and the first account to sign in becomes the owner.
 
+### Added
+- **Encrypted database** - all data now lives in an encrypted SQLite database (`better-sqlite3-multiple-ciphers`, AES-256 / SQLCipher) instead of a plaintext JSON file. Runs in WAL mode with foreign keys, prepared statements, and indexes on the hot paths for faster, safer reads as data grows.
+- **Encryption key management** - the database key is read from the `DB_ENCRYPTION_KEY` environment variable, or auto-generated and stored at `server/data/.dbkey` (permissions `0600`). The key must stay paired with the database to open it.
+- **Consolidated data directory** - the database, encryption key, uploads, and sandbox now all live under a single `server/data/` folder (git-ignored), keeping the server directory clean.
+
+### Changed
+- **Password hashing** - switched from bcrypt to **argon2id** (OWASP-recommended), with tuned memory/time parameters. Existing bcrypt hashes are not carried over (see breaking note above).
+- **Complete chat deletion** - deleting a chat now also removes its uploaded attachment files from disk, in addition to the chat, its messages, and its sandbox (artifacts and version history). Applies to single-chat delete, "delete all my chats," and account deletion.
+- **Admin user deletion** - removing a user now also deletes that user's sandboxes and uploaded attachments, matching the other deletion paths.
+
+### Security
+- **Encryption at rest** - the database file is encrypted with AES-256; a leaked `data.db` is unreadable without the key.
+- **Restrictive file permissions** - the database file and key file are created with `0600` (owner read/write only).
+- **Referential integrity** - `ON DELETE CASCADE` foreign keys guarantee a chat's messages cannot outlive it at the storage layer.
+- **Path-traversal guard** - attachment cleanup resolves filenames with `basename()` and verifies the resolved path stays inside the uploads directory before deleting.
+
+### Removed
+- **Legacy JSON store** - the `data.json` file, its debounced full-file rewrites, and corrupt-file backup handling are gone.
+- **bcryptjs** dependency, replaced by argon2id.
 
 ---
 

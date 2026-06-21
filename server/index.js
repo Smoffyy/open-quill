@@ -53,7 +53,7 @@ const app = express();
 app.use(express.json({ limit: '2mb' }));
 app.use(parseCookies);
 
-const UPLOADS = path.join(__dirname, 'uploads');
+const UPLOADS = path.join(__dirname, 'data', 'uploads');
 fs.mkdirSync(UPLOADS, { recursive: true });
 app.use('/uploads', (req, res, next) => { res.setHeader('Content-Security-Policy', "script-src 'none'; object-src 'none'"); res.setHeader('X-Content-Type-Options', 'nosniff'); next(); }, express.static(UPLOADS));
 
@@ -79,7 +79,7 @@ function noteLoginFail(ip) {
   else loginFails.set(ip, { n: 1, t: Date.now() });
   if (loginFails.size > 5000) loginFails.clear();
 }
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const ip = req.socket.remoteAddress || '';
   if (loginLimited(ip)) return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
   const email = (req.body.email || '').trim().toLowerCase();
@@ -87,11 +87,11 @@ app.post('/api/auth/login', (req, res) => {
   if (!email || pw.length < 4) return res.status(400).json({ error: 'Invalid email or password (min 4 chars).' });
   let u = db.users.find(x => x.email === email);
   if (u) {
-    if (!check(pw, u.password_hash)) { noteLoginFail(ip); return res.status(401).json({ error: 'Incorrect password.' }); }
+    if (!(await check(pw, u.password_hash))) { noteLoginFail(ip); return res.status(401).json({ error: 'Incorrect password.' }); }
     loginFails.delete(ip);
   } else {
     const isFirst = db.users.count() === 0;
-    u = db.users.insert({ id: uid(), email, password_hash: hash(pw), display_name: '', is_admin: isFirst ? 1 : 0, is_owner: isFirst ? 1 : 0, prefs: {}, created_at: now() });
+    u = db.users.insert({ id: uid(), email, password_hash: await hash(pw), display_name: '', is_admin: isFirst ? 1 : 0, is_owner: isFirst ? 1 : 0, prefs: {}, created_at: now() });
   }
   setCookie(res, sign(u));
   res.json({ user: publicUser(u) });
@@ -110,6 +110,7 @@ app.delete('/api/me/chats', authMiddleware, (req, res) => {
   const myChats = db.chats.filter(c => c.user_id === req.user.id);
   for (const c of myChats) { try { sandbox.remove(c.id); } catch {} }
   const chatIds = new Set(myChats.map(c => c.id));
+  purgeUploads(chatIds);
   db.messages.remove(m => chatIds.has(m.chat_id));
   db.chats.remove(c => c.user_id === req.user.id);
   res.json({ ok: true, deleted: myChats.length });
@@ -120,6 +121,7 @@ app.delete('/api/me', authMiddleware, (req, res) => {
   const myChats = db.chats.filter(c => c.user_id === u.id);
   for (const c of myChats) { try { sandbox.remove(c.id); } catch {} }
   const chatIds = new Set(myChats.map(c => c.id));
+  purgeUploads(chatIds);
   db.messages.remove(m => chatIds.has(m.chat_id));
   db.chats.remove(c => c.user_id === u.id);
   db.users.remove(x => x.id === u.id);
@@ -129,7 +131,7 @@ app.delete('/api/me', authMiddleware, (req, res) => {
 
 // ---------- chats ----------
 app.get('/api/chats', authMiddleware, (req, res) => {
-  const list = db.chats.filter(c => c.user_id === req.user.id)
+  const list = db.chats.byUser(req.user.id)
     .sort((a, b) => b.updated_at - a.updated_at)
     .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred, folderId: c.folder_id || null }));
   res.json(list);
@@ -172,7 +174,7 @@ app.delete('/api/folders/:id', authMiddleware, (req, res) => {
 app.get('/api/chats-overview', authMiddleware, (req, res) => {
   const offset = Math.max(0, parseInt(req.query.offset) || 0);
   const limit = Math.min(60, Math.max(1, parseInt(req.query.limit) || 18));
-  const all = db.chats.filter(c => c.user_id === req.user.id).sort((a, b) => b.updated_at - a.updated_at);
+  const all = db.chats.byUser(req.user.id).sort((a, b) => b.updated_at - a.updated_at);
   const page = all.slice(offset, offset + limit).map(c => {
     const msgs = sortedMsgs(c.id);
     let preview = '';
@@ -257,6 +259,7 @@ app.get('/api/chats/:id/export', authMiddleware, (req, res) => {
 app.delete('/api/chats/:id', authMiddleware, (req, res) => {
   const c = db.chats.byId(req.params.id);
   if (c && c.user_id === req.user.id) {
+    purgeUploads(c.id);
     db.messages.remove(m => m.chat_id === c.id);
     db.chats.remove(x => x.id === c.id);
     sandbox.remove(c.id);
@@ -635,6 +638,22 @@ function readImageDataUri(a) {
   } catch { return null; }
 }
 
+function purgeUploads(chatIds) {
+  const ids = chatIds instanceof Set ? chatIds : new Set([chatIds]);
+  const seen = new Set();
+  for (const cid of ids) {
+    for (const m of db.messages.byChat(cid)) {
+      for (const a of (m.attachments || [])) {
+        const fname = path.basename(a?.url || '');
+        if (!fname || seen.has(fname)) continue;
+        seen.add(fname);
+        const p = path.join(UPLOADS, fname);
+        if (p.startsWith(UPLOADS)) { try { fs.unlinkSync(p); } catch {} }
+      }
+    }
+  }
+}
+
 // ---------- admin: users ----------
 app.get('/api/admin/users', authMiddleware, adminOnly, (req, res) => {
   res.json(db.users.all().sort((a, b) => a.created_at - b.created_at).map(u => ({
@@ -654,7 +673,10 @@ app.delete('/api/admin/users/:id', authMiddleware, adminOnly, (req, res) => {
   if (!u) return res.json({ ok: true });
   if (u.is_owner) return res.status(403).json({ error: 'The top admin cannot be removed.' });
   if (u.id === req.user.id) return res.status(403).json({ error: 'You cannot remove your own account here.' });
-  const chatIds = new Set(db.chats.filter(c => c.user_id === u.id).map(c => c.id));
+  const myChats = db.chats.filter(c => c.user_id === u.id);
+  for (const c of myChats) { try { sandbox.remove(c.id); } catch {} }
+  const chatIds = new Set(myChats.map(c => c.id));
+  purgeUploads(chatIds);
   db.messages.remove(m => chatIds.has(m.chat_id));
   db.chats.remove(c => c.user_id === u.id);
   db.users.remove(x => x.id === u.id);
@@ -835,7 +857,7 @@ function formatToolResult(call, r) {
 }
 
 // ---- conversation tree (branching) ----
-function sortedMsgs(chatId) { return db.messages.filter(m => m.chat_id === chatId).sort((a, b) => a.created_at - b.created_at); }
+function sortedMsgs(chatId) { return db.messages.byChat(chatId); }
 function ensureChain(chatId) {
   const all = sortedMsgs(chatId);
   let prev = null;
