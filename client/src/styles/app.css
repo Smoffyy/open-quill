@@ -216,8 +216,8 @@ input, textarea { font-family: inherit; color: inherit; }
 .popover hr { border: none; border-top: 1px solid var(--border-soft); margin: 5px 4px; }
 
 /* ---------- empty / greeting ---------- */
-.center-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
-.greeting { display: flex; align-items: center; gap: 14px; font-size: 36px; margin-bottom: 30px; color: var(--text); font-family: var(--font-serif); }
+.center-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: calc(30vh - 40px) 24px 24px; }
+.greeting { display: flex; align-items: center; gap: 14px; font-size: 40px; margin-bottom: 30px; color: var(--text); font-family: var(--font-serif); }
 .greeting img { width: 30px; height: 30px; }
 .composer-wrap { width: 100%; max-width: 675px; position: relative; z-index: 2; }
 .suggestions { display: flex; gap: 9px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
@@ -231,6 +231,8 @@ input, textarea { font-family: inherit; color: inherit; }
   padding: 14px 16px 10px; transition: border-color .15s; box-shadow: 0 2px 14px #0000002e;
 }
 .composer:focus-within { border-color: #ffffff26; }
+.center-wrap .composer { padding: 20px 18px 15px; }
+.center-wrap .composer textarea { min-height: 43px; }
 .composer textarea {
   width: 100%; background: none; border: none; outline: none; resize: none; font-family: var(--font-sans);
   font-size: 15.5px; line-height: 1.55; color: var(--text); max-height: 280px; min-height: 31px;
@@ -849,7 +851,7 @@ button { transition: transform .12s ease, background .15s ease, color .15s ease,
 /* quick prompt buttons (home screen) */
 .qp-slot { width: 100%; min-height: 60px; display: flex; justify-content: center; align-items: flex-start; }
 .quick-prompts { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 18px; max-width: 760px; position: relative; z-index: 1; }
-.quick-prompt { display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 14px; cursor: pointer; transition: background .14s ease, border-color .14s ease, transform .1s ease; }
+.quick-prompt { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 14px; cursor: pointer; transition: background .14s ease, border-color .14s ease, transform .1s ease; }
 .quick-prompt:hover { background: var(--surface-hover); border-color: var(--border-strong, var(--accent)); }
 .quick-prompt:active { transform: translateY(1px); }
 .quick-prompt:disabled { opacity: .5; cursor: default; }
