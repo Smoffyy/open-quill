@@ -39,6 +39,13 @@ const Grip = (p) => (
   </svg>
 );
 
+function bgPreviewStyle(v) {
+  const s = String(v || '').trim();
+  if (!s) return {};
+  if (/^(https?:|data:|blob:|\/)/i.test(s)) return { backgroundImage: `url("${s}")`, backgroundSize: 'cover', backgroundPosition: 'center' };
+  return { background: s };
+}
+
 function IconSlot({ label, value, def, anim, onChange }) {
   const ref = useRef(null);
   async function pick(e) {
@@ -133,7 +140,9 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
   const [spOpen, setSpOpen] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [detectMsg, setDetectMsg] = useState('');
+  const bgRef = useRef(null);
   const set = (k, v) => onChange({ ...m, [k]: v });
+  async function pickBg(e) { const f = e.target.files?.[0]; if (!f) return; try { const { url } = await api.upload(f); set('bg_image', url); } catch {} e.target.value = ''; }
   const curProvider = providers.find(p => p.id === m.provider_id) || providers[0];
   const curType = curProvider ? providerTypes[curProvider.type] : null;
   const allowedSamplers = curType?.samplers || ['temperature', 'top_p', 'top_k', 'min_p', 'repetition_penalty', 'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens'];
@@ -294,6 +303,22 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
             </div>
             <div className="muted-note">Where the logo sits relative to the message it generates.</div>
           </div>
+          <Toggle m={m} set={set} k="bg_enabled" label="Showcase background" note="Show a custom backdrop behind the whole interface when this model is selected. UI panels turn to frosted glass to blend in. Works with light, dark, and Anthropic themes." />
+          {!!m.bg_enabled && (
+            <div className="field">
+              <label>Background image or CSS</label>
+              <button type="button" className="bg-preview" style={bgPreviewStyle(m.bg_image)} onClick={() => bgRef.current?.click()} title="Click to upload an image">
+                {!m.bg_image && <span className="bg-preview-empty">Click to upload an image</span>}
+              </button>
+              <input ref={bgRef} type="file" hidden onChange={pickBg} accept=".png,.jpg,.jpeg,.gif,.webp,.svg,image/*" />
+              <input value={m.bg_image || ''} onChange={(e) => set('bg_image', e.target.value)} placeholder="Image URL, or a CSS gradient" />
+              <div className="bg-up-row">
+                <button type="button" className="btn ghost" onClick={() => bgRef.current?.click()}>Upload image…</button>
+                {m.bg_image && <button type="button" className="btn ghost" onClick={() => set('bg_image', '')}>Clear</button>}
+              </div>
+              <div className="muted-note">Paste an image URL, upload a file, or use a CSS gradient like <code>linear-gradient(120deg, #a0c4ff, #ffc6ff)</code>. Users can turn it off for conversations from the model picker.</div>
+            </div>
+          )}
         </Accordion>
 
         <Accordion title="Sampling" sub={curType ? curType.label : 'Provider parameters'}>

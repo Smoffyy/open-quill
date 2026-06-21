@@ -4,7 +4,16 @@ import { applyPrefs } from './prefs.js';
 import { QpIcon } from './qpIcons.jsx';
 import Login from './components/Login.jsx';
 import Sidebar from './components/Sidebar.jsx';
+import AppBackground from './components/AppBackground.jsx';
 import Composer from './components/Composer.jsx';
+
+function computeActiveBg(models, currentId, activeId, messagesLen, incognito, prefs) {
+  const m = models.find(x => x.id === currentId);
+  const isEmpty = !activeId && messagesLen === 0;
+  const inChat = prefs?.modelBgInChat !== false;
+  const has = !incognito && !!(m?.bgEnabled && m?.bgImage);
+  return has && (isEmpty || inChat) ? m.bgImage : null;
+}
 import Message from './components/Message.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import AdminPanel from './components/AdminPanel.jsx';
@@ -167,6 +176,7 @@ export default function App() {
   const [models, setModels] = useState([]);
   const [currentId, setCurrentId] = useState(null);
   const [extended, setExtended] = useState(false);
+  const [bgVisible, setBgVisible] = useState(false);
   const [chats, setChats] = useState([]);
   const [folders, setFolders] = useState([]);
   const [chatsLoaded, setChatsLoaded] = useState(false);
@@ -232,6 +242,12 @@ export default function App() {
   const refreshSeq = useRef(0);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
   useEffect(() => { liveRef.current = liveFile; }, [liveFile]);
+  useEffect(() => {
+    const active = computeActiveBg(models, currentId, activeId, messages.length, incognito, user?.prefs);
+    if (active) { setBgVisible(true); return; }
+    const t = setTimeout(() => setBgVisible(false), 650);
+    return () => clearTimeout(t);
+  }, [models, currentId, activeId, messages.length, incognito, user]);
   useEffect(() => { currentIdRef.current = currentId; }, [currentId]);
   useEffect(() => { animateRef.current = animate; }, [animate]);
   const revealRef = useRef(revealMs);
@@ -706,6 +722,11 @@ export default function App() {
 
   function stop() { const key = activeKey(); try { ws.current?.readyState === 1 && ws.current.send(JSON.stringify({ type: 'stop', chatId: key })); } catch {} pendingDone.current = true; setQueued(false); }
   async function logout() { await api.post('/api/auth/logout'); location.href = '/'; }
+  function updatePref(key, value) {
+    const prefs = { ...(user?.prefs || {}), [key]: value };
+    setUser(u => ({ ...u, prefs }));
+    api.patch('/api/me', { prefs }).catch(() => {});
+  }
 
   if (user === undefined) return <div style={{ height: '100%', background: 'var(--bg)' }} />;
   if (!user) return <Login onLogin={(u) => { setUser(u); setIntro(true); }} />;
@@ -716,10 +737,14 @@ export default function App() {
   const webSearchAvailable = !incognito && !!cfg.webSearchAvailable;
   const webSearchOn = webSearchAvailable && webSearch;
   const empty = !activeId && messages.length === 0;
+  const bgInChat = user?.prefs?.modelBgInChat !== false;
+  const modelHasBg = !incognito && !!(model?.bgEnabled && model?.bgImage);
+  const activeBg = computeActiveBg(models, currentId, activeId, messages.length, incognito, user?.prefs);
   const composerProps = {
     value: input, onChange: setInput, onSend: send, onStop: stop, streaming: streaming || queued,
     models, currentId, onSelect: setCurrentId, extended, onToggleExtended: () => setExtended(e => !e),
     visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin,
+    modelHasBg, bgInChat, onToggleBgInChat: () => updatePref('modelBgInChat', !bgInChat),
     sandbox: sandboxOn, sandboxAllowed, onToggleSandbox: () => { if (sandboxAllowed) setSandbox(s => !s); },
     onWantSandbox: () => { if (sandboxAllowed) setSandbox(true); },
     webSearch: webSearchOn, webSearchAvailable, onToggleWebSearch: () => { if (webSearchAvailable) setWebSearch(s => !s); }
@@ -740,7 +765,8 @@ export default function App() {
   ];
 
   return (
-    <div className={'app' + (incognito ? ' app-incognito' : '') + (intro ? ' intro' : '')}>
+    <div className={'app' + (incognito ? ' app-incognito' : '') + (intro ? ' intro' : '') + (bgVisible ? ' has-bg' : '')}>
+      <AppBackground bg={activeBg} />
       {intro && <div className="intro-curtain" />}
       <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName}
         folders={folders} onCreateFolder={createFolder} onRenameFolder={renameFolder} onToggleFolder={toggleFolder} onDeleteFolder={deleteFolder} onMoveChat={moveChatToFolder}
@@ -766,8 +792,8 @@ export default function App() {
           <div className="center-wrap">
             <div className="greeting">
               {incognito
-                ? <><Ghost style={{ width: 40 }} /> {incognitoGreeting}</>
-                : <><img src={model?.staticIcon || cfg.appIcon || '/starburst.svg'} alt="" style={{ width: 40, height: 40, objectFit: 'contain' }} /> {greeting}</>}
+                ? <><Ghost style={{ width: 44 }} /> {incognitoGreeting}</>
+                : <><img src={model?.staticIcon || cfg.appIcon || '/starburst.svg'} alt="" style={{ width: 44, height: 44, objectFit: 'contain' }} /> {greeting}</>}
             </div>
             <div className="composer-wrap">
               <Composer {...composerProps} autoFocus modelUp focusKey={focusTick} />
