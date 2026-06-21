@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Encrypted database** - all data now lives in an encrypted SQLite database (`better-sqlite3-multiple-ciphers`, AES-256 / SQLCipher) instead of a plaintext JSON file. Runs in WAL mode with foreign keys, prepared statements, and indexes on the hot paths for faster, safer reads as data grows.
 - **Encryption key management** - the database key is read from the `DB_ENCRYPTION_KEY` environment variable, or auto-generated and stored at `server/data/.dbkey` (permissions `0600`). The key must stay paired with the database to open it.
 - **Consolidated data directory** - the database, encryption key, uploads, and sandbox now all live under a single `server/data/` folder (git-ignored), keeping the server directory clean.
+- **Exporting/Importing of User Chats** - allows users to export or import their chats properly.
+- **Spaces** - allows users/admins to share a chat with an assistant, collaborating on projects locally.
 
 ### Changed
 - **Password hashing** - switched from bcrypt to **argon2id** (OWASP-recommended), with tuned memory/time parameters. Existing bcrypt hashes are not carried over (see breaking note above).
