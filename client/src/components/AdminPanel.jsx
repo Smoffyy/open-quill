@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
-import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield, Globe } from './icons.jsx';
+import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield, Globe, FileText } from './icons.jsx';
 import { QP_ICON_LIST, QpIcon } from '../qpIcons.jsx';
 
 function QpIconPicker({ value, onPick }) {
@@ -338,6 +338,20 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
             ))}
           </div>
         </Accordion>
+
+        <Accordion title="Pricing" sub="Usage cost tracking">
+          <div className="muted-note">Optional. Used to estimate cost in each user's Usage tab. Prices are per 1,000,000 tokens. Leave blank or 0 for local or free models.</div>
+          <div className="sampling-grid">
+            <div className="samp-field">
+              <label>Input $ / 1M tokens</label>
+              <input type="number" step="any" min="0" placeholder="e.g. 3.00" value={m.cost_in ?? ''} onChange={(e) => set('cost_in', e.target.value)} />
+            </div>
+            <div className="samp-field">
+              <label>Output $ / 1M tokens</label>
+              <input type="number" step="any" min="0" placeholder="e.g. 15.00" value={m.cost_out ?? ''} onChange={(e) => set('cost_out', e.target.value)} />
+            </div>
+          </div>
+        </Accordion>
       </div>
       <div className="btn-row me-foot">
         <span className="autosave-status">
@@ -354,8 +368,13 @@ export default function AdminPanel({ user, onClose }) {
   const [usersList, setUsersList] = useState([]);
   const [cfg, setCfg] = useState({ appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [] });
   const [cfgSaved, setCfgSaved] = useState(false);
-  const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256, modelQueue: false });
+  const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256, modelQueue: false, membankEnabled: false, membankHideTools: false, membankPrompt: '' });
   const [providers, setProviders] = useState([]);
+  const [membankFiles, setMembankFiles] = useState([]);
+  const membankRef = useRef(null);
+  async function loadMembank() { try { const d = await api.get('/api/admin/membank'); setMembankFiles(d.files || []); } catch {} }
+  async function onMembankPick(e) { const files = [...(e.target.files || [])]; e.target.value = ''; if (!files.length) return; try { const r = await api.uploadMembank(files); setMembankFiles(r.files || []); } catch {} }
+  async function removeMembank(name) { try { const r = await api.del('/api/admin/membank/' + encodeURIComponent(name)); setMembankFiles(r.files || []); } catch {} }
   const [providerTypes, setProviderTypes] = useState({});
   const [selModel, setSelModel] = useState(null);
   const [setSavedFlash, setSetSaved] = useState(false);
@@ -538,6 +557,7 @@ export default function AdminPanel({ user, onClose }) {
         <button className={'ar-tab' + (tab === 'users' ? ' active' : '')} onClick={() => setTab('users')}><Users /> Users</button>
         <button className={'ar-tab' + (tab === 'limits' ? ' active' : '')} onClick={() => setTab('limits')}><Shield /> Limits &amp; Safety</button>
         <button className={'ar-tab' + (tab === 'websearch' ? ' active' : '')} onClick={() => setTab('websearch')}><Globe /> Web Search</button>
+        <button className={'ar-tab' + (tab === 'membank' ? ' active' : '')} onClick={() => { setTab('membank'); loadMembank(); }}><FileText /> Memory Bank</button>
         <button className="ar-back" onClick={onClose}><Chevron style={{ transform: 'rotate(90deg)', width: 16 }} /> Back to chat</button>
       </nav>
       <div className="admin-content">
@@ -770,6 +790,47 @@ export default function AdminPanel({ user, onClose }) {
                   <div className="muted-note">Appended to a model's system prompt only when web search is enabled for the chat. Use it to tell the model to search only when asked or when information is missing or outdated.</div>
                 </div>
               </>}
+              <div className="settings-autosave">
+                <span className={'autosave-dot' + (setAutoStatus === 'saved' ? ' flash' : '')} />
+                {setAutoStatus === 'saving' ? 'Saving…' : setAutoStatus === 'saved' ? 'Saved — applies immediately' : 'Changes save automatically'}
+              </div>
+            </>
+          )}
+          {tab === 'membank' && (
+            <>
+              <h2>Memory Bank</h2>
+              <div className="hint">Upload reference files the assistant can read on demand. When enabled, every model gets tools to view a file (or just specific lines) and search across them — useful for project docs, policies, or specs, without web search. Applies to all models and takes effect immediately, no publish needed.</div>
+              <div className="field row">
+                <div><label>Enable memory bank</label><div className="muted-note">When on, all models receive a system-prompt section listing these files plus the <code>mb_view</code> and <code>mb_search</code> tools.</div></div>
+                <div className={'switch' + (settings.membankEnabled ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, membankEnabled: !s.membankEnabled }))} />
+              </div>
+              <div className="field row">
+                <div><label>Hide tool calls from users</label><div className="muted-note">When on, file reads stay behind the scenes — the model still uses the files, but users won't see the <code>mb_view</code> / <code>mb_search</code> steps in the reply.</div></div>
+                <div className={'switch' + (settings.membankHideTools ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, membankHideTools: !s.membankHideTools }))} />
+              </div>
+              <div className="field">
+                <label>System prompt</label>
+                <textarea rows={5} value={settings.membankPrompt ?? ''} onChange={(e) => setSettings(s => ({ ...s, membankPrompt: e.target.value }))} />
+                <div className="muted-note">Intro text added above the file list when the memory bank is enabled. The file names and tool instructions are appended automatically.</div>
+              </div>
+              <div className="field">
+                <label>Files</label>
+                <div className="muted-note" style={{ marginBottom: 8 }}>Text and PDF files work best (.md, .txt, .json, .pdf, code, etc.). PDFs are read as extracted text. Up to 25 MB each.</div>
+                <input ref={membankRef} type="file" multiple hidden onChange={onMembankPick} />
+                <button className="btn" onClick={() => membankRef.current?.click()}>Upload files</button>
+                <div style={{ marginTop: 12 }}>
+                  {membankFiles.length === 0 ? <div className="muted-note">No files yet.</div> : membankFiles.map(f => (
+                    <div key={f.name} className="mb-file-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: '1px solid rgba(128,128,128,0.2)', borderRadius: 8, marginBottom: 6 }}>
+                      <FileText style={{ width: 16, flexShrink: 0, opacity: 0.7 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
+                        <div className="muted-note">{f.readable ? `${(f.lines || 0).toLocaleString()} lines · ${(f.size || 0).toLocaleString()} bytes` : `${(f.size || 0).toLocaleString()} bytes · not readable as text`}</div>
+                      </div>
+                      <button className="btn danger" title="Remove" style={{ flexShrink: 0 }} onClick={() => removeMembank(f.name)}><Trash style={{ width: 15 }} /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
               <div className="settings-autosave">
                 <span className={'autosave-dot' + (setAutoStatus === 'saved' ? ' flash' : '')} />
                 {setAutoStatus === 'saving' ? 'Saving…' : setAutoStatus === 'saved' ? 'Saved — applies immediately' : 'Changes save automatically'}

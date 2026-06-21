@@ -2,8 +2,8 @@ const KV_MAP = { command: 'cmd', to: 'new_path', newpath: 'new_path', destinatio
 const SECTION_FIELD = { CONTENT: 'content', OLD: 'old_str', NEW: 'new_str', CMD: 'cmd', PATHS: 'paths' };
 const INT_KEYS = new Set(['start', 'end', 'count']);
 
-export const READ_TOOLS = new Set(['view', 'list_files', 'search', 'bash', 'run', 'web_search']);
-export const TOOL_NAMES = new Set(['web_search', 'bash', 'run', 'create_file', 'str_replace', 'view', 'list_files', 'delete_file', 'clear_sandbox', 'delete_all', 'rename_file', 'move_file', 'copy_file', 'make_dir', 'mkdir', 'search', 'extract_zip', 'bundle_zip']);
+export const READ_TOOLS = new Set(['view', 'list_files', 'search', 'bash', 'run', 'web_search', 'mb_view', 'mb_search']);
+export const TOOL_NAMES = new Set(['web_search', 'bash', 'run', 'create_file', 'str_replace', 'view', 'list_files', 'delete_file', 'clear_sandbox', 'delete_all', 'rename_file', 'move_file', 'copy_file', 'make_dir', 'mkdir', 'search', 'extract_zip', 'bundle_zip', 'mb_view', 'mb_search']);
 
 function deco(s) { return /[|<>/\[\]]/.test(s); }
 function isClose(t) { const s = t.trim(); return /^[<\[(|\s]*\/\s*\|?\s*tool\s*[|>\])/\s]*$/i.test(s); }
@@ -33,6 +33,8 @@ function enough(call) {
     case 'view': case 'delete_file': case 'make_dir': case 'mkdir': case 'extract_zip': return call.path != null;
     case 'rename_file': case 'move_file': case 'copy_file': return call.path != null && (call.new_path ?? call.to) != null;
     case 'search': case 'web_search': return call.query != null;
+    case 'mb_view': return call.path != null;
+    case 'mb_search': return call.query != null;
     case 'bundle_zip': return call.name != null;
     case 'list_files': case 'clear_sandbox': case 'delete_all': return true;
     default: return true;

@@ -12,6 +12,7 @@ import { getProviders, resolveProvider, providerSpec, typesForClient, PROVIDER_T
 import * as websearch from './websearch.js';
 import * as sandbox from './sandbox.js';
 import * as toolproto from './toolproto.js';
+import * as membank from './membank.js';
 
 function stripToolSyntax(text) {
   let s = String(text || '');
@@ -105,6 +106,21 @@ app.patch('/api/me', authMiddleware, (req, res) => {
   if ('displayName' in req.body) patch.display_name = req.body.displayName;
   db.users.update(req.user.id, patch);
   res.json({ user: publicUser(db.users.byId(req.user.id)) });
+});
+app.get('/api/me/usage', authMiddleware, (req, res) => {
+  const rows = db.usage.byUser(req.user.id);
+  const byModel = new Map();
+  let tp = 0, tc = 0, tcost = 0;
+  for (const r of rows) {
+    tp += r.prompt || 0; tc += r.completion || 0; tcost += r.cost || 0;
+    const key = r.model_id || 'unknown';
+    const e = byModel.get(key) || { modelId: key, modelName: r.model_name || 'Unknown', prompt: 0, completion: 0, cost: 0, count: 0 };
+    e.prompt += r.prompt || 0; e.completion += r.completion || 0; e.cost += r.cost || 0; e.count++;
+    if (r.model_name) e.modelName = r.model_name;
+    byModel.set(key, e);
+  }
+  const models = [...byModel.values()].sort((a, b) => (b.prompt + b.completion) - (a.prompt + a.completion));
+  res.json({ totals: { prompt: tp, completion: tc, total: tp + tc, cost: tcost, generations: rows.length }, models });
 });
 app.delete('/api/me/chats', authMiddleware, (req, res) => {
   const myChats = db.chats.filter(c => c.user_id === req.user.id);
@@ -405,6 +421,7 @@ app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
     static_icon: b.static_icon || '', generating_icon: b.generating_icon || '', thinking_icon: b.thinking_icon || '',
     icon_position: b.icon_position || 'below',
     temperature: null, top_p: null, presence_penalty: null, frequency_penalty: null, repetition_penalty: null, min_p: null, top_k: null, seed: null,
+    cost_in: null, cost_out: null,
     sort_order: max + 1, enabled: 1
   });
   broadcastAdminConfig();
@@ -423,7 +440,7 @@ app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
   if ('num_ctx' in req.body) patch.num_ctx = Math.max(0, parseInt(req.body.num_ctx) || 0);
   if ('icon_size' in req.body) patch.icon_size = Math.max(0, Math.min(80, parseInt(req.body.icon_size) || 0));
   if ('summary_padding' in req.body) patch.summary_padding = Math.max(0.03, Math.min(0.6, parseFloat(req.body.summary_padding) || 0.125));
-  const numF = ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'repetition_penalty', 'min_p'];
+  const numF = ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'repetition_penalty', 'min_p', 'cost_in', 'cost_out'];
   const numI = ['top_k', 'seed', 'max_tokens'];
   for (const k of numF) if (k in req.body) { const v = req.body[k]; patch[k] = (v === '' || v == null || isNaN(Number(v))) ? null : Number(v); }
   for (const k of numI) if (k in req.body) { const v = req.body[k]; patch[k] = (v === '' || v == null || isNaN(parseInt(v))) ? null : parseInt(v); }
@@ -510,6 +527,9 @@ app.get('/api/admin/settings', authMiddleware, adminOnly, (req, res) =>
     sandboxLimitAdminMb: roleLimit('sandbox_limit_mb', true, 1024),
     sandboxLimitUserMb: roleLimit('sandbox_limit_mb', false, 256),
     modelQueue: getSetting('model_queue', '0') === '1',
+    membankEnabled: getSetting('membank_enabled', '0') === '1',
+    membankHideTools: getSetting('membank_hide_tools', '0') === '1',
+    membankPrompt: getSetting('membank_prompt', membank.DEFAULT_PROMPT),
     webSearchEnabled: getSetting('web_search_enabled', '0') === '1',
     webSearchEngine: getSetting('web_search_engine', 'searxng'),
     searxngUrl: getSetting('searxng_url', ''),
@@ -532,6 +552,9 @@ app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
   if ('sandboxLimitAdminMb' in req.body) lim('sandbox_limit_mb_admin', req.body.sandboxLimitAdminMb, 1024);
   if ('sandboxLimitUserMb' in req.body) lim('sandbox_limit_mb_user', req.body.sandboxLimitUserMb, 256);
   if ('modelQueue' in req.body) setSetting('model_queue', req.body.modelQueue ? '1' : '0');
+  if ('membankEnabled' in req.body) setSetting('membank_enabled', req.body.membankEnabled ? '1' : '0');
+  if ('membankHideTools' in req.body) setSetting('membank_hide_tools', req.body.membankHideTools ? '1' : '0');
+  if ('membankPrompt' in req.body) setSetting('membank_prompt', String(req.body.membankPrompt || ''));
   res.json({ ok: true });
 });
 
@@ -605,6 +628,20 @@ const diskStore = multer.diskStorage({
 const upload = multer({ storage: diskStore, limits: { fileSize: 8 * 1024 * 1024 } });
 app.post('/api/admin/upload', authMiddleware, adminOnly, upload.single('file'), (req, res) =>
   res.json({ url: `/uploads/${req.file.filename}` }));
+const membankUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+app.get('/api/admin/membank', authMiddleware, adminOnly, async (req, res) => {
+  try { await membank.ensureIndexedAll(); } catch {}
+  res.json({ files: membank.list(), enabled: getSetting('membank_enabled', '0') === '1' });
+});
+app.post('/api/admin/membank', authMiddleware, adminOnly, membankUpload.array('files', 20), async (req, res) => {
+  let saved = 0;
+  for (const f of (req.files || [])) { try { await membank.saveUpload(f.originalname, f.buffer); saved++; } catch {} }
+  res.json({ files: membank.list(), saved });
+});
+app.delete('/api/admin/membank/:name', authMiddleware, adminOnly, (req, res) => {
+  membank.remove(req.params.name);
+  res.json({ files: membank.list() });
+});
 app.post('/api/upload', authMiddleware, (req, res) => {
   const mb = roleLimit('upload_limit_mb', !!req.user.is_admin, 8) || 8;
   const mw = multer({ storage: diskStore, limits: { fileSize: Math.max(1, mb) * 1024 * 1024 } }).array('files', 10);
@@ -974,18 +1011,22 @@ wss.on('connection', (ws, req) => {
     await maybeCompact(ws, chat, model, extended, sandboxOn);
     const history = chatHistory(chat, model);
     const chatRow = db.chats.byId(chat.id) || chat;
-    const toolsOn = sandboxOn || webSearchOn;
+    const membankOn = getSetting('membank_enabled', '0') === '1' && membank.list().length > 0;
+    const membankHideTools = getSetting('membank_hide_tools', '0') === '1';
+    if (membankOn) { try { await membank.ensureIndexedAll(); } catch {} }
+    const toolsOn = sandboxOn || webSearchOn || membankOn;
     const toolsP = () => {
       const parts = [];
       if (sandboxOn) parts.push(sandboxPromptFor(chat.id));
       if (webSearchOn) { parts.push(websearch.webSearchConfig().prompt); parts.push(websearch.webSearchToolPrompt()); }
+      if (membankOn) parts.push(membank.promptFor(getSetting('membank_prompt', '')));
       return parts.filter(Boolean).join('\n\n') || null;
     };
     let base = buildMessages(model, history, extended, toolsP(), chatRow.summary, promptVars(chat.user_id));
     let inTurn = []; // assistant/tool exchanges accumulated during this response
     const assistantId = uid();
     const assistantParent = (db.chats.byId(chat.id) || {}).active_leaf || null;
-    let content = '', reasoning = '';
+    let content = '', reasoning = '', usage = null;
     safeSend(JSON.stringify({ type: 'start', chatId: chat.id, messageId: assistantId }));
 
     const threshold = compactThreshold(model);
@@ -1018,6 +1059,11 @@ wss.on('connection', (ws, req) => {
               r = await websearch.runWebSearch(call);
               payload = websearch.webSearchResultPayload(call, r);
               formatted = websearch.formatWebSearchResult(call, r);
+            } else if (call.tool === 'mb_view' || call.tool === 'mb_search') {
+              if (!membankOn) continue;
+              r = membank.execTool(call);
+              payload = membank.resultPayload(call, r);
+              formatted = membank.formatResult(call, r);
             } else {
               if (!sandboxOn) continue;
               r = await sandbox.execTool(chat.id, call, sandboxCap);
@@ -1025,9 +1071,12 @@ wss.on('connection', (ws, req) => {
               formatted = formatToolResult(call, r);
             }
             stepResults.push({ call, r, formatted });
-            const block = '\n\n[[OQR:' + Buffer.from(JSON.stringify({ call: cleanCall(call), result: payload }), 'utf8').toString('base64') + ']]\n';
-            content += block;
-            safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: block }));
+            const hideThis = (call.tool === 'mb_view' || call.tool === 'mb_search') && membankHideTools;
+            if (!hideThis) {
+              const block = '\n\n[[OQR:' + Buffer.from(JSON.stringify({ call: cleanCall(call), result: payload }), 'utf8').toString('base64') + ']]\n';
+              content += block;
+              safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: block }));
+            }
             if (sandboxOn) safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
           }
         };
@@ -1035,6 +1084,7 @@ wss.on('connection', (ws, req) => {
           await streamCompletion({
             model, messages: convo, signal: controller.signal,
             onEvent: (e) => {
+              if (e.type === 'usage') { if (!usage) usage = { prompt: 0, completion: 0, total: 0 }; usage.prompt += e.usage.prompt || 0; usage.completion += e.usage.completion || 0; usage.total += e.usage.total || 0; return; }
               if (e.type === 'reasoning') { reasoning += e.text; safeSend(JSON.stringify({ type: 'reasoning', chatId: chat.id, text: e.text })); }
               else {
                 content += e.text; stepText += e.text;
@@ -1071,7 +1121,13 @@ wss.on('connection', (ws, req) => {
     }
     state.aborts.delete(chat.id);
 
-    db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, model_id: model.id, parent_id: assistantParent, created_at: now() });
+    let usageRec = null;
+    if (usage && (usage.prompt || usage.completion)) {
+      const cost = (usage.prompt / 1e6) * (Number(model.cost_in) || 0) + (usage.completion / 1e6) * (Number(model.cost_out) || 0);
+      usageRec = { prompt: usage.prompt, completion: usage.completion, total: usage.total || (usage.prompt + usage.completion), cost };
+      db.usage.insert({ id: uid(), user_id: chat.user_id, model_id: model.id, model_name: model.display_name || '', prompt: usageRec.prompt, completion: usageRec.completion, total: usageRec.total, cost, created_at: now() });
+    }
+    db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, model_id: model.id, parent_id: assistantParent, usage: usageRec, created_at: now() });
     db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
     safeSend(JSON.stringify({ type: 'done', chatId: chat.id, messageId: assistantId }));
 
@@ -1114,6 +1170,7 @@ wss.on('connection', (ws, req) => {
           await streamCompletion({
             model, messages, signal: controller.signal,
             onEvent: (e) => {
+              if (e.type === 'usage') return;
               if (e.type === 'reasoning') safeSend(JSON.stringify({ type: 'reasoning', chatId: 'incognito', text: e.text }));
               else safeSend(JSON.stringify({ type: 'content', chatId: 'incognito', text: e.text }));
             }

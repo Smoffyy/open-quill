@@ -64,6 +64,10 @@ CREATE TABLE IF NOT EXISTS models (
   id TEXT PRIMARY KEY, sort_order INTEGER, enabled INTEGER, data TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_models_sort ON models(sort_order);
+CREATE TABLE IF NOT EXISTS usage (
+  id TEXT PRIMARY KEY, user_id TEXT, model_id TEXT, created_at INTEGER, data TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_usage_user ON usage(user_id, created_at);
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY, value TEXT NOT NULL
 );
@@ -72,6 +76,12 @@ CREATE TABLE IF NOT EXISTS settings (
 if (sdb.pragma('user_version', { simple: true }) === 0) {
   sdb.exec(SCHEMA);
   sdb.pragma('user_version = 1');
+}
+
+if (sdb.pragma('user_version', { simple: true }) < 2) {
+  sdb.exec(`CREATE TABLE IF NOT EXISTS usage (id TEXT PRIMARY KEY, user_id TEXT, model_id TEXT, created_at INTEGER, data TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_usage_user ON usage(user_id, created_at);`);
+  sdb.pragma('user_version = 2');
 }
 
 export const uid = () => crypto.randomUUID();
@@ -83,7 +93,8 @@ const MIRROR = {
   folders: { user_id: o => o.user_id ?? null, sort_order: o => o.sort_order ?? 0, created_at: o => o.created_at ?? 0 },
   chats: { user_id: o => o.user_id ?? null, folder_id: o => o.folder_id ?? null, updated_at: o => o.updated_at ?? 0 },
   messages: { chat_id: o => o.chat_id ?? null, parent_id: o => o.parent_id ?? null, created_at: o => o.created_at ?? 0 },
-  models: { sort_order: o => o.sort_order ?? 0, enabled: o => o.enabled ?? 0 }
+  models: { sort_order: o => o.sort_order ?? 0, enabled: o => o.enabled ?? 0 },
+  usage: { user_id: o => o.user_id ?? null, model_id: o => o.model_id ?? null, created_at: o => o.created_at ?? 0 }
 };
 
 function collection(table) {
@@ -132,12 +143,17 @@ const chatsCol = collection('chats');
 const byUserStmt = sdb.prepare('SELECT data FROM chats WHERE user_id=?');
 chatsCol.byUser = userId => byUserStmt.all(userId).map(r => JSON.parse(r.data));
 
+const usageCol = collection('usage');
+const usageByUserStmt = sdb.prepare('SELECT data FROM usage WHERE user_id=?');
+usageCol.byUser = userId => usageByUserStmt.all(userId).map(r => JSON.parse(r.data));
+
 export const db = {
   users: collection('users'),
   chats: chatsCol,
   messages: messagesCol,
   models: collection('models'),
-  folders: collection('folders')
+  folders: collection('folders'),
+  usage: usageCol
 };
 
 const sGet = sdb.prepare('SELECT value FROM settings WHERE key=?');

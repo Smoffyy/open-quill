@@ -24,5 +24,12 @@ export const api = {
     const res = await fetch('/api/upload', { method: 'POST', body: fd, credentials: 'same-origin' });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Upload failed.');
     return res.json();
+  },
+  async uploadMembank(files) {
+    const fd = new FormData();
+    for (const f of files) fd.append('files', f);
+    const res = await fetch('/api/admin/membank', { method: 'POST', body: fd, credentials: 'same-origin' });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Upload failed.');
+    return res.json();
   }
 };

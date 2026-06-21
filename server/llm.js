@@ -94,7 +94,11 @@ export async function streamCompletion({ model, messages, signal, onEvent }) {
         const msg = json.message || {};
         if (msg.thinking) onEvent({ type: 'reasoning', text: msg.thinking });
         if (msg.content) emitContent(msg.content);
-        if (json.done) return true;
+        if (json.done) {
+          const p = json.prompt_eval_count || 0, c = json.eval_count || 0;
+          if (p || c) onEvent({ type: 'usage', usage: { prompt: p, completion: c, total: p + c } });
+          return true;
+        }
       } catch {}
       return false;
     };
@@ -111,7 +115,7 @@ export async function streamCompletion({ model, messages, signal, onEvent }) {
 
   const res = await fetch(endpoint(base, '/chat/completions'), {
     method: 'POST', headers: authHeaders(key), signal,
-    body: JSON.stringify({ model: model.internal_name, messages, stream: true, ...samplingParams(model, spec) })
+    body: JSON.stringify({ model: model.internal_name, messages, stream: true, stream_options: { include_usage: true }, ...samplingParams(model, spec) })
   });
   if (!res.ok || !res.body) { const t = await res.text().catch(() => ''); throw new Error(`Upstream error ${res.status}: ${t.slice(0, 300)}`); }
   const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
@@ -122,6 +126,7 @@ export async function streamCompletion({ model, messages, signal, onEvent }) {
     if (data === '[DONE]') return true;
     try {
       const json = JSON.parse(data);
+      if (json.usage) { const u = json.usage; onEvent({ type: 'usage', usage: { prompt: u.prompt_tokens || 0, completion: u.completion_tokens || 0, total: u.total_tokens || ((u.prompt_tokens || 0) + (u.completion_tokens || 0)) } }); }
       const delta = json.choices?.[0]?.delta || {};
       if (delta.reasoning_content) onEvent({ type: 'reasoning', text: delta.reasoning_content });
       if (delta.reasoning) onEvent({ type: 'reasoning', text: delta.reasoning });

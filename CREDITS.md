@@ -17,6 +17,9 @@
 - [better-sqlite3-multiple-ciphers](https://github.com/m4heshd/better-sqlite3-multiple-ciphers) - encrypted SQLite storage (AES-256 / SQLCipher)
 - [SQLite](https://www.sqlite.org) - the underlying database engine
 
+## Documents
+- [pdfjs-dist](https://github.com/mozilla/pdf.js) - PDF text extraction for the memory bank
+
 ## Client
 - [React](https://react.dev) and [React DOM](https://react.dev)
 - [Vite](https://vitejs.dev) - build tooling and dev server

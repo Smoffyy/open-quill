@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { api } from '../api.js';
 import { applyPrefs, ACCENT_PRESETS } from '../prefs.js';
-import { Sun, Moon, Gear, Sliders, Info, Chevron } from './icons.jsx';
+import { Sun, Moon, Gear, Sliders, Info, Chevron, Clock } from './icons.jsx';
 import Markdown from './Markdown.jsx';
 
 function Toggle({ prefs, setPref, k, label, desc }) {
@@ -34,7 +34,17 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
   const [confirmClear, setConfirmClear] = useState(false);
   const [clearMsg, setClearMsg] = useState('');
   const saveTimer = useRef(null);
+  const [usageData, setUsageData] = useState(null);
+  const [usageErr, setUsageErr] = useState('');
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
+  useEffect(() => {
+    if (tab !== 'usage') return;
+    let alive = true; setUsageErr('');
+    api.get('/api/me/usage').then(d => { if (alive) setUsageData(d); }).catch(() => { if (alive) setUsageErr('Could not load usage.'); });
+    return () => { alive = false; };
+  }, [tab]);
+  const fmtN = (n) => Number(n || 0).toLocaleString();
+  const fmtUsd = (n) => { const v = Number(n || 0); if (!v) return '$0.00'; return '$' + (v < 0.01 ? v.toFixed(6) : v.toFixed(4)); };
 
   function scheduleSave(nextName, nextPrefs) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -73,6 +83,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
           )}
           <button className={'modal-tab' + (tab === 'appearance' ? ' active' : '')} onClick={() => setTab('appearance')}><Sun /> Appearance</button>
           <button className={'modal-tab' + (tab === 'chat' ? ' active' : '')} onClick={() => setTab('chat')}><Sliders /> Chat</button>
+          <button className={'modal-tab' + (tab === 'usage' ? ' active' : '')} onClick={() => setTab('usage')}><Clock /> Usage</button>
         </div>
         <div className="modal-main">
           {tab === 'general' && (
@@ -230,7 +241,52 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
               </>
             );
           })()}
-          {tab !== 'version' && (
+          {tab === 'usage' && (
+            <>
+              <h2>Usage</h2>
+              <div className="hint">Tokens and estimated cost for your account, across every chat.</div>
+              {usageErr && <div className="dz-err">{usageErr}</div>}
+              {!usageData && !usageErr && <div className="muted-note">Loading…</div>}
+              {usageData && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 18 }}>
+                    {[['Total tokens', fmtN(usageData.totals.total)], ['Input', fmtN(usageData.totals.prompt)], ['Output', fmtN(usageData.totals.completion)], ['Est. cost', fmtUsd(usageData.totals.cost)]].map(([lbl, val]) => (
+                      <div key={lbl} style={{ border: '1px solid rgba(128,128,128,0.22)', borderRadius: 10, padding: '12px 14px' }}>
+                        <div style={{ fontSize: 20, fontWeight: 600 }}>{val}</div>
+                        <div className="muted-note" style={{ marginTop: 2 }}>{lbl}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {usageData.models.length === 0 ? (
+                    <div className="muted-note">No usage recorded yet. Token counts appear here after you chat with a model whose backend reports usage.</div>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                      <thead>
+                        <tr style={{ textAlign: 'left', color: 'inherit', opacity: 0.6 }}>
+                          <th style={{ padding: '6px 8px' }}>Model</th>
+                          <th style={{ padding: '6px 8px', textAlign: 'right' }}>Input</th>
+                          <th style={{ padding: '6px 8px', textAlign: 'right' }}>Output</th>
+                          <th style={{ padding: '6px 8px', textAlign: 'right' }}>Cost</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {usageData.models.map((m, i) => (
+                          <tr key={i} style={{ borderTop: '1px solid rgba(128,128,128,0.18)' }}>
+                            <td style={{ padding: '8px' }}>{m.modelName}</td>
+                            <td style={{ padding: '8px', textAlign: 'right' }}>{fmtN(m.prompt)}</td>
+                            <td style={{ padding: '8px', textAlign: 'right' }}>{fmtN(m.completion)}</td>
+                            <td style={{ padding: '8px', textAlign: 'right' }}>{fmtUsd(m.cost)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                  <div className="muted-note" style={{ marginTop: 14 }}>Cost is estimated from per-model prices set by your admin. Token counts come from your model backend and may be unavailable for some providers.</div>
+                </>
+              )}
+            </>
+          )}
+          {tab !== 'version' && tab !== 'usage' && (
             <div className="autosave-note">
               <span className={'autosave-dot' + (saved ? ' flash' : '')} />
               {saved ? 'Saved' : 'Changes save automatically'}
