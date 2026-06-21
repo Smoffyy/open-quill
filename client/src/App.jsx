@@ -385,6 +385,7 @@ export default function App() {
   }
 
   function handleWs(m) {
+    if (m.type === 'session_revoked') { location.href = '/'; return; }
     if (m.type === 'config') { loadModels(); loadAppConfig(); try { window.dispatchEvent(new CustomEvent('oq-config')); } catch {} return; }
     if (typeof m.type === 'string' && m.type.startsWith('space_')) {
       try { window.dispatchEvent(new CustomEvent('oq-space', { detail: m })); } catch {}

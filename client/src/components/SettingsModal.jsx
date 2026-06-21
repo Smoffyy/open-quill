@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { api } from '../api.js';
 import { applyPrefs, ACCENT_PRESETS } from '../prefs.js';
-import { Sun, Moon, Gear, Sliders, Info, Chevron, Clock, Download, Upload } from './icons.jsx';
+import { Sun, Moon, Gear, Sliders, Info, Chevron, Clock, Download, Upload, Shield, Trash } from './icons.jsx';
 import Markdown from './Markdown.jsx';
 
 function Toggle({ prefs, setPref, k, label, desc }) {
@@ -37,15 +37,35 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
   const saveTimer = useRef(null);
   const [usageData, setUsageData] = useState(null);
   const [usageErr, setUsageErr] = useState('');
+  const [usageWindow, setUsageWindow] = useState('all');
+  const [sessions, setSessions] = useState(null);
+  const [sessionErr, setSessionErr] = useState('');
   useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
   useEffect(() => {
     if (tab !== 'usage') return;
-    let alive = true; setUsageErr('');
-    api.get('/api/me/usage').then(d => { if (alive) setUsageData(d); }).catch(() => { if (alive) setUsageErr('Could not load usage.'); });
+    let alive = true; setUsageErr(''); setUsageData(null);
+    const q = usageWindow === 'all' ? '' : '?days=' + usageWindow;
+    api.get('/api/me/usage' + q).then(d => { if (alive) setUsageData(d); }).catch(() => { if (alive) setUsageErr('Could not load usage.'); });
     return () => { alive = false; };
-  }, [tab]);
+  }, [tab, usageWindow]);
+  function loadSessions() {
+    setSessionErr('');
+    api.get('/api/me/sessions').then(d => setSessions(d.sessions || [])).catch(() => setSessionErr('Could not load sessions.'));
+  }
+  useEffect(() => { if (tab === 'sessions') loadSessions(); }, [tab]);
+  async function revokeSession(id) {
+    try { await api.del('/api/me/sessions/' + id); setSessions(s => (s || []).filter(x => x.id !== id)); }
+    catch { setSessionErr('Could not revoke that session.'); }
+  }
+  async function revokeOthers() {
+    try { await api.del('/api/me/sessions'); loadSessions(); }
+    catch { setSessionErr('Could not revoke other sessions.'); }
+  }
   const fmtN = (n) => Number(n || 0).toLocaleString();
   const fmtUsd = (n) => { const v = Number(n || 0); if (!v) return '$0.00'; return '$' + (v < 0.01 ? v.toFixed(6) : v.toFixed(4)); };
+  const fmtWhen = (ts) => { if (!ts) return 'unknown'; const d = new Date(ts); const diff = Date.now() - ts; if (diff < 60000) return 'just now'; if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago'; if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago'; return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); };
+  const deviceLabel = (ua) => { const s = String(ua || ''); if (/edg/i.test(s)) return 'Edge'; if (/chrome|crios/i.test(s)) return 'Chrome'; if (/firefox|fxios/i.test(s)) return 'Firefox'; if (/safari/i.test(s)) return 'Safari'; return 'Browser'; };
+  const osLabel = (ua) => { const s = String(ua || ''); if (/windows/i.test(s)) return 'Windows'; if (/android/i.test(s)) return 'Android'; if (/iphone|ipad|ios/i.test(s)) return 'iOS'; if (/mac os|macintosh/i.test(s)) return 'macOS'; if (/linux/i.test(s)) return 'Linux'; return 'Unknown OS'; };
 
   function scheduleSave(nextName, nextPrefs) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -85,6 +105,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
           <button className={'modal-tab' + (tab === 'appearance' ? ' active' : '')} onClick={() => setTab('appearance')}><Sun /> Appearance</button>
           <button className={'modal-tab' + (tab === 'chat' ? ' active' : '')} onClick={() => setTab('chat')}><Sliders /> Chat</button>
           <button className={'modal-tab' + (tab === 'usage' ? ' active' : '')} onClick={() => setTab('usage')}><Clock /> Usage</button>
+          <button className={'modal-tab' + (tab === 'sessions' ? ' active' : '')} onClick={() => setTab('sessions')}><Shield /> Sessions</button>
         </div>
         <div className="modal-main">
           {tab === 'general' && (
@@ -256,18 +277,24 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
             <>
               <h2>Usage</h2>
               <div className="hint">Tokens and estimated cost for your account, across every chat.</div>
+              <div className="seg" style={{ marginBottom: 14, width: 'fit-content' }}>
+                {[['7', '7 days'], ['30', '30 days'], ['90', '90 days'], ['all', 'All time']].map(([v, l]) => (
+                  <button key={v} className={usageWindow === v ? 'on' : ''} onClick={() => setUsageWindow(v)}>{l}</button>
+                ))}
+              </div>
               {usageErr && <div className="dz-err">{usageErr}</div>}
               {!usageData && !usageErr && <div className="muted-note">Loading…</div>}
               {usageData && (
                 <>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 18 }}>
-                    {[['Total tokens', fmtN(usageData.totals.total)], ['Input', fmtN(usageData.totals.prompt)], ['Output', fmtN(usageData.totals.completion)], ['Est. cost', fmtUsd(usageData.totals.cost)]].map(([lbl, val]) => (
+                    {[['Total tokens', fmtN(usageData.totals.total)], ['Input', fmtN(usageData.totals.prompt)], ['Output', fmtN(usageData.totals.completion)], ['Est. cost', usageData.totals.cost ? fmtUsd(usageData.totals.cost) : (usageData.totals.costKnown ? '$0.00' : '—')]].map(([lbl, val]) => (
                       <div key={lbl} style={{ border: '1px solid rgba(128,128,128,0.22)', borderRadius: 10, padding: '12px 14px' }}>
                         <div style={{ fontSize: 20, fontWeight: 600 }}>{val}</div>
                         <div className="muted-note" style={{ marginTop: 2 }}>{lbl}</div>
                       </div>
                     ))}
                   </div>
+                  <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 6 }}>{fmtN(usageData.totals.generations)} generation{usageData.totals.generations === 1 ? '' : 's'} in this window.</div>
                   {usageData.models.length === 0 ? (
                     <div className="muted-note">No usage recorded yet. Token counts appear here after you chat with a model whose backend reports usage.</div>
                   ) : (
@@ -286,18 +313,48 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                             <td style={{ padding: '8px' }}>{m.modelName}</td>
                             <td style={{ padding: '8px', textAlign: 'right' }}>{fmtN(m.prompt)}</td>
                             <td style={{ padding: '8px', textAlign: 'right' }}>{fmtN(m.completion)}</td>
-                            <td style={{ padding: '8px', textAlign: 'right' }}>{fmtUsd(m.cost)}</td>
+                            <td style={{ padding: '8px', textAlign: 'right' }}>{m.priced ? fmtUsd(m.cost) : <span className="muted-note">no price</span>}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   )}
-                  <div className="muted-note" style={{ marginTop: 14 }}>Cost is estimated from per-model prices set by your admin. Token counts come from your model backend and may be unavailable for some providers.</div>
+                  <div className="muted-note" style={{ marginTop: 14 }}>Cost is estimated from per-model prices set by your admin. Models marked "no price" are local or free, so no cost is counted. Token counts come from your model backend and may be unavailable for some providers.</div>
                 </>
               )}
             </>
           )}
-          {tab !== 'version' && tab !== 'usage' && (
+          {tab === 'sessions' && (
+            <>
+              <h2>Sessions</h2>
+              <div className="hint">Devices currently signed in to your account. Sessions expire after 30 days of inactivity.</div>
+              {sessionErr && <div className="dz-err">{sessionErr}</div>}
+              {!sessions && !sessionErr && <div className="muted-note">Loading…</div>}
+              {sessions && (
+                <>
+                  {sessions.map(s => (
+                    <div className="field row" key={s.id} style={{ alignItems: 'center' }}>
+                      <div>
+                        <label>{deviceLabel(s.userAgent)} on {osLabel(s.userAgent)} {s.current && <span className="you-tag">this device</span>}</label>
+                        <div className="muted-note">{s.ip ? s.ip + ' • ' : ''}active {fmtWhen(s.lastSeen)} • signed in {fmtWhen(s.createdAt)}</div>
+                      </div>
+                      {!s.current && <button className="btn danger" onClick={() => revokeSession(s.id)}>Revoke</button>}
+                    </div>
+                  ))}
+                  {sessions.filter(s => !s.current).length > 0 && (
+                    <div className="danger-zone">
+                      <div className="dz-title">Sign out everywhere else</div>
+                      <div className="field row">
+                        <div><label>Revoke all other sessions</label><div className="muted-note">Keeps this device signed in and ends every other session.</div></div>
+                        <button className="btn danger" onClick={revokeOthers}>Revoke others</button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+          {tab !== 'version' && tab !== 'usage' && tab !== 'sessions' && (
             <div className="autosave-note">
               <span className={'autosave-dot' + (saved ? ' flash' : '')} />
               {saved ? 'Saved' : 'Changes save automatically'}

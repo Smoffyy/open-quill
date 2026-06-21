@@ -17,12 +17,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Consolidated data directory** - the database, encryption key, uploads, and sandbox now all live under a single `server/data/` folder (git-ignored), keeping the server directory clean.
 - **Exporting/Importing of User Chats** - allows users to export or import their chats properly.
 - **Spaces** - allows users/admins to share a chat with an assistant, collaborating on projects locally.
+- **Session management** - logins now create a tracked session bound to the auth token. A new Sessions tab under Settings lists every signed-in device with its browser, OS, IP, and last-active time, and lets you revoke any individual session or sign out everywhere else. Revoking a session immediately disconnects its live websocket.
+- **Sliding 30-day session expiry** - a session stays valid as long as it is used. Each authenticated request refreshes its activity timestamp; after 30 days of inactivity the session expires and the user is asked to sign in again.
+- **Admin audit log** - a new Audit Log tab in the admin panel records sensitive actions (model create, update, and delete, model publish, provider create, update, and delete, settings changes, user role changes, and user deletions) with the actor, timestamp, affected target, and originating IP. Entries are paginated and load on demand.
+- **Audit retention** - audit entries older than 120 days are pruned automatically at startup and once per day.
+- **Recognized model pricing presets** - a built-in price table covers common hosted models (GPT, Claude, Gemini, DeepSeek, Mistral, Kimi, Grok, and Llama families). When a new model's ID matches a known name, its input and output prices are filled in automatically. Local or unrecognized models stay blank.
+- **Pricing override controls** - the model editor now shows when an ID is recognized and offers a one-click "Apply preset" action plus a "Clear price" link, so admins can accept, override, or remove the suggested price at any time. Manual prices are never overwritten by a preset.
+- **Usage time windows** - the personal Usage tab can now be filtered to the last 7, 30, or 90 days, or all time, and reports how many generations fall in the selected window.
 
 ### Changed
 - **Password hashing** - switched from bcrypt to **argon2id** (OWASP-recommended), with tuned memory/time parameters. Existing bcrypt hashes are not carried over (see breaking note above).
 - **Complete chat deletion** - deleting a chat now also removes its uploaded attachment files from disk, in addition to the chat, its messages, and its sandbox (artifacts and version history). Applies to single-chat delete, "delete all my chats," and account deletion.
 - **Admin user deletion** - removing a user now also deletes that user's sandboxes and uploaded attachments, matching the other deletion paths.
 - **Starburst Icon** - fully centered all icons.
+- **Usage cost accuracy** - each usage record now stores the price that was in effect at generation time. Models with no configured price are shown as "no price" rather than a misleading $0.00, and account totals indicate when a cost figure is incomplete because some models were unpriced.
+- **Spaces assistant replies** - the in-space assistant now uses a short cooldown to avoid double-replies and detects when it is addressed by name or asked a direct question, making its decision to speak or stay silent more reliable.
+- **Spaces invitations** - re-inviting a user who previously declined now re-sends the invite cleanly, duplicate and self-invites are rejected with clear messages, and spaces are capped at 25 members.
+- **Session cleanup on deletion** - deleting a user (by an admin or via self-serve account deletion) now also removes that user's sessions.
 
 ### Security
 - **Encryption at rest** - the database file is encrypted with AES-256; a leaked `data.db` is unreadable without the key.
@@ -33,6 +44,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - **Legacy JSON store** - the `data.json` file, its debounced full-file rewrites, and corrupt-file backup handling are gone.
 - **bcryptjs** dependency, replaced by argon2id.
+
+### Performance
+- **Reduced write amplification** - session activity timestamps are only written when at least 60 seconds have passed since the last update, avoiding a database write on every single request.
+- **Bounded in-memory maps** - the spaces reply-cooldown map is capped to prevent unbounded growth on long-running servers.
 
 ---
 

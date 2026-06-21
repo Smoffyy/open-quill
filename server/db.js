@@ -92,6 +92,18 @@ CREATE INDEX IF NOT EXISTS idx_space_messages_space ON space_messages(space_id, 
   sdb.pragma('user_version = 3');
 }
 
+if (sdb.pragma('user_version', { simple: true }) < 4) {
+  sdb.exec(`CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, user_id TEXT, last_seen INTEGER, created_at INTEGER, data TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id, last_seen);`);
+  sdb.pragma('user_version = 4');
+}
+
+if (sdb.pragma('user_version', { simple: true }) < 5) {
+  sdb.exec(`CREATE TABLE IF NOT EXISTS audit (id TEXT PRIMARY KEY, ts INTEGER, actor_id TEXT, data TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit(ts);`);
+  sdb.pragma('user_version = 5');
+}
+
 export const uid = () => crypto.randomUUID();
 let lastTs = 0;
 export const now = () => { const t = Date.now(); lastTs = t > lastTs ? t : lastTs + 1; return lastTs; };
@@ -104,7 +116,9 @@ const MIRROR = {
   models: { sort_order: o => o.sort_order ?? 0, enabled: o => o.enabled ?? 0 },
   usage: { user_id: o => o.user_id ?? null, model_id: o => o.model_id ?? null, created_at: o => o.created_at ?? 0 },
   spaces: { owner_id: o => o.owner_id ?? null, created_at: o => o.created_at ?? 0, updated_at: o => o.updated_at ?? 0 },
-  space_messages: { space_id: o => o.space_id ?? null, created_at: o => o.created_at ?? 0 }
+  space_messages: { space_id: o => o.space_id ?? null, created_at: o => o.created_at ?? 0 },
+  sessions: { user_id: o => o.user_id ?? null, last_seen: o => o.last_seen ?? 0, created_at: o => o.created_at ?? 0 },
+  audit: { ts: o => o.ts ?? 0, actor_id: o => o.actor_id ?? null }
 };
 
 function collection(table) {
@@ -161,6 +175,18 @@ const spaceMessagesCol = collection('space_messages');
 const spMsgBySpaceStmt = sdb.prepare('SELECT data FROM space_messages WHERE space_id=? ORDER BY created_at');
 spaceMessagesCol.bySpace = spaceId => spMsgBySpaceStmt.all(spaceId).map(r => JSON.parse(r.data));
 
+const sessionsCol = collection('sessions');
+const sessionsByUserStmt = sdb.prepare('SELECT data FROM sessions WHERE user_id=? ORDER BY last_seen DESC');
+sessionsCol.byUser = userId => sessionsByUserStmt.all(userId).map(r => JSON.parse(r.data));
+const touchSessionStmt = sdb.prepare('UPDATE sessions SET last_seen=?, data=json_set(data,\'$.last_seen\',?) WHERE id=?');
+sessionsCol.touch = (id, ts) => { try { touchSessionStmt.run(ts, ts, id); } catch {} };
+
+const auditCol = collection('audit');
+const auditRecentStmt = sdb.prepare('SELECT data FROM audit ORDER BY ts DESC LIMIT ? OFFSET ?');
+auditCol.recent = (limit, offset) => auditRecentStmt.all(limit, offset).map(r => JSON.parse(r.data));
+const auditPruneStmt = sdb.prepare('DELETE FROM audit WHERE ts < ?');
+auditCol.prune = before => { try { return auditPruneStmt.run(before).changes; } catch { return 0; } };
+
 export const db = {
   users: collection('users'),
   chats: chatsCol,
@@ -169,7 +195,9 @@ export const db = {
   folders: collection('folders'),
   usage: usageCol,
   spaces: collection('spaces'),
-  spaceMessages: spaceMessagesCol
+  spaceMessages: spaceMessagesCol,
+  sessions: sessionsCol,
+  audit: auditCol
 };
 
 const sGet = sdb.prepare('SELECT value FROM settings WHERE key=?');

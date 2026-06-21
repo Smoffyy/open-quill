@@ -6,9 +6,10 @@ import fs from 'fs';
 import multer from 'multer';
 import { fileURLToPath } from 'url';
 import { db, uid, now, getSetting, setSetting } from './db.js';
-import { hash, check, sign, publicUser, authMiddleware, adminOnly, userFromRequest, parseCookies } from './auth.js';
+import { hash, check, sign, publicUser, authMiddleware, adminOnly, userFromRequest, parseCookies, createSession, revokeSession, revokeOtherSessions, sessionFromRequest } from './auth.js';
 import { buildMessages, streamCompletion, generateTitle, summarizeConversation, oneShot, stripThink } from './llm.js';
 import { getProviders, resolveProvider, providerSpec, typesForClient, PROVIDER_TYPES } from './providers.js';
+import { matchPreset, presetList } from './pricing.js';
 import * as websearch from './websearch.js';
 import * as sandbox from './sandbox.js';
 import * as toolproto from './toolproto.js';
@@ -61,6 +62,24 @@ app.use('/uploads', (req, res, next) => { res.setHeader('Content-Security-Policy
 const setCookie = (res, token) =>
   res.setHeader('Set-Cookie', `token=${token}; HttpOnly; Path=/; Max-Age=${60 * 60 * 24 * 30}; SameSite=Lax`);
 
+const AUDIT_RETENTION_MS = 120 * 24 * 60 * 60 * 1000;
+function clientIp(req) {
+  return (req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress || '').trim().slice(0, 64);
+}
+function logAudit(req, action, target = {}) {
+  try {
+    db.audit.insert({
+      id: uid(), ts: now(), actor_id: req.user?.id || null,
+      actor_email: req.user?.email || 'system', action,
+      target_type: target.type || null, target_id: target.id || null,
+      meta: target.meta || null, ip: clientIp(req)
+    });
+  } catch {}
+}
+function pruneAudit() {
+  try { db.audit.prune(now() - AUDIT_RETENTION_MS); } catch {}
+}
+
 // ---------- auth ----------
 app.post('/api/auth/check-email', (req, res) => {
   const email = (req.body.email || '').trim().toLowerCase();
@@ -94,11 +113,17 @@ app.post('/api/auth/login', async (req, res) => {
     const isFirst = db.users.count() === 0;
     u = db.users.insert({ id: uid(), email, password_hash: await hash(pw), display_name: '', is_admin: isFirst ? 1 : 0, is_owner: isFirst ? 1 : 0, prefs: {}, created_at: now() });
   }
-  setCookie(res, sign(u));
+  const sid = createSession(u, req);
+  setCookie(res, sign(u, sid));
   res.json({ user: publicUser(u) });
 });
 
-app.post('/api/auth/logout', (req, res) => { setCookie(res, ''); res.json({ ok: true }); });
+app.post('/api/auth/logout', (req, res) => {
+  const r = sessionFromRequest(req);
+  if (r?.sessionId) revokeSession(r.sessionId);
+  setCookie(res, '');
+  res.json({ ok: true });
+});
 app.get('/api/me', authMiddleware, (req, res) => res.json({ user: publicUser(req.user) }));
 app.patch('/api/me', authMiddleware, (req, res) => {
   const patch = {};
@@ -108,19 +133,55 @@ app.patch('/api/me', authMiddleware, (req, res) => {
   res.json({ user: publicUser(db.users.byId(req.user.id)) });
 });
 app.get('/api/me/usage', authMiddleware, (req, res) => {
-  const rows = db.usage.byUser(req.user.id);
+  const windows = { '7': 7, '30': 30, '90': 90 };
+  const days = windows[String(req.query.days)] || null;
+  const since = days ? now() - days * 24 * 60 * 60 * 1000 : 0;
+  const rows = db.usage.byUser(req.user.id).filter(r => (r.created_at || 0) >= since);
   const byModel = new Map();
-  let tp = 0, tc = 0, tcost = 0;
+  const byDay = new Map();
+  let tp = 0, tc = 0, tcost = 0, priced = 0;
   for (const r of rows) {
-    tp += r.prompt || 0; tc += r.completion || 0; tcost += r.cost || 0;
+    const p = r.prompt || 0, c = r.completion || 0, cost = r.cost || 0;
+    tp += p; tc += c; tcost += cost;
+    const hasPrice = (r.cost_in != null && r.cost_in !== 0) || (r.cost_out != null && r.cost_out !== 0) || cost > 0;
+    if (hasPrice) priced++;
     const key = r.model_id || 'unknown';
-    const e = byModel.get(key) || { modelId: key, modelName: r.model_name || 'Unknown', prompt: 0, completion: 0, cost: 0, count: 0 };
-    e.prompt += r.prompt || 0; e.completion += r.completion || 0; e.cost += r.cost || 0; e.count++;
+    const e = byModel.get(key) || { modelId: key, modelName: r.model_name || 'Unknown', prompt: 0, completion: 0, cost: 0, count: 0, priced: false };
+    e.prompt += p; e.completion += c; e.cost += cost; e.count++;
+    if (hasPrice) e.priced = true;
     if (r.model_name) e.modelName = r.model_name;
     byModel.set(key, e);
+    const dayKey = new Date(r.created_at || 0).toISOString().slice(0, 10);
+    const d = byDay.get(dayKey) || { day: dayKey, prompt: 0, completion: 0, cost: 0 };
+    d.prompt += p; d.completion += c; d.cost += cost;
+    byDay.set(dayKey, d);
   }
   const models = [...byModel.values()].sort((a, b) => (b.prompt + b.completion) - (a.prompt + a.completion));
-  res.json({ totals: { prompt: tp, completion: tc, total: tp + tc, cost: tcost, generations: rows.length }, models });
+  const daily = [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day)).slice(-30);
+  res.json({
+    totals: { prompt: tp, completion: tc, total: tp + tc, cost: tcost, generations: rows.length, costKnown: priced === rows.length },
+    models, daily, window: days || 'all'
+  });
+});
+app.get('/api/me/sessions', authMiddleware, (req, res) => {
+  const list = db.sessions.byUser(req.user.id).map(s => ({
+    id: s.id, current: s.id === req.sessionId, ip: s.ip || '', userAgent: s.user_agent || '',
+    lastSeen: s.last_seen || 0, createdAt: s.created_at || 0
+  }));
+  res.json({ sessions: list });
+});
+app.delete('/api/me/sessions/:id', authMiddleware, (req, res) => {
+  const s = db.sessions.byId(req.params.id);
+  if (!s || s.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+  revokeSession(s.id);
+  killSessionSockets(s.id);
+  res.json({ ok: true });
+});
+app.delete('/api/me/sessions', authMiddleware, (req, res) => {
+  const others = db.sessions.byUser(req.user.id).filter(s => s.id !== req.sessionId);
+  revokeOtherSessions(req.user.id, req.sessionId);
+  for (const s of others) killSessionSockets(s.id);
+  res.json({ ok: true, revoked: others.length });
 });
 app.delete('/api/me/chats', authMiddleware, (req, res) => {
   const myChats = db.chats.filter(c => c.user_id === req.user.id);
@@ -141,6 +202,7 @@ app.delete('/api/me', authMiddleware, (req, res) => {
   db.messages.remove(m => chatIds.has(m.chat_id));
   db.chats.remove(c => c.user_id === u.id);
   removeUserFromSpaces(u.id);
+  db.sessions.remove(s => s.user_id === u.id);
   db.users.remove(x => x.id === u.id);
   setCookie(res, '');
   res.json({ ok: true });
@@ -464,6 +526,7 @@ app.get('/api/admin/discover-models', authMiddleware, adminOnly, async (req, res
 app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
   const max = db.models.all().reduce((a, m) => Math.max(a, m.sort_order || 0), 0);
   const b = req.body;
+  const preset = matchPreset(b.internal_name || '');
   const m = db.models.insert({
     id: uid(), display_name: b.display_name || 'New model', description: b.description || '',
     internal_name: b.internal_name || 'local-model', system_prompt: b.system_prompt || '',
@@ -481,9 +544,10 @@ app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
     static_icon: b.static_icon || '', generating_icon: b.generating_icon || '', thinking_icon: b.thinking_icon || '',
     icon_position: b.icon_position || 'below',
     temperature: null, top_p: null, presence_penalty: null, frequency_penalty: null, repetition_penalty: null, min_p: null, top_k: null, seed: null,
-    cost_in: null, cost_out: null,
+    cost_in: preset ? preset.in : null, cost_out: preset ? preset.out : null,
     sort_order: max + 1, enabled: 1
   });
+  logAudit(req, 'model.create', { type: 'model', id: m.id, meta: { displayName: m.display_name, internalName: m.internal_name } });
   broadcastAdminConfig();
   res.json({ id: m.id });
 });
@@ -504,15 +568,29 @@ app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
   const numI = ['top_k', 'seed', 'max_tokens'];
   for (const k of numF) if (k in req.body) { const v = req.body[k]; patch[k] = (v === '' || v == null || isNaN(Number(v))) ? null : Number(v); }
   for (const k of numI) if (k in req.body) { const v = req.body[k]; patch[k] = (v === '' || v == null || isNaN(parseInt(v))) ? null : parseInt(v); }
+  if ('internal_name' in patch && !('cost_in' in req.body) && !('cost_out' in req.body) && cur.cost_in == null && cur.cost_out == null) {
+    const preset = matchPreset(patch.internal_name);
+    if (preset) { patch.cost_in = preset.in; patch.cost_out = preset.out; }
+  }
   // only one model can be the login default
   if (patch.is_default === 1) for (const other of db.models.all()) if (other.id !== cur.id && other.is_default) db.models.update(other.id, { is_default: 0 });
   db.models.update(cur.id, patch);
+  logAudit(req, 'model.update', { type: 'model', id: cur.id, meta: { fields: Object.keys(patch) } });
   broadcastAdminConfig();
   res.json({ ok: true });
 });
 
+app.get('/api/admin/pricing/preset', authMiddleware, adminOnly, (req, res) => {
+  res.json({ preset: matchPreset(req.query.name || '') });
+});
+app.get('/api/admin/pricing/presets', authMiddleware, adminOnly, (req, res) => {
+  res.json({ presets: presetList() });
+});
+
 app.delete('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
-  db.models.remove(m => m.id === req.params.id);
+  const m = db.models.byId(req.params.id);
+  db.models.remove(x => x.id === req.params.id);
+  logAudit(req, 'model.delete', { type: 'model', id: req.params.id, meta: { displayName: m?.display_name } });
   broadcastAdminConfig();
   res.json({ ok: true });
 });
@@ -554,6 +632,7 @@ app.post('/api/admin/models/publish', authMiddleware, adminOnly, (req, res) => {
   const snapshot = db.models.all().map(m => ({ ...m }));
   setSetting('published_models', snapshot);
   setSetting('published_at', now());
+  logAudit(req, 'models.publish', { meta: { count: snapshot.length } });
   broadcastConfig();
   res.json({ ok: true, count: snapshot.length, publishedAt: getSetting('published_at') });
 });
@@ -615,6 +694,7 @@ app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
   if ('membankEnabled' in req.body) setSetting('membank_enabled', req.body.membankEnabled ? '1' : '0');
   if ('membankHideTools' in req.body) setSetting('membank_hide_tools', req.body.membankHideTools ? '1' : '0');
   if ('membankPrompt' in req.body) setSetting('membank_prompt', String(req.body.membankPrompt || ''));
+  logAudit(req, 'settings.update', { meta: { fields: Object.keys(req.body || {}) } });
   res.json({ ok: true });
 });
 
@@ -625,6 +705,7 @@ app.post('/api/admin/providers', authMiddleware, adminOnly, (req, res) => {
   const type = PROVIDER_TYPES[b.type] ? b.type : 'lmstudio';
   const prov = { id: uid(), name: (b.name || PROVIDER_TYPES[type].label).trim(), type, base_url: (b.base_url || '').trim() || PROVIDER_TYPES[type].defaultBaseUrl, api_key: b.api_key || '' };
   setSetting('providers', [...getProviders(), prov]);
+  logAudit(req, 'provider.create', { type: 'provider', id: prov.id, meta: { name: prov.name, type: prov.type } });
   res.json({ id: prov.id });
 });
 app.patch('/api/admin/providers/:id', authMiddleware, adminOnly, (req, res) => {
@@ -639,6 +720,7 @@ app.patch('/api/admin/providers/:id', authMiddleware, adminOnly, (req, res) => {
   if ('api_key' in b) p.api_key = b.api_key || '';
   list[i] = p;
   setSetting('providers', list);
+  logAudit(req, 'provider.update', { type: 'provider', id: p.id, meta: { name: p.name } });
   res.json({ ok: true });
 });
 app.delete('/api/admin/providers/:id', authMiddleware, adminOnly, (req, res) => {
@@ -648,6 +730,7 @@ app.delete('/api/admin/providers/:id', authMiddleware, adminOnly, (req, res) => 
   const fallback = next[0].id;
   for (const m of db.models.all()) if (m.provider_id === req.params.id) db.models.update(m.id, { provider_id: fallback });
   setSetting('providers', next);
+  logAudit(req, 'provider.delete', { type: 'provider', id: req.params.id });
   broadcastAdminConfig();
   res.json({ ok: true });
 });
@@ -768,6 +851,7 @@ app.patch('/api/admin/users/:id', authMiddleware, adminOnly, (req, res) => {
   if (!u) return res.status(404).json({ error: 'not found' });
   if (u.is_owner) return res.status(403).json({ error: 'The top admin cannot be changed.' });
   if ('isAdmin' in req.body) db.users.update(u.id, { is_admin: req.body.isAdmin ? 1 : 0 });
+  logAudit(req, 'user.role', { type: 'user', id: u.id, meta: { email: u.email, isAdmin: !!req.body.isAdmin } });
   res.json({ ok: true });
 });
 app.delete('/api/admin/users/:id', authMiddleware, adminOnly, (req, res) => {
@@ -782,8 +866,21 @@ app.delete('/api/admin/users/:id', authMiddleware, adminOnly, (req, res) => {
   db.messages.remove(m => chatIds.has(m.chat_id));
   db.chats.remove(c => c.user_id === u.id);
   removeUserFromSpaces(u.id);
+  db.sessions.remove(s => s.user_id === u.id);
   db.users.remove(x => x.id === u.id);
+  logAudit(req, 'user.delete', { type: 'user', id: u.id, meta: { email: u.email } });
   res.json({ ok: true });
+});
+
+app.get('/api/admin/audit', authMiddleware, adminOnly, (req, res) => {
+  const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 60));
+  const offset = Math.max(0, parseInt(req.query.offset) || 0);
+  const total = db.audit.count();
+  const rows = db.audit.recent(limit, offset).map(r => ({
+    id: r.id, ts: r.ts, actorEmail: r.actor_email || 'system', action: r.action,
+    targetType: r.target_type || null, targetId: r.target_id || null, meta: r.meta || null, ip: r.ip || ''
+  }));
+  res.json({ entries: rows, total, offset, hasMore: offset + rows.length < total });
 });
 
 // ---------- app customization ----------
@@ -877,6 +974,17 @@ function broadcastConfig() {
 function broadcastAdminConfig() {
   const msg = JSON.stringify({ type: 'config' });
   for (const [ws, st] of clients.entries()) if (ws.readyState === 1 && st.isAdmin) ws.send(msg);
+}
+function killSessionSockets(sessionId) {
+  if (!sessionId) return;
+  const msg = JSON.stringify({ type: 'session_revoked' });
+  for (const [ws, st] of clients.entries()) {
+    if (st.sessionId === sessionId) {
+      try { for (const c of st.aborts.values()) c.abort(); } catch {}
+      try { if (ws.readyState === 1) ws.send(msg); } catch {}
+      try { ws.close(); } catch {}
+    }
+  }
 }
 
 let SKILLS_CACHE = null;
@@ -1068,9 +1176,10 @@ async function maybeCompact(ws, chat, model, extended, sandboxOn) {
 }
 
 wss.on('connection', (ws, req) => {
-  const u = userFromRequest(req);
+  const r = sessionFromRequest(req);
+  const u = r?.user;
   if (!u) { ws.close(); return; }
-  clients.set(ws, { userId: u.id, isAdmin: !!u.is_admin, aborts: new Map() });
+  clients.set(ws, { userId: u.id, sessionId: r.sessionId || null, isAdmin: !!u.is_admin, aborts: new Map() });
   const safeSend = (s) => { if (ws.readyState === 1) { try { ws.send(s); } catch {} } };
 
   async function runCompletion(ws, state, chat, model, extended, sandboxOn, sandboxCap = 0, webSearchOn = false) {
@@ -1191,7 +1300,7 @@ wss.on('connection', (ws, req) => {
     if (usage && (usage.prompt || usage.completion)) {
       const cost = (usage.prompt / 1e6) * (Number(model.cost_in) || 0) + (usage.completion / 1e6) * (Number(model.cost_out) || 0);
       usageRec = { prompt: usage.prompt, completion: usage.completion, total: usage.total || (usage.prompt + usage.completion), cost };
-      db.usage.insert({ id: uid(), user_id: chat.user_id, model_id: model.id, model_name: model.display_name || '', prompt: usageRec.prompt, completion: usageRec.completion, total: usageRec.total, cost, created_at: now() });
+      db.usage.insert({ id: uid(), user_id: chat.user_id, model_id: model.id, model_name: model.display_name || '', prompt: usageRec.prompt, completion: usageRec.completion, total: usageRec.total, cost, cost_in: Number(model.cost_in) || 0, cost_out: Number(model.cost_out) || 0, created_at: now() });
     }
     db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, model_id: model.id, parent_id: assistantParent, usage: usageRec, created_at: now() });
     db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
@@ -1353,15 +1462,25 @@ function ownSpace(req, res, { requireOwner = false } = {}) {
   if (requireOwner && s.owner_id !== req.user.id && !req.user.is_admin) { res.status(403).json({ error: 'Only the space owner can do that.' }); return null; }
   return s;
 }
+const spaceCooldown = new Map();
 async function spaceAssistantRespond(spaceId) {
   const space = db.spaces.byId(spaceId);
   if (!space) return;
+  const last = spaceCooldown.get(spaceId) || 0;
+  if (Date.now() - last < 1200) return;
+  if (spaceCooldown.size > 1000) spaceCooldown.clear();
+  spaceCooldown.set(spaceId, Date.now());
   const model = db.models.byId(space.model_id) || db.models.find(m => m.is_default) || db.models.all()[0];
   if (!model) return;
   broadcastSpace(spaceId, { type: 'space_typing', spaceId, typing: true });
   try {
     const history = db.spaceMessages.bySpace(spaceId).slice(-40);
-    const sys = `You are the AI assistant taking part in a shared group chat space named "${space.name}" alongside multiple human users. Each human message below is prefixed with its sender's name so you can tell people apart; your own earlier replies are not prefixed. Speak naturally in first person, and only reply when you are directly addressed, asked something, or can clearly add value to the discussion. If the latest message is just people talking among themselves and doesn't call for your input, reply with exactly [[SPACE_SILENT]] and nothing else — no punctuation, no explanation, nothing before or after it.`
+    const aiName = (model.display_name || 'Assistant').toLowerCase();
+    const lastMsg = history[history.length - 1];
+    const addressed = lastMsg && lastMsg.role !== 'assistant'
+      && (new RegExp(`(^|\\b)@?${aiName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(lastMsg.content || '') || /\?\s*$/.test((lastMsg.content || '').trim()));
+    const sys = `You are the AI assistant taking part in a shared group chat space named "${space.name}" alongside multiple human users. Each human message below is prefixed with its sender's name so you can tell people apart; your own earlier replies are not prefixed. Speak naturally in first person, and only reply when you are directly addressed, asked something, or can clearly add value to the discussion. If the latest message is just people talking among themselves and doesn't call for your input, reply with exactly [[SPACE_SILENT]] and nothing else: no punctuation, no explanation, nothing before or after it.`
+      + (addressed ? ' The latest message appears to address you directly, so a reply is expected unless it truly makes no sense.' : '')
       + (space.system_prompt && space.system_prompt.trim() ? `\n\nAdditional instructions from the space owner:\n${space.system_prompt.trim()}` : '');
     const convo = [{ role: 'system', content: sys }, ...history.map(m => ({
       role: m.role === 'assistant' ? 'assistant' : 'user',
@@ -1415,9 +1534,20 @@ app.post('/api/spaces/:id/invite', authMiddleware, (req, res) => {
   const s = ownSpace(req, res, { requireOwner: true }); if (!s) return;
   const target = db.users.byId(req.body?.userId);
   if (!target) return res.status(404).json({ error: 'User not found.' });
-  if (isMember(s, target.id)) return res.status(400).json({ error: 'That user is already invited or a member.' });
+  if (target.id === req.user.id) return res.status(400).json({ error: 'You are already in this space.' });
+  const members = [...(s.members || [])];
+  const existing = members.find(m => m.userId === target.id);
   const t = now();
-  const members = [...(s.members || []), { userId: target.id, displayName: target.display_name || target.email.split('@')[0], email: target.email, role: 'member', status: 'invited', invitedAt: t, respondedAt: null }];
+  if (existing) {
+    if (existing.status === 'declined') {
+      existing.status = 'invited'; existing.invitedAt = t; existing.respondedAt = null;
+    } else {
+      return res.status(400).json({ error: 'That user is already invited or a member.' });
+    }
+  } else {
+    if (members.length >= 25) return res.status(400).json({ error: 'A space can have at most 25 members.' });
+    members.push({ userId: target.id, displayName: target.display_name || target.email.split('@')[0], email: target.email, role: 'member', status: 'invited', invitedAt: t, respondedAt: null });
+  }
   const updated = db.spaces.update(s.id, { members, updated_at: t });
   broadcastToUser(target.id, { type: 'space_invite', space: shapeSpace(updated, target.id) });
   res.json(shapeSpace(updated, req.user.id));
@@ -1467,3 +1597,5 @@ app.post('/api/spaces/:id/messages', authMiddleware, (req, res) => {
 });
 
 server.listen(PORT, () => console.log(`open-quill running on http://localhost:${PORT}`));
+pruneAudit();
+setInterval(pruneAudit, 24 * 60 * 60 * 1000).unref();

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
-import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield, Globe, FileText, Pencil } from './icons.jsx';
+import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield, Globe, FileText, Pencil, Clock } from './icons.jsx';
 import { QP_ICON_LIST, QpIcon } from '../qpIcons.jsx';
 
 function QpIconPicker({ value, onPick }) {
@@ -140,8 +140,18 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
   const [spOpen, setSpOpen] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [detectMsg, setDetectMsg] = useState('');
+  const [preset, setPreset] = useState(null);
   const bgRef = useRef(null);
   const set = (k, v) => onChange({ ...m, [k]: v });
+  useEffect(() => {
+    let alive = true;
+    const name = (m.internal_name || '').trim();
+    if (!name) { setPreset(null); return; }
+    api.get('/api/admin/pricing/preset?name=' + encodeURIComponent(name)).then(r => { if (alive) setPreset(r.preset || null); }).catch(() => {});
+    return () => { alive = false; };
+  }, [m.internal_name]);
+  const applyPreset = () => preset && onChange({ ...m, cost_in: preset.in, cost_out: preset.out });
+  const clearPrice = () => onChange({ ...m, cost_in: null, cost_out: null });
   async function pickBg(e) { const f = e.target.files?.[0]; if (!f) return; try { const { url } = await api.upload(f); set('bg_image', url); } catch {} e.target.value = ''; }
   const curProvider = providers.find(p => p.id === m.provider_id) || providers[0];
   const curType = curProvider ? providerTypes[curProvider.type] : null;
@@ -341,6 +351,12 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
 
         <Accordion title="Pricing" sub="Usage cost tracking">
           <div className="muted-note">Optional. Used to estimate cost in each user's Usage tab. Prices are per 1,000,000 tokens. Leave blank or 0 for local or free models.</div>
+          {preset && (
+            <div className="me-hint" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, margin: '10px 0', padding: '8px 12px', border: '1px solid rgba(128,128,128,0.25)', borderRadius: 8 }}>
+              <span>Recognized as <strong>{preset.label}</strong> (${preset.in}/${preset.out} per 1M). {(Number(m.cost_in) === preset.in && Number(m.cost_out) === preset.out) ? 'Applied.' : 'You can apply or override it.'}</span>
+              {!(Number(m.cost_in) === preset.in && Number(m.cost_out) === preset.out) && <button type="button" className="btn" onClick={applyPreset}>Apply preset</button>}
+            </div>
+          )}
           <div className="sampling-grid">
             <div className="samp-field">
               <label>Input $ / 1M tokens</label>
@@ -351,6 +367,9 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
               <input type="number" step="any" min="0" placeholder="e.g. 15.00" value={m.cost_out ?? ''} onChange={(e) => set('cost_out', e.target.value)} />
             </div>
           </div>
+          {(m.cost_in != null || m.cost_out != null) && (
+            <button type="button" className="linklike" style={{ marginTop: 8 }} onClick={clearPrice}>Clear price (treat as local / free)</button>
+          )}
         </Accordion>
       </div>
       <div className="btn-row me-foot">
@@ -385,6 +404,14 @@ export default function AdminPanel({ user, onClose }) {
   async function loadMembank() { try { const d = await api.get('/api/admin/membank'); setMembankFiles(d.files || []); } catch {} }
   async function onMembankPick(e) { const files = [...(e.target.files || [])]; e.target.value = ''; if (!files.length) return; try { const r = await api.uploadMembank(files); setMembankFiles(r.files || []); } catch {} }
   async function removeMembank(name) { try { const r = await api.del('/api/admin/membank/' + encodeURIComponent(name)); setMembankFiles(r.files || []); } catch {} }
+  const [audit, setAudit] = useState({ entries: [], total: 0, offset: 0, hasMore: false, loading: false });
+  async function loadAudit(offset = 0) {
+    setAudit(a => ({ ...a, loading: true }));
+    try {
+      const d = await api.get('/api/admin/audit?limit=60&offset=' + offset);
+      setAudit({ entries: offset ? [...audit.entries, ...d.entries] : d.entries, total: d.total, offset, hasMore: d.hasMore, loading: false });
+    } catch { setAudit(a => ({ ...a, loading: false })); }
+  }
   const [providerTypes, setProviderTypes] = useState({});
   const [selModel, setSelModel] = useState(null);
   const [setSavedFlash, setSetSaved] = useState(false);
@@ -568,6 +595,7 @@ export default function AdminPanel({ user, onClose }) {
         <button className={'ar-tab' + (tab === 'limits' ? ' active' : '')} onClick={() => setTab('limits')}><Shield /> Limits &amp; Safety</button>
         <button className={'ar-tab' + (tab === 'websearch' ? ' active' : '')} onClick={() => setTab('websearch')}><Globe /> Web Search</button>
         <button className={'ar-tab' + (tab === 'membank' ? ' active' : '')} onClick={() => { setTab('membank'); loadMembank(); }}><FileText /> Memory Bank</button>
+        <button className={'ar-tab' + (tab === 'audit' ? ' active' : '')} onClick={() => { setTab('audit'); loadAudit(); }}><Clock /> Audit Log</button>
         <button className="ar-back" onClick={onClose}><Chevron style={{ transform: 'rotate(90deg)', width: 16 }} /> Back to chat</button>
       </nav>
       <div className="admin-content">
@@ -865,6 +893,28 @@ export default function AdminPanel({ user, onClose }) {
                 <span className={'autosave-dot' + (setAutoStatus === 'saved' ? ' flash' : '')} />
                 {setAutoStatus === 'saving' ? 'Saving…' : setAutoStatus === 'saved' ? 'Saved — applies immediately' : 'Changes save automatically'}
               </div>
+            </>
+          )}
+          {tab === 'audit' && (
+            <>
+              <h2>Audit Log</h2>
+              <div className="hint">A record of sensitive admin actions. Entries older than 120 days are pruned automatically. {audit.total > 0 && `Showing ${audit.entries.length} of ${audit.total}.`}</div>
+              {audit.entries.length === 0 && !audit.loading && <div className="muted-note">No audit entries yet.</div>}
+              {audit.entries.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {audit.entries.map(e => (
+                    <div key={e.id} style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '8px 10px', border: '1px solid rgba(128,128,128,0.18)', borderRadius: 8 }}>
+                      <span style={{ fontFamily: 'monospace', fontSize: 12, opacity: 0.65, flexShrink: 0 }}>{new Date(e.ts).toLocaleString()}</span>
+                      <span style={{ flexShrink: 0, fontWeight: 600, fontSize: 13 }}>{e.action}</span>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 13, opacity: 0.85, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {e.actorEmail}{e.meta ? ' · ' + (typeof e.meta === 'object' ? Object.entries(e.meta).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(',') : v}`).join(', ') : String(e.meta)) : ''}
+                      </span>
+                      {e.ip && <span style={{ fontFamily: 'monospace', fontSize: 11, opacity: 0.5, flexShrink: 0 }}>{e.ip}</span>}
+                    </div>
+                  ))}
+                  {audit.hasMore && <button className="btn ghost" style={{ marginTop: 8, alignSelf: 'center' }} disabled={audit.loading} onClick={() => loadAudit(audit.offset + 60)}>{audit.loading ? 'Loading…' : 'Load more'}</button>}
+                </div>
+              )}
             </>
           )}
         </div>
