@@ -145,7 +145,7 @@ export async function streamCompletion({ model, messages, signal, onEvent }) {
   flush();
 }
 
-async function oneShot(model, messages) {
+export async function oneShot(model, messages) {
   const { spec, base, key } = modelProvider(model);
   if (spec.protocol === 'ollama') {
     const res = await fetch(endpoint(base, '/api/chat'), {
@@ -165,7 +165,7 @@ async function oneShot(model, messages) {
   return json.choices?.[0]?.message?.content?.trim() || '';
 }
 
-function stripThink(model, raw) {
+export function stripThink(model, raw) {
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const to = (model.think_open && model.think_open.trim()) || '<think>';
   const tc = (model.think_close && model.think_close.trim()) || '</think>';

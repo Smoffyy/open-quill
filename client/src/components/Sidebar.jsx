@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Chat, Search, Panel, Gear, Shield, Logout, Dots, Trash, Heart, FileText, Star, Download, Folder, Pencil, Chevron } from './icons.jsx';
+import { Plus, Chat, Search, Panel, Gear, Shield, Logout, Dots, Trash, Heart, FileText, Star, Download, Folder, Pencil, Chevron, Users } from './icons.jsx';
 
 function ProfileMenu({ user, version, onSettings, onAdmin, onCredits, onChangelog, onLicense, onLogout, onClose }) {
   const ref = useRef(null);
@@ -145,7 +145,8 @@ function FolderSection({ f, chats, active, showTrash, folders, dragChatId, onTog
 export default function Sidebar({
   user, chats, chatsLoaded = true, activeId, appName, onNew, onOpen, onDelete, onToggleStar,
   folders = [], onCreateFolder, onRenameFolder, onToggleFolder, onDeleteFolder, onMoveChat,
-  collapsed, onToggle, onSettings, onAdmin, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview
+  collapsed, onToggle, onSettings, onAdmin, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview,
+  onSpaces, spacesPending = 0
 }) {
   const [menu, setMenu] = useState(false);
   const [shiftHeld, setShiftHeld] = useState(false);
@@ -188,6 +189,10 @@ export default function Sidebar({
           onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); window.open('/', '_blank', 'noopener'); } }}
           onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}><span className="new-chat-plus"><Plus /></span> <span className="nav-label">New chat</span></button>
         <button className="nav-item" title="Chats" onClick={onChatsOverview}><Chat /> <span className="nav-label">Chats</span></button>
+        <button className="nav-item" title="Spaces" onClick={onSpaces}>
+          <Users /> <span className="nav-label">Spaces</span>
+          {spacesPending > 0 && <span className="nav-badge">{spacesPending}</span>}
+        </button>
       </div>
       <div className="chats">
         {!chatsLoaded ? (

@@ -7,7 +7,7 @@ import multer from 'multer';
 import { fileURLToPath } from 'url';
 import { db, uid, now, getSetting, setSetting } from './db.js';
 import { hash, check, sign, publicUser, authMiddleware, adminOnly, userFromRequest, parseCookies } from './auth.js';
-import { buildMessages, streamCompletion, generateTitle, summarizeConversation } from './llm.js';
+import { buildMessages, streamCompletion, generateTitle, summarizeConversation, oneShot, stripThink } from './llm.js';
 import { getProviders, resolveProvider, providerSpec, typesForClient, PROVIDER_TYPES } from './providers.js';
 import * as websearch from './websearch.js';
 import * as sandbox from './sandbox.js';
@@ -140,9 +140,19 @@ app.delete('/api/me', authMiddleware, (req, res) => {
   purgeUploads(chatIds);
   db.messages.remove(m => chatIds.has(m.chat_id));
   db.chats.remove(c => c.user_id === u.id);
+  removeUserFromSpaces(u.id);
   db.users.remove(x => x.id === u.id);
   setCookie(res, '');
   res.json({ ok: true });
+});
+
+app.get('/api/users/search', authMiddleware, (req, res) => {
+  const q = String(req.query.q || '').trim().toLowerCase();
+  if (q.length < 2) return res.json([]);
+  const out = db.users.filter(u => u.id !== req.user.id && ((u.email || '').toLowerCase().includes(q) || (u.display_name || '').toLowerCase().includes(q)))
+    .slice(0, 10)
+    .map(u => ({ id: u.id, email: u.email, displayName: u.display_name || u.email.split('@')[0] }));
+  res.json(out);
 });
 
 // ---------- chats ----------
@@ -205,6 +215,56 @@ app.post('/api/chats', authMiddleware, (req, res) => {
   const t = now();
   const c = db.chats.insert({ id: uid(), user_id: req.user.id, title: 'New chat', starred: 0, sandbox: 0, created_at: t, updated_at: t });
   res.json({ id: c.id, title: c.title, updated_at: c.updated_at, starred: false });
+});
+app.get('/api/chats/export-all', authMiddleware, (req, res) => {
+  const myChats = db.chats.filter(c => c.user_id === req.user.id).sort((a, b) => a.updated_at - b.updated_at);
+  const myFolders = db.folders.filter(f => f.user_id === req.user.id);
+  const folderName = new Map(myFolders.map(f => [f.id, f.name]));
+  const out = {
+    type: 'open-quill-chats-export', version: 1, exportedAt: new Date().toISOString(),
+    chats: myChats.map(c => ({
+      title: c.title, starred: !!c.starred, folderName: c.folder_id ? (folderName.get(c.folder_id) || null) : null,
+      summary: c.summary || '',
+      messages: activePath(c.id).map(m => ({ role: m.role, content: m.content || '', reasoning: m.reasoning || '', created_at: m.created_at }))
+    }))
+  };
+  const safeName = 'open-quill-chats-' + new Date().toISOString().slice(0, 10);
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename="${safeName}.json"`);
+  res.send(JSON.stringify(out, null, 2));
+});
+app.post('/api/chats/import', authMiddleware, (req, res) => {
+  const body = req.body || {};
+  const bundle = Array.isArray(body.chats) ? body.chats
+    : (Array.isArray(body.messages) ? [{ title: body.title, starred: false, folderName: null, summary: body.summary || '', messages: body.messages }] : null);
+  if (!bundle || !bundle.length) return res.status(400).json({ error: 'Nothing to import — pick a valid open-quill export file.' });
+  const mineFolders = db.folders.filter(f => f.user_id === req.user.id);
+  const folderCache = new Map(mineFolders.map(f => [f.name, f.id]));
+  let maxOrder = mineFolders.reduce((m, f) => Math.max(m, f.sort_order || 0), -1);
+  let imported = 0;
+  for (const c of bundle.slice(0, 500)) {
+    if (!c || !Array.isArray(c.messages) || !c.messages.length) continue;
+    let folderId = null;
+    if (c.folderName) {
+      if (!folderCache.has(c.folderName)) {
+        const nf = db.folders.insert({ id: uid(), user_id: req.user.id, name: String(c.folderName).slice(0, 80), collapsed: 0, sort_order: ++maxOrder, created_at: now() });
+        folderCache.set(c.folderName, nf.id);
+      }
+      folderId = folderCache.get(c.folderName);
+    }
+    const t = now();
+    const chat = db.chats.insert({ id: uid(), user_id: req.user.id, folder_id: folderId, title: String(c.title || 'Imported chat').slice(0, 120) || 'Imported chat', starred: c.starred ? 1 : 0, sandbox: 0, summary: String(c.summary || ''), created_at: t, updated_at: t });
+    let parent = null;
+    for (const m of c.messages.slice(0, 2000)) {
+      if (!m || (m.role !== 'user' && m.role !== 'assistant') || typeof m.content !== 'string') continue;
+      const mid = uid();
+      db.messages.insert({ id: mid, chat_id: chat.id, role: m.role, content: m.content, reasoning: m.reasoning || '', model_id: null, attachments: [], parent_id: parent, created_at: now() });
+      parent = mid;
+    }
+    if (parent) { db.chats.update(chat.id, { active_leaf: parent, updated_at: now() }); imported++; }
+    else db.chats.remove(x => x.id === chat.id);
+  }
+  res.json({ ok: true, imported });
 });
 app.get('/api/chats/:id', authMiddleware, (req, res) => {
   const c = db.chats.byId(req.params.id);
@@ -721,6 +781,7 @@ app.delete('/api/admin/users/:id', authMiddleware, adminOnly, (req, res) => {
   purgeUploads(chatIds);
   db.messages.remove(m => chatIds.has(m.chat_id));
   db.chats.remove(c => c.user_id === u.id);
+  removeUserFromSpaces(u.id);
   db.users.remove(x => x.id === u.id);
   res.json({ ok: true });
 });
@@ -1247,6 +1308,162 @@ wss.on('connection', (ws, req) => {
 
   ws.on('error', () => {});
   ws.on('close', () => { const st = clients.get(ws); try { if (st) for (const c of st.aborts.values()) c.abort(); } catch {} clients.delete(ws); });
+});
+
+// ---------- spaces ----------
+function broadcastSpace(spaceId, payload) {
+  const space = db.spaces.byId(spaceId);
+  if (!space) return;
+  const ids = new Set((space.members || []).filter(m => m.status === 'accepted').map(m => m.userId));
+  const msg = JSON.stringify(payload);
+  for (const [sock, st] of clients.entries()) if (sock.readyState === 1 && ids.has(st.userId)) sock.send(msg);
+}
+function broadcastToUser(userId, payload) {
+  const msg = JSON.stringify(payload);
+  for (const [sock, st] of clients.entries()) if (sock.readyState === 1 && st.userId === userId) sock.send(msg);
+}
+function isMember(space, userId) { return (space.members || []).some(m => m.userId === userId); }
+function isAccepted(space, userId) { return (space.members || []).some(m => m.userId === userId && m.status === 'accepted'); }
+function removeUserFromSpaces(userId) {
+  for (const s of db.spaces.filter(s => isMember(s, userId))) {
+    let members = (s.members || []).filter(m => m.userId !== userId);
+    let ownerId = s.owner_id;
+    if (ownerId === userId) {
+      const next = members.find(m => m.status === 'accepted');
+      ownerId = next ? next.userId : null;
+      if (next) members = members.map(m => m.userId === ownerId ? { ...m, role: 'owner' } : m);
+    }
+    if (!members.length || !ownerId) { db.spaceMessages.remove(m => m.space_id === s.id); db.spaces.remove(x => x.id === s.id); }
+    else db.spaces.update(s.id, { members, owner_id: ownerId, updated_at: now() });
+  }
+}
+function shapeSpace(s, userId) {
+  const members = (s.members || []);
+  const me = userId ? members.find(m => m.userId === userId) : null;
+  return {
+    id: s.id, name: s.name, ownerId: s.owner_id, modelId: s.model_id || null, systemPrompt: s.system_prompt || '',
+    members: members.map(m => ({ userId: m.userId, displayName: m.displayName, email: m.email, role: m.role, status: m.status, invitedAt: m.invitedAt, respondedAt: m.respondedAt || null })),
+    myStatus: me ? me.status : null, myRole: me ? me.role : null, updatedAt: s.updated_at, createdAt: s.created_at
+  };
+}
+function shapeSpaceMsg(m) { return { id: m.id, spaceId: m.space_id, userId: m.user_id, authorName: m.author_name, role: m.role, content: m.content, createdAt: m.created_at }; }
+function ownSpace(req, res, { requireOwner = false } = {}) {
+  const s = db.spaces.byId(req.params.id);
+  if (!s || !isMember(s, req.user.id)) { res.status(404).json({ error: 'not found' }); return null; }
+  if (requireOwner && s.owner_id !== req.user.id && !req.user.is_admin) { res.status(403).json({ error: 'Only the space owner can do that.' }); return null; }
+  return s;
+}
+async function spaceAssistantRespond(spaceId) {
+  const space = db.spaces.byId(spaceId);
+  if (!space) return;
+  const model = db.models.byId(space.model_id) || db.models.find(m => m.is_default) || db.models.all()[0];
+  if (!model) return;
+  broadcastSpace(spaceId, { type: 'space_typing', spaceId, typing: true });
+  try {
+    const history = db.spaceMessages.bySpace(spaceId).slice(-40);
+    const sys = `You are the AI assistant taking part in a shared group chat space named "${space.name}" alongside multiple human users. Each human message below is prefixed with its sender's name so you can tell people apart; your own earlier replies are not prefixed. Speak naturally in first person, and only reply when you are directly addressed, asked something, or can clearly add value to the discussion. If the latest message is just people talking among themselves and doesn't call for your input, reply with exactly [[SPACE_SILENT]] and nothing else — no punctuation, no explanation, nothing before or after it.`
+      + (space.system_prompt && space.system_prompt.trim() ? `\n\nAdditional instructions from the space owner:\n${space.system_prompt.trim()}` : '');
+    const convo = [{ role: 'system', content: sys }, ...history.map(m => ({
+      role: m.role === 'assistant' ? 'assistant' : 'user',
+      content: m.role === 'assistant' ? m.content : `${m.author_name}: ${m.content}`
+    }))];
+    let raw = await oneShot(model, convo);
+    raw = stripThink(model, raw || '').trim();
+    if (!raw || /^\[\[SPACE_SILENT\]\]$/i.test(raw)) return;
+    const t = now();
+    const row = db.spaceMessages.insert({ id: uid(), space_id: spaceId, user_id: null, role: 'assistant', author_name: model.display_name || 'Assistant', content: raw, created_at: t });
+    db.spaces.update(spaceId, { updated_at: t });
+    broadcastSpace(spaceId, { type: 'space_message', spaceId, message: shapeSpaceMsg(row) });
+  } catch {}
+  finally { broadcastSpace(spaceId, { type: 'space_typing', spaceId, typing: false }); }
+}
+
+app.get('/api/spaces', authMiddleware, (req, res) => {
+  const mine = db.spaces.filter(s => isMember(s, req.user.id)).sort((a, b) => b.updated_at - a.updated_at);
+  res.json(mine.map(s => shapeSpace(s, req.user.id)));
+});
+app.post('/api/spaces', authMiddleware, (req, res) => {
+  const name = String(req.body?.name || 'New space').slice(0, 80).trim() || 'New space';
+  const t = now();
+  const me = { userId: req.user.id, displayName: req.user.display_name || req.user.email.split('@')[0], email: req.user.email, role: 'owner', status: 'accepted', invitedAt: t, respondedAt: t };
+  const defaultModel = db.models.find(m => m.is_default) || db.models.all()[0];
+  const s = db.spaces.insert({ id: uid(), owner_id: req.user.id, name, system_prompt: '', model_id: (db.models.byId(req.body?.modelId) || defaultModel)?.id || null, members: [me], created_at: t, updated_at: t });
+  res.json(shapeSpace(s, req.user.id));
+});
+app.get('/api/spaces/:id', authMiddleware, (req, res) => {
+  const s = ownSpace(req, res); if (!s) return;
+  res.json(shapeSpace(s, req.user.id));
+});
+app.patch('/api/spaces/:id', authMiddleware, (req, res) => {
+  const s = ownSpace(req, res, { requireOwner: true }); if (!s) return;
+  const patch = { updated_at: now() };
+  if ('name' in req.body) patch.name = String(req.body.name || 'New space').slice(0, 80).trim() || 'New space';
+  if ('systemPrompt' in req.body) patch.system_prompt = String(req.body.systemPrompt || '').slice(0, 4000);
+  if ('modelId' in req.body) { const m = db.models.byId(req.body.modelId); if (m) patch.model_id = m.id; }
+  const updated = db.spaces.update(s.id, patch);
+  broadcastSpace(s.id, { type: 'space_updated', spaceId: s.id, space: shapeSpace(updated, null) });
+  res.json(shapeSpace(updated, req.user.id));
+});
+app.delete('/api/spaces/:id', authMiddleware, (req, res) => {
+  const s = ownSpace(req, res, { requireOwner: true }); if (!s) return;
+  db.spaceMessages.remove(m => m.space_id === s.id);
+  db.spaces.remove(x => x.id === s.id);
+  broadcastSpace(s.id, { type: 'space_deleted', spaceId: s.id });
+  res.json({ ok: true });
+});
+app.post('/api/spaces/:id/invite', authMiddleware, (req, res) => {
+  const s = ownSpace(req, res, { requireOwner: true }); if (!s) return;
+  const target = db.users.byId(req.body?.userId);
+  if (!target) return res.status(404).json({ error: 'User not found.' });
+  if (isMember(s, target.id)) return res.status(400).json({ error: 'That user is already invited or a member.' });
+  const t = now();
+  const members = [...(s.members || []), { userId: target.id, displayName: target.display_name || target.email.split('@')[0], email: target.email, role: 'member', status: 'invited', invitedAt: t, respondedAt: null }];
+  const updated = db.spaces.update(s.id, { members, updated_at: t });
+  broadcastToUser(target.id, { type: 'space_invite', space: shapeSpace(updated, target.id) });
+  res.json(shapeSpace(updated, req.user.id));
+});
+app.post('/api/spaces/:id/respond', authMiddleware, (req, res) => {
+  const s = db.spaces.byId(req.params.id);
+  if (!s || !isMember(s, req.user.id)) return res.status(404).json({ error: 'not found' });
+  const accept = !!req.body?.accept;
+  const t = now();
+  const members = (s.members || []).map(m => m.userId === req.user.id ? { ...m, status: accept ? 'accepted' : 'declined', respondedAt: t } : m);
+  const updated = db.spaces.update(s.id, { members, updated_at: t });
+  broadcastSpace(s.id, { type: 'space_updated', spaceId: s.id, space: shapeSpace(updated, null) });
+  res.json(shapeSpace(updated, req.user.id));
+});
+app.post('/api/spaces/:id/leave', authMiddleware, (req, res) => {
+  const s = db.spaces.byId(req.params.id);
+  if (!s || !isMember(s, req.user.id)) return res.status(404).json({ error: 'not found' });
+  removeUserFromSpaces(req.user.id);
+  res.json({ ok: true });
+});
+app.delete('/api/spaces/:id/members/:userId', authMiddleware, (req, res) => {
+  const s = ownSpace(req, res, { requireOwner: true }); if (!s) return;
+  if (req.params.userId === s.owner_id) return res.status(400).json({ error: 'The owner cannot be removed — transfer or delete the space instead.' });
+  const members = (s.members || []).filter(m => m.userId !== req.params.userId);
+  const updated = db.spaces.update(s.id, { members, updated_at: now() });
+  broadcastSpace(s.id, { type: 'space_updated', spaceId: s.id, space: shapeSpace(updated, null) });
+  broadcastToUser(req.params.userId, { type: 'space_removed', spaceId: s.id });
+  res.json(shapeSpace(updated, req.user.id));
+});
+app.get('/api/spaces/:id/messages', authMiddleware, (req, res) => {
+  const s = db.spaces.byId(req.params.id);
+  if (!s || !isAccepted(s, req.user.id)) return res.status(404).json({ error: 'not found' });
+  res.json(db.spaceMessages.bySpace(s.id).map(shapeSpaceMsg));
+});
+app.post('/api/spaces/:id/messages', authMiddleware, (req, res) => {
+  const s = db.spaces.byId(req.params.id);
+  if (!s || !isAccepted(s, req.user.id)) return res.status(404).json({ error: 'not found' });
+  const content = String(req.body?.content || '').slice(0, 8000).trim();
+  if (!content) return res.status(400).json({ error: 'Empty message.' });
+  const me = (s.members || []).find(m => m.userId === req.user.id);
+  const t = now();
+  const row = db.spaceMessages.insert({ id: uid(), space_id: s.id, user_id: req.user.id, role: 'user', author_name: me?.displayName || req.user.email, content, created_at: t });
+  db.spaces.update(s.id, { updated_at: t });
+  broadcastSpace(s.id, { type: 'space_message', spaceId: s.id, message: shapeSpaceMsg(row) });
+  res.json(shapeSpaceMsg(row));
+  spaceAssistantRespond(s.id).catch(() => {});
 });
 
 server.listen(PORT, () => console.log(`open-quill running on http://localhost:${PORT}`));

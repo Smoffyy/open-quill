@@ -20,6 +20,7 @@ import AdminPanel from './components/AdminPanel.jsx';
 import DocModal from './components/DocModal.jsx';
 import ArtifactsPanel from './components/ArtifactsPanel.jsx';
 import ChatsOverview from './components/ChatsOverview.jsx';
+import SpacesPanel from './components/SpacesPanel.jsx';
 import { Down, ChevDown, Paper, Compact, Ghost } from './components/icons.jsx';
 import { scanTools } from './toolproto.js';
 
@@ -205,6 +206,8 @@ export default function App() {
   const [incognito, setIncognito] = useState(false);
   const [incognitoGreeting, setIncognitoGreeting] = useState('Greetings, whoever you are');
   const [chatsOverview, setChatsOverview] = useState(false);
+  const [showSpaces, setShowSpaces] = useState(false);
+  const [spacesPending, setSpacesPending] = useState(0);
   const [cmdkOpen, setCmdkOpen] = useState(false);
 
   const [streaming, setStreaming] = useState(false);
@@ -274,7 +277,7 @@ export default function App() {
       return () => mq.removeEventListener?.('change', h);
     }
   }, [user]);
-  useEffect(() => { if (user) { loadModels(); loadChats(); loadFolders(); loadAppConfig(); connect(); openFromUrl(); } }, [!!user]);
+  useEffect(() => { if (user) { loadModels(); loadChats(); loadFolders(); loadAppConfig(); connect(); openFromUrl(); refreshSpacesPending(); } }, [!!user]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -316,6 +319,8 @@ export default function App() {
   function openFromUrl() {
     if (/^\/admin(\/|$)/.test(location.pathname)) { if (user?.isAdmin) { setShowAdmin(true); return; } history.replaceState({}, '', '/'); }
     else setShowAdmin(false);
+    if (/^\/spaces(\/|$)/.test(location.pathname)) { setShowSpaces(true); return; }
+    else setShowSpaces(false);
     const m = location.pathname.match(/^\/chat\/(.+)$/);
     if (m) openChat(decodeURIComponent(m[1]), false);
     else { setActiveId(null); setMessages([]); }
@@ -330,6 +335,16 @@ export default function App() {
   async function loadChats() { try { setChats(await api.get('/api/chats')); } catch {} finally { setChatsLoaded(true); } }
   async function loadFolders() { try { setFolders(await api.get('/api/folders')); } catch {} }
   async function loadAppConfig() { try { applyCfg(await api.get('/api/app-config')); } catch {} }
+  async function refreshSpacesPending() { try { const l = await api.get('/api/spaces'); setSpacesPending(l.filter(s => s.myStatus === 'invited').length); } catch {} }
+  async function exportAllChats() { window.open('/api/chats/export-all', '_blank'); }
+  async function importChatsFile(file) {
+    try {
+      const json = JSON.parse(await file.text());
+      const r = await api.post('/api/chats/import', json);
+      await loadChats(); await loadFolders();
+      alert(`Imported ${r.imported} chat(s).`);
+    } catch (e) { alert(e.message || 'Could not import that file.'); }
+  }
   function applyCfg(c) {
     setCfg(c);
     const list = c.greetings && c.greetings.length ? c.greetings : DEFAULT_CFG.greetings;
@@ -371,6 +386,11 @@ export default function App() {
 
   function handleWs(m) {
     if (m.type === 'config') { loadModels(); loadAppConfig(); try { window.dispatchEvent(new CustomEvent('oq-config')); } catch {} return; }
+    if (typeof m.type === 'string' && m.type.startsWith('space_')) {
+      try { window.dispatchEvent(new CustomEvent('oq-space', { detail: m })); } catch {}
+      if (m.type === 'space_invite' || m.type === 'space_updated' || m.type === 'space_removed' || m.type === 'space_deleted') refreshSpacesPending();
+      return;
+    }
     if (m.type === 'files') {
       if (m.chatId && m.chatId !== activeIdRef.current) return;
       setFiles(m.files || []);
@@ -755,6 +775,7 @@ export default function App() {
     { id: 'new', label: 'New chat', shortcut: 'Ctrl Shift O', keywords: 'create start', action: () => newChat() },
     { id: 'sidebar', label: collapsed ? 'Show sidebar' : 'Hide sidebar', shortcut: 'Ctrl Shift S', keywords: 'toggle collapse panel', action: () => setCollapsed(c => !c) },
     { id: 'chats', label: 'Browse all chats', keywords: 'overview history search', action: () => setChatsOverview(true) },
+    { id: 'spaces', label: 'Open Spaces', keywords: 'group chat invite users', action: () => { history.pushState({}, '', '/spaces'); setShowSpaces(true); } },
     { id: 'incognito', label: incognito ? 'Exit incognito' : 'Start incognito chat', keywords: 'private ghost', action: () => toggleIncognito() },
     { id: 'settings', label: 'Open settings', keywords: 'preferences account theme', action: () => setShowSettings(true) },
     ...(user?.isAdmin ? [{ id: 'admin', label: 'Open admin panel', keywords: 'models users connection providers', action: () => { history.pushState({}, '', '/admin'); setShowAdmin(true); } }] : []),
@@ -774,7 +795,8 @@ export default function App() {
         collapsed={collapsed} onToggle={() => setCollapsed(c => !c)}
         onSettings={() => setShowSettings(true)} onAdmin={() => { history.pushState({}, '', '/admin'); setShowAdmin(true); }}
         onCredits={() => setShowCredits(true)} onChangelog={() => setShowChangelog(true)} onLicense={() => setShowLicense(true)} onLogout={logout} version={cfg.version}
-        onChatsOverview={() => setChatsOverview(true)} />
+        onChatsOverview={() => setChatsOverview(true)}
+        onSpaces={() => { history.pushState({}, '', '/spaces'); setShowSpaces(true); }} spacesPending={spacesPending} />
 
       <div className={'main' + (incognito ? ' incognito' : '')} data-incognito={incognito ? 'on' : undefined}>
         {incognito && (
@@ -865,9 +887,10 @@ export default function App() {
           onChanged={(has) => { setHasSummary(has); }} />
       )}
 
-      {showSettings && <SettingsModal user={user} cfg={cfg} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} />}
+      {showSettings && <SettingsModal user={user} cfg={cfg} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile} />}
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} />}
       {showAdmin && <AdminPanel user={user} onClose={() => { setShowAdmin(false); if (/^\/admin(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} />}
+      {showSpaces && <SpacesPanel user={user} onClose={() => { setShowSpaces(false); refreshSpacesPending(); if (/^\/spaces(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} />}
       {showCredits && <DocModal title="Credits" name="credits" serif onClose={() => setShowCredits(false)} />}
       {showLicense && <DocModal title="Licensing" name="license" onClose={() => setShowLicense(false)} />}
       {showChangelog && <DocModal title="Changelog" name="changelog" onClose={() => setShowChangelog(false)} />}

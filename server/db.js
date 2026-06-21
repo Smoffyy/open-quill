@@ -84,6 +84,14 @@ CREATE INDEX IF NOT EXISTS idx_usage_user ON usage(user_id, created_at);`);
   sdb.pragma('user_version = 2');
 }
 
+if (sdb.pragma('user_version', { simple: true }) < 3) {
+  sdb.exec(`CREATE TABLE IF NOT EXISTS spaces (id TEXT PRIMARY KEY, owner_id TEXT, created_at INTEGER, updated_at INTEGER, data TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_spaces_owner ON spaces(owner_id);
+CREATE TABLE IF NOT EXISTS space_messages (id TEXT PRIMARY KEY, space_id TEXT, created_at INTEGER, data TEXT NOT NULL, FOREIGN KEY(space_id) REFERENCES spaces(id) ON DELETE CASCADE);
+CREATE INDEX IF NOT EXISTS idx_space_messages_space ON space_messages(space_id, created_at);`);
+  sdb.pragma('user_version = 3');
+}
+
 export const uid = () => crypto.randomUUID();
 let lastTs = 0;
 export const now = () => { const t = Date.now(); lastTs = t > lastTs ? t : lastTs + 1; return lastTs; };
@@ -94,7 +102,9 @@ const MIRROR = {
   chats: { user_id: o => o.user_id ?? null, folder_id: o => o.folder_id ?? null, updated_at: o => o.updated_at ?? 0 },
   messages: { chat_id: o => o.chat_id ?? null, parent_id: o => o.parent_id ?? null, created_at: o => o.created_at ?? 0 },
   models: { sort_order: o => o.sort_order ?? 0, enabled: o => o.enabled ?? 0 },
-  usage: { user_id: o => o.user_id ?? null, model_id: o => o.model_id ?? null, created_at: o => o.created_at ?? 0 }
+  usage: { user_id: o => o.user_id ?? null, model_id: o => o.model_id ?? null, created_at: o => o.created_at ?? 0 },
+  spaces: { owner_id: o => o.owner_id ?? null, created_at: o => o.created_at ?? 0, updated_at: o => o.updated_at ?? 0 },
+  space_messages: { space_id: o => o.space_id ?? null, created_at: o => o.created_at ?? 0 }
 };
 
 function collection(table) {
@@ -147,13 +157,19 @@ const usageCol = collection('usage');
 const usageByUserStmt = sdb.prepare('SELECT data FROM usage WHERE user_id=?');
 usageCol.byUser = userId => usageByUserStmt.all(userId).map(r => JSON.parse(r.data));
 
+const spaceMessagesCol = collection('space_messages');
+const spMsgBySpaceStmt = sdb.prepare('SELECT data FROM space_messages WHERE space_id=? ORDER BY created_at');
+spaceMessagesCol.bySpace = spaceId => spMsgBySpaceStmt.all(spaceId).map(r => JSON.parse(r.data));
+
 export const db = {
   users: collection('users'),
   chats: chatsCol,
   messages: messagesCol,
   models: collection('models'),
   folders: collection('folders'),
-  usage: usageCol
+  usage: usageCol,
+  spaces: collection('spaces'),
+  spaceMessages: spaceMessagesCol
 };
 
 const sGet = sdb.prepare('SELECT value FROM settings WHERE key=?');

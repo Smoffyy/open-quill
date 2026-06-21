@@ -51,3 +51,5 @@ export const Code = (p) => <I {...p}><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></I>
 export const Terminal = (p) => <I {...p}><path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM7 9l3 3-3 3M13 15h4"/></I>;
 export const Coffee = (p) => <I {...p}><path d="M17 8h1a3 3 0 0 1 0 6h-1M3 8h14v6a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8zM6 2v2M10 2v2M14 2v2"/></I>;
 export const Graduation = (p) => <I {...p}><path d="M22 9L12 5 2 9l10 4 10-4zM6 11v5c0 1 2.5 3 6 3s6-2 6-3v-5"/></I>;
+export const Upload = (p) => <I {...p}><path d="M12 21V9m0 0l-4 4m4-4l4 4M5 3h14"/></I>;
+export const Send = (p) => <I {...p}><path d="M22 2 11 13M22 2 15 22l-4-9-9-4z"/></I>;

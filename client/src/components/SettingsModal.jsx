@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { api } from '../api.js';
 import { applyPrefs, ACCENT_PRESETS } from '../prefs.js';
-import { Sun, Moon, Gear, Sliders, Info, Chevron, Clock } from './icons.jsx';
+import { Sun, Moon, Gear, Sliders, Info, Chevron, Clock, Download, Upload } from './icons.jsx';
 import Markdown from './Markdown.jsx';
 
 function Toggle({ prefs, setPref, k, label, desc }) {
@@ -23,10 +23,11 @@ function Seg({ value, options, onPick }) {
   );
 }
 
-export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted }) {
+export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted, onExportChats, onImportChats }) {
   const [tab, setTab] = useState('general');
   const [chatSec, setChatSec] = useState('streaming');
   const [name, setName] = useState(user.displayName);
+  const importRef = useRef(null);
   const [prefs, setPrefs] = useState({ animations: true, autoscroll: true, theme: 'system', accent: '', density: 'comfortable', messageEntrance: true, streamCursor: false, cursorStyle: 'block', revealMs: 40, chatStagger: true, themeFade: true, microFx: true, composerFx: true, iconGlow: false, focusGlow: false, oledShift: false, ...user.prefs });
   const [saved, setSaved] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
@@ -93,6 +94,16 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
               <div className="field">
                 <label>What should we call you?</label>
                 <input value={name} onChange={(e) => changeName(e.target.value)} />
+              </div>
+              <div className="field row">
+                <div><label>Export your chats</label><div className="muted-note">Download every saved chat as a single JSON file.</div></div>
+                <button className="btn ghost" onClick={onExportChats}><Download style={{ width: 14, verticalAlign: '-2px' }} /> Export</button>
+              </div>
+              <div className="field row">
+                <div><label>Import chats</label><div className="muted-note">Restore chats from a previously exported JSON file.</div></div>
+                <button className="btn ghost" onClick={() => importRef.current?.click()}><Upload style={{ width: 14, verticalAlign: '-2px' }} /> Import</button>
+                <input ref={importRef} type="file" accept="application/json" hidden
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) onImportChats(f); e.target.value = ''; }} />
               </div>
               <div className="danger-zone">
                   <div className="dz-title">Danger zone</div>
