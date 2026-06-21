@@ -113,6 +113,22 @@ export function remove(name) {
   try { fs.unlinkSync(cachePathFor(s.base)); } catch {}
   return true;
 }
+export function rename(oldName, newName) {
+  const a = safe(oldName), b = safe(newName);
+  if (!a || !b) return { ok: false, error: 'Invalid file name.' };
+  if (a.base === b.base) return { ok: true, name: b.base };
+  if (!fs.existsSync(a.p)) return { ok: false, error: 'File not found.' };
+  if (fs.existsSync(b.p)) return { ok: false, error: 'A file with that name already exists.' };
+  try { fs.renameSync(a.p, b.p); } catch (e) { return { ok: false, error: e.message }; }
+  try {
+    const oc = cachePathFor(a.base);
+    if (fs.existsSync(oc)) {
+      if (ext(a.base) === ext(b.base)) fs.renameSync(oc, cachePathFor(b.base));
+      else fs.unlinkSync(oc);
+    }
+  } catch {}
+  return { ok: true, name: b.base };
+}
 
 export function promptFor(introOverride) {
   const files = list();

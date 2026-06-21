@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Password hashing** - switched from bcrypt to **argon2id** (OWASP-recommended), with tuned memory/time parameters. Existing bcrypt hashes are not carried over (see breaking note above).
 - **Complete chat deletion** - deleting a chat now also removes its uploaded attachment files from disk, in addition to the chat, its messages, and its sandbox (artifacts and version history). Applies to single-chat delete, "delete all my chats," and account deletion.
 - **Admin user deletion** - removing a user now also deletes that user's sandboxes and uploaded attachments, matching the other deletion paths.
+- **Starburst Icon** - fully centered all icons.
 
 ### Security
 - **Encryption at rest** - the database file is encrypted with AES-256; a leaked `data.db` is unreadable without the key.

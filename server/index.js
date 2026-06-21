@@ -642,6 +642,11 @@ app.delete('/api/admin/membank/:name', authMiddleware, adminOnly, (req, res) => 
   membank.remove(req.params.name);
   res.json({ files: membank.list() });
 });
+app.patch('/api/admin/membank/:name', authMiddleware, adminOnly, (req, res) => {
+  const r = membank.rename(req.params.name, req.body.name);
+  if (!r.ok) return res.status(400).json({ error: r.error });
+  res.json({ files: membank.list() });
+});
 app.post('/api/upload', authMiddleware, (req, res) => {
   const mb = roleLimit('upload_limit_mb', !!req.user.is_admin, 8) || 8;
   const mw = multer({ storage: diskStore, limits: { fileSize: Math.max(1, mb) * 1024 * 1024 } }).array('files', 10);

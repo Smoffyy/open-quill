@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
-import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield, Globe, FileText } from './icons.jsx';
+import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield, Globe, FileText, Pencil } from './icons.jsx';
 import { QP_ICON_LIST, QpIcon } from '../qpIcons.jsx';
 
 function QpIconPicker({ value, onPick }) {
@@ -372,6 +372,16 @@ export default function AdminPanel({ user, onClose }) {
   const [providers, setProviders] = useState([]);
   const [membankFiles, setMembankFiles] = useState([]);
   const membankRef = useRef(null);
+  const [mbEdit, setMbEdit] = useState(null);
+  const [mbEditName, setMbEditName] = useState('');
+  const [mbErr, setMbErr] = useState('');
+  async function saveMbRename(oldName) {
+    const name = mbEditName.trim();
+    setMbErr('');
+    if (!name || name === oldName) { setMbEdit(null); return; }
+    try { const r = await api.patch('/api/admin/membank/' + encodeURIComponent(oldName), { name }); setMembankFiles(r.files || []); setMbEdit(null); }
+    catch (e) { setMbErr(e?.message || 'Could not rename file.'); }
+  }
   async function loadMembank() { try { const d = await api.get('/api/admin/membank'); setMembankFiles(d.files || []); } catch {} }
   async function onMembankPick(e) { const files = [...(e.target.files || [])]; e.target.value = ''; if (!files.length) return; try { const r = await api.uploadMembank(files); setMembankFiles(r.files || []); } catch {} }
   async function removeMembank(name) { try { const r = await api.del('/api/admin/membank/' + encodeURIComponent(name)); setMembankFiles(r.files || []); } catch {} }
@@ -819,16 +829,36 @@ export default function AdminPanel({ user, onClose }) {
                 <input ref={membankRef} type="file" multiple hidden onChange={onMembankPick} />
                 <button className="btn" onClick={() => membankRef.current?.click()}>Upload files</button>
                 <div style={{ marginTop: 12 }}>
-                  {membankFiles.length === 0 ? <div className="muted-note">No files yet.</div> : membankFiles.map(f => (
-                    <div key={f.name} className="mb-file-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: '1px solid rgba(128,128,128,0.2)', borderRadius: 8, marginBottom: 6 }}>
-                      <FileText style={{ width: 16, flexShrink: 0, opacity: 0.7 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
-                        <div className="muted-note">{f.readable ? `${(f.lines || 0).toLocaleString()} lines · ${(f.size || 0).toLocaleString()} bytes` : `${(f.size || 0).toLocaleString()} bytes · not readable as text`}</div>
+                  {membankFiles.length === 0 ? <div className="muted-note">No files yet.</div> : membankFiles.map(f => {
+                    const editing = mbEdit === f.name;
+                    return (
+                      <div key={f.name} className="mb-file-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: '1px solid rgba(128,128,128,0.2)', borderRadius: 8, marginBottom: 6 }}>
+                        <FileText style={{ width: 16, flexShrink: 0, opacity: 0.7 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {editing ? (
+                            <input autoFocus value={mbEditName} onChange={(e) => setMbEditName(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') saveMbRename(f.name); if (e.key === 'Escape') { setMbEdit(null); setMbErr(''); } }}
+                              style={{ width: '100%' }} />
+                          ) : (
+                            <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
+                          )}
+                          <div className="muted-note">{f.readable ? `${(f.lines || 0).toLocaleString()} lines · ${(f.size || 0).toLocaleString()} bytes` : `${(f.size || 0).toLocaleString()} bytes · not readable as text`}</div>
+                          {editing && mbErr && <div className="dz-err" style={{ marginTop: 4 }}>{mbErr}</div>}
+                        </div>
+                        {editing ? (
+                          <>
+                            <button className="btn" style={{ flexShrink: 0 }} onClick={() => saveMbRename(f.name)}>Save</button>
+                            <button className="btn ghost" style={{ flexShrink: 0 }} onClick={() => { setMbEdit(null); setMbErr(''); }}>Cancel</button>
+                          </>
+                        ) : (
+                          <>
+                            <button className="btn ghost" title="Rename" style={{ flexShrink: 0 }} onClick={() => { setMbEdit(f.name); setMbEditName(f.name); setMbErr(''); }}><Pencil style={{ width: 14 }} /></button>
+                            <button className="btn danger" title="Remove" style={{ flexShrink: 0 }} onClick={() => removeMembank(f.name)}><Trash style={{ width: 15 }} /></button>
+                          </>
+                        )}
                       </div>
-                      <button className="btn danger" title="Remove" style={{ flexShrink: 0 }} onClick={() => removeMembank(f.name)}><Trash style={{ width: 15 }} /></button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
               <div className="settings-autosave">
