@@ -140,7 +140,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
               <div className="hint">Choose how open-quill looks.</div>
               <div className="field row">
                 <div><label>Theme</label><div className="muted-note">Follow your system, or pick one.</div></div>
-                <Seg value={prefs.theme || 'anthropic'} onPick={(v) => setPref('theme', v)}
+                <Seg value={prefs.theme || 'system'} onPick={(v) => setPref('theme', v)}
                   options={[{ v: 'system', label: 'System' }, { v: 'light', label: 'Light' }, { v: 'dark', label: 'Dark' }, { v: 'anthropic', label: 'Anthropic' }]} />
               </div>
               <div className="field">

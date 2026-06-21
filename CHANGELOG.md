@@ -16,7 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Model Dropdown** - fixed a bug where if an input is too large, model dropdown would clip and not allow users to select models.
 
 ### Changed
-- **Default Theme** - updated default theme to `anthropic`.
 - **Interface Aligment** - updated interface to match closely to anthropics official layout.
 
 ---
