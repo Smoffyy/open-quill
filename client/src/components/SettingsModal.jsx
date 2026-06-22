@@ -215,10 +215,40 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
             </>
           )}
           {tab === 'version' && (() => {
-            const vp = parseVersion(cfg?.uiVersion || cfg?.version || '');
+            const rawVersion = cfg?.uiVersion || cfg?.version || '';
+            const vp = parseVersion(rawVersion);
             const icon = cfg?.uiVersionIcon || cfg?.appIcon || '';
             const notes = (cfg?.uiVersionDesc || '').trim();
-            const channel = vp?.channel ? vp.channel[0].toUpperCase() + vp.channel.slice(1) : '';
+            let displayData = {
+              release: '—',
+              channel: 'Stable',
+              build: null,
+              isPreRelease: false
+            };
+            if (vp && vp.full.includes('-')) {
+              const [base, ...restArr] = vp.full.split('-');
+              const rest = restArr.join('-');
+              
+              let ch = '', bl = '';
+              if (rest) {
+                const mm = rest.match(/^([a-z]+)[.\-_]?(\d+)?$/i);
+                if (mm) { 
+                  ch = mm[1]; 
+                  bl = mm[2] || ''; 
+                } else {
+                  ch = rest;
+                }
+              }
+              displayData.release = base || '—';
+              displayData.channel = ch ? ch.charAt(0).toUpperCase() + ch.slice(1) : 'Pre-release';
+              displayData.build = bl && !isNaN(parseInt(bl)) ? bl : null;
+              displayData.isPreRelease = true;
+            } else {
+              displayData.release = vp?.base || '—';
+              displayData.channel = 'Stable';
+              displayData.build = null;
+              displayData.isPreRelease = false;
+            }
             return (
               <div className="vh">
                 <div className="vh-top">
@@ -228,16 +258,18 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                   <div className="vh-id">
                     <div className="vh-name">{cfg?.appName || 'open-quill'}</div>
                     <div className="vh-version">Version {vp ? vp.full : '—'}</div>
-                    {channel && <div className="vh-channel">{channel} channel</div>}
+                    {displayData.channel !== 'Stable' && (
+                      <div className="vh-channel">{displayData.channel} channel</div>
+                    )}
                   </div>
                 </div>
-                {vp && (
-                  <div className="vh-list">
-                    <div className="vh-li"><span className="vh-li-k">Release</span><span className="vh-li-v">{vp.base || '—'}</span></div>
-                    <div className="vh-li"><span className="vh-li-k">Channel</span><span className="vh-li-v">{channel || 'Stable'}</span></div>
-                    <div className="vh-li"><span className="vh-li-k">Build</span><span className="vh-li-v">{vp.build || '—'}</span></div>
-                  </div>
-                )}
+                <div className="vh-list">
+                  <div className="vh-li"><span className="vh-li-k">Release</span><span className="vh-li-v">{displayData.release}</span></div>
+                  <div className="vh-li"><span className="vh-li-k">Channel</span><span className="vh-li-v">{displayData.channel}</span></div>
+                  {displayData.build && (
+                    <div className="vh-li"><span className="vh-li-k">Build</span><span className="vh-li-v">{displayData.build}</span></div>
+                  )}
+                </div>
                 {notes ? (
                   <div className="vh-notes">
                     <div className="vh-notes-h">What's new</div>
