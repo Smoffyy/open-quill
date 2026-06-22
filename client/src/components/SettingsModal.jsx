@@ -23,6 +23,21 @@ function Seg({ value, options, onPick }) {
   );
 }
 
+function parseVersion(v) {
+  const s = String(v || '').trim();
+  if (!s) return null;
+  const [base, ...restArr] = s.split('-');
+  const rest = restArr.join('-');
+  let channel = '', build = '';
+  if (rest) {
+    const mm = rest.match(/^([a-z]+)[.\-_]?(\d+)?$/i);
+    if (mm) { channel = mm[1]; build = mm[2] || ''; }
+    else channel = rest;
+  }
+  const year = (base.match(/^(\d{4})/) || [])[1] || '';
+  return { full: s, base, channel, build, year };
+}
+
 export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted, onExportChats, onImportChats }) {
   const [tab, setTab] = useState('general');
   const [chatSec, setChatSec] = useState('streaming');
@@ -199,22 +214,41 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                 </div>
             </>
           )}
-          {tab === 'version' && (
-            <>
-              <h2>Version</h2>
-              <div className="hint">About this build.</div>
-              <div className="version-card">
-                {cfg?.uiVersionIcon ? <img className="version-icon" src={cfg.uiVersionIcon} alt="" /> : <div className="version-icon placeholder" />}
-                <div className="version-meta">
-                  <div className="version-name">{cfg?.appName || 'open-quill'}</div>
-                  <div className="version-num">Version {cfg?.uiVersion || cfg?.version || '—'}</div>
+          {tab === 'version' && (() => {
+            const vp = parseVersion(cfg?.uiVersion || cfg?.version || '');
+            const icon = cfg?.uiVersionIcon || cfg?.appIcon || '';
+            const notes = (cfg?.uiVersionDesc || '').trim();
+            const channel = vp?.channel ? vp.channel[0].toUpperCase() + vp.channel.slice(1) : '';
+            return (
+              <div className="vh">
+                <div className="vh-top">
+                  <div className="vh-badge">
+                    {icon ? <img src={icon} alt="" /> : <img className="vh-badge-fallback" src="/starburst.svg" alt="" />}
+                  </div>
+                  <div className="vh-id">
+                    <div className="vh-name">{cfg?.appName || 'open-quill'}</div>
+                    <div className="vh-version">Version {vp ? vp.full : '—'}</div>
+                    {channel && <div className="vh-channel">{channel} channel</div>}
+                  </div>
                 </div>
+                {vp && (
+                  <div className="vh-list">
+                    <div className="vh-li"><span className="vh-li-k">Release</span><span className="vh-li-v">{vp.base || '—'}</span></div>
+                    <div className="vh-li"><span className="vh-li-k">Channel</span><span className="vh-li-v">{channel || 'Stable'}</span></div>
+                    <div className="vh-li"><span className="vh-li-k">Build</span><span className="vh-li-v">{vp.build || '—'}</span></div>
+                  </div>
+                )}
+                {notes ? (
+                  <div className="vh-notes">
+                    <div className="vh-notes-h">What's new</div>
+                    <div className="version-desc"><Markdown>{notes}</Markdown></div>
+                  </div>
+                ) : (
+                  <div className="vh-empty">No release notes for this build.</div>
+                )}
               </div>
-              {(cfg?.uiVersionDesc || '').trim() && (
-                <div className="version-desc"><Markdown>{cfg.uiVersionDesc}</Markdown></div>
-              )}
-            </>
-          )}
+            );
+          })()}
           {tab === 'appearance' && (
             <>
               <h2>Appearance</h2>
