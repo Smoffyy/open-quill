@@ -192,6 +192,7 @@ export default function App() {
   const [showLicense, setShowLicense] = useState(false);
   const [focusTick, setFocusTick] = useState(0);
   const [cfg, setCfg] = useState(DEFAULT_CFG);
+  const [budget, setBudget] = useState(null);
   const [greeting, setGreeting] = useState(DEFAULT_CFG.greetings[0]);
   const [sandbox, setSandbox] = useState(false);
   const [webSearch, setWebSearch] = useState(false);
@@ -277,7 +278,8 @@ export default function App() {
       return () => mq.removeEventListener?.('change', h);
     }
   }, [user]);
-  useEffect(() => { if (user) { loadModels(); loadChats(); loadFolders(); loadAppConfig(); connect(); openFromUrl(); refreshSpacesPending(); } }, [!!user]);
+  useEffect(() => { if (user) { loadModels(); loadChats(); loadFolders(); loadAppConfig(); loadBudget(); connect(); openFromUrl(); refreshSpacesPending(); } }, [!!user]);
+  async function loadBudget() { try { setBudget(await api.get('/api/me/budget')); } catch {} }
 
   useEffect(() => {
     const root = document.documentElement;
@@ -472,6 +474,7 @@ export default function App() {
       const r = recFor(m.chatId); r.done = true;
       if (m.chatId === activeKey()) { pendingDone.current = true; if (!animateRef.current) finalize(); }
       else finalizeBackground(m.chatId);
+      loadBudget();
       return;
     }
   }
@@ -764,7 +767,7 @@ export default function App() {
   const composerProps = {
     value: input, onChange: setInput, onSend: send, onStop: stop, streaming: streaming || queued,
     models, currentId, onSelect: setCurrentId, extended, onToggleExtended: () => setExtended(e => !e),
-    visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin,
+    visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin, budget,
     modelHasBg, bgInChat, onToggleBgInChat: () => updatePref('modelBgInChat', !bgInChat),
     sandbox: sandboxOn, sandboxAllowed, onToggleSandbox: () => { if (sandboxAllowed) setSandbox(s => !s); },
     onWantSandbox: () => { if (sandboxAllowed) setSandbox(true); },

@@ -9,7 +9,8 @@ import { db, uid, now, getSetting, setSetting } from './db.js';
 import { hash, check, sign, publicUser, authMiddleware, adminOnly, userFromRequest, parseCookies, createSession, revokeSession, revokeOtherSessions, sessionFromRequest } from './auth.js';
 import { buildMessages, streamCompletion, generateTitle, summarizeConversation, oneShot, stripThink } from './llm.js';
 import { getProviders, resolveProvider, providerSpec, typesForClient, PROVIDER_TYPES } from './providers.js';
-import { matchPreset, presetList } from './pricing.js';
+import { matchPreset, presetList, setCustomPresets, getCustomPresets } from './pricing.js';
+import { randomSecret, verifyTotp, otpauthUri, makeRecoveryCodes, hashRecovery } from './totp.js';
 import * as websearch from './websearch.js';
 import * as sandbox from './sandbox.js';
 import * as toolproto from './toolproto.js';
@@ -109,6 +110,19 @@ app.post('/api/auth/login', async (req, res) => {
   if (u) {
     if (!(await check(pw, u.password_hash))) { noteLoginFail(ip); return res.status(401).json({ error: 'Incorrect password.' }); }
     loginFails.delete(ip);
+    if (u.totp_enabled && u.totp_secret) {
+      const code = String(req.body.code || '').trim();
+      const recovery = String(req.body.recovery || '').trim();
+      if (!code && !recovery) return res.status(401).json({ error: 'two-factor required', twoFactor: true });
+      let ok = false;
+      if (code) ok = verifyTotp(u.totp_secret, code);
+      if (!ok && recovery) {
+        const h = hashRecovery(recovery);
+        const left = (u.recovery_codes || []).filter(c => c !== h);
+        if (left.length !== (u.recovery_codes || []).length) { ok = true; db.users.update(u.id, { recovery_codes: left }); }
+      }
+      if (!ok) { noteLoginFail(ip); return res.status(401).json({ error: 'Invalid two-factor code.', twoFactor: true }); }
+    }
   } else {
     const isFirst = db.users.count() === 0;
     u = db.users.insert({ id: uid(), email, password_hash: await hash(pw), display_name: '', is_admin: isFirst ? 1 : 0, is_owner: isFirst ? 1 : 0, prefs: {}, created_at: now() });
@@ -183,6 +197,88 @@ app.delete('/api/me/sessions', authMiddleware, (req, res) => {
   for (const s of others) killSessionSockets(s.id);
   res.json({ ok: true, revoked: others.length });
 });
+function monthStartMs() {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+}
+function monthSpend(userId) {
+  const since = monthStartMs();
+  let cost = 0;
+  for (const r of db.usage.byUser(userId)) if ((r.created_at || 0) >= since) cost += r.cost || 0;
+  return cost;
+}
+function budgetConfig() {
+  return {
+    user: Number(getSetting('budget_user', 0)) || 0,
+    admin: Number(getSetting('budget_admin', 0)) || 0,
+    warnFraction: Math.min(0.99, Math.max(0.1, Number(getSetting('budget_warn_fraction', 0.8)) || 0.8)),
+    enforce: getSetting('budget_enforce', '0') === '1'
+  };
+}
+function budgetFor(user) {
+  if (user.budget != null && Number(user.budget) >= 0) return Number(user.budget);
+  const cfg = budgetConfig();
+  return user.is_admin ? cfg.admin : cfg.user;
+}
+function budgetStatus(user) {
+  const cap = budgetFor(user);
+  const cfg = budgetConfig();
+  const spent = monthSpend(user.id);
+  if (!cap) return { cap: 0, spent, fraction: 0, state: 'none', enforce: false };
+  const fraction = spent / cap;
+  let state = 'ok';
+  if (fraction >= 1) state = 'over';
+  else if (fraction >= cfg.warnFraction) state = 'warn';
+  return { cap, spent, fraction, state, enforce: cfg.enforce };
+}
+app.get('/api/me/budget', authMiddleware, (req, res) => res.json(budgetStatus(req.user)));
+
+app.post('/api/me/password', authMiddleware, async (req, res) => {
+  const current = String(req.body?.current || '');
+  const next = String(req.body?.next || '');
+  if (next.length < 4) return res.status(400).json({ error: 'New password must be at least 4 characters.' });
+  if (!(await check(current, req.user.password_hash))) return res.status(401).json({ error: 'Current password is incorrect.' });
+  db.users.update(req.user.id, { password_hash: await hash(next) });
+  revokeOtherSessions(req.user.id, req.sessionId);
+  logAudit(req, 'account.password_change', { type: 'user', id: req.user.id });
+  res.json({ ok: true });
+});
+
+app.post('/api/me/2fa/setup', authMiddleware, (req, res) => {
+  if (req.user.totp_enabled) return res.status(400).json({ error: 'Two-factor is already enabled.' });
+  const secret = randomSecret();
+  db.users.update(req.user.id, { totp_pending: secret });
+  const appName = getSetting('app_name', 'open-quill') || 'open-quill';
+  res.json({ secret, otpauth: otpauthUri(secret, req.user.email, appName) });
+});
+app.post('/api/me/2fa/enable', authMiddleware, (req, res) => {
+  const u = db.users.byId(req.user.id);
+  if (u.totp_enabled) return res.status(400).json({ error: 'Two-factor is already enabled.' });
+  if (!u.totp_pending) return res.status(400).json({ error: 'Start setup first.' });
+  if (!verifyTotp(u.totp_pending, String(req.body?.code || '').trim())) return res.status(401).json({ error: 'That code is not valid. Check your authenticator and try again.' });
+  const codes = makeRecoveryCodes();
+  db.users.update(u.id, { totp_secret: u.totp_pending, totp_enabled: 1, totp_pending: null, recovery_codes: codes.map(hashRecovery) });
+  logAudit(req, 'account.2fa_enable', { type: 'user', id: u.id });
+  res.json({ ok: true, recoveryCodes: codes });
+});
+app.post('/api/me/2fa/disable', authMiddleware, async (req, res) => {
+  const u = db.users.byId(req.user.id);
+  if (!u.totp_enabled) return res.json({ ok: true });
+  if (!(await check(String(req.body?.password || ''), u.password_hash))) return res.status(401).json({ error: 'Password is incorrect.' });
+  db.users.update(u.id, { totp_secret: null, totp_enabled: 0, totp_pending: null, recovery_codes: [] });
+  logAudit(req, 'account.2fa_disable', { type: 'user', id: u.id });
+  res.json({ ok: true });
+});
+app.post('/api/me/2fa/recovery', authMiddleware, async (req, res) => {
+  const u = db.users.byId(req.user.id);
+  if (!u.totp_enabled) return res.status(400).json({ error: 'Two-factor is not enabled.' });
+  if (!(await check(String(req.body?.password || ''), u.password_hash))) return res.status(401).json({ error: 'Password is incorrect.' });
+  const codes = makeRecoveryCodes();
+  db.users.update(u.id, { recovery_codes: codes.map(hashRecovery) });
+  logAudit(req, 'account.2fa_recovery', { type: 'user', id: u.id });
+  res.json({ ok: true, recoveryCodes: codes });
+});
+
 app.delete('/api/me/chats', authMiddleware, (req, res) => {
   const myChats = db.chats.filter(c => c.user_id === req.user.id);
   for (const c of myChats) { try { sandbox.remove(c.id); } catch {} }
@@ -584,7 +680,66 @@ app.get('/api/admin/pricing/preset', authMiddleware, adminOnly, (req, res) => {
   res.json({ preset: matchPreset(req.query.name || '') });
 });
 app.get('/api/admin/pricing/presets', authMiddleware, adminOnly, (req, res) => {
-  res.json({ presets: presetList() });
+  res.json({ presets: presetList(), custom: getCustomPresets() });
+});
+app.post('/api/admin/pricing/presets', authMiddleware, adminOnly, (req, res) => {
+  const b = req.body || {};
+  const match = String(b.match || '').trim();
+  const ci = Number(b.in), co = Number(b.out);
+  if (!match || !Number.isFinite(ci) || !Number.isFinite(co) || ci < 0 || co < 0) return res.status(400).json({ error: 'Provide a model name fragment and non-negative input/output prices.' });
+  const list = getCustomPresets().filter(p => p.match !== match.toLowerCase());
+  list.push({ match, label: String(b.label || match).trim() || match, in: ci, out: co });
+  setSetting('custom_presets', list);
+  setCustomPresets(list);
+  logAudit(req, 'pricing.preset_set', { meta: { match } });
+  res.json({ custom: getCustomPresets() });
+});
+app.delete('/api/admin/pricing/presets/:match', authMiddleware, adminOnly, (req, res) => {
+  const target = decodeURIComponent(req.params.match).toLowerCase();
+  const list = getCustomPresets().filter(p => p.match !== target);
+  setSetting('custom_presets', list);
+  setCustomPresets(list);
+  logAudit(req, 'pricing.preset_delete', { meta: { match: target } });
+  res.json({ custom: getCustomPresets() });
+});
+
+app.get('/api/admin/usage', authMiddleware, adminOnly, (req, res) => {
+  const windows = { '7': 7, '30': 30, '90': 90 };
+  const days = windows[String(req.query.days)] || 30;
+  const since = now() - days * 24 * 60 * 60 * 1000;
+  const nameById = new Map(db.users.all().map(u => [u.id, u.display_name || u.email]));
+  const byUser = new Map(), byModel = new Map(), byDay = new Map();
+  let tp = 0, tc = 0, tcost = 0, gens = 0;
+  for (const r of db.usage.all()) {
+    if ((r.created_at || 0) < since) continue;
+    gens++; const p = r.prompt || 0, c = r.completion || 0, cost = r.cost || 0;
+    tp += p; tc += c; tcost += cost;
+    const uk = r.user_id || 'unknown';
+    const ue = byUser.get(uk) || { userId: uk, name: nameById.get(uk) || 'Unknown', prompt: 0, completion: 0, cost: 0, count: 0 };
+    ue.prompt += p; ue.completion += c; ue.cost += cost; ue.count++; byUser.set(uk, ue);
+    const mk = r.model_id || 'unknown';
+    const me = byModel.get(mk) || { modelId: mk, name: r.model_name || 'Unknown', prompt: 0, completion: 0, cost: 0, count: 0 };
+    me.prompt += p; me.completion += c; me.cost += cost; me.count++; if (r.model_name) me.name = r.model_name; byModel.set(mk, me);
+    const dk = new Date(r.created_at || 0).toISOString().slice(0, 10);
+    const de = byDay.get(dk) || { day: dk, prompt: 0, completion: 0, cost: 0 };
+    de.prompt += p; de.completion += c; de.cost += cost; byDay.set(dk, de);
+  }
+  res.json({
+    totals: { prompt: tp, completion: tc, total: tp + tc, cost: tcost, generations: gens, users: byUser.size },
+    users: [...byUser.values()].sort((a, b) => b.cost - a.cost || (b.prompt + b.completion) - (a.prompt + a.completion)),
+    models: [...byModel.values()].sort((a, b) => (b.prompt + b.completion) - (a.prompt + a.completion)),
+    daily: [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day)).slice(-90),
+    window: days
+  });
+});
+app.patch('/api/admin/users/:id/budget', authMiddleware, adminOnly, (req, res) => {
+  const u = db.users.byId(req.params.id);
+  if (!u) return res.status(404).json({ error: 'not found' });
+  const v = req.body?.budget;
+  const patch = (v === null || v === '' || v === undefined) ? { budget: null } : { budget: Math.max(0, Number(v) || 0) };
+  db.users.update(u.id, patch);
+  logAudit(req, 'user.budget', { type: 'user', id: u.id, meta: { budget: patch.budget } });
+  res.json({ ok: true, budget: patch.budget });
 });
 
 app.delete('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
@@ -674,7 +829,13 @@ app.get('/api/admin/settings', authMiddleware, adminOnly, (req, res) =>
     searxngUrl: getSetting('searxng_url', ''),
     webSearchCount: parseInt(getSetting('web_search_count', '5')) || 5,
     webSearchDomains: (() => { try { const d = JSON.parse(getSetting('web_search_domains', '[]')); return Array.isArray(d) ? d.join('\n') : ''; } catch { return ''; } })(),
-    webSearchPrompt: getSetting('web_search_prompt', websearch.DEFAULT_WS_PROMPT)
+    webSearchPrompt: getSetting('web_search_prompt', websearch.DEFAULT_WS_PROMPT),
+    budgetUser: Number(getSetting('budget_user', 0)) || 0,
+    budgetAdmin: Number(getSetting('budget_admin', 0)) || 0,
+    budgetWarnFraction: Number(getSetting('budget_warn_fraction', 0.8)) || 0.8,
+    budgetEnforce: getSetting('budget_enforce', '0') === '1',
+    sessionTtlDays: Number(getSetting('session_ttl_days', 30)) || 30,
+    maxSessions: Number(getSetting('max_sessions', 0)) || 0
   }));
 app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
   if ('apiBaseUrl' in req.body) setSetting('api_base_url', req.body.apiBaseUrl);
@@ -694,6 +855,12 @@ app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
   if ('membankEnabled' in req.body) setSetting('membank_enabled', req.body.membankEnabled ? '1' : '0');
   if ('membankHideTools' in req.body) setSetting('membank_hide_tools', req.body.membankHideTools ? '1' : '0');
   if ('membankPrompt' in req.body) setSetting('membank_prompt', String(req.body.membankPrompt || ''));
+  if ('budgetUser' in req.body) lim('budget_user', req.body.budgetUser, 0);
+  if ('budgetAdmin' in req.body) lim('budget_admin', req.body.budgetAdmin, 0);
+  if ('budgetWarnFraction' in req.body) { const n = Number(req.body.budgetWarnFraction); setSetting('budget_warn_fraction', String(Number.isFinite(n) ? Math.min(0.99, Math.max(0.1, n)) : 0.8)); }
+  if ('budgetEnforce' in req.body) setSetting('budget_enforce', req.body.budgetEnforce ? '1' : '0');
+  if ('sessionTtlDays' in req.body) { const n = parseInt(req.body.sessionTtlDays); setSetting('session_ttl_days', String(Number.isFinite(n) && n > 0 ? Math.min(365, n) : 30)); }
+  if ('maxSessions' in req.body) { const n = parseInt(req.body.maxSessions); setSetting('max_sessions', String(Number.isFinite(n) && n >= 0 ? Math.min(50, n) : 0)); }
   logAudit(req, 'settings.update', { meta: { fields: Object.keys(req.body || {}) } });
   res.json({ ok: true });
 });
@@ -841,9 +1008,12 @@ function purgeUploads(chatIds) {
 
 // ---------- admin: users ----------
 app.get('/api/admin/users', authMiddleware, adminOnly, (req, res) => {
+  const since = monthStartMs();
   res.json(db.users.all().sort((a, b) => a.created_at - b.created_at).map(u => ({
     id: u.id, email: u.email, displayName: u.display_name || u.email.split('@')[0],
-    isAdmin: !!u.is_admin, isOwner: !!u.is_owner, createdAt: u.created_at
+    isAdmin: !!u.is_admin, isOwner: !!u.is_owner, createdAt: u.created_at,
+    twoFactor: !!u.totp_enabled, budget: u.budget == null ? null : Number(u.budget),
+    monthSpend: db.usage.byUser(u.id).reduce((s, r) => s + ((r.created_at || 0) >= since ? (r.cost || 0) : 0), 0)
   })));
 });
 app.patch('/api/admin/users/:id', authMiddleware, adminOnly, (req, res) => {
@@ -875,12 +1045,31 @@ app.delete('/api/admin/users/:id', authMiddleware, adminOnly, (req, res) => {
 app.get('/api/admin/audit', authMiddleware, adminOnly, (req, res) => {
   const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 60));
   const offset = Math.max(0, parseInt(req.query.offset) || 0);
-  const total = db.audit.count();
-  const rows = db.audit.recent(limit, offset).map(r => ({
+  const action = String(req.query.action || '').trim().toLowerCase();
+  const actor = String(req.query.actor || '').trim().toLowerCase();
+  const sinceDays = parseInt(req.query.days) || 0;
+  const since = sinceDays > 0 ? now() - sinceDays * 24 * 60 * 60 * 1000 : 0;
+  const match = r => (!action || (r.action || '').toLowerCase().includes(action))
+    && (!actor || (r.actor_email || '').toLowerCase().includes(actor))
+    && (!since || (r.ts || 0) >= since);
+  const all = db.audit.recent(100000, 0).filter(match);
+  const actions = [...new Set(db.audit.recent(100000, 0).map(r => r.action))].sort();
+  const page = all.slice(offset, offset + limit).map(r => ({
     id: r.id, ts: r.ts, actorEmail: r.actor_email || 'system', action: r.action,
     targetType: r.target_type || null, targetId: r.target_id || null, meta: r.meta || null, ip: r.ip || ''
   }));
-  res.json({ entries: rows, total, offset, hasMore: offset + rows.length < total });
+  res.json({ entries: page, total: all.length, offset, hasMore: offset + page.length < all.length, actions });
+});
+app.get('/api/admin/audit/export', authMiddleware, adminOnly, (req, res) => {
+  const esc = v => { const s = v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : String(v)); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const lines = ['timestamp,actor,action,target_type,target_id,ip,meta'];
+  for (const r of db.audit.recent(100000, 0)) {
+    lines.push([new Date(r.ts).toISOString(), r.actor_email || 'system', r.action, r.target_type || '', r.target_id || '', r.ip || '', r.meta].map(esc).join(','));
+  }
+  logAudit(req, 'audit.export', {});
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="audit-${new Date().toISOString().slice(0, 10)}.csv"`);
+  res.send(lines.join('\n'));
 });
 
 // ---------- app customization ----------
@@ -1366,6 +1555,8 @@ wss.on('connection', (ws, req) => {
       const model = resolveModel(msg.modelId, state.isAdmin);
       if (!chat || chat.user_id !== u.id || !model) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'Invalid chat or model.' })); return; }
       if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: (model.unavailable_reason || 'This model is currently unavailable.') })); return; }
+      const bs = budgetStatus(u);
+      if (bs.enforce && bs.state === 'over') { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'You have reached your monthly usage budget. It resets at the start of next month.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
 
       const sandboxCap = roleLimit('sandbox_limit_mb', !!u.is_admin, u.is_admin ? 1024 : 256) * 1024 * 1024;
       const userSandbox = !!msg.sandbox;
@@ -1420,12 +1611,12 @@ wss.on('connection', (ws, req) => {
 });
 
 // ---------- spaces ----------
-function broadcastSpace(spaceId, payload) {
+function broadcastSpace(spaceId, payload, excludeUserId) {
   const space = db.spaces.byId(spaceId);
   if (!space) return;
   const ids = new Set((space.members || []).filter(m => m.status === 'accepted').map(m => m.userId));
   const msg = JSON.stringify(payload);
-  for (const [sock, st] of clients.entries()) if (sock.readyState === 1 && ids.has(st.userId)) sock.send(msg);
+  for (const [sock, st] of clients.entries()) if (sock.readyState === 1 && ids.has(st.userId) && st.userId !== excludeUserId) sock.send(msg);
 }
 function broadcastToUser(userId, payload) {
   const msg = JSON.stringify(payload);
@@ -1433,6 +1624,8 @@ function broadcastToUser(userId, payload) {
 }
 function isMember(space, userId) { return (space.members || []).some(m => m.userId === userId); }
 function isAccepted(space, userId) { return (space.members || []).some(m => m.userId === userId && m.status === 'accepted'); }
+function memberOf(space, userId) { return (space.members || []).find(m => m.userId === userId) || null; }
+function canPost(space, userId) { const m = memberOf(space, userId); return !!m && m.status === 'accepted' && m.role !== 'viewer'; }
 function removeUserFromSpaces(userId) {
   for (const s of db.spaces.filter(s => isMember(s, userId))) {
     let members = (s.members || []).filter(m => m.userId !== userId);
@@ -1477,8 +1670,11 @@ async function spaceAssistantRespond(spaceId) {
     const history = db.spaceMessages.bySpace(spaceId).slice(-40);
     const aiName = (model.display_name || 'Assistant').toLowerCase();
     const lastMsg = history[history.length - 1];
+    const lastText = (lastMsg?.content || '');
+    const esc = aiName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const mentioned = new RegExp(`@${esc}\\b`, 'i').test(lastText) || /@(assistant|ai|bot)\b/i.test(lastText);
     const addressed = lastMsg && lastMsg.role !== 'assistant'
-      && (new RegExp(`(^|\\b)@?${aiName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(lastMsg.content || '') || /\?\s*$/.test((lastMsg.content || '').trim()));
+      && (mentioned || new RegExp(`(^|\\b)${esc}\\b`, 'i').test(lastText) || /\?\s*$/.test(lastText.trim()));
     const sys = `You are the AI assistant taking part in a shared group chat space named "${space.name}" alongside multiple human users. Each human message below is prefixed with its sender's name so you can tell people apart; your own earlier replies are not prefixed. Speak naturally in first person, and only reply when you are directly addressed, asked something, or can clearly add value to the discussion. If the latest message is just people talking among themselves and doesn't call for your input, reply with exactly [[SPACE_SILENT]] and nothing else: no punctuation, no explanation, nothing before or after it.`
       + (addressed ? ' The latest message appears to address you directly, so a reply is expected unless it truly makes no sense.' : '')
       + (space.system_prompt && space.system_prompt.trim() ? `\n\nAdditional instructions from the space owner:\n${space.system_prompt.trim()}` : '');
@@ -1577,6 +1773,24 @@ app.delete('/api/spaces/:id/members/:userId', authMiddleware, (req, res) => {
   broadcastToUser(req.params.userId, { type: 'space_removed', spaceId: s.id });
   res.json(shapeSpace(updated, req.user.id));
 });
+app.patch('/api/spaces/:id/members/:userId', authMiddleware, (req, res) => {
+  const s = ownSpace(req, res, { requireOwner: true }); if (!s) return;
+  if (req.params.userId === s.owner_id) return res.status(400).json({ error: 'The owner role cannot be changed here.' });
+  const role = ['editor', 'viewer'].includes(req.body?.role) ? req.body.role : null;
+  if (!role) return res.status(400).json({ error: 'Role must be editor or viewer.' });
+  const members = (s.members || []).map(m => m.userId === req.params.userId ? { ...m, role } : m);
+  if (!members.some(m => m.userId === req.params.userId)) return res.status(404).json({ error: 'Member not found.' });
+  const updated = db.spaces.update(s.id, { members, updated_at: now() });
+  broadcastSpace(s.id, { type: 'space_updated', spaceId: s.id, space: shapeSpace(updated, null) });
+  res.json(shapeSpace(updated, req.user.id));
+});
+app.post('/api/spaces/:id/typing', authMiddleware, (req, res) => {
+  const s = db.spaces.byId(req.params.id);
+  if (!s || !isAccepted(s, req.user.id)) return res.status(404).json({ error: 'not found' });
+  const me = memberOf(s, req.user.id);
+  broadcastSpace(s.id, { type: 'space_user_typing', spaceId: s.id, userId: req.user.id, name: me?.displayName || req.user.email.split('@')[0], typing: !!req.body?.typing }, req.user.id);
+  res.json({ ok: true });
+});
 app.get('/api/spaces/:id/messages', authMiddleware, (req, res) => {
   const s = db.spaces.byId(req.params.id);
   if (!s || !isAccepted(s, req.user.id)) return res.status(404).json({ error: 'not found' });
@@ -1585,6 +1799,7 @@ app.get('/api/spaces/:id/messages', authMiddleware, (req, res) => {
 app.post('/api/spaces/:id/messages', authMiddleware, (req, res) => {
   const s = db.spaces.byId(req.params.id);
   if (!s || !isAccepted(s, req.user.id)) return res.status(404).json({ error: 'not found' });
+  if (!canPost(s, req.user.id)) return res.status(403).json({ error: 'You have view-only access to this space.' });
   const content = String(req.body?.content || '').slice(0, 8000).trim();
   if (!content) return res.status(400).json({ error: 'Empty message.' });
   const me = (s.members || []).find(m => m.userId === req.user.id);
@@ -1597,5 +1812,6 @@ app.post('/api/spaces/:id/messages', authMiddleware, (req, res) => {
 });
 
 server.listen(PORT, () => console.log(`open-quill running on http://localhost:${PORT}`));
+try { setCustomPresets(getSetting('custom_presets', [])); } catch {}
 pruneAudit();
 setInterval(pruneAudit, 24 * 60 * 60 * 1000).unref();

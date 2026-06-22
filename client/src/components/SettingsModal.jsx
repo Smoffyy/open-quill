@@ -53,6 +53,43 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
     api.get('/api/me/sessions').then(d => setSessions(d.sessions || [])).catch(() => setSessionErr('Could not load sessions.'));
   }
   useEffect(() => { if (tab === 'sessions') loadSessions(); }, [tab]);
+  const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
+  const [pwMsg, setPwMsg] = useState('');
+  const [pwErr, setPwErr] = useState('');
+  const [twoFa, setTwoFa] = useState(user.twoFactor ? 'on' : 'off');
+  const [setup, setSetup] = useState(null);
+  const [setupCode, setSetupCode] = useState('');
+  const [secErr, setSecErr] = useState('');
+  const [recovery, setRecovery] = useState(null);
+  const [disablePw, setDisablePw] = useState('');
+  async function changePassword() {
+    setPwErr(''); setPwMsg('');
+    if (pw.next !== pw.confirm) { setPwErr('New passwords do not match.'); return; }
+    if (pw.next.length < 4) { setPwErr('New password must be at least 4 characters.'); return; }
+    try { await api.post('/api/me/password', { current: pw.current, next: pw.next }); setPw({ current: '', next: '', confirm: '' }); setPwMsg('Password updated. Other sessions were signed out.'); }
+    catch (e) { setPwErr(e?.message || 'Could not change password.'); }
+  }
+  async function start2fa() {
+    setSecErr(''); setRecovery(null);
+    try { setSetup(await api.post('/api/me/2fa/setup', {})); }
+    catch (e) { setSecErr(e?.message || 'Could not start setup.'); }
+  }
+  async function confirm2fa() {
+    setSecErr('');
+    try { const r = await api.post('/api/me/2fa/enable', { code: setupCode }); setSetup(null); setSetupCode(''); setTwoFa('on'); setRecovery(r.recoveryCodes); onUpdated?.({ ...user, twoFactor: true }); }
+    catch (e) { setSecErr(e?.message || 'Invalid code.'); }
+  }
+  async function disable2fa() {
+    setSecErr('');
+    try { await api.post('/api/me/2fa/disable', { password: disablePw }); setTwoFa('off'); setDisablePw(''); setRecovery(null); onUpdated?.({ ...user, twoFactor: false }); }
+    catch (e) { setSecErr(e?.message || 'Could not disable.'); }
+  }
+  async function regenRecovery() {
+    setSecErr('');
+    try { const r = await api.post('/api/me/2fa/recovery', { password: disablePw }); setDisablePw(''); setRecovery(r.recoveryCodes); }
+    catch (e) { setSecErr(e?.message || 'Could not regenerate codes.'); }
+  }
+  const _securityAnchor = null;
   async function revokeSession(id) {
     try { await api.del('/api/me/sessions/' + id); setSessions(s => (s || []).filter(x => x.id !== id)); }
     catch { setSessionErr('Could not revoke that session.'); }
@@ -106,6 +143,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
           <button className={'modal-tab' + (tab === 'chat' ? ' active' : '')} onClick={() => setTab('chat')}><Sliders /> Chat</button>
           <button className={'modal-tab' + (tab === 'usage' ? ' active' : '')} onClick={() => setTab('usage')}><Clock /> Usage</button>
           <button className={'modal-tab' + (tab === 'sessions' ? ' active' : '')} onClick={() => setTab('sessions')}><Shield /> Sessions</button>
+          <button className={'modal-tab' + (tab === 'security' ? ' active' : '')} onClick={() => setTab('security')}><Gear /> Security</button>
         </div>
         <div className="modal-main">
           {tab === 'general' && (
@@ -354,7 +392,59 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
               )}
             </>
           )}
-          {tab !== 'version' && tab !== 'usage' && tab !== 'sessions' && (
+          {tab === 'security' && (
+            <>
+              <h2>Security</h2>
+              <div className="hint">Change your password and manage two-factor authentication.</div>
+              <div className="field"><label>Change password</label>
+                <input type="password" placeholder="Current password" value={pw.current} onChange={(e) => setPw(p => ({ ...p, current: e.target.value }))} style={{ marginBottom: 8 }} />
+                <input type="password" placeholder="New password" value={pw.next} onChange={(e) => setPw(p => ({ ...p, next: e.target.value }))} style={{ marginBottom: 8 }} />
+                <input type="password" placeholder="Confirm new password" value={pw.confirm} onChange={(e) => setPw(p => ({ ...p, confirm: e.target.value }))} style={{ marginBottom: 8 }} />
+                {pwErr && <div className="dz-err">{pwErr}</div>}
+                {pwMsg && <div className="muted-note" style={{ color: 'var(--accent)' }}>{pwMsg}</div>}
+                <button className="btn" onClick={changePassword} disabled={!pw.current || !pw.next}>Update password</button>
+              </div>
+              <div className="danger-zone" style={{ borderColor: 'var(--border-soft)' }}>
+                <div className="dz-title" style={{ color: 'var(--text)' }}>Two-factor authentication {twoFa === 'on' && <span className="you-tag">enabled</span>}</div>
+                {secErr && <div className="dz-err">{secErr}</div>}
+                {recovery && (
+                  <div className="recovery-box">
+                    <div className="muted-note" style={{ marginBottom: 8 }}>Save these recovery codes somewhere safe. Each works once if you lose your authenticator. They will not be shown again.</div>
+                    <div className="recovery-grid">{recovery.map(c => <code key={c}>{c}</code>)}</div>
+                  </div>
+                )}
+                {twoFa === 'off' && !setup && (
+                  <>
+                    <div className="muted-note" style={{ marginBottom: 8 }}>Add a time-based one-time code from an authenticator app (Aegis, Google Authenticator, 1Password, and so on) as a second step at login.</div>
+                    <button className="btn" onClick={start2fa}>Set up two-factor</button>
+                  </>
+                )}
+                {twoFa === 'off' && setup && (
+                  <>
+                    <div className="muted-note" style={{ marginBottom: 8 }}>In your authenticator app, add an account using this key, then enter the 6-digit code it shows.</div>
+                    <div className="field"><label className="sub">Secret key</label><code className="totp-secret">{setup.secret}</code></div>
+                    <div className="field"><label className="sub">Or paste this setup URL</label><code className="totp-uri">{setup.otpauth}</code></div>
+                    <input placeholder="123456" inputMode="numeric" value={setupCode} onChange={(e) => setSetupCode(e.target.value.replace(/\D/g, '').slice(0, 6))} style={{ marginBottom: 8, maxWidth: 160 }} />
+                    <div className="edit-actions">
+                      <button className="btn ghost" onClick={() => { setSetup(null); setSetupCode(''); }}>Cancel</button>
+                      <button className="btn primary" onClick={confirm2fa} disabled={setupCode.length !== 6}>Verify & enable</button>
+                    </div>
+                  </>
+                )}
+                {twoFa === 'on' && (
+                  <>
+                    <div className="muted-note" style={{ marginBottom: 8 }}>Enter your password to regenerate recovery codes or turn off two-factor.</div>
+                    <input type="password" placeholder="Password" value={disablePw} onChange={(e) => setDisablePw(e.target.value)} style={{ marginBottom: 8, maxWidth: 240 }} />
+                    <div className="edit-actions">
+                      <button className="btn ghost" onClick={regenRecovery} disabled={!disablePw}>Regenerate recovery codes</button>
+                      <button className="btn danger" onClick={disable2fa} disabled={!disablePw}>Disable two-factor</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+          {tab !== 'version' && tab !== 'usage' && tab !== 'sessions' && tab !== 'security' && (
             <div className="autosave-note">
               <span className={'autosave-dot' + (saved ? ' flash' : '')} />
               {saved ? 'Saved' : 'Changes save automatically'}

@@ -31,7 +31,7 @@ function dominantColor(url) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, models,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
@@ -101,7 +101,7 @@ export default function Composer({
 
   async function doSend() {
     if (streaming || uploading) return;
-    if (blockSend) return;
+    if (blockSend || budgetBlock) return;
     if (!value.trim() && files.length === 0) return;
     let attachments = [];
     if (files.length) {
@@ -133,13 +133,28 @@ export default function Composer({
     return () => clearTimeout(t);
   }, [unavailable]);
   const hasImage = files.some(f => f.preview);
+  const budgetState = budget && budget.cap ? budget.state : 'none';
+  const budgetBlock = budgetState === 'over' && budget?.enforce && !canUseUnavailable;
+  const showBudgetBanner = budgetState === 'warn' || budgetState === 'over';
   const enabledCount = (sandbox ? 1 : 0) + (webSearch ? 1 : 0);
-  const canSend = (value.trim().length > 0 || files.length > 0) && !uploading && !blockSend;
-  const cls = 'composer' + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + (unavailable ? ' unavailable' : '') + (blockSend ? ' blocked' : '');
+  const canSend = (value.trim().length > 0 || files.length > 0) && !uploading && !blockSend && !budgetBlock;
+  const cls = 'composer' + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + (unavailable ? ' unavailable' : '') + ((blockSend || budgetBlock) ? ' blocked' : '');
+  const fmtUsd = (n) => '$' + (Number(n || 0) > 0 && Number(n || 0) < 0.01 ? Number(n).toFixed(4) : Number(n || 0).toFixed(2));
 
   return (
-    <div className={'composer-stack' + (bannerMounted ? ' has-banner' : '')}>
-    {bannerMounted && <div className={'unavail-bg' + (bannerOut ? ' out' : '')} />}
+    <div className={'composer-stack' + ((bannerMounted || showBudgetBanner) ? ' has-banner' : '')}>
+    {(bannerMounted || showBudgetBanner) && <div className={'unavail-bg' + (bannerOut && !showBudgetBanner ? ' out' : '')} />}
+    {showBudgetBanner && (
+      <div className={'unavail-banner budget-banner ' + budgetState}>
+        <div className="unavail-row">
+          <span className="unavail-msg">
+            {budgetState === 'over'
+              ? <><strong>Monthly budget reached.</strong> {fmtUsd(budget.spent)} of {fmtUsd(budget.cap)} used{budget.enforce && !canUseUnavailable ? '. New messages are paused until next month.' : '.'}</>
+              : <><strong>Approaching your monthly budget.</strong> {fmtUsd(budget.spent)} of {fmtUsd(budget.cap)} used.</>}
+          </span>
+        </div>
+      </div>
+    )}
     {bannerMounted && bannerInfo.current && (
       <div className={'unavail-banner' + (bannerOut ? ' out' : '') + (showReason ? ' open' : '')}>
         <div className="unavail-row">

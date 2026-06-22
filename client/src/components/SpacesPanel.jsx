@@ -78,6 +78,9 @@ function MembersPanel({ space, user, models, onChanged, onClose }) {
     await api.del('/api/spaces/' + space.id + '/members/' + uid);
     onChanged?.();
   }
+  async function setMemberRole(uid, role) {
+    try { await api.patch('/api/spaces/' + space.id + '/members/' + uid, { role }); onChanged?.(); } catch {}
+  }
   async function leave() {
     if (!confirm('Leave this space?')) return;
     await api.post('/api/spaces/' + space.id + '/leave', {});
@@ -125,7 +128,12 @@ function MembersPanel({ space, user, models, onChanged, onClose }) {
             <div key={m.userId} className="spc-member-row">
               <span className="spc-avatar small">{initials(m.displayName)}</span>
               <span className="spc-member-name">{m.displayName}{m.userId === user.id ? ' (you)' : ''}{m.role === 'owner' ? ' · Owner' : ''}</span>
-              <span className={'spc-status spc-status-' + m.status}>{m.status}</span>
+              {isOwner && m.role !== 'owner' && m.status === 'accepted' ? (
+                <div className="seg spc-role-seg">
+                  <button className={m.role !== 'viewer' ? 'on' : ''} onClick={() => setMemberRole(m.userId, 'editor')}>Editor</button>
+                  <button className={m.role === 'viewer' ? 'on' : ''} onClick={() => setMemberRole(m.userId, 'viewer')}>Viewer</button>
+                </div>
+              ) : (m.role !== 'owner' && <span className={'spc-status spc-status-' + m.status}>{m.status === 'accepted' ? (m.role === 'viewer' ? 'viewer' : 'editor') : m.status}</span>)}
               {isOwner && m.role !== 'owner' && (
                 <button className="row-ctrl" title="Remove" onClick={() => removeMember(m.userId)}><Trash style={{ width: 13 }} /></button>
               )}
@@ -145,10 +153,20 @@ function SpaceChat({ space, user, models, onChanged, onClose }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
+  const [peopleTyping, setPeopleTyping] = useState({});
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sending, setSending] = useState(false);
+  const [mention, setMention] = useState(null);
   const bodyRef = useRef(null);
+  const taRef = useRef(null);
   const pollRef = useRef(null);
+  const typingSent = useRef(0);
+  const typingStop = useRef(null);
+
+  const myRole = (space.members.find(m => m.userId === user.id) || {}).role;
+  const viewOnly = myRole === 'viewer';
+  const aiName = (() => { const mm = models?.find(x => x.id === space.modelId); return mm?.displayName || 'Assistant'; })();
+  const mentionNames = [aiName, ...space.members.filter(m => m.userId !== user.id).map(m => m.displayName)];
 
   const load = useCallback(async () => {
     try { setMessages(await api.get('/api/spaces/' + space.id + '/messages')); } catch {}
@@ -160,25 +178,58 @@ function SpaceChat({ space, user, models, onChanged, onClose }) {
     const h = (e) => {
       const m = e.detail;
       if (!m || m.spaceId !== space.id) return;
-      if (m.type === 'space_message') setMessages(cs => cs.some(x => x.id === m.message.id) ? cs : [...cs, m.message]);
+      if (m.type === 'space_message') { setMessages(cs => cs.some(x => x.id === m.message.id) ? cs : [...cs, m.message]); setPeopleTyping(p => { const n = { ...p }; delete n[m.message.userId]; return n; }); }
       if (m.type === 'space_typing') setTyping(!!m.typing);
+      if (m.type === 'space_user_typing') setPeopleTyping(p => {
+        const n = { ...p };
+        if (m.typing) n[m.userId] = m.name; else delete n[m.userId];
+        return n;
+      });
     };
     window.addEventListener('oq-space', h);
     return () => window.removeEventListener('oq-space', h);
   }, [space.id]);
 
-  useEffect(() => { const el = bodyRef.current; if (el) el.scrollTop = el.scrollHeight; }, [messages, typing]);
+  useEffect(() => { const el = bodyRef.current; if (el) el.scrollTop = el.scrollHeight; }, [messages, typing, peopleTyping]);
+
+  function sendTyping(on) {
+    const nowT = Date.now();
+    if (on && nowT - typingSent.current < 2500) return;
+    typingSent.current = on ? nowT : 0;
+    api.post('/api/spaces/' + space.id + '/typing', { typing: on }).catch(() => {});
+  }
+  function onInputChange(v) {
+    setInput(v);
+    if (!viewOnly) { sendTyping(true); clearTimeout(typingStop.current); typingStop.current = setTimeout(() => sendTyping(false), 3000); }
+    const caret = taRef.current?.selectionStart ?? v.length;
+    const upto = v.slice(0, caret);
+    const mm = upto.match(/@([\w .-]*)$/);
+    if (mm) {
+      const q = mm[1].toLowerCase();
+      const matches = mentionNames.filter(n => n.toLowerCase().includes(q)).slice(0, 5);
+      setMention(matches.length ? { matches, start: caret - mm[0].length, caret } : null);
+    } else setMention(null);
+  }
+  function pickMention(name) {
+    const before = input.slice(0, mention.start);
+    const after = input.slice(mention.caret);
+    const next = before + '@' + name + ' ' + after;
+    setInput(next); setMention(null);
+    setTimeout(() => taRef.current?.focus(), 0);
+  }
 
   async function send() {
     const text = input.trim();
-    if (!text || sending) return;
-    setInput(''); setSending(true);
+    if (!text || sending || viewOnly) return;
+    setInput(''); setMention(null); setSending(true);
+    clearTimeout(typingStop.current); sendTyping(false);
     try {
       const m = await api.post('/api/spaces/' + space.id + '/messages', { content: text });
       setMessages(cs => cs.some(x => x.id === m.id) ? cs : [...cs, m]);
     } catch (e) { alert(e.message || 'Could not send message.'); }
     setSending(false);
   }
+  const typingNames = Object.values(peopleTyping);
 
   return (
     <div className="spc-chat">
@@ -202,14 +253,26 @@ function SpaceChat({ space, user, models, onChanged, onClose }) {
                 </div>
               </div>
             ))}
-            {typing && <div className="spc-typing"><span className="spc-avatar small">✦</span> Assistant is thinking…</div>}
+            {typing && <div className="spc-typing"><span className="spc-avatar small">✦</span> {aiName} is thinking…</div>}
+            {typingNames.length > 0 && <div className="spc-typing">{typingNames.length === 1 ? `${typingNames[0]} is typing…` : `${typingNames.slice(0, 2).join(', ')}${typingNames.length > 2 ? ' and others' : ''} are typing…`}</div>}
           </div>
-          <div className="spc-composer">
-            <textarea value={input} placeholder={'Message ' + space.name + '…'}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} />
-            <button className="send" disabled={!input.trim() || sending} onClick={send}><Send style={{ width: 15 }} /></button>
-          </div>
+          {viewOnly ? (
+            <div className="spc-viewonly">You have view-only access to this space.</div>
+          ) : (
+            <div className="spc-composer">
+              {mention && (
+                <div className="spc-mention-menu">
+                  {mention.matches.map(n => (
+                    <button key={n} onMouseDown={(e) => { e.preventDefault(); pickMention(n); }}>{n === aiName ? '✦ ' : '@'}{n}</button>
+                  ))}
+                </div>
+              )}
+              <textarea ref={taRef} value={input} placeholder={'Message ' + space.name + '… (use @ to mention)'}
+                onChange={(e) => onInputChange(e.target.value)}
+                onKeyDown={(e) => { if (mention && e.key === 'Enter') { e.preventDefault(); pickMention(mention.matches[0]); return; } if (e.key === 'Escape') setMention(null); if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} />
+              <button className="send" disabled={!input.trim() || sending} onClick={send}><Send style={{ width: 15 }} /></button>
+            </div>
+          )}
         </>
       )}
     </div>

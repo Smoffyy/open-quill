@@ -24,6 +24,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Recognized model pricing presets** - a built-in price table covers common hosted models (GPT, Claude, Gemini, DeepSeek, Mistral, Kimi, Grok, and Llama families). When a new model's ID matches a known name, its input and output prices are filled in automatically. Local or unrecognized models stay blank.
 - **Pricing override controls** - the model editor now shows when an ID is recognized and offers a one-click "Apply preset" action plus a "Clear price" link, so admins can accept, override, or remove the suggested price at any time. Manual prices are never overwritten by a preset.
 - **Usage time windows** - the personal Usage tab can now be filtered to the last 7, 30, or 90 days, or all time, and reports how many generations fall in the selected window.
+- **Usage budgets** - admins can set monthly spend caps per role (users and admins) and per individual user, based on each model's configured price. A warning banner appears in the composer once a configurable fraction of the budget is used, and an optional enforcement mode pauses new messages for anyone at or over their cap until the start of the next month. Admins are never blocked. The budget banner reuses the model-unavailable banner style and stacks above it.
+- **Two-factor authentication** - users can enable TOTP-based two-factor from a new Security tab in Settings. Setup shows a secret key and an otpauth setup URL for any authenticator app, verifies a code before turning on, and issues one-time recovery codes. Login gains a second step that accepts either an authenticator code or a recovery code. The entire implementation is local and uses no external services or new dependencies; codes are computed with Node's built-in crypto.
+- **Password change** - the Security tab lets a signed-in user change their password after confirming the current one. Changing the password signs out all of that user's other sessions.
+- **Configurable session policy** - admins can set how many days of inactivity end a session and cap the number of concurrent sessions per user (oldest sessions are signed out beyond the cap).
+- **Admin usage dashboard** - a new Usage & Pricing tab in the admin panel shows account-wide token and cost totals over 7, 30, or 90 days, broken down by user and by model.
+- **Editable price presets** - admins can add custom price presets (a model-name fragment plus input and output prices) or override built-in ones from the Usage & Pricing tab. Custom presets are layered over the built-in table used for automatic price suggestions.
+- **Audit log filtering and export** - the audit log can be filtered by action, actor email, and time range, and exported to CSV.
+- **Per-user admin controls** - the Users tab now shows each user's two-factor status, month-to-date spend, and an inline monthly budget override.
 
 ### Changed
 - **Password hashing** - switched from bcrypt to **argon2id** (OWASP-recommended), with tuned memory/time parameters. Existing bcrypt hashes are not carried over (see breaking note above).
@@ -34,6 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Spaces assistant replies** - the in-space assistant now uses a short cooldown to avoid double-replies and detects when it is addressed by name or asked a direct question, making its decision to speak or stay silent more reliable.
 - **Spaces invitations** - re-inviting a user who previously declined now re-sends the invite cleanly, duplicate and self-invites are rejected with clear messages, and spaces are capped at 25 members.
 - **Session cleanup on deletion** - deleting a user (by an admin or via self-serve account deletion) now also removes that user's sessions.
+- **Models panel** - the model list is now filterable once you have more than six models, and the core per-model toggles (default, extended thinking, hidden) are grouped into a single card for a calmer, less cluttered editor.
+- **Session lifetime** - the signed token lifetime was raised to 90 days so the sliding inactivity window (default 30 days, now admin-configurable) is the real expiry, rather than the token expiring first.
 
 ### Security
 - **Encryption at rest** - the database file is encrypted with AES-256; a leaked `data.db` is unreadable without the key.
