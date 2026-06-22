@@ -871,7 +871,9 @@ export default function App() {
             <div className="greeting">
               {incognito
                 ? <><Ghost style={{ width: 44 }} /> {incognitoGreeting}</>
-                : <><img src={model?.staticIcon || cfg.appIcon || '/starburst.svg'} alt="" style={{ width: 44, height: 44, objectFit: 'contain' }} /> {greeting}</>}
+                : (model?.staticIcon
+                  ? <><img src={model.staticIcon} alt="" style={{ width: 44, height: 44, objectFit: 'contain' }} /> {greeting}</>
+                  : greeting)}
             </div>
             <div className="composer-wrap">
               <Composer {...composerProps} autoFocus modelUp focusKey={focusTick} />
