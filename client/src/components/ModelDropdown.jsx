@@ -86,7 +86,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
   const Opt = (m) => (
     <button key={m.id} className={'model-opt' + (m.unavailable ? ' unavail' : '')} onClick={() => { onSelect(m.id); setOpen(false); setMoreOpen(false); }}
       title={m.unavailable ? (m.displayName + ' is currently unavailable.') : undefined}>
-      {m.dropdownIcon !== false && <img className="mo-icon" src={m.staticIcon || '/starburst.svg'} alt="" />}
+      {m.dropdownIcon !== false && m.staticIcon && <img className="mo-icon" src={m.staticIcon} alt="" />}
       <div className="mo-main">
         <div className="mo-name">
           {m.displayName}

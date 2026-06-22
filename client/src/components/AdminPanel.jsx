@@ -53,14 +53,15 @@ function IconSlot({ label, value, def, anim, onChange }) {
     const { url } = await api.upload(f);
     onChange(url); e.target.value = '';
   }
+  const shown = value || def;
   return (
     <div className="icon-slot">
       <div className="preview-wrap">
-        <button type="button" className="preview" onClick={() => ref.current?.click()} title="Click to upload (png, svg, jpeg, gif)">
-          <img src={value || def} className={anim} alt="" />
+        <button type="button" className={'preview' + (shown ? '' : ' empty')} onClick={() => ref.current?.click()} title="Click to upload (png, svg, jpeg, gif)">
+          {shown ? <img src={shown} className={anim} alt="" /> : <span className="preview-none">None</span>}
         </button>
         {value && (
-          <button type="button" className="reset-icon" title="Reset to default logo" onClick={() => onChange('')}>
+          <button type="button" className="reset-icon" title="Remove icon" onClick={() => onChange('')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
           </button>
         )}
@@ -194,7 +195,7 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
   return (
     <div className="me2">
       <div className="me2-head">
-        <img className="me2-icon" src={m.static_icon || '/starburst.svg'} alt="" />
+        {m.static_icon ? <img className="me2-icon" src={m.static_icon} alt="" /> : <span className="me2-icon noicon">{(m.display_name || '?').trim().charAt(0).toUpperCase()}</span>}
         <div className="me2-id">
           <div className="me2-name">{m.display_name || 'Untitled model'}</div>
           <div className="me2-sub">{m.internal_name || 'no model id'}</div>
@@ -328,11 +329,11 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
 
         {section === 'appearance' && (
           <div className="me2-pane">
-            <div className="field"><label>Model logos</label>
+            <div className="field"><label>Model logo</label>
               <div className="icon-grid">
-                <IconSlot label="Static" value={m.static_icon} def="/starburst.svg" onChange={(v) => set('static_icon', v)} />
-                <IconSlot label="Generating" value={m.generating_icon} def="/starburst-generating.svg" anim={(m.generating_anim || 'spin') === 'none' ? '' : (m.generating_anim || 'spin')} onChange={(v) => set('generating_icon', v)} />
-                <IconSlot label="Thinking" value={m.thinking_icon} def="/starburst-thinking.svg" anim={(m.thinking_anim || 'pulse') === 'none' ? '' : (m.thinking_anim || 'pulse')} onChange={(v) => set('thinking_icon', v)} />
+                <IconSlot label="Static" value={m.static_icon} def="" onChange={(v) => set('static_icon', v)} />
+                <IconSlot label="Generating" value={m.generating_icon} def={m.static_icon || ''} anim={(m.generating_anim || 'spin') === 'none' ? '' : (m.generating_anim || 'spin')} onChange={(v) => set('generating_icon', v)} />
+                <IconSlot label="Thinking" value={m.thinking_icon} def={m.static_icon || ''} anim={(m.thinking_anim || 'pulse') === 'none' ? '' : (m.thinking_anim || 'pulse')} onChange={(v) => set('thinking_icon', v)} />
               </div>
               <div className="icon-grid anim-row">
                 <div />
@@ -343,7 +344,12 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
                   <option value="pulse">Breathe</option><option value="spin">Spin</option><option value="bounce">Bounce</option><option value="wobble">Wobble</option><option value="fade">Fade</option><option value="none">No motion</option>
                 </select>
               </div>
-              <div className="muted-note">Click an icon to upload a png, svg, jpeg, or gif. Previews animate as they will in chat.</div>
+              <div className="icon-actions">
+                {!m.static_icon
+                  ? <button type="button" className="btn ghost" onClick={() => onChange({ ...m, static_icon: '/starburst.svg', generating_icon: '/starburst-generating.svg', thinking_icon: '/starburst-thinking.svg' })}>Use starburst icon</button>
+                  : <button type="button" className="btn ghost" onClick={() => onChange({ ...m, static_icon: '', generating_icon: '', thinking_icon: '' })}>Remove icon</button>}
+              </div>
+              <div className="muted-note">With no icon set the model shows no logo in chat or the picker. Click a slot to upload a png, svg, jpeg, or gif, or use the starburst. Generating and Thinking fall back to the static logo when left empty.</div>
             </div>
             <div className="field">
               <label>Icon size <span className="muted-note" style={{ display: 'inline' }}>{(m.icon_size || 40)}px</span></label>
@@ -734,7 +740,7 @@ export default function AdminPanel({ user, onClose }) {
                           onDrop={(e) => { if (q) return; e.preventDefault(); drag.onDrop(i); }}
                           onClick={() => setSelModel(m.id)}>
                           {!q && <span className="mg-grip"><Grip /></span>}
-                          <img className="mg-row-icon" src={m.static_icon || '/starburst.svg'} alt="" />
+                          {m.static_icon ? <img className="mg-row-icon" src={m.static_icon} alt="" /> : <span className="mg-row-icon noicon">{(m.display_name || '?').trim().charAt(0).toUpperCase()}</span>}
                           <div className="mg-row-meta">
                             <span className="mg-row-name">
                               {m.display_name || 'Untitled model'}

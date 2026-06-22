@@ -81,12 +81,14 @@ function Attachments({ items }) {
 }
 
 function ModelIcon({ model, phase, below }) {
+  const base = model?.staticIcon || '';
+  if (!base) return null;
   const map = {
-    static: model?.staticIcon || '/starburst.svg',
-    generating: model?.generatingIcon || '/starburst-generating.svg',
-    thinking: model?.thinkingIcon || '/starburst-thinking.svg'
+    static: base,
+    generating: model?.generatingIcon || base,
+    thinking: model?.thinkingIcon || base
   };
-  const src = map[phase] || map.static;
+  const src = map[phase] || base;
   const glow = useLogoGlow(phase === 'generating' || phase === 'thinking' ? src : null);
   const anim = phase === 'generating' ? (model?.generatingAnim || 'spin') : phase === 'thinking' ? (model?.thinkingAnim || 'pulse') : '';
   const cls = anim === 'none' ? '' : anim;
