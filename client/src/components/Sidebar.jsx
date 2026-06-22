@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Chat, Search, Panel, Gear, Shield, Logout, Dots, Trash, Heart, FileText, Star, Download, Folder, Pencil, Chevron, Users } from './icons.jsx';
+import { Plus, Chat, Search, Panel, Gear, Shield, Logout, Dots, Trash, Heart, FileText, Star, Download, Folder, Pencil, Chevron, Users, Box } from './icons.jsx';
 
 function ProfileMenu({ user, version, onSettings, onAdmin, onCredits, onChangelog, onLicense, onLogout, onClose }) {
   const ref = useRef(null);
@@ -146,7 +146,7 @@ export default function Sidebar({
   user, chats, chatsLoaded = true, activeId, appName, onNew, onOpen, onDelete, onToggleStar,
   folders = [], onCreateFolder, onRenameFolder, onToggleFolder, onDeleteFolder, onMoveChat,
   collapsed, onToggle, onSettings, onAdmin, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview,
-  onSpaces, spacesPending = 0
+  onSpaces, spacesPending = 0, projects = [], onProjects, onOpenProject
 }) {
   const [menu, setMenu] = useState(false);
   const [shiftHeld, setShiftHeld] = useState(false);
@@ -167,6 +167,7 @@ export default function Sidebar({
   const showTrash = shiftHeld && hover;
 
   const starred = chats.filter(c => c.starred);
+  const starredProjects = (projects || []).filter(p => p.starred);
   const folderIds = new Set(folders.map(f => f.id));
   const inFolder = (fid) => chats.filter(c => !c.starred && c.folderId === fid);
   const others = chats.filter(c => !c.starred && (!c.folderId || !folderIds.has(c.folderId)));
@@ -189,6 +190,7 @@ export default function Sidebar({
           onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); window.open('/', '_blank', 'noopener'); } }}
           onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}><span className="new-chat-plus"><Plus /></span> <span className="nav-label">New chat</span></button>
         <button className="nav-item" title="Chats" onClick={onChatsOverview}><Chat /> <span className="nav-label">Chats</span></button>
+        <button className="nav-item" title="Projects" onClick={onProjects}><Box /> <span className="nav-label">Projects</span></button>
         <button className="nav-item" title="Spaces" onClick={onSpaces}>
           <Users /> <span className="nav-label">Spaces</span>
           {spacesPending > 0 && <span className="nav-badge">{spacesPending}</span>}
@@ -204,8 +206,14 @@ export default function Sidebar({
           </>
         ) : (
           <>
-            {starred.length > 0 && <>
+            {(starred.length > 0 || starredProjects.length > 0) && <>
               <div className="section-label"><Star style={{ width: 12, verticalAlign: '-1px' }} /> Starred</div>
+              {starredProjects.map(p => (
+                <div key={p.id} className="chat-row project-row" onClick={() => onOpenProject && onOpenProject(p.id)}>
+                  <Box style={{ width: 15, flexShrink: 0, opacity: .85 }} />
+                  <span className="title">{p.name}</span>
+                </div>
+              ))}
               {starred.map(row)}
             </>}
 

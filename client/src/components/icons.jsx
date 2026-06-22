@@ -53,3 +53,5 @@ export const Coffee = (p) => <I {...p}><path d="M17 8h1a3 3 0 0 1 0 6h-1M3 8h14v
 export const Graduation = (p) => <I {...p}><path d="M22 9L12 5 2 9l10 4 10-4zM6 11v5c0 1 2.5 3 6 3s6-2 6-3v-5"/></I>;
 export const Upload = (p) => <I {...p}><path d="M12 21V9m0 0l-4 4m4-4l4 4M5 3h14"/></I>;
 export const Send = (p) => <I {...p}><path d="M22 2 11 13M22 2 15 22l-4-9-9-4z"/></I>;
+export const Box = (p) => <I {...p}><rect x="4" y="8" width="16" height="12" rx="1.5"/><path d="M3 5.5h18v2.5H3zM9.5 12h5"/></I>;
+export const X = (p) => <I {...p}><path d="M18 6 6 18M6 6l12 12"/></I>;

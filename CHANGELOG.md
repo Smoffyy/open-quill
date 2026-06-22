@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Editable price presets** - admins can add custom price presets (a model-name fragment plus input and output prices) or override built-in ones from the Usage & Pricing tab. Custom presets are layered over the built-in table used for automatic price suggestions.
 - **Audit log filtering and export** - the audit log can be filtered by action, actor email, and time range, and exported to CSV.
 - **Per-user admin controls** - the Users tab now shows each user's two-factor status, month-to-date spend, and an inline monthly budget override.
+- **Projects** - place to store entire projects at and chat with.
 
 ### Changed
 - **Password hashing** - switched from bcrypt to **argon2id** (OWASP-recommended), with tuned memory/time parameters. Existing bcrypt hashes are not carried over (see breaking note above).

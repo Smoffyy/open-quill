@@ -21,6 +21,7 @@ import DocModal from './components/DocModal.jsx';
 import ArtifactsPanel from './components/ArtifactsPanel.jsx';
 import ChatsOverview from './components/ChatsOverview.jsx';
 import SpacesPanel from './components/SpacesPanel.jsx';
+import ProjectsPanel from './components/ProjectsPanel.jsx';
 import { Down, ChevDown, Paper, Compact, Ghost } from './components/icons.jsx';
 import { scanTools } from './toolproto.js';
 
@@ -209,6 +210,10 @@ export default function App() {
   const [chatsOverview, setChatsOverview] = useState(false);
   const [showSpaces, setShowSpaces] = useState(false);
   const [spacesPending, setSpacesPending] = useState(0);
+  const [projects, setProjects] = useState([]);
+  const [showProjects, setShowProjects] = useState(false);
+  const [projectOpenId, setProjectOpenId] = useState(null);
+  const [currentProject, setCurrentProject] = useState(null);
   const [cmdkOpen, setCmdkOpen] = useState(false);
 
   const [streaming, setStreaming] = useState(false);
@@ -278,8 +283,9 @@ export default function App() {
       return () => mq.removeEventListener?.('change', h);
     }
   }, [user]);
-  useEffect(() => { if (user) { loadModels(); loadChats(); loadFolders(); loadAppConfig(); loadBudget(); connect(); openFromUrl(); refreshSpacesPending(); } }, [!!user]);
+  useEffect(() => { if (user) { loadModels(); loadChats(); loadFolders(); loadAppConfig(); loadBudget(); connect(); openFromUrl(); refreshSpacesPending(); loadProjects(); } }, [!!user]);
   async function loadBudget() { try { setBudget(await api.get('/api/me/budget')); } catch {} }
+  async function loadProjects() { try { setProjects(await api.get('/api/projects')); } catch {} }
 
   useEffect(() => {
     const root = document.documentElement;
@@ -323,6 +329,10 @@ export default function App() {
     else setShowAdmin(false);
     if (/^\/spaces(\/|$)/.test(location.pathname)) { setShowSpaces(true); return; }
     else setShowSpaces(false);
+    const pm = location.pathname.match(/^\/project\/(.+)$/);
+    if (pm) { setProjectOpenId(decodeURIComponent(pm[1])); setShowProjects(true); return; }
+    if (/^\/projects(\/|$)/.test(location.pathname)) { setProjectOpenId(null); setShowProjects(true); return; }
+    setShowProjects(false);
     const m = location.pathname.match(/^\/chat\/(.+)$/);
     if (m) openChat(decodeURIComponent(m[1]), false);
     else { setActiveId(null); setMessages([]); }
@@ -597,11 +607,13 @@ export default function App() {
 
   async function openChat(id, push = true) {
     if (incognito) setIncognito(false);
+    setShowProjects(false);
     if (id !== activeIdRef.current) { setLiveFile(null); setPendingFiles({}); setArtifactFocus(null); doneBlocksRef.current = 0; }
     setActiveId(id);
     try {
       const { chat, messages } = await api.get('/api/chats/' + id);
       setMessages(messages);
+      setCurrentProject(chat.projectId ? (projects.find(p => p.id === chat.projectId) || { id: chat.projectId, name: 'Project' }) : null);
       if (user?.prefs?.chatStagger !== false && user?.prefs?.messageEntrance !== false) {
         clearTimeout(staggerTimer.current);
         setThreadStagger(true);
@@ -619,6 +631,8 @@ export default function App() {
   }
   function newChat(fromPop) {
     if (incognito) setIncognito(false);
+    setShowProjects(false);
+    setCurrentProject(null);
     setActiveId(null); setMessages([]); setInput('');
     setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingFiles({}); setArtifactFocus(null);
     const m = models.find(m => m.id === currentId);
@@ -728,6 +742,41 @@ export default function App() {
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
   }
 
+  async function startProjectChat(project, rawText, attachments = []) {
+    if (!currentId) return;
+    const text = (rawText || '').trim();
+    if (!text && attachments.length === 0) return;
+    const c = await api.post('/api/chats', { projectId: project.id });
+    setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false, folderId: null, projectId: project.id }, ...cs]);
+    setShowProjects(false); setProjectOpenId(null);
+    setCurrentProject(project);
+    setActiveId(c.id); setMessages([]); setInput('');
+    setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingFiles({}); setArtifactFocus(null);
+    history.pushState({}, '', '/chat/' + c.id);
+    if (!wsSend({ type: 'chat', chatId: c.id, modelId: currentId, extended, content: text, attachments, sandbox, webSearch })) return;
+    gen.current.set(c.id, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, blocks: 0 });
+    setMessages([{ id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
+    stick.current = true; setTimeout(() => scrollBottom(true), 20);
+  }
+  function openProjectChat(chatId, project) {
+    setShowProjects(false); setProjectOpenId(null);
+    if (project) setCurrentProject(project);
+    openChat(chatId);
+  }
+  function clearChatProject() {
+    if (!activeId || !currentProject) { setCurrentProject(null); return; }
+    const pid = currentProject.id;
+    setCurrentProject(null);
+    setChats(cs => cs.map(c => c.id === activeId ? { ...c, projectId: null } : c));
+    api.patch('/api/chats/' + activeId, { projectId: '' }).catch(() => {});
+    setProjects(ps => ps.map(p => p.id === pid ? { ...p, chatCount: Math.max(0, (p.chatCount || 1) - 1) } : p));
+  }
+  function openProjects(id = null) {
+    setProjectOpenId(id);
+    setShowProjects(true);
+    history.pushState({}, '', id ? '/project/' + id : '/projects');
+  }
+
   const regenerate = useCallback((messageId) => {
     if (streaming || !activeId || !currentId) return;
     if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, messageId, sandbox, webSearch })) return;
@@ -771,7 +820,8 @@ export default function App() {
     modelHasBg, bgInChat, onToggleBgInChat: () => updatePref('modelBgInChat', !bgInChat),
     sandbox: sandboxOn, sandboxAllowed, onToggleSandbox: () => { if (sandboxAllowed) setSandbox(s => !s); },
     onWantSandbox: () => { if (sandboxAllowed) setSandbox(true); },
-    webSearch: webSearchOn, webSearchAvailable, onToggleWebSearch: () => { if (webSearchAvailable) setWebSearch(s => !s); }
+    webSearch: webSearchOn, webSearchAvailable, onToggleWebSearch: () => { if (webSearchAvailable) setWebSearch(s => !s); },
+    project: currentProject, onClearProject: clearChatProject
   };
   const showArtifactsBtn = sandboxOn || files.length > 0;
 
@@ -780,6 +830,7 @@ export default function App() {
     { id: 'sidebar', label: collapsed ? 'Show sidebar' : 'Hide sidebar', shortcut: 'Ctrl Shift S', keywords: 'toggle collapse panel', action: () => setCollapsed(c => !c) },
     { id: 'chats', label: 'Browse all chats', keywords: 'overview history search', action: () => setChatsOverview(true) },
     { id: 'spaces', label: 'Open Spaces', keywords: 'group chat invite users', action: () => { history.pushState({}, '', '/spaces'); setShowSpaces(true); } },
+    { id: 'projects', label: 'Open Projects', keywords: 'project workspace organize', action: () => openProjects(null) },
     { id: 'incognito', label: incognito ? 'Exit incognito' : 'Start incognito chat', keywords: 'private ghost', action: () => toggleIncognito() },
     { id: 'settings', label: 'Open settings', keywords: 'preferences account theme', action: () => setShowSettings(true) },
     ...(user?.isAdmin ? [{ id: 'admin', label: 'Open admin panel', keywords: 'models users connection providers', action: () => { history.pushState({}, '', '/admin'); setShowAdmin(true); } }] : []),
@@ -800,7 +851,8 @@ export default function App() {
         onSettings={() => setShowSettings(true)} onAdmin={() => { history.pushState({}, '', '/admin'); setShowAdmin(true); }}
         onCredits={() => setShowCredits(true)} onChangelog={() => setShowChangelog(true)} onLicense={() => setShowLicense(true)} onLogout={logout} version={cfg.version}
         onChatsOverview={() => setChatsOverview(true)}
-        onSpaces={() => { history.pushState({}, '', '/spaces'); setShowSpaces(true); }} spacesPending={spacesPending} />
+        onSpaces={() => { history.pushState({}, '', '/spaces'); setShowSpaces(true); }} spacesPending={spacesPending}
+        projects={projects} onProjects={() => openProjects(null)} onOpenProject={(id) => openProjects(id)} />
 
       <div className={'main' + (incognito ? ' incognito' : '')} data-incognito={incognito ? 'on' : undefined}>
         {incognito && (
@@ -895,6 +947,10 @@ export default function App() {
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} />}
       {showAdmin && <AdminPanel user={user} onClose={() => { setShowAdmin(false); if (/^\/admin(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} />}
       {showSpaces && <SpacesPanel user={user} onClose={() => { setShowSpaces(false); refreshSpacesPending(); if (/^\/spaces(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} />}
+      {showProjects && <ProjectsPanel openId={projectOpenId} composerProps={composerProps}
+        onClose={() => { setShowProjects(false); setProjectOpenId(null); if (/^\/projects?(\/|$)/.test(location.pathname) || /^\/project\//.test(location.pathname)) history.pushState({}, '', '/'); }}
+        onOpenChat={openProjectChat} onStartChat={startProjectChat}
+        onOpenProject={(id) => { setProjectOpenId(id); history.replaceState({}, '', id ? '/project/' + id : '/projects'); loadProjects(); }} />}
       {showCredits && <DocModal title="Credits" name="credits" serif onClose={() => setShowCredits(false)} />}
       {showLicense && <DocModal title="Licensing" name="license" onClose={() => setShowLicense(false)} />}
       {showChangelog && <DocModal title="Changelog" name="changelog" onClose={() => setShowChangelog(false)} />}

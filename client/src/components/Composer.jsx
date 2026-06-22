@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import ModelDropdown from './ModelDropdown.jsx';
 import { api } from '../api.js';
-import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe } from './icons.jsx';
+import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X } from './icons.jsx';
 
 const FILE_ACCEPT = '.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.py,.lua,.html,.css,.xml,.yml,.yaml,.pdf,.log';
 
@@ -31,7 +31,7 @@ function dominantColor(url) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, models,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
@@ -215,6 +215,13 @@ export default function Composer({
               </div>
             )}
           </div>
+          {project && (
+            <div className="composer-project" title={'In project: ' + project.name}>
+              <Box style={{ width: 14 }} />
+              <span className="cp-name">{project.name}</span>
+              {onClearProject && <button className="cp-x" onClick={onClearProject} title="Remove from project"><X style={{ width: 12 }} /></button>}
+            </div>
+          )}
         </div>
         <div className="composer-right">
           <ModelDropdown models={models} currentId={currentId} onSelect={onSelect}

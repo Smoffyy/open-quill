@@ -136,13 +136,37 @@ function Accordion({ title, sub, children, defaultOpen = false }) {
   );
 }
 
+function StatusChips({ m }) {
+  const chips = [];
+  if (m.is_default) chips.push(['default', 'Default']);
+  if (!m.enabled) chips.push(['dim', 'Hidden']);
+  if (m.unavailable) chips.push(['warn', 'Unavailable']);
+  if (m.has_reasoning) chips.push(['', 'Reasoning']);
+  if (m.has_vision) chips.push(['', 'Vision']);
+  if (m.sandbox_allowed !== 0 && m.sandbox_auto) chips.push(['', 'Sandbox']);
+  if (m.in_more_models) chips.push(['dim', 'Grouped']);
+  if (!chips.length) return null;
+  return <div className="me2-chips">{chips.map(([cls, label]) => <span key={label} className={'me2-chip' + (cls ? ' ' + cls : '')}>{label}</span>)}</div>;
+}
+
+const ME_SECTIONS = [
+  ['general', 'General'],
+  ['behavior', 'Behavior'],
+  ['capabilities', 'Capabilities'],
+  ['appearance', 'Appearance'],
+  ['sampling', 'Sampling'],
+  ['pricing', 'Pricing']
+];
+
 function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], providerTypes = {} }) {
   const [spOpen, setSpOpen] = useState(false);
+  const [section, setSection] = useState('general');
   const [detecting, setDetecting] = useState(false);
   const [detectMsg, setDetectMsg] = useState('');
   const [preset, setPreset] = useState(null);
   const bgRef = useRef(null);
   const set = (k, v) => onChange({ ...m, [k]: v });
+  useEffect(() => { setSection('general'); }, [m.id]);
   useEffect(() => {
     let alive = true;
     const name = (m.internal_name || '').trim();
@@ -165,219 +189,251 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
     } catch { setDetectMsg('Could not detect from the server — enter it manually.'); }
     setDetecting(false);
   }
+  const priced = Number(m.cost_in) === preset?.in && Number(m.cost_out) === preset?.out;
+
   return (
-    <div className="model-editor">
-      <div className="me-head">
-        <div className="me-title">
-          <img className="me-title-icon" src={m.static_icon || '/starburst.svg'} alt="" />
-          <span className="mc-title">{m.display_name || 'Untitled model'}</span>
-          <span className="mc-sub">{m.internal_name}</span>
+    <div className="me2">
+      <div className="me2-head">
+        <img className="me2-icon" src={m.static_icon || '/starburst.svg'} alt="" />
+        <div className="me2-id">
+          <div className="me2-name">{m.display_name || 'Untitled model'}</div>
+          <div className="me2-sub">{m.internal_name || 'no model id'}</div>
         </div>
-        <button className="btn danger" onClick={() => onDelete(m.id)}><Trash style={{ width: 15 }} /></button>
+        <StatusChips m={m} />
+        <button className="me2-del" title="Delete model" onClick={() => onDelete(m.id)}><Trash style={{ width: 16 }} /></button>
       </div>
-      <div className="me-body">
-        <div className="me-essentials">
-          <div className="two-col">
-            <div className="field"><label>Display name</label>
-              <input value={m.display_name || ''} onChange={(e) => set('display_name', e.target.value)} /></div>
-            <div className="field"><label>Model ID</label>
-              <input value={m.internal_name || ''} onChange={(e) => set('internal_name', e.target.value)} placeholder="llama-3.1-8b-instruct" /></div>
-          </div>
-          <div className="field"><label>Provider</label>
-            <select value={m.provider_id || (providers[0]?.id || '')} onChange={(e) => set('provider_id', e.target.value)}>
-              {providers.map(p => <option key={p.id} value={p.id}>{p.name} ({providerTypes[p.type]?.label || p.type})</option>)}
-            </select>
-            <div className="muted-note">The connection this model runs through. Add or edit providers in the Providers tab.</div>
-          </div>
-          <div className="field"><label>Description</label>
-            <input value={m.description || ''} onChange={(e) => set('description', e.target.value)} placeholder="For complex tasks" /></div>
-          <div className="field"><label>System prompt</label>
-            <button type="button" className="sp-preview" onClick={() => setSpOpen(true)}>
-              {(m.system_prompt || '').trim()
-                ? <><div className="sp-preview-text">{m.system_prompt}</div><div className="sp-preview-fade" /></>
-                : <div className="sp-preview-empty">Click to write a system prompt…</div>}
-              <div className="sp-preview-hint">Click to edit</div>
-            </button>
-          </div>
-          {spOpen && <SystemPromptEditor value={m.system_prompt || ''} onChange={(v) => set('system_prompt', v)} onClose={() => setSpOpen(false)} />}
-          <div className="me-toggle-card">
-            <Toggle m={m} set={set} k="is_default" label="Set as default" note="Pre-selected for users on first login. Only one model can be the default." />
-            <Toggle m={m} set={set} k="has_reasoning" label="Extended thinking" note="Adds the Extended toggle so users can request deeper reasoning. Configure it under Reasoning below." />
-            <div className="field row">
-              <div><label>Hidden</label><div className="muted-note">Stays in your admin list but is removed from every user's model picker.</div></div>
-              <div className={'switch' + (!m.enabled ? ' on' : '')} onClick={() => set('enabled', m.enabled ? 0 : 1)} />
-            </div>
-          </div>
-        </div>
 
-        <Accordion title="Visibility & access" sub="Grouping and availability">
-          <Toggle m={m} set={set} k="in_more_models" label={'Group under "More models"'} note="Moves the model out of the main list into a collapsible group." />
-          {!!m.in_more_models && (
-            <div className="field"><label>Group label</label>
-              <input value={m.more_models_label || ''} onChange={(e) => set('more_models_label', e.target.value)} placeholder="More models" /></div>
-          )}
-          <Toggle m={m} set={set} k="unavailable" label="Temporarily unavailable" note="The model stays visible in the picker but users can't select it, and a banner explains why. Admins can still use it for testing." />
-          {!!m.unavailable && (
-            <div className="field"><label>Unavailability message <span className="muted-note" style={{ display: 'inline' }}>(shown in the banner's “Learn more”)</span></label>
-              <textarea rows={3} value={m.unavailable_reason || ''} onChange={(e) => set('unavailable_reason', e.target.value)} placeholder="e.g. Down for maintenance — back shortly. Use Quillku 2 in the meantime." /></div>
-          )}
-        </Accordion>
+      <div className="me2-nav">
+        {ME_SECTIONS.map(([id, label]) => (
+          <button key={id} className={section === id ? 'on' : ''} onClick={() => setSection(id)}>{label}</button>
+        ))}
+      </div>
 
-        <Accordion title="Reasoning" sub="Mode triggers, output tags & visibility">
-          {!!m.has_reasoning && <>
+      <div className="me2-body">
+        {section === 'general' && (
+          <div className="me2-pane">
             <div className="two-col">
-              <div className="field"><label>Extended-mode trigger</label>
-                <input value={m.reasoning_token || ''} onChange={(e) => set('reasoning_token', e.target.value)} placeholder="/think" /></div>
-              <div className="field"><label>Standard-mode trigger</label>
-                <input value={m.non_reasoning_token || ''} onChange={(e) => set('non_reasoning_token', e.target.value)} placeholder="/no_think" /></div>
+              <div className="field"><label>Display name</label>
+                <input value={m.display_name || ''} onChange={(e) => set('display_name', e.target.value)} /></div>
+              <div className="field"><label>Model ID</label>
+                <input value={m.internal_name || ''} onChange={(e) => set('internal_name', e.target.value)} placeholder="llama-3.1-8b-instruct" /></div>
             </div>
-            <div className="muted-note">Appended to the system prompt, on its own line, depending on whether the user has Extended turned on.</div>
-          </>}
-          <div className="two-col" style={{ marginTop: 12 }}>
-            <div className="field"><label>Reasoning start tag</label>
-              <input value={m.think_open || ''} onChange={(e) => set('think_open', e.target.value)} placeholder="<think>" /></div>
-            <div className="field"><label>Reasoning end tag</label>
-              <input value={m.think_close || ''} onChange={(e) => set('think_close', e.target.value)} placeholder="</think>" /></div>
-          </div>
-          <div className="muted-note">How the model delimits its reasoning in the output stream. Leave blank to use the default {'<think>…</think>'}.</div>
-          <div style={{ marginTop: 14 }}>
-            <Toggle m={m} set={set} k="reasoning_collapsible" inverted label="Show reasoning to users" note="When on, users can expand and read the thought process. When off, they see only a 'Thinking…' status." />
-          </div>
-        </Accordion>
-
-        <Accordion title="Capabilities & tools" sub="Image input, sandbox, picker badges">
-          <Toggle m={m} set={set} k="has_vision" label="Image input" note="Let users attach images for the model to see. Off = non-image files only." />
-          <Toggle m={m} set={set} k="sandbox_allowed" inverted label="Allow sandbox tools" note="Lets users enable code and file tools for this model. Off means sandbox can't be turned on." />
-          {m.sandbox_allowed !== 0 && <Toggle m={m} set={set} k="sandbox_auto" label="Enable sandbox by default" note="New chats with this model start with sandbox tools on." />}
-          <div className="field"><label>Tool-call limit</label>
-            <input type="number" min="0" value={m.agent_steps || ''} placeholder="Unlimited" onChange={(e) => set('agent_steps', e.target.value)} style={{ maxWidth: 140 }} />
-            <div className="muted-note">Maximum tool rounds per response. Leave blank or 0 for unlimited.</div>
-          </div>
-          <div className="cap-icons-block">
-            <label>Picker badges</label>
-            <div className="muted-note" style={{ marginBottom: 8 }}>Cosmetic labels shown beside the model in the picker. They don't change behaviour — set them to reflect the model's real capabilities.</div>
-            <Toggle m={m} set={set} k="cap_text" label="Text-only badge" note="Marks the model as accepting text input only." />
-            <Toggle m={m} set={set} k="cap_vision" label="Image badge" note="Marks the model as accepting images." />
-            <Toggle m={m} set={set} k="cap_reasoning" label="Reasoning badge" note="Marks the model as able to reason." />
-            <Toggle m={m} set={set} k="cap_compact" label="Combine into a single badge" note="Collapse the badges into one ⓘ that reveals them on hover." />
-          </div>
-        </Accordion>
-
-        <Accordion title="Context management" sub="Auto-summarize long conversations">
-          <Toggle m={m} set={set} k="enable_summaries" label="Auto-summarize long chats" note="When a conversation nears the context window, older turns are compacted into a summary so it can keep going." />
-          {!!m.enable_summaries && <>
-            <div className="field"><label>Context window</label>
-              <div className="ctx-row">
-                <input type="number" min="0" value={m.num_ctx ?? ''} onChange={(e) => set('num_ctx', e.target.value)} placeholder="e.g. 32768" />
-                <button className="btn" type="button" onClick={detect} disabled={detecting}>{detecting ? 'Detecting…' : 'Detect'}</button>
-              </div>
-              <div className="muted-note">{detectMsg || 'The model\u2019s maximum context in tokens. Detect asks the provider; otherwise enter it manually.'}</div>
-            </div>
-            <div className="field"><label>Context headroom <span className="muted-note" style={{ display: 'inline' }}>(%)</span></label>
-              <input type="number" step="1" min="3" max="60" value={Math.round((m.summary_padding ?? 0.125) * 100)} onChange={(e) => set('summary_padding', (parseFloat(e.target.value) || 0) / 100)} style={{ maxWidth: 140 }} />
-              <div className="muted-note">Summarize once the chat fills past this much of the context window's free space. 12% leaves a safety margin before the limit.</div>
-            </div>
-          </>}
-        </Accordion>
-
-        <Accordion title="Appearance" sub="Logos, icon size & position">
-          <div className="field"><label>Model logos</label>
-            <div className="icon-grid">
-              <IconSlot label="Static" value={m.static_icon} def="/starburst.svg" onChange={(v) => set('static_icon', v)} />
-              <IconSlot label="Generating" value={m.generating_icon} def="/starburst-generating.svg" anim={(m.generating_anim || 'spin') === 'none' ? '' : (m.generating_anim || 'spin')} onChange={(v) => set('generating_icon', v)} />
-              <IconSlot label="Thinking" value={m.thinking_icon} def="/starburst-thinking.svg" anim={(m.thinking_anim || 'pulse') === 'none' ? '' : (m.thinking_anim || 'pulse')} onChange={(v) => set('thinking_icon', v)} />
-            </div>
-            <div className="icon-grid anim-row">
-              <div />
-              <select className="anim-sel" value={m.generating_anim || 'spin'} onChange={(e) => set('generating_anim', e.target.value)}>
-                <option value="spin">Spin</option><option value="pulse">Breathe</option><option value="bounce">Bounce</option><option value="wobble">Wobble</option><option value="fade">Fade</option><option value="none">No motion</option>
+            <div className="field"><label>Provider</label>
+              <select value={m.provider_id || (providers[0]?.id || '')} onChange={(e) => set('provider_id', e.target.value)}>
+                {providers.map(p => <option key={p.id} value={p.id}>{p.name} ({providerTypes[p.type]?.label || p.type})</option>)}
               </select>
-              <select className="anim-sel" value={m.thinking_anim || 'pulse'} onChange={(e) => set('thinking_anim', e.target.value)}>
-                <option value="pulse">Breathe</option><option value="spin">Spin</option><option value="bounce">Bounce</option><option value="wobble">Wobble</option><option value="fade">Fade</option><option value="none">No motion</option>
-              </select>
+              <div className="muted-note">The connection this model runs through. Add or edit providers in the Providers tab.</div>
             </div>
-            <div className="muted-note">Click an icon to upload a png, svg, jpeg, or gif. Previews animate as they will in chat.</div>
-          </div>
-          <div className="field">
-            <label>Icon size <span className="muted-note" style={{ display: 'inline' }}>{(m.icon_size || 40)}px</span></label>
-            <div className="icon-size-row">
-              <input type="range" min="14" max="64" value={m.icon_size || 40} onChange={(e) => set('icon_size', parseInt(e.target.value))} />
-              <button className="btn ghost icon-size-reset" disabled={!m.icon_size} onClick={() => set('icon_size', 0)}>Reset</button>
-            </div>
-            <div className="muted-note">Size of the model's icon shown beside its messages. Default is 40px. Legacy is 26px.</div>
-          </div>
-          <Toggle m={m} set={set} k="dropdown_icon" inverted label="Show logo in picker" note="Display this model's static logo next to its name in the model picker." />
-          <div className="field">
-            <label>Logo position</label>
-            <div className="seg">
-              <button className={(m.icon_position || 'below') === 'above' ? 'on' : ''} onClick={() => set('icon_position', 'above')}>Above text</button>
-              <button className={(m.icon_position || 'below') === 'below' ? 'on' : ''} onClick={() => set('icon_position', 'below')}>Below text</button>
-            </div>
-            <div className="muted-note">Where the logo sits relative to the message it generates.</div>
-          </div>
-          <Toggle m={m} set={set} k="bg_enabled" label="Showcase background" note="Show a custom backdrop behind the whole interface when this model is selected. UI panels turn to frosted glass to blend in. Works with light, dark, and Anthropic themes." />
-          {!!m.bg_enabled && (
-            <div className="field">
-              <label>Background image or CSS</label>
-              <button type="button" className="bg-preview" style={bgPreviewStyle(m.bg_image)} onClick={() => bgRef.current?.click()} title="Click to upload an image">
-                {!m.bg_image && <span className="bg-preview-empty">Click to upload an image</span>}
+            <div className="field"><label>Description</label>
+              <input value={m.description || ''} onChange={(e) => set('description', e.target.value)} placeholder="For complex tasks" /></div>
+            <div className="field"><label>System prompt</label>
+              <button type="button" className="sp-preview" onClick={() => setSpOpen(true)}>
+                {(m.system_prompt || '').trim()
+                  ? <><div className="sp-preview-text">{m.system_prompt}</div><div className="sp-preview-fade" /></>
+                  : <div className="sp-preview-empty">Click to write a system prompt…</div>}
+                <div className="sp-preview-hint">Click to edit</div>
               </button>
-              <input ref={bgRef} type="file" hidden onChange={pickBg} accept=".png,.jpg,.jpeg,.gif,.webp,.svg,image/*" />
-              <input value={m.bg_image || ''} onChange={(e) => set('bg_image', e.target.value)} placeholder="Image URL, or a CSS gradient" />
-              <div className="bg-up-row">
-                <button type="button" className="btn ghost" onClick={() => bgRef.current?.click()}>Upload image…</button>
-                {m.bg_image && <button type="button" className="btn ghost" onClick={() => set('bg_image', '')}>Clear</button>}
-              </div>
-              <div className="muted-note">Paste an image URL, upload a file, or use a CSS gradient like <code>linear-gradient(120deg, #a0c4ff, #ffc6ff)</code>. Users can turn it off for conversations from the model picker.</div>
             </div>
-          )}
-        </Accordion>
+            {spOpen && <SystemPromptEditor value={m.system_prompt || ''} onChange={(v) => set('system_prompt', v)} onClose={() => setSpOpen(false)} />}
 
-        <Accordion title="Sampling" sub={curType ? curType.label : 'Provider parameters'}>
-          <div className="muted-note">Optional overrides sent with each request. Leave a field blank to use the provider's default. Only parameters supported by {curType?.label || 'this provider'} are shown.</div>
-          <div className="sampling-grid">
-            {[
-              ['temperature', 'Temperature', '0.0 \u2013 2.0'], ['top_p', 'Top P', '0.0 \u2013 1.0'],
-              ['top_k', 'Top K', 'e.g. 40'], ['min_p', 'Min P', '0.0 \u2013 1.0'],
-              ['repetition_penalty', 'Repetition penalty', 'e.g. 1.1'], ['presence_penalty', 'Presence penalty', '-2.0 \u2013 2.0'],
-              ['frequency_penalty', 'Frequency penalty', '-2.0 \u2013 2.0'], ['seed', 'Seed', 'integer'],
-              ['max_tokens', 'Max tokens', 'e.g. 2048']
-            ].filter(([k]) => allowedSamplers.includes(k)).map(([k, label, ph]) => (
-              <div className="samp-field" key={k}>
-                <label>{label}</label>
-                <input type="number" step="any" placeholder={ph} value={m[k] ?? ''} onChange={(e) => set(k, e.target.value)} />
+            <div className="me2-group-label">Availability</div>
+            <div className="me2-toggle-card">
+              <Toggle m={m} set={set} k="is_default" label="Set as default" note="Pre-selected for users on first login. Only one model can be the default." />
+              <div className="field row">
+                <div><label>Hidden</label><div className="muted-note">Stays in your admin list but is removed from every user's model picker.</div></div>
+                <div className={'switch' + (!m.enabled ? ' on' : '')} onClick={() => set('enabled', m.enabled ? 0 : 1)} />
               </div>
-            ))}
-          </div>
-        </Accordion>
-
-        <Accordion title="Pricing" sub="Usage cost tracking">
-          <div className="muted-note">Optional. Used to estimate cost in each user's Usage tab. Prices are per 1,000,000 tokens. Leave blank or 0 for local or free models.</div>
-          {preset && (
-            <div className="me-hint" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, margin: '10px 0', padding: '8px 12px', border: '1px solid rgba(128,128,128,0.25)', borderRadius: 8 }}>
-              <span>Recognized as <strong>{preset.label}</strong> (${preset.in}/${preset.out} per 1M). {(Number(m.cost_in) === preset.in && Number(m.cost_out) === preset.out) ? 'Applied.' : 'You can apply or override it.'}</span>
-              {!(Number(m.cost_in) === preset.in && Number(m.cost_out) === preset.out) && <button type="button" className="btn" onClick={applyPreset}>Apply preset</button>}
-            </div>
-          )}
-          <div className="sampling-grid">
-            <div className="samp-field">
-              <label>Input $ / 1M tokens</label>
-              <input type="number" step="any" min="0" placeholder="e.g. 3.00" value={m.cost_in ?? ''} onChange={(e) => set('cost_in', e.target.value)} />
-            </div>
-            <div className="samp-field">
-              <label>Output $ / 1M tokens</label>
-              <input type="number" step="any" min="0" placeholder="e.g. 15.00" value={m.cost_out ?? ''} onChange={(e) => set('cost_out', e.target.value)} />
+              <Toggle m={m} set={set} k="in_more_models" label={'Group under "More models"'} note="Moves the model out of the main list into a collapsible group." />
+              {!!m.in_more_models && (
+                <div className="field"><label>Group label</label>
+                  <input value={m.more_models_label || ''} onChange={(e) => set('more_models_label', e.target.value)} placeholder="More models" /></div>
+              )}
+              <Toggle m={m} set={set} k="unavailable" label="Temporarily unavailable" note="Stays visible in the picker but users can't select it, and a banner explains why. Admins can still use it for testing." />
+              {!!m.unavailable && (
+                <div className="field"><label>Unavailability message</label>
+                  <textarea rows={3} value={m.unavailable_reason || ''} onChange={(e) => set('unavailable_reason', e.target.value)} placeholder="e.g. Down for maintenance — back shortly." /></div>
+              )}
             </div>
           </div>
-          {(m.cost_in != null || m.cost_out != null) && (
-            <button type="button" className="linklike" style={{ marginTop: 8 }} onClick={clearPrice}>Clear price (treat as local / free)</button>
-          )}
-        </Accordion>
+        )}
+
+        {section === 'behavior' && (
+          <div className="me2-pane">
+            <div className="me2-toggle-card">
+              <Toggle m={m} set={set} k="has_reasoning" label="Extended thinking" note="Adds the Extended toggle so users can request deeper reasoning." />
+            </div>
+            {!!m.has_reasoning && <>
+              <div className="me2-group-label">Mode triggers</div>
+              <div className="two-col">
+                <div className="field"><label>Extended-mode trigger</label>
+                  <input value={m.reasoning_token || ''} onChange={(e) => set('reasoning_token', e.target.value)} placeholder="/think" /></div>
+                <div className="field"><label>Standard-mode trigger</label>
+                  <input value={m.non_reasoning_token || ''} onChange={(e) => set('non_reasoning_token', e.target.value)} placeholder="/no_think" /></div>
+              </div>
+              <div className="muted-note">Appended to the system prompt, on its own line, depending on whether the user has Extended turned on.</div>
+            </>}
+            <div className="me2-group-label">Reasoning tags</div>
+            <div className="two-col">
+              <div className="field"><label>Reasoning start tag</label>
+                <input value={m.think_open || ''} onChange={(e) => set('think_open', e.target.value)} placeholder="<think>" /></div>
+              <div className="field"><label>Reasoning end tag</label>
+                <input value={m.think_close || ''} onChange={(e) => set('think_close', e.target.value)} placeholder="</think>" /></div>
+            </div>
+            <div className="muted-note">How the model delimits its reasoning in the output stream. Leave blank to use the default {'<think>…</think>'}.</div>
+            <div className="me2-toggle-card" style={{ marginTop: 14 }}>
+              <Toggle m={m} set={set} k="reasoning_collapsible" inverted label="Show reasoning to users" note="When on, users can expand and read the thought process. When off, they see only a 'Thinking…' status." />
+            </div>
+
+            <div className="me2-group-label">Long conversations</div>
+            <div className="me2-toggle-card">
+              <Toggle m={m} set={set} k="enable_summaries" label="Auto-summarize long chats" note="When a conversation nears the context window, older turns are compacted into a summary so it can keep going." />
+            </div>
+            {!!m.enable_summaries && <>
+              <div className="field"><label>Context window</label>
+                <div className="ctx-row">
+                  <input type="number" min="0" value={m.num_ctx ?? ''} onChange={(e) => set('num_ctx', e.target.value)} placeholder="e.g. 32768" />
+                  <button className="btn" type="button" onClick={detect} disabled={detecting}>{detecting ? 'Detecting…' : 'Detect'}</button>
+                </div>
+                <div className="muted-note">{detectMsg || 'The model\u2019s maximum context in tokens. Detect asks the provider; otherwise enter it manually.'}</div>
+              </div>
+              <div className="field"><label>Context headroom <span className="muted-note" style={{ display: 'inline' }}>(%)</span></label>
+                <input type="number" step="1" min="3" max="60" value={Math.round((m.summary_padding ?? 0.125) * 100)} onChange={(e) => set('summary_padding', (parseFloat(e.target.value) || 0) / 100)} style={{ maxWidth: 140 }} />
+                <div className="muted-note">Summarize once the chat fills past this much of the context window's free space. 12% leaves a safety margin.</div>
+              </div>
+            </>}
+          </div>
+        )}
+
+        {section === 'capabilities' && (
+          <div className="me2-pane">
+            <div className="me2-toggle-card">
+              <Toggle m={m} set={set} k="has_vision" label="Image input" note="Let users attach images for the model to see. Off = non-image files only." />
+              <Toggle m={m} set={set} k="sandbox_allowed" inverted label="Allow sandbox tools" note="Lets users enable code and file tools for this model. Off means sandbox can't be turned on." />
+              {m.sandbox_allowed !== 0 && <Toggle m={m} set={set} k="sandbox_auto" label="Enable sandbox by default" note="New chats with this model start with sandbox tools on." />}
+            </div>
+            <div className="field"><label>Tool-call limit</label>
+              <input type="number" min="0" value={m.agent_steps || ''} placeholder="Unlimited" onChange={(e) => set('agent_steps', e.target.value)} style={{ maxWidth: 140 }} />
+              <div className="muted-note">Maximum tool rounds per response. Leave blank or 0 for unlimited.</div>
+            </div>
+            <div className="me2-group-label">Picker badges</div>
+            <div className="muted-note" style={{ marginBottom: 4 }}>Cosmetic labels shown beside the model in the picker. They don't change behaviour.</div>
+            <div className="me2-toggle-card">
+              <Toggle m={m} set={set} k="cap_text" label="Text-only badge" note="Marks the model as accepting text input only." />
+              <Toggle m={m} set={set} k="cap_vision" label="Image badge" note="Marks the model as accepting images." />
+              <Toggle m={m} set={set} k="cap_reasoning" label="Reasoning badge" note="Marks the model as able to reason." />
+              <Toggle m={m} set={set} k="cap_compact" label="Combine into a single badge" note="Collapse the badges into one ⓘ that reveals them on hover." />
+            </div>
+          </div>
+        )}
+
+        {section === 'appearance' && (
+          <div className="me2-pane">
+            <div className="field"><label>Model logos</label>
+              <div className="icon-grid">
+                <IconSlot label="Static" value={m.static_icon} def="/starburst.svg" onChange={(v) => set('static_icon', v)} />
+                <IconSlot label="Generating" value={m.generating_icon} def="/starburst-generating.svg" anim={(m.generating_anim || 'spin') === 'none' ? '' : (m.generating_anim || 'spin')} onChange={(v) => set('generating_icon', v)} />
+                <IconSlot label="Thinking" value={m.thinking_icon} def="/starburst-thinking.svg" anim={(m.thinking_anim || 'pulse') === 'none' ? '' : (m.thinking_anim || 'pulse')} onChange={(v) => set('thinking_icon', v)} />
+              </div>
+              <div className="icon-grid anim-row">
+                <div />
+                <select className="anim-sel" value={m.generating_anim || 'spin'} onChange={(e) => set('generating_anim', e.target.value)}>
+                  <option value="spin">Spin</option><option value="pulse">Breathe</option><option value="bounce">Bounce</option><option value="wobble">Wobble</option><option value="fade">Fade</option><option value="none">No motion</option>
+                </select>
+                <select className="anim-sel" value={m.thinking_anim || 'pulse'} onChange={(e) => set('thinking_anim', e.target.value)}>
+                  <option value="pulse">Breathe</option><option value="spin">Spin</option><option value="bounce">Bounce</option><option value="wobble">Wobble</option><option value="fade">Fade</option><option value="none">No motion</option>
+                </select>
+              </div>
+              <div className="muted-note">Click an icon to upload a png, svg, jpeg, or gif. Previews animate as they will in chat.</div>
+            </div>
+            <div className="field">
+              <label>Icon size <span className="muted-note" style={{ display: 'inline' }}>{(m.icon_size || 40)}px</span></label>
+              <div className="icon-size-row">
+                <input type="range" min="14" max="64" value={m.icon_size || 40} onChange={(e) => set('icon_size', parseInt(e.target.value))} />
+                <button className="btn ghost icon-size-reset" disabled={!m.icon_size} onClick={() => set('icon_size', 0)}>Reset</button>
+              </div>
+              <div className="muted-note">Size of the model's icon shown beside its messages. Default is 40px. Legacy is 26px.</div>
+            </div>
+            <div className="me2-toggle-card">
+              <Toggle m={m} set={set} k="dropdown_icon" inverted label="Show logo in picker" note="Display this model's static logo next to its name in the model picker." />
+            </div>
+            <div className="field">
+              <label>Logo position</label>
+              <div className="seg">
+                <button className={(m.icon_position || 'below') === 'above' ? 'on' : ''} onClick={() => set('icon_position', 'above')}>Above text</button>
+                <button className={(m.icon_position || 'below') === 'below' ? 'on' : ''} onClick={() => set('icon_position', 'below')}>Below text</button>
+              </div>
+              <div className="muted-note">Where the logo sits relative to the message it generates.</div>
+            </div>
+            <div className="me2-toggle-card">
+              <Toggle m={m} set={set} k="bg_enabled" label="Showcase background" note="Show a custom backdrop behind the whole interface when this model is selected. UI panels turn to frosted glass to blend in." />
+            </div>
+            {!!m.bg_enabled && (
+              <div className="field">
+                <label>Background image or CSS</label>
+                <button type="button" className="bg-preview" style={bgPreviewStyle(m.bg_image)} onClick={() => bgRef.current?.click()} title="Click to upload an image">
+                  {!m.bg_image && <span className="bg-preview-empty">Click to upload an image</span>}
+                </button>
+                <input ref={bgRef} type="file" hidden onChange={pickBg} accept=".png,.jpg,.jpeg,.gif,.webp,.svg,image/*" />
+                <input value={m.bg_image || ''} onChange={(e) => set('bg_image', e.target.value)} placeholder="Image URL, or a CSS gradient" />
+                <div className="bg-up-row">
+                  <button type="button" className="btn ghost" onClick={() => bgRef.current?.click()}>Upload image…</button>
+                  {m.bg_image && <button type="button" className="btn ghost" onClick={() => set('bg_image', '')}>Clear</button>}
+                </div>
+                <div className="muted-note">Paste an image URL, upload a file, or use a CSS gradient like <code>linear-gradient(120deg, #a0c4ff, #ffc6ff)</code>.</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {section === 'sampling' && (
+          <div className="me2-pane">
+            <div className="muted-note">Optional overrides sent with each request. Leave a field blank to use the provider's default. Only parameters supported by {curType?.label || 'this provider'} are shown.</div>
+            <div className="sampling-grid">
+              {[
+                ['temperature', 'Temperature', '0.0 \u2013 2.0'], ['top_p', 'Top P', '0.0 \u2013 1.0'],
+                ['top_k', 'Top K', 'e.g. 40'], ['min_p', 'Min P', '0.0 \u2013 1.0'],
+                ['repetition_penalty', 'Repetition penalty', 'e.g. 1.1'], ['presence_penalty', 'Presence penalty', '-2.0 \u2013 2.0'],
+                ['frequency_penalty', 'Frequency penalty', '-2.0 \u2013 2.0'], ['seed', 'Seed', 'integer'],
+                ['max_tokens', 'Max tokens', 'e.g. 2048']
+              ].filter(([k]) => allowedSamplers.includes(k)).map(([k, label, ph]) => (
+                <div className="samp-field" key={k}>
+                  <label>{label}</label>
+                  <input type="number" step="any" placeholder={ph} value={m[k] ?? ''} onChange={(e) => set(k, e.target.value)} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {section === 'pricing' && (
+          <div className="me2-pane">
+            <div className="muted-note">Optional. Used to estimate cost in each user's Usage tab. Prices are per 1,000,000 tokens. Leave blank or 0 for local or free models.</div>
+            {preset && (
+              <div className="me2-preset">
+                <span>Recognized as <strong>{preset.label}</strong> (${preset.in}/${preset.out} per 1M). {priced ? 'Applied.' : 'You can apply or override it.'}</span>
+                {!priced && <button type="button" className="btn" onClick={applyPreset}>Apply preset</button>}
+              </div>
+            )}
+            <div className="sampling-grid">
+              <div className="samp-field">
+                <label>Input $ / 1M tokens</label>
+                <input type="number" step="any" min="0" placeholder="e.g. 3.00" value={m.cost_in ?? ''} onChange={(e) => set('cost_in', e.target.value)} />
+              </div>
+              <div className="samp-field">
+                <label>Output $ / 1M tokens</label>
+                <input type="number" step="any" min="0" placeholder="e.g. 15.00" value={m.cost_out ?? ''} onChange={(e) => set('cost_out', e.target.value)} />
+              </div>
+            </div>
+            {(m.cost_in != null || m.cost_out != null) && (
+              <button type="button" className="linklike" style={{ marginTop: 10 }} onClick={clearPrice}>Clear price (treat as local / free)</button>
+            )}
+          </div>
+        )}
       </div>
-      <div className="btn-row me-foot">
-        <span className="autosave-status">
-          {autosaveState === 'saving' ? 'Saving…' : autosaveState === 'saved' ? 'All changes saved to draft ✓' : 'Edits save automatically to your draft'}
-        </span>
+
+      <div className="me2-foot">
+        <span className={'autosave-dot' + (autosaveState === 'saved' ? ' flash' : '')} />
+        {autosaveState === 'saving' ? 'Saving…' : autosaveState === 'saved' ? 'All changes saved to draft' : 'Edits save automatically to your draft'}
       </div>
     </div>
   );
@@ -660,43 +716,47 @@ export default function AdminPanel({ user, onClose }) {
             const shown = q ? models.filter(m => (m.display_name || '').toLowerCase().includes(q) || (m.internal_name || '').toLowerCase().includes(q)) : models;
             return (
               <>
-                <div className="models-head">
-                  <div>
-                    <h2>Models</h2>
-                    <div className="hint">Edits save to your draft automatically. Use <strong>Push to all clients</strong> (top right) to make them live for everyone.</div>
-                  </div>
-                </div>
-                <div className="models-split">
-                  <div className="models-list">
-                    {models.length > 6 && (
-                      <input className="model-filter" value={modelFilter} onChange={(e) => setModelFilter(e.target.value)} placeholder={`Filter ${models.length} models…`} />
-                    )}
-                    {shown.map((m, i) => (
-                      <div key={m.id}
-                        className={'model-row' + (sel && sel.id === m.id ? ' active' : '') + (!q && drag.dragging === i ? ' dragging' : '') + (!q && drag.over === i ? ' drag-over' : '')}
-                        draggable={!q} onDragStart={() => !q && drag.onStart(i)} onDragEnd={drag.onEnd}
-                        onDragOver={(e) => { if (q) return; e.preventDefault(); drag.onOver(i); }}
-                        onDrop={(e) => { if (q) return; e.preventDefault(); drag.onDrop(i); }}
-                        onClick={() => setSelModel(m.id)}>
-                        {!q && <span className="grip"><Grip /></span>}
-                        <img className="mr-icon" src={m.static_icon || '/starburst.svg'} alt="" />
-                        <div className="mr-meta">
-                          <span className="mr-name">{m.display_name || 'Untitled model'}</span>
-                          <span className="mr-sub">{m.internal_name}</span>
+                <div className="mg-wrap">
+                  <div className="mg-rail">
+                    <div className="mg-rail-head">
+                      <span className="mg-rail-title">Models <span className="mg-count">{models.length}</span></span>
+                      <button className="mg-add-btn" onClick={add} title="Add model"><Plus style={{ width: 16 }} /></button>
+                    </div>
+                    <div className="mg-search">
+                      <input value={modelFilter} onChange={(e) => setModelFilter(e.target.value)} placeholder="Search models…" />
+                    </div>
+                    <div className="mg-list">
+                      {shown.map((m, i) => (
+                        <div key={m.id}
+                          className={'mg-row' + (sel && sel.id === m.id ? ' active' : '') + (!q && drag.dragging === i ? ' dragging' : '') + (!q && drag.over === i ? ' drag-over' : '')}
+                          draggable={!q} onDragStart={() => !q && drag.onStart(i)} onDragEnd={drag.onEnd}
+                          onDragOver={(e) => { if (q) return; e.preventDefault(); drag.onOver(i); }}
+                          onDrop={(e) => { if (q) return; e.preventDefault(); drag.onDrop(i); }}
+                          onClick={() => setSelModel(m.id)}>
+                          {!q && <span className="mg-grip"><Grip /></span>}
+                          <img className="mg-row-icon" src={m.static_icon || '/starburst.svg'} alt="" />
+                          <div className="mg-row-meta">
+                            <span className="mg-row-name">
+                              {m.display_name || 'Untitled model'}
+                              {!!m.is_default && <span className="mg-star" title="Default">★</span>}
+                            </span>
+                            <span className="mg-row-sub">{m.internal_name || 'no id'}</span>
+                          </div>
+                          <span className="mg-dots">
+                            {!m.enabled && <span className="mg-dot dim" title="Hidden" />}
+                            {!!m.unavailable && <span className="mg-dot warn" title="Unavailable" />}
+                            {!!m.in_more_models && <span className="mg-dot" title="Grouped" />}
+                          </span>
                         </div>
-                        <span className="mr-badges">
-                          {!!m.is_default && <span className="mr-badge">default</span>}
-                          {!m.enabled && <span className="mr-badge dim">hidden</span>}
-                          {!!m.unavailable && <span className="mr-badge warn">unavailable</span>}
-                          {!!m.in_more_models && <span className="mr-badge dim">grouped</span>}
-                        </span>
-                      </div>
-                    ))}
-                    {q && shown.length === 0 && <div className="muted-note" style={{ padding: '10px 4px' }}>No models match "{modelFilter}".</div>}
-                    <button className="btn add-model" onClick={add}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> Add model</button>
-                    <button className="btn ghost discover-btn" onClick={openDiscover}><Cube style={{ width: 14, verticalAlign: '-2px' }} /> Discover from backend</button>
+                      ))}
+                      {q && shown.length === 0 && <div className="mg-empty">No models match “{modelFilter}”.</div>}
+                    </div>
+                    <div className="mg-rail-foot">
+                      <button className="btn add-model" onClick={add}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> Add model</button>
+                      <button className="btn ghost discover-btn" onClick={openDiscover}><Cube style={{ width: 14, verticalAlign: '-2px' }} /> Discover</button>
+                    </div>
                   </div>
-                  <div className="models-detail">
+                  <div className="mg-detail">
                     {sel
                       ? <ModelEditor key={sel.id} m={sel} onChange={change} onDelete={del} autosaveState={autosave} providers={providers} providerTypes={providerTypes} />
                       : <div className="muted-note" style={{ padding: 20 }}>No models yet — add one to get started.</div>}

@@ -104,6 +104,12 @@ CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit(ts);`);
   sdb.pragma('user_version = 5');
 }
 
+if (sdb.pragma('user_version', { simple: true }) < 6) {
+  sdb.exec(`CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, user_id TEXT, updated_at INTEGER, created_at INTEGER, data TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
+CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id, updated_at);`);
+  sdb.pragma('user_version = 6');
+}
+
 export const uid = () => crypto.randomUUID();
 let lastTs = 0;
 export const now = () => { const t = Date.now(); lastTs = t > lastTs ? t : lastTs + 1; return lastTs; };
@@ -118,7 +124,8 @@ const MIRROR = {
   spaces: { owner_id: o => o.owner_id ?? null, created_at: o => o.created_at ?? 0, updated_at: o => o.updated_at ?? 0 },
   space_messages: { space_id: o => o.space_id ?? null, created_at: o => o.created_at ?? 0 },
   sessions: { user_id: o => o.user_id ?? null, last_seen: o => o.last_seen ?? 0, created_at: o => o.created_at ?? 0 },
-  audit: { ts: o => o.ts ?? 0, actor_id: o => o.actor_id ?? null }
+  audit: { ts: o => o.ts ?? 0, actor_id: o => o.actor_id ?? null },
+  projects: { user_id: o => o.user_id ?? null, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 }
 };
 
 function collection(table) {
@@ -187,6 +194,10 @@ auditCol.recent = (limit, offset) => auditRecentStmt.all(limit, offset).map(r =>
 const auditPruneStmt = sdb.prepare('DELETE FROM audit WHERE ts < ?');
 auditCol.prune = before => { try { return auditPruneStmt.run(before).changes; } catch { return 0; } };
 
+const projectsCol = collection('projects');
+const projectsByUserStmt = sdb.prepare('SELECT data FROM projects WHERE user_id=? ORDER BY updated_at DESC');
+projectsCol.byUser = userId => projectsByUserStmt.all(userId).map(r => JSON.parse(r.data));
+
 export const db = {
   users: collection('users'),
   chats: chatsCol,
@@ -197,7 +208,8 @@ export const db = {
   spaces: collection('spaces'),
   spaceMessages: spaceMessagesCol,
   sessions: sessionsCol,
-  audit: auditCol
+  audit: auditCol,
+  projects: projectsCol
 };
 
 const sGet = sdb.prepare('SELECT value FROM settings WHERE key=?');

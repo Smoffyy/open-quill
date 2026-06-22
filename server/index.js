@@ -317,8 +317,51 @@ app.get('/api/users/search', authMiddleware, (req, res) => {
 app.get('/api/chats', authMiddleware, (req, res) => {
   const list = db.chats.byUser(req.user.id)
     .sort((a, b) => b.updated_at - a.updated_at)
-    .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred, folderId: c.folder_id || null }));
+    .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred, folderId: c.folder_id || null, projectId: c.project_id || null }));
   res.json(list);
+});
+
+// ---------- projects ----------
+function projectView(p) {
+  const chats = db.chats.filter(c => c.user_id === p.user_id && c.project_id === p.id);
+  return { id: p.id, name: p.name, description: p.description || '', instructions: p.instructions || '', starred: !!p.starred, updated_at: p.updated_at, created_at: p.created_at, chatCount: chats.length };
+}
+app.get('/api/projects', authMiddleware, (req, res) => {
+  res.json(db.projects.byUser(req.user.id).map(projectView));
+});
+app.post('/api/projects', authMiddleware, (req, res) => {
+  const t = now();
+  const name = String(req.body?.name || 'New project').slice(0, 120).trim() || 'New project';
+  const description = String(req.body?.description || '').slice(0, 2000);
+  const p = db.projects.insert({ id: uid(), user_id: req.user.id, name, description, instructions: '', starred: 0, created_at: t, updated_at: t });
+  res.json(projectView(p));
+});
+app.get('/api/projects/:id', authMiddleware, (req, res) => {
+  const p = db.projects.byId(req.params.id);
+  if (!p || p.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+  const chats = db.chats.filter(c => c.user_id === req.user.id && c.project_id === p.id)
+    .sort((a, b) => b.updated_at - a.updated_at)
+    .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred }));
+  res.json({ ...projectView(p), chats });
+});
+app.patch('/api/projects/:id', authMiddleware, (req, res) => {
+  const p = db.projects.byId(req.params.id);
+  if (!p || p.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+  const patch = { updated_at: now() };
+  if ('name' in req.body) patch.name = String(req.body.name || '').slice(0, 120).trim() || 'New project';
+  if ('description' in req.body) patch.description = String(req.body.description || '').slice(0, 2000);
+  if ('instructions' in req.body) patch.instructions = String(req.body.instructions || '').slice(0, 8000);
+  if ('starred' in req.body) patch.starred = req.body.starred ? 1 : 0;
+  db.projects.update(p.id, patch);
+  res.json(projectView(db.projects.byId(p.id)));
+});
+app.delete('/api/projects/:id', authMiddleware, (req, res) => {
+  const p = db.projects.byId(req.params.id);
+  if (p && p.user_id === req.user.id) {
+    for (const c of db.chats.filter(c => c.user_id === req.user.id && c.project_id === p.id)) db.chats.update(c.id, { project_id: null });
+    db.projects.remove(x => x.id === p.id);
+  }
+  res.json({ ok: true });
 });
 
 // ---------- folders ----------
@@ -371,8 +414,10 @@ app.get('/api/chats-overview', authMiddleware, (req, res) => {
 });
 app.post('/api/chats', authMiddleware, (req, res) => {
   const t = now();
-  const c = db.chats.insert({ id: uid(), user_id: req.user.id, title: 'New chat', starred: 0, sandbox: 0, created_at: t, updated_at: t });
-  res.json({ id: c.id, title: c.title, updated_at: c.updated_at, starred: false });
+  let projectId = null;
+  if (req.body?.projectId) { const p = db.projects.byId(req.body.projectId); if (p && p.user_id === req.user.id) projectId = p.id; }
+  const c = db.chats.insert({ id: uid(), user_id: req.user.id, project_id: projectId, title: 'New chat', starred: 0, sandbox: 0, created_at: t, updated_at: t });
+  res.json({ id: c.id, title: c.title, updated_at: c.updated_at, starred: false, projectId });
 });
 app.get('/api/chats/export-all', authMiddleware, (req, res) => {
   const myChats = db.chats.filter(c => c.user_id === req.user.id).sort((a, b) => a.updated_at - b.updated_at);
@@ -438,7 +483,7 @@ app.get('/api/chats/:id', authMiddleware, (req, res) => {
       siblings: sibs.map(s => s.id)
     };
   });
-  res.json({ chat: { id: c.id, title: c.title, starred: !!c.starred, sandbox: !!c.sandbox, summary: c.summary || '', hasSummary: !!c.summary }, messages });
+  res.json({ chat: { id: c.id, title: c.title, starred: !!c.starred, sandbox: !!c.sandbox, summary: c.summary || '', hasSummary: !!c.summary, projectId: c.project_id || null }, messages });
 });
 
 app.post('/api/chats/:id/branch', authMiddleware, (req, res) => {
@@ -511,6 +556,11 @@ app.patch('/api/chats/:id', authMiddleware, (req, res) => {
       const fid = req.body.folderId;
       if (fid === null || fid === '') patch.folder_id = null;
       else { const f = db.folders.byId(fid); if (f && f.user_id === req.user.id) patch.folder_id = fid; }
+    }
+    if ('projectId' in req.body) {
+      const pid = req.body.projectId;
+      if (pid === null || pid === '') patch.project_id = null;
+      else { const p = db.projects.byId(pid); if (p && p.user_id === req.user.id) patch.project_id = pid; }
     }
     db.chats.update(c.id, patch);
   }
