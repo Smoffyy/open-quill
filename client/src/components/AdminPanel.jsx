@@ -1133,7 +1133,7 @@ export default function AdminPanel({ user, onClose }) {
                 </div>
               ))}
               <div className="preset-form">
-                <input placeholder="Name fragment (e.g. my-model)" value={presetForm.match} onChange={(e) => setPresetForm(f => ({ ...f, match: e.target.value }))} />
+                <input placeholder="my-model" value={presetForm.match} onChange={(e) => setPresetForm(f => ({ ...f, match: e.target.value }))} />
                 <input placeholder="Label" value={presetForm.label} onChange={(e) => setPresetForm(f => ({ ...f, label: e.target.value }))} />
                 <input type="number" step="any" min="0" placeholder="$ in" value={presetForm.in} onChange={(e) => setPresetForm(f => ({ ...f, in: e.target.value }))} />
                 <input type="number" step="any" min="0" placeholder="$ out" value={presetForm.out} onChange={(e) => setPresetForm(f => ({ ...f, out: e.target.value }))} />
