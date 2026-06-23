@@ -149,7 +149,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
 
   return (
     <div className="overlay" onMouseDown={(e) => e.target.classList.contains('overlay') && onClose()}>
-      <div className="modal" style={{ position: 'relative' }}>
+      <div className="modal" style={{ position: 'relative', right: 100 }}>
         <button className="modal-close" onClick={onClose}>✕</button>
         <div className="modal-side">
           <div className="ms-label">Settings</div>

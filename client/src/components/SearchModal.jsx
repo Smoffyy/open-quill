@@ -41,7 +41,7 @@ export default function SearchModal({ onClose, onOpen }) {
 
   return (
     <div className="overlay search-overlay" onMouseDown={(e) => e.target.classList.contains('overlay') && onClose()}>
-      <div className="search-modal" onKeyDown={onKey}>
+      <div className="search-modal" onKeyDown={onKey} style={{ position: 'relative', right: '100px', bottom: '400px' }}>
         <div className="search-head">
           <Search style={{ width: 18 }} />
           <input ref={inputRef} value={q} placeholder="Search your chats…" onChange={(e) => setQ(e.target.value)} />

@@ -16,7 +16,7 @@ export default function Toaster() {
   }), [remove]);
   if (!items.length) return null;
   return (
-    <div className="toaster">
+    <div className="toaster" style={{ transform: 'translate(-150px, -850px)' }}>
       {items.map(t => {
         const Ico = t.icon && ICONS[t.icon];
         return (
