@@ -107,6 +107,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
         {extended && current?.hasReasoning && <span className="ext">Extended</span>}
         <ChevDown style={{ width: 15, height: 15 }} />
       </button>
+      {open && <div className="model-scrim" onClick={() => setOpen(false)} />}
       {open && (
         <div ref={menuRef} className={'model-menu' + (place.down ? ' up' : '')} style={place.maxH ? { maxHeight: place.maxH, overflowY: 'auto' } : undefined}>
           {main.map(Opt)}

@@ -28,7 +28,7 @@ import Toaster from './components/Toaster.jsx';
 import Lightbox from './components/Lightbox.jsx';
 import ShortcutsModal from './components/ShortcutsModal.jsx';
 import { toast } from './toast.js';
-import { Down, ChevDown, Paper, Compact, Ghost, Search } from './components/icons.jsx';
+import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu } from './components/icons.jsx';
 import { scanTools } from './toolproto.js';
 
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: 'Assistants can make mistakes, double-check responses.', greetings: ['How can I help you?'], appIcon: '', quickPrompts: [], version: '' };
@@ -192,6 +192,7 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileDrawer, setMobileDrawer] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showCredits, setShowCredits] = useState(false);
@@ -672,6 +673,7 @@ export default function App() {
   function jumpDown() { stick.current = true; setShowJump(false); scrollBottom(true); }
 
   async function openChat(id, push = true) {
+    setMobileDrawer(false);
     if (incognito) setIncognito(false);
     setShowProjects(false);
     if (id !== activeIdRef.current) { setLiveFile(null); setPendingFiles({}); setArtifactFocus(null); doneBlocksRef.current = 0; }
@@ -698,6 +700,7 @@ export default function App() {
     } catch { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); }
   }
   function newChat(fromPop) {
+    setMobileDrawer(false);
     if (incognito) setIncognito(false);
     setShowProjects(false);
     setCurrentProject(null);
@@ -840,6 +843,7 @@ export default function App() {
     setProjects(ps => ps.map(p => p.id === pid ? { ...p, chatCount: Math.max(0, (p.chatCount || 1) - 1) } : p));
   }
   function openProjects(id = null) {
+    setMobileDrawer(false);
     setProjectOpenId(id);
     setShowProjects(true);
     history.pushState({}, '', id ? '/project/' + id : '/projects');
@@ -931,11 +935,14 @@ export default function App() {
         folders={folders} onCreateFolder={createFolder} onRenameFolder={renameFolder} onToggleFolder={toggleFolder} onDeleteFolder={deleteFolder} onMoveChat={moveChatToFolder}
         onNew={newChat} onOpen={openChat} onDelete={deleteChat} onToggleStar={toggleStar}
         collapsed={collapsed} onToggle={() => setCollapsed(c => !c)}
+        mobileOpen={mobileDrawer} onMobileClose={() => setMobileDrawer(false)}
         onSettings={() => setShowSettings(true)} onAdmin={() => { history.pushState({}, '', '/admin'); setShowAdmin(true); }}
         onCredits={() => setShowCredits(true)} onChangelog={() => setShowChangelog(true)} onLicense={() => setShowLicense(true)} onLogout={logout} version={cfg.version}
-        onChatsOverview={() => setChatsOverview(true)}
-        onSpaces={() => { history.pushState({}, '', '/spaces'); setShowSpaces(true); }} spacesPending={spacesPending}
+        onChatsOverview={() => { setMobileDrawer(false); setChatsOverview(true); }}
+        onSpaces={() => { setMobileDrawer(false); history.pushState({}, '', '/spaces'); setShowSpaces(true); }} spacesPending={spacesPending}
         projects={projects} onProjects={() => openProjects(null)} onOpenProject={(id) => openProjects(id)} />
+
+      {mobileDrawer && <div className="drawer-backdrop" onClick={() => setMobileDrawer(false)} />}
 
       <div className={'main' + (incognito ? ' incognito' : '')} data-incognito={incognito ? 'on' : undefined}>
         <Toaster />
@@ -944,6 +951,9 @@ export default function App() {
             <div className="incognito-title"><Ghost style={{ width: 18 }} /> Incognito chat</div>
             <button className="incognito-close" onClick={toggleIncognito} title="Exit incognito" disabled={streaming || queued}>✕</button>
           </div>
+        )}
+        {empty && (
+          <button className="mobile-menu-btn empty-menu" onClick={() => setMobileDrawer(true)} title="Menu"><Menu style={{ width: 20 }} /></button>
         )}
         {!incognito && empty && (
           <button className="incognito-fab" onClick={toggleIncognito} title="Incognito chat — not saved" disabled={streaming || queued}>
@@ -979,6 +989,7 @@ export default function App() {
         ) : (
           <>
             <div className="topbar">
+              <button className="mobile-menu-btn" onClick={() => setMobileDrawer(true)} title="Menu"><Menu style={{ width: 20 }} /></button>
               {renaming ? (
                 <input className="chat-rename" autoFocus value={renameVal}
                   onChange={(e) => setRenameVal(e.target.value)}

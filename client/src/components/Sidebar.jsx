@@ -146,7 +146,7 @@ export default function Sidebar({
   user, chats, chatsLoaded = true, activeId, appName, onNew, onOpen, onDelete, onToggleStar,
   folders = [], onCreateFolder, onRenameFolder, onToggleFolder, onDeleteFolder, onMoveChat,
   collapsed, onToggle, onSettings, onAdmin, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview,
-  onSpaces, spacesPending = 0, projects = [], onProjects, onOpenProject
+  onSpaces, spacesPending = 0, projects = [], onProjects, onOpenProject, mobileOpen = false, onMobileClose
 }) {
   const [menu, setMenu] = useState(false);
   const [shiftHeld, setShiftHeld] = useState(false);
@@ -188,13 +188,14 @@ export default function Sidebar({
   const row = (c) => <ChatRow key={c.id} c={c} active={c.id === activeId} showTrash={showTrash} folders={folders} {...rowProps} />;
 
   return (
-    <div className={'sidebar' + (collapsed ? ' collapsed' : '')}
+    <div className={'sidebar' + (collapsed ? ' collapsed' : '') + (mobileOpen ? ' mobile-open' : '')}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
       <div className="sidebar-head">
         <div className="brand">{appName || 'open-quill'}</div>
         <div className="sidebar-head-actions">
           <button className="icon-btn search-btn"><Search style={{ width: 17 }} /></button>
-          <button className="icon-btn" onClick={onToggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}><Panel style={{ width: 17 }} /></button>
+          <button className="icon-btn collapse-btn" onClick={onToggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}><Panel style={{ width: 17 }} /></button>
+          <button className="icon-btn mobile-close-btn" onClick={onMobileClose} title="Close menu"><span style={{ fontSize: 20, lineHeight: 1 }}>✕</span></button>
         </div>
       </div>
       <div className="nav">

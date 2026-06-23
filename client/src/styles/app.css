@@ -1885,3 +1885,134 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .slash-item.active .slash-ico { color: var(--accent); }
 .slash-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .slash-sub { font-size: 10.5px; color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); padding: 2px 7px; border-radius: 99px; flex-shrink: 0; }
+
+/* ============================================================
+   MOBILE SUPPORT (additive — desktop untouched)
+   ============================================================ */
+.mobile-menu-btn, .mobile-close-btn, .drawer-backdrop { display: none; }
+
+@media (max-width: 768px) {
+  /* ---- sidebar becomes a slide-in drawer ---- */
+  .sidebar, .sidebar.collapsed {
+    position: fixed; top: 0; left: 0; bottom: 0; width: min(86vw, 340px); max-width: 340px;
+    z-index: 130; transform: translateX(-100%); transition: transform .26s cubic-bezier(.3,.8,.3,1);
+    border-right: 1px solid var(--border-soft); box-shadow: 0 0 60px #00000080; overflow: hidden;
+  }
+  .sidebar.mobile-open { transform: none; }
+  .sidebar.collapsed .brand, .sidebar.collapsed .chats, .sidebar.collapsed .nav-label,
+  .sidebar.collapsed .section-label, .sidebar.collapsed .profile-info, .sidebar.collapsed .search-btn { display: revert; }
+  .sidebar.collapsed .nav-item { justify-content: flex-start; padding: 6px 10px; width: 100%; }
+  .sidebar .collapse-btn { display: none; }
+  .mobile-close-btn { display: grid; place-items: center; }
+  .drawer-backdrop { display: block; position: fixed; inset: 0; z-index: 125; background: #00000080; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); animation: fade .2s ease; }
+
+  /* ---- mobile menu (hamburger) buttons ---- */
+  .mobile-menu-btn { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: var(--surface-2); color: var(--text); flex-shrink: 0; }
+  .mobile-menu-btn:active { background: var(--surface-hover); }
+  .mobile-menu-btn.empty-menu { position: absolute; top: 12px; left: 12px; z-index: 20; }
+
+  /* ---- topbar ---- */
+  .topbar { padding: 10px 12px; gap: 8px; }
+  .topbar .chat-name { font-size: 15px; max-width: 46vw; overflow: hidden; }
+  .topbar .chat-name span, .topbar .chat-name { white-space: nowrap; text-overflow: ellipsis; }
+  .topbar-actions { gap: 4px; }
+  .paper-btn { width: 38px; height: 38px; }
+  .chat-rename { min-width: 0; flex: 1; }
+
+  /* ---- empty state / greeting ---- */
+  .center-wrap { padding: 0 14px; }
+  .greeting { font-size: 26px; text-align: center; }
+  .greeting img, .greeting svg { width: 34px !important; height: 34px !important; }
+  .greeting-sub { font-size: 14px; }
+  .incognito-fab { top: 12px; right: 12px; }
+
+  /* ---- thread / messages ---- */
+  .thread { padding: 0 16px; }
+  .msg.user .user-col { max-width: 88%; }
+  .bubble-user, .user-col { max-width: 100%; }
+  .assistant-body { font-size: 17px; }
+
+  /* ---- composer ---- */
+  .composer-wrap { padding: 0 10px !important; }
+  .active-composer { padding: 8px 10px 10px !important; max-width: 100% !important; }
+  .composer { border-radius: 22px; }
+  .to-bottom { bottom: 150px; }
+  .toaster { bottom: 120px; }
+
+  /* ---- model dropdown -> bottom sheet ---- */
+  .model-menu, .model-menu.up {
+    position: fixed !important; left: 0 !important; right: 0 !important; bottom: 0 !important; top: auto !important;
+    width: 100% !important; min-width: 0 !important; max-width: 100% !important; max-height: 80vh; overflow-y: auto;
+    border-radius: 20px 20px 0 0 !important; padding: 14px 12px calc(14px + env(safe-area-inset-bottom)) !important;
+    max-height: 78vh !important; animation: sheetUp .26s var(--ease-out) both !important;
+  }
+
+  /* ---- overlays -> bottom sheets ---- */
+  .overlay { padding-left: 0 !important; place-items: end stretch; }
+  .modal, .search-modal, .shortcuts-modal, .cmdk, .sp-modal, .pj-create, .summary-modal, .confirm-box, .chat-menu-pop {
+    width: 100% !important; max-width: 100% !important; border-radius: 22px 22px 0 0 !important;
+    animation: sheetUp .28s var(--ease-out) both !important; margin: 0 !important;
+  }
+  .search-modal, .cmdk { max-height: 80vh; }
+  .shortcuts-modal, .sp-modal, .pj-create, .summary-modal { max-height: 88vh; overflow-y: auto; }
+  .confirm-box { border-radius: 18px !important; margin: 0 12px 12px !important; width: auto !important; }
+  .chat-menu-pop { position: fixed !important; left: 0 !important; bottom: 0 !important; top: auto !important; width: 100% !important; }
+
+  /* settings modal: stack nav on top */
+  .modal { height: 90vh !important; max-height: 90vh; flex-direction: column; }
+  .modal-side { width: 100%; flex-direction: row; gap: 6px; overflow-x: auto; padding: 12px; border-right: none; border-bottom: 1px solid var(--border-soft); flex-shrink: 0; }
+  .modal-side .ms-label { display: none; }
+  .modal-side button, .modal-side .ms-item { white-space: nowrap; flex-shrink: 0; }
+  .modal-main { padding: 20px 18px; }
+  .modal-close { top: 10px; right: 10px; }
+
+  /* command palette anchored bottom */
+  .cmdk-overlay { place-items: end stretch; }
+}
+@keyframes sheetUp { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: none; } }
+[data-animations="off"] .sidebar { transition: none; }
+
+/* ---- mobile fixes: viewport lock, safe areas, sizing ---- */
+.model-scrim { display: none; }
+@media (max-width: 768px) {
+  html, body, #root { height: 100vh; height: 100dvh; overflow: hidden; overscroll-behavior: none; }
+  .app { height: 100vh; height: 100dvh; overflow: hidden; }
+  .main { min-height: 0; height: 100%; overflow: hidden; }
+  .scroll-area { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+
+  /* safe-area aware bars + floating buttons */
+  .topbar { padding-top: calc(10px + env(safe-area-inset-top)); }
+  .chats-overview .co-head, .pj-head, .co-head { padding-top: calc(14px + env(safe-area-inset-top)); }
+  .incognito-bar { padding-top: calc(8px + env(safe-area-inset-top)); }
+  .mobile-menu-btn.empty-menu { top: calc(12px + env(safe-area-inset-top)); }
+  .incognito-fab { top: calc(12px + env(safe-area-inset-top)); }
+  .sidebar-head { padding-top: calc(14px + env(safe-area-inset-top)); }
+
+  /* empty state: vertically centered, smaller greeting */
+  .center-wrap { padding: 16px; justify-content: center; overflow-y: auto; }
+  .greeting { font-size: 22px; margin-bottom: 18px; line-height: 1.22; }
+  .greeting img, .greeting svg { width: 28px !important; height: 28px !important; }
+
+  /* composer + bottom safe area */
+  .active-composer { padding-bottom: calc(10px + env(safe-area-inset-bottom)) !important; }
+  .qp-slot { padding-bottom: env(safe-area-inset-bottom); }
+
+  /* overview / projects header: stack so nothing overlaps */
+  .co-head, .pj-head { flex-wrap: wrap; gap: 10px; padding-left: 16px; padding-right: 16px; }
+  .co-head h2, .pj-head h2 { font-size: 22px; flex: 1 1 100%; }
+  .pj-head-actions { flex: 1 1 100%; justify-content: space-between; }
+  .co-body, .pj-body { padding-left: 16px; padding-right: 16px; }
+
+  /* model picker scrim behind the bottom sheet */
+  .model-scrim { display: block; position: fixed; inset: 0; z-index: 49; background: #00000070; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); animation: fade .18s ease; }
+
+  /* compactness + overlap guards */
+  .center-wrap .composer { padding: 14px 14px 12px; }
+  .composer textarea, .center-wrap .composer textarea { font-size: 16px; }
+  .qp-slot { margin-top: 14px; }
+  .qp-grid, .quick-prompts { gap: 8px; }
+  .qp-chip, .quick-prompts button { font-size: 13px; padding: 8px 12px; }
+  .topbar .chat-name { max-width: 60vw; }
+  .greeting { padding: 0 8px; }
+  .model-menu .model-opt { padding: 11px 12px; }
+}
