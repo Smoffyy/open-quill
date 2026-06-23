@@ -128,6 +128,7 @@ function FileCard({ call, result }) {
   const name = targetName(call);
   const failed = result && !result.ok;
   const adds = result?.adds, dels = result?.dels;
+  const unchanged = result && result.ok && result.unchanged;
   const showDiff = result && result.ok && (adds || dels) && (call.tool === 'create_file' || call.tool === 'str_replace');
   const openPath = (!failed && call.tool !== 'delete_file') ? openPathFor(call) : null;
   return (
@@ -143,6 +144,7 @@ function FileCard({ call, result }) {
           {dels ? <span className="del">−{dels}</span> : null}
         </span>
       )}
+      {unchanged && <span className="tl-note">unchanged</span>}
       {failed && <span className="tl-err">{result.error}</span>}
       {pending && <span className="tc-dots"><i /><i /><i /></span>}
     </span>

@@ -48,6 +48,7 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
   const [wrap, setWrap] = useState(false);
   const [prev, setPrev] = useState(null);
   const [baseText, setBaseText] = useState(null);
+  const loadTok = useRef(0);
   const ext = extOf(path);
   const isLive = liveText != null;
   const liveEdit = isLive && liveInfo && liveInfo.tool === 'str_replace';
@@ -81,9 +82,10 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
   }, [liveEdit, baseText, liveText, liveInfo]);
 
   async function load(v) {
+    const tok = ++loadTok.current;
     setData(null);
-    try { setData(await api.get(`/api/chats/${chatId}/file?path=${encodeURIComponent(path)}${v ? '&v=' + v : ''}`)); }
-    catch { setData({ error: true }); }
+    try { const r = await api.get(`/api/chats/${chatId}/file?path=${encodeURIComponent(path)}${v ? '&v=' + v : ''}`); if (tok === loadTok.current) setData(r); }
+    catch { if (tok === loadTok.current) setData({ error: true }); }
   }
   useEffect(() => { if (isLive) return; if (committed) { setDiff(false); setPrev(null); load(); } else setData(null); }, [path, isLive, committed]);
 
@@ -130,6 +132,18 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
   const liveActive = isLive || liveEdit;
 
   useEffect(() => { followRef.current = true; }, [path]);
+  useEffect(() => {
+    if (!canBack) return;
+    const onKey = (e) => {
+      if (e.key !== 'Escape' || menu) return;
+      const el = document.activeElement;
+      if (el && /^(INPUT|TEXTAREA)$/.test(el.tagName)) return;
+      if (el && el.isContentEditable) return;
+      onBack();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [canBack, menu, onBack]);
   useEffect(() => {
     if (!liveActive) { cancelAnimationFrame(rafRef.current); return; }
     const tick = () => {

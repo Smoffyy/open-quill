@@ -1356,6 +1356,7 @@ function resultPayload(call, r) {
   if (r.adds != null) o.adds = r.adds;
   if (r.dels != null) o.dels = r.dels;
   if (r.bytes != null) o.bytes = r.bytes;
+  if (r.unchanged) o.unchanged = true;
   if (r.lines != null) o.lines = r.lines;
   if (r.count != null) o.count = r.count;
   if (r.cleared != null) o.cleared = r.cleared;
@@ -1372,7 +1373,7 @@ function formatToolResult(call, r) {
   if (!r.ok) return `${head} → ERROR: ${r.error}` + (r.output ? `\n${r.output}` : '');
   switch (call.tool) {
     case 'bash': case 'run': return `bash$ ${call.cmd ?? call.command ?? ''}\n${r.output || '(no output)'}\n(exit ${r.exit ?? 0})`;
-    case 'create_file': return `${head} → created (v${r.v}, ${r.bytes} bytes, +${r.adds ?? 0}/-${r.dels ?? 0})`;
+    case 'create_file': return r.unchanged ? `${head} → unchanged (already v${r.v}, identical content — no write needed)` : `${head} → created (v${r.v}, ${r.bytes} bytes, +${r.adds ?? 0}/-${r.dels ?? 0})`;
     case 'str_replace': return `${head} → edited (now v${r.v}, +${r.adds ?? 0}/-${r.dels ?? 0})`;
     case 'view': return `${head} →\n${r.content}`;
     case 'list_files': return `list_files →\n${(r.files || []).map(f => `${f.path} (${f.size}b)`).join('\n') || '(empty)'}`;

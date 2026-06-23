@@ -1,6 +1,6 @@
 {
   "name": "open-quill",
-  "version": "2027.0.0-cascade.8",
+  "version": "2027.0.0-cascade.9",
   "private": true,
   "description": "Local Anthropic-style chat UI for OpenAI-compatible servers",
   "scripts": {
