@@ -428,11 +428,13 @@ app.get('/api/search', authMiddleware, (req, res) => {
   for (const c of chats) {
     let titleHit = (c.title || '').toLowerCase().includes(q);
     let snippet = '', matched = false;
-    const msgs = sortedMsgs(c.id);
-    for (const m of msgs) {
-      const text = typeof m.content === 'string' ? m.content : '';
-      const i = text.toLowerCase().indexOf(q);
-      if (i !== -1) { matched = true; const s = Math.max(0, i - 40); snippet = (s > 0 ? '…' : '') + text.slice(s, i + q.length + 60).trim(); break; }
+    if (!titleHit) {
+      const msgs = sortedMsgs(c.id);
+      for (const m of msgs) {
+        const text = typeof m.content === 'string' ? m.content : '';
+        const i = text.toLowerCase().indexOf(q);
+        if (i !== -1) { matched = true; const s = Math.max(0, i - 40); snippet = (s > 0 ? '…' : '') + text.slice(s, i + q.length + 60).trim(); break; }
+      }
     }
     if (titleHit || matched) results.push({ id: c.id, title: c.title, updated_at: c.updated_at, snippet: snippet || (c.title || ''), starred: !!c.starred });
   }
@@ -534,17 +536,17 @@ app.post('/api/chats/:id/fork', authMiddleware, (req, res) => {
   if (cut < 0) return res.status(404).json({ error: 'message not found' });
   const slice = path.slice(0, cut + 1);
   const t = now();
-  const keepSummary = (c.summary && c.summary_upto && c.summary_upto <= slice[slice.length - 1].created_at) ? c.summary : '';
-  const keepUpto = keepSummary ? c.summary_upto : 0;
   const nc = db.chats.insert({
     id: uid(), user_id: req.user.id, project_id: c.project_id || null, folder_id: c.folder_id || null,
     title: (c.title ? c.title + ' (fork)' : 'Forked chat').slice(0, 120), starred: 0, sandbox: c.sandbox ? 1 : 0,
-    summary: keepSummary, summary_upto: keepUpto, created_at: t, updated_at: t
+    summary: '', summary_upto: 0, created_at: t, updated_at: t
   });
   let prev = null, ts = t, leaf = null;
   for (const m of slice) {
     const nid = uid();
-    db.messages.insert({ ...m, id: nid, chat_id: nc.id, parent_id: prev, created_at: ts++ });
+    const copy = { ...m, id: nid, chat_id: nc.id, parent_id: prev, created_at: ts++ };
+    delete copy.active_leaf;
+    db.messages.insert(copy);
     prev = nid; leaf = nid;
   }
   db.chats.update(nc.id, { active_leaf: leaf });
