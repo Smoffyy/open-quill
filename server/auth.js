@@ -41,7 +41,7 @@ export function revokeSession(id) { db.sessions.remove(s => s.id === id); }
 export function revokeOtherSessions(userId, keepId) { db.sessions.remove(s => s.user_id === userId && s.id !== keepId); }
 
 export function publicUser(u) {
-  return { id: u.id, email: u.email, displayName: u.display_name || u.email.split('@')[0], isAdmin: !!u.is_admin, isOwner: !!u.is_owner, twoFactor: !!u.totp_enabled, prefs: u.prefs || {} };
+  return { id: u.id, email: u.email, displayName: u.display_name || u.email.split('@')[0], isAdmin: !!u.is_admin, isOwner: !!u.is_owner, twoFactor: !!u.totp_enabled, prefs: u.prefs || {}, instructions: u.instructions || '', savedPrompts: Array.isArray(u.saved_prompts) ? u.saved_prompts : [] };
 }
 
 function resolveToken(token) {

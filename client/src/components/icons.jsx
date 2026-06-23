@@ -36,6 +36,8 @@ export const Sparkles = (p) => <I {...p}><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12
 export const Paper = (p) => <I {...p}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></I>;
 export const Download = (p) => <I {...p}><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></I>;
 export const Refresh = (p) => <I {...p}><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></I>;
+export const Fork = (p) => <I {...p}><circle cx="6" cy="6" r="2.4"/><circle cx="6" cy="18" r="2.4"/><circle cx="18" cy="8" r="2.4"/><path d="M6 8.4v7.2M6 12h6a4 4 0 0 0 4-4v-.4"/></I>;
+export const Pin = (p) => <I {...p}><path d="M9 4h6l-1 5 3 3v2H7v-2l3-3-1-5zM12 17v3"/></I>;
 export const Wrench = (p) => <I {...p}><path d="M14.7 6.3a4 4 0 0 1-5 5L4 17v3h3l5.7-5.7a4 4 0 0 0 5-5z"/></I>;
 export const Folder = (p) => <I {...p}><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></I>;
 export const Pencil = (p) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>);

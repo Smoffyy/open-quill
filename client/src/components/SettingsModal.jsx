@@ -42,6 +42,8 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
   const [tab, setTab] = useState('general');
   const [chatSec, setChatSec] = useState('streaming');
   const [name, setName] = useState(user.displayName);
+  const [instructions, setInstructions] = useState(user.instructions || '');
+  const instrRef = useRef(user.instructions || '');
   const importRef = useRef(null);
   const [prefs, setPrefs] = useState({ animations: true, autoscroll: true, theme: 'system', accent: '', density: 'comfortable', messageEntrance: true, streamCursor: false, cursorStyle: 'block', revealMs: 40, chatStagger: true, themeFade: true, microFx: true, composerFx: true, iconGlow: false, focusGlow: false, oledShift: false, ...user.prefs });
   const [saved, setSaved] = useState(false);
@@ -123,13 +125,14 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       try {
-        const { user: u } = await api.patch('/api/me', { displayName: nextName, prefs: nextPrefs });
+        const { user: u } = await api.patch('/api/me', { displayName: nextName, prefs: nextPrefs, instructions: instrRef.current });
         onUpdated(u);
         setSaved(true); setTimeout(() => setSaved(false), 1300);
       } catch {}
     }, 450);
   }
   function changeName(v) { setName(v); scheduleSave(v, prefs); }
+  function changeInstructions(v) { setInstructions(v); instrRef.current = v; scheduleSave(name, prefs); }
 
   async function clearChats() {
     setClearMsg('');
@@ -168,6 +171,14 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
               <div className="field">
                 <label>What should we call you?</label>
                 <input value={name} onChange={(e) => changeName(e.target.value)} />
+              </div>
+              <div className="field">
+                <label>Instructions for Claude</label>
+                <div className="muted-note" style={{ marginBottom: 10 }}>Added to the system prompt for every chat. Use it for things to remember about you or how you'd like responses. Leave empty for none.</div>
+                <textarea className="instr-area" value={instructions} maxLength={8000} rows={5}
+                  placeholder="e.g. I'm a backend developer. Keep answers concise and skip the preamble."
+                  onChange={(e) => changeInstructions(e.target.value)} />
+                <div className="muted-note" style={{ textAlign: 'right' }}>{instructions.length}/8000</div>
               </div>
               <div className="field row">
                 <div><label>Export your chats</label><div className="muted-note">Download every saved chat as a single JSON file.</div></div>
@@ -256,7 +267,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
               <div className="field row">
                 <div><label>Theme</label><div className="muted-note">Follow your system, or pick one.</div></div>
                 <Seg value={prefs.theme || 'system'} onPick={(v) => setPref('theme', v)}
-                  options={[{ v: 'system', label: 'System' }, { v: 'light', label: 'Light' }, { v: 'dark', label: 'Dark' }, { v: 'anthropic', label: 'Anthropic' }]} />
+                  options={[{ v: 'system', label: 'System' }, { v: 'light', label: 'Light' }, { v: 'dark', label: 'Dark' }, { v: 'oled', label: 'OLED' }]} />
               </div>
               <div className="field">
                 <label>Accent color</label>

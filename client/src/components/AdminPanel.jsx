@@ -301,6 +301,10 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
                 <input type="number" step="1" min="3" max="60" value={Math.round((m.summary_padding ?? 0.125) * 100)} onChange={(e) => set('summary_padding', (parseFloat(e.target.value) || 0) / 100)} style={{ maxWidth: 140 }} />
                 <div className="muted-note">Summarize once the chat fills past this much of the context window's free space. 12% leaves a safety margin.</div>
               </div>
+              <div className="field"><label>Recent turns kept verbatim</label>
+                <input type="number" step="1" min="1" max="40" value={m.recent_window ?? 4} onChange={(e) => set('recent_window', parseInt(e.target.value) || 4)} style={{ maxWidth: 140 }} />
+                <div className="muted-note">The newest messages are never summarized — they stay word-for-word. Higher keeps more recent detail but uses more context.</div>
+              </div>
             </>}
           </div>
         )}

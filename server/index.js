@@ -143,8 +143,16 @@ app.patch('/api/me', authMiddleware, (req, res) => {
   const patch = {};
   if ('prefs' in req.body) patch.prefs = req.body.prefs;
   if ('displayName' in req.body) patch.display_name = req.body.displayName;
+  if ('instructions' in req.body) patch.instructions = String(req.body.instructions || '').slice(0, 8000);
   db.users.update(req.user.id, patch);
   res.json({ user: publicUser(db.users.byId(req.user.id)) });
+});
+app.put('/api/me/prompts', authMiddleware, (req, res) => {
+  const list = (Array.isArray(req.body.prompts) ? req.body.prompts : [])
+    .map(p => ({ id: String(p.id || uid()).slice(0, 40), title: String(p.title || '').trim().slice(0, 80), text: String(p.text || '').trim().slice(0, 8000) }))
+    .filter(p => p.title && p.text).slice(0, 50);
+  db.users.update(req.user.id, { saved_prompts: list });
+  res.json({ savedPrompts: list });
 });
 app.get('/api/me/usage', authMiddleware, (req, res) => {
   const windows = { '7': 7, '30': 30, '90': 90 };
@@ -412,6 +420,25 @@ app.get('/api/chats-overview', authMiddleware, (req, res) => {
   });
   res.json({ chats: page, total: all.length, offset, hasMore: offset + page.length < all.length });
 });
+app.get('/api/search', authMiddleware, (req, res) => {
+  const q = String(req.query.q || '').trim().toLowerCase();
+  if (q.length < 2) return res.json({ results: [] });
+  const chats = db.chats.byUser(req.user.id);
+  const results = [];
+  for (const c of chats) {
+    let titleHit = (c.title || '').toLowerCase().includes(q);
+    let snippet = '', matched = false;
+    const msgs = sortedMsgs(c.id);
+    for (const m of msgs) {
+      const text = typeof m.content === 'string' ? m.content : '';
+      const i = text.toLowerCase().indexOf(q);
+      if (i !== -1) { matched = true; const s = Math.max(0, i - 40); snippet = (s > 0 ? '…' : '') + text.slice(s, i + q.length + 60).trim(); break; }
+    }
+    if (titleHit || matched) results.push({ id: c.id, title: c.title, updated_at: c.updated_at, snippet: snippet || (c.title || ''), starred: !!c.starred });
+  }
+  results.sort((a, b) => b.updated_at - a.updated_at);
+  res.json({ results: results.slice(0, 40) });
+});
 app.post('/api/chats', authMiddleware, (req, res) => {
   const t = now();
   let projectId = null;
@@ -478,12 +505,12 @@ app.get('/api/chats/:id', authMiddleware, (req, res) => {
   const messages = path.map(m => {
     const sibs = kidsByParent.get(m.parent_id ?? null) || [];
     return {
-      id: m.id, role: m.role, content: m.content, reasoning: m.reasoning, model_id: m.model_id, attachments: m.attachments || [], created_at: m.created_at,
+      id: m.id, role: m.role, content: m.content, reasoning: m.reasoning, model_id: m.model_id, attachments: m.attachments || [], created_at: m.created_at, pinned: !!m.pinned,
       parentId: m.parent_id ?? null, branchIndex: sibs.findIndex(s => s.id === m.id), branchCount: sibs.length,
       siblings: sibs.map(s => s.id)
     };
   });
-  res.json({ chat: { id: c.id, title: c.title, starred: !!c.starred, sandbox: !!c.sandbox, summary: c.summary || '', hasSummary: !!c.summary, projectId: c.project_id || null }, messages });
+  res.json({ chat: { id: c.id, title: c.title, starred: !!c.starred, sandbox: !!c.sandbox, summary: c.summary || '', hasSummary: !!c.summary, projectId: c.project_id || null, instructions: c.instructions || '' }, messages });
 });
 
 app.post('/api/chats/:id/branch', authMiddleware, (req, res) => {
@@ -494,6 +521,57 @@ app.post('/api/chats/:id/branch', authMiddleware, (req, res) => {
   if (!start || start.chat_id !== c.id) return res.status(404).json({ error: 'message not found' });
   db.chats.update(c.id, { active_leaf: leafUnder(c.id, start.id) });
   res.json({ ok: true });
+});
+
+app.post('/api/chats/:id/fork', authMiddleware, (req, res) => {
+  const c = db.chats.byId(req.params.id);
+  if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+  ensureChain(c.id);
+  const path = activePath(c.id);
+  if (!path.length) return res.status(400).json({ error: 'empty chat' });
+  const cutId = req.body.messageId;
+  let cut = cutId ? path.findIndex(m => m.id === cutId) : path.length - 1;
+  if (cut < 0) return res.status(404).json({ error: 'message not found' });
+  const slice = path.slice(0, cut + 1);
+  const t = now();
+  const keepSummary = (c.summary && c.summary_upto && c.summary_upto <= slice[slice.length - 1].created_at) ? c.summary : '';
+  const keepUpto = keepSummary ? c.summary_upto : 0;
+  const nc = db.chats.insert({
+    id: uid(), user_id: req.user.id, project_id: c.project_id || null, folder_id: c.folder_id || null,
+    title: (c.title ? c.title + ' (fork)' : 'Forked chat').slice(0, 120), starred: 0, sandbox: c.sandbox ? 1 : 0,
+    summary: keepSummary, summary_upto: keepUpto, created_at: t, updated_at: t
+  });
+  let prev = null, ts = t, leaf = null;
+  for (const m of slice) {
+    const nid = uid();
+    db.messages.insert({ ...m, id: nid, chat_id: nc.id, parent_id: prev, created_at: ts++ });
+    prev = nid; leaf = nid;
+  }
+  db.chats.update(nc.id, { active_leaf: leaf });
+  res.json({ id: nc.id, title: nc.title });
+});
+
+app.patch('/api/chats/:id/messages/:mid', authMiddleware, (req, res) => {
+  const c = db.chats.byId(req.params.id);
+  if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+  const m = db.messages.byId(req.params.mid);
+  if (!m || m.chat_id !== c.id) return res.status(404).json({ error: 'message not found' });
+  const patch = {};
+  if ('pinned' in req.body) patch.pinned = req.body.pinned ? 1 : 0;
+  db.messages.update(m.id, patch);
+  res.json({ ok: true, pinned: !!patch.pinned });
+});
+
+app.get('/api/chats/:id/context', authMiddleware, (req, res) => {
+  const c = db.chats.byId(req.params.id);
+  if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+  const model = db.models.byId(req.query.modelId) || db.models.all().find(m => m.enabled) || db.models.all()[0];
+  if (!model) return res.json({ used: 0, limit: 0, pct: 0, hasSummary: !!c.summary, summaries: !!c.enable_summaries });
+  const convo = buildMessages(model, chatHistory(c, model), false, null, c.summary, promptVars(c.user_id), combinedInstructions(c));
+  const used = estimateTokens(convo);
+  const limit = (model.enable_summaries && model.num_ctx) ? model.num_ctx : (model.num_ctx || 0);
+  const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+  res.json({ used, limit, pct, hasSummary: !!c.summary, compacts: model.enable_summaries ? compactThreshold(model) : 0 });
 });
 
 app.get('/api/chats/:id/summary', authMiddleware, (req, res) => {
@@ -552,6 +630,7 @@ app.patch('/api/chats/:id', authMiddleware, (req, res) => {
     if ('title' in req.body) patch.title = req.body.title || 'New chat';
     if ('starred' in req.body) patch.starred = req.body.starred ? 1 : 0;
     if ('sandbox' in req.body) patch.sandbox = req.body.sandbox ? 1 : 0;
+    if ('instructions' in req.body) patch.instructions = String(req.body.instructions || '').slice(0, 8000);
     if ('folderId' in req.body) {
       const fid = req.body.folderId;
       if (fid === null || fid === '') patch.folder_id = null;
@@ -623,7 +702,7 @@ function shapePublic(m) {
     staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon, generatingAnim: m.generating_anim || 'spin', thinkingAnim: m.thinking_anim || 'pulse',
     iconPosition: m.icon_position || 'below', hasVision: !!m.has_vision, iconSize: m.icon_size || 0,
     sandboxAuto: !!m.sandbox_auto, sandboxAllowed: m.sandbox_allowed !== 0, dropdownIcon: m.dropdown_icon !== 0, isDefault: !!m.is_default, agentSteps: m.agent_steps || 0,
-    enableSummaries: !!m.enable_summaries, numCtx: m.num_ctx || 0, summaryPadding: m.summary_padding || 0.125,
+    enableSummaries: !!m.enable_summaries, numCtx: m.num_ctx || 0, summaryPadding: m.summary_padding || 0.125, recentWindow: m.recent_window || 4,
     unavailable: !!m.unavailable, unavailableReason: m.unavailable_reason || '',
     bgEnabled: !!m.bg_enabled, bgImage: m.bg_image || '',
     capVision: !!m.cap_vision, capReasoning: !!m.cap_reasoning, capText: !!m.cap_text, capCompact: !!m.cap_compact
@@ -682,7 +761,7 @@ app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
     has_vision: b.has_vision ? 1 : 0,
     think_open: b.think_open || '', think_close: b.think_close || '',
     sandbox_auto: b.sandbox_auto ? 1 : 0, sandbox_allowed: b.sandbox_allowed === false ? 0 : 1, dropdown_icon: b.dropdown_icon === false ? 0 : 1, is_default: 0, agent_steps: Number.isInteger(b.agent_steps) ? Math.max(0, b.agent_steps) : 0,
-    enable_summaries: b.enable_summaries ? 1 : 0, num_ctx: parseInt(b.num_ctx) || 0, summary_padding: typeof b.summary_padding === 'number' ? b.summary_padding : 0.125,
+    enable_summaries: b.enable_summaries ? 1 : 0, num_ctx: parseInt(b.num_ctx) || 0, summary_padding: typeof b.summary_padding === "number" ? b.summary_padding : 0.125, recent_window: parseInt(b.recent_window) > 0 ? parseInt(b.recent_window) : 4,
     in_more_models: b.in_more_models ? 1 : 0, more_models_label: b.more_models_label || 'More models',
     unavailable: b.unavailable ? 1 : 0, unavailable_reason: b.unavailable_reason || '',
     bg_enabled: b.bg_enabled ? 1 : 0, bg_image: b.bg_image || '',
@@ -708,6 +787,7 @@ app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
   for (const k of bool) if (k in req.body) patch[k] = req.body[k] ? 1 : 0;
   if ('agent_steps' in req.body) patch.agent_steps = Math.max(0, parseInt(req.body.agent_steps) || 0);
   if ('num_ctx' in req.body) patch.num_ctx = Math.max(0, parseInt(req.body.num_ctx) || 0);
+  if ('recent_window' in req.body) patch.recent_window = Math.max(1, parseInt(req.body.recent_window) || 4);
   if ('icon_size' in req.body) patch.icon_size = Math.max(0, Math.min(80, parseInt(req.body.icon_size) || 0));
   if ('summary_padding' in req.body) patch.summary_padding = Math.max(0.03, Math.min(0.6, parseFloat(req.body.summary_padding) || 0.125));
   const numF = ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'repetition_penalty', 'min_p', 'cost_in', 'cost_out'];
@@ -1338,7 +1418,7 @@ function chatHistory(chat, model) {
   const fresh = db.chats.byId(chat.id) || chat;
   const upto = fresh.summary && fresh.summary_upto ? fresh.summary_upto : 0;
   let rows = activePath(chat.id);
-  if (upto) rows = rows.filter(m => m.created_at > upto);
+  if (upto) rows = rows.filter(m => m.created_at > upto || m.pinned);
   return rows.map(m => {
     let text = stripToolSyntax(m.content || '').replace(/\n{3,}/g, '\n\n');
     const atts = m.attachments || [];
@@ -1363,13 +1443,20 @@ function chatHistory(chat, model) {
   });
 }
 
+function estTextTokens(s) {
+  if (!s) return 0;
+  let cjk = 0;
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); if ((c >= 0x3000 && c <= 0x9fff) || (c >= 0xac00 && c <= 0xd7af)) cjk++; }
+  return Math.ceil((s.length - cjk) / 3.6) + cjk;
+}
 function estimateTokens(messages) {
-  let chars = 0;
+  let total = 0;
   for (const m of messages) {
-    if (typeof m.content === 'string') chars += m.content.length;
-    else if (Array.isArray(m.content)) for (const p of m.content) chars += p.type === 'text' ? (p.text || '').length : 1000 * 3.5;
+    total += 4;
+    if (typeof m.content === 'string') total += estTextTokens(m.content);
+    else if (Array.isArray(m.content)) for (const p of m.content) total += p.type === 'text' ? estTextTokens(p.text || '') : 850;
   }
-  return Math.ceil(chars / 3.5);
+  return total;
 }
 
 // once we get near the context limit, fold older turns into chat.summary
@@ -1377,15 +1464,22 @@ function estimateTokens(messages) {
 async function compactStep(ws, chat, model) {
   const fresh = db.chats.byId(chat.id);
   const upto = fresh.summary && fresh.summary_upto ? fresh.summary_upto : 0;
+  const recent = recentWindow(model);
   const after = activePath(chat.id).filter(m => m.created_at > upto);
-  if (after.length <= 1) return false; // only the newest message remains; can't compact further
-  const toSummarize = after.slice(0, after.length - 1); // keep newest message verbatim
-  const marker = toSummarize[toSummarize.length - 1].created_at;
+  if (after.length <= recent + 1) return false;
+  const cut = after.length - recent;
+  const toSummarize = after.slice(0, cut).filter(m => !m.pinned);
+  if (!toSummarize.length) return false;
+  const marker = after[cut - 1].created_at;
   try { ws.send(JSON.stringify({ type: 'compacting', chatId: chat.id })); } catch {}
   const summary = await summarizeConversation(model, fresh.summary, toSummarize);
   db.chats.update(chat.id, { summary, summary_upto: marker });
   try { ws.send(JSON.stringify({ type: 'compacted', chatId: chat.id })); } catch {}
   return !!summary;
+}
+function recentWindow(model) {
+  const n = parseInt(model && model.recent_window);
+  return Number.isFinite(n) && n > 0 ? n : 4;
 }
 function compactThreshold(model) {
   if (!model.enable_summaries || !model.num_ctx) return Infinity;
@@ -1401,6 +1495,17 @@ function promptVars(userId) {
   catch { dt = now.toString(); }
   return { currentUser: name, currentDateTime: dt };
 }
+function userInstructions(userId) {
+  const u = userId ? db.users.byId(userId) : null;
+  return (u && u.instructions) ? u.instructions : '';
+}
+function combinedInstructions(chat) {
+  const parts = [];
+  const ui = userInstructions(chat && chat.user_id);
+  if (ui && ui.trim()) parts.push(ui.trim());
+  if (chat && chat.instructions && chat.instructions.trim()) parts.push(chat.instructions.trim());
+  return parts.join('\n\n');
+}
 async function maybeCompact(ws, chat, model, extended, sandboxOn) {
   const threshold = compactThreshold(model);
   if (threshold === Infinity) return;
@@ -1408,7 +1513,7 @@ async function maybeCompact(ws, chat, model, extended, sandboxOn) {
   while (guard++ < 3) {
     const fresh = db.chats.byId(chat.id);
     const sandboxP = sandboxOn ? sandboxPromptFor(chat.id) : null;
-    const convo = buildMessages(model, chatHistory(chat, model), extended, sandboxP, fresh.summary, promptVars(chat.user_id));
+    const convo = buildMessages(model, chatHistory(chat, model), extended, sandboxP, fresh.summary, promptVars(chat.user_id), combinedInstructions(fresh));
     if (estimateTokens(convo) < threshold) return;
     if (!(await compactStep(ws, chat, model))) return;
   }
@@ -1436,7 +1541,7 @@ wss.on('connection', (ws, req) => {
       if (membankOn) parts.push(membank.promptFor(getSetting('membank_prompt', '')));
       return parts.filter(Boolean).join('\n\n') || null;
     };
-    let base = buildMessages(model, history, extended, toolsP(), chatRow.summary, promptVars(chat.user_id));
+    let base = buildMessages(model, history, extended, toolsP(), chatRow.summary, promptVars(chat.user_id), combinedInstructions(chatRow));
     let inTurn = []; // assistant/tool exchanges accumulated during this response
     const assistantId = uid();
     const assistantParent = (db.chats.byId(chat.id) || {}).active_leaf || null;
@@ -1450,7 +1555,7 @@ wss.on('connection', (ws, req) => {
       for (let step = 0; step < maxSteps; step++) {
         // running low on context mid-response? summarize older turns, then carry on where we left off
         if (threshold !== Infinity && inTurn.length && estimateTokens([...base, ...inTurn]) >= threshold) {
-          if (await compactStep(ws, chat, model)) base = buildMessages(model, chatHistory(chat, model), extended, toolsP(), (db.chats.byId(chat.id) || {}).summary, promptVars(chat.user_id));
+          if (await compactStep(ws, chat, model)) base = buildMessages(model, chatHistory(chat, model), extended, toolsP(), (db.chats.byId(chat.id) || {}).summary, promptVars(chat.user_id), combinedInstructions(db.chats.byId(chat.id) || chat));
         }
         const convo = [...base, ...inTurn];
         const controller = new AbortController();

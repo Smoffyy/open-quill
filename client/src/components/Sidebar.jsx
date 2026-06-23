@@ -171,6 +171,19 @@ export default function Sidebar({
   const folderIds = new Set(folders.map(f => f.id));
   const inFolder = (fid) => chats.filter(c => !c.starred && c.folderId === fid);
   const others = chats.filter(c => !c.starred && (!c.folderId || !folderIds.has(c.folderId)));
+  const nowMs = Date.now();
+  const DAY = 86400000;
+  const recentGroups = [
+    { key: 'recent', label: 'Recents', items: [] },
+    { key: 'd3', label: '3+ days ago', items: [] },
+    { key: 'd7', label: '7+ days ago', items: [] },
+  ];
+  for (const c of others) {
+    const age = nowMs - (c.updated_at || nowMs);
+    if (age < 3 * DAY) recentGroups[0].items.push(c);
+    else if (age < 7 * DAY) recentGroups[1].items.push(c);
+    else recentGroups[2].items.push(c);
+  }
   const rowProps = { onOpen, onDelete, onToggleStar, onMoveChat, onDragChat: setDragChatId, folders };
   const row = (c) => <ChatRow key={c.id} c={c} active={c.id === activeId} showTrash={showTrash} folders={folders} {...rowProps} />;
 
@@ -238,7 +251,13 @@ export default function Sidebar({
             </div>
             {!recentsCollapsed && <>
               {others.length === 0 && <div className="chats-empty">No chats yet</div>}
-              {others.map(row)}
+              {recentGroups[0].items.map(row)}
+              {recentGroups.slice(1).map(g => g.items.length > 0 && (
+                <React.Fragment key={g.key}>
+                  <div className="section-label recents-sub">{g.label}</div>
+                  {g.items.map(row)}
+                </React.Fragment>
+              ))}
             </>}
           </>
         )}

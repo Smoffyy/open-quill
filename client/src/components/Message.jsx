@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Markdown from './Markdown.jsx';
 import { copyText } from '../clipboard.js';
+import { openLightbox } from '../lightbox.js';
 import ReasoningBlock from './ReasoningBlock.jsx';
-import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil } from './icons.jsx';
+import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin } from './icons.jsx';
 
 const glowCache = new Map();
 function useLogoGlow(src) {
@@ -69,7 +70,7 @@ function Attachments({ items }) {
   return (
     <div className="msg-attachments">
       {items.map((a, i) => a.type && a.type.startsWith('image/') ? (
-        <a key={i} className="att image" href={a.url} target="_blank" rel="noreferrer"><img src={a.url} alt={a.name} /></a>
+        <button key={i} className="att image" onClick={() => openLightbox(a.url, a.name)}><img src={a.url} alt={a.name} /></button>
       ) : (
         <a key={i} className="att file" href={a.url} target="_blank" rel="noreferrer">
           <FileText style={{ width: 18 }} />
@@ -96,11 +97,19 @@ function ModelIcon({ model, phase, below }) {
   return <div className={'msg-icon' + (below ? ' below' : '')} style={sz}><img src={src} className={cls} style={glow ? { '--icon-glow': glow } : undefined} alt="" /></div>;
 }
 
-function Message({ msg, model, streaming, phase, onRegenerate, onEdit, onSelectBranch, showIcon = true }) {
+function Message({ msg, model, models, currentId, streaming, phase, onRegenerate, onRegenerateWith, onEdit, onSelectBranch, onFork, onTogglePin, showIcon = true }) {
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
+  const [retryMenu, setRetryMenu] = useState(false);
+  const retryRef = useRef(null);
   const taRef = useRef(null);
+  useEffect(() => {
+    if (!retryMenu) return;
+    const h = (e) => { if (retryRef.current && !retryRef.current.contains(e.target)) setRetryMenu(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [retryMenu]);
   useEffect(() => {
     if (editing && taRef.current) { const el = taRef.current; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight + 2, 460) + 'px'; }
   }, [editing, draft]);
@@ -113,8 +122,9 @@ function Message({ msg, model, streaming, phase, onRegenerate, onEdit, onSelectB
   function saveEdit() { const v = draft.trim(); setEditing(false); if (v && v !== msg.content) onEdit?.(msg.id, v); }
   if (msg.role === 'user') {
     return (
-      <div className={'msg user' + (msg._enter ? ' enter' : '')}>
+      <div className={'msg user' + (msg._enter ? ' enter' : '') + (msg.pinned ? ' pinned' : '')} data-mid={msg.id}>
         <div className="user-col">
+          {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> Pinned</div>}
           <Attachments items={msg.attachments} />
           {editing ? (
             <div className="edit-box">
@@ -134,6 +144,8 @@ function Message({ msg, model, streaming, phase, onRegenerate, onEdit, onSelectB
               <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
               <button className="action-btn" onClick={doCopy} title="Copy">{copied ? <Check /> : <Copy />}</button>
               {onEdit && <button className="action-btn" onClick={startEdit} title="Edit"><Pencil style={{ width: 15 }} /></button>}
+              {onFork && <button className="action-btn" onClick={() => onFork(msg.id)} title="Fork into a new chat"><Fork style={{ width: 15 }} /></button>}
+              {onTogglePin && <button className={'action-btn' + (msg.pinned ? ' on' : '')} onClick={() => onTogglePin(msg.id, !msg.pinned)} title={msg.pinned ? 'Unpin' : 'Pin (keep in context)'}><Pin style={{ width: 15 }} /></button>}
             </div>
           )}
         </div>
@@ -146,8 +158,9 @@ function Message({ msg, model, streaming, phase, onRegenerate, onEdit, onSelectB
   const icon = showIt ? <ModelIcon model={model} phase={iconPhase} below={pos === 'below'} /> : null;
 
   return (
-    <div className={'msg assistant' + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '')}>
+    <div className={'msg assistant' + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '')} data-mid={msg.id}>
       {pos === 'above' && icon}
+      {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> Pinned</div>}
       <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} collapsible={model?.reasoningCollapsible !== false} />
       {(msg.content || !streaming) && (
         <div className={'assistant-body' + (streaming ? ' streaming' : '')}>
@@ -157,12 +170,26 @@ function Message({ msg, model, streaming, phase, onRegenerate, onEdit, onSelectB
       {!streaming && msg.content && (
         <div className="actions">
           <button className="action-btn" onClick={doCopy} title="Copy">{copied ? <Check /> : <Copy />}</button>
-          {/* Thumbs up/down — disabled for now, kept for later use
-          <button className="action-btn" title="Good"><ThumbUp /></button>
-          <button className="action-btn" title="Bad"><ThumbDown /></button>
-          */}
           <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
-          <button className="action-btn" title="Retry" onClick={() => onRegenerate?.(msg.id)}><Retry /></button>
+          <span className="retry-wrap" ref={retryRef}>
+            <button className="action-btn" title="Retry" onClick={() => onRegenerate?.(msg.id)}><Retry /></button>
+            {onRegenerateWith && models && models.length > 1 && (
+              <button className="action-caret" title="Retry with another model" onClick={() => setRetryMenu(o => !o)}>▾</button>
+            )}
+            {retryMenu && (
+              <div className="retry-menu">
+                <div className="retry-menu-label">Retry with</div>
+                {models.map(mm => (
+                  <button key={mm.id} className={mm.id === currentId ? 'on' : ''} onClick={() => { setRetryMenu(false); onRegenerateWith(msg.id, mm.id); }}>
+                    {mm.staticIcon && <img src={mm.staticIcon} alt="" />}{mm.displayName}{mm.id === currentId && <Check style={{ width: 13, marginLeft: 'auto' }} />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </span>
+          {onFork && <button className="action-btn" title="Fork into a new chat" onClick={() => onFork(msg.id)}><Fork /></button>}
+          {onTogglePin && <button className={'action-btn' + (msg.pinned ? ' on' : '')} title={msg.pinned ? 'Unpin' : 'Pin (keep in context)'} onClick={() => onTogglePin(msg.id, !msg.pinned)}><Pin /></button>}
+          {model?.displayName && <span className="msg-model-badge">{model.displayName}</span>}
         </div>
       )}
       {pos === 'below' && icon}

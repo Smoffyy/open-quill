@@ -5,11 +5,13 @@ export function resolveTheme(t) {
 }
 export function applyPrefs(prefs) {
   const root = document.documentElement;
-  const nextTheme = resolveTheme(prefs?.theme);
+  let nextTheme = resolveTheme(prefs?.theme);
+  if (nextTheme === 'dark') nextTheme = 'anthropic';
   root.setAttribute('data-theme', nextTheme);
   try { localStorage.setItem('oq-theme', nextTheme); } catch {}
   root.setAttribute('data-density', prefs?.density === 'compact' ? 'compact' : 'comfortable');
   root.setAttribute('data-entrance', prefs?.messageEntrance === false ? 'off' : 'on');
+  root.setAttribute('data-animations', prefs?.animations === false ? 'off' : 'on');
   root.setAttribute('data-cursor', prefs?.streamCursor ? (prefs?.cursorStyle === 'circle' ? 'circle' : 'block') : 'off');
   root.setAttribute('data-microfx', prefs?.microFx === false ? 'off' : 'on');
   root.setAttribute('data-composerfx', prefs?.composerFx === false ? 'off' : 'on');
