@@ -316,7 +316,7 @@ input, textarea { font-family: inherit; color: inherit; }
 .assistant-body code:not(pre code) { background: var(--hover-soft); padding: 1px 6px; border-radius: 5px; font-size: .88em; font-family: ui-monospace, monospace; }
 .assistant-body a { color: var(--accent); }
 
-.msg-icon { width: 26px; height: 26px; margin-bottom: 8px; }
+.msg-icon { width: 40px; height: 40px; margin-bottom: 8px; }
 .msg-icon.below { margin-bottom: 0; margin-top: 12px; transition: transform .22s cubic-bezier(.2,.7,.3,1); }
 .msg.assistant.has-actions .msg-icon.below { transform: translateY(-34px); }
 .msg.assistant.has-actions:hover .msg-icon.below { transform: translateY(0); }
