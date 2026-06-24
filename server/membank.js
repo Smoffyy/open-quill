@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getSetting, setSetting } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const MEMBANK_ROOT = path.join(__dirname, 'data', 'membank');
@@ -94,9 +95,40 @@ function rawList() {
   }
   return out;
 }
+function getMeta() { try { return getSetting('membank_meta', {}) || {}; } catch { return {}; } }
+function setMeta(m) { try { setSetting('membank_meta', m || {}); } catch {} }
+
 export function list() {
-  return rawList().map(f => ({ name: f.name, size: f.size, lines: countLines(f.name), readable: isReadable(f.name) }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const meta = getMeta();
+  const files = rawList().map((f, i) => {
+    const m = meta[f.name] || {};
+    return { name: f.name, size: f.size, lines: countLines(f.name), readable: isReadable(f.name), folder: m.folder || '', order: Number.isFinite(m.order) ? m.order : i };
+  });
+  files.sort((a, b) => (a.folder || '').localeCompare(b.folder || '') || a.order - b.order || a.name.localeCompare(b.name));
+  return files;
+}
+
+export function setFileMeta(name, patch) {
+  const s = safe(name); if (!s) return { ok: false, error: 'Invalid file name.' };
+  const meta = getMeta();
+  const cur = meta[s.base] || {};
+  if ('folder' in patch) cur.folder = String(patch.folder || '').trim().slice(0, 60);
+  if ('order' in patch) cur.order = parseInt(patch.order) || 0;
+  meta[s.base] = cur; setMeta(meta);
+  return { ok: true };
+}
+
+export function reorder(items) {
+  if (!Array.isArray(items)) return { ok: false, error: 'Invalid payload.' };
+  const meta = getMeta();
+  const present = new Set(rawList().map(f => f.name));
+  items.forEach((it, i) => {
+    const name = path.basename(String(it.name || ''));
+    if (!present.has(name)) return;
+    meta[name] = { folder: String(it.folder || '').trim().slice(0, 60), order: i };
+  });
+  setMeta(meta);
+  return { ok: true, files: list() };
 }
 
 export async function saveUpload(originalName, buffer) {
@@ -111,6 +143,7 @@ export function remove(name) {
   if (!s) return false;
   try { fs.unlinkSync(s.p); } catch {}
   try { fs.unlinkSync(cachePathFor(s.base)); } catch {}
+  const meta = getMeta(); if (meta[s.base]) { delete meta[s.base]; setMeta(meta); }
   return true;
 }
 export function rename(oldName, newName) {
@@ -127,6 +160,7 @@ export function rename(oldName, newName) {
       else fs.unlinkSync(oc);
     }
   } catch {}
+  const meta = getMeta(); if (meta[a.base]) { meta[b.base] = meta[a.base]; delete meta[a.base]; setMeta(meta); }
   return { ok: true, name: b.base };
 }
 
@@ -135,7 +169,11 @@ export function promptFor(introOverride) {
   if (!files.length) return '';
   const intro = (introOverride && String(introOverride).trim()) || DEFAULT_PROMPT;
   let p = '## Memory Bank\n' + intro + '\n\nAvailable files:\n';
-  for (const f of files) p += `- ${f.name}${f.readable ? ` (${f.lines} lines, ${f.size} bytes)` : ` (${f.size} bytes, not readable as text)`}\n`;
+  let curFolder = null;
+  for (const f of files) {
+    if ((f.folder || '') !== curFolder) { curFolder = f.folder || ''; if (curFolder) p += `[${curFolder}]\n`; }
+    p += `- ${f.name}${f.readable ? ` (${f.lines} lines, ${f.size} bytes)` : ` (${f.size} bytes, not readable as text)`}\n`;
+  }
   p += '\nTools (emit using the |TOOL| line protocol, same as other tools):\n';
   p += '- mb_view — read a memory bank file. Provide `path` (the file name). Optionally provide `start` and `end` line numbers (1-indexed, inclusive) to read only a slice, which keeps context small.\n';
   p += '- mb_search — search across all memory bank files for a term. Provide `query`.\n\n';

@@ -1,21 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
-import { Pencil, Fork, Star, Compact, Sliders, Pin, Copy } from './icons.jsx';
+import { Pencil, Fork, Star, Compact, Sliders, Pin, Copy, FileText } from './icons.jsx';
 
-export default function ChatMenu({ chat, modelId, pinned = [], onJump, onCopyConversation, onClose, onRename, onFork, onToggleStar, onInstructionsSaved }) {
+export default function ChatMenu({ chat, modelId, pinned = [], pins = [], onUnpinFile, onOpenPersonas, onJump, onCopyConversation, onClose, onRename, onFork, onToggleStar, onInstructionsSaved }) {
   const ref = useRef(null);
   const [instr, setInstr] = useState(chat.instructions || '');
   const [ctx, setCtx] = useState(null);
   const [savedTick, setSavedTick] = useState(false);
+  const [inspect, setInspect] = useState(null);
+  const [inspectOpen, setInspectOpen] = useState(false);
   const saveTimer = useRef(null);
   const baseInstr = useRef(chat.instructions || '');
 
   useEffect(() => {
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    const h = (e) => { if (inspectOpen) return; if (ref.current && !ref.current.contains(e.target)) onClose(); };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
-  }, [onClose]);
+  }, [onClose, inspectOpen]);
 
   useEffect(() => {
     let on = true;
@@ -23,6 +25,12 @@ export default function ChatMenu({ chat, modelId, pinned = [], onJump, onCopyCon
     api.get('/api/chats/' + chat.id + '/context' + q).then(d => { if (on) setCtx(d); }).catch(() => {});
     return () => { on = false; };
   }, [chat.id, modelId]);
+
+  async function openInspect() {
+    setInspectOpen(true); setInspect(null);
+    try { const q = modelId ? '?modelId=' + encodeURIComponent(modelId) : ''; setInspect(await api.get('/api/chats/' + chat.id + '/inspect' + q)); }
+    catch { setInspect({ error: true }); }
+  }
 
   function changeInstr(v) {
     setInstr(v);
@@ -43,6 +51,7 @@ export default function ChatMenu({ chat, modelId, pinned = [], onJump, onCopyCon
         <button onClick={() => { onClose(); onToggleStar?.(); }}><Star style={{ width: 15 }} /> {chat.starred ? 'Unstar' : 'Star'}</button>
         <button onClick={() => { onClose(); onFork?.(); }}><Fork style={{ width: 15 }} /> Fork chat</button>
         <button onClick={() => { onClose(); onCopyConversation?.(); }}><Copy style={{ width: 15 }} /> Copy all</button>
+        {onOpenPersonas && <button onClick={() => { onClose(); onOpenPersonas(); }}><Star style={{ width: 15 }} /> Personas</button>}
       </div>
       {pinned.length > 0 && (
         <div className="cmp-sec">
@@ -53,6 +62,21 @@ export default function ChatMenu({ chat, modelId, pinned = [], onJump, onCopyCon
                 <span className="cmp-pin-role">{m.role === 'user' ? 'You' : 'AI'}</span>
                 <span className="cmp-pin-text">{(typeof m.content === 'string' ? m.content : '').replace(/\s+/g, ' ').trim().slice(0, 80) || '(no text)'}</span>
               </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {pins.length > 0 && (
+        <div className="cmp-sec">
+          <div className="cmp-label"><Pin style={{ width: 14 }} /> Pinned files ({pins.length})</div>
+          <div className="cmp-note">Kept in context every turn for this chat.</div>
+          <div className="cmp-pinfiles">
+            {pins.map(p => (
+              <div key={p.url} className="cmp-pinfile">
+                <FileText style={{ width: 14 }} />
+                <span className="cmp-pinfile-name">{p.name}</span>
+                <button className="cmp-pinfile-x" title="Unpin" onClick={() => onUnpinFile?.(p.url)}>✕</button>
+              </div>
             ))}
           </div>
         </div>
@@ -78,6 +102,39 @@ export default function ChatMenu({ chat, modelId, pinned = [], onJump, onCopyCon
           )
         ) : <div className="cmp-note">Measuring…</div>}
       </div>
+      <div className="cmp-sec">
+        <button className="cmp-inspect-btn" onClick={openInspect}><Compact style={{ width: 14 }} /> Inspect context</button>
+      </div>
+      {inspectOpen && (
+        <div className="ctx-inspect-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setInspectOpen(false); }}>
+          <div className="ctx-inspect">
+            <div className="ctx-inspect-head">
+              <div>Context inspector</div>
+              <button className="ctx-x" onClick={() => setInspectOpen(false)}>✕</button>
+            </div>
+            {!inspect ? <div className="cmp-note" style={{ padding: 16 }}>Building…</div> : inspect.error ? <div className="cmp-note" style={{ padding: 16 }}>Could not load context.</div> : (
+              <div className="ctx-inspect-body">
+                <div className="ctx-summary">
+                  <span><b>{inspect.totalTokens.toLocaleString()}</b> tokens{inspect.limit ? ` / ${inspect.limit.toLocaleString()} (${inspect.pct}%)` : ''}</span>
+                </div>
+                <div className="ctx-flags">
+                  {inspect.flags.memoryBank && <span className="ctx-flag">Memory bank on</span>}
+                  {inspect.flags.webSearch && <span className="ctx-flag">Web search available</span>}
+                  {inspect.flags.summary && <span className="ctx-flag">Older turns compacted</span>}
+                </div>
+                <div className="ctx-segs">
+                  {inspect.segments.map(s => (
+                    <div key={s.index} className={'ctx-seg role-' + s.role}>
+                      <div className="ctx-seg-head"><span className="ctx-role">{s.role}</span><span className="ctx-seg-meta">{s.tokens.toLocaleString()} tok · {s.chars.toLocaleString()} ch{s.hasImages ? ' · img' : ''}</span></div>
+                      <div className="ctx-seg-prev">{s.preview || '(empty)'}{s.chars > 600 ? '…' : ''}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

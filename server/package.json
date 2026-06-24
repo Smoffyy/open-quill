@@ -17,8 +17,5 @@
     "multer": "^2.2.0",
     "pdfjs-dist": "^6.0.227",
     "ws": "^8.21.0"
-  },
-  "optionalDependencies": {
-    "@huggingface/transformers": "^3.0.0 || ^4.0.0"
   }
 }

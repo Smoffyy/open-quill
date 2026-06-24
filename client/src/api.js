@@ -10,7 +10,7 @@ export const api = {
   get: (u) => req('GET', u),
   post: (u, b) => req('POST', u, b),
   patch: (u, b) => req('PATCH', u, b),
-  del: (u) => req('DELETE', u),
+  del: (u, b) => req('DELETE', u, b),
   async upload(file) {
     const fd = new FormData();
     fd.append('file', file);

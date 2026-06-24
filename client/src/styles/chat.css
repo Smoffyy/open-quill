@@ -99,11 +99,18 @@
 .assistant-body code:not(pre code) { background: var(--hover-soft); padding: 1px 6px; border-radius: 5px; font-size: .88em; font-family: ui-monospace, monospace; }
 .assistant-body a { color: var(--accent); }
 
-.msg-icon { width: 40px; height: 40px; margin-bottom: 8px; }
+.msg-icon { display: inline-flex; align-items: center; gap: 9px; margin-bottom: 8px; }
 .msg-icon.below { margin-bottom: 0; margin-top: 12px; transition: transform .22s cubic-bezier(.2,.7,.3,1); }
 .msg.assistant.has-actions .msg-icon.below { transform: translateY(-34px); }
 .msg.assistant.has-actions:hover .msg-icon.below { transform: translateY(0); }
-.msg-icon img { width: 100%; height: 100%; }
+.msg-icon img { display: block; }
+.msg-icon-name { font-family: var(--font-sans); font-size: 14px; font-weight: 500; color: var(--text-muted); white-space: nowrap; }
+
+.msg.assistant.icon-left .assistant-row { display: flex; gap: 12px; align-items: flex-start; }
+.msg.assistant.icon-left .assistant-avatar { flex-shrink: 0; }
+.msg.assistant.icon-left .assistant-avatar .msg-icon { margin: 0; }
+.msg.assistant.icon-left .assistant-main { flex: 1; min-width: 0; }
+.msg.assistant.icon-left .assistant-name { font-family: var(--font-sans); font-size: 15px; font-weight: 600; color: var(--text); margin: 2px 0 6px; line-height: 1; }
 
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
 .seg button { padding: 8px 14px; font-size: 13px; font-family: var(--font-sans); color: var(--text-muted); background: var(--input-bg); transition: background .12s, color .12s; }

@@ -375,8 +375,12 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
               <div className="seg">
                 <button className={(m.icon_position || 'below') === 'above' ? 'on' : ''} onClick={() => set('icon_position', 'above')}>Above text</button>
                 <button className={(m.icon_position || 'below') === 'below' ? 'on' : ''} onClick={() => set('icon_position', 'below')}>Below text</button>
+                <button className={(m.icon_position || 'below') === 'left' ? 'on' : ''} onClick={() => set('icon_position', 'left')}>Left of text</button>
               </div>
-              <div className="muted-note">Where the logo sits relative to the message it generates.</div>
+              <div className="muted-note">Where the logo sits relative to the message it generates. "Left of text" places it as an avatar in a gutter beside the message.</div>
+            </div>
+            <div className="me2-toggle-card">
+              <Toggle m={m} set={set} k="show_name" label="Show model name" note="Display this model's name next to its logo on assistant messages." />
             </div>
             <div className="me2-toggle-card">
               <Toggle m={m} set={set} k="bg_enabled" label="Showcase background" note="Show a custom backdrop behind the whole interface when this model is selected. UI panels turn to frosted glass to blend in." />
@@ -466,19 +470,37 @@ export default function AdminPanel({ user, onClose }) {
   const [toolEdit, setToolEdit] = useState(null);
   const [customFns, setCustomFns] = useState([]);
   const [fnEdit, setFnEdit] = useState(null);
-  const [embed, setEmbed] = useState(null);
-  const [embedBusy, setEmbedBusy] = useState(false);
-  const [embedResult, setEmbedResult] = useState(null);
   const membankRef = useRef(null);
   const [mbEdit, setMbEdit] = useState(null);
   const [mbEditName, setMbEditName] = useState('');
   const [mbErr, setMbErr] = useState('');
+  const [mbDrag, setMbDrag] = useState(null);
   async function saveMbRename(oldName) {
     const name = mbEditName.trim();
     setMbErr('');
     if (!name || name === oldName) { setMbEdit(null); return; }
     try { const r = await api.patch('/api/admin/membank/' + encodeURIComponent(oldName), { name }); setMembankFiles(r.files || []); setMbEdit(null); }
     catch (e) { setMbErr(e?.message || 'Could not rename file.'); }
+  }
+  async function setMbFolder(name, folder) {
+    setMembankFiles(fs => fs.map(f => f.name === name ? { ...f, folder } : f));
+    try { const r = await api.patch('/api/admin/membank/' + encodeURIComponent(name), { folder }); setMembankFiles(r.files || []); } catch {}
+  }
+  async function commitMbOrder(ordered) {
+    setMembankFiles(ordered);
+    try { const r = await api.put('/api/admin/membank/order', { items: ordered.map(f => ({ name: f.name, folder: f.folder || '' })) }); if (r.files) setMembankFiles(r.files); } catch {}
+  }
+  function onMbDrop(target) {
+    if (!mbDrag || mbDrag === target.name) { setMbDrag(null); return; }
+    const arr = membankFiles.slice();
+    const from = arr.findIndex(f => f.name === mbDrag);
+    const to = arr.findIndex(f => f.name === target.name);
+    if (from < 0 || to < 0) { setMbDrag(null); return; }
+    const [moved] = arr.splice(from, 1);
+    moved.folder = target.folder || '';
+    arr.splice(to, 0, moved);
+    setMbDrag(null);
+    commitMbOrder(arr);
   }
   async function loadMembank() { try { const d = await api.get('/api/admin/membank'); setMembankFiles(d.files || []); } catch {} }
   async function onMembankPick(e) { const files = [...(e.target.files || [])]; e.target.value = ''; if (!files.length) return; try { const r = await api.uploadMembank(files); setMembankFiles(r.files || []); } catch {} }
@@ -503,9 +525,6 @@ export default function AdminPanel({ user, onClose }) {
   }
   async function deleteFn(id) { try { await api.del('/api/admin/functions/' + id); setCustomFns(fs => fs.filter(x => x.id !== id)); } catch {} }
   async function toggleFn(f) { try { const r = await api.patch('/api/admin/functions/' + f.id, { enabled: !f.enabled }); setCustomFns(fs => fs.map(x => x.id === f.id ? r.fn : x)); } catch {} }
-  async function loadEmbed() { try { setEmbed(await api.get('/api/admin/embeddings')); } catch {} }
-  async function saveEmbed(patch) { try { const r = await api.patch('/api/admin/embeddings', patch); setEmbed(e => ({ ...e, ...r.config })); } catch (e) { alert(e.message || 'Could not save.'); } }
-  async function testEmbed() { setEmbedBusy(true); setEmbedResult(null); try { setEmbedResult(await api.post('/api/admin/embeddings/test', { text: 'The quick brown fox.' })); } catch (e) { setEmbedResult({ ok: false, error: e.message || 'Test failed.' }); } finally { setEmbedBusy(false); } }
   const [audit, setAudit] = useState({ entries: [], total: 0, offset: 0, hasMore: false, loading: false, actions: [] });
   const [auditFilter, setAuditFilter] = useState({ action: '', actor: '', days: '' });
   const [adminUsage, setAdminUsage] = useState(null);
@@ -726,7 +745,6 @@ export default function AdminPanel({ user, onClose }) {
         <button className={'ar-tab' + (tab === 'membank' ? ' active' : '')} onClick={() => { setTab('membank'); loadMembank(); }}><FileText /> Memory Bank</button>
         <button className={'ar-tab' + (tab === 'tools' ? ' active' : '')} onClick={() => { setTab('tools'); loadTools(); }}><Wrench /> Tools</button>
         <button className={'ar-tab' + (tab === 'functions' ? ' active' : '')} onClick={() => { setTab('functions'); loadFns(); }}><Code /> Functions</button>
-        <button className={'ar-tab' + (tab === 'embeddings' ? ' active' : '')} onClick={() => { setTab('embeddings'); loadEmbed(); }}><Brain /> Embeddings</button>
         <button className={'ar-tab' + (tab === 'audit' ? ' active' : '')} onClick={() => { setTab('audit'); loadAudit(); }}><Clock /> Audit Log</button>
         <button className={'ar-tab' + (tab === 'usage' ? ' active' : '')} onClick={() => { setTab('usage'); loadAdminUsage(); loadPresets(); }}><Sliders /> Usage &amp; Pricing</button>
         <button className="ar-back" onClick={onClose}><Chevron style={{ transform: 'rotate(90deg)', width: 16 }} /> Back to chat</button>
@@ -1031,37 +1049,53 @@ export default function AdminPanel({ user, onClose }) {
                 <div className="muted-note" style={{ marginBottom: 8 }}>Text and PDF files work best (.md, .txt, .json, .pdf, code, etc.). PDFs are read as extracted text. Up to 25 MB each.</div>
                 <input ref={membankRef} type="file" multiple hidden onChange={onMembankPick} />
                 <button className="btn" onClick={() => membankRef.current?.click()}>Upload files</button>
+                <div className="muted-note" style={{ marginTop: 8 }}>Drag the handle to reorder or move files between folders. Type a folder name to group files; clear it to leave a file ungrouped.</div>
+                <datalist id="mb-folders">{[...new Set(membankFiles.map(f => f.folder).filter(Boolean))].map(fo => <option key={fo} value={fo} />)}</datalist>
                 <div style={{ marginTop: 12 }}>
-                  {membankFiles.length === 0 ? <div className="muted-note">No files yet.</div> : membankFiles.map(f => {
-                    const editing = mbEdit === f.name;
-                    return (
-                      <div key={f.name} className="mb-file-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: '1px solid rgba(128,128,128,0.2)', borderRadius: 8, marginBottom: 6 }}>
-                        <FileText style={{ width: 16, flexShrink: 0, opacity: 0.7 }} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          {editing ? (
-                            <input autoFocus value={mbEditName} onChange={(e) => setMbEditName(e.target.value)}
-                              onKeyDown={(e) => { if (e.key === 'Enter') saveMbRename(f.name); if (e.key === 'Escape') { setMbEdit(null); setMbErr(''); } }}
-                              style={{ width: '100%' }} />
-                          ) : (
-                            <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
-                          )}
-                          <div className="muted-note">{f.readable ? `${(f.lines || 0).toLocaleString()} lines · ${(f.size || 0).toLocaleString()} bytes` : `${(f.size || 0).toLocaleString()} bytes · not readable as text`}</div>
-                          {editing && mbErr && <div className="dz-err" style={{ marginTop: 4 }}>{mbErr}</div>}
-                        </div>
-                        {editing ? (
-                          <>
-                            <button className="btn" style={{ flexShrink: 0 }} onClick={() => saveMbRename(f.name)}>Save</button>
-                            <button className="btn ghost" style={{ flexShrink: 0 }} onClick={() => { setMbEdit(null); setMbErr(''); }}>Cancel</button>
-                          </>
-                        ) : (
-                          <>
-                            <button className="btn ghost" title="Rename" style={{ flexShrink: 0 }} onClick={() => { setMbEdit(f.name); setMbEditName(f.name); setMbErr(''); }}><Pencil style={{ width: 14 }} /></button>
-                            <button className="btn danger" title="Remove" style={{ flexShrink: 0 }} onClick={() => removeMembank(f.name)}><Trash style={{ width: 15 }} /></button>
-                          </>
-                        )}
+                  {membankFiles.length === 0 ? <div className="muted-note">No files yet.</div> : (() => {
+                    const groups = []; const seen = new Map();
+                    for (const f of membankFiles) { const k = f.folder || ''; if (!seen.has(k)) { seen.set(k, { folder: k, files: [] }); groups.push(seen.get(k)); } seen.get(k).files.push(f); }
+                    return groups.map(g => (
+                      <div key={g.folder || '__none'} className="mb-group">
+                        <div className="mb-group-head">{g.folder ? g.folder : 'Ungrouped'}</div>
+                        {g.files.map(f => {
+                          const editing = mbEdit === f.name;
+                          return (
+                            <div key={f.name} className={'mb-file-row' + (mbDrag === f.name ? ' dragging' : '')}
+                              onDragOver={(e) => e.preventDefault()} onDrop={() => onMbDrop(f)}>
+                              <span className="mb-drag" draggable onDragStart={() => setMbDrag(f.name)} onDragEnd={() => setMbDrag(null)} title="Drag to reorder / move">⋮⋮</span>
+                              <FileText style={{ width: 16, flexShrink: 0, opacity: 0.7 }} />
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                {editing ? (
+                                  <input autoFocus value={mbEditName} onChange={(e) => setMbEditName(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') saveMbRename(f.name); if (e.key === 'Escape') { setMbEdit(null); setMbErr(''); } }}
+                                    style={{ width: '100%' }} />
+                                ) : (
+                                  <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
+                                )}
+                                <div className="muted-note">{f.readable ? `${(f.lines || 0).toLocaleString()} lines · ${(f.size || 0).toLocaleString()} bytes` : `${(f.size || 0).toLocaleString()} bytes · not readable as text`}</div>
+                                {editing && mbErr && <div className="dz-err" style={{ marginTop: 4 }}>{mbErr}</div>}
+                              </div>
+                              {editing ? (
+                                <>
+                                  <button className="btn" style={{ flexShrink: 0 }} onClick={() => saveMbRename(f.name)}>Save</button>
+                                  <button className="btn ghost" style={{ flexShrink: 0 }} onClick={() => { setMbEdit(null); setMbErr(''); }}>Cancel</button>
+                                </>
+                              ) : (
+                                <>
+                                  <input className="mb-folder-input" list="mb-folders" placeholder="folder" defaultValue={f.folder || ''}
+                                    onBlur={(e) => { const v = e.target.value.trim(); if (v !== (f.folder || '')) setMbFolder(f.name, v); }}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }} />
+                                  <button className="btn ghost" title="Rename" style={{ flexShrink: 0 }} onClick={() => { setMbEdit(f.name); setMbEditName(f.name); setMbErr(''); }}><Pencil style={{ width: 14 }} /></button>
+                                  <button className="btn danger" title="Remove" style={{ flexShrink: 0 }} onClick={() => removeMembank(f.name)}><Trash style={{ width: 15 }} /></button>
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
-                    );
-                  })}
+                    ));
+                  })()}
                 </div>
               </div>
               <div className="settings-autosave">
@@ -1182,45 +1216,6 @@ export default function AdminPanel({ user, onClose }) {
                   </div>
                 ))}
               </div>
-            </>
-          )}
-          {tab === 'embeddings' && embed && (
-            <>
-              <div className="admin-section-head">
-                <div><h3>Embeddings</h3><div className="muted-note">Turn text into vectors for search and memory. Use your provider's embedding API, or run a HuggingFace model locally — it downloads to a folder in the project and runs on this machine.</div></div>
-              </div>
-              <div className="field"><label>Source</label>
-                <select value={embed.mode} onChange={(e) => saveEmbed({ mode: e.target.value })}>
-                  <option value="api">Provider API</option>
-                  <option value="local">Local (HuggingFace)</option>
-                </select>
-              </div>
-              {embed.mode === 'api' && <>
-                <div className="field"><label>Provider</label>
-                  <select value={embed.providerId || ''} onChange={(e) => saveEmbed({ providerId: e.target.value })}>
-                    <option value="">— choose —</option>
-                    {(embed.providers || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                </div>
-                <div className="field"><label>Embedding model</label>
-                  <input value={embed.model || ''} onChange={(e) => setEmbed(s => ({ ...s, model: e.target.value }))} onBlur={() => saveEmbed({ model: embed.model })} placeholder="text-embedding-3-small" />
-                  <div className="muted-note">The model name to send to the provider's <code>/embeddings</code> endpoint.</div>
-                </div>
-              </>}
-              {embed.mode === 'local' && <>
-                <div className="field"><label>HuggingFace model</label>
-                  <input value={embed.localModel || ''} onChange={(e) => setEmbed(s => ({ ...s, localModel: e.target.value }))} onBlur={() => saveEmbed({ localModel: embed.localModel })} placeholder="Xenova/all-MiniLM-L6-v2" />
-                  <div className="muted-note">A feature-extraction model (e.g. <code>Xenova/all-MiniLM-L6-v2</code>, <code>Xenova/bge-small-en-v1.5</code>). Downloaded to <code>{embed.modelsDir}</code> on first use.</div>
-                </div>
-                {!embed.localPackageAvailable && <div className="attach-err">{embed.localPackageError}</div>}
-                {embed.localPackageAvailable && <div className="muted-note">{embed.localModelDownloaded ? 'Model is downloaded and ready.' : 'Model will download on first use (may take a moment).'}</div>}
-              </>}
-              <div className="editor-actions">
-                <button className="btn" onClick={testEmbed} disabled={embedBusy}>{embedBusy ? 'Testing…' : 'Test embedding'}</button>
-              </div>
-              {embedResult && (embedResult.ok
-                ? <div className="muted-note">OK · {embedResult.source} · model <code>{embedResult.model}</code> · {embedResult.dim} dimensions<br />sample: [{(embedResult.sample || []).join(', ')}…]</div>
-                : <div className="attach-err">{embedResult.error}</div>)}
             </>
           )}
           {tab === 'audit' && (

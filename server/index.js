@@ -17,7 +17,6 @@ import * as toolproto from './toolproto.js';
 import * as membank from './membank.js';
 import * as customtools from './customtools.js';
 import * as customfns from './functions.js';
-import * as embeddings from './embeddings.js';
 
 function stripToolSyntax(text) {
   let s = String(text || '');
@@ -149,6 +148,18 @@ app.patch('/api/me', authMiddleware, (req, res) => {
   if ('instructions' in req.body) patch.instructions = String(req.body.instructions || '').slice(0, 8000);
   db.users.update(req.user.id, patch);
   res.json({ user: publicUser(db.users.byId(req.user.id)) });
+});
+app.put('/api/me/personas', authMiddleware, (req, res) => {
+  const list = (Array.isArray(req.body.personas) ? req.body.personas : [])
+    .map(p => ({
+      id: String(p.id || uid()).slice(0, 40),
+      name: String(p.name || '').trim().slice(0, 60),
+      modelId: p.modelId ? String(p.modelId).slice(0, 40) : null,
+      instructions: String(p.instructions || '').trim().slice(0, 8000)
+    }))
+    .filter(p => p.name).slice(0, 50);
+  db.users.update(req.user.id, { personas: list });
+  res.json({ personas: list });
 });
 app.put('/api/me/prompts', authMiddleware, (req, res) => {
   const list = (Array.isArray(req.body.prompts) ? req.body.prompts : [])
@@ -515,7 +526,23 @@ app.get('/api/chats/:id', authMiddleware, (req, res) => {
       siblings: sibs.map(s => s.id)
     };
   });
-  res.json({ chat: { id: c.id, title: c.title, starred: !!c.starred, sandbox: !!c.sandbox, summary: c.summary || '', hasSummary: !!c.summary, projectId: c.project_id || null, instructions: c.instructions || '' }, messages });
+  res.json({ chat: { id: c.id, title: c.title, starred: !!c.starred, sandbox: !!c.sandbox, summary: c.summary || '', hasSummary: !!c.summary, projectId: c.project_id || null, instructions: c.instructions || '', pinnedFiles: Array.isArray(c.pinned_files) ? c.pinned_files : [] }, messages });
+});
+
+app.get('/api/chats/:id/siblings/:mid', authMiddleware, (req, res) => {
+  const c = db.chats.byId(req.params.id);
+  if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+  const m = db.messages.byId(req.params.mid);
+  if (!m || m.chat_id !== c.id) return res.status(404).json({ error: 'message not found' });
+  const sibs = childrenOf(c.id, m.parent_id ?? null);
+  const nameById = new Map(db.models.all().map(x => [x.id, x.display_name || '']));
+  res.json({
+    activeId: m.id,
+    siblings: sibs.map((s, i) => ({
+      id: s.id, index: i, role: s.role, content: stripToolSyntax(s.content || ''), reasoning: s.reasoning || '',
+      modelId: s.model_id || null, modelName: nameById.get(s.model_id) || '', created_at: s.created_at
+    }))
+  });
 });
 
 app.post('/api/chats/:id/branch', authMiddleware, (req, res) => {
@@ -567,16 +594,36 @@ app.patch('/api/chats/:id/messages/:mid', authMiddleware, (req, res) => {
   res.json({ ok: true, pinned: !!patch.pinned });
 });
 
-app.get('/api/chats/:id/context', authMiddleware, (req, res) => {
+app.get('/api/chats/:id/context', authMiddleware, async (req, res) => {
   const c = db.chats.byId(req.params.id);
   if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
   const model = db.models.byId(req.query.modelId) || db.models.all().find(m => m.enabled) || db.models.all()[0];
   if (!model) return res.json({ used: 0, limit: 0, pct: 0, hasSummary: !!c.summary, summaries: !!c.enable_summaries });
-  const convo = buildMessages(model, chatHistory(c, model), false, null, c.summary, promptVars(c.user_id), combinedInstructions(c));
+  const convo = buildMessages(model, await chatHistory(c, model), false, null, c.summary, promptVars(c.user_id), await instrFor(c));
   const used = estimateTokens(convo);
   const limit = (model.enable_summaries && model.num_ctx) ? model.num_ctx : (model.num_ctx || 0);
   const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
   res.json({ used, limit, pct, hasSummary: !!c.summary, compacts: model.enable_summaries ? compactThreshold(model) : 0 });
+});
+
+app.get('/api/chats/:id/inspect', authMiddleware, async (req, res) => {
+  const c = db.chats.byId(req.params.id);
+  if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+  const model = db.models.byId(req.query.modelId) || db.models.all().find(m => m.enabled) || db.models.all()[0];
+  if (!model) return res.json({ segments: [], totalTokens: 0 });
+  const membankOn = getSetting('membank_enabled', '0') === '1' && membank.list().length > 0;
+  const memP = membankOn ? membank.promptFor(getSetting('membank_prompt', '')) : '';
+  const convo = buildMessages(model, await chatHistory(c, model), false, memP || null, c.summary, promptVars(c.user_id), await instrFor(c));
+  const segments = convo.map((m, i) => {
+    const txt = typeof m.content === 'string' ? m.content : (m.content || []).map(p => p.type === 'text' ? p.text : '[image]').join('\n');
+    return { index: i, role: m.role, tokens: estimateTokens([m]), chars: txt.length, preview: txt.slice(0, 600), hasImages: Array.isArray(m.content) && m.content.some(p => p.type === 'image_url') };
+  });
+  const limit = (model.enable_summaries && model.num_ctx) ? model.num_ctx : (model.num_ctx || 0);
+  const total = estimateTokens(convo);
+  res.json({
+    segments, totalTokens: total, limit, pct: limit ? Math.min(100, Math.round((total / limit) * 100)) : 0,
+    flags: { memoryBank: membankOn, webSearch: websearch.webSearchAvailable(), summary: !!c.summary }
+  });
 });
 
 app.get('/api/chats/:id/summary', authMiddleware, (req, res) => {
@@ -651,6 +698,30 @@ app.patch('/api/chats/:id', authMiddleware, (req, res) => {
   res.json({ ok: true });
 });
 
+app.get('/api/chats/:id/pins', authMiddleware, (req, res) => {
+  const c = db.chats.byId(req.params.id);
+  if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+  res.json({ pins: Array.isArray(c.pinned_files) ? c.pinned_files : [] });
+});
+app.post('/api/chats/:id/pins', authMiddleware, (req, res) => {
+  const c = db.chats.byId(req.params.id);
+  if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+  const a = req.body || {};
+  if (!a.url || !a.name) return res.status(400).json({ error: 'name and url required' });
+  const pins = Array.isArray(c.pinned_files) ? c.pinned_files.slice() : [];
+  if (!pins.some(p => p.url === a.url)) pins.push({ name: String(a.name), url: String(a.url), type: a.type ? String(a.type) : '' });
+  db.chats.update(c.id, { pinned_files: pins });
+  res.json({ pins });
+});
+app.delete('/api/chats/:id/pins', authMiddleware, (req, res) => {
+  const c = db.chats.byId(req.params.id);
+  if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+  const url = (req.body && req.body.url) || '';
+  const pins = (Array.isArray(c.pinned_files) ? c.pinned_files : []).filter(p => p.url !== url);
+  db.chats.update(c.id, { pinned_files: pins });
+  res.json({ pins });
+});
+
 // ---------- sandbox / artifacts ----------
 function ownChat(req, res) {
   const c = db.chats.byId(req.params.id);
@@ -705,7 +776,7 @@ function shapePublic(m) {
     hasReasoning: !!m.has_reasoning, inMoreModels: !!m.in_more_models, moreModelsLabel: m.more_models_label,
     reasoningCollapsible: m.reasoning_collapsible !== 0,
     staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon, generatingAnim: m.generating_anim || 'spin', thinkingAnim: m.thinking_anim || 'pulse',
-    iconPosition: m.icon_position || 'below', hasVision: !!m.has_vision, iconSize: m.icon_size || 0,
+    iconPosition: m.icon_position || 'below', hasVision: !!m.has_vision, iconSize: m.icon_size || 0, showName: !!m.show_name,
     sandboxAuto: !!m.sandbox_auto, sandboxAllowed: m.sandbox_allowed !== 0, dropdownIcon: m.dropdown_icon !== 0, isDefault: !!m.is_default, agentSteps: m.agent_steps || 0,
     webSearchAuto: !!m.web_search_auto, webSearchAllowed: m.web_search_allowed !== 0, toolsAuto: !!m.tools_auto, toolsAllowed: m.tools_allowed !== 0,
     enableSummaries: !!m.enable_summaries, numCtx: m.num_ctx || 0, summaryPadding: m.summary_padding || 0.125, recentWindow: m.recent_window || 4,
@@ -788,7 +859,7 @@ app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
   const cur = db.models.byId(req.params.id);
   if (!cur) return res.status(404).json({ error: 'not found' });
   const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id', 'bg_image'];
-  const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'tools_auto', 'tools_allowed'];
+  const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'tools_auto', 'tools_allowed', 'show_name'];
   const patch = {};
   for (const k of str) if (k in req.body) patch[k] = req.body[k];
   for (const k of bool) if (k in req.body) patch[k] = req.body[k] ? 1 : 0;
@@ -1089,22 +1160,10 @@ app.delete('/api/admin/functions/:id', authMiddleware, adminOnly, (req, res) => 
   res.json({ ok: true });
 });
 
-// ---------- embeddings ----------
-app.get('/api/admin/embeddings', authMiddleware, adminOnly, async (req, res) => {
-  res.json({ ...(await embeddings.status()), providers: getProviders().map(p => ({ id: p.id, name: p.name })) });
-});
-app.patch('/api/admin/embeddings', authMiddleware, adminOnly, (req, res) => {
-  const cfg = embeddings.setConfig(req.body || {});
-  logAudit(req, 'embeddings.update', { meta: { mode: cfg.mode } });
-  res.json({ ok: true, config: cfg });
-});
-app.post('/api/admin/embeddings/test', authMiddleware, adminOnly, async (req, res) => {
-  res.json(await embeddings.test(req.body?.text));
-});
-
 
 let activeCount = 0;
 let waiters = [];
+let activeModel = null;
 function acquireModel(modelId, onWait) {
   if (activeModel === null || activeModel === modelId) {
     if (activeModel === null) activeModel = modelId;
@@ -1153,9 +1212,19 @@ app.delete('/api/admin/membank/:name', authMiddleware, adminOnly, (req, res) => 
   res.json({ files: membank.list() });
 });
 app.patch('/api/admin/membank/:name', authMiddleware, adminOnly, (req, res) => {
+  if ('folder' in req.body && !('name' in req.body)) {
+    membank.setFileMeta(req.params.name, { folder: req.body.folder });
+    return res.json({ files: membank.list() });
+  }
   const r = membank.rename(req.params.name, req.body.name);
   if (!r.ok) return res.status(400).json({ error: r.error });
+  if ('folder' in req.body) membank.setFileMeta(req.body.name, { folder: req.body.folder });
   res.json({ files: membank.list() });
+});
+app.put('/api/admin/membank/order', authMiddleware, adminOnly, (req, res) => {
+  const r = membank.reorder(req.body.items);
+  if (!r.ok) return res.status(400).json({ error: r.error });
+  res.json({ files: r.files });
 });
 app.post('/api/upload', authMiddleware, (req, res) => {
   const mb = roleLimit('upload_limit_mb', !!req.user.is_admin, 8) || 8;
@@ -1487,7 +1556,7 @@ function leafUnder(chatId, messageId) {
 }
 
 // history for the active branch, minus whatever the summary already covers
-function chatHistory(chat, model) {
+async function chatHistory(chat, model) {
   const fresh = db.chats.byId(chat.id) || chat;
   const upto = fresh.summary && fresh.summary_upto ? fresh.summary_upto : 0;
   let rows = activePath(chat.id);
@@ -1579,6 +1648,28 @@ function combinedInstructions(chat) {
   if (chat && chat.instructions && chat.instructions.trim()) parts.push(chat.instructions.trim());
   return parts.join('\n\n');
 }
+function lastUserQuery(chatId) {
+  const rows = activePath(chatId);
+  for (let i = rows.length - 1; i >= 0; i--) if (rows[i].role === 'user' && (rows[i].content || '').trim()) return stripToolSyntax(rows[i].content);
+  return '';
+}
+async function pinnedFilesPrompt(chat, query) {
+  const pins = Array.isArray(chat?.pinned_files) ? chat.pinned_files : [];
+  if (!pins.length) return '';
+  const blocks = [];
+  for (const a of pins) {
+    if (isTextLike(a)) blocks.push(`--- Pinned file: ${a.name} ---\n${readUploadText(a.url)}`);
+    else blocks.push(`[Pinned file: ${a.name} (not readable as text)]`);
+  }
+  if (!blocks.length) return '';
+  return 'The user has pinned the following file(s) to this conversation. Keep their contents available as context for every turn:\n\n' + blocks.join('\n\n');
+}
+async function instrFor(chat, query) {
+  const base = combinedInstructions(chat);
+  let pinned = '';
+  try { pinned = await pinnedFilesPrompt(chat, query == null ? lastUserQuery(chat.id) : query); } catch { pinned = ''; }
+  return pinned ? (base ? base + '\n\n' + pinned : pinned) : base;
+}
 async function maybeCompact(ws, chat, model, extended, sandboxOn) {
   const threshold = compactThreshold(model);
   if (threshold === Infinity) return;
@@ -1586,7 +1677,7 @@ async function maybeCompact(ws, chat, model, extended, sandboxOn) {
   while (guard++ < 3) {
     const fresh = db.chats.byId(chat.id);
     const sandboxP = sandboxOn ? sandboxPromptFor(chat.id) : null;
-    const convo = buildMessages(model, chatHistory(chat, model), extended, sandboxP, fresh.summary, promptVars(chat.user_id), combinedInstructions(fresh));
+    const convo = buildMessages(model, await chatHistory(chat, model), extended, sandboxP, fresh.summary, promptVars(chat.user_id), await instrFor(fresh));
     if (estimateTokens(convo) < threshold) return;
     if (!(await compactStep(ws, chat, model))) return;
   }
@@ -1601,7 +1692,7 @@ wss.on('connection', (ws, req) => {
 
   async function runCompletion(ws, state, chat, model, extended, sandboxOn, sandboxCap = 0, webSearchOn = false) {
     await maybeCompact(ws, chat, model, extended, sandboxOn);
-    const history = chatHistory(chat, model);
+    const history = await chatHistory(chat, model);
     const chatRow = db.chats.byId(chat.id) || chat;
     const membankOn = getSetting('membank_enabled', '0') === '1' && membank.list().length > 0;
     const membankHideTools = getSetting('membank_hide_tools', '0') === '1';
@@ -1618,7 +1709,7 @@ wss.on('connection', (ws, req) => {
       if (customToolsOn) parts.push(customtools.promptFor(customToolsList));
       return parts.filter(Boolean).join('\n\n') || null;
     };
-    let base = buildMessages(model, history, extended, toolsP(), chatRow.summary, promptVars(chat.user_id), combinedInstructions(chatRow));
+    let base = buildMessages(model, history, extended, toolsP(), chatRow.summary, promptVars(chat.user_id), await instrFor(chatRow));
     let inTurn = []; // assistant/tool exchanges accumulated during this response
     const assistantId = uid();
     const assistantParent = (db.chats.byId(chat.id) || {}).active_leaf || null;
@@ -1632,7 +1723,7 @@ wss.on('connection', (ws, req) => {
       for (let step = 0; step < maxSteps; step++) {
         // running low on context mid-response? summarize older turns, then carry on where we left off
         if (threshold !== Infinity && inTurn.length && estimateTokens([...base, ...inTurn]) >= threshold) {
-          if (await compactStep(ws, chat, model)) base = buildMessages(model, chatHistory(chat, model), extended, toolsP(), (db.chats.byId(chat.id) || {}).summary, promptVars(chat.user_id), combinedInstructions(db.chats.byId(chat.id) || chat));
+          if (await compactStep(ws, chat, model)) base = buildMessages(model, await chatHistory(chat, model), extended, toolsP(), (db.chats.byId(chat.id) || {}).summary, promptVars(chat.user_id), await instrFor(db.chats.byId(chat.id) || chat));
         }
         const convo = [...base, ...inTurn];
         const controller = new AbortController();

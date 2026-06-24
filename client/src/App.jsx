@@ -23,6 +23,7 @@ import ChatsOverview from './components/ChatsOverview.jsx';
 import SpacesPanel from './components/SpacesPanel.jsx';
 import ProjectsPanel from './components/ProjectsPanel.jsx';
 import ChatMenu from './components/ChatMenu.jsx';
+import PersonasModal from './components/PersonasModal.jsx';
 import SearchModal from './components/SearchModal.jsx';
 import Toaster from './components/Toaster.jsx';
 import Lightbox from './components/Lightbox.jsx';
@@ -212,6 +213,8 @@ export default function App() {
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [chatInstructions, setChatInstructions] = useState('');
+  const [chatPins, setChatPins] = useState([]);
+  const [personasOpen, setPersonasOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameVal, setRenameVal] = useState('');
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -619,6 +622,17 @@ export default function App() {
     api.patch('/api/chats/' + activeId + '/messages/' + messageId, { pinned }).catch(() => {});
     toast(pinned ? 'Message pinned — kept in context' : 'Message unpinned', { icon: 'pin' });
   }
+  async function togglePinFile(att) {
+    if (!activeId || !att?.url) return;
+    const isPinned = chatPins.some(p => p.url === att.url);
+    try {
+      const r = isPinned
+        ? await api.del('/api/chats/' + activeId + '/pins', { url: att.url })
+        : await api.post('/api/chats/' + activeId + '/pins', { name: att.name, url: att.url, type: att.type || '' });
+      setChatPins(r.pins || []);
+      toast(isPinned ? 'File unpinned from chat' : 'File pinned — kept in context', { icon: 'pin' });
+    } catch {}
+  }
   function jumpToMessage(id) {
     setChatMenuOpen(false);
     requestAnimationFrame(() => {
@@ -646,6 +660,19 @@ export default function App() {
     toast('Prompt saved', { icon: 'star' });
   }
   function deleteSavedPrompt(id) { saveSavedPrompts((user?.savedPrompts || []).filter(p => p.id !== id)); }
+  async function savePersonas(list) {
+    setUser(u => ({ ...u, personas: list }));
+    try { await api.put('/api/me/personas', { personas: list }); } catch {}
+  }
+  async function applyPersona(p) {
+    if (!p) return;
+    if (p.modelId && models.find(m => m.id === p.modelId)) setCurrentId(p.modelId);
+    setChatInstructions(p.instructions || '');
+    if (activeId) {
+      try { await api.patch('/api/chats/' + activeId, { instructions: p.instructions || '' }); } catch {}
+    }
+    toast('Applied persona: ' + p.name, { icon: 'star' });
+  }
   function commitRename() {
     const t = renameVal.trim();
     setRenaming(false);
@@ -692,6 +719,7 @@ export default function App() {
       setWebSearch(false);
       setHasSummary(!!chat.hasSummary);
       setChatInstructions(chat.instructions || '');
+      setChatPins(Array.isArray(chat.pinnedFiles) ? chat.pinnedFiles : []);
       setChatMenuOpen(false);
       try { const f = await api.get('/api/chats/' + id + '/files'); setFiles(f.files || []); setArtifactsOpen((f.files || []).length > 0 && artifactsOpen); }
       catch { setFiles([]); }
@@ -1008,6 +1036,9 @@ export default function App() {
                       chat={{ id: activeId, title: chats.find(c => c.id === activeId)?.title || 'New chat', instructions: chatInstructions, starred: !!chats.find(c => c.id === activeId)?.starred }}
                       modelId={currentId}
                       pinned={messages.filter(m => m.pinned)}
+                      pins={chatPins}
+                      onUnpinFile={(url) => togglePinFile({ url })}
+                      onOpenPersonas={() => { setChatMenuOpen(false); setPersonasOpen(true); }}
                       onJump={jumpToMessage}
                       onCopyConversation={copyConversation}
                       onClose={() => setChatMenuOpen(false)}
@@ -1045,7 +1076,7 @@ export default function App() {
             <div className="scroll-area" ref={scrollRef} onScroll={onScroll} onWheel={onWheel} onTouchMove={onTouchMove}>
               <div className={'thread' + (threadStagger ? ' stagger' : '')}>
                 {(() => { const lastA = !streaming ? [...messages].reverse().find(m => m.role === 'assistant') : null; return messages.map(msg => (
-                  <Message key={msg._k || msg.id} msg={msg} model={models.find(x => x.id === msg.model_id) || model} models={models} currentId={currentId} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin} showIcon={msg.role === 'assistant' && lastA && msg.id === lastA.id} />
+                  <Message key={msg._k || msg.id} msg={msg} model={models.find(x => x.id === msg.model_id) || model} models={models} currentId={currentId} chatId={activeId} pins={chatPins} onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin} showIcon={msg.role === 'assistant' && lastA && msg.id === lastA.id} />
                 )); })()}
                 {streaming && (
                   <Message msg={{ role: 'assistant', content: dispContent, reasoning: dispReason }}
@@ -1079,6 +1110,7 @@ export default function App() {
       {showSettings && <SettingsModal user={user} cfg={cfg} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile} />}
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} />}
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} onOpen={(id) => openChat(id)} />}
+      {personasOpen && <PersonasModal personas={user?.personas || []} models={models} currentId={currentId} onApply={applyPersona} onSave={savePersonas} onClose={() => setPersonasOpen(false)} />}
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
       <Lightbox />
       {showAdmin && <AdminPanel user={user} onClose={() => { setShowAdmin(false); if (/^\/admin(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} />}
