@@ -2,7 +2,7 @@
 .center-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: calc(30vh - 40px) 24px 24px; }
 .greeting { display: flex; align-items: center; justify-content: center; gap: 14px; font-size: 40px; margin-bottom: 30px; color: var(--text); font-family: var(--font-serif); text-align: center; }
 .greeting img { width: 30px; height: 30px; }
-.composer-wrap { width: 100%; max-width: 675px; position: relative; z-index: 2; }
+.composer-wrap { width: 100%; max-width: 760px; position: relative; z-index: 2; }
 .suggestions { display: flex; gap: 9px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
 .chip { display: flex; align-items: center; gap: 7px; padding: 8px 14px; background: var(--surface); border: 1px solid var(--border-soft); border-radius: 11px; font-size: 14px; color: #d9d8d0; transition: background .15s; }
 .chip:hover { background: var(--surface-hover); }
@@ -106,11 +106,10 @@
 .msg-icon img { display: block; }
 .msg-icon-name { font-family: var(--font-sans); font-size: 14px; font-weight: 500; color: var(--text-muted); white-space: nowrap; }
 
-.msg.assistant.icon-left .assistant-row { display: flex; gap: 12px; align-items: flex-start; }
-.msg.assistant.icon-left .assistant-avatar { flex-shrink: 0; }
-.msg.assistant.icon-left .assistant-avatar .msg-icon { margin: 0; }
-.msg.assistant.icon-left .assistant-main { flex: 1; min-width: 0; }
-.msg.assistant.icon-left .assistant-name { font-family: var(--font-sans); font-size: 15px; font-weight: 600; color: var(--text); margin: 2px 0 6px; line-height: 1; }
+.msg.assistant.icon-left { position: relative; }
+.msg.assistant.icon-left .il-avatar { position: absolute; top: 0; }
+.msg.assistant.icon-left .il-avatar .msg-icon { margin: 0; }
+.msg.assistant.icon-left .assistant-name { font-family: var(--font-sans); font-size: 15px; font-weight: 600; color: var(--text); margin: 0 0 6px; line-height: 1.3; }
 
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
 .seg button { padding: 8px 14px; font-size: 13px; font-family: var(--font-sans); color: var(--text-muted); background: var(--input-bg); transition: background .12s, color .12s; }

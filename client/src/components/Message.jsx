@@ -217,15 +217,12 @@ function Message({ msg, model, models, currentId, streaming, phase, chatId, pins
   );
 
   if (pos === 'left') {
+    const gutter = model?.iconSize > 0 ? model.iconSize : 40;
     return (
       <div className={'msg assistant icon-left' + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '')} data-mid={msg.id}>
-        <div className="assistant-row">
-          <div className="assistant-avatar">{icon}</div>
-          <div className="assistant-main">
-            {showName && <div className="assistant-name">{model.displayName}</div>}
-            {inner}
-          </div>
-        </div>
+        {icon && <div className="il-avatar" style={{ left: -(gutter + 14) }}>{icon}</div>}
+        {showName && <div className="assistant-name">{model.displayName}</div>}
+        {inner}
       </div>
     );
   }

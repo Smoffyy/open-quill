@@ -1,6 +1,6 @@
 {
   "name": "open-quill-client",
-  "version": "2027.0.0-cascade.11",
+  "version": "2027.0.0-cascade.12",
   "private": true,
   "type": "module",
   "scripts": {
