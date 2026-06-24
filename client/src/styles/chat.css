@@ -71,7 +71,7 @@
 .model-submenu::before { content: ''; position: absolute; top: 0; bottom: 0; left: -14px; width: 14px; }
 
 /* ---------- messages ---------- */
-.scroll-area { flex: 1; overflow-y: auto; scroll-behavior: auto; }
+.scroll-area { flex: 1; overflow-y: auto; scroll-behavior: auto; scrollbar-gutter: stable both-edges; }
 .thread { max-width: 760px; margin: 0 auto; padding: 26px 20px 0; min-height: 100%; }
 .thread-pad { height: 28px; }
 .msg { margin-bottom: 26px; }
