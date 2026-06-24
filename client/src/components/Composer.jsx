@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import ModelDropdown from './ModelDropdown.jsx';
+import FunctionsBar from './FunctionsBar.jsx';
 import { api } from '../api.js';
 import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders } from './icons.jsx';
 
@@ -31,7 +32,7 @@ function dominantColor(url) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, models,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts, functions = []
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
@@ -208,6 +209,7 @@ export default function Composer({
         </div>
       )}
       {upErr && <div className="attach-err">{upErr}</div>}
+      <FunctionsBar functions={functions} input={value} onChange={onChange} onSend={onSend} model={models?.find(m => m.id === currentId)} />
       {slashOpen && (
         <div className="slash-menu">
           <div className="slash-head">Commands</div>

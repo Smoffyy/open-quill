@@ -15,6 +15,9 @@ import * as websearch from './websearch.js';
 import * as sandbox from './sandbox.js';
 import * as toolproto from './toolproto.js';
 import * as membank from './membank.js';
+import * as customtools from './customtools.js';
+import * as customfns from './functions.js';
+import * as embeddings from './embeddings.js';
 
 function stripToolSyntax(text) {
   let s = String(text || '');
@@ -704,6 +707,7 @@ function shapePublic(m) {
     staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon, generatingAnim: m.generating_anim || 'spin', thinkingAnim: m.thinking_anim || 'pulse',
     iconPosition: m.icon_position || 'below', hasVision: !!m.has_vision, iconSize: m.icon_size || 0,
     sandboxAuto: !!m.sandbox_auto, sandboxAllowed: m.sandbox_allowed !== 0, dropdownIcon: m.dropdown_icon !== 0, isDefault: !!m.is_default, agentSteps: m.agent_steps || 0,
+    webSearchAuto: !!m.web_search_auto, webSearchAllowed: m.web_search_allowed !== 0, toolsAuto: !!m.tools_auto, toolsAllowed: m.tools_allowed !== 0,
     enableSummaries: !!m.enable_summaries, numCtx: m.num_ctx || 0, summaryPadding: m.summary_padding || 0.125, recentWindow: m.recent_window || 4,
     unavailable: !!m.unavailable, unavailableReason: m.unavailable_reason || '',
     bgEnabled: !!m.bg_enabled, bgImage: m.bg_image || '',
@@ -763,6 +767,7 @@ app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
     has_vision: b.has_vision ? 1 : 0,
     think_open: b.think_open || '', think_close: b.think_close || '',
     sandbox_auto: b.sandbox_auto ? 1 : 0, sandbox_allowed: b.sandbox_allowed === false ? 0 : 1, dropdown_icon: b.dropdown_icon === false ? 0 : 1, is_default: 0, agent_steps: Number.isInteger(b.agent_steps) ? Math.max(0, b.agent_steps) : 0,
+    web_search_auto: b.web_search_auto ? 1 : 0, web_search_allowed: b.web_search_allowed === false ? 0 : 1, tools_auto: b.tools_auto ? 1 : 0, tools_allowed: b.tools_allowed === false ? 0 : 1,
     enable_summaries: b.enable_summaries ? 1 : 0, num_ctx: parseInt(b.num_ctx) || 0, summary_padding: typeof b.summary_padding === "number" ? b.summary_padding : 0.125, recent_window: parseInt(b.recent_window) > 0 ? parseInt(b.recent_window) : 4,
     in_more_models: b.in_more_models ? 1 : 0, more_models_label: b.more_models_label || 'More models',
     unavailable: b.unavailable ? 1 : 0, unavailable_reason: b.unavailable_reason || '',
@@ -783,7 +788,7 @@ app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
   const cur = db.models.byId(req.params.id);
   if (!cur) return res.status(404).json({ error: 'not found' });
   const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id', 'bg_image'];
-  const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact', 'reasoning_collapsible', 'bg_enabled'];
+  const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'tools_auto', 'tools_allowed'];
   const patch = {};
   for (const k of str) if (k in req.body) patch[k] = req.body[k];
   for (const k of bool) if (k in req.body) patch[k] = req.body[k] ? 1 : 0;
@@ -1034,7 +1039,70 @@ app.delete('/api/admin/providers/:id', authMiddleware, adminOnly, (req, res) => 
   res.json({ ok: true });
 });
 
-let activeModel = null;
+// ---------- custom tools (live data tools for LLMs) ----------
+app.get('/api/admin/tools', authMiddleware, adminOnly, (req, res) => res.json({ tools: customtools.list() }));
+app.post('/api/admin/tools', authMiddleware, adminOnly, (req, res) => {
+  const r = customtools.create(req.body || {});
+  if (r.error) return res.status(400).json({ error: r.error });
+  logAudit(req, 'tool.create', { type: 'tool', id: r.tool.id, meta: { name: r.tool.name } });
+  res.json({ tool: r.tool });
+});
+app.patch('/api/admin/tools/:id', authMiddleware, adminOnly, (req, res) => {
+  const r = customtools.update(req.params.id, req.body || {});
+  if (r.error) return res.status(400).json({ error: r.error });
+  logAudit(req, 'tool.update', { type: 'tool', id: req.params.id });
+  res.json({ tool: r.tool });
+});
+app.delete('/api/admin/tools/:id', authMiddleware, adminOnly, (req, res) => {
+  customtools.remove(req.params.id);
+  logAudit(req, 'tool.delete', { type: 'tool', id: req.params.id });
+  res.json({ ok: true });
+});
+app.post('/api/admin/tools/:id/test', authMiddleware, adminOnly, async (req, res) => {
+  const tool = customtools.list().find(t => t.id === req.params.id);
+  if (!tool) return res.status(404).json({ error: 'not found' });
+  const call = { tool: tool.name, ...(req.body?.args || {}) };
+  const r = await customtools.execTool(call);
+  res.json(r);
+});
+
+// ---------- custom functions (UI extensions) ----------
+app.get('/api/admin/functions', authMiddleware, adminOnly, (req, res) => res.json({ functions: customfns.list() }));
+app.post('/api/admin/functions', authMiddleware, adminOnly, (req, res) => {
+  const r = customfns.create(req.body || {});
+  if (r.error) return res.status(400).json({ error: r.error });
+  logAudit(req, 'function.create', { type: 'function', id: r.fn.id, meta: { label: r.fn.label } });
+  broadcastAdminConfig();
+  res.json({ fn: r.fn });
+});
+app.patch('/api/admin/functions/:id', authMiddleware, adminOnly, (req, res) => {
+  const r = customfns.update(req.params.id, req.body || {});
+  if (r.error) return res.status(400).json({ error: r.error });
+  logAudit(req, 'function.update', { type: 'function', id: req.params.id });
+  broadcastAdminConfig();
+  res.json({ fn: r.fn });
+});
+app.delete('/api/admin/functions/:id', authMiddleware, adminOnly, (req, res) => {
+  customfns.remove(req.params.id);
+  logAudit(req, 'function.delete', { type: 'function', id: req.params.id });
+  broadcastAdminConfig();
+  res.json({ ok: true });
+});
+
+// ---------- embeddings ----------
+app.get('/api/admin/embeddings', authMiddleware, adminOnly, async (req, res) => {
+  res.json({ ...(await embeddings.status()), providers: getProviders().map(p => ({ id: p.id, name: p.name })) });
+});
+app.patch('/api/admin/embeddings', authMiddleware, adminOnly, (req, res) => {
+  const cfg = embeddings.setConfig(req.body || {});
+  logAudit(req, 'embeddings.update', { meta: { mode: cfg.mode } });
+  res.json({ ok: true, config: cfg });
+});
+app.post('/api/admin/embeddings/test', authMiddleware, adminOnly, async (req, res) => {
+  res.json(await embeddings.test(req.body?.text));
+});
+
+
 let activeCount = 0;
 let waiters = [];
 function acquireModel(modelId, onWait) {
@@ -1237,6 +1305,7 @@ function appConfig() {
     version: APP_VERSION,
     uiVersion: APP_VERSION,
     webSearchAvailable: websearch.webSearchAvailable(),
+    functions: customfns.publicList(),
     uiVersionDesc: readVersionText(),
     uiVersionIcon: detectVersionIcon()
   };
@@ -1347,6 +1416,7 @@ function cleanCall(call) {
   if (call.dest != null) o.dest = call.dest;
   if (call.start != null) o.start = call.start;
   if (call.end != null) o.end = call.end;
+  if (customtools.isCustom(call.tool)) for (const [k, v] of Object.entries(call)) if (k !== 'tool' && (typeof v === 'string' || typeof v === 'number')) o[k] = v;
   return o;
 }
 function resultPayload(call, r) {
@@ -1536,12 +1606,16 @@ wss.on('connection', (ws, req) => {
     const membankOn = getSetting('membank_enabled', '0') === '1' && membank.list().length > 0;
     const membankHideTools = getSetting('membank_hide_tools', '0') === '1';
     if (membankOn) { try { await membank.ensureIndexedAll(); } catch {} }
-    const toolsOn = sandboxOn || webSearchOn || membankOn;
+    const customToolsList = (model.tools_allowed !== 0 && model.tools_auto) ? customtools.getEnabled() : [];
+    const customToolsOn = customToolsList.length > 0;
+    const customToolNames = new Set(customToolsList.map(t => t.name));
+    const toolsOn = sandboxOn || webSearchOn || membankOn || customToolsOn;
     const toolsP = () => {
       const parts = [];
       if (sandboxOn) parts.push(sandboxPromptFor(chat.id));
       if (webSearchOn) { parts.push(websearch.webSearchConfig().prompt); parts.push(websearch.webSearchToolPrompt()); }
       if (membankOn) parts.push(membank.promptFor(getSetting('membank_prompt', '')));
+      if (customToolsOn) parts.push(customtools.promptFor(customToolsList));
       return parts.filter(Boolean).join('\n\n') || null;
     };
     let base = buildMessages(model, history, extended, toolsP(), chatRow.summary, promptVars(chat.user_id), combinedInstructions(chatRow));
@@ -1586,6 +1660,11 @@ wss.on('connection', (ws, req) => {
               r = membank.execTool(call);
               payload = membank.resultPayload(call, r);
               formatted = membank.formatResult(call, r);
+            } else if (customToolNames.has(call.tool)) {
+              if (!customToolsOn) continue;
+              r = await customtools.execTool(call);
+              payload = customtools.resultPayload(call, r);
+              formatted = customtools.formatResult(call, r);
             } else {
               if (!sandboxOn) continue;
               r = await sandbox.execTool(chat.id, call, sandboxCap);
@@ -1618,7 +1697,7 @@ wss.on('connection', (ws, req) => {
                     const { calls } = toolproto.scanTools(stepText);
                     if (calls.length) {
                       const last = calls[calls.length - 1].call;
-                      if (last && toolproto.READ_TOOLS.has(last.tool)) { toolStop = true; try { controller.abort(); } catch {} }
+                      if (last && (toolproto.READ_TOOLS.has(last.tool) || customToolNames.has(last.tool))) { toolStop = true; try { controller.abort(); } catch {} }
                     }
                   }
                 }
@@ -1721,7 +1800,7 @@ wss.on('connection', (ws, req) => {
       if (!!chat.sandbox !== userSandbox) db.chats.update(chat.id, { sandbox: userSandbox ? 1 : 0 });
       const hasFileAttach = Array.isArray(msg.attachments) && msg.attachments.some(a => !(a.type && a.type.startsWith('image/')));
       const sandboxOn = userSandbox || (hasFileAttach && model.sandbox_allowed !== 0);
-      const webSearchOn = !!msg.webSearch && websearch.webSearchAvailable();
+      const webSearchOn = !!msg.webSearch && websearch.webSearchAvailable() && model.web_search_allowed !== 0;
       ensureChain(chat.id);
 
       if (msg.type === 'regenerate') {

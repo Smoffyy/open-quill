@@ -608,3 +608,28 @@
   .greeting { padding: 0 8px; }
   .model-menu .model-opt { padding: 11px 12px; }
 }
+
+/* ---------- custom functions bar + admin tools/functions/embeddings ---------- */
+.fn-bar { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 2px 6px; }
+.fn-btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 9px; font-size: 12.5px; color: var(--text-muted); background: var(--surface); border: 1px solid var(--border-soft); transition: background .15s, color .15s, border-color .15s; }
+.fn-btn:hover { background: var(--surface-hover); color: var(--text); }
+.fn-btn.busy { opacity: .6; pointer-events: none; }
+.fn-btn:disabled { opacity: .5; }
+.admin-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.admin-section-head h3 { margin: 0 0 4px; font-size: 16px; }
+.fn-editor { border: 1px solid var(--border-soft); border-radius: 12px; padding: 16px; margin-bottom: 16px; background: var(--surface); display: flex; flex-direction: column; gap: 12px; }
+.fn-editor .field { margin: 0; }
+.fn-editor .field.two-col { display: flex; gap: 12px; }
+.fn-editor .field.two-col > div { flex: 1; }
+.code-area { font-family: ui-monospace, 'SF Mono', monospace; font-size: 12.5px; line-height: 1.5; tab-size: 2; }
+.param-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.param-row input[type="text"], .param-row input:not([type]) { flex: 1; }
+.param-req { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.inline-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.editor-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.fn-list { display: flex; flex-direction: column; gap: 8px; }
+.fn-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid var(--border-soft); border-radius: 11px; background: var(--surface); }
+.fn-card-main { min-width: 0; }
+.fn-card-title { display: flex; align-items: center; gap: 7px; font-size: 14px; }
+.fn-card-desc { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fn-card-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }

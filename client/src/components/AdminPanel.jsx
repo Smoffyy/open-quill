@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
-import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield, Globe, FileText, Pencil, Clock, Download } from './icons.jsx';
+import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield, Globe, FileText, Pencil, Clock, Download, Wrench, Code, Brain } from './icons.jsx';
 import { QP_ICON_LIST, QpIcon } from '../qpIcons.jsx';
 
 function QpIconPicker({ value, onPick }) {
@@ -315,6 +315,10 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
               <Toggle m={m} set={set} k="has_vision" label="Image input" note="Let users attach images for the model to see. Off = non-image files only." />
               <Toggle m={m} set={set} k="sandbox_allowed" inverted label="Allow sandbox tools" note="Lets users enable code and file tools for this model. Off means sandbox can't be turned on." />
               {m.sandbox_allowed !== 0 && <Toggle m={m} set={set} k="sandbox_auto" label="Enable sandbox by default" note="New chats with this model start with sandbox tools on." />}
+              <Toggle m={m} set={set} k="web_search_allowed" inverted label="Allow web search" note="Lets users enable web search for this model (web search must also be configured in the Web Search tab)." />
+              {m.web_search_allowed !== 0 && <Toggle m={m} set={set} k="web_search_auto" label="Enable web search by default" note="New chats with this model start with web search on." />}
+              <Toggle m={m} set={set} k="tools_allowed" inverted label="Allow custom tools" note="Lets this model use the live-data tools defined in the Tools tab." />
+              {m.tools_allowed !== 0 && <Toggle m={m} set={set} k="tools_auto" label="Enable custom tools by default" note="Expose all enabled custom tools to this model automatically." />}
             </div>
             <div className="field"><label>Tool-call limit</label>
               <input type="number" min="0" value={m.agent_steps || ''} placeholder="Unlimited" onChange={(e) => set('agent_steps', e.target.value)} style={{ maxWidth: 140 }} />
@@ -458,6 +462,13 @@ export default function AdminPanel({ user, onClose }) {
   const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256, modelQueue: false, membankEnabled: false, membankHideTools: false, membankPrompt: '', budgetUser: 0, budgetAdmin: 0, budgetWarnFraction: 0.8, budgetEnforce: false, sessionTtlDays: 30, maxSessions: 0 });
   const [providers, setProviders] = useState([]);
   const [membankFiles, setMembankFiles] = useState([]);
+  const [tools, setTools] = useState([]);
+  const [toolEdit, setToolEdit] = useState(null);
+  const [customFns, setCustomFns] = useState([]);
+  const [fnEdit, setFnEdit] = useState(null);
+  const [embed, setEmbed] = useState(null);
+  const [embedBusy, setEmbedBusy] = useState(false);
+  const [embedResult, setEmbedResult] = useState(null);
   const membankRef = useRef(null);
   const [mbEdit, setMbEdit] = useState(null);
   const [mbEditName, setMbEditName] = useState('');
@@ -472,6 +483,29 @@ export default function AdminPanel({ user, onClose }) {
   async function loadMembank() { try { const d = await api.get('/api/admin/membank'); setMembankFiles(d.files || []); } catch {} }
   async function onMembankPick(e) { const files = [...(e.target.files || [])]; e.target.value = ''; if (!files.length) return; try { const r = await api.uploadMembank(files); setMembankFiles(r.files || []); } catch {} }
   async function removeMembank(name) { try { const r = await api.del('/api/admin/membank/' + encodeURIComponent(name)); setMembankFiles(r.files || []); } catch {} }
+  async function loadTools() { try { const d = await api.get('/api/admin/tools'); setTools(d.tools || []); } catch {} }
+  async function saveTool(t) {
+    try {
+      if (t.id) { const r = await api.patch('/api/admin/tools/' + t.id, t); setTools(ts => ts.map(x => x.id === t.id ? r.tool : x)); }
+      else { const r = await api.post('/api/admin/tools', t); setTools(ts => [...ts, r.tool]); }
+      setToolEdit(null);
+    } catch (e) { alert(e.message || 'Could not save tool.'); }
+  }
+  async function deleteTool(id) { try { await api.del('/api/admin/tools/' + id); setTools(ts => ts.filter(x => x.id !== id)); } catch {} }
+  async function toggleTool(t) { try { const r = await api.patch('/api/admin/tools/' + t.id, { enabled: !t.enabled }); setTools(ts => ts.map(x => x.id === t.id ? r.tool : x)); } catch {} }
+  async function loadFns() { try { const d = await api.get('/api/admin/functions'); setCustomFns(d.functions || []); } catch {} }
+  async function saveFn(f) {
+    try {
+      if (f.id) { const r = await api.patch('/api/admin/functions/' + f.id, f); setCustomFns(fs => fs.map(x => x.id === f.id ? r.fn : x)); }
+      else { const r = await api.post('/api/admin/functions', f); setCustomFns(fs => [...fs, r.fn]); }
+      setFnEdit(null);
+    } catch (e) { alert(e.message || 'Could not save function.'); }
+  }
+  async function deleteFn(id) { try { await api.del('/api/admin/functions/' + id); setCustomFns(fs => fs.filter(x => x.id !== id)); } catch {} }
+  async function toggleFn(f) { try { const r = await api.patch('/api/admin/functions/' + f.id, { enabled: !f.enabled }); setCustomFns(fs => fs.map(x => x.id === f.id ? r.fn : x)); } catch {} }
+  async function loadEmbed() { try { setEmbed(await api.get('/api/admin/embeddings')); } catch {} }
+  async function saveEmbed(patch) { try { const r = await api.patch('/api/admin/embeddings', patch); setEmbed(e => ({ ...e, ...r.config })); } catch (e) { alert(e.message || 'Could not save.'); } }
+  async function testEmbed() { setEmbedBusy(true); setEmbedResult(null); try { setEmbedResult(await api.post('/api/admin/embeddings/test', { text: 'The quick brown fox.' })); } catch (e) { setEmbedResult({ ok: false, error: e.message || 'Test failed.' }); } finally { setEmbedBusy(false); } }
   const [audit, setAudit] = useState({ entries: [], total: 0, offset: 0, hasMore: false, loading: false, actions: [] });
   const [auditFilter, setAuditFilter] = useState({ action: '', actor: '', days: '' });
   const [adminUsage, setAdminUsage] = useState(null);
@@ -690,6 +724,9 @@ export default function AdminPanel({ user, onClose }) {
         <button className={'ar-tab' + (tab === 'limits' ? ' active' : '')} onClick={() => setTab('limits')}><Shield /> Limits &amp; Safety</button>
         <button className={'ar-tab' + (tab === 'websearch' ? ' active' : '')} onClick={() => setTab('websearch')}><Globe /> Web Search</button>
         <button className={'ar-tab' + (tab === 'membank' ? ' active' : '')} onClick={() => { setTab('membank'); loadMembank(); }}><FileText /> Memory Bank</button>
+        <button className={'ar-tab' + (tab === 'tools' ? ' active' : '')} onClick={() => { setTab('tools'); loadTools(); }}><Wrench /> Tools</button>
+        <button className={'ar-tab' + (tab === 'functions' ? ' active' : '')} onClick={() => { setTab('functions'); loadFns(); }}><Code /> Functions</button>
+        <button className={'ar-tab' + (tab === 'embeddings' ? ' active' : '')} onClick={() => { setTab('embeddings'); loadEmbed(); }}><Brain /> Embeddings</button>
         <button className={'ar-tab' + (tab === 'audit' ? ' active' : '')} onClick={() => { setTab('audit'); loadAudit(); }}><Clock /> Audit Log</button>
         <button className={'ar-tab' + (tab === 'usage' ? ' active' : '')} onClick={() => { setTab('usage'); loadAdminUsage(); loadPresets(); }}><Sliders /> Usage &amp; Pricing</button>
         <button className="ar-back" onClick={onClose}><Chevron style={{ transform: 'rotate(90deg)', width: 16 }} /> Back to chat</button>
@@ -1031,6 +1068,159 @@ export default function AdminPanel({ user, onClose }) {
                 <span className={'autosave-dot' + (setAutoStatus === 'saved' ? ' flash' : '')} />
                 {setAutoStatus === 'saving' ? 'Saving…' : setAutoStatus === 'saved' ? 'Saved — applies immediately' : 'Changes save automatically'}
               </div>
+            </>
+          )}
+          {tab === 'tools' && (
+            <>
+              <div className="admin-section-head">
+                <div><h3>Tools</h3><div className="muted-note">Give models the ability to fetch real-world, real-time data (weather, stock prices, APIs…). Each tool runs server-side JavaScript and is offered to any model that has "Allow custom tools" enabled.</div></div>
+                <button className="btn primary" onClick={() => setToolEdit({ name: '', description: '', params: [], code: "const r = await fetch('https://api.example.com/data?q=' + encodeURIComponent(args.query));\nconst data = await r.json();\nreturn data;", timeout_ms: 15000, enabled: true, auto: false })}><Plus style={{ width: 15 }} /> New tool</button>
+              </div>
+              {toolEdit && (
+                <div className="fn-editor">
+                  <div className="field"><label>Tool name</label>
+                    <input value={toolEdit.name} onChange={(e) => setToolEdit(t => ({ ...t, name: e.target.value }))} placeholder="get_weather" />
+                    <div className="muted-note">Lowercase letters, digits, underscores. This is the name the model calls.</div>
+                  </div>
+                  <div className="field"><label>Description</label>
+                    <textarea rows={2} value={toolEdit.description} onChange={(e) => setToolEdit(t => ({ ...t, description: e.target.value }))} placeholder="Get the current weather for a city." />
+                  </div>
+                  <div className="field"><label>Arguments</label>
+                    {(toolEdit.params || []).map((p, i) => (
+                      <div key={i} className="param-row">
+                        <input value={p.name} placeholder="name" onChange={(e) => setToolEdit(t => ({ ...t, params: t.params.map((x, j) => j === i ? { ...x, name: e.target.value } : x) }))} />
+                        <input value={p.desc} placeholder="description" onChange={(e) => setToolEdit(t => ({ ...t, params: t.params.map((x, j) => j === i ? { ...x, desc: e.target.value } : x) }))} />
+                        <label className="param-req"><input type="checkbox" checked={!!p.required} onChange={(e) => setToolEdit(t => ({ ...t, params: t.params.map((x, j) => j === i ? { ...x, required: e.target.checked } : x) }))} /> req</label>
+                        <button className="icon-btn" onClick={() => setToolEdit(t => ({ ...t, params: t.params.filter((_, j) => j !== i) }))}><Trash style={{ width: 14 }} /></button>
+                      </div>
+                    ))}
+                    <button className="btn" onClick={() => setToolEdit(t => ({ ...t, params: [...(t.params || []), { name: '', desc: '', required: false }] }))}>Add argument</button>
+                  </div>
+                  <div className="field"><label>Code</label>
+                    <textarea className="code-area" rows={10} value={toolEdit.code} onChange={(e) => setToolEdit(t => ({ ...t, code: e.target.value }))} spellCheck={false} />
+                    <div className="muted-note">Async JS body. Read inputs from <code>args</code>, use <code>fetch</code>, and <code>return</code> the result (string or object). Runs sandboxed with a timeout.</div>
+                  </div>
+                  <div className="field"><label>Timeout (ms)</label>
+                    <input type="number" min="1000" max="60000" value={toolEdit.timeout_ms} onChange={(e) => setToolEdit(t => ({ ...t, timeout_ms: e.target.value }))} style={{ maxWidth: 140 }} />
+                  </div>
+                  <div className="me2-toggle-card">
+                    <label className="inline-toggle"><span>Enabled</span><div className={'switch' + (toolEdit.enabled ? ' on' : '')} onClick={() => setToolEdit(t => ({ ...t, enabled: !t.enabled }))} /></label>
+                  </div>
+                  <div className="editor-actions">
+                    <button className="btn" onClick={() => setToolEdit(null)}>Cancel</button>
+                    <button className="btn primary" onClick={() => saveTool(toolEdit)}>Save tool</button>
+                  </div>
+                </div>
+              )}
+              <div className="fn-list">
+                {tools.length === 0 && !toolEdit && <div className="muted-note">No tools yet.</div>}
+                {tools.map(t => (
+                  <div key={t.id} className="fn-card">
+                    <div className="fn-card-main">
+                      <div className="fn-card-title"><Wrench style={{ width: 15 }} /> <code>{t.name}</code></div>
+                      <div className="fn-card-desc">{t.description || 'No description.'}</div>
+                    </div>
+                    <div className="fn-card-actions">
+                      <div className={'switch' + (t.enabled ? ' on' : '')} title="Enabled" onClick={() => toggleTool(t)} />
+                      <button className="icon-btn" onClick={() => setToolEdit({ ...t, params: t.params || [] })}><Pencil style={{ width: 15 }} /></button>
+                      <button className="icon-btn" onClick={() => deleteTool(t.id)}><Trash style={{ width: 15 }} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {tab === 'functions' && (
+            <>
+              <div className="admin-section-head">
+                <div><h3>Functions</h3><div className="muted-note">Extend open-quill itself. Each function adds a custom button next to the composer that runs your JavaScript in the browser — automate input, call APIs, build filters or shortcuts.</div></div>
+                <button className="btn primary" onClick={() => setFnEdit({ label: '', icon: 'sparkles', location: 'composer', code: "api.setInput(api.input + '\\n\\nPlease answer concisely.');\napi.toast('Added a note');", enabled: true })}><Plus style={{ width: 15 }} /> New function</button>
+              </div>
+              {fnEdit && (
+                <div className="fn-editor">
+                  <div className="field"><label>Button label</label>
+                    <input value={fnEdit.label} onChange={(e) => setFnEdit(f => ({ ...f, label: e.target.value }))} placeholder="Make concise" />
+                  </div>
+                  <div className="field two-col">
+                    <div><label>Icon</label>
+                      <select value={fnEdit.icon} onChange={(e) => setFnEdit(f => ({ ...f, icon: e.target.value }))}>
+                        {['none', 'sparkles', 'bulb', 'pencil', 'code', 'wrench', 'wand', 'bolt', 'filter', 'search', 'star', 'chat'].map(i => <option key={i} value={i}>{i}</option>)}
+                      </select>
+                    </div>
+                    <div><label>Location</label>
+                      <select value={fnEdit.location} onChange={(e) => setFnEdit(f => ({ ...f, location: e.target.value }))}>
+                        <option value="composer">Composer</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="field"><label>Code</label>
+                    <textarea className="code-area" rows={10} value={fnEdit.code} onChange={(e) => setFnEdit(f => ({ ...f, code: e.target.value }))} spellCheck={false} />
+                    <div className="muted-note">Runs in the browser with an <code>api</code> object: <code>api.input</code>, <code>api.setInput(t)</code>, <code>api.insert(t)</code>, <code>api.send()</code>, <code>api.toast(m)</code>, <code>api.copy(t)</code>, <code>api.fetch()</code>, <code>api.model</code>.</div>
+                  </div>
+                  <div className="me2-toggle-card">
+                    <label className="inline-toggle"><span>Enabled</span><div className={'switch' + (fnEdit.enabled ? ' on' : '')} onClick={() => setFnEdit(f => ({ ...f, enabled: !f.enabled }))} /></label>
+                  </div>
+                  <div className="editor-actions">
+                    <button className="btn" onClick={() => setFnEdit(null)}>Cancel</button>
+                    <button className="btn primary" onClick={() => saveFn(fnEdit)}>Save function</button>
+                  </div>
+                </div>
+              )}
+              <div className="fn-list">
+                {customFns.length === 0 && !fnEdit && <div className="muted-note">No functions yet.</div>}
+                {customFns.map(f => (
+                  <div key={f.id} className="fn-card">
+                    <div className="fn-card-main">
+                      <div className="fn-card-title"><Code style={{ width: 15 }} /> {f.label}</div>
+                      <div className="fn-card-desc">Button · {f.location || 'composer'}</div>
+                    </div>
+                    <div className="fn-card-actions">
+                      <div className={'switch' + (f.enabled ? ' on' : '')} title="Enabled" onClick={() => toggleFn(f)} />
+                      <button className="icon-btn" onClick={() => setFnEdit({ ...f })}><Pencil style={{ width: 15 }} /></button>
+                      <button className="icon-btn" onClick={() => deleteFn(f.id)}><Trash style={{ width: 15 }} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {tab === 'embeddings' && embed && (
+            <>
+              <div className="admin-section-head">
+                <div><h3>Embeddings</h3><div className="muted-note">Turn text into vectors for search and memory. Use your provider's embedding API, or run a HuggingFace model locally — it downloads to a folder in the project and runs on this machine.</div></div>
+              </div>
+              <div className="field"><label>Source</label>
+                <select value={embed.mode} onChange={(e) => saveEmbed({ mode: e.target.value })}>
+                  <option value="api">Provider API</option>
+                  <option value="local">Local (HuggingFace)</option>
+                </select>
+              </div>
+              {embed.mode === 'api' && <>
+                <div className="field"><label>Provider</label>
+                  <select value={embed.providerId || ''} onChange={(e) => saveEmbed({ providerId: e.target.value })}>
+                    <option value="">— choose —</option>
+                    {(embed.providers || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+                <div className="field"><label>Embedding model</label>
+                  <input value={embed.model || ''} onChange={(e) => setEmbed(s => ({ ...s, model: e.target.value }))} onBlur={() => saveEmbed({ model: embed.model })} placeholder="text-embedding-3-small" />
+                  <div className="muted-note">The model name to send to the provider's <code>/embeddings</code> endpoint.</div>
+                </div>
+              </>}
+              {embed.mode === 'local' && <>
+                <div className="field"><label>HuggingFace model</label>
+                  <input value={embed.localModel || ''} onChange={(e) => setEmbed(s => ({ ...s, localModel: e.target.value }))} onBlur={() => saveEmbed({ localModel: embed.localModel })} placeholder="Xenova/all-MiniLM-L6-v2" />
+                  <div className="muted-note">A feature-extraction model (e.g. <code>Xenova/all-MiniLM-L6-v2</code>, <code>Xenova/bge-small-en-v1.5</code>). Downloaded to <code>{embed.modelsDir}</code> on first use.</div>
+                </div>
+                {!embed.localPackageAvailable && <div className="attach-err">{embed.localPackageError}</div>}
+                {embed.localPackageAvailable && <div className="muted-note">{embed.localModelDownloaded ? 'Model is downloaded and ready.' : 'Model will download on first use (may take a moment).'}</div>}
+              </>}
+              <div className="editor-actions">
+                <button className="btn" onClick={testEmbed} disabled={embedBusy}>{embedBusy ? 'Testing…' : 'Test embedding'}</button>
+              </div>
+              {embedResult && (embedResult.ok
+                ? <div className="muted-note">OK · {embedResult.source} · model <code>{embedResult.model}</code> · {embedResult.dim} dimensions<br />sample: [{(embedResult.sample || []).join(', ')}…]</div>
+                : <div className="attach-err">{embedResult.error}</div>)}
             </>
           )}
           {tab === 'audit' && (

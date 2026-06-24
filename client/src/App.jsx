@@ -342,6 +342,7 @@ export default function App() {
   useEffect(() => {
     const m = models.find(x => x.id === currentId);
     if (m && m.sandboxAllowed === false) setSandbox(false);
+    if (m && m.webSearchAllowed === false) setWebSearch(false);
   }, [currentId, activeId]);
   function openFromUrl() {
     if (/^\/admin(\/|$)/.test(location.pathname)) { if (user?.isAdmin) { setShowAdmin(true); return; } history.replaceState({}, '', '/'); }
@@ -708,7 +709,7 @@ export default function App() {
     setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingFiles({}); setArtifactFocus(null);
     const m = models.find(m => m.id === currentId);
     setSandbox(m?.sandboxAllowed !== false && !!m?.sandboxAuto);
-    setWebSearch(false);
+    setWebSearch(!!cfg.webSearchAvailable && m?.webSearchAllowed !== false && !!m?.webSearchAuto);
     setFocusTick(t => t + 1);
     if (fromPop !== true) history.pushState({}, '', '/');
   }
@@ -890,7 +891,7 @@ export default function App() {
   const model = models.find(m => m.id === currentId);
   const sandboxAllowed = incognito ? false : (model ? model.sandboxAllowed !== false : true);
   const sandboxOn = sandboxAllowed && sandbox;
-  const webSearchAvailable = !incognito && !!cfg.webSearchAvailable;
+  const webSearchAvailable = !incognito && !!cfg.webSearchAvailable && (model ? model.webSearchAllowed !== false : true);
   const webSearchOn = webSearchAvailable && webSearch;
   const empty = !activeId && messages.length === 0;
   const bgInChat = user?.prefs?.modelBgInChat !== false;
@@ -906,7 +907,8 @@ export default function App() {
     webSearch: webSearchOn, webSearchAvailable, onToggleWebSearch: () => { if (webSearchAvailable) setWebSearch(s => !s); },
     project: currentProject, onClearProject: clearChatProject,
     savedPrompts: user?.savedPrompts || [], onUsePrompt: (t) => { setInput(t); setFocusTick(x => x + 1); }, onSavePrompt: savePromptFromInput, onDeletePrompt: deleteSavedPrompt,
-    onNewChat: () => newChat(), onShortcuts: () => setShowShortcuts(true)
+    onNewChat: () => newChat(), onShortcuts: () => setShowShortcuts(true),
+    functions: incognito ? [] : (cfg.functions || [])
   };
   const showArtifactsBtn = sandboxOn || files.length > 0;
 

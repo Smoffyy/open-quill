@@ -1,6 +1,6 @@
 {
   "name": "open-quill-server",
-  "version": "2027.0.0-cascade.9",
+  "version": "2027.0.0-cascade.8",
   "private": true,
   "type": "module",
   "main": "index.js",
@@ -17,5 +17,8 @@
     "multer": "^2.2.0",
     "pdfjs-dist": "^6.0.227",
     "ws": "^8.21.0"
+  },
+  "optionalDependencies": {
+    "@huggingface/transformers": "^3.0.0 || ^4.0.0"
   }
 }
