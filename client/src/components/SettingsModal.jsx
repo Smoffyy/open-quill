@@ -244,18 +244,33 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                 </div>
                 {vp && (
                   <div className="vh-list">
-                    <div className="vh-li"><span className="vh-li-k">Release</span><span className="vh-li-v">{vp.base || '—'}</span></div>
-                    <div className="vh-li"><span className="vh-li-k">Channel</span><span className="vh-li-v">{channel || 'Stable'}</span></div>
-                    {vp.build && <div className="vh-li"><span className="vh-li-k">Build</span><span className="vh-li-v">{vp.build}</span></div>}
+                    <div className="vh-li">
+                      <span className="vh-li-k">Release</span>
+                      <span className="vh-li-v">{vp.base || '—'}</span>
+                    </div>
+                                
+                    <div className="vh-li">
+                      <span className="vh-li-k">Channel</span>
+                      <span className="vh-li-v">{channel || 'Stable'}</span>
+                    </div>
+                                
+                    {vp.build && (
+                      <div className="vh-li">
+                        <span className="vh-li-k">Build</span>
+                        <span className="vh-li-v">{vp.build}</span>
+                      </div>
+                    )}
+                
+                    {notes && (
+                      <div className="version-desc" style={{ marginTop: 14 }}>
+                        <Markdown>{notes}</Markdown>
+                      </div>
+                    )}
+                
+                    {!notes && (
+                      <div className="vh-empty">No release notes for this build.</div>
+                    )}
                   </div>
-                )}
-                {notes ? (
-                  <div className="vh-notes">
-                    <div className="vh-notes-h">What's new</div>
-                    <div className="version-desc"><Markdown>{notes}</Markdown></div>
-                  </div>
-                ) : (
-                  <div className="vh-empty">No release notes for this build.</div>
                 )}
               </div>
             );
