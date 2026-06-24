@@ -89,7 +89,7 @@
 .sp-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; }
 
 /* ---------- model discovery ---------- */
-.discover-btn { margin-top: 8px; width: 100%; justify-content: center; display: flex; align-items: center; gap: 7px; }
+.discover-btn { width: 100%; justify-content: center; display: flex; align-items: center; gap: 7px; }
 .discover-list { flex: 1; overflow-y: auto; margin: 4px 0 2px; display: flex; flex-direction: column; gap: 6px; min-height: 120px; }
 .discover-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; background: var(--input-bg); border: 1px solid var(--border-soft); border-radius: 10px; }
 .discover-id { font-family: ui-monospace, 'SF Mono', monospace; font-size: 13px; color: var(--text); word-break: break-all; }

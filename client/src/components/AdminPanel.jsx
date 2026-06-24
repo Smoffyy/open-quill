@@ -1108,7 +1108,7 @@ export default function AdminPanel({ user, onClose }) {
             <>
               <div className="admin-section-head">
                 <div><h3>Tools</h3><div className="muted-note">Give models the ability to fetch real-world, real-time data (weather, stock prices, APIs…). Each tool runs server-side JavaScript and is offered to any model that has "Allow custom tools" enabled.</div></div>
-                <button className="btn primary" onClick={() => setToolEdit({ name: '', description: '', params: [], code: "const r = await fetch('https://api.example.com/data?q=' + encodeURIComponent(args.query));\nconst data = await r.json();\nreturn data;", timeout_ms: 15000, enabled: true, auto: false })}><Plus style={{ width: 15 }} /> New tool</button>
+                <button className="btn primary" onClick={() => setToolEdit({ name: '', description: '', params: [], code: "const r = await fetch('https://api.example.com/data?q=' + encodeURIComponent(args.query));\nconst data = await r.json();\nreturn data;", timeout_ms: 15000, enabled: true, auto: false })}><Plus style={{ width: 15 }} /></button>
               </div>
               {toolEdit && (
                 <div className="fn-editor">
@@ -1168,7 +1168,7 @@ export default function AdminPanel({ user, onClose }) {
             <>
               <div className="admin-section-head">
                 <div><h3>Functions</h3><div className="muted-note">Extend open-quill itself. Each function adds a custom button next to the composer that runs your JavaScript in the browser — automate input, call APIs, build filters or shortcuts.</div></div>
-                <button className="btn primary" onClick={() => setFnEdit({ label: '', icon: 'sparkles', location: 'composer', code: "api.setInput(api.input + '\\n\\nPlease answer concisely.');\napi.toast('Added a note');", enabled: true })}><Plus style={{ width: 15 }} /> New function</button>
+                <button className="btn primary" onClick={() => setFnEdit({ label: '', icon: 'sparkles', location: 'composer', code: "api.setInput(api.input + '\\n\\nPlease answer concisely.');\napi.toast('Added a note');", enabled: true })}><Plus style={{ width: 15 }} /></button>
               </div>
               {fnEdit && (
                 <div className="fn-editor">
