@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [2027.0.0] — 2026-06-24
+## [2027.0.0] — TBD
 
 > **Breaking:** This release replaces the plaintext `data.json` store with an encrypted SQLite database and is **not backward compatible** with previous versions. There is no automatic import; a fresh database is created on first run and the first account to sign in becomes the owner.
 

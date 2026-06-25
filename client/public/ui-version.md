@@ -1,5 +1,5 @@
-# 2027
+# 2027 - Cascade
 
-This release focuses on major backend changes, such as a stronger database, more functions in the interface, as well as implementing even more ways to customize open-quill! Each subsequent update will bring greater stability, though new versions may occasionally include bugs as we continue improving the experience.
+The next major release is here, building on the 2026 foundation with a strong focus on security, scalability, and customization. With encrypted storage, stronger authentication, advanced usage controls, and collaborative workspaces like Spaces and Projects, 2027 makes the platform more secure, more manageable, and more powerful for the community. As always, new versions may occasionally include bugs as we keep improving the experience.
 
 To see all changes, check out the `Changelog` menu.

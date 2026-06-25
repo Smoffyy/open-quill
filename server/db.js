@@ -237,7 +237,7 @@ if (!getSetting('seeded')) {
     internal_name: 'local-model', system_prompt: 'You are a helpful assistant.', provider_id: pid,
     has_reasoning: 0, reasoning_token: '', non_reasoning_token: '',
     in_more_models: 0, more_models_label: 'More models',
-    static_icon: '', generating_icon: '', thinking_icon: '', icon_position: 'below', sort_order: 0, enabled: 1
+    static_icon: '/starburst.svg', generating_icon: '/starburst-generating.svg', thinking_icon: '/starburst-thinking.svg', icon_position: 'below', sort_order: 0, enabled: 1
   });
   setSetting('seeded', '1');
 }
