@@ -6,6 +6,7 @@ export const NewChatIcon = Plus;
 export const Search = (p) => <I {...p}><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></I>;
 export const Globe = (p) => <I {...p}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18" /></I>;
 export const Panel = (p) => <I {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></I>;
+export const Menu = (p) => <I {...p}><path d="M4 7h16M4 12h12M4 17h16" /></I>;
 export const Mic = (p) => <I {...p}><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></I>;
 export const Wave = (p) => <svg viewBox="0 0 24 24" fill="currentColor" {...p}><rect x="3" y="9" width="2" height="6" rx="1"/><rect x="7" y="6" width="2" height="12" rx="1"/><rect x="11" y="4" width="2" height="16" rx="1"/><rect x="15" y="7" width="2" height="10" rx="1"/><rect x="19" y="10" width="2" height="4" rx="1"/></svg>;
 export const Up = (p) => <I {...p}><path d="M12 19V5M5 12l7-7 7 7" /></I>;
@@ -36,6 +37,8 @@ export const Sparkles = (p) => <I {...p}><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12
 export const Paper = (p) => <I {...p}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></I>;
 export const Download = (p) => <I {...p}><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></I>;
 export const Refresh = (p) => <I {...p}><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></I>;
+export const Fork = (p) => <I {...p}><circle cx="6" cy="6" r="2.4"/><circle cx="6" cy="18" r="2.4"/><circle cx="18" cy="8" r="2.4"/><path d="M6 8.4v7.2M6 12h6a4 4 0 0 0 4-4v-.4"/></I>;
+export const Pin = (p) => <I {...p}><path d="M9 4h6l-1 5 3 3v2H7v-2l3-3-1-5zM12 17v3"/></I>;
 export const Wrench = (p) => <I {...p}><path d="M14.7 6.3a4 4 0 0 1-5 5L4 17v3h3l5.7-5.7a4 4 0 0 0 5-5z"/></I>;
 export const Folder = (p) => <I {...p}><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></I>;
 export const Pencil = (p) => (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>);
@@ -51,3 +54,7 @@ export const Code = (p) => <I {...p}><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></I>
 export const Terminal = (p) => <I {...p}><path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM7 9l3 3-3 3M13 15h4"/></I>;
 export const Coffee = (p) => <I {...p}><path d="M17 8h1a3 3 0 0 1 0 6h-1M3 8h14v6a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8zM6 2v2M10 2v2M14 2v2"/></I>;
 export const Graduation = (p) => <I {...p}><path d="M22 9L12 5 2 9l10 4 10-4zM6 11v5c0 1 2.5 3 6 3s6-2 6-3v-5"/></I>;
+export const Upload = (p) => <I {...p}><path d="M12 21V9m0 0l-4 4m4-4l4 4M5 3h14"/></I>;
+export const Send = (p) => <I {...p}><path d="M22 2 11 13M22 2 15 22l-4-9-9-4z"/></I>;
+export const Box = (p) => <I {...p}><rect x="4" y="8" width="16" height="12" rx="1.5"/><path d="M3 5.5h18v2.5H3zM9.5 12h5"/></I>;
+export const X = (p) => <I {...p}><path d="M18 6 6 18M6 6l12 12"/></I>;

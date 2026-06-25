@@ -16,8 +16,9 @@ function applyPromptVars(text, vars) {
 }
 
 // system prompt order: base, summary, sandbox, then the reasoning toggle token last
-export function buildMessages(model, history, extended, sandboxPrompt, summaryText, vars = {}) {
+export function buildMessages(model, history, extended, sandboxPrompt, summaryText, vars = {}, instructions = '') {
   let sys = applyPromptVars(model.system_prompt || '', vars);
+  if (instructions && instructions.trim()) sys = (sys ? sys + '\n\n' : '') + "The user has provided the following instructions to keep in mind across all conversations. Follow them unless they conflict with safety or a direct request in the conversation:\n" + instructions.trim();
   if (summaryText && summaryText.trim()) sys = (sys ? sys + '\n\n' : '') + 'Summary of the earlier part of this conversation (older messages were compacted to save context — treat this as established context):\n' + summaryText.trim();
   if (sandboxPrompt) sys = (sys ? sys + '\n\n' : '') + sandboxPrompt;
   if (model.has_reasoning) {
@@ -94,7 +95,11 @@ export async function streamCompletion({ model, messages, signal, onEvent }) {
         const msg = json.message || {};
         if (msg.thinking) onEvent({ type: 'reasoning', text: msg.thinking });
         if (msg.content) emitContent(msg.content);
-        if (json.done) return true;
+        if (json.done) {
+          const p = json.prompt_eval_count || 0, c = json.eval_count || 0;
+          if (p || c) onEvent({ type: 'usage', usage: { prompt: p, completion: c, total: p + c } });
+          return true;
+        }
       } catch {}
       return false;
     };
@@ -111,7 +116,7 @@ export async function streamCompletion({ model, messages, signal, onEvent }) {
 
   const res = await fetch(endpoint(base, '/chat/completions'), {
     method: 'POST', headers: authHeaders(key), signal,
-    body: JSON.stringify({ model: model.internal_name, messages, stream: true, ...samplingParams(model, spec) })
+    body: JSON.stringify({ model: model.internal_name, messages, stream: true, stream_options: { include_usage: true }, ...samplingParams(model, spec) })
   });
   if (!res.ok || !res.body) { const t = await res.text().catch(() => ''); throw new Error(`Upstream error ${res.status}: ${t.slice(0, 300)}`); }
   const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
@@ -122,6 +127,7 @@ export async function streamCompletion({ model, messages, signal, onEvent }) {
     if (data === '[DONE]') return true;
     try {
       const json = JSON.parse(data);
+      if (json.usage) { const u = json.usage; onEvent({ type: 'usage', usage: { prompt: u.prompt_tokens || 0, completion: u.completion_tokens || 0, total: u.total_tokens || ((u.prompt_tokens || 0) + (u.completion_tokens || 0)) } }); }
       const delta = json.choices?.[0]?.delta || {};
       if (delta.reasoning_content) onEvent({ type: 'reasoning', text: delta.reasoning_content });
       if (delta.reasoning) onEvent({ type: 'reasoning', text: delta.reasoning });
@@ -140,7 +146,7 @@ export async function streamCompletion({ model, messages, signal, onEvent }) {
   flush();
 }
 
-async function oneShot(model, messages) {
+export async function oneShot(model, messages) {
   const { spec, base, key } = modelProvider(model);
   if (spec.protocol === 'ollama') {
     const res = await fetch(endpoint(base, '/api/chat'), {
@@ -160,7 +166,7 @@ async function oneShot(model, messages) {
   return json.choices?.[0]?.message?.content?.trim() || '';
 }
 
-function stripThink(model, raw) {
+export function stripThink(model, raw) {
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const to = (model.think_open && model.think_open.trim()) || '<think>';
   const tc = (model.think_close && model.think_close.trim()) || '</think>';
@@ -183,7 +189,24 @@ export async function generateTitle(model, userText, assistantText) {
   } catch { return 'New chat'; }
 }
 
-const SUMMARY_SYSTEM = `You are compacting a long conversation so it can continue without exceeding the context window. Write a thorough but concise summary of everything so far, in past tense as notes. PRESERVE: the user's goals and intent, every decision made, concrete facts and requirements, the state and names of any files/code produced, important values or snippets, and any open questions or next steps. OMIT pleasantries and filler. Do not address the user; this is internal context. Output only the summary.`;
+const SUMMARY_SYSTEM = `You are compacting a long conversation so it can continue without exceeding the context window. Produce a dense, factual summary as internal notes (not addressed to the user), organized under these exact headings, omitting any that are empty:
+
+## Goals
+What the user is ultimately trying to accomplish, and their stated intent.
+
+## Decisions
+Concrete decisions, conclusions, and agreements reached so far.
+
+## Facts & Constraints
+Important values, requirements, names, preferences, and constraints to remember.
+
+## Artifacts & State
+Files, code, or documents produced, with their names and current state.
+
+## Open Questions / Next Steps
+Anything unresolved or planned.
+
+Be concise but complete. Preserve specifics (names, numbers, snippets) over prose. Omit pleasantries and filler. Output only the summary.`;
 
 export async function summarizeConversation(model, priorSummary, msgs) {
   const flat = msgs.map(m => {

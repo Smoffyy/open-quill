@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
-import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield, Globe } from './icons.jsx';
+import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield, Globe, FileText, Pencil, Clock, Download, Wrench, Code, Brain } from './icons.jsx';
 import { QP_ICON_LIST, QpIcon } from '../qpIcons.jsx';
 
 function QpIconPicker({ value, onPick }) {
@@ -53,14 +53,15 @@ function IconSlot({ label, value, def, anim, onChange }) {
     const { url } = await api.upload(f);
     onChange(url); e.target.value = '';
   }
+  const shown = value || def;
   return (
     <div className="icon-slot">
       <div className="preview-wrap">
-        <button type="button" className="preview" onClick={() => ref.current?.click()} title="Click to upload (png, svg, jpeg, gif)">
-          <img src={value || def} className={anim} alt="" />
+        <button type="button" className={'preview' + (shown ? '' : ' empty')} onClick={() => ref.current?.click()} title="Click to upload (png, svg, jpeg, gif)">
+          {shown ? <img src={shown} className={anim} alt="" /> : <span className="preview-none">None</span>}
         </button>
         {value && (
-          <button type="button" className="reset-icon" title="Reset to default logo" onClick={() => onChange('')}>
+          <button type="button" className="reset-icon" title="Remove icon" onClick={() => onChange('')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
           </button>
         )}
@@ -136,12 +137,46 @@ function Accordion({ title, sub, children, defaultOpen = false }) {
   );
 }
 
+function StatusChips({ m }) {
+  const chips = [];
+  if (m.is_default) chips.push(['default', 'Default']);
+  if (!m.enabled) chips.push(['dim', 'Hidden']);
+  if (m.unavailable) chips.push(['warn', 'Unavailable']);
+  if (m.has_reasoning) chips.push(['', 'Reasoning']);
+  if (m.has_vision) chips.push(['', 'Vision']);
+  if (m.sandbox_allowed !== 0 && m.sandbox_auto) chips.push(['', 'Sandbox']);
+  if (m.in_more_models) chips.push(['dim', 'Grouped']);
+  if (!chips.length) return null;
+  return <div className="me2-chips">{chips.map(([cls, label]) => <span key={label} className={'me2-chip' + (cls ? ' ' + cls : '')}>{label}</span>)}</div>;
+}
+
+const ME_SECTIONS = [
+  ['general', 'General'],
+  ['behavior', 'Behavior'],
+  ['capabilities', 'Capabilities'],
+  ['appearance', 'Appearance'],
+  ['sampling', 'Sampling'],
+  ['pricing', 'Pricing']
+];
+
 function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], providerTypes = {} }) {
   const [spOpen, setSpOpen] = useState(false);
+  const [section, setSection] = useState('general');
   const [detecting, setDetecting] = useState(false);
   const [detectMsg, setDetectMsg] = useState('');
+  const [preset, setPreset] = useState(null);
   const bgRef = useRef(null);
   const set = (k, v) => onChange({ ...m, [k]: v });
+  useEffect(() => { setSection('general'); }, [m.id]);
+  useEffect(() => {
+    let alive = true;
+    const name = (m.internal_name || '').trim();
+    if (!name) { setPreset(null); return; }
+    api.get('/api/admin/pricing/preset?name=' + encodeURIComponent(name)).then(r => { if (alive) setPreset(r.preset || null); }).catch(() => {});
+    return () => { alive = false; };
+  }, [m.internal_name]);
+  const applyPreset = () => preset && onChange({ ...m, cost_in: preset.in, cost_out: preset.out });
+  const clearPrice = () => onChange({ ...m, cost_in: null, cost_out: null });
   async function pickBg(e) { const f = e.target.files?.[0]; if (!f) return; try { const { url } = await api.upload(f); set('bg_image', url); } catch {} e.target.value = ''; }
   const curProvider = providers.find(p => p.id === m.provider_id) || providers[0];
   const curType = curProvider ? providerTypes[curProvider.type] : null;
@@ -155,194 +190,268 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
     } catch { setDetectMsg('Could not detect from the server — enter it manually.'); }
     setDetecting(false);
   }
+  const priced = Number(m.cost_in) === preset?.in && Number(m.cost_out) === preset?.out;
+
   return (
-    <div className="model-editor">
-      <div className="me-head">
-        <div className="me-title">
-          <img className="me-title-icon" src={m.static_icon || '/starburst.svg'} alt="" />
-          <span className="mc-title">{m.display_name || 'Untitled model'}</span>
-          <span className="mc-sub">{m.internal_name}</span>
+    <div className="me2">
+      <div className="me2-head">
+        {m.static_icon ? <img className="me2-icon" src={m.static_icon} alt="" /> : <span className="me2-icon noicon">{(m.display_name || '?').trim().charAt(0).toUpperCase()}</span>}
+        <div className="me2-id">
+          <div className="me2-name">{m.display_name || 'Untitled model'}</div>
+          <div className="me2-sub">{m.internal_name || 'no model id'}</div>
         </div>
-        <button className="btn danger" onClick={() => onDelete(m.id)}><Trash style={{ width: 15 }} /></button>
+        <StatusChips m={m} />
+        <button className="me2-del" title="Delete model" onClick={() => onDelete(m.id)}><Trash style={{ width: 16 }} /></button>
       </div>
-      <div className="me-body">
-        <div className="me-essentials">
-          <div className="two-col">
-            <div className="field"><label>Display name</label>
-              <input value={m.display_name || ''} onChange={(e) => set('display_name', e.target.value)} /></div>
-            <div className="field"><label>Model ID</label>
-              <input value={m.internal_name || ''} onChange={(e) => set('internal_name', e.target.value)} placeholder="llama-3.1-8b-instruct" /></div>
-          </div>
-          <div className="field"><label>Provider</label>
-            <select value={m.provider_id || (providers[0]?.id || '')} onChange={(e) => set('provider_id', e.target.value)}>
-              {providers.map(p => <option key={p.id} value={p.id}>{p.name} ({providerTypes[p.type]?.label || p.type})</option>)}
-            </select>
-            <div className="muted-note">The connection this model runs through. Add or edit providers in the Providers tab.</div>
-          </div>
-          <div className="field"><label>Description</label>
-            <input value={m.description || ''} onChange={(e) => set('description', e.target.value)} placeholder="For complex tasks" /></div>
-          <div className="field"><label>System prompt</label>
-            <button type="button" className="sp-preview" onClick={() => setSpOpen(true)}>
-              {(m.system_prompt || '').trim()
-                ? <><div className="sp-preview-text">{m.system_prompt}</div><div className="sp-preview-fade" /></>
-                : <div className="sp-preview-empty">Click to write a system prompt…</div>}
-              <div className="sp-preview-hint">Click to edit</div>
-            </button>
-          </div>
-          {spOpen && <SystemPromptEditor value={m.system_prompt || ''} onChange={(v) => set('system_prompt', v)} onClose={() => setSpOpen(false)} />}
-          <Toggle m={m} set={set} k="is_default" label="Set as default" note="Pre-selected for users on first login. Only one model can be the default." />
-          <Toggle m={m} set={set} k="has_reasoning" label="Extended thinking" note="Adds the Extended toggle so users can request deeper reasoning. Configure it under Reasoning below." />
-          <div className="field row">
-            <div><label>Hidden</label><div className="muted-note">Stays in your admin list but is removed from every user's model picker.</div></div>
-            <div className={'switch' + (!m.enabled ? ' on' : '')} onClick={() => set('enabled', m.enabled ? 0 : 1)} />
-          </div>
-        </div>
 
-        <Accordion title="Visibility & access" sub="Grouping and availability">
-          <Toggle m={m} set={set} k="in_more_models" label={'Group under "More models"'} note="Moves the model out of the main list into a collapsible group." />
-          {!!m.in_more_models && (
-            <div className="field"><label>Group label</label>
-              <input value={m.more_models_label || ''} onChange={(e) => set('more_models_label', e.target.value)} placeholder="More models" /></div>
-          )}
-          <Toggle m={m} set={set} k="unavailable" label="Temporarily unavailable" note="The model stays visible in the picker but users can't select it, and a banner explains why. Admins can still use it for testing." />
-          {!!m.unavailable && (
-            <div className="field"><label>Unavailability message <span className="muted-note" style={{ display: 'inline' }}>(shown in the banner's “Learn more”)</span></label>
-              <textarea rows={3} value={m.unavailable_reason || ''} onChange={(e) => set('unavailable_reason', e.target.value)} placeholder="e.g. Down for maintenance — back shortly. Use Quillku 2 in the meantime." /></div>
-          )}
-        </Accordion>
+      <div className="me2-nav">
+        {ME_SECTIONS.map(([id, label]) => (
+          <button key={id} className={section === id ? 'on' : ''} onClick={() => setSection(id)}>{label}</button>
+        ))}
+      </div>
 
-        <Accordion title="Reasoning" sub="Mode triggers, output tags & visibility">
-          {!!m.has_reasoning && <>
+      <div className="me2-body">
+        {section === 'general' && (
+          <div className="me2-pane">
             <div className="two-col">
-              <div className="field"><label>Extended-mode trigger</label>
-                <input value={m.reasoning_token || ''} onChange={(e) => set('reasoning_token', e.target.value)} placeholder="/think" /></div>
-              <div className="field"><label>Standard-mode trigger</label>
-                <input value={m.non_reasoning_token || ''} onChange={(e) => set('non_reasoning_token', e.target.value)} placeholder="/no_think" /></div>
+              <div className="field"><label>Display name</label>
+                <input value={m.display_name || ''} onChange={(e) => set('display_name', e.target.value)} /></div>
+              <div className="field"><label>Model ID</label>
+                <input value={m.internal_name || ''} onChange={(e) => set('internal_name', e.target.value)} placeholder="llama-3.1-8b-instruct" /></div>
             </div>
-            <div className="muted-note">Appended to the system prompt, on its own line, depending on whether the user has Extended turned on.</div>
-          </>}
-          <div className="two-col" style={{ marginTop: 12 }}>
-            <div className="field"><label>Reasoning start tag</label>
-              <input value={m.think_open || ''} onChange={(e) => set('think_open', e.target.value)} placeholder="<think>" /></div>
-            <div className="field"><label>Reasoning end tag</label>
-              <input value={m.think_close || ''} onChange={(e) => set('think_close', e.target.value)} placeholder="</think>" /></div>
-          </div>
-          <div className="muted-note">How the model delimits its reasoning in the output stream. Leave blank to use the default {'<think>…</think>'}.</div>
-          <div style={{ marginTop: 14 }}>
-            <Toggle m={m} set={set} k="reasoning_collapsible" inverted label="Show reasoning to users" note="When on, users can expand and read the thought process. When off, they see only a 'Thinking…' status." />
-          </div>
-        </Accordion>
-
-        <Accordion title="Capabilities & tools" sub="Image input, sandbox, picker badges">
-          <Toggle m={m} set={set} k="has_vision" label="Image input" note="Let users attach images for the model to see. Off = non-image files only." />
-          <Toggle m={m} set={set} k="sandbox_allowed" inverted label="Allow sandbox tools" note="Lets users enable code and file tools for this model. Off means sandbox can't be turned on." />
-          {m.sandbox_allowed !== 0 && <Toggle m={m} set={set} k="sandbox_auto" label="Enable sandbox by default" note="New chats with this model start with sandbox tools on." />}
-          <div className="field"><label>Tool-call limit</label>
-            <input type="number" min="0" value={m.agent_steps || ''} placeholder="Unlimited" onChange={(e) => set('agent_steps', e.target.value)} style={{ maxWidth: 140 }} />
-            <div className="muted-note">Maximum tool rounds per response. Leave blank or 0 for unlimited.</div>
-          </div>
-          <div className="cap-icons-block">
-            <label>Picker badges</label>
-            <div className="muted-note" style={{ marginBottom: 8 }}>Cosmetic labels shown beside the model in the picker. They don't change behaviour — set them to reflect the model's real capabilities.</div>
-            <Toggle m={m} set={set} k="cap_text" label="Text-only badge" note="Marks the model as accepting text input only." />
-            <Toggle m={m} set={set} k="cap_vision" label="Image badge" note="Marks the model as accepting images." />
-            <Toggle m={m} set={set} k="cap_reasoning" label="Reasoning badge" note="Marks the model as able to reason." />
-            <Toggle m={m} set={set} k="cap_compact" label="Combine into a single badge" note="Collapse the badges into one ⓘ that reveals them on hover." />
-          </div>
-        </Accordion>
-
-        <Accordion title="Context management" sub="Auto-summarize long conversations">
-          <Toggle m={m} set={set} k="enable_summaries" label="Auto-summarize long chats" note="When a conversation nears the context window, older turns are compacted into a summary so it can keep going." />
-          {!!m.enable_summaries && <>
-            <div className="field"><label>Context window</label>
-              <div className="ctx-row">
-                <input type="number" min="0" value={m.num_ctx ?? ''} onChange={(e) => set('num_ctx', e.target.value)} placeholder="e.g. 32768" />
-                <button className="btn" type="button" onClick={detect} disabled={detecting}>{detecting ? 'Detecting…' : 'Detect'}</button>
-              </div>
-              <div className="muted-note">{detectMsg || 'The model\u2019s maximum context in tokens. Detect asks the provider; otherwise enter it manually.'}</div>
-            </div>
-            <div className="field"><label>Context headroom <span className="muted-note" style={{ display: 'inline' }}>(%)</span></label>
-              <input type="number" step="1" min="3" max="60" value={Math.round((m.summary_padding ?? 0.125) * 100)} onChange={(e) => set('summary_padding', (parseFloat(e.target.value) || 0) / 100)} style={{ maxWidth: 140 }} />
-              <div className="muted-note">Summarize once the chat fills past this much of the context window's free space. 12% leaves a safety margin before the limit.</div>
-            </div>
-          </>}
-        </Accordion>
-
-        <Accordion title="Appearance" sub="Logos, icon size & position">
-          <div className="field"><label>Model logos</label>
-            <div className="icon-grid">
-              <IconSlot label="Static" value={m.static_icon} def="/starburst.svg" onChange={(v) => set('static_icon', v)} />
-              <IconSlot label="Generating" value={m.generating_icon} def="/starburst-generating.svg" anim={(m.generating_anim || 'spin') === 'none' ? '' : (m.generating_anim || 'spin')} onChange={(v) => set('generating_icon', v)} />
-              <IconSlot label="Thinking" value={m.thinking_icon} def="/starburst-thinking.svg" anim={(m.thinking_anim || 'pulse') === 'none' ? '' : (m.thinking_anim || 'pulse')} onChange={(v) => set('thinking_icon', v)} />
-            </div>
-            <div className="icon-grid anim-row">
-              <div />
-              <select className="anim-sel" value={m.generating_anim || 'spin'} onChange={(e) => set('generating_anim', e.target.value)}>
-                <option value="spin">Spin</option><option value="pulse">Breathe</option><option value="bounce">Bounce</option><option value="wobble">Wobble</option><option value="fade">Fade</option><option value="none">No motion</option>
+            <div className="field"><label>Provider</label>
+              <select value={m.provider_id || (providers[0]?.id || '')} onChange={(e) => set('provider_id', e.target.value)}>
+                {providers.map(p => <option key={p.id} value={p.id}>{p.name} ({providerTypes[p.type]?.label || p.type})</option>)}
               </select>
-              <select className="anim-sel" value={m.thinking_anim || 'pulse'} onChange={(e) => set('thinking_anim', e.target.value)}>
-                <option value="pulse">Breathe</option><option value="spin">Spin</option><option value="bounce">Bounce</option><option value="wobble">Wobble</option><option value="fade">Fade</option><option value="none">No motion</option>
-              </select>
+              <div className="muted-note">The connection this model runs through. Add or edit providers in the Providers tab.</div>
             </div>
-            <div className="muted-note">Click an icon to upload a png, svg, jpeg, or gif. Previews animate as they will in chat.</div>
-          </div>
-          <div className="field">
-            <label>Icon size <span className="muted-note" style={{ display: 'inline' }}>{(m.icon_size || 40)}px</span></label>
-            <div className="icon-size-row">
-              <input type="range" min="14" max="64" value={m.icon_size || 40} onChange={(e) => set('icon_size', parseInt(e.target.value))} />
-              <button className="btn ghost icon-size-reset" disabled={!m.icon_size} onClick={() => set('icon_size', 0)}>Reset</button>
-            </div>
-            <div className="muted-note">Size of the model's icon shown beside its messages. Default is 40px. Legacy is 26px.</div>
-          </div>
-          <Toggle m={m} set={set} k="dropdown_icon" inverted label="Show logo in picker" note="Display this model's static logo next to its name in the model picker." />
-          <div className="field">
-            <label>Logo position</label>
-            <div className="seg">
-              <button className={(m.icon_position || 'below') === 'above' ? 'on' : ''} onClick={() => set('icon_position', 'above')}>Above text</button>
-              <button className={(m.icon_position || 'below') === 'below' ? 'on' : ''} onClick={() => set('icon_position', 'below')}>Below text</button>
-            </div>
-            <div className="muted-note">Where the logo sits relative to the message it generates.</div>
-          </div>
-          <Toggle m={m} set={set} k="bg_enabled" label="Showcase background" note="Show a custom backdrop behind the whole interface when this model is selected. UI panels turn to frosted glass to blend in. Works with light, dark, and Anthropic themes." />
-          {!!m.bg_enabled && (
-            <div className="field">
-              <label>Background image or CSS</label>
-              <button type="button" className="bg-preview" style={bgPreviewStyle(m.bg_image)} onClick={() => bgRef.current?.click()} title="Click to upload an image">
-                {!m.bg_image && <span className="bg-preview-empty">Click to upload an image</span>}
+            <div className="field"><label>Description</label>
+              <input value={m.description || ''} onChange={(e) => set('description', e.target.value)} placeholder="For complex tasks" /></div>
+            <div className="field"><label>System prompt</label>
+              <button type="button" className="sp-preview" onClick={() => setSpOpen(true)}>
+                {(m.system_prompt || '').trim()
+                  ? <><div className="sp-preview-text">{m.system_prompt}</div><div className="sp-preview-fade" /></>
+                  : <div className="sp-preview-empty">Click to write a system prompt…</div>}
+                <div className="sp-preview-hint">Click to edit</div>
               </button>
-              <input ref={bgRef} type="file" hidden onChange={pickBg} accept=".png,.jpg,.jpeg,.gif,.webp,.svg,image/*" />
-              <input value={m.bg_image || ''} onChange={(e) => set('bg_image', e.target.value)} placeholder="Image URL, or a CSS gradient" />
-              <div className="bg-up-row">
-                <button type="button" className="btn ghost" onClick={() => bgRef.current?.click()}>Upload image…</button>
-                {m.bg_image && <button type="button" className="btn ghost" onClick={() => set('bg_image', '')}>Clear</button>}
-              </div>
-              <div className="muted-note">Paste an image URL, upload a file, or use a CSS gradient like <code>linear-gradient(120deg, #a0c4ff, #ffc6ff)</code>. Users can turn it off for conversations from the model picker.</div>
             </div>
-          )}
-        </Accordion>
+            {spOpen && <SystemPromptEditor value={m.system_prompt || ''} onChange={(v) => set('system_prompt', v)} onClose={() => setSpOpen(false)} />}
 
-        <Accordion title="Sampling" sub={curType ? curType.label : 'Provider parameters'}>
-          <div className="muted-note">Optional overrides sent with each request. Leave a field blank to use the provider's default. Only parameters supported by {curType?.label || 'this provider'} are shown.</div>
-          <div className="sampling-grid">
-            {[
-              ['temperature', 'Temperature', '0.0 \u2013 2.0'], ['top_p', 'Top P', '0.0 \u2013 1.0'],
-              ['top_k', 'Top K', 'e.g. 40'], ['min_p', 'Min P', '0.0 \u2013 1.0'],
-              ['repetition_penalty', 'Repetition penalty', 'e.g. 1.1'], ['presence_penalty', 'Presence penalty', '-2.0 \u2013 2.0'],
-              ['frequency_penalty', 'Frequency penalty', '-2.0 \u2013 2.0'], ['seed', 'Seed', 'integer'],
-              ['max_tokens', 'Max tokens', 'e.g. 2048']
-            ].filter(([k]) => allowedSamplers.includes(k)).map(([k, label, ph]) => (
-              <div className="samp-field" key={k}>
-                <label>{label}</label>
-                <input type="number" step="any" placeholder={ph} value={m[k] ?? ''} onChange={(e) => set(k, e.target.value)} />
+            <div className="me2-group-label">Availability</div>
+            <div className="me2-toggle-card">
+              <Toggle m={m} set={set} k="is_default" label="Set as default" note="Pre-selected for users on first login. Only one model can be the default." />
+              <div className="field row">
+                <div><label>Hidden</label><div className="muted-note">Stays in your admin list but is removed from every user's model picker.</div></div>
+                <div className={'switch' + (!m.enabled ? ' on' : '')} onClick={() => set('enabled', m.enabled ? 0 : 1)} />
               </div>
-            ))}
+              <Toggle m={m} set={set} k="in_more_models" label={'Group under "More models"'} note="Moves the model out of the main list into a collapsible group." />
+              {!!m.in_more_models && (
+                <div className="field"><label>Group label</label>
+                  <input value={m.more_models_label || ''} onChange={(e) => set('more_models_label', e.target.value)} placeholder="More models" /></div>
+              )}
+              <Toggle m={m} set={set} k="unavailable" label="Temporarily unavailable" note="Stays visible in the picker but users can't select it, and a banner explains why. Admins can still use it for testing." />
+              {!!m.unavailable && (
+                <div className="field"><label>Unavailability message</label>
+                  <textarea rows={3} value={m.unavailable_reason || ''} onChange={(e) => set('unavailable_reason', e.target.value)} placeholder="e.g. Down for maintenance — back shortly." /></div>
+              )}
+            </div>
           </div>
-        </Accordion>
+        )}
+
+        {section === 'behavior' && (
+          <div className="me2-pane">
+            <div className="me2-toggle-card">
+              <Toggle m={m} set={set} k="has_reasoning" label="Extended thinking" note="Adds the Extended toggle so users can request deeper reasoning." />
+            </div>
+            {!!m.has_reasoning && <>
+              <div className="me2-group-label">Mode triggers</div>
+              <div className="two-col">
+                <div className="field"><label>Extended-mode trigger</label>
+                  <input value={m.reasoning_token || ''} onChange={(e) => set('reasoning_token', e.target.value)} placeholder="/think" /></div>
+                <div className="field"><label>Standard-mode trigger</label>
+                  <input value={m.non_reasoning_token || ''} onChange={(e) => set('non_reasoning_token', e.target.value)} placeholder="/no_think" /></div>
+              </div>
+              <div className="muted-note">Appended to the system prompt, on its own line, depending on whether the user has Extended turned on.</div>
+            </>}
+            <div className="me2-group-label">Reasoning tags</div>
+            <div className="two-col">
+              <div className="field"><label>Reasoning start tag</label>
+                <input value={m.think_open || ''} onChange={(e) => set('think_open', e.target.value)} placeholder="<think>" /></div>
+              <div className="field"><label>Reasoning end tag</label>
+                <input value={m.think_close || ''} onChange={(e) => set('think_close', e.target.value)} placeholder="</think>" /></div>
+            </div>
+            <div className="muted-note">How the model delimits its reasoning in the output stream. Leave blank to use the default {'<think>…</think>'}.</div>
+            <div className="me2-toggle-card" style={{ marginTop: 14 }}>
+              <Toggle m={m} set={set} k="reasoning_collapsible" inverted label="Show reasoning to users" note="When on, users can expand and read the thought process. When off, they see only a 'Thinking…' status." />
+            </div>
+
+            <div className="me2-group-label">Long conversations</div>
+            <div className="me2-toggle-card">
+              <Toggle m={m} set={set} k="enable_summaries" label="Auto-summarize long chats" note="When a conversation nears the context window, older turns are compacted into a summary so it can keep going." />
+            </div>
+            {!!m.enable_summaries && <>
+              <div className="field"><label>Context window</label>
+                <div className="ctx-row">
+                  <input type="number" min="0" value={m.num_ctx ?? ''} onChange={(e) => set('num_ctx', e.target.value)} placeholder="e.g. 32768" />
+                  <button className="btn" type="button" onClick={detect} disabled={detecting}>{detecting ? 'Detecting…' : 'Detect'}</button>
+                </div>
+                <div className="muted-note">{detectMsg || 'The model\u2019s maximum context in tokens. Detect asks the provider; otherwise enter it manually.'}</div>
+              </div>
+              <div className="field"><label>Context headroom <span className="muted-note" style={{ display: 'inline' }}>(%)</span></label>
+                <input type="number" step="1" min="3" max="60" value={Math.round((m.summary_padding ?? 0.125) * 100)} onChange={(e) => set('summary_padding', (parseFloat(e.target.value) || 0) / 100)} style={{ maxWidth: 140 }} />
+                <div className="muted-note">Summarize once the chat fills past this much of the context window's free space. 12% leaves a safety margin.</div>
+              </div>
+              <div className="field"><label>Recent turns kept verbatim</label>
+                <input type="number" step="1" min="1" max="40" value={m.recent_window ?? 4} onChange={(e) => set('recent_window', parseInt(e.target.value) || 4)} style={{ maxWidth: 140 }} />
+                <div className="muted-note">The newest messages are never summarized — they stay word-for-word. Higher keeps more recent detail but uses more context.</div>
+              </div>
+            </>}
+          </div>
+        )}
+
+        {section === 'capabilities' && (
+          <div className="me2-pane">
+            <div className="me2-toggle-card">
+              <Toggle m={m} set={set} k="has_vision" label="Image input" note="Let users attach images for the model to see. Off = non-image files only." />
+              <Toggle m={m} set={set} k="sandbox_allowed" inverted label="Allow sandbox tools" note="Lets users enable code and file tools for this model. Off means sandbox can't be turned on." />
+              {m.sandbox_allowed !== 0 && <Toggle m={m} set={set} k="sandbox_auto" label="Enable sandbox by default" note="New chats with this model start with sandbox tools on." />}
+              <Toggle m={m} set={set} k="web_search_allowed" inverted label="Allow web search" note="Lets users enable web search for this model (web search must also be configured in the Web Search tab)." />
+              {m.web_search_allowed !== 0 && <Toggle m={m} set={set} k="web_search_auto" label="Enable web search by default" note="New chats with this model start with web search on." />}
+              <Toggle m={m} set={set} k="tools_allowed" inverted label="Allow custom tools" note="Lets this model use the live-data tools defined in the Tools tab." />
+              {m.tools_allowed !== 0 && <Toggle m={m} set={set} k="tools_auto" label="Enable custom tools by default" note="Expose all enabled custom tools to this model automatically." />}
+            </div>
+            <div className="field"><label>Tool-call limit</label>
+              <input type="number" min="0" value={m.agent_steps || ''} placeholder="Unlimited" onChange={(e) => set('agent_steps', e.target.value)} style={{ maxWidth: 140 }} />
+              <div className="muted-note">Maximum tool rounds per response. Leave blank or 0 for unlimited.</div>
+            </div>
+            <div className="me2-group-label">Picker badges</div>
+            <div className="muted-note" style={{ marginBottom: 4 }}>Cosmetic labels shown beside the model in the picker. They don't change behaviour.</div>
+            <div className="me2-toggle-card">
+              <Toggle m={m} set={set} k="cap_text" label="Text-only badge" note="Marks the model as accepting text input only." />
+              <Toggle m={m} set={set} k="cap_vision" label="Image badge" note="Marks the model as accepting images." />
+              <Toggle m={m} set={set} k="cap_reasoning" label="Reasoning badge" note="Marks the model as able to reason." />
+              <Toggle m={m} set={set} k="cap_compact" label="Combine into a single badge" note="Collapse the badges into one ⓘ that reveals them on hover." />
+            </div>
+          </div>
+        )}
+
+        {section === 'appearance' && (
+          <div className="me2-pane">
+            <div className="field"><label>Model logo</label>
+              <div className="icon-grid">
+                <IconSlot label="Static" value={m.static_icon} def="" onChange={(v) => set('static_icon', v)} />
+                <IconSlot label="Generating" value={m.generating_icon} def={m.static_icon || ''} anim={(m.generating_anim || 'spin') === 'none' ? '' : (m.generating_anim || 'spin')} onChange={(v) => set('generating_icon', v)} />
+                <IconSlot label="Thinking" value={m.thinking_icon} def={m.static_icon || ''} anim={(m.thinking_anim || 'pulse') === 'none' ? '' : (m.thinking_anim || 'pulse')} onChange={(v) => set('thinking_icon', v)} />
+              </div>
+              <div className="icon-grid anim-row">
+                <div />
+                <select className="anim-sel" value={m.generating_anim || 'spin'} onChange={(e) => set('generating_anim', e.target.value)}>
+                  <option value="spin">Spin</option><option value="pulse">Breathe</option><option value="bounce">Bounce</option><option value="wobble">Wobble</option><option value="fade">Fade</option><option value="none">No motion</option>
+                </select>
+                <select className="anim-sel" value={m.thinking_anim || 'pulse'} onChange={(e) => set('thinking_anim', e.target.value)}>
+                  <option value="pulse">Breathe</option><option value="spin">Spin</option><option value="bounce">Bounce</option><option value="wobble">Wobble</option><option value="fade">Fade</option><option value="none">No motion</option>
+                </select>
+              </div>
+              <div className="icon-actions">
+                {!m.static_icon
+                  ? <button type="button" className="btn ghost" onClick={() => onChange({ ...m, static_icon: '/starburst.svg', generating_icon: '/starburst-generating.svg', thinking_icon: '/starburst-thinking.svg' })}>Use starburst icon</button>
+                  : <button type="button" className="btn ghost" onClick={() => onChange({ ...m, static_icon: '', generating_icon: '', thinking_icon: '' })}>Remove icon</button>}
+              </div>
+              <div className="muted-note">With no icon set the model shows no logo in chat or the picker. Click a slot to upload a png, svg, jpeg, or gif, or use the starburst. Generating and Thinking fall back to the static logo when left empty.</div>
+            </div>
+            <div className="field">
+              <label>Icon size <span className="muted-note" style={{ display: 'inline' }}>{(m.icon_size || 40)}px</span></label>
+              <div className="icon-size-row">
+                <input type="range" min="14" max="64" value={m.icon_size || 40} onChange={(e) => set('icon_size', parseInt(e.target.value))} />
+                <button className="btn ghost icon-size-reset" disabled={!m.icon_size} onClick={() => set('icon_size', 0)}>Reset</button>
+              </div>
+              <div className="muted-note">Size of the model's icon shown beside its messages. Default is 40px. Legacy is 26px.</div>
+            </div>
+            <div className="me2-toggle-card">
+              <Toggle m={m} set={set} k="dropdown_icon" inverted label="Show logo in picker" note="Display this model's static logo next to its name in the model picker." />
+            </div>
+            <div className="field">
+              <label>Logo position</label>
+              <div className="seg">
+                <button className={(m.icon_position || 'below') === 'above' ? 'on' : ''} onClick={() => set('icon_position', 'above')}>Above text</button>
+                <button className={(m.icon_position || 'below') === 'below' ? 'on' : ''} onClick={() => set('icon_position', 'below')}>Below text</button>
+                <button className={(m.icon_position || 'below') === 'left' ? 'on' : ''} onClick={() => set('icon_position', 'left')}>Left of text</button>
+              </div>
+              <div className="muted-note">Where the logo sits relative to the message it generates. "Left of text" places it as an avatar in a gutter beside the message.</div>
+            </div>
+            <div className="me2-toggle-card">
+              <Toggle m={m} set={set} k="show_name" label="Show model name" note="Display this model's name next to its logo on assistant messages." />
+            </div>
+            <div className="me2-toggle-card">
+              <Toggle m={m} set={set} k="bg_enabled" label="Showcase background" note="Show a custom backdrop behind the whole interface when this model is selected. UI panels turn to frosted glass to blend in." />
+            </div>
+            {!!m.bg_enabled && (
+              <div className="field">
+                <label>Background image or CSS</label>
+                <button type="button" className="bg-preview" style={bgPreviewStyle(m.bg_image)} onClick={() => bgRef.current?.click()} title="Click to upload an image">
+                  {!m.bg_image && <span className="bg-preview-empty">Click to upload an image</span>}
+                </button>
+                <input ref={bgRef} type="file" hidden onChange={pickBg} accept=".png,.jpg,.jpeg,.gif,.webp,.svg,image/*" />
+                <input value={m.bg_image || ''} onChange={(e) => set('bg_image', e.target.value)} placeholder="Image URL, or a CSS gradient" />
+                <div className="bg-up-row">
+                  <button type="button" className="btn ghost" onClick={() => bgRef.current?.click()}>Upload image…</button>
+                  {m.bg_image && <button type="button" className="btn ghost" onClick={() => set('bg_image', '')}>Clear</button>}
+                </div>
+                <div className="muted-note">Paste an image URL, upload a file, or use a CSS gradient like <code>linear-gradient(120deg, #a0c4ff, #ffc6ff)</code>.</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {section === 'sampling' && (
+          <div className="me2-pane">
+            <div className="muted-note">Optional overrides sent with each request. Leave a field blank to use the provider's default. Only parameters supported by {curType?.label || 'this provider'} are shown.</div>
+            <div className="sampling-grid">
+              {[
+                ['temperature', 'Temperature', '0.0 \u2013 2.0'], ['top_p', 'Top P', '0.0 \u2013 1.0'],
+                ['top_k', 'Top K', 'e.g. 40'], ['min_p', 'Min P', '0.0 \u2013 1.0'],
+                ['repetition_penalty', 'Repetition penalty', 'e.g. 1.1'], ['presence_penalty', 'Presence penalty', '-2.0 \u2013 2.0'],
+                ['frequency_penalty', 'Frequency penalty', '-2.0 \u2013 2.0'], ['seed', 'Seed', 'integer'],
+                ['max_tokens', 'Max tokens', 'e.g. 2048']
+              ].filter(([k]) => allowedSamplers.includes(k)).map(([k, label, ph]) => (
+                <div className="samp-field" key={k}>
+                  <label>{label}</label>
+                  <input type="number" step="any" placeholder={ph} value={m[k] ?? ''} onChange={(e) => set(k, e.target.value)} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {section === 'pricing' && (
+          <div className="me2-pane">
+            <div className="muted-note">Optional. Used to estimate cost in each user's Usage tab. Prices are per 1,000,000 tokens. Leave blank or 0 for local or free models.</div>
+            {preset && (
+              <div className="me2-preset">
+                <span>Recognized as <strong>{preset.label}</strong> (${preset.in}/${preset.out} per 1M). {priced ? 'Applied.' : 'You can apply or override it.'}</span>
+                {!priced && <button type="button" className="btn" onClick={applyPreset}>Apply preset</button>}
+              </div>
+            )}
+            <div className="sampling-grid">
+              <div className="samp-field">
+                <label>Input $ / 1M tokens</label>
+                <input type="number" step="any" min="0" placeholder="e.g. 3.00" value={m.cost_in ?? ''} onChange={(e) => set('cost_in', e.target.value)} />
+              </div>
+              <div className="samp-field">
+                <label>Output $ / 1M tokens</label>
+                <input type="number" step="any" min="0" placeholder="e.g. 15.00" value={m.cost_out ?? ''} onChange={(e) => set('cost_out', e.target.value)} />
+              </div>
+            </div>
+            {(m.cost_in != null || m.cost_out != null) && (
+              <button type="button" className="linklike" style={{ marginTop: 10 }} onClick={clearPrice}>Clear price (treat as local / free)</button>
+            )}
+          </div>
+        )}
       </div>
-      <div className="btn-row me-foot">
-        <span className="autosave-status">
-          {autosaveState === 'saving' ? 'Saving…' : autosaveState === 'saved' ? 'All changes saved to draft ✓' : 'Edits save automatically to your draft'}
-        </span>
+
+      <div className="me2-foot">
+        <span className={'autosave-dot' + (autosaveState === 'saved' ? ' flash' : '')} />
+        {autosaveState === 'saving' ? 'Saving…' : autosaveState === 'saved' ? 'All changes saved to draft' : 'Edits save automatically to your draft'}
       </div>
     </div>
   );
@@ -354,10 +463,101 @@ export default function AdminPanel({ user, onClose }) {
   const [usersList, setUsersList] = useState([]);
   const [cfg, setCfg] = useState({ appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [] });
   const [cfgSaved, setCfgSaved] = useState(false);
-  const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256, modelQueue: false });
+  const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256, modelQueue: false, membankEnabled: false, membankHideTools: false, membankPrompt: '', budgetUser: 0, budgetAdmin: 0, budgetWarnFraction: 0.8, budgetEnforce: false, sessionTtlDays: 30, maxSessions: 0 });
   const [providers, setProviders] = useState([]);
+  const [membankFiles, setMembankFiles] = useState([]);
+  const [tools, setTools] = useState([]);
+  const [toolEdit, setToolEdit] = useState(null);
+  const [customFns, setCustomFns] = useState([]);
+  const [fnEdit, setFnEdit] = useState(null);
+  const membankRef = useRef(null);
+  const [mbEdit, setMbEdit] = useState(null);
+  const [mbEditName, setMbEditName] = useState('');
+  const [mbErr, setMbErr] = useState('');
+  const [mbDrag, setMbDrag] = useState(null);
+  async function saveMbRename(oldName) {
+    const name = mbEditName.trim();
+    setMbErr('');
+    if (!name || name === oldName) { setMbEdit(null); return; }
+    try { const r = await api.patch('/api/admin/membank/' + encodeURIComponent(oldName), { name }); setMembankFiles(r.files || []); setMbEdit(null); }
+    catch (e) { setMbErr(e?.message || 'Could not rename file.'); }
+  }
+  async function setMbFolder(name, folder) {
+    setMembankFiles(fs => fs.map(f => f.name === name ? { ...f, folder } : f));
+    try { const r = await api.patch('/api/admin/membank/' + encodeURIComponent(name), { folder }); setMembankFiles(r.files || []); } catch {}
+  }
+  async function commitMbOrder(ordered) {
+    setMembankFiles(ordered);
+    try { const r = await api.put('/api/admin/membank/order', { items: ordered.map(f => ({ name: f.name, folder: f.folder || '' })) }); if (r.files) setMembankFiles(r.files); } catch {}
+  }
+  function onMbDrop(target) {
+    if (!mbDrag || mbDrag === target.name) { setMbDrag(null); return; }
+    const arr = membankFiles.slice();
+    const from = arr.findIndex(f => f.name === mbDrag);
+    const to = arr.findIndex(f => f.name === target.name);
+    if (from < 0 || to < 0) { setMbDrag(null); return; }
+    const [moved] = arr.splice(from, 1);
+    moved.folder = target.folder || '';
+    arr.splice(to, 0, moved);
+    setMbDrag(null);
+    commitMbOrder(arr);
+  }
+  async function loadMembank() { try { const d = await api.get('/api/admin/membank'); setMembankFiles(d.files || []); } catch {} }
+  async function onMembankPick(e) { const files = [...(e.target.files || [])]; e.target.value = ''; if (!files.length) return; try { const r = await api.uploadMembank(files); setMembankFiles(r.files || []); } catch {} }
+  async function removeMembank(name) { try { const r = await api.del('/api/admin/membank/' + encodeURIComponent(name)); setMembankFiles(r.files || []); } catch {} }
+  async function loadTools() { try { const d = await api.get('/api/admin/tools'); setTools(d.tools || []); } catch {} }
+  async function saveTool(t) {
+    try {
+      if (t.id) { const r = await api.patch('/api/admin/tools/' + t.id, t); setTools(ts => ts.map(x => x.id === t.id ? r.tool : x)); }
+      else { const r = await api.post('/api/admin/tools', t); setTools(ts => [...ts, r.tool]); }
+      setToolEdit(null);
+    } catch (e) { alert(e.message || 'Could not save tool.'); }
+  }
+  async function deleteTool(id) { try { await api.del('/api/admin/tools/' + id); setTools(ts => ts.filter(x => x.id !== id)); } catch {} }
+  async function toggleTool(t) { try { const r = await api.patch('/api/admin/tools/' + t.id, { enabled: !t.enabled }); setTools(ts => ts.map(x => x.id === t.id ? r.tool : x)); } catch {} }
+  async function loadFns() { try { const d = await api.get('/api/admin/functions'); setCustomFns(d.functions || []); } catch {} }
+  async function saveFn(f) {
+    try {
+      if (f.id) { const r = await api.patch('/api/admin/functions/' + f.id, f); setCustomFns(fs => fs.map(x => x.id === f.id ? r.fn : x)); }
+      else { const r = await api.post('/api/admin/functions', f); setCustomFns(fs => [...fs, r.fn]); }
+      setFnEdit(null);
+    } catch (e) { alert(e.message || 'Could not save function.'); }
+  }
+  async function deleteFn(id) { try { await api.del('/api/admin/functions/' + id); setCustomFns(fs => fs.filter(x => x.id !== id)); } catch {} }
+  async function toggleFn(f) { try { const r = await api.patch('/api/admin/functions/' + f.id, { enabled: !f.enabled }); setCustomFns(fs => fs.map(x => x.id === f.id ? r.fn : x)); } catch {} }
+  const [audit, setAudit] = useState({ entries: [], total: 0, offset: 0, hasMore: false, loading: false, actions: [] });
+  const [auditFilter, setAuditFilter] = useState({ action: '', actor: '', days: '' });
+  const [adminUsage, setAdminUsage] = useState(null);
+  const [adminUsageDays, setAdminUsageDays] = useState('30');
+  const [customPresets, setCustomPresetsState] = useState([]);
+  const [presetForm, setPresetForm] = useState({ match: '', label: '', in: '', out: '' });
+  const [presetErr, setPresetErr] = useState('');
+  async function loadAdminUsage(days) {
+    const d = days || adminUsageDays;
+    try { setAdminUsage(await api.get('/api/admin/usage?days=' + d)); } catch {}
+  }
+  async function loadPresets() { try { const r = await api.get('/api/admin/pricing/presets'); setCustomPresetsState(r.custom || []); } catch {} }
+  async function addPreset() {
+    setPresetErr('');
+    try { const r = await api.post('/api/admin/pricing/presets', { match: presetForm.match, label: presetForm.label, in: Number(presetForm.in), out: Number(presetForm.out) }); setCustomPresetsState(r.custom || []); setPresetForm({ match: '', label: '', in: '', out: '' }); }
+    catch (e) { setPresetErr(e?.message || 'Could not save preset.'); }
+  }
+  async function delPreset(match) { try { const r = await api.del('/api/admin/pricing/presets/' + encodeURIComponent(match)); setCustomPresetsState(r.custom || []); } catch {} }
+  async function loadAudit(offset = 0, filterOverride) {
+    const f = filterOverride || auditFilter;
+    setAudit(a => ({ ...a, loading: true }));
+    try {
+      const params = new URLSearchParams({ limit: '60', offset: String(offset) });
+      if (f.action) params.set('action', f.action);
+      if (f.actor) params.set('actor', f.actor);
+      if (f.days) params.set('days', f.days);
+      const d = await api.get('/api/admin/audit?' + params.toString());
+      setAudit(a => ({ entries: offset ? [...a.entries, ...d.entries] : d.entries, total: d.total, offset, hasMore: d.hasMore, loading: false, actions: d.actions || a.actions }));
+    } catch { setAudit(a => ({ ...a, loading: false })); }
+  }
   const [providerTypes, setProviderTypes] = useState({});
   const [selModel, setSelModel] = useState(null);
+  const [modelFilter, setModelFilter] = useState('');
   const [setSavedFlash, setSetSaved] = useState(false);
   const [dragOver, setDragOver] = useState(null);
   const [ask, setAsk] = useState(null); // { message, danger, onConfirm }
@@ -431,6 +631,10 @@ export default function AdminPanel({ user, onClose }) {
   async function setRole(id, isAdmin) {
     await api.patch('/api/admin/users/' + id, { isAdmin });
     setUsersList(us => us.map(u => u.id === id ? { ...u, isAdmin } : u));
+  }
+  async function saveBudget(id, value) {
+    const budget = value === '' || value == null ? null : Math.max(0, Number(value) || 0);
+    try { await api.patch('/api/admin/users/' + id + '/budget', { budget }); setUsersList(us => us.map(u => u.id === id ? { ...u, budget } : u)); } catch {}
   }
   function removeUser(id) {
     setAsk({
@@ -538,6 +742,11 @@ export default function AdminPanel({ user, onClose }) {
         <button className={'ar-tab' + (tab === 'users' ? ' active' : '')} onClick={() => setTab('users')}><Users /> Users</button>
         <button className={'ar-tab' + (tab === 'limits' ? ' active' : '')} onClick={() => setTab('limits')}><Shield /> Limits &amp; Safety</button>
         <button className={'ar-tab' + (tab === 'websearch' ? ' active' : '')} onClick={() => setTab('websearch')}><Globe /> Web Search</button>
+        <button className={'ar-tab' + (tab === 'membank' ? ' active' : '')} onClick={() => { setTab('membank'); loadMembank(); }}><FileText /> Memory Bank</button>
+        <button className={'ar-tab' + (tab === 'tools' ? ' active' : '')} onClick={() => { setTab('tools'); loadTools(); }}><Wrench /> Tools</button>
+        <button className={'ar-tab' + (tab === 'functions' ? ' active' : '')} onClick={() => { setTab('functions'); loadFns(); }}><Code /> Functions</button>
+        <button className={'ar-tab' + (tab === 'audit' ? ' active' : '')} onClick={() => { setTab('audit'); loadAudit(); }}><Clock /> Audit Log</button>
+        <button className={'ar-tab' + (tab === 'usage' ? ' active' : '')} onClick={() => { setTab('usage'); loadAdminUsage(); loadPresets(); }}><Sliders /> Usage &amp; Pricing</button>
         <button className="ar-back" onClick={onClose}><Chevron style={{ transform: 'rotate(90deg)', width: 16 }} /> Back to chat</button>
       </nav>
       <div className="admin-content">
@@ -568,41 +777,51 @@ export default function AdminPanel({ user, onClose }) {
                 <div className="ae-hint">No provider set up yet? Head to the <button className="linklike" onClick={() => setTab('providers')}>Providers</button> tab first.</div>
               </div>
             );
+            const q = modelFilter.trim().toLowerCase();
+            const shown = q ? models.filter(m => (m.display_name || '').toLowerCase().includes(q) || (m.internal_name || '').toLowerCase().includes(q)) : models;
             return (
               <>
-                <div className="models-head">
-                  <div>
-                    <h2>Models</h2>
-                    <div className="hint">Edits save to your draft automatically and only you (and other admins) see them. Use <strong>Push to all clients</strong> (top right) to make them live for everyone.</div>
-                  </div>
-                </div>
-                <div className="models-split">
-                  <div className="models-list">
-                    {models.map((m, i) => (
-                      <div key={m.id}
-                        className={'model-row' + (sel && sel.id === m.id ? ' active' : '') + (drag.dragging === i ? ' dragging' : '') + (drag.over === i ? ' drag-over' : '')}
-                        draggable onDragStart={() => drag.onStart(i)} onDragEnd={drag.onEnd}
-                        onDragOver={(e) => { e.preventDefault(); drag.onOver(i); }}
-                        onDrop={(e) => { e.preventDefault(); drag.onDrop(i); }}
-                        onClick={() => setSelModel(m.id)}>
-                        <span className="grip"><Grip /></span>
-                        <img className="mr-icon" src={m.static_icon || '/starburst.svg'} alt="" />
-                        <div className="mr-meta">
-                          <span className="mr-name">{m.display_name || 'Untitled model'}</span>
-                          <span className="mr-sub">{m.internal_name}</span>
+                <div className="mg-wrap">
+                  <div className="mg-rail">
+                    <div className="mg-rail-head">
+                      <span className="mg-rail-title">Models <span className="mg-count">{models.length}</span></span>
+                      <button className="mg-add-btn" onClick={add} title="Add model"><Plus style={{ width: 16 }} /></button>
+                    </div>
+                    <div className="mg-search">
+                      <input value={modelFilter} onChange={(e) => setModelFilter(e.target.value)} placeholder="Search models…" />
+                    </div>
+                    <div className="mg-list">
+                      {shown.map((m, i) => (
+                        <div key={m.id}
+                          className={'mg-row' + (sel && sel.id === m.id ? ' active' : '') + (!q && drag.dragging === i ? ' dragging' : '') + (!q && drag.over === i ? ' drag-over' : '')}
+                          draggable={!q} onDragStart={() => !q && drag.onStart(i)} onDragEnd={drag.onEnd}
+                          onDragOver={(e) => { if (q) return; e.preventDefault(); drag.onOver(i); }}
+                          onDrop={(e) => { if (q) return; e.preventDefault(); drag.onDrop(i); }}
+                          onClick={() => setSelModel(m.id)}>
+                          {!q && <span className="mg-grip"><Grip /></span>}
+                          {m.static_icon ? <img className="mg-row-icon" src={m.static_icon} alt="" /> : <span className="mg-row-icon noicon">{(m.display_name || '?').trim().charAt(0).toUpperCase()}</span>}
+                          <div className="mg-row-meta">
+                            <span className="mg-row-name">
+                              {m.display_name || 'Untitled model'}
+                              {!!m.is_default && <span className="mg-star" title="Default">★</span>}
+                            </span>
+                            <span className="mg-row-sub">{m.internal_name || 'no id'}</span>
+                          </div>
+                          <span className="mg-dots">
+                            {!m.enabled && <span className="mg-dot dim" title="Hidden" />}
+                            {!!m.unavailable && <span className="mg-dot warn" title="Unavailable" />}
+                            {!!m.in_more_models && <span className="mg-dot" title="Grouped" />}
+                          </span>
                         </div>
-                        <span className="mr-badges">
-                          {!!m.is_default && <span className="mr-badge">default</span>}
-                          {!m.enabled && <span className="mr-badge dim">hidden</span>}
-                          {!!m.unavailable && <span className="mr-badge warn">unavailable</span>}
-                          {!!m.in_more_models && <span className="mr-badge dim">grouped</span>}
-                        </span>
-                      </div>
-                    ))}
-                    <button className="btn add-model" onClick={add}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> Add model</button>
-                    <button className="btn ghost discover-btn" onClick={openDiscover}><Cube style={{ width: 14, verticalAlign: '-2px' }} /> Discover from backend</button>
+                      ))}
+                      {q && shown.length === 0 && <div className="mg-empty">No models match “{modelFilter}”.</div>}
+                    </div>
+                    <div className="mg-rail-foot">
+                      <button className="btn add-model" onClick={add}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> Add model</button>
+                      <button className="btn ghost discover-btn" onClick={openDiscover}><Cube style={{ width: 14, verticalAlign: '-2px' }} /> Discover</button>
+                    </div>
                   </div>
-                  <div className="models-detail">
+                  <div className="mg-detail">
                     {sel
                       ? <ModelEditor key={sel.id} m={sel} onChange={change} onDelete={del} autosaveState={autosave} providers={providers} providerTypes={providerTypes} />
                       : <div className="muted-note" style={{ padding: 20 }}>No models yet — add one to get started.</div>}
@@ -655,13 +874,20 @@ export default function AdminPanel({ user, onClose }) {
           {tab === 'users' && (
             <>
               <h2>Users</h2>
-              <div className="hint">Everyone who has signed in. Toggle admin rights or remove accounts.</div>
+              <div className="hint">Everyone who has signed in. Toggle admin rights, set a monthly budget, or remove accounts.</div>
               {usersList.map(u => (
                 <div className="user-row" key={u.id}>
                   <div className="avatar">{(u.displayName || u.email)[0].toUpperCase()}</div>
                   <div className="u-main">
-                    <div className="u-name">{u.displayName}{u.isOwner && <span className="badge">Top admin</span>}{u.id === user?.id && !u.isOwner && <span className="you-tag">you</span>}</div>
-                    <div className="u-email">{u.email}</div>
+                    <div className="u-name">{u.displayName}{u.isOwner && <span className="badge">Top admin</span>}{u.twoFactor && <span className="badge" title="Two-factor enabled">2FA</span>}{u.id === user?.id && !u.isOwner && <span className="you-tag">you</span>}</div>
+                    <div className="u-email">{u.email}{typeof u.monthSpend === 'number' && u.monthSpend > 0 ? ` · $${u.monthSpend.toFixed(u.monthSpend < 0.01 ? 4 : 2)} this month` : ''}</div>
+                  </div>
+                  <div className="u-budget" title="Monthly budget override ($). Blank uses the role default.">
+                    <span className="u-budget-prefix">$</span>
+                    <input type="number" min="0" step="any" placeholder="role default"
+                      value={u.budget == null ? '' : u.budget}
+                      onChange={(e) => setUsersList(us => us.map(x => x.id === u.id ? { ...x, budget: e.target.value === '' ? null : e.target.value } : x))}
+                      onBlur={(e) => saveBudget(u.id, e.target.value)} />
                   </div>
                   {!u.isOwner && (
                     <div className="seg">
@@ -731,6 +957,31 @@ export default function AdminPanel({ user, onClose }) {
               <div className="field row">
                 <div><label>Model queue</label><div className="muted-note">Only one model runs at a time. Requests for the same model run together; a request for a different model waits until the current one finishes, instead of swapping it out mid-response. Useful for local servers that load a single model.</div></div>
                 <div className={'switch' + (settings.modelQueue ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, modelQueue: !s.modelQueue }))} /></div>
+
+              <h3 className="me-section-h">Usage budgets</h3>
+              <div className="muted-note" style={{ marginBottom: 8 }}>Monthly spend caps based on per-model pricing. A warning banner appears as a user nears the cap. Set 0 for no limit. Per-user overrides live in the Users tab.</div>
+              <div className="two-col">
+                <div className="field"><label className="sub">Default user budget ($ / month)</label>
+                  <input type="number" min="0" step="any" value={settings.budgetUser ?? 0} onChange={(e) => setSettings(s => ({ ...s, budgetUser: e.target.value }))} placeholder="0" /></div>
+                <div className="field"><label className="sub">Default admin budget ($ / month)</label>
+                  <input type="number" min="0" step="any" value={settings.budgetAdmin ?? 0} onChange={(e) => setSettings(s => ({ ...s, budgetAdmin: e.target.value }))} placeholder="0" /></div>
+              </div>
+              <div className="field"><label className="sub">Warn at</label>
+                <div className="muted-note">Show the warning banner once this fraction of the budget is used.</div>
+                <input type="number" min="0.1" max="0.99" step="0.05" value={settings.budgetWarnFraction ?? 0.8} onChange={(e) => setSettings(s => ({ ...s, budgetWarnFraction: e.target.value }))} placeholder="0.8" /></div>
+              <div className="field row">
+                <div><label>Enforce budget</label><div className="muted-note">When on, users at or over their cap cannot send new messages until next month. When off, the banner is informational only. Admins are never blocked.</div></div>
+                <div className={'switch' + (settings.budgetEnforce ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, budgetEnforce: !s.budgetEnforce }))} /></div>
+
+              <h3 className="me-section-h">Sessions</h3>
+              <div className="two-col">
+                <div className="field"><label className="sub">Session lifetime (days)</label>
+                  <div className="muted-note">Sessions expire after this many days of inactivity. Activity resets the timer.</div>
+                  <input type="number" min="1" max="365" step="1" value={settings.sessionTtlDays ?? 30} onChange={(e) => setSettings(s => ({ ...s, sessionTtlDays: e.target.value }))} placeholder="30" /></div>
+                <div className="field"><label className="sub">Max sessions per user</label>
+                  <div className="muted-note">Oldest sessions are signed out beyond this. 0 = unlimited.</div>
+                  <input type="number" min="0" max="50" step="1" value={settings.maxSessions ?? 0} onChange={(e) => setSettings(s => ({ ...s, maxSessions: e.target.value }))} placeholder="0" /></div>
+              </div>
               <div className="settings-autosave">
                 <span className={'autosave-dot' + (setAutoStatus === 'saved' ? ' flash' : '')} />
                 {setAutoStatus === 'saving' ? 'Saving…' : setAutoStatus === 'saved' ? 'Saved — applies immediately' : 'Changes save automatically'}
@@ -774,6 +1025,310 @@ export default function AdminPanel({ user, onClose }) {
                 <span className={'autosave-dot' + (setAutoStatus === 'saved' ? ' flash' : '')} />
                 {setAutoStatus === 'saving' ? 'Saving…' : setAutoStatus === 'saved' ? 'Saved — applies immediately' : 'Changes save automatically'}
               </div>
+            </>
+          )}
+          {tab === 'membank' && (
+            <>
+              <h2>Memory Bank</h2>
+              <div className="hint">Upload reference files the assistant can read on demand. When enabled, every model gets tools to view a file (or just specific lines) and search across them — useful for project docs, policies, or specs, without web search. Applies to all models and takes effect immediately, no publish needed.</div>
+              <div className="field row">
+                <div><label>Enable memory bank</label><div className="muted-note">When on, all models receive a system-prompt section listing these files plus the <code>mb_view</code> and <code>mb_search</code> tools.</div></div>
+                <div className={'switch' + (settings.membankEnabled ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, membankEnabled: !s.membankEnabled }))} />
+              </div>
+              <div className="field row">
+                <div><label>Hide tool calls from users</label><div className="muted-note">When on, file reads stay behind the scenes — the model still uses the files, but users won't see the <code>mb_view</code> / <code>mb_search</code> steps in the reply.</div></div>
+                <div className={'switch' + (settings.membankHideTools ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, membankHideTools: !s.membankHideTools }))} />
+              </div>
+              <div className="field">
+                <label>System prompt</label>
+                <textarea rows={5} value={settings.membankPrompt ?? ''} onChange={(e) => setSettings(s => ({ ...s, membankPrompt: e.target.value }))} />
+                <div className="muted-note">Intro text added above the file list when the memory bank is enabled. The file names and tool instructions are appended automatically.</div>
+              </div>
+              <div className="field">
+                <label>Files</label>
+                <div className="muted-note" style={{ marginBottom: 8 }}>Text and PDF files work best (.md, .txt, .json, .pdf, code, etc.). PDFs are read as extracted text. Up to 25 MB each.</div>
+                <input ref={membankRef} type="file" multiple hidden onChange={onMembankPick} />
+                <button className="btn" onClick={() => membankRef.current?.click()}>Upload files</button>
+                <div className="muted-note" style={{ marginTop: 8 }}>Drag the handle to reorder or move files between folders. Type a folder name to group files; clear it to leave a file ungrouped.</div>
+                <datalist id="mb-folders">{[...new Set(membankFiles.map(f => f.folder).filter(Boolean))].map(fo => <option key={fo} value={fo} />)}</datalist>
+                <div style={{ marginTop: 12 }}>
+                  {membankFiles.length === 0 ? <div className="muted-note">No files yet.</div> : (() => {
+                    const groups = []; const seen = new Map();
+                    for (const f of membankFiles) { const k = f.folder || ''; if (!seen.has(k)) { seen.set(k, { folder: k, files: [] }); groups.push(seen.get(k)); } seen.get(k).files.push(f); }
+                    return groups.map(g => (
+                      <div key={g.folder || '__none'} className="mb-group">
+                        <div className="mb-group-head">{g.folder ? g.folder : 'Ungrouped'}</div>
+                        {g.files.map(f => {
+                          const editing = mbEdit === f.name;
+                          return (
+                            <div key={f.name} className={'mb-file-row' + (mbDrag === f.name ? ' dragging' : '')}
+                              onDragOver={(e) => e.preventDefault()} onDrop={() => onMbDrop(f)}>
+                              <span className="mb-drag" draggable onDragStart={() => setMbDrag(f.name)} onDragEnd={() => setMbDrag(null)} title="Drag to reorder / move">⋮⋮</span>
+                              <FileText style={{ width: 16, flexShrink: 0, opacity: 0.7 }} />
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                {editing ? (
+                                  <input autoFocus value={mbEditName} onChange={(e) => setMbEditName(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') saveMbRename(f.name); if (e.key === 'Escape') { setMbEdit(null); setMbErr(''); } }}
+                                    style={{ width: '100%' }} />
+                                ) : (
+                                  <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
+                                )}
+                                <div className="muted-note">{f.readable ? `${(f.lines || 0).toLocaleString()} lines · ${(f.size || 0).toLocaleString()} bytes` : `${(f.size || 0).toLocaleString()} bytes · not readable as text`}</div>
+                                {editing && mbErr && <div className="dz-err" style={{ marginTop: 4 }}>{mbErr}</div>}
+                              </div>
+                              {editing ? (
+                                <>
+                                  <button className="btn" style={{ flexShrink: 0 }} onClick={() => saveMbRename(f.name)}>Save</button>
+                                  <button className="btn ghost" style={{ flexShrink: 0 }} onClick={() => { setMbEdit(null); setMbErr(''); }}>Cancel</button>
+                                </>
+                              ) : (
+                                <>
+                                  <input className="mb-folder-input" list="mb-folders" placeholder="folder" defaultValue={f.folder || ''}
+                                    onBlur={(e) => { const v = e.target.value.trim(); if (v !== (f.folder || '')) setMbFolder(f.name, v); }}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }} />
+                                  <button className="btn ghost" title="Rename" style={{ flexShrink: 0 }} onClick={() => { setMbEdit(f.name); setMbEditName(f.name); setMbErr(''); }}><Pencil style={{ width: 14 }} /></button>
+                                  <button className="btn danger" title="Remove" style={{ flexShrink: 0 }} onClick={() => removeMembank(f.name)}><Trash style={{ width: 15 }} /></button>
+                                </>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </div>
+              <div className="settings-autosave">
+                <span className={'autosave-dot' + (setAutoStatus === 'saved' ? ' flash' : '')} />
+                {setAutoStatus === 'saving' ? 'Saving…' : setAutoStatus === 'saved' ? 'Saved — applies immediately' : 'Changes save automatically'}
+              </div>
+            </>
+          )}
+          {tab === 'tools' && (
+            <>
+              <div className="admin-section-head">
+                <div><h3>Tools</h3><div className="muted-note">Give models the ability to fetch real-world, real-time data (weather, stock prices, APIs…). Each tool runs server-side JavaScript and is offered to any model that has "Allow custom tools" enabled.</div></div>
+                <button className="btn primary" onClick={() => setToolEdit({ name: '', description: '', params: [], code: "const r = await fetch('https://api.example.com/data?q=' + encodeURIComponent(args.query));\nconst data = await r.json();\nreturn data;", timeout_ms: 15000, enabled: true, auto: false })}><Plus style={{ width: 15 }} /></button>
+              </div>
+              {toolEdit && (
+                <div className="fn-editor">
+                  <div className="field"><label>Tool name</label>
+                    <input value={toolEdit.name} onChange={(e) => setToolEdit(t => ({ ...t, name: e.target.value }))} placeholder="get_weather" />
+                    <div className="muted-note">Lowercase letters, digits, underscores. This is the name the model calls.</div>
+                  </div>
+                  <div className="field"><label>Description</label>
+                    <textarea rows={2} value={toolEdit.description} onChange={(e) => setToolEdit(t => ({ ...t, description: e.target.value }))} placeholder="Get the current weather for a city." />
+                  </div>
+                  <div className="field"><label>Arguments</label>
+                    {(toolEdit.params || []).map((p, i) => (
+                      <div key={i} className="param-row">
+                        <input value={p.name} placeholder="name" onChange={(e) => setToolEdit(t => ({ ...t, params: t.params.map((x, j) => j === i ? { ...x, name: e.target.value } : x) }))} />
+                        <input value={p.desc} placeholder="description" onChange={(e) => setToolEdit(t => ({ ...t, params: t.params.map((x, j) => j === i ? { ...x, desc: e.target.value } : x) }))} />
+                        <label className="param-req"><input type="checkbox" checked={!!p.required} onChange={(e) => setToolEdit(t => ({ ...t, params: t.params.map((x, j) => j === i ? { ...x, required: e.target.checked } : x) }))} /> req</label>
+                        <button className="icon-btn" onClick={() => setToolEdit(t => ({ ...t, params: t.params.filter((_, j) => j !== i) }))}><Trash style={{ width: 14 }} /></button>
+                      </div>
+                    ))}
+                    <button className="btn" onClick={() => setToolEdit(t => ({ ...t, params: [...(t.params || []), { name: '', desc: '', required: false }] }))}>Add argument</button>
+                  </div>
+                  <div className="field"><label>Code</label>
+                    <textarea className="code-area" rows={10} value={toolEdit.code} onChange={(e) => setToolEdit(t => ({ ...t, code: e.target.value }))} spellCheck={false} />
+                    <div className="muted-note">Async JS body. Read inputs from <code>args</code>, use <code>fetch</code>, and <code>return</code> the result (string or object). Runs sandboxed with a timeout.</div>
+                  </div>
+                  <div className="field"><label>Timeout (ms)</label>
+                    <input type="number" min="1000" max="60000" value={toolEdit.timeout_ms} onChange={(e) => setToolEdit(t => ({ ...t, timeout_ms: e.target.value }))} style={{ maxWidth: 140 }} />
+                  </div>
+                  <div className="me2-toggle-card">
+                    <label className="inline-toggle"><span>Enabled</span><div className={'switch' + (toolEdit.enabled ? ' on' : '')} onClick={() => setToolEdit(t => ({ ...t, enabled: !t.enabled }))} /></label>
+                  </div>
+                  <div className="editor-actions">
+                    <button className="btn" onClick={() => setToolEdit(null)}>Cancel</button>
+                    <button className="btn primary" onClick={() => saveTool(toolEdit)}>Save tool</button>
+                  </div>
+                </div>
+              )}
+              <div className="fn-list">
+                {tools.length === 0 && !toolEdit && <div className="muted-note">No tools yet.</div>}
+                {tools.map(t => (
+                  <div key={t.id} className="fn-card">
+                    <div className="fn-card-main">
+                      <div className="fn-card-title"><Wrench style={{ width: 15 }} /> <code>{t.name}</code></div>
+                      <div className="fn-card-desc">{t.description || 'No description.'}</div>
+                    </div>
+                    <div className="fn-card-actions">
+                      <div className={'switch' + (t.enabled ? ' on' : '')} title="Enabled" onClick={() => toggleTool(t)} />
+                      <button className="icon-btn" onClick={() => setToolEdit({ ...t, params: t.params || [] })}><Pencil style={{ width: 15 }} /></button>
+                      <button className="icon-btn" onClick={() => deleteTool(t.id)}><Trash style={{ width: 15 }} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {tab === 'functions' && (
+            <>
+              <div className="admin-section-head">
+                <div><h3>Functions</h3><div className="muted-note">Extend open-quill itself. Each function adds a custom button next to the composer that runs your JavaScript in the browser — automate input, call APIs, build filters or shortcuts.</div></div>
+                <button className="btn primary" onClick={() => setFnEdit({ label: '', icon: 'sparkles', location: 'composer', code: "api.setInput(api.input + '\\n\\nPlease answer concisely.');\napi.toast('Added a note');", enabled: true })}><Plus style={{ width: 15 }} /></button>
+              </div>
+              {fnEdit && (
+                <div className="fn-editor">
+                  <div className="field"><label>Button label</label>
+                    <input value={fnEdit.label} onChange={(e) => setFnEdit(f => ({ ...f, label: e.target.value }))} placeholder="Make concise" />
+                  </div>
+                  <div className="field two-col">
+                    <div><label>Icon</label>
+                      <select value={fnEdit.icon} onChange={(e) => setFnEdit(f => ({ ...f, icon: e.target.value }))}>
+                        {['none', 'sparkles', 'bulb', 'pencil', 'code', 'wrench', 'wand', 'bolt', 'filter', 'search', 'star', 'chat'].map(i => <option key={i} value={i}>{i}</option>)}
+                      </select>
+                    </div>
+                    <div><label>Location</label>
+                      <select value={fnEdit.location} onChange={(e) => setFnEdit(f => ({ ...f, location: e.target.value }))}>
+                        <option value="composer">Composer</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="field"><label>Code</label>
+                    <textarea className="code-area" rows={10} value={fnEdit.code} onChange={(e) => setFnEdit(f => ({ ...f, code: e.target.value }))} spellCheck={false} />
+                    <div className="muted-note">Runs in the browser with an <code>api</code> object: <code>api.input</code>, <code>api.setInput(t)</code>, <code>api.insert(t)</code>, <code>api.send()</code>, <code>api.toast(m)</code>, <code>api.copy(t)</code>, <code>api.fetch()</code>, <code>api.model</code>.</div>
+                  </div>
+                  <div className="me2-toggle-card">
+                    <label className="inline-toggle"><span>Enabled</span><div className={'switch' + (fnEdit.enabled ? ' on' : '')} onClick={() => setFnEdit(f => ({ ...f, enabled: !f.enabled }))} /></label>
+                  </div>
+                  <div className="editor-actions">
+                    <button className="btn" onClick={() => setFnEdit(null)}>Cancel</button>
+                    <button className="btn primary" onClick={() => saveFn(fnEdit)}>Save function</button>
+                  </div>
+                </div>
+              )}
+              <div className="fn-list">
+                {customFns.length === 0 && !fnEdit && <div className="muted-note">No functions yet.</div>}
+                {customFns.map(f => (
+                  <div key={f.id} className="fn-card">
+                    <div className="fn-card-main">
+                      <div className="fn-card-title"><Code style={{ width: 15 }} /> {f.label}</div>
+                      <div className="fn-card-desc">Button · {f.location || 'composer'}</div>
+                    </div>
+                    <div className="fn-card-actions">
+                      <div className={'switch' + (f.enabled ? ' on' : '')} title="Enabled" onClick={() => toggleFn(f)} />
+                      <button className="icon-btn" onClick={() => setFnEdit({ ...f })}><Pencil style={{ width: 15 }} /></button>
+                      <button className="icon-btn" onClick={() => deleteFn(f.id)}><Trash style={{ width: 15 }} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {tab === 'audit' && (
+            <>
+              <h2>Audit Log</h2>
+              <div className="hint">A record of sensitive admin actions. Entries older than 120 days are pruned automatically. {audit.total > 0 && `Showing ${audit.entries.length} of ${audit.total}.`}</div>
+              <div className="audit-filters">
+                <select value={auditFilter.action} onChange={(e) => { const action = e.target.value; setAuditFilter(f => ({ ...f, action })); loadAudit(0, { ...auditFilter, action }); }}>
+                  <option value="">All actions</option>
+                  {(audit.actions || []).map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+                <input placeholder="Filter by actor email" value={auditFilter.actor}
+                  onChange={(e) => setAuditFilter(f => ({ ...f, actor: e.target.value }))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') loadAudit(0); }} />
+                <select value={auditFilter.days} onChange={(e) => { const days = e.target.value; setAuditFilter(f => ({ ...f, days })); loadAudit(0, { ...auditFilter, days }); }}>
+                  <option value="">Any time</option>
+                  <option value="1">Last 24h</option>
+                  <option value="7">Last 7 days</option>
+                  <option value="30">Last 30 days</option>
+                </select>
+                <button className="btn ghost" onClick={() => loadAudit(0)}>Apply</button>
+                <button className="btn ghost" onClick={() => { window.location.href = '/api/admin/audit/export'; }}><Download style={{ width: 14, verticalAlign: '-2px' }} /> Export CSV</button>
+              </div>
+              {audit.entries.length === 0 && !audit.loading && <div className="muted-note">No audit entries match.</div>}
+              {audit.entries.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {audit.entries.map(e => (
+                    <div key={e.id} style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '8px 10px', border: '1px solid rgba(128,128,128,0.18)', borderRadius: 8 }}>
+                      <span style={{ fontFamily: 'monospace', fontSize: 12, opacity: 0.65, flexShrink: 0 }}>{new Date(e.ts).toLocaleString()}</span>
+                      <span style={{ flexShrink: 0, fontWeight: 600, fontSize: 13 }}>{e.action}</span>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 13, opacity: 0.85, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {e.actorEmail}{e.meta ? ' · ' + (typeof e.meta === 'object' ? Object.entries(e.meta).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(',') : v}`).join(', ') : String(e.meta)) : ''}
+                      </span>
+                      {e.ip && <span style={{ fontFamily: 'monospace', fontSize: 11, opacity: 0.5, flexShrink: 0 }}>{e.ip}</span>}
+                    </div>
+                  ))}
+                  {audit.hasMore && <button className="btn ghost" style={{ marginTop: 8, alignSelf: 'center' }} disabled={audit.loading} onClick={() => loadAudit(audit.offset + 60)}>{audit.loading ? 'Loading…' : 'Load more'}</button>}
+                </div>
+              )}
+            </>
+          )}
+          {tab === 'usage' && (
+            <>
+              <h2>Usage &amp; Pricing</h2>
+              <div className="hint">Account-wide token use and estimated cost, plus the price presets applied to recognized model names.</div>
+              <div className="seg" style={{ width: 'fit-content', marginBottom: 14 }}>
+                {[['7', '7 days'], ['30', '30 days'], ['90', '90 days']].map(([v, l]) => (
+                  <button key={v} className={adminUsageDays === v ? 'on' : ''} onClick={() => { setAdminUsageDays(v); loadAdminUsage(v); }}>{l}</button>
+                ))}
+              </div>
+              {!adminUsage && <div className="muted-note">Loading…</div>}
+              {adminUsage && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
+                    {[['Total tokens', adminUsage.totals.total.toLocaleString()], ['Est. cost', '$' + adminUsage.totals.cost.toFixed(2)], ['Generations', adminUsage.totals.generations.toLocaleString()], ['Active users', String(adminUsage.totals.users)]].map(([l, v]) => (
+                      <div key={l} style={{ border: '1px solid rgba(128,128,128,0.22)', borderRadius: 10, padding: '12px 14px' }}>
+                        <div style={{ fontSize: 20, fontWeight: 600 }}>{v}</div>
+                        <div className="muted-note" style={{ marginTop: 2 }}>{l}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {adminUsage.users.length > 0 && (
+                    <>
+                      <h3 className="me-section-h">By user</h3>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                        <thead><tr style={{ textAlign: 'left', opacity: 0.6 }}>
+                          <th style={{ padding: '6px 8px' }}>User</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Tokens</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Cost</th>
+                        </tr></thead>
+                        <tbody>{adminUsage.users.slice(0, 30).map(u => (
+                          <tr key={u.userId} style={{ borderTop: '1px solid rgba(128,128,128,0.18)' }}>
+                            <td style={{ padding: '8px' }}>{u.name}</td>
+                            <td style={{ padding: '8px', textAlign: 'right' }}>{(u.prompt + u.completion).toLocaleString()}</td>
+                            <td style={{ padding: '8px', textAlign: 'right' }}>{u.cost ? '$' + u.cost.toFixed(u.cost < 0.01 ? 4 : 2) : '—'}</td>
+                          </tr>
+                        ))}</tbody>
+                      </table>
+                    </>
+                  )}
+                  {adminUsage.models.length > 0 && (
+                    <>
+                      <h3 className="me-section-h">By model</h3>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                        <thead><tr style={{ textAlign: 'left', opacity: 0.6 }}>
+                          <th style={{ padding: '6px 8px' }}>Model</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Tokens</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Cost</th>
+                        </tr></thead>
+                        <tbody>{adminUsage.models.slice(0, 30).map(m => (
+                          <tr key={m.modelId} style={{ borderTop: '1px solid rgba(128,128,128,0.18)' }}>
+                            <td style={{ padding: '8px' }}>{m.name}</td>
+                            <td style={{ padding: '8px', textAlign: 'right' }}>{(m.prompt + m.completion).toLocaleString()}</td>
+                            <td style={{ padding: '8px', textAlign: 'right' }}>{m.cost ? '$' + m.cost.toFixed(m.cost < 0.01 ? 4 : 2) : '—'}</td>
+                          </tr>
+                        ))}</tbody>
+                      </table>
+                    </>
+                  )}
+                </>
+              )}
+              <h3 className="me-section-h">Custom price presets</h3>
+              <div className="muted-note" style={{ marginBottom: 10 }}>Add house models or override built-in prices. When a model's ID contains one of these fragments, its price is suggested automatically. Built-in presets (GPT, Claude, Gemini, and so on) always apply unless overridden here.</div>
+              {customPresets.length > 0 && customPresets.map(p => (
+                <div key={p.match} className="field row" style={{ alignItems: 'center' }}>
+                  <div><label>{p.label}</label><div className="muted-note">matches "{p.match}" · ${p.in} in / ${p.out} out per 1M</div></div>
+                  <button className="btn danger" onClick={() => delPreset(p.match)}><Trash style={{ width: 14 }} /></button>
+                </div>
+              ))}
+              <div className="preset-form">
+                <input placeholder="my-model" value={presetForm.match} onChange={(e) => setPresetForm(f => ({ ...f, match: e.target.value }))} />
+                <input placeholder="Label" value={presetForm.label} onChange={(e) => setPresetForm(f => ({ ...f, label: e.target.value }))} />
+                <input type="number" step="any" min="0" placeholder="$ in" value={presetForm.in} onChange={(e) => setPresetForm(f => ({ ...f, in: e.target.value }))} />
+                <input type="number" step="any" min="0" placeholder="$ out" value={presetForm.out} onChange={(e) => setPresetForm(f => ({ ...f, out: e.target.value }))} />
+                <button className="btn" onClick={addPreset}><Plus style={{ width: 14, verticalAlign: '-2px' }} /> Add</button>
+              </div>
+              {presetErr && <div className="dz-err" style={{ marginTop: 8 }}>{presetErr}</div>}
             </>
           )}
         </div>

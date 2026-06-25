@@ -21,7 +21,9 @@ const VERBS = {
   search: ['Searching', 'Searched'],
   web_search: ['Searching the web', 'Searched the web'],
   extract_zip: ['Extracting', 'Extracted'],
-  bundle_zip: ['Bundling', 'Bundled']
+  bundle_zip: ['Bundling', 'Bundled'],
+  mb_view: ['Reading', 'Read'],
+  mb_search: ['Searching memory', 'Searched memory']
 };
 const FILE_TOOLS = new Set(['create_file', 'str_replace', 'delete_file', 'rename_file', 'move_file', 'copy_file', 'make_dir', 'mkdir']);
 
@@ -47,7 +49,9 @@ function iconFor(tool) {
   if (tool === 'make_dir' || tool === 'mkdir') return Folder;
   if (tool === 'bundle_zip' || tool === 'extract_zip') return Download;
   if (tool === 'search') return Search;
+  if (tool === 'mb_search') return Search;
   if (tool === 'view') return FileText;
+  if (tool === 'mb_view') return FileText;
   if (tool === 'create_file') return Plus;
   if (tool === 'copy_file') return Copy;
   if (tool === 'str_replace' || tool === 'rename_file' || tool === 'move_file') return Pencil;
@@ -57,7 +61,7 @@ function targetName(call) {
   if (!call) return '';
   if (call.tool === 'bundle_zip') return (call.name || 'bundle') + '.zip';
   if (call.tool === 'rename_file' || call.tool === 'move_file' || call.tool === 'copy_file') return call.path && call.new_path ? `${baseName(call.path)} → ${baseName(call.new_path)}` : baseName(call.path);
-  if (call.tool === 'search') return call.query ? `"${call.query}"` : '';
+  if (call.tool === 'search' || call.tool === 'mb_search') return call.query ? `"${call.query}"` : '';
   if (call.tool === 'list_files' || call.tool === 'clear_sandbox' || call.tool === 'delete_all') return '';
   return baseName(call.path) || '';
 }
@@ -67,6 +71,8 @@ function resultNote(call, res) {
     case 'view': return res.lines ? `${res.lines} lines` : null;
     case 'list_files': return res.files ? `${res.files.length} file${res.files.length === 1 ? '' : 's'}` : null;
     case 'search': return res.count != null ? `${res.count} match${res.count === 1 ? '' : 'es'}` : null;
+    case 'mb_search': return res.count != null ? `${res.count} match${res.count === 1 ? '' : 'es'}` : null;
+    case 'mb_view': return res.total != null ? `${res.total} lines` : null;
     case 'extract_zip': return res.files ? `${res.files.length} file${res.files.length === 1 ? '' : 's'}` : null;
     case 'bundle_zip': return res.count != null ? `${res.count} file${res.count === 1 ? '' : 's'}` : null;
     case 'clear_sandbox': case 'delete_all': return res.cleared != null ? `${res.cleared} removed` : null;
@@ -122,6 +128,7 @@ function FileCard({ call, result }) {
   const name = targetName(call);
   const failed = result && !result.ok;
   const adds = result?.adds, dels = result?.dels;
+  const unchanged = result && result.ok && result.unchanged;
   const showDiff = result && result.ok && (adds || dels) && (call.tool === 'create_file' || call.tool === 'str_replace');
   const openPath = (!failed && call.tool !== 'delete_file') ? openPathFor(call) : null;
   return (
@@ -137,6 +144,7 @@ function FileCard({ call, result }) {
           {dels ? <span className="del">−{dels}</span> : null}
         </span>
       )}
+      {unchanged && <span className="tl-note">unchanged</span>}
       {failed && <span className="tl-err">{result.error}</span>}
       {pending && <span className="tc-dots"><i /><i /><i /></span>}
     </span>

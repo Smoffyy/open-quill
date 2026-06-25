@@ -5,7 +5,7 @@ import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const SANDBOX_ROOT = path.join(__dirname, 'sandbox');
+export const SANDBOX_ROOT = path.join(__dirname, 'data', 'sandbox');
 const META_DIR = path.join(SANDBOX_ROOT, '.meta');
 function metaPath(chatId) { return path.join(META_DIR, String(chatId).replace(/[^a-zA-Z0-9_-]/g, '') + '.json'); }
 function readMeta(chatId) { try { return JSON.parse(fs.readFileSync(metaPath(chatId), 'utf8')); } catch { return {}; } }
@@ -96,19 +96,25 @@ export function clearAll(chatId) {
 export function createFile(chatId, rel, content) {
   const p = resolveSafe(chatId, rel);
   const prev = (fs.existsSync(p) && isText(rel)) ? fs.readFileSync(p, 'utf8') : null;
+  const body = content ?? '';
+  if (prev != null && prev === body) {
+    return { ok: true, path: rel, bytes: Buffer.byteLength(body), v: versionOf(chatId, rel), adds: 0, dels: 0, unchanged: true };
+  }
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  fs.writeFileSync(p, content ?? '', 'utf8');
+  fs.writeFileSync(p, body, 'utf8');
   bumpVersion(chatId, rel);
   const v = versionOf(chatId, rel);
-  if (isText(rel)) saveSnapshot(chatId, rel, v, content ?? '');
-  const { adds, dels } = lineDelta(prev, content ?? '');
-  return { ok: true, path: rel, bytes: Buffer.byteLength(content ?? ''), v, adds, dels };
+  if (isText(rel)) saveSnapshot(chatId, rel, v, body);
+  const { adds, dels } = lineDelta(prev, body);
+  return { ok: true, path: rel, bytes: Buffer.byteLength(body), v, adds, dels };
 }
 export function strReplace(chatId, rel, oldStr, newStr) {
   const p = resolveSafe(chatId, rel);
   if (!fs.existsSync(p)) return { ok: false, error: `File not found: ${rel}` };
+  if (oldStr == null || oldStr === '') return { ok: false, error: 'old_str is empty; provide the exact text to replace (use create_file to write a new file)' };
+  if (oldStr === (newStr ?? '')) return { ok: false, error: 'old_str and new_str are identical; nothing to change' };
   const text = fs.readFileSync(p, 'utf8');
-  const idx = text.indexOf(oldStr ?? '');
+  const idx = text.indexOf(oldStr);
   if (idx === -1) return { ok: false, error: 'old_str not found in file' };
   if (text.indexOf(oldStr, idx + 1) !== -1) return { ok: false, error: 'old_str is not unique; include more surrounding context' };
   const next = text.slice(0, idx) + (newStr ?? '') + text.slice(idx + oldStr.length);
@@ -129,7 +135,12 @@ export function view(chatId, rel, start, end) {
   if (Number.isInteger(end)) e = Math.min(all.length, end);
   let body = all.slice(s - 1, e).map((l, i) => `${s + i}\t${l}`).join('\n');
   let note = '';
-  if (body.length > 8000) { body = body.slice(0, 8000); note = `\n... [truncated at 8000 chars; file has ${all.length} lines total — call view again with start/end to page through it]`; }
+  if (body.length > 8000) {
+    let cut = body.lastIndexOf('\n', 8000);
+    if (cut < 1) cut = 8000;
+    body = body.slice(0, cut);
+    note = `\n... [truncated; file has ${all.length} lines total — call view again with start/end to page through it]`;
+  }
   else if (s > 1 || e < all.length) { note = `\n[showing lines ${s}-${e} of ${all.length}]`; }
   return { ok: true, path: rel, content: body + note, lines: all.length };
 }

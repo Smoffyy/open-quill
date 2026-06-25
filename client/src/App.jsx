@@ -20,7 +20,16 @@ import AdminPanel from './components/AdminPanel.jsx';
 import DocModal from './components/DocModal.jsx';
 import ArtifactsPanel from './components/ArtifactsPanel.jsx';
 import ChatsOverview from './components/ChatsOverview.jsx';
-import { Down, ChevDown, Paper, Compact, Ghost } from './components/icons.jsx';
+import SpacesPanel from './components/SpacesPanel.jsx';
+import ProjectsPanel from './components/ProjectsPanel.jsx';
+import ChatMenu from './components/ChatMenu.jsx';
+import PersonasModal from './components/PersonasModal.jsx';
+import SearchModal from './components/SearchModal.jsx';
+import Toaster from './components/Toaster.jsx';
+import Lightbox from './components/Lightbox.jsx';
+import ShortcutsModal from './components/ShortcutsModal.jsx';
+import { toast } from './toast.js';
+import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu } from './components/icons.jsx';
 import { scanTools } from './toolproto.js';
 
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: 'Assistants can make mistakes, double-check responses.', greetings: ['How can I help you?'], appIcon: '', quickPrompts: [], version: '' };
@@ -184,6 +193,7 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileDrawer, setMobileDrawer] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showCredits, setShowCredits] = useState(false);
@@ -191,6 +201,7 @@ export default function App() {
   const [showLicense, setShowLicense] = useState(false);
   const [focusTick, setFocusTick] = useState(0);
   const [cfg, setCfg] = useState(DEFAULT_CFG);
+  const [budget, setBudget] = useState(null);
   const [greeting, setGreeting] = useState(DEFAULT_CFG.greetings[0]);
   const [sandbox, setSandbox] = useState(false);
   const [webSearch, setWebSearch] = useState(false);
@@ -199,12 +210,26 @@ export default function App() {
   const [pendingFiles, setPendingFiles] = useState({});
   const [compacting, setCompacting] = useState(false);
   const [hasSummary, setHasSummary] = useState(false);
+  const [chatMenuOpen, setChatMenuOpen] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [chatInstructions, setChatInstructions] = useState('');
+  const [chatPins, setChatPins] = useState([]);
+  const [personasOpen, setPersonasOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [renameVal, setRenameVal] = useState('');
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [artifactsOpen, setArtifactsOpen] = useState(false);
   const [artifactFocus, setArtifactFocus] = useState(null);
   const [incognito, setIncognito] = useState(false);
   const [incognitoGreeting, setIncognitoGreeting] = useState('Greetings, whoever you are');
   const [chatsOverview, setChatsOverview] = useState(false);
+  const [showSpaces, setShowSpaces] = useState(false);
+  const [spacesPending, setSpacesPending] = useState(0);
+  const [projects, setProjects] = useState([]);
+  const [showProjects, setShowProjects] = useState(false);
+  const [projectOpenId, setProjectOpenId] = useState(null);
+  const [currentProject, setCurrentProject] = useState(null);
   const [cmdkOpen, setCmdkOpen] = useState(false);
 
   const [streaming, setStreaming] = useState(false);
@@ -274,7 +299,9 @@ export default function App() {
       return () => mq.removeEventListener?.('change', h);
     }
   }, [user]);
-  useEffect(() => { if (user) { loadModels(); loadChats(); loadFolders(); loadAppConfig(); connect(); openFromUrl(); } }, [!!user]);
+  useEffect(() => { if (user) { loadModels(); loadChats(); loadFolders(); loadAppConfig(); loadBudget(); connect(); openFromUrl(); refreshSpacesPending(); loadProjects(); } }, [!!user]);
+  async function loadBudget() { try { setBudget(await api.get('/api/me/budget')); } catch {} }
+  async function loadProjects() { try { setProjects(await api.get('/api/projects')); } catch {} }
 
   useEffect(() => {
     const root = document.documentElement;
@@ -304,6 +331,12 @@ export default function App() {
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.shiftKey && (e.key === 'S' || e.key === 's')) { e.preventDefault(); setCollapsed(c => !c); return; }
       if (mod && !e.shiftKey && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); setCmdkOpen(o => !o); return; }
+      if (mod && e.shiftKey && (e.key === 'F' || e.key === 'f')) { e.preventDefault(); setShowSearch(true); return; }
+      if (e.key === '?' && !mod) {
+        const el = document.activeElement;
+        const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+        if (!typing) { e.preventDefault(); setShowShortcuts(s => !s); return; }
+      }
       if (mod && e.shiftKey && (e.key === 'O' || e.key === 'o')) { e.preventDefault(); newChat(); return; }
     };
     window.addEventListener('keydown', onKey);
@@ -312,10 +345,17 @@ export default function App() {
   useEffect(() => {
     const m = models.find(x => x.id === currentId);
     if (m && m.sandboxAllowed === false) setSandbox(false);
+    if (m && m.webSearchAllowed === false) setWebSearch(false);
   }, [currentId, activeId]);
   function openFromUrl() {
     if (/^\/admin(\/|$)/.test(location.pathname)) { if (user?.isAdmin) { setShowAdmin(true); return; } history.replaceState({}, '', '/'); }
     else setShowAdmin(false);
+    if (/^\/spaces(\/|$)/.test(location.pathname)) { setShowSpaces(true); return; }
+    else setShowSpaces(false);
+    const pm = location.pathname.match(/^\/project\/(.+)$/);
+    if (pm) { setProjectOpenId(decodeURIComponent(pm[1])); setShowProjects(true); return; }
+    if (/^\/projects(\/|$)/.test(location.pathname)) { setProjectOpenId(null); setShowProjects(true); return; }
+    setShowProjects(false);
     const m = location.pathname.match(/^\/chat\/(.+)$/);
     if (m) openChat(decodeURIComponent(m[1]), false);
     else { setActiveId(null); setMessages([]); }
@@ -330,6 +370,16 @@ export default function App() {
   async function loadChats() { try { setChats(await api.get('/api/chats')); } catch {} finally { setChatsLoaded(true); } }
   async function loadFolders() { try { setFolders(await api.get('/api/folders')); } catch {} }
   async function loadAppConfig() { try { applyCfg(await api.get('/api/app-config')); } catch {} }
+  async function refreshSpacesPending() { try { const l = await api.get('/api/spaces'); setSpacesPending(l.filter(s => s.myStatus === 'invited').length); } catch {} }
+  async function exportAllChats() { window.open('/api/chats/export-all', '_blank'); }
+  async function importChatsFile(file) {
+    try {
+      const json = JSON.parse(await file.text());
+      const r = await api.post('/api/chats/import', json);
+      await loadChats(); await loadFolders();
+      alert(`Imported ${r.imported} chat(s).`);
+    } catch (e) { alert(e.message || 'Could not import that file.'); }
+  }
   function applyCfg(c) {
     setCfg(c);
     const list = c.greetings && c.greetings.length ? c.greetings : DEFAULT_CFG.greetings;
@@ -370,7 +420,13 @@ export default function App() {
   }
 
   function handleWs(m) {
+    if (m.type === 'session_revoked') { location.href = '/'; return; }
     if (m.type === 'config') { loadModels(); loadAppConfig(); try { window.dispatchEvent(new CustomEvent('oq-config')); } catch {} return; }
+    if (typeof m.type === 'string' && m.type.startsWith('space_')) {
+      try { window.dispatchEvent(new CustomEvent('oq-space', { detail: m })); } catch {}
+      if (m.type === 'space_invite' || m.type === 'space_updated' || m.type === 'space_removed' || m.type === 'space_deleted') refreshSpacesPending();
+      return;
+    }
     if (m.type === 'files') {
       if (m.chatId && m.chatId !== activeIdRef.current) return;
       setFiles(m.files || []);
@@ -451,6 +507,7 @@ export default function App() {
       const r = recFor(m.chatId); r.done = true;
       if (m.chatId === activeKey()) { pendingDone.current = true; if (!animateRef.current) finalize(); }
       else finalizeBackground(m.chatId);
+      loadBudget();
       return;
     }
   }
@@ -551,6 +608,78 @@ export default function App() {
     if (streaming || !activeId || !siblingId) return;
     try { await api.post('/api/chats/' + activeId + '/branch', { messageId: siblingId }); await refreshMessages(activeId); setTimeout(() => scrollBottom(false), 20); } catch {}
   }
+  async function forkChat(messageId) {
+    if (streaming || !activeId) return;
+    try {
+      const r = await api.post('/api/chats/' + activeId + '/fork', { messageId });
+      await loadChats();
+      if (r?.id) { openChat(r.id); toast('Forked into a new chat', { icon: 'fork' }); }
+    } catch {}
+  }
+  function togglePin(messageId, pinned) {
+    if (!activeId) return;
+    setMessages(ms => ms.map(m => m.id === messageId ? { ...m, pinned } : m));
+    api.patch('/api/chats/' + activeId + '/messages/' + messageId, { pinned }).catch(() => {});
+    toast(pinned ? 'Message pinned — kept in context' : 'Message unpinned', { icon: 'pin' });
+  }
+  async function togglePinFile(att) {
+    if (!activeId || !att?.url) return;
+    const isPinned = chatPins.some(p => p.url === att.url);
+    try {
+      const r = isPinned
+        ? await api.del('/api/chats/' + activeId + '/pins', { url: att.url })
+        : await api.post('/api/chats/' + activeId + '/pins', { name: att.name, url: att.url, type: att.type || '' });
+      setChatPins(r.pins || []);
+      toast(isPinned ? 'File unpinned from chat' : 'File pinned — kept in context', { icon: 'pin' });
+    } catch {}
+  }
+  function jumpToMessage(id) {
+    setChatMenuOpen(false);
+    requestAnimationFrame(() => {
+      const el = document.querySelector('[data-mid="' + id + '"]');
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+      setTimeout(() => el.classList.remove('flash'), 1600);
+    });
+  }
+  async function copyConversation() {
+    const text = messages.filter(m => m.role === 'user' || m.role === 'assistant')
+      .map(m => (m.role === 'user' ? 'You' : 'Assistant') + ':\n' + (typeof m.content === 'string' ? m.content : '')).join('\n\n');
+    try { await navigator.clipboard.writeText(text); toast('Conversation copied', { icon: 'copy' }); } catch {}
+  }
+  async function saveSavedPrompts(list) {
+    setUser(u => ({ ...u, savedPrompts: list }));
+    try { await api.put('/api/me/prompts', { prompts: list }); } catch {}
+  }
+  function savePromptFromInput(title) {
+    const text = (input || '').trim();
+    if (!text) return;
+    const list = [...(user?.savedPrompts || []), { id: 'p' + Date.now(), title: (title || text.slice(0, 40)).trim(), text }];
+    saveSavedPrompts(list);
+    toast('Prompt saved', { icon: 'star' });
+  }
+  function deleteSavedPrompt(id) { saveSavedPrompts((user?.savedPrompts || []).filter(p => p.id !== id)); }
+  async function savePersonas(list) {
+    setUser(u => ({ ...u, personas: list }));
+    try { await api.put('/api/me/personas', { personas: list }); } catch {}
+  }
+  async function applyPersona(p) {
+    if (!p) return;
+    if (p.modelId && models.find(m => m.id === p.modelId)) setCurrentId(p.modelId);
+    setChatInstructions(p.instructions || '');
+    if (activeId) {
+      try { await api.patch('/api/chats/' + activeId, { instructions: p.instructions || '' }); } catch {}
+    }
+    toast('Applied persona: ' + p.name, { icon: 'star' });
+  }
+  function commitRename() {
+    const t = renameVal.trim();
+    setRenaming(false);
+    if (!activeId || !t) return;
+    setChats(cs => cs.map(c => c.id === activeId ? { ...c, title: t } : c));
+    api.patch('/api/chats/' + activeId, { title: t }).catch(() => {});
+  }
 
   function scrollBottom(smooth) {
     const el = scrollRef.current; if (!el) return;
@@ -572,12 +701,15 @@ export default function App() {
   function jumpDown() { stick.current = true; setShowJump(false); scrollBottom(true); }
 
   async function openChat(id, push = true) {
+    setMobileDrawer(false);
     if (incognito) setIncognito(false);
+    setShowProjects(false);
     if (id !== activeIdRef.current) { setLiveFile(null); setPendingFiles({}); setArtifactFocus(null); doneBlocksRef.current = 0; }
     setActiveId(id);
     try {
       const { chat, messages } = await api.get('/api/chats/' + id);
       setMessages(messages);
+      setCurrentProject(chat.projectId ? (projects.find(p => p.id === chat.projectId) || { id: chat.projectId, name: 'Project' }) : null);
       if (user?.prefs?.chatStagger !== false && user?.prefs?.messageEntrance !== false) {
         clearTimeout(staggerTimer.current);
         setThreadStagger(true);
@@ -586,6 +718,9 @@ export default function App() {
       setSandbox(!!chat.sandbox);
       setWebSearch(false);
       setHasSummary(!!chat.hasSummary);
+      setChatInstructions(chat.instructions || '');
+      setChatPins(Array.isArray(chat.pinnedFiles) ? chat.pinnedFiles : []);
+      setChatMenuOpen(false);
       try { const f = await api.get('/api/chats/' + id + '/files'); setFiles(f.files || []); setArtifactsOpen((f.files || []).length > 0 && artifactsOpen); }
       catch { setFiles([]); }
       if (push) history.pushState({}, '', '/chat/' + id);
@@ -594,12 +729,15 @@ export default function App() {
     } catch { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); }
   }
   function newChat(fromPop) {
+    setMobileDrawer(false);
     if (incognito) setIncognito(false);
+    setShowProjects(false);
+    setCurrentProject(null);
     setActiveId(null); setMessages([]); setInput('');
     setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingFiles({}); setArtifactFocus(null);
     const m = models.find(m => m.id === currentId);
     setSandbox(m?.sandboxAllowed !== false && !!m?.sandboxAuto);
-    setWebSearch(false);
+    setWebSearch(!!cfg.webSearchAvailable && m?.webSearchAllowed !== false && !!m?.webSearchAuto);
     setFocusTick(t => t + 1);
     if (fromPop !== true) history.pushState({}, '', '/');
   }
@@ -704,6 +842,42 @@ export default function App() {
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
   }
 
+  async function startProjectChat(project, rawText, attachments = []) {
+    if (!currentId) return;
+    const text = (rawText || '').trim();
+    if (!text && attachments.length === 0) return;
+    const c = await api.post('/api/chats', { projectId: project.id });
+    setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false, folderId: null, projectId: project.id }, ...cs]);
+    setShowProjects(false); setProjectOpenId(null);
+    setCurrentProject(project);
+    setActiveId(c.id); setMessages([]); setInput('');
+    setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingFiles({}); setArtifactFocus(null);
+    history.pushState({}, '', '/chat/' + c.id);
+    if (!wsSend({ type: 'chat', chatId: c.id, modelId: currentId, extended, content: text, attachments, sandbox, webSearch })) return;
+    gen.current.set(c.id, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, blocks: 0 });
+    setMessages([{ id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
+    stick.current = true; setTimeout(() => scrollBottom(true), 20);
+  }
+  function openProjectChat(chatId, project) {
+    setShowProjects(false); setProjectOpenId(null);
+    if (project) setCurrentProject(project);
+    openChat(chatId);
+  }
+  function clearChatProject() {
+    if (!activeId || !currentProject) { setCurrentProject(null); return; }
+    const pid = currentProject.id;
+    setCurrentProject(null);
+    setChats(cs => cs.map(c => c.id === activeId ? { ...c, projectId: null } : c));
+    api.patch('/api/chats/' + activeId, { projectId: '' }).catch(() => {});
+    setProjects(ps => ps.map(p => p.id === pid ? { ...p, chatCount: Math.max(0, (p.chatCount || 1) - 1) } : p));
+  }
+  function openProjects(id = null) {
+    setMobileDrawer(false);
+    setProjectOpenId(id);
+    setShowProjects(true);
+    history.pushState({}, '', id ? '/project/' + id : '/projects');
+  }
+
   const regenerate = useCallback((messageId) => {
     if (streaming || !activeId || !currentId) return;
     if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, messageId, sandbox, webSearch })) return;
@@ -711,6 +885,17 @@ export default function App() {
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
   }, [streaming, activeId, currentId, extended, sandbox, webSearch]);
+
+  const regenerateWith = useCallback((messageId, modelId) => {
+    if (streaming || !activeId || !modelId) return;
+    setCurrentId(modelId);
+    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId, extended, messageId, sandbox, webSearch })) return;
+    gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: modelId, blocks: 0 });
+    setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
+    stick.current = true; setTimeout(() => scrollBottom(true), 20);
+    const mm = models.find(m => m.id === modelId);
+    if (mm) toast('Retrying with ' + mm.displayName, { icon: 'check' });
+  }, [streaming, activeId, extended, sandbox, webSearch, models]);
 
   const editMessage = useCallback((messageId, newContent) => {
     if (streaming || !activeId || !currentId) return;
@@ -734,7 +919,7 @@ export default function App() {
   const model = models.find(m => m.id === currentId);
   const sandboxAllowed = incognito ? false : (model ? model.sandboxAllowed !== false : true);
   const sandboxOn = sandboxAllowed && sandbox;
-  const webSearchAvailable = !incognito && !!cfg.webSearchAvailable;
+  const webSearchAvailable = !incognito && !!cfg.webSearchAvailable && (model ? model.webSearchAllowed !== false : true);
   const webSearchOn = webSearchAvailable && webSearch;
   const empty = !activeId && messages.length === 0;
   const bgInChat = user?.prefs?.modelBgInChat !== false;
@@ -743,11 +928,15 @@ export default function App() {
   const composerProps = {
     value: input, onChange: setInput, onSend: send, onStop: stop, streaming: streaming || queued,
     models, currentId, onSelect: setCurrentId, extended, onToggleExtended: () => setExtended(e => !e),
-    visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin,
+    visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin, budget,
     modelHasBg, bgInChat, onToggleBgInChat: () => updatePref('modelBgInChat', !bgInChat),
     sandbox: sandboxOn, sandboxAllowed, onToggleSandbox: () => { if (sandboxAllowed) setSandbox(s => !s); },
     onWantSandbox: () => { if (sandboxAllowed) setSandbox(true); },
-    webSearch: webSearchOn, webSearchAvailable, onToggleWebSearch: () => { if (webSearchAvailable) setWebSearch(s => !s); }
+    webSearch: webSearchOn, webSearchAvailable, onToggleWebSearch: () => { if (webSearchAvailable) setWebSearch(s => !s); },
+    project: currentProject, onClearProject: clearChatProject,
+    savedPrompts: user?.savedPrompts || [], onUsePrompt: (t) => { setInput(t); setFocusTick(x => x + 1); }, onSavePrompt: savePromptFromInput, onDeletePrompt: deleteSavedPrompt,
+    onNewChat: () => newChat(), onShortcuts: () => setShowShortcuts(true),
+    functions: incognito ? [] : (cfg.functions || [])
   };
   const showArtifactsBtn = sandboxOn || files.length > 0;
 
@@ -755,6 +944,10 @@ export default function App() {
     { id: 'new', label: 'New chat', shortcut: 'Ctrl Shift O', keywords: 'create start', action: () => newChat() },
     { id: 'sidebar', label: collapsed ? 'Show sidebar' : 'Hide sidebar', shortcut: 'Ctrl Shift S', keywords: 'toggle collapse panel', action: () => setCollapsed(c => !c) },
     { id: 'chats', label: 'Browse all chats', keywords: 'overview history search', action: () => setChatsOverview(true) },
+    { id: 'search', label: 'Search chats', shortcut: 'Ctrl Shift F', keywords: 'find message text', action: () => setShowSearch(true) },
+    { id: 'shortcuts', label: 'Keyboard shortcuts', shortcut: '?', keywords: 'keys help hotkeys', action: () => setShowShortcuts(true) },
+    { id: 'spaces', label: 'Open Spaces', keywords: 'group chat invite users', action: () => { history.pushState({}, '', '/spaces'); setShowSpaces(true); } },
+    { id: 'projects', label: 'Open Projects', keywords: 'project workspace organize', action: () => openProjects(null) },
     { id: 'incognito', label: incognito ? 'Exit incognito' : 'Start incognito chat', keywords: 'private ghost', action: () => toggleIncognito() },
     { id: 'settings', label: 'Open settings', keywords: 'preferences account theme', action: () => setShowSettings(true) },
     ...(user?.isAdmin ? [{ id: 'admin', label: 'Open admin panel', keywords: 'models users connection providers', action: () => { history.pushState({}, '', '/admin'); setShowAdmin(true); } }] : []),
@@ -765,23 +958,32 @@ export default function App() {
   ];
 
   return (
-    <div className={'app' + (incognito ? ' app-incognito' : '') + (intro ? ' intro' : '') + (bgVisible ? ' has-bg' : '')}>
+    <div className={'app' + (incognito ? ' app-incognito' : '') + (intro ? ' intro' : '') + (bgVisible ? ' has-bg' : '') + (collapsed ? ' sb-collapsed' : '')}>
       <AppBackground bg={activeBg} />
       {intro && <div className="intro-curtain" />}
       <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName}
         folders={folders} onCreateFolder={createFolder} onRenameFolder={renameFolder} onToggleFolder={toggleFolder} onDeleteFolder={deleteFolder} onMoveChat={moveChatToFolder}
         onNew={newChat} onOpen={openChat} onDelete={deleteChat} onToggleStar={toggleStar}
         collapsed={collapsed} onToggle={() => setCollapsed(c => !c)}
+        mobileOpen={mobileDrawer} onMobileClose={() => setMobileDrawer(false)}
         onSettings={() => setShowSettings(true)} onAdmin={() => { history.pushState({}, '', '/admin'); setShowAdmin(true); }}
         onCredits={() => setShowCredits(true)} onChangelog={() => setShowChangelog(true)} onLicense={() => setShowLicense(true)} onLogout={logout} version={cfg.version}
-        onChatsOverview={() => setChatsOverview(true)} />
+        onChatsOverview={() => { setMobileDrawer(false); setChatsOverview(true); }}
+        onSpaces={() => { setMobileDrawer(false); history.pushState({}, '', '/spaces'); setShowSpaces(true); }} spacesPending={spacesPending}
+        projects={projects} onProjects={() => openProjects(null)} onOpenProject={(id) => openProjects(id)} />
+
+      {mobileDrawer && <div className="drawer-backdrop" onClick={() => setMobileDrawer(false)} />}
 
       <div className={'main' + (incognito ? ' incognito' : '')} data-incognito={incognito ? 'on' : undefined}>
+        <Toaster />
         {incognito && (
           <div className="incognito-bar">
             <div className="incognito-title"><Ghost style={{ width: 18 }} /> Incognito chat</div>
             <button className="incognito-close" onClick={toggleIncognito} title="Exit incognito" disabled={streaming || queued}>✕</button>
           </div>
+        )}
+        {empty && (
+          <button className="mobile-menu-btn empty-menu" onClick={() => setMobileDrawer(true)} title="Menu"><Menu style={{ width: 20 }} /></button>
         )}
         {!incognito && empty && (
           <button className="incognito-fab" onClick={toggleIncognito} title="Incognito chat — not saved" disabled={streaming || queued}>
@@ -793,7 +995,15 @@ export default function App() {
             <div className="greeting">
               {incognito
                 ? <><Ghost style={{ width: 44 }} /> {incognitoGreeting}</>
-                : <><img src={model?.staticIcon || cfg.appIcon || '/starburst.svg'} alt="" style={{ width: 44, height: 44, objectFit: 'contain' }} /> {greeting}</>}
+                : (() => {
+                    const h = new Date().getHours();
+                    const part = h < 5 ? 'Working late' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : h < 22 ? 'Good evening' : 'Burning the midnight oil';
+                    const nm = (user?.displayName || '').split(' ')[0];
+                    const line = nm ? part + ', ' + nm : part;
+                    return model?.staticIcon
+                      ? <><img src={model.staticIcon} alt="" style={{ width: 44, height: 44, objectFit: 'contain' }} /> {line}</>
+                      : line;
+                  })()}
             </div>
             <div className="composer-wrap">
               <Composer {...composerProps} autoFocus modelUp focusKey={focusTick} />
@@ -809,8 +1019,40 @@ export default function App() {
         ) : (
           <>
             <div className="topbar">
-              <div className="chat-name">{chats.find(c => c.id === activeId)?.title || 'New chat'} <ChevDown style={{ width: 15 }} /></div>
+              <button className="mobile-menu-btn" onClick={() => setMobileDrawer(true)} title="Menu"><Menu style={{ width: 20 }} /></button>
+              {renaming ? (
+                <input className="chat-rename" autoFocus value={renameVal}
+                  onChange={(e) => setRenameVal(e.target.value)}
+                  onBlur={commitRename}
+                  onKeyDown={(e) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenaming(false); }} />
+              ) : (
+                <div className="chat-name-wrap">
+                  <button className="chat-name" onClick={() => setChatMenuOpen(o => !o)}>
+                    {chats.find(c => c.id === activeId)?.title || 'New chat'} <ChevDown style={{ width: 15 }} />
+                  </button>
+                  {(chatInstructions || '').trim() && <span className="chat-instr-dot" title="This chat has custom instructions" />}
+                  {chatMenuOpen && activeId && (
+                    <ChatMenu
+                      chat={{ id: activeId, title: chats.find(c => c.id === activeId)?.title || 'New chat', instructions: chatInstructions, starred: !!chats.find(c => c.id === activeId)?.starred }}
+                      modelId={currentId}
+                      pinned={messages.filter(m => m.pinned)}
+                      pins={chatPins}
+                      onUnpinFile={(url) => togglePinFile({ url })}
+                      onOpenPersonas={() => { setChatMenuOpen(false); setPersonasOpen(true); }}
+                      onJump={jumpToMessage}
+                      onCopyConversation={copyConversation}
+                      onClose={() => setChatMenuOpen(false)}
+                      onRename={() => { setRenameVal(chats.find(c => c.id === activeId)?.title || ''); setRenaming(true); }}
+                      onFork={() => forkChat()}
+                      onToggleStar={() => toggleStar(activeId, !chats.find(c => c.id === activeId)?.starred)}
+                      onInstructionsSaved={(v) => setChatInstructions(v)} />
+                  )}
+                </div>
+              )}
               <div className="topbar-actions">
+                <button className="paper-btn" onClick={() => setShowSearch(true)} title="Search chats (Ctrl+Shift+F)">
+                  <Search style={{ width: 18 }} />
+                </button>
                 {!incognito && (
                   <button className="paper-btn" onClick={toggleIncognito} title="Incognito chat — not saved" disabled={streaming || queued}>
                     <Ghost style={{ width: 18 }} />
@@ -834,7 +1076,7 @@ export default function App() {
             <div className="scroll-area" ref={scrollRef} onScroll={onScroll} onWheel={onWheel} onTouchMove={onTouchMove}>
               <div className={'thread' + (threadStagger ? ' stagger' : '')}>
                 {(() => { const lastA = !streaming ? [...messages].reverse().find(m => m.role === 'assistant') : null; return messages.map(msg => (
-                  <Message key={msg._k || msg.id} msg={msg} model={models.find(x => x.id === msg.model_id) || model} onRegenerate={regenerate} onEdit={editMessage} onSelectBranch={selectBranch} showIcon={msg.role === 'assistant' && lastA && msg.id === lastA.id} />
+                  <Message key={msg._k || msg.id} msg={msg} model={models.find(x => x.id === msg.model_id) || model} models={models} currentId={currentId} chatId={activeId} pins={chatPins} onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin} showIcon={msg.role === 'assistant' && lastA && msg.id === lastA.id} />
                 )); })()}
                 {streaming && (
                   <Message msg={{ role: 'assistant', content: dispContent, reasoning: dispReason }}
@@ -865,9 +1107,18 @@ export default function App() {
           onChanged={(has) => { setHasSummary(has); }} />
       )}
 
-      {showSettings && <SettingsModal user={user} cfg={cfg} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} />}
+      {showSettings && <SettingsModal user={user} cfg={cfg} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile} />}
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} />}
+      {showSearch && <SearchModal onClose={() => setShowSearch(false)} onOpen={(id) => openChat(id)} />}
+      {personasOpen && <PersonasModal personas={user?.personas || []} models={models} currentId={currentId} onApply={applyPersona} onSave={savePersonas} onClose={() => setPersonasOpen(false)} />}
+      {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
+      <Lightbox />
       {showAdmin && <AdminPanel user={user} onClose={() => { setShowAdmin(false); if (/^\/admin(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} />}
+      {showSpaces && <SpacesPanel user={user} onClose={() => { setShowSpaces(false); refreshSpacesPending(); if (/^\/spaces(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} />}
+      {showProjects && <ProjectsPanel openId={projectOpenId} composerProps={composerProps}
+        onClose={() => { setShowProjects(false); setProjectOpenId(null); if (/^\/projects?(\/|$)/.test(location.pathname) || /^\/project\//.test(location.pathname)) history.pushState({}, '', '/'); }}
+        onOpenChat={openProjectChat} onStartChat={startProjectChat}
+        onOpenProject={(id) => { setProjectOpenId(id); history.replaceState({}, '', id ? '/project/' + id : '/projects'); loadProjects(); }} />}
       {showCredits && <DocModal title="Credits" name="credits" serif onClose={() => setShowCredits(false)} />}
       {showLicense && <DocModal title="Licensing" name="license" onClose={() => setShowLicense(false)} />}
       {showChangelog && <DocModal title="Changelog" name="changelog" onClose={() => setShowChangelog(false)} />}

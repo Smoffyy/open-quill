@@ -1,6 +1,6 @@
 {
   "name": "open-quill-client",
-  "version": "2026.2.0",
+  "version": "2027.0.0-cascade.14",
   "private": true,
   "type": "module",
   "scripts": {
@@ -19,7 +19,7 @@
     "remark-math": "^6.0.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^6.0.2",
-    "vite": "^8.0.16"
+    "@vitejs/plugin-react": "^6.0.3",
+    "vite": "^8.1.0"
   }
 }

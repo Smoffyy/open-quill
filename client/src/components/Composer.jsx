@@ -1,7 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
 import ModelDropdown from './ModelDropdown.jsx';
+import FunctionsBar from './FunctionsBar.jsx';
 import { api } from '../api.js';
-import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe } from './icons.jsx';
+import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders } from './icons.jsx';
 
 const FILE_ACCEPT = '.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.py,.lua,.html,.css,.xml,.yml,.yaml,.pdf,.log';
 
@@ -31,7 +32,7 @@ function dominantColor(url) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, models,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts, functions = []
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
@@ -42,10 +43,12 @@ export default function Composer({
   const [dragActive, setDragActive] = useState(false);
   const [glow, setGlow] = useState('var(--accent)');
   const [plusMenu, setPlusMenu] = useState(false);
+  const [promptsOpen, setPromptsOpen] = useState(false);
   const [showReason, setShowReason] = useState(false);
+  const [slashIdx, setSlashIdx] = useState(0);
 
   useEffect(() => {
-    if (!plusMenu) return;
+    if (!plusMenu) { setPromptsOpen(false); return; }
     const h = (e) => { if (plusRef.current && !plusRef.current.contains(e.target)) setPlusMenu(false); };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
@@ -101,7 +104,7 @@ export default function Composer({
 
   async function doSend() {
     if (streaming || uploading) return;
-    if (blockSend) return;
+    if (blockSend || budgetBlock) return;
     if (!value.trim() && files.length === 0) return;
     let attachments = [];
     if (files.length) {
@@ -117,7 +120,29 @@ export default function Composer({
 
   useEffect(() => { setShowReason(false); }, [currentId]);
 
-  function key(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } }
+  const slashActive = value.startsWith('/') && !value.includes('\n');
+  const slashQuery = slashActive ? value.slice(1).toLowerCase().trim() : '';
+  const slashCmds = [];
+  if (slashActive) {
+    if (onNewChat) slashCmds.push({ id: 'new', label: 'New chat', icon: <NewChatIcon style={{ width: 16 }} />, run: () => { onChange(''); onNewChat(); } });
+    if (sandboxAllowed && onToggleSandbox) slashCmds.push({ id: 'sandbox', label: (sandbox ? 'Disable' : 'Enable') + ' sandbox tools', icon: <Cube style={{ width: 16 }} />, run: () => { onChange(''); onToggleSandbox(); } });
+    if (webSearchAvailable && onToggleWebSearch) slashCmds.push({ id: 'web', label: (webSearch ? 'Disable' : 'Enable') + ' web search', icon: <Globe style={{ width: 16 }} />, run: () => { onChange(''); onToggleWebSearch(); } });
+    if (onShortcuts) slashCmds.push({ id: 'keys', label: 'Keyboard shortcuts', icon: <Sliders style={{ width: 16 }} />, run: () => { onChange(''); onShortcuts(); } });
+    for (const p of (savedPrompts || [])) slashCmds.push({ id: 'p' + p.id, label: p.title, sub: 'prompt', icon: <Star style={{ width: 16 }} />, run: () => { onUsePrompt && onUsePrompt(p.text); } });
+  }
+  const slashShown = slashCmds.filter(c => c.label.toLowerCase().includes(slashQuery));
+  const slashOpen = slashActive && slashShown.length > 0;
+  useEffect(() => { setSlashIdx(0); }, [slashQuery, slashOpen]);
+
+  function key(e) {
+    if (slashOpen) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSlashIdx(i => Math.min(slashShown.length - 1, i + 1)); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setSlashIdx(i => Math.max(0, i - 1)); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); slashShown[slashIdx]?.run(); return; }
+      if (e.key === 'Escape') { e.preventDefault(); onChange(''); return; }
+    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
+  }
   const activeModel = models?.find(m => m.id === currentId) || null;
   const unavailable = !!activeModel?.unavailable;
   const blockSend = unavailable && !canUseUnavailable;
@@ -133,13 +158,28 @@ export default function Composer({
     return () => clearTimeout(t);
   }, [unavailable]);
   const hasImage = files.some(f => f.preview);
+  const budgetState = budget && budget.cap ? budget.state : 'none';
+  const budgetBlock = budgetState === 'over' && budget?.enforce && !canUseUnavailable;
+  const showBudgetBanner = budgetState === 'warn' || budgetState === 'over';
   const enabledCount = (sandbox ? 1 : 0) + (webSearch ? 1 : 0);
-  const canSend = (value.trim().length > 0 || files.length > 0) && !uploading && !blockSend;
-  const cls = 'composer' + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + (unavailable ? ' unavailable' : '') + (blockSend ? ' blocked' : '');
+  const canSend = (value.trim().length > 0 || files.length > 0) && !uploading && !blockSend && !budgetBlock;
+  const cls = 'composer' + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + (unavailable ? ' unavailable' : '') + ((blockSend || budgetBlock) ? ' blocked' : '');
+  const fmtUsd = (n) => '$' + (Number(n || 0) > 0 && Number(n || 0) < 0.01 ? Number(n).toFixed(4) : Number(n || 0).toFixed(2));
 
   return (
-    <div className={'composer-stack' + (bannerMounted ? ' has-banner' : '')}>
-    {bannerMounted && <div className={'unavail-bg' + (bannerOut ? ' out' : '')} />}
+    <div className={'composer-stack' + ((bannerMounted || showBudgetBanner) ? ' has-banner' : '')}>
+    {(bannerMounted || showBudgetBanner) && <div className={'unavail-bg' + (bannerOut && !showBudgetBanner ? ' out' : '')} />}
+    {showBudgetBanner && (
+      <div className={'unavail-banner budget-banner ' + budgetState}>
+        <div className="unavail-row">
+          <span className="unavail-msg">
+            {budgetState === 'over'
+              ? <><strong>Monthly budget reached.</strong> {fmtUsd(budget.spent)} of {fmtUsd(budget.cap)} used{budget.enforce && !canUseUnavailable ? '. New messages are paused until next month.' : '.'}</>
+              : <><strong>Approaching your monthly budget.</strong> {fmtUsd(budget.spent)} of {fmtUsd(budget.cap)} used.</>}
+          </span>
+        </div>
+      </div>
+    )}
     {bannerMounted && bannerInfo.current && (
       <div className={'unavail-banner' + (bannerOut ? ' out' : '') + (showReason ? ' open' : '')}>
         <div className="unavail-row">
@@ -169,6 +209,19 @@ export default function Composer({
         </div>
       )}
       {upErr && <div className="attach-err">{upErr}</div>}
+      <FunctionsBar functions={functions} input={value} onChange={onChange} onSend={onSend} model={models?.find(m => m.id === currentId)} />
+      {slashOpen && (
+        <div className="slash-menu">
+          <div className="slash-head">Commands</div>
+          {slashShown.map((c, i) => (
+            <button key={c.id} className={'slash-item' + (i === slashIdx ? ' active' : '')} onMouseEnter={() => setSlashIdx(i)} onMouseDown={(e) => { e.preventDefault(); c.run(); }}>
+              <span className="slash-ico">{c.icon}</span>
+              <span className="slash-label">{c.label}</span>
+              {c.sub && <span className="slash-sub">{c.sub}</span>}
+            </button>
+          ))}
+        </div>
+      )}
       <textarea ref={ta} rows={1} value={value} placeholder={placeholder || 'How can I help you today?'}
         onChange={(e) => onChange(e.target.value)} onKeyDown={key} onPaste={onPaste} />
       <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}
@@ -182,24 +235,60 @@ export default function Composer({
             </button>
             {plusMenu && (
               <div className="plus-menu">
-                <button onClick={() => { setPlusMenu(false); fileInput.current?.click(); }}>
-                  <FileText style={{ width: 16 }} /> {visionSupported ? 'Upload images or files' : 'Upload files'}
+                <button className="pm-item" onClick={() => { setPlusMenu(false); fileInput.current?.click(); }}>
+                  <FileText style={{ width: 17 }} />
+                  <span className="pm-label">{visionSupported ? 'Add files or photos' : 'Add files'}</span>
+                  <span className="pm-shortcut">⌘U</span>
                 </button>
+                {(sandboxAllowed || webSearchAvailable) && <div className="pm-divider" />}
                 {sandboxAllowed && (
-                  <button onClick={() => onToggleSandbox && onToggleSandbox()}>
-                    <Cube style={{ width: 16 }} /> Enable Sandbox Tools
+                  <button className="pm-item" onClick={() => onToggleSandbox && onToggleSandbox()}>
+                    <Cube style={{ width: 17 }} />
+                    <span className="pm-label">Sandbox tools</span>
                     <span className={'mini-switch' + (sandbox ? ' on' : '')}>{sandbox && <Check style={{ width: 12 }} />}</span>
                   </button>
                 )}
                 {webSearchAvailable && (
-                  <button onClick={() => onToggleWebSearch && onToggleWebSearch()}>
-                    <Globe style={{ width: 16 }} /> Web Search
+                  <button className="pm-item" onClick={() => onToggleWebSearch && onToggleWebSearch()}>
+                    <Globe style={{ width: 17 }} />
+                    <span className="pm-label">Web search</span>
                     <span className={'mini-switch' + (webSearch ? ' on' : '')}>{webSearch && <Check style={{ width: 12 }} />}</span>
                   </button>
+                )}
+                <div className="pm-divider" />
+                <button className="pm-item" onClick={() => setPromptsOpen(o => !o)}>
+                  <TextIcon style={{ width: 17 }} />
+                  <span className="pm-label">Saved prompts</span>
+                  <Chevron style={{ width: 13, marginLeft: 'auto', color: 'var(--text-faint)', transform: promptsOpen ? 'rotate(90deg)' : 'none' }} />
+                </button>
+                {promptsOpen && (
+                  <div className="pm-prompts">
+                    {(savedPrompts || []).length === 0 && <div className="pm-empty">No saved prompts yet.</div>}
+                    {(savedPrompts || []).map(p => (
+                      <div key={p.id} className="pm-prompt">
+                        <button className="pm-prompt-use" title={p.text} onClick={() => { setPlusMenu(false); onUsePrompt && onUsePrompt(p.text); }}>
+                          <Star style={{ width: 13 }} /> <span className="pm-prompt-title">{p.title}</span>
+                        </button>
+                        {onDeletePrompt && <button className="pm-prompt-x" title="Delete" onClick={(e) => { e.stopPropagation(); onDeletePrompt(p.id); }}><X style={{ width: 12 }} /></button>}
+                      </div>
+                    ))}
+                    {onSavePrompt && value.trim() && (
+                      <button className="pm-save-prompt" onClick={() => { onSavePrompt(); setPromptsOpen(false); }}>
+                        <Plus style={{ width: 13 }} /> Save current text as prompt
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             )}
           </div>
+          {project && (
+            <div className="composer-project" title={'In project: ' + project.name}>
+              <Box style={{ width: 14 }} />
+              <span className="cp-name">{project.name}</span>
+              {onClearProject && <button className="cp-x" onClick={onClearProject} title="Remove from project"><X style={{ width: 12 }} /></button>}
+            </div>
+          )}
         </div>
         <div className="composer-right">
           <ModelDropdown models={models} currentId={currentId} onSelect={onSelect}

@@ -8,6 +8,8 @@ export default function Login({ onLogin }) {
   const [exists, setExists] = useState(false);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [code, setCode] = useState('');
+  const [useRecovery, setUseRecovery] = useState(false);
 
   async function next() {
     setErr('');
@@ -26,9 +28,14 @@ export default function Login({ onLogin }) {
     if (pw.length < 4) { setErr('Password must be at least 4 characters.'); return; }
     setBusy(true);
     try {
-      const { user } = await api.post('/api/auth/login', { email, password: pw });
+      const body = { email, password: pw };
+      if (step === 'twofa') { if (useRecovery) body.recovery = code; else body.code = code; }
+      const { user } = await api.post('/api/auth/login', body);
       onLogin(user);
-    } catch (e) { setErr(String(e.message)); }
+    } catch (e) {
+      if (e?.message === 'two-factor required' || (e?.message || '').toLowerCase().includes('two-factor')) { setStep('twofa'); setErr(step === 'twofa' ? 'That code was not valid. Try again.' : ''); }
+      else setErr(String(e.message));
+    }
     setBusy(false);
   }
 
@@ -46,6 +53,17 @@ export default function Login({ onLogin }) {
                 onChange={(e) => setEmail(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && next()} />
               <button className="primary" onClick={next} disabled={busy}>Continue with email</button>
+            </>
+          ) : step === 'twofa' ? (
+            <>
+              <div className="lbl">{useRecovery ? 'Enter a recovery code' : 'Enter your two-factor code'}</div>
+              {err && <div className="err">{err}</div>}
+              <input autoFocus placeholder={useRecovery ? 'xxxxx-xxxxx' : '123456'} value={code}
+                inputMode={useRecovery ? 'text' : 'numeric'}
+                onChange={(e) => setCode(useRecovery ? e.target.value : e.target.value.replace(/\D/g, '').slice(0, 6))}
+                onKeyDown={(e) => e.key === 'Enter' && submit()} />
+              <button className="primary" onClick={submit} disabled={busy}>Verify</button>
+              <button className="back" onClick={() => { setUseRecovery(r => !r); setCode(''); setErr(''); }}>{useRecovery ? 'Use authenticator code instead' : 'Use a recovery code instead'}</button>
             </>
           ) : (
             <>

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Chat, Search, Panel, Gear, Shield, Logout, Dots, Trash, Heart, FileText, Star, Download, Folder, Pencil, Chevron } from './icons.jsx';
+import { Plus, Chat, Search, Panel, Gear, Shield, Logout, Dots, Trash, Heart, FileText, Star, Download, Folder, Pencil, Chevron, Users, Box } from './icons.jsx';
 
 function ProfileMenu({ user, version, onSettings, onAdmin, onCredits, onChangelog, onLicense, onLogout, onClose }) {
   const ref = useRef(null);
@@ -145,7 +145,8 @@ function FolderSection({ f, chats, active, showTrash, folders, dragChatId, onTog
 export default function Sidebar({
   user, chats, chatsLoaded = true, activeId, appName, onNew, onOpen, onDelete, onToggleStar,
   folders = [], onCreateFolder, onRenameFolder, onToggleFolder, onDeleteFolder, onMoveChat,
-  collapsed, onToggle, onSettings, onAdmin, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview
+  collapsed, onToggle, onSettings, onAdmin, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview,
+  onSpaces, spacesPending = 0, projects = [], onProjects, onOpenProject, mobileOpen = false, onMobileClose
 }) {
   const [menu, setMenu] = useState(false);
   const [shiftHeld, setShiftHeld] = useState(false);
@@ -166,20 +167,35 @@ export default function Sidebar({
   const showTrash = shiftHeld && hover;
 
   const starred = chats.filter(c => c.starred);
+  const starredProjects = (projects || []).filter(p => p.starred);
   const folderIds = new Set(folders.map(f => f.id));
   const inFolder = (fid) => chats.filter(c => !c.starred && c.folderId === fid);
   const others = chats.filter(c => !c.starred && (!c.folderId || !folderIds.has(c.folderId)));
+  const nowMs = Date.now();
+  const DAY = 86400000;
+  const recentGroups = [
+    { key: 'recent', label: 'Recents', items: [] },
+    { key: 'd3', label: '3+ days ago', items: [] },
+    { key: 'd7', label: '7+ days ago', items: [] },
+  ];
+  for (const c of others) {
+    const age = nowMs - (c.updated_at || nowMs);
+    if (age < 3 * DAY) recentGroups[0].items.push(c);
+    else if (age < 7 * DAY) recentGroups[1].items.push(c);
+    else recentGroups[2].items.push(c);
+  }
   const rowProps = { onOpen, onDelete, onToggleStar, onMoveChat, onDragChat: setDragChatId, folders };
   const row = (c) => <ChatRow key={c.id} c={c} active={c.id === activeId} showTrash={showTrash} folders={folders} {...rowProps} />;
 
   return (
-    <div className={'sidebar' + (collapsed ? ' collapsed' : '')}
+    <div className={'sidebar' + (collapsed ? ' collapsed' : '') + (mobileOpen ? ' mobile-open' : '')}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
       <div className="sidebar-head">
         <div className="brand">{appName || 'open-quill'}</div>
         <div className="sidebar-head-actions">
           <button className="icon-btn search-btn"><Search style={{ width: 17 }} /></button>
-          <button className="icon-btn" onClick={onToggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}><Panel style={{ width: 17 }} /></button>
+          <button className="icon-btn collapse-btn" onClick={onToggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}><Panel style={{ width: 17 }} /></button>
+          <button className="icon-btn mobile-close-btn" onClick={onMobileClose} title="Close menu"><span style={{ fontSize: 20, lineHeight: 1 }}>✕</span></button>
         </div>
       </div>
       <div className="nav">
@@ -188,6 +204,11 @@ export default function Sidebar({
           onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); window.open('/', '_blank', 'noopener'); } }}
           onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}><span className="new-chat-plus"><Plus /></span> <span className="nav-label">New chat</span></button>
         <button className="nav-item" title="Chats" onClick={onChatsOverview}><Chat /> <span className="nav-label">Chats</span></button>
+        <button className="nav-item" title="Projects" onClick={onProjects}><Box /> <span className="nav-label">Projects</span></button>
+        <button className="nav-item" title="Spaces" onClick={onSpaces}>
+          <Users /> <span className="nav-label">Spaces</span>
+          {spacesPending > 0 && <span className="nav-badge">{spacesPending}</span>}
+        </button>
       </div>
       <div className="chats">
         {!chatsLoaded ? (
@@ -199,8 +220,14 @@ export default function Sidebar({
           </>
         ) : (
           <>
-            {starred.length > 0 && <>
+            {(starred.length > 0 || starredProjects.length > 0) && <>
               <div className="section-label"><Star style={{ width: 12, verticalAlign: '-1px' }} /> Starred</div>
+              {starredProjects.map(p => (
+                <div key={p.id} className="chat-row project-row" onClick={() => onOpenProject && onOpenProject(p.id)}>
+                  <Box style={{ width: 15, flexShrink: 0, opacity: .85 }} />
+                  <span className="title">{p.name}</span>
+                </div>
+              ))}
               {starred.map(row)}
             </>}
 
@@ -225,7 +252,13 @@ export default function Sidebar({
             </div>
             {!recentsCollapsed && <>
               {others.length === 0 && <div className="chats-empty">No chats yet</div>}
-              {others.map(row)}
+              {recentGroups[0].items.map(row)}
+              {recentGroups.slice(1).map(g => g.items.length > 0 && (
+                <React.Fragment key={g.key}>
+                  <div className="section-label recents-sub">{g.label}</div>
+                  {g.items.map(row)}
+                </React.Fragment>
+              ))}
             </>}
           </>
         )}

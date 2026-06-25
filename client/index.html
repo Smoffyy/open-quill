@@ -6,21 +6,22 @@
     <title>open-quill</title>
     <script>
       (function () {
-        var BG = { light: '#f4f3ee', dark: '#262624', anthropic: '#1f1f1e' };
+        var BG = { light: '#f4f3ee', dark: '#1f1f1e', anthropic: '#1f1f1e', oled: '#000000' };
         try {
           var t = localStorage.getItem('oq-theme');
-          if (t !== 'light' && t !== 'dark' && t !== 'anthropic') {
-            t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+          if (t === 'dark') t = 'anthropic';
+          if (t !== 'light' && t !== 'anthropic' && t !== 'oled') {
+            t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'anthropic';
           }
           document.documentElement.setAttribute('data-theme', t);
-          document.documentElement.style.background = BG[t] || BG.dark;
+          document.documentElement.style.background = BG[t] || BG.anthropic;
         } catch (e) {
-          document.documentElement.setAttribute('data-theme', 'dark');
-          document.documentElement.style.background = '#262624';
+          document.documentElement.setAttribute('data-theme', 'anthropic');
+          document.documentElement.style.background = '#1f1f1e';
         }
       })();
     </script>
-    <style>html{background:#262624}html[data-theme="light"]{background:#f4f3ee}html[data-theme="anthropic"]{background:#1f1f1e}</style>
+    <style>html{background:#1f1f1e}html[data-theme="light"]{background:#f4f3ee}html[data-theme="anthropic"]{background:#1f1f1e}html[data-theme="oled"]{background:#000}</style>
   </head>
   <body>
     <div id="root"></div>
