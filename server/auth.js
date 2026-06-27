@@ -73,19 +73,19 @@ export function adminOnly(req, res, next) {
 }
 
 export function userFromRequest(req) {
-  const raw = req.headers.cookie ? cookie.parse(req.headers.cookie) : {};
+  const raw = req.headers.cookie ? cookie.parseCookie(req.headers.cookie) : {};
   if (!raw.token) return null;
   const r = resolveToken(raw.token);
   return r ? r.user : null;
 }
 
 export function sessionFromRequest(req) {
-  const raw = req.headers.cookie ? cookie.parse(req.headers.cookie) : {};
+  const raw = req.headers.cookie ? cookie.parseCookie(req.headers.cookie) : {};
   if (!raw.token) return null;
   return resolveToken(raw.token);
 }
 
 export function parseCookies(req, _res, next) {
-  req.cookies = req.headers.cookie ? cookie.parse(req.headers.cookie) : {};
+  req.cookies = req.headers.cookie ? cookie.parseCookie(req.headers.cookie) : {};
   next();
 }
