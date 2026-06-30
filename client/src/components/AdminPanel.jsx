@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
-import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield, Globe, FileText, Pencil, Clock, Download, Wrench, Code, Brain } from './icons.jsx';
+import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield, Globe, FileText, Pencil, Clock, Download, Wrench, Code, Brain, Copy } from './icons.jsx';
 import { QP_ICON_LIST, QpIcon } from '../qpIcons.jsx';
 
 function QpIconPicker({ value, onPick }) {
@@ -159,7 +159,7 @@ const ME_SECTIONS = [
   ['pricing', 'Pricing']
 ];
 
-function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], providerTypes = {} }) {
+function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, providers = [], providerTypes = {} }) {
   const [spOpen, setSpOpen] = useState(false);
   const [section, setSection] = useState('general');
   const [detecting, setDetecting] = useState(false);
@@ -201,6 +201,7 @@ function ModelEditor({ m, onChange, onDelete, autosaveState, providers = [], pro
           <div className="me2-sub">{m.internal_name || 'no model id'}</div>
         </div>
         <StatusChips m={m} />
+        {onDuplicate && <button className="me2-dup" title="Duplicate model" onClick={() => onDuplicate(m.id)}><Copy style={{ width: 16 }} /></button>}
         <button className="me2-del" title="Delete model" onClick={() => onDelete(m.id)}><Trash style={{ width: 16 }} /></button>
       </div>
 
@@ -690,6 +691,16 @@ export default function AdminPanel({ user, onClose }) {
       setPubFlash(true); setTimeout(() => setPubFlash(false), 2200);
     } finally { setPublishing(false); }
   }
+  async function duplicate(id) {
+    const src = modelsRef.current.find(m => m.id === id);
+    if (!src) return;
+    const body = { ...src, display_name: (src.display_name || 'Model') + ' copy', is_default: false };
+    const { id: newId } = await api.post('/api/admin/models', body);
+    await api.patch('/api/admin/models/' + newId, body);
+    await load();
+    setSelModel(newId);
+    setPub(p => ({ ...p, dirty: true }));
+  }
   function del(id) {
     setAsk({
       message: 'Delete this model? This cannot be undone.', danger: 'Delete model',
@@ -823,7 +834,7 @@ export default function AdminPanel({ user, onClose }) {
                   </div>
                   <div className="mg-detail">
                     {sel
-                      ? <ModelEditor key={sel.id} m={sel} onChange={change} onDelete={del} autosaveState={autosave} providers={providers} providerTypes={providerTypes} />
+                      ? <ModelEditor key={sel.id} m={sel} onChange={change} onDelete={del} onDuplicate={duplicate} autosaveState={autosave} providers={providers} providerTypes={providerTypes} />
                       : <div className="muted-note" style={{ padding: 20 }}>No models yet — add one to get started.</div>}
                   </div>
                 </div>
