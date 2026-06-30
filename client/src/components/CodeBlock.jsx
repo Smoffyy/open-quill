@@ -26,7 +26,7 @@ export default function CodeBlock({ lang, code }) {
     <div className="code-wrap">
       <div className={'code-bar' + (copied ? ' flash' : '')}>
         <span>{lang || 'text'}</span>
-        <button className="code-copy" onClick={copy}>
+        <button className="code-copy" onPointerDown={(e) => { e.preventDefault(); copy(); }}>
           {copied ? <Check key="c" className="copy-pop" /> : <Copy key="o" />} {copied ? 'Copied' : 'Copy'}
         </button>
       </div>

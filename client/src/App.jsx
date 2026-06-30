@@ -604,25 +604,25 @@ export default function App() {
       }));
     } catch {}
   }
-  async function selectBranch(siblingId) {
+  const selectBranch = useCallback(async (siblingId) => {
     if (streaming || !activeId || !siblingId) return;
     try { await api.post('/api/chats/' + activeId + '/branch', { messageId: siblingId }); await refreshMessages(activeId); setTimeout(() => scrollBottom(false), 20); } catch {}
-  }
-  async function forkChat(messageId) {
+  }, [streaming, activeId]);
+  const forkChat = useCallback(async (messageId) => {
     if (streaming || !activeId) return;
     try {
       const r = await api.post('/api/chats/' + activeId + '/fork', { messageId });
       await loadChats();
       if (r?.id) { openChat(r.id); toast('Forked into a new chat', { icon: 'fork' }); }
     } catch {}
-  }
-  function togglePin(messageId, pinned) {
+  }, [streaming, activeId]);
+  const togglePin = useCallback((messageId, pinned) => {
     if (!activeId) return;
     setMessages(ms => ms.map(m => m.id === messageId ? { ...m, pinned } : m));
     api.patch('/api/chats/' + activeId + '/messages/' + messageId, { pinned }).catch(() => {});
     toast(pinned ? 'Message pinned — kept in context' : 'Message unpinned', { icon: 'pin' });
-  }
-  async function togglePinFile(att) {
+  }, [activeId]);
+  const togglePinFile = useCallback(async (att) => {
     if (!activeId || !att?.url) return;
     const isPinned = chatPins.some(p => p.url === att.url);
     try {
@@ -632,7 +632,7 @@ export default function App() {
       setChatPins(r.pins || []);
       toast(isPinned ? 'File unpinned from chat' : 'File pinned — kept in context', { icon: 'pin' });
     } catch {}
-  }
+  }, [activeId, chatPins]);
   function jumpToMessage(id) {
     setChatMenuOpen(false);
     requestAnimationFrame(() => {

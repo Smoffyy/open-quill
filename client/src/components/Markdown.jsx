@@ -106,32 +106,67 @@ function transformTools(text) {
   return out;
 }
 
-function Markdown({ children, streaming }) {
-  const text = typeof children === 'string' ? transformTools(children) : children;
+function isFenceLine(line) {
+  return /^\s*(`{3,}|~{3,})/.test(line);
+}
+
+function blockify(text) {
+  const lines = text.split('\n');
+  const blocks = [];
+  let buf = [];
+  let inFence = false;
+  for (const line of lines) {
+    buf.push(line);
+    if (isFenceLine(line)) {
+      if (inFence) { inFence = false; blocks.push(buf.join('\n')); buf = []; }
+      else inFence = true;
+      continue;
+    }
+    if (!inFence && line.trim() === '' && buf.some(l => l.trim() !== '')) {
+      blocks.push(buf.join('\n'));
+      buf = [];
+    }
+  }
+  if (buf.length) blocks.push(buf.join('\n'));
+  return blocks;
+}
+
+const mdComponents = {
+  pre({ children }) {
+    const el = Array.isArray(children) ? children[0] : children;
+    const props = el?.props || {};
+    const m = /language-(\w+)/.exec(props.className || '');
+    const raw = String(props.children || '').replace(/\n$/, '');
+    const lang = m ? m[1].toLowerCase() : '';
+    if (lang === 'toolcall') {
+      const data = (() => { try { return JSON.parse(b64decode(raw)); } catch { return null; } })();
+      if (data && data.call) return <ToolCard call={data.call} result={data.result} />;
+      return null;
+    }
+    return <CodeBlock lang={m ? m[1] : ''} code={raw} />;
+  },
+  code({ className, children }) {
+    return <code className={className}>{children}</code>;
+  }
+};
+
+const MarkdownBlock = React.memo(function MarkdownBlock({ text }) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath]}
       rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}
-      components={{
-        pre({ children }) {
-          const el = Array.isArray(children) ? children[0] : children;
-          const props = el?.props || {};
-          const m = /language-(\w+)/.exec(props.className || '');
-          const raw = String(props.children || '').replace(/\n$/, '');
-          const lang = m ? m[1].toLowerCase() : '';
-          if (lang === 'toolcall') {
-            const data = (() => { try { return JSON.parse(b64decode(raw)); } catch { return null; } })();
-            if (data && data.call) return <ToolCard call={data.call} result={data.result} />;
-            return null;
-          }
-          return <CodeBlock lang={m ? m[1] : ''} code={raw} />;
-        },
-        code({ className, children }) {
-          return <code className={className}>{children}</code>;
-        }
-      }}
+      components={mdComponents}
     >{text}</ReactMarkdown>
   );
+});
+
+function Markdown({ children }) {
+  if (typeof children !== 'string') {
+    return <MarkdownBlock text={children} />;
+  }
+  const text = transformTools(children);
+  const blocks = blockify(text);
+  return blocks.map((b, i) => <MarkdownBlock key={i} text={b} />);
 }
 
 export default React.memo(Markdown);
