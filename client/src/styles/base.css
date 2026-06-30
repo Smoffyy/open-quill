@@ -83,9 +83,9 @@
   --surface-hover: #1c1c1c;
   --border: #232323;
   --border-soft: #ffffff10;
-  --text: #f3f2ec;
-  --text-muted: rgba(255,255,255,.58);
-  --text-faint: rgba(255,255,255,.38);
+  --text: #ffffff;
+  --text-muted: rgba(255, 255, 255, 0.796);
+  --text-faint: rgba(255, 255, 255, 0.488);
   --accent: #d97757;
   --user-bubble: #161616;
   --menu-bg: #0a0a0a;
@@ -96,7 +96,7 @@
   --hover-soft: #ffffff10;
   --hover-mid: #ffffff1c;
   --sidebar-text: rgba(255,255,255,.6);
-  --sidebar-icon: #f3f2ec;
+  --sidebar-icon: #f3f3f3;
   --model-name: #ffffff;
 }
 :root[data-theme="oled"] .code-wrap { background: #050505; }
