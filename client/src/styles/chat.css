@@ -156,3 +156,12 @@
 .code-copy svg { width: 13px; height: 13px; }
 .code-wrap pre { margin: 0; padding: 4px 16px 16px; overflow-x: auto; }
 .code-wrap pre code { font-family: ui-monospace, 'SF Mono', monospace; font-size: 13.5px; line-height: 1.6; background: none; padding: 0; }
+
+/* Force white streaming cursor for both block and circle types on OLED theme */
+:root[data-theme="oled"][data-cursor="block"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap)::after,
+:root[data-theme="oled"][data-cursor="circle"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap)::after,
+:root[data-theme="oled"][data-cursor="block"] .streaming::after,
+:root[data-theme="oled"][data-cursor="circle"] .streaming::after {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+}
