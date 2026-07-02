@@ -245,7 +245,7 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
                 <div><label>Hidden</label><div className="muted-note">Stays in your admin list but is removed from every user's model picker.</div></div>
                 <div className={'switch' + (!m.enabled ? ' on' : '')} onClick={() => set('enabled', m.enabled ? 0 : 1)} />
               </div>
-              <Toggle m={m} set={set} k="in_more_models" label={'Group under "More models"'} note="Moves the model out of the main list into a collapsible group." />
+              <Toggle m={m} set={set} k="in_more_models" label={'Group under "More models"'} note="Moves the model out of the main list into a collapsible group. Models sharing a label sit together; different labels form separate groups." />
               {!!m.in_more_models && (
                 <div className="field"><label>Group label</label>
                   <input value={m.more_models_label || ''} onChange={(e) => set('more_models_label', e.target.value)} placeholder="More models" /></div>
@@ -462,7 +462,7 @@ export default function AdminPanel({ user, onClose }) {
   const [tab, setTab] = useState('models');
   const [models, setModels] = useState([]);
   const [usersList, setUsersList] = useState([]);
-  const [cfg, setCfg] = useState({ appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [] });
+  const [cfg, setCfg] = useState({ appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [], appFont: 'serif' });
   const [cfgSaved, setCfgSaved] = useState(false);
   const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256, modelQueue: false, membankEnabled: false, membankHideTools: false, membankPrompt: '', budgetUser: 0, budgetAdmin: 0, budgetWarnFraction: 0.8, budgetEnforce: false, sessionTtlDays: 30, maxSessions: 0 });
   const [providers, setProviders] = useState([]);
@@ -596,7 +596,7 @@ export default function AdminPanel({ user, onClose }) {
     try { const p = await api.get('/api/admin/providers'); setProviders(p.providers || []); setProviderTypes(p.types || {}); } catch {}
     try {
       const c = await api.get('/api/app-config');
-      setCfg({ appName: c.appName || '', disclaimer: c.disclaimer || '', greetings: c.greetings?.length ? c.greetings : [''], appIcon: c.appIcon || '', quickPrompts: Array.isArray(c.quickPrompts) ? c.quickPrompts : [] });
+      setCfg({ appName: c.appName || '', disclaimer: c.disclaimer || '', greetings: c.greetings?.length ? c.greetings : [''], appIcon: c.appIcon || '', quickPrompts: Array.isArray(c.quickPrompts) ? c.quickPrompts : [], appFont: c.appFont === 'sans' ? 'sans' : 'serif' });
     } catch {}
     loadUsers();
   }
@@ -743,25 +743,59 @@ export default function AdminPanel({ user, onClose }) {
     }
   };
 
+  const NAV = [
+    { group: 'Platform', items: [
+      { id: 'models', label: 'Models', desc: 'The catalog users pick from — prompts, capabilities, look and pricing per model.', Icon: Cube },
+      { id: 'providers', label: 'Providers', desc: 'The LLM backends your models run through.', Icon: Sliders }
+    ] },
+    { group: 'Workspace', items: [
+      { id: 'customization', label: 'Appearance', desc: 'Brand the app. Changes save to a draft and push to every connected client.', Icon: Sparkles },
+      { id: 'users', label: 'Users', desc: 'Everyone who has signed in — roles, budgets, and account removal.', Icon: Users },
+      { id: 'limits', label: 'Limits & Safety', desc: 'Guardrails applied across the app. These take effect immediately.', Icon: Shield }
+    ] },
+    { group: 'Intelligence', items: [
+      { id: 'websearch', label: 'Web Search', desc: 'Give models a web search tool backed by your own SearXNG instance.', Icon: Globe, load: null },
+      { id: 'membank', label: 'Memory Bank', desc: 'Reference files every model can read on demand.', Icon: FileText, load: loadMembank },
+      { id: 'tools', label: 'Tools', desc: 'Server-side live-data tools models can call (weather, prices, APIs…).', Icon: Wrench, load: loadTools },
+      { id: 'functions', label: 'Functions', desc: 'Custom buttons that run your JavaScript in the browser.', Icon: Code, load: loadFns }
+    ] },
+    { group: 'Insights', items: [
+      { id: 'audit', label: 'Audit Log', desc: 'A record of sensitive admin actions. Pruned after 120 days.', Icon: Clock, load: () => loadAudit() },
+      { id: 'usage', label: 'Usage & Pricing', desc: 'Account-wide token use, estimated cost, and price presets.', Icon: Brain, load: () => { loadAdminUsage(); loadPresets(); } }
+    ] }
+  ];
+  const activeMeta = NAV.flatMap(g => g.items).find(t => t.id === tab) || NAV[0].items[0];
+
   return (
     <div className="admin-page">
       <nav className="admin-rail">
-        <div className="ar-brand">Admin Panel</div>
-        <button className={'ar-tab' + (tab === 'models' ? ' active' : '')} onClick={() => setTab('models')}><Cube /> Models</button>
-        <button className={'ar-tab' + (tab === 'providers' ? ' active' : '')} onClick={() => setTab('providers')}><Sliders /> Providers</button>
-        <button className={'ar-tab' + (tab === 'customization' ? ' active' : '')} onClick={() => setTab('customization')}><Sparkles /> Appearance</button>
-        <button className={'ar-tab' + (tab === 'users' ? ' active' : '')} onClick={() => setTab('users')}><Users /> Users</button>
-        <button className={'ar-tab' + (tab === 'limits' ? ' active' : '')} onClick={() => setTab('limits')}><Shield /> Limits &amp; Safety</button>
-        <button className={'ar-tab' + (tab === 'websearch' ? ' active' : '')} onClick={() => setTab('websearch')}><Globe /> Web Search</button>
-        <button className={'ar-tab' + (tab === 'membank' ? ' active' : '')} onClick={() => { setTab('membank'); loadMembank(); }}><FileText /> Memory Bank</button>
-        <button className={'ar-tab' + (tab === 'tools' ? ' active' : '')} onClick={() => { setTab('tools'); loadTools(); }}><Wrench /> Tools</button>
-        <button className={'ar-tab' + (tab === 'functions' ? ' active' : '')} onClick={() => { setTab('functions'); loadFns(); }}><Code /> Functions</button>
-        <button className={'ar-tab' + (tab === 'audit' ? ' active' : '')} onClick={() => { setTab('audit'); loadAudit(); }}><Clock /> Audit Log</button>
-        <button className={'ar-tab' + (tab === 'usage' ? ' active' : '')} onClick={() => { setTab('usage'); loadAdminUsage(); loadPresets(); }}><Sliders /> Usage &amp; Pricing</button>
+        <div className="ar-brand">
+          <img className="ar-brand-icon" src={cfg.appIcon || '/starburst.svg'} alt="" />
+          <div className="ar-brand-text">
+            <span className="ar-brand-name">{cfg.appName || 'open-quill'}</span>
+            <span className="ar-brand-sub">Admin</span>
+          </div>
+        </div>
+        <div className="ar-scroll">
+          {NAV.map(g => (
+            <div className="ar-group" key={g.group}>
+              <div className="ar-group-label">{g.group}</div>
+              {g.items.map(({ id, label, Icon, load }) => (
+                <button key={id} className={'ar-tab' + (tab === id ? ' active' : '')} onClick={() => { setTab(id); load && load(); }}>
+                  <Icon /> <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
         <button className="ar-back" onClick={onClose}><Chevron style={{ transform: 'rotate(90deg)', width: 16 }} /> Back to chat</button>
       </nav>
       <div className="admin-content">
         <header className="admin-topbar">
+          <div className="atb-title">
+            <h1>{activeMeta.label}</h1>
+            <span className="atb-desc">{activeMeta.desc}</span>
+          </div>
           <div className="atb-status">
             {pubFlash
               ? <span className="saved-flash">Pushed to all clients ✓</span>
@@ -843,10 +877,15 @@ export default function AdminPanel({ user, onClose }) {
           })()}
           {tab === 'customization' && (
             <>
-              <h2>Customization</h2>
-              <div className="hint">Brand the app. Changes save instantly and push to every connected client.</div>
               <div className="field"><label>App name</label>
                 <input value={cfg.appName} onChange={(e) => setCfg(c => ({ ...c, appName: e.target.value }))} placeholder="open-quill" /></div>
+              <div className="field"><label>Interface font</label>
+                <div className="seg" style={{ width: 'fit-content' }}>
+                  <button className={(cfg.appFont || 'serif') === 'serif' ? 'on' : ''} onClick={() => setCfg(c => ({ ...c, appFont: 'serif' }))}>Source Serif (default)</button>
+                  <button className={cfg.appFont === 'sans' ? 'on' : ''} onClick={() => setCfg(c => ({ ...c, appFont: 'sans' }))}>Open Sans</button>
+                </div>
+                <div className="muted-note">The display font used for headings, greetings, and assistant text across the entire UI. Open Sans gives a cleaner, sans-serif look everywhere.</div>
+              </div>
               <div className="field"><label>Bottom disclaimer</label>
                 <input value={cfg.disclaimer} onChange={(e) => setCfg(c => ({ ...c, disclaimer: e.target.value }))} placeholder="Assistants can make mistakes, double-check responses." /></div>
               <div className="field">
@@ -884,8 +923,6 @@ export default function AdminPanel({ user, onClose }) {
           )}
           {tab === 'users' && (
             <>
-              <h2>Users</h2>
-              <div className="hint">Everyone who has signed in. Toggle admin rights, set a monthly budget, or remove accounts.</div>
               {usersList.map(u => (
                 <div className="user-row" key={u.id}>
                   <div className="avatar">{(u.displayName || u.email)[0].toUpperCase()}</div>
@@ -915,8 +952,6 @@ export default function AdminPanel({ user, onClose }) {
           )}
           {tab === 'providers' && (
             <>
-              <h2>Providers</h2>
-              <div className="hint">Add one or more providers. Each model runs through the provider you assign it (in the model's General tab).</div>
               <div className="provider-list">
                 {providers.map(p => {
                   const t = providerTypes[p.type] || {};
@@ -947,8 +982,6 @@ export default function AdminPanel({ user, onClose }) {
           )}
           {tab === 'limits' && (
             <>
-              <h2>Limits &amp; Safety</h2>
-              <div className="hint">Guardrails applied across the app. These take effect immediately — no publish needed.</div>
               <div className="field"><label>Upload size limit (MB)</label>
                 <div className="muted-note">Max size for files attached to messages, per role. 0 = unlimited.</div>
                 <div className="two-col">
@@ -1001,8 +1034,6 @@ export default function AdminPanel({ user, onClose }) {
           )}
           {tab === 'websearch' && (
             <>
-              <h2>Web Search</h2>
-              <div className="hint">Give models a web search tool backed by your own SearXNG instance. Everything stays local — the server queries your instance and reads the result pages itself. Takes effect immediately, no publish needed.</div>
               <div className="field row">
                 <div><label>Enable web search</label><div className="muted-note">When on, users get a Web Search toggle in the + menu. The model can call the tool whenever it's enabled for a chat.</div></div>
                 <div className={'switch' + (settings.webSearchEnabled ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, webSearchEnabled: !s.webSearchEnabled }))} />
@@ -1040,8 +1071,6 @@ export default function AdminPanel({ user, onClose }) {
           )}
           {tab === 'membank' && (
             <>
-              <h2>Memory Bank</h2>
-              <div className="hint">Upload reference files the assistant can read on demand. When enabled, every model gets tools to view a file (or just specific lines) and search across them — useful for project docs, policies, or specs, without web search. Applies to all models and takes effect immediately, no publish needed.</div>
               <div className="field row">
                 <div><label>Enable memory bank</label><div className="muted-note">When on, all models receive a system-prompt section listing these files plus the <code>mb_view</code> and <code>mb_search</code> tools.</div></div>
                 <div className={'switch' + (settings.membankEnabled ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, membankEnabled: !s.membankEnabled }))} />
@@ -1118,7 +1147,7 @@ export default function AdminPanel({ user, onClose }) {
           {tab === 'tools' && (
             <>
               <div className="admin-section-head">
-                <div><h3>Tools</h3><div className="muted-note">Give models the ability to fetch real-world, real-time data (weather, stock prices, APIs…). Each tool runs server-side JavaScript and is offered to any model that has "Allow custom tools" enabled.</div></div>
+                <div><div className="muted-note">Give models the ability to fetch real-world, real-time data (weather, stock prices, APIs…). Each tool runs server-side JavaScript and is offered to any model that has "Allow custom tools" enabled.</div></div>
                 <button className="btn primary" onClick={() => setToolEdit({ name: '', description: '', params: [], code: "const r = await fetch('https://api.example.com/data?q=' + encodeURIComponent(args.query));\nconst data = await r.json();\nreturn data;", timeout_ms: 15000, enabled: true, auto: false })}><Plus style={{ width: 15 }} /></button>
               </div>
               {toolEdit && (
@@ -1178,7 +1207,7 @@ export default function AdminPanel({ user, onClose }) {
           {tab === 'functions' && (
             <>
               <div className="admin-section-head">
-                <div><h3>Functions</h3><div className="muted-note">Extend open-quill itself. Each function adds a custom button next to the composer that runs your JavaScript in the browser — automate input, call APIs, build filters or shortcuts.</div></div>
+                <div><div className="muted-note">Extend open-quill itself. Each function adds a custom button next to the composer that runs your JavaScript in the browser — automate input, call APIs, build filters or shortcuts.</div></div>
                 <button className="btn primary" onClick={() => setFnEdit({ label: '', icon: 'sparkles', location: 'composer', code: "api.setInput(api.input + '\\n\\nPlease answer concisely.');\napi.toast('Added a note');", enabled: true })}><Plus style={{ width: 15 }} /></button>
               </div>
               {fnEdit && (
@@ -1231,8 +1260,7 @@ export default function AdminPanel({ user, onClose }) {
           )}
           {tab === 'audit' && (
             <>
-              <h2>Audit Log</h2>
-              <div className="hint">A record of sensitive admin actions. Entries older than 120 days are pruned automatically. {audit.total > 0 && `Showing ${audit.entries.length} of ${audit.total}.`}</div>
+              <div className="hint">{audit.total > 0 ? `Showing ${audit.entries.length} of ${audit.total} entries.` : ''}</div>
               <div className="audit-filters">
                 <select value={auditFilter.action} onChange={(e) => { const action = e.target.value; setAuditFilter(f => ({ ...f, action })); loadAudit(0, { ...auditFilter, action }); }}>
                   <option value="">All actions</option>
@@ -1252,26 +1280,24 @@ export default function AdminPanel({ user, onClose }) {
               </div>
               {audit.entries.length === 0 && !audit.loading && <div className="muted-note">No audit entries match.</div>}
               {audit.entries.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div className="audit-list">
                   {audit.entries.map(e => (
-                    <div key={e.id} style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '8px 10px', border: '1px solid rgba(128,128,128,0.18)', borderRadius: 8 }}>
-                      <span style={{ fontFamily: 'monospace', fontSize: 12, opacity: 0.65, flexShrink: 0 }}>{new Date(e.ts).toLocaleString()}</span>
-                      <span style={{ flexShrink: 0, fontWeight: 600, fontSize: 13 }}>{e.action}</span>
-                      <span style={{ flex: 1, minWidth: 0, fontSize: 13, opacity: 0.85, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div key={e.id} className="audit-row">
+                      <span className="au-ts">{new Date(e.ts).toLocaleString()}</span>
+                      <span className="au-action">{e.action}</span>
+                      <span className="au-meta">
                         {e.actorEmail}{e.meta ? ' · ' + (typeof e.meta === 'object' ? Object.entries(e.meta).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(',') : v}`).join(', ') : String(e.meta)) : ''}
                       </span>
-                      {e.ip && <span style={{ fontFamily: 'monospace', fontSize: 11, opacity: 0.5, flexShrink: 0 }}>{e.ip}</span>}
+                      {e.ip && <span className="au-ip">{e.ip}</span>}
                     </div>
                   ))}
-                  {audit.hasMore && <button className="btn ghost" style={{ marginTop: 8, alignSelf: 'center' }} disabled={audit.loading} onClick={() => loadAudit(audit.offset + 60)}>{audit.loading ? 'Loading…' : 'Load more'}</button>}
+                  {audit.hasMore && <button className="btn ghost audit-more" disabled={audit.loading} onClick={() => loadAudit(audit.offset + 60)}>{audit.loading ? 'Loading…' : 'Load more'}</button>}
                 </div>
               )}
             </>
           )}
           {tab === 'usage' && (
             <>
-              <h2>Usage &amp; Pricing</h2>
-              <div className="hint">Account-wide token use and estimated cost, plus the price presets applied to recognized model names.</div>
               <div className="seg" style={{ width: 'fit-content', marginBottom: 14 }}>
                 {[['7', '7 days'], ['30', '30 days'], ['90', '90 days']].map(([v, l]) => (
                   <button key={v} className={adminUsageDays === v ? 'on' : ''} onClick={() => { setAdminUsageDays(v); loadAdminUsage(v); }}>{l}</button>
@@ -1280,26 +1306,24 @@ export default function AdminPanel({ user, onClose }) {
               {!adminUsage && <div className="muted-note">Loading…</div>}
               {adminUsage && (
                 <>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
+                  <div className="stat-grid">
                     {[['Total tokens', adminUsage.totals.total.toLocaleString()], ['Est. cost', '$' + adminUsage.totals.cost.toFixed(2)], ['Generations', adminUsage.totals.generations.toLocaleString()], ['Active users', String(adminUsage.totals.users)]].map(([l, v]) => (
-                      <div key={l} style={{ border: '1px solid rgba(128,128,128,0.22)', borderRadius: 10, padding: '12px 14px' }}>
-                        <div style={{ fontSize: 20, fontWeight: 600 }}>{v}</div>
-                        <div className="muted-note" style={{ marginTop: 2 }}>{l}</div>
+                      <div key={l} className="stat-card">
+                        <div className="sc-v">{v}</div>
+                        <div className="sc-l">{l}</div>
                       </div>
                     ))}
                   </div>
                   {adminUsage.users.length > 0 && (
                     <>
                       <h3 className="me-section-h">By user</h3>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                        <thead><tr style={{ textAlign: 'left', opacity: 0.6 }}>
-                          <th style={{ padding: '6px 8px' }}>User</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Tokens</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Cost</th>
-                        </tr></thead>
+                      <table className="admin-table">
+                        <thead><tr><th>User</th><th className="num">Tokens</th><th className="num">Cost</th></tr></thead>
                         <tbody>{adminUsage.users.slice(0, 30).map(u => (
-                          <tr key={u.userId} style={{ borderTop: '1px solid rgba(128,128,128,0.18)' }}>
-                            <td style={{ padding: '8px' }}>{u.name}</td>
-                            <td style={{ padding: '8px', textAlign: 'right' }}>{(u.prompt + u.completion).toLocaleString()}</td>
-                            <td style={{ padding: '8px', textAlign: 'right' }}>{u.cost ? '$' + u.cost.toFixed(u.cost < 0.01 ? 4 : 2) : '—'}</td>
+                          <tr key={u.userId}>
+                            <td>{u.name}</td>
+                            <td className="num">{(u.prompt + u.completion).toLocaleString()}</td>
+                            <td className="num">{u.cost ? '$' + u.cost.toFixed(u.cost < 0.01 ? 4 : 2) : '—'}</td>
                           </tr>
                         ))}</tbody>
                       </table>
@@ -1308,15 +1332,13 @@ export default function AdminPanel({ user, onClose }) {
                   {adminUsage.models.length > 0 && (
                     <>
                       <h3 className="me-section-h">By model</h3>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                        <thead><tr style={{ textAlign: 'left', opacity: 0.6 }}>
-                          <th style={{ padding: '6px 8px' }}>Model</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Tokens</th><th style={{ padding: '6px 8px', textAlign: 'right' }}>Cost</th>
-                        </tr></thead>
+                      <table className="admin-table">
+                        <thead><tr><th>Model</th><th className="num">Tokens</th><th className="num">Cost</th></tr></thead>
                         <tbody>{adminUsage.models.slice(0, 30).map(m => (
-                          <tr key={m.modelId} style={{ borderTop: '1px solid rgba(128,128,128,0.18)' }}>
-                            <td style={{ padding: '8px' }}>{m.name}</td>
-                            <td style={{ padding: '8px', textAlign: 'right' }}>{(m.prompt + m.completion).toLocaleString()}</td>
-                            <td style={{ padding: '8px', textAlign: 'right' }}>{m.cost ? '$' + m.cost.toFixed(m.cost < 0.01 ? 4 : 2) : '—'}</td>
+                          <tr key={m.modelId}>
+                            <td>{m.name}</td>
+                            <td className="num">{(m.prompt + m.completion).toLocaleString()}</td>
+                            <td className="num">{m.cost ? '$' + m.cost.toFixed(m.cost < 0.01 ? 4 : 2) : '—'}</td>
                           </tr>
                         ))}</tbody>
                       </table>

@@ -17,6 +17,7 @@ import * as toolproto from './toolproto.js';
 import * as membank from './membank.js';
 import * as customtools from './customtools.js';
 import * as customfns from './functions.js';
+import { buildTools, toCall, livePreview } from './tools.js';
 
 function stripToolSyntax(text) {
   let s = String(text || '');
@@ -32,19 +33,34 @@ function stripToolSyntax(text) {
   return s.replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '').replace(/```tool[\s\S]*?```/g, '');
 }
 
-function compactAssistant(text, eofCloses) {
-  const s = String(text || '');
-  const { calls } = toolproto.scanTools(s, { eofCloses });
-  if (!calls.length) return s;
-  let out = '', cursor = 0;
-  for (const { call, start, end } of calls) {
-    out += s.slice(cursor, start);
-    const ref = call.path || call.cmd || call.query || call.name || '';
-    out += `[${call.tool}${ref ? ' ' + ref : ''}]`;
-    cursor = end;
+function decodeOqr(b64) {
+  try { return JSON.parse(Buffer.from(b64, 'base64').toString('utf8')); } catch { return null; }
+}
+
+function historyText(text) {
+  let s = String(text || '');
+  const { calls, live } = toolproto.scanTools(s);
+  for (let i = calls.length - 1; i >= 0; i--) {
+    const c = calls[i].call;
+    const ref = c && (c.path || c.cmd || c.query || c.name) || '';
+    s = s.slice(0, calls[i].start) + `[${c?.tool || 'tool'}${ref ? ' ' + String(ref).split('\n')[0].slice(0, 80) : ''}]` + s.slice(calls[i].end);
   }
-  out += s.slice(cursor);
-  return out;
+  if (live && live.start != null) {
+    const after = toolproto.scanTools(s).live;
+    if (after && after.start != null) {
+      const oi = s.indexOf('[[OQR:', after.start);
+      s = s.slice(0, after.start) + (oi === -1 ? '' : s.slice(oi));
+    }
+  }
+  s = s.replace(/\[\[OQR:([A-Za-z0-9+/=]+)\]\]/g, (_, b) => {
+    const d = decodeOqr(b);
+    const c = d && d.call;
+    if (!c || !c.tool) return '';
+    const ref = c.path || c.cmd || c.query || c.name || '';
+    const failed = d.result && d.result.ok === false;
+    return `[used ${c.tool}${ref ? ': ' + String(ref).split('\n')[0].slice(0, 80) : ''}${failed ? ' → error' : ''}]`;
+  });
+  return s.replace(/```tool[\s\S]*?```/g, '');
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -600,10 +616,11 @@ app.get('/api/chats/:id/context', authMiddleware, async (req, res) => {
   const model = db.models.byId(req.query.modelId) || db.models.all().find(m => m.enabled) || db.models.all()[0];
   if (!model) return res.json({ used: 0, limit: 0, pct: 0, hasSummary: !!c.summary, summaries: !!c.enable_summaries });
   const convo = buildMessages(model, await chatHistory(c, model), false, null, c.summary, promptVars(c.user_id), await instrFor(c));
-  const used = estimateTokens(convo);
-  const limit = (model.enable_summaries && model.num_ctx) ? model.num_ctx : (model.num_ctx || 0);
+  const used = calibratedTokens(c.id, convo);
+  const ctx = await modelCtx(model);
+  const limit = ctx || parseInt(model.num_ctx) || 0;
   const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
-  res.json({ used, limit, pct, hasSummary: !!c.summary, compacts: model.enable_summaries ? compactThreshold(model) : 0 });
+  res.json({ used, limit, pct, hasSummary: !!c.summary, measured: tokenCalib.has(c.id), compacts: model.enable_summaries ? compactThreshold(model, ctx) : 0 });
 });
 
 app.get('/api/chats/:id/inspect', authMiddleware, async (req, res) => {
@@ -958,30 +975,71 @@ app.delete('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/admin/detect-ctx', authMiddleware, adminOnly, async (req, res) => {
-  const internal = req.query.model || '';
-  const prov = req.query.provider ? resolveProvider(req.query.provider) : getProviders()[0];
+async function detectContextLength(prov, internal) {
   const { spec, base, key } = providerSpec(prov);
   const headers = { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) };
   const root = base.replace(/\/v1$/, '');
+  const asInt = (v) => { const n = parseInt(v); return Number.isFinite(n) && n > 0 ? n : 0; };
   try {
     if (spec.protocol === 'ollama') {
       const r = await fetch(root + '/api/show', { method: 'POST', headers, body: JSON.stringify({ model: internal }) });
-      if (!r.ok) return res.json({ numCtx: 0, ok: false });
+      if (!r.ok) return 0;
       const json = await r.json();
       const info = json.model_info || {};
       const ctxKey = Object.keys(info).find(k => k.endsWith('.context_length'));
-      const ctx = ctxKey ? info[ctxKey] : 0;
-      return res.json({ numCtx: parseInt(ctx) || 0, ok: !!ctx });
+      return asInt(ctxKey ? info[ctxKey] : 0);
+    }
+    if (prov?.type === 'llamacpp') {
+      try {
+        const r = await fetch(root + '/props', { headers });
+        if (r.ok) {
+          const json = await r.json();
+          const ctx = asInt(json?.default_generation_settings?.n_ctx) || asInt(json?.n_ctx);
+          if (ctx) return ctx;
+        }
+      } catch {}
+      try {
+        const r = await fetch(base + '/models', { headers });
+        if (r.ok) {
+          const json = await r.json();
+          const list = Array.isArray(json.data) ? json.data : [];
+          const hit = list.find(m => m.id === internal) || list[0];
+          const ctx = asInt(hit?.meta?.n_ctx_train) || asInt(hit?.meta?.n_ctx);
+          if (ctx) return ctx;
+        }
+      } catch {}
+      return 0;
     }
     const r = await fetch(root + '/api/v0/models', { headers: { 'Content-Type': 'application/json' } });
-    if (!r.ok) return res.json({ numCtx: 0, ok: false });
+    if (!r.ok) return 0;
     const json = await r.json();
     const list = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
     const hit = list.find(m => (m.id || m.key) === internal) || list.find(m => (m.id || '').includes(internal));
-    const ctx = hit ? (hit.max_context_length || hit.loaded_context_length || hit.context_length || 0) : 0;
-    res.json({ numCtx: parseInt(ctx) || 0, ok: !!ctx });
-  } catch { res.json({ numCtx: 0, ok: false }); }
+    return asInt(hit ? (hit.max_context_length || hit.loaded_context_length || hit.context_length || 0) : 0);
+  } catch { return 0; }
+}
+
+const ctxDetectCache = new Map();
+const CTX_CACHE_MS = 5 * 60 * 1000;
+const CTX_AUTO_TYPES = new Set(['llamacpp', 'ollama', 'lmstudio']);
+async function modelCtx(model) {
+  const manual = parseInt(model.num_ctx);
+  if (Number.isFinite(manual) && manual > 0) return manual;
+  const prov = resolveProvider(model.provider_id);
+  if (!prov || !CTX_AUTO_TYPES.has(prov.type)) return 0;
+  const cacheKey = prov.id + ':' + (model.internal_name || '');
+  const hit = ctxDetectCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < CTX_CACHE_MS) return hit.ctx;
+  const ctx = await detectContextLength(prov, model.internal_name || '');
+  ctxDetectCache.set(cacheKey, { ctx, at: Date.now() });
+  return ctx;
+}
+
+app.get('/api/admin/detect-ctx', authMiddleware, adminOnly, async (req, res) => {
+  const internal = req.query.model || '';
+  const prov = req.query.provider ? resolveProvider(req.query.provider) : getProviders()[0];
+  const numCtx = await detectContextLength(prov, internal);
+  res.json({ numCtx, ok: !!numCtx });
 });
 
 app.post('/api/admin/models/reorder', authMiddleware, adminOnly, (req, res) => {
@@ -1370,6 +1428,7 @@ function appConfig() {
     disclaimer: getSetting('disclaimer', 'Assistants can make mistakes, double-check responses.'),
     greetings: (() => { const g = safeParse(getSetting('greetings', '[]'), []); return Array.isArray(g) && g.length ? g : ['How can I help you?', 'What are we building today?', 'Where should we start?']; })(),
     appIcon: getSetting('app_icon', ''),
+    appFont: getSetting('app_font', 'serif'),
     quickPrompts: (() => { const q = safeParse(getSetting('quick_prompts', '[]'), []); return Array.isArray(q) && q.length ? q : [{ icon: 'sparkles', label: 'Ideas', prompt: 'Give me ideas on what I should do today.' }, { icon: 'pencil', label: 'Write', prompt: 'Write a one paragraph summary about how Large Language Models (LLMs) work.' }, { icon: 'code', label: 'Code', prompt: 'Write a Python function that checks whether a string is a palindrome.' }, { icon: 'learn', label: 'Learn', prompt: 'How far away is the sun from Earth?' }, { icon: 'coffee', label: 'Life stuff', prompt: 'Give me practical advice for a life problem.' }]; })(),
     version: APP_VERSION,
     uiVersion: APP_VERSION,
@@ -1396,6 +1455,7 @@ app.patch('/api/admin/app-config', authMiddleware, adminOnly, (req, res) => {
     setSetting('quick_prompts', JSON.stringify(list));
   }
   if ('appIcon' in b) setSetting('app_icon', b.appIcon || '');
+  if ('appFont' in b) setSetting('app_font', b.appFont === 'sans' ? 'sans' : 'serif');
   res.json({ ok: true });
 });
 
@@ -1453,12 +1513,13 @@ function sandboxPromptFor(chatId) {
     catch { SKILLS_CACHE = ''; }
   }
   let p = SKILLS_CACHE;
-  const files = sandbox.list(chatId);
-  if (!files.length) return p + '\n\n## Current sandbox\nThe sandbox is empty.';
+  const { files, hidden } = sandbox.list(chatId, { withHidden: true });
+  if (!files.length && !hidden) return p + '\n\n## Current sandbox\nThe sandbox is empty.';
   const LIST_CAP = 200, INLINE_CAP = 12;
   p += '\n\n## Current sandbox files\nThese are the LATEST versions on disk. Always edit these directly — never assume older content. The version number (vN) increases each time a file changes.\n';
   for (const f of files.slice(0, LIST_CAP)) p += `- ${f.path} (v${f.v}, ${f.size} bytes)\n`;
   if (files.length > LIST_CAP) p += `- … and ${files.length - LIST_CAP} more file(s). The list is truncated to protect context — use \`list_files\`, \`search\`, or \`view\` to inspect anything not shown here.\n`;
+  if (hidden) p += `\n(${hidden} file(s) inside dependency/build folders like node_modules are hidden from this listing and from context; they exist on disk and your commands can use them normally.)\n`;
   p += '\n## Latest file contents (a sample; use `view` for anything not shown)\n';
   let budget = 40000, inlined = 0;
   for (const f of files) {
@@ -1472,7 +1533,7 @@ function sandboxPromptFor(chatId) {
     p += `\n### ${f.path} (v${f.v})\n\`\`\`${f.ext || ''}\n${txt}\n\`\`\`\n`;
     budget -= txt.length; inlined++;
   }
-  p += '\n---\nREMINDER: The sandbox is ON and these files above are the current truth. Edit existing files with `str_replace` (never recreate them from scratch). For file operations use the dedicated tools — `copy_file`, `move_file`, `make_dir`, `delete_file`, `bundle_zip`, `extract_zip` — never shell commands like cp/rm/mkdir/zip, and never absolute paths like /tmp. Emit tool calls using the `|TOOL|` line protocol exactly as described above (never JSON, never code fences). Keep working through the task with tool calls until it is fully done; do not stop to ask permission, do not paste file contents or fake terminal output into the chat, and do not repeat a tool call that just failed — read the error and change approach.';
+  p += '\n---\nREMINDER: The sandbox is ON and the files above are the current truth. Edit existing files with `str_replace` (never recreate them from scratch), and use the dedicated file tools — `copy_file`, `move_file`, `make_dir`, `delete_file`, `bundle_zip`, `extract_zip` — for file operations. Use relative paths only. Keep calling tools until the task is fully done; do not stop to ask permission, do not paste whole file contents or fake terminal output into the chat, and when a tool fails, read the error and change approach instead of repeating the same call.';
   return p;
 }
 function cleanCall(call) {
@@ -1562,7 +1623,7 @@ async function chatHistory(chat, model) {
   let rows = activePath(chat.id);
   if (upto) rows = rows.filter(m => m.created_at > upto || m.pinned);
   return rows.map(m => {
-    let text = stripToolSyntax(m.content || '').replace(/\n{3,}/g, '\n\n');
+    let text = historyText(m.content || '').replace(/\n{3,}/g, '\n\n');
     const atts = m.attachments || [];
     const images = [];
     if (atts.length) {
@@ -1597,6 +1658,7 @@ function estimateTokens(messages) {
     total += 4;
     if (typeof m.content === 'string') total += estTextTokens(m.content);
     else if (Array.isArray(m.content)) for (const p of m.content) total += p.type === 'text' ? estTextTokens(p.text || '') : 850;
+    if (Array.isArray(m.tool_calls)) for (const c of m.tool_calls) total += estTextTokens((c.argsText || '') + (c.name || '')) + 8;
   }
   return total;
 }
@@ -1623,10 +1685,30 @@ function recentWindow(model) {
   const n = parseInt(model && model.recent_window);
   return Number.isFinite(n) && n > 0 ? n : 4;
 }
-function compactThreshold(model) {
-  if (!model.enable_summaries || !model.num_ctx) return Infinity;
+function compactThreshold(model, ctxOverride) {
+  const ctx = Number.isFinite(parseInt(ctxOverride)) && parseInt(ctxOverride) > 0 ? parseInt(ctxOverride) : parseInt(model.num_ctx);
+  if (!model.enable_summaries || !ctx || ctx <= 0) return Infinity;
   const padding = Math.max(0.03, Math.min(0.6, model.summary_padding || 0.125));
-  return Math.floor(model.num_ctx * (1 - padding));
+  return Math.floor(ctx * (1 - padding));
+}
+
+const tokenCalib = new Map();
+function updateCalib(chatId, actualPrompt, estimated) {
+  if (!chatId || !actualPrompt || !estimated || estimated < 200) return;
+  const raw = actualPrompt / estimated;
+  if (!Number.isFinite(raw)) return;
+  const ratio = Math.max(0.25, Math.min(4, raw));
+  const prev = tokenCalib.get(chatId);
+  tokenCalib.set(chatId, { ratio: prev ? prev.ratio * 0.4 + ratio * 0.6 : ratio, at: Date.now() });
+  if (tokenCalib.size > 2000) {
+    const cutoff = Date.now() - 6 * 3600 * 1000;
+    for (const [k, v] of tokenCalib) if (v.at < cutoff) tokenCalib.delete(k);
+  }
+}
+function calibratedTokens(chatId, messages) {
+  const est = estimateTokens(messages);
+  const c = chatId && tokenCalib.get(chatId);
+  return c ? Math.round(est * c.ratio) : est;
 }
 function promptVars(userId) {
   const u = userId ? db.users.byId(userId) : null;
@@ -1671,14 +1753,14 @@ async function instrFor(chat, query) {
   return pinned ? (base ? base + '\n\n' + pinned : pinned) : base;
 }
 async function maybeCompact(ws, chat, model, extended, sandboxOn) {
-  const threshold = compactThreshold(model);
+  const threshold = compactThreshold(model, await modelCtx(model));
   if (threshold === Infinity) return;
   let guard = 0;
   while (guard++ < 3) {
     const fresh = db.chats.byId(chat.id);
     const sandboxP = sandboxOn ? sandboxPromptFor(chat.id) : null;
     const convo = buildMessages(model, await chatHistory(chat, model), extended, sandboxP, fresh.summary, promptVars(chat.user_id), await instrFor(fresh));
-    if (estimateTokens(convo) < threshold) return;
+    if (calibratedTokens(chat.id, convo) < threshold) return;
     if (!(await compactStep(ws, chat, model))) return;
   }
 }
@@ -1716,97 +1798,117 @@ wss.on('connection', (ws, req) => {
     let content = '', reasoning = '', usage = null;
     safeSend(JSON.stringify({ type: 'start', chatId: chat.id, messageId: assistantId }));
 
-    const threshold = compactThreshold(model);
+    const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, customToolsList }) : [];
+    const runToolCall = async (call) => {
+      if (call.tool === 'web_search') {
+        if (!webSearchOn) return null;
+        const r = await websearch.runWebSearch(call);
+        return { payload: websearch.webSearchResultPayload(call, r), formatted: websearch.formatWebSearchResult(call, r), hide: false };
+      }
+      if (call.tool === 'mb_view' || call.tool === 'mb_search') {
+        if (!membankOn) return null;
+        const r = membank.execTool(call);
+        return { payload: membank.resultPayload(call, r), formatted: membank.formatResult(call, r), hide: membankHideTools };
+      }
+      if (customToolNames.has(call.tool)) {
+        const r = await customtools.execTool(call);
+        return { payload: customtools.resultPayload(call, r), formatted: customtools.formatResult(call, r), hide: false };
+      }
+      if (!sandboxOn) return null;
+      const r = await sandbox.execTool(chat.id, call, sandboxCap);
+      return { payload: resultPayload(call, r), formatted: formatToolResult(call, r), hide: false };
+    };
+
+    const threshold = compactThreshold(model, await modelCtx(model));
     const stepCap = (model.agent_steps && model.agent_steps > 0) ? model.agent_steps : 1000;
     const maxSteps = toolsOn ? stepCap : 1;
     try {
       for (let step = 0; step < maxSteps; step++) {
         // running low on context mid-response? summarize older turns, then carry on where we left off
-        if (threshold !== Infinity && inTurn.length && estimateTokens([...base, ...inTurn]) >= threshold) {
+        if (threshold !== Infinity && inTurn.length && calibratedTokens(chat.id, [...base, ...inTurn]) >= threshold) {
           if (await compactStep(ws, chat, model)) base = buildMessages(model, await chatHistory(chat, model), extended, toolsP(), (db.chats.byId(chat.id) || {}).summary, promptVars(chat.user_id), await instrFor(db.chats.byId(chat.id) || chat));
         }
         const convo = [...base, ...inTurn];
+        const stepEstimate = estimateTokens(convo);
+        let stepPromptTokens = 0;
         const controller = new AbortController();
         state.aborts.set(chat.id, controller);
         let stepText = '';
         let aborted = false;
-        let toolStop = false;
-        let execIndex = 0;
-        let abortScanFrom = 0;
-        const stepResults = [];
-        const execPending = async (eofCloses) => {
-          if (!toolsOn) return;
-          const { calls } = toolproto.scanTools(stepText, { eofCloses });
-          for (; execIndex < calls.length; execIndex++) {
-            const call = calls[execIndex].call;
-            if (!call || !call.tool) continue;
-            let r, payload, formatted;
-            if (call.tool === 'web_search') {
-              if (!webSearchOn) continue;
-              r = await websearch.runWebSearch(call);
-              payload = websearch.webSearchResultPayload(call, r);
-              formatted = websearch.formatWebSearchResult(call, r);
-            } else if (call.tool === 'mb_view' || call.tool === 'mb_search') {
-              if (!membankOn) continue;
-              r = membank.execTool(call);
-              payload = membank.resultPayload(call, r);
-              formatted = membank.formatResult(call, r);
-            } else if (customToolNames.has(call.tool)) {
-              if (!customToolsOn) continue;
-              r = await customtools.execTool(call);
-              payload = customtools.resultPayload(call, r);
-              formatted = customtools.formatResult(call, r);
-            } else {
-              if (!sandboxOn) continue;
-              r = await sandbox.execTool(chat.id, call, sandboxCap);
-              payload = resultPayload(call, r);
-              formatted = formatToolResult(call, r);
-            }
-            stepResults.push({ call, r, formatted });
-            const hideThis = (call.tool === 'mb_view' || call.tool === 'mb_search') && membankHideTools;
-            if (!hideThis) {
-              const block = '\n\n[[OQR:' + Buffer.from(JSON.stringify({ call: cleanCall(call), result: payload }), 'utf8').toString('base64') + ']]\n';
-              content += block;
-              safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: block }));
-            }
-            if (sandboxOn) safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
-          }
-        };
+        let toolCalls = [];
+        let liveSent = false;
+        let liveState = { key: '', len: 0, lastAt: 0 };
         try {
           await streamCompletion({
-            model, messages: convo, signal: controller.signal,
+            model, messages: convo, tools, signal: controller.signal,
             onEvent: (e) => {
-              if (e.type === 'usage') { if (!usage) usage = { prompt: 0, completion: 0, total: 0 }; usage.prompt += e.usage.prompt || 0; usage.completion += e.usage.completion || 0; usage.total += e.usage.total || 0; return; }
-              if (e.type === 'reasoning') { reasoning += e.text; safeSend(JSON.stringify({ type: 'reasoning', chatId: chat.id, text: e.text })); }
-              else {
+              if (e.type === 'usage') { stepPromptTokens = e.usage.prompt || stepPromptTokens; if (!usage) usage = { prompt: 0, completion: 0, total: 0 }; usage.prompt += e.usage.prompt || 0; usage.completion += e.usage.completion || 0; usage.total += e.usage.total || 0; return; }
+              if (e.type === 'reasoning') { reasoning += e.text; safeSend(JSON.stringify({ type: 'reasoning', chatId: chat.id, text: e.text })); return; }
+              if (e.type === 'content') {
                 content += e.text; stepText += e.text;
                 safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: e.text }));
-                if (toolsOn && !toolStop) {
-                  const tail = stepText.slice(Math.max(0, abortScanFrom - 16));
-                  abortScanFrom = stepText.length;
-                  if (/\/\s*\|?\s*tool\b/i.test(tail)) {
-                    const { calls } = toolproto.scanTools(stepText);
-                    if (calls.length) {
-                      const last = calls[calls.length - 1].call;
-                      if (last && (toolproto.READ_TOOLS.has(last.tool) || customToolNames.has(last.tool))) { toolStop = true; try { controller.abort(); } catch {} }
-                    }
+                return;
+              }
+              if (e.type === 'tool_call_delta') {
+                const live = livePreview(e.name, e.argsText);
+                if (!live || !live.tool) return;
+                const isFile = (live.tool === 'create_file' || live.tool === 'str_replace') && live.path;
+                if (isFile) {
+                  const key = e.index + ':' + live.tool + ':' + live.path + ':' + (live.oldStr || '');
+                  if (key !== liveState.key) {
+                    liveState = { key, len: (live.content || '').length, lastAt: Date.now() };
+                    liveSent = true;
+                    safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live }));
+                  } else if ((live.content || '').length > liveState.len) {
+                    const text = live.content.slice(liveState.len);
+                    liveState.len = live.content.length;
+                    liveSent = true;
+                    safeSend(JSON.stringify({ type: 'tool_live_delta', chatId: chat.id, text }));
+                  }
+                } else {
+                  const key = e.index + ':' + JSON.stringify(live);
+                  const t = Date.now();
+                  if (key !== liveState.key && t - liveState.lastAt > 120) {
+                    liveState = { key, len: 0, lastAt: t };
+                    liveSent = true;
+                    safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live }));
                   }
                 }
+                return;
               }
+              if (e.type === 'tool_calls') { toolCalls = e.calls; }
             }
           });
         } catch (err) {
           if (err.name === 'AbortError') aborted = true; else throw err;
         }
-        const eof = !toolStop;
-        try { await execPending(eof); } catch {}
-        if (stepResults.length) {
-          const results = stepResults.map(({ formatted }) => formatted);
-          inTurn = [...inTurn, { role: 'assistant', content: compactAssistant(stepText, eof) }, { role: 'user', content: 'Tool results:\n' + results.join('\n\n') }];
+        updateCalib(chat.id, stepPromptTokens, stepEstimate);
+        if (aborted || !toolsOn || !toolCalls.length) {
+          if (liveSent) safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live: null }));
+          break;
         }
-        if (!toolsOn) break;
-        if (aborted && !toolStop) break;
-        if (!stepResults.length) break;
+        const toolMsgs = [];
+        for (const tc of toolCalls) {
+          const call = toCall(tc.name, tc.argsText);
+          safeSend(JSON.stringify({ type: 'tool_exec', chatId: chat.id, call: cleanCall(call) }));
+          let out;
+          try { out = await runToolCall(call); }
+          catch (e) { out = { payload: { ok: false, error: String(e.message || e).slice(0, 400) }, formatted: `${call.tool} → ERROR: ${String(e.message || e).slice(0, 400)}`, hide: false }; }
+          if (!out) out = { payload: { ok: false, error: `Unknown or disabled tool: ${call.tool}` }, formatted: `${call.tool} → ERROR: this tool is not available.`, hide: false };
+          if (!out.hide) {
+            const block = '\n\n[[OQR:' + Buffer.from(JSON.stringify({ call: cleanCall(call), result: out.payload }), 'utf8').toString('base64') + ']]\n';
+            content += block;
+            safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: block }));
+          }
+          if (sandboxOn) safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
+          toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: out.formatted });
+        }
+        safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live: null }));
+        inTurn = [
+          ...inTurn,
+          { role: 'assistant', content: stepText, tool_calls: toolCalls.map(c => ({ id: c.id, name: c.name, argsText: c.argsText })) },
+          ...toolMsgs
+        ];
       }
     } catch (err) {
       if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: String(err.message || err) }));

@@ -2,7 +2,12 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import hljs from 'highlight.js';
 import { api } from '../api.js';
 import { copyText } from '../clipboard.js';
+import Markdown from './Markdown.jsx';
 import { Download, Refresh, FileText, Copy, Check, ChevDown, Folder, Chevron } from './icons.jsx';
+
+const PREVIEW_HTML = new Set(['html', 'htm', 'svg']);
+const PREVIEW_MD = new Set(['md', 'markdown']);
+const IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'avif']);
 
 const EXT_LANG = { rs: 'rust', py: 'python', js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript', html: 'xml', htm: 'xml', css: 'css', scss: 'scss', json: 'json', md: 'markdown', markdown: 'markdown', sh: 'bash', bash: 'bash', c: 'c', cpp: 'cpp', h: 'cpp', java: 'java', rb: 'ruby', go: 'go', php: 'php', sql: 'sql', yml: 'yaml', yaml: 'yaml', toml: 'ini', ini: 'ini', lua: 'lua', glsl: 'glsl', vert: 'glsl', frag: 'glsl', xml: 'xml', svg: 'xml', kt: 'kotlin', swift: 'swift', vue: 'xml' };
 const EXT_COLOR = { py: '#4b8bf4', js: '#e6b73a', jsx: '#e6b73a', mjs: '#e6b73a', ts: '#3a8ddb', tsx: '#3a8ddb', html: '#e3683c', htm: '#e3683c', css: '#3f7ff0', scss: '#cd6799', json: '#9aa0a6', md: '#8a93a0', markdown: '#8a93a0', sh: '#5bbd6a', bash: '#5bbd6a', rs: '#d6a07a', c: '#6b78c4', cpp: '#6b78c4', h: '#6b78c4', java: '#c0824a', rb: '#c5413b', go: '#39c0d4', php: '#8a8fd0', sql: '#d99440', yml: '#cb4b3e', yaml: '#cb4b3e', toml: '#b08b54', lua: '#5b8df0', svg: '#e3683c', xml: '#e3683c', txt: '#9aa0a6', csv: '#5bbd6a', zip: '#b48ad6' };
@@ -51,6 +56,10 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
   const loadTok = useRef(0);
   const ext = extOf(path);
   const isLive = liveText != null;
+  const canPreview = PREVIEW_HTML.has(ext) || PREVIEW_MD.has(ext);
+  const [mode, setMode] = useState(() => (PREVIEW_HTML.has(ext) ? 'preview' : 'code'));
+  useEffect(() => { setMode(PREVIEW_HTML.has(extOf(path)) ? 'preview' : 'code'); }, [path]);
+  const previewOn = canPreview && mode === 'preview' && !isLive && !diff;
   const liveEdit = isLive && liveInfo && liveInfo.tool === 'str_replace';
   const streamText = isLive ? liveText : (!committed && pendingText != null ? pendingText : null);
   const fromStream = streamText != null;
@@ -182,7 +191,13 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
           {!isLive && viewing && <span className={'art-ver' + (stale ? ' stale' : '')}>v{viewing}{stale ? ` of ${current}` : ''}</span>}
         </div>
         <div className="art-vactions">
-          {showText && !diff && <button className={'art-btn icon' + (wrap ? ' on' : '')} onClick={() => setWrap(w => !w)} title="Toggle word wrap">↩</button>}
+          {canPreview && !isLive && showText && (
+            <div className="art-mode-seg">
+              <button className={mode === 'preview' ? 'on' : ''} onClick={() => setMode('preview')}>Preview</button>
+              <button className={mode === 'code' ? 'on' : ''} onClick={() => setMode('code')}>Code</button>
+            </div>
+          )}
+          {showText && !diff && !previewOn && <button className={'art-btn icon' + (wrap ? ' on' : '')} onClick={() => setWrap(w => !w)} title="Toggle word wrap">↩</button>}
           {!isLive && data?.text != null && viewing > 1 && (
             <button className={'art-btn icon' + (diff ? ' on' : '')} onClick={() => setDiff(d => !d)} title="Show changes from previous version">Diff</button>
           )}
@@ -228,7 +243,12 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
                   <span className="live-caret diff" />
                 </div>
         )}
-        {!liveEdit && showText && !diff && (
+        {!liveEdit && showText && !diff && previewOn && (
+          PREVIEW_MD.has(ext)
+            ? <div className="art-md"><Markdown>{shownText || ''}</Markdown></div>
+            : <iframe className="art-preview-frame" sandbox="allow-scripts" srcDoc={shownText || ''} title={baseName(path)} />
+        )}
+        {!liveEdit && showText && !diff && !previewOn && (
           <div className={'art-code' + (isLive ? ' live' : '') + (wrap ? ' wrap' : '')}>
             <div className="art-gutter">{lines.map((_, i) => <div key={i}>{i + 1}</div>)}</div>
             <pre><code className="hljs" dangerouslySetInnerHTML={{ __html: html }} />{isLive && <span className="live-caret" />}</pre>
@@ -254,11 +274,18 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
               </div>
         )}
         {!isLive && data && data.binary && (
-          <div className="art-binary">
-            <div className="art-binary-icon"><FileChip ext={ext} size="lg" /></div>
-            <div className="art-bname">{baseName(path)}</div>
-            <a className="btn primary" href={data.downloadUrl}><Download style={{ width: 15, verticalAlign: '-2px' }} /> Download</a>
-          </div>
+          IMAGE_EXT.has(ext) ? (
+            <div className="art-imgwrap">
+              <img className="art-img" src={data.downloadUrl} alt={baseName(path)} />
+              <a className="btn primary art-img-dl" href={data.downloadUrl}><Download style={{ width: 15, verticalAlign: '-2px' }} /> Download</a>
+            </div>
+          ) : (
+            <div className="art-binary">
+              <div className="art-binary-icon"><FileChip ext={ext} size="lg" /></div>
+              <div className="art-bname">{baseName(path)}</div>
+              <a className="btn primary" href={data.downloadUrl}><Download style={{ width: 15, verticalAlign: '-2px' }} /> Download</a>
+            </div>
+          )
         )}
       </div>
     </div>

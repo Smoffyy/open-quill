@@ -30,7 +30,6 @@ import Lightbox from './components/Lightbox.jsx';
 import ShortcutsModal from './components/ShortcutsModal.jsx';
 import { toast } from './toast.js';
 import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu } from './components/icons.jsx';
-import { scanTools } from './toolproto.js';
 
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: 'Assistants can make mistakes, double-check responses.', greetings: ['How can I help you?'], appIcon: '', quickPrompts: [], version: '' };
 
@@ -56,39 +55,6 @@ function QuickPrompts({ prompts, visible, disabled, onPick }) {
       ))}
     </div>
   );
-}
-
-function filesFromCalls(calls) {
-  const files = {};
-  for (const { call } of calls) {
-    const tool = call.tool, p = call.path;
-    if (tool === 'create_file') { if (p) files[p] = typeof call.content === 'string' ? call.content : null; }
-    else if (tool === 'str_replace') { if (p && !(p in files)) files[p] = null; }
-    else if (tool === 'delete_file') { if (p) delete files[p]; }
-    else if (tool === 'rename_file' || tool === 'move_file') {
-      const np = call.new_path;
-      if (p) { if (np) files[np] = files[p] ?? null; delete files[p]; }
-    }
-    else if (tool === 'copy_file') {
-      const np = call.new_path;
-      if (np) files[np] = files[p] ?? null;
-    }
-  }
-  return files;
-}
-function parseStreamedFiles(text) { return filesFromCalls(scanTools(text).calls); }
-
-function parseLiveFile(text) {
-  const re = /(^|\n)([<\[(|]\s*[|]?\s*tool\b)/gi;
-  let lastOpen = -1, m;
-  while ((m = re.exec(text))) lastOpen = m.index + (m[1] ? m[1].length : 0);
-  if (lastOpen === -1) return null;
-  const seg = text.slice(lastOpen);
-  if (seg.indexOf('[[OQR:') !== -1) return null;
-  const { live } = scanTools(seg);
-  if (!live || !live.path) return null;
-  if (live.tool !== 'create_file' && live.tool !== 'str_replace') return null;
-  return { path: live.path, content: live.content || '', tool: live.tool, oldStr: live.oldStr ?? null };
 }
 
 function CompactingBar() {
@@ -207,7 +173,7 @@ export default function App() {
   const [webSearch, setWebSearch] = useState(false);
   const [files, setFiles] = useState([]);
   const [liveFile, setLiveFile] = useState(null);
-  const [pendingFiles, setPendingFiles] = useState({});
+  const [liveCall, setLiveCall] = useState(null);
   const [compacting, setCompacting] = useState(false);
   const [hasSummary, setHasSummary] = useState(false);
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
@@ -243,8 +209,9 @@ export default function App() {
   const targetContent = useRef('');
   const targetReason = useRef('');
   const pendingDone = useRef(false);
-  const doneBlocksRef = useRef(0);
   const liveRef = useRef(null);
+  const selectingRef = useRef(false);
+  const hasSelectionRef = useRef(false);
   const assistantIdRef = useRef(null);
   const revealTimer = useRef(null);
   const followRaf = useRef(0);
@@ -290,6 +257,7 @@ export default function App() {
     api.get('/api/me').then(({ user }) => setUser(user)).catch(() => setUser(null));
   }, []);
   useEffect(() => {
+    if (!user) return;
     applyPrefs(user?.prefs);
     const t = user?.prefs?.theme || 'dark';
     if (t === 'system' && window.matchMedia) {
@@ -315,6 +283,26 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPop);
   }, []);
   useEffect(() => { syncView(); }, [activeId, incognito]);
+  useEffect(() => {
+    const down = (e) => { if (scrollRef.current && scrollRef.current.contains(e.target)) selectingRef.current = true; };
+    const up = () => { selectingRef.current = false; };
+    const selChange = () => {
+      let has = false;
+      try {
+        const sel = window.getSelection();
+        has = !!(sel && !sel.isCollapsed && sel.rangeCount && scrollRef.current && scrollRef.current.contains(sel.getRangeAt(0).commonAncestorContainer));
+      } catch { has = false; }
+      hasSelectionRef.current = has;
+    };
+    document.addEventListener('pointerdown', down, true);
+    document.addEventListener('pointerup', up, true);
+    document.addEventListener('selectionchange', selChange);
+    return () => {
+      document.removeEventListener('pointerdown', down, true);
+      document.removeEventListener('pointerup', up, true);
+      document.removeEventListener('selectionchange', selChange);
+    };
+  }, []);
   useEffect(() => {
     const h = (e) => {
       const p = e.detail?.path;
@@ -370,6 +358,12 @@ export default function App() {
   async function loadChats() { try { setChats(await api.get('/api/chats')); } catch {} finally { setChatsLoaded(true); } }
   async function loadFolders() { try { setFolders(await api.get('/api/folders')); } catch {} }
   async function loadAppConfig() { try { applyCfg(await api.get('/api/app-config')); } catch {} }
+  useEffect(() => {
+    const appName = cfg.appName || 'open-quill';
+    if (incognito) { document.title = 'Incognito chat - ' + appName; return; }
+    const active = activeId ? chats.find(c => c.id === activeId) : null;
+    document.title = active ? `${active.title || 'Untitled chat'} - ${appName}` : `New chat - ${appName}`;
+  }, [activeId, chats, cfg.appName, incognito]);
   async function refreshSpacesPending() { try { const l = await api.get('/api/spaces'); setSpacesPending(l.filter(s => s.myStatus === 'invited').length); } catch {} }
   async function exportAllChats() { window.open('/api/chats/export-all', '_blank'); }
   async function importChatsFile(file) {
@@ -384,7 +378,7 @@ export default function App() {
     setCfg(c);
     const list = c.greetings && c.greetings.length ? c.greetings : DEFAULT_CFG.greetings;
     setGreeting(list[Math.floor(Math.random() * list.length)]);
-    document.title = c.appName || 'open-quill';
+    document.documentElement.setAttribute('data-font', c.appFont === 'sans' ? 'sans' : 'serif');
     let link = document.querySelector('link[rel="icon"]');
     if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
     link.href = c.appIcon || '/starburst.svg';
@@ -415,7 +409,7 @@ export default function App() {
   function activeKey() { return incognitoRef.current ? 'incognito' : activeIdRef.current; }
   function recFor(key) {
     let r = gen.current.get(key);
-    if (!r) { r = { content: '', reasoning: '', phase: 'generating', done: false, assistantId: null, model_id: currentIdRef.current, blocks: 0 }; gen.current.set(key, r); }
+    if (!r) { r = { content: '', reasoning: '', phase: 'generating', done: false, assistantId: null, model_id: currentIdRef.current, live: null }; gen.current.set(key, r); }
     return r;
   }
 
@@ -430,8 +424,35 @@ export default function App() {
     if (m.type === 'files') {
       if (m.chatId && m.chatId !== activeIdRef.current) return;
       setFiles(m.files || []);
-      const r = gen.current.get(m.chatId);
-      setLiveFile(r && !r.done ? parseLiveFile(r.content) : null);
+      const lf = liveRef.current;
+      if (lf && lf.path && (m.files || []).some(f => f.path === lf.path)) { liveRef.current = null; setLiveFile(null); }
+      return;
+    }
+    if (m.type === 'tool_live') {
+      const r = recFor(m.chatId); r.live = m.live || null;
+      if (m.chatId !== activeKey()) return;
+      const live = m.live;
+      if (live && live.path && (live.tool === 'create_file' || live.tool === 'str_replace')) {
+        const lf = { path: live.path, content: live.content || '', tool: live.tool, oldStr: live.oldStr ?? null };
+        liveRef.current = lf; setLiveFile(lf);
+      } else if (!live) {
+        liveRef.current = null; setLiveFile(null);
+      }
+      setLiveCall(live && live.tool ? { ...live } : null);
+      return;
+    }
+    if (m.type === 'tool_live_delta') {
+      const r = recFor(m.chatId);
+      if (r.live && r.live.tool) r.live = { ...r.live, content: (r.live.content || '') + m.text };
+      if (m.chatId !== activeKey()) return;
+      const lf = liveRef.current;
+      if (lf) { const nf = { ...lf, content: (lf.content || '') + m.text }; liveRef.current = nf; setLiveFile(nf); }
+      return;
+    }
+    if (m.type === 'tool_exec') {
+      const r = recFor(m.chatId); r.live = m.call || null;
+      if (m.chatId !== activeKey()) return;
+      if (m.call && m.call.tool) setLiveCall(m.call);
       return;
     }
     if (m.type === 'tool') { return; }
@@ -445,10 +466,10 @@ export default function App() {
     }
     if (m.type === 'start') {
       const r = recFor(m.chatId);
-      r.content = ''; r.reasoning = ''; r.phase = 'generating'; r.done = false; r.error = false; r.assistantId = m.messageId; r.blocks = 0;
+      r.content = ''; r.reasoning = ''; r.phase = 'generating'; r.done = false; r.error = false; r.assistantId = m.messageId; r.live = null;
       if (m.chatId === activeKey()) {
         refreshSeq.current++;
-        setCompacting(false); setLiveFile(null); setPendingFiles({}); doneBlocksRef.current = 0;
+        setCompacting(false); setLiveFile(null); setLiveCall(null); liveRef.current = null;
         targetContent.current = ''; targetReason.current = ''; pendingDone.current = false;
         assistantIdRef.current = m.messageId; dispLen.current = 0;
         setDispContent(''); setDispReason(''); setPhase('generating'); setStreaming(true); setQueued(false);
@@ -471,16 +492,7 @@ export default function App() {
       if (m.chatId === activeKey()) {
         targetContent.current = r.content;
         setPhase('generating');
-        if (/[|<]/.test(m.text) || liveRef.current) {
-          const lf = parseLiveFile(r.content);
-          liveRef.current = lf;
-          setLiveFile(lf);
-        }
-        if (/[|<]/.test(m.text)) {
-          const { calls } = scanTools(r.content);
-          if (calls.length !== doneBlocksRef.current) { doneBlocksRef.current = calls.length; setPendingFiles(filesFromCalls(calls)); }
-        }
-        if (m.text.indexOf('[[OQR:') !== -1) { dispLen.current = r.content.length; setDispContent(r.content); }
+        if (m.text.indexOf('[[OQR:') !== -1) { dispLen.current = r.content.length; setDispContent(r.content); setLiveCall(null); }
         else if (!animateRef.current) { setDispContent(r.content); dispLen.current = r.content.length; }
       }
       return;
@@ -536,7 +548,7 @@ export default function App() {
 
   function follow() {
     const el = scrollRef.current;
-    if (el && stick.current) {
+    if (el && stick.current && !selectingRef.current && !hasSelectionRef.current) {
       const target = el.scrollHeight - el.clientHeight;
       const diff = target - el.scrollTop;
       if (diff > 0.5) { programmatic.current = true; el.scrollTop = el.scrollTop + Math.max(1, diff * 0.2); }
@@ -556,11 +568,11 @@ export default function App() {
     const mid = r ? r.model_id : currentIdRef.current;
     gen.current.delete(key);
     setStreaming(false); setPhase('static'); setQueued(false);
-    setMessages(ms => [...ms, { id, role: 'assistant', content, reasoning, model_id: mid }]);
+    setMessages(ms => ms.some(m => m.id === id) ? ms : [...ms, { id, role: 'assistant', content, reasoning, model_id: mid }]);
     setDispContent(''); setDispReason('');
-    setLiveFile(null); setPendingFiles({}); doneBlocksRef.current = 0;
+    setLiveFile(null); setLiveCall(null); liveRef.current = null;
     targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
-    if (stick.current) setTimeout(() => scrollBottom(false), 0);
+    if (stick.current && !selectingRef.current && !hasSelectionRef.current) setTimeout(() => scrollBottom(false), 0);
     if (key === 'incognito') return;
     loadChats();
     if (key) refreshMessages(key);
@@ -580,9 +592,14 @@ export default function App() {
       refreshSeq.current++;
       targetContent.current = r.content; targetReason.current = r.reasoning;
       assistantIdRef.current = r.assistantId; pendingDone.current = false;
-      doneBlocksRef.current = r.blocks || 0; dispLen.current = r.content.length;
+      dispLen.current = r.content.length;
       setDispContent(r.content); setDispReason(r.reasoning);
-      setLiveFile(null); setPendingFiles(parseStreamedFiles(r.content));
+      const live = r.live;
+      if (live && live.path && (live.tool === 'create_file' || live.tool === 'str_replace')) {
+        const lf = { path: live.path, content: live.content || '', tool: live.tool, oldStr: live.oldStr ?? null };
+        liveRef.current = lf; setLiveFile(lf);
+      } else { liveRef.current = null; setLiveFile(null); }
+      setLiveCall(live && live.tool ? { ...live } : null);
       setPhase(r.phase === 'thinking' ? 'thinking' : 'generating');
       setStreaming(true); setQueued(r.phase === 'queued');
       startStream();
@@ -591,6 +608,7 @@ export default function App() {
       targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
       setStreaming(false); setQueued(false); setPhase('static');
       setDispContent(''); setDispReason('');
+      setLiveCall(null);
     }
   }
   async function refreshMessages(id) {
@@ -704,7 +722,7 @@ export default function App() {
     setMobileDrawer(false);
     if (incognito) setIncognito(false);
     setShowProjects(false);
-    if (id !== activeIdRef.current) { setLiveFile(null); setPendingFiles({}); setArtifactFocus(null); doneBlocksRef.current = 0; }
+    if (id !== activeIdRef.current) { setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null); }
     setActiveId(id);
     try {
       const { chat, messages } = await api.get('/api/chats/' + id);
@@ -734,7 +752,7 @@ export default function App() {
     setShowProjects(false);
     setCurrentProject(null);
     setActiveId(null); setMessages([]); setInput('');
-    setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingFiles({}); setArtifactFocus(null);
+    setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
     const m = models.find(m => m.id === currentId);
     setSandbox(m?.sandboxAllowed !== false && !!m?.sandboxAuto);
     setWebSearch(!!cfg.webSearchAvailable && m?.webSearchAllowed !== false && !!m?.webSearchAuto);
@@ -749,7 +767,7 @@ export default function App() {
       setFocusTick(t => t + 1);
     } else {
       setActiveId(null); setMessages([]); setInput('');
-      setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingFiles({}); setArtifactFocus(null);
+      setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
       setSandbox(false);
       const gs = ['Greetings, whoever you are', 'No names, no traces', 'This one stays between us', 'Off the record'];
       setIncognitoGreeting(gs[Math.floor(Math.random() * gs.length)]);
@@ -821,7 +839,7 @@ export default function App() {
         .map(m => ({ role: m.role, content: m.content })),
         { role: 'user', content: text }];
       if (!wsSend({ type: 'incognito', modelId: currentId, extended, messages: history })) return;
-      gen.current.set('incognito', { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, blocks: 0 });
+      gen.current.set('incognito', { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
       setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments: [], _enter: true }]);
       setInput('');
       stick.current = true; setTimeout(() => scrollBottom(true), 20);
@@ -836,7 +854,7 @@ export default function App() {
       history.pushState({}, '', '/chat/' + chatId);
     }
     if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, content: text, attachments, sandbox, webSearch })) return;
-    gen.current.set(chatId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, blocks: 0 });
+    gen.current.set(chatId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
     setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     setInput('');
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
@@ -851,10 +869,10 @@ export default function App() {
     setShowProjects(false); setProjectOpenId(null);
     setCurrentProject(project);
     setActiveId(c.id); setMessages([]); setInput('');
-    setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setPendingFiles({}); setArtifactFocus(null);
+    setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
     history.pushState({}, '', '/chat/' + c.id);
     if (!wsSend({ type: 'chat', chatId: c.id, modelId: currentId, extended, content: text, attachments, sandbox, webSearch })) return;
-    gen.current.set(c.id, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, blocks: 0 });
+    gen.current.set(c.id, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
     setMessages([{ id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
   }
@@ -881,7 +899,7 @@ export default function App() {
   const regenerate = useCallback((messageId) => {
     if (streaming || !activeId || !currentId) return;
     if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, messageId, sandbox, webSearch })) return;
-    gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, blocks: 0 });
+    gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
   }, [streaming, activeId, currentId, extended, sandbox, webSearch]);
@@ -890,7 +908,7 @@ export default function App() {
     if (streaming || !activeId || !modelId) return;
     setCurrentId(modelId);
     if (!wsSend({ type: 'regenerate', chatId: activeId, modelId, extended, messageId, sandbox, webSearch })) return;
-    gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: modelId, blocks: 0 });
+    gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: modelId, live: null });
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
     const mm = models.find(m => m.id === modelId);
@@ -902,7 +920,7 @@ export default function App() {
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); if (idx === -1) return ms; const copy = ms.slice(0, idx + 1); copy[idx] = { ...copy[idx], content: newContent }; return copy; });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
     if (!wsSend({ type: 'edit', chatId: activeId, modelId: currentId, extended, messageId, content: newContent, sandbox, webSearch })) return;
-    gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, blocks: 0 });
+    gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
   }, [streaming, activeId, currentId, extended, sandbox, webSearch]);
 
   function stop() { const key = activeKey(); try { ws.current?.readyState === 1 && ws.current.send(JSON.stringify({ type: 'stop', chatId: key })); } catch {} pendingDone.current = true; setQueued(false); }
@@ -961,7 +979,7 @@ export default function App() {
     <div className={'app' + (incognito ? ' app-incognito' : '') + (intro ? ' intro' : '') + (bgVisible ? ' has-bg' : '') + (collapsed ? ' sb-collapsed' : '')}>
       <AppBackground bg={activeBg} />
       {intro && <div className="intro-curtain" />}
-      <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName}
+      <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName} onSearch={() => setShowSearch(true)}
         folders={folders} onCreateFolder={createFolder} onRenameFolder={renameFolder} onToggleFolder={toggleFolder} onDeleteFolder={deleteFolder} onMoveChat={moveChatToFolder}
         onNew={newChat} onOpen={openChat} onDelete={deleteChat} onToggleStar={toggleStar}
         collapsed={collapsed} onToggle={() => setCollapsed(c => !c)}
@@ -1050,9 +1068,6 @@ export default function App() {
                 </div>
               )}
               <div className="topbar-actions">
-                <button className="paper-btn" onClick={() => setShowSearch(true)} title="Search chats (Ctrl+Shift+F)">
-                  <Search style={{ width: 18 }} />
-                </button>
                 {!incognito && (
                   <button className="paper-btn" onClick={toggleIncognito} title="Incognito chat — not saved" disabled={streaming || queued}>
                     <Ghost style={{ width: 18 }} />
@@ -1075,13 +1090,19 @@ export default function App() {
             </div>
             <div className="scroll-area" ref={scrollRef} onScroll={onScroll} onWheel={onWheel} onTouchMove={onTouchMove}>
               <div className={'thread' + (threadStagger ? ' stagger' : '')}>
-                {(() => { const lastA = !streaming ? [...messages].reverse().find(m => m.role === 'assistant') : null; return messages.map(msg => (
-                  <Message key={msg._k || msg.id} msg={msg} model={models.find(x => x.id === msg.model_id) || model} models={models} currentId={currentId} chatId={activeId} pins={chatPins} onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin} showIcon={msg.role === 'assistant' && lastA && msg.id === lastA.id} />
-                )); })()}
-                {streaming && (
-                  <Message msg={{ role: 'assistant', content: dispContent, reasoning: dispReason }}
-                    model={model} streaming phase={phase} />
-                )}
+                {(() => {
+                  const streamKey = assistantIdRef.current || '_stream';
+                  const renderList = streaming
+                    ? [...messages.filter(m => m.id !== streamKey), { id: streamKey, _k: streamKey, role: 'assistant', content: dispContent, reasoning: dispReason, model_id: currentId, _streaming: true }]
+                    : messages;
+                  const lastA = [...renderList].reverse().find(m => m.role === 'assistant');
+                  return renderList.map(msg => (
+                    <Message key={msg._k || msg.id} msg={msg} model={models.find(x => x.id === msg.model_id) || model} models={models} currentId={currentId} chatId={activeId} pins={chatPins}
+                      streaming={!!msg._streaming} phase={msg._streaming ? phase : 'static'} liveCall={msg._streaming ? liveCall : null}
+                      onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
+                      showIcon={msg.role === 'assistant' && lastA && msg.id === lastA.id} />
+                  ));
+                })()}
                 {queued && !streaming && (
                   <div className="msg assistant"><div className="queue-wait"><img src="/starburst.svg" className="pulse think-dot" alt="" /> Waiting for queue…</div></div>
                 )}
@@ -1099,7 +1120,7 @@ export default function App() {
       </div>
 
       {artifactsOpen && activeId && (
-        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} pending={pendingFiles} focus={artifactFocus} onClose={() => setArtifactsOpen(false)} />
+        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} focus={artifactFocus} onClose={() => setArtifactsOpen(false)} />
       )}
 
       {summaryOpen && activeId && (

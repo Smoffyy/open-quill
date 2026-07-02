@@ -20,6 +20,10 @@ export function listVersions(chatId, rel) { try { return fs.readdirSync(histDir(
 export function readVersion(chatId, rel, v) { try { return fs.readFileSync(path.join(histDir(chatId, rel), 'v' + v), 'utf8'); } catch { return null; } }
 const TEXT_EXT = new Set(['txt', 'md', 'markdown', 'csv', 'tsv', 'json', 'js', 'jsx', 'ts', 'tsx', 'py', 'lua', 'html', 'htm', 'css', 'scss', 'xml', 'yml', 'yaml', 'sh', 'bash', 'c', 'cpp', 'h', 'hpp', 'java', 'rb', 'go', 'rs', 'php', 'sql', 'ini', 'cfg', 'toml', 'log', 'glsl', 'vert', 'frag', 'svg', 'gitignore', 'env', 'kt', 'swift', 'dart', 'r', 'm', 'vue', 'svelte' ]);
 
+export const IGNORED_DIRS = new Set(['node_modules', '.git', '.hg', '.svn', '__pycache__', '.venv', 'venv', '.cache', '.npm', '.pnpm-store', '.next', '.nuxt', '.turbo', '.parcel-cache', 'dist', 'build', 'out', 'target', 'coverage', '.pytest_cache', '.mypy_cache', '.gradle', '.idea', '.vscode', 'vendor', 'bower_components', '.tox', '.eggs', 'site-packages']);
+export function isIgnoredDir(name) { return IGNORED_DIRS.has(name) || name.endsWith('.egg-info'); }
+export function isIgnoredPath(rel) { return String(rel || '').split('/').slice(0, -1).some(isIgnoredDir); }
+
 export function dirFor(chatId) {
   const d = path.join(SANDBOX_ROOT, String(chatId).replace(/[^a-zA-Z0-9_-]/g, ''));
   return d;
@@ -67,21 +71,35 @@ function lineDelta(prev, next) {
   return { adds, dels };
 }
 
-export function list(chatId) {
+export function list(chatId, opts = {}) {
+  const includeIgnored = !!opts.includeIgnored;
   const root = dirFor(chatId);
   const meta = readMeta(chatId);
   const out = [];
+  let hidden = 0;
+  const countAll = (dir) => {
+    let n = 0;
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return 0; }
+    for (const e of entries) { if (e.isDirectory()) n += countAll(path.join(dir, e.name)); else n++; }
+    return n;
+  };
   const walk = (dir, base) => {
     let entries = [];
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
       const rel = base ? base + '/' + e.name : e.name;
-      if (e.isDirectory()) walk(path.join(dir, e.name), rel);
+      if (e.isDirectory()) {
+        if (!includeIgnored && isIgnoredDir(e.name)) { hidden += countAll(path.join(dir, e.name)); continue; }
+        walk(path.join(dir, e.name), rel);
+      }
       else { let size = 0; try { size = fs.statSync(path.join(dir, e.name)).size; } catch {} out.push({ path: rel, ext: extOf(e.name), size, v: meta[rel]?.v || 1 }); }
     }
   };
   walk(root, '');
-  return out.sort((a, b) => a.path.localeCompare(b.path));
+  const sorted = out.sort((a, b) => a.path.localeCompare(b.path));
+  if (opts.withHidden) return { files: sorted, hidden };
+  return sorted;
 }
 export function remove(chatId) { try { fs.rmSync(dirFor(chatId), { recursive: true, force: true }); } catch {} try { fs.rmSync(metaPath(chatId), { force: true }); } catch {} try { fs.rmSync(histRoot(chatId), { recursive: true, force: true }); } catch {} }
 export function clearAll(chatId) {
@@ -197,7 +215,7 @@ export function search(chatId, query, filter) {
   const q = String(query).toLowerCase();
   const out = [];
   for (const f of list(chatId)) {
-    if (f.ext === 'zip' || !isText(f.path)) continue;
+    if (f.ext === 'zip' || !isText(f.path) || isIgnoredPath(f.path)) continue;
     if (filter && !f.path.toLowerCase().includes(String(filter).toLowerCase())) continue;
     const txt = readText(chatId, f.path); if (txt == null) continue;
     const lines = txt.split('\n');
@@ -387,7 +405,11 @@ export function bash(chatId, cmd, timeoutMs = 60000) {
 export async function execTool(chatId, call, maxBytes = 0) {
   try {
     switch (call.tool) {
-      case 'bash': case 'run': return await bash(chatId, call.cmd ?? call.command);
+      case 'bash': case 'run': {
+        const t = parseInt(call.timeout_s ?? call.timeout);
+        const ms = Number.isFinite(t) && t > 0 ? Math.min(t, 300) * 1000 : 60000;
+        return await bash(chatId, call.cmd ?? call.command, ms);
+      }
       case 'create_file': { const sz = Buffer.byteLength(String(call.content ?? ''), 'utf8'); if (overCap(chatId, sz, maxBytes)) return capError(maxBytes); return createFile(chatId, call.path, call.content); }
       case 'str_replace': return strReplace(chatId, call.path, call.old_str, call.new_str);
       case 'view': return view(chatId, call.path, call.start, call.end);

@@ -4,6 +4,7 @@ import { copyText } from '../clipboard.js';
 import { openLightbox } from '../lightbox.js';
 import ReasoningBlock from './ReasoningBlock.jsx';
 import BranchCompare from './BranchCompare.jsx';
+import ToolCard from './ToolCard.jsx';
 import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin } from './icons.jsx';
 
 function Columns(props) {
@@ -113,7 +114,17 @@ function ModelIcon({ model, phase, below, name }) {
   );
 }
 
-function Message({ msg, model, models, currentId, streaming, phase, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onSelectBranch, onFork, onTogglePin, showIcon = true }) {
+function Message({ msg, model, models, currentId, streaming, phase, liveCall, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onSelectBranch, onFork, onTogglePin, showIcon = true }) {
+  const [typing, setTyping] = useState(false);
+  const typingTimer = useRef(null);
+  useEffect(() => {
+    if (!streaming || !msg.content) { setTyping(false); return; }
+    setTyping(true);
+    clearTimeout(typingTimer.current);
+    const v = parseInt(document.documentElement.style.getPropertyValue('--caret-blink'));
+    typingTimer.current = setTimeout(() => setTyping(false), Number.isFinite(v) && v > 0 ? v : 500);
+    return () => clearTimeout(typingTimer.current);
+  }, [streaming, msg.content]);
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -181,9 +192,18 @@ function Message({ msg, model, models, currentId, streaming, phase, chatId, pins
     <>
       {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> Pinned</div>}
       <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} collapsible={model?.reasoningCollapsible !== false} />
-      {(msg.content || !streaming) && (
-        <div className={'assistant-body' + (streaming ? ' streaming' : '')}>
-          <Markdown streaming={streaming}>{msg.content}</Markdown>
+      {(msg.content || streaming) && (
+        <div className={'assistant-body' + (streaming ? ' streaming' : '') + (streaming && typing ? ' typing' : '')}>
+          {msg.content ? <Markdown streaming={streaming}>{msg.content}</Markdown> : null}
+          {streaming && liveCall && liveCall.tool && (
+            <div className="tool-live"><ToolCard call={liveCall} result={null} /></div>
+          )}
+          {streaming && !msg.content && !liveCall && <p className="stream-wait" aria-hidden="true"></p>}
+        </div>
+      )}
+      {streaming && msg.content && (
+        <div className="actions stream-actions">
+          <button className="action-btn" onClick={doCopy} title="Copy what's written so far">{copied ? <Check /> : <Copy />}</button>
         </div>
       )}
       {!streaming && msg.content && (

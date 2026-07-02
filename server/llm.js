@@ -77,14 +77,52 @@ function makeEmitter(model, onEvent) {
   return { emitContent, flush };
 }
 
-export async function streamCompletion({ model, messages, signal, onEvent }) {
+function normalizeMessages(protocol, messages) {
+  return messages.map(m => {
+    if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length) {
+      const calls = m.tool_calls.map((c, i) => ({
+        id: c.id || `call_${i}`,
+        type: 'function',
+        function: {
+          name: c.name || c.function?.name || '',
+          arguments: protocol === 'ollama'
+            ? (c.args ?? safeParse(c.argsText ?? c.function?.arguments) ?? {})
+            : (typeof c.argsText === 'string' ? c.argsText : JSON.stringify(c.args ?? safeParse(c.function?.arguments) ?? {}))
+        }
+      }));
+      return { role: 'assistant', content: m.content || '', tool_calls: calls };
+    }
+    if (m.role === 'tool') {
+      if (protocol === 'ollama') return { role: 'tool', tool_name: m.name || '', content: String(m.content ?? '') };
+      return { role: 'tool', tool_call_id: m.tool_call_id || '', content: String(m.content ?? '') };
+    }
+    return { role: m.role, content: m.content };
+  });
+}
+function safeParse(v) {
+  if (v == null) return null;
+  if (typeof v === 'object') return v;
+  try { return JSON.parse(v); } catch { return null; }
+}
+
+export async function streamCompletion({ model, messages, tools, signal, onEvent }) {
   const { spec, base, key } = modelProvider(model);
   const { emitContent, flush } = makeEmitter(model, onEvent);
+  const hasTools = Array.isArray(tools) && tools.length > 0;
+  const wire = normalizeMessages(spec.protocol, messages);
+  const pending = new Map();
+  let callSeq = 0;
+  const finishCalls = () => {
+    if (!pending.size) return;
+    const calls = [...pending.entries()].sort((a, b) => a[0] - b[0]).map(([, c]) => c).filter(c => c.name);
+    pending.clear();
+    if (calls.length) onEvent({ type: 'tool_calls', calls });
+  };
 
   if (spec.protocol === 'ollama') {
     const res = await fetch(endpoint(base, '/api/chat'), {
       method: 'POST', headers: authHeaders(key), signal,
-      body: JSON.stringify({ model: model.internal_name, messages, stream: true, think: !!model.has_reasoning, options: ollamaOptions(model, spec) })
+      body: JSON.stringify({ model: model.internal_name, messages: wire, stream: true, think: !!model.has_reasoning, options: ollamaOptions(model, spec), ...(hasTools ? { tools } : {}) })
     });
     if (!res.ok || !res.body) { const t = await res.text().catch(() => ''); throw new Error(`Upstream error ${res.status}: ${t.slice(0, 300)}`); }
     const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
@@ -95,6 +133,14 @@ export async function streamCompletion({ model, messages, signal, onEvent }) {
         const msg = json.message || {};
         if (msg.thinking) onEvent({ type: 'reasoning', text: msg.thinking });
         if (msg.content) emitContent(msg.content);
+        if (Array.isArray(msg.tool_calls)) {
+          for (const tc of msg.tool_calls) {
+            const idx = callSeq++;
+            const argsText = typeof tc.function?.arguments === 'string' ? tc.function.arguments : JSON.stringify(tc.function?.arguments ?? {});
+            pending.set(idx, { id: tc.id || `call_${idx}`, name: tc.function?.name || '', argsText });
+            onEvent({ type: 'tool_call_delta', index: idx, id: tc.id || `call_${idx}`, name: tc.function?.name || '', argsText });
+          }
+        }
         if (json.done) {
           const p = json.prompt_eval_count || 0, c = json.eval_count || 0;
           if (p || c) onEvent({ type: 'usage', usage: { prompt: p, completion: c, total: p + c } });
@@ -107,16 +153,16 @@ export async function streamCompletion({ model, messages, signal, onEvent }) {
       const { done, value } = await reader.read(); if (done) break;
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n'); buffer = lines.pop();
-      for (const line of lines) if (handle(line)) { flush(); return; }
+      for (const line of lines) if (handle(line)) { flush(); finishCalls(); return; }
     }
     buffer += decoder.decode();
     handle(buffer);
-    flush(); return;
+    flush(); finishCalls(); return;
   }
 
   const res = await fetch(endpoint(base, '/chat/completions'), {
     method: 'POST', headers: authHeaders(key), signal,
-    body: JSON.stringify({ model: model.internal_name, messages, stream: true, stream_options: { include_usage: true }, ...samplingParams(model, spec) })
+    body: JSON.stringify({ model: model.internal_name, messages: wire, stream: true, stream_options: { include_usage: true }, ...(hasTools ? { tools, tool_choice: 'auto' } : {}), ...samplingParams(model, spec) })
   });
   if (!res.ok || !res.body) { const t = await res.text().catch(() => ''); throw new Error(`Upstream error ${res.status}: ${t.slice(0, 300)}`); }
   const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
@@ -132,6 +178,17 @@ export async function streamCompletion({ model, messages, signal, onEvent }) {
       if (delta.reasoning_content) onEvent({ type: 'reasoning', text: delta.reasoning_content });
       if (delta.reasoning) onEvent({ type: 'reasoning', text: delta.reasoning });
       if (delta.content) emitContent(delta.content);
+      if (Array.isArray(delta.tool_calls)) {
+        for (const tc of delta.tool_calls) {
+          const idx = Number.isInteger(tc.index) ? tc.index : callSeq;
+          let cur = pending.get(idx);
+          if (!cur) { cur = { id: '', name: '', argsText: '' }; pending.set(idx, cur); callSeq = Math.max(callSeq, idx + 1); }
+          if (tc.id) cur.id = tc.id;
+          if (tc.function?.name) cur.name += tc.function.name;
+          if (typeof tc.function?.arguments === 'string') cur.argsText += tc.function.arguments;
+          onEvent({ type: 'tool_call_delta', index: idx, id: cur.id, name: cur.name, argsText: cur.argsText });
+        }
+      }
     } catch {}
     return false;
   };
@@ -139,11 +196,12 @@ export async function streamCompletion({ model, messages, signal, onEvent }) {
     const { done, value } = await reader.read(); if (done) break;
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n'); buffer = lines.pop();
-    for (const line of lines) if (handle(line)) { flush(); return; }
+    for (const line of lines) if (handle(line)) { flush(); finishCalls(); return; }
   }
   buffer += decoder.decode();
   handle(buffer);
   flush();
+  finishCalls();
 }
 
 export async function oneShot(model, messages) {

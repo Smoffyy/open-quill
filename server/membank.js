@@ -174,10 +174,7 @@ export function promptFor(introOverride) {
     if ((f.folder || '') !== curFolder) { curFolder = f.folder || ''; if (curFolder) p += `[${curFolder}]\n`; }
     p += `- ${f.name}${f.readable ? ` (${f.lines} lines, ${f.size} bytes)` : ` (${f.size} bytes, not readable as text)`}\n`;
   }
-  p += '\nTools (emit using the |TOOL| line protocol, same as other tools):\n';
-  p += '- mb_view — read a memory bank file. Provide `path` (the file name). Optionally provide `start` and `end` line numbers (1-indexed, inclusive) to read only a slice, which keeps context small.\n';
-  p += '- mb_search — search across all memory bank files for a term. Provide `query`.\n\n';
-  p += 'Example:\n|TOOL| mb_view\npath: policies.md\nstart: 1\nend: 40\n|/TOOL|\n\nRead only what you need. Do not paste entire large files if a line range suffices.';
+  p += '\nUse the `mb_view` function to read a file (pass `path`, and optional `start`/`end` line numbers to read only a slice) and `mb_search` to search across all files (pass `query`). Read only what you need — do not pull entire large files if a line range suffices.';
   return p;
 }
 

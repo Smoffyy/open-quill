@@ -1,6 +1,6 @@
 {
   "name": "open-quill-server",
-  "version": "2027.0.0-developer.5",
+  "version": "2027.0.0-developer.6",
   "private": true,
   "type": "module",
   "main": "index.js",
@@ -11,7 +11,7 @@
   "dependencies": {
     "argon2": "^0.44.0",
     "better-sqlite3-multiple-ciphers": "^12.11.1",
-    "cookie": "^2.0.0",
+    "cookie": "^2.0.1",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.2.0",

@@ -143,7 +143,7 @@ function FolderSection({ f, chats, active, showTrash, folders, dragChatId, onTog
 }
 
 export default function Sidebar({
-  user, chats, chatsLoaded = true, activeId, appName, onNew, onOpen, onDelete, onToggleStar,
+  user, chats, onSearch, chatsLoaded = true, activeId, appName, onNew, onOpen, onDelete, onToggleStar,
   folders = [], onCreateFolder, onRenameFolder, onToggleFolder, onDeleteFolder, onMoveChat,
   collapsed, onToggle, onSettings, onAdmin, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview,
   onSpaces, spacesPending = 0, projects = [], onProjects, onOpenProject, mobileOpen = false, onMobileClose
@@ -193,7 +193,7 @@ export default function Sidebar({
       <div className="sidebar-head">
         <div className="brand">{appName || 'open-quill'}</div>
         <div className="sidebar-head-actions">
-          <button className="icon-btn search-btn"><Search style={{ width: 17 }} /></button>
+          <button className="icon-btn search-btn" onClick={onSearch} title="Search chats (Ctrl+Shift+F)"><Search style={{ width: 17 }} /></button>
           <button className="icon-btn collapse-btn" onClick={onToggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}><Panel style={{ width: 17 }} /></button>
           <button className="icon-btn mobile-close-btn" onClick={onMobileClose} title="Close menu"><span style={{ fontSize: 20, lineHeight: 1 }}>✕</span></button>
         </div>

@@ -18,6 +18,11 @@ export function applyPrefs(prefs) {
   root.setAttribute('data-focusglow', prefs?.focusGlow ? 'on' : 'off');
   root.setAttribute('data-iconglow', prefs?.iconGlow ? 'on' : 'off');
   root.setAttribute('data-oled', prefs?.oledShift ? 'on' : 'off');
+  const blink = Math.max(150, Math.min(2000, parseInt(prefs?.cursorBlinkMs) || 500));
+  const pulse = Math.max(300, Math.min(4000, parseInt(prefs?.cursorPulseMs) || 1000));
+  root.style.setProperty('--caret-blink', blink + 'ms');
+  root.style.setProperty('--caret-cycle', (blink * 2) + 'ms');
+  root.style.setProperty('--caret-pulse', pulse + 'ms');
   if (prefs?.accent) root.style.setProperty('--accent', prefs.accent);
   else root.style.removeProperty('--accent');
 }

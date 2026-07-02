@@ -24,14 +24,7 @@ export function webSearchAvailable() {
 
 export function webSearchToolPrompt() {
   return `## Web search tool
-When web search is enabled you can run searches with the \`|TOOL|\` line protocol. Run a search like this:
-
-|TOOL| web_search
-query: your search query
-count: 5
-|/TOOL|
-
-After the call, stop and wait for the tool results (provided back to you as page contents with their URLs), then continue. "count" is optional and capped by the server. Keep queries focused; issue multiple searches if needed, one at a time.`;
+The \`web_search\` function is available. Call it with a focused \`query\` (and an optional \`count\`, capped by the server). Results come back as page contents with their URLs. Issue follow-up searches to refine when needed, and base your answer on the retrieved pages, citing the source URLs you relied on.`;
 }
 
 function hostOf(u) { try { return new URL(u).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; } }

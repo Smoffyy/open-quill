@@ -45,7 +45,13 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
   const [instructions, setInstructions] = useState(user.instructions || '');
   const instrRef = useRef(user.instructions || '');
   const importRef = useRef(null);
-  const [prefs, setPrefs] = useState({ animations: true, autoscroll: true, theme: 'system', accent: '', density: 'comfortable', messageEntrance: true, streamCursor: false, cursorStyle: 'block', revealMs: 40, chatStagger: true, themeFade: true, microFx: true, composerFx: true, iconGlow: false, focusGlow: false, oledShift: false, ...user.prefs });
+  const [prefs, setPrefs] = useState(() => {
+    const applied = document.documentElement.getAttribute('data-theme');
+    const fallbackTheme = applied === 'anthropic' ? 'dark' : (applied || 'system');
+    const merged = { animations: true, autoscroll: true, theme: 'system', accent: '', density: 'comfortable', messageEntrance: true, streamCursor: false, cursorStyle: 'block', cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40, chatStagger: true, themeFade: true, microFx: true, composerFx: true, iconGlow: false, focusGlow: false, oledShift: false, ...user.prefs };
+    if (!user.prefs || user.prefs.theme == null) merged.theme = fallbackTheme;
+    return merged;
+  });
   const [saved, setSaved] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const [delErr, setDelErr] = useState('');
@@ -149,19 +155,22 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
 
   return (
     <div className="overlay" onMouseDown={(e) => e.target.classList.contains('overlay') && onClose()}>
-      <div className="modal" style={{ position: 'relative', right: 100 }}>
+      <div className="modal">
         <button className="modal-close" onClick={onClose}>✕</button>
         <div className="modal-side">
           <div className="ms-label">Settings</div>
+          <div className="ms-group">Account</div>
           <button className={'modal-tab has-sub' + (tab === 'general' ? ' active' : '') + ((tab === 'general' || tab === 'version') ? ' open' : '')} onClick={() => setTab('general')}><Gear /> General <Chevron className="tab-chev" style={{ width: 13 }} /></button>
           {(tab === 'general' || tab === 'version') && (
             <button className={'modal-tab sub' + (tab === 'version' ? ' active' : '')} onClick={() => setTab('version')}><Info /> Version</button>
           )}
+          <button className={'modal-tab' + (tab === 'security' ? ' active' : '')} onClick={() => setTab('security')}><Shield /> Security</button>
+          <button className={'modal-tab' + (tab === 'sessions' ? ' active' : '')} onClick={() => setTab('sessions')}><Clock /> Sessions</button>
+          <div className="ms-group">Interface</div>
           <button className={'modal-tab' + (tab === 'appearance' ? ' active' : '')} onClick={() => setTab('appearance')}><Sun /> Appearance</button>
           <button className={'modal-tab' + (tab === 'chat' ? ' active' : '')} onClick={() => setTab('chat')}><Sliders /> Chat</button>
+          <div className="ms-group">Insights</div>
           <button className={'modal-tab' + (tab === 'usage' ? ' active' : '')} onClick={() => setTab('usage')}><Clock /> Usage</button>
-          <button className={'modal-tab' + (tab === 'sessions' ? ' active' : '')} onClick={() => setTab('sessions')}><Shield /> Sessions</button>
-          <button className={'modal-tab' + (tab === 'security' ? ' active' : '')} onClick={() => setTab('security')}><Gear /> Security</button>
         </div>
         <div className="modal-main">
           {tab === 'general' && (
@@ -346,6 +355,32 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                       </div>
                     </div>
                   )}
+                  {!!prefs.streamCursor && (prefs.cursorStyle || 'block') === 'block' && (() => {
+                    const bv = Math.max(150, Math.min(2000, parseInt(prefs.cursorBlinkMs) || 500));
+                    return (
+                      <div className="field">
+                        <label>Blink speed</label>
+                        <div className="reveal-row">
+                          <input type="range" min="150" max="2000" step="50" value={bv} onChange={(e) => setPref('cursorBlinkMs', parseInt(e.target.value))} />
+                          <span className="reveal-val">{bv} ms</span>
+                        </div>
+                        <div className="muted-note">How often the block cursor blinks while idle. It stays solid while text is actively streaming, like a terminal. Default 500 ms{bv !== 500 ? <> — <button className="linklike" onClick={() => setPref('cursorBlinkMs', 500)}>reset</button></> : ''}.</div>
+                      </div>
+                    );
+                  })()}
+                  {!!prefs.streamCursor && prefs.cursorStyle === 'circle' && (() => {
+                    const pv = Math.max(300, Math.min(4000, parseInt(prefs.cursorPulseMs) || 1000));
+                    return (
+                      <div className="field">
+                        <label>Pulse speed</label>
+                        <div className="reveal-row">
+                          <input type="range" min="300" max="4000" step="100" value={pv} onChange={(e) => setPref('cursorPulseMs', parseInt(e.target.value))} />
+                          <span className="reveal-val">{pv} ms</span>
+                        </div>
+                        <div className="muted-note">How quickly the circle grows and shrinks. Default 1000 ms{pv !== 1000 ? <> — <button className="linklike" onClick={() => setPref('cursorPulseMs', 1000)}>reset</button></> : ''}.</div>
+                      </div>
+                    );
+                  })()}
                 </>}
                 {chatSec === 'motion' && <>
                   <div className="field row">

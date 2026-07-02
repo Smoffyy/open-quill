@@ -67,16 +67,10 @@ export function remove(id) { save(list().filter(t => t.id !== id)); return { ok:
 export function promptFor(tools) {
   const enabled = (tools && tools.length) ? tools : getEnabled();
   if (!enabled.length) return '';
-  let p = '## Live data tools\nYou can call these admin-provided tools to fetch real-world, real-time information. Call them with the same `|TOOL|` line protocol used for other tools: a line `|TOOL| <name>`, then `key: value` argument lines, then `|/TOOL|`. After a call, stop and wait for the tool result before continuing.\n';
+  let p = '## Live data tools\nThe admin has provided these extra functions for fetching real-world, real-time information. Call them like any other function and wait for the result before continuing:\n';
   for (const t of enabled) {
-    p += `\n### ${t.name}\n${t.description || '(no description)'}\n`;
-    if (t.params.length) {
-      p += 'Arguments:\n';
-      for (const a of t.params) p += `- ${a.name}${a.required ? ' (required)' : ''}: ${a.desc || ''}\n`;
-      p += `\nExample:\n|TOOL| ${t.name}\n${t.params.map(a => `${a.name}: ...`).join('\n')}\n|/TOOL|\n`;
-    } else {
-      p += `\nExample:\n|TOOL| ${t.name}\n|/TOOL|\n`;
-    }
+    p += `\n- \`${t.name}\` — ${t.description || '(no description)'}`;
+    if (t.params.length) p += ` (args: ${t.params.map(a => a.name + (a.required ? '*' : '')).join(', ')})`;
   }
   return p.trim();
 }

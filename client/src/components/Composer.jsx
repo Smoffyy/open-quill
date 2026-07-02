@@ -43,12 +43,26 @@ export default function Composer({
   const [dragActive, setDragActive] = useState(false);
   const [glow, setGlow] = useState('var(--accent)');
   const [plusMenu, setPlusMenu] = useState(false);
+  const [plusDown, setPlusDown] = useState(false);
   const [promptsOpen, setPromptsOpen] = useState(false);
+  const promptsTimer = useRef(null);
+  const openPrompts = () => { clearTimeout(promptsTimer.current); setPromptsOpen(true); };
+  const closePrompts = (now) => {
+    clearTimeout(promptsTimer.current);
+    if (now === true) { setPromptsOpen(false); return; }
+    promptsTimer.current = setTimeout(() => setPromptsOpen(false), 160);
+  };
+  useEffect(() => () => clearTimeout(promptsTimer.current), []);
   const [showReason, setShowReason] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
 
   useEffect(() => {
     if (!plusMenu) { setPromptsOpen(false); return; }
+    const btn = plusRef.current && plusRef.current.querySelector('.plus');
+    if (btn) {
+      const r = btn.getBoundingClientRect();
+      setPlusDown(window.innerHeight - r.bottom > 320);
+    }
     const h = (e) => { if (plusRef.current && !plusRef.current.contains(e.target)) setPlusMenu(false); };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
@@ -234,50 +248,52 @@ export default function Composer({
               {enabledCount > 0 && <span className="plus-badge">{enabledCount}</span>}
             </button>
             {plusMenu && (
-              <div className="plus-menu">
+              <div className={'plus-menu' + (plusDown ? ' down' : '')}>
                 <button className="pm-item" onClick={() => { setPlusMenu(false); fileInput.current?.click(); }}>
-                  <FileText style={{ width: 17 }} />
+                  <FileText />
                   <span className="pm-label">{visionSupported ? 'Add files or photos' : 'Add files'}</span>
-                  <span className="pm-shortcut">⌘U</span>
+                  <span className="pm-shortcut">{/mac/i.test(navigator.platform) ? '⌘U' : 'Ctrl+U'}</span>
                 </button>
+                <div className="pm-divider" />
+                <div className="pm-subwrap" onMouseEnter={openPrompts} onMouseLeave={closePrompts}>
+                  <button className={'pm-item' + (promptsOpen ? ' active' : '')} onClick={() => (promptsOpen ? closePrompts(true) : openPrompts())}>
+                    <TextIcon />
+                    <span className="pm-label">Saved prompts</span>
+                    <Chevron className="pm-chev" />
+                  </button>
+                  {promptsOpen && (
+                    <div className="pm-sub" onMouseEnter={openPrompts} onMouseLeave={closePrompts}>
+                      {(savedPrompts || []).length === 0 && <div className="pm-empty">No saved prompts yet.</div>}
+                      {(savedPrompts || []).map(p => (
+                        <div key={p.id} className="pm-prompt">
+                          <button className="pm-prompt-use" title={p.text} onClick={() => { setPlusMenu(false); onUsePrompt && onUsePrompt(p.text); }}>
+                            <Star style={{ width: 13 }} /> <span className="pm-prompt-title">{p.title}</span>
+                          </button>
+                          {onDeletePrompt && <button className="pm-prompt-x" title="Delete" onClick={(e) => { e.stopPropagation(); onDeletePrompt(p.id); }}><X style={{ width: 12 }} /></button>}
+                        </div>
+                      ))}
+                      {onSavePrompt && value.trim() && (
+                        <button className="pm-save-prompt" onClick={() => { onSavePrompt(); setPromptsOpen(false); }}>
+                          <Plus style={{ width: 13 }} /> Save current text as prompt
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
                 {(sandboxAllowed || webSearchAvailable) && <div className="pm-divider" />}
                 {sandboxAllowed && (
                   <button className="pm-item" onClick={() => onToggleSandbox && onToggleSandbox()}>
-                    <Cube style={{ width: 17 }} />
+                    <Cube />
                     <span className="pm-label">Sandbox tools</span>
-                    <span className={'mini-switch' + (sandbox ? ' on' : '')}>{sandbox && <Check style={{ width: 12 }} />}</span>
+                    {sandbox && <Check className="pm-check" />}
                   </button>
                 )}
                 {webSearchAvailable && (
                   <button className="pm-item" onClick={() => onToggleWebSearch && onToggleWebSearch()}>
-                    <Globe style={{ width: 17 }} />
+                    <Globe />
                     <span className="pm-label">Web search</span>
-                    <span className={'mini-switch' + (webSearch ? ' on' : '')}>{webSearch && <Check style={{ width: 12 }} />}</span>
+                    {webSearch && <Check className="pm-check" />}
                   </button>
-                )}
-                <div className="pm-divider" />
-                <button className="pm-item" onClick={() => setPromptsOpen(o => !o)}>
-                  <TextIcon style={{ width: 17 }} />
-                  <span className="pm-label">Saved prompts</span>
-                  <Chevron style={{ width: 13, marginLeft: 'auto', color: 'var(--text-faint)', transform: promptsOpen ? 'rotate(90deg)' : 'none' }} />
-                </button>
-                {promptsOpen && (
-                  <div className="pm-prompts">
-                    {(savedPrompts || []).length === 0 && <div className="pm-empty">No saved prompts yet.</div>}
-                    {(savedPrompts || []).map(p => (
-                      <div key={p.id} className="pm-prompt">
-                        <button className="pm-prompt-use" title={p.text} onClick={() => { setPlusMenu(false); onUsePrompt && onUsePrompt(p.text); }}>
-                          <Star style={{ width: 13 }} /> <span className="pm-prompt-title">{p.title}</span>
-                        </button>
-                        {onDeletePrompt && <button className="pm-prompt-x" title="Delete" onClick={(e) => { e.stopPropagation(); onDeletePrompt(p.id); }}><X style={{ width: 12 }} /></button>}
-                      </div>
-                    ))}
-                    {onSavePrompt && value.trim() && (
-                      <button className="pm-save-prompt" onClick={() => { onSavePrompt(); setPromptsOpen(false); }}>
-                        <Plus style={{ width: 13 }} /> Save current text as prompt
-                      </button>
-                    )}
-                  </div>
                 )}
               </div>
             )}
