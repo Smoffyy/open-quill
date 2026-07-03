@@ -850,6 +850,7 @@ app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
   const m = db.models.insert({
     id: uid(), display_name: b.display_name || 'New model', description: b.description || '',
     internal_name: b.internal_name || 'local-model', system_prompt: b.system_prompt || '',
+    call_prompt: b.call_prompt || '',
     provider_id: b.provider_id || (getProviders()[0]?.id || null), max_tokens: parseInt(b.max_tokens) || null,
     has_reasoning: b.has_reasoning ? 1 : 0, reasoning_token: b.reasoning_token || '', non_reasoning_token: b.non_reasoning_token || '',
     reasoning_collapsible: b.reasoning_collapsible === false ? 0 : 1, icon_size: parseInt(b.icon_size) || 0,
@@ -876,7 +877,7 @@ app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
 app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
   const cur = db.models.byId(req.params.id);
   if (!cur) return res.status(404).json({ error: 'not found' });
-  const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id', 'bg_image'];
+  const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'call_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id', 'bg_image'];
   const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'tools_auto', 'tools_allowed', 'show_name'];
   const patch = {};
   for (const k of str) if (k in req.body) patch[k] = req.body[k];
@@ -1102,7 +1103,19 @@ app.get('/api/admin/settings', authMiddleware, adminOnly, (req, res) =>
     budgetWarnFraction: Number(getSetting('budget_warn_fraction', 0.8)) || 0.8,
     budgetEnforce: getSetting('budget_enforce', '0') === '1',
     sessionTtlDays: Number(getSetting('session_ttl_days', 30)) || 30,
-    maxSessions: Number(getSetting('max_sessions', 0)) || 0
+    maxSessions: Number(getSetting('max_sessions', 0)) || 0,
+    voiceMicEnabled: getSetting('voice_mic_enabled', '0') === '1',
+    voiceCallEnabled: getSetting('voice_call_enabled', '0') === '1',
+    voiceSttEngine: getSetting('voice_stt_engine', 'browser'),
+    voiceSttUrl: getSetting('voice_stt_url', ''),
+    voiceSttKey: getSetting('voice_stt_key', ''),
+    voiceSttModel: getSetting('voice_stt_model', 'whisper-1'),
+    voiceTtsEngine: getSetting('voice_tts_engine', 'browser'),
+    voiceTtsUrl: getSetting('voice_tts_url', ''),
+    voiceTtsKey: getSetting('voice_tts_key', ''),
+    voiceTtsModel: getSetting('voice_tts_model', 'tts-1'),
+    voiceTtsVoice: getSetting('voice_tts_voice', 'alloy'),
+    voiceTtsSpeed: Number(getSetting('voice_tts_speed', 1)) || 1
   }));
 app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
   if ('apiBaseUrl' in req.body) setSetting('api_base_url', req.body.apiBaseUrl);
@@ -1128,6 +1141,18 @@ app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
   if ('budgetEnforce' in req.body) setSetting('budget_enforce', req.body.budgetEnforce ? '1' : '0');
   if ('sessionTtlDays' in req.body) { const n = parseInt(req.body.sessionTtlDays); setSetting('session_ttl_days', String(Number.isFinite(n) && n > 0 ? Math.min(365, n) : 30)); }
   if ('maxSessions' in req.body) { const n = parseInt(req.body.maxSessions); setSetting('max_sessions', String(Number.isFinite(n) && n >= 0 ? Math.min(50, n) : 0)); }
+  if ('voiceMicEnabled' in req.body) setSetting('voice_mic_enabled', req.body.voiceMicEnabled ? '1' : '0');
+  if ('voiceCallEnabled' in req.body) setSetting('voice_call_enabled', req.body.voiceCallEnabled ? '1' : '0');
+  if ('voiceSttEngine' in req.body) setSetting('voice_stt_engine', req.body.voiceSttEngine === 'server' ? 'server' : 'browser');
+  if ('voiceSttUrl' in req.body) setSetting('voice_stt_url', String(req.body.voiceSttUrl || '').trim());
+  if ('voiceSttKey' in req.body) setSetting('voice_stt_key', String(req.body.voiceSttKey || '').trim());
+  if ('voiceSttModel' in req.body) setSetting('voice_stt_model', String(req.body.voiceSttModel || '').trim() || 'whisper-1');
+  if ('voiceTtsEngine' in req.body) setSetting('voice_tts_engine', req.body.voiceTtsEngine === 'server' ? 'server' : 'browser');
+  if ('voiceTtsUrl' in req.body) setSetting('voice_tts_url', String(req.body.voiceTtsUrl || '').trim());
+  if ('voiceTtsKey' in req.body) setSetting('voice_tts_key', String(req.body.voiceTtsKey || '').trim());
+  if ('voiceTtsModel' in req.body) setSetting('voice_tts_model', String(req.body.voiceTtsModel || '').trim() || 'tts-1');
+  if ('voiceTtsVoice' in req.body) setSetting('voice_tts_voice', String(req.body.voiceTtsVoice || '').trim());
+  if ('voiceTtsSpeed' in req.body) { const n = Number(req.body.voiceTtsSpeed); setSetting('voice_tts_speed', String(Number.isFinite(n) && n >= 0.25 && n <= 4 ? n : 1)); }
   logAudit(req, 'settings.update', { meta: { fields: Object.keys(req.body || {}) } });
   res.json({ ok: true });
 });
@@ -1257,6 +1282,49 @@ const upload = multer({ storage: diskStore, limits: { fileSize: 8 * 1024 * 1024 
 app.post('/api/admin/upload', authMiddleware, adminOnly, upload.single('file'), (req, res) =>
   res.json({ url: `/uploads/${req.file.filename}` }));
 const membankUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+
+const voiceUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+const voiceUrl = (base, p) => String(base || '').trim().replace(/\/+$/, '') + p;
+app.post('/api/voice/transcribe', authMiddleware, voiceUpload.single('audio'), async (req, res) => {
+  if (getSetting('voice_mic_enabled', '0') !== '1' && getSetting('voice_call_enabled', '0') !== '1') return res.status(403).json({ error: 'Voice features are disabled.' });
+  if (getSetting('voice_stt_engine', 'browser') !== 'server') return res.status(400).json({ error: 'Server transcription is not enabled.' });
+  const base = getSetting('voice_stt_url', '');
+  if (!base) return res.status(400).json({ error: 'No transcription endpoint configured.' });
+  if (!req.file || !req.file.buffer || !req.file.buffer.length) return res.status(400).json({ error: 'No audio received.' });
+  try {
+    const fd = new FormData();
+    fd.append('file', new Blob([req.file.buffer], { type: req.file.mimetype || 'audio/webm' }), req.file.originalname || 'audio.webm');
+    fd.append('model', getSetting('voice_stt_model', 'whisper-1'));
+    fd.append('response_format', 'json');
+    const key = getSetting('voice_stt_key', '');
+    const r = await fetch(voiceUrl(base, '/audio/transcriptions'), { method: 'POST', headers: key ? { Authorization: 'Bearer ' + key } : {}, body: fd });
+    if (!r.ok) { const err = await r.text().catch(() => ''); return res.status(502).json({ error: 'Transcription failed (' + r.status + ').' + (err ? ' ' + err.slice(0, 200) : '') }); }
+    const d = await r.json().catch(() => ({}));
+    res.json({ text: String(d.text || '').trim() });
+  } catch { res.status(502).json({ error: 'Could not reach the transcription endpoint.' }); }
+});
+app.post('/api/voice/speak', authMiddleware, async (req, res) => {
+  if (getSetting('voice_call_enabled', '0') !== '1') return res.status(403).json({ error: 'Voice calls are disabled.' });
+  if (getSetting('voice_tts_engine', 'browser') !== 'server') return res.status(400).json({ error: 'Server speech is not enabled.' });
+  const base = getSetting('voice_tts_url', '');
+  if (!base) return res.status(400).json({ error: 'No speech endpoint configured.' });
+  const text = String((req.body || {}).text || '').trim().slice(0, 4000);
+  if (!text) return res.status(400).json({ error: 'Nothing to speak.' });
+  try {
+    const key = getSetting('voice_tts_key', '');
+    const speed = Number(getSetting('voice_tts_speed', 1)) || 1;
+    const r = await fetch(voiceUrl(base, '/audio/speech'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: 'Bearer ' + key } : {}) },
+      body: JSON.stringify({ model: getSetting('voice_tts_model', 'tts-1'), voice: getSetting('voice_tts_voice', 'alloy') || 'alloy', input: text, speed, response_format: 'mp3' })
+    });
+    if (!r.ok) return res.status(502).json({ error: 'Speech synthesis failed (' + r.status + ').' });
+    const buf = Buffer.from(await r.arrayBuffer());
+    res.set('Content-Type', r.headers.get('content-type') || 'audio/mpeg');
+    res.set('Cache-Control', 'no-store');
+    res.send(buf);
+  } catch { res.status(502).json({ error: 'Could not reach the speech endpoint.' }); }
+});
 app.get('/api/admin/membank', authMiddleware, adminOnly, async (req, res) => {
   try { await membank.ensureIndexedAll(); } catch {}
   res.json({ files: membank.list(), enabled: getSetting('membank_enabled', '0') === '1' });
@@ -1434,6 +1502,12 @@ function appConfig() {
     version: APP_VERSION,
     uiVersion: APP_VERSION,
     webSearchAvailable: websearch.webSearchAvailable(),
+    voiceMic: getSetting('voice_mic_enabled', '0') === '1',
+    voiceCall: getSetting('voice_call_enabled', '0') === '1',
+    voiceStt: getSetting('voice_stt_engine', 'browser'),
+    voiceTts: getSetting('voice_tts_engine', 'browser'),
+    voiceTtsVoice: getSetting('voice_tts_voice', ''),
+    voiceTtsSpeed: Number(getSetting('voice_tts_speed', 1)) || 1,
     functions: customfns.publicList(),
     uiVersionDesc: readVersionText(),
     uiVersionIcon: detectVersionIcon()
@@ -1859,7 +1933,8 @@ wss.on('connection', (ws, req) => {
   clients.set(ws, { userId: u.id, sessionId: r.sessionId || null, isAdmin: !!u.is_admin, aborts: new Map() });
   const safeSend = (s) => { if (ws.readyState === 1) { try { ws.send(s); } catch {} } };
 
-  async function runCompletion(ws, state, chat, model, extended, sandboxOn, sandboxCap = 0, webSearchOn = false) {
+  async function runCompletion(ws, state, chat, model, extended, sandboxOn, sandboxCap = 0, webSearchOn = false, callMode = false) {
+    if (callMode && (model.call_prompt || '').trim()) model = { ...model, system_prompt: model.call_prompt };
     await maybeCompact(ws, chat, model, extended, sandboxOn);
     const history = await chatHistory(chat, model);
     const chatRow = db.chats.byId(chat.id) || chat;
@@ -2127,7 +2202,7 @@ wss.on('connection', (ws, req) => {
       const queueOn = getSetting('model_queue', '0') === '1';
       await runQueued(queueOn, model.id,
         () => { safeSend(JSON.stringify({ type: 'queued', chatId: chat.id })); },
-        () => runCompletion(ws, state, chat, model, !!msg.extended, sandboxOn, sandboxCap, webSearchOn));
+        () => runCompletion(ws, state, chat, model, !!msg.extended, sandboxOn, sandboxCap, webSearchOn, !!msg.call));
     } catch (err) {
       if (msg && msg.chatId) state.aborts.delete(msg.chatId);
       safeSend(JSON.stringify({ type: 'error', chatId: msg && msg.chatId, error: String(err.message || err) }));

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
-import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield, Globe, FileText, Pencil, Clock, Download, Wrench, Code, Brain, Copy, Check, Panel, Chat } from './icons.jsx';
+import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield, Globe, FileText, Pencil, Clock, Download, Wrench, Code, Brain, Copy, Check, Panel, Chat, Mic } from './icons.jsx';
 import { QP_ICON_LIST, QpIcon } from '../qpIcons.jsx';
 
 function QpIconPicker({ value, onPick }) {
@@ -262,6 +262,13 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
             </div>
             {spOpen && <SystemPromptEditor value={m.system_prompt || ''} onChange={(v) => set('system_prompt', v)} onClose={() => setSpOpen(false)} />}
 
+            <div className="me2-group-label">Voice calls</div>
+            <div className="field">
+              <label>Call system prompt <span className="muted-note" style={{ display: 'inline' }}>(optional)</span></label>
+              <textarea rows={4} value={m.call_prompt || ''} onChange={(e) => set('call_prompt', e.target.value)} placeholder="You are on a voice call. Keep replies short and conversational — a couple of sentences. No markdown, no lists, no code." />
+              <div className="muted-note">Replaces the system prompt above whenever a message comes in through a voice call. Leave empty to use the regular prompt during calls too.</div>
+            </div>
+
             <div className="me2-group-label">Availability</div>
             <div className="me2-toggle-card">
               <Toggle m={m} set={set} k="is_default" label="Set as default" note="Pre-selected for users on first login. Only one model can be the default." />
@@ -482,7 +489,7 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
   );
 }
 
-const TAB_IDS = ['overview', 'models', 'providers', 'branding', 'home', 'members', 'websearch', 'membank', 'tools', 'functions', 'limits', 'audit', 'analytics'];
+const TAB_IDS = ['overview', 'models', 'providers', 'branding', 'home', 'members', 'websearch', 'membank', 'tools', 'functions', 'voice', 'limits', 'audit', 'analytics'];
 
 export default function AdminPanel({ user, onClose }) {
   const [tab, setTab] = useState(() => {
@@ -493,7 +500,7 @@ export default function AdminPanel({ user, onClose }) {
   const [models, setModels] = useState([]);
   const [usersList, setUsersList] = useState([]);
   const [cfg, setCfg] = useState({ appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [], appFont: 'serif' });
-  const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256, modelQueue: false, membankEnabled: false, membankHideTools: false, membankPrompt: '', budgetUser: 0, budgetAdmin: 0, budgetWarnFraction: 0.8, budgetEnforce: false, sessionTtlDays: 30, maxSessions: 0 });
+  const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256, modelQueue: false, membankEnabled: false, membankHideTools: false, membankPrompt: '', budgetUser: 0, budgetAdmin: 0, budgetWarnFraction: 0.8, budgetEnforce: false, sessionTtlDays: 30, maxSessions: 0, voiceMicEnabled: false, voiceCallEnabled: false, voiceSttEngine: 'browser', voiceSttUrl: '', voiceSttKey: '', voiceSttModel: 'whisper-1', voiceTtsEngine: 'browser', voiceTtsUrl: '', voiceTtsKey: '', voiceTtsModel: 'tts-1', voiceTtsVoice: 'alloy', voiceTtsSpeed: 1 });
   const [providers, setProviders] = useState([]);
   const [membankFiles, setMembankFiles] = useState([]);
   const [tools, setTools] = useState([]);
@@ -838,7 +845,8 @@ export default function AdminPanel({ user, onClose }) {
       { id: 'websearch', label: 'Web Search', desc: 'Give models a web search tool backed by your own SearXNG instance.', Icon: Globe },
       { id: 'membank', label: 'Memory Bank', desc: 'Reference files every model can read on demand.', Icon: FileText },
       { id: 'tools', label: 'Live Tools', desc: 'Server-side live-data tools models can call (weather, prices, APIs…).', Icon: Wrench },
-      { id: 'functions', label: 'Functions', desc: 'Custom buttons that run your JavaScript in the browser.', Icon: Code }
+      { id: 'functions', label: 'Functions', desc: 'Custom buttons that run your JavaScript in the browser.', Icon: Code },
+      { id: 'voice', label: 'Voice', desc: 'Dictation and voice calls — speech-to-text and text-to-speech engines.', Icon: Mic }
     ] },
     { group: 'Governance', items: [
       { id: 'limits', label: 'Limits & Budgets', desc: 'Guardrails applied across the app. These take effect immediately.', Icon: Shield },
@@ -1255,6 +1263,73 @@ export default function AdminPanel({ user, onClose }) {
                 })}
                 <button className="btn add-model" onClick={addProvider}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> Add provider</button>
               </div>
+            </>
+          )}
+          {tab === 'voice' && (
+            <>
+              <Card title="Features" sub="Both buttons disappear from the composer entirely when turned off.">
+                <div className="field row">
+                  <div><label>Microphone (dictation)</label><div className="muted-note">Adds a mic button to the input bar. Speech is transcribed into the message box — nothing sends until the user hits enter.</div></div>
+                  <div className={'switch' + (settings.voiceMicEnabled ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, voiceMicEnabled: !s.voiceMicEnabled }))} />
+                </div>
+                <div className="field row" style={{ borderBottom: 0, marginBottom: 0 }}>
+                  <div><label>Voice calls</label><div className="muted-note">Adds a call button that opens a hands-free voice conversation panel. Spoken turns are saved to the chat like typed messages, and replies are read aloud.</div></div>
+                  <div className={'switch' + (settings.voiceCallEnabled ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, voiceCallEnabled: !s.voiceCallEnabled, voiceMicEnabled: !s.voiceCallEnabled ? true : s.voiceMicEnabled }))} />
+                </div>
+              </Card>
+              {(settings.voiceMicEnabled || settings.voiceCallEnabled) && (
+                <Card title="Speech-to-text" sub="How spoken audio becomes text.">
+                  <div className="field"><label>Engine</label>
+                    <div className="seg" style={{ width: 'fit-content' }}>
+                      <button className={(settings.voiceSttEngine || 'browser') === 'browser' ? 'on' : ''} onClick={() => setSettings(s => ({ ...s, voiceSttEngine: 'browser' }))}>Browser built-in</button>
+                      <button className={settings.voiceSttEngine === 'server' ? 'on' : ''} onClick={() => setSettings(s => ({ ...s, voiceSttEngine: 'server' }))}>Server (Whisper)</button>
+                    </div>
+                    <div className="muted-note">Browser uses Chrome's built-in speech recognition — zero setup, no audio leaves the machine beyond what the browser does. Server sends recorded audio to any OpenAI-compatible transcription endpoint: whisper.cpp's server, faster-whisper-server, Speaches, or OpenAI itself.</div>
+                  </div>
+                  {settings.voiceSttEngine === 'server' && <>
+                    <div className="field"><label>Base URL</label>
+                      <input value={settings.voiceSttUrl || ''} onChange={(e) => setSettings(s => ({ ...s, voiceSttUrl: e.target.value }))} placeholder="http://localhost:8000/v1" />
+                      <div className="muted-note">The server calls <code>{'{base}'}/audio/transcriptions</code>. Keys never reach the browser.</div>
+                    </div>
+                    <div className="two-col">
+                      <div className="field"><label>API key <span className="muted-note" style={{ display: 'inline' }}>(optional for local)</span></label>
+                        <input value={settings.voiceSttKey || ''} onChange={(e) => setSettings(s => ({ ...s, voiceSttKey: e.target.value }))} placeholder="Not required for whisper.cpp" /></div>
+                      <div className="field"><label>Model</label>
+                        <input value={settings.voiceSttModel || ''} onChange={(e) => setSettings(s => ({ ...s, voiceSttModel: e.target.value }))} placeholder="whisper-1" /></div>
+                    </div>
+                  </>}
+                </Card>
+              )}
+              {settings.voiceCallEnabled && (
+                <Card title="Text-to-speech" sub="How replies are read aloud during calls.">
+                  <div className="field"><label>Engine</label>
+                    <div className="seg" style={{ width: 'fit-content' }}>
+                      <button className={(settings.voiceTtsEngine || 'browser') === 'browser' ? 'on' : ''} onClick={() => setSettings(s => ({ ...s, voiceTtsEngine: 'browser' }))}>Browser built-in</button>
+                      <button className={settings.voiceTtsEngine === 'server' ? 'on' : ''} onClick={() => setSettings(s => ({ ...s, voiceTtsEngine: 'server' }))}>Server (OpenAI-compatible)</button>
+                    </div>
+                    <div className="muted-note">Browser uses the operating system voices via Chrome — fully local, zero setup. Server sends text to any OpenAI-compatible <code>/audio/speech</code> endpoint: openedai-speech, Kokoro-FastAPI, Piper wrappers, or OpenAI.</div>
+                  </div>
+                  {settings.voiceTtsEngine === 'server' && <>
+                    <div className="field"><label>Base URL</label>
+                      <input value={settings.voiceTtsUrl || ''} onChange={(e) => setSettings(s => ({ ...s, voiceTtsUrl: e.target.value }))} placeholder="http://localhost:8880/v1" /></div>
+                    <div className="two-col">
+                      <div className="field"><label>API key <span className="muted-note" style={{ display: 'inline' }}>(optional for local)</span></label>
+                        <input value={settings.voiceTtsKey || ''} onChange={(e) => setSettings(s => ({ ...s, voiceTtsKey: e.target.value }))} placeholder="Not required for local servers" /></div>
+                      <div className="field"><label>Model</label>
+                        <input value={settings.voiceTtsModel || ''} onChange={(e) => setSettings(s => ({ ...s, voiceTtsModel: e.target.value }))} placeholder="tts-1" /></div>
+                    </div>
+                  </>}
+                  <div className="two-col">
+                    <div className="field"><label>Voice</label>
+                      <input value={settings.voiceTtsVoice || ''} onChange={(e) => setSettings(s => ({ ...s, voiceTtsVoice: e.target.value }))} placeholder={settings.voiceTtsEngine === 'server' ? 'alloy' : 'e.g. Google US English'} />
+                      <div className="muted-note">{settings.voiceTtsEngine === 'server' ? 'The voice name sent to the endpoint (e.g. alloy, af_bella for Kokoro).' : 'Matched against the browser\u2019s installed voice names. Leave blank for the system default.'}</div>
+                    </div>
+                    <div className="field"><label>Speed</label>
+                      <input type="number" min="0.25" max="4" step="0.05" value={settings.voiceTtsSpeed ?? 1} onChange={(e) => setSettings(s => ({ ...s, voiceTtsSpeed: e.target.value }))} placeholder="1" /></div>
+                  </div>
+                </Card>
+              )}
+              <AutosaveNote status={setAutoStatus} live />
             </>
           )}
           {tab === 'limits' && (

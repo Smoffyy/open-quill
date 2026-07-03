@@ -2,6 +2,8 @@ import React, { useRef, useEffect, useState } from 'react';
 import ModelDropdown from './ModelDropdown.jsx';
 import FunctionsBar from './FunctionsBar.jsx';
 import { api } from '../api.js';
+import { transcribeBlob } from '../voice.js';
+import { toast } from '../toast.js';
 import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders } from './icons.jsx';
 
 const FILE_ACCEPT = '.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.py,.lua,.html,.css,.xml,.yml,.yaml,.pdf,.log';
@@ -32,7 +34,8 @@ function dominantColor(url) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, models,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts, functions = []
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts, functions = [],
+  voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
@@ -40,6 +43,69 @@ export default function Composer({
   const plusRef = useRef(null);
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [dictating, setDictating] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const dictRef = useRef(null);
+  const dictMediaRef = useRef(null);
+  const valueRef = useRef(value);
+  useEffect(() => { valueRef.current = value; }, [value]);
+  useEffect(() => () => { stopDictation(true); }, []);
+  function appendText(text) {
+    const cur = valueRef.current || '';
+    onChange((cur ? cur.replace(/\s+$/, '') + ' ' : '') + text.trim());
+  }
+  function stopDictation(silent) {
+    if (dictRef.current) { try { dictRef.current.stop(); } catch {} dictRef.current = null; }
+    if (dictMediaRef.current && dictMediaRef.current.state !== 'inactive') { try { dictMediaRef.current.stop(); } catch {} }
+    if (!silent) setDictating(false);
+  }
+  async function toggleDictation() {
+    if (dictating) { stopDictation(); return; }
+    if (sttEngine === 'browser') {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { toastLocal('This browser has no built-in speech recognition.'); return; }
+      const rec = new SR();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.lang = navigator.language || 'en-US';
+      let base = valueRef.current || '';
+      rec.onresult = (e) => {
+        let fin = '', interim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) fin += t; else interim += t;
+        }
+        if (fin) base = (base ? base.replace(/\s+$/, '') + ' ' : '') + fin.trim();
+        onChange(base + (interim ? (base ? ' ' : '') + interim : ''));
+      };
+      rec.onend = () => { setDictating(false); dictRef.current = null; };
+      rec.onerror = () => { setDictating(false); dictRef.current = null; };
+      dictRef.current = rec;
+      try { rec.start(); setDictating(true); } catch {}
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      const mr = new MediaRecorder(stream);
+      const chunks = [];
+      mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        dictMediaRef.current = null;
+        setDictating(false);
+        const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
+        if (blob.size < 1500) return;
+        setTranscribing(true);
+        try { const text = await transcribeBlob(blob); if (text) appendText(text); }
+        catch (e) { toastLocal(e.message || 'Transcription failed.'); }
+        setTranscribing(false);
+      };
+      dictMediaRef.current = mr;
+      mr.start();
+      setDictating(true);
+    } catch { toastLocal('Microphone access denied.'); }
+  }
+  function toastLocal(msg) { try { toast(msg, { icon: 'info', kind: 'warn', duration: 4200 }); } catch {} }
   const [dragActive, setDragActive] = useState(false);
   const [glow, setGlow] = useState('var(--accent)');
   const [plusMenu, setPlusMenu] = useState(false);
@@ -310,13 +376,20 @@ export default function Composer({
           <ModelDropdown models={models} currentId={currentId} onSelect={onSelect}
             extended={extended} onToggleExtended={onToggleExtended} up={modelUp}
             modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />
-          <button className="mic"><Mic style={{ width: 18, height: 18 }} /></button>
+          {voiceMic && (
+            <button className={'mic' + (dictating ? ' rec' : '') + (transcribing ? ' busy' : '')} onClick={toggleDictation}
+              title={dictating ? 'Stop dictation' : transcribing ? 'Transcribing…' : 'Dictate'} disabled={transcribing}>
+              <Mic style={{ width: 18, height: 18 }} />
+            </button>
+          )}
           {streaming ? (
             <button key="stop" className="send stop" onClick={onStop}><Stop style={{ width: 16, height: 16 }} /></button>
           ) : canSend ? (
             <button key="send" className="send" onClick={doSend} disabled={uploading}><Up style={{ width: 17, height: 17 }} /></button>
+          ) : voiceCall ? (
+            <button key="call" className="mic call" onClick={onStartCall} title="Start a voice call"><Wave style={{ width: 20, height: 20 }} /></button>
           ) : (
-            <button key="mic" className="mic"><Wave style={{ width: 20, height: 20 }} /></button>
+            <button key="send" className="send" disabled><Up style={{ width: 17, height: 17 }} /></button>
           )}
         </div>
       </div>

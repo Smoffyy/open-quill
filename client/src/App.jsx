@@ -19,6 +19,8 @@ import SettingsModal from './components/SettingsModal.jsx';
 import AdminPanel from './components/AdminPanel.jsx';
 import DocModal from './components/DocModal.jsx';
 import ArtifactsPanel from './components/ArtifactsPanel.jsx';
+import CallPanel from './components/CallPanel.jsx';
+import { voiceEmit } from './voice.js';
 import ChatsOverview from './components/ChatsOverview.jsx';
 import SpacesPanel from './components/SpacesPanel.jsx';
 import ProjectsPanel from './components/ProjectsPanel.jsx';
@@ -186,6 +188,7 @@ export default function App() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [artifactsOpen, setArtifactsOpen] = useState(false);
+  const [callOpen, setCallOpen] = useState(false);
   const [artifactFocus, setArtifactFocus] = useState(null);
   const [incognito, setIncognito] = useState(false);
   const [incognitoGreeting, setIncognitoGreeting] = useState('Greetings, whoever you are');
@@ -469,6 +472,7 @@ export default function App() {
       return;
     }
     if (m.type === 'start') {
+      voiceEmit({ type: 'start', chatId: m.chatId });
       const r = recFor(m.chatId);
       r.content = ''; r.reasoning = ''; r.phase = 'generating'; r.done = false; r.error = false; r.assistantId = m.messageId; r.live = null;
       if (m.chatId === activeKey()) {
@@ -492,6 +496,7 @@ export default function App() {
       return;
     }
     if (m.type === 'content') {
+      voiceEmit({ type: 'content', chatId: m.chatId, text: m.text });
       const r = recFor(m.chatId); r.content += m.text; r.phase = 'generating';
       if (m.chatId === activeKey()) {
         targetContent.current = r.content;
@@ -502,6 +507,7 @@ export default function App() {
       return;
     }
     if (m.type === 'error') {
+      voiceEmit({ type: 'error', chatId: m.chatId });
       const r = gen.current.get(m.chatId);
       if (!r || !r.content) {
         gen.current.delete(m.chatId);
@@ -520,6 +526,7 @@ export default function App() {
       return;
     }
     if (m.type === 'done') {
+      voiceEmit({ type: 'done', chatId: m.chatId });
       const r = recFor(m.chatId); r.done = true;
       if (m.chatId === activeKey()) { pendingDone.current = true; if (!animateRef.current) finalize(); }
       else finalizeBackground(m.chatId);
@@ -832,7 +839,7 @@ export default function App() {
     });
   }
 
-  async function send(attachments = [], overrideText) {
+  async function send(attachments = [], overrideText, opts = {}) {
     if (streaming || queued) return;
     const text = (overrideText != null ? overrideText : input).trim();
     if ((!text && attachments.length === 0) || !currentId) return;
@@ -857,10 +864,10 @@ export default function App() {
       setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false, folderId: null }, ...cs]);
       history.pushState({}, '', '/chat/' + chatId);
     }
-    if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, content: text, attachments, sandbox, webSearch })) return;
+    if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, content: text, attachments, sandbox, webSearch, call: !!opts.call })) return;
     gen.current.set(chatId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
     setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
-    setInput('');
+    if (!opts.call) setInput('');
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
   }
 
@@ -958,6 +965,8 @@ export default function App() {
     project: currentProject, onClearProject: clearChatProject,
     savedPrompts: user?.savedPrompts || [], onUsePrompt: (t) => { setInput(t); setFocusTick(x => x + 1); }, onSavePrompt: savePromptFromInput, onDeletePrompt: deleteSavedPrompt,
     onNewChat: () => newChat(), onShortcuts: () => setShowShortcuts(true),
+    voiceMic: !!cfg.voiceMic, voiceCall: !!cfg.voiceCall && !incognito, sttEngine: cfg.voiceStt || 'browser',
+    onStartCall: () => { setArtifactsOpen(false); setCallOpen(true); },
     functions: incognito ? [] : (cfg.functions || [])
   };
   const showArtifactsBtn = sandboxOn || files.length > 0;
@@ -1083,7 +1092,7 @@ export default function App() {
                   </button>
                 )}
                 {showArtifactsBtn && (
-                  <button className={'paper-btn' + (artifactsOpen ? ' active' : '') + (liveFile ? ' writing' : '')} onClick={() => setArtifactsOpen(o => !o)} title="Artifacts">
+                  <button className={'paper-btn' + (artifactsOpen ? ' active' : '') + (liveFile ? ' writing' : '')} onClick={() => { setCallOpen(false); setArtifactsOpen(o => !o); }} title="Artifacts">
                     <Paper style={{ width: 18 }} />{files.length > 0 && <span className="paper-count">{files.length}</span>}
                   </button>
                 )}
@@ -1123,8 +1132,14 @@ export default function App() {
         )}
       </div>
 
-      {artifactsOpen && activeId && (
+      {artifactsOpen && activeId && !callOpen && (
         <ArtifactsPanel chatId={activeId} files={files} live={liveFile} focus={artifactFocus} onClose={() => setArtifactsOpen(false)} />
+      )}
+      {callOpen && (
+        <CallPanel chatId={activeId} model={model}
+          voice={{ stt: cfg.voiceStt || 'browser', tts: cfg.voiceTts || 'browser', ttsVoice: cfg.voiceTtsVoice || '', ttsSpeed: cfg.voiceTtsSpeed || 1 }}
+          onSendText={(t) => send([], t, { call: true })}
+          onClose={() => setCallOpen(false)} />
       )}
 
       {summaryOpen && activeId && (
