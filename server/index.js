@@ -620,7 +620,8 @@ app.get('/api/chats/:id/context', authMiddleware, async (req, res) => {
   const ctx = await modelCtx(model);
   const limit = ctx || parseInt(model.num_ctx) || 0;
   const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
-  res.json({ used, limit, pct, hasSummary: !!c.summary, measured: tokenCalib.has(c.id), compacts: model.enable_summaries ? compactThreshold(model, ctx) : 0 });
+  const rolling = !!limit && (await rollingCtxFor(model)) > 0;
+  res.json({ used, limit, pct, hasSummary: !!c.summary, measured: tokenCalib.has(c.id), compacts: model.enable_summaries ? compactThreshold(model, ctx) : 0, rolling });
 });
 
 app.get('/api/chats/:id/inspect', authMiddleware, async (req, res) => {
@@ -1663,8 +1664,93 @@ function estimateTokens(messages) {
   return total;
 }
 
+const CTX_TRIM_NOTE = '[Earlier part of this message was trimmed to fit the model context window.]\n\n';
+function trimMsgToTokens(m, allowedTokens) {
+  const keep = Math.max(400, Math.floor(Math.max(60, allowedTokens) * 3.4));
+  if (typeof m.content === 'string') {
+    if (m.content.length <= keep) return m;
+    return { ...m, content: CTX_TRIM_NOTE + m.content.slice(-keep) };
+  }
+  if (Array.isArray(m.content)) {
+    let joined = m.content.filter(p => p.type === 'text').map(p => p.text || '').join('\n\n');
+    if (joined.length > keep) joined = CTX_TRIM_NOTE + joined.slice(-keep);
+    return { ...m, content: joined || '[content trimmed to fit the model context window]' };
+  }
+  return m;
+}
+function truncateForRollingCtx(chatId, msgs, ctx) {
+  const reserve = Math.min(Math.max(256, Math.floor(ctx * 0.15)), 1536);
+  const budget = Math.max(512, ctx - reserve);
+  if (calibratedTokens(chatId, msgs) <= budget) return { msgs, dropped: 0, trimmed: false };
+  const out = msgs.slice();
+  let dropped = 0;
+  const nonSys = () => out.reduce((a, m, i) => { if (m.role !== 'system') a.push(i); return a; }, []);
+  while (calibratedTokens(chatId, out) > budget) {
+    const idxs = nonSys();
+    if (idxs.length <= 1) break;
+    out.splice(idxs[0], 1);
+    dropped++;
+  }
+  let trimmed = false;
+  if (calibratedTokens(chatId, out) > budget) {
+    const idxs = nonSys();
+    if (idxs.length) {
+      const i = idxs[0];
+      const rest = out.filter((_, j) => j !== i);
+      const allowed = budget - calibratedTokens(chatId, rest) - 8;
+      const before = out[i];
+      out[i] = trimMsgToTokens(before, allowed);
+      trimmed = out[i] !== before;
+    }
+  }
+  return { msgs: out, dropped, trimmed };
+}
+async function rollingCtxFor(model) {
+  if (model.enable_summaries) return 0;
+  const prov = resolveProvider(model.provider_id);
+  if (!prov || prov.type !== 'llamacpp') return 0;
+  const ctx = await modelCtx(model);
+  return ctx > 0 ? ctx : 0;
+}
+
 // once we get near the context limit, fold older turns into chat.summary
 // one summarization pass over older persisted turns; returns true if it compacted
+async function describeImageForSummary(model, a) {
+  if (!model || !model.has_vision) return '';
+  const uri = readImageDataUri(a);
+  if (!uri) return '';
+  try {
+    let d = await oneShot(model, [
+      { role: 'system', content: 'You write short factual descriptions of images so their content survives in a text-only conversation summary. Reply with 1-3 plain sentences describing what the image shows, including any visible text. No preamble, no markdown.' },
+      { role: 'user', content: [{ type: 'text', text: `Describe the attached image "${a.name || 'image'}" concisely.` }, { type: 'image_url', image_url: { url: uri } }] }
+    ]);
+    d = stripThink(model, d).trim().replace(/\s+/g, ' ');
+    return d.slice(0, 700);
+  } catch { return ''; }
+}
+async function enrichForSummary(model, rows) {
+  const out = [];
+  for (const m of rows) {
+    let text = m.content || '';
+    const atts = Array.isArray(m.attachments) ? m.attachments : [];
+    const notes = [];
+    let changed = false;
+    for (const a of atts) {
+      const isImage = a.type && a.type.startsWith('image/');
+      if (!isImage) continue;
+      let d = typeof a.summary_desc === 'string' ? a.summary_desc : '';
+      if (!d) {
+        d = await describeImageForSummary(model, a);
+        if (d) { a.summary_desc = d; changed = true; }
+      }
+      notes.push(d ? `[Attached image "${a.name || 'image'}": ${d}]` : `[Attached image: ${a.name || 'image'}]`);
+    }
+    if (changed) { try { db.messages.update(m.id, { attachments: atts }); } catch {} }
+    if (notes.length) text = (text ? text + '\n\n' : '') + notes.join('\n');
+    out.push({ role: m.role, content: text });
+  }
+  return out;
+}
 async function compactStep(ws, chat, model) {
   const fresh = db.chats.byId(chat.id);
   const upto = fresh.summary && fresh.summary_upto ? fresh.summary_upto : 0;
@@ -1676,7 +1762,8 @@ async function compactStep(ws, chat, model) {
   if (!toSummarize.length) return false;
   const marker = after[cut - 1].created_at;
   try { ws.send(JSON.stringify({ type: 'compacting', chatId: chat.id })); } catch {}
-  const summary = await summarizeConversation(model, fresh.summary, toSummarize);
+  const enriched = await enrichForSummary(model, toSummarize);
+  const summary = await summarizeConversation(model, fresh.summary, enriched);
   db.chats.update(chat.id, { summary, summary_upto: marker });
   try { ws.send(JSON.stringify({ type: 'compacted', chatId: chat.id })); } catch {}
   return !!summary;
@@ -1820,6 +1907,8 @@ wss.on('connection', (ws, req) => {
     };
 
     const threshold = compactThreshold(model, await modelCtx(model));
+    const rollCtx = await rollingCtxFor(model);
+    let rollNotified = false;
     const stepCap = (model.agent_steps && model.agent_steps > 0) ? model.agent_steps : 1000;
     const maxSteps = toolsOn ? stepCap : 1;
     try {
@@ -1828,7 +1917,17 @@ wss.on('connection', (ws, req) => {
         if (threshold !== Infinity && inTurn.length && calibratedTokens(chat.id, [...base, ...inTurn]) >= threshold) {
           if (await compactStep(ws, chat, model)) base = buildMessages(model, await chatHistory(chat, model), extended, toolsP(), (db.chats.byId(chat.id) || {}).summary, promptVars(chat.user_id), await instrFor(db.chats.byId(chat.id) || chat));
         }
-        const convo = [...base, ...inTurn];
+        let convo = [...base, ...inTurn];
+        if (rollCtx) {
+          const t = truncateForRollingCtx(chat.id, convo, rollCtx);
+          if (t.dropped || t.trimmed) {
+            convo = t.msgs;
+            if (!rollNotified) {
+              rollNotified = true;
+              safeSend(JSON.stringify({ type: 'ctx_rolling', chatId: chat.id, dropped: t.dropped, trimmed: t.trimmed, limit: rollCtx }));
+            }
+          }
+        }
         const stepEstimate = estimateTokens(convo);
         let stepPromptTokens = 0;
         const controller = new AbortController();

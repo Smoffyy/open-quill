@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { subscribe } from '../toast.js';
-import { Check, Pin, Fork, Star, Copy, Sliders } from './icons.jsx';
+import { Check, Pin, Fork, Star, Copy, Sliders, Info } from './icons.jsx';
 
-const ICONS = { check: Check, pin: Pin, fork: Fork, star: Star, copy: Copy, sliders: Sliders };
+const ICONS = { check: Check, pin: Pin, fork: Fork, star: Star, copy: Copy, sliders: Sliders, info: Info };
 
 export default function Toaster() {
   const [items, setItems] = useState([]);

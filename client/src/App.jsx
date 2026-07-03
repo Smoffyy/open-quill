@@ -458,6 +458,10 @@ export default function App() {
     if (m.type === 'tool') { return; }
     if (m.type === 'compacting') { if (m.chatId === activeKey()) setCompacting(true); return; }
     if (m.type === 'compacted') { if (m.chatId === activeKey()) { setCompacting(false); setHasSummary(true); } return; }
+    if (m.type === 'ctx_rolling') {
+      if (m.chatId === activeKey()) toast(`Context limit reached (${(m.limit || 0).toLocaleString()} tokens) — trimming older messages so the chat can continue`, { icon: 'info', kind: 'warn', duration: 6000 });
+      return;
+    }
     if (m.type === 'title') { setChats(cs => cs.map(c => c.id === m.chatId ? { ...c, title: m.title } : c)); return; }
     if (m.type === 'queued') {
       const r = recFor(m.chatId); r.phase = 'queued';

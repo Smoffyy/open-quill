@@ -21,6 +21,10 @@ This roadmap outlines the planned direction of the project. Priorities may shift
 * [X] File Memory Bank. (Allow admins to upload files, and have a small system prompt that'll append to all models system prompt on tools for the model to view a certain file, or only certain lines of a file for best context management. It allows the assistant to learn in real time when needed without web search. This features can be enabled/disbale in the admin panel and is for all models)
 * [X] Exporting and Importing All Chats.
 
+
+* [ ] Safety model, adds an option to enable a safety check, making the currently active model output either "Yes" or "No" based on the inputted text, allowing the model to then answer the question.
+
+
 ---
 
 ## Notes

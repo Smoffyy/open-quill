@@ -95,7 +95,7 @@ export default function ChatMenu({ chat, modelId, pinned = [], pins = [], onUnpi
           ctx.limit ? (
             <>
               <div className={'cmp-meter ' + meterClass}><span style={{ width: pct + '%' }} /></div>
-              <div className="cmp-note">{ctx.used.toLocaleString()} / {ctx.limit.toLocaleString()} tokens ({pct}%){ctx.hasSummary ? ' · older turns compacted' : ''}</div>
+              <div className="cmp-note">{ctx.used.toLocaleString()} / {ctx.limit.toLocaleString()} tokens ({pct}%){ctx.hasSummary ? ' · older turns compacted' : ''}{ctx.rolling && pct >= 100 ? ' · rolling window active' : ctx.rolling ? ' · rolling window' : ''}</div>
             </>
           ) : (
             <div className="cmp-note">~{ctx.used.toLocaleString()} tokens in context. No window limit set for this model.</div>

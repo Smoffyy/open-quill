@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
-import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield, Globe, FileText, Pencil, Clock, Download, Wrench, Code, Brain, Copy } from './icons.jsx';
+import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield, Globe, FileText, Pencil, Clock, Download, Wrench, Code, Brain, Copy, Check, Panel, Chat } from './icons.jsx';
 import { QP_ICON_LIST, QpIcon } from '../qpIcons.jsx';
 
 function QpIconPicker({ value, onPick }) {
@@ -124,16 +124,39 @@ function Toggle({ m, set, k, label, note, inverted }) {
   );
 }
 
-function Accordion({ title, sub, children, defaultOpen = false }) {
-  const [open, setOpen] = useState(defaultOpen);
+function Card({ title, sub, right, children, className }) {
   return (
-    <div className={'me-acc' + (open ? ' open' : '')}>
-      <button type="button" className="me-acc-head" onClick={() => setOpen(o => !o)}>
-        <span className="me-acc-titles"><span className="me-acc-title">{title}</span>{sub && <span className="me-acc-sub">{sub}</span>}</span>
-        <Chevron className="me-acc-chev" />
-      </button>
-      {open && <div className="me-acc-body">{children}</div>}
+    <section className={'ad-card' + (className ? ' ' + className : '')}>
+      {(title || right) && (
+        <div className="ad-card-head">
+          <div className="ad-card-titles">
+            {title && <h3 className="ad-card-title">{title}</h3>}
+            {sub && <div className="ad-card-sub">{sub}</div>}
+          </div>
+          {right && <div className="ad-card-right">{right}</div>}
+        </div>
+      )}
+      <div className="ad-card-body">{children}</div>
+    </section>
+  );
+}
+
+function AutosaveNote({ status, live }) {
+  return (
+    <div className="settings-autosave">
+      <span className={'autosave-dot' + (status === 'saved' ? ' flash' : '')} />
+      {status === 'saving' ? 'Saving…' : status === 'saved' ? (live ? 'Saved — applies immediately' : 'Saved to draft — use Push to all clients to make it live') : (live ? 'Changes save automatically' : 'Changes save automatically to your draft')}
     </div>
+  );
+}
+
+function CopyBtn({ text, title }) {
+  const [ok, setOk] = useState(false);
+  return (
+    <button type="button" className={'me2-copy' + (ok ? ' ok' : '')} title={title || 'Copy'}
+      onClick={async (e) => { e.stopPropagation(); try { await navigator.clipboard.writeText(text || ''); setOk(true); setTimeout(() => setOk(false), 1200); } catch {} }}>
+      {ok ? <Check style={{ width: 12 }} /> : <Copy style={{ width: 12 }} />}
+    </button>
   );
 }
 
@@ -152,22 +175,19 @@ function StatusChips({ m }) {
 
 const ME_SECTIONS = [
   ['general', 'General'],
-  ['behavior', 'Behavior'],
-  ['capabilities', 'Capabilities'],
-  ['appearance', 'Appearance'],
-  ['sampling', 'Sampling'],
-  ['pricing', 'Pricing']
+  ['intelligence', 'Intelligence'],
+  ['abilities', 'Abilities'],
+  ['style', 'Style'],
+  ['tuning', 'Tuning']
 ];
 
-function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, providers = [], providerTypes = {} }) {
+function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, providers = [], providerTypes = {}, section = 'general', onSection }) {
   const [spOpen, setSpOpen] = useState(false);
-  const [section, setSection] = useState('general');
   const [detecting, setDetecting] = useState(false);
   const [detectMsg, setDetectMsg] = useState('');
   const [preset, setPreset] = useState(null);
   const bgRef = useRef(null);
   const set = (k, v) => onChange({ ...m, [k]: v });
-  useEffect(() => { setSection('general'); }, [m.id]);
   useEffect(() => {
     let alive = true;
     const name = (m.internal_name || '').trim();
@@ -198,7 +218,10 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
         {m.static_icon ? <img className="me2-icon" src={m.static_icon} alt="" /> : <span className="me2-icon noicon">{(m.display_name || '?').trim().charAt(0).toUpperCase()}</span>}
         <div className="me2-id">
           <div className="me2-name">{m.display_name || 'Untitled model'}</div>
-          <div className="me2-sub">{m.internal_name || 'no model id'}</div>
+          <div className="me2-sub">
+            <span className="me2-sub-text">{m.internal_name || 'no model id'}</span>
+            {!!(m.internal_name || '').trim() && <CopyBtn text={m.internal_name} title="Copy model ID" />}
+          </div>
         </div>
         <StatusChips m={m} />
         {onDuplicate && <button className="me2-dup" title="Duplicate model" onClick={() => onDuplicate(m.id)}><Copy style={{ width: 16 }} /></button>}
@@ -207,13 +230,14 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
 
       <div className="me2-nav">
         {ME_SECTIONS.map(([id, label]) => (
-          <button key={id} className={section === id ? 'on' : ''} onClick={() => setSection(id)}>{label}</button>
+          <button key={id} className={section === id ? 'on' : ''} onClick={() => onSection && onSection(id)}>{label}</button>
         ))}
       </div>
 
       <div className="me2-body">
         {section === 'general' && (
           <div className="me2-pane">
+            <div className="me2-group-label first">Identity</div>
             <div className="two-col">
               <div className="field"><label>Display name</label>
                 <input value={m.display_name || ''} onChange={(e) => set('display_name', e.target.value)} /></div>
@@ -224,7 +248,7 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
               <select value={m.provider_id || (providers[0]?.id || '')} onChange={(e) => set('provider_id', e.target.value)}>
                 {providers.map(p => <option key={p.id} value={p.id}>{p.name} ({providerTypes[p.type]?.label || p.type})</option>)}
               </select>
-              <div className="muted-note">The connection this model runs through. Add or edit providers in the Providers tab.</div>
+              <div className="muted-note">The connection this model runs through. Add or edit connections in the Providers section.</div>
             </div>
             <div className="field"><label>Description</label>
               <input value={m.description || ''} onChange={(e) => set('description', e.target.value)} placeholder="For complex tasks" /></div>
@@ -259,8 +283,9 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
           </div>
         )}
 
-        {section === 'behavior' && (
+        {section === 'intelligence' && (
           <div className="me2-pane">
+            <div className="me2-group-label first">Reasoning</div>
             <div className="me2-toggle-card">
               <Toggle m={m} set={set} k="has_reasoning" label="Extended thinking" note="Adds the Extended toggle so users can request deeper reasoning." />
             </div>
@@ -310,16 +335,17 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
           </div>
         )}
 
-        {section === 'capabilities' && (
+        {section === 'abilities' && (
           <div className="me2-pane">
+            <div className="me2-group-label first">What this model can use</div>
             <div className="me2-toggle-card">
               <Toggle m={m} set={set} k="has_vision" label="Image input" note="Let users attach images for the model to see. Off = non-image files only." />
               <Toggle m={m} set={set} k="sandbox_allowed" inverted label="Allow sandbox tools" note="Lets users enable code and file tools for this model. Off means sandbox can't be turned on." />
               {m.sandbox_allowed !== 0 && <Toggle m={m} set={set} k="sandbox_auto" label="Enable sandbox by default" note="New chats with this model start with sandbox tools on." />}
-              <Toggle m={m} set={set} k="web_search_allowed" inverted label="Allow web search" note="Lets users enable web search for this model (web search must also be configured in the Web Search tab)." />
+              <Toggle m={m} set={set} k="web_search_allowed" inverted label="Allow web search" note="Lets users enable web search for this model (web search must also be configured in the Web Search section)." />
               {m.web_search_allowed !== 0 && <Toggle m={m} set={set} k="web_search_auto" label="Enable web search by default" note="New chats with this model start with web search on." />}
-              <Toggle m={m} set={set} k="tools_allowed" inverted label="Allow custom tools" note="Lets this model use the live-data tools defined in the Tools tab." />
-              {m.tools_allowed !== 0 && <Toggle m={m} set={set} k="tools_auto" label="Enable custom tools by default" note="Expose all enabled custom tools to this model automatically." />}
+              <Toggle m={m} set={set} k="tools_allowed" inverted label="Allow live tools" note="Lets this model use the live-data tools defined in the Live Tools section." />
+              {m.tools_allowed !== 0 && <Toggle m={m} set={set} k="tools_auto" label="Enable live tools by default" note="Expose all enabled live tools to this model automatically." />}
             </div>
             <div className="field"><label>Tool-call limit</label>
               <input type="number" min="0" value={m.agent_steps || ''} placeholder="Unlimited" onChange={(e) => set('agent_steps', e.target.value)} style={{ maxWidth: 140 }} />
@@ -336,9 +362,10 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
           </div>
         )}
 
-        {section === 'appearance' && (
+        {section === 'style' && (
           <div className="me2-pane">
-            <div className="field"><label>Model logo</label>
+            <div className="me2-group-label first">Logo</div>
+            <div className="field">
               <div className="icon-grid">
                 <IconSlot label="Static" value={m.static_icon} def="" onChange={(v) => set('static_icon', v)} />
                 <IconSlot label="Generating" value={m.generating_icon} def={m.static_icon || ''} anim={(m.generating_anim || 'spin') === 'none' ? '' : (m.generating_anim || 'spin')} onChange={(v) => set('generating_icon', v)} />
@@ -368,8 +395,10 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
               </div>
               <div className="muted-note">Size of the model's icon shown beside its messages. Default is 40px. Legacy is 26px.</div>
             </div>
+            <div className="me2-group-label">In chat</div>
             <div className="me2-toggle-card">
               <Toggle m={m} set={set} k="dropdown_icon" inverted label="Show logo in picker" note="Display this model's static logo next to its name in the model picker." />
+              <Toggle m={m} set={set} k="show_name" label="Show model name" note="Display this model's name next to its logo on assistant messages." />
             </div>
             <div className="field">
               <label>Logo position</label>
@@ -380,9 +409,7 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
               </div>
               <div className="muted-note">Where the logo sits relative to the message it generates. "Left of text" places it as an avatar in a gutter beside the message.</div>
             </div>
-            <div className="me2-toggle-card">
-              <Toggle m={m} set={set} k="show_name" label="Show model name" note="Display this model's name next to its logo on assistant messages." />
-            </div>
+            <div className="me2-group-label">Showcase</div>
             <div className="me2-toggle-card">
               <Toggle m={m} set={set} k="bg_enabled" label="Showcase background" note="Show a custom backdrop behind the whole interface when this model is selected. UI panels turn to frosted glass to blend in." />
             </div>
@@ -404,8 +431,9 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
           </div>
         )}
 
-        {section === 'sampling' && (
+        {section === 'tuning' && (
           <div className="me2-pane">
+            <div className="me2-group-label first">Sampling</div>
             <div className="muted-note">Optional overrides sent with each request. Leave a field blank to use the provider's default. Only parameters supported by {curType?.label || 'this provider'} are shown.</div>
             <div className="sampling-grid">
               {[
@@ -421,11 +449,7 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
                 </div>
               ))}
             </div>
-          </div>
-        )}
-
-        {section === 'pricing' && (
-          <div className="me2-pane">
+            <div className="me2-group-label">Pricing</div>
             <div className="muted-note">Optional. Used to estimate cost in each user's Usage tab. Prices are per 1,000,000 tokens. Leave blank or 0 for local or free models.</div>
             {preset && (
               <div className="me2-preset">
@@ -458,12 +482,17 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
   );
 }
 
+const TAB_IDS = ['overview', 'models', 'providers', 'branding', 'home', 'members', 'websearch', 'membank', 'tools', 'functions', 'limits', 'audit', 'analytics'];
+
 export default function AdminPanel({ user, onClose }) {
-  const [tab, setTab] = useState('models');
+  const [tab, setTab] = useState(() => {
+    try { const t = localStorage.getItem('oq-admin-tab'); if (t && TAB_IDS.includes(t)) return t; } catch {}
+    return 'overview';
+  });
+  const [navQ, setNavQ] = useState('');
   const [models, setModels] = useState([]);
   const [usersList, setUsersList] = useState([]);
   const [cfg, setCfg] = useState({ appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [], appFont: 'serif' });
-  const [cfgSaved, setCfgSaved] = useState(false);
   const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256, modelQueue: false, membankEnabled: false, membankHideTools: false, membankPrompt: '', budgetUser: 0, budgetAdmin: 0, budgetWarnFraction: 0.8, budgetEnforce: false, sessionTtlDays: 30, maxSessions: 0 });
   const [providers, setProviders] = useState([]);
   const [membankFiles, setMembankFiles] = useState([]);
@@ -476,6 +505,14 @@ export default function AdminPanel({ user, onClose }) {
   const [mbEditName, setMbEditName] = useState('');
   const [mbErr, setMbErr] = useState('');
   const [mbDrag, setMbDrag] = useState(null);
+  const [memberQ, setMemberQ] = useState('');
+  const [memberRole, setMemberRole] = useState('all');
+  const [modelView, setModelView] = useState('all');
+  const [meSection, setMeSection] = useState('general');
+  const [multiSel, setMultiSel] = useState(() => new Set());
+  const selAnchor = useRef(null);
+  const [provTest, setProvTest] = useState({});
+  const [recentAudit, setRecentAudit] = useState(null);
   async function saveMbRename(oldName) {
     const name = mbEditName.trim();
     setMbErr('');
@@ -556,13 +593,15 @@ export default function AdminPanel({ user, onClose }) {
       setAudit(a => ({ entries: offset ? [...a.entries, ...d.entries] : d.entries, total: d.total, offset, hasMore: d.hasMore, loading: false, actions: d.actions || a.actions }));
     } catch { setAudit(a => ({ ...a, loading: false })); }
   }
+  async function loadRecentAudit() {
+    try { const d = await api.get('/api/admin/audit?limit=6&offset=0'); setRecentAudit(d.entries || []); } catch { setRecentAudit([]); }
+  }
   const [providerTypes, setProviderTypes] = useState({});
   const [selModel, setSelModel] = useState(null);
   const [modelFilter, setModelFilter] = useState('');
-  const [setSavedFlash, setSetSaved] = useState(false);
   const [dragOver, setDragOver] = useState(null);
-  const [ask, setAsk] = useState(null); // { message, danger, onConfirm }
-  const [autosave, setAutosave] = useState('idle'); // idle | saving | saved
+  const [ask, setAsk] = useState(null);
+  const [autosave, setAutosave] = useState('idle');
   const [pub, setPub] = useState({ dirty: false, publishedAt: null });
   const [publishing, setPublishing] = useState(false);
   const [pubFlash, setPubFlash] = useState(false);
@@ -577,6 +616,7 @@ export default function AdminPanel({ user, onClose }) {
   const modelsRef = useRef([]);
   useEffect(() => { modelsRef.current = models; }, [models]);
   useEffect(() => { selModelRef.current = selModel; }, [selModel]);
+  useEffect(() => { try { localStorage.setItem('oq-admin-tab', tab); } catch {} }, [tab]);
 
   useEffect(() => {
     async function onConfig() {
@@ -605,6 +645,15 @@ export default function AdminPanel({ user, onClose }) {
   useEffect(() => { load().then(() => { readyRef.current = true; }); refreshPubState(); }, []);
 
   useEffect(() => {
+    if (tab === 'overview') { if (!adminUsage) loadAdminUsage('30'); if (!recentAudit) loadRecentAudit(); }
+    else if (tab === 'membank') loadMembank();
+    else if (tab === 'tools') loadTools();
+    else if (tab === 'functions') loadFns();
+    else if (tab === 'audit') loadAudit(0);
+    else if (tab === 'analytics') { loadAdminUsage(); loadPresets(); }
+  }, [tab]);
+
+  useEffect(() => {
     if (!readyRef.current) return;
     if (setSaveTimer.current) clearTimeout(setSaveTimer.current);
     setSetAutoStatus('saving');
@@ -623,11 +672,6 @@ export default function AdminPanel({ user, onClose }) {
       catch { setSetAutoStatus('idle'); }
     }, 500);
   }, [cfg]);
-
-  async function saveCfg() {
-    await api.patch('/api/admin/app-config', { ...cfg, greetings: cfg.greetings.map(g => g.trim()).filter(Boolean), quickPrompts: (cfg.quickPrompts || []).filter(q => (q.label || '').trim() && (q.prompt || '').trim()) });
-    setCfgSaved(true); setTimeout(() => setCfgSaved(false), 1600);
-  }
 
   async function setRole(id, isAdmin) {
     await api.patch('/api/admin/users/' + id, { isAdmin });
@@ -701,15 +745,40 @@ export default function AdminPanel({ user, onClose }) {
     setSelModel(newId);
     setPub(p => ({ ...p, dirty: true }));
   }
+  async function bulkDuplicate(ids) {
+    for (const id of ids) {
+      const src = modelsRef.current.find(m => m.id === id);
+      if (!src) continue;
+      const body = { ...src, display_name: (src.display_name || 'Model') + ' copy', is_default: false };
+      const { id: newId } = await api.post('/api/admin/models', body);
+      await api.patch('/api/admin/models/' + newId, body);
+    }
+    await load();
+    setMultiSel(new Set());
+    setPub(p => ({ ...p, dirty: true }));
+  }
+  async function bulkSetEnabled(ids, enabled) {
+    for (const id of ids) await api.patch('/api/admin/models/' + id, { enabled: enabled ? 1 : 0 });
+    setModels(ms => ms.map(m => ids.includes(m.id) ? { ...m, enabled: enabled ? 1 : 0 } : m));
+    setPub(p => ({ ...p, dirty: true }));
+  }
+  function bulkDelete(ids) {
+    setAsk({
+      message: `Delete ${ids.length} model${ids.length === 1 ? '' : 's'}? This cannot be undone.`, danger: `Delete ${ids.length} model${ids.length === 1 ? '' : 's'}`,
+      onConfirm: async () => {
+        for (const id of ids) await api.del('/api/admin/models/' + id);
+        setModels(ms => ms.filter(m => !ids.includes(m.id)));
+        setMultiSel(new Set());
+        setSelModel(s => ids.includes(s) ? null : s);
+        setPub(p => ({ ...p, dirty: true }));
+      }
+    });
+  }
   function del(id) {
     setAsk({
       message: 'Delete this model? This cannot be undone.', danger: 'Delete model',
       onConfirm: async () => { await api.del('/api/admin/models/' + id); setModels(ms => ms.filter(m => m.id !== id)); setSelModel(s => s === id ? null : s); setPub(p => ({ ...p, dirty: true })); }
     });
-  }
-  async function saveSettings() {
-    await api.patch('/api/admin/settings', settings);
-    setSetSaved(true); setTimeout(() => setSetSaved(false), 1500);
   }
   async function reloadProviders() {
     try { const p = await api.get('/api/admin/providers'); setProviders(p.providers || []); setProviderTypes(p.types || {}); } catch {}
@@ -725,6 +794,15 @@ export default function AdminPanel({ user, onClose }) {
   async function deleteProvider(id) {
     try { await api.del('/api/admin/providers/' + id); await reloadProviders(); await load(); }
     catch (e) { setAsk({ message: e?.message || 'Could not delete provider.', onConfirm: () => setAsk(null) }); }
+  }
+  async function testProvider(id) {
+    setProvTest(t => ({ ...t, [id]: { busy: true } }));
+    try {
+      const r = await api.get('/api/admin/discover-models?provider=' + encodeURIComponent(id));
+      setProvTest(t => ({ ...t, [id]: { ok: true, count: (r.models || []).length } }));
+    } catch (e) {
+      setProvTest(t => ({ ...t, [id]: { ok: false, err: e?.message || 'Unreachable' } }));
+    }
   }
 
   const drag = {
@@ -744,27 +822,48 @@ export default function AdminPanel({ user, onClose }) {
   };
 
   const NAV = [
-    { group: 'Platform', items: [
+    { group: '', items: [
+      { id: 'overview', label: 'Overview', desc: 'A live snapshot of your workspace — catalog, people, spend, and recent activity.', Icon: Panel }
+    ] },
+    { group: 'Catalog', items: [
       { id: 'models', label: 'Models', desc: 'The catalog users pick from — prompts, capabilities, look and pricing per model.', Icon: Cube },
       { id: 'providers', label: 'Providers', desc: 'The LLM backends your models run through.', Icon: Sliders }
     ] },
     { group: 'Workspace', items: [
-      { id: 'customization', label: 'Appearance', desc: 'Brand the app. Changes save to a draft and push to every connected client.', Icon: Sparkles },
-      { id: 'users', label: 'Users', desc: 'Everyone who has signed in — roles, budgets, and account removal.', Icon: Users },
-      { id: 'limits', label: 'Limits & Safety', desc: 'Guardrails applied across the app. These take effect immediately.', Icon: Shield }
+      { id: 'branding', label: 'Branding', desc: 'Name, icon, and typography. Changes save to a draft and push to every connected client.', Icon: Sparkles },
+      { id: 'home', label: 'Home Screen', desc: 'The greetings and quick prompts users see when they start a new chat.', Icon: Chat },
+      { id: 'members', label: 'Members', desc: 'Everyone who has signed in — roles, budgets, and account removal.', Icon: Users }
     ] },
     { group: 'Intelligence', items: [
-      { id: 'websearch', label: 'Web Search', desc: 'Give models a web search tool backed by your own SearXNG instance.', Icon: Globe, load: null },
-      { id: 'membank', label: 'Memory Bank', desc: 'Reference files every model can read on demand.', Icon: FileText, load: loadMembank },
-      { id: 'tools', label: 'Tools', desc: 'Server-side live-data tools models can call (weather, prices, APIs…).', Icon: Wrench, load: loadTools },
-      { id: 'functions', label: 'Functions', desc: 'Custom buttons that run your JavaScript in the browser.', Icon: Code, load: loadFns }
+      { id: 'websearch', label: 'Web Search', desc: 'Give models a web search tool backed by your own SearXNG instance.', Icon: Globe },
+      { id: 'membank', label: 'Memory Bank', desc: 'Reference files every model can read on demand.', Icon: FileText },
+      { id: 'tools', label: 'Live Tools', desc: 'Server-side live-data tools models can call (weather, prices, APIs…).', Icon: Wrench },
+      { id: 'functions', label: 'Functions', desc: 'Custom buttons that run your JavaScript in the browser.', Icon: Code }
     ] },
-    { group: 'Insights', items: [
-      { id: 'audit', label: 'Audit Log', desc: 'A record of sensitive admin actions. Pruned after 120 days.', Icon: Clock, load: () => loadAudit() },
-      { id: 'usage', label: 'Usage & Pricing', desc: 'Account-wide token use, estimated cost, and price presets.', Icon: Brain, load: () => { loadAdminUsage(); loadPresets(); } }
+    { group: 'Governance', items: [
+      { id: 'limits', label: 'Limits & Budgets', desc: 'Guardrails applied across the app. These take effect immediately.', Icon: Shield },
+      { id: 'audit', label: 'Audit Log', desc: 'A record of sensitive admin actions. Pruned after 120 days.', Icon: Clock },
+      { id: 'analytics', label: 'Analytics', desc: 'Account-wide token use, estimated cost, and price presets.', Icon: Brain }
     ] }
   ];
-  const activeMeta = NAV.flatMap(g => g.items).find(t => t.id === tab) || NAV[0].items[0];
+  const flatNav = NAV.flatMap(g => g.items.map(it => ({ ...it, group: g.group })));
+  const activeMeta = flatNav.find(t => t.id === tab) || flatNav[0];
+  const nq = navQ.trim().toLowerCase();
+  const navMatches = nq ? flatNav.filter(t => t.label.toLowerCase().includes(nq) || (t.group || '').toLowerCase().includes(nq)) : null;
+
+  const visibleModels = models.filter(m => m.enabled && !m.unavailable).length;
+  const hiddenModels = models.filter(m => !m.enabled).length;
+  const unavailModels = models.filter(m => !!m.unavailable).length;
+  const adminCount = usersList.filter(u => u.isAdmin || u.isOwner).length;
+
+  const fmtWhen = (ts) => {
+    if (!ts) return '';
+    const d = new Date(ts); const diff = Date.now() - (typeof ts === 'number' ? ts : d.getTime());
+    if (diff < 60000) return 'just now';
+    if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+    if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+    return d.toLocaleDateString();
+  };
 
   return (
     <div className="admin-page">
@@ -773,16 +872,31 @@ export default function AdminPanel({ user, onClose }) {
           <img className="ar-brand-icon" src={cfg.appIcon || '/starburst.svg'} alt="" />
           <div className="ar-brand-text">
             <span className="ar-brand-name">{cfg.appName || 'open-quill'}</span>
-            <span className="ar-brand-sub">Admin</span>
+            <span className="ar-brand-sub">Control Center</span>
           </div>
         </div>
+        <div className="ar-filter">
+          <input value={navQ} onChange={(e) => setNavQ(e.target.value)} placeholder="Jump to a section…"
+            onKeyDown={(e) => { if (e.key === 'Enter' && navMatches?.length) { setTab(navMatches[0].id); setNavQ(''); } if (e.key === 'Escape') setNavQ(''); }} />
+        </div>
         <div className="ar-scroll">
-          {NAV.map(g => (
-            <div className="ar-group" key={g.group}>
-              <div className="ar-group-label">{g.group}</div>
-              {g.items.map(({ id, label, Icon, load }) => (
-                <button key={id} className={'ar-tab' + (tab === id ? ' active' : '')} onClick={() => { setTab(id); load && load(); }}>
+          {navMatches ? (
+            <div className="ar-group">
+              <div className="ar-group-label">{navMatches.length ? 'Matches' : 'No matches'}</div>
+              {navMatches.map(({ id, label, Icon, group }) => (
+                <button key={id} className={'ar-tab' + (tab === id ? ' active' : '')} onClick={() => { setTab(id); setNavQ(''); }}>
+                  <Icon /> <span>{label}</span>{group && <span className="ar-tab-hint">{group}</span>}
+                </button>
+              ))}
+            </div>
+          ) : NAV.map((g, gi) => (
+            <div className="ar-group" key={g.group || gi}>
+              {g.group && <div className="ar-group-label">{g.group}</div>}
+              {g.items.map(({ id, label, Icon }) => (
+                <button key={id} className={'ar-tab' + (tab === id ? ' active' : '')} onClick={() => setTab(id)}>
                   <Icon /> <span>{label}</span>
+                  {id === 'models' && models.length > 0 && <span className="ar-tab-count">{models.length}</span>}
+                  {id === 'members' && usersList.length > 0 && <span className="ar-tab-count">{usersList.length}</span>}
                 </button>
               ))}
             </div>
@@ -793,21 +907,85 @@ export default function AdminPanel({ user, onClose }) {
       <div className="admin-content">
         <header className="admin-topbar">
           <div className="atb-title">
+            {activeMeta.group && <span className="atb-crumb">{activeMeta.group}</span>}
             <h1>{activeMeta.label}</h1>
             <span className="atb-desc">{activeMeta.desc}</span>
           </div>
-          <div className="atb-status">
-            {pubFlash
-              ? <span className="saved-flash">Pushed to all clients ✓</span>
-              : pub.dirty
-                ? <span className="pub-note dirty">Unpublished draft changes</span>
-                : <span className="pub-note">{pub.published ? 'Clients are up to date' : 'Nothing published yet'}</span>}
-          </div>
-          <button className={'btn primary push-btn' + (pub.dirty ? ' dirty' : '')} onClick={publish} disabled={publishing || (!pub.dirty && pub.published)}>
-            {publishing ? 'Pushing…' : 'Push to all clients'}
-          </button>
+          {tab !== 'overview' && (
+            <div className="atb-status">
+              {pubFlash
+                ? <span className="saved-flash">Pushed to all clients ✓</span>
+                : pub.dirty
+                  ? <span className="pub-note dirty">Unpublished draft changes</span>
+                  : <span className="pub-note">{pub.published ? 'Clients are up to date' : 'Nothing published yet'}</span>}
+            </div>
+          )}
+          {tab !== 'overview' && (
+            <button className={'btn primary push-btn' + (pub.dirty ? ' dirty' : '')} onClick={publish} disabled={publishing || (!pub.dirty && pub.published)}>
+              {publishing ? 'Pushing…' : 'Push to all clients'}
+            </button>
+          )}
         </header>
-        <div className={'admin-body' + (tab === 'models' ? ' wide' : '')}>
+        <div className={'admin-body' + (tab === 'models' && models.length ? ' wide' : '')}>
+          {tab === 'overview' && (
+            <div className="ov-wrap">
+              <div className="ov-stats">
+                {[
+                  ['Models', String(models.length), `${visibleModels} visible · ${hiddenModels} hidden${unavailModels ? ` · ${unavailModels} unavailable` : ''}`, Cube, 'models'],
+                  ['Providers', String(providers.length), Object.keys(providerTypes).length ? 'LLM backends connected' : 'LLM backends', Sliders, 'providers'],
+                  ['Members', String(usersList.length), `${adminCount} admin${adminCount === 1 ? '' : 's'}`, Users, 'members'],
+                  ['30-day spend', adminUsage ? '$' + (adminUsage.totals?.cost || 0).toFixed(2) : '—', adminUsage ? `${(adminUsage.totals?.total || 0).toLocaleString()} tokens · ${(adminUsage.totals?.generations || 0).toLocaleString()} generations` : 'Loading…', Brain, 'analytics']
+                ].map(([l, v, s, Icon, dest]) => (
+                  <button key={l} className="ov-stat" onClick={() => setTab(dest)}>
+                    <span className="ov-stat-icon"><Icon /></span>
+                    <span className="ov-stat-main">
+                      <span className="ov-stat-v">{v}</span>
+                      <span className="ov-stat-l">{l}</span>
+                      <span className="ov-stat-s">{s}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div className="ov-cols">
+                <Card title="Publishing" sub="Drafts stay private to admins until pushed.">
+                  <div className={'ov-pub' + (pub.dirty ? ' dirty' : '')}>
+                    <span className="ov-pub-dot" />
+                    <div className="ov-pub-text">
+                      <div className="ov-pub-title">{pub.dirty ? 'You have unpublished draft changes' : pub.published ? 'All clients are up to date' : 'Nothing published yet'}</div>
+                      <div className="muted-note">{pub.publishedAt ? 'Last pushed ' + new Date(pub.publishedAt).toLocaleString() : 'Model, branding, and home screen edits collect in a draft until you push them.'}</div>
+                    </div>
+                    <button className="btn primary" onClick={publish} disabled={publishing || (!pub.dirty && pub.published)}>{publishing ? 'Pushing…' : 'Push now'}</button>
+                  </div>
+                </Card>
+                <Card title="Quick actions" sub="Common tasks, one click away.">
+                  <div className="ov-actions">
+                    <button className="ov-action" onClick={() => { setTab('models'); add(); }}><Plus /> <span>New model</span></button>
+                    <button className="ov-action" onClick={() => { setTab('models'); openDiscover(providers[0]?.id); }}><Cube /> <span>Discover models</span></button>
+                    <button className="ov-action" onClick={() => { setTab('providers'); }}><Sliders /> <span>Manage providers</span></button>
+                    <button className="ov-action" onClick={() => { setTab('branding'); }}><Sparkles /> <span>Edit branding</span></button>
+                    <button className="ov-action" onClick={() => { setTab('limits'); }}><Shield /> <span>Review limits</span></button>
+                    <button className="ov-action" onClick={() => { setTab('audit'); }}><Clock /> <span>Open audit log</span></button>
+                  </div>
+                </Card>
+              </div>
+              <Card title="Recent activity" sub="The latest sensitive admin actions."
+                right={<button className="linklike" onClick={() => setTab('audit')}>View full log</button>}>
+                {!recentAudit && <div className="muted-note">Loading…</div>}
+                {recentAudit && recentAudit.length === 0 && <div className="muted-note">No admin activity recorded yet.</div>}
+                {recentAudit && recentAudit.length > 0 && (
+                  <div className="ov-activity">
+                    {recentAudit.map(e => (
+                      <div key={e.id} className="ov-act-row">
+                        <span className="au-action">{e.action}</span>
+                        <span className="ov-act-meta">{e.actorEmail}</span>
+                        <span className="ov-act-when">{fmtWhen(e.ts)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </div>
+          )}
           {tab === 'models' && (() => {
             const sel = models.find(x => x.id === selModel) || models[0] || null;
             if (!models.length) return (
@@ -819,11 +997,40 @@ export default function AdminPanel({ user, onClose }) {
                   <button className="btn primary" onClick={add}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> Add model</button>
                   <button className="btn ghost" onClick={() => openDiscover(providers[0]?.id)}><Cube style={{ width: 14, verticalAlign: '-2px' }} /> Discover from a provider</button>
                 </div>
-                <div className="ae-hint">No provider set up yet? Head to the <button className="linklike" onClick={() => setTab('providers')}>Providers</button> tab first.</div>
+                <div className="ae-hint">No provider set up yet? Head to the <button className="linklike" onClick={() => setTab('providers')}>Providers</button> section first.</div>
               </div>
             );
             const q = modelFilter.trim().toLowerCase();
-            const shown = q ? models.filter(m => (m.display_name || '').toLowerCase().includes(q) || (m.internal_name || '').toLowerCase().includes(q)) : models;
+            const inView = (m) => modelView === 'visible' ? (!!m.enabled && !m.unavailable) : modelView === 'hidden' ? !m.enabled : modelView === 'unavailable' ? !!m.unavailable : true;
+            const shown = models.filter(m => inView(m) && (!q || (m.display_name || '').toLowerCase().includes(q) || (m.internal_name || '').toLowerCase().includes(q)));
+            const canDrag = !q && modelView === 'all' && multiSel.size <= 1;
+            const selectedIds = [...multiSel].filter(id => models.some(m => m.id === id));
+            const bulk = selectedIds.length > 1;
+            function rowClick(e, m) {
+              if (e.shiftKey && selAnchor.current) {
+                const order = shown.map(x => x.id);
+                let a = order.indexOf(selAnchor.current), b = order.indexOf(m.id);
+                if (a < 0) a = b;
+                const [lo, hi] = a < b ? [a, b] : [b, a];
+                setMultiSel(new Set(order.slice(lo, hi + 1)));
+                setSelModel(m.id);
+                return;
+              }
+              if (e.ctrlKey || e.metaKey) {
+                setMultiSel(prev => {
+                  const n = new Set(prev);
+                  if (!n.size && sel) n.add(sel.id);
+                  if (n.has(m.id)) n.delete(m.id); else n.add(m.id);
+                  return n;
+                });
+                selAnchor.current = m.id;
+                setSelModel(m.id);
+                return;
+              }
+              setMultiSel(new Set());
+              selAnchor.current = m.id;
+              setSelModel(m.id);
+            }
             return (
               <>
                 <div className="mg-wrap">
@@ -835,31 +1042,40 @@ export default function AdminPanel({ user, onClose }) {
                     <div className="mg-search">
                       <input value={modelFilter} onChange={(e) => setModelFilter(e.target.value)} placeholder="Search models…" />
                     </div>
-                    <div className="mg-list">
-                      {shown.map((m, i) => (
-                        <div key={m.id}
-                          className={'mg-row' + (sel && sel.id === m.id ? ' active' : '') + (!q && drag.dragging === i ? ' dragging' : '') + (!q && drag.over === i ? ' drag-over' : '')}
-                          draggable={!q} onDragStart={() => !q && drag.onStart(i)} onDragEnd={drag.onEnd}
-                          onDragOver={(e) => { if (q) return; e.preventDefault(); drag.onOver(i); }}
-                          onDrop={(e) => { if (q) return; e.preventDefault(); drag.onDrop(i); }}
-                          onClick={() => setSelModel(m.id)}>
-                          {!q && <span className="mg-grip"><Grip /></span>}
-                          {m.static_icon ? <img className="mg-row-icon" src={m.static_icon} alt="" /> : <span className="mg-row-icon noicon">{(m.display_name || '?').trim().charAt(0).toUpperCase()}</span>}
-                          <div className="mg-row-meta">
-                            <span className="mg-row-name">
-                              {m.display_name || 'Untitled model'}
-                              {!!m.is_default && <span className="mg-star" title="Default">★</span>}
-                            </span>
-                            <span className="mg-row-sub">{m.internal_name || 'no id'}</span>
-                          </div>
-                          <span className="mg-dots">
-                            {!m.enabled && <span className="mg-dot dim" title="Hidden" />}
-                            {!!m.unavailable && <span className="mg-dot warn" title="Unavailable" />}
-                            {!!m.in_more_models && <span className="mg-dot" title="Grouped" />}
-                          </span>
-                        </div>
+                    <div className="mg-filters">
+                      {[['all', 'All', models.length], ['visible', 'Visible', visibleModels], ['hidden', 'Hidden', hiddenModels], ['unavailable', 'Down', unavailModels]].map(([v, l, n]) => (
+                        <button key={v} className={'mg-chip' + (modelView === v ? ' on' : '')} onClick={() => setModelView(v)}>{l}{n > 0 && <em>{n}</em>}</button>
                       ))}
-                      {q && shown.length === 0 && <div className="mg-empty">No models match “{modelFilter}”.</div>}
+                    </div>
+                    <div className="mg-list">
+                      {shown.map((m) => {
+                        const i = models.indexOf(m);
+                        return (
+                          <div key={m.id}
+                            className={'mg-row' + (sel && sel.id === m.id && !bulk ? ' active' : '') + (multiSel.has(m.id) ? ' checked' : '') + (canDrag && drag.dragging === i ? ' dragging' : '') + (canDrag && drag.over === i ? ' drag-over' : '')}
+                            draggable={canDrag} onDragStart={() => canDrag && drag.onStart(i)} onDragEnd={drag.onEnd}
+                            onDragOver={(e) => { if (!canDrag) return; e.preventDefault(); drag.onOver(i); }}
+                            onDrop={(e) => { if (!canDrag) return; e.preventDefault(); drag.onDrop(i); }}
+                            onMouseDown={(e) => { if (e.shiftKey) e.preventDefault(); }}
+                            onClick={(e) => rowClick(e, m)}>
+                            {canDrag && <span className="mg-grip"><Grip /></span>}
+                            {m.static_icon ? <img className="mg-row-icon" src={m.static_icon} alt="" /> : <span className="mg-row-icon noicon">{(m.display_name || '?').trim().charAt(0).toUpperCase()}</span>}
+                            <div className="mg-row-meta">
+                              <span className="mg-row-name">
+                                {m.display_name || 'Untitled model'}
+                                {!!m.is_default && <span className="mg-star" title="Default">★</span>}
+                              </span>
+                              <span className="mg-row-sub">{m.internal_name || 'no id'}</span>
+                            </div>
+                            <span className="mg-dots">
+                              {!m.enabled && <span className="mg-dot dim" title="Hidden" />}
+                              {!!m.unavailable && <span className="mg-dot warn" title="Unavailable" />}
+                              {!!m.in_more_models && <span className="mg-dot" title="Grouped" />}
+                            </span>
+                          </div>
+                        );
+                      })}
+                      {shown.length === 0 && <div className="mg-empty">{q ? `No models match “${modelFilter}”.` : 'Nothing here with this filter.'}</div>}
                     </div>
                     <div className="mg-rail-foot">
                       <button className="btn add-model" onClick={add}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> Add model</button>
@@ -867,29 +1083,70 @@ export default function AdminPanel({ user, onClose }) {
                     </div>
                   </div>
                   <div className="mg-detail">
-                    {sel
-                      ? <ModelEditor key={sel.id} m={sel} onChange={change} onDelete={del} onDuplicate={duplicate} autosaveState={autosave} providers={providers} providerTypes={providerTypes} />
+                    {bulk ? (
+                      <div className="me2 bulk-panel">
+                        <div className="me2-head">
+                          <span className="me2-icon noicon">{selectedIds.length}</span>
+                          <div className="me2-id">
+                            <div className="me2-name">{selectedIds.length} models selected</div>
+                            <div className="me2-sub"><span className="me2-sub-text">Shift-click selects a range · Ctrl-click toggles one</span></div>
+                          </div>
+                        </div>
+                        <div className="me2-body">
+                          <div className="me2-pane">
+                            <div className="bulk-chips">
+                              {selectedIds.map(id => {
+                                const m = models.find(x => x.id === id);
+                                return m ? <span key={id} className="bulk-chip">{m.display_name || 'Untitled'}</span> : null;
+                              })}
+                            </div>
+                            <div className="bulk-actions">
+                              <button className="btn" onClick={() => bulkDuplicate(selectedIds)}><Copy style={{ width: 14, verticalAlign: '-2px' }} /> Duplicate</button>
+                              <button className="btn" onClick={() => bulkSetEnabled(selectedIds, true)}>Show</button>
+                              <button className="btn" onClick={() => bulkSetEnabled(selectedIds, false)}>Hide</button>
+                              <button className="btn danger" onClick={() => bulkDelete(selectedIds)}><Trash style={{ width: 14, verticalAlign: '-2px' }} /> Delete</button>
+                              <button className="btn ghost" onClick={() => setMultiSel(new Set())}>Clear selection</button>
+                            </div>
+                            <div className="muted-note" style={{ marginTop: 12 }}>Duplicating copies every setting except the default flag. Show and Hide flip picker visibility. Deleting cannot be undone.</div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : sel
+                      ? <ModelEditor key={sel.id} m={sel} onChange={change} onDelete={del} onDuplicate={duplicate} autosaveState={autosave} providers={providers} providerTypes={providerTypes} section={meSection} onSection={setMeSection} />
                       : <div className="muted-note" style={{ padding: 20 }}>No models yet — add one to get started.</div>}
                   </div>
                 </div>
               </>
             );
           })()}
-          {tab === 'customization' && (
+          {tab === 'branding' && (
             <>
-              <div className="field"><label>App name</label>
-                <input value={cfg.appName} onChange={(e) => setCfg(c => ({ ...c, appName: e.target.value }))} placeholder="open-quill" /></div>
-              <div className="field"><label>Interface font</label>
-                <div className="seg" style={{ width: 'fit-content' }}>
-                  <button className={(cfg.appFont || 'serif') === 'serif' ? 'on' : ''} onClick={() => setCfg(c => ({ ...c, appFont: 'serif' }))}>Source Serif (default)</button>
-                  <button className={cfg.appFont === 'sans' ? 'on' : ''} onClick={() => setCfg(c => ({ ...c, appFont: 'sans' }))}>Open Sans</button>
+              <Card title="Identity" sub="How the app introduces itself across every client.">
+                <div className="field"><label>App name</label>
+                  <input value={cfg.appName} onChange={(e) => setCfg(c => ({ ...c, appName: e.target.value }))} placeholder="open-quill" /></div>
+                <div className="field"><label>App icon <span className="muted-note" style={{ display: 'inline' }}>(browser tab + greeting)</span></label>
+                  <div className="icon-grid" style={{ gridTemplateColumns: '1fr' }}>
+                    <IconSlot label="Click to upload (png, svg, jpeg, gif)" value={cfg.appIcon} def="/starburst.svg" anim="" onChange={(v) => setCfg(c => ({ ...c, appIcon: v }))} />
+                  </div>
                 </div>
-                <div className="muted-note">The display font used for headings, greetings, and assistant text across the entire UI. Open Sans gives a cleaner, sans-serif look everywhere.</div>
-              </div>
-              <div className="field"><label>Bottom disclaimer</label>
-                <input value={cfg.disclaimer} onChange={(e) => setCfg(c => ({ ...c, disclaimer: e.target.value }))} placeholder="Assistants can make mistakes, double-check responses." /></div>
-              <div className="field">
-                <label>Greetings <span className="muted-note" style={{ display: 'inline' }}>(one is shown at random each visit)</span></label>
+              </Card>
+              <Card title="Typography & footer" sub="The overall voice of the interface.">
+                <div className="field"><label>Interface font</label>
+                  <div className="seg" style={{ width: 'fit-content' }}>
+                    <button className={(cfg.appFont || 'serif') === 'serif' ? 'on' : ''} onClick={() => setCfg(c => ({ ...c, appFont: 'serif' }))}>Source Serif (default)</button>
+                    <button className={cfg.appFont === 'sans' ? 'on' : ''} onClick={() => setCfg(c => ({ ...c, appFont: 'sans' }))}>Open Sans</button>
+                  </div>
+                  <div className="muted-note">The display font used for headings, greetings, and assistant text across the entire UI. Open Sans gives a cleaner, sans-serif look everywhere.</div>
+                </div>
+                <div className="field"><label>Bottom disclaimer</label>
+                  <input value={cfg.disclaimer} onChange={(e) => setCfg(c => ({ ...c, disclaimer: e.target.value }))} placeholder="Assistants can make mistakes, double-check responses." /></div>
+              </Card>
+              <AutosaveNote status={setAutoStatus} />
+            </>
+          )}
+          {tab === 'home' && (
+            <>
+              <Card title="Greetings" sub="One is shown at random each visit.">
                 {cfg.greetings.map((g, i) => (
                   <div key={i} className="greeting-row">
                     <input value={g} onChange={(e) => setCfg(c => ({ ...c, greetings: c.greetings.map((x, j) => j === i ? e.target.value : x) }))} placeholder="How can I help you?" />
@@ -897,9 +1154,8 @@ export default function AdminPanel({ user, onClose }) {
                   </div>
                 ))}
                 <button className="btn" style={{ marginTop: 8 }} onClick={() => setCfg(c => ({ ...c, greetings: [...c.greetings, ''] }))}><Plus style={{ width: 14, verticalAlign: '-2px' }} /> Add greeting</button>
-              </div>
-              <div className="field">
-                <label>Quick prompt buttons <span className="muted-note" style={{ display: 'inline' }}>(shown under the input on the home screen; clicking sends the prompt)</span></label>
+              </Card>
+              <Card title="Quick prompt buttons" sub="Shown under the input on the home screen; clicking sends the prompt. Up to 8.">
                 {(cfg.quickPrompts || []).map((q, i) => (
                   <div key={i} className="qp-row">
                     <QpIconPicker value={q.icon || 'none'} onPick={(name) => setCfg(c => ({ ...c, quickPrompts: c.quickPrompts.map((x, j) => j === i ? { ...x, icon: name } : x) }))} />
@@ -908,55 +1164,75 @@ export default function AdminPanel({ user, onClose }) {
                     <button className="btn danger" onClick={() => setCfg(c => ({ ...c, quickPrompts: c.quickPrompts.filter((_, j) => j !== i) }))}><Trash style={{ width: 14 }} /></button>
                   </div>
                 ))}
+                {(cfg.quickPrompts || []).length === 0 && <div className="muted-note" style={{ marginBottom: 6 }}>No quick prompts yet — add one below.</div>}
                 {(cfg.quickPrompts || []).length < 8 && <button className="btn" style={{ marginTop: 8 }} onClick={() => setCfg(c => ({ ...c, quickPrompts: [...(c.quickPrompts || []), { icon: 'none', label: '', prompt: '' }] }))}><Plus style={{ width: 14, verticalAlign: '-2px' }} /> Add button</button>}
-              </div>
-              <div className="field"><label>App icon (browser tab + greeting)</label>
-                <div className="icon-grid" style={{ gridTemplateColumns: '1fr' }}>
-                  <IconSlot label="Click to upload (png, svg, jpeg, gif)" value={cfg.appIcon} def="/starburst.svg" anim="" onChange={(v) => setCfg(c => ({ ...c, appIcon: v }))} />
-                </div>
-              </div>
-              <div className="settings-autosave">
-                <span className={'autosave-dot' + (setAutoStatus === 'saved' ? ' flash' : '')} />
-                {setAutoStatus === 'saving' ? 'Saving…' : setAutoStatus === 'saved' ? 'Saved to draft — use Push to all clients to make it live' : 'Changes save automatically to your draft'}
-              </div>
+              </Card>
+              <AutosaveNote status={setAutoStatus} />
             </>
           )}
-          {tab === 'users' && (
-            <>
-              {usersList.map(u => (
-                <div className="user-row" key={u.id}>
-                  <div className="avatar">{(u.displayName || u.email)[0].toUpperCase()}</div>
-                  <div className="u-main">
-                    <div className="u-name">{u.displayName}{u.isOwner && <span className="badge">Top admin</span>}{u.twoFactor && <span className="badge" title="Two-factor enabled">2FA</span>}{u.id === user?.id && !u.isOwner && <span className="you-tag">you</span>}</div>
-                    <div className="u-email">{u.email}{typeof u.monthSpend === 'number' && u.monthSpend > 0 ? ` · $${u.monthSpend.toFixed(u.monthSpend < 0.01 ? 4 : 2)} this month` : ''}</div>
+          {tab === 'members' && (() => {
+            const mq = memberQ.trim().toLowerCase();
+            const shownUsers = usersList.filter(u => {
+              const isAdm = !!(u.isAdmin || u.isOwner);
+              if (memberRole === 'admins' && !isAdm) return false;
+              if (memberRole === 'users' && isAdm) return false;
+              if (mq && !((u.displayName || '').toLowerCase().includes(mq) || (u.email || '').toLowerCase().includes(mq))) return false;
+              return true;
+            });
+            return (
+              <>
+                <div className="mem-toolbar">
+                  <input className="mem-search" value={memberQ} onChange={(e) => setMemberQ(e.target.value)} placeholder="Search by name or email…" />
+                  <div className="seg">
+                    {[['all', `All (${usersList.length})`], ['admins', `Admins (${adminCount})`], ['users', `Users (${usersList.length - adminCount})`]].map(([v, l]) => (
+                      <button key={v} className={memberRole === v ? 'on' : ''} onClick={() => setMemberRole(v)}>{l}</button>
+                    ))}
                   </div>
-                  <div className="u-budget" title="Monthly budget override ($). Blank uses the role default.">
-                    <span className="u-budget-prefix">$</span>
-                    <input type="number" min="0" step="any" placeholder="role default"
-                      value={u.budget == null ? '' : u.budget}
-                      onChange={(e) => setUsersList(us => us.map(x => x.id === u.id ? { ...x, budget: e.target.value === '' ? null : e.target.value } : x))}
-                      onBlur={(e) => saveBudget(u.id, e.target.value)} />
-                  </div>
-                  {!u.isOwner && (
-                    <div className="seg">
-                      <button className={u.isAdmin ? '' : 'on'} onClick={() => setRole(u.id, false)}>User</button>
-                      <button className={u.isAdmin ? 'on' : ''} onClick={() => setRole(u.id, true)}>Admin</button>
+                </div>
+                {shownUsers.length === 0 && <div className="muted-note">No members match.</div>}
+                {shownUsers.map(u => (
+                  <div className="user-row" key={u.id}>
+                    <div className="avatar">{(u.displayName || u.email)[0].toUpperCase()}</div>
+                    <div className="u-main">
+                      <div className="u-name">{u.displayName}{u.isOwner && <span className="badge">Top admin</span>}{u.twoFactor && <span className="badge" title="Two-factor enabled">2FA</span>}{u.id === user?.id && !u.isOwner && <span className="you-tag">you</span>}</div>
+                      <div className="u-email">{u.email}{typeof u.monthSpend === 'number' && u.monthSpend > 0 ? ` · $${u.monthSpend.toFixed(u.monthSpend < 0.01 ? 4 : 2)} this month` : ''}</div>
                     </div>
-                  )}
-                  {!u.isOwner && u.id !== user?.id && (
-                    <button className="btn danger" onClick={() => removeUser(u.id)}><Trash style={{ width: 15 }} /></button>
-                  )}
-                </div>
-              ))}
-            </>
-          )}
+                    <div className="u-budget" title="Monthly budget override ($). Blank uses the role default.">
+                      <span className="u-budget-prefix">$</span>
+                      <input type="number" min="0" step="any" placeholder="role default"
+                        value={u.budget == null ? '' : u.budget}
+                        onChange={(e) => setUsersList(us => us.map(x => x.id === u.id ? { ...x, budget: e.target.value === '' ? null : e.target.value } : x))}
+                        onBlur={(e) => saveBudget(u.id, e.target.value)} />
+                    </div>
+                    {!u.isOwner && (
+                      <div className="seg">
+                        <button className={u.isAdmin ? '' : 'on'} onClick={() => setRole(u.id, false)}>User</button>
+                        <button className={u.isAdmin ? 'on' : ''} onClick={() => setRole(u.id, true)}>Admin</button>
+                      </div>
+                    )}
+                    {!u.isOwner && u.id !== user?.id && (
+                      <button className="btn danger" onClick={() => removeUser(u.id)}><Trash style={{ width: 15 }} /></button>
+                    )}
+                  </div>
+                ))}
+              </>
+            );
+          })()}
           {tab === 'providers' && (
             <>
               <div className="provider-list">
-                {providers.map(p => {
+                {providers.map((p, idx) => {
                   const t = providerTypes[p.type] || {};
+                  const test = provTest[p.id];
                   return (
-                    <div className="provider-card" key={p.id}>
+                    <Card key={p.id} className="provider-card2"
+                      title={p.name || 'Provider ' + (idx + 1)}
+                      sub={t.label || p.type}
+                      right={test && !test.busy && (
+                        test.ok
+                          ? <span className="pv-status ok">Reachable · {test.count} model{test.count === 1 ? '' : 's'}</span>
+                          : <span className="pv-status err">{test.err}</span>
+                      )}>
                       <div className="two-col">
                         <div className="field"><label>Name</label>
                           <input value={p.name || ''} onChange={(e) => patchProvider(p.id, { name: e.target.value })} placeholder="My provider" /></div>
@@ -970,10 +1246,11 @@ export default function AdminPanel({ user, onClose }) {
                       <div className="field"><label>API key {t.keyOptional && <span className="muted-note" style={{ display: 'inline' }}>(optional)</span>}</label>
                         <input value={p.api_key || ''} onChange={(e) => patchProvider(p.id, { api_key: e.target.value })} placeholder={t.keyOptional ? 'Not required for local servers' : 'Required'} /></div>
                       <div className="btn-row">
+                        <button className="btn ghost" onClick={() => testProvider(p.id)} disabled={test?.busy}>{test?.busy ? 'Testing…' : 'Test connection'}</button>
                         <button className="btn ghost" onClick={() => openDiscover(p.id)}><Cube style={{ width: 13, verticalAlign: '-2px' }} /> Discover models</button>
                         <button className="btn danger" disabled={providers.length <= 1} onClick={() => deleteProvider(p.id)}><Trash style={{ width: 13 }} /></button>
                       </div>
-                    </div>
+                    </Card>
                   );
                 })}
                 <button className="btn add-model" onClick={addProvider}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> Add provider</button>
@@ -982,114 +1259,119 @@ export default function AdminPanel({ user, onClose }) {
           )}
           {tab === 'limits' && (
             <>
-              <div className="field"><label>Upload size limit (MB)</label>
-                <div className="muted-note">Max size for files attached to messages, per role. 0 = unlimited.</div>
+              <Card title="Attachments & storage" sub="Per-role ceilings for what people can upload and keep. 0 = unlimited.">
+                <div className="field"><label>Upload size limit (MB)</label>
+                  <div className="muted-note">Max size for files attached to messages, per role.</div>
+                  <div className="two-col">
+                    <div className="field"><label className="sub">Admins</label>
+                      <input type="number" min="0" step="1" value={settings.uploadLimitAdminMb ?? 8} onChange={(e) => setSettings(s => ({ ...s, uploadLimitAdminMb: e.target.value }))} placeholder="8" /></div>
+                    <div className="field"><label className="sub">Users</label>
+                      <input type="number" min="0" step="1" value={settings.uploadLimitUserMb ?? 8} onChange={(e) => setSettings(s => ({ ...s, uploadLimitUserMb: e.target.value }))} placeholder="8" /></div>
+                  </div></div>
+                <div className="field" style={{ marginBottom: 0 }}><label>Sandbox storage limit (MB)</label>
+                  <div className="muted-note">Max total size of a chat's sandbox files, per role. Writes beyond it are rejected.</div>
+                  <div className="two-col">
+                    <div className="field"><label className="sub">Admins</label>
+                      <input type="number" min="0" step="1" value={settings.sandboxLimitAdminMb ?? 1024} onChange={(e) => setSettings(s => ({ ...s, sandboxLimitAdminMb: e.target.value }))} placeholder="1024" /></div>
+                    <div className="field"><label className="sub">Users</label>
+                      <input type="number" min="0" step="1" value={settings.sandboxLimitUserMb ?? 256} onChange={(e) => setSettings(s => ({ ...s, sandboxLimitUserMb: e.target.value }))} placeholder="256" /></div>
+                  </div></div>
+              </Card>
+              <Card title="Request queue" sub="Keep small local servers from thrashing between models.">
+                <div className="field row" style={{ borderBottom: 0, marginBottom: 0 }}>
+                  <div><label>Model queue</label><div className="muted-note">Only one model runs at a time. Requests for the same model run together; a request for a different model waits until the current one finishes, instead of swapping it out mid-response.</div></div>
+                  <div className={'switch' + (settings.modelQueue ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, modelQueue: !s.modelQueue }))} /></div>
+              </Card>
+              <Card title="Usage budgets" sub="Monthly spend caps based on per-model pricing. Per-member overrides live in the Members section. Set 0 for no limit.">
                 <div className="two-col">
-                  <div className="field"><label className="sub">Admins</label>
-                    <input type="number" min="0" step="1" value={settings.uploadLimitAdminMb ?? 8} onChange={(e) => setSettings(s => ({ ...s, uploadLimitAdminMb: e.target.value }))} placeholder="8" /></div>
-                  <div className="field"><label className="sub">Users</label>
-                    <input type="number" min="0" step="1" value={settings.uploadLimitUserMb ?? 8} onChange={(e) => setSettings(s => ({ ...s, uploadLimitUserMb: e.target.value }))} placeholder="8" /></div>
-                </div></div>
-              <div className="field"><label>Sandbox storage limit (MB)</label>
-                <div className="muted-note">Max total size of a chat's sandbox files, per role. Writes beyond it are rejected. 0 = unlimited.</div>
+                  <div className="field"><label className="sub">Default user budget ($ / month)</label>
+                    <input type="number" min="0" step="any" value={settings.budgetUser ?? 0} onChange={(e) => setSettings(s => ({ ...s, budgetUser: e.target.value }))} placeholder="0" /></div>
+                  <div className="field"><label className="sub">Default admin budget ($ / month)</label>
+                    <input type="number" min="0" step="any" value={settings.budgetAdmin ?? 0} onChange={(e) => setSettings(s => ({ ...s, budgetAdmin: e.target.value }))} placeholder="0" /></div>
+                </div>
+                <div className="field"><label className="sub">Warn at</label>
+                  <div className="muted-note">Show the warning banner once this fraction of the budget is used.</div>
+                  <input type="number" min="0.1" max="0.99" step="0.05" value={settings.budgetWarnFraction ?? 0.8} onChange={(e) => setSettings(s => ({ ...s, budgetWarnFraction: e.target.value }))} placeholder="0.8" /></div>
+                <div className="field row" style={{ borderBottom: 0, marginBottom: 0 }}>
+                  <div><label>Enforce budget</label><div className="muted-note">When on, users at or over their cap cannot send new messages until next month. When off, the banner is informational only. Admins are never blocked.</div></div>
+                  <div className={'switch' + (settings.budgetEnforce ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, budgetEnforce: !s.budgetEnforce }))} /></div>
+              </Card>
+              <Card title="Sessions" sub="How long sign-ins live and how many each person may hold.">
                 <div className="two-col">
-                  <div className="field"><label className="sub">Admins</label>
-                    <input type="number" min="0" step="1" value={settings.sandboxLimitAdminMb ?? 1024} onChange={(e) => setSettings(s => ({ ...s, sandboxLimitAdminMb: e.target.value }))} placeholder="1024" /></div>
-                  <div className="field"><label className="sub">Users</label>
-                    <input type="number" min="0" step="1" value={settings.sandboxLimitUserMb ?? 256} onChange={(e) => setSettings(s => ({ ...s, sandboxLimitUserMb: e.target.value }))} placeholder="256" /></div>
-                </div></div>
-              <div className="field row">
-                <div><label>Model queue</label><div className="muted-note">Only one model runs at a time. Requests for the same model run together; a request for a different model waits until the current one finishes, instead of swapping it out mid-response. Useful for local servers that load a single model.</div></div>
-                <div className={'switch' + (settings.modelQueue ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, modelQueue: !s.modelQueue }))} /></div>
-
-              <h3 className="me-section-h">Usage budgets</h3>
-              <div className="muted-note" style={{ marginBottom: 8 }}>Monthly spend caps based on per-model pricing. A warning banner appears as a user nears the cap. Set 0 for no limit. Per-user overrides live in the Users tab.</div>
-              <div className="two-col">
-                <div className="field"><label className="sub">Default user budget ($ / month)</label>
-                  <input type="number" min="0" step="any" value={settings.budgetUser ?? 0} onChange={(e) => setSettings(s => ({ ...s, budgetUser: e.target.value }))} placeholder="0" /></div>
-                <div className="field"><label className="sub">Default admin budget ($ / month)</label>
-                  <input type="number" min="0" step="any" value={settings.budgetAdmin ?? 0} onChange={(e) => setSettings(s => ({ ...s, budgetAdmin: e.target.value }))} placeholder="0" /></div>
-              </div>
-              <div className="field"><label className="sub">Warn at</label>
-                <div className="muted-note">Show the warning banner once this fraction of the budget is used.</div>
-                <input type="number" min="0.1" max="0.99" step="0.05" value={settings.budgetWarnFraction ?? 0.8} onChange={(e) => setSettings(s => ({ ...s, budgetWarnFraction: e.target.value }))} placeholder="0.8" /></div>
-              <div className="field row">
-                <div><label>Enforce budget</label><div className="muted-note">When on, users at or over their cap cannot send new messages until next month. When off, the banner is informational only. Admins are never blocked.</div></div>
-                <div className={'switch' + (settings.budgetEnforce ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, budgetEnforce: !s.budgetEnforce }))} /></div>
-
-              <h3 className="me-section-h">Sessions</h3>
-              <div className="two-col">
-                <div className="field"><label className="sub">Session lifetime (days)</label>
-                  <div className="muted-note">Sessions expire after this many days of inactivity. Activity resets the timer.</div>
-                  <input type="number" min="1" max="365" step="1" value={settings.sessionTtlDays ?? 30} onChange={(e) => setSettings(s => ({ ...s, sessionTtlDays: e.target.value }))} placeholder="30" /></div>
-                <div className="field"><label className="sub">Max sessions per user</label>
-                  <div className="muted-note">Oldest sessions are signed out beyond this. 0 = unlimited.</div>
-                  <input type="number" min="0" max="50" step="1" value={settings.maxSessions ?? 0} onChange={(e) => setSettings(s => ({ ...s, maxSessions: e.target.value }))} placeholder="0" /></div>
-              </div>
-              <div className="settings-autosave">
-                <span className={'autosave-dot' + (setAutoStatus === 'saved' ? ' flash' : '')} />
-                {setAutoStatus === 'saving' ? 'Saving…' : setAutoStatus === 'saved' ? 'Saved — applies immediately' : 'Changes save automatically'}
-              </div>
+                  <div className="field"><label className="sub">Session lifetime (days)</label>
+                    <div className="muted-note">Sessions expire after this many days of inactivity. Activity resets the timer.</div>
+                    <input type="number" min="1" max="365" step="1" value={settings.sessionTtlDays ?? 30} onChange={(e) => setSettings(s => ({ ...s, sessionTtlDays: e.target.value }))} placeholder="30" /></div>
+                  <div className="field"><label className="sub">Max sessions per user</label>
+                    <div className="muted-note">Oldest sessions are signed out beyond this. 0 = unlimited.</div>
+                    <input type="number" min="0" max="50" step="1" value={settings.maxSessions ?? 0} onChange={(e) => setSettings(s => ({ ...s, maxSessions: e.target.value }))} placeholder="0" /></div>
+                </div>
+              </Card>
+              <AutosaveNote status={setAutoStatus} live />
             </>
           )}
           {tab === 'websearch' && (
             <>
-              <div className="field row">
-                <div><label>Enable web search</label><div className="muted-note">When on, users get a Web Search toggle in the + menu. The model can call the tool whenever it's enabled for a chat.</div></div>
-                <div className={'switch' + (settings.webSearchEnabled ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, webSearchEnabled: !s.webSearchEnabled }))} />
-              </div>
-              {settings.webSearchEnabled && <>
-                <div className="field"><label>Search engine</label>
-                  <select value={settings.webSearchEngine || 'searxng'} onChange={(e) => setSettings(s => ({ ...s, webSearchEngine: e.target.value }))}>
-                    <option value="searxng">SearXNG</option>
-                  </select>
+              <Card title="Engine" sub="Turn the tool on and point it at your search backend.">
+                <div className="field row">
+                  <div><label>Enable web search</label><div className="muted-note">When on, users get a Web Search toggle in the + menu. The model can call the tool whenever it's enabled for a chat.</div></div>
+                  <div className={'switch' + (settings.webSearchEnabled ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, webSearchEnabled: !s.webSearchEnabled }))} />
                 </div>
-                {(settings.webSearchEngine || 'searxng') === 'searxng' && (
-                  <div className="field"><label>SearXNG query URL</label>
-                    <input value={settings.searxngUrl || ''} onChange={(e) => setSettings(s => ({ ...s, searxngUrl: e.target.value }))} placeholder="http://localhost:8888" />
-                    <div className="muted-note">Base URL of your SearXNG instance. The server calls <code>/search?q=…&amp;format=json</code>, so JSON output must be enabled in your SearXNG settings.</div>
+                {settings.webSearchEnabled && <>
+                  <div className="field"><label>Search engine</label>
+                    <select value={settings.webSearchEngine || 'searxng'} onChange={(e) => setSettings(s => ({ ...s, webSearchEngine: e.target.value }))}>
+                      <option value="searxng">SearXNG</option>
+                    </select>
                   </div>
-                )}
-                <div className="field"><label>Result count limit</label>
-                  <input type="number" min="1" max="20" value={settings.webSearchCount ?? 5} onChange={(e) => setSettings(s => ({ ...s, webSearchCount: e.target.value }))} style={{ maxWidth: 140 }} />
-                  <div className="muted-note">How many result pages to fetch and read per search (1–20). Higher means more context but slower and heavier.</div>
-                </div>
-                <div className="field"><label>Allowed domains</label>
-                  <textarea rows={3} value={settings.webSearchDomains || ''} onChange={(e) => setSettings(s => ({ ...s, webSearchDomains: e.target.value }))} placeholder={'wikipedia.org\narxiv.org'} />
-                  <div className="muted-note">One domain per line (or comma-separated). When set, the assistant can only read results from these domains and their subdomains — everything else is dropped. Leave empty to allow any site.</div>
-                </div>
-                <div className="field"><label>Web search system prompt</label>
-                  <textarea rows={6} value={settings.webSearchPrompt ?? ''} onChange={(e) => setSettings(s => ({ ...s, webSearchPrompt: e.target.value }))} />
-                  <div className="muted-note">Appended to a model's system prompt only when web search is enabled for the chat. Use it to tell the model to search only when asked or when information is missing or outdated.</div>
-                </div>
+                  {(settings.webSearchEngine || 'searxng') === 'searxng' && (
+                    <div className="field" style={{ marginBottom: 0 }}><label>SearXNG query URL</label>
+                      <input value={settings.searxngUrl || ''} onChange={(e) => setSettings(s => ({ ...s, searxngUrl: e.target.value }))} placeholder="http://localhost:8888" />
+                      <div className="muted-note">Base URL of your SearXNG instance. The server calls <code>/search?q=…&amp;format=json</code>, so JSON output must be enabled in your SearXNG settings.</div>
+                    </div>
+                  )}
+                </>}
+              </Card>
+              {settings.webSearchEnabled && <>
+                <Card title="Results & scope" sub="How much the assistant reads, and from where.">
+                  <div className="field"><label>Result count limit</label>
+                    <input type="number" min="1" max="20" value={settings.webSearchCount ?? 5} onChange={(e) => setSettings(s => ({ ...s, webSearchCount: e.target.value }))} style={{ maxWidth: 140 }} />
+                    <div className="muted-note">How many result pages to fetch and read per search (1–20). Higher means more context but slower and heavier.</div>
+                  </div>
+                  <div className="field" style={{ marginBottom: 0 }}><label>Allowed domains</label>
+                    <textarea rows={3} value={settings.webSearchDomains || ''} onChange={(e) => setSettings(s => ({ ...s, webSearchDomains: e.target.value }))} placeholder={'wikipedia.org\narxiv.org'} />
+                    <div className="muted-note">One domain per line (or comma-separated). When set, the assistant can only read results from these domains and their subdomains — everything else is dropped. Leave empty to allow any site.</div>
+                  </div>
+                </Card>
+                <Card title="Search prompt" sub="Guidance the model receives whenever web search is on.">
+                  <div className="field" style={{ marginBottom: 0 }}>
+                    <textarea rows={6} value={settings.webSearchPrompt ?? ''} onChange={(e) => setSettings(s => ({ ...s, webSearchPrompt: e.target.value }))} />
+                    <div className="muted-note">Appended to a model's system prompt only when web search is enabled for the chat. Use it to tell the model to search only when asked or when information is missing or outdated.</div>
+                  </div>
+                </Card>
               </>}
-              <div className="settings-autosave">
-                <span className={'autosave-dot' + (setAutoStatus === 'saved' ? ' flash' : '')} />
-                {setAutoStatus === 'saving' ? 'Saving…' : setAutoStatus === 'saved' ? 'Saved — applies immediately' : 'Changes save automatically'}
-              </div>
+              <AutosaveNote status={setAutoStatus} live />
             </>
           )}
           {tab === 'membank' && (
             <>
-              <div className="field row">
-                <div><label>Enable memory bank</label><div className="muted-note">When on, all models receive a system-prompt section listing these files plus the <code>mb_view</code> and <code>mb_search</code> tools.</div></div>
-                <div className={'switch' + (settings.membankEnabled ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, membankEnabled: !s.membankEnabled }))} />
-              </div>
-              <div className="field row">
-                <div><label>Hide tool calls from users</label><div className="muted-note">When on, file reads stay behind the scenes — the model still uses the files, but users won't see the <code>mb_view</code> / <code>mb_search</code> steps in the reply.</div></div>
-                <div className={'switch' + (settings.membankHideTools ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, membankHideTools: !s.membankHideTools }))} />
-              </div>
-              <div className="field">
-                <label>System prompt</label>
-                <textarea rows={5} value={settings.membankPrompt ?? ''} onChange={(e) => setSettings(s => ({ ...s, membankPrompt: e.target.value }))} />
-                <div className="muted-note">Intro text added above the file list when the memory bank is enabled. The file names and tool instructions are appended automatically.</div>
-              </div>
-              <div className="field">
-                <label>Files</label>
-                <div className="muted-note" style={{ marginBottom: 8 }}>Text and PDF files work best (.md, .txt, .json, .pdf, code, etc.). PDFs are read as extracted text. Up to 25 MB each.</div>
+              <Card title="Behavior" sub="How and when models reach for these files.">
+                <div className="field row">
+                  <div><label>Enable memory bank</label><div className="muted-note">When on, all models receive a system-prompt section listing these files plus the <code>mb_view</code> and <code>mb_search</code> tools.</div></div>
+                  <div className={'switch' + (settings.membankEnabled ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, membankEnabled: !s.membankEnabled }))} />
+                </div>
+                <div className="field row">
+                  <div><label>Hide tool calls from users</label><div className="muted-note">When on, file reads stay behind the scenes — the model still uses the files, but users won't see the <code>mb_view</code> / <code>mb_search</code> steps in the reply.</div></div>
+                  <div className={'switch' + (settings.membankHideTools ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, membankHideTools: !s.membankHideTools }))} />
+                </div>
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <label>System prompt</label>
+                  <textarea rows={5} value={settings.membankPrompt ?? ''} onChange={(e) => setSettings(s => ({ ...s, membankPrompt: e.target.value }))} />
+                  <div className="muted-note">Intro text added above the file list when the memory bank is enabled. The file names and tool instructions are appended automatically.</div>
+                </div>
+              </Card>
+              <Card title="Files" sub="Text and PDF files work best (.md, .txt, .json, .pdf, code, etc.). PDFs are read as extracted text. Up to 25 MB each."
+                right={<button className="btn" onClick={() => membankRef.current?.click()}>Upload files</button>}>
                 <input ref={membankRef} type="file" multiple hidden onChange={onMembankPick} />
-                <button className="btn" onClick={() => membankRef.current?.click()}>Upload files</button>
-                <div className="muted-note" style={{ marginTop: 8 }}>Drag the handle to reorder or move files between folders. Type a folder name to group files; clear it to leave a file ungrouped.</div>
+                <div className="muted-note">Drag the handle to reorder or move files between folders. Type a folder name to group files; clear it to leave a file ungrouped.</div>
                 <datalist id="mb-folders">{[...new Set(membankFiles.map(f => f.folder).filter(Boolean))].map(fo => <option key={fo} value={fo} />)}</datalist>
                 <div style={{ marginTop: 12 }}>
                   {membankFiles.length === 0 ? <div className="muted-note">No files yet.</div> : (() => {
@@ -1137,18 +1419,15 @@ export default function AdminPanel({ user, onClose }) {
                     ));
                   })()}
                 </div>
-              </div>
-              <div className="settings-autosave">
-                <span className={'autosave-dot' + (setAutoStatus === 'saved' ? ' flash' : '')} />
-                {setAutoStatus === 'saving' ? 'Saving…' : setAutoStatus === 'saved' ? 'Saved — applies immediately' : 'Changes save automatically'}
-              </div>
+              </Card>
+              <AutosaveNote status={setAutoStatus} live />
             </>
           )}
           {tab === 'tools' && (
             <>
               <div className="admin-section-head">
-                <div><div className="muted-note">Give models the ability to fetch real-world, real-time data (weather, stock prices, APIs…). Each tool runs server-side JavaScript and is offered to any model that has "Allow custom tools" enabled.</div></div>
-                <button className="btn primary" onClick={() => setToolEdit({ name: '', description: '', params: [], code: "const r = await fetch('https://api.example.com/data?q=' + encodeURIComponent(args.query));\nconst data = await r.json();\nreturn data;", timeout_ms: 15000, enabled: true, auto: false })}><Plus style={{ width: 15 }} /></button>
+                <div><div className="muted-note">Give models the ability to fetch real-world, real-time data (weather, stock prices, APIs…). Each tool runs server-side JavaScript and is offered to any model that has "Allow live tools" enabled.</div></div>
+                <button className="btn primary" onClick={() => setToolEdit({ name: '', description: '', params: [], code: "const r = await fetch('https://api.example.com/data?q=' + encodeURIComponent(args.query));\nconst data = await r.json();\nreturn data;", timeout_ms: 15000, enabled: true, auto: false })}><Plus style={{ width: 15 }} /> New tool</button>
               </div>
               {toolEdit && (
                 <div className="fn-editor">
@@ -1207,8 +1486,8 @@ export default function AdminPanel({ user, onClose }) {
           {tab === 'functions' && (
             <>
               <div className="admin-section-head">
-                <div><div className="muted-note">Extend open-quill itself. Each function adds a custom button next to the composer that runs your JavaScript in the browser — automate input, call APIs, build filters or shortcuts.</div></div>
-                <button className="btn primary" onClick={() => setFnEdit({ label: '', icon: 'sparkles', location: 'composer', code: "api.setInput(api.input + '\\n\\nPlease answer concisely.');\napi.toast('Added a note');", enabled: true })}><Plus style={{ width: 15 }} /></button>
+                <div><div className="muted-note">Extend the app itself. Each function adds a custom button next to the composer that runs your JavaScript in the browser — automate input, call APIs, build filters or shortcuts.</div></div>
+                <button className="btn primary" onClick={() => setFnEdit({ label: '', icon: 'sparkles', location: 'composer', code: "api.setInput(api.input + '\\n\\nPlease answer concisely.');\napi.toast('Added a note');", enabled: true })}><Plus style={{ width: 15 }} /> New function</button>
               </div>
               {fnEdit && (
                 <div className="fn-editor">
@@ -1296,7 +1575,7 @@ export default function AdminPanel({ user, onClose }) {
               )}
             </>
           )}
-          {tab === 'usage' && (
+          {tab === 'analytics' && (
             <>
               <div className="seg" style={{ width: 'fit-content', marginBottom: 14 }}>
                 {[['7', '7 days'], ['30', '30 days'], ['90', '90 days']].map(([v, l]) => (
@@ -1315,8 +1594,7 @@ export default function AdminPanel({ user, onClose }) {
                     ))}
                   </div>
                   {adminUsage.users.length > 0 && (
-                    <>
-                      <h3 className="me-section-h">By user</h3>
+                    <Card title="By user">
                       <table className="admin-table">
                         <thead><tr><th>User</th><th className="num">Tokens</th><th className="num">Cost</th></tr></thead>
                         <tbody>{adminUsage.users.slice(0, 30).map(u => (
@@ -1327,11 +1605,10 @@ export default function AdminPanel({ user, onClose }) {
                           </tr>
                         ))}</tbody>
                       </table>
-                    </>
+                    </Card>
                   )}
                   {adminUsage.models.length > 0 && (
-                    <>
-                      <h3 className="me-section-h">By model</h3>
+                    <Card title="By model">
                       <table className="admin-table">
                         <thead><tr><th>Model</th><th className="num">Tokens</th><th className="num">Cost</th></tr></thead>
                         <tbody>{adminUsage.models.slice(0, 30).map(m => (
@@ -1342,26 +1619,26 @@ export default function AdminPanel({ user, onClose }) {
                           </tr>
                         ))}</tbody>
                       </table>
-                    </>
+                    </Card>
                   )}
                 </>
               )}
-              <h3 className="me-section-h">Custom price presets</h3>
-              <div className="muted-note" style={{ marginBottom: 10 }}>Add house models or override built-in prices. When a model's ID contains one of these fragments, its price is suggested automatically. Built-in presets (GPT, Claude, Gemini, and so on) always apply unless overridden here.</div>
-              {customPresets.length > 0 && customPresets.map(p => (
-                <div key={p.match} className="field row" style={{ alignItems: 'center' }}>
-                  <div><label>{p.label}</label><div className="muted-note">matches "{p.match}" · ${p.in} in / ${p.out} out per 1M</div></div>
-                  <button className="btn danger" onClick={() => delPreset(p.match)}><Trash style={{ width: 14 }} /></button>
+              <Card title="Custom price presets" sub={'Add house models or override built-in prices. When a model\u2019s ID contains one of these fragments, its price is suggested automatically. Built-in presets (GPT, Claude, Gemini, and so on) always apply unless overridden here.'}>
+                {customPresets.length > 0 && customPresets.map(p => (
+                  <div key={p.match} className="field row" style={{ alignItems: 'center' }}>
+                    <div><label>{p.label}</label><div className="muted-note">matches "{p.match}" · ${p.in} in / ${p.out} out per 1M</div></div>
+                    <button className="btn danger" onClick={() => delPreset(p.match)}><Trash style={{ width: 14 }} /></button>
+                  </div>
+                ))}
+                <div className="preset-form">
+                  <input placeholder="my-model" value={presetForm.match} onChange={(e) => setPresetForm(f => ({ ...f, match: e.target.value }))} />
+                  <input placeholder="Label" value={presetForm.label} onChange={(e) => setPresetForm(f => ({ ...f, label: e.target.value }))} />
+                  <input type="number" step="any" min="0" placeholder="$ in" value={presetForm.in} onChange={(e) => setPresetForm(f => ({ ...f, in: e.target.value }))} />
+                  <input type="number" step="any" min="0" placeholder="$ out" value={presetForm.out} onChange={(e) => setPresetForm(f => ({ ...f, out: e.target.value }))} />
+                  <button className="btn" onClick={addPreset}><Plus style={{ width: 14, verticalAlign: '-2px' }} /> Add</button>
                 </div>
-              ))}
-              <div className="preset-form">
-                <input placeholder="my-model" value={presetForm.match} onChange={(e) => setPresetForm(f => ({ ...f, match: e.target.value }))} />
-                <input placeholder="Label" value={presetForm.label} onChange={(e) => setPresetForm(f => ({ ...f, label: e.target.value }))} />
-                <input type="number" step="any" min="0" placeholder="$ in" value={presetForm.in} onChange={(e) => setPresetForm(f => ({ ...f, in: e.target.value }))} />
-                <input type="number" step="any" min="0" placeholder="$ out" value={presetForm.out} onChange={(e) => setPresetForm(f => ({ ...f, out: e.target.value }))} />
-                <button className="btn" onClick={addPreset}><Plus style={{ width: 14, verticalAlign: '-2px' }} /> Add</button>
-              </div>
-              {presetErr && <div className="dz-err" style={{ marginTop: 8 }}>{presetErr}</div>}
+                {presetErr && <div className="dz-err" style={{ marginTop: 8 }}>{presetErr}</div>}
+              </Card>
             </>
           )}
         </div>

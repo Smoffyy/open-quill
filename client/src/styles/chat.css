@@ -165,3 +165,8 @@
   background: #ffffff !important;
   background-color: #ffffff !important;
 }
+.assistant-body table, .bubble-user table, .art-md table, .doc-body table, .bc-col-body table, .spc-msg-body table { display: block; width: max-content; max-width: 100%; overflow-x: auto; border-collapse: collapse; margin: 14px 0; font-size: .9em; line-height: 1.5; font-family: var(--font-sans); }
+.assistant-body table th, .assistant-body table td, .bubble-user table th, .bubble-user table td, .art-md table th, .art-md table td, .doc-body table th, .doc-body table td, .bc-col-body table th, .bc-col-body table td, .spc-msg-body table th, .spc-msg-body table td { border: 1px solid var(--border-soft); padding: 7px 12px; text-align: left; vertical-align: top; }
+.assistant-body table thead th, .bubble-user table thead th, .art-md table thead th, .doc-body table thead th, .bc-col-body table thead th, .spc-msg-body table thead th { background: var(--surface-2); font-weight: 600; font-size: .95em; color: var(--text); }
+.assistant-body table tbody tr:nth-child(even) td, .art-md table tbody tr:nth-child(even) td, .doc-body table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--surface-2) 40%, transparent); }
+.assistant-body table code, .bubble-user table code { white-space: nowrap; }
