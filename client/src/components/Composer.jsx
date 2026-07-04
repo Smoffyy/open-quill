@@ -35,7 +35,8 @@ function dominantColor(url) {
 export default function Composer({
   value, onChange, onSend, onStop, streaming, models,
   currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts, functions = [],
-  voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall
+  voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall,
+  safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = ''
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
@@ -184,7 +185,7 @@ export default function Composer({
 
   async function doSend() {
     if (streaming || uploading) return;
-    if (blockSend || budgetBlock) return;
+    if (blockSend || budgetBlock || safetyFlagged || safetyChecking) return;
     if (!value.trim() && files.length === 0) return;
     let attachments = [];
     if (files.length) {
@@ -242,13 +243,20 @@ export default function Composer({
   const budgetBlock = budgetState === 'over' && budget?.enforce && !canUseUnavailable;
   const showBudgetBanner = budgetState === 'warn' || budgetState === 'over';
   const enabledCount = (sandbox ? 1 : 0) + (webSearch ? 1 : 0);
-  const canSend = (value.trim().length > 0 || files.length > 0) && !uploading && !blockSend && !budgetBlock;
+  const canSend = (value.trim().length > 0 || files.length > 0) && !uploading && !blockSend && !budgetBlock && !safetyFlagged && !safetyChecking;
   const cls = 'composer' + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + (unavailable ? ' unavailable' : '') + ((blockSend || budgetBlock) ? ' blocked' : '');
   const fmtUsd = (n) => '$' + (Number(n || 0) > 0 && Number(n || 0) < 0.01 ? Number(n).toFixed(4) : Number(n || 0).toFixed(2));
 
   return (
-    <div className={'composer-stack' + ((bannerMounted || showBudgetBanner) ? ' has-banner' : '')}>
-    {(bannerMounted || showBudgetBanner) && <div className={'unavail-bg' + (bannerOut && !showBudgetBanner ? ' out' : '')} />}
+    <div className={'composer-stack' + ((bannerMounted || showBudgetBanner || safetyFlagged) ? ' has-banner' : '')}>
+    {(bannerMounted || showBudgetBanner || safetyFlagged) && <div className={'unavail-bg' + (bannerOut && !showBudgetBanner && !safetyFlagged ? ' out' : '')} />}
+    {safetyFlagged && (
+      <div className="unavail-banner safety-banner">
+        <div className="unavail-row">
+          <span className="unavail-msg"><strong>Message flagged.</strong> {safetyReason && safetyReason.trim() ? safetyReason.trim() : 'This prompt was blocked by the safety check — please revise it and try again.'}</span>
+        </div>
+      </div>
+    )}
     {showBudgetBanner && (
       <div className={'unavail-banner budget-banner ' + budgetState}>
         <div className="unavail-row">
@@ -306,6 +314,7 @@ export default function Composer({
         onChange={(e) => onChange(e.target.value)} onKeyDown={key} onPaste={onPaste} />
       <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}
         accept={(visionSupported ? 'image/*,' : '') + FILE_ACCEPT} />
+      {safetyChecking && safetyVerbose && <div className="safety-checking">Safety check…</div>}
       <div className="composer-bar">
         <div className="composer-left">
           <div className="plus-wrap" ref={plusRef}>
@@ -384,12 +393,14 @@ export default function Composer({
           )}
           {streaming ? (
             <button key="stop" className="send stop" onClick={onStop}><Stop style={{ width: 16, height: 16 }} /></button>
+          ) : safetyChecking ? (
+            <button key="send" className={'send' + (safetyVerbose ? ' checking' : ' quiet')} disabled title={safetyVerbose ? 'Safety check…' : undefined}><Up style={{ width: 17, height: 17 }} /></button>
           ) : canSend ? (
             <button key="send" className="send" onClick={doSend} disabled={uploading}><Up style={{ width: 17, height: 17 }} /></button>
           ) : voiceCall ? (
             <button key="call" className="mic call" onClick={onStartCall} title="Start a voice call"><Wave style={{ width: 20, height: 20 }} /></button>
           ) : (
-            <button key="send" className="send" disabled><Up style={{ width: 17, height: 17 }} /></button>
+            <button key="send" className="send ghost" disabled><Up style={{ width: 17, height: 17 }} /></button>
           )}
         </div>
       </div>

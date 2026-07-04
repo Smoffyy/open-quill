@@ -22,7 +22,7 @@ This roadmap outlines the planned direction of the project. Priorities may shift
 * [X] Exporting and Importing All Chats.
 
 
-* [ ] Safety model, adds an option to enable a safety check, making the currently active model output either "Yes" or "No" based on the inputted text, allowing the model to then answer the question.
+* [X] Safety model, adds an option to enable a safety check, making the currently active model output either "Yes" or "No" based on the inputted text, allowing the model to then answer the question.
 
 
 ---

@@ -1081,6 +1081,60 @@ function roleLimit(key, isAdmin, fallback) {
   if (v != null) return Number(v);
   return Number(getSetting(key, String(fallback)));
 }
+
+const DEFAULT_SAFETY_PROMPT = 'You are a safety filter for a chat application. Analyze the user message below and decide whether it is safe and appropriate to forward to the assistant. Respond with a JSON object only, in exactly this format: {"verdict":"Yes"} if the message is acceptable, or {"verdict":"No"} if it must be blocked. Do not output anything besides the JSON object.';
+const SAFETY_REASON_SUFFIX = 'If the verdict is "No", also include a short user-facing reason in the JSON, in exactly this format: {"verdict":"No","reason":"<one short sentence explaining why the message was blocked>"}. Keep the reason to a single brief sentence.';
+
+function resolveSafetyModel(requestedModelId, isAdmin) {
+  if (getSetting('safety_model_mode', 'current') === 'specific') {
+    const id = getSetting('safety_model_id', '');
+    if (id) {
+      const m = db.models.byId(id);
+      if (m) return m;
+    }
+  }
+  return resolveModel(requestedModelId, isAdmin);
+}
+
+function parseSafetyVerdict(model, raw) {
+  const out = stripThink(model, String(raw || '')).trim();
+  let verdict = '';
+  let reason = '';
+  const match = out.match(/\{[\s\S]*?\}/);
+  if (match) {
+    try {
+      const j = JSON.parse(match[0]);
+      const v = j.verdict ?? j.answer ?? j.response ?? j.result ?? j.allowed ?? j.safe ?? Object.values(j)[0];
+      verdict = String(v ?? '');
+      if (j.reason != null) reason = String(j.reason).trim().slice(0, 300);
+    } catch {}
+  }
+  if (!verdict) verdict = out;
+  const hasNo = /\bno\b/i.test(verdict);
+  const hasYes = /\byes\b/i.test(verdict);
+  if (hasNo && !hasYes) return { allowed: false, reason };
+  return { allowed: true, reason: '' };
+}
+
+app.post('/api/safety-check', authMiddleware, async (req, res) => {
+  if (getSetting('safety_enabled', '0') !== '1') return res.json({ allowed: true });
+  const text = String(req.body?.text || '').slice(0, 32000);
+  if (!text.trim()) return res.json({ allowed: true });
+  const model = resolveSafetyModel(String(req.body?.modelId || ''), !!req.user.is_admin);
+  if (!model) return res.json({ allowed: true });
+  let sys = getSetting('safety_prompt', DEFAULT_SAFETY_PROMPT) || DEFAULT_SAFETY_PROMPT;
+  const wantReason = getSetting('safety_reason_enabled', '0') === '1';
+  if (wantReason) sys = sys.replace(/\s+$/, '') + '\n' + SAFETY_REASON_SUFFIX;
+  try {
+    const raw = await oneShot(model, [{ role: 'system', content: sys }, { role: 'user', content: text }]);
+    if (!raw) return res.json({ allowed: true });
+    const r = parseSafetyVerdict(model, raw);
+    if (r.allowed) return res.json({ allowed: true });
+    res.json({ allowed: false, reason: wantReason ? r.reason : '' });
+  } catch {
+    res.json({ allowed: true });
+  }
+});
 app.get('/api/admin/settings', authMiddleware, adminOnly, (req, res) =>
   res.json({
     apiBaseUrl: getSetting('api_base_url'), apiKey: getSetting('api_key'),
@@ -1115,7 +1169,13 @@ app.get('/api/admin/settings', authMiddleware, adminOnly, (req, res) =>
     voiceTtsKey: getSetting('voice_tts_key', ''),
     voiceTtsModel: getSetting('voice_tts_model', 'tts-1'),
     voiceTtsVoice: getSetting('voice_tts_voice', 'alloy'),
-    voiceTtsSpeed: Number(getSetting('voice_tts_speed', 1)) || 1
+    voiceTtsSpeed: Number(getSetting('voice_tts_speed', 1)) || 1,
+    safetyEnabled: getSetting('safety_enabled', '0') === '1',
+    safetyModelMode: getSetting('safety_model_mode', 'current') === 'specific' ? 'specific' : 'current',
+    safetyModelId: getSetting('safety_model_id', ''),
+    safetyPrompt: getSetting('safety_prompt', DEFAULT_SAFETY_PROMPT),
+    safetyVerbose: getSetting('safety_verbose', '1') === '1',
+    safetyReasonEnabled: getSetting('safety_reason_enabled', '0') === '1'
   }));
 app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
   if ('apiBaseUrl' in req.body) setSetting('api_base_url', req.body.apiBaseUrl);
@@ -1153,6 +1213,12 @@ app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
   if ('voiceTtsModel' in req.body) setSetting('voice_tts_model', String(req.body.voiceTtsModel || '').trim() || 'tts-1');
   if ('voiceTtsVoice' in req.body) setSetting('voice_tts_voice', String(req.body.voiceTtsVoice || '').trim());
   if ('voiceTtsSpeed' in req.body) { const n = Number(req.body.voiceTtsSpeed); setSetting('voice_tts_speed', String(Number.isFinite(n) && n >= 0.25 && n <= 4 ? n : 1)); }
+  if ('safetyEnabled' in req.body) setSetting('safety_enabled', req.body.safetyEnabled ? '1' : '0');
+  if ('safetyModelMode' in req.body) setSetting('safety_model_mode', req.body.safetyModelMode === 'specific' ? 'specific' : 'current');
+  if ('safetyModelId' in req.body) setSetting('safety_model_id', String(req.body.safetyModelId || ''));
+  if ('safetyPrompt' in req.body) setSetting('safety_prompt', String(req.body.safetyPrompt || '') || DEFAULT_SAFETY_PROMPT);
+  if ('safetyVerbose' in req.body) setSetting('safety_verbose', req.body.safetyVerbose ? '1' : '0');
+  if ('safetyReasonEnabled' in req.body) setSetting('safety_reason_enabled', req.body.safetyReasonEnabled ? '1' : '0');
   logAudit(req, 'settings.update', { meta: { fields: Object.keys(req.body || {}) } });
   res.json({ ok: true });
 });
@@ -1504,6 +1570,8 @@ function appConfig() {
     webSearchAvailable: websearch.webSearchAvailable(),
     voiceMic: getSetting('voice_mic_enabled', '0') === '1',
     voiceCall: getSetting('voice_call_enabled', '0') === '1',
+    safetyCheckEnabled: getSetting('safety_enabled', '0') === '1',
+    safetyCheckVerbose: getSetting('safety_verbose', '1') === '1',
     voiceStt: getSetting('voice_stt_engine', 'browser'),
     voiceTts: getSetting('voice_tts_engine', 'browser'),
     voiceTtsVoice: getSetting('voice_tts_voice', ''),

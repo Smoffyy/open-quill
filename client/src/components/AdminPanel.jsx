@@ -489,7 +489,7 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
   );
 }
 
-const TAB_IDS = ['overview', 'models', 'providers', 'branding', 'home', 'members', 'websearch', 'membank', 'tools', 'functions', 'voice', 'limits', 'audit', 'analytics'];
+const TAB_IDS = ['overview', 'models', 'providers', 'branding', 'home', 'members', 'websearch', 'membank', 'tools', 'functions', 'voice', 'safety', 'limits', 'audit', 'analytics'];
 
 export default function AdminPanel({ user, onClose }) {
   const [tab, setTab] = useState(() => {
@@ -500,7 +500,7 @@ export default function AdminPanel({ user, onClose }) {
   const [models, setModels] = useState([]);
   const [usersList, setUsersList] = useState([]);
   const [cfg, setCfg] = useState({ appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [], appFont: 'serif' });
-  const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256, modelQueue: false, membankEnabled: false, membankHideTools: false, membankPrompt: '', budgetUser: 0, budgetAdmin: 0, budgetWarnFraction: 0.8, budgetEnforce: false, sessionTtlDays: 30, maxSessions: 0, voiceMicEnabled: false, voiceCallEnabled: false, voiceSttEngine: 'browser', voiceSttUrl: '', voiceSttKey: '', voiceSttModel: 'whisper-1', voiceTtsEngine: 'browser', voiceTtsUrl: '', voiceTtsKey: '', voiceTtsModel: 'tts-1', voiceTtsVoice: 'alloy', voiceTtsSpeed: 1 });
+  const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256, modelQueue: false, membankEnabled: false, membankHideTools: false, membankPrompt: '', budgetUser: 0, budgetAdmin: 0, budgetWarnFraction: 0.8, budgetEnforce: false, sessionTtlDays: 30, maxSessions: 0, voiceMicEnabled: false, voiceCallEnabled: false, voiceSttEngine: 'browser', voiceSttUrl: '', voiceSttKey: '', voiceSttModel: 'whisper-1', voiceTtsEngine: 'browser', voiceTtsUrl: '', voiceTtsKey: '', voiceTtsModel: 'tts-1', voiceTtsVoice: 'alloy', voiceTtsSpeed: 1, safetyEnabled: false, safetyModelMode: 'current', safetyModelId: '', safetyPrompt: '', safetyVerbose: true, safetyReasonEnabled: false });
   const [providers, setProviders] = useState([]);
   const [membankFiles, setMembankFiles] = useState([]);
   const [tools, setTools] = useState([]);
@@ -846,7 +846,8 @@ export default function AdminPanel({ user, onClose }) {
       { id: 'membank', label: 'Memory Bank', desc: 'Reference files every model can read on demand.', Icon: FileText },
       { id: 'tools', label: 'Live Tools', desc: 'Server-side live-data tools models can call (weather, prices, APIs…).', Icon: Wrench },
       { id: 'functions', label: 'Functions', desc: 'Custom buttons that run your JavaScript in the browser.', Icon: Code },
-      { id: 'voice', label: 'Voice', desc: 'Dictation and voice calls — speech-to-text and text-to-speech engines.', Icon: Mic }
+      { id: 'voice', label: 'Voice', desc: 'Dictation and voice calls — speech-to-text and text-to-speech engines.', Icon: Mic },
+      { id: 'safety', label: 'Safety Model', desc: 'Screen user prompts with a model before they reach the assistant.', Icon: Shield }
     ] },
     { group: 'Governance', items: [
       { id: 'limits', label: 'Limits & Budgets', desc: 'Guardrails applied across the app. These take effect immediately.', Icon: Shield },
@@ -1326,6 +1327,57 @@ export default function AdminPanel({ user, onClose }) {
                     </div>
                     <div className="field"><label>Speed</label>
                       <input type="number" min="0.25" max="4" step="0.05" value={settings.voiceTtsSpeed ?? 1} onChange={(e) => setSettings(s => ({ ...s, voiceTtsSpeed: e.target.value }))} placeholder="1" /></div>
+                  </div>
+                </Card>
+              )}
+              <AutosaveNote status={setAutoStatus} live />
+            </>
+          )}
+          {tab === 'safety' && (
+            <>
+              <Card title="Safety model" sub="Every prompt is screened by a model before it reaches the assistant. Flagged prompts are blocked and the user is asked to revise them.">
+                <div className="field row" style={settings.safetyEnabled ? {} : { borderBottom: 0, marginBottom: 0 }}>
+                  <div><label>Enable safety checks</label><div className="muted-note">When on, user prompts are sent to the safety model first. If it answers No, the prompt never reaches the assistant and a banner appears in the input bar.</div></div>
+                  <div className={'switch' + (settings.safetyEnabled ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, safetyEnabled: !s.safetyEnabled }))} />
+                </div>
+                {settings.safetyEnabled && (
+                  <div className="field row">
+                    <div><label>Verbose</label><div className="muted-note">Shows a "Safety check…" status in the input bar while the prompt is being screened. When off, the check runs silently in the background.</div></div>
+                    <div className={'switch' + (settings.safetyVerbose ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, safetyVerbose: !s.safetyVerbose }))} />
+                  </div>
+                )}
+                {settings.safetyEnabled && (
+                  <div className="field row" style={{ borderBottom: 0, marginBottom: 0 }}>
+                    <div><label>Show a reason</label><div className="muted-note">Lets the safety model include a short explanation of why a prompt was blocked, shown in the banner instead of the generic message. The reason instruction is appended to the system prompt below, so your edits are kept.</div></div>
+                    <div className={'switch' + (settings.safetyReasonEnabled ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, safetyReasonEnabled: !s.safetyReasonEnabled }))} />
+                  </div>
+                )}
+              </Card>
+              {settings.safetyEnabled && (
+                <Card title="Model" sub="Which model performs the screening.">
+                  <div className="field"><label>Checked by</label>
+                    <div className="seg" style={{ width: 'fit-content' }}>
+                      <button className={(settings.safetyModelMode || 'current') === 'current' ? 'on' : ''} onClick={() => setSettings(s => ({ ...s, safetyModelMode: 'current' }))}>Currently loaded model</button>
+                      <button className={settings.safetyModelMode === 'specific' ? 'on' : ''} onClick={() => setSettings(s => ({ ...s, safetyModelMode: 'specific' }))}>Specific model</button>
+                    </div>
+                    <div className="muted-note">Currently loaded uses whatever model the user is chatting with. Specific always routes the check through one dedicated model.</div>
+                  </div>
+                  {settings.safetyModelMode === 'specific' && (
+                    <div className="field"><label>Safety model</label>
+                      <select value={settings.safetyModelId || ''} onChange={(e) => setSettings(s => ({ ...s, safetyModelId: e.target.value }))}>
+                        <option value="">Select a model…</option>
+                        {models.map(m => <option key={m.id} value={m.id}>{m.display_name || m.internal_name}</option>)}
+                      </select>
+                      <div className="muted-note">If the selected model is removed, checks fall back to the currently loaded model.</div>
+                    </div>
+                  )}
+                </Card>
+              )}
+              {settings.safetyEnabled && (
+                <Card title="System prompt" sub="The instructions sent to the safety model along with the user's prompt.">
+                  <div className="field"><label>Prompt</label>
+                    <textarea rows={7} value={settings.safetyPrompt ?? ''} onChange={(e) => setSettings(s => ({ ...s, safetyPrompt: e.target.value }))} />
+                    <div className="muted-note">The model must reply with JSON only, e.g. <code>{'{"verdict":"Yes"}'}</code> to allow or <code>{'{"verdict":"No"}'}</code> to block. Clearing the field restores the default prompt.{settings.safetyReasonEnabled ? <> With reasons on, an instruction asking for <code>{'{"verdict":"No","reason":"…"}'}</code> is appended on a new line automatically.</> : null}</div>
                   </div>
                 </Card>
               )}

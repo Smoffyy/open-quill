@@ -31,6 +31,14 @@
 .send:disabled { opacity: .35; cursor: default; }
 .send:not(:disabled):hover { transform: scale(1.05); }
 .send.stop { background: var(--accent); }
+.send.ghost { background: transparent; border: 1.5px solid var(--text-muted); color: var(--text-muted); }
+.send.ghost:disabled { opacity: .55; }
+:root[data-theme="anthropic"] .send.ghost { color: var(--text-muted); }
+.send.checking { animation: sendChecking 1.1s ease-in-out infinite; }
+.send.quiet:disabled { opacity: 1; }
+@keyframes sendChecking { 0%, 100% { opacity: .4; } 50% { opacity: .85; } }
+.safety-checking { display: flex; align-items: center; gap: 7px; padding: 2px 4px 8px; font-size: 12.5px; font-weight: 600; background: linear-gradient(90deg, var(--text-muted) 30%, var(--text) 50%, var(--text-muted) 70%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 2.2s linear infinite; }
+.unavail-banner.safety-banner .unavail-msg strong { color: #d9534f; }
 .mic { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; color: var(--text-muted); }
 .mic:hover { background: var(--surface-hover); color: var(--text); }
 
@@ -124,7 +132,7 @@
 .msg.assistant:hover .actions { opacity: 1; }
 .action-btn { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; color: var(--text-muted); }
 .action-btn:hover { background: var(--surface-hover); color: var(--text); }
-.action-btn svg { width: 15px; height: 15px; }
+.action-btn svg { width: 18px; height: 18px; }
 
 /* streaming char reveal */
 .reveal-char { display: inline; animation: charUp .32s ease both; }

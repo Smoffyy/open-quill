@@ -160,6 +160,9 @@ export default function App() {
   const [activeId, setActiveId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
+  const [safetyFlagged, setSafetyFlagged] = useState(false);
+  const [safetyChecking, setSafetyChecking] = useState(false);
+  const [safetyReason, setSafetyReason] = useState('');
   const [collapsed, setCollapsed] = useState(false);
   const [mobileDrawer, setMobileDrawer] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -840,9 +843,23 @@ export default function App() {
   }
 
   async function send(attachments = [], overrideText, opts = {}) {
-    if (streaming || queued) return;
+    if (streaming || queued || safetyChecking) return;
+    if (safetyFlagged) return;
     const text = (overrideText != null ? overrideText : input).trim();
     if ((!text && attachments.length === 0) || !currentId) return;
+
+    if (cfg.safetyCheckEnabled && text) {
+      setSafetyChecking(true);
+      let allowed = true;
+      let reason = '';
+      try {
+        const r = await api.post('/api/safety-check', { text, modelId: currentId });
+        allowed = r?.allowed !== false;
+        reason = typeof r?.reason === 'string' ? r.reason.trim() : '';
+      } catch {}
+      setSafetyChecking(false);
+      if (!allowed) { setSafetyReason(reason); setSafetyFlagged(true); return; }
+    }
 
     if (incognito) {
       const history = [...messages
@@ -955,7 +972,8 @@ export default function App() {
   const modelHasBg = !incognito && !!(model?.bgEnabled && model?.bgImage);
   const activeBg = computeActiveBg(models, currentId, activeId, messages.length, incognito, user?.prefs);
   const composerProps = {
-    value: input, onChange: setInput, onSend: send, onStop: stop, streaming: streaming || queued,
+    value: input, onChange: (v) => { if (safetyFlagged) { setSafetyFlagged(false); setSafetyReason(''); } setInput(v); }, onSend: send, onStop: stop, streaming: streaming || queued,
+    safetyFlagged, safetyChecking, safetyReason, safetyVerbose: !!cfg.safetyCheckVerbose,
     models, currentId, onSelect: setCurrentId, extended, onToggleExtended: () => setExtended(e => !e),
     visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin, budget,
     modelHasBg, bgInChat, onToggleBgInChat: () => updatePref('modelBgInChat', !bgInChat),

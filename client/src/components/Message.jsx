@@ -170,11 +170,11 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
             <div className="actions user-actions">
               {(() => { const t = fmtTime(msg.created_at); return t ? <span className="msg-time" data-full={t.full}>{t.short}</span> : null; })()}
               <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
-              {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title="Compare versions"><Columns style={{ width: 15 }} /></button>}
+              {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title="Compare versions"><Columns style={{ width: 18 }} /></button>}
               <button className="action-btn" onClick={doCopy} title="Copy">{copied ? <Check /> : <Copy />}</button>
-              {onEdit && <button className="action-btn" onClick={startEdit} title="Edit"><Pencil style={{ width: 15 }} /></button>}
-              {onFork && <button className="action-btn" onClick={() => onFork(msg.id)} title="Fork into a new chat"><Fork style={{ width: 15 }} /></button>}
-              {onTogglePin && <button className={'action-btn' + (msg.pinned ? ' on' : '')} onClick={() => onTogglePin(msg.id, !msg.pinned)} title={msg.pinned ? 'Unpin' : 'Pin (keep in context)'}><Pin style={{ width: 15 }} /></button>}
+              {onEdit && <button className="action-btn" onClick={startEdit} title="Edit"><Pencil style={{ width: 18 }} /></button>}
+              {onFork && <button className="action-btn" onClick={() => onFork(msg.id)} title="Fork into a new chat"><Fork style={{ width: 18 }} /></button>}
+              {onTogglePin && <button className={'action-btn' + (msg.pinned ? ' on' : '')} onClick={() => onTogglePin(msg.id, !msg.pinned)} title={msg.pinned ? 'Unpin' : 'Pin (keep in context)'}><Pin style={{ width: 18 }} /></button>}
             </div>
           )}
           {compare && chatId && <BranchCompare chatId={chatId} messageId={msg.id} onSelect={onSelectBranch} onClose={() => setCompare(false)} />}
@@ -210,7 +210,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
         <div className="actions">
           <button className="action-btn" onClick={doCopy} title="Copy">{copied ? <Check /> : <Copy />}</button>
           <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
-          {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title="Compare versions"><Columns style={{ width: 15 }} /></button>}
+          {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title="Compare versions"><Columns style={{ width: 18 }} /></button>}
           <span className="retry-wrap" ref={retryRef}>
             <button className="action-btn" title="Retry" onClick={() => onRegenerate?.(msg.id)}><Retry /></button>
             {onRegenerateWith && models && models.length > 1 && (
