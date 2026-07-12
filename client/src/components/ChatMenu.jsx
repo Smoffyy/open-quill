@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import { toast } from '../toast.js';
 import { Pencil, Fork, Star, Compact, Sliders, Pin, Copy, FileText } from './icons.jsx';
 
-export default function ChatMenu({ chat, modelId, pinned = [], pins = [], onUnpinFile, onOpenPersonas, onJump, onCopyConversation, onClose, onRename, onFork, onToggleStar, onInstructionsSaved }) {
+export default function ChatMenu({ chat, modelId, pinned = [], pins = [], onUnpinFile, onOpenPersonas, onJump, onCopyConversation, onClose, onRename, onFork, onToggleStar, onToggleArchive, onInstructionsSaved }) {
   const ref = useRef(null);
   const [instr, setInstr] = useState(chat.instructions || '');
   const [ctx, setCtx] = useState(null);
@@ -49,6 +49,7 @@ export default function ChatMenu({ chat, modelId, pinned = [], pins = [], onUnpi
       <div className="cmp-actions">
         <button onClick={() => { onClose(); onRename?.(); }}><Pencil style={{ width: 15 }} /> Rename</button>
         <button onClick={() => { onClose(); onToggleStar?.(); }}><Star style={{ width: 15 }} /> {chat.starred ? 'Unstar' : 'Star'}</button>
+        {onToggleArchive && <button onClick={() => { onClose(); onToggleArchive(); }}><FileText style={{ width: 15 }} /> {chat.archived ? 'Unarchive' : 'Archive'}</button>}
         <button onClick={() => { onClose(); onFork?.(); }}><Fork style={{ width: 15 }} /> Fork chat</button>
         <button onClick={() => { onClose(); onCopyConversation?.(); }}><Copy style={{ width: 15 }} /> Copy all</button>
         {onOpenPersonas && <button onClick={() => { onClose(); onOpenPersonas(); }}><Star style={{ width: 15 }} /> Personas</button>}

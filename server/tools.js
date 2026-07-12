@@ -106,6 +106,19 @@ export function endConversationSchema() {
   }, []);
 }
 
+export function projectFilesSchemas() {
+  return [
+    fn('pf_search', "Search across the documents the user attached to this project. Returns matching lines with file names and line numbers.", {
+      query: str('Text to search for (case-insensitive).')
+    }, ['query']),
+    fn('pf_view', 'Read a project document by name, optionally a specific line range.', {
+      name: str('The file name exactly as listed in the system prompt.'),
+      from: int('Optional 1-based line to start from (default 1).'),
+      lines: int('Optional number of lines to return (default 200, max 400).')
+    }, ['name'])
+  ];
+}
+
 export function customToolSchemas(list) {
   return (list || []).map(t => fn(
     t.name,
@@ -115,7 +128,7 @@ export function customToolSchemas(list) {
   ));
 }
 
-export function buildTools({ sandboxOn, webSearchOn, membankOn, customToolsList, chatSearchOn, skillsOn, mcpSchemas, endChatOn }) {
+export function buildTools({ sandboxOn, webSearchOn, membankOn, customToolsList, chatSearchOn, skillsOn, mcpSchemas, endChatOn, projFilesOn }) {
   const out = [];
   if (sandboxOn) out.push(...sandboxToolSchemas());
   if (webSearchOn) out.push(webSearchSchema());
@@ -123,6 +136,7 @@ export function buildTools({ sandboxOn, webSearchOn, membankOn, customToolsList,
   if (chatSearchOn) out.push(...chatSearchSchemas());
   if (skillsOn) out.push(skillSchema());
   if (endChatOn) out.push(endConversationSchema());
+  if (projFilesOn) out.push(...projectFilesSchemas());
   if (customToolsList && customToolsList.length) out.push(...customToolSchemas(customToolsList));
   if (mcpSchemas && mcpSchemas.length) out.push(...mcpSchemas);
   return out;

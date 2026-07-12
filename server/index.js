@@ -19,6 +19,7 @@ import * as customtools from './customtools.js';
 import * as customfns from './functions.js';
 import * as skillsys from './skillsys.js';
 import * as mcp from './mcp.js';
+import * as projectfiles from './projectfiles.js';
 import { buildTools, toCall, livePreview } from './tools.js';
 
 function stripToolSyntax(text) {
@@ -256,7 +257,7 @@ app.post('/api/messages/:id/feedback', authMiddleware, (req, res) => {
   db.feedback.remove(f => f.message_id === m.id && f.user_id === req.user.id);
   if (rating !== 0) {
     db.feedback.insert({
-      id: uid(), ts: Date.now(), user_id: req.user.id,
+      id: uid(), ts: Date.now(), user_id: req.user.id, kind: 'rating',
       message_id: m.id, chat_id: chat.id, model_id: m.model_id || null,
       rating, comment, snippet: String(m.content || '').slice(0, 400)
     });
@@ -454,7 +455,7 @@ app.get('/api/users/search', authMiddleware, (req, res) => {
 app.get('/api/chats', authMiddleware, (req, res) => {
   const list = db.chats.byUser(req.user.id)
     .sort((a, b) => b.updated_at - a.updated_at)
-    .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred, folderId: c.folder_id || null, projectId: c.project_id || null, ended: !!c.ended }));
+    .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred, archived: !!c.archived, folderId: c.folder_id || null, projectId: c.project_id || null, ended: !!c.ended }));
   res.json(list);
 });
 
@@ -492,7 +493,29 @@ app.patch('/api/projects/:id', authMiddleware, (req, res) => {
   db.projects.update(p.id, patch);
   res.json(projectView(db.projects.byId(p.id)));
 });
+app.get('/api/projects/:id/files', authMiddleware, (req, res) => {
+  const pr = db.projects.byId(req.params.id);
+  if (!pr || pr.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+  res.json({ files: projectfiles.list(pr.id) });
+});
+const projectUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+app.post('/api/projects/:id/files', authMiddleware, projectUpload.single('file'), (req, res) => {
+  const pr = db.projects.byId(req.params.id);
+  if (!pr || pr.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+  if (!req.file) return res.status(400).json({ error: 'No file received.' });
+  const r = projectfiles.saveUpload(pr.id, req.file.originalname, req.file.buffer);
+  if (r.error) return res.status(400).json({ error: r.error });
+  res.json({ file: r.file, files: projectfiles.list(pr.id) });
+});
+app.delete('/api/projects/:id/files/:name', authMiddleware, (req, res) => {
+  const pr = db.projects.byId(req.params.id);
+  if (!pr || pr.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+  projectfiles.remove(pr.id, req.params.name);
+  res.json({ files: projectfiles.list(pr.id) });
+});
+
 app.delete('/api/projects/:id', authMiddleware, (req, res) => {
+  try { projectfiles.removeAll(req.params.id); } catch {}
   const p = db.projects.byId(req.params.id);
   if (p && p.user_id === req.user.id) {
     for (const c of db.chats.filter(c => c.user_id === req.user.id && c.project_id === p.id)) db.chats.update(c.id, { project_id: null });
@@ -538,14 +561,15 @@ app.delete('/api/folders/:id', authMiddleware, (req, res) => {
 app.get('/api/chats-overview', authMiddleware, (req, res) => {
   const offset = Math.max(0, parseInt(req.query.offset) || 0);
   const limit = Math.min(60, Math.max(1, parseInt(req.query.limit) || 18));
-  const all = db.chats.byUser(req.user.id).sort((a, b) => b.updated_at - a.updated_at);
+  const wantArchived = req.query.archived === '1';
+  const all = db.chats.byUser(req.user.id).filter(c => !!c.archived === wantArchived).sort((a, b) => b.updated_at - a.updated_at);
   const page = all.slice(offset, offset + limit).map(c => {
     const msgs = sortedMsgs(c.id);
     let preview = '';
     for (let i = msgs.length - 1; i >= 0; i--) {
       if (msgs[i].role === 'user' && typeof msgs[i].content === 'string' && msgs[i].content.trim()) { preview = msgs[i].content.slice(0, 220); break; }
     }
-    return { id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred, preview };
+    return { id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred, archived: !!c.archived, ended: !!c.ended, preview };
   });
   res.json({ chats: page, total: all.length, offset, hasMore: offset + page.length < all.length });
 });
@@ -582,12 +606,22 @@ app.get('/api/chats/export-all', authMiddleware, (req, res) => {
   const myFolders = db.folders.filter(f => f.user_id === req.user.id);
   const folderName = new Map(myFolders.map(f => [f.id, f.name]));
   const out = {
-    type: 'open-quill-chats-export', version: 1, exportedAt: new Date().toISOString(),
+    type: 'open-quill-chats-export', version: 2, exportedAt: new Date().toISOString(),
     chats: myChats.map(c => ({
-      title: c.title, starred: !!c.starred, folderName: c.folder_id ? (folderName.get(c.folder_id) || null) : null,
+      title: c.title, starred: !!c.starred, archived: !!c.archived, folderName: c.folder_id ? (folderName.get(c.folder_id) || null) : null,
       summary: c.summary || '',
       messages: activePath(c.id).map(m => ({ role: m.role, content: m.content || '', reasoning: m.reasoning || '', created_at: m.created_at }))
-    }))
+    })),
+    profile: (() => {
+      const u = db.users.byId(req.user.id) || {};
+      return {
+        instructions: u.instructions || '', memory: u.memory || '',
+        styles: Array.isArray(u.styles) ? u.styles : [],
+        personas: Array.isArray(u.personas) ? u.personas : [],
+        savedPrompts: Array.isArray(u.saved_prompts) ? u.saved_prompts : [],
+        prefs: u.prefs && typeof u.prefs === 'object' ? u.prefs : {}
+      };
+    })()
   };
   const safeName = 'open-quill-chats-' + new Date().toISOString().slice(0, 10);
   res.setHeader('Content-Type', 'application/json');
@@ -598,13 +632,36 @@ app.post('/api/chats/import', authMiddleware, (req, res) => {
   const body = req.body || {};
   const bundle = Array.isArray(body.chats) ? body.chats
     : (Array.isArray(body.messages) ? [{ title: body.title, starred: false, folderName: null, summary: body.summary || '', messages: body.messages }] : null);
-  if (!bundle || !bundle.length) return res.status(400).json({ error: 'Nothing to import — pick a valid open-quill export file.' });
+  if ((!bundle || !bundle.length) && !body.profile) return res.status(400).json({ error: 'Nothing to import — pick a valid open-quill export file.' });
+  if (body.profile && typeof body.profile === 'object') {
+    const u = db.users.byId(req.user.id) || {};
+    const pf = body.profile;
+    const patch = {};
+    if (typeof pf.instructions === 'string' && pf.instructions.trim() && !(u.instructions || '').trim()) patch.instructions = pf.instructions.slice(0, 8000);
+    if (typeof pf.memory === 'string' && pf.memory.trim() && !(u.memory || '').trim()) patch.memory = pf.memory.slice(0, 6000);
+    const mergeById = (mine, theirs, cap) => {
+      const out = Array.isArray(mine) ? [...mine] : [];
+      const seen = new Set(out.map(x => x && x.id));
+      for (const x of (Array.isArray(theirs) ? theirs : [])) {
+        if (x && x.id && !seen.has(x.id) && out.length < cap) { out.push(x); seen.add(x.id); }
+      }
+      return out;
+    };
+    patch.styles = mergeById(u.styles, pf.styles, 30);
+    patch.personas = mergeById(u.personas, pf.personas, 50);
+    patch.saved_prompts = mergeById(u.saved_prompts, pf.savedPrompts, 100);
+    if (pf.prefs && typeof pf.prefs === 'object') patch.prefs = { ...pf.prefs, ...(u.prefs || {}) };
+    db.users.update(req.user.id, patch);
+  }
+  if (!bundle || !bundle.length) return res.json({ imported: 0, profile: true });
   const mineFolders = db.folders.filter(f => f.user_id === req.user.id);
   const folderCache = new Map(mineFolders.map(f => [f.name, f.id]));
   let maxOrder = mineFolders.reduce((m, f) => Math.max(m, f.sort_order || 0), -1);
   let imported = 0;
   for (const c of bundle.slice(0, 500)) {
     if (!c || !Array.isArray(c.messages) || !c.messages.length) continue;
+    const wantArchived = c.archived ? 1 : 0;
+    void wantArchived;
     let folderId = null;
     if (c.folderName) {
       if (!folderCache.has(c.folderName)) {
@@ -614,7 +671,7 @@ app.post('/api/chats/import', authMiddleware, (req, res) => {
       folderId = folderCache.get(c.folderName);
     }
     const t = now();
-    const chat = db.chats.insert({ id: uid(), user_id: req.user.id, folder_id: folderId, title: String(c.title || 'Imported chat').slice(0, 120) || 'Imported chat', starred: c.starred ? 1 : 0, sandbox: 0, summary: String(c.summary || ''), created_at: t, updated_at: t });
+    const chat = db.chats.insert({ id: uid(), user_id: req.user.id, folder_id: folderId, title: String(c.title || 'Imported chat').slice(0, 120) || 'Imported chat', starred: c.starred ? 1 : 0, archived: c.archived ? 1 : 0, sandbox: 0, summary: String(c.summary || ''), created_at: t, updated_at: t });
     let parent = null;
     for (const m of c.messages.slice(0, 2000)) {
       if (!m || (m.role !== 'user' && m.role !== 'assistant') || typeof m.content !== 'string') continue;
@@ -641,7 +698,7 @@ app.get('/api/chats/:id', authMiddleware, (req, res) => {
       siblings: sibs.map(s => s.id)
     };
   });
-  res.json({ chat: { id: c.id, title: c.title, starred: !!c.starred, sandbox: !!c.sandbox, summary: c.summary || '', hasSummary: !!c.summary, projectId: c.project_id || null, instructions: c.instructions || '', pinnedFiles: Array.isArray(c.pinned_files) ? c.pinned_files : [], ended: !!c.ended, endedReason: c.ended_reason || '' }, messages });
+  res.json({ chat: { id: c.id, title: c.title, starred: !!c.starred, sandbox: !!c.sandbox, summary: c.summary || '', hasSummary: !!c.summary, projectId: c.project_id || null, instructions: c.instructions || '', pinnedFiles: Array.isArray(c.pinned_files) ? c.pinned_files : [], ended: !!c.ended, endedReason: c.ended_reason || '', genParams: c.gen_params || null, systemOverride: c.system_override || '' }, messages });
 });
 
 app.get('/api/chats/:id/siblings/:mid', authMiddleware, (req, res) => {
@@ -799,6 +856,17 @@ app.patch('/api/chats/:id', authMiddleware, (req, res) => {
     const patch = {};
     if ('title' in req.body) patch.title = req.body.title || 'New chat';
     if ('starred' in req.body) patch.starred = req.body.starred ? 1 : 0;
+    if ('archived' in req.body) patch.archived = req.body.archived ? 1 : 0;
+    if (req.user.is_admin && 'genParams' in req.body) {
+      const g = req.body.genParams && typeof req.body.genParams === 'object' ? req.body.genParams : {};
+      const out = {};
+      for (const k of ['temperature', 'top_p', 'top_k', 'min_p', 'max_tokens', 'frequency_penalty', 'presence_penalty', 'repeat_penalty']) {
+        const n = Number(g[k]);
+        if (g[k] !== '' && g[k] != null && Number.isFinite(n)) out[k] = n;
+      }
+      patch.gen_params = Object.keys(out).length ? out : null;
+    }
+    if (req.user.is_admin && 'systemOverride' in req.body) patch.system_override = String(req.body.systemOverride || '').slice(0, 24000);
     if ('sandbox' in req.body) patch.sandbox = req.body.sandbox ? 1 : 0;
     if ('instructions' in req.body) patch.instructions = String(req.body.instructions || '').slice(0, 8000);
     if ('folderId' in req.body) {
@@ -1256,6 +1324,12 @@ app.post('/api/safety-check', authMiddleware, async (req, res) => {
     if (!raw) return res.json({ allowed: true });
     const r = parseSafetyVerdict(model, raw);
     if (r.allowed) return res.json({ allowed: true });
+    try {
+      db.feedback.insert({
+        id: uid(), ts: Date.now(), user_id: req.user.id, kind: 'safety',
+        model_id: model.id || null, snippet: text.slice(0, 400), comment: r.reason || '', rating: 0
+      });
+    } catch {}
     res.json({ allowed: false, reason: wantReason ? r.reason : '' });
   } catch {
     res.json({ allowed: true });
@@ -1464,9 +1538,28 @@ app.post('/api/admin/mcp/:id/refresh', authMiddleware, adminOnly, async (req, re
   res.json({ server: r.server, error: r.error || undefined });
 });
 
+app.get('/api/admin/safety-log', authMiddleware, adminOnly, (req, res) => {
+  const offset = Math.max(0, parseInt(req.query.offset) || 0);
+  const rows = db.feedback.filter(f => f.kind === 'safety').sort((a, b) => b.ts - a.ts).slice(offset, offset + 50);
+  const users = new Map(db.users.all().map(u => [u.id, u]));
+  const models = new Map(db.models.all().map(m => [m.id, m]));
+  res.json({
+    entries: rows.map(f => ({
+      id: f.id, ts: f.ts, snippet: f.snippet || '', reason: f.comment || '',
+      user: users.get(f.user_id)?.email || 'deleted user',
+      model: models.get(f.model_id)?.display_name || f.model_id || '\u2014'
+    })),
+    total: db.feedback.count(f => f.kind === 'safety')
+  });
+});
+app.delete('/api/admin/safety-log', authMiddleware, adminOnly, (req, res) => {
+  db.feedback.remove(f => f.kind === 'safety');
+  res.json({ ok: true });
+});
+
 app.get('/api/admin/feedback', authMiddleware, adminOnly, (req, res) => {
   const offset = Math.max(0, parseInt(req.query.offset) || 0);
-  const rows = db.feedback.recent(50, offset);
+  const rows = db.feedback.filter(f => f.kind !== 'safety').sort((a, b) => b.ts - a.ts).slice(offset, offset + 50);
   const users = new Map(db.users.all().map(u => [u.id, u]));
   const models = new Map(db.models.all().map(m => [m.id, m]));
   res.json({
@@ -1476,7 +1569,7 @@ app.get('/api/admin/feedback', authMiddleware, adminOnly, (req, res) => {
       model: models.get(f.model_id)?.display_name || f.model_id || '\u2014',
       chatId: f.chat_id
     })),
-    counts: { up: db.feedback.count(f => f.rating === 1), down: db.feedback.count(f => f.rating === -1) }
+    counts: { up: db.feedback.count(f => f.kind !== 'safety' && f.rating === 1), down: db.feedback.count(f => f.kind !== 'safety' && f.rating === -1) }
   });
 });
 
@@ -2346,6 +2439,11 @@ wss.on('connection', (ws, req) => {
 
   async function runCompletion(ws, state, chat, model, extended, sandboxOn, sandboxCap = 0, webSearchOn = false, callMode = false, styleText = '') {
     if (callMode && (model.call_prompt || '').trim()) model = { ...model, system_prompt: model.call_prompt };
+    {
+      const cRow0 = db.chats.byId(chat.id) || chat;
+      if (cRow0.gen_params && typeof cRow0.gen_params === 'object') model = { ...model, ...cRow0.gen_params };
+      if ((cRow0.system_override || '').trim()) model = { ...model, system_prompt: cRow0.system_override };
+    }
     await maybeCompact(ws, chat, model, extended, sandboxOn);
     const history = await chatHistory(chat, model);
     const chatRow = db.chats.byId(chat.id) || chat;
@@ -2360,9 +2458,11 @@ wss.on('connection', (ws, req) => {
     const mcpSchemas = model.mcp_allowed ? mcp.toolSchemas() : [];
     const mcpOn = mcpSchemas.length > 0;
     const endChatOn = !!model.end_chat_allowed;
+    const projFilesOn = !!chatRow.project_id && projectfiles.list(chatRow.project_id).length > 0;
+    const projRow = projFilesOn ? db.projects.byId(chatRow.project_id) : null;
     const longReminderOn = !!model.long_convo_reminder;
     let conversationEnded = false;
-    const toolsOn = sandboxOn || webSearchOn || membankOn || customToolsOn || chatSearchOn || skillsOn || mcpOn || endChatOn;
+    const toolsOn = sandboxOn || webSearchOn || membankOn || customToolsOn || chatSearchOn || skillsOn || mcpOn || endChatOn || projFilesOn;
     const withStyle = (instr) => {
       if (!styleText) return instr;
       const block = 'The user selected a response style for this conversation. Apply it consistently to every reply:\n' + styleText;
@@ -2378,6 +2478,7 @@ wss.on('connection', (ws, req) => {
       if (mcpOn) parts.push(mcp.promptFor());
       if (customToolsOn) parts.push(customtools.promptFor(customToolsList));
       if (endChatOn) parts.push(endChatPromptFor(model));
+      if (projFilesOn) parts.push(projectfiles.promptFor(chatRow.project_id, projRow ? projRow.name : ''));
       if (longReminderOn) parts.push(longConvoReminderFor(chat.id));
       return parts.filter(Boolean).join('\n\n') || null;
     };
@@ -2388,7 +2489,7 @@ wss.on('connection', (ws, req) => {
     let content = '', reasoning = '', usage = null;
     safeSend(JSON.stringify({ type: 'start', chatId: chat.id, messageId: assistantId }));
 
-    const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, customToolsList, chatSearchOn, skillsOn, mcpSchemas, endChatOn }) : [];
+    const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, customToolsList, chatSearchOn, skillsOn, mcpSchemas, endChatOn, projFilesOn }) : [];
     const runToolCall = async (call) => {
       if (call.tool === 'end_conversation') {
         if (!endChatOn) return null;
@@ -2396,6 +2497,11 @@ wss.on('connection', (ws, req) => {
         db.chats.update(chat.id, { ended: 1, ended_at: now(), ended_reason: reason });
         conversationEnded = true;
         return { payload: { ok: true, ended: true }, formatted: 'end_conversation \u2192 The conversation has been permanently ended. Do not produce any further tool calls; finish your reply now.', hide: false };
+      }
+      if (call.tool === 'pf_search' || call.tool === 'pf_view') {
+        if (!projFilesOn) return null;
+        const r = await projectfiles.execTool(chatRow.project_id, call);
+        return { payload: projectfiles.resultPayload(call, r), formatted: projectfiles.formatResult(call, r), hide: false };
       }
       if (call.tool === 'chat_search' || call.tool === 'chat_view') {
         if (!chatSearchOn) return null;
@@ -2555,7 +2661,8 @@ wss.on('connection', (ws, req) => {
     }
     db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, model_id: model.id, parent_id: assistantParent, usage: usageRec, created_at: now() });
     db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
-    safeSend(JSON.stringify({ type: 'done', chatId: chat.id, messageId: assistantId }));
+    const truncated = !!(Number(model.max_tokens) > 0 && usage && usage.completion >= Number(model.max_tokens) - 2 && !conversationEnded);
+    safeSend(JSON.stringify({ type: 'done', chatId: chat.id, messageId: assistantId, truncated }));
 
     const fresh = db.chats.byId(chat.id);
     const lastUser = [...history].reverse().find(h => h.role === 'user');
@@ -2625,7 +2732,8 @@ wss.on('connection', (ws, req) => {
       const userSandbox = !!msg.sandbox;
       if (!!chat.sandbox !== userSandbox) db.chats.update(chat.id, { sandbox: userSandbox ? 1 : 0 });
       const hasFileAttach = Array.isArray(msg.attachments) && msg.attachments.some(a => !(a.type && a.type.startsWith('image/')));
-      const sandboxOn = userSandbox || (hasFileAttach && model.sandbox_allowed !== 0);
+      void hasFileAttach;
+      const sandboxOn = userSandbox;
       const webSearchOn = !!msg.webSearch && websearch.webSearchAvailable() && model.web_search_allowed !== 0;
       ensureChain(chat.id);
 

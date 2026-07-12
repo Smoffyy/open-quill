@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../api.js';
+import { toast } from '../toast.js';
 import Composer from './Composer.jsx';
 import { Box, Search, Plus, ChevDown, Star, Dots, Trash, Pencil, X, FileText } from './icons.jsx';
 
@@ -59,6 +60,32 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
   const [editingInstr, setEditingInstr] = useState(false);
   const [instr, setInstr] = useState('');
   const [menu, setMenu] = useState(false);
+  const [pjFiles, setPjFiles] = useState([]);
+  const [fileBusy, setFileBusy] = useState(false);
+  const fileInputRef = useRef(null);
+  const loadFiles = useCallback(async () => {
+    try { const d = await api.get('/api/projects/' + id + '/files'); setPjFiles(d.files || []); } catch {}
+  }, [id]);
+  useEffect(() => { loadFiles(); }, [loadFiles]);
+  async function uploadFiles(list) {
+    if (!list || !list.length || fileBusy) return;
+    setFileBusy(true);
+    for (const f of list) {
+      try {
+        const fd = new FormData();
+        fd.append('file', f);
+        const r = await fetch('/api/projects/' + id + '/files', { method: 'POST', body: fd, credentials: 'include' });
+        const d = await r.json();
+        if (!r.ok) toast(d.error || 'Upload failed.');
+        else setPjFiles(d.files || []);
+      } catch { toast('Upload failed.'); }
+    }
+    setFileBusy(false);
+  }
+  async function removeFile(name) {
+    try { const d = await api.del('/api/projects/' + id + '/files/' + encodeURIComponent(name)); setPjFiles(d.files || []); } catch {}
+  }
+  const fmtSize = (n) => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState('');
   const menuRef = useRef(null);
@@ -159,13 +186,29 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
           </div>
           <div className="pj-card">
             <div className="pj-card-head">
-              <span>Files</span>
-              <button className="pj-card-add"><Plus style={{ width: 16 }} /></button>
+              <span>Files{pjFiles.length ? ` (${pjFiles.length})` : ''}</span>
+              <button className="pj-card-add" disabled={fileBusy} onClick={() => fileInputRef.current?.click()}><Plus style={{ width: 16 }} /></button>
+              <input ref={fileInputRef} type="file" multiple hidden accept=".pdf,.txt,.md,.markdown,.csv,.tsv,.json,.js,.ts,.jsx,.tsx,.py,.html,.css,.xml,.yaml,.yml,.log,.ini,.toml,.sh,.bat,.sql,.java,.c,.cpp,.h,.rs,.go,.rb,.php"
+                onChange={(e) => { uploadFiles([...(e.target.files || [])]); e.target.value = ''; }} />
             </div>
-            <div className="pj-files-empty">
-              <FileText style={{ width: 30 }} />
-              <span>Add PDFs, documents, or other text to reference in this project.</span>
-            </div>
+            {pjFiles.length === 0 ? (
+              <div className="pj-files-empty" onClick={() => fileInputRef.current?.click()} style={{ cursor: 'pointer' }}>
+                <FileText style={{ width: 30 }} />
+                <span>{fileBusy ? 'Uploading…' : 'Add PDFs or text documents — chats in this project can search and read them.'}</span>
+              </div>
+            ) : (
+              <div className="pj-file-list">
+                {pjFiles.map(f => (
+                  <div key={f.name} className="pj-file-row">
+                    <FileText style={{ width: 14 }} />
+                    <span className="pj-file-name" title={f.name}>{f.name}</span>
+                    <span className="pj-file-size">{fmtSize(f.size)}</span>
+                    <button className="pj-file-del" title="Remove" onClick={() => removeFile(f.name)}>✕</button>
+                  </div>
+                ))}
+                {fileBusy && <div className="pj-file-row"><span className="pj-file-name">Uploading…</span></div>}
+              </div>
+            )}
           </div>
         </div>
       </div>

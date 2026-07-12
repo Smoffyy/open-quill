@@ -1,31 +1,39 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../api.js';
+import { toast } from '../toast.js';
 
 function timeAgo(ts) {
   const s = Math.floor((Date.now() - ts) / 1000);
   if (s < 60) return 'just now';
-  const m = Math.floor(s / 60); if (m < 60) return m + 'm ago';
-  const h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
-  const d = Math.floor(h / 24); if (d < 7) return d + 'd ago';
+  if (s < 3600) return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  if (s < 604800) return Math.floor(s / 86400) + 'd ago';
   return new Date(ts).toLocaleDateString();
 }
 
-export default function ChatsOverview({ onOpen, onClose }) {
+export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
   const [chats, setChats] = useState([]);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState('all');
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState(() => new Set());
+  const [busy, setBusy] = useState(false);
   const offsetRef = useRef(0);
   const bodyRef = useRef(null);
   const busyRef = useRef(false);
+  const tabRef = useRef('all');
 
-  const loadMore = useCallback(async () => {
+  const loadMore = useCallback(async (reset) => {
     if (busyRef.current) return;
     busyRef.current = true; setLoading(true);
+    if (reset) { offsetRef.current = 0; setChats([]); setHasMore(true); }
     try {
-      const r = await api.get(`/api/chats-overview?offset=${offsetRef.current}&limit=18`);
+      const r = await api.get(`/api/chats-overview?offset=${offsetRef.current}&limit=18&archived=${tabRef.current === 'archived' ? 1 : 0}`);
       setChats(cs => {
-        const seen = new Set(cs.map(c => c.id));
-        return [...cs, ...r.chats.filter(c => !seen.has(c.id))];
+        const base = reset ? [] : cs;
+        const seen = new Set(base.map(c => c.id));
+        return [...base, ...r.chats.filter(c => !seen.has(c.id))];
       });
       offsetRef.current += r.chats.length;
       setHasMore(r.hasMore);
@@ -34,6 +42,12 @@ export default function ChatsOverview({ onOpen, onClose }) {
   }, []);
 
   useEffect(() => { loadMore(); }, [loadMore]);
+
+  function switchTab(t) {
+    setTab(t); tabRef.current = t;
+    setSelected(new Set()); setSelecting(false);
+    loadMore(true);
+  }
 
   function onScroll() {
     const el = bodyRef.current; if (!el || !hasMore) return;
@@ -46,18 +60,78 @@ export default function ChatsOverview({ onOpen, onClose }) {
     return () => document.removeEventListener('keydown', h);
   }, [onClose]);
 
+  function toggleSel(id) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function clickCard(c) {
+    if (selecting) toggleSel(c.id);
+    else onOpen(c.id);
+  }
+
+  async function bulkArchive(archived) {
+    if (!selected.size || busy) return;
+    setBusy(true);
+    const ids = [...selected];
+    for (const id of ids) { try { await api.patch('/api/chats/' + id, { archived }); } catch {} }
+    setChats(cs => cs.filter(c => !selected.has(c.id)));
+    setSelected(new Set());
+    setBusy(false);
+    toast(`${ids.length} chat${ids.length === 1 ? '' : 's'} ${archived ? 'archived' : 'restored'}.`);
+    onChatsChanged?.();
+  }
+
+  async function bulkDelete() {
+    if (!selected.size || busy) return;
+    if (!confirm(`Permanently delete ${selected.size} chat${selected.size === 1 ? '' : 's'}? This cannot be undone.`)) return;
+    setBusy(true);
+    const ids = [...selected];
+    for (const id of ids) { try { await api.del('/api/chats/' + id); } catch {} }
+    setChats(cs => cs.filter(c => !selected.has(c.id)));
+    setSelected(new Set());
+    setBusy(false);
+    toast(`${ids.length} chat${ids.length === 1 ? '' : 's'} deleted.`);
+    onChatsChanged?.();
+  }
+
+  function selectAll() {
+    setSelected(prev => prev.size === chats.length ? new Set() : new Set(chats.map(c => c.id)));
+  }
+
   return (
     <div className="chats-overview">
       <div className="co-head">
         <h2>Your chats</h2>
+        <div className="co-tools">
+          <div className="seg co-seg">
+            <button className={tab === 'all' ? 'on' : ''} onClick={() => switchTab('all')}>Active</button>
+            <button className={tab === 'archived' ? 'on' : ''} onClick={() => switchTab('archived')}>Archived</button>
+          </div>
+          <button className={'co-select-btn' + (selecting ? ' on' : '')} onClick={() => { setSelecting(v => !v); setSelected(new Set()); }}>{selecting ? 'Done' : 'Select'}</button>
+        </div>
         <button className="co-close" onClick={onClose}>✕</button>
       </div>
+      {selecting && (
+        <div className="co-bulkbar">
+          <button className="co-bulk-link" onClick={selectAll}>{selected.size === chats.length && chats.length ? 'Clear selection' : 'Select all'}</button>
+          <span className="co-bulk-count">{selected.size} selected</span>
+          <div className="co-bulk-actions">
+            <button className="btn ghost" disabled={!selected.size || busy} onClick={() => bulkArchive(tab !== 'archived')}>{tab === 'archived' ? 'Unarchive' : 'Archive'}</button>
+            <button className="btn ghost danger" disabled={!selected.size || busy} onClick={bulkDelete}>Delete</button>
+          </div>
+        </div>
+      )}
       <div className="co-body" ref={bodyRef} onScroll={onScroll}>
-        {chats.length === 0 && !loading && <div className="art-empty">No chats yet.</div>}
+        {chats.length === 0 && !loading && <div className="art-empty">{tab === 'archived' ? 'No archived chats.' : 'No chats yet.'}</div>}
         <div className="co-grid">
           {chats.map((c, i) => (
-            <button key={c.id} className="co-card" style={{ animationDelay: (i % 18) * 22 + 'ms' }} onClick={() => onOpen(c.id)}>
-              <div className="co-title">{c.starred ? '★ ' : ''}{c.title || 'New chat'}</div>
+            <button key={c.id} className={'co-card' + (selecting && selected.has(c.id) ? ' selected' : '')} style={{ animationDelay: (i % 18) * 22 + 'ms' }} onClick={() => clickCard(c)}>
+              {selecting && <span className={'co-check' + (selected.has(c.id) ? ' on' : '')}>{selected.has(c.id) ? '✓' : ''}</span>}
+              <div className="co-title">{c.starred ? '★ ' : ''}{c.ended ? '🔒 ' : ''}{c.title || 'New chat'}</div>
               {c.preview && <div className="co-preview">{c.preview}</div>}
               <div className="co-fade" />
               <div className="co-time">{timeAgo(c.updated_at)}</div>

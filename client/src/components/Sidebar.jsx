@@ -166,6 +166,7 @@ export default function Sidebar({
   }, []);
   const showTrash = shiftHeld && hover;
 
+  chats = chats.filter(c => !c.archived);
   const starred = chats.filter(c => c.starred);
   const starredProjects = (projects || []).filter(p => p.starred);
   const folderIds = new Set(folders.map(f => f.id));

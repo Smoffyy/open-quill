@@ -136,6 +136,11 @@ function BashCard({ call, result }) {
   );
 }
 
+function chatIdFromUrl() {
+  const m = window.location.pathname.match(/\/chat\/([a-zA-Z0-9-]+)/);
+  return m ? m[1] : null;
+}
+
 function FileCard({ call, result }) {
   const v = verbsFor(call.tool) || [call.tool, call.tool];
   const pending = !result;
@@ -147,7 +152,27 @@ function FileCard({ call, result }) {
   const unchanged = result && result.ok && result.unchanged;
   const showDiff = result && result.ok && (adds || dels) && (call.tool === 'create_file' || call.tool === 'str_replace');
   const openPath = (!failed && call.tool !== 'delete_file') ? openPathFor(call) : null;
+  const [preview, setPreview] = React.useState(null);
+  const [previewBusy, setPreviewBusy] = React.useState(false);
+  const canPeek = !!openPath && result && result.ok && (call.tool === 'create_file' || call.tool === 'str_replace' || call.tool === 'view') && chatIdFromUrl();
+  async function togglePeek(e) {
+    e.stopPropagation();
+    if (preview != null) { setPreview(null); return; }
+    if (previewBusy) return;
+    setPreviewBusy(true);
+    try {
+      const cid = chatIdFromUrl();
+      const r = await fetch(`/api/chats/${cid}/file?path=${encodeURIComponent(openPath)}`, { credentials: 'include' });
+      const d = await r.json();
+      if (d && typeof d.text === 'string') {
+        const t = d.text.length > 6000 ? d.text.slice(0, 6000) + '\n\u2026 (truncated \u2014 open in artifacts for the full file)' : d.text;
+        setPreview(t || '(empty file)');
+      } else setPreview(d && d.binary ? '(binary file \u2014 open in artifacts to download)' : '(could not load preview)');
+    } catch { setPreview('(could not load preview)'); }
+    setPreviewBusy(false);
+  }
   return (
+    <>
     <span className={'tool-line' + (pending ? ' pending' : '') + (failed ? ' err' : '') + (openPath ? ' clickable' : '')}
       onClick={openPath ? () => openArtifact(openPath) : undefined}
       title={openPath ? 'Open ' + name + ' in artifacts' : undefined}>
@@ -163,7 +188,10 @@ function FileCard({ call, result }) {
       {unchanged && <span className="tl-note">unchanged</span>}
       {failed && <span className="tl-err">{result.error}</span>}
       {pending && <span className="tc-dots"><i /><i /><i /></span>}
+      {canPeek && <button className="tc-preview-btn" onClick={togglePeek}>{previewBusy ? '\u2026' : preview != null ? 'Hide' : 'Peek'}</button>}
     </span>
+    {preview != null && <div className="tc-preview">{preview}</div>}
+    </>
   );
 }
 

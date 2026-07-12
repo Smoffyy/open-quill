@@ -19,6 +19,8 @@ import SettingsModal from './components/SettingsModal.jsx';
 import AdminPanel from './components/AdminPanel.jsx';
 import DocModal from './components/DocModal.jsx';
 import ArtifactsPanel from './components/ArtifactsPanel.jsx';
+import ChatControls from './components/ChatControls.jsx';
+import ModelDropdown from './components/ModelDropdown.jsx';
 import CallPanel from './components/CallPanel.jsx';
 import { voiceEmit } from './voice.js';
 import ChatsOverview from './components/ChatsOverview.jsx';
@@ -31,7 +33,7 @@ import Toaster from './components/Toaster.jsx';
 import Lightbox from './components/Lightbox.jsx';
 import ShortcutsModal from './components/ShortcutsModal.jsx';
 import { toast } from './toast.js';
-import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu } from './components/icons.jsx';
+import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders } from './components/icons.jsx';
 
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: 'Assistants can make mistakes, double-check responses.', greetings: ['How can I help you?'], appIcon: '', quickPrompts: [], version: '' };
 
@@ -164,7 +166,27 @@ export default function App() {
   const [safetyChecking, setSafetyChecking] = useState(false);
   const [safetyReason, setSafetyReason] = useState('');
   const [chatEnded, setChatEnded] = useState(false);
+  const [ctlOpen, setCtlOpen] = useState(false);
+  const [chatGenParams, setChatGenParams] = useState(null);
+  const [chatSysOverride, setChatSysOverride] = useState('');
   const [chatEndedReason, setChatEndedReason] = useState('');
+  const [queuedMsg, setQueuedMsg] = useState('');
+  const queuedRef = useRef('');
+  const sendRef = useRef(null);
+  const genOptsRef = useRef({});
+  const [canContinue, setCanContinue] = useState(false);
+  const [compareIds, setCompareIds] = useState([]);
+  const compareRef = useRef(null);
+  const draftKey = (id) => 'oq-draft-' + (id || 'new');
+  const draftTimer = useRef(null);
+  const saveDraft = (id, text) => {
+    clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => {
+      try { text && text.trim() ? localStorage.setItem(draftKey(id), text) : localStorage.removeItem(draftKey(id)); } catch {}
+    }, 250);
+  };
+  const loadDraft = (id) => { try { return localStorage.getItem(draftKey(id)) || ''; } catch { return ''; } };
+  const clearDraft = (id) => { clearTimeout(draftTimer.current); try { localStorage.removeItem(draftKey(id)); } catch {} };
   const styleId = user?.prefs?.styleId || 'normal';
   const setStyleId = (id) => updatePref('styleId', id);
   const saveStyles = async (list) => {
@@ -547,6 +569,24 @@ export default function App() {
       if (m.chatId === activeKey()) { pendingDone.current = true; if (!animateRef.current) finalize(); }
       else finalizeBackground(m.chatId);
       loadBudget();
+      if (m.chatId === activeKey()) {
+        setCanContinue(!!m.truncated);
+        const cmp = compareRef.current;
+        if (cmp && cmp.chatId === m.chatId) {
+          if (!cmp.messageId && m.messageId) cmp.messageId = m.messageId;
+          const nextId = cmp.remaining.shift();
+          if (nextId && cmp.messageId) {
+            (() => { const g = genOptsRef.current; setTimeout(() => wsSend({ type: 'regenerate', chatId: cmp.chatId, modelId: nextId, extended: g.extended, messageId: cmp.messageId, sandbox: g.sandbox, webSearch: g.webSearch, styleId: g.styleId }), 150); })();
+          } else {
+            compareRef.current = null;
+            toast('Model comparison ready — use the version arrows or compare button on the response.', { duration: 6000 });
+            queuedRef.current && queuedRef.current.trim() && (() => { const q2 = queuedRef.current; queuedRef.current=''; setQueuedMsg(''); setTimeout(() => sendRef.current([], q2, { fromQueue: true }), 150); })();
+          }
+        } else {
+          const q = queuedRef.current;
+          if (q && q.trim()) { queuedRef.current = ''; setQueuedMsg(''); setTimeout(() => sendRef.current([], q, { fromQueue: true }), 120); }
+        }
+      }
       return;
     }
   }
@@ -765,6 +805,11 @@ export default function App() {
       setHasSummary(!!chat.hasSummary);
       setChatEnded(!!chat.ended);
       setChatEndedReason(chat.endedReason || '');
+      setChatGenParams(chat.genParams || null);
+      setChatSysOverride(chat.systemOverride || '');
+      setCtlOpen(false);
+      setCanContinue(false); setQueuedMsg(''); queuedRef.current = '';
+      setInput(loadDraft(id));
       setChatInstructions(chat.instructions || '');
       setChatPins(Array.isArray(chat.pinnedFiles) ? chat.pinnedFiles : []);
       setChatMenuOpen(false);
@@ -783,6 +828,8 @@ export default function App() {
     setActiveId(null); setMessages([]); setInput('');
     setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
     setChatEnded(false); setChatEndedReason('');
+    setCanContinue(false); setQueuedMsg(''); queuedRef.current = '';
+    setInput(loadDraft(null));
     const m = models.find(m => m.id === currentId);
     setSandbox(m?.sandboxAllowed !== false && !!m?.sandboxAuto);
     setWebSearch(!!cfg.webSearchAvailable && m?.webSearchAllowed !== false && !!m?.webSearchAuto);
@@ -811,6 +858,14 @@ export default function App() {
     setChats(cs => cs.filter(c => c.id !== id));
     if (id === activeId) newChat();
   }
+  function toggleArchive(id) {
+    const cur = chats.find(c => c.id === id);
+    const next = !cur?.archived;
+    setChats(cs => cs.map(c => c.id === id ? { ...c, archived: next } : c));
+    api.patch('/api/chats/' + id, { archived: next }).catch(() => {});
+    if (next && id === activeId) toast('Chat archived — find it under Chats → Archived.');
+  }
+
   function toggleStar(id) {
     const cur = chats.find(c => c.id === id);
     const next = !cur?.starred;
@@ -859,10 +914,17 @@ export default function App() {
   }
 
   async function send(attachments = [], overrideText, opts = {}) {
-    if (streaming || queued || safetyChecking) return;
+    if ((streaming || queued) && !opts.fromQueue) return;
+    if (safetyChecking) return;
     if (safetyFlagged) return;
     const text = (overrideText != null ? overrideText : input).trim();
     if ((!text && attachments.length === 0) || !currentId) return;
+
+    setCanContinue(false);
+    if (compareIds.length && !opts.call) {
+      compareRef.current = { chatId: null, remaining: [...compareIds], messageId: null };
+      setCompareIds([]);
+    }
 
     if (cfg.safetyCheckEnabled && text) {
       setSafetyChecking(true);
@@ -897,6 +959,8 @@ export default function App() {
       setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false, folderId: null }, ...cs]);
       history.pushState({}, '', '/chat/' + chatId);
     }
+    if (compareRef.current && !compareRef.current.chatId) compareRef.current.chatId = chatId;
+    clearDraft(activeId);
     if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, content: text, attachments, sandbox, webSearch, call: !!opts.call, styleId })) return;
     gen.current.set(chatId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
     setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
@@ -987,11 +1051,17 @@ export default function App() {
   const bgInChat = user?.prefs?.modelBgInChat !== false;
   const modelHasBg = !incognito && !!(model?.bgEnabled && model?.bgImage);
   const activeBg = computeActiveBg(models, currentId, activeId, messages.length, incognito, user?.prefs);
+  sendRef.current = send;
+  genOptsRef.current = { extended, sandbox, webSearch, styleId };
   const composerProps = {
-    value: input, onChange: (v) => { if (safetyFlagged) { setSafetyFlagged(false); setSafetyReason(''); } setInput(v); }, onSend: send, onStop: stop, streaming: streaming || queued,
+    value: input, onChange: (v) => { if (safetyFlagged) { setSafetyFlagged(false); setSafetyReason(''); } setInput(v); saveDraft(activeId, v); }, onSend: send, onStop: stop, streaming: streaming || queued,
+    queuedMsg, onQueue: (t) => { queuedRef.current = t; setQueuedMsg(t); }, onCancelQueue: () => { queuedRef.current = ''; setQueuedMsg(''); },
+    canContinue, onContinue: () => { setCanContinue(false); send([], 'Continue exactly where your previous reply stopped, without repeating any content.'); },
+    compareIds, onSetCompare: setCompareIds,
     safetyFlagged, safetyChecking, safetyReason, safetyVerbose: !!cfg.safetyCheckVerbose,
     styles: user?.styles || [], styleId, onSelectStyle: setStyleId, onSaveStyles: saveStyles,
     conversationEnded: chatEnded, endedReason: chatEndedReason,
+    hideModelPicker: user?.prefs?.modelTop === true,
     models, currentId, onSelect: setCurrentId, extended, onToggleExtended: () => setExtended(e => !e),
     visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin, budget,
     modelHasBg, bgInChat, onToggleBgInChat: () => updatePref('modelBgInChat', !bgInChat),
@@ -1086,6 +1156,11 @@ export default function App() {
         ) : (
           <>
             <div className="topbar">
+              {user?.prefs?.modelTop === true && (
+                <div className="topbar-model">
+                  <ModelDropdown models={models} currentId={currentId} onSelect={setCurrentId} canUseUnavailable={!!user?.isAdmin} up={false} />
+                </div>
+              )}
               <button className="mobile-menu-btn" onClick={() => setMobileDrawer(true)} title="Menu"><Menu style={{ width: 20 }} /></button>
               {renaming ? (
                 <input className="chat-rename" autoFocus value={renameVal}
@@ -1100,7 +1175,7 @@ export default function App() {
                   {(chatInstructions || '').trim() && <span className="chat-instr-dot" title="This chat has custom instructions" />}
                   {chatMenuOpen && activeId && (
                     <ChatMenu
-                      chat={{ id: activeId, title: chats.find(c => c.id === activeId)?.title || 'New chat', instructions: chatInstructions, starred: !!chats.find(c => c.id === activeId)?.starred }}
+                      chat={{ id: activeId, title: chats.find(c => c.id === activeId)?.title || 'New chat', instructions: chatInstructions, starred: !!chats.find(c => c.id === activeId)?.starred, archived: !!chats.find(c => c.id === activeId)?.archived }}
                       modelId={currentId}
                       pinned={messages.filter(m => m.pinned)}
                       pins={chatPins}
@@ -1112,6 +1187,7 @@ export default function App() {
                       onRename={() => { setRenameVal(chats.find(c => c.id === activeId)?.title || ''); setRenaming(true); }}
                       onFork={() => forkChat()}
                       onToggleStar={() => toggleStar(activeId, !chats.find(c => c.id === activeId)?.starred)}
+                      onToggleArchive={() => toggleArchive(activeId)}
                       onInstructionsSaved={(v) => setChatInstructions(v)} />
                   )}
                 </div>
@@ -1125,6 +1201,11 @@ export default function App() {
                 {hasSummary && (
                   <button className="paper-btn" onClick={() => setSummaryOpen(true)} title="Conversation memory">
                     <Compact style={{ width: 18 }} />
+                  </button>
+                )}
+                {user?.isAdmin && activeId && (
+                  <button className={'paper-btn' + (ctlOpen ? ' active' : '')} onClick={() => { setArtifactsOpen(false); setCtlOpen(o => !o); }} title="Chat controls (admin)">
+                    <Sliders style={{ width: 17 }} />
                   </button>
                 )}
                 {showArtifactsBtn && (
@@ -1171,6 +1252,9 @@ export default function App() {
       {artifactsOpen && activeId && !callOpen && (
         <ArtifactsPanel chatId={activeId} files={files} live={liveFile} focus={artifactFocus} onClose={() => setArtifactsOpen(false)} />
       )}
+      {ctlOpen && user?.isAdmin && activeId && (
+        <ChatControls chatId={activeId} initialParams={chatGenParams} initialOverride={chatSysOverride} onClose={() => setCtlOpen(false)} />
+      )}
       {callOpen && (
         <CallPanel chatId={activeId} model={model}
           voice={{ stt: cfg.voiceStt || 'browser', tts: cfg.voiceTts || 'browser', ttsVoice: cfg.voiceTtsVoice || '', ttsSpeed: cfg.voiceTtsSpeed || 1 }}
@@ -1184,7 +1268,7 @@ export default function App() {
       )}
 
       {showSettings && <SettingsModal user={user} cfg={cfg} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile} />}
-      {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} />}
+      {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} onChatsChanged={() => loadChats()} />}
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} onOpen={(id) => openChat(id)} />}
       {personasOpen && <PersonasModal personas={user?.personas || []} models={models} currentId={currentId} onApply={applyPersona} onSave={savePersonas} onClose={() => setPersonasOpen(false)} />}
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}

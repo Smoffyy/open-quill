@@ -267,8 +267,9 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 }
 [data-cursor="block"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { width: 12px; height: 1.05em; border-radius: 2.5px; vertical-align: -3px; background: var(--accent); animation-name: caretHard; animation-duration: var(--caret-cycle, 1000ms); animation-timing-function: steps(1); animation-iteration-count: infinite; }
 [data-cursor="circle"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { width: 0.75em; height: 0.75em; border-radius: 50%; background: var(--accent); animation-name: caretPulse; animation-duration: var(--caret-pulse, 1000ms); animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
-[data-cursor="block"] .assistant-body.streaming.typing > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { animation: none; opacity: 1; }
-[data-cursor="circle"] .assistant-body.streaming.typing > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { animation: none; transform: scale(1.15); }
+[data-cursor="block"] .assistant-body.streaming.typing > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { animation: caretSoft 0.9s ease-in-out infinite; }
+@keyframes caretSoft { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+[data-cursor="circle"] .assistant-body.streaming.typing > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { animation: caretPulse var(--caret-pulse, 900ms) ease-in-out infinite; }
 @keyframes caretSoft { 0%, 100% { opacity: .9; } 50% { opacity: .25; } }
 @keyframes caretHard { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 @keyframes caretPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.3); } }

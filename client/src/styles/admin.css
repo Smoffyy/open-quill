@@ -263,3 +263,10 @@
 .fb-rating { flex-shrink: 0; width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; margin-right: 4px; }
 .fb-rating.up { color: #4caf7d; background: color-mix(in srgb, #4caf7d 12%, transparent); }
 .fb-rating.down { color: #d9534f; background: color-mix(in srgb, #d9534f 12%, transparent); }
+
+.crop-modal { width: min(680px, 94vw) !important; height: auto !important; max-height: 90vh !important; }
+.crop-body { display: flex; gap: 24px; padding-top: 14px; flex-wrap: wrap; }
+.crop-preview { width: 256px; height: 256px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: repeating-conic-gradient(var(--hover) 0% 25%, transparent 0% 50%) 50% / 22px 22px; border-radius: 14px; border: 1px solid var(--border); overflow: hidden; }
+.crop-preview img { width: 256px; height: 256px; }
+.crop-controls { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 6px; }
+.me2-group-label { margin-top: 22px !important; padding-bottom: 6px; border-bottom: 1px solid var(--border-soft); }

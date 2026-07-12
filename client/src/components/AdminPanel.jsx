@@ -46,12 +46,80 @@ function bgPreviewStyle(v) {
   return { background: s };
 }
 
+function IconCropModal({ file, onDone, onCancel }) {
+  const [shape, setShape] = useState('rounded');
+  const [zoom, setZoom] = useState(1);
+  const [img, setImg] = useState(null);
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    const i = new Image();
+    i.onload = () => setImg(i);
+    i.src = url;
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  function render(preview) {
+    const size = 256;
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    const ctx = c.getContext('2d');
+    if (!img) return c;
+    ctx.save();
+    if (shape === 'circle') { ctx.beginPath(); ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2); ctx.clip(); }
+    else if (shape === 'rounded') { const r = size * 0.22; ctx.beginPath(); ctx.roundRect(0, 0, size, size, r); ctx.clip(); }
+    const base = Math.min(img.width, img.height);
+    const crop = base / zoom;
+    ctx.drawImage(img, (img.width - crop) / 2, (img.height - crop) / 2, crop, crop, 0, 0, size, size);
+    ctx.restore();
+    return c;
+  }
+  const previewUrl = img ? render(true).toDataURL('image/png') : '';
+  async function apply() {
+    render(false).toBlob(async (blob) => {
+      const f = new File([blob], (file.name.replace(/\.[^.]+$/, '') || 'icon') + '-cropped.png', { type: 'image/png' });
+      const { url } = await api.upload(f);
+      onDone(url);
+    }, 'image/png');
+  }
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div className="sp-modal crop-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="sp-head"><h3>Crop icon</h3><button className="sp-x" onClick={onCancel}>✕</button></div>
+        <div className="crop-body">
+          <div className="crop-preview">{previewUrl && <img src={previewUrl} alt="" />}</div>
+          <div className="crop-controls">
+            <div className="field"><label>Shape</label>
+              <div className="seg" style={{ width: 'fit-content' }}>
+                <button className={shape === 'circle' ? 'on' : ''} onClick={() => setShape('circle')}>Circle</button>
+                <button className={shape === 'rounded' ? 'on' : ''} onClick={() => setShape('rounded')}>Rounded</button>
+                <button className={shape === 'square' ? 'on' : ''} onClick={() => setShape('square')}>Square</button>
+              </div>
+            </div>
+            <div className="field"><label>Zoom</label>
+              <input type="range" min="1" max="3" step="0.02" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
+            </div>
+            <div className="editor-actions">
+              <button className="btn" onClick={onCancel}>Cancel</button>
+              <button className="btn primary" disabled={!img} onClick={apply}>Use icon</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function IconSlot({ label, value, def, anim, onChange }) {
   const ref = useRef(null);
+  const [cropFile, setCropFile] = useState(null);
   async function pick(e) {
     const f = e.target.files?.[0]; if (!f) return;
-    const { url } = await api.upload(f);
-    onChange(url); e.target.value = '';
+    e.target.value = '';
+    if (f.type === 'image/svg+xml' || f.type === 'image/gif') {
+      const { url } = await api.upload(f);
+      onChange(url);
+      return;
+    }
+    setCropFile(f);
   }
   const shown = value || def;
   return (
@@ -68,6 +136,7 @@ function IconSlot({ label, value, def, anim, onChange }) {
       </div>
       <input ref={ref} type="file" hidden onChange={pick}
         accept=".png,.svg,.jpg,.jpeg,.gif,image/png,image/svg+xml,image/jpeg,image/gif" />
+      {cropFile && <IconCropModal file={cropFile} onCancel={() => setCropFile(null)} onDone={(url) => { setCropFile(null); onChange(url); }} />}
       <div className="up">{label}</div>
     </div>
   );
@@ -612,6 +681,15 @@ export default function AdminPanel({ user, onClose }) {
   async function loadFeedback(offset = 0) {
     try { const d = await api.get('/api/admin/feedback?offset=' + offset); setFbRows(d.feedback || []); setFbCounts(d.counts || { up: 0, down: 0 }); setFbOffset(offset); } catch {}
   }
+  const [safetyLog, setSafetyLog] = useState(null);
+  const [safetyLogTotal, setSafetyLogTotal] = useState(0);
+  async function loadSafetyLog() {
+    try { const d = await api.get('/api/admin/safety-log'); setSafetyLog(d.entries || []); setSafetyLogTotal(d.total || 0); } catch {}
+  }
+  async function clearSafetyLog() {
+    if (!confirm('Clear the entire safety log?')) return;
+    try { await api.del('/api/admin/safety-log'); setSafetyLog([]); setSafetyLogTotal(0); } catch {}
+  }
   async function saveFn(f) {
     try {
       if (f.id) { const r = await api.patch('/api/admin/functions/' + f.id, f); setCustomFns(fs => fs.map(x => x.id === f.id ? r.fn : x)); }
@@ -678,9 +756,19 @@ export default function AdminPanel({ user, onClose }) {
 
   useEffect(() => {
     async function onConfig() {
+      const el = document.activeElement;
+      if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT')) {
+        clearTimeout(onConfig._t);
+        onConfig._t = setTimeout(onConfig, 2500);
+        return;
+      }
       try {
         const fresh = await api.get('/api/admin/models');
-        setModels(cur => fresh.map(fm => (pendingIds.current.has(fm.id) ? (cur.find(c => c.id === fm.id) || fm) : fm)));
+        setModels(cur => fresh.map(fm => {
+          if (pendingIds.current.has(fm.id)) return cur.find(c => c.id === fm.id) || fm;
+          if (saveTimers.current[fm.id]) return cur.find(c => c.id === fm.id) || fm;
+          return fm;
+        }));
         refreshPubState();
       } catch {}
     }
@@ -708,6 +796,7 @@ export default function AdminPanel({ user, onClose }) {
     else if (tab === 'tools') loadTools();
     else if (tab === 'functions') loadFns();
     else if (tab === 'skills') loadSkills();
+    else if (tab === 'safety') loadSafetyLog();
     else if (tab === 'mcp') loadMcp();
     else if (tab === 'feedback') loadFeedback(0);
     else if (tab === 'audit') loadAudit(0);
@@ -765,7 +854,7 @@ export default function AdminPanel({ user, onClose }) {
         setPub(p => ({ ...p, dirty: true }));
         setTimeout(() => setAutosave(s => s === 'saved' ? 'idle' : s), 1600);
       } catch { setAutosave('idle'); }
-      finally { pendingIds.current.delete(updated.id); }
+      finally { setTimeout(() => pendingIds.current.delete(updated.id), 1200); delete saveTimers.current[updated.id]; }
     }, 500);
   }
   async function add() {
@@ -1431,6 +1520,21 @@ export default function AdminPanel({ user, onClose }) {
                   )}
                 </Card>
               )}
+              <Card title="Safety log" sub={`Prompts the safety model blocked${safetyLogTotal ? ` — ${safetyLogTotal} total` : ''}. Use these to tune the system prompt and catch false positives.`}
+                right={safetyLog && safetyLog.length ? <button className="btn ghost danger" onClick={clearSafetyLog}>Clear log</button> : null}>
+                {safetyLog == null && <div className="muted-note">Loading…</div>}
+                {safetyLog != null && safetyLog.length === 0 && <div className="muted-note">Nothing has been flagged yet.</div>}
+                {(safetyLog || []).map(e => (
+                  <div key={e.id} className="fn-card fb-card" style={{ marginBottom: 8 }}>
+                    <div className="fb-rating down"><Shield style={{ width: 15 }} /></div>
+                    <div className="fn-card-main">
+                      <div className="fn-card-title">{e.user} <span className="muted-note" style={{ display: 'inline' }}>· {e.model} · {new Date(e.ts).toLocaleString()}</span></div>
+                      <div className="fn-card-desc">{e.snippet || '(empty prompt)'}</div>
+                      {e.reason && <div className="fn-card-desc" style={{ fontStyle: 'italic' }}>Reason: {e.reason}</div>}
+                    </div>
+                  </div>
+                ))}
+              </Card>
               {settings.safetyEnabled && (
                 <Card title="System prompt" sub="The instructions sent to the safety model along with the user's prompt.">
                   <div className="field"><label>Prompt</label>

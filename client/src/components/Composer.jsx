@@ -39,7 +39,9 @@ export default function Composer({
   voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall,
   safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
-  conversationEnded = false, endedReason = ''
+  conversationEnded = false, endedReason = '',
+  queuedMsg = '', onQueue, onCancelQueue, canContinue = false, onContinue,
+  compareIds = [], onSetCompare, hideModelPicker = false
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
@@ -132,6 +134,16 @@ export default function Composer({
   };
   useEffect(() => () => clearTimeout(stylesTimer.current), []);
   useEffect(() => { if (!plusMenu) setStylesOpen(false); }, [plusMenu]);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const compareTimer = useRef(null);
+  const openCompare = () => { clearTimeout(compareTimer.current); setCompareOpen(true); setPromptsOpen(false); setStylesOpen(false); };
+  const closeCompare = (now) => {
+    clearTimeout(compareTimer.current);
+    if (now === true) { setCompareOpen(false); return; }
+    compareTimer.current = setTimeout(() => setCompareOpen(false), 160);
+  };
+  useEffect(() => () => clearTimeout(compareTimer.current), []);
+  useEffect(() => { if (!plusMenu) setCompareOpen(false); }, [plusMenu]);
   useEffect(() => () => clearTimeout(promptsTimer.current), []);
   const [showReason, setShowReason] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
@@ -197,8 +209,13 @@ export default function Composer({
   function onDrop(e) { e.preventDefault(); dragDepth.current = 0; setDragActive(false); addFiles(e.dataTransfer.files); }
 
   async function doSend() {
-    if (streaming || uploading) return;
+    if (uploading) return;
     if (blockSend || budgetBlock || safetyFlagged || safetyChecking || conversationEnded) return;
+    if (streaming) {
+      const t = value.trim();
+      if (t && onQueue && !queuedMsg) { onQueue(t); onChange(''); }
+      return;
+    }
     if (!value.trim() && files.length === 0) return;
     let attachments = [];
     if (files.length) {
@@ -359,6 +376,25 @@ export default function Composer({
         accept={(visionSupported ? 'image/*,' : '') + FILE_ACCEPT} />
       {safetyChecking && safetyVerbose && <div className="safety-checking">Safety check…</div>}
       {improving && <div className="safety-checking">Improving prompt…</div>}
+      {queuedMsg && (
+        <div className="queued-chip">
+          <span className="queued-label">Queued:</span>
+          <span className="queued-text">{queuedMsg.length > 90 ? queuedMsg.slice(0, 90) + '…' : queuedMsg}</span>
+          <button className="queued-x" title="Cancel queued message" onClick={() => onCancelQueue?.()}><X style={{ width: 12 }} /></button>
+        </div>
+      )}
+      {canContinue && !streaming && !conversationEnded && (
+        <div className="continue-row">
+          <button className="continue-btn" onClick={() => onContinue?.()}>Continue generating →</button>
+        </div>
+      )}
+      {compareIds.length > 0 && (
+        <div className="queued-chip compare-chip">
+          <span className="queued-label">Compare:</span>
+          <span className="queued-text">{[models?.find(m => m.id === currentId)?.displayName || 'Current', ...compareIds.map(id => models?.find(m => m.id === id)?.displayName || 'model')].join(' vs ')}</span>
+          <button className="queued-x" title="Cancel comparison" onClick={() => onSetCompare?.([])}><X style={{ width: 12 }} /></button>
+        </div>
+      )}
       <div className="composer-bar">
         <div className="composer-left">
           <div className="plus-wrap" ref={plusRef}>
@@ -420,6 +456,32 @@ export default function Composer({
                   <Wand />
                   <span className="pm-label">{improvedNow ? 'Restore original prompt' : 'Improve prompt'}</span>
                 </button>
+                {onSetCompare && models && models.length > 1 && (
+                  <div className="pm-subwrap" onMouseEnter={openCompare} onMouseLeave={closeCompare}>
+                    <button className={'pm-item' + (compareOpen ? ' active' : '')} onClick={() => (compareOpen ? closeCompare(true) : openCompare())}>
+                      <Cube />
+                      <span className="pm-label">Compare models</span>
+                      {compareIds.length > 0 && <span className="pm-note">+{compareIds.length}</span>}
+                      <Chevron className="pm-chev" />
+                    </button>
+                    {compareOpen && (
+                      <div className="pm-sub styles" onMouseEnter={openCompare} onMouseLeave={closeCompare}>
+                        <div className="style-menu-label">Also answer with</div>
+                        {models.filter(m => m.id !== currentId).map(m => {
+                          const on = compareIds.includes(m.id);
+                          return (
+                            <button key={m.id} className={'style-item' + (on ? ' active' : '')}
+                              onClick={() => onSetCompare(on ? compareIds.filter(x => x !== m.id) : (compareIds.length < 2 ? [...compareIds, m.id] : compareIds))}>
+                              <span className="style-item-name">{m.displayName || m.id}</span>
+                              {on && <Check style={{ width: 14 }} />}
+                            </button>
+                          );
+                        })}
+                        <div className="style-menu-label" style={{ textTransform: 'none', letterSpacing: 0 }}>Pick up to 2 extra models. Your next message will be answered by each as versions of one response.</div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {(sandboxAllowed || webSearchAvailable) && <div className="pm-divider" />}
                 {sandboxAllowed && (
                   <button className="pm-item" onClick={() => onToggleSandbox && onToggleSandbox()}>
@@ -447,9 +509,9 @@ export default function Composer({
           )}
         </div>
         <div className="composer-right">
-          <ModelDropdown models={models} currentId={currentId} onSelect={onSelect}
+          {!hideModelPicker && <ModelDropdown models={models} currentId={currentId} onSelect={onSelect}
             extended={extended} onToggleExtended={onToggleExtended} up={modelUp}
-            modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />
+            modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />}
           {voiceMic && (
             <button className={'mic' + (dictating ? ' rec' : '') + (transcribing ? ' busy' : '')} onClick={toggleDictation}
               title={dictating ? 'Stop dictation' : transcribing ? 'Transcribing…' : 'Dictate'} disabled={transcribing}>

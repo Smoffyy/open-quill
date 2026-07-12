@@ -215,11 +215,11 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                 <div className="muted-note" style={{ textAlign: 'right' }}>{instructions.length}/8000</div>
               </div>
               <div className="field row">
-                <div><label>Export your chats</label><div className="muted-note">Download every saved chat as a single JSON file.</div></div>
+                <div><label>Export everything</label><div className="muted-note">Download all your data — chats, folders, custom styles, personas, saved prompts, memory, instructions, and preferences — as one JSON file.</div></div>
                 <button className="btn ghost" onClick={onExportChats}><Download style={{ width: 14, verticalAlign: '-2px' }} /> Export</button>
               </div>
               <div className="field row">
-                <div><label>Import chats</label><div className="muted-note">Restore chats from a previously exported JSON file.</div></div>
+                <div><label>Import</label><div className="muted-note">Restore from an exported file. Chats are added, and profile data (styles, personas, prompts, memory) is merged without overwriting what you have.</div></div>
                 <button className="btn ghost" onClick={() => importRef.current?.click()}><Upload style={{ width: 14, verticalAlign: '-2px' }} /> Import</button>
                 <input ref={importRef} type="file" accept="application/json" hidden
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) onImportChats(f); e.target.value = ''; }} />
@@ -393,6 +393,10 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                   )}
                   <Toggle prefs={prefs} setPref={setPref} k="autoscroll" label="Auto-scroll" desc="Keep the latest text in view unless you scroll up." />
                   <div className="field row">
+                <div><label>Model picker in the top bar</label><div className="muted-note">Moves model selection from the input bar to the top-left of the chat, Open WebUI style.</div></div>
+                <div className={'switch' + (prefs.modelTop === true ? ' on' : '')} onClick={() => setPref('modelTop', prefs.modelTop !== true)} />
+              </div>
+              <div className="field row">
                     <div><label>Streaming cursor</label><div className="muted-note">Show a soft cursor at the write position as text streams in.</div></div>
                     <div className={'switch' + (prefs.streamCursor ? ' on' : '')} onClick={() => setPref('streamCursor', !prefs.streamCursor)} />
                   </div>

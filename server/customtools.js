@@ -1,7 +1,7 @@
 import vm from 'vm';
 import { getSetting, setSetting, uid } from './db.js';
 
-const RESERVED = new Set(['skill_view', 'chat_search', 'chat_view', 'web_search', 'bash', 'run', 'create_file', 'str_replace', 'view', 'list_files', 'delete_file', 'clear_sandbox', 'delete_all', 'rename_file', 'move_file', 'copy_file', 'make_dir', 'mkdir', 'search', 'extract_zip', 'bundle_zip', 'mb_view', 'mb_search']);
+const RESERVED = new Set(['skill_view', 'chat_search', 'chat_view', 'pf_search', 'pf_view', 'end_conversation', 'web_search', 'bash', 'run', 'create_file', 'str_replace', 'view', 'list_files', 'delete_file', 'clear_sandbox', 'delete_all', 'rename_file', 'move_file', 'copy_file', 'make_dir', 'mkdir', 'search', 'extract_zip', 'bundle_zip', 'mb_view', 'mb_search']);
 const NAME_RE = /^[a-z][a-z0-9_]{1,39}$/;
 const DEFAULT_TIMEOUT = 15000;
 

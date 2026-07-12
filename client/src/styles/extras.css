@@ -74,7 +74,8 @@
 .sp-preview:hover .sp-preview-hint { opacity: 1; transform: none; }
 
 .sp-overlay { z-index: 300; }
-.sp-modal { width: min(760px, 92vw); max-height: 88vh; display: flex; flex-direction: column; background: var(--modal-bg); border: 1px solid var(--border); border-radius: 18px; padding: 22px 24px; box-shadow: 0 24px 70px #00000070; animation: pop .16s ease; }
+.sp-modal { width: min(1400px, 96vw); height: 92vh; max-height: 92vh; display: flex; flex-direction: column; background: var(--modal-bg); border: 1px solid var(--border); border-radius: 18px; padding: 22px 24px; box-shadow: 0 24px 70px #00000070; animation: pop .16s ease; }
+.sp-modal textarea { flex: 1; min-height: 0; height: 100%; font-size: 13.5px; line-height: 1.6; }
 .sp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .sp-head h3 { margin: 0 0 4px; font-size: 18px; color: var(--text); }
 .sp-vars { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
