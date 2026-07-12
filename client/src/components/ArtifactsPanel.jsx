@@ -52,6 +52,16 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
   const [diff, setDiff] = useState(false);
   const [wrap, setWrap] = useState(false);
   const [prev, setPrev] = useState(null);
+  const [restoring, setRestoring] = useState(false);
+  async function restore() {
+    if (restoring || !viewing) return;
+    setRestoring(true);
+    try {
+      await api.post(`/api/chats/${chatId}/restore`, { path, v: viewing });
+      await load();
+    } catch {}
+    setRestoring(false);
+  }
   const [baseText, setBaseText] = useState(null);
   const loadTok = useRef(0);
   const ext = extOf(path);
@@ -226,7 +236,12 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
       {!isLive && writingElsewhere && (
         <button className="art-writing-bar" onClick={onJumpToLive}>✍ Writing {baseName(writingElsewhere)}… — view live</button>
       )}
-      {stale && <button className="art-stale-bar" onClick={() => load()}>Viewing older version v{viewing} — jump to latest (v{current})</button>}
+      {stale && (
+        <div className="art-stale-row">
+          <button className="art-stale-bar" onClick={() => load()}>Viewing older version v{viewing} — jump to latest (v{current})</button>
+          <button className="art-restore-btn" disabled={restoring} onClick={restore}>{restoring ? 'Restoring…' : `Restore v${viewing}`}</button>
+        </div>
+      )}
       <div className="art-vbody" ref={bodyRef} onScroll={onBodyScroll} onWheel={onBodyWheel} onTouchStart={onBodyTouchStart} onTouchMove={onBodyTouchMove}>
         {liveEdit && (
           baseText == null

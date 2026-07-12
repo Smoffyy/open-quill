@@ -17,6 +17,8 @@ import * as toolproto from './toolproto.js';
 import * as membank from './membank.js';
 import * as customtools from './customtools.js';
 import * as customfns from './functions.js';
+import * as skillsys from './skillsys.js';
+import * as mcp from './mcp.js';
 import { buildTools, toCall, livePreview } from './tools.js';
 
 function stripToolSyntax(text) {
@@ -165,6 +167,103 @@ app.patch('/api/me', authMiddleware, (req, res) => {
   db.users.update(req.user.id, patch);
   res.json({ user: publicUser(db.users.byId(req.user.id)) });
 });
+const STYLE_PRESETS = {
+  concise: 'Respond concisely. Get to the point immediately, cut filler, hedging, and restatement, and keep answers as short as they can be while remaining complete and correct. Prefer tight prose over long lists.',
+  explanatory: 'Respond in an explanatory, educational way. Walk through the reasoning behind answers, define terms the user may not know, use short examples or analogies where they aid understanding, and make sure the user leaves knowing WHY, not just WHAT.',
+  formal: 'Respond in a polished, professional register suitable for business or academic contexts. Use complete sentences, precise vocabulary, and a measured tone. Avoid slang, contractions where practical, and overly casual phrasing.'
+};
+function styleTextFor(userId, styleId) {
+  const id = String(styleId || '').trim();
+  if (!id || id === 'normal') return '';
+  if (STYLE_PRESETS[id]) return STYLE_PRESETS[id];
+  const u = userId ? db.users.byId(userId) : null;
+  const custom = (Array.isArray(u?.styles) ? u.styles : []).find(x => x.id === id);
+  return custom && custom.prompt ? String(custom.prompt) : '';
+}
+
+app.put('/api/me/styles', authMiddleware, (req, res) => {
+  const list = (Array.isArray(req.body.styles) ? req.body.styles : [])
+    .map(x => ({
+      id: String(x.id || uid()).slice(0, 40),
+      name: String(x.name || '').trim().slice(0, 50),
+      prompt: String(x.prompt || '').trim().slice(0, 4000)
+    }))
+    .filter(x => x.name && x.prompt).slice(0, 30);
+  db.users.update(req.user.id, { styles: list });
+  res.json({ styles: list });
+});
+
+const DEFAULT_STYLE_GEN_PROMPT = 'You create writing-style instructions for an AI assistant. The user will provide a sample of writing they like. Analyze its tone, sentence structure, vocabulary, formality, formatting habits, and personality, then output ONLY a concise instruction paragraph (under 120 words) telling an assistant how to write in that style. Do not mention the sample, do not add a preamble, output only the instruction text.';
+app.post('/api/styles/generate', authMiddleware, async (req, res) => {
+  const sample = String(req.body?.sample || '').slice(0, 12000);
+  if (!sample.trim()) return res.status(400).json({ error: 'A writing sample is required.' });
+  const model = resolveModelOrDefault(String(req.body?.modelId || ''), !!req.user.is_admin);
+  if (!model) return res.status(400).json({ error: 'No model available to generate the style.' });
+  try {
+    const raw = await oneShot(model, [{ role: 'system', content: DEFAULT_STYLE_GEN_PROMPT }, { role: 'user', content: sample }]);
+    const text = stripThink(model, raw || '').trim().slice(0, 4000);
+    if (!text) return res.status(502).json({ error: 'The model returned an empty style.' });
+    res.json({ prompt: text });
+  } catch (e) { res.status(502).json({ error: 'Could not reach the model to generate the style.' }); }
+});
+
+app.get('/api/me/memory', authMiddleware, (req, res) => {
+  const u = db.users.byId(req.user.id);
+  res.json({ memory: u?.memory || '', updatedAt: u?.memory_updated_at || 0 });
+});
+app.put('/api/me/memory', authMiddleware, (req, res) => {
+  const memory = String(req.body?.memory || '').slice(0, 6000);
+  db.users.update(req.user.id, { memory, memory_updated_at: Date.now() });
+  res.json({ memory });
+});
+app.delete('/api/me/memory', authMiddleware, (req, res) => {
+  db.users.update(req.user.id, { memory: '', memory_updated_at: 0 });
+  res.json({ ok: true });
+});
+app.post('/api/me/memory/refresh', authMiddleware, async (req, res) => {
+  if (getSetting('memory_enabled', '0') !== '1') return res.status(403).json({ error: 'Memory is disabled by the admin.' });
+  const model = resolveModelOrDefault(String(req.body?.modelId || ''), !!req.user.is_admin);
+  if (!model) return res.status(400).json({ error: 'No model available to update memory.' });
+  try {
+    const memory = await updateUserMemory(req.user.id, model);
+    if (memory == null) return res.status(502).json({ error: 'The model returned nothing. Try again.' });
+    res.json({ memory, updatedAt: Date.now() });
+  } catch { res.status(502).json({ error: 'Could not reach the model to update memory.' }); }
+});
+
+const DEFAULT_IMPROVE_PROMPT = 'You are a prompt engineer. The user will give you a draft prompt they intend to send to an AI assistant. Rewrite it to be clearer, more specific, and more likely to get an excellent result: state the goal explicitly, add helpful structure, specify the desired format or constraints when they are implied, and remove ambiguity. Preserve the user\u2019s intent, language, and any concrete details exactly. Output ONLY the improved prompt text, with no preamble, quotes, or explanation.';
+app.post('/api/improve-prompt', authMiddleware, async (req, res) => {
+  const text = String(req.body?.text || '').slice(0, 16000);
+  if (!text.trim()) return res.status(400).json({ error: 'Nothing to improve.' });
+  const model = resolveModelOrDefault(String(req.body?.modelId || ''), !!req.user.is_admin);
+  if (!model) return res.status(400).json({ error: 'No model available.' });
+  try {
+    const raw = await oneShot(model, [{ role: 'system', content: DEFAULT_IMPROVE_PROMPT }, { role: 'user', content: text }]);
+    const out = stripThink(model, raw || '').trim();
+    if (!out) return res.status(502).json({ error: 'The model returned an empty prompt.' });
+    res.json({ text: out.slice(0, 24000) });
+  } catch { res.status(502).json({ error: 'Could not reach the model.' }); }
+});
+
+app.post('/api/messages/:id/feedback', authMiddleware, (req, res) => {
+  const m = db.messages.byId(req.params.id);
+  if (!m) return res.status(404).json({ error: 'not found' });
+  const chat = db.chats.byId(m.chat_id);
+  if (!chat || chat.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+  const rating = req.body?.rating === 1 ? 1 : req.body?.rating === -1 ? -1 : 0;
+  const comment = String(req.body?.comment || '').trim().slice(0, 1000);
+  db.messages.update(m.id, { feedback: rating });
+  db.feedback.remove(f => f.message_id === m.id && f.user_id === req.user.id);
+  if (rating !== 0) {
+    db.feedback.insert({
+      id: uid(), ts: Date.now(), user_id: req.user.id,
+      message_id: m.id, chat_id: chat.id, model_id: m.model_id || null,
+      rating, comment, snippet: String(m.content || '').slice(0, 400)
+    });
+  }
+  res.json({ ok: true, rating });
+});
+
 app.put('/api/me/personas', authMiddleware, (req, res) => {
   const list = (Array.isArray(req.body.personas) ? req.body.personas : [])
     .map(p => ({
@@ -355,7 +454,7 @@ app.get('/api/users/search', authMiddleware, (req, res) => {
 app.get('/api/chats', authMiddleware, (req, res) => {
   const list = db.chats.byUser(req.user.id)
     .sort((a, b) => b.updated_at - a.updated_at)
-    .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred, folderId: c.folder_id || null, projectId: c.project_id || null }));
+    .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred, folderId: c.folder_id || null, projectId: c.project_id || null, ended: !!c.ended }));
   res.json(list);
 });
 
@@ -537,12 +636,12 @@ app.get('/api/chats/:id', authMiddleware, (req, res) => {
   const messages = path.map(m => {
     const sibs = kidsByParent.get(m.parent_id ?? null) || [];
     return {
-      id: m.id, role: m.role, content: m.content, reasoning: m.reasoning, model_id: m.model_id, attachments: m.attachments || [], created_at: m.created_at, pinned: !!m.pinned,
+      id: m.id, role: m.role, content: m.content, reasoning: m.reasoning, model_id: m.model_id, attachments: m.attachments || [], created_at: m.created_at, pinned: !!m.pinned, feedback: m.feedback || 0,
       parentId: m.parent_id ?? null, branchIndex: sibs.findIndex(s => s.id === m.id), branchCount: sibs.length,
       siblings: sibs.map(s => s.id)
     };
   });
-  res.json({ chat: { id: c.id, title: c.title, starred: !!c.starred, sandbox: !!c.sandbox, summary: c.summary || '', hasSummary: !!c.summary, projectId: c.project_id || null, instructions: c.instructions || '', pinnedFiles: Array.isArray(c.pinned_files) ? c.pinned_files : [] }, messages });
+  res.json({ chat: { id: c.id, title: c.title, starred: !!c.starred, sandbox: !!c.sandbox, summary: c.summary || '', hasSummary: !!c.summary, projectId: c.project_id || null, instructions: c.instructions || '', pinnedFiles: Array.isArray(c.pinned_files) ? c.pinned_files : [], ended: !!c.ended, endedReason: c.ended_reason || '' }, messages });
 });
 
 app.get('/api/chats/:id/siblings/:mid', authMiddleware, (req, res) => {
@@ -574,6 +673,7 @@ app.post('/api/chats/:id/branch', authMiddleware, (req, res) => {
 app.post('/api/chats/:id/fork', authMiddleware, (req, res) => {
   const c = db.chats.byId(req.params.id);
   if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+  if (c.ended) return res.status(403).json({ error: 'This conversation was ended by the assistant and cannot be continued or branched.' });
   ensureChain(c.id);
   const path = activePath(c.id);
   if (!path.length) return res.status(400).json({ error: 'empty chat' });
@@ -780,6 +880,22 @@ app.get('/api/chats/:id/download', authMiddleware, (req, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
   res.send(sandbox.readBuffer(c.id, rel));
 });
+app.post('/api/chats/:id/restore', authMiddleware, (req, res) => {
+  const c = ownChat(req, res); if (!c) return;
+  const rel = String(req.body?.path || '');
+  const v = parseInt(req.body?.v);
+  const files = sandbox.list(c.id);
+  if (!files.find(f => f.path === rel)) return res.status(404).json({ error: 'not found' });
+  if (!sandbox.isText(rel)) return res.status(400).json({ error: 'Only text files can be restored to an older version.' });
+  const versions = sandbox.listVersions(c.id, rel);
+  if (!Number.isFinite(v) || !versions.includes(v)) return res.status(400).json({ error: 'Unknown version.' });
+  const content = sandbox.readVersion(c.id, rel, v);
+  if (content == null) return res.status(404).json({ error: 'That version could not be read.' });
+  const r = sandbox.createFile(c.id, rel, content);
+  if (!r.ok) return res.status(400).json({ error: r.error || 'Restore failed.' });
+  res.json({ ok: true, v: sandbox.versionOf(c.id, rel), restoredFrom: v, files: sandbox.list(c.id) });
+});
+
 app.get('/api/chats/:id/zip', authMiddleware, (req, res) => {
   const c = ownChat(req, res); if (!c) return;
   res.setHeader('Content-Type', 'application/zip');
@@ -858,6 +974,8 @@ app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
     think_open: b.think_open || '', think_close: b.think_close || '',
     sandbox_auto: b.sandbox_auto ? 1 : 0, sandbox_allowed: b.sandbox_allowed === false ? 0 : 1, dropdown_icon: b.dropdown_icon === false ? 0 : 1, is_default: 0, agent_steps: Number.isInteger(b.agent_steps) ? Math.max(0, b.agent_steps) : 0,
     web_search_auto: b.web_search_auto ? 1 : 0, web_search_allowed: b.web_search_allowed === false ? 0 : 1, tools_auto: b.tools_auto ? 1 : 0, tools_allowed: b.tools_allowed === false ? 0 : 1,
+    skills_allowed: b.skills_allowed ? 1 : 0, mcp_allowed: b.mcp_allowed ? 1 : 0, chat_search_allowed: b.chat_search_allowed ? 1 : 0,
+    end_chat_allowed: b.end_chat_allowed ? 1 : 0, end_chat_prompt: String(b.end_chat_prompt || ''), long_convo_reminder: b.long_convo_reminder ? 1 : 0,
     enable_summaries: b.enable_summaries ? 1 : 0, num_ctx: parseInt(b.num_ctx) || 0, summary_padding: typeof b.summary_padding === "number" ? b.summary_padding : 0.125, recent_window: parseInt(b.recent_window) > 0 ? parseInt(b.recent_window) : 4,
     in_more_models: b.in_more_models ? 1 : 0, more_models_label: b.more_models_label || 'More models',
     unavailable: b.unavailable ? 1 : 0, unavailable_reason: b.unavailable_reason || '',
@@ -877,8 +995,8 @@ app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
 app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
   const cur = db.models.byId(req.params.id);
   if (!cur) return res.status(404).json({ error: 'not found' });
-  const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'call_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id', 'bg_image'];
-  const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'tools_auto', 'tools_allowed', 'show_name'];
+  const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'call_prompt', 'end_chat_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id', 'bg_image'];
+  const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'tools_auto', 'tools_allowed', 'show_name', 'skills_allowed', 'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'long_convo_reminder'];
   const patch = {};
   for (const k of str) if (k in req.body) patch[k] = req.body[k];
   for (const k of bool) if (k in req.body) patch[k] = req.body[k] ? 1 : 0;
@@ -1076,6 +1194,14 @@ function resolveModel(modelId, isAdmin) {
   return snap.find(m => m.id === modelId) || null;
 }
 
+function resolveModelOrDefault(modelId, isAdmin) {
+  const m = resolveModel(modelId, isAdmin);
+  if (m) return m;
+  const snap = getSetting('published_models', null);
+  const pool = (!isAdmin && Array.isArray(snap)) ? snap : db.models.all();
+  return pool.filter(x => x.enabled).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))[0] || null;
+}
+
 function roleLimit(key, isAdmin, fallback) {
   const v = getSetting(key + (isAdmin ? '_admin' : '_user'));
   if (v != null) return Number(v);
@@ -1093,7 +1219,7 @@ function resolveSafetyModel(requestedModelId, isAdmin) {
       if (m) return m;
     }
   }
-  return resolveModel(requestedModelId, isAdmin);
+  return resolveModelOrDefault(requestedModelId, isAdmin);
 }
 
 function parseSafetyVerdict(model, raw) {
@@ -1175,7 +1301,10 @@ app.get('/api/admin/settings', authMiddleware, adminOnly, (req, res) =>
     safetyModelId: getSetting('safety_model_id', ''),
     safetyPrompt: getSetting('safety_prompt', DEFAULT_SAFETY_PROMPT),
     safetyVerbose: getSetting('safety_verbose', '1') === '1',
-    safetyReasonEnabled: getSetting('safety_reason_enabled', '0') === '1'
+    safetyReasonEnabled: getSetting('safety_reason_enabled', '0') === '1',
+    memoryEnabled: getSetting('memory_enabled', '0') === '1',
+    memoryPrompt: getSetting('memory_prompt', DEFAULT_MEMORY_PROMPT),
+    chatSearchEnabled: getSetting('chat_search_enabled', '0') === '1'
   }));
 app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
   if ('apiBaseUrl' in req.body) setSetting('api_base_url', req.body.apiBaseUrl);
@@ -1219,6 +1348,9 @@ app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
   if ('safetyPrompt' in req.body) setSetting('safety_prompt', String(req.body.safetyPrompt || '') || DEFAULT_SAFETY_PROMPT);
   if ('safetyVerbose' in req.body) setSetting('safety_verbose', req.body.safetyVerbose ? '1' : '0');
   if ('safetyReasonEnabled' in req.body) setSetting('safety_reason_enabled', req.body.safetyReasonEnabled ? '1' : '0');
+  if ('memoryEnabled' in req.body) setSetting('memory_enabled', req.body.memoryEnabled ? '1' : '0');
+  if ('memoryPrompt' in req.body) setSetting('memory_prompt', String(req.body.memoryPrompt || '') || DEFAULT_MEMORY_PROMPT);
+  if ('chatSearchEnabled' in req.body) setSetting('chat_search_enabled', req.body.chatSearchEnabled ? '1' : '0');
   logAudit(req, 'settings.update', { meta: { fields: Object.keys(req.body || {}) } });
   res.json({ ok: true });
 });
@@ -1288,6 +1420,66 @@ app.post('/api/admin/tools/:id/test', authMiddleware, adminOnly, async (req, res
 });
 
 // ---------- custom functions (UI extensions) ----------
+app.get('/api/admin/skills', authMiddleware, adminOnly, (req, res) => res.json({ skills: skillsys.list() }));
+app.post('/api/admin/skills', authMiddleware, adminOnly, (req, res) => {
+  const r = skillsys.create(req.body || {});
+  if (r.error) return res.status(400).json({ error: r.error });
+  logAudit(req, 'skill.create', { meta: { name: r.skill.name } });
+  res.json(r);
+});
+app.patch('/api/admin/skills/:id', authMiddleware, adminOnly, (req, res) => {
+  const r = skillsys.update(req.params.id, req.body || {});
+  if (r.error) return res.status(400).json({ error: r.error });
+  logAudit(req, 'skill.update', { meta: { name: r.skill.name } });
+  res.json(r);
+});
+app.delete('/api/admin/skills/:id', authMiddleware, adminOnly, (req, res) => {
+  skillsys.remove(req.params.id);
+  logAudit(req, 'skill.delete', { meta: { id: req.params.id } });
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/mcp', authMiddleware, adminOnly, (req, res) => res.json({ servers: mcp.list() }));
+app.post('/api/admin/mcp', authMiddleware, adminOnly, async (req, res) => {
+  const r = mcp.create(req.body || {});
+  if (r.error) return res.status(400).json({ error: r.error });
+  logAudit(req, 'mcp.create', { meta: { name: r.server.name } });
+  const refreshed = await mcp.refreshTools(r.server.id);
+  res.json({ server: refreshed.server || r.server, warning: refreshed.error || undefined });
+});
+app.patch('/api/admin/mcp/:id', authMiddleware, adminOnly, (req, res) => {
+  const r = mcp.update(req.params.id, req.body || {});
+  if (r.error) return res.status(400).json({ error: r.error });
+  logAudit(req, 'mcp.update', { meta: { name: r.server.name } });
+  res.json(r);
+});
+app.delete('/api/admin/mcp/:id', authMiddleware, adminOnly, (req, res) => {
+  mcp.remove(req.params.id);
+  logAudit(req, 'mcp.delete', { meta: { id: req.params.id } });
+  res.json({ ok: true });
+});
+app.post('/api/admin/mcp/:id/refresh', authMiddleware, adminOnly, async (req, res) => {
+  const r = await mcp.refreshTools(req.params.id);
+  if (!r.server) return res.status(404).json({ error: 'Server not found.' });
+  res.json({ server: r.server, error: r.error || undefined });
+});
+
+app.get('/api/admin/feedback', authMiddleware, adminOnly, (req, res) => {
+  const offset = Math.max(0, parseInt(req.query.offset) || 0);
+  const rows = db.feedback.recent(50, offset);
+  const users = new Map(db.users.all().map(u => [u.id, u]));
+  const models = new Map(db.models.all().map(m => [m.id, m]));
+  res.json({
+    feedback: rows.map(f => ({
+      id: f.id, ts: f.ts, rating: f.rating, comment: f.comment || '', snippet: f.snippet || '',
+      user: users.get(f.user_id)?.email || 'deleted user',
+      model: models.get(f.model_id)?.display_name || f.model_id || '\u2014',
+      chatId: f.chat_id
+    })),
+    counts: { up: db.feedback.count(f => f.rating === 1), down: db.feedback.count(f => f.rating === -1) }
+  });
+});
+
 app.get('/api/admin/functions', authMiddleware, adminOnly, (req, res) => res.json({ functions: customfns.list() }));
 app.post('/api/admin/functions', authMiddleware, adminOnly, (req, res) => {
   const r = customfns.create(req.body || {});
@@ -1572,6 +1764,7 @@ function appConfig() {
     voiceCall: getSetting('voice_call_enabled', '0') === '1',
     safetyCheckEnabled: getSetting('safety_enabled', '0') === '1',
     safetyCheckVerbose: getSetting('safety_verbose', '1') === '1',
+    memoryFeature: getSetting('memory_enabled', '0') === '1',
     voiceStt: getSetting('voice_stt_engine', 'browser'),
     voiceTts: getSetting('voice_tts_engine', 'browser'),
     voiceTtsVoice: getSetting('voice_tts_voice', ''),
@@ -1656,6 +1849,17 @@ function sandboxPromptFor(chatId) {
     catch { SKILLS_CACHE = ''; }
   }
   let p = SKILLS_CACHE;
+  const env = sandbox.hostEnvInfo();
+  p += `\n\n## Host environment (READ THIS BEFORE USING bash)\n- Operating system: **${env.osName}**. Shell: \`${env.shellName}\`.\n`;
+  if (!env.unix) {
+    p += '- This is NOT a Unix system. Commands like `cat`, `ls`, `grep`, `unzip`, `zipinfo`, `file`, `head`, `tail`, `wc`, `sed`, `awk`, `which`, `touch`, `chmod` DO NOT EXIST and will fail with exit code 9009 or "not recognized". Never call them, not even once to check.\n- For every file operation use the dedicated tools: `view`, `list_files`, `search`, `extract_zip`, `bundle_zip`, `copy_file`, `move_file`, `make_dir`, `delete_file`. They always work.\n- If you need to inspect data programmatically, write a small script file with `create_file` and run it with an interpreter listed below, instead of long shell one-liners (cmd.exe quoting mangles quotes and newlines in one-liners).\n';
+  } else {
+    p += '- Standard Unix utilities are available, but the dedicated file tools (`view`, `extract_zip`, `copy_file` and friends) are still preferred for file operations because their results are structured.\n';
+  }
+  p += env.interpreters.length
+    ? `- Interpreters detected on this host: ${env.interpreters.join(', ')}. Only invoke interpreters from this list.\n`
+    : '- No language interpreters were detected on this host. Rely on the dedicated file tools; do not assume node or python exist.\n';
+  p += '\n## History markers are NOT a syntax\nEarlier tool activity may appear in this conversation as compact bracketed summaries like `[used bash: ...]` or `[used view: ...]`. Those are generated by the platform AFTER a real tool call, purely to save space. Writing text like `[used view: file.txt]` yourself does NOTHING: no tool runs, and it looks broken to the user. The ONLY way to use a tool is a real function/tool call with JSON arguments. Never write `[used`, `[tool`, or imitation tool-call text in your replies.';
   const { files, hidden } = sandbox.list(chatId, { withHidden: true });
   if (!files.length && !hidden) return p + '\n\n## Current sandbox\nThe sandbox is empty.';
   const LIST_CAP = 200, INLINE_CAP = 12;
@@ -1676,7 +1880,7 @@ function sandboxPromptFor(chatId) {
     p += `\n### ${f.path} (v${f.v})\n\`\`\`${f.ext || ''}\n${txt}\n\`\`\`\n`;
     budget -= txt.length; inlined++;
   }
-  p += '\n---\nREMINDER: The sandbox is ON and the files above are the current truth. Edit existing files with `str_replace` (never recreate them from scratch), and use the dedicated file tools — `copy_file`, `move_file`, `make_dir`, `delete_file`, `bundle_zip`, `extract_zip` — for file operations. Use relative paths only. Keep calling tools until the task is fully done; do not stop to ask permission, do not paste whole file contents or fake terminal output into the chat, and when a tool fails, read the error and change approach instead of repeating the same call.';
+  p += '\n---\nREMINDER: The sandbox is ON and the files above are the current truth. Edit existing files with `str_replace` (never recreate them from scratch), and use the dedicated file tools — `copy_file`, `move_file`, `make_dir`, `delete_file`, `bundle_zip`, `extract_zip` — for file operations. Use relative paths only. Keep calling tools until the task is fully done; do not stop to ask permission, do not paste whole file contents or fake terminal output into the chat, and when a tool fails, read the error and change approach instead of repeating the same call. Never write imitation tool text like `[used bash: ...]` in a reply; make real tool calls.';
   return p;
 }
 function cleanCall(call) {
@@ -1952,13 +2156,152 @@ function userInstructions(userId) {
   const u = userId ? db.users.byId(userId) : null;
   return (u && u.instructions) ? u.instructions : '';
 }
+function userMemoryBlock(userId) {
+  if (getSetting('memory_enabled', '0') !== '1') return '';
+  const u = userId ? db.users.byId(userId) : null;
+  if (!u || u.prefs?.memoryEnabled === false) return '';
+  const mem = (u.memory || '').trim();
+  if (!mem) return '';
+  return 'Things you remember about this user from earlier conversations (the user can view and edit this memory at any time):\n' + mem;
+}
 function combinedInstructions(chat) {
   const parts = [];
   const ui = userInstructions(chat && chat.user_id);
   if (ui && ui.trim()) parts.push(ui.trim());
+  const mem = userMemoryBlock(chat && chat.user_id);
+  if (mem) parts.push(mem);
   if (chat && chat.instructions && chat.instructions.trim()) parts.push(chat.instructions.trim());
   return parts.join('\n\n');
 }
+
+const DEFAULT_MEMORY_PROMPT = 'You maintain a compact long-term memory about a user of a chat assistant. You are given the CURRENT MEMORY and excerpts of the user\u2019s RECENT MESSAGES. Produce the UPDATED MEMORY: a short plain-text list of durable, useful facts about the user \u2014 their name and role if stated, ongoing projects, preferences, tools and languages they use, and standing instructions. Merge new facts with the current memory, drop stale or one-off details, never invent anything, and never store sensitive data like passwords or keys. Output ONLY the memory text, at most 20 short lines.';
+const MEMORY_THROTTLE_MS = 6 * 60 * 60 * 1000;
+
+async function updateUserMemory(userId, model) {
+  const u = db.users.byId(userId);
+  if (!u) return null;
+  const chats = db.chats.byUser(userId).sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0)).slice(0, 12);
+  const excerpts = [];
+  let budget = 12000;
+  for (const c of chats) {
+    if (budget <= 0) break;
+    const userMsgs = db.messages.byChat(c.id).filter(m => m.role === 'user' && (m.content || '').trim()).slice(-6);
+    if (!userMsgs.length) continue;
+    let block = `[Chat: ${(c.title || 'Untitled').slice(0, 60)}]\n`;
+    for (const m of userMsgs) block += '- ' + stripToolSyntax(m.content).replace(/\s+/g, ' ').slice(0, 400) + '\n';
+    block = block.slice(0, Math.max(0, budget));
+    budget -= block.length;
+    excerpts.push(block);
+  }
+  if (!excerpts.length) return (u.memory || '');
+  const sys = getSetting('memory_prompt', DEFAULT_MEMORY_PROMPT) || DEFAULT_MEMORY_PROMPT;
+  const userMsg = `CURRENT MEMORY:\n${(u.memory || '(empty)').slice(0, 6000)}\n\nRECENT MESSAGES:\n${excerpts.join('\n')}`;
+  const raw = await oneShot(model, [{ role: 'system', content: sys }, { role: 'user', content: userMsg }]);
+  const memory = stripThink(model, raw || '').trim().slice(0, 6000);
+  if (!memory) return null;
+  db.users.update(userId, { memory, memory_updated_at: Date.now() });
+  return memory;
+}
+
+function maybeUpdateMemory(userId, model) {
+  try {
+    if (getSetting('memory_enabled', '0') !== '1') return;
+    const u = db.users.byId(userId);
+    if (!u || u.prefs?.memoryEnabled === false) return;
+    if (Date.now() - (u.memory_updated_at || 0) < MEMORY_THROTTLE_MS) return;
+    db.users.update(userId, { memory_updated_at: Date.now() });
+    updateUserMemory(userId, model).catch(() => {});
+  } catch {}
+}
+
+function runChatSearchTool(userId, currentChatId, call) {
+  if (call.tool === 'chat_search') {
+    const q = String(call.query || '').trim().toLowerCase();
+    if (!q) return { ok: false, error: 'Empty query.' };
+    const matches = [];
+    const chats = db.chats.byUser(userId).sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0)).slice(0, 300);
+    let scanned = 0;
+    for (const c of chats) {
+      if (c.id === currentChatId) continue;
+      if (scanned > 30000) break;
+      const title = c.title || 'Untitled';
+      if (title.toLowerCase().includes(q)) matches.push({ chat_id: c.id, title, date: new Date(c.updated_at || 0).toISOString().slice(0, 10), text: '(title match)' });
+      if (matches.length >= 25) break;
+      for (const m of db.messages.byChat(c.id)) {
+        scanned++;
+        const content = String(m.content || '');
+        const idx = content.toLowerCase().indexOf(q);
+        if (idx === -1) continue;
+        const from = Math.max(0, idx - 80);
+        matches.push({ chat_id: c.id, title, date: new Date(c.updated_at || 0).toISOString().slice(0, 10), role: m.role, text: content.slice(from, idx + q.length + 120).replace(/\s+/g, ' ') });
+        if (matches.length >= 25) break;
+      }
+      if (matches.length >= 25) break;
+    }
+    return { ok: true, query: call.query, count: matches.length, matches };
+  }
+  if (call.tool === 'chat_view') {
+    const c = db.chats.byId(String(call.chat_id || ''));
+    if (!c || c.user_id !== userId) return { ok: false, error: 'No such chat.' };
+    const limit = Math.min(60, Math.max(1, parseInt(call.limit) || 20));
+    const msgs = activePath(c.id).filter(m => m.role === 'user' || m.role === 'assistant').slice(-limit)
+      .map(m => ({ role: m.role, content: stripToolSyntax(String(m.content || '')).slice(0, 2000) }));
+    return { ok: true, chat_id: c.id, title: c.title || 'Untitled', count: msgs.length, messages: msgs };
+  }
+  return { ok: false, error: 'Unknown chat tool.' };
+}
+function formatChatSearchResult(call, r) {
+  if (!r.ok) return `${call.tool} \u2192 ERROR: ${r.error}`;
+  if (call.tool === 'chat_search') {
+    return `chat_search "${call.query}" \u2192 ${r.count} match(es)` + (r.matches.length ? '\n' + r.matches.map(m => `[${m.chat_id}] ${m.title} (${m.date})${m.role ? ' ' + m.role : ''}: ${m.text}`).join('\n') : '');
+  }
+  return `chat_view ${r.chat_id} \u2014 ${r.title} \u2192\n` + r.messages.map(m => `${m.role}: ${m.content}`).join('\n');
+}
+function chatSearchPayload(call, r) {
+  const o = { ok: !!r.ok };
+  if (r.error) o.error = r.error;
+  if (r.count != null) o.count = r.count;
+  if (r.title) o.title = r.title;
+  if (call.tool === 'chat_search' && Array.isArray(r.matches)) o.matches = r.matches.slice(0, 10).map(m => ({ chat_id: m.chat_id, title: m.title }));
+  return o;
+}
+function endChatPromptFor(model) {
+  let p = '## Ending conversations\nYou have an `end_conversation` tool. Calling it PERMANENTLY closes this chat: the user cannot reply, edit, regenerate, or branch it afterwards. When you decide to end a conversation, first clearly explain to the user in your reply why the conversation is being ended, and only then call the tool with a short `reason`. Never call it silently or without explanation, and never mention it as a threat.';
+  const extra = String(model.end_chat_prompt || '').trim();
+  if (extra) p += '\n\nAdditional instructions from the administrator about when to end conversations:\n' + extra;
+  return p;
+}
+
+function fmtDuration(ms) {
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return 'under a minute';
+  if (m < 60) return `${m} minute${m === 1 ? '' : 's'}`;
+  const h = Math.floor(m / 60), rm = m % 60;
+  if (h < 24) return `${h} hour${h === 1 ? '' : 's'}${rm ? ` ${rm} min` : ''}`;
+  const d = Math.floor(h / 24);
+  return `${d} day${d === 1 ? '' : 's'}${h % 24 ? ` ${h % 24} h` : ''}`;
+}
+
+function longConvoReminderFor(chatId) {
+  const msgs = activePath(chatId).filter(m => m.role === 'user' || m.role === 'assistant');
+  if (!msgs.length) return '';
+  const first = msgs[0].created_at || Date.now();
+  const last = msgs[msgs.length - 1].created_at || Date.now();
+  const nowTs = Date.now();
+  const gap = nowTs - last;
+  const fresh = gap < 3 * 60 * 60 * 1000;
+  let p = '## Long conversation awareness\n';
+  p += `This conversation started ${fmtDuration(nowTs - first)} ago (${new Date(first).toLocaleString()}). `;
+  p += `It contains ${msgs.length} messages. The previous message was ${fmtDuration(gap)} ago (${new Date(last).toLocaleString()}). Current time: ${new Date(nowTs).toLocaleString()}.\n`;
+  if (fresh && msgs.length >= 20) {
+    p += 'This has been a long continuous session. If the moment is natural (a task just finished, a stopping point was reached), you may gently suggest the user take a short break, without being pushy or repeating the suggestion every message.';
+  } else {
+    p += 'Use these timestamps for temporal awareness. If the session becomes very long and continuous, you may gently suggest a short break at a natural stopping point \u2014 at most once in a while, never repeatedly.';
+  }
+  return p;
+}
+
+const CHAT_SEARCH_PROMPT = "## Past conversations\nYou can search the user's other conversations in this app with `chat_search` (pass `query`) and read one with `chat_view` (pass `chat_id`). Use these when the user refers to something discussed in a previous chat instead of saying you have no memory of it.";
 function lastUserQuery(chatId) {
   const rows = activePath(chatId);
   for (let i = rows.length - 1; i >= 0; i--) if (rows[i].role === 'user' && (rows[i].content || '').trim()) return stripToolSyntax(rows[i].content);
@@ -2001,7 +2344,7 @@ wss.on('connection', (ws, req) => {
   clients.set(ws, { userId: u.id, sessionId: r.sessionId || null, isAdmin: !!u.is_admin, aborts: new Map() });
   const safeSend = (s) => { if (ws.readyState === 1) { try { ws.send(s); } catch {} } };
 
-  async function runCompletion(ws, state, chat, model, extended, sandboxOn, sandboxCap = 0, webSearchOn = false, callMode = false) {
+  async function runCompletion(ws, state, chat, model, extended, sandboxOn, sandboxCap = 0, webSearchOn = false, callMode = false, styleText = '') {
     if (callMode && (model.call_prompt || '').trim()) model = { ...model, system_prompt: model.call_prompt };
     await maybeCompact(ws, chat, model, extended, sandboxOn);
     const history = await chatHistory(chat, model);
@@ -2012,24 +2355,62 @@ wss.on('connection', (ws, req) => {
     const customToolsList = (model.tools_allowed !== 0 && model.tools_auto) ? customtools.getEnabled() : [];
     const customToolsOn = customToolsList.length > 0;
     const customToolNames = new Set(customToolsList.map(t => t.name));
-    const toolsOn = sandboxOn || webSearchOn || membankOn || customToolsOn;
+    const chatSearchOn = !!model.chat_search_allowed && getSetting('chat_search_enabled', '0') === '1';
+    const skillsOn = !!model.skills_allowed && skillsys.getEnabled().length > 0;
+    const mcpSchemas = model.mcp_allowed ? mcp.toolSchemas() : [];
+    const mcpOn = mcpSchemas.length > 0;
+    const endChatOn = !!model.end_chat_allowed;
+    const longReminderOn = !!model.long_convo_reminder;
+    let conversationEnded = false;
+    const toolsOn = sandboxOn || webSearchOn || membankOn || customToolsOn || chatSearchOn || skillsOn || mcpOn || endChatOn;
+    const withStyle = (instr) => {
+      if (!styleText) return instr;
+      const block = 'The user selected a response style for this conversation. Apply it consistently to every reply:\n' + styleText;
+      return instr ? instr + '\n\n' + block : block;
+    };
     const toolsP = () => {
       const parts = [];
       if (sandboxOn) parts.push(sandboxPromptFor(chat.id));
       if (webSearchOn) { parts.push(websearch.webSearchConfig().prompt); parts.push(websearch.webSearchToolPrompt()); }
       if (membankOn) parts.push(membank.promptFor(getSetting('membank_prompt', '')));
+      if (chatSearchOn) parts.push(CHAT_SEARCH_PROMPT);
+      if (skillsOn) parts.push(skillsys.promptFor());
+      if (mcpOn) parts.push(mcp.promptFor());
       if (customToolsOn) parts.push(customtools.promptFor(customToolsList));
+      if (endChatOn) parts.push(endChatPromptFor(model));
+      if (longReminderOn) parts.push(longConvoReminderFor(chat.id));
       return parts.filter(Boolean).join('\n\n') || null;
     };
-    let base = buildMessages(model, history, extended, toolsP(), chatRow.summary, promptVars(chat.user_id), await instrFor(chatRow));
+    let base = buildMessages(model, history, extended, toolsP(), chatRow.summary, promptVars(chat.user_id), withStyle(await instrFor(chatRow)));
     let inTurn = []; // assistant/tool exchanges accumulated during this response
     const assistantId = uid();
     const assistantParent = (db.chats.byId(chat.id) || {}).active_leaf || null;
     let content = '', reasoning = '', usage = null;
     safeSend(JSON.stringify({ type: 'start', chatId: chat.id, messageId: assistantId }));
 
-    const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, customToolsList }) : [];
+    const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, customToolsList, chatSearchOn, skillsOn, mcpSchemas, endChatOn }) : [];
     const runToolCall = async (call) => {
+      if (call.tool === 'end_conversation') {
+        if (!endChatOn) return null;
+        const reason = String(call.reason || '').trim().slice(0, 500);
+        db.chats.update(chat.id, { ended: 1, ended_at: now(), ended_reason: reason });
+        conversationEnded = true;
+        return { payload: { ok: true, ended: true }, formatted: 'end_conversation \u2192 The conversation has been permanently ended. Do not produce any further tool calls; finish your reply now.', hide: false };
+      }
+      if (call.tool === 'chat_search' || call.tool === 'chat_view') {
+        if (!chatSearchOn) return null;
+        const r = runChatSearchTool(chat.user_id, chat.id, call);
+        return { payload: chatSearchPayload(call, r), formatted: formatChatSearchResult(call, r), hide: false };
+      }
+      if (call.tool === 'skill_view') {
+        if (!skillsOn) return null;
+        const r = skillsys.execTool(call);
+        return { payload: skillsys.resultPayload(call, r), formatted: skillsys.formatResult(call, r), hide: false };
+      }
+      if (mcpOn && mcp.isMcpTool(call.tool)) {
+        const r = await mcp.execTool(call);
+        return { payload: mcp.resultPayload(call, r), formatted: mcp.formatResult(call, r), hide: false };
+      }
       if (call.tool === 'web_search') {
         if (!webSearchOn) return null;
         const r = await websearch.runWebSearch(call);
@@ -2058,7 +2439,7 @@ wss.on('connection', (ws, req) => {
       for (let step = 0; step < maxSteps; step++) {
         // running low on context mid-response? summarize older turns, then carry on where we left off
         if (threshold !== Infinity && inTurn.length && calibratedTokens(chat.id, [...base, ...inTurn]) >= threshold) {
-          if (await compactStep(ws, chat, model)) base = buildMessages(model, await chatHistory(chat, model), extended, toolsP(), (db.chats.byId(chat.id) || {}).summary, promptVars(chat.user_id), await instrFor(db.chats.byId(chat.id) || chat));
+          if (await compactStep(ws, chat, model)) base = buildMessages(model, await chatHistory(chat, model), extended, toolsP(), (db.chats.byId(chat.id) || {}).summary, promptVars(chat.user_id), withStyle(await instrFor(db.chats.byId(chat.id) || chat)));
         }
         let convo = [...base, ...inTurn];
         if (rollCtx) {
@@ -2132,6 +2513,10 @@ wss.on('connection', (ws, req) => {
         const toolMsgs = [];
         for (const tc of toolCalls) {
           const call = toCall(tc.name, tc.argsText);
+          if (conversationEnded) {
+            toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: `${call.tool} \u2192 ERROR: the conversation has been ended; no further tools may run.` });
+            continue;
+          }
           safeSend(JSON.stringify({ type: 'tool_exec', chatId: chat.id, call: cleanCall(call) }));
           let out;
           try { out = await runToolCall(call); }
@@ -2146,6 +2531,11 @@ wss.on('connection', (ws, req) => {
           toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: out.formatted });
         }
         safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live: null }));
+        if (conversationEnded) {
+          const endedChat = db.chats.byId(chat.id);
+          safeSend(JSON.stringify({ type: 'chat_ended', chatId: chat.id, reason: (endedChat && endedChat.ended_reason) || '' }));
+          break;
+        }
         inTurn = [
           ...inTurn,
           { role: 'assistant', content: stepText, tool_calls: toolCalls.map(c => ({ id: c.id, name: c.name, argsText: c.argsText })) },
@@ -2227,6 +2617,7 @@ wss.on('connection', (ws, req) => {
       const model = resolveModel(msg.modelId, state.isAdmin);
       if (!chat || chat.user_id !== u.id || !model) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'Invalid chat or model.' })); return; }
       if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: (model.unavailable_reason || 'This model is currently unavailable.') })); return; }
+      if (chat.ended) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'This conversation was ended by the assistant and can no longer be continued.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
       const bs = budgetStatus(u);
       if (bs.enforce && bs.state === 'over') { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'You have reached your monthly usage budget. It resets at the start of next month.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
 
@@ -2268,9 +2659,11 @@ wss.on('connection', (ws, req) => {
       }
 
       const queueOn = getSetting('model_queue', '0') === '1';
+      const styleText = styleTextFor(u.id, msg.styleId);
       await runQueued(queueOn, model.id,
         () => { safeSend(JSON.stringify({ type: 'queued', chatId: chat.id })); },
-        () => runCompletion(ws, state, chat, model, !!msg.extended, sandboxOn, sandboxCap, webSearchOn, !!msg.call));
+        () => runCompletion(ws, state, chat, model, !!msg.extended, sandboxOn, sandboxCap, webSearchOn, !!msg.call, styleText));
+      maybeUpdateMemory(u.id, model);
     } catch (err) {
       if (msg && msg.chatId) state.aborts.delete(msg.chatId);
       safeSend(JSON.stringify({ type: 'error', chatId: msg && msg.chatId, error: String(err.message || err) }));
@@ -2482,6 +2875,8 @@ app.post('/api/spaces/:id/messages', authMiddleware, (req, res) => {
   res.json(shapeSpaceMsg(row));
   spaceAssistantRespond(s.id).catch(() => {});
 });
+
+process.on('exit', () => { try { mcp.shutdown(); } catch {} });
 
 server.listen(PORT, () => console.log(`open-quill running on http://localhost:${PORT}`));
 try { setCustomPresets(getSetting('custom_presets', [])); } catch {}

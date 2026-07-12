@@ -23,8 +23,20 @@ const VERBS = {
   extract_zip: ['Extracting', 'Extracted'],
   bundle_zip: ['Bundling', 'Bundled'],
   mb_view: ['Reading', 'Read'],
-  mb_search: ['Searching memory', 'Searched memory']
+  mb_search: ['Searching memory', 'Searched memory'],
+  chat_search: ['Searching past chats', 'Searched past chats'],
+  chat_view: ['Reading a past chat', 'Read a past chat'],
+  skill_view: ['Loading skill', 'Loaded skill'],
+  end_conversation: ['Ending the conversation', 'Ended the conversation']
 };
+function verbsFor(tool) {
+  if (VERBS[tool]) return VERBS[tool];
+  if (String(tool || '').startsWith('mcp_')) {
+    const short = String(tool).split('_').slice(2).join(' ') || 'connector';
+    return ['Using ' + short, 'Used ' + short];
+  }
+  return null;
+}
 const FILE_TOOLS = new Set(['create_file', 'str_replace', 'delete_file', 'rename_file', 'move_file', 'copy_file', 'make_dir', 'mkdir']);
 
 function escapeHtml(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
@@ -61,7 +73,8 @@ function targetName(call) {
   if (!call) return '';
   if (call.tool === 'bundle_zip') return (call.name || 'bundle') + '.zip';
   if (call.tool === 'rename_file' || call.tool === 'move_file' || call.tool === 'copy_file') return call.path && call.new_path ? `${baseName(call.path)} → ${baseName(call.new_path)}` : baseName(call.path);
-  if (call.tool === 'search' || call.tool === 'mb_search') return call.query ? `"${call.query}"` : '';
+  if (call.tool === 'search' || call.tool === 'mb_search' || call.tool === 'chat_search') return call.query ? `"${call.query}"` : '';
+  if (call.tool === 'skill_view') return call.name || '';
   if (call.tool === 'list_files' || call.tool === 'clear_sandbox' || call.tool === 'delete_all') return '';
   return baseName(call.path) || '';
 }
@@ -73,6 +86,9 @@ function resultNote(call, res) {
     case 'search': return res.count != null ? `${res.count} match${res.count === 1 ? '' : 'es'}` : null;
     case 'mb_search': return res.count != null ? `${res.count} match${res.count === 1 ? '' : 'es'}` : null;
     case 'mb_view': return res.total != null ? `${res.total} lines` : null;
+    case 'chat_search': return res.count != null ? `${res.count} match${res.count === 1 ? '' : 'es'}` : null;
+    case 'chat_view': return res.title ? `"${res.title}"` : null;
+    case 'skill_view': return res.name ? res.name : null;
     case 'extract_zip': return res.files ? `${res.files.length} file${res.files.length === 1 ? '' : 's'}` : null;
     case 'bundle_zip': return res.count != null ? `${res.count} file${res.count === 1 ? '' : 's'}` : null;
     case 'clear_sandbox': case 'delete_all': return res.cleared != null ? `${res.cleared} removed` : null;
@@ -121,7 +137,7 @@ function BashCard({ call, result }) {
 }
 
 function FileCard({ call, result }) {
-  const v = VERBS[call.tool] || [call.tool, call.tool];
+  const v = verbsFor(call.tool) || [call.tool, call.tool];
   const pending = !result;
   const verb = v[pending ? 0 : 1];
   const Icon = iconFor(call.tool);
@@ -152,7 +168,7 @@ function FileCard({ call, result }) {
 }
 
 function ChipCard({ call, result }) {
-  const v = VERBS[call.tool] || [call.tool || 'Working', call.tool || 'Done'];
+  const v = verbsFor(call.tool) || [call.tool || 'Working', call.tool || 'Done'];
   const pending = !result;
   const verb = v[pending ? 0 : 1];
   const Icon = iconFor(call.tool);

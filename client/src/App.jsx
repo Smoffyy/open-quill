@@ -163,6 +163,14 @@ export default function App() {
   const [safetyFlagged, setSafetyFlagged] = useState(false);
   const [safetyChecking, setSafetyChecking] = useState(false);
   const [safetyReason, setSafetyReason] = useState('');
+  const [chatEnded, setChatEnded] = useState(false);
+  const [chatEndedReason, setChatEndedReason] = useState('');
+  const styleId = user?.prefs?.styleId || 'normal';
+  const setStyleId = (id) => updatePref('styleId', id);
+  const saveStyles = async (list) => {
+    const { styles } = await api.put('/api/me/styles', { styles: list });
+    setUser(u => ({ ...u, styles }));
+  };
   const [collapsed, setCollapsed] = useState(false);
   const [mobileDrawer, setMobileDrawer] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -469,6 +477,11 @@ export default function App() {
       return;
     }
     if (m.type === 'title') { setChats(cs => cs.map(c => c.id === m.chatId ? { ...c, title: m.title } : c)); return; }
+    if (m.type === 'chat_ended') {
+      setChats(cs => cs.map(c => c.id === m.chatId ? { ...c, ended: true } : c));
+      if (m.chatId === activeKey()) { setChatEnded(true); setChatEndedReason(m.reason || ''); }
+      return;
+    }
     if (m.type === 'queued') {
       const r = recFor(m.chatId); r.phase = 'queued';
       if (m.chatId === activeKey()) setQueued(true);
@@ -750,6 +763,8 @@ export default function App() {
       setSandbox(!!chat.sandbox);
       setWebSearch(false);
       setHasSummary(!!chat.hasSummary);
+      setChatEnded(!!chat.ended);
+      setChatEndedReason(chat.endedReason || '');
       setChatInstructions(chat.instructions || '');
       setChatPins(Array.isArray(chat.pinnedFiles) ? chat.pinnedFiles : []);
       setChatMenuOpen(false);
@@ -767,6 +782,7 @@ export default function App() {
     setCurrentProject(null);
     setActiveId(null); setMessages([]); setInput('');
     setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
+    setChatEnded(false); setChatEndedReason('');
     const m = models.find(m => m.id === currentId);
     setSandbox(m?.sandboxAllowed !== false && !!m?.sandboxAuto);
     setWebSearch(!!cfg.webSearchAvailable && m?.webSearchAllowed !== false && !!m?.webSearchAuto);
@@ -881,7 +897,7 @@ export default function App() {
       setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false, folderId: null }, ...cs]);
       history.pushState({}, '', '/chat/' + chatId);
     }
-    if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, content: text, attachments, sandbox, webSearch, call: !!opts.call })) return;
+    if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, content: text, attachments, sandbox, webSearch, call: !!opts.call, styleId })) return;
     gen.current.set(chatId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
     setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     if (!opts.call) setInput('');
@@ -899,7 +915,7 @@ export default function App() {
     setActiveId(c.id); setMessages([]); setInput('');
     setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
     history.pushState({}, '', '/chat/' + c.id);
-    if (!wsSend({ type: 'chat', chatId: c.id, modelId: currentId, extended, content: text, attachments, sandbox, webSearch })) return;
+    if (!wsSend({ type: 'chat', chatId: c.id, modelId: currentId, extended, content: text, attachments, sandbox, webSearch, styleId })) return;
     gen.current.set(c.id, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
     setMessages([{ id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
@@ -926,7 +942,7 @@ export default function App() {
 
   const regenerate = useCallback((messageId) => {
     if (streaming || !activeId || !currentId) return;
-    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, messageId, sandbox, webSearch })) return;
+    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, messageId, sandbox, webSearch, styleId })) return;
     gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
@@ -935,7 +951,7 @@ export default function App() {
   const regenerateWith = useCallback((messageId, modelId) => {
     if (streaming || !activeId || !modelId) return;
     setCurrentId(modelId);
-    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId, extended, messageId, sandbox, webSearch })) return;
+    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId, extended, messageId, sandbox, webSearch, styleId })) return;
     gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: modelId, live: null });
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
@@ -947,7 +963,7 @@ export default function App() {
     if (streaming || !activeId || !currentId) return;
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); if (idx === -1) return ms; const copy = ms.slice(0, idx + 1); copy[idx] = { ...copy[idx], content: newContent }; return copy; });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
-    if (!wsSend({ type: 'edit', chatId: activeId, modelId: currentId, extended, messageId, content: newContent, sandbox, webSearch })) return;
+    if (!wsSend({ type: 'edit', chatId: activeId, modelId: currentId, extended, messageId, content: newContent, sandbox, webSearch, styleId })) return;
     gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
   }, [streaming, activeId, currentId, extended, sandbox, webSearch]);
 
@@ -974,6 +990,8 @@ export default function App() {
   const composerProps = {
     value: input, onChange: (v) => { if (safetyFlagged) { setSafetyFlagged(false); setSafetyReason(''); } setInput(v); }, onSend: send, onStop: stop, streaming: streaming || queued,
     safetyFlagged, safetyChecking, safetyReason, safetyVerbose: !!cfg.safetyCheckVerbose,
+    styles: user?.styles || [], styleId, onSelectStyle: setStyleId, onSaveStyles: saveStyles,
+    conversationEnded: chatEnded, endedReason: chatEndedReason,
     models, currentId, onSelect: setCurrentId, extended, onToggleExtended: () => setExtended(e => !e),
     visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin, budget,
     modelHasBg, bgInChat, onToggleBgInChat: () => updatePref('modelBgInChat', !bgInChat),
@@ -1128,7 +1146,7 @@ export default function App() {
                     : messages;
                   const lastA = [...renderList].reverse().find(m => m.role === 'assistant');
                   return renderList.map(msg => (
-                    <Message key={msg._k || msg.id} msg={msg} model={models.find(x => x.id === msg.model_id) || model} models={models} currentId={currentId} chatId={activeId} pins={chatPins}
+                    <Message key={msg._k || msg.id} msg={msg} model={models.find(x => x.id === msg.model_id) || model} models={models} currentId={currentId} chatId={activeId} pins={chatPins} chatEnded={chatEnded}
                       streaming={!!msg._streaming} phase={msg._streaming ? phase : 'static'} liveCall={msg._streaming ? liveCall : null}
                       onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
                       showIcon={msg.role === 'assistant' && lastA && msg.id === lastA.id} />

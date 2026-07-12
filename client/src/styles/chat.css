@@ -39,6 +39,34 @@
 @keyframes sendChecking { 0%, 100% { opacity: .4; } 50% { opacity: .85; } }
 .safety-checking { display: flex; align-items: center; gap: 7px; padding: 2px 4px 8px; font-size: 12.5px; font-weight: 600; background: linear-gradient(90deg, var(--text-muted) 30%, var(--text) 50%, var(--text-muted) 70%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 2.2s linear infinite; }
 .unavail-banner.safety-banner .unavail-msg strong { color: #d9534f; }
+.unavail-banner.ended-banner .unavail-msg strong { color: var(--accent); }
+.action-btn.fb.on { color: var(--accent); }
+.action-btn.fb.on.down { color: #d9534f; }
+.pm-note { margin-left: auto; font-size: 11.5px; color: var(--text-muted); max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-item:disabled { opacity: .45; cursor: default; }
+.pm-sub.styles { width: 280px; max-height: 420px; overflow-y: auto; }
+.style-menu-label { padding: 8px 10px 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); }
+.style-item { position: relative; width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 9px; text-align: left; color: var(--text); font-size: 13.5px; }
+.style-item:hover { background: var(--hover); }
+.style-item.active { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.style-item-name { font-weight: 600; }
+.style-item-desc { font-size: 11.5px; color: var(--text-muted); margin-left: auto; padding-right: 4px; }
+.style-item svg { flex-shrink: 0; color: var(--accent); }
+.style-item.create { color: var(--text-muted); font-weight: 600; justify-content: center; }
+.style-item.create:hover { color: var(--text); }
+.style-del { display: none; margin-left: auto; padding: 3px; border-radius: 6px; color: var(--text-muted); }
+.style-item:hover .style-del { display: inline-flex; }
+.style-del:hover { color: #d9534f; background: var(--hover); }
+.style-create { padding: 4px 6px 8px; display: flex; flex-direction: column; gap: 8px; }
+.style-create input, .style-create textarea { width: 100%; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px; font-family: var(--font-sans); resize: vertical; }
+.style-gen { display: flex; flex-direction: column; gap: 6px; border-top: 1px dashed var(--border); padding-top: 8px; }
+.style-gen-btn { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 10px; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.style-gen-btn:disabled { opacity: .5; }
+.style-create-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.style-cancel { padding: 7px 12px; border-radius: 9px; font-size: 12.5px; color: var(--text-muted); }
+.style-cancel:hover { background: var(--hover); color: var(--text); }
+.style-save { padding: 7px 12px; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: #fff; background: var(--accent); }
+.style-save:disabled { opacity: .5; }
 .mic { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; color: var(--text-muted); }
 .mic:hover { background: var(--surface-hover); color: var(--text); }
 

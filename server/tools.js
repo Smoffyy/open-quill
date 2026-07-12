@@ -82,6 +82,30 @@ export function membankSchemas() {
   ];
 }
 
+export function chatSearchSchemas() {
+  return [
+    fn('chat_search', "Search the user's OTHER past conversations in this app for relevant context (decisions, code, preferences discussed before). Returns matching snippets with chat ids. Use it when the user references something from a previous chat.", {
+      query: str('The text to search for across past chat titles and messages (case-insensitive).')
+    }, ['query']),
+    fn('chat_view', 'Read the messages of one of the user\'s past chats found via chat_search. Returns the most recent messages, truncated.', {
+      chat_id: str('The id of the chat, as returned by chat_search.'),
+      limit: int('Optional number of most recent messages to return (default 20, max 60).')
+    }, ['chat_id'])
+  ];
+}
+
+export function skillSchema() {
+  return fn('skill_view', 'Load an admin-provided skill file by name. Skills contain required instructions and best practices for specific kinds of tasks — load the matching skill before starting such a task.', {
+    name: str('The skill name exactly as listed in the system prompt.')
+  }, ['name']);
+}
+
+export function endConversationSchema() {
+  return fn('end_conversation', 'Permanently end this conversation. After this call the user can no longer send messages, edit, regenerate, or branch this chat. Use it only when your instructions call for it. ALWAYS explain to the user in your reply text WHY you are ending the conversation BEFORE calling this tool, then call it with a short reason.', {
+    reason: str('A short summary of why the conversation is being ended (shown to the user).')
+  }, []);
+}
+
 export function customToolSchemas(list) {
   return (list || []).map(t => fn(
     t.name,
@@ -91,12 +115,16 @@ export function customToolSchemas(list) {
   ));
 }
 
-export function buildTools({ sandboxOn, webSearchOn, membankOn, customToolsList }) {
+export function buildTools({ sandboxOn, webSearchOn, membankOn, customToolsList, chatSearchOn, skillsOn, mcpSchemas, endChatOn }) {
   const out = [];
   if (sandboxOn) out.push(...sandboxToolSchemas());
   if (webSearchOn) out.push(webSearchSchema());
   if (membankOn) out.push(...membankSchemas());
+  if (chatSearchOn) out.push(...chatSearchSchemas());
+  if (skillsOn) out.push(skillSchema());
+  if (endChatOn) out.push(endConversationSchema());
   if (customToolsList && customToolsList.length) out.push(...customToolSchemas(customToolsList));
+  if (mcpSchemas && mcpSchemas.length) out.push(...mcpSchemas);
   return out;
 }
 

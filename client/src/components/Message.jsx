@@ -6,6 +6,7 @@ import ReasoningBlock from './ReasoningBlock.jsx';
 import BranchCompare from './BranchCompare.jsx';
 import ToolCard from './ToolCard.jsx';
 import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin } from './icons.jsx';
+import { api } from '../api.js';
 
 function Columns(props) {
   return (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect x="3" y="4" width="7" height="16" rx="1" /><rect x="14" y="4" width="7" height="16" rx="1" /></svg>);
@@ -114,7 +115,8 @@ function ModelIcon({ model, phase, below, name }) {
   );
 }
 
-function Message({ msg, model, models, currentId, streaming, phase, liveCall, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onSelectBranch, onFork, onTogglePin, showIcon = true }) {
+function Message({ msg, model, models, currentId, streaming, phase, liveCall, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false }) {
+  if (chatEnded) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onFork = null; }
   const [typing, setTyping] = useState(false);
   const typingTimer = useRef(null);
   useEffect(() => {
@@ -188,6 +190,14 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
   const showName = !!model?.showName && !!model?.displayName;
   const icon = showIt ? <ModelIcon model={model} phase={iconPhase} below={pos === 'below'} name={pos === 'left' ? null : (showName ? model.displayName : null)} /> : null;
 
+  const [fb, setFb] = useState(msg.feedback || 0);
+  useEffect(() => { setFb(msg.feedback || 0); }, [msg.id]);
+  async function rate(r) {
+    const next = fb === r ? 0 : r;
+    setFb(next);
+    try { await api.post(`/api/messages/${msg.id}/feedback`, { rating: next }); } catch { setFb(fb); }
+  }
+
   const inner = (
     <>
       {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> Pinned</div>}
@@ -209,10 +219,14 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
       {!streaming && msg.content && (
         <div className="actions">
           <button className="action-btn" onClick={doCopy} title="Copy">{copied ? <Check /> : <Copy />}</button>
+          {chatId && !String(msg.id).startsWith('inc-') && <>
+            <button className={'action-btn fb' + (fb === 1 ? ' on' : '')} title="Good response" onClick={() => rate(1)}><ThumbUp style={{ width: 17 }} /></button>
+            <button className={'action-btn fb' + (fb === -1 ? ' on down' : '')} title="Bad response" onClick={() => rate(-1)}><ThumbDown style={{ width: 17 }} /></button>
+          </>}
           <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
           {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title="Compare versions"><Columns style={{ width: 18 }} /></button>}
           <span className="retry-wrap" ref={retryRef}>
-            <button className="action-btn" title="Retry" onClick={() => onRegenerate?.(msg.id)}><Retry /></button>
+            {onRegenerate && <button className="action-btn" title="Retry" onClick={() => onRegenerate(msg.id)}><Retry /></button>}
             {onRegenerateWith && models && models.length > 1 && (
               <button className="action-caret" title="Retry with another model" onClick={() => setRetryMenu(o => !o)}>▾</button>
             )}

@@ -110,6 +110,12 @@ CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id, updated_at);`)
   sdb.pragma('user_version = 6');
 }
 
+if (sdb.pragma('user_version', { simple: true }) < 7) {
+  sdb.exec(`CREATE TABLE IF NOT EXISTS feedback (id TEXT PRIMARY KEY, ts INTEGER, user_id TEXT, data TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_feedback_ts ON feedback(ts);`);
+  sdb.pragma('user_version = 7');
+}
+
 export const uid = () => crypto.randomUUID();
 let lastTs = 0;
 export const now = () => { const t = Date.now(); lastTs = t > lastTs ? t : lastTs + 1; return lastTs; };
@@ -125,7 +131,8 @@ const MIRROR = {
   space_messages: { space_id: o => o.space_id ?? null, created_at: o => o.created_at ?? 0 },
   sessions: { user_id: o => o.user_id ?? null, last_seen: o => o.last_seen ?? 0, created_at: o => o.created_at ?? 0 },
   audit: { ts: o => o.ts ?? 0, actor_id: o => o.actor_id ?? null },
-  projects: { user_id: o => o.user_id ?? null, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 }
+  projects: { user_id: o => o.user_id ?? null, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 },
+  feedback: { ts: o => o.ts ?? 0, user_id: o => o.user_id ?? null }
 };
 
 function collection(table) {
@@ -194,6 +201,12 @@ auditCol.recent = (limit, offset) => auditRecentStmt.all(limit, offset).map(r =>
 const auditPruneStmt = sdb.prepare('DELETE FROM audit WHERE ts < ?');
 auditCol.prune = before => { try { return auditPruneStmt.run(before).changes; } catch { return 0; } };
 
+const feedbackCol = collection('feedback');
+const feedbackRecentStmt = sdb.prepare('SELECT data FROM feedback ORDER BY ts DESC LIMIT ? OFFSET ?');
+feedbackCol.recent = (limit, offset) => feedbackRecentStmt.all(limit, offset).map(r => JSON.parse(r.data));
+const feedbackByMsgStmt = sdb.prepare("SELECT data FROM feedback WHERE json_extract(data,'$.message_id')=?");
+feedbackCol.byMessage = mid => feedbackByMsgStmt.all(mid).map(r => JSON.parse(r.data));
+
 const projectsCol = collection('projects');
 const projectsByUserStmt = sdb.prepare('SELECT data FROM projects WHERE user_id=? ORDER BY updated_at DESC');
 projectsCol.byUser = userId => projectsByUserStmt.all(userId).map(r => JSON.parse(r.data));
@@ -209,7 +222,8 @@ export const db = {
   spaceMessages: spaceMessagesCol,
   sessions: sessionsCol,
   audit: auditCol,
-  projects: projectsCol
+  projects: projectsCol,
+  feedback: feedbackCol
 };
 
 const sGet = sdb.prepare('SELECT value FROM settings WHERE key=?');

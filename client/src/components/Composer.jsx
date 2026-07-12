@@ -4,7 +4,8 @@ import FunctionsBar from './FunctionsBar.jsx';
 import { api } from '../api.js';
 import { transcribeBlob } from '../voice.js';
 import { toast } from '../toast.js';
-import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders } from './icons.jsx';
+import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand } from './icons.jsx';
+import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
 
 const FILE_ACCEPT = '.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.py,.lua,.html,.css,.xml,.yml,.yaml,.pdf,.log';
 
@@ -36,7 +37,9 @@ export default function Composer({
   value, onChange, onSend, onStop, streaming, models,
   currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts, functions = [],
   voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall,
-  safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = ''
+  safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
+  styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
+  conversationEnded = false, endedReason = ''
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
@@ -113,12 +116,22 @@ export default function Composer({
   const [plusDown, setPlusDown] = useState(false);
   const [promptsOpen, setPromptsOpen] = useState(false);
   const promptsTimer = useRef(null);
-  const openPrompts = () => { clearTimeout(promptsTimer.current); setPromptsOpen(true); };
+  const openPrompts = () => { clearTimeout(promptsTimer.current); setPromptsOpen(true); setStylesOpen(false); };
   const closePrompts = (now) => {
     clearTimeout(promptsTimer.current);
     if (now === true) { setPromptsOpen(false); return; }
     promptsTimer.current = setTimeout(() => setPromptsOpen(false), 160);
   };
+  const [stylesOpen, setStylesOpen] = useState(false);
+  const stylesTimer = useRef(null);
+  const openStyles = () => { clearTimeout(stylesTimer.current); setStylesOpen(true); setPromptsOpen(false); };
+  const closeStyles = (now) => {
+    clearTimeout(stylesTimer.current);
+    if (now === true) { setStylesOpen(false); return; }
+    stylesTimer.current = setTimeout(() => setStylesOpen(false), 160);
+  };
+  useEffect(() => () => clearTimeout(stylesTimer.current), []);
+  useEffect(() => { if (!plusMenu) setStylesOpen(false); }, [plusMenu]);
   useEffect(() => () => clearTimeout(promptsTimer.current), []);
   const [showReason, setShowReason] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
@@ -185,7 +198,7 @@ export default function Composer({
 
   async function doSend() {
     if (streaming || uploading) return;
-    if (blockSend || budgetBlock || safetyFlagged || safetyChecking) return;
+    if (blockSend || budgetBlock || safetyFlagged || safetyChecking || conversationEnded) return;
     if (!value.trim() && files.length === 0) return;
     let attachments = [];
     if (files.length) {
@@ -225,6 +238,29 @@ export default function Composer({
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
   }
   const activeModel = models?.find(m => m.id === currentId) || null;
+  const [improving, setImproving] = useState(false);
+  const improvedRef = useRef(null);
+  useEffect(() => {
+    if (improvedRef.current && value !== improvedRef.current.improved) improvedRef.current = null;
+  }, [value]);
+  async function improvePrompt() {
+    if (improving) return;
+    if (improvedRef.current && value === improvedRef.current.improved) {
+      const orig = improvedRef.current.original;
+      improvedRef.current = null;
+      onChange(orig);
+      return;
+    }
+    const text = value.trim();
+    if (!text) return;
+    setImproving(true);
+    try {
+      const r = await api.post('/api/improve-prompt', { text, modelId: currentId });
+      if (r.text) { improvedRef.current = { original: value, improved: r.text }; onChange(r.text); }
+    } catch (e) { toast(e.message || 'Could not improve the prompt.'); }
+    setImproving(false);
+  }
+  const improvedNow = !!(improvedRef.current && value === improvedRef.current.improved);
   const unavailable = !!activeModel?.unavailable;
   const blockSend = unavailable && !canUseUnavailable;
   const [bannerMounted, setBannerMounted] = useState(unavailable);
@@ -243,13 +279,20 @@ export default function Composer({
   const budgetBlock = budgetState === 'over' && budget?.enforce && !canUseUnavailable;
   const showBudgetBanner = budgetState === 'warn' || budgetState === 'over';
   const enabledCount = (sandbox ? 1 : 0) + (webSearch ? 1 : 0);
-  const canSend = (value.trim().length > 0 || files.length > 0) && !uploading && !blockSend && !budgetBlock && !safetyFlagged && !safetyChecking;
+  const canSend = (value.trim().length > 0 || files.length > 0) && !uploading && !blockSend && !budgetBlock && !safetyFlagged && !safetyChecking && !conversationEnded;
   const cls = 'composer' + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + (unavailable ? ' unavailable' : '') + ((blockSend || budgetBlock) ? ' blocked' : '');
   const fmtUsd = (n) => '$' + (Number(n || 0) > 0 && Number(n || 0) < 0.01 ? Number(n).toFixed(4) : Number(n || 0).toFixed(2));
 
   return (
-    <div className={'composer-stack' + ((bannerMounted || showBudgetBanner || safetyFlagged) ? ' has-banner' : '')}>
-    {(bannerMounted || showBudgetBanner || safetyFlagged) && <div className={'unavail-bg' + (bannerOut && !showBudgetBanner && !safetyFlagged ? ' out' : '')} />}
+    <div className={'composer-stack' + ((bannerMounted || showBudgetBanner || safetyFlagged || conversationEnded) ? ' has-banner' : '')}>
+    {(bannerMounted || showBudgetBanner || safetyFlagged || conversationEnded) && <div className={'unavail-bg' + (bannerOut && !showBudgetBanner && !safetyFlagged && !conversationEnded ? ' out' : '')} />}
+    {conversationEnded && (
+      <div className="unavail-banner ended-banner">
+        <div className="unavail-row">
+          <span className="unavail-msg"><strong>The assistant ended this conversation.</strong> {endedReason ? endedReason : 'It can no longer be continued, edited, or branched.'}</span>
+        </div>
+      </div>
+    )}
     {safetyFlagged && (
       <div className="unavail-banner safety-banner">
         <div className="unavail-row">
@@ -315,6 +358,7 @@ export default function Composer({
       <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}
         accept={(visionSupported ? 'image/*,' : '') + FILE_ACCEPT} />
       {safetyChecking && safetyVerbose && <div className="safety-checking">Safety check…</div>}
+      {improving && <div className="safety-checking">Improving prompt…</div>}
       <div className="composer-bar">
         <div className="composer-left">
           <div className="plus-wrap" ref={plusRef}>
@@ -355,6 +399,27 @@ export default function Composer({
                     </div>
                   )}
                 </div>
+                {onSelectStyle && (
+                  <div className="pm-subwrap" onMouseEnter={openStyles} onMouseLeave={closeStyles}>
+                    <button className={'pm-item' + (stylesOpen ? ' active' : '')} onClick={() => (stylesOpen ? closeStyles(true) : openStyles())}>
+                      <Sliders />
+                      <span className="pm-label">Response style</span>
+                      <span className="pm-note">{styleNameFor(styleId, styles)}</span>
+                      <Chevron className="pm-chev" />
+                    </button>
+                    {stylesOpen && (
+                      <div className="pm-sub styles" onMouseEnter={openStyles} onMouseLeave={closeStyles}>
+                        <StyleSubmenu styles={styles} styleId={styleId} currentId={currentId} onSaveStyles={onSaveStyles}
+                          onSelect={(id) => { onSelectStyle && onSelectStyle(id); }} />
+                      </div>
+                    )}
+                  </div>
+                )}
+                <button className="pm-item" disabled={improving || (!value.trim() && !improvedNow)}
+                  onClick={() => { setPlusMenu(false); improvePrompt(); }}>
+                  <Wand />
+                  <span className="pm-label">{improvedNow ? 'Restore original prompt' : 'Improve prompt'}</span>
+                </button>
                 {(sandboxAllowed || webSearchAvailable) && <div className="pm-divider" />}
                 {sandboxAllowed && (
                   <button className="pm-item" onClick={() => onToggleSandbox && onToggleSandbox()}>

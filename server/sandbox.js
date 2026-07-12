@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -359,6 +359,35 @@ function pickShell() {
   SHELL_CACHE = true;
   return SHELL_CACHE;
 }
+let ENV_CACHE = null;
+export function hostEnvInfo() {
+  if (ENV_CACHE) return ENV_CACHE;
+  const osName = process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux';
+  const shellRaw = pickShell();
+  const shellName = process.platform === 'win32'
+    ? (typeof shellRaw === 'string' ? path.basename(shellRaw) : 'cmd.exe')
+    : (typeof shellRaw === 'string' ? path.basename(shellRaw) : 'sh');
+  const probe = (bin, args) => {
+    try {
+      const r = spawnSync(bin, args, { timeout: 4000, windowsHide: true, shell: process.platform === 'win32' });
+      if (r.status === 0) {
+        const v = String(r.stdout || r.stderr || '').trim().split('\n')[0].slice(0, 40);
+        return v || 'available';
+      }
+    } catch {}
+    return null;
+  };
+  const interpreters = [];
+  const node = probe('node', ['-v']); if (node) interpreters.push(`node ${node}`);
+  const py = probe('python', ['--version']); if (py) interpreters.push(`python (${py})`);
+  const py3 = probe('python3', ['--version']); if (py3) interpreters.push(`python3 (${py3})`);
+  if (py && !py3) interpreters.push('python3 NOT available \u2014 always use `python`');
+  const npm = probe('npm', ['-v']); if (npm) interpreters.push(`npm ${npm}`);
+  const git = probe('git', ['--version']); if (git) interpreters.push('git');
+  ENV_CACHE = { osName, shellName, interpreters, unix: process.platform !== 'win32' };
+  return ENV_CACHE;
+}
+
 export function bash(chatId, cmd, timeoutMs = 60000) {
   if (!cmd || !String(cmd).trim()) return Promise.resolve({ ok: false, error: 'cmd required', output: '' });
   const trimmed = String(cmd).trim();
@@ -366,7 +395,8 @@ export function bash(chatId, cmd, timeoutMs = 60000) {
     const first = trimmed.split(/\s+/)[0].toLowerCase().replace(/.*[\\/]/, '');
     const redirect = {
       cp: 'copy_file', rm: 'delete_file', mv: 'move_file', mkdir: 'make_dir',
-      touch: 'create_file', zip: 'bundle_zip', unzip: 'extract_zip', cat: 'view', ls: 'list_files', grep: 'search'
+      touch: 'create_file', zip: 'bundle_zip', unzip: 'extract_zip', zipinfo: 'extract_zip', cat: 'view', ls: 'list_files', grep: 'search',
+      file: 'view', head: 'view', tail: 'view', less: 'view', wc: 'view', find: 'search', sed: 'str_replace', awk: 'view', chmod: 'list_files', diff: 'view'
     };
     if (redirect[first]) {
       return Promise.resolve({ ok: false, exit: null, output: '',
@@ -397,7 +427,14 @@ export function bash(chatId, cmd, timeoutMs = 60000) {
       if (killed) return done({ ok: false, output: capOut(out), error: `Output exceeded ${Math.round(MAX / 1048576)} MB; process killed.`, exit: null });
       const exit = typeof code === 'number' ? code : 1;
       if (exit === 0) return done({ ok: true, output: capOut(out), exit: 0 });
-      return done({ ok: false, output: capOut(out) || `Exited with code ${exit}`, exit, error: `Exited with code ${exit}` });
+      let hinted = capOut(out) || `Exited with code ${exit}`;
+      if (process.platform === 'win32') {
+        if (/is not recognized as an internal or external command/i.test(hinted) || exit === 9009) {
+          hinted += '\n\nHINT: This sandbox runs on WINDOWS (cmd.exe). Unix utilities do not exist here. Do not retry Unix commands. Use the dedicated tools instead: view (read files), list_files, search, extract_zip, bundle_zip, copy_file, move_file, delete_file, make_dir. For code, invoke interpreters that exist on this host (see the Host environment section of your instructions).';
+          if (/^python3(\s|$)/.test(trimmed)) hinted += ' On this host the Python command is `python`, not `python3`.';
+        }
+      }
+      return done({ ok: false, output: hinted, exit, error: `Exited with code ${exit}` });
     });
   });
 }

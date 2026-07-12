@@ -58,3 +58,6 @@ export const Upload = (p) => <I {...p}><path d="M12 21V9m0 0l-4 4m4-4l4 4M5 3h14
 export const Send = (p) => <I {...p}><path d="M22 2 11 13M22 2 15 22l-4-9-9-4z"/></I>;
 export const Box = (p) => <I {...p}><rect x="4" y="8" width="16" height="12" rx="1.5"/><path d="M3 5.5h18v2.5H3zM9.5 12h5"/></I>;
 export const X = (p) => <I {...p}><path d="M18 6 6 18M6 6l12 12"/></I>;
+export const Wand = (p) => <I {...p}><path d="M15 4V2M15 10V8M11.5 6h2M17.5 6h2M6 20 16 10l-2-2L4 18l2 2zM20 15l1 1M19 20l1-1"/></I>;
+export const Plug = (p) => <I {...p}><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-6 6 6 6 0 0 1-6-6zM12 17v4"/></I>;
+export const Feather = (p) => <I {...p}><path d="M20 4c-5 0-11 3-13 8l-3 8 8-3c5-2 8-8 8-13zM7 17l7-7"/></I>;

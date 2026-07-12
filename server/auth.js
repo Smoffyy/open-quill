@@ -41,7 +41,7 @@ export function revokeSession(id) { db.sessions.remove(s => s.id === id); }
 export function revokeOtherSessions(userId, keepId) { db.sessions.remove(s => s.user_id === userId && s.id !== keepId); }
 
 export function publicUser(u) {
-  return { id: u.id, email: u.email, displayName: u.display_name || u.email.split('@')[0], isAdmin: !!u.is_admin, isOwner: !!u.is_owner, twoFactor: !!u.totp_enabled, prefs: u.prefs || {}, instructions: u.instructions || '', savedPrompts: Array.isArray(u.saved_prompts) ? u.saved_prompts : [], personas: Array.isArray(u.personas) ? u.personas : [] };
+  return { id: u.id, email: u.email, displayName: u.display_name || u.email.split('@')[0], isAdmin: !!u.is_admin, isOwner: !!u.is_owner, twoFactor: !!u.totp_enabled, prefs: u.prefs || {}, instructions: u.instructions || '', savedPrompts: Array.isArray(u.saved_prompts) ? u.saved_prompts : [], personas: Array.isArray(u.personas) ? u.personas : [], styles: Array.isArray(u.styles) ? u.styles : [], memory: u.memory || '', memoryUpdatedAt: u.memory_updated_at || 0 };
 }
 
 function resolveToken(token) {

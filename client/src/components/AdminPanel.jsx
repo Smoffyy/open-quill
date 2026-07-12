@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
-import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield, Globe, FileText, Pencil, Clock, Download, Wrench, Code, Brain, Copy, Check, Panel, Chat, Mic } from './icons.jsx';
+import { Cube, Sliders, Plus, Trash, Users, Sparkles, Chevron, Shield, Globe, FileText, Pencil, Clock, Download, Wrench, Code, Brain, Copy, Check, Panel, Chat, Mic, Bulb, Star, Refresh, ThumbUp, ThumbDown, Plug } from './icons.jsx';
 import { QP_ICON_LIST, QpIcon } from '../qpIcons.jsx';
 
 function QpIconPicker({ value, onPick }) {
@@ -354,6 +354,20 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
               <Toggle m={m} set={set} k="tools_allowed" inverted label="Allow live tools" note="Lets this model use the live-data tools defined in the Live Tools section." />
               {m.tools_allowed !== 0 && <Toggle m={m} set={set} k="tools_auto" label="Enable live tools by default" note="Expose all enabled live tools to this model automatically." />}
             </div>
+            <div className="me2-group-label">Assistant features — all off by default</div>
+            <div className="me2-toggle-card">
+              <Toggle m={m} set={set} k="skills_allowed" label="Skills" note="Lets this model load admin-created skills from the Skills section." />
+              <Toggle m={m} set={set} k="mcp_allowed" label="MCP connectors" note="Exposes tools from enabled MCP servers to this model." />
+              <Toggle m={m} set={set} k="chat_search_allowed" label="Past-chat search" note="Lets this model search the user's own previous conversations (also requires the global toggle in User Memory)." />
+              <Toggle m={m} set={set} k="long_convo_reminder" label="Long conversation awareness" note="Gives the model the conversation's start time, duration, and timestamps so it can gently suggest breaks during very long sessions." />
+              <Toggle m={m} set={set} k="end_chat_allowed" label="End conversation tool" note="Lets the model permanently end a chat. Ended chats cannot be continued, edited, regenerated, or branched." />
+            </div>
+            {!!m.end_chat_allowed && (
+              <div className="field"><label>End-conversation instructions</label>
+                <textarea rows={4} value={m.end_chat_prompt ?? ''} onChange={(e) => set('end_chat_prompt', e.target.value)} placeholder={'End the conversation if the user repeatedly…'} />
+                <div className="muted-note">Appended to the system prompt to tell the model WHEN it should end conversations. Leave blank to append nothing beyond the basic tool description.</div>
+              </div>
+            )}
             <div className="field"><label>Tool-call limit</label>
               <input type="number" min="0" value={m.agent_steps || ''} placeholder="Unlimited" onChange={(e) => set('agent_steps', e.target.value)} style={{ maxWidth: 140 }} />
               <div className="muted-note">Maximum tool rounds per response. Leave blank or 0 for unlimited.</div>
@@ -489,7 +503,7 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
   );
 }
 
-const TAB_IDS = ['overview', 'models', 'providers', 'branding', 'home', 'members', 'websearch', 'membank', 'tools', 'functions', 'voice', 'safety', 'limits', 'audit', 'analytics'];
+const TAB_IDS = ['overview', 'models', 'providers', 'branding', 'home', 'members', 'websearch', 'membank', 'tools', 'functions', 'voice', 'safety', 'memory', 'skills', 'mcp', 'feedback', 'limits', 'audit', 'analytics'];
 
 export default function AdminPanel({ user, onClose }) {
   const [tab, setTab] = useState(() => {
@@ -500,7 +514,7 @@ export default function AdminPanel({ user, onClose }) {
   const [models, setModels] = useState([]);
   const [usersList, setUsersList] = useState([]);
   const [cfg, setCfg] = useState({ appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [], appFont: 'serif' });
-  const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256, modelQueue: false, membankEnabled: false, membankHideTools: false, membankPrompt: '', budgetUser: 0, budgetAdmin: 0, budgetWarnFraction: 0.8, budgetEnforce: false, sessionTtlDays: 30, maxSessions: 0, voiceMicEnabled: false, voiceCallEnabled: false, voiceSttEngine: 'browser', voiceSttUrl: '', voiceSttKey: '', voiceSttModel: 'whisper-1', voiceTtsEngine: 'browser', voiceTtsUrl: '', voiceTtsKey: '', voiceTtsModel: 'tts-1', voiceTtsVoice: 'alloy', voiceTtsSpeed: 1, safetyEnabled: false, safetyModelMode: 'current', safetyModelId: '', safetyPrompt: '', safetyVerbose: true, safetyReasonEnabled: false });
+  const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256, modelQueue: false, membankEnabled: false, membankHideTools: false, membankPrompt: '', budgetUser: 0, budgetAdmin: 0, budgetWarnFraction: 0.8, budgetEnforce: false, sessionTtlDays: 30, maxSessions: 0, voiceMicEnabled: false, voiceCallEnabled: false, voiceSttEngine: 'browser', voiceSttUrl: '', voiceSttKey: '', voiceSttModel: 'whisper-1', voiceTtsEngine: 'browser', voiceTtsUrl: '', voiceTtsKey: '', voiceTtsModel: 'tts-1', voiceTtsVoice: 'alloy', voiceTtsSpeed: 1, safetyEnabled: false, safetyModelMode: 'current', safetyModelId: '', safetyPrompt: '', safetyVerbose: true, safetyReasonEnabled: false, memoryEnabled: false, memoryPrompt: '', chatSearchEnabled: false });
   const [providers, setProviders] = useState([]);
   const [membankFiles, setMembankFiles] = useState([]);
   const [tools, setTools] = useState([]);
@@ -561,6 +575,43 @@ export default function AdminPanel({ user, onClose }) {
   async function deleteTool(id) { try { await api.del('/api/admin/tools/' + id); setTools(ts => ts.filter(x => x.id !== id)); } catch {} }
   async function toggleTool(t) { try { const r = await api.patch('/api/admin/tools/' + t.id, { enabled: !t.enabled }); setTools(ts => ts.map(x => x.id === t.id ? r.tool : x)); } catch {} }
   async function loadFns() { try { const d = await api.get('/api/admin/functions'); setCustomFns(d.functions || []); } catch {} }
+  const [skills, setSkills] = useState([]);
+  const [skillEdit, setSkillEdit] = useState(null);
+  async function loadSkills() { try { const d = await api.get('/api/admin/skills'); setSkills(d.skills || []); } catch {} }
+  async function saveSkill(sk) {
+    try {
+      if (sk.id) { const r = await api.patch('/api/admin/skills/' + sk.id, sk); setSkills(list => list.map(x => x.id === sk.id ? r.skill : x)); }
+      else { const r = await api.post('/api/admin/skills', sk); setSkills(list => [...list, r.skill]); }
+      setSkillEdit(null);
+    } catch (e) { alert(e.message || 'Could not save skill.'); }
+  }
+  async function deleteSkill(id) { try { await api.del('/api/admin/skills/' + id); setSkills(list => list.filter(x => x.id !== id)); } catch {} }
+  async function toggleSkill(sk) { try { const r = await api.patch('/api/admin/skills/' + sk.id, { enabled: !sk.enabled }); setSkills(list => list.map(x => x.id === sk.id ? r.skill : x)); } catch {} }
+  const [mcpServers, setMcpServers] = useState([]);
+  const [mcpEdit, setMcpEdit] = useState(null);
+  const [mcpBusy, setMcpBusy] = useState('');
+  async function loadMcp() { try { const d = await api.get('/api/admin/mcp'); setMcpServers(d.servers || []); } catch {} }
+  async function saveMcp(sv) {
+    try {
+      if (sv.id) { const r = await api.patch('/api/admin/mcp/' + sv.id, sv); setMcpServers(list => list.map(x => x.id === sv.id ? r.server : x)); }
+      else { const r = await api.post('/api/admin/mcp', sv); setMcpServers(list => [...list, r.server]); if (r.warning) alert('Server saved, but connecting failed: ' + r.warning); }
+      setMcpEdit(null);
+    } catch (e) { alert(e.message || 'Could not save server.'); }
+  }
+  async function deleteMcp(id) { try { await api.del('/api/admin/mcp/' + id); setMcpServers(list => list.filter(x => x.id !== id)); } catch {} }
+  async function toggleMcp(sv) { try { const r = await api.patch('/api/admin/mcp/' + sv.id, { enabled: !sv.enabled }); setMcpServers(list => list.map(x => x.id === sv.id ? r.server : x)); } catch {} }
+  async function refreshMcp(id) {
+    setMcpBusy(id);
+    try { const r = await api.post('/api/admin/mcp/' + id + '/refresh'); setMcpServers(list => list.map(x => x.id === id ? r.server : x)); }
+    catch {}
+    setMcpBusy('');
+  }
+  const [fbRows, setFbRows] = useState(null);
+  const [fbCounts, setFbCounts] = useState({ up: 0, down: 0 });
+  const [fbOffset, setFbOffset] = useState(0);
+  async function loadFeedback(offset = 0) {
+    try { const d = await api.get('/api/admin/feedback?offset=' + offset); setFbRows(d.feedback || []); setFbCounts(d.counts || { up: 0, down: 0 }); setFbOffset(offset); } catch {}
+  }
   async function saveFn(f) {
     try {
       if (f.id) { const r = await api.patch('/api/admin/functions/' + f.id, f); setCustomFns(fs => fs.map(x => x.id === f.id ? r.fn : x)); }
@@ -656,6 +707,9 @@ export default function AdminPanel({ user, onClose }) {
     else if (tab === 'membank') loadMembank();
     else if (tab === 'tools') loadTools();
     else if (tab === 'functions') loadFns();
+    else if (tab === 'skills') loadSkills();
+    else if (tab === 'mcp') loadMcp();
+    else if (tab === 'feedback') loadFeedback(0);
     else if (tab === 'audit') loadAudit(0);
     else if (tab === 'analytics') { loadAdminUsage(); loadPresets(); }
   }, [tab]);
@@ -847,10 +901,14 @@ export default function AdminPanel({ user, onClose }) {
       { id: 'tools', label: 'Live Tools', desc: 'Server-side live-data tools models can call (weather, prices, APIs…).', Icon: Wrench },
       { id: 'functions', label: 'Functions', desc: 'Custom buttons that run your JavaScript in the browser.', Icon: Code },
       { id: 'voice', label: 'Voice', desc: 'Dictation and voice calls — speech-to-text and text-to-speech engines.', Icon: Mic },
-      { id: 'safety', label: 'Safety Model', desc: 'Screen user prompts with a model before they reach the assistant.', Icon: Shield }
+      { id: 'safety', label: 'Safety Model', desc: 'Screen user prompts with a model before they reach the assistant.', Icon: Shield },
+      { id: 'memory', label: 'User Memory', desc: 'Per-user long-term memory and searching past chats as a tool.', Icon: Brain },
+      { id: 'skills', label: 'Skills', desc: 'Reusable instruction files models load on demand for specific tasks.', Icon: Bulb },
+      { id: 'mcp', label: 'MCP Connectors', desc: 'Connect local MCP servers and expose their tools to every model.', Icon: Plug }
     ] },
     { group: 'Governance', items: [
       { id: 'limits', label: 'Limits & Budgets', desc: 'Guardrails applied across the app. These take effect immediately.', Icon: Shield },
+      { id: 'feedback', label: 'Feedback', desc: 'Thumbs up/down users left on responses, for reviewing model quality.', Icon: Star },
       { id: 'audit', label: 'Audit Log', desc: 'A record of sensitive admin actions. Pruned after 120 days.', Icon: Clock },
       { id: 'analytics', label: 'Analytics', desc: 'Account-wide token use, estimated cost, and price presets.', Icon: Brain }
     ] }
@@ -1382,6 +1440,179 @@ export default function AdminPanel({ user, onClose }) {
                 </Card>
               )}
               <AutosaveNote status={setAutoStatus} live />
+            </>
+          )}
+          {tab === 'memory' && (
+            <>
+              <Card title="User memory" sub="Each user gets a compact long-term memory built from their own chats. Users can view, edit, disable, or clear it in Settings → Memory.">
+                <div className="field row">
+                  <div><label>Enable user memory</label><div className="muted-note">When on, memory is injected into the system prompt for users who keep it enabled, and refreshed in the background at most every few hours using the model they are chatting with.</div></div>
+                  <div className={'switch' + (settings.memoryEnabled ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, memoryEnabled: !s.memoryEnabled }))} />
+                </div>
+                {settings.memoryEnabled && (
+                  <div className="field" style={{ borderBottom: 0, marginBottom: 0 }}><label>Memory update prompt</label>
+                    <textarea rows={6} value={settings.memoryPrompt ?? ''} onChange={(e) => setSettings(s => ({ ...s, memoryPrompt: e.target.value }))} />
+                    <div className="muted-note">The instructions used when the model rewrites a user's memory from recent conversations. Clearing the field restores the default.</div>
+                  </div>
+                )}
+              </Card>
+              <Card title="Past-chat search" sub="Gives models chat_search and chat_view tools to look things up in the user's own previous conversations.">
+                <div className="field row" style={{ borderBottom: 0, marginBottom: 0 }}>
+                  <div><label>Enable chat history search</label><div className="muted-note">Only the requesting user's chats are searchable, and never the conversation currently in progress. Requires a model with tool calling.</div></div>
+                  <div className={'switch' + (settings.chatSearchEnabled ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, chatSearchEnabled: !s.chatSearchEnabled }))} />
+                </div>
+              </Card>
+              <AutosaveNote status={setAutoStatus} live />
+            </>
+          )}
+          {tab === 'skills' && (
+            <>
+              <div className="admin-section-head">
+                <div><div className="muted-note">Skills are markdown instruction files listed in the system prompt. When a task matches a skill's description, the model loads it with <code>skill_view</code> and follows it. Offered to any model with tool calling.</div></div>
+                <button className="btn primary" onClick={() => setSkillEdit({ name: '', description: '', content: '', enabled: true })}><Plus style={{ width: 15 }} /> New skill</button>
+              </div>
+              {skillEdit && (
+                <div className="fn-editor">
+                  <div className="field"><label>Skill name</label>
+                    <input value={skillEdit.name} onChange={(e) => setSkillEdit(x => ({ ...x, name: e.target.value }))} placeholder="brand-voice" />
+                    <div className="muted-note">Lowercase letters, digits, hyphens. This is the name the model loads.</div>
+                  </div>
+                  <div className="field"><label>Description</label>
+                    <input value={skillEdit.description} onChange={(e) => setSkillEdit(x => ({ ...x, description: e.target.value }))} placeholder="How to write copy in our brand voice. Load before writing any marketing text." />
+                    <div className="muted-note">Shown in the system prompt — tell the model exactly WHEN to load this skill.</div>
+                  </div>
+                  <div className="field"><label>Content</label>
+                    <textarea className="code-area" rows={14} value={skillEdit.content} onChange={(e) => setSkillEdit(x => ({ ...x, content: e.target.value }))} spellCheck={false} placeholder={'# Brand voice\n\nAlways…'} />
+                    <div className="muted-note">Markdown works well. The full content is returned to the model when it loads the skill.</div>
+                  </div>
+                  <div className="me2-toggle-card">
+                    <label className="inline-toggle"><span>Enabled</span><div className={'switch' + (skillEdit.enabled ? ' on' : '')} onClick={() => setSkillEdit(x => ({ ...x, enabled: !x.enabled }))} /></label>
+                  </div>
+                  <div className="editor-actions">
+                    <button className="btn" onClick={() => setSkillEdit(null)}>Cancel</button>
+                    <button className="btn primary" onClick={() => saveSkill(skillEdit)}>Save skill</button>
+                  </div>
+                </div>
+              )}
+              <div className="fn-list">
+                {skills.length === 0 && !skillEdit && <div className="muted-note">No skills yet.</div>}
+                {skills.map(sk => (
+                  <div key={sk.id} className="fn-card">
+                    <div className="fn-card-main">
+                      <div className="fn-card-title"><Bulb style={{ width: 15 }} /> <code>{sk.name}</code> <span className="muted-note" style={{ display: 'inline' }}>{(sk.content || '').split('\n').length} lines</span></div>
+                      <div className="fn-card-desc">{sk.description || 'No description.'}</div>
+                    </div>
+                    <div className="fn-card-actions">
+                      <div className={'switch' + (sk.enabled ? ' on' : '')} title="Enabled" onClick={() => toggleSkill(sk)} />
+                      <button className="icon-btn" onClick={() => setSkillEdit({ ...sk })}><Pencil style={{ width: 15 }} /></button>
+                      <button className="icon-btn" onClick={() => deleteSkill(sk.id)}><Trash style={{ width: 15 }} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {tab === 'mcp' && (
+            <>
+              <div className="admin-section-head">
+                <div><div className="muted-note">Connect MCP (Model Context Protocol) servers running on this machine or your network. Their tools are exposed to every model with tool calling, prefixed <code>mcp_</code>. Everything stays local — no cloud relay is involved.</div></div>
+                <button className="btn primary" onClick={() => setMcpEdit({ name: '', transport: 'stdio', command: '', args: '', url: '', headers: '', enabled: true })}><Plus style={{ width: 15 }} /> Add server</button>
+              </div>
+              {mcpEdit && (
+                <div className="fn-editor">
+                  <div className="field"><label>Server name</label>
+                    <input value={mcpEdit.name} onChange={(e) => setMcpEdit(x => ({ ...x, name: e.target.value }))} placeholder="Filesystem" />
+                  </div>
+                  <div className="field"><label>Transport</label>
+                    <div className="seg" style={{ width: 'fit-content' }}>
+                      <button className={mcpEdit.transport !== 'http' ? 'on' : ''} onClick={() => setMcpEdit(x => ({ ...x, transport: 'stdio' }))}>stdio (local command)</button>
+                      <button className={mcpEdit.transport === 'http' ? 'on' : ''} onClick={() => setMcpEdit(x => ({ ...x, transport: 'http' }))}>HTTP</button>
+                    </div>
+                  </div>
+                  {mcpEdit.transport !== 'http' && (
+                    <>
+                      <div className="field"><label>Command</label>
+                        <input value={mcpEdit.command} onChange={(e) => setMcpEdit(x => ({ ...x, command: e.target.value }))} placeholder="npx" />
+                      </div>
+                      <div className="field"><label>Arguments</label>
+                        <input value={mcpEdit.args} onChange={(e) => setMcpEdit(x => ({ ...x, args: e.target.value }))} placeholder="-y @modelcontextprotocol/server-filesystem /home/me/docs" />
+                        <div className="muted-note">The command is spawned by this server and speaks MCP over stdio.</div>
+                      </div>
+                    </>
+                  )}
+                  {mcpEdit.transport === 'http' && (
+                    <>
+                      <div className="field"><label>URL</label>
+                        <input value={mcpEdit.url} onChange={(e) => setMcpEdit(x => ({ ...x, url: e.target.value }))} placeholder="http://localhost:8931/mcp" />
+                      </div>
+                      <div className="field"><label>Headers</label>
+                        <textarea rows={2} value={mcpEdit.headers} onChange={(e) => setMcpEdit(x => ({ ...x, headers: e.target.value }))} placeholder={'Authorization: Bearer …'} />
+                        <div className="muted-note">Optional, one <code>Name: value</code> per line.</div>
+                      </div>
+                    </>
+                  )}
+                  <div className="me2-toggle-card">
+                    <label className="inline-toggle"><span>Enabled</span><div className={'switch' + (mcpEdit.enabled ? ' on' : '')} onClick={() => setMcpEdit(x => ({ ...x, enabled: !x.enabled }))} /></label>
+                  </div>
+                  <div className="editor-actions">
+                    <button className="btn" onClick={() => setMcpEdit(null)}>Cancel</button>
+                    <button className="btn primary" onClick={() => saveMcp(mcpEdit)}>Save server</button>
+                  </div>
+                </div>
+              )}
+              <div className="fn-list">
+                {mcpServers.length === 0 && !mcpEdit && <div className="muted-note">No MCP servers yet.</div>}
+                {mcpServers.map(sv => (
+                  <div key={sv.id} className="fn-card">
+                    <div className="fn-card-main">
+                      <div className="fn-card-title">
+                        <Plug style={{ width: 15 }} /> {sv.name}
+                        <span className={'mcp-status ' + (sv.status || 'new')}>{sv.status === 'connected' ? `${(sv.tools || []).length} tool${(sv.tools || []).length === 1 ? '' : 's'}` : sv.status === 'error' ? 'error' : 'not connected'}</span>
+                      </div>
+                      <div className="fn-card-desc">
+                        {sv.transport === 'http' ? sv.url : `${sv.command} ${sv.args || ''}`.trim()}
+                        {sv.status === 'error' && sv.error ? ` — ${sv.error}` : ''}
+                        {sv.status === 'connected' && (sv.tools || []).length ? ` — ${(sv.tools || []).map(t => t.name).slice(0, 6).join(', ')}${(sv.tools || []).length > 6 ? '…' : ''}` : ''}
+                      </div>
+                    </div>
+                    <div className="fn-card-actions">
+                      <button className="icon-btn" title="Reconnect and refresh tools" disabled={mcpBusy === sv.id} onClick={() => refreshMcp(sv.id)}><Refresh style={{ width: 15, opacity: mcpBusy === sv.id ? .4 : 1 }} /></button>
+                      <div className={'switch' + (sv.enabled ? ' on' : '')} title="Enabled" onClick={() => toggleMcp(sv)} />
+                      <button className="icon-btn" onClick={() => setMcpEdit({ ...sv })}><Pencil style={{ width: 15 }} /></button>
+                      <button className="icon-btn" onClick={() => deleteMcp(sv.id)}><Trash style={{ width: 15 }} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {tab === 'feedback' && (
+            <>
+              <div className="admin-section-head">
+                <div><div className="muted-note">Ratings users left on assistant responses. Use them to spot weak prompts, tune the safety model, or compare models.</div></div>
+                <div className="fb-totals">
+                  <span className="fb-total up"><ThumbUp style={{ width: 14 }} /> {fbCounts.up}</span>
+                  <span className="fb-total down"><ThumbDown style={{ width: 14 }} /> {fbCounts.down}</span>
+                </div>
+              </div>
+              <div className="fn-list">
+                {fbRows == null && <div className="muted-note">Loading…</div>}
+                {fbRows != null && fbRows.length === 0 && <div className="muted-note">No feedback yet.</div>}
+                {(fbRows || []).map(f => (
+                  <div key={f.id} className="fn-card fb-card">
+                    <div className={'fb-rating ' + (f.rating === 1 ? 'up' : 'down')}>{f.rating === 1 ? <ThumbUp style={{ width: 15 }} /> : <ThumbDown style={{ width: 15 }} />}</div>
+                    <div className="fn-card-main">
+                      <div className="fn-card-title">{f.user} <span className="muted-note" style={{ display: 'inline' }}>· {f.model} · {new Date(f.ts).toLocaleString()}</span></div>
+                      <div className="fn-card-desc">{f.snippet || '(empty response)'}</div>
+                      {f.comment && <div className="fn-card-desc" style={{ fontStyle: 'italic' }}>“{f.comment}”</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="editor-actions" style={{ justifyContent: 'flex-start' }}>
+                <button className="btn" disabled={fbOffset === 0} onClick={() => loadFeedback(Math.max(0, fbOffset - 50))}>Newer</button>
+                <button className="btn" disabled={(fbRows || []).length < 50} onClick={() => loadFeedback(fbOffset + 50)}>Older</button>
+              </div>
             </>
           )}
           {tab === 'limits' && (

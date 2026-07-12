@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { api } from '../api.js';
 import { applyPrefs, ACCENT_PRESETS } from '../prefs.js';
-import { Sun, Moon, Gear, Sliders, Info, Chevron, Clock, Download, Upload, Shield, Trash } from './icons.jsx';
+import { Sun, Moon, Gear, Sliders, Info, Chevron, Clock, Download, Upload, Shield, Trash, Brain, Refresh } from './icons.jsx';
 import Markdown from './Markdown.jsx';
 
 function Toggle({ prefs, setPref, k, label, desc }) {
@@ -152,6 +152,30 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
   }
 
   function setPref(k, v) { setPrefs(p => { const next = { ...p, [k]: v }; applyPrefs(next); scheduleSave(name, next); return next; }); }
+  const [memory, setMemory] = useState(user.memory || '');
+  const [memBusy, setMemBusy] = useState(false);
+  const memTimer = useRef(null);
+  function changeMemory(v) {
+    setMemory(v);
+    clearTimeout(memTimer.current);
+    memTimer.current = setTimeout(async () => {
+      try { await api.put('/api/me/memory', { memory: v }); onUpdated?.({ ...user, memory: v }); } catch {}
+    }, 700);
+  }
+  async function refreshMemory() {
+    if (memBusy) return;
+    setMemBusy(true);
+    try {
+      const modelId = user?.prefs?.lastModelId || '';
+      const r = await api.post('/api/me/memory/refresh', { modelId });
+      setMemory(r.memory || '');
+      onUpdated?.({ ...user, memory: r.memory || '' });
+    } catch (e) { alert(e.message || 'Could not update memory.'); }
+    setMemBusy(false);
+  }
+  async function clearMemory() {
+    try { await api.del('/api/me/memory'); setMemory(''); onUpdated?.({ ...user, memory: '' }); } catch {}
+  }
 
   return (
     <div className="overlay" onMouseDown={(e) => e.target.classList.contains('overlay') && onClose()}>
@@ -170,6 +194,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
           <button className={'modal-tab' + (tab === 'appearance' ? ' active' : '')} onClick={() => setTab('appearance')}><Sun /> Appearance</button>
           <button className={'modal-tab' + (tab === 'chat' ? ' active' : '')} onClick={() => setTab('chat')}><Sliders /> Chat</button>
           <div className="ms-group">Insights</div>
+          {cfg?.memoryFeature && <button className={'modal-tab' + (tab === 'memory' ? ' active' : '')} onClick={() => setTab('memory')}><Brain /> Memory</button>}
           <button className={'modal-tab' + (tab === 'usage' ? ' active' : '')} onClick={() => setTab('usage')}><Clock /> Usage</button>
         </div>
         <div className="modal-main">
@@ -232,6 +257,31 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                     </div>
                   ))}
                 </div>
+            </>
+          )}
+          {tab === 'memory' && (
+            <>
+              <h2>Memory</h2>
+              <div className="hint">The assistant keeps a short, editable memory about you, built from your recent chats. It is stored locally and only used when memory is on.</div>
+              <div className="field row">
+                <div><label>Use memory in chats</label><div className="muted-note">When on, the memory below is added to the system prompt of every conversation and refreshed periodically in the background.</div></div>
+                <div className={'switch' + (prefs.memoryEnabled !== false ? ' on' : '')} onClick={() => setPref('memoryEnabled', prefs.memoryEnabled === false)} />
+              </div>
+              <div className="field">
+                <label>What the assistant remembers</label>
+                <textarea className="instr-area" value={memory} maxLength={6000} rows={9}
+                  placeholder="Nothing yet. Chat a bit, then press Update now — or write anything you want remembered."
+                  onChange={(e) => changeMemory(e.target.value)} />
+                <div className="muted-note" style={{ textAlign: 'right' }}>{memory.length}/6000</div>
+              </div>
+              <div className="field row">
+                <div><label>Update from recent chats</label><div className="muted-note">Asks the current model to refresh this memory from your latest conversations.</div></div>
+                <button className="btn ghost" disabled={memBusy} onClick={refreshMemory}><Refresh style={{ width: 14, verticalAlign: '-2px' }} /> {memBusy ? 'Updating…' : 'Update now'}</button>
+              </div>
+              <div className="field row">
+                <div><label>Forget everything</label><div className="muted-note">Clears the memory. It may be rebuilt from future chats while memory is on.</div></div>
+                <button className="btn ghost danger" onClick={clearMemory}><Trash style={{ width: 14, verticalAlign: '-2px' }} /> Clear</button>
+              </div>
             </>
           )}
           {tab === 'version' && (() => {

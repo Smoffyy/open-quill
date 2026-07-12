@@ -250,3 +250,16 @@
 .bulk-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
 .bulk-chip { font-size: 12px; font-weight: 500; color: var(--text-muted); background: var(--input-bg); border: 1px solid var(--border-soft); border-radius: 999px; padding: 3px 11px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bulk-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.mcp-status { margin-left: 8px; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: .04em; }
+.mcp-status.connected { color: #4caf7d; background: color-mix(in srgb, #4caf7d 14%, transparent); }
+.mcp-status.error { color: #d9534f; background: color-mix(in srgb, #d9534f 14%, transparent); }
+.mcp-status.new { color: var(--text-muted); background: var(--hover); }
+.fb-totals { display: flex; gap: 10px; align-items: center; }
+.fb-total { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; padding: 5px 11px; border-radius: 20px; }
+.fb-total.up { color: #4caf7d; background: color-mix(in srgb, #4caf7d 12%, transparent); }
+.fb-total.down { color: #d9534f; background: color-mix(in srgb, #d9534f 12%, transparent); }
+.fb-card { align-items: flex-start; }
+.fb-rating { flex-shrink: 0; width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; margin-right: 4px; }
+.fb-rating.up { color: #4caf7d; background: color-mix(in srgb, #4caf7d 12%, transparent); }
+.fb-rating.down { color: #d9534f; background: color-mix(in srgb, #d9534f 12%, transparent); }
