@@ -265,6 +265,8 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 [data-cursor="circle"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after {
   content: ''; display: inline-block; vertical-align: -2px; margin-left: 3px;
 }
+[data-cursor="block"] .assistant-body.streaming.thinking > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after,
+[data-cursor="circle"] .assistant-body.streaming.thinking > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { content: none; }
 [data-cursor="block"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { width: 12px; height: 1.05em; border-radius: 2.5px; vertical-align: -3px; background: var(--accent); animation-name: caretHard; animation-duration: var(--caret-cycle, 1000ms); animation-timing-function: steps(1); animation-iteration-count: infinite; }
 [data-cursor="circle"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { width: 0.75em; height: 0.75em; border-radius: 50%; background: var(--accent); animation-name: caretPulse; animation-duration: var(--caret-pulse, 1000ms); animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
 [data-cursor="block"] .assistant-body.streaming.typing > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { animation: caretSoft 0.9s ease-in-out infinite; }

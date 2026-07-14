@@ -203,7 +203,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
       {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> Pinned</div>}
       <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} collapsible={model?.reasoningCollapsible !== false} />
       {(msg.content || streaming) && (
-        <div className={'assistant-body' + (streaming ? ' streaming' : '') + (streaming && typing ? ' typing' : '')}>
+        <div className={'assistant-body' + (streaming ? ' streaming' : '') + (streaming && typing ? ' typing' : '') + (streaming && phase === 'thinking' ? ' thinking' : '')}>
           {msg.content ? <Markdown streaming={streaming}>{msg.content}</Markdown> : null}
           {streaming && liveCall && liveCall.tool && (
             <div className="tool-live"><ToolCard call={liveCall} result={null} /></div>

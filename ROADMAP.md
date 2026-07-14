@@ -24,6 +24,13 @@ This roadmap outlines the planned direction of the project. Priorities may shift
 
 * [X] Safety model, adds an option to enable a safety check, making the currently active model output either "Yes" or "No" based on the inputted text, allowing the model to then answer the question.
 
+* [X] When "Show reasoning to users" is disabled, the "Thinking..." status doesnt shimmer, and if the user has the cursor enabled it must not show the cursor until the model stops thinking, then it will show the cursor.
+
+* [ ] Create 2 presets, Anthropic preset, OpenAI preset. The OpenAI preset will arrage and reshape all icons to match OpenAI theme, same goes for anthropic. OpenAI theme will have circle cursor on by default unless overriden by user. When the first admin logs in, theyre given the choice of choosing between Anthropic or OpenAI theming. The OpenAI theme will have the Compact density between messages by default. Whenever openAI theme is enabled all models created by default will use icon size of 28px, show model name, as well as having "Left of text" logo position by default, as well as the "Static", "Generating", and "Thinking" will all NOT have any animation, meaning all those values by default will be "No motion". "Show logo in picker" will be off by default in OpenAI theming. OpenAI themeing will use Open Sans for all the Typographgy and footer by default everywhere.
+
+* [ ] Fully refactor admin panel to be organized better overall.
+
+* [ ] Localization, adding other languages support.
 
 ---
 
