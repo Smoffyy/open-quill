@@ -36,7 +36,7 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .sidebar { transition: width .22s cubic-bezier(.4, 0, .2, 1); }
 
 /* model dropdown option icon */
-.model-opt .mo-icon { width: 22px; height: 22px; border-radius: 5px; object-fit: contain; flex: none; margin-top: 1px; }
+.model-opt .mo-icon { width: 20px; height: 20px; border-radius: 5px; object-fit: contain; flex: none; margin-top: 0; }
 
 /* admin sampling parameters grid */
 .sampling-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 12px; }

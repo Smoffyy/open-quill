@@ -141,13 +141,11 @@
 button { transition: transform .12s ease, background .15s ease, color .15s ease, opacity .15s ease, border-color .15s ease; }
 .icon-btn:hover, .action-btn:hover { transform: translateY(-1px); }
 .icon-btn:active, .action-btn:active, .plus:active, .mic:active, .row-menu:active { transform: scale(.88); }
-.nav-item { transition: background .15s ease, transform .12s ease, color .15s ease; }
-.nav-item:hover { transform: translateX(2px); }
+.nav-item { transition: background .15s ease, color .15s ease; }
 .chip:hover { transform: translateY(-2px); }
 .send:not(:disabled):active { transform: scale(.9); }
 .btn:active { transform: translateY(1px); }
-.chat-row { transition: background .15s ease, color .15s ease, transform .12s ease; }
-.chat-row:hover { transform: translateX(2px); }
+.chat-row { transition: background .15s ease, color .15s ease; }
 .model-trigger:active, .share-btn:active { transform: scale(.96); }
 .code-copy:active { transform: scale(.9); }
 .to-bottom { transition: transform .15s ease, background .15s ease; }

@@ -52,17 +52,18 @@ function MoreGroup({ label, items, renderOpt }) {
     const above = rr.bottom;
     const flip = below < subH + 14 && above > below;
     const avail = (flip ? above : below) - 16;
-    setPlace({ up: flip, maxH: subH > avail ? Math.max(140, avail) : 0 });
+    const flipLeft = rr.right + 4 + sub.offsetWidth > window.innerWidth - 8;
+    setPlace({ up: flip, maxH: subH > avail ? Math.max(140, avail) : 0, left: flipLeft });
   }, [open]);
   const show = () => { clearTimeout(timer.current); setOpen(true); };
   const hide = () => { clearTimeout(timer.current); timer.current = setTimeout(() => setOpen(false), 160); };
   return (
     <div className="more-wrap" ref={rowRef} onMouseEnter={show} onMouseLeave={hide}>
       <button className={'submenu-row' + (open ? ' active' : '')} onClick={() => (open ? hide() : show())}>
-        <span>{label}</span><Chevron style={{ width: 15 }} />
+        <span>{label}</span><Chevron className="sub-chev" />
       </button>
       {open && (
-        <div ref={subRef} className={'model-submenu' + (place.up ? ' up' : '')} style={place.maxH ? { maxHeight: place.maxH, overflowY: 'auto' } : undefined} onMouseEnter={show} onMouseLeave={hide}>
+        <div ref={subRef} className={'model-submenu' + (place.up ? ' up' : '') + (place.left ? ' left' : '')} style={place.maxH ? { maxHeight: place.maxH, overflowY: 'auto' } : undefined} onMouseEnter={show} onMouseLeave={hide}>
           {items.map(renderOpt)}
         </div>
       )}
@@ -128,7 +129,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
       <button className="model-trigger" onClick={() => setOpen(o => !o)}>
         {current?.displayName || 'Model'}
         {extended && current?.hasReasoning && <span className="ext">Extended</span>}
-        <ChevDown style={{ width: 15, height: 15 }} />
+        <ChevDown style={{ width: 16, height: 16 }} />
       </button>
       {open && <div className="model-scrim" onClick={() => setOpen(false)} />}
       {open && (

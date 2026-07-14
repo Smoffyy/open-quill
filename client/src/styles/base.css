@@ -19,9 +19,20 @@
   --card-bg: #232220;
   --hover-soft: #ffffff14;
   --hover-mid: #ffffff1f;
+  --hover: var(--hover-soft);
   --font-serif: 'Source Serif 4 Variable', 'Source Serif 4', Georgia, serif;
   --font-sans: 'Open Sans', system-ui, sans-serif;
   --radius: 14px;
+  --pop-bg: #383835;
+  --pop-border: rgba(255, 255, 255, .10);
+  --pop-hover: #42423f;
+  --pop-divider: rgba(255, 255, 255, .10);
+  --pop-text: #ffffff;
+  --pop-muted: rgba(255, 255, 255, .47);
+  --pop-faint: rgba(255, 255, 255, .45);
+  --pop-blue: #2a78d6;
+  --pop-switch: rgba(255, 255, 255, .2);
+  --pop-shadow: 0 4px 14px rgba(0, 0, 0, .25), 0 12px 32px rgba(0, 0, 0, .3);
 }
 
 :root[data-theme="light"] {
@@ -45,6 +56,16 @@
   --card-bg: #f3f3f3;
   --hover-soft: #00000010;
   --hover-mid: #0000001c;
+  --pop-bg: #ffffff;
+  --pop-border: rgba(0, 0, 0, .08);
+  --pop-hover: rgba(0, 0, 0, .05);
+  --pop-divider: rgba(0, 0, 0, .08);
+  --pop-text: #1a1915;
+  --pop-muted: rgba(26, 25, 21, .58);
+  --pop-faint: rgba(26, 25, 21, .5);
+  --pop-blue: #2a78d6;
+  --pop-switch: rgba(0, 0, 0, .16);
+  --pop-shadow: 0 4px 14px rgba(0, 0, 0, .1), 0 12px 32px rgba(0, 0, 0, .12);
 }
 :root[data-theme="light"] .code-wrap { background: #1f1f1d; }
 
@@ -98,6 +119,10 @@
   --sidebar-text: rgba(255,255,255,.6);
   --sidebar-icon: #f3f3f3;
   --model-name: #ffffff;
+  --pop-bg: #161616;
+  --pop-hover: #212121;
+  --pop-border: rgba(255, 255, 255, .10);
+  --pop-divider: rgba(255, 255, 255, .10);
 }
 :root[data-theme="oled"] .code-wrap { background: #050505; }
 /* anthropic: sidebar saved-chat + label text */
@@ -133,9 +158,8 @@
 :root[data-theme="anthropic"] .sidebar .icon-btn,
 :root[data-theme="anthropic"] .folder-head svg { color: var(--sidebar-icon); }
 /* anthropic: model name + description in the dropdown */
-:root[data-theme="anthropic"] .model-trigger,
-:root[data-theme="anthropic"] .mo-name { color: var(--model-name); }
-:root[data-theme="anthropic"] .mo-desc { color: #fefefe; opacity: .55; }
+:root[data-theme="anthropic"] .model-trigger { color: var(--model-name); }
+:root[data-theme="anthropic"] .mo-desc { color: var(--pop-muted); opacity: 1; }
 :root[data-theme="anthropic"] .model-trigger .ext { color: rgba(255,255,255,.5); }
 :root[data-theme="anthropic"] .quick-prompt { background: #313130; }
 /* anthropic: disabled model banner */
