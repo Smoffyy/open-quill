@@ -251,6 +251,7 @@ export default function App() {
   const assistantIdRef = useRef(null);
   const revealTimer = useRef(null);
   const followRaf = useRef(0);
+  const followTs = useRef(0);
   const dispLen = useRef(0);
   const scrollRef = useRef(null);
   const stick = useRef(true);
@@ -615,10 +616,17 @@ export default function App() {
 
   function follow() {
     const el = scrollRef.current;
+    const now = performance.now();
+    const dt = Math.min(80, now - (followTs.current || now));
+    followTs.current = now;
     if (el && stick.current && !selectingRef.current && !hasSelectionRef.current) {
       const target = el.scrollHeight - el.clientHeight;
       const diff = target - el.scrollTop;
-      if (diff > 0.5) { programmatic.current = true; el.scrollTop = el.scrollTop + Math.max(1, diff * 0.2); }
+      if (diff > 0.5) {
+        programmatic.current = true;
+        const k = 1 - Math.exp(-dt / 85);
+        el.scrollTop = el.scrollTop + Math.max(1, diff * k);
+      }
     }
     followRaf.current = requestAnimationFrame(follow);
   }

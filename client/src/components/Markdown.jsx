@@ -160,11 +160,59 @@ const MarkdownBlock = React.memo(function MarkdownBlock({ text }) {
   );
 });
 
-function Markdown({ children }) {
+function autoCloseMath(text) {
+  let inFence = false, inCode = false, mode = 0, openIdx = -1;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inFence) { if (c === '`' && text.slice(i, i + 3) === '```') { inFence = false; i += 2; } continue; }
+    if (inCode) { if (c === '`') inCode = false; continue; }
+    if (c === '`') { if (text.slice(i, i + 3) === '```') { inFence = true; i += 2; } else inCode = true; continue; }
+    if (c === '\\') { i++; continue; }
+    if (c !== '$') continue;
+    if (text[i + 1] === '$') { if (mode === 2) mode = 0; else if (mode === 0) { mode = 2; openIdx = i + 2; } i++; continue; }
+    if (mode === 1) mode = 0; else if (mode === 0) { mode = 1; openIdx = i + 1; }
+  }
+  if (!mode || inFence || inCode) return text;
+  let out = text.replace(/\\[a-zA-Z]+$/, '');
+  const seg = out.slice(openIdx);
+  let braces = 0, lefts = 0;
+  for (let i = 0; i < seg.length; i++) {
+    const c = seg[i];
+    if (c === '\\') {
+      if (seg.slice(i, i + 5) === '\\left') { lefts++; i += 4; }
+      else if (seg.slice(i, i + 6) === '\\right') { lefts = Math.max(0, lefts - 1); i += 5; }
+      else i++;
+      continue;
+    }
+    if (c === '{') braces++;
+    else if (c === '}') braces = Math.max(0, braces - 1);
+  }
+  out = out.replace(/[_^]$/, '');
+  out += '}'.repeat(braces) + '\\right.'.repeat(lefts) + (mode === 2 ? '$$' : '$');
+  return out;
+}
+
+function Markdown({ children, streaming }) {
+  const held = React.useRef({ src: '', out: '', at: 0 });
   if (typeof children !== 'string') {
     return <MarkdownBlock text={children} />;
   }
-  const text = transformTools(children);
+  let text = transformTools(children);
+  if (streaming) {
+    const closed = autoCloseMath(text);
+    if (closed === text) {
+      held.current = { src: '', out: '', at: 0 };
+    } else {
+      const now = performance.now();
+      const h = held.current;
+      if (h.out && text.startsWith(h.src) && now - h.at < 120) {
+        text = h.out;
+      } else {
+        held.current = { src: text, out: closed, at: now };
+        text = closed;
+      }
+    }
+  }
   const blocks = blockify(text);
   return blocks.map((b, i) => <MarkdownBlock key={i} text={b} />);
 }

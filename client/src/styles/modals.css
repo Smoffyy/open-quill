@@ -104,8 +104,8 @@
 .think-dot { width: 16px; height: 16px; }
 .btn { padding: 9px 16px; border-radius: 9px; font-size: 14px; font-family: var(--font-sans); background: var(--surface-2); transition: background .15s; }
 .btn:hover { background: var(--surface-hover); }
-.btn.primary { background: var(--accent); color: #fff; font-weight: 600; }
-.btn.primary:hover { background: #c9663f; }
+.btn.primary { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.btn.primary:hover { background: color-mix(in srgb, var(--accent) 86%, var(--on-accent)); }
 .btn.danger { color: #e06a52; }
 .btn.danger:hover { background: #e06a5222; }
 .btn-row { display: flex; gap: 10px; margin-top: 8px; }
@@ -176,7 +176,7 @@ button { transition: transform .12s ease, background .15s ease, color .15s ease,
 .user-row .u-main { flex: 1; min-width: 0; }
 .user-row .u-name { font-size: 14.5px; display: flex; align-items: center; gap: 8px; }
 .user-row .u-email { font-size: 12.5px; color: var(--text-muted); }
-.badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: var(--accent); color: #fff; font-weight: 600; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: var(--accent); color: var(--on-accent); font-weight: 600; }
 .you-tag { font-size: 11px; color: var(--text-faint); }
 
 /* ---------- customization ---------- */

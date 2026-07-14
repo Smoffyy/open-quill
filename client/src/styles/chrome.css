@@ -20,8 +20,8 @@
 .login-box .lbl { font-size: 14px; color: #57564f; margin-bottom: 12px; font-family: var(--font-sans); }
 .login input { width: 100%; padding: 12px 14px; border: 1px solid #d6d4c8; border-radius: 9px; font-size: 15px; background: #fff; outline: none; font-family: var(--font-sans); margin-bottom: 10px; }
 .login input:focus { border-color: var(--accent); }
-.login .primary { width: 100%; padding: 12px; background: var(--accent); color: #fff; border-radius: 9px; font-size: 15px; font-family: var(--font-sans); font-weight: 600; transition: background .15s; }
-.login .primary:hover { background: #c9663f; }
+.login .primary { width: 100%; padding: 12px; background: var(--accent); color: var(--on-accent); border-radius: 9px; font-size: 15px; font-family: var(--font-sans); font-weight: 600; transition: background .15s; }
+.login .primary:hover { background: color-mix(in srgb, var(--accent) 86%, var(--on-accent)); }
 .login .back { margin-top: 12px; font-size: 13px; color: #6f6e66; font-family: var(--font-sans); }
 .login .err { color: #c0392b; font-size: 13px; margin-bottom: 10px; font-family: var(--font-sans); }
 .login .sub { margin-top: 26px; font-size: 15px; color: #57564f; }
