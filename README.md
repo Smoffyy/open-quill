@@ -1,4 +1,4 @@
-# open-quill
+# Open Quill
 
 A fully local chat UI for OpenAI-compatible model servers, inspired by Anthropic’s design and enhanced with additional features all running entirely on your machine!
 

@@ -1,6 +1,6 @@
 {
   "name": "open-quill-server",
-  "version": "2027.0.0-cascade.17",
+  "version": "27.0.0-cascade.18",
   "private": true,
   "type": "module",
   "main": "index.js",
@@ -16,6 +16,6 @@
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.2.0",
     "pdfjs-dist": "^6.1.200",
-    "ws": "^8.21.0"
+    "ws": "^8.21.1"
   }
 }
