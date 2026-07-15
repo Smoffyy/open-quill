@@ -158,6 +158,7 @@ export default function App() {
   const [models, setModels] = useState([]);
   const [currentId, setCurrentId] = useState(null);
   const [extended, setExtended] = useState(false);
+  const [reasoningEffort, setReasoningEffort] = useState('');
   const [bgVisible, setBgVisible] = useState(false);
   const [chats, setChats] = useState([]);
   const [folders, setFolders] = useState([]);
@@ -274,6 +275,12 @@ export default function App() {
   const refreshSeq = useRef(0);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
   useEffect(() => { liveRef.current = liveFile; }, [liveFile]);
+  useEffect(() => {
+    const m = models.find(x => x.id === currentId);
+    if (!m || !m.effortEnabled) return;
+    const levels = (m.effortLevels && m.effortLevels.length) ? m.effortLevels : ['low', 'medium', 'high'];
+    setReasoningEffort(prev => levels.includes(prev) ? prev : (levels.includes(m.effortDefault) ? m.effortDefault : (levels[Math.floor(levels.length / 2)] || levels[0])));
+  }, [currentId, models]);
   useEffect(() => {
     const active = computeActiveBg(models, currentId, activeId, messages.length, incognito, user?.prefs);
     if (active) { setBgVisible(true); return; }
@@ -590,7 +597,7 @@ export default function App() {
           if (!cmp.messageId && m.messageId) cmp.messageId = m.messageId;
           const nextId = cmp.remaining.shift();
           if (nextId && cmp.messageId) {
-            (() => { const g = genOptsRef.current; setTimeout(() => wsSend({ type: 'regenerate', chatId: cmp.chatId, modelId: nextId, extended: g.extended, messageId: cmp.messageId, sandbox: g.sandbox, webSearch: g.webSearch, styleId: g.styleId }), 150); })();
+            (() => { const g = genOptsRef.current; setTimeout(() => wsSend({ type: 'regenerate', chatId: cmp.chatId, modelId: nextId, extended: g.extended, reasoningEffort: g.reasoningEffort, messageId: cmp.messageId, sandbox: g.sandbox, webSearch: g.webSearch, styleId: g.styleId }), 150); })();
           } else {
             compareRef.current = null;
             toast('Model comparison ready — use the version arrows or compare button on the response.', { duration: 6000 });
@@ -965,7 +972,7 @@ export default function App() {
         .filter(m => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
         .map(m => ({ role: m.role, content: m.content })),
         { role: 'user', content: text }];
-      if (!wsSend({ type: 'incognito', modelId: currentId, extended, messages: history })) return;
+      if (!wsSend({ type: 'incognito', modelId: currentId, extended, reasoningEffort, messages: history })) return;
       gen.current.set('incognito', { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
       setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments: [], _enter: true }]);
       setInput('');
@@ -982,7 +989,7 @@ export default function App() {
     }
     if (compareRef.current && !compareRef.current.chatId) compareRef.current.chatId = chatId;
     clearDraft(activeId);
-    if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, content: text, attachments, sandbox, webSearch, call: !!opts.call, styleId })) return;
+    if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, reasoningEffort, content: text, attachments, sandbox, webSearch, call: !!opts.call, styleId })) return;
     gen.current.set(chatId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
     setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     if (!opts.call) setInput('');
@@ -1000,7 +1007,7 @@ export default function App() {
     setActiveId(c.id); setMessages([]); setInput('');
     setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
     history.pushState({}, '', '/chat/' + c.id);
-    if (!wsSend({ type: 'chat', chatId: c.id, modelId: currentId, extended, content: text, attachments, sandbox, webSearch, styleId })) return;
+    if (!wsSend({ type: 'chat', chatId: c.id, modelId: currentId, extended, reasoningEffort, content: text, attachments, sandbox, webSearch, styleId })) return;
     gen.current.set(c.id, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
     setMessages([{ id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
@@ -1027,30 +1034,30 @@ export default function App() {
 
   const regenerate = useCallback((messageId) => {
     if (streaming || !activeId || !currentId) return;
-    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, messageId, sandbox, webSearch, styleId })) return;
+    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, reasoningEffort, messageId, sandbox, webSearch, styleId })) return;
     gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
-  }, [streaming, activeId, currentId, extended, sandbox, webSearch]);
+  }, [streaming, activeId, currentId, extended, reasoningEffort, sandbox, webSearch]);
 
   const regenerateWith = useCallback((messageId, modelId) => {
     if (streaming || !activeId || !modelId) return;
     setCurrentId(modelId);
-    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId, extended, messageId, sandbox, webSearch, styleId })) return;
+    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId, extended, reasoningEffort, messageId, sandbox, webSearch, styleId })) return;
     gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: modelId, live: null });
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
     const mm = models.find(m => m.id === modelId);
     if (mm) toast('Retrying with ' + mm.displayName, { icon: 'check' });
-  }, [streaming, activeId, extended, sandbox, webSearch, models]);
+  }, [streaming, activeId, extended, reasoningEffort, sandbox, webSearch, models]);
 
   const editMessage = useCallback((messageId, newContent) => {
     if (streaming || !activeId || !currentId) return;
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); if (idx === -1) return ms; const copy = ms.slice(0, idx + 1); copy[idx] = { ...copy[idx], content: newContent }; return copy; });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
-    if (!wsSend({ type: 'edit', chatId: activeId, modelId: currentId, extended, messageId, content: newContent, sandbox, webSearch, styleId })) return;
+    if (!wsSend({ type: 'edit', chatId: activeId, modelId: currentId, extended, reasoningEffort, messageId, content: newContent, sandbox, webSearch, styleId })) return;
     gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
-  }, [streaming, activeId, currentId, extended, sandbox, webSearch]);
+  }, [streaming, activeId, currentId, extended, reasoningEffort, sandbox, webSearch]);
 
   function stop() { const key = activeKey(); try { ws.current?.readyState === 1 && ws.current.send(JSON.stringify({ type: 'stop', chatId: key })); } catch {} pendingDone.current = true; setQueued(false); }
   async function logout() { await api.post('/api/auth/logout'); location.href = '/'; }
@@ -1073,7 +1080,7 @@ export default function App() {
   const modelHasBg = !incognito && !!(model?.bgEnabled && model?.bgImage);
   const activeBg = computeActiveBg(models, currentId, activeId, messages.length, incognito, user?.prefs);
   sendRef.current = send;
-  genOptsRef.current = { extended, sandbox, webSearch, styleId };
+  genOptsRef.current = { extended, reasoningEffort, sandbox, webSearch, styleId };
   const composerProps = {
     value: input, onChange: (v) => { if (safetyFlagged) { setSafetyFlagged(false); setSafetyReason(''); } setInput(v); saveDraft(activeId, v); }, onSend: send, onStop: stop, streaming: streaming || queued,
     queuedMsg, onQueue: (t) => { queuedRef.current = t; setQueuedMsg(t); }, onCancelQueue: () => { queuedRef.current = ''; setQueuedMsg(''); },
@@ -1084,6 +1091,7 @@ export default function App() {
     conversationEnded: chatEnded, endedReason: chatEndedReason,
     hideModelPicker: cfg.uiPreset === 'openai',
     models, currentId, onSelect: setCurrentId, extended, onToggleExtended: () => setExtended(e => !e),
+    reasoningEffort, onSetEffort: setReasoningEffort,
     visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin, budget,
     modelHasBg, bgInChat, onToggleBgInChat: () => updatePref('modelBgInChat', !bgInChat),
     sandbox: sandboxOn, sandboxAllowed, onToggleSandbox: () => { if (sandboxAllowed) setSandbox(s => !s); },
@@ -1151,7 +1159,7 @@ export default function App() {
         {empty && !incognito && cfg.uiPreset === 'openai' && (
           <div className="home-topbar">
             <div className="topbar-model">
-              <ModelDropdown models={models} currentId={currentId} onSelect={setCurrentId} extended={extended} onToggleExtended={() => setExtended(e => !e)} canUseUnavailable={!!user?.isAdmin} up={false} />
+              <ModelDropdown models={models} currentId={currentId} onSelect={setCurrentId} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} canUseUnavailable={!!user?.isAdmin} up={false} />
             </div>
           </div>
         )}
@@ -1188,7 +1196,7 @@ export default function App() {
             <div className="topbar">
               {cfg.uiPreset === 'openai' && (
                 <div className="topbar-model">
-                  <ModelDropdown models={models} currentId={currentId} onSelect={setCurrentId} extended={extended} onToggleExtended={() => setExtended(e => !e)} canUseUnavailable={!!user?.isAdmin} up={false} />
+                  <ModelDropdown models={models} currentId={currentId} onSelect={setCurrentId} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} canUseUnavailable={!!user?.isAdmin} up={false} />
                 </div>
               )}
               <button className="mobile-menu-btn" onClick={() => setMobileDrawer(true)} title="Menu"><Menu style={{ width: 20 }} /></button>

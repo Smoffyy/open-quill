@@ -257,6 +257,9 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
   const [preset, setPreset] = useState(null);
   const bgRef = useRef(null);
   const set = (k, v) => onChange({ ...m, [k]: v });
+  const effortLevelsArr = (Array.isArray(m.effort_levels) ? m.effort_levels : String(m.effort_levels ?? 'low, medium, high').split(',')).map(s => String(s).trim().toLowerCase()).filter(Boolean);
+  const effortLevelsStr = Array.isArray(m.effort_levels) ? m.effort_levels.join(', ') : (m.effort_levels ?? 'low, medium, high');
+  const effortIsBool = effortLevelsArr.length === 2 && effortLevelsArr.includes('true') && effortLevelsArr.includes('false');
   useEffect(() => {
     let alive = true;
     const name = (m.internal_name || '').trim();
@@ -363,17 +366,38 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
           <div className="me2-pane">
             <div className="me2-group-label first">Reasoning</div>
             <div className="me2-toggle-card">
-              <Toggle m={m} set={set} k="has_reasoning" label="Extended thinking" note="Adds the Extended toggle so users can request deeper reasoning." />
+              <Toggle m={m} set={set} k="effort_enabled" label="Thinking control" note="Shows a thinking control in the model picker and passes the choice via chat_template_kwargs each turn. Use several values for a slider, or true/false for an on-off toggle." />
             </div>
-            {!!m.has_reasoning && <>
-              <div className="me2-group-label">Mode triggers</div>
+            {!!m.effort_enabled && <>
+              <div className="field"><label>Values</label>
+                <input value={effortLevelsStr} onChange={(e) => set('effort_levels', e.target.value)} placeholder="low, medium, high" /></div>
+              <div className="muted-note">Comma-separated. {effortIsBool
+                ? 'On/off values detected — users get an Extended Thinking toggle.'
+                : 'Ordered lowest to highest — users get a slider through these stops.'}</div>
               <div className="two-col">
-                <div className="field"><label>Extended-mode trigger</label>
-                  <input value={m.reasoning_token || ''} onChange={(e) => set('reasoning_token', e.target.value)} placeholder="/think" /></div>
-                <div className="field"><label>Standard-mode trigger</label>
-                  <input value={m.non_reasoning_token || ''} onChange={(e) => set('non_reasoning_token', e.target.value)} placeholder="/no_think" /></div>
+                <div className="field"><label>Default</label>
+                  <select value={effortLevelsArr.includes(m.effort_default) ? m.effort_default : (effortLevelsArr[Math.floor(effortLevelsArr.length / 2)] || '')} onChange={(e) => set('effort_default', e.target.value)}>
+                    {effortLevelsArr.map(l => <option key={l} value={l}>{l}</option>)}
+                  </select></div>
+                <div className="field"><label>API kwarg name</label>
+                  <input value={m.effort_kwarg || ''} onChange={(e) => set('effort_kwarg', e.target.value)} placeholder="reasoning_effort" /></div>
               </div>
-              <div className="muted-note">Appended to the system prompt, on its own line, depending on whether the user has Extended turned on.</div>
+              <div className="muted-note">Sent as {'{ "chat_template_kwargs": { "<kwarg>": <value> } }'}. gpt-oss uses reasoning_effort with low, medium, high — Qwen uses enable_thinking with false, true.</div>
+            </>}
+            {!m.effort_enabled && <>
+              <div className="me2-toggle-card">
+                <Toggle m={m} set={set} k="has_reasoning" label="Extended thinking (prompt token)" note="For models that switch modes via a token in the system prompt. Adds the Extended toggle for users." />
+              </div>
+              {!!m.has_reasoning && <>
+                <div className="me2-group-label">Mode triggers</div>
+                <div className="two-col">
+                  <div className="field"><label>Extended-mode trigger</label>
+                    <input value={m.reasoning_token || ''} onChange={(e) => set('reasoning_token', e.target.value)} placeholder="/think" /></div>
+                  <div className="field"><label>Standard-mode trigger</label>
+                    <input value={m.non_reasoning_token || ''} onChange={(e) => set('non_reasoning_token', e.target.value)} placeholder="/no_think" /></div>
+                </div>
+                <div className="muted-note">Appended to the system prompt, on its own line, depending on whether the user has Extended turned on.</div>
+              </>}
             </>}
             <div className="me2-group-label">Reasoning tags</div>
             <div className="two-col">

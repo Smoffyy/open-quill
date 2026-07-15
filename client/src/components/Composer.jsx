@@ -72,7 +72,7 @@ export default function Composer({
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
   conversationEnded = false, endedReason = '',
   queuedMsg = '', onQueue, onCancelQueue, canContinue = false, onContinue,
-  compareIds = [], onSetCompare, hideModelPicker = false
+  compareIds = [], onSetCompare, hideModelPicker = false, reasoningEffort, onSetEffort
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
@@ -545,6 +545,7 @@ export default function Composer({
         <div className="composer-right">
           {!hideModelPicker && <ModelDropdown models={models} currentId={currentId} onSelect={onSelect}
             extended={extended} onToggleExtended={onToggleExtended} up={modelUp}
+            reasoningEffort={reasoningEffort} onSetEffort={onSetEffort}
             modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />}
           {voiceMic && (
             <button className={'mic' + (dictating ? ' rec' : '') + (transcribing ? ' busy' : '')} onClick={toggleDictation}

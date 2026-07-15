@@ -976,6 +976,7 @@ function shapePublic(m) {
   return {
     id: m.id, displayName: m.display_name, description: m.description,
     hasReasoning: !!m.has_reasoning, inMoreModels: !!m.in_more_models, moreModelsLabel: m.more_models_label,
+    effortEnabled: !!m.effort_enabled, effortLevels: (Array.isArray(m.effort_levels) && m.effort_levels.length) ? m.effort_levels : ['low', 'medium', 'high'], effortDefault: m.effort_default || '',
     reasoningCollapsible: m.reasoning_collapsible !== 0,
     staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon, generatingAnim: m.generating_anim || 'spin', thinkingAnim: m.thinking_anim || 'pulse',
     iconPosition: m.icon_position || 'below', hasVision: !!m.has_vision, iconSize: m.icon_size || 0, showName: !!m.show_name,
@@ -1037,6 +1038,7 @@ app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
     call_prompt: b.call_prompt || '',
     provider_id: b.provider_id || (getProviders()[0]?.id || null), max_tokens: parseInt(b.max_tokens) || null,
     has_reasoning: b.has_reasoning ? 1 : 0, reasoning_token: b.reasoning_token || '', non_reasoning_token: b.non_reasoning_token || '',
+    effort_enabled: b.effort_enabled ? 1 : 0, effort_levels: Array.isArray(b.effort_levels) && b.effort_levels.length ? b.effort_levels : ['low', 'medium', 'high'], effort_default: b.effort_default || 'medium', effort_kwarg: b.effort_kwarg || 'reasoning_effort',
     reasoning_collapsible: b.reasoning_collapsible === false ? 0 : 1, icon_size: parseInt(b.icon_size) || (getSetting('ui_preset', '') === 'openai' ? 28 : 0),
     show_name: 'show_name' in b ? (b.show_name ? 1 : 0) : (getSetting('ui_preset', '') === 'openai' ? 1 : 0),
     generating_anim: b.generating_anim || (getSetting('ui_preset', '') === 'openai' ? 'none' : ''),
@@ -1066,11 +1068,16 @@ app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
 app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
   const cur = db.models.byId(req.params.id);
   if (!cur) return res.status(404).json({ error: 'not found' });
-  const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'call_prompt', 'end_chat_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id', 'bg_image'];
-  const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'tools_auto', 'tools_allowed', 'show_name', 'skills_allowed', 'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'long_convo_reminder'];
+  const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'call_prompt', 'end_chat_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id', 'bg_image', 'effort_kwarg', 'effort_default'];
+  const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'tools_auto', 'tools_allowed', 'show_name', 'skills_allowed', 'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'long_convo_reminder', 'effort_enabled'];
   const patch = {};
   for (const k of str) if (k in req.body) patch[k] = req.body[k];
   for (const k of bool) if (k in req.body) patch[k] = req.body[k] ? 1 : 0;
+  if ('effort_levels' in req.body) {
+    const arr = Array.isArray(req.body.effort_levels) ? req.body.effort_levels : String(req.body.effort_levels || '').split(',');
+    const clean = arr.map(s => String(s).trim().toLowerCase()).filter(Boolean).slice(0, 8);
+    patch.effort_levels = clean.length ? clean : ['low', 'medium', 'high'];
+  }
   if ('agent_steps' in req.body) patch.agent_steps = Math.max(0, parseInt(req.body.agent_steps) || 0);
   if ('num_ctx' in req.body) patch.num_ctx = Math.max(0, parseInt(req.body.num_ctx) || 0);
   if ('recent_window' in req.body) patch.recent_window = Math.max(1, parseInt(req.body.recent_window) || 4);
@@ -1271,6 +1278,17 @@ function resolveModelOrDefault(modelId, isAdmin) {
   const snap = getSetting('published_models', null);
   const pool = (!isAdmin && Array.isArray(snap)) ? snap : db.models.all();
   return pool.filter(x => x.enabled).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))[0] || null;
+}
+
+function effortLevelsOf(model) {
+  return (Array.isArray(model.effort_levels) && model.effort_levels.length) ? model.effort_levels : ['low', 'medium', 'high'];
+}
+function applyEffort(model, requested) {
+  if (!model || !model.effort_enabled) return model;
+  const levels = effortLevelsOf(model);
+  const def = levels.includes(model.effort_default) ? model.effort_default : (levels[Math.floor(levels.length / 2)] || levels[0]);
+  const level = (typeof requested === 'string' && levels.includes(requested)) ? requested : def;
+  return { ...model, reasoning_effort_level: level, reasoning_effort_kwarg: (model.effort_kwarg || 'reasoning_effort').trim() || 'reasoning_effort' };
 }
 
 function roleLimit(key, isAdmin, fallback) {
@@ -2697,7 +2715,7 @@ wss.on('connection', (ws, req) => {
     if (msg.type === 'stop') { const c = state.aborts.get(msg.chatId); if (c) { c.abort(); state.aborts.delete(msg.chatId); } return; }
     if (msg.type === 'incognito') {
       try {
-        const model = resolveModel(msg.modelId, state.isAdmin);
+        const model = applyEffort(resolveModel(msg.modelId, state.isAdmin), msg.reasoningEffort);
         if (!model) { safeSend(JSON.stringify({ type: 'error', error: 'Invalid model.' })); safeSend(JSON.stringify({ type: 'done' })); return; }
         if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', error: (model.unavailable_reason || 'This model is currently unavailable.') })); safeSend(JSON.stringify({ type: 'done' })); return; }
         const history = (Array.isArray(msg.messages) ? msg.messages : [])
@@ -2734,7 +2752,7 @@ wss.on('connection', (ws, req) => {
     if (msg.type !== 'chat' && msg.type !== 'regenerate' && msg.type !== 'edit') return;
     try {
       const chat = db.chats.byId(msg.chatId);
-      const model = resolveModel(msg.modelId, state.isAdmin);
+      const model = applyEffort(resolveModel(msg.modelId, state.isAdmin), msg.reasoningEffort);
       if (!chat || chat.user_id !== u.id || !model) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'Invalid chat or model.' })); return; }
       if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: (model.unavailable_reason || 'This model is currently unavailable.') })); return; }
       if (chat.ended) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'This conversation was ended by the assistant and can no longer be continued.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }

@@ -110,6 +110,27 @@ function isFenceLine(line) {
   return /^\s*(`{3,}|~{3,})/.test(line);
 }
 
+function remarkBreaks() {
+  return (tree) => {
+    const walk = (node) => {
+      if (!node || !Array.isArray(node.children)) return;
+      const out = [];
+      for (const child of node.children) {
+        if (child.type === 'html' && typeof child.value === 'string' && /^(?:\s*<br\s*\/?>\s*)+$/i.test(child.value)) {
+          const count = (child.value.match(/<br\s*\/?>/gi) || []).length || 1;
+          for (let i = 0; i < count; i++) out.push({ type: 'break' });
+        } else {
+          walk(child);
+          out.push(child);
+        }
+      }
+      node.children = out;
+    };
+    walk(tree);
+    return tree;
+  };
+}
+
 function blockify(text) {
   const lines = text.split('\n');
   const blocks = [];
@@ -153,7 +174,7 @@ const mdComponents = {
 const MarkdownBlock = React.memo(function MarkdownBlock({ text }) {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath]}
+      remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
       rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}
       components={mdComponents}
     >{text}</ReactMarkdown>
