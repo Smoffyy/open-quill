@@ -4,13 +4,13 @@
   --radius: 24px;
 }
 :root[data-theme="openai"] {
-  --bg: #000000;
-  --sidebar: #000000;
-  --input-bg: #212121;
-  --user-bubble: #2b2b2b;
+  --bg: #212121;
+  --sidebar: #171717;
+  --input-bg: #2f2f2f;
+  --user-bubble: #2f2f2f;
   --surface: #212121;
   --surface-2: #2b2b2b;
-  --surface-hover: #2f2f2f;
+  --surface-hover: #424242;
   --border: #ffffff1a;
   --border-soft: #ffffff12;
   --pop-bg: #303030;
@@ -38,7 +38,7 @@
 [data-preset="openai"] .nav-item { border-radius: 10px; padding: 7px 10px; font-size: 14px; font-weight: 500; }
 [data-preset="openai"] .nav-item:hover { background: var(--surface-hover); }
 [data-preset="openai"] .chat-row { border-radius: 8px; padding: 7px 10px; font-size: 13.5px; color: var(--text); }
-:root[data-theme="openai"] .chat-row:hover, :root[data-theme="openai"] .chat-row.active { background: #1a1a1a; color: var(--text); }
+:root[data-theme="openai"] .chat-row:hover, :root[data-theme="openai"] .chat-row.active { background: #393939; color: var(--text); }
 :root[data-preset="openai"][data-theme="light"] .chat-row:hover, :root[data-preset="openai"][data-theme="light"] .chat-row.active { background: #e2e2e2; color: var(--text); }
 [data-preset="openai"] .section-label, [data-preset="openai"] .recents-label { color: var(--text); font-weight: 700; opacity: 1; font-size: 12.5px; }
 [data-preset="openai"] .recents-label:hover { color: var(--text); }
