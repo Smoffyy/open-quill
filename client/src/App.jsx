@@ -1208,7 +1208,7 @@ export default function App() {
               ) : (
                 <div className="chat-name-wrap">
                   <button className="chat-name" onClick={() => setChatMenuOpen(o => !o)}>
-                    {chats.find(c => c.id === activeId)?.title || 'New chat'} <ChevDown style={{ width: 15 }} />
+                    <span className="ct-title">{chats.find(c => c.id === activeId)?.title || 'New chat'}</span> <ChevDown style={{ width: 15 }} />
                   </button>
                   {(chatInstructions || '').trim() && <span className="chat-instr-dot" title="This chat has custom instructions" />}
                   {chatMenuOpen && activeId && (
