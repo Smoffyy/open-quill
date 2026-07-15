@@ -81,6 +81,8 @@
 }
 .model-menu.up { bottom: auto; top: 44px; transform-origin: top right; }
 .model-opt { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border-radius: 8px; width: 100%; text-align: left; transition: background .12s; }
+.model-main-list { scrollbar-width: thin; }
+.model-main-list::-webkit-scrollbar { width: 6px; }
 .model-opt:hover { background: var(--pop-hover); }
 .model-opt .mo-main { flex: 1; }
 .model-opt .mo-name { font-size: 14px; font-weight: 500; line-height: 20px; color: var(--pop-text); }

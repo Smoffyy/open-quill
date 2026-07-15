@@ -1151,7 +1151,7 @@ export default function App() {
         {empty && !incognito && cfg.uiPreset === 'openai' && (
           <div className="home-topbar">
             <div className="topbar-model">
-              <ModelDropdown models={models} currentId={currentId} onSelect={setCurrentId} canUseUnavailable={!!user?.isAdmin} up={false} />
+              <ModelDropdown models={models} currentId={currentId} onSelect={setCurrentId} extended={extended} onToggleExtended={() => setExtended(e => !e)} canUseUnavailable={!!user?.isAdmin} up={false} />
             </div>
           </div>
         )}
@@ -1188,7 +1188,7 @@ export default function App() {
             <div className="topbar">
               {cfg.uiPreset === 'openai' && (
                 <div className="topbar-model">
-                  <ModelDropdown models={models} currentId={currentId} onSelect={setCurrentId} canUseUnavailable={!!user?.isAdmin} up={false} />
+                  <ModelDropdown models={models} currentId={currentId} onSelect={setCurrentId} extended={extended} onToggleExtended={() => setExtended(e => !e)} canUseUnavailable={!!user?.isAdmin} up={false} />
                 </div>
               )}
               <button className="mobile-menu-btn" onClick={() => setMobileDrawer(true)} title="Menu"><Menu style={{ width: 20 }} /></button>

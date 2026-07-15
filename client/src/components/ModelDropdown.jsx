@@ -74,8 +74,10 @@ function MoreGroup({ label, items, renderOpt }) {
 export default function ModelDropdown({ models, currentId, onSelect, extended, onToggleExtended, up, modelHasBg, bgInChat, onToggleBgInChat }) {
   const [open, setOpen] = useState(false);
   const [place, setPlace] = useState({ down: !!up, maxH: 0 });
+  const [listMaxH, setListMaxH] = useState(0);
   const ref = useRef(null);
   const menuRef = useRef(null);
+  const listRef = useRef(null);
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener('mousedown', h);
@@ -92,7 +94,19 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
     const down = below >= menuH + 14 ? true : below >= above;
     const avail = (down ? below : above) - 16;
     setPlace({ down, maxH: menuH > avail ? Math.max(160, avail) : 0 });
-  }, [open]);
+  }, [open, listMaxH]);
+  useLayoutEffect(() => {
+    if (!open) { setListMaxH(0); return; }
+    const list = listRef.current;
+    if (!list) return;
+    const kids = list.children;
+    if (kids.length > 4) {
+      const h = Math.round(kids[4].getBoundingClientRect().top - kids[0].getBoundingClientRect().top);
+      setListMaxH(h > 0 ? h : 0);
+    } else {
+      setListMaxH(0);
+    }
+  }, [open, models]);
 
   const current = models.find(m => m.id === currentId);
   const main = models.filter(m => !m.inMoreModels);
@@ -134,7 +148,9 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
       {open && <div className="model-scrim" onClick={() => setOpen(false)} />}
       {open && (
         <div ref={menuRef} className={'model-menu' + (place.down ? ' up' : '')} style={place.maxH ? { maxHeight: place.maxH, overflowY: 'auto' } : undefined}>
-          {main.map(Opt)}
+          <div className="model-main-list" ref={listRef} style={listMaxH ? { maxHeight: listMaxH, overflowY: 'auto' } : undefined}>
+            {main.map(Opt)}
+          </div>
           {current?.hasReasoning && (
             <>
               <hr />
