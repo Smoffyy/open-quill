@@ -1,18 +1,32 @@
-// push the chosen theme / accent / density onto the root element
 export function resolveTheme(t) {
   if (!t || t === 'system') return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
   return t;
 }
-export function applyPrefs(prefs) {
+export function currentPreset() {
+  const attr = document.documentElement.getAttribute('data-preset');
+  if (attr === 'openai' || attr === 'anthropic') return attr;
+  try { const s = localStorage.getItem('oq-preset'); if (s === 'openai' || s === 'anthropic') return s; } catch {}
+  return 'anthropic';
+}
+export function applyPrefs(prefs, preset) {
   const root = document.documentElement;
-  let nextTheme = resolveTheme(prefs?.theme);
-  if (nextTheme === 'dark') nextTheme = 'anthropic';
+  const p = preset === 'openai' || preset === 'anthropic' ? preset : currentPreset();
+  root.setAttribute('data-preset', p);
+  try { localStorage.setItem('oq-preset', p); } catch {}
+  let t = prefs?.theme;
+  if (t === 'oled') t = 'dark';
+  let nextTheme = resolveTheme(t);
+  if (nextTheme === 'dark' || nextTheme === 'anthropic' || nextTheme === 'oled' || nextTheme === 'openai') {
+    nextTheme = p === 'openai' ? 'openai' : 'anthropic';
+  }
   root.setAttribute('data-theme', nextTheme);
   try { localStorage.setItem('oq-theme', nextTheme); } catch {}
   root.setAttribute('data-density', prefs?.density === 'compact' ? 'compact' : 'comfortable');
   root.setAttribute('data-entrance', prefs?.messageEntrance === false ? 'off' : 'on');
   root.setAttribute('data-animations', prefs?.animations === false ? 'off' : 'on');
-  root.setAttribute('data-cursor', prefs?.streamCursor ? (prefs?.cursorStyle === 'circle' ? 'circle' : 'block') : 'off');
+  const cursorOn = p === 'openai' ? true : (prefs?.streamCursor == null ? false : !!prefs.streamCursor);
+  const cursorStyle = p === 'openai' ? 'circle' : (prefs?.cursorStyle || 'block');
+  root.setAttribute('data-cursor', cursorOn ? (cursorStyle === 'circle' ? 'circle' : 'block') : 'off');
   root.setAttribute('data-microfx', prefs?.microFx === false ? 'off' : 'on');
   root.setAttribute('data-composerfx', prefs?.composerFx === false ? 'off' : 'on');
   root.setAttribute('data-focusglow', prefs?.focusGlow ? 'on' : 'off');

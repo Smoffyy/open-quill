@@ -160,6 +160,21 @@ const MarkdownBlock = React.memo(function MarkdownBlock({ text }) {
   );
 });
 
+function normalizeMathDelims(text) {
+  if (!text || (text.indexOf('\\[') === -1 && text.indexOf('\\(') === -1)) return text;
+  const parts = text.split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`)/);
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (!p || p.startsWith('`')) continue;
+    parts[i] = p
+      .replace(/\\\[/g, () => '$$')
+      .replace(/\\\]/g, () => '$$')
+      .replace(/\\\(/g, () => '$')
+      .replace(/\\\)/g, () => '$');
+  }
+  return parts.join('');
+}
+
 function autoCloseMath(text) {
   let inFence = false, inCode = false, mode = 0, openIdx = -1;
   for (let i = 0; i < text.length; i++) {
@@ -197,7 +212,7 @@ function Markdown({ children, streaming }) {
   if (typeof children !== 'string') {
     return <MarkdownBlock text={children} />;
   }
-  let text = transformTools(children);
+  let text = normalizeMathDelims(transformTools(children));
   if (streaming) {
     const closed = autoCloseMath(text);
     if (closed === text) {

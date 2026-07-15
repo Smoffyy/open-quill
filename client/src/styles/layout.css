@@ -83,3 +83,5 @@
 .popover .email { padding: 8px 10px 6px; font-size: 12.5px; color: var(--text-muted); font-family: var(--font-sans); }
 .popover hr { border: none; border-top: 1px solid var(--border-soft); margin: 5px 4px; }
 
+.all-chats-btn { display: flex; align-items: center; width: 100%; padding: 8px 10px; margin-top: 6px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--text-muted); background: transparent; border: none; cursor: pointer; transition: background .12s ease, color .12s ease; }
+.all-chats-btn:hover { background: var(--surface-hover); color: var(--text); }

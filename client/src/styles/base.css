@@ -98,7 +98,7 @@
   --model-name: #fefefe;
 }
 
-:root[data-theme="oled"] {
+:root[data-theme="oled"], :root[data-theme="openai"] {
   color-scheme: dark;
   --bg: #000000;
   --sidebar: #000000;
@@ -128,7 +128,7 @@
   --pop-border: rgba(255, 255, 255, .10);
   --pop-divider: rgba(255, 255, 255, .10);
 }
-:root[data-theme="oled"] .code-wrap { background: #050505; }
+:root[data-theme="oled"] .code-wrap, :root[data-theme="openai"] .code-wrap { background: #050505; }
 /* anthropic: sidebar saved-chat + label text */
 :root[data-theme="anthropic"] .chat-row,
 :root[data-theme="anthropic"] .section-label,

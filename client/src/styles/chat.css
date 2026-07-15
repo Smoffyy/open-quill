@@ -200,8 +200,12 @@
 /* Force white streaming cursor for both block and circle types on OLED theme */
 :root[data-theme="oled"][data-cursor="block"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after,
 :root[data-theme="oled"][data-cursor="circle"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after,
+:root[data-theme="openai"][data-cursor="block"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after,
+:root[data-theme="openai"][data-cursor="circle"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after,
 :root[data-theme="oled"][data-cursor="block"] .streaming::after,
-:root[data-theme="oled"][data-cursor="circle"] .streaming::after {
+:root[data-theme="oled"][data-cursor="circle"] .streaming::after,
+:root[data-theme="openai"][data-cursor="block"] .streaming::after,
+:root[data-theme="openai"][data-cursor="circle"] .streaming::after {
   background: #ffffff !important;
   background-color: #ffffff !important;
 }

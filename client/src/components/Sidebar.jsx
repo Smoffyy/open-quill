@@ -179,7 +179,10 @@ export default function Sidebar({
     { key: 'd3', label: '3+ days ago', items: [] },
     { key: 'd7', label: '7+ days ago', items: [] },
   ];
-  for (const c of others) {
+  const SIDEBAR_CHAT_LIMIT = 40;
+  const capped = others.slice(0, SIDEBAR_CHAT_LIMIT);
+  const overflow = others.length > SIDEBAR_CHAT_LIMIT;
+  for (const c of capped) {
     const age = nowMs - (c.updated_at || nowMs);
     if (age < 3 * DAY) recentGroups[0].items.push(c);
     else if (age < 7 * DAY) recentGroups[1].items.push(c);
@@ -260,6 +263,9 @@ export default function Sidebar({
                   {g.items.map(row)}
                 </React.Fragment>
               ))}
+              {overflow && (
+                <button className="all-chats-btn" onClick={onChatsOverview}>All chats</button>
+              )}
             </>}
           </>
         )}

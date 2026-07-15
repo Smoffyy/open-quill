@@ -49,9 +49,10 @@ function QuickPrompts({ prompts, visible, disabled, onPick }) {
     const t = setTimeout(() => setRender(false), dur);
     return () => clearTimeout(t);
   }, [visible]);
-  if (!render) return null;
+  const keepSpace = document.documentElement.getAttribute('data-preset') === 'openai';
+  if (!render && !keepSpace) return null;
   return (
-    <div className={'quick-prompts' + (leaving ? ' leaving' : '')}>
+    <div className={'quick-prompts' + (leaving ? ' leaving' : '') + (keepSpace && !visible ? ' qp-ghost' : '')}>
       {prompts.map((q, i) => (
         <button key={i} className="quick-prompt" style={{ animationDelay: i * 45 + 'ms' }} onClick={() => onPick(q.prompt)} disabled={disabled}>
           {q.icon && q.icon !== 'none' && <span className="qp-icon"><QpIcon name={q.icon} style={{ width: 15, height: 15 }} /></span>}{q.label}
@@ -151,6 +152,8 @@ function CommandPalette({ commands, onClose }) {
 
 export default function App() {
   const [user, setUser] = useState(undefined);
+  const userRef = useRef(undefined);
+  useEffect(() => { userRef.current = user; }, [user]);
   const [intro, setIntro] = useState(false);
   const [models, setModels] = useState([]);
   const [currentId, setCurrentId] = useState(null);
@@ -295,15 +298,16 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!user) return;
-    applyPrefs(user?.prefs);
+    const preset = cfg?.uiPreset === 'openai' ? 'openai' : 'anthropic';
+    applyPrefs(user?.prefs, preset);
     const t = user?.prefs?.theme || 'dark';
     if (t === 'system' && window.matchMedia) {
       const mq = window.matchMedia('(prefers-color-scheme: dark)');
-      const h = () => applyPrefs(user?.prefs);
+      const h = () => applyPrefs(user?.prefs, preset);
       mq.addEventListener?.('change', h);
       return () => mq.removeEventListener?.('change', h);
     }
-  }, [user]);
+  }, [user, cfg?.uiPreset]);
   useEffect(() => { if (user) { loadModels(); loadChats(); loadFolders(); loadAppConfig(); loadBudget(); connect(); openFromUrl(); refreshSpacesPending(); loadProjects(); } }, [!!user]);
   async function loadBudget() { try { setBudget(await api.get('/api/me/budget')); } catch {} }
   async function loadProjects() { try { setProjects(await api.get('/api/projects')); } catch {} }
@@ -395,6 +399,11 @@ export default function App() {
   async function loadChats() { try { setChats(await api.get('/api/chats')); } catch {} finally { setChatsLoaded(true); } }
   async function loadFolders() { try { setFolders(await api.get('/api/folders')); } catch {} }
   async function loadAppConfig() { try { applyCfg(await api.get('/api/app-config')); } catch {} }
+  const [presetPicked, setPresetPicked] = useState(false);
+  async function choosePreset(p) {
+    setPresetPicked(true);
+    try { await api.patch('/api/admin/app-config', { uiPreset: p }); await loadAppConfig(); } catch {}
+  }
   useEffect(() => {
     const appName = cfg.appName || 'open-quill';
     if (incognito) { document.title = 'Incognito chat - ' + appName; return; }
@@ -415,6 +424,10 @@ export default function App() {
     setCfg(c);
     const list = c.greetings && c.greetings.length ? c.greetings : DEFAULT_CFG.greetings;
     setGreeting(list[Math.floor(Math.random() * list.length)]);
+    const preset = c.uiPreset === 'openai' ? 'openai' : 'anthropic';
+    document.documentElement.setAttribute('data-preset', preset);
+    try { localStorage.setItem('oq-preset', preset); } catch {}
+    applyPrefs(userRef.current?.prefs, preset);
     document.documentElement.setAttribute('data-font', c.appFont === 'sans' ? 'sans' : 'serif');
     let link = document.querySelector('link[rel="icon"]');
     if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
@@ -602,7 +615,7 @@ export default function App() {
       if (dispLen.current >= target.length) { if (pendingDone.current) finalize(); return; }
       setDispContent(prev => {
         const remaining = target.length - prev.length;
-        const instant = !animateRef.current || revealRef.current <= 0;
+        const instant = document.documentElement.getAttribute('data-preset') === 'openai' || !animateRef.current || revealRef.current <= 0;
         const n = instant ? remaining
           : remaining > 1200 ? Math.ceil(remaining / 3)
           : remaining > 240 ? Math.ceil(remaining / 6)
@@ -1069,7 +1082,7 @@ export default function App() {
     safetyFlagged, safetyChecking, safetyReason, safetyVerbose: !!cfg.safetyCheckVerbose,
     styles: user?.styles || [], styleId, onSelectStyle: setStyleId, onSaveStyles: saveStyles,
     conversationEnded: chatEnded, endedReason: chatEndedReason,
-    hideModelPicker: user?.prefs?.modelTop === true,
+    hideModelPicker: cfg.uiPreset === 'openai',
     models, currentId, onSelect: setCurrentId, extended, onToggleExtended: () => setExtended(e => !e),
     visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin, budget,
     modelHasBg, bgInChat, onToggleBgInChat: () => updatePref('modelBgInChat', !bgInChat),
@@ -1135,11 +1148,20 @@ export default function App() {
             <Ghost style={{ width: 18 }} />
           </button>
         )}
+        {empty && !incognito && cfg.uiPreset === 'openai' && (
+          <div className="home-topbar">
+            <div className="topbar-model">
+              <ModelDropdown models={models} currentId={currentId} onSelect={setCurrentId} canUseUnavailable={!!user?.isAdmin} up={false} />
+            </div>
+          </div>
+        )}
         {empty ? (
           <div className="center-wrap">
             <div className="greeting">
               {incognito
-                ? <><Ghost style={{ width: 44 }} /> {incognitoGreeting}</>
+                ? (cfg.uiPreset === 'openai'
+                    ? <span className="incog-title">Temporary Chat</span>
+                    : <><Ghost style={{ width: 44 }} /> {incognitoGreeting}</>)
                 : (() => {
                     const h = new Date().getHours();
                     const part = h < 5 ? 'Working late' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : h < 22 ? 'Good evening' : 'Burning the midnight oil';
@@ -1155,7 +1177,7 @@ export default function App() {
             </div>
             <div className="qp-slot">
               {incognito ? (
-                <div className="incognito-note">Incognito chats aren't saved to your history.</div>
+                <div className={cfg.uiPreset === 'openai' ? 'incog-note' : 'incognito-note'}>{cfg.uiPreset === 'openai' ? "This chat won't appear in history. Incognito chats aren't saved." : "Incognito chats aren't saved to your history."}</div>
               ) : cfg.quickPrompts && cfg.quickPrompts.length > 0 && (
                 <QuickPrompts prompts={cfg.quickPrompts} visible={!input.trim()} disabled={streaming} onPick={(p) => send([], p)} />
               )}
@@ -1164,7 +1186,7 @@ export default function App() {
         ) : (
           <>
             <div className="topbar">
-              {user?.prefs?.modelTop === true && (
+              {cfg.uiPreset === 'openai' && (
                 <div className="topbar-model">
                   <ModelDropdown models={models} currentId={currentId} onSelect={setCurrentId} canUseUnavailable={!!user?.isAdmin} up={false} />
                 </div>
@@ -1238,7 +1260,7 @@ export default function App() {
                     <Message key={msg._k || msg.id} msg={msg} model={models.find(x => x.id === msg.model_id) || model} models={models} currentId={currentId} chatId={activeId} pins={chatPins} chatEnded={chatEnded}
                       streaming={!!msg._streaming} phase={msg._streaming ? phase : 'static'} liveCall={msg._streaming ? liveCall : null}
                       onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
-                      showIcon={msg.role === 'assistant' && lastA && msg.id === lastA.id} />
+                      showIcon={msg.role === 'assistant' && (cfg.uiPreset === 'openai' || (lastA && msg.id === lastA.id))} />
                   ));
                 })()}
                 {queued && !streaming && (
@@ -1249,7 +1271,7 @@ export default function App() {
               </div>
             </div>
             {showJump && <button className="to-bottom" onClick={jumpDown}><Down style={{ width: 17 }} /></button>}
-            <div className="composer-wrap active-composer" style={{ maxWidth: 760, margin: '0 auto', width: '100%', padding: '0 20px' }}>
+            <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')} style={{ maxWidth: cfg.uiPreset === 'openai' ? 808 : 760, margin: '0 auto', width: '100%', padding: '0 20px' }}>
               <Composer {...composerProps} focusKey={focusTick} />
               <div className="disclaimer">{cfg.disclaimer}</div>
             </div>
@@ -1276,6 +1298,26 @@ export default function App() {
       )}
 
       {showSettings && <SettingsModal user={user} cfg={cfg} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile} />}
+      {user?.isAdmin && cfg.uiPresetChosen === false && !presetPicked && (
+        <div className="preset-scrim">
+          <div className="preset-modal">
+            <h2 className="preset-title">Choose your interface</h2>
+            <p className="preset-sub">Pick the look for this workspace. You can change it any time in Admin → Branding.</p>
+            <div className="preset-grid">
+              <button className="preset-card" onClick={() => choosePreset('anthropic')}>
+                <span className="preset-swatch anthropic"><span className="ps-dot" /></span>
+                <span className="preset-name">Anthropic</span>
+                <span className="preset-desc">Warm serif look with the classic open-quill layout.</span>
+              </button>
+              <button className="preset-card" onClick={() => choosePreset('openai')}>
+                <span className="preset-swatch openai"><span className="ps-dot" /></span>
+                <span className="preset-name">OpenAI</span>
+                <span className="preset-desc">Pitch-black ChatGPT layout with the model picker up top.</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} onChatsChanged={() => loadChats()} />}
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} onOpen={(id) => openChat(id)} />}
       {personasOpen && <PersonasModal personas={user?.personas || []} models={models} currentId={currentId} onApply={applyPersona} onSave={savePersonas} onClose={() => setPersonasOpen(false)} />}

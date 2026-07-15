@@ -1037,10 +1037,13 @@ app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
     call_prompt: b.call_prompt || '',
     provider_id: b.provider_id || (getProviders()[0]?.id || null), max_tokens: parseInt(b.max_tokens) || null,
     has_reasoning: b.has_reasoning ? 1 : 0, reasoning_token: b.reasoning_token || '', non_reasoning_token: b.non_reasoning_token || '',
-    reasoning_collapsible: b.reasoning_collapsible === false ? 0 : 1, icon_size: parseInt(b.icon_size) || 0,
+    reasoning_collapsible: b.reasoning_collapsible === false ? 0 : 1, icon_size: parseInt(b.icon_size) || (getSetting('ui_preset', '') === 'openai' ? 28 : 0),
+    show_name: 'show_name' in b ? (b.show_name ? 1 : 0) : (getSetting('ui_preset', '') === 'openai' ? 1 : 0),
+    generating_anim: b.generating_anim || (getSetting('ui_preset', '') === 'openai' ? 'none' : ''),
+    thinking_anim: b.thinking_anim || (getSetting('ui_preset', '') === 'openai' ? 'none' : ''),
     has_vision: b.has_vision ? 1 : 0,
     think_open: b.think_open || '', think_close: b.think_close || '',
-    sandbox_auto: b.sandbox_auto ? 1 : 0, sandbox_allowed: b.sandbox_allowed === false ? 0 : 1, dropdown_icon: b.dropdown_icon === false ? 0 : 1, is_default: 0, agent_steps: Number.isInteger(b.agent_steps) ? Math.max(0, b.agent_steps) : 0,
+    sandbox_auto: b.sandbox_auto ? 1 : 0, sandbox_allowed: b.sandbox_allowed === false ? 0 : 1, dropdown_icon: 'dropdown_icon' in b ? (b.dropdown_icon === false ? 0 : 1) : (getSetting('ui_preset', '') === 'openai' ? 0 : 1), is_default: 0, agent_steps: Number.isInteger(b.agent_steps) ? Math.max(0, b.agent_steps) : 0,
     web_search_auto: b.web_search_auto ? 1 : 0, web_search_allowed: b.web_search_allowed === false ? 0 : 1, tools_auto: b.tools_auto ? 1 : 0, tools_allowed: b.tools_allowed === false ? 0 : 1,
     skills_allowed: b.skills_allowed ? 1 : 0, mcp_allowed: b.mcp_allowed ? 1 : 0, chat_search_allowed: b.chat_search_allowed ? 1 : 0,
     end_chat_allowed: b.end_chat_allowed ? 1 : 0, end_chat_prompt: String(b.end_chat_prompt || ''), long_convo_reminder: b.long_convo_reminder ? 1 : 0,
@@ -1050,7 +1053,7 @@ app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
     bg_enabled: b.bg_enabled ? 1 : 0, bg_image: b.bg_image || '',
     cap_vision: b.cap_vision ? 1 : 0, cap_reasoning: b.cap_reasoning ? 1 : 0, cap_text: b.cap_text ? 1 : 0, cap_compact: b.cap_compact ? 1 : 0,
     static_icon: b.static_icon || '', generating_icon: b.generating_icon || '', thinking_icon: b.thinking_icon || '',
-    icon_position: b.icon_position || 'below',
+    icon_position: b.icon_position || (getSetting('ui_preset', '') === 'openai' ? 'left' : 'below'),
     temperature: null, top_p: null, presence_penalty: null, frequency_penalty: null, repetition_penalty: null, min_p: null, top_k: null, seed: null,
     cost_in: preset ? preset.in : null, cost_out: preset ? preset.out : null,
     sort_order: max + 1, enabled: 1
@@ -1849,6 +1852,8 @@ function appConfig() {
     greetings: (() => { const g = safeParse(getSetting('greetings', '[]'), []); return Array.isArray(g) && g.length ? g : ['How can I help you?', 'What are we building today?', 'Where should we start?']; })(),
     appIcon: getSetting('app_icon', ''),
     appFont: getSetting('app_font', 'serif'),
+    uiPreset: getSetting('ui_preset', '') === 'openai' ? 'openai' : 'anthropic',
+    uiPresetChosen: !!getSetting('ui_preset', ''),
     quickPrompts: (() => { const q = safeParse(getSetting('quick_prompts', '[]'), []); return Array.isArray(q) && q.length ? q : [{ icon: 'sparkles', label: 'Ideas', prompt: 'Give me ideas on what I should do today.' }, { icon: 'pencil', label: 'Write', prompt: 'Write a one paragraph summary about how Large Language Models (LLMs) work.' }, { icon: 'code', label: 'Code', prompt: 'Write a Python function that checks whether a string is a palindrome.' }, { icon: 'learn', label: 'Learn', prompt: 'How far away is the sun from Earth?' }, { icon: 'coffee', label: 'Life stuff', prompt: 'Give me practical advice for a life problem.' }]; })(),
     version: APP_VERSION,
     uiVersion: APP_VERSION,
@@ -1885,6 +1890,14 @@ app.patch('/api/admin/app-config', authMiddleware, adminOnly, (req, res) => {
   }
   if ('appIcon' in b) setSetting('app_icon', b.appIcon || '');
   if ('appFont' in b) setSetting('app_font', b.appFont === 'sans' ? 'sans' : 'serif');
+  if ('uiPreset' in b) {
+    const next = b.uiPreset === 'openai' ? 'openai' : 'anthropic';
+    const prev = getSetting('ui_preset', '');
+    setSetting('ui_preset', next);
+    if (prev !== next && !('appFont' in b)) setSetting('app_font', next === 'openai' ? 'sans' : 'serif');
+    logAudit(req, 'branding.preset', { meta: { preset: next } });
+    broadcastConfig();
+  }
   res.json({ ok: true });
 });
 

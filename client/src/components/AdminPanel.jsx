@@ -582,7 +582,7 @@ export default function AdminPanel({ user, onClose }) {
   const [navQ, setNavQ] = useState('');
   const [models, setModels] = useState([]);
   const [usersList, setUsersList] = useState([]);
-  const [cfg, setCfg] = useState({ appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [], appFont: 'serif' });
+  const [cfg, setCfg] = useState({ appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [], appFont: 'serif', uiPreset: 'anthropic' });
   const [settings, setSettings] = useState({ apiBaseUrl: '', apiKey: '', uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256, modelQueue: false, membankEnabled: false, membankHideTools: false, membankPrompt: '', budgetUser: 0, budgetAdmin: 0, budgetWarnFraction: 0.8, budgetEnforce: false, sessionTtlDays: 30, maxSessions: 0, voiceMicEnabled: false, voiceCallEnabled: false, voiceSttEngine: 'browser', voiceSttUrl: '', voiceSttKey: '', voiceSttModel: 'whisper-1', voiceTtsEngine: 'browser', voiceTtsUrl: '', voiceTtsKey: '', voiceTtsModel: 'tts-1', voiceTtsVoice: 'alloy', voiceTtsSpeed: 1, safetyEnabled: false, safetyModelMode: 'current', safetyModelId: '', safetyPrompt: '', safetyVerbose: true, safetyReasonEnabled: false, memoryEnabled: false, memoryPrompt: '', chatSearchEnabled: false });
   const [providers, setProviders] = useState([]);
   const [membankFiles, setMembankFiles] = useState([]);
@@ -782,7 +782,7 @@ export default function AdminPanel({ user, onClose }) {
     try { const p = await api.get('/api/admin/providers'); setProviders(p.providers || []); setProviderTypes(p.types || {}); } catch {}
     try {
       const c = await api.get('/api/app-config');
-      setCfg({ appName: c.appName || '', disclaimer: c.disclaimer || '', greetings: c.greetings?.length ? c.greetings : [''], appIcon: c.appIcon || '', quickPrompts: Array.isArray(c.quickPrompts) ? c.quickPrompts : [], appFont: c.appFont === 'sans' ? 'sans' : 'serif' });
+      setCfg({ appName: c.appName || '', disclaimer: c.disclaimer || '', greetings: c.greetings?.length ? c.greetings : [''], appIcon: c.appIcon || '', quickPrompts: Array.isArray(c.quickPrompts) ? c.quickPrompts : [], appFont: c.appFont === 'sans' ? 'sans' : 'serif', uiPreset: c.uiPreset === 'openai' ? 'openai' : 'anthropic' });
     } catch {}
     loadUsers();
   }
@@ -1284,6 +1284,15 @@ export default function AdminPanel({ user, onClose }) {
                   <div className="icon-grid" style={{ gridTemplateColumns: '1fr' }}>
                     <IconSlot label="Click to upload (png, svg, jpeg, gif)" value={cfg.appIcon} def="/starburst.svg" anim="" onChange={(v) => setCfg(c => ({ ...c, appIcon: v }))} />
                   </div>
+                </div>
+              </Card>
+              <Card title="Interface preset" sub="Switches the entire UI between the two looks instantly, for every connected client.">
+                <div className="field">
+                  <div className="seg" style={{ width: 'fit-content' }}>
+                    <button className={(cfg.uiPreset || 'anthropic') === 'anthropic' ? 'on' : ''} onClick={() => setCfg(c => ({ ...c, uiPreset: 'anthropic', appFont: 'serif' }))}>Anthropic</button>
+                    <button className={cfg.uiPreset === 'openai' ? 'on' : ''} onClick={() => setCfg(c => ({ ...c, uiPreset: 'openai', appFont: 'sans' }))}>OpenAI</button>
+                  </div>
+                  <div className="muted-note">Anthropic keeps the classic open-quill layout. OpenAI restyles everything after ChatGPT: pitch-black palette, Open Sans, pill composer, the model picker in the top-left, persistent 28px model logos beside every reply, and no logo motion. New models created while OpenAI is active default to those icon settings.</div>
                 </div>
               </Card>
               <Card title="Typography & footer" sub="The overall voice of the interface.">
