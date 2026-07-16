@@ -7,7 +7,7 @@
 *A fully open-sourced chat interface featuring Anthropic inspired theming.*
 
 [![Latest Stable Release](https://img.shields.io/github/v/release/Smoffyy/open-quill?label=Latest%20Stable%20Release)](https://github.com/Smoffyy/open-quill/releases/latest)
-[![Latest Pre-release](https://img.shields.io/github/v/release/Smoffyy/open-quill?include_prereleases&label=Latest%20Pre-release)](https://github.com/Smoffyy/open-quill/releases)
+[![Latest Beta Release](https://img.shields.io/github/v/release/Smoffyy/open-quill?include_prereleases&label=Latest%20Beta%20Release)](https://github.com/Smoffyy/open-quill/releases)
 
 </div>
 
