@@ -112,10 +112,11 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
 
   const current = models.find(m => m.id === currentId);
   const effortLevels = (current?.effortLevels && current.effortLevels.length) ? current.effortLevels : ['low', 'medium', 'high'];
-  const effortActive = effortLevels.includes(reasoningEffort) ? reasoningEffort
-    : (effortLevels.includes(current?.effortDefault) ? current.effortDefault : (effortLevels[Math.floor(effortLevels.length / 2)] || effortLevels[0]));
-  const effortIdx = Math.max(0, effortLevels.indexOf(effortActive));
   const effortBool = effortLevels.length === 2 && effortLevels.some(x => /^true$/i.test(x)) && effortLevels.some(x => /^false$/i.test(x));
+  const effortFallback = effortBool ? effortLevels.find(x => /^false$/i.test(x)) : (effortLevels[Math.floor(effortLevels.length / 2)] || effortLevels[0]);
+  const effortActive = effortLevels.includes(reasoningEffort) ? reasoningEffort
+    : (effortLevels.includes(current?.effortDefault) ? current.effortDefault : effortFallback);
+  const effortIdx = Math.max(0, effortLevels.indexOf(effortActive));
   const effortTrueVal = effortBool ? effortLevels.find(x => /^true$/i.test(x)) : null;
   const effortFalseVal = effortBool ? effortLevels.find(x => /^false$/i.test(x)) : null;
   const thinkingOn = effortBool && /^true$/i.test(effortActive);

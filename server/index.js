@@ -694,6 +694,7 @@ app.get('/api/chats/:id', authMiddleware, (req, res) => {
     const sibs = kidsByParent.get(m.parent_id ?? null) || [];
     return {
       id: m.id, role: m.role, content: m.content, reasoning: m.reasoning, model_id: m.model_id, attachments: m.attachments || [], created_at: m.created_at, pinned: !!m.pinned, feedback: m.feedback || 0,
+      extended: !!m.extended, reasoningEffort: m.reasoning_effort || null,
       parentId: m.parent_id ?? null, branchIndex: sibs.findIndex(s => s.id === m.id), branchCount: sibs.length,
       siblings: sibs.map(s => s.id)
     };
@@ -1286,7 +1287,9 @@ function effortLevelsOf(model) {
 function applyEffort(model, requested) {
   if (!model || !model.effort_enabled) return model;
   const levels = effortLevelsOf(model);
-  const def = levels.includes(model.effort_default) ? model.effort_default : (levels[Math.floor(levels.length / 2)] || levels[0]);
+  const isBool = levels.length === 2 && levels.some(x => /^true$/i.test(x)) && levels.some(x => /^false$/i.test(x));
+  const fallback = isBool ? levels.find(x => /^false$/i.test(x)) : (levels[Math.floor(levels.length / 2)] || levels[0]);
+  const def = levels.includes(model.effort_default) ? model.effort_default : fallback;
   const level = (typeof requested === 'string' && levels.includes(requested)) ? requested : def;
   return { ...model, reasoning_effort_level: level, reasoning_effort_kwarg: (model.effort_kwarg || 'reasoning_effort').trim() || 'reasoning_effort' };
 }
@@ -2690,7 +2693,7 @@ wss.on('connection', (ws, req) => {
       usageRec = { prompt: usage.prompt, completion: usage.completion, total: usage.total || (usage.prompt + usage.completion), cost };
       db.usage.insert({ id: uid(), user_id: chat.user_id, model_id: model.id, model_name: model.display_name || '', prompt: usageRec.prompt, completion: usageRec.completion, total: usageRec.total, cost, cost_in: Number(model.cost_in) || 0, cost_out: Number(model.cost_out) || 0, created_at: now() });
     }
-    db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, model_id: model.id, parent_id: assistantParent, usage: usageRec, created_at: now() });
+    db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, model_id: model.id, parent_id: assistantParent, usage: usageRec, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, created_at: now() });
     db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
     const truncated = !!(Number(model.max_tokens) > 0 && usage && usage.completion >= Number(model.max_tokens) - 2 && !conversationEnded);
     safeSend(JSON.stringify({ type: 'done', chatId: chat.id, messageId: assistantId, truncated }));

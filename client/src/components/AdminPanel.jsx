@@ -376,7 +376,7 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
                 : 'Ordered lowest to highest — users get a slider through these stops.'}</div>
               <div className="two-col">
                 <div className="field"><label>Default</label>
-                  <select value={effortLevelsArr.includes(m.effort_default) ? m.effort_default : (effortLevelsArr[Math.floor(effortLevelsArr.length / 2)] || '')} onChange={(e) => set('effort_default', e.target.value)}>
+                  <select value={effortLevelsArr.includes(m.effort_default) ? m.effort_default : (effortIsBool ? 'false' : (effortLevelsArr[Math.floor(effortLevelsArr.length / 2)] || ''))} onChange={(e) => set('effort_default', e.target.value)}>
                     {effortLevelsArr.map(l => <option key={l} value={l}>{l}</option>)}
                   </select></div>
                 <div className="field"><label>API kwarg name</label>

@@ -147,7 +147,7 @@
   background: var(--user-bubble); border-radius: 22px; padding: 8px 18px; font-size: 15px; line-height: 22px;
   font-family: var(--font-sans); max-width: 100%;
 }
-[data-preset="openai"] .msg-icon img { border-radius: 50%; border: 1px solid var(--border-soft); }
+[data-preset="openai"] .msg-icon img { border-radius: 8px; }
 [data-preset="openai"] .msg-icon-name { font-family: var(--font-sans); font-size: 13.5px; font-weight: 600; color: var(--text); }
 [data-preset="openai"] .msg.assistant.icon-left .il-avatar { top: -4px; }
 [data-preset="openai"] .reasoning-head, [data-preset="openai"] .rb-label { font-family: var(--font-sans); font-size: 13.5px; }

@@ -279,8 +279,14 @@ export default function App() {
     const m = models.find(x => x.id === currentId);
     if (!m || !m.effortEnabled) return;
     const levels = (m.effortLevels && m.effortLevels.length) ? m.effortLevels : ['low', 'medium', 'high'];
-    setReasoningEffort(prev => levels.includes(prev) ? prev : (levels.includes(m.effortDefault) ? m.effortDefault : (levels[Math.floor(levels.length / 2)] || levels[0])));
+    const isBool = levels.length === 2 && levels.some(x => /^true$/i.test(x)) && levels.some(x => /^false$/i.test(x));
+    const fallback = isBool ? levels.find(x => /^false$/i.test(x)) : (levels[Math.floor(levels.length / 2)] || levels[0]);
+    setReasoningEffort(prev => levels.includes(prev) ? prev : (levels.includes(m.effortDefault) ? m.effortDefault : fallback));
   }, [currentId, models]);
+  const homeSelectionRef = useRef(null);
+  useEffect(() => {
+    if (!activeId && !incognito) homeSelectionRef.current = { modelId: currentId, extended, reasoningEffort };
+  }, [activeId, incognito, currentId, extended, reasoningEffort]);
   useEffect(() => {
     const active = computeActiveBg(models, currentId, activeId, messages.length, incognito, user?.prefs);
     if (active) { setBgVisible(true); return; }
@@ -822,6 +828,14 @@ export default function App() {
     try {
       const { chat, messages } = await api.get('/api/chats/' + id);
       setMessages(messages);
+      {
+        const lastA = [...messages].reverse().find(mm => mm.role === 'assistant' && mm.model_id);
+        if (lastA && models.find(mm => mm.id === lastA.model_id)) {
+          setCurrentId(lastA.model_id);
+          setExtended(!!lastA.extended);
+          if (lastA.reasoningEffort) setReasoningEffort(lastA.reasoningEffort);
+        }
+      }
       setCurrentProject(chat.projectId ? (projects.find(p => p.id === chat.projectId) || { id: chat.projectId, name: 'Project' }) : null);
       if (user?.prefs?.chatStagger !== false && user?.prefs?.messageEntrance !== false) {
         clearTimeout(staggerTimer.current);
@@ -857,8 +871,16 @@ export default function App() {
     setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
     setChatEnded(false); setChatEndedReason('');
     setCanContinue(false); setQueuedMsg(''); queuedRef.current = '';
+    setChatGenParams(null); setChatSysOverride('');
     setInput(loadDraft(null));
-    const m = models.find(m => m.id === currentId);
+    const restored = homeSelectionRef.current;
+    const targetId = (restored && restored.modelId && models.find(m => m.id === restored.modelId)) ? restored.modelId : currentId;
+    if (restored) {
+      if (targetId !== currentId) setCurrentId(targetId);
+      setExtended(!!restored.extended);
+      setReasoningEffort(restored.reasoningEffort || '');
+    }
+    const m = models.find(m => m.id === targetId);
     setSandbox(m?.sandboxAllowed !== false && !!m?.sandboxAuto);
     setWebSearch(!!cfg.webSearchAvailable && m?.webSearchAllowed !== false && !!m?.webSearchAuto);
     setFocusTick(t => t + 1);
@@ -986,6 +1008,9 @@ export default function App() {
       chatId = c.id; setActiveId(chatId);
       setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false, folderId: null }, ...cs]);
       history.pushState({}, '', '/chat/' + chatId);
+      if ((chatGenParams && Object.keys(chatGenParams).length) || (chatSysOverride && chatSysOverride.trim())) {
+        try { await api.patch('/api/chats/' + chatId, { genParams: chatGenParams || {}, systemOverride: chatSysOverride || '' }); } catch {}
+      }
     }
     if (compareRef.current && !compareRef.current.chatId) compareRef.current.chatId = chatId;
     clearDraft(activeId);
@@ -1152,8 +1177,13 @@ export default function App() {
           <button className="mobile-menu-btn empty-menu" onClick={() => setMobileDrawer(true)} title="Menu"><Menu style={{ width: 20 }} /></button>
         )}
         {!incognito && empty && (
-          <button className="incognito-fab" onClick={toggleIncognito} title="Incognito chat — not saved" disabled={streaming || queued}>
+          <button className={'incognito-fab' + (user?.isAdmin ? ' with-ctl' : '')} onClick={toggleIncognito} title="Incognito chat — not saved" disabled={streaming || queued}>
             <Ghost style={{ width: 18 }} />
+          </button>
+        )}
+        {empty && !incognito && user?.isAdmin && (
+          <button className={'incognito-fab ctl-fab' + (ctlOpen ? ' active' : '')} onClick={() => { setArtifactsOpen(false); setCtlOpen(o => !o); }} title="Chat controls (admin)" disabled={streaming || queued}>
+            <Sliders style={{ width: 17 }} />
           </button>
         )}
         {empty && !incognito && cfg.uiPreset === 'openai' && (
@@ -1290,8 +1320,8 @@ export default function App() {
       {artifactsOpen && activeId && !callOpen && (
         <ArtifactsPanel chatId={activeId} files={files} live={liveFile} focus={artifactFocus} onClose={() => setArtifactsOpen(false)} />
       )}
-      {ctlOpen && user?.isAdmin && activeId && (
-        <ChatControls chatId={activeId} initialParams={chatGenParams} initialOverride={chatSysOverride} onClose={() => setCtlOpen(false)} />
+      {ctlOpen && user?.isAdmin && !incognito && (
+        <ChatControls chatId={activeId || null} initialParams={chatGenParams} initialOverride={chatSysOverride} onChange={(p, o) => { setChatGenParams(p && Object.keys(p).length ? p : null); setChatSysOverride(o || ''); }} onClose={() => setCtlOpen(false)} />
       )}
       {callOpen && (
         <CallPanel chatId={activeId} model={model}

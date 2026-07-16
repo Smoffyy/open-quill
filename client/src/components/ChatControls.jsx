@@ -13,7 +13,7 @@ const FIELDS = [
   { k: 'repeat_penalty', label: 'Repeat penalty', min: 0, max: 2, step: 0.05 }
 ];
 
-export default function ChatControls({ chatId, initialParams, initialOverride, onClose }) {
+export default function ChatControls({ chatId, initialParams, initialOverride, onChange, onClose }) {
   const [params, setParams] = useState(initialParams || {});
   const [override, setOverride] = useState(initialOverride || '');
   const [status, setStatus] = useState('idle');
@@ -22,6 +22,8 @@ export default function ChatControls({ chatId, initialParams, initialOverride, o
   useEffect(() => { setParams(initialParams || {}); setOverride(initialOverride || ''); }, [chatId]);
 
   function save(nextParams, nextOverride) {
+    if (onChange) onChange(nextParams, nextOverride);
+    if (!chatId) { setStatus('idle'); return; }
     setStatus('saving');
     clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
@@ -50,7 +52,7 @@ export default function ChatControls({ chatId, initialParams, initialOverride, o
       <div className="chatctl-head">
         <div>
           <div className="chatctl-title">Chat controls</div>
-          <div className="chatctl-sub">Overrides apply to this chat only, on top of the model's own settings. {status === 'saving' ? 'Saving\u2026' : status === 'saved' ? 'Saved.' : ''}</div>
+          <div className="chatctl-sub">{chatId ? <>Overrides apply to this chat only, on top of the model's own settings. {status === 'saving' ? 'Saving\u2026' : status === 'saved' ? 'Saved.' : ''}</> : 'These apply to the new chat once you send your first message.'}</div>
         </div>
         <button className="chatctl-x" onClick={onClose}><X style={{ width: 16 }} /></button>
       </div>
