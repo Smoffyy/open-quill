@@ -113,6 +113,16 @@ function effortKwargs(model) {
   return { chat_template_kwargs: { [kw]: val } };
 }
 
+function firstEffortKwargs(model) {
+  if (!model || !model.effort_enabled) return {};
+  const levels = (Array.isArray(model.effort_levels) && model.effort_levels.length) ? model.effort_levels : ['low', 'medium', 'high'];
+  const first = levels[0];
+  if (first == null || first === '') return {};
+  const kw = (model.effort_kwarg || 'reasoning_effort').trim() || 'reasoning_effort';
+  const val = /^(true|false)$/i.test(String(first)) ? /^true$/i.test(String(first)) : first;
+  return { chat_template_kwargs: { [kw]: val } };
+}
+
 export async function streamCompletion({ model, messages, tools, signal, onEvent }) {
   const { spec, base, key } = modelProvider(model);
   const { emitContent, flush } = makeEmitter(model, onEvent);
@@ -225,7 +235,7 @@ export async function oneShot(model, messages) {
   }
   const res = await fetch(endpoint(base, '/chat/completions'), {
     method: 'POST', headers: authHeaders(key),
-    body: JSON.stringify({ model: model.internal_name, stream: false, messages })
+    body: JSON.stringify({ model: model.internal_name, stream: false, messages, ...firstEffortKwargs(model) })
   });
   if (!res.ok) return '';
   const json = await res.json();
