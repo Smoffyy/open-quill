@@ -83,7 +83,7 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .artifacts { animation: panelIn .26s var(--ease-out) both; }
 @keyframes panelIn { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: none; } }
 
-/* reasoning expand/collapse — smooth height via grid rows */
+/* reasoning expand/collapse, smooth height via grid rows */
 .reasoning-collapse { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .26s var(--ease-out), opacity .2s ease; opacity: .0; }
 .reasoning-collapse.open { grid-template-rows: 1fr; opacity: 1; }
 .reasoning-collapse > .reasoning-body { overflow: hidden; min-height: 0; }

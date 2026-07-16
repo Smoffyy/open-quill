@@ -157,7 +157,7 @@ export function view(chatId, rel, start, end) {
     let cut = body.lastIndexOf('\n', 8000);
     if (cut < 1) cut = 8000;
     body = body.slice(0, cut);
-    note = `\n... [truncated; file has ${all.length} lines total — call view again with start/end to page through it]`;
+    note = `\n... [truncated; file has ${all.length} lines total, call view again with start/end to page through it]`;
   }
   else if (s > 1 || e < all.length) { note = `\n[showing lines ${s}-${e} of ${all.length}]`; }
   return { ok: true, path: rel, content: body + note, lines: all.length };
@@ -400,7 +400,7 @@ export function bash(chatId, cmd, timeoutMs = 60000) {
     };
     if (redirect[first]) {
       return Promise.resolve({ ok: false, exit: null, output: '',
-        error: `This host shell does not have \`${first}\`. Use the \`${redirect[first]}\` tool instead — it is cross-platform and works on this sandbox. Do not retry the shell command.` });
+        error: `This host shell does not have \`${first}\`. Use the \`${redirect[first]}\` tool instead, it is cross-platform and works on this sandbox. Do not retry the shell command.` });
     }
     if (/(^|\s)\/tmp(\/|\s|$)|(^|\s)\/(home|var|usr|etc)(\/|\s|$)/.test(trimmed)) {
       return Promise.resolve({ ok: false, exit: null, output: '',

@@ -29,7 +29,7 @@ export default function StyleSubmenu({ styles = [], styleId = 'normal', onSelect
     try {
       const r = await api.post('/api/styles/generate', { sample, modelId: currentId });
       setPrompt(r.prompt || '');
-      toast('Style generated from your sample — review and save.');
+      toast('Style generated from your sample, review and save.');
     } catch (e) { toast(e.message || 'Could not generate the style.'); }
     setGenBusy(false);
   }

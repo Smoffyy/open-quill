@@ -194,7 +194,7 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
             {pjFiles.length === 0 ? (
               <div className="pj-files-empty" onClick={() => fileInputRef.current?.click()} style={{ cursor: 'pointer' }}>
                 <FileText style={{ width: 30 }} />
-                <span>{fileBusy ? 'Uploading…' : 'Add PDFs or text documents — chats in this project can search and read them.'}</span>
+                <span>{fileBusy ? 'Uploading…' : 'Add PDFs or text documents, chats in this project can search and read them.'}</span>
               </div>
             ) : (
               <div className="pj-file-list">
@@ -259,7 +259,7 @@ export default function ProjectsPanel({ openId, composerProps, onClose, onOpenCh
               <input value={q} placeholder="Search projects..." onChange={(e) => setQ(e.target.value)} />
             </div>
             {projects === null ? null : list.length === 0 ? (
-              <div className="co-end">{q.trim() ? 'No projects match your search.' : 'No projects yet — create one to get started.'}</div>
+              <div className="co-end">{q.trim() ? 'No projects match your search.' : 'No projects yet, create one to get started.'}</div>
             ) : (
               <div className="pj-grid">
                 {list.map((p, i) => (

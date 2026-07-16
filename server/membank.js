@@ -174,7 +174,7 @@ export function promptFor(introOverride) {
     if ((f.folder || '') !== curFolder) { curFolder = f.folder || ''; if (curFolder) p += `[${curFolder}]\n`; }
     p += `- ${f.name}${f.readable ? ` (${f.lines} lines, ${f.size} bytes)` : ` (${f.size} bytes, not readable as text)`}\n`;
   }
-  p += '\nUse the `mb_view` function to read a file (pass `path`, and optional `start`/`end` line numbers to read only a slice) and `mb_search` to search across all files (pass `query`). Read only what you need — do not pull entire large files if a line range suffices.';
+  p += '\nUse the `mb_view` function to read a file (pass `path`, and optional `start`/`end` line numbers to read only a slice) and `mb_search` to search across all files (pass `query`). Read only what you need, do not pull entire large files if a line range suffices.';
   return p;
 }
 
@@ -184,7 +184,7 @@ export function execTool(call) {
     if (!s) return { ok: false, error: `No memory bank file named "${call.path}".` };
     if (!isReadable(call.path)) return { ok: false, error: `"${call.path}" is not a readable text or PDF file.` };
     const text = readableTextSync(call.path);
-    if (text == null) return { ok: false, error: `Could not read "${call.path}". It may still be indexing — try again.` };
+    if (text == null) return { ok: false, error: `Could not read "${call.path}". It may still be indexing, try again.` };
     const lines = text.split('\n');
     let start = Number.isInteger(call.start) ? call.start : null;
     let end = Number.isInteger(call.end) ? call.end : null;

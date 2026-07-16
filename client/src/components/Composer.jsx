@@ -254,7 +254,7 @@ export default function Composer({
     if (files.length) {
       setUploading(true);
       try { const r = await api.uploadFiles(files.map(f => f.file)); attachments = r.files || []; }
-      catch (e) { setUploading(false); setUpErr(e?.message || 'Upload failed — the file may be too large.'); return; }
+      catch (e) { setUploading(false); setUpErr(e?.message || 'Upload failed, the file may be too large.'); return; }
       setUploading(false);
     }
     files.forEach(f => f.preview && URL.revokeObjectURL(f.preview));
@@ -347,7 +347,7 @@ export default function Composer({
     {safetyFlagged && (
       <div className="unavail-banner safety-banner">
         <div className="unavail-row">
-          <span className="unavail-msg"><strong>Message flagged.</strong> {safetyReason && safetyReason.trim() ? safetyReason.trim() : 'This prompt was blocked by the safety check — please revise it and try again.'}</span>
+          <span className="unavail-msg"><strong>Message flagged.</strong> {safetyReason && safetyReason.trim() ? safetyReason.trim() : 'This prompt was blocked by the safety check, please revise it and try again.'}</span>
         </div>
       </div>
     )}

@@ -29,5 +29,5 @@ for (const f of folders) {
   console.log(run('npm update', dir).trim() || 'done');
 }
 
-if (check) console.log('\n(check only — nothing was changed)');
+if (check) console.log('\n(check only, nothing was changed)');
 else console.log('\nAll folders updated within their safe version ranges.');

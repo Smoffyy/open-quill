@@ -239,7 +239,7 @@ export default function Sidebar({
               <span><Folder style={{ width: 12, verticalAlign: '-1px' }} /> Folders</span>
               <button className="folder-add" title="New folder" onClick={() => onCreateFolder && onCreateFolder()}><Plus style={{ width: 13 }} /></button>
             </div>
-            {folders.length === 0 && <div className="chats-empty">No folders — click + to add one</div>}
+            {folders.length === 0 && <div className="chats-empty">No folders, click + to add one</div>}
             {folders.map(f => (
               <FolderSection key={f.id} f={f} chats={inFolder(f.id)} active={activeId} showTrash={showTrash}
                 folders={folders} dragChatId={dragChatId}

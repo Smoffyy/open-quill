@@ -243,7 +243,7 @@ function SpaceChat({ space, user, models, onChanged, onClose }) {
       ) : (
         <>
           <div className="spc-chat-body" ref={bodyRef}>
-            {messages.length === 0 && <div className="spc-empty-msgs">No messages yet — say hello!</div>}
+            {messages.length === 0 && <div className="spc-empty-msgs">No messages yet, say hello!</div>}
             {messages.map(m => (
               <div key={m.id} className={'spc-msg' + (m.role === 'assistant' ? ' assistant' : (m.userId === user.id ? ' mine' : ''))}>
                 <span className="spc-avatar small">{m.role === 'assistant' ? '✦' : initials(m.authorName)}</span>
