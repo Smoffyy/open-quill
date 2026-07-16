@@ -1,6 +1,5 @@
 import React, { useRef, useEffect, useState, useLayoutEffect } from 'react';
 import ModelDropdown from './ModelDropdown.jsx';
-import FunctionsBar from './FunctionsBar.jsx';
 import { api } from '../api.js';
 import { transcribeBlob } from '../voice.js';
 import { toast } from '../toast.js';
@@ -66,7 +65,7 @@ function PmSub({ className = '', children, onMouseEnter, onMouseLeave }) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, models,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts, functions = [],
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
   voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall,
   safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
@@ -391,7 +390,6 @@ export default function Composer({
         </div>
       )}
       {upErr && <div className="attach-err">{upErr}</div>}
-      <FunctionsBar functions={functions} input={value} onChange={onChange} onSend={onSend} model={models?.find(m => m.id === currentId)} />
       {slashOpen && (
         <div className="slash-menu">
           <div className="slash-head">Commands</div>

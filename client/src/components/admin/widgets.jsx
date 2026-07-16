@@ -1,0 +1,244 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { api } from '../../api.js';
+import { Copy, Check } from '../icons.jsx';
+import { QP_ICON_LIST, QpIcon } from '../../qpIcons.jsx';
+
+export function QpIconPicker({ value, onPick }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+  return (
+    <div className="qp-iconpick" ref={ref}>
+      <button type="button" className="qp-iconbtn" onClick={() => setOpen(o => !o)} title="Choose an icon">
+        {value && value !== 'none' ? <QpIcon name={value} style={{ width: 16, height: 16 }} /> : <span className="qp-iconnone">, </span>}
+      </button>
+      {open && (
+        <div className="qp-iconmenu">
+          {QP_ICON_LIST.map(name => (
+            <button type="button" key={name} className={'qp-iconopt' + (name === (value || 'none') ? ' on' : '')}
+              onClick={() => { onPick(name); setOpen(false); }} title={name}>
+              {name === 'none' ? <span className="qp-iconnone">, </span> : <QpIcon name={name} style={{ width: 16, height: 16 }} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export const Grip = (p) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" {...p}>
+    <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
+    <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+    <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+  </svg>
+);
+
+export function bgPreviewStyle(v) {
+  const s = String(v || '').trim();
+  if (!s) return {};
+  if (/^(https?:|data:|blob:|\/)/i.test(s)) return { backgroundImage: `url("${s}")`, backgroundSize: 'cover', backgroundPosition: 'center' };
+  return { background: s };
+}
+
+export function IconCropModal({ file, onDone, onCancel }) {
+  const [shape, setShape] = useState('rounded');
+  const [zoom, setZoom] = useState(1);
+  const [img, setImg] = useState(null);
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    const i = new Image();
+    i.onload = () => setImg(i);
+    i.src = url;
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  function render(preview) {
+    const size = 256;
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    const ctx = c.getContext('2d');
+    if (!img) return c;
+    ctx.save();
+    if (shape === 'circle') { ctx.beginPath(); ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2); ctx.clip(); }
+    else if (shape === 'rounded') { const r = size * 0.22; ctx.beginPath(); ctx.roundRect(0, 0, size, size, r); ctx.clip(); }
+    const base = Math.min(img.width, img.height);
+    const crop = base / zoom;
+    ctx.drawImage(img, (img.width - crop) / 2, (img.height - crop) / 2, crop, crop, 0, 0, size, size);
+    ctx.restore();
+    return c;
+  }
+  const previewUrl = img ? render(true).toDataURL('image/png') : '';
+  async function apply() {
+    render(false).toBlob(async (blob) => {
+      const f = new File([blob], (file.name.replace(/\.[^.]+$/, '') || 'icon') + '-cropped.png', { type: 'image/png' });
+      const { url } = await api.upload(f);
+      onDone(url);
+    }, 'image/png');
+  }
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div className="sp-modal crop-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="sp-head"><h3>Crop icon</h3><button className="sp-x" onClick={onCancel}>✕</button></div>
+        <div className="crop-body">
+          <div className="crop-preview">{previewUrl && <img src={previewUrl} alt="" />}</div>
+          <div className="crop-controls">
+            <div className="field"><label>Shape</label>
+              <div className="seg" style={{ width: 'fit-content' }}>
+                <button className={shape === 'circle' ? 'on' : ''} onClick={() => setShape('circle')}>Circle</button>
+                <button className={shape === 'rounded' ? 'on' : ''} onClick={() => setShape('rounded')}>Rounded</button>
+                <button className={shape === 'square' ? 'on' : ''} onClick={() => setShape('square')}>Square</button>
+              </div>
+            </div>
+            <div className="field"><label>Zoom</label>
+              <input type="range" min="1" max="3" step="0.02" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
+            </div>
+            <div className="editor-actions">
+              <button className="btn" onClick={onCancel}>Cancel</button>
+              <button className="btn primary" disabled={!img} onClick={apply}>Use icon</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function IconSlot({ label, value, def, anim, onChange }) {
+  const ref = useRef(null);
+  const [cropFile, setCropFile] = useState(null);
+  async function pick(e) {
+    const f = e.target.files?.[0]; if (!f) return;
+    e.target.value = '';
+    if (f.type === 'image/svg+xml' || f.type === 'image/gif') {
+      const { url } = await api.upload(f);
+      onChange(url);
+      return;
+    }
+    setCropFile(f);
+  }
+  const shown = value || def;
+  return (
+    <div className="icon-slot">
+      <div className="preview-wrap">
+        <button type="button" className={'preview' + (shown ? '' : ' empty')} onClick={() => ref.current?.click()} title="Click to upload (png, svg, jpeg, gif)">
+          {shown ? <img src={shown} className={anim} alt="" /> : <span className="preview-none">None</span>}
+        </button>
+        {value && (
+          <button type="button" className="reset-icon" title="Remove icon" onClick={() => onChange('')}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
+          </button>
+        )}
+      </div>
+      <input ref={ref} type="file" hidden onChange={pick}
+        accept=".png,.svg,.jpg,.jpeg,.gif,image/png,image/svg+xml,image/jpeg,image/gif" />
+      {cropFile && <IconCropModal file={cropFile} onCancel={() => setCropFile(null)} onDone={(url) => { setCropFile(null); onChange(url); }} />}
+      <div className="up">{label}</div>
+    </div>
+  );
+}
+
+export function SystemPromptEditor({ value, onChange, onClose }) {
+  const taRef = useRef(null);
+  const dt = '{{currentDateTime}}';
+  const cu = '{{currentUser}}';
+  function insert(token) {
+    const ta = taRef.current;
+    const v = value || '';
+    if (!ta) { onChange(v + token); return; }
+    const s = ta.selectionStart ?? v.length, e = ta.selectionEnd ?? v.length;
+    const next = v.slice(0, s) + token + v.slice(e);
+    onChange(next);
+    requestAnimationFrame(() => { ta.focus(); const p = s + token.length; ta.setSelectionRange(p, p); });
+  }
+  return (
+    <div className="overlay sp-overlay" onMouseDown={(e) => e.target.classList.contains('sp-overlay') && onClose()}>
+      <div className="sp-modal">
+        <div className="sp-head">
+          <div>
+            <h3>System prompt</h3>
+            <div className="muted-note">Define how this model behaves. Variables below are filled in locally on each message.</div>
+          </div>
+          <button className="modal-close" style={{ position: 'static' }} onClick={onClose}>✕</button>
+        </div>
+        <div className="sp-vars">
+          <button className="sp-chip" onClick={() => insert(dt)}><code>{dt}</code> Insert local date &amp; time</button>
+          <button className="sp-chip" onClick={() => insert(cu)}><code>{cu}</code> Insert the user's name</button>
+        </div>
+        <textarea ref={taRef} className="sp-text" value={value || ''} onChange={(e) => onChange(e.target.value)} placeholder="You are a helpful assistant…" autoFocus />
+        <div className="sp-tips">
+          <div className="sp-tip"><b>{dt}</b>, replaced with the current date and time from this device, in your local timezone.</div>
+          <div className="sp-tip"><b>{cu}</b>, replaced with the signed-in user's name. Everything stays on your machine.</div>
+        </div>
+        <div className="sp-foot">
+          <span className="muted-note">Edits save to your draft automatically.</span>
+          <button className="btn primary" onClick={onClose}>Done</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function Toggle({ m, set, k, label, note, inverted }) {
+  const on = inverted ? m[k] !== 0 : !!m[k];
+  return (
+    <div className="field row">
+      <div><label>{label}</label>{note && <div className="muted-note">{note}</div>}</div>
+      <div className={'switch' + (on ? ' on' : '')} onClick={() => set(k, on ? 0 : 1)} />
+    </div>
+  );
+}
+
+export function Card({ title, sub, right, children, className }) {
+  return (
+    <section className={'ad-card' + (className ? ' ' + className : '')}>
+      {(title || right) && (
+        <div className="ad-card-head">
+          <div className="ad-card-titles">
+            {title && <h3 className="ad-card-title">{title}</h3>}
+            {sub && <div className="ad-card-sub">{sub}</div>}
+          </div>
+          {right && <div className="ad-card-right">{right}</div>}
+        </div>
+      )}
+      <div className="ad-card-body">{children}</div>
+    </section>
+  );
+}
+
+export function AutosaveNote({ status, live }) {
+  return (
+    <div className="settings-autosave">
+      <span className={'autosave-dot' + (status === 'saved' ? ' flash' : '')} />
+      {status === 'saving' ? 'Saving…' : status === 'saved' ? (live ? 'Saved, applies immediately' : 'Saved to draft, use Push to all clients to make it live') : (live ? 'Changes save automatically' : 'Changes save automatically to your draft')}
+    </div>
+  );
+}
+
+export function CopyBtn({ text, title }) {
+  const [ok, setOk] = useState(false);
+  return (
+    <button type="button" className={'me2-copy' + (ok ? ' ok' : '')} title={title || 'Copy'}
+      onClick={async (e) => { e.stopPropagation(); try { await navigator.clipboard.writeText(text || ''); setOk(true); setTimeout(() => setOk(false), 1200); } catch {} }}>
+      {ok ? <Check style={{ width: 12 }} /> : <Copy style={{ width: 12 }} />}
+    </button>
+  );
+}
+
+export function StatusChips({ m }) {
+  const chips = [];
+  if (m.is_default) chips.push(['default', 'Default']);
+  if (!m.enabled) chips.push(['dim', 'Hidden']);
+  if (m.unavailable) chips.push(['warn', 'Unavailable']);
+  if (m.has_reasoning) chips.push(['', 'Reasoning']);
+  if (m.has_vision) chips.push(['', 'Vision']);
+  if (m.sandbox_allowed !== 0 && m.sandbox_auto) chips.push(['', 'Sandbox']);
+  if (m.in_more_models) chips.push(['dim', 'Grouped']);
+  if (!chips.length) return null;
+  return <div className="me2-chips">{chips.map(([cls, label]) => <span key={label} className={'me2-chip' + (cls ? ' ' + cls : '')}>{label}</span>)}</div>;
+}
+

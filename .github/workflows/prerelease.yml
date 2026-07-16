@@ -1,0 +1,67 @@
+name: Pre-release
+
+on:
+  push:
+    tags:
+      - 'v*-beta.*'
+      - 'v*-rc.*'
+
+permissions:
+  contents: write
+
+jobs:
+  prerelease:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+            client/package-lock.json
+
+      - name: Verify tag matches package.json version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          BASE="${TAG%%-*}"
+          PKG=$(node -p "require('./package.json').version")
+          PKG_BASE="${PKG%%-*}"
+          echo "tag=$TAG base=$BASE package.json=$PKG"
+          [ "$BASE" = "$PKG_BASE" ] || { echo "::error::Tag base $BASE does not match package.json version $PKG_BASE"; exit 1; }
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      - name: Build client
+        run: npm run build
+
+      - name: Bundle release archive
+        run: |
+          mkdir -p out
+          zip -r "out/open-quill-${GITHUB_REF_NAME}.zip" \
+            package.json package-lock.json README.md LICENSE CREDITS.md CLAUDE.md \
+            server client/dist \
+            -x "server/node_modules/*" "server/data/*"
+
+      - name: Derive release name
+        id: name
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          BASE="${TAG%%-*}"
+          SUFFIX="${TAG#*-}"
+          KIND="${SUFFIX%%.*}"
+          NUM="${SUFFIX##*.}"
+          KIND="$(echo "${KIND:0:1}" | tr '[:lower:]' '[:upper:]')${KIND:1}"
+          echo "release_name=$BASE $KIND $NUM" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.name.outputs.release_name }}
+          prerelease: true
+          generate_release_notes: true
+          files: out/*.zip

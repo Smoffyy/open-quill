@@ -1126,8 +1126,7 @@ export default function App() {
     savedPrompts: user?.savedPrompts || [], onUsePrompt: (t) => { setInput(t); setFocusTick(x => x + 1); }, onSavePrompt: savePromptFromInput, onDeletePrompt: deleteSavedPrompt,
     onNewChat: () => newChat(), onShortcuts: () => setShowShortcuts(true),
     voiceMic: !!cfg.voiceMic, voiceCall: !!cfg.voiceCall && !incognito, sttEngine: cfg.voiceStt || 'browser',
-    onStartCall: () => { setArtifactsOpen(false); setCallOpen(true); },
-    functions: incognito ? [] : (cfg.functions || [])
+    onStartCall: () => { setArtifactsOpen(false); setCallOpen(true); }
   };
   const showArtifactsBtn = sandboxOn || files.length > 0;
 

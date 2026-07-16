@@ -119,16 +119,7 @@ export function projectFilesSchemas() {
   ];
 }
 
-export function customToolSchemas(list) {
-  return (list || []).map(t => fn(
-    t.name,
-    (t.description || 'Admin-provided tool.').slice(0, 1000),
-    Object.fromEntries((t.params || []).map(p => [p.name, str(p.desc || '')])),
-    (t.params || []).filter(p => p.required).map(p => p.name)
-  ));
-}
-
-export function buildTools({ sandboxOn, webSearchOn, membankOn, customToolsList, chatSearchOn, skillsOn, mcpSchemas, endChatOn, projFilesOn }) {
+export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, projFilesOn }) {
   const out = [];
   if (sandboxOn) out.push(...sandboxToolSchemas());
   if (webSearchOn) out.push(webSearchSchema());
@@ -137,7 +128,6 @@ export function buildTools({ sandboxOn, webSearchOn, membankOn, customToolsList,
   if (skillsOn) out.push(skillSchema());
   if (endChatOn) out.push(endConversationSchema());
   if (projFilesOn) out.push(...projectFilesSchemas());
-  if (customToolsList && customToolsList.length) out.push(...customToolSchemas(customToolsList));
   if (mcpSchemas && mcpSchemas.length) out.push(...mcpSchemas);
   return out;
 }

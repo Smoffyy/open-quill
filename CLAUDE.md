@@ -25,8 +25,8 @@ Rules:
 
 ## Where the preset comes from
 
-- Server setting `ui_preset` (SQLite key-value via `getSetting`/`setSetting` in `server/index.js`).
-- Exposed in `GET /api/app-config` as `uiPreset` and `uiPresetChosen`.
+- Server setting `ui_preset` (SQLite key-value via `getSetting`/`setSetting` in `server/db.js`).
+- Exposed in `GET /api/app-config` as `uiPreset` and `uiPresetChosen` (assembled in `server/lib/appconfig.js`, route in `server/routes/misc.js`).
 - Changed via `PATCH /api/admin/app-config { uiPreset }` → also flips the default `app_font` (sans for openai, serif for anthropic) unless the same request sets a font, writes an audit log entry, and calls `broadcastConfig()` so every connected client re-themes live.
 - First-run: when `uiPresetChosen === false`, admins see the chooser modal (`.preset-scrim` / `.preset-modal` in `App.jsx` + `modals.css`). Admins can change it later in Admin → Branding → Interface preset (`AdminPanel.jsx`).
 - Pre-React boot: `client/index.html` reads `localStorage 'oq-preset'` and `'oq-theme'` and sets both attributes before paint (no flash). `applyCfg`/`applyPrefs` keep localStorage in sync afterwards.
@@ -44,7 +44,7 @@ Rules:
 - `prefs.js` — theme mapping and forced circle cursor described above.
 - `SettingsModal.jsx` — preset-aware cursor defaults when seeding the prefs object.
 - `Composer.jsx` — none. The `.ml` multiline class is preset-agnostic; only `openai.css` styles it.
-- `server/index.js` — new-model defaults while `ui_preset === 'openai'`: `icon_size 28`, `show_name 1`, `icon_position 'left'`, `generating_anim/thinking_anim 'none'`, `dropdown_icon 0`.
+- `server/routes/models.js` — new-model defaults while `ui_preset === 'openai'`: `icon_size 28`, `show_name 1`, `icon_position 'left'`, `generating_anim/thinking_anim 'none'`, `dropdown_icon 0`.
 
 ## Layout invariants worth knowing before editing
 
@@ -61,3 +61,105 @@ Rules:
 2. If the OpenAI skin needs different visuals, add scoped rules to `openai.css` only.
 3. If it needs different *behavior*, branch on `cfg.uiPreset` and add the branch to the list above.
 4. Verify both presets and both light/dark before shipping. Preset switching is live — test by toggling in Admin → Branding with a second window open.
+
+---
+
+# Project map
+
+Full layout of the repository so any change lands in the right file. The server was refactored from a single `server/index.js` monolith into `lib/` (shared logic) and `routes/` (HTTP endpoints); the old monolith no longer exists. Keep it that way: new endpoints go in an existing route module (or a new one registered in `index.js`), new shared logic goes in `lib/`.
+
+## Root
+
+- `package.json` — workspace scripts and the **single source of truth for the app version** (`server/lib/appconfig.js` reads it as `APP_VERSION`; release workflows verify tags against it).
+  - `npm run install:all` — installs root, server, and client deps.
+  - `npm run build` — builds the client into `client/dist`.
+  - `npm run dev` — hot-reload server + client concurrently.
+  - `npm start` — production server, serves `client/dist` at `http://localhost:3001`.
+  - `npm run update:deps` / `check:deps` — dependency updater (`update-deps.mjs`; `update-deps-major.mjs` for majors).
+- `CLAUDE.md` — this document. `README.md`, `CREDITS.md`, `LICENSE` — served by `GET /api/docs/:name`.
+- `.github/workflows/` — CI and release automation (see "Branching & releases" below).
+- `assets/` — repo/README imagery only, not served by the app.
+
+## Server (`server/`)
+
+Entry point is `index.js` (~60 lines): express setup, cookie parsing, `/uploads` static hosting, route registration, static `client/dist` serving, websocket init via `initWs(server)`, and startup tasks (custom pricing presets, audit pruning). Route order matters only in that the static-client catch-all is registered last.
+
+### Core modules (pre-existing)
+
+- `db.js` — encrypted SQLite (better-sqlite3-multiple-ciphers) with JSON-blob tables; exports `db.<table>` accessors plus `uid`, `now`, `getSetting`, `setSetting`. Data lives in `server/data/` (gitignored).
+- `auth.js` — password hashing, JWT-style token signing, cookie parsing, sessions, `authMiddleware`, `adminOnly`, `sessionFromRequest`.
+- `llm.js` — provider-agnostic completion streaming: `buildMessages`, `streamCompletion`, `oneShot`, `generateTitle`, `summarizeConversation`, `stripThink`.
+- `providers.js` — provider registry (`PROVIDER_TYPES`, `getProviders`, `resolveProvider`, `providerSpec`).
+- `pricing.js` — per-model cost presets (`matchPreset`, custom presets).
+- `tools.js` — JSON tool schemas for the LLM (`buildTools`, `toCall`, `livePreview`). No custom/live tools: that feature was removed.
+- `toolproto.js` — inline tool-call syntax scanner shared conceptually with `client/src/toolproto.js`.
+- `sandbox.js` — per-chat file sandbox (versioned files, bash, zip). `skills/sandbox.md` is the base sandbox system prompt.
+- `websearch.js`, `membank.js`, `skillsys.js`, `mcp.js`, `projectfiles.js` — self-contained tool backends (each exports `execTool`/`promptFor`/`resultPayload`/`formatResult` variants).
+- `totp.js` — 2FA secrets, verification, recovery codes.
+
+### Shared logic (`server/lib/`)
+
+- `appconfig.js` — `APP_VERSION` + `appConfig()` (the `GET /api/app-config` payload).
+- `audit.js` — `logAudit`, `pruneAudit`, `clientIp`.
+- `budget.js` — monthly spend math: `budgetStatus`, `budgetFor`, `monthStartMs`.
+- `convo.js` — conversation assembly: `chatHistory`, token estimation + per-chat calibration (`estimateTokens`, `calibratedTokens`, `tokenCalib`), rolling-context truncation, auto-summarization (`compactStep`, `compactThreshold`), `promptVars`, `instrFor`, `styleTextFor`.
+- `history.js` — `stripToolSyntax` / `historyText` (turn stored tool blocks into compact markers), `decodeOqr`.
+- `memory.js` — per-user long-term memory (`updateUserMemory`, `maybeUpdateMemory`, `DEFAULT_MEMORY_PROMPT`).
+- `models.js` — model shaping/resolution: `shapePublic`, `draftModels`, `publicModels`, `resolveModel(OrDefault)`, `applyEffort`, `roleLimit`, context-length detection (`modelCtx`, `detectContextLength`).
+- `prompts.js` — system-prompt builders and tool formatting: `sandboxPromptFor`, `cleanCall`, `resultPayload`, `formatToolResult`, chat-search tools, `endChatPromptFor`, `longConvoReminderFor`, `pinnedFilesPrompt`.
+- `queue.js` — optional one-model-at-a-time request queue (`runQueued`).
+- `safety.js` — safety filter prompt + verdict parsing.
+- `spaces.js` — space membership helpers, `broadcastSpace`, `removeUserFromSpaces`, `spaceAssistantRespond`.
+- `tree.js` — message branching tree: `activePath`, `ensureChain`, `childrenOf`, `leafUnder`, `sortedMsgs`.
+- `uploads.js` — `UPLOADS` dir, multer `diskStore`, attachment readers (`readUploadText`, `readImageDataUri`, `isTextLike`), `purgeUploads`.
+- `ws.js` — the websocket engine. Holds the `clients` map, `broadcastConfig`, `broadcastAdminConfig`, `broadcastToUser`, `killSessionSockets`, and `initWs(server)` which contains `runCompletion` (the agentic tool-call loop) and the `chat`/`regenerate`/`edit`/`incognito`/`stop` message handlers. **`lib/ws.js` must never import from `routes/`** — dependency direction is routes → lib.
+
+### HTTP routes (`server/routes/`)
+
+Each exports `default function register(app)` and is wired in `index.js`.
+
+- `auth.js` — login/logout, `/api/me` (profile, styles, memory, personas, saved prompts, usage, sessions, budget, password, 2FA, delete-account), message feedback, improve-prompt, style generation, user search.
+- `chats.js` — chat CRUD, folders, search, overview, export/import, branching (`/branch`, `/fork`, `/siblings`), pins, context/inspect/summary endpoints.
+- `projects.js` — project CRUD + project file uploads.
+- `artifacts.js` — sandbox file viewing, versions, downloads, restore, zip.
+- `models.js` — public `/api/models`, admin model CRUD, discovery, reorder, publish/publish-state (draft vs published snapshot), pricing presets, context detection.
+- `settings.js` — `/api/safety-check`, `GET/PATCH /api/admin/settings`, provider CRUD.
+- `admin.js` — users, skills, MCP servers, feedback, safety log, audit log (+ CSV export), admin usage analytics, per-user budgets.
+- `media.js` — general + admin uploads, voice transcribe/speak proxies, memory bank files.
+- `spaces.js` — shared group-chat spaces (invite/respond/leave/members/messages/typing).
+- `misc.js` — `/api/app-config`, `PATCH /api/admin/app-config` (branding, greetings, quick prompts, UI preset), `/api/docs/:name`.
+
+## Client (`client/`)
+
+Vite + React. `vite.config.js` proxies `/api`, `/uploads`, and the websocket to `:3001` in dev.
+
+- `src/main.jsx` — entry, mounts `App`.
+- `src/App.jsx` — top-level state: auth, chat list, streaming websocket handling, composer props, keyboard shortcuts, modals, routing between home/chat/spaces.
+- `src/api.js` — fetch wrapper for every REST call (`api.get/post/patch/put/del`, uploads).
+- `src/prefs.js` — theme/preset application (see preset doc above). `src/toast.js`, `src/clipboard.js`, `src/lightbox.js`, `src/voice.js` — small utilities. `src/toolproto.js` — client-side tool-syntax scanner. `src/qpIcons.jsx` — quick-prompt icon set.
+- `src/styles/` — `app.css` imports everything; `openai.css` is the OpenAI preset (always last). Others: `base`, `layout`, `chrome`, `chat`, `composer` styles live across `polish`, `extras`, `modals`, `admin`, `artifacts`, `fonts`.
+
+### Components (`src/components/`)
+
+- `AdminPanel.jsx` — admin shell: tab navigation, models list/publish flow, branding, members, settings tabs. Tab ids: `overview, models, providers, branding, home, members, websearch, membank, voice, safety, memory, skills, mcp, feedback, limits, audit, analytics`.
+- `admin/widgets.jsx` — shared admin primitives: `Card`, `Toggle`, `IconSlot`, `IconCropModal`, `SystemPromptEditor`, `QpIconPicker`, `AutosaveNote`, `CopyBtn`, `StatusChips`, `Grip`, `bgPreviewStyle`.
+- `admin/ModelEditor.jsx` — the per-model editor (sections: General, Intelligence, Abilities, Style, Tuning; `ME_SECTIONS`).
+- `Composer.jsx` — the input: attachments, dictation, slash commands, style menu, sandbox/web-search toggles, saved prompts.
+- `Message.jsx`, `Markdown.jsx`, `CodeBlock.jsx`, `ReasoningBlock.jsx`, `StreamingText.jsx`, `ToolCard.jsx` — message rendering pipeline.
+- `Sidebar.jsx`, `ChatMenu.jsx`, `ChatsOverview.jsx`, `SearchModal.jsx`, `BranchCompare.jsx` — navigation and history.
+- `ArtifactsPanel.jsx` — sandbox file browser/preview. `ProjectsPanel.jsx`, `SpacesPanel.jsx` — projects and spaces UIs.
+- `SettingsModal.jsx`, `PersonasModal.jsx`, `StyleMenu.jsx`, `ShortcutsModal.jsx`, `DocModal.jsx`, `Login.jsx`, `CallPanel.jsx`, `ModelDropdown.jsx`, `ChatControls.jsx`, `AppBackground.jsx`, `Toaster.jsx`, `Lightbox.jsx`, `icons.jsx`.
+
+## Removed features (do not resurrect)
+
+- **Custom Functions** (admin-defined browser-side buttons): `server/functions.js`, `FunctionsBar.jsx`, `/api/admin/functions`, `cfg.functions` — all deleted.
+- **Live Tools** (admin-defined server-side JS tools): `server/customtools.js`, `/api/admin/tools`, `customToolSchemas` in `tools.js`, model fields `tools_allowed`/`tools_auto` — all deleted. Stale `tools_allowed`/`tools_auto` keys may linger in old model rows in the DB; they are ignored everywhere.
+
+## Branching & releases
+
+Permanent branches: `dev` → `beta` → `stable`. Versions live in tags, not branch names.
+
+- Pre-release: merge `dev` into `beta`, bump root `package.json` version, tag `vX.Y.Z-beta.N` → `.github/workflows/prerelease.yml` builds and publishes a GitHub pre-release named "X.Y.Z Beta N".
+- Stable: merge `beta` into `stable`, tag `vX.Y.Z` → `.github/workflows/release.yml` publishes the release and marks it latest.
+- `ci.yml` runs build + server smoke test on every push/PR to the three branches. `version-guard.yml` blocks PRs into `beta`/`stable` unless the root `package.json` version was bumped.
+- Releases only fire on tags, never on branch pushes, so an accidental push to `beta` publishes nothing.
