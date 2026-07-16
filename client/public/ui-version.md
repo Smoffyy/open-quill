@@ -1,5 +1,7 @@
-# 2027 - Cascade
+# Open Quill 27 — Cascade
 
-The next major release is here, building on the 2026 foundation with a strong focus on security, scalability, and customization. With encrypted storage, stronger authentication, advanced usage controls, and collaborative workspaces like Spaces and Projects, 2027 makes the platform more secure, more manageable, and more powerful for the community. As always, new versions may occasionally include bugs as we keep improving the experience.
+Open Quill 27 (OQ 27) is the next major release of Open Quill, building on the 2026 foundation with a strong focus on security, scalability, and customization. This release introduces encrypted storage, enhanced authentication, advanced usage controls, and collaborative workspaces through Spaces and Projects, making Open Quill more secure, more manageable, and more powerful than ever.
 
-To see all changes, check out the `Changelog` menu.
+As with any major release, you may encounter occasional bugs as we continue refining the platform through future updates.
+
+For a complete list of changes, see the `Changelog` menu.

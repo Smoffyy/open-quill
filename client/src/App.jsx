@@ -49,9 +49,10 @@ function QuickPrompts({ prompts, visible, disabled, onPick }) {
     const t = setTimeout(() => setRender(false), dur);
     return () => clearTimeout(t);
   }, [visible]);
-  if (!render) return null;
+  const keepSpace = document.documentElement.getAttribute('data-preset') === 'openai';
+  if (!render && !keepSpace) return null;
   return (
-    <div className={'quick-prompts' + (leaving ? ' leaving' : '')}>
+    <div className={'quick-prompts' + (leaving ? ' leaving' : '') + (keepSpace && !visible ? ' qp-ghost' : '')}>
       {prompts.map((q, i) => (
         <button key={i} className="quick-prompt" style={{ animationDelay: i * 45 + 'ms' }} onClick={() => onPick(q.prompt)} disabled={disabled}>
           {q.icon && q.icon !== 'none' && <span className="qp-icon"><QpIcon name={q.icon} style={{ width: 15, height: 15 }} /></span>}{q.label}
@@ -151,10 +152,13 @@ function CommandPalette({ commands, onClose }) {
 
 export default function App() {
   const [user, setUser] = useState(undefined);
+  const userRef = useRef(undefined);
+  useEffect(() => { userRef.current = user; }, [user]);
   const [intro, setIntro] = useState(false);
   const [models, setModels] = useState([]);
   const [currentId, setCurrentId] = useState(null);
   const [extended, setExtended] = useState(false);
+  const [reasoningEffort, setReasoningEffort] = useState('');
   const [bgVisible, setBgVisible] = useState(false);
   const [chats, setChats] = useState([]);
   const [folders, setFolders] = useState([]);
@@ -251,6 +255,7 @@ export default function App() {
   const assistantIdRef = useRef(null);
   const revealTimer = useRef(null);
   const followRaf = useRef(0);
+  const followTs = useRef(0);
   const dispLen = useRef(0);
   const scrollRef = useRef(null);
   const stick = useRef(true);
@@ -270,6 +275,18 @@ export default function App() {
   const refreshSeq = useRef(0);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
   useEffect(() => { liveRef.current = liveFile; }, [liveFile]);
+  useEffect(() => {
+    const m = models.find(x => x.id === currentId);
+    if (!m || !m.effortEnabled) return;
+    const levels = (m.effortLevels && m.effortLevels.length) ? m.effortLevels : ['low', 'medium', 'high'];
+    const isBool = levels.length === 2 && levels.some(x => /^true$/i.test(x)) && levels.some(x => /^false$/i.test(x));
+    const fallback = isBool ? levels.find(x => /^false$/i.test(x)) : (levels[Math.floor(levels.length / 2)] || levels[0]);
+    setReasoningEffort(prev => levels.includes(prev) ? prev : (levels.includes(m.effortDefault) ? m.effortDefault : fallback));
+  }, [currentId, models]);
+  const homeSelectionRef = useRef(null);
+  useEffect(() => {
+    if (!activeId && !incognito) homeSelectionRef.current = { modelId: currentId, extended, reasoningEffort };
+  }, [activeId, incognito, currentId, extended, reasoningEffort]);
   useEffect(() => {
     const active = computeActiveBg(models, currentId, activeId, messages.length, incognito, user?.prefs);
     if (active) { setBgVisible(true); return; }
@@ -294,15 +311,16 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!user) return;
-    applyPrefs(user?.prefs);
+    const preset = cfg?.uiPreset === 'openai' ? 'openai' : 'anthropic';
+    applyPrefs(user?.prefs, preset);
     const t = user?.prefs?.theme || 'dark';
     if (t === 'system' && window.matchMedia) {
       const mq = window.matchMedia('(prefers-color-scheme: dark)');
-      const h = () => applyPrefs(user?.prefs);
+      const h = () => applyPrefs(user?.prefs, preset);
       mq.addEventListener?.('change', h);
       return () => mq.removeEventListener?.('change', h);
     }
-  }, [user]);
+  }, [user, cfg?.uiPreset]);
   useEffect(() => { if (user) { loadModels(); loadChats(); loadFolders(); loadAppConfig(); loadBudget(); connect(); openFromUrl(); refreshSpacesPending(); loadProjects(); } }, [!!user]);
   async function loadBudget() { try { setBudget(await api.get('/api/me/budget')); } catch {} }
   async function loadProjects() { try { setProjects(await api.get('/api/projects')); } catch {} }
@@ -394,6 +412,11 @@ export default function App() {
   async function loadChats() { try { setChats(await api.get('/api/chats')); } catch {} finally { setChatsLoaded(true); } }
   async function loadFolders() { try { setFolders(await api.get('/api/folders')); } catch {} }
   async function loadAppConfig() { try { applyCfg(await api.get('/api/app-config')); } catch {} }
+  const [presetPicked, setPresetPicked] = useState(false);
+  async function choosePreset(p) {
+    setPresetPicked(true);
+    try { await api.patch('/api/admin/app-config', { uiPreset: p }); await loadAppConfig(); } catch {}
+  }
   useEffect(() => {
     const appName = cfg.appName || 'open-quill';
     if (incognito) { document.title = 'Incognito chat - ' + appName; return; }
@@ -414,6 +437,10 @@ export default function App() {
     setCfg(c);
     const list = c.greetings && c.greetings.length ? c.greetings : DEFAULT_CFG.greetings;
     setGreeting(list[Math.floor(Math.random() * list.length)]);
+    const preset = c.uiPreset === 'openai' ? 'openai' : 'anthropic';
+    document.documentElement.setAttribute('data-preset', preset);
+    try { localStorage.setItem('oq-preset', preset); } catch {}
+    applyPrefs(userRef.current?.prefs, preset);
     document.documentElement.setAttribute('data-font', c.appFont === 'sans' ? 'sans' : 'serif');
     let link = document.querySelector('link[rel="icon"]');
     if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
@@ -576,7 +603,7 @@ export default function App() {
           if (!cmp.messageId && m.messageId) cmp.messageId = m.messageId;
           const nextId = cmp.remaining.shift();
           if (nextId && cmp.messageId) {
-            (() => { const g = genOptsRef.current; setTimeout(() => wsSend({ type: 'regenerate', chatId: cmp.chatId, modelId: nextId, extended: g.extended, messageId: cmp.messageId, sandbox: g.sandbox, webSearch: g.webSearch, styleId: g.styleId }), 150); })();
+            (() => { const g = genOptsRef.current; setTimeout(() => wsSend({ type: 'regenerate', chatId: cmp.chatId, modelId: nextId, extended: g.extended, reasoningEffort: g.reasoningEffort, messageId: cmp.messageId, sandbox: g.sandbox, webSearch: g.webSearch, styleId: g.styleId }), 150); })();
           } else {
             compareRef.current = null;
             toast('Model comparison ready — use the version arrows or compare button on the response.', { duration: 6000 });
@@ -601,7 +628,7 @@ export default function App() {
       if (dispLen.current >= target.length) { if (pendingDone.current) finalize(); return; }
       setDispContent(prev => {
         const remaining = target.length - prev.length;
-        const instant = !animateRef.current || revealRef.current <= 0;
+        const instant = document.documentElement.getAttribute('data-preset') === 'openai' || !animateRef.current || revealRef.current <= 0;
         const n = instant ? remaining
           : remaining > 1200 ? Math.ceil(remaining / 3)
           : remaining > 240 ? Math.ceil(remaining / 6)
@@ -615,10 +642,17 @@ export default function App() {
 
   function follow() {
     const el = scrollRef.current;
+    const now = performance.now();
+    const dt = Math.min(80, now - (followTs.current || now));
+    followTs.current = now;
     if (el && stick.current && !selectingRef.current && !hasSelectionRef.current) {
       const target = el.scrollHeight - el.clientHeight;
       const diff = target - el.scrollTop;
-      if (diff > 0.5) { programmatic.current = true; el.scrollTop = el.scrollTop + Math.max(1, diff * 0.2); }
+      if (diff > 0.5) {
+        programmatic.current = true;
+        const k = 1 - Math.exp(-dt / 85);
+        el.scrollTop = el.scrollTop + Math.max(1, diff * k);
+      }
     }
     followRaf.current = requestAnimationFrame(follow);
   }
@@ -794,6 +828,14 @@ export default function App() {
     try {
       const { chat, messages } = await api.get('/api/chats/' + id);
       setMessages(messages);
+      {
+        const lastA = [...messages].reverse().find(mm => mm.role === 'assistant' && mm.model_id);
+        if (lastA && models.find(mm => mm.id === lastA.model_id)) {
+          setCurrentId(lastA.model_id);
+          setExtended(!!lastA.extended);
+          if (lastA.reasoningEffort) setReasoningEffort(lastA.reasoningEffort);
+        }
+      }
       setCurrentProject(chat.projectId ? (projects.find(p => p.id === chat.projectId) || { id: chat.projectId, name: 'Project' }) : null);
       if (user?.prefs?.chatStagger !== false && user?.prefs?.messageEntrance !== false) {
         clearTimeout(staggerTimer.current);
@@ -829,8 +871,16 @@ export default function App() {
     setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
     setChatEnded(false); setChatEndedReason('');
     setCanContinue(false); setQueuedMsg(''); queuedRef.current = '';
+    setChatGenParams(null); setChatSysOverride('');
     setInput(loadDraft(null));
-    const m = models.find(m => m.id === currentId);
+    const restored = homeSelectionRef.current;
+    const targetId = (restored && restored.modelId && models.find(m => m.id === restored.modelId)) ? restored.modelId : currentId;
+    if (restored) {
+      if (targetId !== currentId) setCurrentId(targetId);
+      setExtended(!!restored.extended);
+      setReasoningEffort(restored.reasoningEffort || '');
+    }
+    const m = models.find(m => m.id === targetId);
     setSandbox(m?.sandboxAllowed !== false && !!m?.sandboxAuto);
     setWebSearch(!!cfg.webSearchAvailable && m?.webSearchAllowed !== false && !!m?.webSearchAuto);
     setFocusTick(t => t + 1);
@@ -944,7 +994,7 @@ export default function App() {
         .filter(m => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
         .map(m => ({ role: m.role, content: m.content })),
         { role: 'user', content: text }];
-      if (!wsSend({ type: 'incognito', modelId: currentId, extended, messages: history })) return;
+      if (!wsSend({ type: 'incognito', modelId: currentId, extended, reasoningEffort, messages: history })) return;
       gen.current.set('incognito', { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
       setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments: [], _enter: true }]);
       setInput('');
@@ -958,10 +1008,13 @@ export default function App() {
       chatId = c.id; setActiveId(chatId);
       setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false, folderId: null }, ...cs]);
       history.pushState({}, '', '/chat/' + chatId);
+      if ((chatGenParams && Object.keys(chatGenParams).length) || (chatSysOverride && chatSysOverride.trim())) {
+        try { await api.patch('/api/chats/' + chatId, { genParams: chatGenParams || {}, systemOverride: chatSysOverride || '' }); } catch {}
+      }
     }
     if (compareRef.current && !compareRef.current.chatId) compareRef.current.chatId = chatId;
     clearDraft(activeId);
-    if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, content: text, attachments, sandbox, webSearch, call: !!opts.call, styleId })) return;
+    if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, reasoningEffort, content: text, attachments, sandbox, webSearch, call: !!opts.call, styleId })) return;
     gen.current.set(chatId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
     setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     if (!opts.call) setInput('');
@@ -979,7 +1032,7 @@ export default function App() {
     setActiveId(c.id); setMessages([]); setInput('');
     setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
     history.pushState({}, '', '/chat/' + c.id);
-    if (!wsSend({ type: 'chat', chatId: c.id, modelId: currentId, extended, content: text, attachments, sandbox, webSearch, styleId })) return;
+    if (!wsSend({ type: 'chat', chatId: c.id, modelId: currentId, extended, reasoningEffort, content: text, attachments, sandbox, webSearch, styleId })) return;
     gen.current.set(c.id, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
     setMessages([{ id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
@@ -1006,30 +1059,30 @@ export default function App() {
 
   const regenerate = useCallback((messageId) => {
     if (streaming || !activeId || !currentId) return;
-    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, messageId, sandbox, webSearch, styleId })) return;
+    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, reasoningEffort, messageId, sandbox, webSearch, styleId })) return;
     gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
-  }, [streaming, activeId, currentId, extended, sandbox, webSearch]);
+  }, [streaming, activeId, currentId, extended, reasoningEffort, sandbox, webSearch]);
 
   const regenerateWith = useCallback((messageId, modelId) => {
     if (streaming || !activeId || !modelId) return;
     setCurrentId(modelId);
-    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId, extended, messageId, sandbox, webSearch, styleId })) return;
+    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId, extended, reasoningEffort, messageId, sandbox, webSearch, styleId })) return;
     gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: modelId, live: null });
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
     const mm = models.find(m => m.id === modelId);
     if (mm) toast('Retrying with ' + mm.displayName, { icon: 'check' });
-  }, [streaming, activeId, extended, sandbox, webSearch, models]);
+  }, [streaming, activeId, extended, reasoningEffort, sandbox, webSearch, models]);
 
   const editMessage = useCallback((messageId, newContent) => {
     if (streaming || !activeId || !currentId) return;
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); if (idx === -1) return ms; const copy = ms.slice(0, idx + 1); copy[idx] = { ...copy[idx], content: newContent }; return copy; });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
-    if (!wsSend({ type: 'edit', chatId: activeId, modelId: currentId, extended, messageId, content: newContent, sandbox, webSearch, styleId })) return;
+    if (!wsSend({ type: 'edit', chatId: activeId, modelId: currentId, extended, reasoningEffort, messageId, content: newContent, sandbox, webSearch, styleId })) return;
     gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
-  }, [streaming, activeId, currentId, extended, sandbox, webSearch]);
+  }, [streaming, activeId, currentId, extended, reasoningEffort, sandbox, webSearch]);
 
   function stop() { const key = activeKey(); try { ws.current?.readyState === 1 && ws.current.send(JSON.stringify({ type: 'stop', chatId: key })); } catch {} pendingDone.current = true; setQueued(false); }
   async function logout() { await api.post('/api/auth/logout'); location.href = '/'; }
@@ -1052,7 +1105,7 @@ export default function App() {
   const modelHasBg = !incognito && !!(model?.bgEnabled && model?.bgImage);
   const activeBg = computeActiveBg(models, currentId, activeId, messages.length, incognito, user?.prefs);
   sendRef.current = send;
-  genOptsRef.current = { extended, sandbox, webSearch, styleId };
+  genOptsRef.current = { extended, reasoningEffort, sandbox, webSearch, styleId };
   const composerProps = {
     value: input, onChange: (v) => { if (safetyFlagged) { setSafetyFlagged(false); setSafetyReason(''); } setInput(v); saveDraft(activeId, v); }, onSend: send, onStop: stop, streaming: streaming || queued,
     queuedMsg, onQueue: (t) => { queuedRef.current = t; setQueuedMsg(t); }, onCancelQueue: () => { queuedRef.current = ''; setQueuedMsg(''); },
@@ -1061,8 +1114,9 @@ export default function App() {
     safetyFlagged, safetyChecking, safetyReason, safetyVerbose: !!cfg.safetyCheckVerbose,
     styles: user?.styles || [], styleId, onSelectStyle: setStyleId, onSaveStyles: saveStyles,
     conversationEnded: chatEnded, endedReason: chatEndedReason,
-    hideModelPicker: user?.prefs?.modelTop === true,
+    hideModelPicker: cfg.uiPreset === 'openai',
     models, currentId, onSelect: setCurrentId, extended, onToggleExtended: () => setExtended(e => !e),
+    reasoningEffort, onSetEffort: setReasoningEffort,
     visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin, budget,
     modelHasBg, bgInChat, onToggleBgInChat: () => updatePref('modelBgInChat', !bgInChat),
     sandbox: sandboxOn, sandboxAllowed, onToggleSandbox: () => { if (sandboxAllowed) setSandbox(s => !s); },
@@ -1123,15 +1177,29 @@ export default function App() {
           <button className="mobile-menu-btn empty-menu" onClick={() => setMobileDrawer(true)} title="Menu"><Menu style={{ width: 20 }} /></button>
         )}
         {!incognito && empty && (
-          <button className="incognito-fab" onClick={toggleIncognito} title="Incognito chat — not saved" disabled={streaming || queued}>
+          <button className={'incognito-fab' + (user?.isAdmin ? ' with-ctl' : '')} onClick={toggleIncognito} title="Incognito chat — not saved" disabled={streaming || queued}>
             <Ghost style={{ width: 18 }} />
           </button>
+        )}
+        {empty && !incognito && user?.isAdmin && (
+          <button className={'incognito-fab ctl-fab' + (ctlOpen ? ' active' : '')} onClick={() => { setArtifactsOpen(false); setCtlOpen(o => !o); }} title="Chat controls (admin)" disabled={streaming || queued}>
+            <Sliders style={{ width: 17 }} />
+          </button>
+        )}
+        {empty && !incognito && cfg.uiPreset === 'openai' && (
+          <div className="home-topbar">
+            <div className="topbar-model">
+              <ModelDropdown models={models} currentId={currentId} onSelect={setCurrentId} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} canUseUnavailable={!!user?.isAdmin} up={false} />
+            </div>
+          </div>
         )}
         {empty ? (
           <div className="center-wrap">
             <div className="greeting">
               {incognito
-                ? <><Ghost style={{ width: 44 }} /> {incognitoGreeting}</>
+                ? (cfg.uiPreset === 'openai'
+                    ? <span className="incog-title">Temporary Chat</span>
+                    : <><Ghost style={{ width: 44 }} /> {incognitoGreeting}</>)
                 : (() => {
                     const h = new Date().getHours();
                     const part = h < 5 ? 'Working late' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : h < 22 ? 'Good evening' : 'Burning the midnight oil';
@@ -1147,7 +1215,7 @@ export default function App() {
             </div>
             <div className="qp-slot">
               {incognito ? (
-                <div className="incognito-note">Incognito chats aren't saved to your history.</div>
+                <div className={cfg.uiPreset === 'openai' ? 'incog-note' : 'incognito-note'}>{cfg.uiPreset === 'openai' ? "This chat won't appear in history. Incognito chats aren't saved." : "Incognito chats aren't saved to your history."}</div>
               ) : cfg.quickPrompts && cfg.quickPrompts.length > 0 && (
                 <QuickPrompts prompts={cfg.quickPrompts} visible={!input.trim()} disabled={streaming} onPick={(p) => send([], p)} />
               )}
@@ -1156,9 +1224,9 @@ export default function App() {
         ) : (
           <>
             <div className="topbar">
-              {user?.prefs?.modelTop === true && (
+              {cfg.uiPreset === 'openai' && (
                 <div className="topbar-model">
-                  <ModelDropdown models={models} currentId={currentId} onSelect={setCurrentId} canUseUnavailable={!!user?.isAdmin} up={false} />
+                  <ModelDropdown models={models} currentId={currentId} onSelect={setCurrentId} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} canUseUnavailable={!!user?.isAdmin} up={false} />
                 </div>
               )}
               <button className="mobile-menu-btn" onClick={() => setMobileDrawer(true)} title="Menu"><Menu style={{ width: 20 }} /></button>
@@ -1170,7 +1238,7 @@ export default function App() {
               ) : (
                 <div className="chat-name-wrap">
                   <button className="chat-name" onClick={() => setChatMenuOpen(o => !o)}>
-                    {chats.find(c => c.id === activeId)?.title || 'New chat'} <ChevDown style={{ width: 15 }} />
+                    <span className="ct-title">{chats.find(c => c.id === activeId)?.title || 'New chat'}</span> <ChevDown style={{ width: 15 }} />
                   </button>
                   {(chatInstructions || '').trim() && <span className="chat-instr-dot" title="This chat has custom instructions" />}
                   {chatMenuOpen && activeId && (
@@ -1230,7 +1298,7 @@ export default function App() {
                     <Message key={msg._k || msg.id} msg={msg} model={models.find(x => x.id === msg.model_id) || model} models={models} currentId={currentId} chatId={activeId} pins={chatPins} chatEnded={chatEnded}
                       streaming={!!msg._streaming} phase={msg._streaming ? phase : 'static'} liveCall={msg._streaming ? liveCall : null}
                       onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
-                      showIcon={msg.role === 'assistant' && lastA && msg.id === lastA.id} />
+                      showIcon={msg.role === 'assistant' && (cfg.uiPreset === 'openai' || (lastA && msg.id === lastA.id))} />
                   ));
                 })()}
                 {queued && !streaming && (
@@ -1241,7 +1309,7 @@ export default function App() {
               </div>
             </div>
             {showJump && <button className="to-bottom" onClick={jumpDown}><Down style={{ width: 17 }} /></button>}
-            <div className="composer-wrap active-composer" style={{ maxWidth: 760, margin: '0 auto', width: '100%', padding: '0 20px' }}>
+            <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')} style={{ maxWidth: cfg.uiPreset === 'openai' ? 808 : 760, margin: '0 auto', width: '100%', padding: '0 20px' }}>
               <Composer {...composerProps} focusKey={focusTick} />
               <div className="disclaimer">{cfg.disclaimer}</div>
             </div>
@@ -1252,8 +1320,8 @@ export default function App() {
       {artifactsOpen && activeId && !callOpen && (
         <ArtifactsPanel chatId={activeId} files={files} live={liveFile} focus={artifactFocus} onClose={() => setArtifactsOpen(false)} />
       )}
-      {ctlOpen && user?.isAdmin && activeId && (
-        <ChatControls chatId={activeId} initialParams={chatGenParams} initialOverride={chatSysOverride} onClose={() => setCtlOpen(false)} />
+      {ctlOpen && user?.isAdmin && !incognito && (
+        <ChatControls chatId={activeId || null} initialParams={chatGenParams} initialOverride={chatSysOverride} onChange={(p, o) => { setChatGenParams(p && Object.keys(p).length ? p : null); setChatSysOverride(o || ''); }} onClose={() => setCtlOpen(false)} />
       )}
       {callOpen && (
         <CallPanel chatId={activeId} model={model}
@@ -1268,6 +1336,26 @@ export default function App() {
       )}
 
       {showSettings && <SettingsModal user={user} cfg={cfg} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile} />}
+      {user?.isAdmin && cfg.uiPresetChosen === false && !presetPicked && (
+        <div className="preset-scrim">
+          <div className="preset-modal">
+            <h2 className="preset-title">Choose your interface</h2>
+            <p className="preset-sub">Pick the look for this workspace. You can change it any time in Admin → Branding.</p>
+            <div className="preset-grid">
+              <button className="preset-card" onClick={() => choosePreset('anthropic')}>
+                <span className="preset-swatch anthropic"><span className="ps-dot" /></span>
+                <span className="preset-name">Anthropic</span>
+                <span className="preset-desc">Warm serif look with the classic open-quill layout.</span>
+              </button>
+              <button className="preset-card" onClick={() => choosePreset('openai')}>
+                <span className="preset-swatch openai"><span className="ps-dot" /></span>
+                <span className="preset-name">OpenAI</span>
+                <span className="preset-desc">Pitch-black ChatGPT layout with the model picker up top.</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} onChatsChanged={() => loadChats()} />}
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} onOpen={(id) => openChat(id)} />}
       {personasOpen && <PersonasModal personas={user?.personas || []} models={models} currentId={currentId} onApply={applyPersona} onSave={savePersonas} onClose={() => setPersonasOpen(false)} />}

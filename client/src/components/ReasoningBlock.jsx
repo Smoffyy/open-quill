@@ -8,7 +8,7 @@ export default function ReasoningBlock({ text, live, collapsible = true }) {
     if (!live) return null;
     return (
       <div className="reasoning">
-        <div className="reasoning-head static">
+        <div className="reasoning-head static live">
           <span><span className="rb-label">Thinking…</span></span>
         </div>
       </div>

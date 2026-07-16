@@ -47,9 +47,11 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
   const importRef = useRef(null);
   const [prefs, setPrefs] = useState(() => {
     const applied = document.documentElement.getAttribute('data-theme');
-    const fallbackTheme = applied === 'anthropic' ? 'dark' : (applied || 'system');
-    const merged = { animations: true, autoscroll: true, theme: 'system', accent: '', density: 'comfortable', messageEntrance: true, streamCursor: false, cursorStyle: 'block', cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40, chatStagger: true, themeFade: true, microFx: true, composerFx: true, iconGlow: false, focusGlow: false, oledShift: false, ...user.prefs };
+    const fallbackTheme = (applied === 'anthropic' || applied === 'openai' || applied === 'oled') ? 'dark' : (applied || 'system');
+    const isOpenai = document.documentElement.getAttribute('data-preset') === 'openai';
+    const merged = { animations: true, autoscroll: true, theme: 'system', accent: '', density: 'comfortable', messageEntrance: true, streamCursor: isOpenai, cursorStyle: isOpenai ? 'circle' : 'block', cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40, chatStagger: true, themeFade: true, microFx: true, composerFx: true, iconGlow: false, focusGlow: false, oledShift: false, ...user.prefs };
     if (!user.prefs || user.prefs.theme == null) merged.theme = fallbackTheme;
+    if (merged.theme === 'oled') merged.theme = 'dark';
     return merged;
   });
   const [saved, setSaved] = useState(false);
@@ -341,7 +343,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
               <div className="field row">
                 <div><label>Theme</label><div className="muted-note">Follow your system, or pick one.</div></div>
                 <Seg value={prefs.theme || 'system'} onPick={(v) => setPref('theme', v)}
-                  options={[{ v: 'system', label: 'System' }, { v: 'light', label: 'Light' }, { v: 'dark', label: 'Dark' }, { v: 'oled', label: 'OLED' }]} />
+                  options={[{ v: 'system', label: 'System' }, { v: 'light', label: 'Light' }, { v: 'dark', label: 'Dark' }]} />
               </div>
               <div className="field">
                 <label>Accent color</label>
@@ -393,10 +395,6 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                   )}
                   <Toggle prefs={prefs} setPref={setPref} k="autoscroll" label="Auto-scroll" desc="Keep the latest text in view unless you scroll up." />
                   <div className="field row">
-                <div><label>Model picker in the top bar</label><div className="muted-note">Moves model selection from the input bar to the top-left of the chat, Open WebUI style.</div></div>
-                <div className={'switch' + (prefs.modelTop === true ? ' on' : '')} onClick={() => setPref('modelTop', prefs.modelTop !== true)} />
-              </div>
-              <div className="field row">
                     <div><label>Streaming cursor</label><div className="muted-note">Show a soft cursor at the write position as text streams in.</div></div>
                     <div className={'switch' + (prefs.streamCursor ? ' on' : '')} onClick={() => setPref('streamCursor', !prefs.streamCursor)} />
                   </div>

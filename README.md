@@ -1,48 +1,21 @@
-# open-quill
+<div align="center">
 
-A fully local chat UI for OpenAI-compatible model servers, inspired by Anthropic’s design and enhanced with additional features all running entirely on your machine!
+# Open Quill
 
-<p align="center">
-  <img src="assets\v2026\banner.png" alt="Starburst Logo" width="1250"/>
-</p>
+<img src="assets\v27\icon.svg" alt="Starburst Logo" width="200"/>
 
-## Preview
+*A fully open-sourced chat interface featuring Anthropic inspired theming.*
 
-<p align="center">
-  <img src="assets\v2026\artifacts-showcase-screen.png" alt="Chat Interface with Artifacts"/>
-  <br>
-  <sub>The open-quill chat interface showcasing chats and artifacts.</sub>
-</p>
+[![Latest Stable Release](https://img.shields.io/github/v/release/Smoffyy/open-quill?label=Latest%20Stable%20Release)](https://github.com/Smoffyy/open-quill/releases/latest)
+[![Latest Pre-release](https://img.shields.io/github/v/release/Smoffyy/open-quill?include_prereleases&label=Latest%20Pre-release)](https://github.com/Smoffyy/open-quill/releases)
 
-<details>
-  <summary>More Screenshots.</summary>
-  <br>
+</div>
 
-  <p align="center">
-    <img src="assets\v2026\first-login-screen.png" alt="First Login"/>
-    <br>
-    <sub>Web page upon first login.</sub>
-  </p>
+A **chat interface** inspired by **[Anthropic's Chat Interface](https://claude.ai/new)**, enhanced with new features while preserving the Anthropic's aesthetic. This project aims to recreate the look and feel of Anthropic's interface while introducing the ability to run everything **entirely locally** for greater privacy and control.
 
-  <p align="center">
-    <img src="assets\v2026\response-showcase-screen.png" alt="Normal chat response"/>
-    <br>
-    <sub>Response showcase.</sub>
-  </p>
+This project is licensed under the [MIT License](LICENSE), by downloading, using, or modifying this project, you agree to the terms of the [LICENSE](LICENSE) file. **Forever free. Built by the community, for the community.**
 
-  <p align="center">
-    <img src="assets\v2026\admin-models-screen.png" alt="Admin panel"/>
-    <br>
-    <sub>Models tab in Admin Panel.</sub>
-  </p>
-
-  <p align="center">
-    <img src="assets\v2026\your-chats-showcase-screen.png" alt="Saved Chats"/>
-    <br>
-    <sub>Your Chats panel.</sub>
-  </p>
-
-</details>
+> **This project is not enterprise ready and is not intended to be. It is a community built interface designed to be customized, modified, and configured however you prefer.**
 
 ---
 
@@ -103,6 +76,8 @@ Open http://localhost:5173.
 - All data lives in `server/data.json` and uploaded logos in `server/uploads/`. Delete `data.json` to reset.
 - To change the port, set `PORT` before `npm start`.
 
-## Updates / Version info
+## Updates / Version Information
 
-The scheme is `YEAR.QUARTER.PATCH`, but may not follow closely to accurate date as major releases will release earlier than the specified year.
+Beginning with **Open Quill 27**, the project will adopt a year based versioning system. Major releases will increment annually, starting with version **27** and continuing forward with each new release cycle.
+
+If you're wanting to try out the latest features, check out the [dev branch](https://github.com/Smoffyy/open-quill/tree/dev), *this is a development branch meaning there WILL be bugs.*

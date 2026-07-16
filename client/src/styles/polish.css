@@ -36,7 +36,7 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .sidebar { transition: width .22s cubic-bezier(.4, 0, .2, 1); }
 
 /* model dropdown option icon */
-.model-opt .mo-icon { width: 22px; height: 22px; border-radius: 5px; object-fit: contain; flex: none; margin-top: 1px; }
+.model-opt .mo-icon { width: 20px; height: 20px; border-radius: 5px; object-fit: contain; flex: none; margin-top: 0; }
 
 /* admin sampling parameters grid */
 .sampling-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 12px; }
@@ -265,6 +265,8 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 [data-cursor="circle"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after {
   content: ''; display: inline-block; vertical-align: -2px; margin-left: 3px;
 }
+[data-cursor="block"] .assistant-body.streaming.thinking > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after,
+[data-cursor="circle"] .assistant-body.streaming.thinking > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { content: none; }
 [data-cursor="block"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { width: 12px; height: 1.05em; border-radius: 2.5px; vertical-align: -3px; background: var(--accent); animation-name: caretHard; animation-duration: var(--caret-cycle, 1000ms); animation-timing-function: steps(1); animation-iteration-count: infinite; }
 [data-cursor="circle"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { width: 0.75em; height: 0.75em; border-radius: 50%; background: var(--accent); animation-name: caretPulse; animation-duration: var(--caret-pulse, 1000ms); animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
 [data-cursor="block"] .assistant-body.streaming.typing > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { animation: caretSoft 0.9s ease-in-out infinite; }
@@ -380,6 +382,9 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .incognito-fab:hover { background: var(--hover-soft); color: var(--text); }
 .incognito-fab:active { transform: scale(.9); }
 .incognito-fab:disabled { opacity: .4; pointer-events: none; }
+.ctl-fab.incognito-fab { right: 18px; }
+.incognito-fab.with-ctl { right: 60px; }
+.ctl-fab.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 
 /* the outline that fills the viewport edge when incognito is active */
 .app-incognito { position: relative; }

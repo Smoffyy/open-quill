@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Chat, Search, Panel, Gear, Shield, Logout, Dots, Trash, Heart, FileText, Star, Download, Folder, Pencil, Chevron, Users, Box } from './icons.jsx';
+import { Plus, Chat, Search, Panel, Gear, Shield, Logout, Dots, Trash, Heart, FileText, Star, Download, Folder, Pencil, Chevron, Users, Box, Compact } from './icons.jsx';
 
 function ProfileMenu({ user, version, onSettings, onAdmin, onCredits, onChangelog, onLicense, onLogout, onClose }) {
   const ref = useRef(null);
@@ -179,7 +179,10 @@ export default function Sidebar({
     { key: 'd3', label: '3+ days ago', items: [] },
     { key: 'd7', label: '7+ days ago', items: [] },
   ];
-  for (const c of others) {
+  const SIDEBAR_CHAT_LIMIT = 40;
+  const capped = others.slice(0, SIDEBAR_CHAT_LIMIT);
+  const overflow = others.length > SIDEBAR_CHAT_LIMIT;
+  for (const c of capped) {
     const age = nowMs - (c.updated_at || nowMs);
     if (age < 3 * DAY) recentGroups[0].items.push(c);
     else if (age < 7 * DAY) recentGroups[1].items.push(c);
@@ -260,6 +263,9 @@ export default function Sidebar({
                   {g.items.map(row)}
                 </React.Fragment>
               ))}
+              {overflow && (
+                <button className="all-chats-btn" onClick={onChatsOverview}><Compact style={{ width: 15, flexShrink: 0 }} /> <span>All chats</span></button>
+              )}
             </>}
           </>
         )}

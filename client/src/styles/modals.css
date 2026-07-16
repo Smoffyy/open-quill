@@ -104,8 +104,8 @@
 .think-dot { width: 16px; height: 16px; }
 .btn { padding: 9px 16px; border-radius: 9px; font-size: 14px; font-family: var(--font-sans); background: var(--surface-2); transition: background .15s; }
 .btn:hover { background: var(--surface-hover); }
-.btn.primary { background: var(--accent); color: #fff; font-weight: 600; }
-.btn.primary:hover { background: #c9663f; }
+.btn.primary { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.btn.primary:hover { background: color-mix(in srgb, var(--accent) 86%, var(--on-accent)); }
 .btn.danger { color: #e06a52; }
 .btn.danger:hover { background: #e06a5222; }
 .btn-row { display: flex; gap: 10px; margin-top: 8px; }
@@ -141,13 +141,11 @@
 button { transition: transform .12s ease, background .15s ease, color .15s ease, opacity .15s ease, border-color .15s ease; }
 .icon-btn:hover, .action-btn:hover { transform: translateY(-1px); }
 .icon-btn:active, .action-btn:active, .plus:active, .mic:active, .row-menu:active { transform: scale(.88); }
-.nav-item { transition: background .15s ease, transform .12s ease, color .15s ease; }
-.nav-item:hover { transform: translateX(2px); }
+.nav-item { transition: background .15s ease, color .15s ease; }
 .chip:hover { transform: translateY(-2px); }
 .send:not(:disabled):active { transform: scale(.9); }
 .btn:active { transform: translateY(1px); }
-.chat-row { transition: background .15s ease, color .15s ease, transform .12s ease; }
-.chat-row:hover { transform: translateX(2px); }
+.chat-row { transition: background .15s ease, color .15s ease; }
 .model-trigger:active, .share-btn:active { transform: scale(.96); }
 .code-copy:active { transform: scale(.9); }
 .to-bottom { transition: transform .15s ease, background .15s ease; }
@@ -178,7 +176,7 @@ button { transition: transform .12s ease, background .15s ease, color .15s ease,
 .user-row .u-main { flex: 1; min-width: 0; }
 .user-row .u-name { font-size: 14.5px; display: flex; align-items: center; gap: 8px; }
 .user-row .u-email { font-size: 12.5px; color: var(--text-muted); }
-.badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: var(--accent); color: #fff; font-weight: 600; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: var(--accent); color: var(--on-accent); font-weight: 600; }
 .you-tag { font-size: 11px; color: var(--text-faint); }
 
 /* ---------- customization ---------- */
@@ -231,3 +229,18 @@ button { transition: transform .12s ease, background .15s ease, color .15s ease,
 .btn.danger-solid { background: #c4452f; color: #fff; }
 .btn.danger-solid:hover { background: #d44e36; }
 
+.preset-scrim { position: fixed; inset: 0; z-index: 400; background: rgba(0, 0, 0, .55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: grid; place-items: center; animation: fadeIn .18s ease; }
+.preset-modal { width: min(560px, calc(100vw - 32px)); background: var(--modal-bg); border: 1px solid var(--border-soft); border-radius: 18px; padding: 30px 28px 26px; text-align: center; box-shadow: 0 24px 70px #00000059; animation: pop .18s ease; }
+.preset-title { font-family: var(--font-serif); font-size: 24px; font-weight: 500; margin: 0 0 6px; color: var(--text); }
+.preset-sub { color: var(--text-muted); font-size: 13.5px; font-family: var(--font-sans); margin: 0 0 20px; }
+.preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.preset-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 14px; border: 1px solid var(--border-soft); border-radius: 14px; background: var(--surface); font-family: var(--font-sans); transition: border-color .15s, background .15s, transform .12s; }
+.preset-card:hover { border-color: var(--accent); background: var(--surface-hover); transform: translateY(-1px); }
+.preset-swatch { width: 64px; height: 64px; border-radius: 16px; display: grid; place-items: center; }
+.preset-swatch.anthropic { background: #262624; border: 1px solid #3a3a37; }
+.preset-swatch.anthropic .ps-dot { width: 22px; height: 22px; border-radius: 6px; background: #d97757; }
+.preset-swatch.openai { background: #000; border: 1px solid #2b2b2b; }
+.preset-swatch.openai .ps-dot { width: 22px; height: 22px; border-radius: 50%; background: #fff; }
+.preset-name { font-weight: 600; font-size: 15px; color: var(--text); }
+.preset-desc { font-size: 12.5px; color: var(--text-muted); line-height: 1.45; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }

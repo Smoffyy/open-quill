@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [2027.0.0] — TBD
+## [27.0.0] — TBD
 
 > **Breaking:** This release replaces the plaintext `data.json` store with an encrypted SQLite database and is **not backward compatible** with previous versions. There is no automatic import; a fresh database is created on first run and the first account to sign in becomes the owner.
+
+> **Version naming update:** Beginning with version 27, releases will use a year-based naming scheme instead of the previous year.month.quarter format. This clears up confusing on when updates will come out.
 
 ### Added
 - **Encrypted database** - all data now lives in an encrypted SQLite database (`better-sqlite3-multiple-ciphers`, AES-256 / SQLCipher) instead of a plaintext JSON file. Runs in WAL mode with foreign keys, prepared statements, and indexes on the hot paths for faster, safer reads as data grows.

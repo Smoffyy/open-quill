@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useLayoutEffect } from 'react';
 import ModelDropdown from './ModelDropdown.jsx';
 import FunctionsBar from './FunctionsBar.jsx';
 import { api } from '../api.js';
@@ -33,6 +33,37 @@ function dominantColor(url) {
   });
 }
 
+function PmSub({ className = '', children, onMouseEnter, onMouseLeave }) {
+  const ref = useRef(null);
+  const [pos, setPos] = useState({ flipLeft: false, top: -6, maxH: 0, ready: false });
+  useLayoutEffect(() => {
+    const el = ref.current; if (!el) return;
+    const wrap = el.parentElement; if (!wrap) return;
+    const measure = () => {
+      const row = wrap.getBoundingClientRect();
+      const pad = 8;
+      const availH = window.innerHeight - pad * 2;
+      const h = el.offsetHeight;
+      const effH = Math.min(h, availH);
+      const flipLeft = row.right + 4 + el.offsetWidth > window.innerWidth - pad;
+      let top = -6;
+      const over = row.top + top + effH - (window.innerHeight - pad);
+      if (over > 0) top -= over;
+      if (row.top + top < pad) top = pad - row.top;
+      setPos({ flipLeft, top, maxH: h > availH ? availH : 0, ready: true });
+    };
+    measure();
+  }, [children]);
+  return (
+    <div ref={ref}
+      className={'pm-sub' + (className ? ' ' + className : '') + (pos.flipLeft ? ' left' : '')}
+      style={{ top: pos.top, maxHeight: pos.maxH || undefined, visibility: pos.ready ? undefined : 'hidden' }}
+      onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+      {children}
+    </div>
+  );
+}
+
 export default function Composer({
   value, onChange, onSend, onStop, streaming, models,
   currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts, functions = [],
@@ -41,7 +72,7 @@ export default function Composer({
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
   conversationEnded = false, endedReason = '',
   queuedMsg = '', onQueue, onCancelQueue, canContinue = false, onContinue,
-  compareIds = [], onSetCompare, hideModelPicker = false
+  compareIds = [], onSetCompare, hideModelPicker = false, reasoningEffort, onSetEffort
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
@@ -165,7 +196,9 @@ export default function Composer({
     const el = ta.current; if (!el) return;
     const prev = el.style.height;
     el.style.height = 'auto';
-    const next = Math.min(el.scrollHeight, 280) + 'px';
+    const measured = Math.min(el.scrollHeight, 280);
+    const next = measured + 'px';
+    setMultiline(m => { const ml = measured > 44; return m === ml ? m : ml; });
     if (!grewOnce.current) { el.style.height = next; grewOnce.current = true; return; } // no animation on first paint
     el.style.height = prev || next;
     requestAnimationFrame(() => { if (ta.current) ta.current.style.height = next; });
@@ -297,7 +330,8 @@ export default function Composer({
   const showBudgetBanner = budgetState === 'warn' || budgetState === 'over';
   const enabledCount = (sandbox ? 1 : 0) + (webSearch ? 1 : 0);
   const canSend = (value.trim().length > 0 || files.length > 0) && !uploading && !blockSend && !budgetBlock && !safetyFlagged && !safetyChecking && !conversationEnded;
-  const cls = 'composer' + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + (unavailable ? ' unavailable' : '') + ((blockSend || budgetBlock) ? ' blocked' : '');
+  const [multiline, setMultiline] = useState(false);
+  const cls = 'composer' + (multiline ? ' ml' : '') + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + (unavailable ? ' unavailable' : '') + ((blockSend || budgetBlock) ? ' blocked' : '');
   const fmtUsd = (n) => '$' + (Number(n || 0) > 0 && Number(n || 0) < 0.01 ? Number(n).toFixed(4) : Number(n || 0).toFixed(2));
 
   return (
@@ -417,7 +451,7 @@ export default function Composer({
                     <Chevron className="pm-chev" />
                   </button>
                   {promptsOpen && (
-                    <div className="pm-sub" onMouseEnter={openPrompts} onMouseLeave={closePrompts}>
+                    <PmSub onMouseEnter={openPrompts} onMouseLeave={closePrompts}>
                       {(savedPrompts || []).length === 0 && <div className="pm-empty">No saved prompts yet.</div>}
                       {(savedPrompts || []).map(p => (
                         <div key={p.id} className="pm-prompt">
@@ -432,7 +466,7 @@ export default function Composer({
                           <Plus style={{ width: 13 }} /> Save current text as prompt
                         </button>
                       )}
-                    </div>
+                    </PmSub>
                   )}
                 </div>
                 {onSelectStyle && (
@@ -444,10 +478,10 @@ export default function Composer({
                       <Chevron className="pm-chev" />
                     </button>
                     {stylesOpen && (
-                      <div className="pm-sub styles" onMouseEnter={openStyles} onMouseLeave={closeStyles}>
+                      <PmSub className="styles" onMouseEnter={openStyles} onMouseLeave={closeStyles}>
                         <StyleSubmenu styles={styles} styleId={styleId} currentId={currentId} onSaveStyles={onSaveStyles}
                           onSelect={(id) => { onSelectStyle && onSelectStyle(id); }} />
-                      </div>
+                      </PmSub>
                     )}
                   </div>
                 )}
@@ -465,7 +499,7 @@ export default function Composer({
                       <Chevron className="pm-chev" />
                     </button>
                     {compareOpen && (
-                      <div className="pm-sub styles" onMouseEnter={openCompare} onMouseLeave={closeCompare}>
+                      <PmSub className="styles" onMouseEnter={openCompare} onMouseLeave={closeCompare}>
                         <div className="style-menu-label">Also answer with</div>
                         {models.filter(m => m.id !== currentId).map(m => {
                           const on = compareIds.includes(m.id);
@@ -478,7 +512,7 @@ export default function Composer({
                           );
                         })}
                         <div className="style-menu-label" style={{ textTransform: 'none', letterSpacing: 0 }}>Pick up to 2 extra models. Your next message will be answered by each as versions of one response.</div>
-                      </div>
+                      </PmSub>
                     )}
                   </div>
                 )}
@@ -511,6 +545,7 @@ export default function Composer({
         <div className="composer-right">
           {!hideModelPicker && <ModelDropdown models={models} currentId={currentId} onSelect={onSelect}
             extended={extended} onToggleExtended={onToggleExtended} up={modelUp}
+            reasoningEffort={reasoningEffort} onSetEffort={onSetEffort}
             modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />}
           {voiceMic && (
             <button className={'mic' + (dictating ? ' rec' : '') + (transcribing ? ' busy' : '')} onClick={toggleDictation}
