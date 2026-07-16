@@ -32,6 +32,9 @@ This roadmap outlines the planned direction of the project. Priorities may shift
 
 * [ ] Localization, adding other languages support.
 
+* [X] Fix in OpenAI theme whenever you input a long input it keeps switching and glitching.
+
+
 ---
 
 ## Notes

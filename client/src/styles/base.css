@@ -98,7 +98,7 @@
   --model-name: #fefefe;
 }
 
-:root[data-theme="oled"] {
+:root[data-theme="oled"], :root[data-theme="openai"] {
   color-scheme: dark;
   --bg: #000000;
   --sidebar: #000000;
@@ -113,14 +113,14 @@
   --accent: #ffffff;
   --on-accent: #111110;
   --user-bubble: #161616;
-  --menu-bg: #0a0a0a;
+  --menu-bg: #2f2f2f;
   --modal-bg: #000000;
   --modal-side: #070707;
   --input-bg: #0d0d0d;
-  --card-bg: #0a0a0a;
+  --card-bg: #2f2f2f;
   --hover-soft: #ffffff10;
   --hover-mid: #ffffff1c;
-  --sidebar-text: rgba(255,255,255,.6);
+  --sidebar-text: rgba(255, 255, 255, 0.6);
   --sidebar-icon: #f3f3f3;
   --model-name: #ffffff;
   --pop-bg: #161616;
@@ -128,7 +128,7 @@
   --pop-border: rgba(255, 255, 255, .10);
   --pop-divider: rgba(255, 255, 255, .10);
 }
-:root[data-theme="oled"] .code-wrap { background: #050505; }
+:root[data-theme="oled"] .code-wrap, :root[data-theme="openai"] .code-wrap { background: #050505; }
 /* anthropic: sidebar saved-chat + label text */
 :root[data-theme="anthropic"] .chat-row,
 :root[data-theme="anthropic"] .section-label,

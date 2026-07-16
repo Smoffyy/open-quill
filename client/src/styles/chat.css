@@ -74,13 +74,15 @@
 .model-select { position: relative; }
 .model-trigger { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 9px; color: var(--text-muted); font-size: 14px; transition: background .15s; }
 .model-trigger:hover { background: var(--surface-hover); color: var(--text); }
-.model-trigger .ext { color: var(--accent); }
+.model-trigger .ext { color: var(--accent); margin-left: 4px; }
 .model-menu {
   position: absolute; bottom: 42px; right: 0; min-width: 268px; background: var(--pop-bg); border: 1px solid var(--pop-border);
   border-radius: 12px; padding: 4px; box-shadow: var(--pop-shadow); z-index: 50; animation: pop .14s ease; transform-origin: bottom right;
 }
 .model-menu.up { bottom: auto; top: 44px; transform-origin: top right; }
 .model-opt { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border-radius: 8px; width: 100%; text-align: left; transition: background .12s; }
+.model-main-list { scrollbar-width: thin; }
+.model-main-list::-webkit-scrollbar { width: 6px; }
 .model-opt:hover { background: var(--pop-hover); }
 .model-opt .mo-main { flex: 1; }
 .model-opt .mo-name { font-size: 14px; font-weight: 500; line-height: 20px; color: var(--pop-text); }
@@ -88,6 +90,15 @@
 .model-opt .check { color: var(--pop-blue); width: 18px; height: 18px; margin-top: 1px; flex-shrink: 0; }
 .model-menu hr { border: none; border-top: 1px solid var(--pop-divider); margin: 4px 8px; }
 .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 8px; border-radius: 8px; }
+.effort-row { padding: 8px 8px 10px; }
+.effort-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
+.effort-head .mo-name { font-size: 14px; font-weight: 500; line-height: 20px; color: var(--pop-text); }
+.effort-cur { font-size: 12.5px; font-weight: 500; color: var(--pop-muted); font-family: var(--font-sans); }
+.effort-seg { position: relative; display: flex; padding: 3px; border-radius: 9px; background: var(--pop-switch); }
+.effort-seg-thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / var(--n)); border-radius: 7px; background: var(--accent); transform: translateX(calc(var(--i) * 100%)); transition: transform .2s cubic-bezier(.4, 0, .2, 1); }
+.effort-seg-btn { position: relative; z-index: 1; flex: 1 1 0; min-width: 0; padding: 5px 4px; font-size: 12.5px; font-weight: 500; line-height: 16px; text-align: center; color: var(--pop-muted); border-radius: 7px; transition: color .18s; }
+.effort-seg-btn:hover { color: var(--pop-text); }
+.effort-seg-btn.on { color: var(--on-accent); }
 .toggle-row:hover { background: var(--pop-hover); }
 .toggle-row .tr-main .mo-name { font-size: 14px; font-weight: 500; line-height: 20px; color: var(--pop-text); }
 .toggle-row .tr-main .mo-desc { font-size: 13px; line-height: 17px; color: var(--pop-muted); font-family: var(--font-sans); }
@@ -173,8 +184,8 @@
 .stream-text { white-space: pre-wrap; word-break: break-word; }
 
 /* ---------- reasoning ---------- */
-.reasoning { margin-bottom: 6px; }
-.reasoning-head { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 14.5px; padding: 3px 0; cursor: pointer; transition: color .15s; }
+.reasoning { margin-bottom: 2px; }
+.reasoning-head { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 14.5px; padding: 3px 0 1px; cursor: pointer; transition: color .15s; }
 .reasoning-head.static { cursor: default; }
 .reasoning-head.static:hover { color: var(--text-muted); }
 .reasoning-head:hover { color: var(--text); }
@@ -200,8 +211,12 @@
 /* Force white streaming cursor for both block and circle types on OLED theme */
 :root[data-theme="oled"][data-cursor="block"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after,
 :root[data-theme="oled"][data-cursor="circle"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after,
+:root[data-theme="openai"][data-cursor="block"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after,
+:root[data-theme="openai"][data-cursor="circle"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after,
 :root[data-theme="oled"][data-cursor="block"] .streaming::after,
-:root[data-theme="oled"][data-cursor="circle"] .streaming::after {
+:root[data-theme="oled"][data-cursor="circle"] .streaming::after,
+:root[data-theme="openai"][data-cursor="block"] .streaming::after,
+:root[data-theme="openai"][data-cursor="circle"] .streaming::after {
   background: #ffffff !important;
   background-color: #ffffff !important;
 }

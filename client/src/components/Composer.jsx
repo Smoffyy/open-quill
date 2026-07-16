@@ -72,7 +72,7 @@ export default function Composer({
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
   conversationEnded = false, endedReason = '',
   queuedMsg = '', onQueue, onCancelQueue, canContinue = false, onContinue,
-  compareIds = [], onSetCompare, hideModelPicker = false
+  compareIds = [], onSetCompare, hideModelPicker = false, reasoningEffort, onSetEffort
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
@@ -196,7 +196,9 @@ export default function Composer({
     const el = ta.current; if (!el) return;
     const prev = el.style.height;
     el.style.height = 'auto';
-    const next = Math.min(el.scrollHeight, 280) + 'px';
+    const measured = Math.min(el.scrollHeight, 280);
+    const next = measured + 'px';
+    setMultiline(m => { const ml = measured > 44; return m === ml ? m : ml; });
     if (!grewOnce.current) { el.style.height = next; grewOnce.current = true; return; } // no animation on first paint
     el.style.height = prev || next;
     requestAnimationFrame(() => { if (ta.current) ta.current.style.height = next; });
@@ -328,7 +330,8 @@ export default function Composer({
   const showBudgetBanner = budgetState === 'warn' || budgetState === 'over';
   const enabledCount = (sandbox ? 1 : 0) + (webSearch ? 1 : 0);
   const canSend = (value.trim().length > 0 || files.length > 0) && !uploading && !blockSend && !budgetBlock && !safetyFlagged && !safetyChecking && !conversationEnded;
-  const cls = 'composer' + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + (unavailable ? ' unavailable' : '') + ((blockSend || budgetBlock) ? ' blocked' : '');
+  const [multiline, setMultiline] = useState(false);
+  const cls = 'composer' + (multiline ? ' ml' : '') + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + (unavailable ? ' unavailable' : '') + ((blockSend || budgetBlock) ? ' blocked' : '');
   const fmtUsd = (n) => '$' + (Number(n || 0) > 0 && Number(n || 0) < 0.01 ? Number(n).toFixed(4) : Number(n || 0).toFixed(2));
 
   return (
@@ -542,6 +545,7 @@ export default function Composer({
         <div className="composer-right">
           {!hideModelPicker && <ModelDropdown models={models} currentId={currentId} onSelect={onSelect}
             extended={extended} onToggleExtended={onToggleExtended} up={modelUp}
+            reasoningEffort={reasoningEffort} onSetEffort={onSetEffort}
             modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />}
           {voiceMic && (
             <button className={'mic' + (dictating ? ' rec' : '') + (transcribing ? ' busy' : '')} onClick={toggleDictation}

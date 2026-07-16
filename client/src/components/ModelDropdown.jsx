@@ -35,6 +35,8 @@ function CapInfo({ m }) {
   );
 }
 
+const capLevel = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
 function MoreGroup({ label, items, renderOpt }) {
   const [open, setOpen] = useState(false);
   const [place, setPlace] = useState({ up: false, maxH: 0 });
@@ -71,11 +73,13 @@ function MoreGroup({ label, items, renderOpt }) {
   );
 }
 
-export default function ModelDropdown({ models, currentId, onSelect, extended, onToggleExtended, up, modelHasBg, bgInChat, onToggleBgInChat }) {
+export default function ModelDropdown({ models, currentId, onSelect, extended, onToggleExtended, up, modelHasBg, bgInChat, onToggleBgInChat, reasoningEffort, onSetEffort }) {
   const [open, setOpen] = useState(false);
   const [place, setPlace] = useState({ down: !!up, maxH: 0 });
+  const [listMaxH, setListMaxH] = useState(0);
   const ref = useRef(null);
   const menuRef = useRef(null);
+  const listRef = useRef(null);
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener('mousedown', h);
@@ -92,9 +96,30 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
     const down = below >= menuH + 14 ? true : below >= above;
     const avail = (down ? below : above) - 16;
     setPlace({ down, maxH: menuH > avail ? Math.max(160, avail) : 0 });
-  }, [open]);
+  }, [open, listMaxH]);
+  useLayoutEffect(() => {
+    if (!open) { setListMaxH(0); return; }
+    const list = listRef.current;
+    if (!list) return;
+    const kids = list.children;
+    if (kids.length > 4) {
+      const h = Math.round(kids[4].getBoundingClientRect().top - kids[0].getBoundingClientRect().top);
+      setListMaxH(h > 0 ? h : 0);
+    } else {
+      setListMaxH(0);
+    }
+  }, [open, models]);
 
   const current = models.find(m => m.id === currentId);
+  const effortLevels = (current?.effortLevels && current.effortLevels.length) ? current.effortLevels : ['low', 'medium', 'high'];
+  const effortBool = effortLevels.length === 2 && effortLevels.some(x => /^true$/i.test(x)) && effortLevels.some(x => /^false$/i.test(x));
+  const effortFallback = effortBool ? effortLevels.find(x => /^false$/i.test(x)) : (effortLevels[Math.floor(effortLevels.length / 2)] || effortLevels[0]);
+  const effortActive = effortLevels.includes(reasoningEffort) ? reasoningEffort
+    : (effortLevels.includes(current?.effortDefault) ? current.effortDefault : effortFallback);
+  const effortIdx = Math.max(0, effortLevels.indexOf(effortActive));
+  const effortTrueVal = effortBool ? effortLevels.find(x => /^true$/i.test(x)) : null;
+  const effortFalseVal = effortBool ? effortLevels.find(x => /^false$/i.test(x)) : null;
+  const thinkingOn = effortBool && /^true$/i.test(effortActive);
   const main = models.filter(m => !m.inMoreModels);
   const groups = [];
   {
@@ -128,14 +153,49 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
     <div className="model-select" ref={ref}>
       <button className="model-trigger" onClick={() => setOpen(o => !o)}>
         {current?.displayName || 'Model'}
-        {extended && current?.hasReasoning && <span className="ext">Extended</span>}
+        {current?.effortEnabled
+          ? (effortBool
+              ? (thinkingOn && <span className="ext ext-effort">Thinking</span>)
+              : <span className="ext ext-effort">{capLevel(effortActive)}</span>)
+          : (extended && current?.hasReasoning && <span className="ext">Extended</span>)}
         <ChevDown style={{ width: 16, height: 16 }} />
       </button>
       {open && <div className="model-scrim" onClick={() => setOpen(false)} />}
       {open && (
         <div ref={menuRef} className={'model-menu' + (place.down ? ' up' : '')} style={place.maxH ? { maxHeight: place.maxH, overflowY: 'auto' } : undefined}>
-          {main.map(Opt)}
-          {current?.hasReasoning && (
+          <div className="model-main-list" ref={listRef} style={listMaxH ? { maxHeight: listMaxH, overflowY: 'auto' } : undefined}>
+            {main.map(Opt)}
+          </div>
+          {current?.effortEnabled ? (
+            effortBool ? (
+              <>
+                <hr />
+                <div className="toggle-row" onClick={() => onSetEffort && onSetEffort(thinkingOn ? effortFalseVal : effortTrueVal)}>
+                  <div className="tr-main">
+                    <div className="mo-name">Extended thinking</div>
+                    <div className="mo-desc">Let the model think before answering</div>
+                  </div>
+                  <div className={'switch' + (thinkingOn ? ' on' : '')} />
+                </div>
+              </>
+            ) : (
+              <>
+                <hr />
+                <div className="effort-row">
+                  <div className="effort-head">
+                    <span className="mo-name">Reasoning effort</span>
+                    <span className="effort-cur">{capLevel(effortActive)}</span>
+                  </div>
+                  <div className="effort-seg" style={{ '--n': effortLevels.length, '--i': effortIdx }}>
+                    <span className="effort-seg-thumb" />
+                    {effortLevels.map((lvl, i) => (
+                      <button key={lvl} className={'effort-seg-btn' + (i === effortIdx ? ' on' : '')} onClick={() => onSetEffort && onSetEffort(lvl)}>{capLevel(lvl)}</button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )
+          ) : current?.hasReasoning ? (
             <>
               <hr />
               <div className="toggle-row" onClick={onToggleExtended}>
@@ -146,7 +206,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
                 <div className={'switch' + (extended ? ' on' : '')} />
               </div>
             </>
-          )}
+          ) : null}
           {modelHasBg && (
             <>
               <hr />

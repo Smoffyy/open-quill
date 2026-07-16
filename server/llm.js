@@ -21,7 +21,7 @@ export function buildMessages(model, history, extended, sandboxPrompt, summaryTe
   if (instructions && instructions.trim()) sys = (sys ? sys + '\n\n' : '') + "The user has provided the following instructions to keep in mind across all conversations. Follow them unless they conflict with safety or a direct request in the conversation:\n" + instructions.trim();
   if (summaryText && summaryText.trim()) sys = (sys ? sys + '\n\n' : '') + 'Summary of the earlier part of this conversation (older messages were compacted to save context — treat this as established context):\n' + summaryText.trim();
   if (sandboxPrompt) sys = (sys ? sys + '\n\n' : '') + sandboxPrompt;
-  if (model.has_reasoning) {
+  if (model.has_reasoning && !model.effort_enabled) {
     const tok = extended ? model.reasoning_token : model.non_reasoning_token;
     if (tok && tok.trim()) sys = (sys ? sys + '\n' : '') + tok.trim();
   }
@@ -105,6 +105,24 @@ function safeParse(v) {
   try { return JSON.parse(v); } catch { return null; }
 }
 
+function effortKwargs(model) {
+  if (!model || model.reasoning_effort_level == null || model.reasoning_effort_level === '') return {};
+  const kw = (model.reasoning_effort_kwarg || 'reasoning_effort').trim() || 'reasoning_effort';
+  const raw = String(model.reasoning_effort_level);
+  const val = /^(true|false)$/i.test(raw) ? /^true$/i.test(raw) : model.reasoning_effort_level;
+  return { chat_template_kwargs: { [kw]: val } };
+}
+
+function firstEffortKwargs(model) {
+  if (!model || !model.effort_enabled) return {};
+  const levels = (Array.isArray(model.effort_levels) && model.effort_levels.length) ? model.effort_levels : ['low', 'medium', 'high'];
+  const first = levels[0];
+  if (first == null || first === '') return {};
+  const kw = (model.effort_kwarg || 'reasoning_effort').trim() || 'reasoning_effort';
+  const val = /^(true|false)$/i.test(String(first)) ? /^true$/i.test(String(first)) : first;
+  return { chat_template_kwargs: { [kw]: val } };
+}
+
 export async function streamCompletion({ model, messages, tools, signal, onEvent }) {
   const { spec, base, key } = modelProvider(model);
   const { emitContent, flush } = makeEmitter(model, onEvent);
@@ -162,7 +180,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
 
   const res = await fetch(endpoint(base, '/chat/completions'), {
     method: 'POST', headers: authHeaders(key), signal,
-    body: JSON.stringify({ model: model.internal_name, messages: wire, stream: true, stream_options: { include_usage: true }, ...(hasTools ? { tools, tool_choice: 'auto' } : {}), ...samplingParams(model, spec) })
+    body: JSON.stringify({ model: model.internal_name, messages: wire, stream: true, stream_options: { include_usage: true }, ...(hasTools ? { tools, tool_choice: 'auto' } : {}), ...samplingParams(model, spec), ...effortKwargs(model) })
   });
   if (!res.ok || !res.body) { const t = await res.text().catch(() => ''); throw new Error(`Upstream error ${res.status}: ${t.slice(0, 300)}`); }
   const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
@@ -217,7 +235,7 @@ export async function oneShot(model, messages) {
   }
   const res = await fetch(endpoint(base, '/chat/completions'), {
     method: 'POST', headers: authHeaders(key),
-    body: JSON.stringify({ model: model.internal_name, stream: false, messages })
+    body: JSON.stringify({ model: model.internal_name, stream: false, messages, ...firstEffortKwargs(model) })
   });
   if (!res.ok) return '';
   const json = await res.json();

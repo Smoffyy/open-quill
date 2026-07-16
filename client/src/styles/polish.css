@@ -382,6 +382,9 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .incognito-fab:hover { background: var(--hover-soft); color: var(--text); }
 .incognito-fab:active { transform: scale(.9); }
 .incognito-fab:disabled { opacity: .4; pointer-events: none; }
+.ctl-fab.incognito-fab { right: 18px; }
+.incognito-fab.with-ctl { right: 60px; }
+.ctl-fab.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 
 /* the outline that fills the viewport edge when incognito is active */
 .app-incognito { position: relative; }
