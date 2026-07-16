@@ -161,7 +161,7 @@
 
 :root[data-preset="openai"][data-theme="openai"] .code-wrap,
 :root[data-preset="openai"][data-theme="openai"] .code-bar,
-:root[data-preset="openai"][data-theme="openai"] .code-wrap pre { background: #0d0d0d; }
+:root[data-preset="openai"][data-theme="openai"] .code-wrap pre { background: #1d1d1d; }
 :root[data-preset="openai"][data-theme="openai"] .code-wrap pre { border-radius: 0 0 12px 12px; }
 :root[data-preset="openai"][data-theme="openai"] .code-bar { border-bottom: 1px solid rgba(255, 255, 255, .06); }
 
