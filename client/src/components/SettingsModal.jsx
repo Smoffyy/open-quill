@@ -209,7 +209,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                 <input value={name} onChange={(e) => changeName(e.target.value)} />
               </div>
               <div className="field">
-                <label>Instructions for Claude</label>
+                <label>Instructions for the Assistant</label>
                 <div className="muted-note" style={{ marginBottom: 10 }}>Added to the system prompt for every chat. Use it for things to remember about you or how you'd like responses. Leave empty for none.</div>
                 <textarea className="instr-area" value={instructions} maxLength={8000} rows={5}
                   placeholder="e.g. I'm a backend developer. Keep answers concise and skip the preamble."

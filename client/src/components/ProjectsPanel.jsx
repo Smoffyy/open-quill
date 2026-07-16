@@ -176,11 +176,11 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
             </div>
             {editingInstr ? (
               <textarea className="pj-instr-edit" autoFocus value={instr} rows={5}
-                placeholder="Add instructions to tailor Claude's responses"
+                placeholder="Add instructions to tailor the Assistant's responses"
                 onChange={(e) => setInstr(e.target.value)} onBlur={saveInstr} />
             ) : (
               <div className="pj-card-sub" onClick={() => setEditingInstr(true)}>
-                {project.instructions ? project.instructions : "Add instructions to tailor Claude's responses"}
+                {project.instructions ? project.instructions : "Add instructions to tailor Assistant's responses"}
               </div>
             )}
           </div>
