@@ -30,7 +30,7 @@ This project is licensed under the [MIT License](LICENSE), by downloading, using
 - Reasoning / non-reasoning tokens are appended to the end of the system prompt on a new line (e.g. `/think`, `/no_think`)
 - Changes save instantly and push to every connected client in real time over WebSocket
 - Auto-generated chat titles, code blocks with hover-to-copy, smart autoscroll with a jump-to-bottom button
-- Zero native dependencies — data is stored in a local JSON file (`server/data.json`)
+- Zero native dependencies, data is stored in a local JSON file (`server/data.json`)
 - Artifacts, enabling users to create entire projects natively inside the UI!
 - And much more!
 
@@ -53,7 +53,7 @@ npm run build # builds the client into client/dist
 npm start # serves everything from http://localhost:3001
 ```
 
-Open http://localhost:3001 and create your account — the first one is the admin.
+Open http://localhost:3001 and create your account, the first one is the admin.
 
 ### Development (hot reload)
 

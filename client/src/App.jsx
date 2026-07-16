@@ -462,7 +462,7 @@ export default function App() {
     const sock = ws.current;
     if (!sock || sock.readyState !== 1) {
       if (!sock || sock.readyState >= 2) connect();
-      setMessages(ms => [...ms, { id: 'e' + Date.now(), role: 'assistant', content: '_Connection lost — reconnecting. Try again in a moment._' }]);
+      setMessages(ms => [...ms, { id: 'e' + Date.now(), role: 'assistant', content: '_Connection lost, reconnecting. Try again in a moment._' }]);
       return false;
     }
     try { sock.send(JSON.stringify(obj)); return true; }
@@ -522,7 +522,7 @@ export default function App() {
     if (m.type === 'compacting') { if (m.chatId === activeKey()) setCompacting(true); return; }
     if (m.type === 'compacted') { if (m.chatId === activeKey()) { setCompacting(false); setHasSummary(true); } return; }
     if (m.type === 'ctx_rolling') {
-      if (m.chatId === activeKey()) toast(`Context limit reached (${(m.limit || 0).toLocaleString()} tokens) — trimming older messages so the chat can continue`, { icon: 'info', kind: 'warn', duration: 6000 });
+      if (m.chatId === activeKey()) toast(`Context limit reached (${(m.limit || 0).toLocaleString()} tokens), trimming older messages so the chat can continue`, { icon: 'info', kind: 'warn', duration: 6000 });
       return;
     }
     if (m.type === 'title') { setChats(cs => cs.map(c => c.id === m.chatId ? { ...c, title: m.title } : c)); return; }
@@ -606,7 +606,7 @@ export default function App() {
             (() => { const g = genOptsRef.current; setTimeout(() => wsSend({ type: 'regenerate', chatId: cmp.chatId, modelId: nextId, extended: g.extended, reasoningEffort: g.reasoningEffort, messageId: cmp.messageId, sandbox: g.sandbox, webSearch: g.webSearch, styleId: g.styleId }), 150); })();
           } else {
             compareRef.current = null;
-            toast('Model comparison ready — use the version arrows or compare button on the response.', { duration: 6000 });
+            toast('Model comparison ready, use the version arrows or compare button on the response.', { duration: 6000 });
             queuedRef.current && queuedRef.current.trim() && (() => { const q2 = queuedRef.current; queuedRef.current=''; setQueuedMsg(''); setTimeout(() => sendRef.current([], q2, { fromQueue: true }), 150); })();
           }
         } else {
@@ -739,7 +739,7 @@ export default function App() {
     if (!activeId) return;
     setMessages(ms => ms.map(m => m.id === messageId ? { ...m, pinned } : m));
     api.patch('/api/chats/' + activeId + '/messages/' + messageId, { pinned }).catch(() => {});
-    toast(pinned ? 'Message pinned — kept in context' : 'Message unpinned', { icon: 'pin' });
+    toast(pinned ? 'Message pinned, kept in context' : 'Message unpinned', { icon: 'pin' });
   }, [activeId]);
   const togglePinFile = useCallback(async (att) => {
     if (!activeId || !att?.url) return;
@@ -749,7 +749,7 @@ export default function App() {
         ? await api.del('/api/chats/' + activeId + '/pins', { url: att.url })
         : await api.post('/api/chats/' + activeId + '/pins', { name: att.name, url: att.url, type: att.type || '' });
       setChatPins(r.pins || []);
-      toast(isPinned ? 'File unpinned from chat' : 'File pinned — kept in context', { icon: 'pin' });
+      toast(isPinned ? 'File unpinned from chat' : 'File pinned, kept in context', { icon: 'pin' });
     } catch {}
   }, [activeId, chatPins]);
   function jumpToMessage(id) {
@@ -913,7 +913,7 @@ export default function App() {
     const next = !cur?.archived;
     setChats(cs => cs.map(c => c.id === id ? { ...c, archived: next } : c));
     api.patch('/api/chats/' + id, { archived: next }).catch(() => {});
-    if (next && id === activeId) toast('Chat archived — find it under Chats → Archived.');
+    if (next && id === activeId) toast('Chat archived, find it under Chats → Archived.');
   }
 
   function toggleStar(id) {
@@ -1177,7 +1177,7 @@ export default function App() {
           <button className="mobile-menu-btn empty-menu" onClick={() => setMobileDrawer(true)} title="Menu"><Menu style={{ width: 20 }} /></button>
         )}
         {!incognito && empty && (
-          <button className={'incognito-fab' + (user?.isAdmin ? ' with-ctl' : '')} onClick={toggleIncognito} title="Incognito chat — not saved" disabled={streaming || queued}>
+          <button className={'incognito-fab' + (user?.isAdmin ? ' with-ctl' : '')} onClick={toggleIncognito} title="Incognito chat, not saved" disabled={streaming || queued}>
             <Ghost style={{ width: 18 }} />
           </button>
         )}
@@ -1262,7 +1262,7 @@ export default function App() {
               )}
               <div className="topbar-actions">
                 {!incognito && (
-                  <button className="paper-btn" onClick={toggleIncognito} title="Incognito chat — not saved" disabled={streaming || queued}>
+                  <button className="paper-btn" onClick={toggleIncognito} title="Incognito chat, not saved" disabled={streaming || queued}>
                     <Ghost style={{ width: 18 }} />
                   </button>
                 )}
@@ -1281,7 +1281,7 @@ export default function App() {
                     <Paper style={{ width: 18 }} />{files.length > 0 && <span className="paper-count">{files.length}</span>}
                   </button>
                 )}
-                {/* Share button — disabled for now, kept for later use
+                {/* Share button, disabled for now, kept for later use
                 <button className="share-btn">Share</button>
                 */}
               </div>

@@ -69,7 +69,7 @@ export function promptFor(tools) {
   if (!enabled.length) return '';
   let p = '## Live data tools\nThe admin has provided these extra functions for fetching real-world, real-time information. Call them like any other function and wait for the result before continuing:\n';
   for (const t of enabled) {
-    p += `\n- \`${t.name}\` — ${t.description || '(no description)'}`;
+    p += `\n- \`${t.name}\`, ${t.description || '(no description)'}`;
     if (t.params.length) p += ` (args: ${t.params.map(a => a.name + (a.required ? '*' : '')).join(', ')})`;
   }
   return p.trim();

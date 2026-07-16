@@ -17,11 +17,11 @@ export function sandboxToolSchemas() {
       cmd: str('The shell command to run. May span multiple lines.'),
       timeout_s: int('Optional timeout in seconds (default 60, max 300). Raise it for slow installs or long-running builds.')
     }, ['cmd']),
-    fn('create_file', 'Create or fully overwrite a file in the sandbox. Provide the COMPLETE file content — never truncate or write placeholders like "rest unchanged". Parent folders are created automatically. Each write is versioned so the user can diff and roll back.', {
+    fn('create_file', 'Create or fully overwrite a file in the sandbox. Provide the COMPLETE file content, never truncate or write placeholders like "rest unchanged". Parent folders are created automatically. Each write is versioned so the user can diff and roll back.', {
       path: str('Relative path of the file, e.g. "src/app.js". Never absolute.'),
       content: str('The complete raw text content of the file.')
     }, ['path', 'content']),
-    fn('str_replace', 'Edit an existing file by replacing one exact, unique snippet. old_str must appear exactly once in the file — include enough surrounding lines to make it unique. This is the preferred way to edit; do not recreate whole files to change a part.', {
+    fn('str_replace', 'Edit an existing file by replacing one exact, unique snippet. old_str must appear exactly once in the file, include enough surrounding lines to make it unique. This is the preferred way to edit; do not recreate whole files to change a part.', {
       path: str('Relative path of the file to edit.'),
       old_str: str('The exact text to replace. Must occur exactly once in the file.'),
       new_str: str('The replacement text.')
@@ -95,7 +95,7 @@ export function chatSearchSchemas() {
 }
 
 export function skillSchema() {
-  return fn('skill_view', 'Load an admin-provided skill file by name. Skills contain required instructions and best practices for specific kinds of tasks — load the matching skill before starting such a task.', {
+  return fn('skill_view', 'Load an admin-provided skill file by name. Skills contain required instructions and best practices for specific kinds of tasks, load the matching skill before starting such a task.', {
     name: str('The skill name exactly as listed in the system prompt.')
   }, ['name']);
 }

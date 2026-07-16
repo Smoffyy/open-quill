@@ -209,7 +209,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                 <input value={name} onChange={(e) => changeName(e.target.value)} />
               </div>
               <div className="field">
-                <label>Instructions for Claude</label>
+                <label>Instructions for the Assistant</label>
                 <div className="muted-note" style={{ marginBottom: 10 }}>Added to the system prompt for every chat. Use it for things to remember about you or how you'd like responses. Leave empty for none.</div>
                 <textarea className="instr-area" value={instructions} maxLength={8000} rows={5}
                   placeholder="e.g. I'm a backend developer. Keep answers concise and skip the preamble."
@@ -217,7 +217,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                 <div className="muted-note" style={{ textAlign: 'right' }}>{instructions.length}/8000</div>
               </div>
               <div className="field row">
-                <div><label>Export everything</label><div className="muted-note">Download all your data — chats, folders, custom styles, personas, saved prompts, memory, instructions, and preferences — as one JSON file.</div></div>
+                <div><label>Export everything</label><div className="muted-note">Download all your data, chats, folders, custom styles, personas, saved prompts, memory, instructions, and preferences, as one JSON file.</div></div>
                 <button className="btn ghost" onClick={onExportChats}><Download style={{ width: 14, verticalAlign: '-2px' }} /> Export</button>
               </div>
               <div className="field row">
@@ -272,7 +272,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
               <div className="field">
                 <label>What the assistant remembers</label>
                 <textarea className="instr-area" value={memory} maxLength={6000} rows={9}
-                  placeholder="Nothing yet. Chat a bit, then press Update now — or write anything you want remembered."
+                  placeholder="Nothing yet. Chat a bit, then press Update now, or write anything you want remembered."
                   onChange={(e) => changeMemory(e.target.value)} />
                 <div className="muted-note" style={{ textAlign: 'right' }}>{memory.length}/6000</div>
               </div>
@@ -299,7 +299,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                   </div>
                   <div className="vh-id">
                     <div className="vh-name">{cfg?.appName || 'open-quill'}</div>
-                    <div className="vh-version">Version {vp ? vp.full : '—'}</div>
+                    <div className="vh-version">Version {vp ? vp.full : ', '}</div>
                     {channel && <div className="vh-channel">{channel} channel</div>}
                   </div>
                 </div>
@@ -307,7 +307,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                   <div className="vh-list">
                     <div className="vh-li">
                       <span className="vh-li-k">Release</span>
-                      <span className="vh-li-v">{vp.base || '—'}</span>
+                      <span className="vh-li-v">{vp.base || ', '}</span>
                     </div>
                                 
                     <div className="vh-li">
@@ -416,7 +416,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                           <input type="range" min="150" max="2000" step="50" value={bv} onChange={(e) => setPref('cursorBlinkMs', parseInt(e.target.value))} />
                           <span className="reveal-val">{bv} ms</span>
                         </div>
-                        <div className="muted-note">How often the block cursor blinks while idle. It stays solid while text is actively streaming, like a terminal. Default 500 ms{bv !== 500 ? <> — <button className="linklike" onClick={() => setPref('cursorBlinkMs', 500)}>reset</button></> : ''}.</div>
+                        <div className="muted-note">How often the block cursor blinks while idle. It stays solid while text is actively streaming, like a terminal. Default 500 ms{bv !== 500 ? <>, <button className="linklike" onClick={() => setPref('cursorBlinkMs', 500)}>reset</button></> : ''}.</div>
                       </div>
                     );
                   })()}
@@ -429,14 +429,14 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                           <input type="range" min="300" max="4000" step="100" value={pv} onChange={(e) => setPref('cursorPulseMs', parseInt(e.target.value))} />
                           <span className="reveal-val">{pv} ms</span>
                         </div>
-                        <div className="muted-note">How quickly the circle grows and shrinks. Default 1000 ms{pv !== 1000 ? <> — <button className="linklike" onClick={() => setPref('cursorPulseMs', 1000)}>reset</button></> : ''}.</div>
+                        <div className="muted-note">How quickly the circle grows and shrinks. Default 1000 ms{pv !== 1000 ? <>, <button className="linklike" onClick={() => setPref('cursorPulseMs', 1000)}>reset</button></> : ''}.</div>
                       </div>
                     );
                   })()}
                 </>}
                 {chatSec === 'motion' && <>
                   <div className="field row">
-                    <div><label>Message entrance</label><div className="muted-note">Slide new messages into view — yours from the right, replies from the left.</div></div>
+                    <div><label>Message entrance</label><div className="muted-note">Slide new messages into view, yours from the right, replies from the left.</div></div>
                     <div className={'switch' + (prefs.messageEntrance !== false ? ' on' : '')} onClick={() => setPref('messageEntrance', prefs.messageEntrance === false)} />
                   </div>
                   {prefs.messageEntrance !== false && (
@@ -472,7 +472,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
               {usageData && (
                 <>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 18 }}>
-                    {[['Total tokens', fmtN(usageData.totals.total)], ['Input', fmtN(usageData.totals.prompt)], ['Output', fmtN(usageData.totals.completion)], ['Est. cost', usageData.totals.cost ? fmtUsd(usageData.totals.cost) : (usageData.totals.costKnown ? '$0.00' : '—')]].map(([lbl, val]) => (
+                    {[['Total tokens', fmtN(usageData.totals.total)], ['Input', fmtN(usageData.totals.prompt)], ['Output', fmtN(usageData.totals.completion)], ['Est. cost', usageData.totals.cost ? fmtUsd(usageData.totals.cost) : (usageData.totals.costKnown ? '$0.00' : ', ')]].map(([lbl, val]) => (
                       <div key={lbl} style={{ border: '1px solid rgba(128,128,128,0.22)', borderRadius: 10, padding: '12px 14px' }}>
                         <div style={{ fontSize: 20, fontWeight: 600 }}>{val}</div>
                         <div className="muted-note" style={{ marginTop: 2 }}>{lbl}</div>

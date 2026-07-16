@@ -571,7 +571,7 @@
 .slash-sub { font-size: 10.5px; color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); padding: 2px 7px; border-radius: 99px; flex-shrink: 0; }
 
 /* ============================================================
-   MOBILE SUPPORT (additive — desktop untouched)
+   MOBILE SUPPORT (additive, desktop untouched)
    ============================================================ */
 .mobile-menu-btn, .mobile-close-btn, .drawer-backdrop { display: none; }
 

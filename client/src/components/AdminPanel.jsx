@@ -15,14 +15,14 @@ function QpIconPicker({ value, onPick }) {
   return (
     <div className="qp-iconpick" ref={ref}>
       <button type="button" className="qp-iconbtn" onClick={() => setOpen(o => !o)} title="Choose an icon">
-        {value && value !== 'none' ? <QpIcon name={value} style={{ width: 16, height: 16 }} /> : <span className="qp-iconnone">—</span>}
+        {value && value !== 'none' ? <QpIcon name={value} style={{ width: 16, height: 16 }} /> : <span className="qp-iconnone">, </span>}
       </button>
       {open && (
         <div className="qp-iconmenu">
           {QP_ICON_LIST.map(name => (
             <button type="button" key={name} className={'qp-iconopt' + (name === (value || 'none') ? ' on' : '')}
               onClick={() => { onPick(name); setOpen(false); }} title={name}>
-              {name === 'none' ? <span className="qp-iconnone">—</span> : <QpIcon name={name} style={{ width: 16, height: 16 }} />}
+              {name === 'none' ? <span className="qp-iconnone">, </span> : <QpIcon name={name} style={{ width: 16, height: 16 }} />}
             </button>
           ))}
         </div>
@@ -171,8 +171,8 @@ function SystemPromptEditor({ value, onChange, onClose }) {
         </div>
         <textarea ref={taRef} className="sp-text" value={value || ''} onChange={(e) => onChange(e.target.value)} placeholder="You are a helpful assistant…" autoFocus />
         <div className="sp-tips">
-          <div className="sp-tip"><b>{dt}</b> — replaced with the current date and time from this device, in your local timezone.</div>
-          <div className="sp-tip"><b>{cu}</b> — replaced with the signed-in user's name. Everything stays on your machine.</div>
+          <div className="sp-tip"><b>{dt}</b>, replaced with the current date and time from this device, in your local timezone.</div>
+          <div className="sp-tip"><b>{cu}</b>, replaced with the signed-in user's name. Everything stays on your machine.</div>
         </div>
         <div className="sp-foot">
           <span className="muted-note">Edits save to your draft automatically.</span>
@@ -214,7 +214,7 @@ function AutosaveNote({ status, live }) {
   return (
     <div className="settings-autosave">
       <span className={'autosave-dot' + (status === 'saved' ? ' flash' : '')} />
-      {status === 'saving' ? 'Saving…' : status === 'saved' ? (live ? 'Saved — applies immediately' : 'Saved to draft — use Push to all clients to make it live') : (live ? 'Changes save automatically' : 'Changes save automatically to your draft')}
+      {status === 'saving' ? 'Saving…' : status === 'saved' ? (live ? 'Saved, applies immediately' : 'Saved to draft, use Push to all clients to make it live') : (live ? 'Changes save automatically' : 'Changes save automatically to your draft')}
     </div>
   );
 }
@@ -278,8 +278,8 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
     try {
       const r = await api.get('/api/admin/detect-ctx?model=' + encodeURIComponent(m.internal_name || '') + '&provider=' + encodeURIComponent(m.provider_id || ''));
       if (r.ok && r.numCtx) { set('num_ctx', r.numCtx); setDetectMsg('Detected ' + r.numCtx.toLocaleString() + ' tokens.'); }
-      else setDetectMsg('Could not detect from the server — enter it manually.');
-    } catch { setDetectMsg('Could not detect from the server — enter it manually.'); }
+      else setDetectMsg('Could not detect from the server, enter it manually.');
+    } catch { setDetectMsg('Could not detect from the server, enter it manually.'); }
     setDetecting(false);
   }
   const priced = Number(m.cost_in) === preset?.in && Number(m.cost_out) === preset?.out;
@@ -337,7 +337,7 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
             <div className="me2-group-label">Voice calls</div>
             <div className="field">
               <label>Call system prompt <span className="muted-note" style={{ display: 'inline' }}>(optional)</span></label>
-              <textarea rows={4} value={m.call_prompt || ''} onChange={(e) => set('call_prompt', e.target.value)} placeholder="You are on a voice call. Keep replies short and conversational — a couple of sentences. No markdown, no lists, no code." />
+              <textarea rows={4} value={m.call_prompt || ''} onChange={(e) => set('call_prompt', e.target.value)} placeholder="You are on a voice call. Keep replies short and conversational, a couple of sentences. No markdown, no lists, no code." />
               <div className="muted-note">Replaces the system prompt above whenever a message comes in through a voice call. Leave empty to use the regular prompt during calls too.</div>
             </div>
 
@@ -356,7 +356,7 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
               <Toggle m={m} set={set} k="unavailable" label="Temporarily unavailable" note="Stays visible in the picker but users can't select it, and a banner explains why. Admins can still use it for testing." />
               {!!m.unavailable && (
                 <div className="field"><label>Unavailability message</label>
-                  <textarea rows={3} value={m.unavailable_reason || ''} onChange={(e) => set('unavailable_reason', e.target.value)} placeholder="e.g. Down for maintenance — back shortly." /></div>
+                  <textarea rows={3} value={m.unavailable_reason || ''} onChange={(e) => set('unavailable_reason', e.target.value)} placeholder="e.g. Down for maintenance, back shortly." /></div>
               )}
             </div>
           </div>
@@ -372,8 +372,8 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
               <div className="field"><label>Values</label>
                 <input value={effortLevelsStr} onChange={(e) => set('effort_levels', e.target.value)} placeholder="low, medium, high" /></div>
               <div className="muted-note">Comma-separated. {effortIsBool
-                ? 'On/off values detected — users get an Extended Thinking toggle.'
-                : 'Ordered lowest to highest — users get a slider through these stops.'}</div>
+                ? 'On/off values detected, users get an Extended Thinking toggle.'
+                : 'Ordered lowest to highest, users get a slider through these stops.'}</div>
               <div className="two-col">
                 <div className="field"><label>Default</label>
                   <select value={effortLevelsArr.includes(m.effort_default) ? m.effort_default : (effortIsBool ? 'false' : (effortLevelsArr[Math.floor(effortLevelsArr.length / 2)] || ''))} onChange={(e) => set('effort_default', e.target.value)}>
@@ -382,7 +382,7 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
                 <div className="field"><label>API kwarg name</label>
                   <input value={m.effort_kwarg || ''} onChange={(e) => set('effort_kwarg', e.target.value)} placeholder="reasoning_effort" /></div>
               </div>
-              <div className="muted-note">Sent as {'{ "chat_template_kwargs": { "<kwarg>": <value> } }'}. gpt-oss uses reasoning_effort with low, medium, high — Qwen uses enable_thinking with false, true.</div>
+              <div className="muted-note">Sent as {'{ "chat_template_kwargs": { "<kwarg>": <value> } }'}. gpt-oss uses reasoning_effort with low, medium, high, Qwen uses enable_thinking with false, true.</div>
             </>}
             {!m.effort_enabled && <>
               <div className="me2-toggle-card">
@@ -429,7 +429,7 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
               </div>
               <div className="field"><label>Recent turns kept verbatim</label>
                 <input type="number" step="1" min="1" max="40" value={m.recent_window ?? 4} onChange={(e) => set('recent_window', parseInt(e.target.value) || 4)} style={{ maxWidth: 140 }} />
-                <div className="muted-note">The newest messages are never summarized — they stay word-for-word. Higher keeps more recent detail but uses more context.</div>
+                <div className="muted-note">The newest messages are never summarized, they stay word-for-word. Higher keeps more recent detail but uses more context.</div>
               </div>
             </>}
           </div>
@@ -447,7 +447,7 @@ function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, provid
               <Toggle m={m} set={set} k="tools_allowed" inverted label="Allow live tools" note="Lets this model use the live-data tools defined in the Live Tools section." />
               {m.tools_allowed !== 0 && <Toggle m={m} set={set} k="tools_auto" label="Enable live tools by default" note="Expose all enabled live tools to this model automatically." />}
             </div>
-            <div className="me2-group-label">Assistant features — all off by default</div>
+            <div className="me2-group-label">Assistant features, all off by default</div>
             <div className="me2-toggle-card">
               <Toggle m={m} set={set} k="skills_allowed" label="Skills" note="Lets this model load admin-created skills from the Skills section." />
               <Toggle m={m} set={set} k="mcp_allowed" label="MCP connectors" note="Exposes tools from enabled MCP servers to this model." />
@@ -997,23 +997,23 @@ export default function AdminPanel({ user, onClose }) {
 
   const NAV = [
     { group: '', items: [
-      { id: 'overview', label: 'Overview', desc: 'A live snapshot of your workspace — catalog, people, spend, and recent activity.', Icon: Panel }
+      { id: 'overview', label: 'Overview', desc: 'A live snapshot of your workspace, catalog, people, spend, and recent activity.', Icon: Panel }
     ] },
     { group: 'Catalog', items: [
-      { id: 'models', label: 'Models', desc: 'The catalog users pick from — prompts, capabilities, look and pricing per model.', Icon: Cube },
+      { id: 'models', label: 'Models', desc: 'The catalog users pick from, prompts, capabilities, look and pricing per model.', Icon: Cube },
       { id: 'providers', label: 'Providers', desc: 'The LLM backends your models run through.', Icon: Sliders }
     ] },
     { group: 'Workspace', items: [
       { id: 'branding', label: 'Branding', desc: 'Name, icon, and typography. Changes save to a draft and push to every connected client.', Icon: Sparkles },
       { id: 'home', label: 'Home Screen', desc: 'The greetings and quick prompts users see when they start a new chat.', Icon: Chat },
-      { id: 'members', label: 'Members', desc: 'Everyone who has signed in — roles, budgets, and account removal.', Icon: Users }
+      { id: 'members', label: 'Members', desc: 'Everyone who has signed in, roles, budgets, and account removal.', Icon: Users }
     ] },
     { group: 'Intelligence', items: [
       { id: 'websearch', label: 'Web Search', desc: 'Give models a web search tool backed by your own SearXNG instance.', Icon: Globe },
       { id: 'membank', label: 'Memory Bank', desc: 'Reference files every model can read on demand.', Icon: FileText },
       { id: 'tools', label: 'Live Tools', desc: 'Server-side live-data tools models can call (weather, prices, APIs…).', Icon: Wrench },
       { id: 'functions', label: 'Functions', desc: 'Custom buttons that run your JavaScript in the browser.', Icon: Code },
-      { id: 'voice', label: 'Voice', desc: 'Dictation and voice calls — speech-to-text and text-to-speech engines.', Icon: Mic },
+      { id: 'voice', label: 'Voice', desc: 'Dictation and voice calls, speech-to-text and text-to-speech engines.', Icon: Mic },
       { id: 'safety', label: 'Safety Model', desc: 'Screen user prompts with a model before they reach the assistant.', Icon: Shield },
       { id: 'memory', label: 'User Memory', desc: 'Per-user long-term memory and searching past chats as a tool.', Icon: Brain },
       { id: 'skills', label: 'Skills', desc: 'Reusable instruction files models load on demand for specific tasks.', Icon: Bulb },
@@ -1114,7 +1114,7 @@ export default function AdminPanel({ user, onClose }) {
                   ['Models', String(models.length), `${visibleModels} visible · ${hiddenModels} hidden${unavailModels ? ` · ${unavailModels} unavailable` : ''}`, Cube, 'models'],
                   ['Providers', String(providers.length), Object.keys(providerTypes).length ? 'LLM backends connected' : 'LLM backends', Sliders, 'providers'],
                   ['Members', String(usersList.length), `${adminCount} admin${adminCount === 1 ? '' : 's'}`, Users, 'members'],
-                  ['30-day spend', adminUsage ? '$' + (adminUsage.totals?.cost || 0).toFixed(2) : '—', adminUsage ? `${(adminUsage.totals?.total || 0).toLocaleString()} tokens · ${(adminUsage.totals?.generations || 0).toLocaleString()} generations` : 'Loading…', Brain, 'analytics']
+                  ['30-day spend', adminUsage ? '$' + (adminUsage.totals?.cost || 0).toFixed(2) : ', ', adminUsage ? `${(adminUsage.totals?.total || 0).toLocaleString()} tokens · ${(adminUsage.totals?.generations || 0).toLocaleString()} generations` : 'Loading…', Brain, 'analytics']
                 ].map(([l, v, s, Icon, dest]) => (
                   <button key={l} className="ov-stat" onClick={() => setTab(dest)}>
                     <span className="ov-stat-icon"><Icon /></span>
@@ -1293,7 +1293,7 @@ export default function AdminPanel({ user, onClose }) {
                       </div>
                     ) : sel
                       ? <ModelEditor key={sel.id} m={sel} onChange={change} onDelete={del} onDuplicate={duplicate} autosaveState={autosave} providers={providers} providerTypes={providerTypes} section={meSection} onSection={setMeSection} />
-                      : <div className="muted-note" style={{ padding: 20 }}>No models yet — add one to get started.</div>}
+                      : <div className="muted-note" style={{ padding: 20 }}>No models yet, add one to get started.</div>}
                   </div>
                 </div>
               </>
@@ -1353,7 +1353,7 @@ export default function AdminPanel({ user, onClose }) {
                     <button className="btn danger" onClick={() => setCfg(c => ({ ...c, quickPrompts: c.quickPrompts.filter((_, j) => j !== i) }))}><Trash style={{ width: 14 }} /></button>
                   </div>
                 ))}
-                {(cfg.quickPrompts || []).length === 0 && <div className="muted-note" style={{ marginBottom: 6 }}>No quick prompts yet — add one below.</div>}
+                {(cfg.quickPrompts || []).length === 0 && <div className="muted-note" style={{ marginBottom: 6 }}>No quick prompts yet, add one below.</div>}
                 {(cfg.quickPrompts || []).length < 8 && <button className="btn" style={{ marginTop: 8 }} onClick={() => setCfg(c => ({ ...c, quickPrompts: [...(c.quickPrompts || []), { icon: 'none', label: '', prompt: '' }] }))}><Plus style={{ width: 14, verticalAlign: '-2px' }} /> Add button</button>}
               </Card>
               <AutosaveNote status={setAutoStatus} />
@@ -1450,7 +1450,7 @@ export default function AdminPanel({ user, onClose }) {
             <>
               <Card title="Features" sub="Both buttons disappear from the composer entirely when turned off.">
                 <div className="field row">
-                  <div><label>Microphone (dictation)</label><div className="muted-note">Adds a mic button to the input bar. Speech is transcribed into the message box — nothing sends until the user hits enter.</div></div>
+                  <div><label>Microphone (dictation)</label><div className="muted-note">Adds a mic button to the input bar. Speech is transcribed into the message box, nothing sends until the user hits enter.</div></div>
                   <div className={'switch' + (settings.voiceMicEnabled ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, voiceMicEnabled: !s.voiceMicEnabled }))} />
                 </div>
                 <div className="field row" style={{ borderBottom: 0, marginBottom: 0 }}>
@@ -1465,7 +1465,7 @@ export default function AdminPanel({ user, onClose }) {
                       <button className={(settings.voiceSttEngine || 'browser') === 'browser' ? 'on' : ''} onClick={() => setSettings(s => ({ ...s, voiceSttEngine: 'browser' }))}>Browser built-in</button>
                       <button className={settings.voiceSttEngine === 'server' ? 'on' : ''} onClick={() => setSettings(s => ({ ...s, voiceSttEngine: 'server' }))}>Server (Whisper)</button>
                     </div>
-                    <div className="muted-note">Browser uses Chrome's built-in speech recognition — zero setup, no audio leaves the machine beyond what the browser does. Server sends recorded audio to any OpenAI-compatible transcription endpoint: whisper.cpp's server, faster-whisper-server, Speaches, or OpenAI itself.</div>
+                    <div className="muted-note">Browser uses Chrome's built-in speech recognition, zero setup, no audio leaves the machine beyond what the browser does. Server sends recorded audio to any OpenAI-compatible transcription endpoint: whisper.cpp's server, faster-whisper-server, Speaches, or OpenAI itself.</div>
                   </div>
                   {settings.voiceSttEngine === 'server' && <>
                     <div className="field"><label>Base URL</label>
@@ -1488,7 +1488,7 @@ export default function AdminPanel({ user, onClose }) {
                       <button className={(settings.voiceTtsEngine || 'browser') === 'browser' ? 'on' : ''} onClick={() => setSettings(s => ({ ...s, voiceTtsEngine: 'browser' }))}>Browser built-in</button>
                       <button className={settings.voiceTtsEngine === 'server' ? 'on' : ''} onClick={() => setSettings(s => ({ ...s, voiceTtsEngine: 'server' }))}>Server (OpenAI-compatible)</button>
                     </div>
-                    <div className="muted-note">Browser uses the operating system voices via Chrome — fully local, zero setup. Server sends text to any OpenAI-compatible <code>/audio/speech</code> endpoint: openedai-speech, Kokoro-FastAPI, Piper wrappers, or OpenAI.</div>
+                    <div className="muted-note">Browser uses the operating system voices via Chrome, fully local, zero setup. Server sends text to any OpenAI-compatible <code>/audio/speech</code> endpoint: openedai-speech, Kokoro-FastAPI, Piper wrappers, or OpenAI.</div>
                   </div>
                   {settings.voiceTtsEngine === 'server' && <>
                     <div className="field"><label>Base URL</label>
@@ -1553,7 +1553,7 @@ export default function AdminPanel({ user, onClose }) {
                   )}
                 </Card>
               )}
-              <Card title="Safety log" sub={`Prompts the safety model blocked${safetyLogTotal ? ` — ${safetyLogTotal} total` : ''}. Use these to tune the system prompt and catch false positives.`}
+              <Card title="Safety log" sub={`Prompts the safety model blocked${safetyLogTotal ? `, ${safetyLogTotal} total` : ''}. Use these to tune the system prompt and catch false positives.`}
                 right={safetyLog && safetyLog.length ? <button className="btn ghost danger" onClick={clearSafetyLog}>Clear log</button> : null}>
                 {safetyLog == null && <div className="muted-note">Loading…</div>}
                 {safetyLog != null && safetyLog.length === 0 && <div className="muted-note">Nothing has been flagged yet.</div>}
@@ -1616,7 +1616,7 @@ export default function AdminPanel({ user, onClose }) {
                   </div>
                   <div className="field"><label>Description</label>
                     <input value={skillEdit.description} onChange={(e) => setSkillEdit(x => ({ ...x, description: e.target.value }))} placeholder="How to write copy in our brand voice. Load before writing any marketing text." />
-                    <div className="muted-note">Shown in the system prompt — tell the model exactly WHEN to load this skill.</div>
+                    <div className="muted-note">Shown in the system prompt, tell the model exactly WHEN to load this skill.</div>
                   </div>
                   <div className="field"><label>Content</label>
                     <textarea className="code-area" rows={14} value={skillEdit.content} onChange={(e) => setSkillEdit(x => ({ ...x, content: e.target.value }))} spellCheck={false} placeholder={'# Brand voice\n\nAlways…'} />
@@ -1652,7 +1652,7 @@ export default function AdminPanel({ user, onClose }) {
           {tab === 'mcp' && (
             <>
               <div className="admin-section-head">
-                <div><div className="muted-note">Connect MCP (Model Context Protocol) servers running on this machine or your network. Their tools are exposed to every model with tool calling, prefixed <code>mcp_</code>. Everything stays local — no cloud relay is involved.</div></div>
+                <div><div className="muted-note">Connect MCP (Model Context Protocol) servers running on this machine or your network. Their tools are exposed to every model with tool calling, prefixed <code>mcp_</code>. Everything stays local, no cloud relay is involved.</div></div>
                 <button className="btn primary" onClick={() => setMcpEdit({ name: '', transport: 'stdio', command: '', args: '', url: '', headers: '', enabled: true })}><Plus style={{ width: 15 }} /> Add server</button>
               </div>
               {mcpEdit && (
@@ -1708,8 +1708,8 @@ export default function AdminPanel({ user, onClose }) {
                       </div>
                       <div className="fn-card-desc">
                         {sv.transport === 'http' ? sv.url : `${sv.command} ${sv.args || ''}`.trim()}
-                        {sv.status === 'error' && sv.error ? ` — ${sv.error}` : ''}
-                        {sv.status === 'connected' && (sv.tools || []).length ? ` — ${(sv.tools || []).map(t => t.name).slice(0, 6).join(', ')}${(sv.tools || []).length > 6 ? '…' : ''}` : ''}
+                        {sv.status === 'error' && sv.error ? `, ${sv.error}` : ''}
+                        {sv.status === 'connected' && (sv.tools || []).length ? `, ${(sv.tools || []).map(t => t.name).slice(0, 6).join(', ')}${(sv.tools || []).length > 6 ? '…' : ''}` : ''}
                       </div>
                     </div>
                     <div className="fn-card-actions">
@@ -1833,7 +1833,7 @@ export default function AdminPanel({ user, onClose }) {
                   </div>
                   <div className="field" style={{ marginBottom: 0 }}><label>Allowed domains</label>
                     <textarea rows={3} value={settings.webSearchDomains || ''} onChange={(e) => setSettings(s => ({ ...s, webSearchDomains: e.target.value }))} placeholder={'wikipedia.org\narxiv.org'} />
-                    <div className="muted-note">One domain per line (or comma-separated). When set, the assistant can only read results from these domains and their subdomains — everything else is dropped. Leave empty to allow any site.</div>
+                    <div className="muted-note">One domain per line (or comma-separated). When set, the assistant can only read results from these domains and their subdomains, everything else is dropped. Leave empty to allow any site.</div>
                   </div>
                 </Card>
                 <Card title="Search prompt" sub="Guidance the model receives whenever web search is on.">
@@ -1854,7 +1854,7 @@ export default function AdminPanel({ user, onClose }) {
                   <div className={'switch' + (settings.membankEnabled ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, membankEnabled: !s.membankEnabled }))} />
                 </div>
                 <div className="field row">
-                  <div><label>Hide tool calls from users</label><div className="muted-note">When on, file reads stay behind the scenes — the model still uses the files, but users won't see the <code>mb_view</code> / <code>mb_search</code> steps in the reply.</div></div>
+                  <div><label>Hide tool calls from users</label><div className="muted-note">When on, file reads stay behind the scenes, the model still uses the files, but users won't see the <code>mb_view</code> / <code>mb_search</code> steps in the reply.</div></div>
                   <div className={'switch' + (settings.membankHideTools ? ' on' : '')} onClick={() => setSettings(s => ({ ...s, membankHideTools: !s.membankHideTools }))} />
                 </div>
                 <div className="field" style={{ marginBottom: 0 }}>
@@ -1981,7 +1981,7 @@ export default function AdminPanel({ user, onClose }) {
           {tab === 'functions' && (
             <>
               <div className="admin-section-head">
-                <div><div className="muted-note">Extend the app itself. Each function adds a custom button next to the composer that runs your JavaScript in the browser — automate input, call APIs, build filters or shortcuts.</div></div>
+                <div><div className="muted-note">Extend the app itself. Each function adds a custom button next to the composer that runs your JavaScript in the browser, automate input, call APIs, build filters or shortcuts.</div></div>
                 <button className="btn primary" onClick={() => setFnEdit({ label: '', icon: 'sparkles', location: 'composer', code: "api.setInput(api.input + '\\n\\nPlease answer concisely.');\napi.toast('Added a note');", enabled: true })}><Plus style={{ width: 15 }} /> New function</button>
               </div>
               {fnEdit && (
@@ -2096,7 +2096,7 @@ export default function AdminPanel({ user, onClose }) {
                           <tr key={u.userId}>
                             <td>{u.name}</td>
                             <td className="num">{(u.prompt + u.completion).toLocaleString()}</td>
-                            <td className="num">{u.cost ? '$' + u.cost.toFixed(u.cost < 0.01 ? 4 : 2) : '—'}</td>
+                            <td className="num">{u.cost ? '$' + u.cost.toFixed(u.cost < 0.01 ? 4 : 2) : ', '}</td>
                           </tr>
                         ))}</tbody>
                       </table>
@@ -2110,7 +2110,7 @@ export default function AdminPanel({ user, onClose }) {
                           <tr key={m.modelId}>
                             <td>{m.name}</td>
                             <td className="num">{(m.prompt + m.completion).toLocaleString()}</td>
-                            <td className="num">{m.cost ? '$' + m.cost.toFixed(m.cost < 0.01 ? 4 : 2) : '—'}</td>
+                            <td className="num">{m.cost ? '$' + m.cost.toFixed(m.cost < 0.01 ? 4 : 2) : ', '}</td>
                           </tr>
                         ))}</tbody>
                       </table>
@@ -2144,7 +2144,7 @@ export default function AdminPanel({ user, onClose }) {
             <div className="sp-head">
               <div>
                 <h3>Discover models</h3>
-                <div className="muted-note">Models your backend currently exposes. Add the ones you want — added models can be hidden or deleted like any other.</div>
+                <div className="muted-note">Models your backend currently exposes. Add the ones you want, added models can be hidden or deleted like any other.</div>
               </div>
               <button className="modal-close" style={{ position: 'static' }} onClick={() => setDiscover(null)}>✕</button>
             </div>

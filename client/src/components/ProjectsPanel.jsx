@@ -176,11 +176,11 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
             </div>
             {editingInstr ? (
               <textarea className="pj-instr-edit" autoFocus value={instr} rows={5}
-                placeholder="Add instructions to tailor Claude's responses"
+                placeholder="Add instructions to tailor the Assistant's responses"
                 onChange={(e) => setInstr(e.target.value)} onBlur={saveInstr} />
             ) : (
               <div className="pj-card-sub" onClick={() => setEditingInstr(true)}>
-                {project.instructions ? project.instructions : "Add instructions to tailor Claude's responses"}
+                {project.instructions ? project.instructions : "Add instructions to tailor Assistant's responses"}
               </div>
             )}
           </div>
@@ -194,7 +194,7 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
             {pjFiles.length === 0 ? (
               <div className="pj-files-empty" onClick={() => fileInputRef.current?.click()} style={{ cursor: 'pointer' }}>
                 <FileText style={{ width: 30 }} />
-                <span>{fileBusy ? 'Uploading…' : 'Add PDFs or text documents — chats in this project can search and read them.'}</span>
+                <span>{fileBusy ? 'Uploading…' : 'Add PDFs or text documents, chats in this project can search and read them.'}</span>
               </div>
             ) : (
               <div className="pj-file-list">
@@ -259,7 +259,7 @@ export default function ProjectsPanel({ openId, composerProps, onClose, onOpenCh
               <input value={q} placeholder="Search projects..." onChange={(e) => setQ(e.target.value)} />
             </div>
             {projects === null ? null : list.length === 0 ? (
-              <div className="co-end">{q.trim() ? 'No projects match your search.' : 'No projects yet — create one to get started.'}</div>
+              <div className="co-end">{q.trim() ? 'No projects match your search.' : 'No projects yet, create one to get started.'}</div>
             ) : (
               <div className="pj-grid">
                 {list.map((p, i) => (

@@ -234,11 +234,11 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
         </div>
       </div>
       {!isLive && writingElsewhere && (
-        <button className="art-writing-bar" onClick={onJumpToLive}>✍ Writing {baseName(writingElsewhere)}… — view live</button>
+        <button className="art-writing-bar" onClick={onJumpToLive}>✍ Writing {baseName(writingElsewhere)}…, view live</button>
       )}
       {stale && (
         <div className="art-stale-row">
-          <button className="art-stale-bar" onClick={() => load()}>Viewing older version v{viewing} — jump to latest (v{current})</button>
+          <button className="art-stale-bar" onClick={() => load()}>Viewing older version v{viewing}, jump to latest (v{current})</button>
           <button className="art-restore-btn" disabled={restoring} onClick={restore}>{restoring ? 'Restoring…' : `Restore v${viewing}`}</button>
         </div>
       )}
@@ -406,7 +406,7 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
               <div className="art-empty big">
                 <div className="art-empty-icon"><FileText style={{ width: 26 }} /></div>
                 <div className="art-empty-title">No files yet</div>
-                <div>When the assistant creates or edits files, they'll show up here — ready to view, diff, and download.</div>
+                <div>When the assistant creates or edits files, they'll show up here, ready to view, diff, and download.</div>
               </div>
             )}
             {treeFiles.length > 0 && <TreeChildren node={buildTree(treeFiles)} depth={0} chatId={chatId} onOpen={setSel} sel={sel} live={live} />}

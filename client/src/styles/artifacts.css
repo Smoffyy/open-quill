@@ -127,7 +127,7 @@
 .tc-note.err, .tool-chip.err .tc-verb { color: var(--danger, #e5635b); }
 .tool-chip.err svg { color: var(--danger, #e5635b); }
 
-/* tool line — understated grey status for file ops & misc tools */
+/* tool line, understated grey status for file ops & misc tools */
 .tool-line { display: inline-flex; align-items: center; gap: 7px; max-width: 100%; margin: 5px 0; font-family: var(--font-sans); font-size: 13.5px; color: var(--text-muted); animation: chipIn .26s var(--ease-out) backwards; vertical-align: middle; }
 .tool-line .tl-icon { color: var(--text-muted); opacity: .85; flex-shrink: 0; }
 .tool-line.err .tl-icon { color: var(--danger, #e5635b); }
@@ -143,7 +143,7 @@
 .tool-line.clickable:hover { background: var(--surface-2); }
 .tool-line.clickable:hover .tl-name { text-decoration: underline; text-underline-offset: 2px; }
 
-/* bash / terminal — collapsible */
+/* bash / terminal, collapsible */
 .tool-bash { margin: 6px 0; animation: chipIn .26s var(--ease-out) backwards; }
 .tb-head { display: flex; align-items: center; gap: 8px; width: 100%; max-width: 100%; padding: 4px 0; background: none; border: none; cursor: pointer; font-family: var(--font-sans); font-size: 13.5px; color: var(--text-muted); transition: color .15s; text-align: left; }
 .tb-head:hover { color: var(--text); }

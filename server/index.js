@@ -68,7 +68,7 @@ function historyText(text) {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3001;
-// single source of truth — bump the version in the root package.json
+// single source of truth, bump the version in the root package.json
 const APP_VERSION = (() => {
   try { return JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')).version || '0.0.0'; }
   catch { return '0.0.0'; }
@@ -632,7 +632,7 @@ app.post('/api/chats/import', authMiddleware, (req, res) => {
   const body = req.body || {};
   const bundle = Array.isArray(body.chats) ? body.chats
     : (Array.isArray(body.messages) ? [{ title: body.title, starred: false, folderName: null, summary: body.summary || '', messages: body.messages }] : null);
-  if ((!bundle || !bundle.length) && !body.profile) return res.status(400).json({ error: 'Nothing to import — pick a valid open-quill export file.' });
+  if ((!bundle || !bundle.length) && !body.profile) return res.status(400).json({ error: 'Nothing to import, pick a valid open-quill export file.' });
   if (body.profile && typeof body.profile === 'object') {
     const u = db.users.byId(req.user.id) || {};
     const pf = body.profile;
@@ -1990,9 +1990,9 @@ function sandboxPromptFor(chatId) {
   const { files, hidden } = sandbox.list(chatId, { withHidden: true });
   if (!files.length && !hidden) return p + '\n\n## Current sandbox\nThe sandbox is empty.';
   const LIST_CAP = 200, INLINE_CAP = 12;
-  p += '\n\n## Current sandbox files\nThese are the LATEST versions on disk. Always edit these directly — never assume older content. The version number (vN) increases each time a file changes.\n';
+  p += '\n\n## Current sandbox files\nThese are the LATEST versions on disk. Always edit these directly, never assume older content. The version number (vN) increases each time a file changes.\n';
   for (const f of files.slice(0, LIST_CAP)) p += `- ${f.path} (v${f.v}, ${f.size} bytes)\n`;
-  if (files.length > LIST_CAP) p += `- … and ${files.length - LIST_CAP} more file(s). The list is truncated to protect context — use \`list_files\`, \`search\`, or \`view\` to inspect anything not shown here.\n`;
+  if (files.length > LIST_CAP) p += `- … and ${files.length - LIST_CAP} more file(s). The list is truncated to protect context, use \`list_files\`, \`search\`, or \`view\` to inspect anything not shown here.\n`;
   if (hidden) p += `\n(${hidden} file(s) inside dependency/build folders like node_modules are hidden from this listing and from context; they exist on disk and your commands can use them normally.)\n`;
   p += '\n## Latest file contents (a sample; use `view` for anything not shown)\n';
   let budget = 40000, inlined = 0;
@@ -2001,13 +2001,13 @@ function sandboxPromptFor(chatId) {
     if (f.ext === 'zip' || !sandbox.isText(f.path)) continue;
     const txt = sandbox.readText(chatId, f.path) || '';
     if (txt.length > 8000 || txt.length > budget) {
-      p += `\n### ${f.path} (v${f.v}) — ${f.size} bytes, too large to inline; use the view tool to read it.\n`;
+      p += `\n### ${f.path} (v${f.v}), ${f.size} bytes, too large to inline; use the view tool to read it.\n`;
       continue;
     }
     p += `\n### ${f.path} (v${f.v})\n\`\`\`${f.ext || ''}\n${txt}\n\`\`\`\n`;
     budget -= txt.length; inlined++;
   }
-  p += '\n---\nREMINDER: The sandbox is ON and the files above are the current truth. Edit existing files with `str_replace` (never recreate them from scratch), and use the dedicated file tools — `copy_file`, `move_file`, `make_dir`, `delete_file`, `bundle_zip`, `extract_zip` — for file operations. Use relative paths only. Keep calling tools until the task is fully done; do not stop to ask permission, do not paste whole file contents or fake terminal output into the chat, and when a tool fails, read the error and change approach instead of repeating the same call. Never write imitation tool text like `[used bash: ...]` in a reply; make real tool calls.';
+  p += '\n---\nREMINDER: The sandbox is ON and the files above are the current truth. Edit existing files with `str_replace` (never recreate them from scratch), and use the dedicated file tools, `copy_file`, `move_file`, `make_dir`, `delete_file`, `bundle_zip`, `extract_zip`, for file operations. Use relative paths only. Keep calling tools until the task is fully done; do not stop to ask permission, do not paste whole file contents or fake terminal output into the chat, and when a tool fails, read the error and change approach instead of repeating the same call. Never write imitation tool text like `[used bash: ...]` in a reply; make real tool calls.';
   return p;
 }
 function cleanCall(call) {
@@ -2047,7 +2047,7 @@ function formatToolResult(call, r) {
   if (!r.ok) return `${head} → ERROR: ${r.error}` + (r.output ? `\n${r.output}` : '');
   switch (call.tool) {
     case 'bash': case 'run': return `bash$ ${call.cmd ?? call.command ?? ''}\n${r.output || '(no output)'}\n(exit ${r.exit ?? 0})`;
-    case 'create_file': return r.unchanged ? `${head} → unchanged (already v${r.v}, identical content — no write needed)` : `${head} → created (v${r.v}, ${r.bytes} bytes, +${r.adds ?? 0}/-${r.dels ?? 0})`;
+    case 'create_file': return r.unchanged ? `${head} → unchanged (already v${r.v}, identical content, no write needed)` : `${head} → created (v${r.v}, ${r.bytes} bytes, +${r.adds ?? 0}/-${r.dels ?? 0})`;
     case 'str_replace': return `${head} → edited (now v${r.v}, +${r.adds ?? 0}/-${r.dels ?? 0})`;
     case 'view': return `${head} →\n${r.content}`;
     case 'list_files': return `list_files →\n${(r.files || []).map(f => `${f.path} (${f.size}b)`).join('\n') || '(empty)'}`;
@@ -2973,7 +2973,7 @@ app.post('/api/spaces/:id/leave', authMiddleware, (req, res) => {
 });
 app.delete('/api/spaces/:id/members/:userId', authMiddleware, (req, res) => {
   const s = ownSpace(req, res, { requireOwner: true }); if (!s) return;
-  if (req.params.userId === s.owner_id) return res.status(400).json({ error: 'The owner cannot be removed — transfer or delete the space instead.' });
+  if (req.params.userId === s.owner_id) return res.status(400).json({ error: 'The owner cannot be removed, transfer or delete the space instead.' });
   const members = (s.members || []).filter(m => m.userId !== req.params.userId);
   const updated = db.spaces.update(s.id, { members, updated_at: now() });
   broadcastSpace(s.id, { type: 'space_updated', spaceId: s.id, space: shapeSpace(updated, null) });
