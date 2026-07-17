@@ -265,6 +265,34 @@ export default function registerChatRoutes(app) {
     res.json({ ok: true, pinned: !!patch.pinned });
   });
 
+  app.delete('/api/chats/:id/messages/:mid', authMiddleware, (req, res) => {
+    const c = db.chats.byId(req.params.id);
+    if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+    ensureChain(c.id);
+    const m = db.messages.byId(req.params.mid);
+    if (!m || m.chat_id !== c.id) return res.status(404).json({ error: 'message not found' });
+    const cascade = req.query.cascade === '1';
+    const removed = new Set([m.id]);
+    if (cascade) {
+      let frontier = [m.id];
+      while (frontier.length) {
+        const next = [];
+        for (const pid of frontier) for (const kid of childrenOf(c.id, pid)) if (!removed.has(kid.id)) { removed.add(kid.id); next.push(kid.id); }
+        frontier = next;
+      }
+    } else {
+      for (const kid of childrenOf(c.id, m.id)) db.messages.update(kid.id, { parent_id: m.parent_id ?? null });
+    }
+    db.messages.remove(x => removed.has(x.id));
+    const fresh = db.chats.byId(c.id);
+    if (removed.has(fresh.active_leaf)) {
+      const anchor = m.parent_id ?? null;
+      const roots = childrenOf(c.id, null);
+      db.chats.update(c.id, { active_leaf: anchor ? leafUnder(c.id, anchor) : (roots.length ? leafUnder(c.id, roots[roots.length - 1].id) : null) });
+    }
+    res.json({ ok: true, removed: removed.size });
+  });
+
   app.get('/api/chats/:id/context', authMiddleware, async (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });

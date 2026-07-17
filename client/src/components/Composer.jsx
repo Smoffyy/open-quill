@@ -65,12 +65,12 @@ function PmSub({ className = '', children, onMouseEnter, onMouseLeave }) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, models,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
   voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall,
   safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
   conversationEnded = false, endedReason = '',
-  queuedMsg = '', onQueue, onCancelQueue, canContinue = false, onContinue,
+  queueCount = 0, onQueue, canContinue = false, onContinue,
   compareIds = [], onSetCompare, hideModelPicker = false, reasoningEffort, onSetEffort
 }) {
   const ta = useRef(null);
@@ -218,7 +218,6 @@ export default function Composer({
       preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
     }));
     setFiles(fs => [...fs, ...mapped]);
-    if (sandboxAllowed && !sandbox && mapped.some(f => !f.preview)) onWantSandbox?.();
     const lastImg = [...mapped].reverse().find(f => f.preview);
     if (lastImg) dominantColor(lastImg.preview).then(c => c && setGlow(c));
   }
@@ -245,7 +244,19 @@ export default function Composer({
     if (blockSend || budgetBlock || safetyFlagged || safetyChecking || conversationEnded) return;
     if (streaming) {
       const t = value.trim();
-      if (t && onQueue && !queuedMsg) { onQueue(t); onChange(''); }
+      if (!t && files.length === 0) return;
+      if (!onQueue) return;
+      let attachments = [];
+      if (files.length) {
+        setUploading(true);
+        try { const r = await api.uploadFiles(files.map(f => f.file)); attachments = r.files || []; }
+        catch (e) { setUploading(false); setUpErr(e?.message || 'Upload failed, the file may be too large.'); return; }
+        setUploading(false);
+        files.forEach(f => f.preview && URL.revokeObjectURL(f.preview));
+        setFiles([]); setGlow('var(--accent)');
+      }
+      onQueue(t, attachments);
+      onChange('');
       return;
     }
     if (!value.trim() && files.length === 0) return;
@@ -402,19 +413,12 @@ export default function Composer({
           ))}
         </div>
       )}
-      <textarea ref={ta} rows={1} value={value} placeholder={placeholder || 'How can I help you today?'}
+      <textarea ref={ta} rows={1} value={value} placeholder={streaming ? (queueCount > 0 ? `Queue another message (${queueCount} waiting)…` : 'Type to queue a message…') : (placeholder || 'How can I help you today?')}
         onChange={(e) => onChange(e.target.value)} onKeyDown={key} onPaste={onPaste} />
       <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}
         accept={(visionSupported ? 'image/*,' : '') + FILE_ACCEPT} />
       {safetyChecking && safetyVerbose && <div className="safety-checking">Safety check…</div>}
       {improving && <div className="safety-checking">Improving prompt…</div>}
-      {queuedMsg && (
-        <div className="queued-chip">
-          <span className="queued-label">Queued:</span>
-          <span className="queued-text">{queuedMsg.length > 90 ? queuedMsg.slice(0, 90) + '…' : queuedMsg}</span>
-          <button className="queued-x" title="Cancel queued message" onClick={() => onCancelQueue?.()}><X style={{ width: 12 }} /></button>
-        </div>
-      )}
       {canContinue && !streaming && !conversationEnded && (
         <div className="continue-row">
           <button className="continue-btn" onClick={() => onContinue?.()}>Continue generating →</button>
@@ -542,7 +546,7 @@ export default function Composer({
         </div>
         <div className="composer-right">
           {!hideModelPicker && <ModelDropdown models={models} currentId={currentId} onSelect={onSelect}
-            extended={extended} onToggleExtended={onToggleExtended} up={modelUp}
+            extended={extended} onToggleExtended={onToggleExtended} up={modelUp} isAdmin={canUseUnavailable}
             reasoningEffort={reasoningEffort} onSetEffort={onSetEffort}
             modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />}
           {voiceMic && (

@@ -5,7 +5,7 @@ import { openLightbox } from '../lightbox.js';
 import ReasoningBlock from './ReasoningBlock.jsx';
 import BranchCompare from './BranchCompare.jsx';
 import ToolCard from './ToolCard.jsx';
-import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin } from './icons.jsx';
+import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash } from './icons.jsx';
 import { api } from '../api.js';
 
 function Columns(props) {
@@ -115,8 +115,8 @@ function ModelIcon({ model, phase, below, name }) {
   );
 }
 
-function Message({ msg, model, models, currentId, streaming, phase, liveCall, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false }) {
-  if (chatEnded) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onFork = null; }
+function Message({ msg, model, models, currentId, streaming, phase, liveCall, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false }) {
+  if (chatEnded) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onFork = null; onDelete = null; }
   const [typing, setTyping] = useState(false);
   const typingTimer = useRef(null);
   useEffect(() => {
@@ -177,6 +177,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
               {onEdit && <button className="action-btn" onClick={startEdit} title="Edit"><Pencil style={{ width: 18 }} /></button>}
               {onFork && <button className="action-btn" onClick={() => onFork(msg.id)} title="Fork into a new chat"><Fork style={{ width: 18 }} /></button>}
               {onTogglePin && <button className={'action-btn' + (msg.pinned ? ' on' : '')} onClick={() => onTogglePin(msg.id, !msg.pinned)} title={msg.pinned ? 'Unpin' : 'Pin (keep in context)'}><Pin style={{ width: 18 }} /></button>}
+              {onDelete && chatId && <button className="action-btn danger" onClick={() => onDelete(msg.id)} title="Delete message"><Trash style={{ width: 17 }} /></button>}
             </div>
           )}
           {compare && chatId && <BranchCompare chatId={chatId} messageId={msg.id} onSelect={onSelectBranch} onClose={() => setCompare(false)} />}
@@ -243,6 +244,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
           </span>
           {onFork && <button className="action-btn" title="Fork into a new chat" onClick={() => onFork(msg.id)}><Fork /></button>}
           {onTogglePin && <button className={'action-btn' + (msg.pinned ? ' on' : '')} title={msg.pinned ? 'Unpin' : 'Pin (keep in context)'} onClick={() => onTogglePin(msg.id, !msg.pinned)}><Pin /></button>}
+          {onDelete && chatId && !String(msg.id).startsWith('inc-') && <button className="action-btn danger" title="Delete message" onClick={() => onDelete(msg.id)}><Trash style={{ width: 17 }} /></button>}
           {model?.displayName && <span className="msg-model-badge">{model.displayName}</span>}
         </div>
       )}

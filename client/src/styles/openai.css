@@ -72,6 +72,8 @@
 [data-preset="openai"] .center-wrap { justify-content: center; padding-top: 24px; padding-bottom: 24px; }
 
 [data-preset="openai"] .composer-wrap { max-width: 808px; }
+[data-preset="openai"] .composer-stack { max-width: 768px; margin: 0 auto; }
+[data-preset="openai"] .unavail-bg { border-radius: 26px; }
 [data-preset="openai"] .composer, [data-preset="openai"] .center-wrap .composer {
   position: relative; z-index: 3; border-radius: 26px; border: 1px solid var(--border-soft);
   background: var(--input-bg); padding: 8px 96px 8px 48px; min-height: 52px; max-width: 768px; width: 100%;
@@ -101,13 +103,19 @@
 
 [data-preset="openai"] .composer-wrap.floating {
   position: absolute; bottom: 0; left: 0; right: 0; z-index: 30;
-  padding-top: 34px !important;
-  background: linear-gradient(to top, var(--bg) calc(100% - 34px), transparent);
+  padding-top: 64px !important;
+  background: linear-gradient(to top,
+    var(--bg) 0%,
+    var(--bg) 26%,
+    color-mix(in srgb, var(--bg) 88%, transparent) 48%,
+    color-mix(in srgb, var(--bg) 62%, transparent) 66%,
+    color-mix(in srgb, var(--bg) 30%, transparent) 84%,
+    transparent 100%);
   pointer-events: none;
 }
 [data-preset="openai"] .composer-wrap.floating > * { pointer-events: auto; }
 [data-preset="openai"] .composer-wrap.floating .disclaimer { margin: 0; padding: 8px 0 10px; }
-[data-preset="openai"] .scroll-area .thread-pad { height: 130px; }
+[data-preset="openai"] .scroll-area .thread-pad { height: 160px; }
 [data-preset="openai"] .to-bottom { bottom: 130px; }
 [data-preset="openai"] .disclaimer { font-family: var(--font-sans); font-size: 12px; text-align: center; }
 

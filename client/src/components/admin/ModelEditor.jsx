@@ -144,6 +144,15 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
                   <input value={m.effort_kwarg || ''} onChange={(e) => set('effort_kwarg', e.target.value)} placeholder="reasoning_effort" /></div>
               </div>
               <div className="muted-note">Sent as {'{ "chat_template_kwargs": { "<kwarg>": <value> } }'}. gpt-oss uses reasoning_effort with low, medium, high, Qwen uses enable_thinking with false, true.</div>
+              <div className="me2-toggle-card" style={{ marginTop: 14 }}>
+                <div className="field row">
+                  <div><label>Who can change thinking</label><div className="muted-note">Admins only: users see the control greyed out and the model always runs at the default level. Everyone: users and admins can adjust it.</div></div>
+                  <div className="effort-perm-seg">
+                    <button type="button" className={m.effort_admin_only ? 'on' : ''} onClick={() => set('effort_admin_only', 1)}>Admins only</button>
+                    <button type="button" className={!m.effort_admin_only ? 'on' : ''} onClick={() => set('effort_admin_only', 0)}>Everyone</button>
+                  </div>
+                </div>
+              </div>
             </>}
             {!m.effort_enabled && <>
               <div className="me2-toggle-card">
@@ -170,6 +179,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
             <div className="muted-note">How the model delimits its reasoning in the output stream. Leave blank to use the default {'<think>…</think>'}.</div>
             <div className="me2-toggle-card" style={{ marginTop: 14 }}>
               <Toggle m={m} set={set} k="reasoning_collapsible" inverted label="Show reasoning to users" note="When on, users can expand and read the thought process. When off, they see only a 'Thinking…' status." />
+              {m.reasoning_collapsible === 0 && <Toggle m={m} set={set} k="hide_thinking" label={'Hide the "Thinking…" status too'} note="No thinking indicator at all, the model just appears to be generating normally while it reasons." />}
             </div>
 
             <div className="me2-group-label">Long conversations</div>

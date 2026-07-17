@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, Chat, Search, Panel, Gear, Shield, Logout, Dots, Trash, Heart, FileText, Star, Download, Folder, Pencil, Chevron, Users, Box, Compact } from './icons.jsx';
 
@@ -49,8 +49,19 @@ function ChatRow({ c, active, showTrash, folders, onOpen, onDelete, onToggleStar
     e.stopPropagation();
     if (menu) { setMenu(null); setSubOpen(false); return; }
     const r = btnRef.current.getBoundingClientRect();
-    setMenu({ top: r.bottom + 6, left: Math.min(r.left, window.innerWidth - 190) });
+    setMenu({ top: r.bottom + 6, left: r.left, anchorTop: r.top, ready: false });
   }
+  useLayoutEffect(() => {
+    if (!menu || menu.ready || !menuRef.current) return;
+    const pad = 8;
+    const mr = menuRef.current.getBoundingClientRect();
+    let top = menu.top;
+    let left = menu.left;
+    if (top + mr.height > window.innerHeight - pad) top = Math.max(pad, menu.anchorTop - mr.height - 6);
+    if (top + mr.height > window.innerHeight - pad) top = Math.max(pad, window.innerHeight - mr.height - pad);
+    left = Math.min(Math.max(pad, left), window.innerWidth - mr.width - pad);
+    setMenu(m => m ? { ...m, top, left, ready: true } : m);
+  }, [menu, subOpen]);
   const openInTab = () => window.open('/chat/' + c.id, '_blank', 'noopener');
   const close = () => { setMenu(null); setSubOpen(false); };
   return (
@@ -68,12 +79,12 @@ function ChatRow({ c, active, showTrash, folders, onOpen, onDelete, onToggleStar
         <button className="row-ctrl" ref={btnRef} onClick={openMenu} title="Options"><Dots style={{ width: 16 }} /></button>
       )}
       {menu && createPortal(
-        <div className="chat-menu" ref={menuRef} style={{ top: menu.top, left: menu.left }}>
+        <div className="chat-menu" ref={menuRef} style={{ top: menu.top, left: menu.left, visibility: menu.ready ? undefined : 'hidden' }}>
           <button onClick={(e) => { e.stopPropagation(); onToggleStar(c.id); close(); }}>
             <Star style={{ width: 15 }} /> {c.starred ? 'Unstar chat' : 'Star chat'}
           </button>
           <div className="cm-sub">
-            <button onClick={(e) => { e.stopPropagation(); setSubOpen(s => !s); }}>
+            <button onClick={(e) => { e.stopPropagation(); setSubOpen(s => !s); setMenu(m => m ? { ...m, ready: false } : m); }}>
               <Folder style={{ width: 15 }} /> Move to folder
               <Chevron style={{ width: 13, marginLeft: 'auto', transform: subOpen ? 'rotate(90deg)' : 'none' }} />
             </button>

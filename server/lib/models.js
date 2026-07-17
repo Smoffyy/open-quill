@@ -5,8 +5,8 @@ export function shapePublic(m) {
   return {
     id: m.id, displayName: m.display_name, description: m.description,
     hasReasoning: !!m.has_reasoning, inMoreModels: !!m.in_more_models, moreModelsLabel: m.more_models_label,
-    effortEnabled: !!m.effort_enabled, effortLevels: (Array.isArray(m.effort_levels) && m.effort_levels.length) ? m.effort_levels : ['low', 'medium', 'high'], effortDefault: m.effort_default || '',
-    reasoningCollapsible: m.reasoning_collapsible !== 0,
+    effortEnabled: !!m.effort_enabled, effortLevels: (Array.isArray(m.effort_levels) && m.effort_levels.length) ? m.effort_levels : ['low', 'medium', 'high'], effortDefault: m.effort_default || '', effortAdminOnly: !!m.effort_admin_only,
+    reasoningCollapsible: m.reasoning_collapsible !== 0, hideThinking: !!m.hide_thinking,
     staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon, generatingAnim: m.generating_anim || 'spin', thinkingAnim: m.thinking_anim || 'pulse',
     iconPosition: m.icon_position || 'below', hasVision: !!m.has_vision, iconSize: m.icon_size || 0, showName: !!m.show_name,
     sandboxAuto: !!m.sandbox_auto, sandboxAllowed: m.sandbox_allowed !== 0, dropdownIcon: m.dropdown_icon !== 0, isDefault: !!m.is_default, agentSteps: m.agent_steps || 0,
@@ -48,13 +48,13 @@ export function effortLevelsOf(model) {
   return (Array.isArray(model.effort_levels) && model.effort_levels.length) ? model.effort_levels : ['low', 'medium', 'high'];
 }
 
-export function applyEffort(model, requested) {
+export function applyEffort(model, requested, allowRequest = true) {
   if (!model || !model.effort_enabled) return model;
   const levels = effortLevelsOf(model);
   const isBool = levels.length === 2 && levels.some(x => /^true$/i.test(x)) && levels.some(x => /^false$/i.test(x));
   const fallback = isBool ? levels.find(x => /^false$/i.test(x)) : (levels[Math.floor(levels.length / 2)] || levels[0]);
   const def = levels.includes(model.effort_default) ? model.effort_default : fallback;
-  const level = (typeof requested === 'string' && levels.includes(requested)) ? requested : def;
+  const level = (allowRequest && typeof requested === 'string' && levels.includes(requested)) ? requested : def;
   return { ...model, reasoning_effort_level: level, reasoning_effort_kwarg: (model.effort_kwarg || 'reasoning_effort').trim() || 'reasoning_effort' };
 }
 

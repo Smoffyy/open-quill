@@ -33,7 +33,7 @@ import Toaster from './components/Toaster.jsx';
 import Lightbox from './components/Lightbox.jsx';
 import ShortcutsModal from './components/ShortcutsModal.jsx';
 import { toast } from './toast.js';
-import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders } from './components/icons.jsx';
+import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X } from './components/icons.jsx';
 
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: 'Assistants can make mistakes, double-check responses.', greetings: ['How can I help you?'], appIcon: '', quickPrompts: [], version: '' };
 
@@ -174,8 +174,18 @@ export default function App() {
   const [chatGenParams, setChatGenParams] = useState(null);
   const [chatSysOverride, setChatSysOverride] = useState('');
   const [chatEndedReason, setChatEndedReason] = useState('');
-  const [queuedMsg, setQueuedMsg] = useState('');
-  const queuedRef = useRef('');
+  const [queuedList, setQueuedList] = useState([]);
+  const queuedListRef = useRef([]);
+  const setQueue = (updater) => setQueuedList(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; queuedListRef.current = next; return next; });
+  const chatCache = useRef(new Map());
+  const cacheChat = (id, entry) => {
+    if (!id) return;
+    const cache = chatCache.current;
+    const prev = cache.get(id) || {};
+    cache.delete(id);
+    cache.set(id, { ...prev, ...entry });
+    if (cache.size > 25) cache.delete(cache.keys().next().value);
+  };
   const sendRef = useRef(null);
   const genOptsRef = useRef({});
   const [canContinue, setCanContinue] = useState(false);
@@ -607,11 +617,11 @@ export default function App() {
           } else {
             compareRef.current = null;
             toast('Model comparison ready, use the version arrows or compare button on the response.', { duration: 6000 });
-            queuedRef.current && queuedRef.current.trim() && (() => { const q2 = queuedRef.current; queuedRef.current=''; setQueuedMsg(''); setTimeout(() => sendRef.current([], q2, { fromQueue: true }), 150); })();
+            (() => { const q2 = queuedListRef.current[0]; if (q2) { setQueue(l => l.slice(1)); setTimeout(() => sendRef.current(q2.attachments || [], q2.text, { fromQueue: true }), 150); } })();
           }
         } else {
-          const q = queuedRef.current;
-          if (q && q.trim()) { queuedRef.current = ''; setQueuedMsg(''); setTimeout(() => sendRef.current([], q, { fromQueue: true }), 120); }
+          const q = queuedListRef.current[0];
+          if (q) { setQueue(l => l.slice(1)); setTimeout(() => sendRef.current(q.attachments || [], q.text, { fromQueue: true }), 120); }
         }
       }
       return;
@@ -721,12 +731,17 @@ export default function App() {
         const pm = prev[i];
         return { ...sm, _k: (pm && pm.role === sm.role) ? (pm._k || pm.id) : sm.id };
       }));
+      cacheChat(id, { messages: server });
     } catch {}
   }
   const selectBranch = useCallback(async (siblingId) => {
     if (streaming || !activeId || !siblingId) return;
     try { await api.post('/api/chats/' + activeId + '/branch', { messageId: siblingId }); await refreshMessages(activeId); setTimeout(() => scrollBottom(false), 20); } catch {}
   }, [streaming, activeId]);
+  useEffect(() => {
+    const id = activeIdRef.current;
+    if (id && !incognito && chatCache.current.has(id)) cacheChat(id, { messages });
+  }, [messages]);
   const forkChat = useCallback(async (messageId) => {
     if (streaming || !activeId) return;
     try {
@@ -819,48 +834,71 @@ export default function App() {
   function onTouchMove() { const el = scrollRef.current; if (el && el.scrollHeight - el.scrollTop - el.clientHeight > 24) stick.current = false; }
   function jumpDown() { stick.current = true; setShowJump(false); scrollBottom(true); }
 
+  const openSeq = useRef(0);
+  function applyChatMeta(chat) {
+    setCurrentProject(chat.projectId ? (projects.find(p => p.id === chat.projectId) || { id: chat.projectId, name: 'Project' }) : null);
+    setSandbox(!!chat.sandbox);
+    setWebSearch(false);
+    setHasSummary(!!chat.hasSummary);
+    setChatEnded(!!chat.ended);
+    setChatEndedReason(chat.endedReason || '');
+    setChatGenParams(chat.genParams || null);
+    setChatSysOverride(chat.systemOverride || '');
+    setChatInstructions(chat.instructions || '');
+    setChatPins(Array.isArray(chat.pinnedFiles) ? chat.pinnedFiles : []);
+  }
+  function applyLastModel(msgs) {
+    const lastA = [...msgs].reverse().find(mm => mm.role === 'assistant' && mm.model_id);
+    if (lastA && models.find(mm => mm.id === lastA.model_id)) {
+      setCurrentId(lastA.model_id);
+      setExtended(!!lastA.extended);
+      if (lastA.reasoningEffort) setReasoningEffort(lastA.reasoningEffort);
+    }
+  }
   async function openChat(id, push = true) {
     setMobileDrawer(false);
     if (incognito) setIncognito(false);
     setShowProjects(false);
     if (id !== activeIdRef.current) { setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null); }
     setActiveId(id);
+    const seq = ++openSeq.current;
+    const cached = chatCache.current.get(id);
+    if (cached) {
+      setMessages(cached.messages || []);
+      applyChatMeta(cached.chat || {});
+      applyLastModel(cached.messages || []);
+      setFiles(cached.files || []);
+      setArtifactsOpen((cached.files || []).length > 0 && artifactsOpen);
+    } else {
+      setMessages([]);
+      setFiles([]);
+    }
+    setCtlOpen(false);
+    setCanContinue(false); setQueue([]);
+    setInput(loadDraft(id));
+    setChatMenuOpen(false);
+    if (push) history.pushState({}, '', '/chat/' + id);
+    else history.replaceState({}, '', '/chat/' + id);
+    stick.current = true; setTimeout(() => scrollBottom(false), 30);
     try {
       const { chat, messages } = await api.get('/api/chats/' + id);
-      setMessages(messages);
-      {
-        const lastA = [...messages].reverse().find(mm => mm.role === 'assistant' && mm.model_id);
-        if (lastA && models.find(mm => mm.id === lastA.model_id)) {
-          setCurrentId(lastA.model_id);
-          setExtended(!!lastA.extended);
-          if (lastA.reasoningEffort) setReasoningEffort(lastA.reasoningEffort);
-        }
-      }
-      setCurrentProject(chat.projectId ? (projects.find(p => p.id === chat.projectId) || { id: chat.projectId, name: 'Project' }) : null);
-      if (user?.prefs?.chatStagger !== false && user?.prefs?.messageEntrance !== false) {
+      if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { chat, messages }); return; }
+      refreshSeq.current++;
+      setMessages(prev => (cached && prev.length === messages.length)
+        ? messages.map((sm, i) => { const pm = prev[i]; return { ...sm, _k: (pm && pm.role === sm.role) ? (pm._k || pm.id) : sm.id }; })
+        : messages);
+      applyChatMeta(chat);
+      applyLastModel(messages);
+      cacheChat(id, { chat, messages });
+      if (!cached && user?.prefs?.chatStagger !== false && user?.prefs?.messageEntrance !== false) {
         clearTimeout(staggerTimer.current);
         setThreadStagger(true);
         staggerTimer.current = setTimeout(() => setThreadStagger(false), 700);
       }
-      setSandbox(!!chat.sandbox);
-      setWebSearch(false);
-      setHasSummary(!!chat.hasSummary);
-      setChatEnded(!!chat.ended);
-      setChatEndedReason(chat.endedReason || '');
-      setChatGenParams(chat.genParams || null);
-      setChatSysOverride(chat.systemOverride || '');
-      setCtlOpen(false);
-      setCanContinue(false); setQueuedMsg(''); queuedRef.current = '';
-      setInput(loadDraft(id));
-      setChatInstructions(chat.instructions || '');
-      setChatPins(Array.isArray(chat.pinnedFiles) ? chat.pinnedFiles : []);
-      setChatMenuOpen(false);
-      try { const f = await api.get('/api/chats/' + id + '/files'); setFiles(f.files || []); setArtifactsOpen((f.files || []).length > 0 && artifactsOpen); }
-      catch { setFiles([]); }
-      if (push) history.pushState({}, '', '/chat/' + id);
-      else history.replaceState({}, '', '/chat/' + id);
-      stick.current = true; setTimeout(() => scrollBottom(false), 30);
-    } catch { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); }
+      try { const f = await api.get('/api/chats/' + id + '/files'); if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { files: f.files || [] }); return; } setFiles(f.files || []); setArtifactsOpen((f.files || []).length > 0 && artifactsOpen); cacheChat(id, { files: f.files || [] }); }
+      catch { if (seq === openSeq.current && activeIdRef.current === id && !cached) setFiles([]); }
+      if (!cached) { stick.current = true; setTimeout(() => scrollBottom(false), 30); }
+    } catch { if (seq === openSeq.current) { if (!cached) { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); } } }
   }
   function newChat(fromPop) {
     setMobileDrawer(false);
@@ -870,7 +908,7 @@ export default function App() {
     setActiveId(null); setMessages([]); setInput('');
     setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
     setChatEnded(false); setChatEndedReason('');
-    setCanContinue(false); setQueuedMsg(''); queuedRef.current = '';
+    setCanContinue(false); setQueue([]);
     setChatGenParams(null); setChatSysOverride('');
     setInput(loadDraft(null));
     const restored = homeSelectionRef.current;
@@ -905,8 +943,16 @@ export default function App() {
   }
   async function deleteChat(id) {
     await api.del('/api/chats/' + id);
+    chatCache.current.delete(id);
     setChats(cs => cs.filter(c => c.id !== id));
     if (id === activeId) newChat();
+  }
+  async function deleteMessage(messageId) {
+    const id = activeIdRef.current;
+    if (!id || streaming) return;
+    setMessages(ms => ms.filter(m => m.id !== messageId));
+    try { await api.del('/api/chats/' + id + '/messages/' + messageId); await refreshMessages(id); }
+    catch { refreshMessages(id); }
   }
   function toggleArchive(id) {
     const cur = chats.find(c => c.id === id);
@@ -1108,7 +1154,8 @@ export default function App() {
   genOptsRef.current = { extended, reasoningEffort, sandbox, webSearch, styleId };
   const composerProps = {
     value: input, onChange: (v) => { if (safetyFlagged) { setSafetyFlagged(false); setSafetyReason(''); } setInput(v); saveDraft(activeId, v); }, onSend: send, onStop: stop, streaming: streaming || queued,
-    queuedMsg, onQueue: (t) => { queuedRef.current = t; setQueuedMsg(t); }, onCancelQueue: () => { queuedRef.current = ''; setQueuedMsg(''); },
+    queueCount: queuedList.length,
+    onQueue: (t, atts) => setQueue(l => [...l, { id: 'q' + Date.now() + Math.random().toString(36).slice(2, 7), text: t, attachments: atts || [] }]),
     canContinue, onContinue: () => { setCanContinue(false); send([], 'Continue exactly where your previous reply stopped, without repeating any content.'); },
     compareIds, onSetCompare: setCompareIds,
     safetyFlagged, safetyChecking, safetyReason, safetyVerbose: !!cfg.safetyCheckVerbose,
@@ -1120,7 +1167,6 @@ export default function App() {
     visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin, budget,
     modelHasBg, bgInChat, onToggleBgInChat: () => updatePref('modelBgInChat', !bgInChat),
     sandbox: sandboxOn, sandboxAllowed, onToggleSandbox: () => { if (sandboxAllowed) setSandbox(s => !s); },
-    onWantSandbox: () => { if (sandboxAllowed) setSandbox(true); },
     webSearch: webSearchOn, webSearchAvailable, onToggleWebSearch: () => { if (webSearchAvailable) setWebSearch(s => !s); },
     project: currentProject, onClearProject: clearChatProject,
     savedPrompts: user?.savedPrompts || [], onUsePrompt: (t) => { setInput(t); setFocusTick(x => x + 1); }, onSavePrompt: savePromptFromInput, onDeletePrompt: deleteSavedPrompt,
@@ -1188,7 +1234,7 @@ export default function App() {
         {empty && !incognito && cfg.uiPreset === 'openai' && (
           <div className="home-topbar">
             <div className="topbar-model">
-              <ModelDropdown models={models} currentId={currentId} onSelect={setCurrentId} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} canUseUnavailable={!!user?.isAdmin} up={false} />
+              <ModelDropdown models={models} currentId={currentId} onSelect={setCurrentId} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
             </div>
           </div>
         )}
@@ -1225,7 +1271,7 @@ export default function App() {
             <div className="topbar">
               {cfg.uiPreset === 'openai' && (
                 <div className="topbar-model">
-                  <ModelDropdown models={models} currentId={currentId} onSelect={setCurrentId} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} canUseUnavailable={!!user?.isAdmin} up={false} />
+                  <ModelDropdown models={models} currentId={currentId} onSelect={setCurrentId} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
                 </div>
               )}
               <button className="mobile-menu-btn" onClick={() => setMobileDrawer(true)} title="Menu"><Menu style={{ width: 20 }} /></button>
@@ -1295,11 +1341,25 @@ export default function App() {
                   const lastA = [...renderList].reverse().find(m => m.role === 'assistant');
                   return renderList.map(msg => (
                     <Message key={msg._k || msg.id} msg={msg} model={models.find(x => x.id === msg.model_id) || model} models={models} currentId={currentId} chatId={activeId} pins={chatPins} chatEnded={chatEnded}
-                      streaming={!!msg._streaming} phase={msg._streaming ? phase : 'static'} liveCall={msg._streaming ? liveCall : null}
-                      onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
+                      streaming={!!msg._streaming} phase={msg._streaming ? ((models.find(x => x.id === currentId)?.hideThinking && phase === 'thinking') ? 'generating' : phase) : 'static'} liveCall={msg._streaming ? liveCall : null}
+                      onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onDelete={streaming || queued ? null : deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
                       showIcon={msg.role === 'assistant' && (cfg.uiPreset === 'openai' || (lastA && msg.id === lastA.id))} />
                   ));
                 })()}
+                {queuedList.map(q => (
+                  <div key={q.id} className="queue-ghost">
+                    <div className="msg user ghost">
+                      <div className="bubble-user"><div className="ghost-text">{q.text}</div></div>
+                      <div className="ghost-row">
+                        <span className="ghost-note">Queued</span>
+                        <button className="ghost-remove" onClick={() => setQueue(l => l.filter(x => x.id !== q.id))}><X style={{ width: 12 }} /> Remove from queue</button>
+                      </div>
+                    </div>
+                    <div className="msg assistant ghost">
+                      <div className="ghost-placeholder"><span /><span /><span /></div>
+                    </div>
+                  </div>
+                ))}
                 {queued && !streaming && (
                   <div className="msg assistant"><div className="queue-wait"><img src="/starburst.svg" className="pulse think-dot" alt="" /> Waiting for queue…</div></div>
                 )}
