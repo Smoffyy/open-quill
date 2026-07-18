@@ -57,7 +57,7 @@ export function IconCropModal({ file, onDone, onCancel }) {
     i.src = url;
     return () => URL.revokeObjectURL(url);
   }, [file]);
-  function render(preview) {
+  function render() {
     const size = 256;
     const c = document.createElement('canvas');
     c.width = c.height = size;
@@ -72,9 +72,9 @@ export function IconCropModal({ file, onDone, onCancel }) {
     ctx.restore();
     return c;
   }
-  const previewUrl = img ? render(true).toDataURL('image/png') : '';
+  const previewUrl = img ? render().toDataURL('image/png') : '';
   async function apply() {
-    render(false).toBlob(async (blob) => {
+    render().toBlob(async (blob) => {
       const f = new File([blob], (file.name.replace(/\.[^.]+$/, '') || 'icon') + '-cropped.png', { type: 'image/png' });
       const { url } = await api.upload(f);
       onDone(url);
@@ -193,20 +193,54 @@ export function Toggle({ m, set, k, label, note, inverted }) {
   );
 }
 
+export function Switch({ on, onToggle }) {
+  return <div className={'switch' + (on ? ' on' : '')} onClick={onToggle} />;
+}
+
+export function SettingRow({ label, note, on, onToggle, last }) {
+  return (
+    <div className="field row" style={last ? { borderBottom: 0, marginBottom: 0 } : undefined}>
+      <div><label>{label}</label>{note && <div className="muted-note">{note}</div>}</div>
+      <Switch on={on} onToggle={onToggle} />
+    </div>
+  );
+}
+
+export function SegPick({ value, options, onChange, style }) {
+  return (
+    <div className="seg" style={{ width: 'fit-content', ...style }}>
+      {options.map(([v, l]) => (
+        <button key={v} type="button" className={value === v ? 'on' : ''} onClick={() => onChange(v)}>{l}</button>
+      ))}
+    </div>
+  );
+}
+
 export function Card({ title, sub, right, children, className }) {
   return (
-    <section className={'ad-card' + (className ? ' ' + className : '')}>
+    <section className={'acard' + (className ? ' ' + className : '')}>
       {(title || right) && (
-        <div className="ad-card-head">
-          <div className="ad-card-titles">
-            {title && <h3 className="ad-card-title">{title}</h3>}
-            {sub && <div className="ad-card-sub">{sub}</div>}
+        <div className="acard-head">
+          <div className="acard-titles">
+            {title && <h3 className="acard-title">{title}</h3>}
+            {sub && <div className="acard-sub">{sub}</div>}
           </div>
-          {right && <div className="ad-card-right">{right}</div>}
+          {right && <div className="acard-right">{right}</div>}
         </div>
       )}
-      <div className="ad-card-body">{children}</div>
+      <div className="acard-body">{children}</div>
     </section>
+  );
+}
+
+export function EmptyState({ icon, title, children, actions }) {
+  return (
+    <div className="aq-empty">
+      {icon && <div className="aq-empty-icon">{icon}</div>}
+      <h2>{title}</h2>
+      {children}
+      {actions && <div className="aq-empty-actions">{actions}</div>}
+    </div>
   );
 }
 
@@ -222,7 +256,7 @@ export function AutosaveNote({ status, live }) {
 export function CopyBtn({ text, title }) {
   const [ok, setOk] = useState(false);
   return (
-    <button type="button" className={'me2-copy' + (ok ? ' ok' : '')} title={title || 'Copy'}
+    <button type="button" className={'aq-copy' + (ok ? ' ok' : '')} title={title || 'Copy'}
       onClick={async (e) => { e.stopPropagation(); try { await navigator.clipboard.writeText(text || ''); setOk(true); setTimeout(() => setOk(false), 1200); } catch {} }}>
       {ok ? <Check style={{ width: 12 }} /> : <Copy style={{ width: 12 }} />}
     </button>
@@ -234,11 +268,40 @@ export function StatusChips({ m }) {
   if (m.is_default) chips.push(['default', 'Default']);
   if (!m.enabled) chips.push(['dim', 'Hidden']);
   if (m.unavailable) chips.push(['warn', 'Unavailable']);
-  if (m.has_reasoning) chips.push(['', 'Reasoning']);
+  if (m.effort_enabled || m.has_reasoning) chips.push(['', 'Reasoning']);
   if (m.has_vision) chips.push(['', 'Vision']);
   if (m.sandbox_allowed !== 0 && m.sandbox_auto) chips.push(['', 'Sandbox']);
   if (m.in_more_models) chips.push(['dim', 'Grouped']);
   if (!chips.length) return null;
-  return <div className="me2-chips">{chips.map(([cls, label]) => <span key={label} className={'me2-chip' + (cls ? ' ' + cls : '')}>{label}</span>)}</div>;
+  return <div className="aq-chips">{chips.map(([cls, label]) => <span key={label} className={'aq-chip' + (cls ? ' ' + cls : '')}>{label}</span>)}</div>;
 }
 
+export function ConfirmDialog({ ask, onClose }) {
+  if (!ask) return null;
+  return (
+    <div className="confirm-overlay" onMouseDown={(e) => e.target.classList.contains('confirm-overlay') && onClose()}>
+      <div className="confirm-box">
+        <div className="confirm-msg">{ask.message}</div>
+        <div className="confirm-actions">
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn danger-solid" onClick={async () => { const fn = ask.onConfirm; onClose(); await fn(); }}>{ask.danger || 'Confirm'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function fmtWhen(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const diff = Date.now() - (typeof ts === 'number' ? ts : d.getTime());
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+  if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+  return d.toLocaleDateString();
+}
+
+export function fmtMoney(v) {
+  const n = Number(v) || 0;
+  return '$' + n.toFixed(n && n < 0.01 ? 4 : 2);
+}
