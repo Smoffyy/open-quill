@@ -5,7 +5,7 @@ import { openLightbox } from '../lightbox.js';
 import ReasoningBlock from './ReasoningBlock.jsx';
 import BranchCompare from './BranchCompare.jsx';
 import ToolCard from './ToolCard.jsx';
-import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash } from './icons.jsx';
+import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash, Dots } from './icons.jsx';
 import { api } from '../api.js';
 
 function Columns(props) {
@@ -57,6 +57,33 @@ function fmtTime(ts) {
     short: d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
     full: d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
   };
+}
+
+function MoreMenu({ items }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+  const list = items.filter(Boolean);
+  if (!list.length) return null;
+  return (
+    <span className="retry-wrap" ref={ref}>
+      <button className={'action-btn' + (open ? ' on' : '')} title="More actions" onClick={() => setOpen(o => !o)}><Dots style={{ width: 18 }} /></button>
+      {open && (
+        <div className="retry-menu more-menu">
+          {list.map((it, i) => (
+            <button key={i} className={(it.on ? 'on' : '') + (it.danger ? ' danger' : '')} onClick={() => { setOpen(false); it.run(); }}>
+              {it.icon}{it.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
+  );
 }
 
 function BranchNav({ msg, onSelectBranch }) {
@@ -175,9 +202,11 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
               {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title="Compare versions"><Columns style={{ width: 18 }} /></button>}
               <button className="action-btn" onClick={doCopy} title="Copy">{copied ? <Check /> : <Copy />}</button>
               {onEdit && <button className="action-btn" onClick={startEdit} title="Edit"><Pencil style={{ width: 18 }} /></button>}
-              {onFork && <button className="action-btn" onClick={() => onFork(msg.id)} title="Fork into a new chat"><Fork style={{ width: 18 }} /></button>}
-              {onTogglePin && <button className={'action-btn' + (msg.pinned ? ' on' : '')} onClick={() => onTogglePin(msg.id, !msg.pinned)} title={msg.pinned ? 'Unpin' : 'Pin (keep in context)'}><Pin style={{ width: 18 }} /></button>}
-              {onDelete && chatId && <button className="action-btn danger" onClick={() => onDelete(msg.id)} title="Delete message"><Trash style={{ width: 17 }} /></button>}
+              <MoreMenu items={[
+                onFork && { label: 'Branch into a new chat', icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
+                onTogglePin && { label: msg.pinned ? 'Unpin' : 'Pin (keep in context)', icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
+                onDelete && chatId && { label: 'Delete message', icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
+              ]} />
             </div>
           )}
           {compare && chatId && <BranchCompare chatId={chatId} messageId={msg.id} onSelect={onSelectBranch} onClose={() => setCompare(false)} />}
@@ -220,10 +249,6 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
       {!streaming && msg.content && (
         <div className="actions">
           <button className="action-btn" onClick={doCopy} title="Copy">{copied ? <Check /> : <Copy />}</button>
-          {chatId && !String(msg.id).startsWith('inc-') && <>
-            <button className={'action-btn fb' + (fb === 1 ? ' on' : '')} title="Good response" onClick={() => rate(1)}><ThumbUp style={{ width: 17 }} /></button>
-            <button className={'action-btn fb' + (fb === -1 ? ' on down' : '')} title="Bad response" onClick={() => rate(-1)}><ThumbDown style={{ width: 17 }} /></button>
-          </>}
           <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
           {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title="Compare versions"><Columns style={{ width: 18 }} /></button>}
           <span className="retry-wrap" ref={retryRef}>
@@ -242,9 +267,13 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
               </div>
             )}
           </span>
-          {onFork && <button className="action-btn" title="Fork into a new chat" onClick={() => onFork(msg.id)}><Fork /></button>}
-          {onTogglePin && <button className={'action-btn' + (msg.pinned ? ' on' : '')} title={msg.pinned ? 'Unpin' : 'Pin (keep in context)'} onClick={() => onTogglePin(msg.id, !msg.pinned)}><Pin /></button>}
-          {onDelete && chatId && !String(msg.id).startsWith('inc-') && <button className="action-btn danger" title="Delete message" onClick={() => onDelete(msg.id)}><Trash style={{ width: 17 }} /></button>}
+          <MoreMenu items={[
+            chatId && !String(msg.id).startsWith('inc-') && { label: 'Good response', icon: <ThumbUp style={{ width: 15 }} />, on: fb === 1, run: () => rate(1) },
+            chatId && !String(msg.id).startsWith('inc-') && { label: 'Bad response', icon: <ThumbDown style={{ width: 15 }} />, on: fb === -1, run: () => rate(-1) },
+            onFork && { label: 'Branch into a new chat', icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
+            onTogglePin && { label: msg.pinned ? 'Unpin' : 'Pin (keep in context)', icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
+            onDelete && chatId && !String(msg.id).startsWith('inc-') && { label: 'Delete message', icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
+          ]} />
           {model?.displayName && <span className="msg-model-badge">{model.displayName}</span>}
         </div>
       )}

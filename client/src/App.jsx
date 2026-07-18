@@ -157,6 +157,8 @@ export default function App() {
   const [intro, setIntro] = useState(false);
   const [models, setModels] = useState([]);
   const [currentId, setCurrentId] = useState(null);
+  const [chatRemovedModel, setChatRemovedModel] = useState(null);
+  const pickModel = useCallback((id) => { setChatRemovedModel(null); setCurrentId(id); }, []);
   const [extended, setExtended] = useState(false);
   const [reasoningEffort, setReasoningEffort] = useState('');
   const [bgVisible, setBgVisible] = useState(false);
@@ -853,6 +855,11 @@ export default function App() {
       setCurrentId(lastA.model_id);
       setExtended(!!lastA.extended);
       if (lastA.reasoningEffort) setReasoningEffort(lastA.reasoningEffort);
+      setChatRemovedModel(null);
+    } else if (lastA) {
+      setChatRemovedModel({ id: lastA.model_id, name: lastA.model_name || 'The original model' });
+    } else {
+      setChatRemovedModel(null);
     }
   }
   async function openChat(id, push = true) {
@@ -908,6 +915,7 @@ export default function App() {
     setActiveId(null); setMessages([]); setInput('');
     setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
     setChatEnded(false); setChatEndedReason('');
+    setChatRemovedModel(null);
     setCanContinue(false); setQueue([]);
     setChatGenParams(null); setChatSysOverride('');
     setInput(loadDraft(null));
@@ -1113,6 +1121,7 @@ export default function App() {
 
   const regenerateWith = useCallback((messageId, modelId) => {
     if (streaming || !activeId || !modelId) return;
+    setChatRemovedModel(null);
     setCurrentId(modelId);
     if (!wsSend({ type: 'regenerate', chatId: activeId, modelId, extended, reasoningEffort, messageId, sandbox, webSearch, styleId })) return;
     gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: modelId, live: null });
@@ -1161,8 +1170,9 @@ export default function App() {
     safetyFlagged, safetyChecking, safetyReason, safetyVerbose: !!cfg.safetyCheckVerbose,
     styles: user?.styles || [], styleId, onSelectStyle: setStyleId, onSaveStyles: saveStyles,
     conversationEnded: chatEnded, endedReason: chatEndedReason,
+    removedModel: activeId ? chatRemovedModel : null,
     hideModelPicker: cfg.uiPreset === 'openai',
-    models, currentId, onSelect: setCurrentId, extended, onToggleExtended: () => setExtended(e => !e),
+    models, currentId, onSelect: pickModel, extended, onToggleExtended: () => setExtended(e => !e),
     reasoningEffort, onSetEffort: setReasoningEffort,
     visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin, budget,
     modelHasBg, bgInChat, onToggleBgInChat: () => updatePref('modelBgInChat', !bgInChat),
@@ -1234,7 +1244,7 @@ export default function App() {
         {empty && !incognito && cfg.uiPreset === 'openai' && (
           <div className="home-topbar">
             <div className="topbar-model">
-              <ModelDropdown models={models} currentId={currentId} onSelect={setCurrentId} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
+              <ModelDropdown models={models} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
             </div>
           </div>
         )}
@@ -1271,7 +1281,7 @@ export default function App() {
             <div className="topbar">
               {cfg.uiPreset === 'openai' && (
                 <div className="topbar-model">
-                  <ModelDropdown models={models} currentId={currentId} onSelect={setCurrentId} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
+                  <ModelDropdown models={models} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
                 </div>
               )}
               <button className="mobile-menu-btn" onClick={() => setMobileDrawer(true)} title="Menu"><Menu style={{ width: 20 }} /></button>
@@ -1340,7 +1350,7 @@ export default function App() {
                     : messages;
                   const lastA = [...renderList].reverse().find(m => m.role === 'assistant');
                   return renderList.map(msg => (
-                    <Message key={msg._k || msg.id} msg={msg} model={models.find(x => x.id === msg.model_id) || model} models={models} currentId={currentId} chatId={activeId} pins={chatPins} chatEnded={chatEnded}
+                    <Message key={msg._k || msg.id} msg={msg} model={models.find(x => x.id === msg.model_id) || (msg.role === 'assistant' && msg.model_id && (msg.model_name || msg.model_icon) ? { id: msg.model_id, displayName: msg.model_name || 'Removed model', staticIcon: msg.model_icon || '', removed: true } : model)} models={models} currentId={currentId} chatId={activeId} pins={chatPins} chatEnded={chatEnded}
                       streaming={!!msg._streaming} phase={msg._streaming ? ((models.find(x => x.id === currentId)?.hideThinking && phase === 'thinking') ? 'generating' : phase) : 'static'} liveCall={msg._streaming ? liveCall : null}
                       onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onDelete={streaming || queued ? null : deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
                       showIcon={msg.role === 'assistant' && (cfg.uiPreset === 'openai' || (lastA && msg.id === lastA.id))} />

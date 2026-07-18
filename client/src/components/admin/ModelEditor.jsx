@@ -16,6 +16,7 @@ const FIELD_INDEX = [
   { s: 'essentials', a: 'description', label: 'Description', k: 'tagline subtitle picker text' },
   { s: 'essentials', a: 'sysprompt', label: 'System prompt', k: 'instructions persona behavior prompt' },
   { s: 'essentials', a: 'visibility', label: 'Visibility & default', k: 'hidden default unavailable picker show hide' },
+  { s: 'essentials', a: 'sunset', label: 'Retirement date', k: 'sunset retire going away deprecate schedule date countdown' },
   { s: 'reasoning', a: 'thinking', label: 'Thinking control', k: 'effort reasoning slider toggle kwarg extended levels' },
   { s: 'reasoning', a: 'tags', label: 'Reasoning tags', k: 'think open close delimiter stream' },
   { s: 'reasoning', a: 'reveal', label: 'Show reasoning to users', k: 'collapsible hide thinking status expand' },
@@ -199,6 +200,25 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
               {!!m.unavailable && (
                 <div className="field"><label>Unavailability message</label>
                   <textarea rows={3} value={m.unavailable_reason || ''} onChange={(e) => set('unavailable_reason', e.target.value)} placeholder="e.g. Down for maintenance, back shortly." /></div>
+              )}
+              <div className="field row" data-anchor="sunset">
+                <div>
+                  <label>Retire on a date</label>
+                  <div className="muted-note">Users see a countdown banner in the chat that shifts toward red as the date approaches. On the date, the action below runs automatically, for users too, even without a manual push.</div>
+                </div>
+                <input type="date" value={m.sunset_at || ''} onChange={(e) => onChange({ ...m, sunset_at: e.target.value, sunset_action: m.sunset_action || 'hide' })} style={{ width: 160, flexShrink: 0 }} />
+              </div>
+              {!!m.sunset_at && (
+                <div className="field row">
+                  <div>
+                    <label>When the date arrives</label>
+                    <div className="muted-note">Hide removes it from every picker. Unavailable keeps it listed but unselectable, with a retirement notice.</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <SegPick value={m.sunset_action || 'hide'} options={[['hide', 'Hide'], ['unavailable', 'Unavailable']]} onChange={(v) => set('sunset_action', v)} />
+                    <button type="button" className="btn ghost" onClick={() => onChange({ ...m, sunset_at: '' })}>Clear</button>
+                  </div>
+                </div>
               )}
             </div>
           </div>

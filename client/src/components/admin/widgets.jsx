@@ -268,6 +268,7 @@ export function StatusChips({ m }) {
   if (m.is_default) chips.push(['default', 'Default']);
   if (!m.enabled) chips.push(['dim', 'Hidden']);
   if (m.unavailable) chips.push(['warn', 'Unavailable']);
+  if (m.sunset_at) chips.push(['warn', 'Retiring ' + m.sunset_at]);
   if (m.effort_enabled || m.has_reasoning) chips.push(['', 'Reasoning']);
   if (m.has_vision) chips.push(['', 'Vision']);
   if (m.sandbox_allowed !== 0 && m.sandbox_auto) chips.push(['', 'Sandbox']);

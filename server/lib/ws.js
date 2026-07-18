@@ -297,7 +297,7 @@ export function initWs(server) {
       }
       const hasOutput = !!(content.trim() || reasoning.trim());
       if (hasOutput || usageRec) {
-        db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, model_id: model.id, parent_id: assistantParent, usage: usageRec, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, created_at: now() });
+        db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: usageRec, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, created_at: now() });
         db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
       } else {
         db.chats.update(chat.id, { updated_at: now() });

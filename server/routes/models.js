@@ -83,6 +83,14 @@ export default function registerModelRoutes(app) {
     const patch = {};
     for (const k of str) if (k in req.body) patch[k] = req.body[k];
     for (const k of bool) if (k in req.body) patch[k] = req.body[k] ? 1 : 0;
+    if ('sunset_at' in req.body) {
+      const v = String(req.body.sunset_at || '').trim();
+      patch.sunset_at = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '';
+    }
+    if ('sunset_action' in req.body) {
+      const v = String(req.body.sunset_action || '');
+      patch.sunset_action = v === 'unavailable' ? 'unavailable' : 'hide';
+    }
     if ('effort_levels' in req.body) {
       const arr = Array.isArray(req.body.effort_levels) ? req.body.effort_levels : String(req.body.effort_levels || '').split(',');
       const clean = arr.map(s => String(s).trim().toLowerCase()).filter(Boolean).slice(0, 8);

@@ -1,5 +1,27 @@
-import { db, getSetting } from '../db.js';
+import { db, getSetting, setSetting } from '../db.js';
 import { getProviders, resolveProvider, providerSpec } from '../providers.js';
+
+export function applySunsets() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  for (const m of db.models.all()) {
+    if (!m.sunset_at) continue;
+    const d = new Date(m.sunset_at + 'T00:00:00');
+    if (isNaN(d.getTime()) || d.getTime() > today.getTime()) continue;
+    const patch = m.sunset_action === 'unavailable'
+      ? { unavailable: 1, unavailable_reason: m.unavailable_reason || 'This model has been retired.', sunset_at: '' }
+      : { enabled: 0, sunset_at: '' };
+    db.models.update(m.id, patch);
+    const snap = getSetting('published_models', null);
+    if (Array.isArray(snap)) {
+      const i = snap.findIndex(x => x.id === m.id);
+      if (i >= 0) {
+        snap[i] = { ...snap[i], ...patch };
+        setSetting('published_models', snap);
+      }
+    }
+  }
+}
 
 export function shapePublic(m) {
   return {
@@ -13,16 +35,19 @@ export function shapePublic(m) {
     webSearchAuto: !!m.web_search_auto, webSearchAllowed: m.web_search_allowed !== 0,
     enableSummaries: !!m.enable_summaries, numCtx: m.num_ctx || 0, summaryPadding: m.summary_padding || 0.125, recentWindow: m.recent_window || 4,
     unavailable: !!m.unavailable, unavailableReason: m.unavailable_reason || '',
+    sunsetAt: m.sunset_at || '',
     bgEnabled: !!m.bg_enabled, bgImage: m.bg_image || '',
     capVision: !!m.cap_vision, capReasoning: !!m.cap_reasoning, capText: !!m.cap_text, capCompact: !!m.cap_compact
   };
 }
 
 export function draftModels() {
+  applySunsets();
   return db.models.filter(m => m.enabled).sort((a, b) => a.sort_order - b.sort_order).map(shapePublic);
 }
 
 export function publicModels() {
+  applySunsets();
   const snap = getSetting('published_models', null);
   if (!Array.isArray(snap)) return draftModels();
   return snap.filter(m => m.enabled).sort((a, b) => a.sort_order - b.sort_order).map(shapePublic);
@@ -30,6 +55,7 @@ export function publicModels() {
 
 // resolve the model used to RUN a completion: admins use live draft, clients use the published snapshot
 export function resolveModel(modelId, isAdmin) {
+  applySunsets();
   if (isAdmin) return db.models.byId(modelId);
   const snap = getSetting('published_models', null);
   if (!Array.isArray(snap)) return db.models.byId(modelId);
