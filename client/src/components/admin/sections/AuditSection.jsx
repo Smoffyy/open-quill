@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../../../api.js';
 import { Download } from '../../icons.jsx';
+import { t } from '../../../i18n.jsx';
 
 export default function AuditSection() {
   const [audit, setAudit] = useState({ entries: [], total: 0, offset: 0, hasMore: false, loading: false, actions: [] });
@@ -31,7 +32,7 @@ export default function AuditSection() {
           <option value="">All actions</option>
           {(audit.actions || []).map(a => <option key={a} value={a}>{a}</option>)}
         </select>
-        <input placeholder="Filter by actor email" value={filter.actor}
+        <input placeholder={t("Filter by actor email")} value={filter.actor}
           onChange={(e) => setFilter(f => ({ ...f, actor: e.target.value }))}
           onKeyDown={(e) => { if (e.key === 'Enter') load(0); }} />
         <select value={filter.days} onChange={(e) => { const days = e.target.value; setFilter(f => ({ ...f, days })); load(0, { ...filter, days }); }}>
@@ -43,7 +44,7 @@ export default function AuditSection() {
         <button className="btn ghost" onClick={() => load(0)}>Apply</button>
         <button className="btn ghost" onClick={() => { window.location.href = '/api/admin/audit/export'; }}><Download style={{ width: 14, verticalAlign: '-2px' }} /> Export CSV</button>
       </div>
-      {audit.entries.length === 0 && !audit.loading && <div className="muted-note">No audit entries match.</div>}
+      {audit.entries.length === 0 && !audit.loading && <div className="muted-note">{t("No audit entries match.")}</div>}
       {audit.entries.length > 0 && (
         <div className="audit-list">
           {audit.entries.map(e => (

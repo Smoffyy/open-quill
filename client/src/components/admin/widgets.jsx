@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../api.js';
 import { Copy, Check } from '../icons.jsx';
 import { QP_ICON_LIST, QpIcon } from '../../qpIcons.jsx';
+import { t } from '../../i18n.jsx';
 
 export function QpIconPicker({ value, onPick }) {
   const [open, setOpen] = useState(false);
@@ -14,7 +15,7 @@ export function QpIconPicker({ value, onPick }) {
   }, [open]);
   return (
     <div className="qp-iconpick" ref={ref}>
-      <button type="button" className="qp-iconbtn" onClick={() => setOpen(o => !o)} title="Choose an icon">
+      <button type="button" className="qp-iconbtn" onClick={() => setOpen(o => !o)} title={t("Choose an icon")}>
         {value && value !== 'none' ? <QpIcon name={value} style={{ width: 16, height: 16 }} /> : <span className="qp-iconnone">, </span>}
       </button>
       {open && (
@@ -38,6 +39,92 @@ export const Grip = (p) => (
     <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
   </svg>
 );
+
+export function BannerCropModal({ file, onDone, onCancel }) {
+  const [zoom, setZoom] = useState(1);
+  const [offX, setOffX] = useState(0);
+  const [offY, setOffY] = useState(0);
+  const [img, setImg] = useState(null);
+  const ASPECT = 2.5;
+  useEffect(() => {
+    const url = URL.createObjectURL(file);
+    const i = new Image();
+    i.onload = () => setImg(i);
+    i.src = url;
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  function render() {
+    const W = 800, H = Math.round(800 / ASPECT);
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const ctx = c.getContext('2d');
+    if (!img) return c;
+    let cw = Math.min(img.width, img.height * ASPECT);
+    cw = cw / zoom;
+    const ch = cw / ASPECT;
+    const roomX = img.width - cw, roomY = img.height - ch;
+    const sx = roomX / 2 + (offX * roomX) / 2;
+    const sy = roomY / 2 + (offY * roomY) / 2;
+    ctx.drawImage(img, sx, sy, cw, ch, 0, 0, W, H);
+    return c;
+  }
+  const previewUrl = img ? render().toDataURL('image/jpeg', 0.9) : '';
+  async function apply() {
+    render().toBlob(async (blob) => {
+      const f = new File([blob], (file.name.replace(/\.[^.]+$/, '') || 'banner') + '-banner.jpg', { type: 'image/jpeg' });
+      const { url } = await api.upload(f);
+      onDone(url);
+    }, 'image/jpeg', 0.9);
+  }
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div className="sp-modal crop-modal banner-crop" onClick={(e) => e.stopPropagation()}>
+        <div className="sp-head"><h3>{t("Crop banner")}</h3><button className="sp-x" onClick={onCancel}>✕</button></div>
+        <div className="crop-body">
+          <div className="crop-preview banner-preview">{previewUrl && <img src={previewUrl} alt="" />}</div>
+          <div className="crop-controls">
+            <div className="field"><label>{t("Zoom")}</label>
+              <input type="range" min="1" max="3" step="0.02" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
+            </div>
+            <div className="field"><label>{t("Horizontal position")}</label>
+              <input type="range" min="-1" max="1" step="0.02" value={offX} onChange={(e) => setOffX(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
+            </div>
+            <div className="field"><label>{t("Vertical position")}</label>
+              <input type="range" min="-1" max="1" step="0.02" value={offY} onChange={(e) => setOffY(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
+            </div>
+            <div className="editor-actions">
+              <button className="btn" onClick={onCancel}>{t('Cancel')}</button>
+              <button className="btn primary" disabled={!img} onClick={apply}>{t('Use banner')}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function BannerPicker({ value, onChange }) {
+  const ref = useRef(null);
+  const [cropFile, setCropFile] = useState(null);
+  const isImage = /^(https?:|data:|blob:|\/)/i.test(String(value || '').trim());
+  return (
+    <div className="banner-picker">
+      <div className="banner-pick-preview" style={bgPreviewStyle(value)}>
+        {!value && <span className="muted-note">{t('No banner set')}</span>}
+      </div>
+      <div className="banner-pick-actions">
+        <button type="button" className="btn" onClick={() => ref.current?.click()}>{t('Upload image')}</button>
+        {!!value && <button type="button" className="btn ghost danger" onClick={() => onChange('')}>{t('Remove')}</button>}
+      </div>
+      <input ref={ref} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden
+        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setCropFile(f); }} />
+      <input value={isImage ? '' : (value || '')} onChange={(e) => onChange(e.target.value)}
+        placeholder={t('Or paste a CSS gradient, e.g. linear-gradient(120deg, #f7b733, #fc4a1a)')} />
+      {cropFile && <BannerCropModal file={cropFile} onDone={(url) => { setCropFile(null); onChange(url); }} onCancel={() => setCropFile(null)} />}
+    </div>
+  );
+}
 
 export function bgPreviewStyle(v) {
   const s = String(v || '').trim();
@@ -83,22 +170,22 @@ export function IconCropModal({ file, onDone, onCancel }) {
   return (
     <div className="modal-backdrop" onClick={onCancel}>
       <div className="sp-modal crop-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="sp-head"><h3>Crop icon</h3><button className="sp-x" onClick={onCancel}>✕</button></div>
+        <div className="sp-head"><h3>{t("Crop icon")}</h3><button className="sp-x" onClick={onCancel}>✕</button></div>
         <div className="crop-body">
           <div className="crop-preview">{previewUrl && <img src={previewUrl} alt="" />}</div>
           <div className="crop-controls">
-            <div className="field"><label>Shape</label>
+            <div className="field"><label>{t("Shape")}</label>
               <div className="seg" style={{ width: 'fit-content' }}>
                 <button className={shape === 'circle' ? 'on' : ''} onClick={() => setShape('circle')}>Circle</button>
                 <button className={shape === 'rounded' ? 'on' : ''} onClick={() => setShape('rounded')}>Rounded</button>
                 <button className={shape === 'square' ? 'on' : ''} onClick={() => setShape('square')}>Square</button>
               </div>
             </div>
-            <div className="field"><label>Zoom</label>
+            <div className="field"><label>{t("Zoom")}</label>
               <input type="range" min="1" max="3" step="0.02" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
             </div>
             <div className="editor-actions">
-              <button className="btn" onClick={onCancel}>Cancel</button>
+              <button className="btn" onClick={onCancel}>{t('Cancel')}</button>
               <button className="btn primary" disabled={!img} onClick={apply}>Use icon</button>
             </div>
           </div>
@@ -125,11 +212,11 @@ export function IconSlot({ label, value, def, anim, onChange }) {
   return (
     <div className="icon-slot">
       <div className="preview-wrap">
-        <button type="button" className={'preview' + (shown ? '' : ' empty')} onClick={() => ref.current?.click()} title="Click to upload (png, svg, jpeg, gif)">
+        <button type="button" className={'preview' + (shown ? '' : ' empty')} onClick={() => ref.current?.click()} title={t("Click to upload (png, svg, jpeg, gif)")}>
           {shown ? <img src={shown} className={anim} alt="" /> : <span className="preview-none">None</span>}
         </button>
         {value && (
-          <button type="button" className="reset-icon" title="Remove icon" onClick={() => onChange('')}>
+          <button type="button" className="reset-icon" title={t("Remove icon")} onClick={() => onChange('')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
           </button>
         )}
@@ -160,8 +247,8 @@ export function SystemPromptEditor({ value, onChange, onClose }) {
       <div className="sp-modal">
         <div className="sp-head">
           <div>
-            <h3>System prompt</h3>
-            <div className="muted-note">Define how this model behaves. Variables below are filled in locally on each message.</div>
+            <h3>{t("System prompt")}</h3>
+            <div className="muted-note">{t("Define how this model behaves. Variables below are filled in locally on each message.")}</div>
           </div>
           <button className="modal-close" style={{ position: 'static' }} onClick={onClose}>✕</button>
         </div>
@@ -169,7 +256,7 @@ export function SystemPromptEditor({ value, onChange, onClose }) {
           <button className="sp-chip" onClick={() => insert(dt)}><code>{dt}</code> Insert local date &amp; time</button>
           <button className="sp-chip" onClick={() => insert(cu)}><code>{cu}</code> Insert the user's name</button>
         </div>
-        <textarea ref={taRef} className="sp-text" value={value || ''} onChange={(e) => onChange(e.target.value)} placeholder="You are a helpful assistant…" autoFocus />
+        <textarea ref={taRef} className="sp-text" value={value || ''} onChange={(e) => onChange(e.target.value)} placeholder={t("You are a helpful assistant…")} autoFocus />
         <div className="sp-tips">
           <div className="sp-tip"><b>{dt}</b>, replaced with the current date and time from this device, in your local timezone.</div>
           <div className="sp-tip"><b>{cu}</b>, replaced with the signed-in user's name. Everything stays on your machine.</div>
@@ -210,7 +297,7 @@ export function SegPick({ value, options, onChange, style }) {
   return (
     <div className="seg" style={{ width: 'fit-content', ...style }}>
       {options.map(([v, l]) => (
-        <button key={v} type="button" className={value === v ? 'on' : ''} onClick={() => onChange(v)}>{l}</button>
+        <button key={v} type="button" className={value === v ? 'on' : ''} onClick={() => onChange(v)}>{typeof l === 'string' ? t(l) : l}</button>
       ))}
     </div>
   );
@@ -248,7 +335,7 @@ export function AutosaveNote({ status, live }) {
   return (
     <div className="settings-autosave">
       <span className={'autosave-dot' + (status === 'saved' ? ' flash' : '')} />
-      {status === 'saving' ? 'Saving…' : status === 'saved' ? (live ? 'Saved, applies immediately' : 'Saved to draft, use Push to all clients to make it live') : (live ? 'Changes save automatically' : 'Changes save automatically to your draft')}
+      {status === 'saving' ? t('Saving…') : status === 'saved' ? (live ? 'Saved, applies immediately' : 'Saved to draft, use Push to all clients to make it live') : (live ? t('Changes save automatically') : 'Changes save automatically to your draft')}
     </div>
   );
 }
@@ -268,13 +355,13 @@ export function StatusChips({ m }) {
   if (m.is_default) chips.push(['default', 'Default']);
   if (!m.enabled) chips.push(['dim', 'Hidden']);
   if (m.unavailable) chips.push(['warn', 'Unavailable']);
-  if (m.sunset_at) chips.push(['warn', 'Retiring ' + m.sunset_at]);
+  if (m.sunset_at) chips.push(['warn', t('Retiring') + ' ' + m.sunset_at]);
   if (m.effort_enabled || m.has_reasoning) chips.push(['', 'Reasoning']);
   if (m.has_vision) chips.push(['', 'Vision']);
   if (m.sandbox_allowed !== 0 && m.sandbox_auto) chips.push(['', 'Sandbox']);
   if (m.in_more_models) chips.push(['dim', 'Grouped']);
   if (!chips.length) return null;
-  return <div className="aq-chips">{chips.map(([cls, label]) => <span key={label} className={'aq-chip' + (cls ? ' ' + cls : '')}>{label}</span>)}</div>;
+  return <div className="aq-chips">{chips.map(([cls, label]) => <span key={label} className={'aq-chip' + (cls ? ' ' + cls : '')}>{t(label)}</span>)}</div>;
 }
 
 export function ConfirmDialog({ ask, onClose }) {
@@ -284,7 +371,7 @@ export function ConfirmDialog({ ask, onClose }) {
       <div className="confirm-box">
         <div className="confirm-msg">{ask.message}</div>
         <div className="confirm-actions">
-          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn" onClick={onClose}>{t('Cancel')}</button>
           <button className="btn danger-solid" onClick={async () => { const fn = ask.onConfirm; onClose(); await fn(); }}>{ask.danger || 'Confirm'}</button>
         </div>
       </div>

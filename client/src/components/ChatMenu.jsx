@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
 import { Pencil, Fork, Star, Compact, Sliders, Pin, Copy, FileText } from './icons.jsx';
+import { t } from '../i18n.jsx';
 
 export default function ChatMenu({ chat, modelId, pinned = [], pins = [], onUnpinFile, onOpenPersonas, onJump, onCopyConversation, onClose, onRename, onFork, onToggleStar, onToggleArchive, onInstructionsSaved }) {
   const ref = useRef(null);
@@ -76,7 +77,7 @@ export default function ChatMenu({ chat, modelId, pinned = [], pins = [], onUnpi
               <div key={p.url} className="cmp-pinfile">
                 <FileText style={{ width: 14 }} />
                 <span className="cmp-pinfile-name">{p.name}</span>
-                <button className="cmp-pinfile-x" title="Unpin" onClick={() => onUnpinFile?.(p.url)}>✕</button>
+                <button className="cmp-pinfile-x" title={t("Unpin")} onClick={() => onUnpinFile?.(p.url)}>✕</button>
               </div>
             ))}
           </div>
@@ -86,7 +87,7 @@ export default function ChatMenu({ chat, modelId, pinned = [], pins = [], onUnpi
         <div className="cmp-label"><Sliders style={{ width: 14 }} /> Chat instructions</div>
         <div className="cmp-note">Added to the system prompt for this chat only, on top of your global instructions.</div>
         <textarea className="cmp-instr" value={instr} maxLength={8000} rows={4}
-          placeholder="e.g. Answer as a senior code reviewer. Be terse."
+          placeholder={t("e.g. Answer as a senior code reviewer. Be terse.")}
           onChange={(e) => changeInstr(e.target.value)} />
         <div className="cmp-saved">{savedTick ? 'Saved' : ''}</div>
       </div>

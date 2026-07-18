@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../../../api.js';
 import { ThumbUp, ThumbDown } from '../../icons.jsx';
+import { t } from '../../../i18n.jsx';
 
 export default function FeedbackSection() {
   const [rows, setRows] = useState(null);
@@ -21,15 +22,15 @@ export default function FeedbackSection() {
   return (
     <>
       <div className="admin-section-head">
-        <div><div className="muted-note">Ratings users left on assistant responses. Use them to spot weak prompts, tune the safety model, or compare models.</div></div>
+        <div><div className="muted-note">{t("Ratings users left on assistant responses. Use them to spot weak prompts, tune the safety model, or compare models.")}</div></div>
         <div className="fb-totals">
           <span className="fb-total up"><ThumbUp style={{ width: 14 }} /> {counts.up}</span>
           <span className="fb-total down"><ThumbDown style={{ width: 14 }} /> {counts.down}</span>
         </div>
       </div>
       <div className="fn-list">
-        {rows == null && <div className="muted-note">Loading…</div>}
-        {rows != null && rows.length === 0 && <div className="muted-note">No feedback yet.</div>}
+        {rows == null && <div className="muted-note">{t("Loading…")}</div>}
+        {rows != null && rows.length === 0 && <div className="muted-note">{t("No feedback yet.")}</div>}
         {(rows || []).map(f => (
           <div key={f.id} className="fn-card fb-card">
             <div className={'fb-rating ' + (f.rating === 1 ? 'up' : 'down')}>{f.rating === 1 ? <ThumbUp style={{ width: 15 }} /> : <ThumbDown style={{ width: 15 }} />}</div>

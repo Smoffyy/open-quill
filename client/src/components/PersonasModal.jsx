@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { t } from '../i18n.jsx';
 
 const EMPTY = { id: '', name: '', modelId: null, instructions: '' };
 
@@ -57,14 +58,14 @@ export default function PersonasModal({ personas = [], models = [], currentId, o
         ) : (
           <div className="pm-body">
             <label className="pm-label">Name</label>
-            <input className="pm-input" value={edit.name} autoFocus placeholder="e.g. Senior code reviewer" onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
+            <input className="pm-input" value={edit.name} autoFocus placeholder={t("e.g. Senior code reviewer")} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
             <label className="pm-label">Model</label>
             <select className="pm-input" value={edit.modelId || ''} onChange={(e) => setEdit({ ...edit, modelId: e.target.value || null })}>
               <option value="">Any (keep current)</option>
               {models.map(m => <option key={m.id} value={m.id}>{m.displayName}</option>)}
             </select>
             <label className="pm-label">Chat instructions</label>
-            <textarea className="pm-input" rows={5} maxLength={8000} value={edit.instructions} placeholder="Added to the system prompt when this persona is applied." onChange={(e) => setEdit({ ...edit, instructions: e.target.value })} />
+            <textarea className="pm-input" rows={5} maxLength={8000} value={edit.instructions} placeholder={t("Added to the system prompt when this persona is applied.")} onChange={(e) => setEdit({ ...edit, instructions: e.target.value })} />
             <div className="pm-edit-actions">
               <button className="pm-btn ghost" onClick={() => setEdit(null)}>Cancel</button>
               <button className="pm-btn" disabled={!edit.name.trim()} onClick={saveEdit}>Save</button>

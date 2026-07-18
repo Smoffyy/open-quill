@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAdmin } from '../store.jsx';
 import { Trash } from '../../icons.jsx';
+import { t } from '../../../i18n.jsx';
 
 export default function MembersSection() {
   const A = useAdmin();
@@ -19,24 +20,24 @@ export default function MembersSection() {
   return (
     <>
       <div className="mem-toolbar">
-        <input className="mem-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or email…" />
+        <input className="mem-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search by name or email…")} />
         <div className="seg">
           {[['all', `All (${users.length})`], ['admins', `Admins (${adminCount})`], ['users', `Users (${users.length - adminCount})`]].map(([v, l]) => (
             <button key={v} className={role === v ? 'on' : ''} onClick={() => setRole(v)}>{l}</button>
           ))}
         </div>
       </div>
-      {shownUsers.length === 0 && <div className="muted-note">No members match.</div>}
+      {shownUsers.length === 0 && <div className="muted-note">{t("No members match.")}</div>}
       {shownUsers.map(u => (
         <div className="user-row" key={u.id}>
           <div className="avatar">{(u.displayName || u.email)[0].toUpperCase()}</div>
           <div className="u-main">
-            <div className="u-name">{u.displayName}{u.isOwner && <span className="badge">Top admin</span>}{u.twoFactor && <span className="badge" title="Two-factor enabled">2FA</span>}{u.id === user?.id && !u.isOwner && <span className="you-tag">you</span>}</div>
+            <div className="u-name">{u.displayName}{u.isOwner && <span className="badge">Top admin</span>}{u.twoFactor && <span className="badge" title={t("Two-factor enabled")}>2FA</span>}{u.id === user?.id && !u.isOwner && <span className="you-tag">you</span>}</div>
             <div className="u-email">{u.email}{typeof u.monthSpend === 'number' && u.monthSpend > 0 ? ` · $${u.monthSpend.toFixed(u.monthSpend < 0.01 ? 4 : 2)} this month` : ''}</div>
           </div>
-          <div className="u-budget" title="Monthly budget override ($). Blank uses the role default.">
+          <div className="u-budget" title={t("Monthly budget override ($). Blank uses the role default.")}>
             <span className="u-budget-prefix">$</span>
-            <input type="number" min="0" step="any" placeholder="role default"
+            <input type="number" min="0" step="any" placeholder={t("role default")}
               value={u.budget == null ? '' : u.budget}
               onChange={(e) => setUsers(us => us.map(x => x.id === u.id ? { ...x, budget: e.target.value === '' ? null : e.target.value } : x))}
               onBlur={(e) => A.saveBudget(u.id, e.target.value)} />

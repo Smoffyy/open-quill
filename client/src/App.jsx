@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from './api.js';
+import { t } from './i18n.jsx';
 import { applyPrefs } from './prefs.js';
 import { QpIcon } from './qpIcons.jsx';
 import Login from './components/Login.jsx';
@@ -16,6 +17,7 @@ function computeActiveBg(models, currentId, activeId, messagesLen, incognito, pr
 }
 import Message from './components/Message.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
+import ModelDocs from './components/ModelDocs.jsx';
 import AdminPanel from './components/AdminPanel.jsx';
 import DocModal from './components/DocModal.jsx';
 import ArtifactsPanel from './components/ArtifactsPanel.jsx';
@@ -54,8 +56,8 @@ function QuickPrompts({ prompts, visible, disabled, onPick }) {
   return (
     <div className={'quick-prompts' + (leaving ? ' leaving' : '') + (keepSpace && !visible ? ' qp-ghost' : '')}>
       {prompts.map((q, i) => (
-        <button key={i} className="quick-prompt" style={{ animationDelay: i * 45 + 'ms' }} onClick={() => onPick(q.prompt)} disabled={disabled}>
-          {q.icon && q.icon !== 'none' && <span className="qp-icon"><QpIcon name={q.icon} style={{ width: 15, height: 15 }} /></span>}{q.label}
+        <button key={i} className="quick-prompt" style={{ animationDelay: i * 45 + 'ms' }} onClick={() => onPick(t(q.prompt))} disabled={disabled}>
+          {q.icon && q.icon !== 'none' && <span className="qp-icon"><QpIcon name={q.icon} style={{ width: 15, height: 15 }} /></span>}{t(q.label)}
         </button>
       ))}
     </div>
@@ -212,6 +214,7 @@ export default function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileDrawer, setMobileDrawer] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showDocs, setShowDocs] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showCredits, setShowCredits] = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
@@ -433,7 +436,7 @@ export default function App() {
     const appName = cfg.appName || 'open-quill';
     if (incognito) { document.title = 'Incognito chat - ' + appName; return; }
     const active = activeId ? chats.find(c => c.id === activeId) : null;
-    document.title = active ? `${active.title || 'Untitled chat'} - ${appName}` : `New chat - ${appName}`;
+    document.title = active ? `${active.title || t('Untitled chat')} - ${appName}` : `New chat - ${appName}`;
   }, [activeId, chats, cfg.appName, incognito]);
   async function refreshSpacesPending() { try { const l = await api.get('/api/spaces'); setSpacesPending(l.filter(s => s.myStatus === 'invited').length); } catch {} }
   async function exportAllChats() { window.open('/api/chats/export-all', '_blank'); }
@@ -749,14 +752,14 @@ export default function App() {
     try {
       const r = await api.post('/api/chats/' + activeId + '/fork', { messageId });
       await loadChats();
-      if (r?.id) { openChat(r.id); toast('Forked into a new chat', { icon: 'fork' }); }
+      if (r?.id) { openChat(r.id); toast(t('Forked into a new chat'), { icon: 'fork' }); }
     } catch {}
   }, [streaming, activeId]);
   const togglePin = useCallback((messageId, pinned) => {
     if (!activeId) return;
     setMessages(ms => ms.map(m => m.id === messageId ? { ...m, pinned } : m));
     api.patch('/api/chats/' + activeId + '/messages/' + messageId, { pinned }).catch(() => {});
-    toast(pinned ? 'Message pinned, kept in context' : 'Message unpinned', { icon: 'pin' });
+    toast(pinned ? t('Message pinned, kept in context') : t('Message unpinned'), { icon: 'pin' });
   }, [activeId]);
   const togglePinFile = useCallback(async (att) => {
     if (!activeId || !att?.url) return;
@@ -766,7 +769,7 @@ export default function App() {
         ? await api.del('/api/chats/' + activeId + '/pins', { url: att.url })
         : await api.post('/api/chats/' + activeId + '/pins', { name: att.name, url: att.url, type: att.type || '' });
       setChatPins(r.pins || []);
-      toast(isPinned ? 'File unpinned from chat' : 'File pinned, kept in context', { icon: 'pin' });
+      toast(isPinned ? t('File unpinned from chat') : t('File pinned, kept in context'), { icon: 'pin' });
     } catch {}
   }, [activeId, chatPins]);
   function jumpToMessage(id) {
@@ -782,7 +785,7 @@ export default function App() {
   async function copyConversation() {
     const text = messages.filter(m => m.role === 'user' || m.role === 'assistant')
       .map(m => (m.role === 'user' ? 'You' : 'Assistant') + ':\n' + (typeof m.content === 'string' ? m.content : '')).join('\n\n');
-    try { await navigator.clipboard.writeText(text); toast('Conversation copied', { icon: 'copy' }); } catch {}
+    try { await navigator.clipboard.writeText(text); toast(t('Conversation copied'), { icon: 'copy' }); } catch {}
   }
   async function saveSavedPrompts(list) {
     setUser(u => ({ ...u, savedPrompts: list }));
@@ -793,7 +796,7 @@ export default function App() {
     if (!text) return;
     const list = [...(user?.savedPrompts || []), { id: 'p' + Date.now(), title: (title || text.slice(0, 40)).trim(), text }];
     saveSavedPrompts(list);
-    toast('Prompt saved', { icon: 'star' });
+    toast(t('Prompt saved'), { icon: 'star' });
   }
   function deleteSavedPrompt(id) { saveSavedPrompts((user?.savedPrompts || []).filter(p => p.id !== id)); }
   async function savePersonas(list) {
@@ -807,7 +810,7 @@ export default function App() {
     if (activeId) {
       try { await api.patch('/api/chats/' + activeId, { instructions: p.instructions || '' }); } catch {}
     }
-    toast('Applied persona: ' + p.name, { icon: 'star' });
+    toast(t('Applied persona: ') + p.name, { icon: 'star' });
   }
   function commitRename() {
     const t = renameVal.trim();
@@ -857,7 +860,7 @@ export default function App() {
       if (lastA.reasoningEffort) setReasoningEffort(lastA.reasoningEffort);
       setChatRemovedModel(null);
     } else if (lastA) {
-      setChatRemovedModel({ id: lastA.model_id, name: lastA.model_name || 'The original model' });
+      setChatRemovedModel({ id: lastA.model_id, name: lastA.model_name || t('The original model') });
     } else {
       setChatRemovedModel(null);
     }
@@ -977,7 +980,7 @@ export default function App() {
     api.patch('/api/chats/' + id, { starred: next }).catch(() => {});
   }
 
-  async function createFolder(name = 'New folder') {
+  async function createFolder(name = t('New folder')) {
     try {
       const f = await api.post('/api/folders', { name });
       setFolders(fs => [...fs, { id: f.id, name: f.name, collapsed: false, sortOrder: f.sortOrder }]);
@@ -1128,7 +1131,7 @@ export default function App() {
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
     const mm = models.find(m => m.id === modelId);
-    if (mm) toast('Retrying with ' + mm.displayName, { icon: 'check' });
+    if (mm) toast(t('Retrying with ') + mm.displayName, { icon: 'check' });
   }, [streaming, activeId, extended, reasoningEffort, sandbox, webSearch, models]);
 
   const editMessage = useCallback((messageId, newContent) => {
@@ -1171,6 +1174,7 @@ export default function App() {
     styles: user?.styles || [], styleId, onSelectStyle: setStyleId, onSaveStyles: saveStyles,
     conversationEnded: chatEnded, endedReason: chatEndedReason,
     removedModel: activeId ? chatRemovedModel : null,
+    onOpenDocs: () => setShowDocs(true),
     hideModelPicker: cfg.uiPreset === 'openai',
     models, currentId, onSelect: pickModel, extended, onToggleExtended: () => setExtended(e => !e),
     reasoningEffort, onSetEffort: setReasoningEffort,
@@ -1187,20 +1191,21 @@ export default function App() {
   const showArtifactsBtn = sandboxOn || files.length > 0;
 
   const commands = [
-    { id: 'new', label: 'New chat', shortcut: 'Ctrl Shift O', keywords: 'create start', action: () => newChat() },
-    { id: 'sidebar', label: collapsed ? 'Show sidebar' : 'Hide sidebar', shortcut: 'Ctrl Shift S', keywords: 'toggle collapse panel', action: () => setCollapsed(c => !c) },
-    { id: 'chats', label: 'Browse all chats', keywords: 'overview history search', action: () => setChatsOverview(true) },
-    { id: 'search', label: 'Search chats', shortcut: 'Ctrl Shift F', keywords: 'find message text', action: () => setShowSearch(true) },
-    { id: 'shortcuts', label: 'Keyboard shortcuts', shortcut: '?', keywords: 'keys help hotkeys', action: () => setShowShortcuts(true) },
-    { id: 'spaces', label: 'Open Spaces', keywords: 'group chat invite users', action: () => { history.pushState({}, '', '/spaces'); setShowSpaces(true); } },
-    { id: 'projects', label: 'Open Projects', keywords: 'project workspace organize', action: () => openProjects(null) },
-    { id: 'incognito', label: incognito ? 'Exit incognito' : 'Start incognito chat', keywords: 'private ghost', action: () => toggleIncognito() },
-    { id: 'settings', label: 'Open settings', keywords: 'preferences account theme', action: () => setShowSettings(true) },
-    ...(user?.isAdmin ? [{ id: 'admin', label: 'Open admin panel', keywords: 'models users connection providers', action: () => { history.pushState({}, '', '/admin'); setShowAdmin(true); } }] : []),
-    { id: 'changelog', label: 'View changelog', keywords: 'updates version', action: () => setShowChangelog(true) },
-    { id: 'credits', label: 'View credits', keywords: 'about', action: () => setShowCredits(true) },
-    { id: 'license', label: 'View licensing', keywords: 'legal', action: () => setShowLicense(true) },
-    { id: 'logout', label: 'Log out', keywords: 'sign out exit', action: () => logout() }
+    { id: 'new', label: t('New chat'), shortcut: 'Ctrl Shift O', keywords: 'create start', action: () => newChat() },
+    { id: 'sidebar', label: collapsed ? t('Show sidebar') : t('Hide sidebar'), shortcut: 'Ctrl Shift S', keywords: 'toggle collapse panel', action: () => setCollapsed(c => !c) },
+    { id: 'chats', label: t('Browse all chats'), keywords: 'overview history search', action: () => setChatsOverview(true) },
+    { id: 'search', label: t('Search chats'), shortcut: 'Ctrl Shift F', keywords: 'find message text', action: () => setShowSearch(true) },
+    { id: 'shortcuts', label: t('Keyboard shortcuts'), shortcut: '?', keywords: 'keys help hotkeys', action: () => setShowShortcuts(true) },
+    { id: 'spaces', label: t('Open Spaces'), keywords: 'group chat invite users', action: () => { history.pushState({}, '', '/spaces'); setShowSpaces(true); } },
+    { id: 'projects', label: t('Open Projects'), keywords: 'project workspace organize', action: () => openProjects(null) },
+    { id: 'incognito', label: incognito ? t('Exit incognito') : t('Start incognito chat'), keywords: 'private ghost', action: () => toggleIncognito() },
+    { id: 'modeldocs', label: t('Model docs'), keywords: 'models compare docs catalog capabilities', action: () => setShowDocs(true) },
+    { id: 'settings', label: t('Open settings'), keywords: 'preferences account theme', action: () => setShowSettings(true) },
+    ...(user?.isAdmin ? [{ id: 'admin', label: t('Open admin panel'), keywords: 'models users connection providers', action: () => { history.pushState({}, '', '/admin'); setShowAdmin(true); } }] : []),
+    { id: 'changelog', label: t('View changelog'), keywords: 'updates version', action: () => setShowChangelog(true) },
+    { id: 'credits', label: t('View credits'), keywords: 'about', action: () => setShowCredits(true) },
+    { id: 'license', label: t('View licensing'), keywords: 'legal', action: () => setShowLicense(true) },
+    { id: 'logout', label: t('Log out'), keywords: 'sign out exit', action: () => logout() }
   ];
 
   return (
@@ -1225,7 +1230,7 @@ export default function App() {
         {incognito && (
           <div className="incognito-bar">
             <div className="incognito-title"><Ghost style={{ width: 18 }} /> Incognito chat</div>
-            <button className="incognito-close" onClick={toggleIncognito} title="Exit incognito" disabled={streaming || queued}>✕</button>
+            <button className="incognito-close" onClick={toggleIncognito} title={t("Exit incognito")} disabled={streaming || queued}>✕</button>
           </div>
         )}
         {empty && (
@@ -1243,8 +1248,9 @@ export default function App() {
         )}
         {empty && !incognito && cfg.uiPreset === 'openai' && (
           <div className="home-topbar">
-            <div className="topbar-model">
+            <div className="topbar-model tbm-flex">
               <ModelDropdown models={models} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
+              <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={() => setShowDocs(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>
             </div>
           </div>
         )}
@@ -1253,11 +1259,11 @@ export default function App() {
             <div className="greeting">
               {incognito
                 ? (cfg.uiPreset === 'openai'
-                    ? <span className="incog-title">Temporary Chat</span>
-                    : <><Ghost style={{ width: 44 }} /> {incognitoGreeting}</>)
+                    ? <span className="incog-title">{t("Temporary Chat")}</span>
+                    : <><Ghost style={{ width: 44 }} /> {t(incognitoGreeting)}</>)
                 : (() => {
                     const h = new Date().getHours();
-                    const part = h < 5 ? 'Working late' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : h < 22 ? 'Good evening' : 'Burning the midnight oil';
+                    const part = h < 5 ? t('Working late') : h < 12 ? t('Good morning') : h < 17 ? t('Good afternoon') : h < 22 ? t('Good evening') : t('Burning the midnight oil');
                     const nm = (user?.displayName || '').split(' ')[0];
                     const line = nm ? part + ', ' + nm : part;
                     return model?.staticIcon
@@ -1280,8 +1286,9 @@ export default function App() {
           <>
             <div className="topbar">
               {cfg.uiPreset === 'openai' && (
-                <div className="topbar-model">
+                <div className="topbar-model tbm-flex">
                   <ModelDropdown models={models} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
+              <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={() => setShowDocs(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>
                 </div>
               )}
               <button className="mobile-menu-btn" onClick={() => setMobileDrawer(true)} title="Menu"><Menu style={{ width: 20 }} /></button>
@@ -1380,7 +1387,7 @@ export default function App() {
             {showJump && <button className="to-bottom" onClick={jumpDown}><Down style={{ width: 17 }} /></button>}
             <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')} style={{ maxWidth: cfg.uiPreset === 'openai' ? 808 : 760, margin: '0 auto', width: '100%', padding: '0 20px' }}>
               <Composer {...composerProps} focusKey={focusTick} />
-              <div className="disclaimer">{cfg.disclaimer}</div>
+              <div className="disclaimer">{t(cfg.disclaimer)}</div>
             </div>
           </>
         )}
@@ -1404,6 +1411,7 @@ export default function App() {
           onChanged={(has) => { setHasSummary(has); }} />
       )}
 
+      {showDocs && <ModelDocs models={models} currentId={currentId} onClose={() => setShowDocs(false)} onTry={(id) => { pickModel(id); setShowDocs(false); }} />}
       {showSettings && <SettingsModal user={user} cfg={cfg} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile} />}
       {user?.isAdmin && cfg.uiPresetChosen === false && !presetPicked && (
         <div className="preset-scrim">

@@ -2,6 +2,7 @@ import React from 'react';
 import { useAdmin } from '../store.jsx';
 import { Card } from '../widgets.jsx';
 import { Cube, Plus, Trash } from '../../icons.jsx';
+import { t } from '../../../i18n.jsx';
 
 export default function ProvidersSection() {
   const A = useAdmin();
@@ -22,14 +23,14 @@ export default function ProvidersSection() {
                 : <span className="pv-status err">{test.err}</span>
             )}>
             <div className="two-col">
-              <div className="field"><label>Name</label>
-                <input value={p.name || ''} onChange={(e) => A.patchProvider(p.id, { name: e.target.value })} placeholder="My provider" /></div>
-              <div className="field"><label>Provider type</label>
+              <div className="field"><label>{t("Name")}</label>
+                <input value={p.name || ''} onChange={(e) => A.patchProvider(p.id, { name: e.target.value })} placeholder={t("My provider")} /></div>
+              <div className="field"><label>{t("Provider type")}</label>
                 <select value={p.type} onChange={(e) => A.patchProvider(p.id, { type: e.target.value })}>
                   {Object.entries(providerTypes).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                 </select></div>
             </div>
-            <div className="field"><label>API base URL</label>
+            <div className="field"><label>{t("API base URL")}</label>
               <input value={p.base_url || ''} onChange={(e) => A.patchProvider(p.id, { base_url: e.target.value })} placeholder={t.defaultBaseUrl || ''} /></div>
             <div className="field"><label>API key {t.keyOptional && <span className="muted-note" style={{ display: 'inline' }}>(optional)</span>}</label>
               <input value={p.api_key || ''} onChange={(e) => A.patchProvider(p.id, { api_key: e.target.value })} placeholder={t.keyOptional ? 'Not required for local servers' : 'Required'} /></div>

@@ -37,7 +37,12 @@ export function shapePublic(m) {
     unavailable: !!m.unavailable, unavailableReason: m.unavailable_reason || '',
     sunsetAt: m.sunset_at || '',
     bgEnabled: !!m.bg_enabled, bgImage: m.bg_image || '',
-    capVision: !!m.cap_vision, capReasoning: !!m.cap_reasoning, capText: !!m.cap_text, capCompact: !!m.cap_compact
+    capVision: !!m.cap_vision, capReasoning: !!m.cap_reasoning, capText: !!m.cap_text, capCompact: !!m.cap_compact,
+    priceIn: m.cost_in ?? null, priceOut: m.cost_out ?? null,
+    docsFeatured: !!m.docs_featured, docsIntelligence: m.docs_intelligence || 0, docsSpeed: m.docs_speed || 0,
+    docsMaxOutput: m.docs_max_output || 0, docsCutoff: m.docs_cutoff || '', docsBody: m.docs_body || '', docsImage: m.docs_image || '', docsIcon: m.docs_icon || '',
+    docsIn: { text: m.docs_in_text !== 0, image: !!m.docs_in_image || !!m.has_vision, audio: !!m.docs_in_audio, video: !!m.docs_in_video },
+    docsOut: { text: m.docs_out_text !== 0, image: !!m.docs_out_image, audio: !!m.docs_out_audio, video: !!m.docs_out_video }
   };
 }
 

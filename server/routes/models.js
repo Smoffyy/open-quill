@@ -78,8 +78,8 @@ export default function registerModelRoutes(app) {
   app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
     const cur = db.models.byId(req.params.id);
     if (!cur) return res.status(404).json({ error: 'not found' });
-    const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'call_prompt', 'end_chat_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id', 'bg_image', 'effort_kwarg', 'effort_default'];
-    const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'show_name', 'skills_allowed', 'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'long_convo_reminder', 'effort_enabled', 'effort_admin_only', 'hide_thinking'];
+    const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'call_prompt', 'end_chat_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id', 'bg_image', 'effort_kwarg', 'effort_default', 'docs_cutoff', 'docs_body', 'docs_image', 'docs_icon'];
+    const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'show_name', 'skills_allowed', 'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'long_convo_reminder', 'effort_enabled', 'effort_admin_only', 'hide_thinking', 'docs_featured', 'docs_in_text', 'docs_in_image', 'docs_in_audio', 'docs_in_video', 'docs_out_text', 'docs_out_image', 'docs_out_audio', 'docs_out_video'];
     const patch = {};
     for (const k of str) if (k in req.body) patch[k] = req.body[k];
     for (const k of bool) if (k in req.body) patch[k] = req.body[k] ? 1 : 0;
@@ -102,7 +102,7 @@ export default function registerModelRoutes(app) {
     if ('icon_size' in req.body) patch.icon_size = Math.max(0, Math.min(80, parseInt(req.body.icon_size) || 0));
     if ('summary_padding' in req.body) patch.summary_padding = Math.max(0.03, Math.min(0.6, parseFloat(req.body.summary_padding) || 0.125));
     const numF = ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'repetition_penalty', 'min_p', 'cost_in', 'cost_out'];
-    const numI = ['top_k', 'seed', 'max_tokens'];
+    const numI = ['top_k', 'seed', 'max_tokens', 'docs_intelligence', 'docs_speed', 'docs_max_output'];
     for (const k of numF) if (k in req.body) { const v = req.body[k]; patch[k] = (v === '' || v == null || isNaN(Number(v))) ? null : Number(v); }
     for (const k of numI) if (k in req.body) { const v = req.body[k]; patch[k] = (v === '' || v == null || isNaN(parseInt(v))) ? null : parseInt(v); }
     if ('internal_name' in patch && !('cost_in' in req.body) && !('cost_out' in req.body) && cur.cost_in == null && cur.cost_out == null) {

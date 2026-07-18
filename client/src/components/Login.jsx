@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { api } from '../api.js';
+import { t } from '../i18n.jsx';
 
 export default function Login({ onLogin }) {
   const [step, setStep] = useState('email');
@@ -49,7 +50,7 @@ export default function Login({ onLogin }) {
             <>
               <div className="lbl">Get started with your email below</div>
               {err && <div className="err">{err}</div>}
-              <input autoFocus placeholder="Email address" value={email}
+              <input autoFocus placeholder={t("Email address")} value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && next()} />
               <button className="primary" onClick={next} disabled={busy}>Continue with email</button>
@@ -69,7 +70,7 @@ export default function Login({ onLogin }) {
             <>
               <div className="lbl">{exists ? 'Enter your password' : 'Create a password for your new account'}</div>
               {err && <div className="err">{err}</div>}
-              <input autoFocus type="password" placeholder="Password" value={pw}
+              <input autoFocus type="password" placeholder={t("Password")} value={pw}
                 onChange={(e) => setPw(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && submit()} />
               <button className="primary" onClick={submit} disabled={busy}>

@@ -316,3 +316,4 @@
 .plus-menu .pm-item > svg:first-child { width: 18px !important; height: 18px !important; opacity: 1; }
 .pm-divider { margin: 5px -6px !important; }
 .pm-sub { border-radius: 12px !important; padding: 6px !important; }
+.topbar-model.tbm-flex { display: inline-flex; align-items: center; gap: 4px; }

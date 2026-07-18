@@ -1,16 +1,17 @@
 {
   "name": "open-quill-client",
-  "version": "27.0.0-developer.5",
+  "version": "27.0.0-developer.3",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "i18n:check": "node scripts/i18n-check.mjs"
   },
   "dependencies": {
     "highlight.js": "^11.11.1",
-    "katex": "^0.18.0",
+    "katex": "^0.17.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-markdown": "^10.1.0",

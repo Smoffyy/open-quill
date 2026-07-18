@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { Check, ChevDown, Chevron, ImageIcon, Brain, Info, TextIcon } from './icons.jsx';
+import { t } from '../i18n.jsx';
 
 const CAP_ICONS = [
   { key: 'capText', label: 'Text-Only', Icon: TextIcon },
@@ -128,7 +129,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
     const seen = new Map();
     for (const m of models) {
       if (!m.inMoreModels) continue;
-      const label = (m.moreModelsLabel || '').trim() || 'More models';
+      const label = (m.moreModelsLabel || '').trim() || t('More models');
       if (!seen.has(label)) { seen.set(label, { label, items: [] }); groups.push(seen.get(label)); }
       seen.get(label).items.push(m);
     }
@@ -157,7 +158,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
         {current?.displayName || 'Model'}
         {current?.effortEnabled
           ? (effortBool
-              ? (thinkingOn && <span className="ext ext-effort">Thinking</span>)
+              ? (thinkingOn && <span className="ext ext-effort">{t("Thinking")}</span>)
               : <span className="ext ext-effort">{capLevel(effortActive)}</span>)
           : (extended && current?.hasReasoning && <span className="ext">Extended</span>)}
         <ChevDown style={{ width: 16, height: 16 }} />
@@ -174,7 +175,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
                 <hr />
                 <div className={'toggle-row' + (effortLocked ? ' locked' : '')} onClick={() => { if (!effortLocked && onSetEffort) onSetEffort(thinkingOn ? effortFalseVal : effortTrueVal); }}>
                   <div className="tr-main">
-                    <div className="mo-name">Extended thinking</div>
+                    <div className="mo-name">{t("Extended thinking")}</div>
                     <div className="mo-desc">{effortLocked ? 'Set by your administrator' : 'Let the model think before answering'}</div>
                   </div>
                   <div className={'switch' + (thinkingOn ? ' on' : '')} />

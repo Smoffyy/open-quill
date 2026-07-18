@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, Chat, Search, Panel, Gear, Shield, Logout, Dots, Trash, Heart, FileText, Star, Download, Folder, Pencil, Chevron, Users, Box, Compact } from './icons.jsx';
+import { t } from '../i18n.jsx';
 
 function ProfileMenu({ user, version, onSettings, onAdmin, onCredits, onChangelog, onLicense, onLogout, onClose }) {
   const ref = useRef(null);
@@ -11,13 +12,13 @@ function ProfileMenu({ user, version, onSettings, onAdmin, onCredits, onChangelo
   }, []);
   return (
     <div className="popover" ref={ref}>
-      {user.isAdmin && <button onClick={onAdmin}><Shield /> Admin Panel</button>}
-      <button onClick={onSettings}><Gear /> Settings</button>
-      <button onClick={onCredits}><Heart /> Credits</button>
-      <button onClick={onChangelog}><FileText /> Changelog</button>
-      <button onClick={onLicense}><FileText /> Licensing</button>
+      {user.isAdmin && <button onClick={onAdmin}><Shield /> {t('Admin Panel')}</button>}
+      <button onClick={onSettings}><Gear /> {t('Settings')}</button>
+      <button onClick={onCredits}><Heart /> {t('Credits')}</button>
+      <button onClick={onChangelog}><FileText /> {t('Changelog')}</button>
+      <button onClick={onLicense}><FileText /> {t('Licensing')}</button>
       <hr />
-      <button onClick={onLogout}><Logout /> Log out</button>
+      <button onClick={onLogout}><Logout /> {t('Log out')}</button>
       {version && <div className="pm-version">open-quill v{version}</div>}
     </div>
   );
@@ -74,9 +75,9 @@ function ChatRow({ c, active, showTrash, folders, onOpen, onDelete, onToggleStar
       onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}>
       <span className="title">{c.title}</span>
       {showTrash ? (
-        <button className="row-ctrl shift-del" onClick={(e) => { e.stopPropagation(); onDelete(c.id); }} title="Delete chat"><Trash style={{ width: 14 }} /></button>
+        <button className="row-ctrl shift-del" onClick={(e) => { e.stopPropagation(); onDelete(c.id); }} title={t("Delete chat")}><Trash style={{ width: 14 }} /></button>
       ) : (
-        <button className="row-ctrl" ref={btnRef} onClick={openMenu} title="Options"><Dots style={{ width: 16 }} /></button>
+        <button className="row-ctrl" ref={btnRef} onClick={openMenu} title={t("Options")}><Dots style={{ width: 16 }} /></button>
       )}
       {menu && createPortal(
         <div className="chat-menu" ref={menuRef} style={{ top: menu.top, left: menu.left, visibility: menu.ready ? undefined : 'hidden' }}>
@@ -91,7 +92,7 @@ function ChatRow({ c, active, showTrash, folders, onOpen, onDelete, onToggleStar
             {subOpen && (
               <div className="cm-sublist">
                 {c.folderId && <button onClick={(e) => { e.stopPropagation(); onMoveChat(c.id, null); close(); }}>Remove from folder</button>}
-                {folders.length === 0 && <div className="cm-empty">No folders yet</div>}
+                {folders.length === 0 && <div className="cm-empty">{t("No folders yet")}</div>}
                 {folders.map(f => (
                   <button key={f.id} className={f.id === c.folderId ? 'on' : ''} onClick={(e) => { e.stopPropagation(); onMoveChat(c.id, f.id); close(); }}>
                     <Folder style={{ width: 14 }} /> {f.name}
@@ -139,8 +140,8 @@ function FolderSection({ f, chats, active, showTrash, folders, dragChatId, onTog
         )}
         <span className="folder-count">{chats.length}</span>
         <span className="folder-ctrls" onClick={(e) => e.stopPropagation()}>
-          <button className="row-ctrl" title="Rename" onClick={() => setEditing(true)}><Pencil style={{ width: 13 }} /></button>
-          <button className="row-ctrl" title="Delete folder" onClick={() => onDelete(f.id)}><Trash style={{ width: 13 }} /></button>
+          <button className="row-ctrl" title={t("Rename")} onClick={() => setEditing(true)}><Pencil style={{ width: 13 }} /></button>
+          <button className="row-ctrl" title={t("Delete folder")} onClick={() => onDelete(f.id)}><Trash style={{ width: 13 }} /></button>
         </span>
       </div>
       {!f.collapsed && (
@@ -186,7 +187,7 @@ export default function Sidebar({
   const nowMs = Date.now();
   const DAY = 86400000;
   const recentGroups = [
-    { key: 'recent', label: 'Recents', items: [] },
+    { key: 'recent', label: t('Recents'), items: [] },
     { key: 'd3', label: '3+ days ago', items: [] },
     { key: 'd7', label: '7+ days ago', items: [] },
   ];
@@ -208,27 +209,27 @@ export default function Sidebar({
       <div className="sidebar-head">
         <div className="brand">{appName || 'open-quill'}</div>
         <div className="sidebar-head-actions">
-          <button className="icon-btn search-btn" onClick={onSearch} title="Search chats (Ctrl+Shift+F)"><Search style={{ width: 17 }} /></button>
+          <button className="icon-btn search-btn" onClick={onSearch} title={t("Search chats (Ctrl+Shift+F)")}><Search style={{ width: 17 }} /></button>
           <button className="icon-btn collapse-btn" onClick={onToggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}><Panel style={{ width: 17 }} /></button>
-          <button className="icon-btn mobile-close-btn" onClick={onMobileClose} title="Close menu"><span style={{ fontSize: 20, lineHeight: 1 }}>✕</span></button>
+          <button className="icon-btn mobile-close-btn" onClick={onMobileClose} title={t("Close menu")}><span style={{ fontSize: 20, lineHeight: 1 }}>✕</span></button>
         </div>
       </div>
       <div className="nav">
-        <button className="nav-item new-chat" title="New chat"
+        <button className="nav-item new-chat" title={t("New chat")}
           onClick={(e) => { if (e.ctrlKey || e.metaKey) { window.open('/', '_blank', 'noopener'); return; } onNew(); }}
           onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); window.open('/', '_blank', 'noopener'); } }}
-          onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}><span className="new-chat-plus"><Plus /></span> <span className="nav-label">New chat</span></button>
-        <button className="nav-item" title="Chats" onClick={onChatsOverview}><Chat /> <span className="nav-label">Chats</span></button>
-        <button className="nav-item" title="Projects" onClick={onProjects}><Box /> <span className="nav-label">Projects</span></button>
-        <button className="nav-item" title="Spaces" onClick={onSpaces}>
-          <Users /> <span className="nav-label">Spaces</span>
+          onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}><span className="new-chat-plus"><Plus /></span> <span className="nav-label">{t("New chat")}</span></button>
+        <button className="nav-item" title={t("Chats")} onClick={onChatsOverview}><Chat /> <span className="nav-label">{t("Chats")}</span></button>
+        <button className="nav-item" title={t("Projects")} onClick={onProjects}><Box /> <span className="nav-label">{t("Projects")}</span></button>
+        <button className="nav-item" title={t("Spaces")} onClick={onSpaces}>
+          <Users /> <span className="nav-label">{t("Spaces")}</span>
           {spacesPending > 0 && <span className="nav-badge">{spacesPending}</span>}
         </button>
       </div>
       <div className="chats">
         {!chatsLoaded ? (
           <>
-            <div className="section-label">Recents</div>
+            <div className="section-label">{t("Recents")}</div>
             {Array.from({ length: 7 }).map((_, i) => (
               <div key={i} className="chat-skel"><span className="skeleton" style={{ width: (55 + ((i * 37) % 40)) + '%' }} /></div>
             ))}
@@ -247,10 +248,10 @@ export default function Sidebar({
             </>}
 
             <div className="section-label folders-label">
-              <span><Folder style={{ width: 12, verticalAlign: '-1px' }} /> Folders</span>
-              <button className="folder-add" title="New folder" onClick={() => onCreateFolder && onCreateFolder()}><Plus style={{ width: 13 }} /></button>
+              <span><Folder style={{ width: 12, verticalAlign: '-1px' }} /> {t('Folders')}</span>
+              <button className="folder-add" title={t("New folder")} onClick={() => onCreateFolder && onCreateFolder()}><Plus style={{ width: 13 }} /></button>
             </div>
-            {folders.length === 0 && <div className="chats-empty">No folders, click + to add one</div>}
+            {folders.length === 0 && <div className="chats-empty">{t("No folders, click + to add one")}</div>}
             {folders.map(f => (
               <FolderSection key={f.id} f={f} chats={inFolder(f.id)} active={activeId} showTrash={showTrash}
                 folders={folders} dragChatId={dragChatId}

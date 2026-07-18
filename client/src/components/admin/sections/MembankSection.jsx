@@ -3,6 +3,7 @@ import { api } from '../../../api.js';
 import { useAdmin } from '../store.jsx';
 import { Card, AutosaveNote, SettingRow } from '../widgets.jsx';
 import { FileText, Pencil, Trash } from '../../icons.jsx';
+import { t } from '../../../i18n.jsx';
 
 export default function MembankSection() {
   const A = useAdmin();
@@ -65,24 +66,24 @@ export default function MembankSection() {
 
   return (
     <>
-      <Card title="Behavior" sub="How and when models reach for these files.">
-        <SettingRow label="Enable memory bank" note={<>When on, all models receive a system-prompt section listing these files plus the <code>mb_view</code> and <code>mb_search</code> tools.</>}
+      <Card title={t("Behavior")} sub={t("How and when models reach for these files.")}>
+        <SettingRow label={t("Enable memory bank")} note={<>When on, all models receive a system-prompt section listing these files plus the <code>mb_view</code> and <code>mb_search</code> tools.</>}
           on={!!settings.membankEnabled} onToggle={() => setSettings(s => ({ ...s, membankEnabled: !s.membankEnabled }))} />
-        <SettingRow label="Hide tool calls from users" note={<>When on, file reads stay behind the scenes, the model still uses the files, but users won't see the <code>mb_view</code> / <code>mb_search</code> steps in the reply.</>}
+        <SettingRow label={t("Hide tool calls from users")} note={<>When on, file reads stay behind the scenes, the model still uses the files, but users won't see the <code>mb_view</code> / <code>mb_search</code> steps in the reply.</>}
           on={!!settings.membankHideTools} onToggle={() => setSettings(s => ({ ...s, membankHideTools: !s.membankHideTools }))} />
         <div className="field" style={{ marginBottom: 0 }}>
-          <label>System prompt</label>
+          <label>{t("System prompt")}</label>
           <textarea rows={5} value={settings.membankPrompt ?? ''} onChange={(e) => setSettings(s => ({ ...s, membankPrompt: e.target.value }))} />
-          <div className="muted-note">Intro text added above the file list when the memory bank is enabled. The file names and tool instructions are appended automatically.</div>
+          <div className="muted-note">{t("Intro text added above the file list when the memory bank is enabled. The file names and tool instructions are appended automatically.")}</div>
         </div>
       </Card>
-      <Card title="Files" sub="Text and PDF files work best (.md, .txt, .json, .pdf, code, etc.). PDFs are read as extracted text. Up to 25 MB each."
+      <Card title={t("Files")} sub={t("Text and PDF files work best (.md, .txt, .json, .pdf, code, etc.). PDFs are read as extracted text. Up to 25 MB each.")}
         right={<button className="btn" onClick={() => pickRef.current?.click()}>Upload files</button>}>
         <input ref={pickRef} type="file" multiple hidden onChange={onPick} />
-        <div className="muted-note">Drag the handle to reorder or move files between folders. Type a folder name to group files; clear it to leave a file ungrouped.</div>
+        <div className="muted-note">{t("Drag the handle to reorder or move files between folders. Type a folder name to group files; clear it to leave a file ungrouped.")}</div>
         <datalist id="mb-folders">{[...new Set(files.map(f => f.folder).filter(Boolean))].map(fo => <option key={fo} value={fo} />)}</datalist>
         <div style={{ marginTop: 12 }}>
-          {files.length === 0 ? <div className="muted-note">No files yet.</div> : groups.map(g => (
+          {files.length === 0 ? <div className="muted-note">{t("No files yet.")}</div> : groups.map(g => (
             <div key={g.folder || '__none'} className="mb-group">
               <div className="mb-group-head">{g.folder ? g.folder : 'Ungrouped'}</div>
               {g.files.map(f => {
@@ -90,7 +91,7 @@ export default function MembankSection() {
                 return (
                   <div key={f.name} className={'mb-file-row' + (drag === f.name ? ' dragging' : '')}
                     onDragOver={(e) => e.preventDefault()} onDrop={() => onDrop(f)}>
-                    <span className="mb-drag" draggable onDragStart={() => setDrag(f.name)} onDragEnd={() => setDrag(null)} title="Drag to reorder / move">⋮⋮</span>
+                    <span className="mb-drag" draggable onDragStart={() => setDrag(f.name)} onDragEnd={() => setDrag(null)} title={t("Drag to reorder / move")}>⋮⋮</span>
                     <FileText style={{ width: 16, flexShrink: 0, opacity: 0.7 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       {editing ? (
@@ -110,11 +111,11 @@ export default function MembankSection() {
                       </>
                     ) : (
                       <>
-                        <input className="mb-folder-input" list="mb-folders" placeholder="folder" defaultValue={f.folder || ''}
+                        <input className="mb-folder-input" list="mb-folders" placeholder={t("folder")} defaultValue={f.folder || ''}
                           onBlur={(e) => { const v = e.target.value.trim(); if (v !== (f.folder || '')) setFolder(f.name, v); }}
                           onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }} />
-                        <button className="btn ghost" title="Rename" style={{ flexShrink: 0 }} onClick={() => { setEdit(f.name); setEditName(f.name); setErr(''); }}><Pencil style={{ width: 14 }} /></button>
-                        <button className="btn danger" title="Remove" style={{ flexShrink: 0 }} onClick={() => remove(f.name)}><Trash style={{ width: 15 }} /></button>
+                        <button className="btn ghost" title={t("Rename")} style={{ flexShrink: 0 }} onClick={() => { setEdit(f.name); setEditName(f.name); setErr(''); }}><Pencil style={{ width: 14 }} /></button>
+                        <button className="btn danger" title={t("Remove")} style={{ flexShrink: 0 }} onClick={() => remove(f.name)}><Trash style={{ width: 15 }} /></button>
                       </>
                     )}
                   </div>
