@@ -187,10 +187,19 @@ export default function registerChatRoutes(app) {
     const path = activePath(c.id);
     const kidsByParent = new Map();
     for (const m of sortedMsgs(c.id)) { const p = m.parent_id ?? null; if (!kidsByParent.has(p)) kidsByParent.set(p, []); kidsByParent.get(p).push(m); }
+    const modelById = new Map(db.models.all().map(x => [x.id, x]));
+    const legacyName = new Map();
+    for (const m of path) {
+      if (m.role !== 'assistant' || !m.model_id || m.model_name || modelById.has(m.model_id) || legacyName.has(m.model_id)) continue;
+      const u = db.usage.find(x => x.model_id === m.model_id && x.model_name);
+      legacyName.set(m.model_id, u ? u.model_name : '');
+    }
     const messages = path.map(m => {
       const sibs = kidsByParent.get(m.parent_id ?? null) || [];
+      const mm = m.model_id ? modelById.get(m.model_id) : null;
       return {
         id: m.id, role: m.role, content: m.content, reasoning: m.reasoning, model_id: m.model_id, attachments: m.attachments || [], created_at: m.created_at, pinned: !!m.pinned, feedback: m.feedback || 0,
+        model_name: m.model_name || mm?.display_name || legacyName.get(m.model_id) || '', model_icon: m.model_icon || mm?.static_icon || '',
         extended: !!m.extended, reasoningEffort: m.reasoning_effort || null,
         parentId: m.parent_id ?? null, branchIndex: sibs.findIndex(s => s.id === m.id), branchCount: sibs.length,
         siblings: sibs.map(s => s.id)
@@ -263,6 +272,34 @@ export default function registerChatRoutes(app) {
     if ('pinned' in req.body) patch.pinned = req.body.pinned ? 1 : 0;
     db.messages.update(m.id, patch);
     res.json({ ok: true, pinned: !!patch.pinned });
+  });
+
+  app.delete('/api/chats/:id/messages/:mid', authMiddleware, (req, res) => {
+    const c = db.chats.byId(req.params.id);
+    if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+    ensureChain(c.id);
+    const m = db.messages.byId(req.params.mid);
+    if (!m || m.chat_id !== c.id) return res.status(404).json({ error: 'message not found' });
+    const cascade = req.query.cascade === '1';
+    const removed = new Set([m.id]);
+    if (cascade) {
+      let frontier = [m.id];
+      while (frontier.length) {
+        const next = [];
+        for (const pid of frontier) for (const kid of childrenOf(c.id, pid)) if (!removed.has(kid.id)) { removed.add(kid.id); next.push(kid.id); }
+        frontier = next;
+      }
+    } else {
+      for (const kid of childrenOf(c.id, m.id)) db.messages.update(kid.id, { parent_id: m.parent_id ?? null });
+    }
+    db.messages.remove(x => removed.has(x.id));
+    const fresh = db.chats.byId(c.id);
+    if (removed.has(fresh.active_leaf)) {
+      const anchor = m.parent_id ?? null;
+      const roots = childrenOf(c.id, null);
+      db.chats.update(c.id, { active_leaf: anchor ? leafUnder(c.id, anchor) : (roots.length ? leafUnder(c.id, roots[roots.length - 1].id) : null) });
+    }
+    res.json({ ok: true, removed: removed.size });
   });
 
   app.get('/api/chats/:id/context', authMiddleware, async (req, res) => {

@@ -73,7 +73,7 @@ function MoreGroup({ label, items, renderOpt }) {
   );
 }
 
-export default function ModelDropdown({ models, currentId, onSelect, extended, onToggleExtended, up, modelHasBg, bgInChat, onToggleBgInChat, reasoningEffort, onSetEffort }) {
+export default function ModelDropdown({ models, currentId, onSelect, extended, onToggleExtended, up, modelHasBg, bgInChat, onToggleBgInChat, reasoningEffort, onSetEffort, isAdmin = false }) {
   const [open, setOpen] = useState(false);
   const [place, setPlace] = useState({ down: !!up, maxH: 0 });
   const [listMaxH, setListMaxH] = useState(0);
@@ -114,8 +114,10 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
   const effortLevels = (current?.effortLevels && current.effortLevels.length) ? current.effortLevels : ['low', 'medium', 'high'];
   const effortBool = effortLevels.length === 2 && effortLevels.some(x => /^true$/i.test(x)) && effortLevels.some(x => /^false$/i.test(x));
   const effortFallback = effortBool ? effortLevels.find(x => /^false$/i.test(x)) : (effortLevels[Math.floor(effortLevels.length / 2)] || effortLevels[0]);
-  const effortActive = effortLevels.includes(reasoningEffort) ? reasoningEffort
-    : (effortLevels.includes(current?.effortDefault) ? current.effortDefault : effortFallback);
+  const effortLocked = !!current?.effortAdminOnly && !isAdmin;
+  const effortDefaultVal = effortLevels.includes(current?.effortDefault) ? current.effortDefault : effortFallback;
+  const effortActive = effortLocked ? effortDefaultVal
+    : (effortLevels.includes(reasoningEffort) ? reasoningEffort : effortDefaultVal);
   const effortIdx = Math.max(0, effortLevels.indexOf(effortActive));
   const effortTrueVal = effortBool ? effortLevels.find(x => /^true$/i.test(x)) : null;
   const effortFalseVal = effortBool ? effortLevels.find(x => /^false$/i.test(x)) : null;
@@ -170,10 +172,10 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
             effortBool ? (
               <>
                 <hr />
-                <div className="toggle-row" onClick={() => onSetEffort && onSetEffort(thinkingOn ? effortFalseVal : effortTrueVal)}>
+                <div className={'toggle-row' + (effortLocked ? ' locked' : '')} onClick={() => { if (!effortLocked && onSetEffort) onSetEffort(thinkingOn ? effortFalseVal : effortTrueVal); }}>
                   <div className="tr-main">
                     <div className="mo-name">Extended thinking</div>
-                    <div className="mo-desc">Let the model think before answering</div>
+                    <div className="mo-desc">{effortLocked ? 'Set by your administrator' : 'Let the model think before answering'}</div>
                   </div>
                   <div className={'switch' + (thinkingOn ? ' on' : '')} />
                 </div>
@@ -181,15 +183,15 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
             ) : (
               <>
                 <hr />
-                <div className="effort-row">
+                <div className={'effort-row' + (effortLocked ? ' locked' : '')}>
                   <div className="effort-head">
                     <span className="mo-name">Reasoning effort</span>
-                    <span className="effort-cur">{capLevel(effortActive)}</span>
+                    <span className="effort-cur">{effortLocked ? capLevel(effortActive) + ' · admin set' : capLevel(effortActive)}</span>
                   </div>
                   <div className="effort-seg" style={{ '--n': effortLevels.length, '--i': effortIdx }}>
                     <span className="effort-seg-thumb" />
                     {effortLevels.map((lvl, i) => (
-                      <button key={lvl} className={'effort-seg-btn' + (i === effortIdx ? ' on' : '')} onClick={() => onSetEffort && onSetEffort(lvl)}>{capLevel(lvl)}</button>
+                      <button key={lvl} disabled={effortLocked} className={'effort-seg-btn' + (i === effortIdx ? ' on' : '')} onClick={() => { if (!effortLocked && onSetEffort) onSetEffort(lvl); }}>{capLevel(lvl)}</button>
                     ))}
                   </div>
                 </div>

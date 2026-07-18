@@ -295,10 +295,15 @@ export function initWs(server) {
         usageRec = { prompt: usage.prompt, completion: usage.completion, total: usage.total || (usage.prompt + usage.completion), cost };
         db.usage.insert({ id: uid(), user_id: chat.user_id, model_id: model.id, model_name: model.display_name || '', prompt: usageRec.prompt, completion: usageRec.completion, total: usageRec.total, cost, cost_in: Number(model.cost_in) || 0, cost_out: Number(model.cost_out) || 0, created_at: now() });
       }
-      db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, model_id: model.id, parent_id: assistantParent, usage: usageRec, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, created_at: now() });
-      db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
+      const hasOutput = !!(content.trim() || reasoning.trim());
+      if (hasOutput || usageRec) {
+        db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: usageRec, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, created_at: now() });
+        db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
+      } else {
+        db.chats.update(chat.id, { updated_at: now() });
+      }
       const truncated = !!(Number(model.max_tokens) > 0 && usage && usage.completion >= Number(model.max_tokens) - 2 && !conversationEnded);
-      safeSend(JSON.stringify({ type: 'done', chatId: chat.id, messageId: assistantId, truncated }));
+      safeSend(JSON.stringify({ type: 'done', chatId: chat.id, messageId: (hasOutput || usageRec) ? assistantId : null, truncated }));
 
       const fresh = db.chats.byId(chat.id);
       const lastUser = [...history].reverse().find(h => h.role === 'user');
@@ -320,7 +325,8 @@ export function initWs(server) {
       if (msg.type === 'stop') { const c = state.aborts.get(msg.chatId); if (c) { c.abort(); state.aborts.delete(msg.chatId); } return; }
       if (msg.type === 'incognito') {
         try {
-          const model = applyEffort(resolveModel(msg.modelId, state.isAdmin), msg.reasoningEffort);
+          const baseModel = resolveModel(msg.modelId, state.isAdmin);
+          const model = applyEffort(baseModel, msg.reasoningEffort, state.isAdmin || !(baseModel && baseModel.effort_admin_only));
           if (!model) { safeSend(JSON.stringify({ type: 'error', error: 'Invalid model.' })); safeSend(JSON.stringify({ type: 'done' })); return; }
           if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', error: (model.unavailable_reason || 'This model is currently unavailable.') })); safeSend(JSON.stringify({ type: 'done' })); return; }
           const history = (Array.isArray(msg.messages) ? msg.messages : [])
@@ -357,7 +363,8 @@ export function initWs(server) {
       if (msg.type !== 'chat' && msg.type !== 'regenerate' && msg.type !== 'edit') return;
       try {
         const chat = db.chats.byId(msg.chatId);
-        const model = applyEffort(resolveModel(msg.modelId, state.isAdmin), msg.reasoningEffort);
+        const baseModel = resolveModel(msg.modelId, state.isAdmin);
+        const model = applyEffort(baseModel, msg.reasoningEffort, state.isAdmin || !(baseModel && baseModel.effort_admin_only));
         if (!chat || chat.user_id !== u.id || !model) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'Invalid chat or model.' })); return; }
         if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: (model.unavailable_reason || 'This model is currently unavailable.') })); return; }
         if (chat.ended) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'This conversation was ended by the assistant and can no longer be continued.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }

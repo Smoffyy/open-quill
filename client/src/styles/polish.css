@@ -499,3 +499,8 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .mo-capinfo-item svg { opacity: .8; }
 :root[data-theme="anthropic"] .mo-capinfo-item { color: #fefefe; }
 
+.removed-banner .unavail-msg strong { color: #d9534f; }
+.sunset-banner.pill { margin: 7px 7px 3px; padding: 10px 15px; border-radius: 13px; border: 1px solid color-mix(in srgb, #e5484d 32%, transparent); }
+.composer-stack.has-banner .sunset-banner.pill + .composer, .composer-stack.has-banner .sunset-banner.pill + .unavail-banner { border-top: 0; }
+.sunset-msg { display: inline-flex; align-items: center; gap: 10px; }
+.sunset-msg svg { width: 17px; height: 17px; flex-shrink: 0; opacity: .9; }

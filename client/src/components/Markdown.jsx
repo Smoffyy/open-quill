@@ -181,13 +181,46 @@ const MarkdownBlock = React.memo(function MarkdownBlock({ text }) {
   );
 });
 
+function guardDollars(s) {
+  if (s.indexOf('$') === -1) return s;
+  const singles = [];
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === '\\') { i++; continue; }
+    if (c !== '$') continue;
+    if (s[i + 1] === '$') { i++; continue; }
+    singles.push(i);
+  }
+  if (!singles.length) return s;
+  const esc = new Set();
+  for (const i of singles) {
+    const m = /^\d[\d,]*(?:\.\d+)?/.exec(s.slice(i + 1, i + 24));
+    if (!m) continue;
+    const after = s[i + 1 + m[0].length] || '';
+    if (!after || !'^_{\\'.includes(after)) esc.add(i);
+  }
+  const rest = singles.filter(i => !esc.has(i));
+  for (let k = 0; k + 1 < rest.length; k += 2) {
+    const a = rest[k], b = rest[k + 1];
+    const inner = s.slice(a + 1, b);
+    if (!inner || /^\s/.test(inner) || /\s$/.test(inner) || inner.includes('**') || inner.includes('\n\n') || inner.length > 300) {
+      esc.add(a);
+      esc.add(b);
+    }
+  }
+  if (!esc.size) return s;
+  let out = '';
+  for (let i = 0; i < s.length; i++) out += esc.has(i) ? '\\$' : s[i];
+  return out;
+}
+
 function normalizeMathDelims(text) {
-  if (!text || (text.indexOf('\\[') === -1 && text.indexOf('\\(') === -1)) return text;
+  if (!text || (text.indexOf('$') === -1 && text.indexOf('\\[') === -1 && text.indexOf('\\(') === -1)) return text;
   const parts = text.split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`)/);
   for (let i = 0; i < parts.length; i++) {
     const p = parts[i];
     if (!p || p.startsWith('`')) continue;
-    parts[i] = p
+    parts[i] = guardDollars(p)
       .replace(/\\\[/g, () => '$$')
       .replace(/\\\]/g, () => '$$')
       .replace(/\\\(/g, () => '$')

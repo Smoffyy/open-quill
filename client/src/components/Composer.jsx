@@ -65,12 +65,13 @@ function PmSub({ className = '', children, onMouseEnter, onMouseLeave }) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, models,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, onWantSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
   voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall,
   safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
   conversationEnded = false, endedReason = '',
-  queuedMsg = '', onQueue, onCancelQueue, canContinue = false, onContinue,
+  removedModel = null,
+  queueCount = 0, onQueue, canContinue = false, onContinue,
   compareIds = [], onSetCompare, hideModelPicker = false, reasoningEffort, onSetEffort
 }) {
   const ta = useRef(null);
@@ -218,7 +219,6 @@ export default function Composer({
       preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
     }));
     setFiles(fs => [...fs, ...mapped]);
-    if (sandboxAllowed && !sandbox && mapped.some(f => !f.preview)) onWantSandbox?.();
     const lastImg = [...mapped].reverse().find(f => f.preview);
     if (lastImg) dominantColor(lastImg.preview).then(c => c && setGlow(c));
   }
@@ -245,7 +245,19 @@ export default function Composer({
     if (blockSend || budgetBlock || safetyFlagged || safetyChecking || conversationEnded) return;
     if (streaming) {
       const t = value.trim();
-      if (t && onQueue && !queuedMsg) { onQueue(t); onChange(''); }
+      if (!t && files.length === 0) return;
+      if (!onQueue) return;
+      let attachments = [];
+      if (files.length) {
+        setUploading(true);
+        try { const r = await api.uploadFiles(files.map(f => f.file)); attachments = r.files || []; }
+        catch (e) { setUploading(false); setUpErr(e?.message || 'Upload failed, the file may be too large.'); return; }
+        setUploading(false);
+        files.forEach(f => f.preview && URL.revokeObjectURL(f.preview));
+        setFiles([]); setGlow('var(--accent)');
+      }
+      onQueue(t, attachments);
+      onChange('');
       return;
     }
     if (!value.trim() && files.length === 0) return;
@@ -311,7 +323,23 @@ export default function Composer({
   }
   const improvedNow = !!(improvedRef.current && value === improvedRef.current.improved);
   const unavailable = !!activeModel?.unavailable;
-  const blockSend = unavailable && !canUseUnavailable;
+  const blockSend = (unavailable && !canUseUnavailable) || !!removedModel;
+  const sunsetInfo = (() => {
+    const sAt = activeModel?.sunsetAt;
+    if (!sAt || unavailable || removedModel) return null;
+    const d = new Date(sAt + 'T00:00:00');
+    if (isNaN(d.getTime())) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const days = Math.round((d.getTime() - today.getTime()) / 86400000);
+    if (days < 0) return null;
+    const t = Math.max(0, Math.min(1, 1 - days / 14));
+    return {
+      name: activeModel.displayName,
+      date: d.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' }),
+      mix: Math.round(t * 62)
+    };
+  })();
   const [bannerMounted, setBannerMounted] = useState(unavailable);
   const [bannerOut, setBannerOut] = useState(false);
   const bannerInfo = useRef(null);
@@ -327,15 +355,40 @@ export default function Composer({
   const budgetState = budget && budget.cap ? budget.state : 'none';
   const budgetBlock = budgetState === 'over' && budget?.enforce && !canUseUnavailable;
   const showBudgetBanner = budgetState === 'warn' || budgetState === 'over';
+  const sunsetOnly = !!sunsetInfo && !bannerMounted && !showBudgetBanner && !safetyFlagged && !conversationEnded && !removedModel;
   const enabledCount = (sandbox ? 1 : 0) + (webSearch ? 1 : 0);
   const canSend = (value.trim().length > 0 || files.length > 0) && !uploading && !blockSend && !budgetBlock && !safetyFlagged && !safetyChecking && !conversationEnded;
   const [multiline, setMultiline] = useState(false);
-  const cls = 'composer' + (multiline ? ' ml' : '') + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + (unavailable ? ' unavailable' : '') + ((blockSend || budgetBlock) ? ' blocked' : '');
+  const cls = 'composer' + (multiline ? ' ml' : '') + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + ((unavailable || removedModel) ? ' unavailable' : '') + ((blockSend || budgetBlock) ? ' blocked' : '');
   const fmtUsd = (n) => '$' + (Number(n || 0) > 0 && Number(n || 0) < 0.01 ? Number(n).toFixed(4) : Number(n || 0).toFixed(2));
 
   return (
-    <div className={'composer-stack' + ((bannerMounted || showBudgetBanner || safetyFlagged || conversationEnded) ? ' has-banner' : '')}>
-    {(bannerMounted || showBudgetBanner || safetyFlagged || conversationEnded) && <div className={'unavail-bg' + (bannerOut && !showBudgetBanner && !safetyFlagged && !conversationEnded ? ' out' : '')} />}
+    <div className={'composer-stack' + ((bannerMounted || showBudgetBanner || safetyFlagged || conversationEnded || removedModel || sunsetInfo) ? ' has-banner' : '')}>
+    {(bannerMounted || showBudgetBanner || safetyFlagged || conversationEnded || removedModel || sunsetInfo) && (
+      <div className={'unavail-bg' + (bannerOut && !showBudgetBanner && !safetyFlagged && !conversationEnded && !removedModel && !sunsetInfo ? ' out' : '')}
+        style={sunsetOnly ? {
+          background: `color-mix(in srgb, #e5484d ${sunsetInfo.mix}%, var(--bg))`,
+          borderColor: `color-mix(in srgb, #e5484d ${Math.min(70, sunsetInfo.mix + 12)}%, var(--border-soft))`,
+          transition: 'background .4s ease, border-color .4s ease'
+        } : undefined} />
+    )}
+    {removedModel && (
+      <div className="unavail-banner removed-banner">
+        <div className="unavail-row">
+          <span className="unavail-msg"><strong>{removedModel.name}</strong> has been removed, try using a different model to continue this chat.</span>
+        </div>
+      </div>
+    )}
+    {sunsetInfo && (
+      <div className={'unavail-banner sunset-banner' + (sunsetOnly ? '' : ' pill')} style={sunsetOnly ? undefined : { background: `color-mix(in srgb, #e5484d ${sunsetInfo.mix}%, transparent)` }}>
+        <div className="unavail-row">
+          <span className="unavail-msg sunset-msg">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="3.5" y="5" width="17" height="16" rx="2.5" /><path d="M8 3v4M16 3v4M3.5 10h17" /></svg>
+            <span><strong>{sunsetInfo.name}</strong> is going away {sunsetInfo.date}.</span>
+          </span>
+        </div>
+      </div>
+    )}
     {conversationEnded && (
       <div className="unavail-banner ended-banner">
         <div className="unavail-row">
@@ -402,19 +455,12 @@ export default function Composer({
           ))}
         </div>
       )}
-      <textarea ref={ta} rows={1} value={value} placeholder={placeholder || 'How can I help you today?'}
+      <textarea ref={ta} rows={1} value={value} placeholder={streaming ? (queueCount > 0 ? `Queue another message (${queueCount} waiting)…` : 'Type to queue a message…') : (placeholder || 'How can I help you today?')}
         onChange={(e) => onChange(e.target.value)} onKeyDown={key} onPaste={onPaste} />
       <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}
         accept={(visionSupported ? 'image/*,' : '') + FILE_ACCEPT} />
       {safetyChecking && safetyVerbose && <div className="safety-checking">Safety check…</div>}
       {improving && <div className="safety-checking">Improving prompt…</div>}
-      {queuedMsg && (
-        <div className="queued-chip">
-          <span className="queued-label">Queued:</span>
-          <span className="queued-text">{queuedMsg.length > 90 ? queuedMsg.slice(0, 90) + '…' : queuedMsg}</span>
-          <button className="queued-x" title="Cancel queued message" onClick={() => onCancelQueue?.()}><X style={{ width: 12 }} /></button>
-        </div>
-      )}
       {canContinue && !streaming && !conversationEnded && (
         <div className="continue-row">
           <button className="continue-btn" onClick={() => onContinue?.()}>Continue generating →</button>
@@ -542,7 +588,7 @@ export default function Composer({
         </div>
         <div className="composer-right">
           {!hideModelPicker && <ModelDropdown models={models} currentId={currentId} onSelect={onSelect}
-            extended={extended} onToggleExtended={onToggleExtended} up={modelUp}
+            extended={extended} onToggleExtended={onToggleExtended} up={modelUp} isAdmin={canUseUnavailable}
             reasoningEffort={reasoningEffort} onSetEffort={onSetEffort}
             modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />}
           {voiceMic && (

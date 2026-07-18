@@ -1,28 +1,53 @@
-import { db, getSetting } from '../db.js';
+import { db, getSetting, setSetting } from '../db.js';
 import { getProviders, resolveProvider, providerSpec } from '../providers.js';
+
+export function applySunsets() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  for (const m of db.models.all()) {
+    if (!m.sunset_at) continue;
+    const d = new Date(m.sunset_at + 'T00:00:00');
+    if (isNaN(d.getTime()) || d.getTime() > today.getTime()) continue;
+    const patch = m.sunset_action === 'unavailable'
+      ? { unavailable: 1, unavailable_reason: m.unavailable_reason || 'This model has been retired.', sunset_at: '' }
+      : { enabled: 0, sunset_at: '' };
+    db.models.update(m.id, patch);
+    const snap = getSetting('published_models', null);
+    if (Array.isArray(snap)) {
+      const i = snap.findIndex(x => x.id === m.id);
+      if (i >= 0) {
+        snap[i] = { ...snap[i], ...patch };
+        setSetting('published_models', snap);
+      }
+    }
+  }
+}
 
 export function shapePublic(m) {
   return {
     id: m.id, displayName: m.display_name, description: m.description,
     hasReasoning: !!m.has_reasoning, inMoreModels: !!m.in_more_models, moreModelsLabel: m.more_models_label,
-    effortEnabled: !!m.effort_enabled, effortLevels: (Array.isArray(m.effort_levels) && m.effort_levels.length) ? m.effort_levels : ['low', 'medium', 'high'], effortDefault: m.effort_default || '',
-    reasoningCollapsible: m.reasoning_collapsible !== 0,
+    effortEnabled: !!m.effort_enabled, effortLevels: (Array.isArray(m.effort_levels) && m.effort_levels.length) ? m.effort_levels : ['low', 'medium', 'high'], effortDefault: m.effort_default || '', effortAdminOnly: !!m.effort_admin_only,
+    reasoningCollapsible: m.reasoning_collapsible !== 0, hideThinking: !!m.hide_thinking,
     staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon, generatingAnim: m.generating_anim || 'spin', thinkingAnim: m.thinking_anim || 'pulse',
     iconPosition: m.icon_position || 'below', hasVision: !!m.has_vision, iconSize: m.icon_size || 0, showName: !!m.show_name,
     sandboxAuto: !!m.sandbox_auto, sandboxAllowed: m.sandbox_allowed !== 0, dropdownIcon: m.dropdown_icon !== 0, isDefault: !!m.is_default, agentSteps: m.agent_steps || 0,
     webSearchAuto: !!m.web_search_auto, webSearchAllowed: m.web_search_allowed !== 0,
     enableSummaries: !!m.enable_summaries, numCtx: m.num_ctx || 0, summaryPadding: m.summary_padding || 0.125, recentWindow: m.recent_window || 4,
     unavailable: !!m.unavailable, unavailableReason: m.unavailable_reason || '',
+    sunsetAt: m.sunset_at || '',
     bgEnabled: !!m.bg_enabled, bgImage: m.bg_image || '',
     capVision: !!m.cap_vision, capReasoning: !!m.cap_reasoning, capText: !!m.cap_text, capCompact: !!m.cap_compact
   };
 }
 
 export function draftModels() {
+  applySunsets();
   return db.models.filter(m => m.enabled).sort((a, b) => a.sort_order - b.sort_order).map(shapePublic);
 }
 
 export function publicModels() {
+  applySunsets();
   const snap = getSetting('published_models', null);
   if (!Array.isArray(snap)) return draftModels();
   return snap.filter(m => m.enabled).sort((a, b) => a.sort_order - b.sort_order).map(shapePublic);
@@ -30,6 +55,7 @@ export function publicModels() {
 
 // resolve the model used to RUN a completion: admins use live draft, clients use the published snapshot
 export function resolveModel(modelId, isAdmin) {
+  applySunsets();
   if (isAdmin) return db.models.byId(modelId);
   const snap = getSetting('published_models', null);
   if (!Array.isArray(snap)) return db.models.byId(modelId);
@@ -48,13 +74,13 @@ export function effortLevelsOf(model) {
   return (Array.isArray(model.effort_levels) && model.effort_levels.length) ? model.effort_levels : ['low', 'medium', 'high'];
 }
 
-export function applyEffort(model, requested) {
+export function applyEffort(model, requested, allowRequest = true) {
   if (!model || !model.effort_enabled) return model;
   const levels = effortLevelsOf(model);
   const isBool = levels.length === 2 && levels.some(x => /^true$/i.test(x)) && levels.some(x => /^false$/i.test(x));
   const fallback = isBool ? levels.find(x => /^false$/i.test(x)) : (levels[Math.floor(levels.length / 2)] || levels[0]);
   const def = levels.includes(model.effort_default) ? model.effort_default : fallback;
-  const level = (typeof requested === 'string' && levels.includes(requested)) ? requested : def;
+  const level = (allowRequest && typeof requested === 'string' && levels.includes(requested)) ? requested : def;
   return { ...model, reasoning_effort_level: level, reasoning_effort_kwarg: (model.effort_kwarg || 'reasoning_effort').trim() || 'reasoning_effort' };
 }
 

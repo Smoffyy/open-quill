@@ -1,6 +1,6 @@
 {
   "name": "open-quill-client",
-  "version": "27.0.0-beta.1",
+  "version": "27.0.0-beta.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "highlight.js": "^11.11.1",
-    "katex": "^0.17.0",
+    "katex": "^0.18.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-markdown": "^10.1.0",

@@ -48,7 +48,7 @@ export default function registerModelRoutes(app) {
       call_prompt: b.call_prompt || '',
       provider_id: b.provider_id || (getProviders()[0]?.id || null), max_tokens: parseInt(b.max_tokens) || null,
       has_reasoning: b.has_reasoning ? 1 : 0, reasoning_token: b.reasoning_token || '', non_reasoning_token: b.non_reasoning_token || '',
-      effort_enabled: b.effort_enabled ? 1 : 0, effort_levels: Array.isArray(b.effort_levels) && b.effort_levels.length ? b.effort_levels : ['low', 'medium', 'high'], effort_default: b.effort_default || 'medium', effort_kwarg: b.effort_kwarg || 'reasoning_effort',
+      effort_enabled: b.effort_enabled ? 1 : 0, effort_levels: Array.isArray(b.effort_levels) && b.effort_levels.length ? b.effort_levels : ['low', 'medium', 'high'], effort_default: b.effort_default || 'medium', effort_kwarg: b.effort_kwarg || 'reasoning_effort', effort_admin_only: b.effort_admin_only ? 1 : 0, hide_thinking: b.hide_thinking ? 1 : 0,
       reasoning_collapsible: b.reasoning_collapsible === false ? 0 : 1, icon_size: parseInt(b.icon_size) || (getSetting('ui_preset', '') === 'openai' ? 28 : 0),
       show_name: 'show_name' in b ? (b.show_name ? 1 : 0) : (getSetting('ui_preset', '') === 'openai' ? 1 : 0),
       generating_anim: b.generating_anim || (getSetting('ui_preset', '') === 'openai' ? 'none' : ''),
@@ -79,10 +79,18 @@ export default function registerModelRoutes(app) {
     const cur = db.models.byId(req.params.id);
     if (!cur) return res.status(404).json({ error: 'not found' });
     const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'call_prompt', 'end_chat_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id', 'bg_image', 'effort_kwarg', 'effort_default'];
-    const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'show_name', 'skills_allowed', 'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'long_convo_reminder', 'effort_enabled'];
+    const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'show_name', 'skills_allowed', 'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'long_convo_reminder', 'effort_enabled', 'effort_admin_only', 'hide_thinking'];
     const patch = {};
     for (const k of str) if (k in req.body) patch[k] = req.body[k];
     for (const k of bool) if (k in req.body) patch[k] = req.body[k] ? 1 : 0;
+    if ('sunset_at' in req.body) {
+      const v = String(req.body.sunset_at || '').trim();
+      patch.sunset_at = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '';
+    }
+    if ('sunset_action' in req.body) {
+      const v = String(req.body.sunset_action || '');
+      patch.sunset_action = v === 'unavailable' ? 'unavailable' : 'hide';
+    }
     if ('effort_levels' in req.body) {
       const arr = Array.isArray(req.body.effort_levels) ? req.body.effort_levels : String(req.body.effort_levels || '').split(',');
       const clean = arr.map(s => String(s).trim().toLowerCase()).filter(Boolean).slice(0, 8);
