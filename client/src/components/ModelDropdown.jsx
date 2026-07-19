@@ -13,9 +13,9 @@ function CapRow({ m }) {
   return (
     <div className="mo-caps">
       {active.map(({ key, label, Icon }) => (
-        <span key={key} className="mo-cap-ic" title={label}>
+        <span key={key} className="mo-cap-ic" title={t(label)}>
           <Icon style={{ width: 12, height: 12 }} />
-          <span className="mo-cap-lbl">{label}</span>
+          <span className="mo-cap-lbl">{t(label)}</span>
         </span>
       ))}
     </div>

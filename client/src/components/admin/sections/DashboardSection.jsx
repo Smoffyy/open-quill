@@ -34,7 +34,7 @@ export default function DashboardSection() {
             <span className="dash-stat-icon"><Icon /></span>
             <span className="dash-stat-main">
               <span className="dash-stat-v">{v}</span>
-              <span className="dash-stat-l">{l}</span>
+              <span className="dash-stat-l">{t(l)}</span>
               <span className="dash-stat-s">{s}</span>
             </span>
           </button>

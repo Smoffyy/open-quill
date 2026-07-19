@@ -51,7 +51,7 @@ export default function DatabasesSection() {
     setAsk({
       message: isActive
         ? t('This database is already running. Setting it again just confirms it loads on the next restart.')
-        : t(`Load "${name}" on the next restart? The running database will not change until the server restarts. Current chats, users and content stay untouched.`),
+        : t('Load "{name}" on the next restart? The running database will not change until the server restarts. Current chats, users and content stay untouched.', { name }),
       danger: t('Set for next restart'),
       onConfirm: () => run('activate', () => api.post('/api/admin/databases/activate', { name }))
     });
@@ -59,7 +59,7 @@ export default function DatabasesSection() {
 
   function remove(name) {
     setAsk({
-      message: t(`Permanently delete the "${name}" database and everything inside it (chats, users, uploads, artifacts, memory)? This cannot be undone.`),
+      message: t('Permanently delete the "{name}" database and everything inside it (chats, users, uploads, artifacts, memory)? This cannot be undone.', { name }),
       danger: t('Delete database'),
       onConfirm: () => run('del-' + name, () => api.del('/api/admin/databases/' + encodeURIComponent(name)))
     });

@@ -115,6 +115,23 @@ Each database is encrypted with its own key stored beside its data. To use one k
 - All data lives under the active database's folder inside `server/data/` (see **Databases** above). To reset a database, stop the server and delete its folder.
 - To change the port, set `PORT` before `npm start`.
 
+## Privacy and local-only operation
+
+Open Quill is built to run entirely on your own machine, and by default nothing leaves it:
+
+- No telemetry, analytics, crash reporting, tracking, or update "phone-home" checks. The "Analytics" in the admin panel is your own local token/cost accounting, computed from the local database.
+- The web client only ever talks to its own backend (same-origin requests and a same-host WebSocket). It loads no third-party scripts; fonts are self-hosted, not fetched from a CDN.
+- Secrets (the database encryption key and the auth token secret) are generated and stored locally and are never transmitted. The database itself is encrypted at rest.
+- The server binds to `127.0.0.1` (this machine only) by default. Set `HOST=0.0.0.0` in your `.env` if you want to reach it from other devices on your network.
+
+Outbound network requests happen only when you explicitly configure or enable a feature, and only to the destination you specify:
+
+- **Model provider**: chat requests go to the provider base URL you set. The default is a local server (LM Studio at `http://localhost:1234/v1`). If you choose a cloud provider and enter an API key, requests go there.  
+- **Voice**: speech‑to‑text and text‑to‑speech use the base URL you configure (local by default).  
+- **Web search**: off unless you enable it and point it at your own SearXNG instance. When a search runs, the server fetches result pages from the web, which is the point of the feature.  
+- **Connectors (MCP)**: only those you add. These run as local subprocesses, or reach an `http(s)` URL if you configure one.  
+- **Code sandbox**: runs code the model or you generate; that code has the same network access as the host, so a script it runs could make its own requests.
+
 ## Updates / Version Information
 
 Beginning with **Open Quill 27**, the project will adopt a year based versioning system. Major releases will increment annually, starting with version **27** and continuing forward with each new release cycle.

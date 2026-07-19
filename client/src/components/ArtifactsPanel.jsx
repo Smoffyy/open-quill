@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { copyText } from '../clipboard.js';
 import Markdown from './Markdown.jsx';
 import { Download, Refresh, FileText, Copy, Check, ChevDown, Folder, Chevron } from './icons.jsx';
+import { t } from '../i18n.jsx';
 
 const PREVIEW_HTML = new Set(['html', 'htm', 'svg']);
 const PREVIEW_MD = new Set(['md', 'markdown']);
@@ -197,19 +198,19 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
           {canBack && <button className="art-back" onClick={onBack} title="Back to files"><Chevron style={{ width: 16, transform: 'rotate(180deg)' }} /></button>}
           <FileChip ext={ext} />
           <span className="art-vname">{baseName(path)}</span>
-          {isLive && <span className="art-ver writing">{liveEdit ? 'editing…' : (liveText && liveText.length ? 'writing…' : 'creating…')}</span>}
+          {isLive && <span className="art-ver writing">{liveEdit ? t('editing…') : (liveText && liveText.length ? t('writing…') : t('creating…'))}</span>}
           {!isLive && viewing && <span className={'art-ver' + (stale ? ' stale' : '')}>v{viewing}{stale ? ` of ${current}` : ''}</span>}
         </div>
         <div className="art-vactions">
           {canPreview && !isLive && showText && (
             <div className="art-mode-seg">
-              <button className={mode === 'preview' ? 'on' : ''} onClick={() => setMode('preview')}>Preview</button>
-              <button className={mode === 'code' ? 'on' : ''} onClick={() => setMode('code')}>Code</button>
+              <button className={mode === 'preview' ? 'on' : ''} onClick={() => setMode('preview')}>{t('Preview')}</button>
+              <button className={mode === 'code' ? 'on' : ''} onClick={() => setMode('code')}>{t('Code')}</button>
             </div>
           )}
-          {showText && !diff && !previewOn && <button className={'art-btn icon' + (wrap ? ' on' : '')} onClick={() => setWrap(w => !w)} title="Toggle word wrap">↩</button>}
+          {showText && !diff && !previewOn && <button className={'art-btn icon' + (wrap ? ' on' : '')} onClick={() => setWrap(w => !w)} title={t("Toggle word wrap")}>↩</button>}
           {!isLive && data?.text != null && viewing > 1 && (
-            <button className={'art-btn icon' + (diff ? ' on' : '')} onClick={() => setDiff(d => !d)} title="Show changes from previous version">Diff</button>
+            <button className={'art-btn icon' + (diff ? ' on' : '')} onClick={() => setDiff(d => !d)} title={t("Show changes from previous version")}>{t('Diff')}</button>
           )}
           {!isLive && data?.text != null && (
             <div className="art-copy-wrap">

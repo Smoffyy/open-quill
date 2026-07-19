@@ -150,13 +150,13 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
             <div className="med-find-menu">
               {findHits.map(h => (
                 <button key={h.s + h.a} onClick={() => jumpTo(h)}>
-                  <span>{h.label}</span>
-                  <em>{ME_SECTIONS.find(([id]) => id === h.s)?.[1]}</em>
+                  <span>{t(h.label)}</span>
+                  <em>{t(ME_SECTIONS.find(([id]) => id === h.s)?.[1] || '')}</em>
                 </button>
               ))}
             </div>
           )}
-          {fq && !findHits.length && <div className="med-find-menu"><div className="med-find-none">No matching setting.</div></div>}
+          {fq && !findHits.length && <div className="med-find-menu"><div className="med-find-none">{t("No matching setting.")}</div></div>}
         </div>
       </div>
 
@@ -499,7 +499,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
                 ['max_tokens', 'Max tokens', 'e.g. 2048']
               ].filter(([k]) => allowedSamplers.includes(k)).map(([k, label, ph]) => (
                 <div className="samp-field" key={k}>
-                  <label>{label}</label>
+                  <label>{t(label)}</label>
                   <input type="number" step="any" placeholder={ph} value={m[k] ?? ''} onChange={(e) => set(k, e.target.value)} />
                 </div>
               ))}

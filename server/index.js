@@ -24,6 +24,7 @@ import registerMiscRoutes from './routes/misc.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3001;
+const HOST = process.env.HOST || '127.0.0.1';
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -55,7 +56,7 @@ initWs(server);
 
 process.on('exit', () => { try { mcp.shutdown(); } catch {} });
 
-server.listen(PORT, () => console.log(`open-quill running on http://localhost:${PORT}`));
+server.listen(PORT, HOST, () => console.log(`open-quill running on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`));
 try { setCustomPresets(getSetting('custom_presets', [])); } catch {}
 pruneAudit();
 setInterval(pruneAudit, 24 * 60 * 60 * 1000).unref();
