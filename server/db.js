@@ -1,14 +1,12 @@
 import fs from 'fs';
-import path from 'path';
 import crypto from 'crypto';
-import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3-multiple-ciphers';
+import { DATA_ROOT, dataPath } from './lib/dataroot.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, 'data');
+const DATA_DIR = DATA_ROOT;
 fs.mkdirSync(DATA_DIR, { recursive: true });
-const FILE = path.join(DATA_DIR, 'data.db');
-const KEYFILE = path.join(DATA_DIR, '.dbkey');
+const FILE = dataPath('data.db');
+const KEYFILE = dataPath('.dbkey');
 
 function loadKey() {
   const env = process.env.DB_ENCRYPTION_KEY;

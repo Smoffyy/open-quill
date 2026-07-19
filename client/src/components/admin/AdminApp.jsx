@@ -20,6 +20,7 @@ import FeedbackSection from './sections/FeedbackSection.jsx';
 import LimitsSection from './sections/LimitsSection.jsx';
 import AuditSection from './sections/AuditSection.jsx';
 import AnalyticsSection from './sections/AnalyticsSection.jsx';
+import DatabasesSection from './sections/DatabasesSection.jsx';
 import { t } from '../../i18n.jsx';
 
 const SECTION_COMPONENTS = {
@@ -39,7 +40,8 @@ const SECTION_COMPONENTS = {
   feedback: FeedbackSection,
   limits: LimitsSection,
   audit: AuditSection,
-  analytics: AnalyticsSection
+  analytics: AnalyticsSection,
+  databases: DatabasesSection
 };
 
 function DiscoverModal() {
@@ -116,6 +118,7 @@ function Shell() {
   }
 
   const Section = SECTION_COMPONENTS[section] || DashboardSection;
+  const showPublish = section !== 'dashboard' && section !== 'databases';
 
   return (
     <div className="oqa">
@@ -169,7 +172,7 @@ function Shell() {
             <h1>{t(meta.label)}</h1>
             <span className="oqa-desc">{t(meta.desc)}</span>
           </div>
-          {section !== 'dashboard' && (
+          {showPublish && (
             <div className="oqa-status">
               {pubFlash
                 ? <span className="saved-flash">{t("Pushed to all clients")} ✓</span>
@@ -178,7 +181,7 @@ function Shell() {
                   : <span className="pub-note">{pub.published ? t('Clients are up to date') : t('Nothing published yet')}</span>}
             </div>
           )}
-          {section !== 'dashboard' && (
+          {showPublish && (
             <button className={'btn primary push-btn' + (pub.dirty ? ' dirty' : '')} onClick={A.publish} disabled={publishing || (!pub.dirty && pub.published)}>
               {publishing ? t('Pushing…') : t('Push to all clients')}
             </button>

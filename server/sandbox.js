@@ -2,10 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
 import { spawn, spawnSync } from 'child_process';
-import { fileURLToPath } from 'url';
+import { dataPath } from './lib/dataroot.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const SANDBOX_ROOT = path.join(__dirname, 'data', 'sandbox');
+export const SANDBOX_ROOT = dataPath('sandbox');
 const META_DIR = path.join(SANDBOX_ROOT, '.meta');
 function metaPath(chatId) { return path.join(META_DIR, String(chatId).replace(/[^a-zA-Z0-9_-]/g, '') + '.json'); }
 function readMeta(chatId) { try { return JSON.parse(fs.readFileSync(metaPath(chatId), 'utf8')); } catch { return {}; } }

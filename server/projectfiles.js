@@ -1,9 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { dataPath } from './lib/dataroot.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(__dirname, 'data', 'projectfiles');
+const ROOT = dataPath('projectfiles');
 
 const TEXT_EXT = new Set(['txt', 'md', 'markdown', 'csv', 'tsv', 'json', 'js', 'ts', 'jsx', 'tsx', 'py', 'html', 'css', 'xml', 'yaml', 'yml', 'log', 'ini', 'toml', 'sh', 'bat', 'sql', 'java', 'c', 'cpp', 'h', 'rs', 'go', 'rb', 'php']);
 const MAX_FILE = 25 * 1024 * 1024;

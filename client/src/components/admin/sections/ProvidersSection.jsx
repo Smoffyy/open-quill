@@ -10,13 +10,13 @@ export default function ProvidersSection() {
   return (
     <div className="provider-list">
       {providers.map((p, idx) => {
-        const t = providerTypes[p.type] || {};
+        const pt = providerTypes[p.type] || {};
         const test = provTest[p.id];
         const count = models.filter(m => (m.provider_id || providers[0]?.id) === p.id).length;
         return (
           <Card key={p.id} className="provider-card2"
             title={p.name || 'Provider ' + (idx + 1)}
-            sub={`${t.label || p.type}${count ? ` · ${count} model${count === 1 ? '' : 's'} attached` : ''}`}
+            sub={`${pt.label || p.type}${count ? ` · ${count} model${count === 1 ? '' : 's'} attached` : ''}`}
             right={test && !test.busy && (
               test.ok
                 ? <span className="pv-status ok">Reachable · {test.count} model{test.count === 1 ? '' : 's'}</span>
@@ -31,9 +31,9 @@ export default function ProvidersSection() {
                 </select></div>
             </div>
             <div className="field"><label>{t("API base URL")}</label>
-              <input value={p.base_url || ''} onChange={(e) => A.patchProvider(p.id, { base_url: e.target.value })} placeholder={t.defaultBaseUrl || ''} /></div>
-            <div className="field"><label>API key {t.keyOptional && <span className="muted-note" style={{ display: 'inline' }}>(optional)</span>}</label>
-              <input value={p.api_key || ''} onChange={(e) => A.patchProvider(p.id, { api_key: e.target.value })} placeholder={t.keyOptional ? 'Not required for local servers' : 'Required'} /></div>
+              <input value={p.base_url || ''} onChange={(e) => A.patchProvider(p.id, { base_url: e.target.value })} placeholder={pt.defaultBaseUrl || ''} /></div>
+            <div className="field"><label>API key {pt.keyOptional && <span className="muted-note" style={{ display: 'inline' }}>(optional)</span>}</label>
+              <input value={p.api_key || ''} onChange={(e) => A.patchProvider(p.id, { api_key: e.target.value })} placeholder={pt.keyOptional ? 'Not required for local servers' : 'Required'} /></div>
             <div className="btn-row">
               <button className="btn ghost" onClick={() => A.testProvider(p.id)} disabled={test?.busy}>{test?.busy ? 'Testing…' : 'Test connection'}</button>
               <button className="btn ghost" onClick={() => A.openDiscover(p.id)}><Cube style={{ width: 13, verticalAlign: '-2px' }} /> Discover models</button>
