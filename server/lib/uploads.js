@@ -1,11 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
-import { fileURLToPath } from 'url';
 import { db, uid } from '../db.js';
+import { dataPath } from './dataroot.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const UPLOADS = path.join(__dirname, '..', 'data', 'uploads');
+export const UPLOADS = dataPath('uploads');
 fs.mkdirSync(UPLOADS, { recursive: true });
 
 export const diskStore = multer.diskStorage({

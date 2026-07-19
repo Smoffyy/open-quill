@@ -7,6 +7,7 @@ import { logAudit } from '../lib/audit.js';
 import { purgeUploads } from '../lib/uploads.js';
 import { monthStartMs } from '../lib/budget.js';
 import { removeUserFromSpaces } from '../lib/spaces.js';
+import * as dataroot from '../lib/dataroot.js';
 
 export default function registerAdminRoutes(app) {
   app.get('/api/admin/skills', authMiddleware, adminOnly, (req, res) => res.json({ skills: skillsys.list() }));
@@ -192,5 +193,30 @@ export default function registerAdminRoutes(app) {
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="audit-${new Date().toISOString().slice(0, 10)}.csv"`);
     res.send(lines.join('\n'));
+  });
+
+  app.get('/api/admin/databases', authMiddleware, adminOnly, (req, res) => {
+    res.json({ ...dataroot.activeInfo(), databases: dataroot.listDatabases() });
+  });
+
+  app.post('/api/admin/databases', authMiddleware, adminOnly, (req, res) => {
+    const r = dataroot.createDatabase((req.body || {}).name);
+    if (!r.ok) return res.status(400).json({ error: r.error });
+    logAudit(req, 'database.create', { meta: { name: r.database.name } });
+    res.json({ ...dataroot.activeInfo(), databases: dataroot.listDatabases(), created: r.database.name });
+  });
+
+  app.post('/api/admin/databases/activate', authMiddleware, adminOnly, (req, res) => {
+    const r = dataroot.setPendingDatabase((req.body || {}).name);
+    if (!r.ok) return res.status(400).json({ error: r.error });
+    logAudit(req, 'database.activate', { meta: { name: r.pending } });
+    res.json({ ...dataroot.activeInfo(), databases: dataroot.listDatabases() });
+  });
+
+  app.delete('/api/admin/databases/:name', authMiddleware, adminOnly, (req, res) => {
+    const r = dataroot.deleteDatabase(req.params.name);
+    if (!r.ok) return res.status(400).json({ error: r.error });
+    logAudit(req, 'database.delete', { meta: { name: req.params.name } });
+    res.json({ ...dataroot.activeInfo(), databases: dataroot.listDatabases() });
   });
 }

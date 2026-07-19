@@ -1,4 +1,4 @@
-import { Panel, Cube, Sliders, Sparkles, Chat, Users, Globe, Mic, Brain, FileText, Bulb, Plug, Shield, Star, Clock, Gear, Wave } from '../icons.jsx';
+import { Panel, Cube, Sliders, Sparkles, Chat, Users, Globe, Mic, Brain, FileText, Bulb, Plug, Shield, Star, Clock, Gear, Wave, Box } from '../icons.jsx';
 
 export const NAV_GROUPS = [
   { id: 'root', label: '', items: [
@@ -27,6 +27,7 @@ export const NAV_GROUPS = [
     { id: 'feedback', label: 'Feedback', desc: 'Thumbs up and down users left on responses, for reviewing model quality.', Icon: Star, keywords: 'ratings thumbs reviews quality' }
   ] },
   { id: 'governance', label: 'Governance', items: [
+    { id: 'databases', label: 'Databases', desc: 'Switch between isolated databases. Set which one loads next; changes apply on restart.', Icon: Box, keywords: 'database switch env storage backup profile isolate multi' },
     { id: 'limits', label: 'Limits & Budgets', desc: 'Guardrails applied across the app. These take effect immediately.', Icon: Gear, keywords: 'uploads sandbox sessions queue budgets caps' },
     { id: 'audit', label: 'Audit Log', desc: 'A record of sensitive admin actions. Pruned after 120 days.', Icon: Clock, keywords: 'log history actions security trail' }
   ] }
