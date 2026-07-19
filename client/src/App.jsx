@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { api } from './api.js';
 import { t } from './i18n.jsx';
 import { applyPrefs } from './prefs.js';
@@ -16,9 +16,9 @@ function computeActiveBg(models, currentId, activeId, messagesLen, incognito, pr
   return has && (isEmpty || inChat) ? m.bgImage : null;
 }
 import Message from './components/Message.jsx';
-import SettingsModal from './components/SettingsModal.jsx';
-import ModelDocs from './components/ModelDocs.jsx';
-import AdminPanel from './components/AdminPanel.jsx';
+const SettingsModal = React.lazy(() => import('./components/SettingsModal.jsx'));
+const ModelDocs = React.lazy(() => import('./components/ModelDocs.jsx'));
+const AdminPanel = React.lazy(() => import('./components/AdminPanel.jsx'));
 import DocModal from './components/DocModal.jsx';
 import ArtifactsPanel from './components/ArtifactsPanel.jsx';
 import ChatControls from './components/ChatControls.jsx';
@@ -161,6 +161,50 @@ export default function App() {
   const [currentId, setCurrentId] = useState(null);
   const [chatRemovedModel, setChatRemovedModel] = useState(null);
   const pickModel = useCallback((id) => { setChatRemovedModel(null); setCurrentId(id); }, []);
+  const modelById = useMemo(() => {
+    const m = new Map();
+    for (const x of models) m.set(x.id, x);
+    return m;
+  }, [models]);
+  const ghostModels = useRef(new Map());
+  const resolveMsgModel = useCallback((msg, fallback) => {
+    const live = modelById.get(msg.model_id);
+    if (live) return live;
+    if (msg.role === 'assistant' && msg.model_id && (msg.model_name || msg.model_icon)) {
+      const key = msg.model_id + '|' + (msg.model_name || '') + '|' + (msg.model_icon || '');
+      let g = ghostModels.current.get(key);
+      if (!g) {
+        g = { id: msg.model_id, displayName: msg.model_name || t('Removed model'), staticIcon: msg.model_icon || '', removed: true };
+        ghostModels.current.set(key, g);
+      }
+      return g;
+    }
+    return fallback;
+  }, [modelById]);
+  const sidebarFns = useRef({});
+  const sbCreateFolder = useCallback((...a) => sidebarFns.current.createFolder(...a), []);
+  const sbRenameFolder = useCallback((...a) => sidebarFns.current.renameFolder(...a), []);
+  const sbToggleFolder = useCallback((...a) => sidebarFns.current.toggleFolder(...a), []);
+  const sbDeleteFolder = useCallback((...a) => sidebarFns.current.deleteFolder(...a), []);
+  const sbMoveChat = useCallback((...a) => sidebarFns.current.moveChatToFolder(...a), []);
+  const sbNewChat = useCallback((...a) => sidebarFns.current.newChat(...a), []);
+  const sbOpenChat = useCallback((...a) => sidebarFns.current.openChat(...a), []);
+  const sbDeleteChat = useCallback((...a) => sidebarFns.current.deleteChat(...a), []);
+  const sbToggleStar = useCallback((...a) => sidebarFns.current.toggleStar(...a), []);
+  const sbLogout = useCallback((...a) => sidebarFns.current.logout(...a), []);
+  const sbProjects = useCallback(() => sidebarFns.current.openProjects(null), []);
+  const sbOpenProject = useCallback((id) => sidebarFns.current.openProjects(id), []);
+  const onSearchCb = useCallback(() => setShowSearch(true), []);
+  const onToggleSidebarCb = useCallback(() => setCollapsed(c => !c), []);
+  const onMobileCloseCb = useCallback(() => setMobileDrawer(false), []);
+  const onSettingsCb = useCallback(() => setShowSettings(true), []);
+  const onAdminCb = useCallback(() => { history.pushState({}, '', '/admin'); setShowAdmin(true); }, []);
+  const onCreditsCb = useCallback(() => setShowCredits(true), []);
+  const onChangelogCb = useCallback(() => setShowChangelog(true), []);
+  const onLicenseCb = useCallback(() => setShowLicense(true), []);
+  const onChatsOverviewCb = useCallback(() => { setMobileDrawer(false); setChatsOverview(true); }, []);
+  const onSpacesCb = useCallback(() => { setMobileDrawer(false); history.pushState({}, '', '/spaces'); setShowSpaces(true); }, []);
+
   const [extended, setExtended] = useState(false);
   const [reasoningEffort, setReasoningEffort] = useState('');
   const [bgVisible, setBgVisible] = useState(false);
@@ -1208,20 +1252,22 @@ export default function App() {
     { id: 'logout', label: t('Log out'), keywords: 'sign out exit', action: () => logout() }
   ];
 
+  sidebarFns.current = { createFolder, renameFolder, toggleFolder, deleteFolder, moveChatToFolder, newChat, openChat, deleteChat, toggleStar, logout, openProjects };
+
   return (
     <div className={'app' + (incognito ? ' app-incognito' : '') + (intro ? ' intro' : '') + (bgVisible ? ' has-bg' : '') + (collapsed ? ' sb-collapsed' : '')}>
       <AppBackground bg={activeBg} />
       {intro && <div className="intro-curtain" />}
-      <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName} onSearch={() => setShowSearch(true)}
-        folders={folders} onCreateFolder={createFolder} onRenameFolder={renameFolder} onToggleFolder={toggleFolder} onDeleteFolder={deleteFolder} onMoveChat={moveChatToFolder}
-        onNew={newChat} onOpen={openChat} onDelete={deleteChat} onToggleStar={toggleStar}
-        collapsed={collapsed} onToggle={() => setCollapsed(c => !c)}
-        mobileOpen={mobileDrawer} onMobileClose={() => setMobileDrawer(false)}
-        onSettings={() => setShowSettings(true)} onAdmin={() => { history.pushState({}, '', '/admin'); setShowAdmin(true); }}
-        onCredits={() => setShowCredits(true)} onChangelog={() => setShowChangelog(true)} onLicense={() => setShowLicense(true)} onLogout={logout} version={cfg.version}
-        onChatsOverview={() => { setMobileDrawer(false); setChatsOverview(true); }}
-        onSpaces={() => { setMobileDrawer(false); history.pushState({}, '', '/spaces'); setShowSpaces(true); }} spacesPending={spacesPending}
-        projects={projects} onProjects={() => openProjects(null)} onOpenProject={(id) => openProjects(id)} />
+      <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName} onSearch={onSearchCb}
+        folders={folders} onCreateFolder={sbCreateFolder} onRenameFolder={sbRenameFolder} onToggleFolder={sbToggleFolder} onDeleteFolder={sbDeleteFolder} onMoveChat={sbMoveChat}
+        onNew={sbNewChat} onOpen={sbOpenChat} onDelete={sbDeleteChat} onToggleStar={sbToggleStar}
+        collapsed={collapsed} onToggle={onToggleSidebarCb}
+        mobileOpen={mobileDrawer} onMobileClose={onMobileCloseCb}
+        onSettings={onSettingsCb} onAdmin={onAdminCb}
+        onCredits={onCreditsCb} onChangelog={onChangelogCb} onLicense={onLicenseCb} onLogout={sbLogout} version={cfg.version}
+        onChatsOverview={onChatsOverviewCb}
+        onSpaces={onSpacesCb} spacesPending={spacesPending}
+        projects={projects} onProjects={sbProjects} onOpenProject={sbOpenProject} />
 
       {mobileDrawer && <div className="drawer-backdrop" onClick={() => setMobileDrawer(false)} />}
 
@@ -1357,8 +1403,8 @@ export default function App() {
                     : messages;
                   const lastA = [...renderList].reverse().find(m => m.role === 'assistant');
                   return renderList.map(msg => (
-                    <Message key={msg._k || msg.id} msg={msg} model={models.find(x => x.id === msg.model_id) || (msg.role === 'assistant' && msg.model_id && (msg.model_name || msg.model_icon) ? { id: msg.model_id, displayName: msg.model_name || 'Removed model', staticIcon: msg.model_icon || '', removed: true } : model)} models={models} currentId={currentId} chatId={activeId} pins={chatPins} chatEnded={chatEnded}
-                      streaming={!!msg._streaming} phase={msg._streaming ? ((models.find(x => x.id === currentId)?.hideThinking && phase === 'thinking') ? 'generating' : phase) : 'static'} liveCall={msg._streaming ? liveCall : null}
+                    <Message key={msg._k || msg.id} msg={msg} model={resolveMsgModel(msg, model)} models={models} currentId={currentId} chatId={activeId} pins={chatPins} chatEnded={chatEnded}
+                      streaming={!!msg._streaming} phase={msg._streaming ? ((modelById.get(currentId)?.hideThinking && phase === 'thinking') ? 'generating' : phase) : 'static'} liveCall={msg._streaming ? liveCall : null}
                       onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onDelete={streaming || queued ? null : deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
                       showIcon={msg.role === 'assistant' && (cfg.uiPreset === 'openai' || (lastA && msg.id === lastA.id))} />
                   ));
@@ -1411,8 +1457,8 @@ export default function App() {
           onChanged={(has) => { setHasSummary(has); }} />
       )}
 
-      {showDocs && <ModelDocs models={models} currentId={currentId} onClose={() => setShowDocs(false)} onTry={(id) => { pickModel(id); setShowDocs(false); }} />}
-      {showSettings && <SettingsModal user={user} cfg={cfg} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile} />}
+      {showDocs && <React.Suspense fallback={null}><ModelDocs models={models} currentId={currentId} onClose={() => setShowDocs(false)} onTry={(id) => { pickModel(id); setShowDocs(false); }} /></React.Suspense>}
+      {showSettings && <React.Suspense fallback={null}><SettingsModal user={user} cfg={cfg} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile} /></React.Suspense>}
       {user?.isAdmin && cfg.uiPresetChosen === false && !presetPicked && (
         <div className="preset-scrim">
           <div className="preset-modal">
@@ -1438,7 +1484,7 @@ export default function App() {
       {personasOpen && <PersonasModal personas={user?.personas || []} models={models} currentId={currentId} onApply={applyPersona} onSave={savePersonas} onClose={() => setPersonasOpen(false)} />}
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
       <Lightbox />
-      {showAdmin && <AdminPanel user={user} onClose={() => { setShowAdmin(false); if (/^\/admin(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} />}
+      {showAdmin && <React.Suspense fallback={null}><AdminPanel user={user} onClose={() => { setShowAdmin(false); if (/^\/admin(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
       {showSpaces && <SpacesPanel user={user} onClose={() => { setShowSpaces(false); refreshSpacesPending(); if (/^\/spaces(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} />}
       {showProjects && <ProjectsPanel openId={projectOpenId} composerProps={composerProps}
         onClose={() => { setShowProjects(false); setProjectOpenId(null); if (/^\/projects?(\/|$)/.test(location.pathname) || /^\/project\//.test(location.pathname)) history.pushState({}, '', '/'); }}

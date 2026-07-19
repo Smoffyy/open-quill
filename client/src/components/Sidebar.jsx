@@ -154,7 +154,7 @@ function FolderSection({ f, chats, active, showTrash, folders, dragChatId, onTog
   );
 }
 
-export default function Sidebar({
+function Sidebar({
   user, chats, onSearch, chatsLoaded = true, activeId, appName, onNew, onOpen, onDelete, onToggleStar,
   folders = [], onCreateFolder, onRenameFolder, onToggleFolder, onDeleteFolder, onMoveChat,
   collapsed, onToggle, onSettings, onAdmin, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview,
@@ -302,3 +302,5 @@ export default function Sidebar({
     </div>
   );
 }
+
+export default React.memo(Sidebar);

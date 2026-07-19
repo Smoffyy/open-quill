@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { copyText } from '../clipboard.js';
-import hljs from 'highlight.js';
+import hljs from 'highlight.js/lib/common';
 import { Copy, Check } from './icons.jsx';
 
 function escapeHtml(s) {
