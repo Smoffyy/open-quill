@@ -54,6 +54,8 @@ if (fs.existsSync(clientDist)) {
 const server = http.createServer(app);
 initWs(server);
 
+process.on('unhandledRejection', (reason) => { console.error('[unhandledRejection]', reason); });
+process.on('uncaughtException', (err) => { console.error('[uncaughtException]', err); });
 process.on('exit', () => { try { mcp.shutdown(); } catch {} });
 
 server.listen(PORT, HOST, () => console.log(`open-quill running on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`));

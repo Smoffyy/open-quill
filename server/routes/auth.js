@@ -1,5 +1,5 @@
 import { db, uid, now, getSetting } from '../db.js';
-import { hash, check, sign, publicUser, authMiddleware, sessionFromRequest, createSession, revokeSession, revokeOtherSessions } from '../auth.js';
+import { hash, check, sign, publicUser, authMiddleware, sessionFromRequest, createSession, revokeSession, revokeOtherSessions, sessionMaxAgeSeconds } from '../auth.js';
 import { oneShot, stripThink } from '../llm.js';
 import { randomSecret, verifyTotp, otpauthUri, makeRecoveryCodes, hashRecovery } from '../totp.js';
 import * as sandbox from '../sandbox.js';
@@ -12,7 +12,7 @@ import { killSessionSockets } from '../lib/ws.js';
 import { removeUserFromSpaces } from '../lib/spaces.js';
 
 const setCookie = (res, token) =>
-  res.setHeader('Set-Cookie', `token=${token}; HttpOnly; Path=/; Max-Age=${60 * 60 * 24 * 30}; SameSite=Lax`);
+  res.setHeader('Set-Cookie', `token=${token}; HttpOnly; Path=/; Max-Age=${token ? sessionMaxAgeSeconds() : 0}; SameSite=Lax`);
 
 const loginFails = new Map();
 function loginLimited(ip) {

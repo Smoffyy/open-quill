@@ -78,6 +78,8 @@ export function initWs(server) {
     const r = sessionFromRequest(req);
     const u = r?.user;
     if (!u) { ws.close(); return; }
+    ws.isAlive = true;
+    ws.on('pong', () => { ws.isAlive = true; });
     clients.set(ws, { userId: u.id, sessionId: r.sessionId || null, isAdmin: !!u.is_admin, aborts: new Map() });
     const safeSend = (s) => { if (ws.readyState === 1) { try { ws.send(s); } catch {} } };
 
@@ -423,6 +425,16 @@ export function initWs(server) {
     ws.on('error', () => {});
     ws.on('close', () => { const st = clients.get(ws); try { if (st) for (const c of st.aborts.values()) c.abort(); } catch {} clients.delete(ws); });
   });
+
+  const heartbeat = setInterval(() => {
+    for (const ws of clients.keys()) {
+      if (ws.isAlive === false) { try { ws.terminate(); } catch {} continue; }
+      ws.isAlive = false;
+      try { ws.ping(); } catch { try { ws.terminate(); } catch {} }
+    }
+  }, 30000);
+  heartbeat.unref();
+  wss.on('close', () => clearInterval(heartbeat));
 
   return wss;
 }

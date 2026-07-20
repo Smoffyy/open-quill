@@ -9,9 +9,18 @@ if (!SECRET) { SECRET = uid() + uid(); setSetting('jwt_secret', SECRET); }
 const ARGON_OPTS = { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 };
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function sessionTtlMs() {
+function sessionTtlDays() {
   const d = Number(getSetting('session_ttl_days', 30));
-  return (Number.isFinite(d) && d > 0 ? d : 30) * DAY_MS;
+  return Number.isFinite(d) && d > 0 ? d : 30;
+}
+function sessionTtlMs() {
+  return sessionTtlDays() * DAY_MS;
+}
+function tokenLifeDays() {
+  return Math.max(2, Math.ceil(sessionTtlDays()) + 7);
+}
+export function sessionMaxAgeSeconds() {
+  return tokenLifeDays() * 24 * 60 * 60;
 }
 function maxSessions() {
   const n = Number(getSetting('max_sessions', 0));
@@ -36,7 +45,7 @@ export function createSession(user, req) {
   const s = db.sessions.insert({ id: uid(), user_id: user.id, ip, user_agent: ua, last_seen: t, created_at: t });
   return s.id;
 }
-export function sign(user, sessionId) { return jwt.sign({ id: user.id, sid: sessionId }, SECRET, { expiresIn: '90d' }); }
+export function sign(user, sessionId) { return jwt.sign({ id: user.id, sid: sessionId }, SECRET, { expiresIn: `${tokenLifeDays()}d` }); }
 export function revokeSession(id) { db.sessions.remove(s => s.id === id); }
 export function revokeOtherSessions(userId, keepId) { db.sessions.remove(s => s.user_id === userId && s.id !== keepId); }
 
