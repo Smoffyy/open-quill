@@ -136,7 +136,7 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .mg-row-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .mg-row-name { font-size: 14px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 5px; }
 .mg-star { color: var(--accent); font-size: 11px; }
-.mg-row-sub { font-size: 11.5px; color: var(--text-faint); font-family: ui-monospace, 'SF Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mg-row-sub { font-size: 11.5px; color: var(--text-faint); font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mg-dots { display: flex; gap: 4px; flex-shrink: 0; }
 .mg-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint); }
 .mg-dot.dim { background: var(--text-faint); opacity: .5; }
@@ -150,7 +150,7 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .me2-icon { width: 34px; height: 34px; object-fit: contain; border-radius: 8px; flex-shrink: 0; }
 .me2-id { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .me2-name { font-size: 17px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.me2-sub { font-size: 12px; color: var(--text-faint); font-family: ui-monospace, 'SF Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.me2-sub { font-size: 12px; color: var(--text-faint); font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .me2-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-left: auto; }
 .me2-chip { font-size: 10.5px; font-weight: 600; letter-spacing: .2px; padding: 3px 9px; border-radius: 99px; background: var(--surface-hover); color: var(--text-muted); }
 .me2-chip.default { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }

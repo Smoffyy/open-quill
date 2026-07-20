@@ -12,7 +12,9 @@ export default function CodeBlock({ lang, code }) {
   // re-highlight on each render so streaming code stays smooth
   const html = useMemo(() => {
     try {
+      if (code.length > 60000) return escapeHtml(code);
       if (lang && hljs.getLanguage(lang)) return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
+      if (code.length > 12000) return escapeHtml(code);
       return hljs.highlightAuto(code).value;
     } catch { return escapeHtml(code); }
   }, [code, lang]);

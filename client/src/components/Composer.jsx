@@ -198,11 +198,19 @@ export default function Composer({
   const fit = useCallback((animate) => {
     const el = ta.current; if (!el) return;
     cancelAnimationFrame(fitRaf.current);
+    const MAX = 280;
+    if ((el.value ? el.value.length : 0) > 4000) {
+      el.style.overflowY = 'auto';
+      el.style.height = MAX + 'px';
+      setMultiline(m => (m === true ? m : true));
+      grewOnce.current = true;
+      return;
+    }
     const prev = el.offsetHeight;
     el.style.height = 'auto';
     const raw = el.scrollHeight;
-    const measured = Math.min(raw, 280);
-    el.style.overflowY = raw > 280 ? 'auto' : 'hidden';
+    const measured = Math.min(raw, MAX);
+    el.style.overflowY = raw > MAX ? 'auto' : 'hidden';
     setMultiline(m => { const ml = measured > 44; return m === ml ? m : ml; });
     if (!animate || !grewOnce.current || Math.abs(prev - measured) < 1) {
       el.style.height = measured + 'px';
@@ -388,7 +396,8 @@ export default function Composer({
   const showBudgetBanner = budgetState === 'warn' || budgetState === 'over';
   const sunsetOnly = !!sunsetInfo && !bannerMounted && !showBudgetBanner && !safetyFlagged && !conversationEnded && !removedModel;
   const enabledCount = (sandbox ? 1 : 0) + (webSearch ? 1 : 0);
-  const canSend = (value.trim().length > 0 || files.length > 0) && !uploading && !blockSend && !budgetBlock && !safetyFlagged && !safetyChecking && !conversationEnded;
+  const hasText = /\S/.test(value);
+  const canSend = (hasText || files.length > 0) && !uploading && !blockSend && !budgetBlock && !safetyFlagged && !safetyChecking && !conversationEnded;
   const [multiline, setMultiline] = useState(false);
   const cls = 'composer' + (multiline ? ' ml' : '') + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + ((unavailable || removedModel) ? ' unavailable' : '') + ((blockSend || budgetBlock) ? ' blocked' : '');
   const fmtUsd = (n) => '$' + (Number(n || 0) > 0 && Number(n || 0) < 0.01 ? Number(n).toFixed(4) : Number(n || 0).toFixed(2));
@@ -536,7 +545,7 @@ export default function Composer({
                           {onDeletePrompt && <button className="pm-prompt-x" title={t("Delete")} onClick={(e) => { e.stopPropagation(); onDeletePrompt(p.id); }}><X style={{ width: 12 }} /></button>}
                         </div>
                       ))}
-                      {onSavePrompt && value.trim() && (
+                      {onSavePrompt && hasText && (
                         <button className="pm-save-prompt" onClick={() => { onSavePrompt(); setPromptsOpen(false); }}>
                           <Plus style={{ width: 13 }} /> Save current text as prompt
                         </button>
@@ -560,7 +569,7 @@ export default function Composer({
                     )}
                   </div>
                 )}
-                <button className="pm-item" disabled={improving || (!value.trim() && !improvedNow)}
+                <button className="pm-item" disabled={improving || (!hasText && !improvedNow)}
                   onClick={() => { setPlusMenu(false); improvePrompt(); }}>
                   <Wand />
                   <span className="pm-label">{improvedNow ? 'Restore original prompt' : 'Improve prompt'}</span>

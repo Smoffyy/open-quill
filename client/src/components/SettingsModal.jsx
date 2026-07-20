@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { api } from '../api.js';
-import { applyPrefs, ACCENT_PRESETS } from '../prefs.js';
+import { applyPrefs, ACCENT_PRESETS, getUserFont, setUserFont } from '../prefs.js';
 import { Sun, Moon, Gear, Sliders, Info, Chevron, Clock, Download, Upload, Shield, Trash, Brain, Refresh } from './icons.jsx';
 import Markdown from './Markdown.jsx';
 import { t, useI18n } from '../i18n.jsx';
@@ -57,6 +57,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
     return merged;
   });
   const [saved, setSaved] = useState(false);
+  const [userFont, setUserFontState] = useState(getUserFont());
   const [confirmDel, setConfirmDel] = useState(false);
   const [delErr, setDelErr] = useState('');
   const [confirmClear, setConfirmClear] = useState(false);
@@ -371,6 +372,11 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                 <div><label>{t("Message density")}</label><div className="muted-note">{t("Vertical spacing between messages.")}</div></div>
                 <Seg value={prefs.density || 'comfortable'} onPick={(v) => setPref('density', v)}
                   options={[{ v: 'comfortable', label: 'Comfortable' }, { v: 'compact', label: 'Compact' }]} />
+              </div>
+              <div className="field row">
+                <div><label>{t("Font")}</label><div className="muted-note">{t("Overrides the theme's default font, on this device only.")}</div></div>
+                <Seg value={userFont} onPick={(v) => { setUserFontState(v); setUserFont(v); }}
+                  options={[{ v: 'default', label: 'Default' }, { v: 'sans', label: 'Open Sans' }, { v: 'serif', label: 'Source Serif' }]} />
               </div>
               <div className="field row">
                 <div><label>{t("OLED screen protection")}</label><div className="muted-note">{t("Periodically nudges the interface a few pixels and eases peak brightness to limit burn-in on OLED displays.")}</div></div>

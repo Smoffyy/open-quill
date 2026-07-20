@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Markdown from './Markdown.jsx';
 import { copyText } from '../clipboard.js';
 import { openLightbox } from '../lightbox.js';
@@ -62,27 +63,44 @@ function fmtTime(ts) {
 
 function MoreMenu({ items }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+  const [pos, setPos] = useState(null);
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
   useEffect(() => {
     if (!open) return;
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const h = (e) => { if (menuRef.current && !menuRef.current.contains(e.target) && btnRef.current && !btnRef.current.contains(e.target)) setOpen(false); };
+    const close = () => setOpen(false);
     document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
+    window.addEventListener('resize', close);
+    window.addEventListener('scroll', close, true);
+    return () => { document.removeEventListener('mousedown', h); window.removeEventListener('resize', close); window.removeEventListener('scroll', close, true); };
+  }, [open]);
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    const menu = menuRef.current;
+    const mh = menu ? menu.offsetHeight : 220;
+    const mw = menu ? menu.offsetWidth : 200;
+    const below = window.innerHeight - r.bottom;
+    const up = below < mh + 12 && r.top > below;
+    const top = up ? Math.max(8, r.top - mh - 6) : r.bottom + 6;
+    const left = Math.min(Math.max(8, r.right - mw), window.innerWidth - mw - 8);
+    setPos({ top, left });
   }, [open]);
   const list = items.filter(Boolean);
   if (!list.length) return null;
   return (
-    <span className="retry-wrap" ref={ref}>
-      <button className={'action-btn' + (open ? ' on' : '')} title={t("More actions")} onClick={() => setOpen(o => !o)}><Dots style={{ width: 18 }} /></button>
-      {open && (
-        <div className="retry-menu more-menu">
+    <span className="retry-wrap">
+      <button ref={btnRef} className={'action-btn' + (open ? ' on' : '')} title={t("More actions")} onClick={() => setOpen(o => !o)}><Dots style={{ width: 18 }} /></button>
+      {open && createPortal(
+        <div ref={menuRef} className="retry-menu more-menu portal"
+          style={{ position: 'fixed', top: pos ? pos.top : -9999, left: pos ? pos.left : -9999, right: 'auto', bottom: 'auto', visibility: pos ? 'visible' : 'hidden', zIndex: 200 }}>
           {list.map((it, i) => (
             <button key={i} className={(it.on ? 'on' : '') + (it.danger ? ' danger' : '')} onClick={() => { setOpen(false); it.run(); }}>
               {it.icon}{it.label}
             </button>
           ))}
-        </div>
-      )}
+        </div>, document.body)}
     </span>
   );
 }

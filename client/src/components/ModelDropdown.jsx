@@ -38,8 +38,8 @@ function CapInfo({ m }) {
 
 const capLevel = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
-function MoreGroup({ label, items, renderOpt }) {
-  const [open, setOpen] = useState(false);
+function MoreGroup({ label, items, renderOpt, openKey, setOpenKey }) {
+  const open = openKey === label;
   const [place, setPlace] = useState({ up: false, maxH: 0 });
   const rowRef = useRef(null);
   const subRef = useRef(null);
@@ -58,11 +58,11 @@ function MoreGroup({ label, items, renderOpt }) {
     const flipLeft = rr.right + 4 + sub.offsetWidth > window.innerWidth - 8;
     setPlace({ up: flip, maxH: subH > avail ? Math.max(140, avail) : 0, left: flipLeft });
   }, [open]);
-  const show = () => { clearTimeout(timer.current); setOpen(true); };
-  const hide = () => { clearTimeout(timer.current); timer.current = setTimeout(() => setOpen(false), 160); };
+  const show = () => { clearTimeout(timer.current); setOpenKey(label); };
+  const hide = () => { clearTimeout(timer.current); timer.current = setTimeout(() => setOpenKey(k => (k === label ? null : k)), 160); };
   return (
     <div className="more-wrap" ref={rowRef} onMouseEnter={show} onMouseLeave={hide}>
-      <button className={'submenu-row' + (open ? ' active' : '')} onClick={() => (open ? hide() : show())}>
+      <button className={'submenu-row' + (open ? ' active' : '')} onClick={() => (open ? setOpenKey(null) : show())}>
         <span>{label}</span><Chevron className="sub-chev" />
       </button>
       {open && (
@@ -76,6 +76,7 @@ function MoreGroup({ label, items, renderOpt }) {
 
 export default function ModelDropdown({ models, currentId, onSelect, extended, onToggleExtended, up, modelHasBg, bgInChat, onToggleBgInChat, reasoningEffort, onSetEffort, isAdmin = false }) {
   const [open, setOpen] = useState(false);
+  const [openSub, setOpenSub] = useState(null);
   const [place, setPlace] = useState({ down: !!up, maxH: 0 });
   const [listMaxH, setListMaxH] = useState(0);
   const ref = useRef(null);
@@ -86,6 +87,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, []);
+  useEffect(() => { if (!open) setOpenSub(null); }, [open]);
   useLayoutEffect(() => {
     if (!open) return;
     const trig = ref.current && ref.current.querySelector('.model-trigger');
@@ -225,7 +227,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
           {groups.length > 0 && (
             <>
               <hr />
-              {groups.map(g => <MoreGroup key={g.label} label={g.label} items={g.items} renderOpt={Opt} />)}
+              {groups.map(g => <MoreGroup key={g.label} label={g.label} items={g.items} renderOpt={Opt} openKey={openSub} setOpenKey={setOpenSub} />)}
             </>
           )}
         </div>

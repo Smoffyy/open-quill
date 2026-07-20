@@ -299,6 +299,7 @@ export default function App() {
 
   const [streaming, setStreaming] = useState(false);
   const [queued, setQueued] = useState(false);
+  const [chatErrors, setChatErrors] = useState({});
   const [dispContent, setDispContent] = useState('');
   const [dispReason, setDispReason] = useState('');
   const [phase, setPhase] = useState('static');
@@ -521,7 +522,7 @@ export default function App() {
     const sock = ws.current;
     if (!sock || sock.readyState !== 1) {
       if (!sock || sock.readyState >= 2) connect();
-      setMessages(ms => [...ms, { id: 'e' + Date.now(), role: 'assistant', content: '_Connection lost, reconnecting. Try again in a moment._' }]);
+      setChatErrors(prev => ({ ...prev, [activeKey()]: 'Connection lost, reconnecting. Try again in a moment.' }));
       return false;
     }
     try { sock.send(JSON.stringify(obj)); return true; }
@@ -529,6 +530,10 @@ export default function App() {
   }
 
   function activeKey() { return incognitoRef.current ? 'incognito' : activeIdRef.current; }
+  function dismissError(key) {
+    const k = key || activeKey();
+    setChatErrors(prev => { if (!(k in prev)) return prev; const n = { ...prev }; delete n[k]; return n; });
+  }
   function recFor(key) {
     let r = gen.current.get(key);
     if (!r) { r = { content: '', reasoning: '', phase: 'generating', done: false, assistantId: null, model_id: currentIdRef.current, live: null }; gen.current.set(key, r); }
@@ -633,20 +638,16 @@ export default function App() {
     if (m.type === 'error') {
       voiceEmit({ type: 'error', chatId: m.chatId });
       const r = gen.current.get(m.chatId);
-      if (!r || !r.content) {
-        gen.current.delete(m.chatId);
-        if (m.chatId === activeKey()) {
-          setQueued(false); setStreaming(false); setPhase('static');
-          setMessages(ms => [...ms, { id: 'e' + Date.now(), role: 'assistant', content: `_Error: ${m.error}_` }]);
-        }
-        return;
-      }
-      r.content += `\n\n_Error: ${m.error}_`;
+      const hadContent = !!(r && r.content);
       if (m.chatId === activeKey()) {
-        targetContent.current = r.content;
-        if (!animateRef.current) { setDispContent(r.content); dispLen.current = r.content.length; }
-        pendingDone.current = true;
+        if (hadContent) { pendingDone.current = true; finalize(); }
+        else { gen.current.delete(m.chatId); setQueued(false); setStreaming(false); setPhase('static'); }
+      } else if (hadContent) {
+        finalizeBackground(m.chatId);
+      } else {
+        gen.current.delete(m.chatId);
       }
+      setChatErrors(prev => ({ ...prev, [m.chatId]: String(m.error || 'The model returned an error.') }));
       return;
     }
     if (m.type === 'done') {
@@ -1071,6 +1072,7 @@ export default function App() {
     const text = (overrideText != null ? overrideText : input).trim();
     if ((!text && attachments.length === 0) || !currentId) return;
 
+    dismissError();
     setCanContinue(false);
     if (compareIds.length && !opts.call) {
       compareRef.current = { chatId: null, remaining: [...compareIds], messageId: null };
@@ -1160,6 +1162,7 @@ export default function App() {
 
   const regenerate = useCallback((messageId) => {
     if (streaming || !activeId || !currentId) return;
+    dismissError();
     if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, reasoningEffort, messageId, sandbox, webSearch, styleId })) return;
     gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
@@ -1168,6 +1171,7 @@ export default function App() {
 
   const regenerateWith = useCallback((messageId, modelId) => {
     if (streaming || !activeId || !modelId) return;
+    dismissError();
     setChatRemovedModel(null);
     setCurrentId(modelId);
     if (!wsSend({ type: 'regenerate', chatId: activeId, modelId, extended, reasoningEffort, messageId, sandbox, webSearch, styleId })) return;
@@ -1409,6 +1413,15 @@ export default function App() {
                       showIcon={msg.role === 'assistant' && (cfg.uiPreset === 'openai' || (lastA && msg.id === lastA.id))} />
                   ));
                 })()}
+                {chatErrors[activeKey()] && (
+                  <div className="chat-error" role="alert">
+                    <div className="chat-error-main">
+                      <span className="chat-error-title">{t('Something went wrong')}</span>
+                      <span className="chat-error-text">{chatErrors[activeKey()]}</span>
+                    </div>
+                    <button className="chat-error-x" title={t('Dismiss')} onClick={() => dismissError()}><X style={{ width: 15 }} /></button>
+                  </div>
+                )}
                 {queuedList.map(q => (
                   <div key={q.id} className="queue-ghost">
                     <div className="msg user ghost">

@@ -131,6 +131,8 @@ function remarkBreaks() {
   };
 }
 
+const BLOCK_HARD_LINES = 500;
+
 function blockify(text) {
   const lines = text.split('\n');
   const blocks = [];
@@ -144,6 +146,9 @@ function blockify(text) {
       continue;
     }
     if (!inFence && line.trim() === '' && buf.some(l => l.trim() !== '')) {
+      blocks.push(buf.join('\n'));
+      buf = [];
+    } else if (!inFence && buf.length >= BLOCK_HARD_LINES) {
       blocks.push(buf.join('\n'));
       buf = [];
     }
@@ -319,6 +324,37 @@ function normalizeMathDelims(text) {
   return parts.join('');
 }
 
+const PROGRESSIVE_SIZE_TRIGGER = 20000;
+const PROGRESSIVE_BLOCK_TRIGGER = 40;
+const PROGRESSIVE_INITIAL_LINES = 300;
+const PROGRESSIVE_STEP_LINES = 1200;
+
+function lineCount(str) {
+  let n = 1;
+  for (let i = 0; i < str.length; i++) if (str.charCodeAt(i) === 10) n++;
+  return n;
+}
+
+function ProgressiveBlocks({ blocks }) {
+  const sizes = React.useMemo(() => blocks.map(lineCount), [blocks]);
+  const advance = React.useCallback((from, budget) => {
+    let lines = 0, i = from;
+    while (i < blocks.length) { lines += sizes[i]; i++; if (lines >= budget) break; }
+    return Math.min(blocks.length, Math.max(i, from + 1));
+  }, [blocks, sizes]);
+  const [count, setCount] = React.useState(() => advance(0, PROGRESSIVE_INITIAL_LINES));
+  React.useEffect(() => { setCount(advance(0, PROGRESSIVE_INITIAL_LINES)); }, [advance]);
+  React.useEffect(() => {
+    if (count >= blocks.length) return;
+    const idle = window.requestIdleCallback || ((cb) => setTimeout(() => cb(), 16));
+    const cancel = window.cancelIdleCallback || clearTimeout;
+    const handle = idle(() => setCount(c => advance(c, PROGRESSIVE_STEP_LINES)));
+    return () => cancel(handle);
+  }, [count, blocks.length, advance]);
+  const shown = count >= blocks.length ? blocks : blocks.slice(0, count);
+  return shown.map((b, i) => <MarkdownBlock key={i} text={b} />);
+}
+
 function Markdown({ children, streaming }) {
   if (typeof children !== 'string') {
     return <MarkdownBlock text={children} />;
@@ -326,6 +362,9 @@ function Markdown({ children, streaming }) {
   let text = normalizeMathDelims(transformTools(children));
   if (streaming) text = neutralizeOpenMath(text);
   const blocks = blockify(text);
+  if (!streaming && (text.length > PROGRESSIVE_SIZE_TRIGGER || blocks.length > PROGRESSIVE_BLOCK_TRIGGER)) {
+    return <ProgressiveBlocks blocks={blocks} />;
+  }
   return blocks.map((b, i) => <MarkdownBlock key={i} text={b} />);
 }
 

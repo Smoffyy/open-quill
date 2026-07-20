@@ -5,6 +5,9 @@ import 'highlight.js/styles/github-dark.css';
 import './styles/app.css';
 import App from './App.jsx';
 import { useI18n } from './i18n.jsx';
+import { applyUserFont } from './prefs.js';
+
+applyUserFont();
 
 function Root() {
   const { lang } = useI18n();

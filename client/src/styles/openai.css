@@ -1,6 +1,6 @@
 :root[data-preset="openai"] {
-  --font-serif: 'Open Sans', system-ui, sans-serif;
-  --font-sans: 'Open Sans', system-ui, sans-serif;
+  --font-serif: 'Open Sans';
+  --font-sans: 'Open Sans';
   --radius: 24px;
 }
 :root[data-theme="openai"] {
@@ -18,6 +18,12 @@
   --pop-hover: #424242;
   --pop-divider: rgba(255, 255, 255, .08);
   --pop-switch: rgba(255, 255, 255, .25);
+  --modal-bg: #2f2f2f;
+  --modal-side: #171717;
+  --menu-bg: #2f2f2f;
+  --card-bg: #262626;
+  --hover-soft: #ffffff0f;
+  --hover-mid: #ffffff1a;
 }
 :root[data-preset="openai"][data-theme="light"] {
   --bg: #fcfcfc;
@@ -30,6 +36,12 @@
   --accent: #0d0d0d;
   --on-accent: #ffffff;
   --text: #0d0d0d;
+  --modal-bg: #ffffff;
+  --modal-side: #f9f9f9;
+  --menu-bg: #ffffff;
+  --card-bg: #f7f7f7;
+  --hover-soft: #0000000a;
+  --hover-mid: #00000012;
 }
 
 [data-preset="openai"] .sidebar { background: var(--sidebar); border-right: 1px solid var(--border-soft); font-family: var(--font-sans); }
