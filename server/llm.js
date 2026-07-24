@@ -1,4 +1,5 @@
 import { resolveProvider, providerSpec } from './providers.js';
+import { defaultKwargPayload, oneShotKwargPayload, stripNestedKwargs } from './lib/kwargs.js';
 
 function modelProvider(model) {
   return providerSpec(resolveProvider(model?.provider_id));
@@ -105,22 +106,9 @@ function safeParse(v) {
   try { return JSON.parse(v); } catch { return null; }
 }
 
-function effortKwargs(model) {
-  if (!model || model.reasoning_effort_level == null || model.reasoning_effort_level === '') return {};
-  const kw = (model.reasoning_effort_kwarg || 'reasoning_effort').trim() || 'reasoning_effort';
-  const raw = String(model.reasoning_effort_level);
-  const val = /^(true|false)$/i.test(raw) ? /^true$/i.test(raw) : model.reasoning_effort_level;
-  return { chat_template_kwargs: { [kw]: val } };
-}
-
-function firstEffortKwargs(model) {
-  if (!model || !model.effort_enabled) return {};
-  const levels = (Array.isArray(model.effort_levels) && model.effort_levels.length) ? model.effort_levels : ['low', 'medium', 'high'];
-  const first = levels[0];
-  if (first == null || first === '') return {};
-  const kw = (model.effort_kwarg || 'reasoning_effort').trim() || 'reasoning_effort';
-  const val = /^(true|false)$/i.test(String(first)) ? /^true$/i.test(String(first)) : first;
-  return { chat_template_kwargs: { [kw]: val } };
+function requestKwargs(model) {
+  if (model && model.resolved_kwargs && typeof model.resolved_kwargs === 'object') return model.resolved_kwargs;
+  return defaultKwargPayload(model);
 }
 
 export async function streamCompletion({ model, messages, tools, signal, onEvent }) {
@@ -141,7 +129,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
   if (spec.protocol === 'ollama') {
     const res = await fetch(endpoint(base, '/api/chat'), {
       method: 'POST', headers: authHeaders(key), signal,
-      body: JSON.stringify({ model: model.internal_name, messages: wire, stream: true, think: !!model.has_reasoning, options: ollamaOptions(model, spec), ...(hasTools ? { tools } : {}) })
+      body: JSON.stringify({ model: model.internal_name, messages: wire, stream: true, think: !!model.has_reasoning, options: ollamaOptions(model, spec), ...(hasTools ? { tools } : {}), ...stripNestedKwargs(requestKwargs(model)) })
     });
     if (!res.ok || !res.body) { const t = await res.text().catch(() => ''); throw new Error(`Upstream error ${res.status}: ${t.slice(0, 300)}`); }
     const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
@@ -182,7 +170,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
 
   const res = await fetch(endpoint(base, '/chat/completions'), {
     method: 'POST', headers: authHeaders(key), signal,
-    body: JSON.stringify({ model: model.internal_name, messages: wire, stream: true, stream_options: { include_usage: true }, ...(hasTools ? { tools, tool_choice: 'auto' } : {}), ...samplingParams(model, spec), ...effortKwargs(model) })
+    body: JSON.stringify({ model: model.internal_name, messages: wire, stream: true, stream_options: { include_usage: true }, ...(hasTools ? { tools, tool_choice: 'auto' } : {}), ...samplingParams(model, spec), ...requestKwargs(model) })
   });
   if (!res.ok || !res.body) { const t = await res.text().catch(() => ''); throw new Error(`Upstream error ${res.status}: ${t.slice(0, 300)}`); }
   const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
@@ -232,7 +220,7 @@ export async function oneShot(model, messages) {
   if (spec.protocol === 'ollama') {
     const res = await fetch(endpoint(base, '/api/chat'), {
       method: 'POST', headers: authHeaders(key),
-      body: JSON.stringify({ model: model.internal_name, messages, stream: false, think: false, options: ollamaOptions(model, spec) })
+      body: JSON.stringify({ model: model.internal_name, messages, stream: false, think: false, options: ollamaOptions(model, spec), ...stripNestedKwargs(oneShotKwargPayload(model)) })
     });
     if (!res.ok) return '';
     const json = await res.json();
@@ -240,7 +228,7 @@ export async function oneShot(model, messages) {
   }
   const res = await fetch(endpoint(base, '/chat/completions'), {
     method: 'POST', headers: authHeaders(key),
-    body: JSON.stringify({ model: model.internal_name, stream: false, messages, ...firstEffortKwargs(model) })
+    body: JSON.stringify({ model: model.internal_name, stream: false, messages, ...oneShotKwargPayload(model) })
   });
   if (!res.ok) return '';
   const json = await res.json();

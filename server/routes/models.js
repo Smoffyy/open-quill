@@ -4,6 +4,7 @@ import { getProviders, resolveProvider, providerSpec } from '../providers.js';
 import { matchPreset, presetList, setCustomPresets, getCustomPresets } from '../pricing.js';
 import { logAudit } from '../lib/audit.js';
 import { draftModels, publicModels, detectContextLength } from '../lib/models.js';
+import { sanitizeKwargs } from '../lib/kwargs.js';
 import { broadcastConfig, broadcastAdminConfig } from '../lib/ws.js';
 
 export default function registerModelRoutes(app) {
@@ -48,6 +49,7 @@ export default function registerModelRoutes(app) {
       call_prompt: b.call_prompt || '',
       provider_id: b.provider_id || (getProviders()[0]?.id || null), max_tokens: parseInt(b.max_tokens) || null,
       has_reasoning: b.has_reasoning ? 1 : 0, reasoning_token: b.reasoning_token || '', non_reasoning_token: b.non_reasoning_token || '',
+      kwargs: sanitizeKwargs(b.kwargs),
       effort_enabled: b.effort_enabled ? 1 : 0, effort_levels: Array.isArray(b.effort_levels) && b.effort_levels.length ? b.effort_levels : ['low', 'medium', 'high'], effort_default: b.effort_default || 'medium', effort_kwarg: b.effort_kwarg || 'reasoning_effort', effort_admin_only: b.effort_admin_only ? 1 : 0, hide_thinking: b.hide_thinking ? 1 : 0,
       reasoning_collapsible: b.reasoning_collapsible === false ? 0 : 1, icon_size: parseInt(b.icon_size) || (getSetting('ui_preset', '') === 'openai' ? 28 : 0),
       show_name: 'show_name' in b ? (b.show_name ? 1 : 0) : (getSetting('ui_preset', '') === 'openai' ? 1 : 0),
@@ -91,6 +93,7 @@ export default function registerModelRoutes(app) {
       const v = String(req.body.sunset_action || '');
       patch.sunset_action = v === 'unavailable' ? 'unavailable' : 'hide';
     }
+    if ('kwargs' in req.body) patch.kwargs = sanitizeKwargs(req.body.kwargs);
     if ('effort_levels' in req.body) {
       const arr = Array.isArray(req.body.effort_levels) ? req.body.effort_levels : String(req.body.effort_levels || '').split(',');
       const clean = arr.map(s => String(s).trim().toLowerCase()).filter(Boolean).slice(0, 8);

@@ -14,7 +14,8 @@ import * as projectfiles from '../projectfiles.js';
 import { stripToolSyntax } from './history.js';
 import { UPLOADS } from './uploads.js';
 import { ensureChain, activePath } from './tree.js';
-import { resolveModel, applyEffort, roleLimit, modelCtx } from './models.js';
+import { resolveModel, roleLimit, modelCtx } from './models.js';
+import { applyKwargs } from './kwargs.js';
 import { budgetStatus } from './budget.js';
 import { runQueued } from './queue.js';
 import { maybeUpdateMemory } from './memory.js';
@@ -29,6 +30,19 @@ import {
 } from './prompts.js';
 
 export const clients = new Map(); // ws -> {userId, abort}
+
+function requestedKwargs(msg) {
+  const out = {};
+  if (msg && typeof msg.reasoningEffort === 'string' && msg.reasoningEffort) out.effort = msg.reasoningEffort;
+  if (msg && msg.kwargValues && typeof msg.kwargValues === 'object') {
+    for (const k of Object.keys(msg.kwargValues)) {
+      const v = msg.kwargValues[k];
+      if (v == null) continue;
+      out[String(k).slice(0, 40)] = String(v).slice(0, 200);
+    }
+  }
+  return out;
+}
 
 export function broadcastConfig() {
   const msg = JSON.stringify({ type: 'config' });
@@ -319,7 +333,7 @@ export function initWs(server) {
       }
       const hasOutput = !!(content.trim() || reasoning.trim());
       if (hasOutput || usageRec) {
-        db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: usageRec, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, created_at: now() });
+        db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: usageRec, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, kwarg_values: model.kwarg_values || null, created_at: now() });
         db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
       } else {
         db.chats.update(chat.id, { updated_at: now() });
@@ -348,7 +362,7 @@ export function initWs(server) {
       if (msg.type === 'incognito') {
         try {
           const baseModel = resolveModel(msg.modelId, state.isAdmin);
-          const model = applyEffort(baseModel, msg.reasoningEffort, state.isAdmin || !(baseModel && baseModel.effort_admin_only));
+          const model = applyKwargs(baseModel, requestedKwargs(msg), state.isAdmin);
           if (!model) { safeSend(JSON.stringify({ type: 'error', error: 'Invalid model.' })); safeSend(JSON.stringify({ type: 'done' })); return; }
           if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', error: (model.unavailable_reason || 'This model is currently unavailable.') })); safeSend(JSON.stringify({ type: 'done' })); return; }
           const history = (Array.isArray(msg.messages) ? msg.messages : [])
@@ -386,7 +400,7 @@ export function initWs(server) {
       try {
         const chat = db.chats.byId(msg.chatId);
         const baseModel = resolveModel(msg.modelId, state.isAdmin);
-        const model = applyEffort(baseModel, msg.reasoningEffort, state.isAdmin || !(baseModel && baseModel.effort_admin_only));
+        const model = applyKwargs(baseModel, requestedKwargs(msg), state.isAdmin);
         if (!chat || chat.user_id !== u.id || !model) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'Invalid chat or model.' })); return; }
         if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: (model.unavailable_reason || 'This model is currently unavailable.') })); return; }
         if (chat.ended) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'This conversation was ended by the assistant and can no longer be continued.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }

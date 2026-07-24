@@ -77,7 +77,7 @@ export default function Composer({
   conversationEnded = false, endedReason = '',
   removedModel = null, onOpenDocs = null,
   queueCount = 0, onQueue, canContinue = false, onContinue,
-  compareIds = [], onSetCompare, hideModelPicker = false, reasoningEffort, onSetEffort
+  compareIds = [], onSetCompare, hideModelPicker = false, reasoningEffort, onSetEffort, kwargValues, onSetKwarg
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
@@ -634,6 +634,7 @@ export default function Composer({
           {!hideModelPicker && <ModelDropdown models={models} currentId={currentId} onSelect={onSelect}
             extended={extended} onToggleExtended={onToggleExtended} up={modelUp} isAdmin={canUseUnavailable}
             reasoningEffort={reasoningEffort} onSetEffort={onSetEffort}
+            kwargValues={kwargValues} onSetKwarg={onSetKwarg}
             modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />}
           {!hideModelPicker && onOpenDocs && (
             <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={onOpenDocs}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>

@@ -483,7 +483,7 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 :root[data-theme="anthropic"] .mo-cap-ic { color: rgba(255,255,255,.5); }
 
 /* compact capabilities: single info icon with hover popover */
-.mo-capinfo { position: relative; display: inline-flex; align-items: center; align-self: flex-start; margin-top: 1px; color: var(--text-faint); flex-shrink: 0; }
+.mo-capinfo { position: relative; display: inline-flex; align-items: center; align-self: center; margin-top: 0; color: var(--text-faint); flex-shrink: 0; }
 .mo-capinfo svg { opacity: .7; transition: opacity .12s; }
 .mo-capinfo:hover svg { opacity: 1; color: var(--text-muted); }
 .mo-capinfo-pop {

@@ -2,11 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../api.js';
 import { Copy, Trash, Star } from '../icons.jsx';
 import { Toggle, IconSlot, SystemPromptEditor, StatusChips, CopyBtn, SegPick, bgPreviewStyle, BannerPicker } from './widgets.jsx';
+import KwargsEditor from './KwargsEditor.jsx';
 import { t } from '../../i18n.jsx';
 
 export const ME_SECTIONS = [
   ['essentials', 'Essentials'],
   ['reasoning', 'Reasoning'],
+  ['kwargs', 'Kwargs'],
   ['tools', 'Tools'],
   ['appearance', 'Appearance'],
   ['advanced', 'Advanced'],
@@ -20,7 +22,8 @@ const FIELD_INDEX = [
   { s: 'essentials', a: 'visibility', label: 'Visibility & default', k: 'hidden default unavailable picker show hide' },
   { s: 'essentials', a: 'sunset', label: 'Retirement date', k: 'sunset retire going away deprecate schedule date countdown' },
   { s: 'docs', a: 'docs-page', label: 'Model docs page', k: 'docs documentation catalog page intelligence speed modalities cutoff frontier featured compare' },
-  { s: 'reasoning', a: 'thinking', label: 'Thinking control', k: 'effort reasoning slider toggle kwarg extended levels' },
+  { s: 'kwargs', a: 'kwargs-list', label: 'Kwargs & thinking controls', k: 'kwarg kwargs effort reasoning slider toggle extended levels enable_thinking preserve_thinking chat_template_kwargs paired custom values default' },
+  { s: 'reasoning', a: 'prompt-token', label: 'Extended thinking (prompt token)', k: 'think no_think token trigger mode' },
   { s: 'reasoning', a: 'tags', label: 'Reasoning tags', k: 'think open close delimiter stream' },
   { s: 'reasoning', a: 'reveal', label: 'Show reasoning to users', k: 'collapsible hide thinking status expand' },
   { s: 'reasoning', a: 'summaries', label: 'Long conversations & context', k: 'summarize compact context window num ctx headroom recent turns detect' },
@@ -63,9 +66,8 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
   const nameRef = useRef(null);
   const set = (k, v) => onChange({ ...m, [k]: v });
 
-  const effortLevelsArr = (Array.isArray(m.effort_levels) ? m.effort_levels : String(m.effort_levels ?? 'low, medium, high').split(',')).map(s => String(s).trim().toLowerCase()).filter(Boolean);
-  const effortLevelsStr = Array.isArray(m.effort_levels) ? m.effort_levels.join(', ') : (m.effort_levels ?? 'low, medium, high');
-  const effortIsBool = effortLevelsArr.length === 2 && effortLevelsArr.includes('true') && effortLevelsArr.includes('false');
+  const kwargCount = Array.isArray(m.kwargs) ? m.kwargs.length : 0;
+  const hasKwargs = kwargCount > 0;
 
   useEffect(() => {
     let alive = true;
@@ -229,46 +231,30 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
 
         {section === 'reasoning' && (
           <div className="med-pane">
-            <GroupLabel anchor="thinking" first>{t("Thinking")}</GroupLabel>
-            <div className="med-toggle-card">
-              <Toggle m={m} set={set} k="effort_enabled" label={t("Thinking control")} note={t("Shows a thinking control in the model picker and passes the choice via chat_template_kwargs each turn. Use several values for a slider, or true/false for an on-off toggle.")} />
+            <GroupLabel anchor="prompt-token" first>{t("Thinking")}</GroupLabel>
+            <div className="muted-note" style={{ marginBottom: 10 }}>
+              {t("Thinking controls that ride along with the request now live in the Kwargs tab, where you can add as many as you like and pair them together.")}
+              {' '}<button type="button" className="linklike" onClick={() => onSection && onSection('kwargs')}>{t("Open Kwargs")}</button>
             </div>
-            {!!m.effort_enabled && <>
-              <div className="field"><label>{t("Values")}</label>
-                <input value={effortLevelsStr} onChange={(e) => set('effort_levels', e.target.value)} placeholder={t("low, medium, high")} /></div>
-              <div className="muted-note">Comma-separated. {effortIsBool
-                ? 'On/off values detected, users get an Extended Thinking toggle.'
-                : 'Ordered lowest to highest, users get a slider through these stops.'}</div>
+            {(hasKwargs || !!m.effort_enabled) && (
+              <div className="muted-note" style={{ marginBottom: 10 }}>
+                {hasKwargs
+                  ? t("This model sends {n} kwarg(s) with every request.", { n: kwargCount })
+                  : t("This model still uses the old thinking control. The Kwargs tab can convert it.")}
+              </div>
+            )}
+            <div className="med-toggle-card">
+              <Toggle m={m} set={set} k="has_reasoning" label={t("Extended thinking (prompt token)")} note={t("For models that switch modes via a token in the system prompt. Adds the Extended toggle for users.")} />
+            </div>
+            {!!m.has_reasoning && <>
+              <GroupLabel anchor="triggers">{t("Mode triggers")}</GroupLabel>
               <div className="two-col">
-                <div className="field"><label>{t("Default")}</label>
-                  <select value={effortLevelsArr.includes(m.effort_default) ? m.effort_default : (effortIsBool ? 'false' : (effortLevelsArr[Math.floor(effortLevelsArr.length / 2)] || ''))} onChange={(e) => set('effort_default', e.target.value)}>
-                    {effortLevelsArr.map(l => <option key={l} value={l}>{l}</option>)}
-                  </select></div>
-                <div className="field"><label>{t("API kwarg name")}</label>
-                  <input value={m.effort_kwarg || ''} onChange={(e) => set('effort_kwarg', e.target.value)} placeholder={t("reasoning_effort")} /></div>
+                <div className="field"><label>{t("Extended-mode trigger")}</label>
+                  <input value={m.reasoning_token || ''} onChange={(e) => set('reasoning_token', e.target.value)} placeholder={t("/think")} /></div>
+                <div className="field"><label>{t("Standard-mode trigger")}</label>
+                  <input value={m.non_reasoning_token || ''} onChange={(e) => set('non_reasoning_token', e.target.value)} placeholder={t("/no_think")} /></div>
               </div>
-              <div className="muted-note">Sent as {'{ "chat_template_kwargs": { "<kwarg>": <value> } }'}. gpt-oss uses reasoning_effort with low, medium, high, Qwen uses enable_thinking with false, true.</div>
-              <div className="med-toggle-card" style={{ marginTop: 14 }}>
-                <div className="field row">
-                  <div><label>{t("Who can change thinking")}</label><div className="muted-note">{t("Admins only: users see the control greyed out and the model always runs at the default level. Everyone: users and admins can adjust it.")}</div></div>
-                  <SegPick value={m.effort_admin_only ? 'admins' : 'everyone'} options={[['admins', 'Admins only'], ['everyone', 'Everyone']]} onChange={(v) => set('effort_admin_only', v === 'admins' ? 1 : 0)} />
-                </div>
-              </div>
-            </>}
-            {!m.effort_enabled && <>
-              <div className="med-toggle-card">
-                <Toggle m={m} set={set} k="has_reasoning" label={t("Extended thinking (prompt token)")} note={t("For models that switch modes via a token in the system prompt. Adds the Extended toggle for users.")} />
-              </div>
-              {!!m.has_reasoning && <>
-                <GroupLabel anchor="triggers">{t("Mode triggers")}</GroupLabel>
-                <div className="two-col">
-                  <div className="field"><label>{t("Extended-mode trigger")}</label>
-                    <input value={m.reasoning_token || ''} onChange={(e) => set('reasoning_token', e.target.value)} placeholder={t("/think")} /></div>
-                  <div className="field"><label>{t("Standard-mode trigger")}</label>
-                    <input value={m.non_reasoning_token || ''} onChange={(e) => set('non_reasoning_token', e.target.value)} placeholder={t("/no_think")} /></div>
-                </div>
-                <div className="muted-note">{t("Appended to the system prompt, on its own line, depending on whether the user has Extended turned on.")}</div>
-              </>}
+              <div className="muted-note">{t("Appended to the system prompt, on its own line, depending on whether the user has Extended turned on.")}</div>
             </>}
 
             <GroupLabel anchor="tags">{t("Reasoning tags")}</GroupLabel>
@@ -483,6 +469,16 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
             <div className="field">
               <textarea rows={6} value={m.docs_body || ''} onChange={(e) => set('docs_body', e.target.value)} placeholder={t("A few paragraphs about what this model is best at. Shown on its docs page under the header.")} />
             </div>
+          </div>
+        )}
+
+        {section === 'kwargs' && (
+          <div className="med-pane">
+            <GroupLabel anchor="kwargs-list" first>{t("Kwargs")}</GroupLabel>
+            <div className="muted-note" style={{ marginBottom: 14 }}>
+              {t("Extra values sent with every request to this model. Each one can show up in the model picker with your own wording, stay hidden, or follow another kwarg so two values always move together.")}
+            </div>
+            <KwargsEditor m={m} onChange={onChange} />
           </div>
         )}
 

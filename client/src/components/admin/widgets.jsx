@@ -195,13 +195,149 @@ export function IconCropModal({ file, onDone, onCancel }) {
   );
 }
 
+export function SvgCropModal({ file, onDone, onCancel }) {
+  const [shape, setShape] = useState('square');
+  const [zoom, setZoom] = useState(1);
+  const [offX, setOffX] = useState(0);
+  const [offY, setOffY] = useState(0);
+  const [source, setSource] = useState(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    file.text().then((raw) => {
+      if (!alive) return;
+      try {
+        const doc = new DOMParser().parseFromString(raw, 'image/svg+xml');
+        const root = doc.documentElement;
+        if (!root || root.nodeName.toLowerCase() !== 'svg' || doc.querySelector('parsererror')) {
+          setError(t('That file could not be read as an SVG.'));
+          return;
+        }
+        const num = (v) => { const n = parseFloat(String(v || '').replace(/[^0-9.eE+-]/g, '')); return Number.isFinite(n) ? n : 0; };
+        const vb = (root.getAttribute('viewBox') || '').trim().split(/[\s,]+/).map(Number);
+        let box = vb.length === 4 && vb.every(Number.isFinite) && vb[2] > 0 && vb[3] > 0
+          ? { x: vb[0], y: vb[1], w: vb[2], h: vb[3] }
+          : { x: 0, y: 0, w: num(root.getAttribute('width')), h: num(root.getAttribute('height')) };
+        if (!(box.w > 0 && box.h > 0)) box = { x: 0, y: 0, w: 100, h: 100 };
+        setSource({ raw, box });
+      } catch {
+        setError(t('That file could not be read as an SVG.'));
+      }
+    }).catch(() => { if (alive) setError(t('That file could not be read.')); });
+    return () => { alive = false; };
+  }, [file]);
+
+  function build() {
+    if (!source) return '';
+    const { raw, box } = source;
+    const doc = new DOMParser().parseFromString(raw, 'image/svg+xml');
+    const root = doc.documentElement;
+    const side = Math.min(box.w, box.h) / zoom;
+    const roomX = box.w - side, roomY = box.h - side;
+    const x = box.x + roomX / 2 + (offX * roomX) / 2;
+    const y = box.y + roomY / 2 + (offY * roomY) / 2;
+    root.setAttribute('viewBox', [x, y, side, side].map(n => Math.round(n * 1000) / 1000).join(' '));
+    root.setAttribute('width', '256');
+    root.setAttribute('height', '256');
+    root.removeAttribute('style');
+    if (shape !== 'square') {
+      const cid = 'oqcrop' + Math.random().toString(36).slice(2, 8);
+      const ns = 'http://www.w3.org/2000/svg';
+      const defs = doc.createElementNS(ns, 'defs');
+      const clip = doc.createElementNS(ns, 'clipPath');
+      clip.setAttribute('id', cid);
+      clip.setAttribute('clipPathUnits', 'userSpaceOnUse');
+      if (shape === 'circle') {
+        const c = doc.createElementNS(ns, 'circle');
+        c.setAttribute('cx', String(x + side / 2));
+        c.setAttribute('cy', String(y + side / 2));
+        c.setAttribute('r', String(side / 2));
+        clip.appendChild(c);
+      } else {
+        const r = doc.createElementNS(ns, 'rect');
+        r.setAttribute('x', String(x));
+        r.setAttribute('y', String(y));
+        r.setAttribute('width', String(side));
+        r.setAttribute('height', String(side));
+        r.setAttribute('rx', String(side * 0.22));
+        clip.appendChild(r);
+      }
+      defs.appendChild(clip);
+      const wrap = doc.createElementNS(ns, 'g');
+      wrap.setAttribute('clip-path', 'url(#' + cid + ')');
+      while (root.firstChild) wrap.appendChild(root.firstChild);
+      root.appendChild(defs);
+      root.appendChild(wrap);
+    }
+    return new XMLSerializer().serializeToString(root);
+  }
+
+  const out = source ? build() : '';
+  const previewUrl = out ? 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(out) : '';
+
+  async function apply(original) {
+    setBusy(true);
+    try {
+      const body = original ? await file.text() : out;
+      const name = (file.name.replace(/\.[^.]+$/, '') || 'icon') + (original ? '' : '-cropped') + '.svg';
+      const f = new File([body], name, { type: 'image/svg+xml' });
+      const { url } = await api.upload(f);
+      onDone(url);
+    } catch {
+      setBusy(false);
+      setError(t('The upload failed, try again.'));
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div className="sp-modal crop-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="sp-head"><h3>{t("Crop SVG")}</h3><button className="sp-x" onClick={onCancel}>✕</button></div>
+        <div className="crop-body">
+          <div className="crop-preview">{previewUrl && <img src={previewUrl} alt="" />}</div>
+          <div className="crop-controls">
+            {error
+              ? <div className="muted-note">{error}</div>
+              : <div className="muted-note">{t('The crop stays vector, only the viewBox changes, so the logo keeps its sharp edges at any size.')}</div>}
+            <div className="field"><label>{t("Shape")}</label>
+              <div className="seg" style={{ width: 'fit-content' }}>
+                <button className={shape === 'circle' ? 'on' : ''} onClick={() => setShape('circle')}>{t('Circle')}</button>
+                <button className={shape === 'rounded' ? 'on' : ''} onClick={() => setShape('rounded')}>{t('Rounded')}</button>
+                <button className={shape === 'square' ? 'on' : ''} onClick={() => setShape('square')}>{t('Square')}</button>
+              </div>
+            </div>
+            <div className="field"><label>{t("Zoom")}</label>
+              <input type="range" min="1" max="3" step="0.02" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
+            </div>
+            <div className="field"><label>{t("Horizontal position")}</label>
+              <input type="range" min="-1" max="1" step="0.02" value={offX} onChange={(e) => setOffX(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
+            </div>
+            <div className="field"><label>{t("Vertical position")}</label>
+              <input type="range" min="-1" max="1" step="0.02" value={offY} onChange={(e) => setOffY(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
+            </div>
+            <div className="editor-actions">
+              <button className="btn" onClick={onCancel}>{t('Cancel')}</button>
+              <button className="btn ghost" disabled={busy} onClick={() => apply(true)}>{t('Use as is')}</button>
+              <button className="btn primary" disabled={!out || busy} onClick={() => apply(false)}>{t('Use crop')}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function IconSlot({ label, value, def, anim, onChange }) {
   const ref = useRef(null);
   const [cropFile, setCropFile] = useState(null);
+  const [svgFile, setSvgFile] = useState(null);
   async function pick(e) {
     const f = e.target.files?.[0]; if (!f) return;
     e.target.value = '';
-    if (f.type === 'image/svg+xml' || f.type === 'image/gif') {
+    if (f.type === 'image/svg+xml' || /\.svg$/i.test(f.name || '')) { setSvgFile(f); return; }
+    if (f.type === 'image/gif') {
       const { url } = await api.upload(f);
       onChange(url);
       return;
@@ -224,6 +360,7 @@ export function IconSlot({ label, value, def, anim, onChange }) {
       <input ref={ref} type="file" hidden onChange={pick}
         accept=".png,.svg,.jpg,.jpeg,.gif,image/png,image/svg+xml,image/jpeg,image/gif" />
       {cropFile && <IconCropModal file={cropFile} onCancel={() => setCropFile(null)} onDone={(url) => { setCropFile(null); onChange(url); }} />}
+      {svgFile && <SvgCropModal file={svgFile} onCancel={() => setSvgFile(null)} onDone={(url) => { setSvgFile(null); onChange(url); }} />}
       <div className="up">{label}</div>
     </div>
   );
@@ -356,7 +493,7 @@ export function StatusChips({ m }) {
   if (!m.enabled) chips.push(['dim', 'Hidden']);
   if (m.unavailable) chips.push(['warn', 'Unavailable']);
   if (m.sunset_at) chips.push(['warn', t('Retiring') + ' ' + m.sunset_at]);
-  if (m.effort_enabled || m.has_reasoning) chips.push(['', 'Reasoning']);
+  if (m.effort_enabled || m.has_reasoning || (Array.isArray(m.kwargs) && m.kwargs.length)) chips.push(['', 'Reasoning']);
   if (m.has_vision) chips.push(['', 'Vision']);
   if (m.sandbox_allowed !== 0 && m.sandbox_auto) chips.push(['', 'Sandbox']);
   if (m.in_more_models) chips.push(['dim', 'Grouped']);

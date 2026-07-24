@@ -1,5 +1,6 @@
 import { db, getSetting, setSetting } from '../db.js';
 import { getProviders, resolveProvider, providerSpec } from '../providers.js';
+import { publicKwargDefs } from './kwargs.js';
 
 export function applySunsets() {
   const today = new Date();
@@ -28,6 +29,7 @@ export function shapePublic(m) {
     id: m.id, displayName: m.display_name, description: m.description,
     hasReasoning: !!m.has_reasoning, inMoreModels: !!m.in_more_models, moreModelsLabel: m.more_models_label,
     effortEnabled: !!m.effort_enabled, effortLevels: (Array.isArray(m.effort_levels) && m.effort_levels.length) ? m.effort_levels : ['low', 'medium', 'high'], effortDefault: m.effort_default || '', effortAdminOnly: !!m.effort_admin_only,
+    kwargs: publicKwargDefs(m),
     reasoningCollapsible: m.reasoning_collapsible !== 0, hideThinking: !!m.hide_thinking,
     staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon, generatingAnim: m.generating_anim || 'spin', thinkingAnim: m.thinking_anim || 'pulse',
     iconPosition: m.icon_position || 'below', hasVision: !!m.has_vision, iconSize: m.icon_size || 0, showName: !!m.show_name,
@@ -73,20 +75,6 @@ export function resolveModelOrDefault(modelId, isAdmin) {
   const snap = getSetting('published_models', null);
   const pool = (!isAdmin && Array.isArray(snap)) ? snap : db.models.all();
   return pool.filter(x => x.enabled).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))[0] || null;
-}
-
-export function effortLevelsOf(model) {
-  return (Array.isArray(model.effort_levels) && model.effort_levels.length) ? model.effort_levels : ['low', 'medium', 'high'];
-}
-
-export function applyEffort(model, requested, allowRequest = true) {
-  if (!model || !model.effort_enabled) return model;
-  const levels = effortLevelsOf(model);
-  const isBool = levels.length === 2 && levels.some(x => /^true$/i.test(x)) && levels.some(x => /^false$/i.test(x));
-  const fallback = isBool ? levels.find(x => /^false$/i.test(x)) : (levels[Math.floor(levels.length / 2)] || levels[0]);
-  const def = levels.includes(model.effort_default) ? model.effort_default : fallback;
-  const level = (allowRequest && typeof requested === 'string' && levels.includes(requested)) ? requested : def;
-  return { ...model, reasoning_effort_level: level, reasoning_effort_kwarg: (model.effort_kwarg || 'reasoning_effort').trim() || 'reasoning_effort' };
 }
 
 export function roleLimit(key, isAdmin, fallback) {

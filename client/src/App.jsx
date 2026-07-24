@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { api } from './api.js';
 import { t } from './i18n.jsx';
 import { applyPrefs } from './prefs.js';
+import { kwargValuesArr, defaultValueOf } from './kwargs.js';
 import { QpIcon } from './qpIcons.jsx';
 import Login from './components/Login.jsx';
 import Sidebar from './components/Sidebar.jsx';
@@ -206,7 +207,10 @@ export default function App() {
   const onSpacesCb = useCallback(() => { setMobileDrawer(false); history.pushState({}, '', '/spaces'); setShowSpaces(true); }, []);
 
   const [extended, setExtended] = useState(false);
-  const [reasoningEffort, setReasoningEffort] = useState('');
+  const [kwargValues, setKwargValues] = useState({});
+  const reasoningEffort = kwargValues.effort || '';
+  const setKwarg = useCallback((id, value) => setKwargValues(prev => ({ ...prev, [id]: value })), []);
+  const setReasoningEffort = useCallback((value) => setKwargValues(prev => ({ ...prev, effort: typeof value === 'function' ? value(prev.effort || '') : value })), []);
   const [bgVisible, setBgVisible] = useState(false);
   const [chats, setChats] = useState([]);
   const [folders, setFolders] = useState([]);
@@ -337,16 +341,25 @@ export default function App() {
   useEffect(() => { liveRef.current = liveFile; }, [liveFile]);
   useEffect(() => {
     const m = models.find(x => x.id === currentId);
-    if (!m || !m.effortEnabled) return;
-    const levels = (m.effortLevels && m.effortLevels.length) ? m.effortLevels : ['low', 'medium', 'high'];
-    const isBool = levels.length === 2 && levels.some(x => /^true$/i.test(x)) && levels.some(x => /^false$/i.test(x));
-    const fallback = isBool ? levels.find(x => /^false$/i.test(x)) : (levels[Math.floor(levels.length / 2)] || levels[0]);
-    setReasoningEffort(prev => levels.includes(prev) ? prev : (levels.includes(m.effortDefault) ? m.effortDefault : fallback));
+    const defs = (m && Array.isArray(m.kwargs)) ? m.kwargs.filter(d => !d.parentId) : [];
+    if (!defs.length) return;
+    setKwargValues(prev => {
+      let changed = false;
+      const next = { ...prev };
+      for (const d of defs) {
+        const values = kwargValuesArr(d);
+        if (!values.length) continue;
+        if (values.includes(next[d.id])) continue;
+        next[d.id] = defaultValueOf(d);
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
   }, [currentId, models]);
   const homeSelectionRef = useRef(null);
   useEffect(() => {
-    if (!activeId && !incognito) homeSelectionRef.current = { modelId: currentId, extended, reasoningEffort };
-  }, [activeId, incognito, currentId, extended, reasoningEffort]);
+    if (!activeId && !incognito) homeSelectionRef.current = { modelId: currentId, extended, kwargValues };
+  }, [activeId, incognito, currentId, extended, kwargValues]);
   useEffect(() => {
     const active = computeActiveBg(models, currentId, activeId, messages.length, incognito, user?.prefs);
     if (active) { setBgVisible(true); return; }
@@ -663,7 +676,7 @@ export default function App() {
           if (!cmp.messageId && m.messageId) cmp.messageId = m.messageId;
           const nextId = cmp.remaining.shift();
           if (nextId && cmp.messageId) {
-            (() => { const g = genOptsRef.current; setTimeout(() => wsSend({ type: 'regenerate', chatId: cmp.chatId, modelId: nextId, extended: g.extended, reasoningEffort: g.reasoningEffort, messageId: cmp.messageId, sandbox: g.sandbox, webSearch: g.webSearch, styleId: g.styleId }), 150); })();
+            (() => { const g = genOptsRef.current; setTimeout(() => wsSend({ type: 'regenerate', chatId: cmp.chatId, modelId: nextId, extended: g.extended, reasoningEffort: g.reasoningEffort, kwargValues: g.kwargValues, messageId: cmp.messageId, sandbox: g.sandbox, webSearch: g.webSearch, styleId: g.styleId }), 150); })();
           } else {
             compareRef.current = null;
             toast('Model comparison ready, use the version arrows or compare button on the response.', { duration: 6000 });
@@ -902,7 +915,8 @@ export default function App() {
     if (lastA && models.find(mm => mm.id === lastA.model_id)) {
       setCurrentId(lastA.model_id);
       setExtended(!!lastA.extended);
-      if (lastA.reasoningEffort) setReasoningEffort(lastA.reasoningEffort);
+      if (lastA.kwargValues && typeof lastA.kwargValues === 'object') setKwargValues(prev => ({ ...prev, ...lastA.kwargValues }));
+      else if (lastA.reasoningEffort) setReasoningEffort(lastA.reasoningEffort);
       setChatRemovedModel(null);
     } else if (lastA) {
       setChatRemovedModel({ id: lastA.model_id, name: lastA.model_name || t('The original model') });
@@ -972,7 +986,7 @@ export default function App() {
     if (restored) {
       if (targetId !== currentId) setCurrentId(targetId);
       setExtended(!!restored.extended);
-      setReasoningEffort(restored.reasoningEffort || '');
+      setKwargValues(restored.kwargValues || {});
     }
     const m = models.find(m => m.id === targetId);
     setSandbox(m?.sandboxAllowed !== false && !!m?.sandboxAuto);
@@ -1097,7 +1111,7 @@ export default function App() {
         .filter(m => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
         .map(m => ({ role: m.role, content: m.content })),
         { role: 'user', content: text }];
-      if (!wsSend({ type: 'incognito', modelId: currentId, extended, reasoningEffort, messages: history })) return;
+      if (!wsSend({ type: 'incognito', modelId: currentId, extended, reasoningEffort, kwargValues, messages: history })) return;
       gen.current.set('incognito', { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
       setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments: [], _enter: true }]);
       setInput('');
@@ -1117,7 +1131,7 @@ export default function App() {
     }
     if (compareRef.current && !compareRef.current.chatId) compareRef.current.chatId = chatId;
     clearDraft(activeId);
-    if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, reasoningEffort, content: text, attachments, sandbox, webSearch, call: !!opts.call, styleId })) return;
+    if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, reasoningEffort, kwargValues, content: text, attachments, sandbox, webSearch, call: !!opts.call, styleId })) return;
     gen.current.set(chatId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
     setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     if (!opts.call) setInput('');
@@ -1135,7 +1149,7 @@ export default function App() {
     setActiveId(c.id); setMessages([]); setInput('');
     setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
     history.pushState({}, '', '/chat/' + c.id);
-    if (!wsSend({ type: 'chat', chatId: c.id, modelId: currentId, extended, reasoningEffort, content: text, attachments, sandbox, webSearch, styleId })) return;
+    if (!wsSend({ type: 'chat', chatId: c.id, modelId: currentId, extended, reasoningEffort, kwargValues, content: text, attachments, sandbox, webSearch, styleId })) return;
     gen.current.set(c.id, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
     setMessages([{ id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
@@ -1163,32 +1177,32 @@ export default function App() {
   const regenerate = useCallback((messageId) => {
     if (streaming || !activeId || !currentId) return;
     dismissError();
-    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, reasoningEffort, messageId, sandbox, webSearch, styleId })) return;
+    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, reasoningEffort, kwargValues, messageId, sandbox, webSearch, styleId })) return;
     gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
-  }, [streaming, activeId, currentId, extended, reasoningEffort, sandbox, webSearch]);
+  }, [streaming, activeId, currentId, extended, reasoningEffort, kwargValues, sandbox, webSearch]);
 
   const regenerateWith = useCallback((messageId, modelId) => {
     if (streaming || !activeId || !modelId) return;
     dismissError();
     setChatRemovedModel(null);
     setCurrentId(modelId);
-    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId, extended, reasoningEffort, messageId, sandbox, webSearch, styleId })) return;
+    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId, extended, reasoningEffort, kwargValues, messageId, sandbox, webSearch, styleId })) return;
     gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: modelId, live: null });
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
     const mm = models.find(m => m.id === modelId);
     if (mm) toast(t('Retrying with ') + mm.displayName, { icon: 'check' });
-  }, [streaming, activeId, extended, reasoningEffort, sandbox, webSearch, models]);
+  }, [streaming, activeId, extended, reasoningEffort, kwargValues, sandbox, webSearch, models]);
 
   const editMessage = useCallback((messageId, newContent) => {
     if (streaming || !activeId || !currentId) return;
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); if (idx === -1) return ms; const copy = ms.slice(0, idx + 1); copy[idx] = { ...copy[idx], content: newContent }; return copy; });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
-    if (!wsSend({ type: 'edit', chatId: activeId, modelId: currentId, extended, reasoningEffort, messageId, content: newContent, sandbox, webSearch, styleId })) return;
+    if (!wsSend({ type: 'edit', chatId: activeId, modelId: currentId, extended, reasoningEffort, kwargValues, messageId, content: newContent, sandbox, webSearch, styleId })) return;
     gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
-  }, [streaming, activeId, currentId, extended, reasoningEffort, sandbox, webSearch]);
+  }, [streaming, activeId, currentId, extended, reasoningEffort, kwargValues, sandbox, webSearch]);
 
   function stop() { const key = activeKey(); try { ws.current?.readyState === 1 && ws.current.send(JSON.stringify({ type: 'stop', chatId: key })); } catch {} pendingDone.current = true; setQueued(false); }
   async function logout() { await api.post('/api/auth/logout'); location.href = '/'; }
@@ -1211,7 +1225,7 @@ export default function App() {
   const modelHasBg = !incognito && !!(model?.bgEnabled && model?.bgImage);
   const activeBg = computeActiveBg(models, currentId, activeId, messages.length, incognito, user?.prefs);
   sendRef.current = send;
-  genOptsRef.current = { extended, reasoningEffort, sandbox, webSearch, styleId };
+  genOptsRef.current = { extended, reasoningEffort, kwargValues, sandbox, webSearch, styleId };
   const composerProps = {
     value: input, onChange: (v) => { if (safetyFlagged) { setSafetyFlagged(false); setSafetyReason(''); } setInput(v); saveDraft(activeId, v); }, onSend: send, onStop: stop, streaming: streaming || queued,
     queueCount: queuedList.length,
@@ -1225,7 +1239,7 @@ export default function App() {
     onOpenDocs: () => setShowDocs(true),
     hideModelPicker: cfg.uiPreset === 'openai',
     models, currentId, onSelect: pickModel, extended, onToggleExtended: () => setExtended(e => !e),
-    reasoningEffort, onSetEffort: setReasoningEffort,
+    reasoningEffort, onSetEffort: setReasoningEffort, kwargValues, onSetKwarg: setKwarg,
     visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin, budget,
     modelHasBg, bgInChat, onToggleBgInChat: () => updatePref('modelBgInChat', !bgInChat),
     sandbox: sandboxOn, sandboxAllowed, onToggleSandbox: () => { if (sandboxAllowed) setSandbox(s => !s); },
@@ -1299,7 +1313,7 @@ export default function App() {
         {empty && !incognito && cfg.uiPreset === 'openai' && (
           <div className="home-topbar">
             <div className="topbar-model tbm-flex">
-              <ModelDropdown models={models} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
+              <ModelDropdown models={models} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} kwargValues={kwargValues} onSetKwarg={setKwarg} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
               <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={() => setShowDocs(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>
             </div>
           </div>
@@ -1337,7 +1351,7 @@ export default function App() {
             <div className="topbar">
               {cfg.uiPreset === 'openai' && (
                 <div className="topbar-model tbm-flex">
-                  <ModelDropdown models={models} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
+                  <ModelDropdown models={models} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} kwargValues={kwargValues} onSetKwarg={setKwarg} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
               <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={() => setShowDocs(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>
                 </div>
               )}
