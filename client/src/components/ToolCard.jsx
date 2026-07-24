@@ -19,6 +19,7 @@ const VERBS = {
   make_dir: ['Creating folder', 'Created folder'],
   mkdir: ['Creating folder', 'Created folder'],
   search: ['Searching', 'Searched'],
+  find: ['Finding files', 'Found files'],
   web_search: ['Searching the web', 'Searched the web'],
   extract_zip: ['Extracting', 'Extracted'],
   bundle_zip: ['Bundling', 'Bundled'],
@@ -61,6 +62,7 @@ function iconFor(tool) {
   if (tool === 'make_dir' || tool === 'mkdir') return Folder;
   if (tool === 'bundle_zip' || tool === 'extract_zip') return Download;
   if (tool === 'search') return Search;
+  if (tool === 'find') return Search;
   if (tool === 'mb_search') return Search;
   if (tool === 'view') return FileText;
   if (tool === 'mb_view') return FileText;
@@ -74,6 +76,7 @@ function targetName(call) {
   if (call.tool === 'bundle_zip') return (call.name || 'bundle') + '.zip';
   if (call.tool === 'rename_file' || call.tool === 'move_file' || call.tool === 'copy_file') return call.path && call.new_path ? `${baseName(call.path)} → ${baseName(call.new_path)}` : baseName(call.path);
   if (call.tool === 'search' || call.tool === 'mb_search' || call.tool === 'chat_search') return call.query ? `"${call.query}"` : '';
+  if (call.tool === 'find') return call.pattern ? `"${call.pattern}"` : (call.query ? `"${call.query}"` : '');
   if (call.tool === 'skill_view') return call.name || '';
   if (call.tool === 'list_files' || call.tool === 'clear_sandbox' || call.tool === 'delete_all') return '';
   return baseName(call.path) || '';
@@ -83,6 +86,7 @@ function resultNote(call, res) {
   switch (call.tool) {
     case 'view': return res.lines ? `${res.lines} lines` : null;
     case 'list_files': return res.files ? `${res.files.length} file${res.files.length === 1 ? '' : 's'}` : null;
+    case 'find': return res.count != null ? `${res.count} file${res.count === 1 ? '' : 's'}` : null;
     case 'search': return res.count != null ? `${res.count} match${res.count === 1 ? '' : 'es'}` : null;
     case 'mb_search': return res.count != null ? `${res.count} match${res.count === 1 ? '' : 'es'}` : null;
     case 'mb_view': return res.total != null ? `${res.total} lines` : null;
@@ -251,12 +255,15 @@ function WebSearchCard({ call, result }) {
   );
 }
 
+const TOOL_ALIAS = { run: 'bash', shell: 'bash', write_file: 'create_file', edit_file: 'str_replace', insert_lines: 'str_replace', read_file: 'view', cat: 'view', ls: 'list_files', tree: 'list_files', glob: 'find', grep: 'search', mv: 'move_file', cp: 'copy_file', rm: 'delete_file', mkdir: 'make_dir', unzip: 'extract_zip', zip: 'bundle_zip', reset: 'clear_sandbox' };
+
 function ToolCard({ call, result }) {
   if (!call || !call.tool) return null;
-  if (call.tool === 'web_search') return <WebSearchCard call={call} result={result} />;
-  if (call.tool === 'bash' || call.tool === 'run') return <BashCard call={call} result={result} />;
-  if (FILE_TOOLS.has(call.tool)) return <FileCard call={call} result={result} />;
-  return <ChipCard call={call} result={result} />;
+  const c = TOOL_ALIAS[call.tool] ? { ...call, tool: TOOL_ALIAS[call.tool] } : call;
+  if (c.tool === 'web_search') return <WebSearchCard call={c} result={result} />;
+  if (c.tool === 'bash') return <BashCard call={c} result={result} />;
+  if (FILE_TOOLS.has(c.tool)) return <FileCard call={c} result={result} />;
+  return <ChipCard call={c} result={result} />;
 }
 export default React.memo(ToolCard, (a, b) =>
   JSON.stringify(a.call) === JSON.stringify(b.call) && JSON.stringify(a.result) === JSON.stringify(b.result));

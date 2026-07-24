@@ -38,21 +38,25 @@ function PmSub({ className = '', children, onMouseEnter, onMouseLeave }) {
   const [pos, setPos] = useState({ flipLeft: false, top: -6, maxH: 0, ready: false });
   useLayoutEffect(() => {
     const el = ref.current; if (!el) return;
-    const wrap = el.parentElement; if (!wrap) return;
     const measure = () => {
+      const wrap = el.parentElement; if (!wrap) return;
       const row = wrap.getBoundingClientRect();
       const pad = 8;
       const availH = window.innerHeight - pad * 2;
-      const h = el.offsetHeight;
+      const h = el.scrollHeight;
       const effH = Math.min(h, availH);
       const flipLeft = row.right + 4 + el.offsetWidth > window.innerWidth - pad;
       let top = -6;
       const over = row.top + top + effH - (window.innerHeight - pad);
       if (over > 0) top -= over;
       if (row.top + top < pad) top = pad - row.top;
-      setPos({ flipLeft, top, maxH: h > availH ? availH : 0, ready: true });
+      setPos(prev => (prev.ready && prev.flipLeft === flipLeft && prev.top === top && prev.maxH === (h > availH ? availH : 0)) ? prev : { flipLeft, top, maxH: h > availH ? availH : 0, ready: true });
     };
     measure();
+    let ro;
+    if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(measure); ro.observe(el); }
+    window.addEventListener('resize', measure);
+    return () => { if (ro) ro.disconnect(); window.removeEventListener('resize', measure); };
   }, [children]);
   return (
     <div ref={ref}

@@ -90,7 +90,7 @@ function normalizeMessages(protocol, messages) {
             : (typeof c.argsText === 'string' ? c.argsText : JSON.stringify(c.args ?? safeParse(c.function?.arguments) ?? {}))
         }
       }));
-      return { role: 'assistant', content: m.content || '', tool_calls: calls };
+      return { role: 'assistant', content: (m.content && String(m.content).trim()) ? m.content : null, tool_calls: calls };
     }
     if (m.role === 'tool') {
       if (protocol === 'ollama') return { role: 'tool', tool_name: m.name || '', content: String(m.content ?? '') };
@@ -130,6 +130,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
   const wire = normalizeMessages(spec.protocol, messages);
   const pending = new Map();
   let callSeq = 0;
+  const nonce = Math.random().toString(36).slice(2, 8);
   const finishCalls = () => {
     if (!pending.size) return;
     const calls = [...pending.entries()].sort((a, b) => a[0] - b[0]).map(([, c]) => c).filter(c => c.name);
@@ -154,9 +155,10 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
         if (Array.isArray(msg.tool_calls)) {
           for (const tc of msg.tool_calls) {
             const idx = callSeq++;
+            const cid = tc.id || `call_${nonce}_${idx}`;
             const argsText = typeof tc.function?.arguments === 'string' ? tc.function.arguments : JSON.stringify(tc.function?.arguments ?? {});
-            pending.set(idx, { id: tc.id || `call_${idx}`, name: tc.function?.name || '', argsText });
-            onEvent({ type: 'tool_call_delta', index: idx, id: tc.id || `call_${idx}`, name: tc.function?.name || '', argsText });
+            pending.set(idx, { id: cid, name: tc.function?.name || '', argsText });
+            onEvent({ type: 'tool_call_delta', index: idx, id: cid, name: tc.function?.name || '', argsText });
           }
         }
         if (json.done) {
@@ -200,10 +202,13 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
         for (const tc of delta.tool_calls) {
           const idx = Number.isInteger(tc.index) ? tc.index : callSeq;
           let cur = pending.get(idx);
-          if (!cur) { cur = { id: '', name: '', argsText: '' }; pending.set(idx, cur); callSeq = Math.max(callSeq, idx + 1); }
+          if (!cur) { cur = { id: `call_${nonce}_${idx}`, name: '', argsText: '' }; pending.set(idx, cur); callSeq = Math.max(callSeq, idx + 1); }
           if (tc.id) cur.id = tc.id;
-          if (tc.function?.name) cur.name += tc.function.name;
-          if (typeof tc.function?.arguments === 'string') cur.argsText += tc.function.arguments;
+          const nm = tc.function?.name;
+          if (nm) { if (!cur.name) cur.name = nm; else if (cur.name !== nm) cur.name += nm; }
+          const a = tc.function?.arguments;
+          if (typeof a === 'string') cur.argsText += a;
+          else if (a && typeof a === 'object') cur.argsText = JSON.stringify(a);
           onEvent({ type: 'tool_call_delta', index: idx, id: cur.id, name: cur.name, argsText: cur.argsText });
         }
       }

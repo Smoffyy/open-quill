@@ -11,32 +11,44 @@ function fn(name, description, properties = {}, required = []) {
 const str = (description) => ({ type: 'string', description });
 const int = (description) => ({ type: 'integer', description });
 
+const bool = (description) => ({ type: 'boolean', description });
+
 export function sandboxToolSchemas() {
   return [
-    fn('bash', 'Run a shell command inside the sandbox working directory. Use it to run and test code, install packages, and inspect data (e.g. "python3 main.py", "npm install"). stdout and stderr are captured. Prefer the dedicated file tools for copying, moving, or deleting files so the operation works on every host OS.', {
+    fn('bash', 'Run a shell command on your machine, inside your working directory. This is your main tool: run and test code, install packages, scaffold projects, inspect data, use git, anything (e.g. "python main.py", "npm install", "node test.js"). stdout and stderr are captured and the real exit code is returned. Your current directory PERSISTS between calls, so "cd sub" now affects later commands. Prefer the dedicated file tools (create_file, str_replace, view, move_file, etc.) for editing and moving files, since they are versioned and work identically on every host OS.', {
       cmd: str('The shell command to run. May span multiple lines.'),
-      timeout_s: int('Optional timeout in seconds (default 60, max 300). Raise it for slow installs or long-running builds.')
+      workdir: str('Optional directory to run in for this call (relative to your root). Also becomes the new persistent working directory.'),
+      timeout_s: int('Optional timeout in seconds (default 60, max 600). Raise it for slow installs or long builds.')
     }, ['cmd']),
-    fn('create_file', 'Create or fully overwrite a file in the sandbox. Provide the COMPLETE file content, never truncate or write placeholders like "rest unchanged". Parent folders are created automatically. Each write is versioned so the user can diff and roll back.', {
+    fn('create_file', 'Create or fully overwrite a file. Provide the COMPLETE file content, never truncate or write placeholders like "rest unchanged". Parent folders are created automatically. Each write is versioned so the user can diff and roll back.', {
       path: str('Relative path of the file, e.g. "src/app.js". Never absolute.'),
       content: str('The complete raw text content of the file.')
     }, ['path', 'content']),
-    fn('str_replace', 'Edit an existing file by replacing one exact, unique snippet. old_str must appear exactly once in the file, include enough surrounding lines to make it unique. This is the preferred way to edit; do not recreate whole files to change a part.', {
+    fn('str_replace', 'Edit an existing file by replacing an exact snippet. By default old_str must occur exactly once (include enough surrounding lines to make it unique). This is the preferred way to edit; do not recreate a whole file to change part of it.', {
       path: str('Relative path of the file to edit.'),
-      old_str: str('The exact text to replace. Must occur exactly once in the file.'),
-      new_str: str('The replacement text.')
+      old_str: str('The exact text to replace, whitespace and indentation included.'),
+      new_str: str('The replacement text.'),
+      replace_all: bool('Optional. If true, replace every occurrence of old_str instead of requiring it to be unique.')
     }, ['path', 'old_str', 'new_str']),
-    fn('view', 'Read a file from the sandbox. Returns numbered lines. For large files, pass start/end to page through them.', {
-      path: str('Relative path of the file to read.'),
-      start: int('Optional first line to show (1-indexed).'),
-      end: int('Optional last line to show (inclusive).')
-    }, ['path']),
-    fn('list_files', 'List every file currently in the sandbox (dependency folders like node_modules are hidden).', {}),
-    fn('search', 'Search the text contents of all sandbox files for a string.', {
-      query: str('The text to search for (case-insensitive).'),
-      path: str('Optional substring filter on file paths.')
+    fn('view', 'Read a file (returns numbered lines; page large files with start/end) OR view a directory (returns its tree). Dependency and build folders like node_modules are shown as "(ignored)".', {
+      path: str('Relative path of a file or directory. Omit or "." for the whole workspace tree.'),
+      start: int('Optional first line to show (1-indexed, files only).'),
+      end: int('Optional last line to show (inclusive, files only).')
+    }),
+    fn('list_files', 'Show your working directory as a tree. Dependency and build folders (node_modules, .venv, target, dist, and so on) plus anything in .gitignore are hidden from the tree but still exist on disk and are fully usable from bash.', {
+      path: str('Optional subdirectory to list. Omit for the whole workspace.'),
+      all: bool('Optional. If true, include ignored dependency/build folders too.')
+    }),
+    fn('find', 'Find files by glob pattern (e.g. "**/*.py", "src/**/*.ts", "*.json"). Ignored dependency/build folders are excluded unless all is true.', {
+      pattern: str('A glob pattern. "**" matches any depth, "*" matches within one path segment.'),
+      all: bool('Optional. If true, also search inside ignored dependency/build folders.')
+    }, ['pattern']),
+    fn('search', 'Search file contents across the workspace. Substring by default, or a regular expression when regex is true. Ignored folders are skipped.', {
+      query: str('Text to search for (case-insensitive), or a regex when regex is true.'),
+      path: str('Optional path filter: a glob like "src/**/*.js" or a plain substring of the path.'),
+      regex: bool('Optional. If true, treat query as a JavaScript regular expression.')
     }, ['query']),
-    fn('delete_file', 'Delete a file or folder from the sandbox.', {
+    fn('delete_file', 'Delete a file or folder.', {
       path: str('Relative path of the file or folder to delete.')
     }, ['path']),
     fn('move_file', 'Move or rename a file or folder, keeping its version history.', {
@@ -50,15 +62,15 @@ export function sandboxToolSchemas() {
     fn('make_dir', 'Create a directory (and any missing parents).', {
       path: str('Relative path of the directory to create.')
     }, ['path']),
-    fn('extract_zip', 'Unpack a .zip file that is already in the sandbox.', {
+    fn('extract_zip', 'Unpack a .zip that is already in your directory. Files inside dependency/build folders are unpacked to disk but kept out of listings automatically.', {
       path: str('Relative path of the zip file.'),
       dest: str('Optional destination folder to extract into.')
     }, ['path']),
-    fn('bundle_zip', 'Package sandbox files into one downloadable .zip. This is the only correct way to produce a zip for the user; never build zips with shell commands.', {
+    fn('bundle_zip', 'Package files into one downloadable .zip for the user. This is the only correct way to produce a zip; never build zips with shell commands.', {
       name: str('Base name for the zip (without extension).'),
-      paths: { type: 'array', items: { type: 'string' }, description: 'Optional list of relative paths to include. Omit to bundle everything.' }
+      paths: { type: 'array', items: { type: 'string' }, description: 'Optional list of relative paths to include, preserving their folder structure. Omit to bundle everything.' }
     }, ['name']),
-    fn('clear_sandbox', 'Delete EVERYTHING in the sandbox. Only use when the user explicitly asks to clear or reset it.', {})
+    fn('clear_sandbox', 'Delete EVERYTHING in your directory. Only use when the user explicitly asks to clear or reset it.', {})
   ];
 }
 
@@ -134,12 +146,19 @@ export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, sk
 
 export function parseArgs(argsText) {
   if (argsText == null || argsText === '') return {};
-  if (typeof argsText === 'object') return argsText;
+  if (typeof argsText === 'object') return Array.isArray(argsText) ? {} : argsText;
+  let text = String(argsText).trim();
+  const fence = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fence) text = fence[1].trim();
   try {
-    const v = JSON.parse(argsText);
-    return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+    const v = JSON.parse(text);
+    if (v && typeof v === 'object' && !Array.isArray(v)) return v;
   } catch {}
-  const partial = extractPartial(String(argsText));
+  try {
+    const v = JSON.parse(text.replace(/,\s*([}\]])/g, '$1'));
+    if (v && typeof v === 'object' && !Array.isArray(v)) return v;
+  } catch {}
+  const partial = extractPartial(text);
   const out = {};
   for (const k of Object.keys(partial)) if (partial[k].closed) out[k] = partial[k].value;
   return out;

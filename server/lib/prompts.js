@@ -19,10 +19,11 @@ export function sandboxPromptFor(chatId) {
   const env = sandbox.hostEnvInfo();
   p += `\n\n## Host environment (READ THIS BEFORE USING bash)\n- Operating system: **${env.osName}**. Shell: \`${env.shellName}\`.\n`;
   if (!env.unix) {
-    p += '- This is NOT a Unix system. Commands like `cat`, `ls`, `grep`, `unzip`, `zipinfo`, `file`, `head`, `tail`, `wc`, `sed`, `awk`, `which`, `touch`, `chmod` DO NOT EXIST and will fail with exit code 9009 or "not recognized". Never call them, not even once to check.\n- For every file operation use the dedicated tools: `view`, `list_files`, `search`, `extract_zip`, `bundle_zip`, `copy_file`, `move_file`, `make_dir`, `delete_file`. They always work.\n- If you need to inspect data programmatically, write a small script file with `create_file` and run it with an interpreter listed below, instead of long shell one-liners (cmd.exe quoting mangles quotes and newlines in one-liners).\n';
+    p += '- This is NOT a Unix system. Commands like `cat`, `ls`, `grep`, `find`, `unzip`, `zipinfo`, `file`, `head`, `tail`, `wc`, `sed`, `awk`, `which`, `touch`, `chmod` DO NOT EXIST and will fail with exit code 9009 or "not recognized". Never call them, not even once to check.\n- For every file operation use the dedicated tools: `view`, `list_files`, `find`, `search`, `extract_zip`, `bundle_zip`, `copy_file`, `move_file`, `make_dir`, `delete_file`. They always work and are cross-platform.\n- If you need to inspect data programmatically, write a small script file with `create_file` and run it with an interpreter listed below, instead of long shell one-liners (cmd.exe quoting mangles quotes and newlines in one-liners).\n';
   } else {
-    p += '- Standard Unix utilities are available, but the dedicated file tools (`view`, `extract_zip`, `copy_file` and friends) are still preferred for file operations because their results are structured.\n';
+    p += '- Standard Unix utilities are available, but the dedicated file tools (`view`, `list_files`, `find`, `search`, `extract_zip`, `copy_file` and friends) are still preferred for file operations because their results are structured and versioned.\n';
   }
+  p += '- Your shell working directory PERSISTS across bash calls: `cd sub` now stays in effect for later commands until you `cd` elsewhere.\n';
   p += env.interpreters.length
     ? `- Interpreters detected on this host: ${env.interpreters.join(', ')}. Only invoke interpreters from this list.\n`
     : '- No language interpreters were detected on this host. Rely on the dedicated file tools; do not assume node or python exist.\n';
@@ -33,7 +34,7 @@ export function sandboxPromptFor(chatId) {
   p += '\n\n## Current sandbox files\nThese are the LATEST versions on disk. Always edit these directly, never assume older content. The version number (vN) increases each time a file changes.\n';
   for (const f of files.slice(0, LIST_CAP)) p += `- ${f.path} (v${f.v}, ${f.size} bytes)\n`;
   if (files.length > LIST_CAP) p += `- … and ${files.length - LIST_CAP} more file(s). The list is truncated to protect context, use \`list_files\`, \`search\`, or \`view\` to inspect anything not shown here.\n`;
-  if (hidden) p += `\n(${hidden} file(s) inside dependency/build folders like node_modules are hidden from this listing and from context; they exist on disk and your commands can use them normally.)\n`;
+  if (hidden) p += `\n(${hidden} file(s) inside dependency or build folders (node_modules, .venv, target, dist, and similar) and anything matched by .gitignore are hidden from this listing and from context to keep things clean. They still exist on disk and your bash commands and interpreters use them normally; pass all:true to list_files/find to see them, or reference them by exact path.)\n`;
   p += '\n## Latest file contents (a sample; use `view` for anything not shown)\n';
   let budget = 40000, inlined = 0;
   for (const f of files) {
@@ -47,20 +48,26 @@ export function sandboxPromptFor(chatId) {
     p += `\n### ${f.path} (v${f.v})\n\`\`\`${f.ext || ''}\n${txt}\n\`\`\`\n`;
     budget -= txt.length; inlined++;
   }
-  p += '\n---\nREMINDER: The sandbox is ON and the files above are the current truth. Edit existing files with `str_replace` (never recreate them from scratch), and use the dedicated file tools, `copy_file`, `move_file`, `make_dir`, `delete_file`, `bundle_zip`, `extract_zip`, for file operations. Use relative paths only. Keep calling tools until the task is fully done; do not stop to ask permission, do not paste whole file contents or fake terminal output into the chat, and when a tool fails, read the error and change approach instead of repeating the same call. Never write imitation tool text like `[used bash: ...]` in a reply; make real tool calls.';
+  p += '\n---\nREMINDER: The workspace is ON and the files above are the current truth. Edit existing files with `str_replace` (never recreate them from scratch), and use the dedicated file tools, `copy_file`, `move_file`, `make_dir`, `delete_file`, `find`, `search`, `bundle_zip`, `extract_zip`, for file operations. Use relative paths only. Keep calling tools until the task is fully done; do not stop to ask permission, do not paste whole file contents or fake terminal output into the chat, and when a tool fails, read the error and change approach instead of repeating the same call. Never write imitation tool text like `[used bash: ...]` in a reply; make real tool calls.';
   return p;
 }
+
+const BASH_TOOLS = new Set(['bash', 'run', 'shell']);
 
 export function cleanCall(call) {
   const o = { tool: call.tool };
   if (call.path != null) o.path = call.path;
-  if (call.tool === 'bash' || call.tool === 'run') o.cmd = call.cmd ?? call.command ?? '';
+  if (BASH_TOOLS.has(call.tool)) { o.cmd = call.cmd ?? call.command ?? ''; if (call.workdir ?? call.cwd) o.workdir = call.workdir ?? call.cwd; }
   if (call.new_path != null || call.to != null) o.new_path = call.new_path ?? call.to;
   if (call.query != null) o.query = call.query;
+  if (call.pattern != null) o.pattern = call.pattern;
   if (call.name != null) o.name = call.name;
   if (call.dest != null) o.dest = call.dest;
   if (call.start != null) o.start = call.start;
   if (call.end != null) o.end = call.end;
+  if (call.replace_all === true || call.replace_all === 'true') o.replace_all = true;
+  if (call.regex === true || call.regex === 'true') o.regex = true;
+  if (call.all === true || call.all === 'true') o.all = true;
   return o;
 }
 
@@ -74,13 +81,19 @@ export function resultPayload(call, r) {
   if (r.unchanged) o.unchanged = true;
   if (r.lines != null) o.lines = r.lines;
   if (r.count != null) o.count = r.count;
+  if (r.replaced != null) o.replaced = r.replaced;
   if (r.cleared != null) o.cleared = r.cleared;
+  if (r.hidden != null) o.hidden = r.hidden;
+  if (r.deps != null) o.deps = r.deps;
+  if (r.note) o.note = r.note;
   if (r.path != null) o.path = r.path;
   if (r.from != null) o.from = r.from;
-  if ((call.tool === 'bash' || call.tool === 'run')) { o.output = (r.output || '').slice(0, 8000); o.exit = r.exit ?? null; }
-  if (call.tool === 'list_files' && Array.isArray(r.files)) o.files = r.files.slice(0, 100).map(f => ({ path: f.path, size: f.size }));
+  if (r.cwd) o.cwd = r.cwd;
+  if (BASH_TOOLS.has(call.tool)) { o.output = (r.output || '').slice(0, 8000); o.exit = r.exit ?? null; }
+  if ((call.tool === 'list_files' || call.tool === 'ls' || call.tool === 'tree') && Array.isArray(r.files)) o.files = r.files.slice(0, 100).map(f => ({ path: f.path, size: f.size }));
+  if ((call.tool === 'find' || call.tool === 'glob') && Array.isArray(r.matches)) o.matches = r.matches.slice(0, 60);
   if (call.tool === 'extract_zip' && Array.isArray(r.files)) o.files = r.files.slice(0, 60);
-  if (call.tool === 'search' && Array.isArray(r.matches)) o.matches = r.matches.slice(0, 40);
+  if ((call.tool === 'search' || call.tool === 'grep') && Array.isArray(r.matches)) o.matches = r.matches.slice(0, 40);
   return o;
 }
 
@@ -88,19 +101,21 @@ export function formatToolResult(call, r) {
   const head = `${call.tool}${call.path ? ' ' + call.path : ''}`;
   if (!r.ok) return `${head} → ERROR: ${r.error}` + (r.output ? `\n${r.output}` : '');
   switch (call.tool) {
-    case 'bash': case 'run': return `bash$ ${call.cmd ?? call.command ?? ''}\n${r.output || '(no output)'}\n(exit ${r.exit ?? 0})`;
-    case 'create_file': return r.unchanged ? `${head} → unchanged (already v${r.v}, identical content, no write needed)` : `${head} → created (v${r.v}, ${r.bytes} bytes, +${r.adds ?? 0}/-${r.dels ?? 0})`;
-    case 'str_replace': return `${head} → edited (now v${r.v}, +${r.adds ?? 0}/-${r.dels ?? 0})`;
-    case 'view': return `${head} →\n${r.content}`;
-    case 'list_files': return `list_files →\n${(r.files || []).map(f => `${f.path} (${f.size}b)`).join('\n') || '(empty)'}`;
-    case 'delete_file': return `${head} → deleted`;
-    case 'clear_sandbox': case 'delete_all': return `clear_sandbox → removed ${r.cleared} item(s); sandbox is now empty`;
-    case 'rename_file': case 'move_file': return `${head} → moved to ${r.path}`;
-    case 'copy_file': return `${head} → copied to ${r.path}${r.count > 1 ? ` (${r.count} files)` : ''}`;
+    case 'bash': case 'run': case 'shell': return `$ ${call.cmd ?? call.command ?? ''}\n${r.output || '(no output)'}\n(exit ${r.exit ?? 0}${r.cwd ? `, cwd: ${r.cwd || '.'}` : ''})`;
+    case 'create_file': case 'write_file': return r.unchanged ? `${head} → unchanged (already v${r.v}, identical content, no write needed)` : `${head} → created (v${r.v}, ${r.bytes} bytes, +${r.adds ?? 0}/-${r.dels ?? 0})`;
+    case 'str_replace': case 'edit_file': return `${head} → edited (now v${r.v}, +${r.adds ?? 0}/-${r.dels ?? 0}${r.replaced > 1 ? `, ${r.replaced} occurrences` : ''})`;
+    case 'insert_lines': return `${head} → inserted ${r.adds} line(s) (now v${r.v})`;
+    case 'view': case 'read_file': case 'cat': return `${head} →\n${r.content}`;
+    case 'list_files': case 'ls': case 'tree': return `${head} →\n${r.tree || '(empty)'}` + (r.hidden ? `\n(${r.hidden} item(s) in ignored dependency/build folders hidden; pass all:true to include them)` : '');
+    case 'find': case 'glob': return `find "${call.pattern ?? call.query}" → ${r.count} file(s)` + (r.matches && r.matches.length ? '\n' + r.matches.map(m => m.path).join('\n') : '');
+    case 'delete_file': case 'rm': return `${head} → deleted`;
+    case 'clear_sandbox': case 'delete_all': case 'reset': return `clear_sandbox → removed ${r.cleared} item(s); the directory is now empty`;
+    case 'rename_file': case 'move_file': case 'mv': return `${head} → moved to ${r.path}`;
+    case 'copy_file': case 'cp': return `${head} → copied to ${r.path}${r.count > 1 ? ` (${r.count} files)` : ''}`;
     case 'make_dir': case 'mkdir': return `${head} → directory ready`;
-    case 'search': return `search "${call.query}" → ${r.count} match(es)` + (r.matches.length ? '\n' + r.matches.map(m => `${m.path}:${m.line}: ${m.text}`).join('\n') : '');
-    case 'extract_zip': return `extract_zip ${call.path} → ${r.count} file(s)` + (r.files && r.files.length ? ':\n' + r.files.join('\n') : '');
-    case 'bundle_zip': return `bundle_zip ${r.path} → created (${r.count} files)`;
+    case 'search': case 'grep': return `search "${call.query ?? call.pattern}" → ${r.count} match(es)` + (r.matches && r.matches.length ? '\n' + r.matches.map(m => `${m.path}:${m.line}: ${m.text}`).join('\n') : '');
+    case 'extract_zip': case 'unzip': return `extract_zip ${call.path} → ${r.count} file(s)` + (r.note ? ` (${r.note})` : '') + (r.files && r.files.length ? ':\n' + r.files.join('\n') : '');
+    case 'bundle_zip': case 'zip': return `bundle_zip ${r.path} → created (${r.count} files)`;
     default: return `${head} → ok`;
   }
 }

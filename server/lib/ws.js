@@ -3,7 +3,7 @@ import path from 'path';
 import { WebSocketServer } from 'ws';
 import { db, uid, now, getSetting } from '../db.js';
 import { sessionFromRequest } from '../auth.js';
-import { buildMessages, streamCompletion, generateTitle } from '../llm.js';
+import { buildMessages, streamCompletion, generateTitle, stripThink } from '../llm.js';
 import { buildTools, toCall, livePreview } from '../tools.js';
 import * as websearch from '../websearch.js';
 import * as sandbox from '../sandbox.js';
@@ -179,6 +179,8 @@ export function initWs(server) {
       let rollNotified = false;
       const stepCap = (model.agent_steps && model.agent_steps > 0) ? model.agent_steps : 1000;
       const maxSteps = toolsOn ? stepCap : 1;
+      const callFails = new Map();
+      let prevStepSig = '';
       try {
         for (let step = 0; step < maxSteps; step++) {
           // running low on context mid-response? summarize older turns, then carry on where we left off
@@ -255,6 +257,7 @@ export function initWs(server) {
             break;
           }
           const toolMsgs = [];
+          let stepOk = 0, stepFailed = 0;
           for (const tc of toolCalls) {
             const call = toCall(tc.name, tc.argsText);
             if (conversationEnded) {
@@ -266,13 +269,21 @@ export function initWs(server) {
             try { out = await runToolCall(call); }
             catch (e) { out = { payload: { ok: false, error: String(e.message || e).slice(0, 400) }, formatted: `${call.tool} → ERROR: ${String(e.message || e).slice(0, 400)}`, hide: false }; }
             if (!out) out = { payload: { ok: false, error: `Unknown or disabled tool: ${call.tool}` }, formatted: `${call.tool} → ERROR: this tool is not available.`, hide: false };
+            const failed = !out.payload || out.payload.ok === false;
+            let formatted = out.formatted;
+            const sig = call.tool + '|' + (tc.argsText || '');
+            if (failed) {
+              stepFailed++;
+              const n = (callFails.get(sig) || 0) + 1; callFails.set(sig, n);
+              if (n >= 2) formatted += `\n(NOTE: this identical call has failed ${n} times. Do not repeat it. Change the arguments or approach, or tell the user why it cannot be done.)`;
+            } else { stepOk++; callFails.delete(sig); }
             if (!out.hide) {
               const block = '\n\n[[OQR:' + Buffer.from(JSON.stringify({ call: cleanCall(call), result: out.payload }), 'utf8').toString('base64') + ']]\n';
               content += block;
               safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: block }));
             }
             if (sandboxOn) safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
-            toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: out.formatted });
+            toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: formatted });
           }
           safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live: null }));
           if (conversationEnded) {
@@ -282,9 +293,18 @@ export function initWs(server) {
           }
           inTurn = [
             ...inTurn,
-            { role: 'assistant', content: stepText, tool_calls: toolCalls.map(c => ({ id: c.id, name: c.name, argsText: c.argsText })) },
+            { role: 'assistant', content: stripThink(model, stepText), tool_calls: toolCalls.map(c => ({ id: c.id, name: c.name, argsText: c.argsText })) },
             ...toolMsgs
           ];
+          const stepSig = toolCalls.map(c => c.name + ':' + (c.argsText || '')).join('|');
+          const loopStuck = stepOk === 0 && stepFailed > 0 && stepSig === prevStepSig;
+          prevStepSig = stepSig;
+          if (loopStuck) {
+            const note = '\n\nI stopped because the last actions kept failing in the same way. Tell me how you would like to proceed.';
+            content += note;
+            safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: note }));
+            break;
+          }
         }
       } catch (err) {
         if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: String(err.message || err) }));
