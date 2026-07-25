@@ -1,8 +1,17 @@
 import { db, getSetting, setSetting } from '../db.js';
 import { getProviders, resolveProvider, providerSpec } from '../providers.js';
 import { publicKwargDefs } from './kwargs.js';
+import { llamaContext } from './llamacpp.js';
+
+let sunsetCheckedAt = 0;
+let sunsetCheckedVersion = -1;
+const SUNSET_INTERVAL_MS = 60000;
 
 export function applySunsets() {
+  const version = db.models.version();
+  if (version === sunsetCheckedVersion && Date.now() - sunsetCheckedAt < SUNSET_INTERVAL_MS) return;
+  sunsetCheckedAt = Date.now();
+  sunsetCheckedVersion = version;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   for (const m of db.models.all()) {
@@ -48,25 +57,50 @@ export function shapePublic(m) {
   };
 }
 
+const shapeCache = { draft: null, published: null };
+
+function shapeList(rows) {
+  return rows.filter(m => m.enabled).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).map(shapePublic);
+}
+
 export function draftModels() {
   applySunsets();
-  return db.models.filter(m => m.enabled).sort((a, b) => a.sort_order - b.sort_order).map(shapePublic);
+  const version = db.models.version();
+  if (shapeCache.draft && shapeCache.draft.version === version) return shapeCache.draft.list;
+  const list = shapeList(db.models.all());
+  shapeCache.draft = { version, list };
+  return list;
 }
 
 export function publicModels() {
   applySunsets();
   const snap = getSetting('published_models', null);
   if (!Array.isArray(snap)) return draftModels();
-  return snap.filter(m => m.enabled).sort((a, b) => a.sort_order - b.sort_order).map(shapePublic);
+  if (shapeCache.published && shapeCache.published.snap === snap) return shapeCache.published.list;
+  const list = shapeList(snap);
+  shapeCache.published = { snap, list };
+  return list;
 }
 
+export function invalidateModelShapes() { shapeCache.draft = null; shapeCache.published = null; }
+
 // resolve the model used to RUN a completion: admins use live draft, clients use the published snapshot
+const snapIndex = { snap: null, byId: null };
+
+function publishedById(snap, modelId) {
+  if (snapIndex.snap !== snap) {
+    snapIndex.snap = snap;
+    snapIndex.byId = new Map(snap.map(m => [m.id, m]));
+  }
+  return snapIndex.byId.get(modelId) || null;
+}
+
 export function resolveModel(modelId, isAdmin) {
   applySunsets();
   if (isAdmin) return db.models.byId(modelId);
   const snap = getSetting('published_models', null);
   if (!Array.isArray(snap)) return db.models.byId(modelId);
-  return snap.find(m => m.id === modelId) || null;
+  return publishedById(snap, modelId);
 }
 
 export function resolveModelOrDefault(modelId, isAdmin) {
@@ -134,6 +168,8 @@ const CTX_AUTO_TYPES = new Set(['llamacpp', 'ollama', 'lmstudio']);
 export async function modelCtx(model) {
   const manual = parseInt(model.num_ctx);
   if (Number.isFinite(manual) && manual > 0) return manual;
+  const llama = await llamaContext(model);
+  if (llama > 0) return llama;
   const prov = resolveProvider(model.provider_id);
   if (!prov || !CTX_AUTO_TYPES.has(prov.type)) return 0;
   const cacheKey = prov.id + ':' + (model.internal_name || '');

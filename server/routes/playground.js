@@ -1,6 +1,6 @@
 import { db } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
-import { streamCompletion } from '../llm.js';
+import { streamCompletion } from '../llm/index.js';
 import { applyKwargs, sanitizeKwargs } from '../lib/kwargs.js';
 
 const NUM_FIELDS = ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'repetition_penalty', 'min_p'];

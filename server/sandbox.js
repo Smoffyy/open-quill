@@ -579,6 +579,45 @@ function wrapCommand(base, cmd) {
   return `cd ${JSON.stringify(base)} || exit 1\n${cmd}\n__oq_ec=$?\nprintf '\\n${CWD_MARK}%s\\n' "$PWD"\nexit $__oq_ec`;
 }
 
+const WIN_REWRITES = [
+  [/^mkdir\s+-p\s+/i, 'mkdir '],
+  [/^rm\s+-rf?\s+/i, 'rmdir /s /q '],
+  [/^rm\s+-fr\s+/i, 'rmdir /s /q '],
+  [/^rm\s+-f\s+/i, 'del /q /f '],
+  [/^rm\s+/i, 'del /q '],
+  [/^cp\s+-r\s+/i, 'xcopy /e /i /y '],
+  [/^cp\s+/i, 'copy /y '],
+  [/^mv\s+/i, 'move /y '],
+  [/^cat\s+/i, 'type '],
+  [/^ls\s+-[a-z]+\s*/i, 'dir '],
+  [/^ls\s*$/i, 'dir'],
+  [/^ls\s+/i, 'dir '],
+  [/^which\s+/i, 'where '],
+  [/^pwd\s*$/i, 'cd'],
+  [/^python3(\s|$)/i, 'python$1'],
+  [/^pip3(\s|$)/i, 'pip$1']
+];
+
+export function winTranslate(cmd) {
+  const src = String(cmd == null ? '' : cmd);
+  const notes = [];
+  const parts = src.split(/(\s*&&\s*|\s*\|\|\s*|\s*;\s*|\s*\|\s*)/);
+  const out = parts.map((seg, i) => {
+    if (i % 2 === 1) return seg;
+    const trimmed = seg.trim();
+    if (!trimmed) return seg;
+    for (const [re, rep] of WIN_REWRITES) {
+      if (re.test(trimmed)) {
+        const next = trimmed.replace(re, rep);
+        if (next !== trimmed) notes.push(trimmed.split(/\s+/)[0] + ' -> ' + next.split(/\s+/)[0]);
+        return seg.replace(trimmed, next);
+      }
+    }
+    return seg;
+  }).join('');
+  return { cmd: out, notes };
+}
+
 export function bash(chatId, cmd, timeoutMs = 60000, workdir) {
   if (!cmd || !String(cmd).trim()) return Promise.resolve({ ok: false, error: 'cmd is required', output: '' });
   const root = dirFor(chatId);
@@ -591,7 +630,8 @@ export function bash(chatId, cmd, timeoutMs = 60000, workdir) {
 
   const win = process.platform === 'win32';
   const shell = pickShell();
-  const wrapped = wrapCommand(base, String(cmd));
+  const xlat = win ? winTranslate(cmd) : { cmd: String(cmd), notes: [] };
+  const wrapped = wrapCommand(base, xlat.cmd);
 
   return new Promise((resolve) => {
     let child;
@@ -628,10 +668,11 @@ export function bash(chatId, cmd, timeoutMs = 60000, workdir) {
       if (killed) return done({ ok: false, output: capOut(text), error: `Output exceeded ${Math.round(MAX / 1048576)} MB; process killed.`, exit: null });
       const exit = typeof code === 'number' ? code : 1;
       const cwd = getCwd(chatId);
-      if (exit === 0) return done({ ok: true, output: capOut(text), exit: 0, cwd });
+      const xnote = xlat.notes.length ? `\n\n[Adjusted for Windows: ${xlat.notes.join(', ')}. Unix flags like -p and -rf do not exist here; prefer the dedicated file tools.]` : '';
+      if (exit === 0) return done({ ok: true, output: capOut(text) + xnote, exit: 0, cwd });
       let hinted = capOut(text) || `Exited with code ${exit}`;
       if (win && (/is not recognized as an internal or external command/i.test(hinted) || exit === 9009)) {
-        hinted += '\n\nHINT: this host runs Windows (cmd.exe); Unix-only utilities are unavailable. Use the dedicated file tools (view, list_files, search, find, extract_zip, bundle_zip, copy_file, move_file, delete_file, make_dir) and invoke only interpreters listed in the Host environment section. On this host the Python command is `python`, not `python3`.';
+        hinted += '\n\nHINT: this host runs Windows (cmd.exe). Unix flags do not exist here either: `mkdir -p`, `rm -rf`, `cp -r`, `ls -la` all fail even though some of those command names exist. Unix-only utilities are unavailable. Use the dedicated file tools (view, list_files, search, find, extract_zip, bundle_zip, copy_file, move_file, delete_file, make_dir) and invoke only interpreters listed in the Host environment section. On this host the Python command is `python`, not `python3`.';
       }
       return done({ ok: false, output: hinted, exit, error: `Exited with code ${exit}`, cwd });
     });

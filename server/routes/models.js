@@ -5,7 +5,7 @@ import { matchPreset, presetList, setCustomPresets, getCustomPresets } from '../
 import { logAudit } from '../lib/audit.js';
 import { draftModels, publicModels, detectContextLength } from '../lib/models.js';
 import { sanitizeKwargs } from '../lib/kwargs.js';
-import { broadcastConfig, broadcastAdminConfig } from '../lib/ws.js';
+import { broadcastConfig, broadcastAdminConfig } from '../lib/ws/index.js';
 
 export default function registerModelRoutes(app) {
   app.get('/api/models', authMiddleware, (req, res) => res.json(req.user.is_admin ? draftModels() : publicModels()));

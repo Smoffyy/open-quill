@@ -1,6 +1,6 @@
 import { db, uid, now, getSetting } from '../db.js';
 import { hash, check, sign, publicUser, authMiddleware, sessionFromRequest, createSession, revokeSession, revokeOtherSessions, sessionMaxAgeSeconds } from '../auth.js';
-import { oneShot, stripThink } from '../llm.js';
+import { oneShot, stripThink } from '../llm/index.js';
 import { randomSecret, verifyTotp, otpauthUri, makeRecoveryCodes, hashRecovery } from '../totp.js';
 import * as sandbox from '../sandbox.js';
 import { logAudit } from '../lib/audit.js';
@@ -8,7 +8,7 @@ import { purgeUploads } from '../lib/uploads.js';
 import { resolveModelOrDefault } from '../lib/models.js';
 import { budgetStatus } from '../lib/budget.js';
 import { updateUserMemory } from '../lib/memory.js';
-import { killSessionSockets } from '../lib/ws.js';
+import { killSessionSockets } from '../lib/ws/index.js';
 import { removeUserFromSpaces } from '../lib/spaces.js';
 
 const setCookie = (res, token) =>
@@ -290,7 +290,7 @@ export default function registerAuthRoutes(app) {
   });
 
   app.delete('/api/me/chats', authMiddleware, (req, res) => {
-    const myChats = db.chats.filter(c => c.user_id === req.user.id);
+    const myChats = db.chats.byUser(req.user.id);
     for (const c of myChats) { try { sandbox.remove(c.id); } catch {} }
     const chatIds = new Set(myChats.map(c => c.id));
     purgeUploads(chatIds);
@@ -302,7 +302,7 @@ export default function registerAuthRoutes(app) {
   app.delete('/api/me', authMiddleware, (req, res) => {
     const u = req.user;
     if (u.is_owner) return res.status(403).json({ error: 'The owner account cannot be deleted.' });
-    const myChats = db.chats.filter(c => c.user_id === u.id);
+    const myChats = db.chats.byUser(u.id);
     for (const c of myChats) { try { sandbox.remove(c.id); } catch {} }
     const chatIds = new Set(myChats.map(c => c.id));
     purgeUploads(chatIds);

@@ -1,6 +1,6 @@
 import { db, uid, getSetting, setSetting } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
-import { oneShot } from '../llm.js';
+import { oneShot } from '../llm/index.js';
 import { PROVIDER_TYPES, getProviders, typesForClient } from '../providers.js';
 import * as membank from '../membank.js';
 import * as websearch from '../websearch.js';
@@ -8,7 +8,7 @@ import { logAudit } from '../lib/audit.js';
 import { roleLimit } from '../lib/models.js';
 import { DEFAULT_MEMORY_PROMPT } from '../lib/memory.js';
 import { DEFAULT_SAFETY_PROMPT, SAFETY_REASON_SUFFIX, resolveSafetyModel, parseSafetyVerdict } from '../lib/safety.js';
-import { broadcastAdminConfig } from '../lib/ws.js';
+import { broadcastAdminConfig } from '../lib/ws/index.js';
 
 export default function registerSettingsRoutes(app) {
   app.post('/api/safety-check', authMiddleware, async (req, res) => {

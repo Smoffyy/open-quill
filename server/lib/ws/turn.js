@@ -1,0 +1,324 @@
+import fs from 'fs';
+import path from 'path';
+import { db, uid, now, getSetting } from '../../db.js';
+import { sessionFromRequest } from '../../auth.js';
+import { buildMessages, streamCompletion, generateTitle, stripThink } from '../../llm/index.js';
+import { buildTools, toCall, livePreview } from '../../tools/index.js';
+import * as websearch from '../../websearch.js';
+import * as sandbox from '../../sandbox.js';
+import * as membank from '../../membank.js';
+import * as skillsys from '../../skillsys.js';
+import * as mcp from '../../mcp.js';
+import * as projectfiles from '../../projectfiles.js';
+import { stripToolSyntax } from '../history.js';
+import { UPLOADS } from '../uploads.js';
+import { ensureChain, activePath } from '../tree.js';
+import { resolveModel, roleLimit, modelCtx } from '../models.js';
+import { applyKwargs } from '../kwargs.js';
+import { budgetStatus } from '../budget.js';
+import { runQueued } from '../queue.js';
+import { maybeUpdateMemory } from '../memory.js';
+import {
+  chatHistory, estimateTokens, calibratedTokens, updateCalib, truncateForRollingCtx,
+  rollingCtxFor, compactStep, compactThreshold, promptVars, instrFor, styleTextFor,
+  exactTokens, trimInTurn
+} from '../convo.js';
+import { isContextOverflowError } from '../llamacpp.js';
+import {
+  sandboxPromptFor, cleanCall, resultPayload, formatToolResult,
+  runChatSearchTool, formatChatSearchResult, chatSearchPayload,
+  endChatPromptFor, longConvoReminderFor, CHAT_SEARCH_PROMPT
+} from '../prompts.js';
+
+import { clients } from './broadcast.js';
+
+export async function maybeCompact(ws, chat, model, extended, sandboxOn) {
+  const threshold = compactThreshold(model, await modelCtx(model));
+  if (threshold === Infinity) return;
+  let guard = 0;
+  while (guard++ < 3) {
+    const fresh = db.chats.byId(chat.id);
+    const sandboxP = sandboxOn ? sandboxPromptFor(chat.id) : null;
+    const convo = buildMessages(model, await chatHistory(chat, model), extended, sandboxP, fresh.summary, promptVars(chat.user_id), await instrFor(fresh));
+    if ((await exactTokens(chat.id, model, convo)) < threshold) return;
+    if (!(await compactStep(ws, chat, model))) return;
+  }
+}
+
+export async function runCompletion(ws, state, safeSend, chat, model, extended, sandboxOn, sandboxCap = 0, webSearchOn = false, callMode = false, styleText = '') {
+  if (callMode && (model.call_prompt || '').trim()) model = { ...model, system_prompt: model.call_prompt };
+  {
+    const cRow0 = db.chats.byId(chat.id) || chat;
+    if (cRow0.gen_params && typeof cRow0.gen_params === 'object') model = { ...model, ...cRow0.gen_params };
+    if ((cRow0.system_override || '').trim()) model = { ...model, system_prompt: cRow0.system_override };
+  }
+  await maybeCompact(ws, chat, model, extended, sandboxOn);
+  const history = await chatHistory(chat, model);
+  const chatRow = db.chats.byId(chat.id) || chat;
+  const membankOn = getSetting('membank_enabled', '0') === '1' && membank.list().length > 0;
+  const membankHideTools = getSetting('membank_hide_tools', '0') === '1';
+  if (membankOn) { try { await membank.ensureIndexedAll(); } catch {} }
+  const chatSearchOn = !!model.chat_search_allowed && getSetting('chat_search_enabled', '0') === '1';
+  const skillsOn = !!model.skills_allowed && skillsys.getEnabled().length > 0;
+  const mcpSchemas = model.mcp_allowed ? mcp.toolSchemas() : [];
+  const mcpOn = mcpSchemas.length > 0;
+  const endChatOn = !!model.end_chat_allowed;
+  const projFilesOn = !!chatRow.project_id && projectfiles.list(chatRow.project_id).length > 0;
+  const projRow = projFilesOn ? db.projects.byId(chatRow.project_id) : null;
+  const longReminderOn = !!model.long_convo_reminder;
+  let conversationEnded = false;
+  const toolsOn = sandboxOn || webSearchOn || membankOn || chatSearchOn || skillsOn || mcpOn || endChatOn || projFilesOn;
+  const withStyle = (instr) => {
+    if (!styleText) return instr;
+    const block = 'The user selected a response style for this conversation. Apply it consistently to every reply:\n' + styleText;
+    return instr ? instr + '\n\n' + block : block;
+  };
+  const toolsP = () => {
+    const parts = [];
+    if (sandboxOn) parts.push(sandboxPromptFor(chat.id));
+    if (webSearchOn) { parts.push(websearch.webSearchConfig().prompt); parts.push(websearch.webSearchToolPrompt()); }
+    if (membankOn) parts.push(membank.promptFor(getSetting('membank_prompt', '')));
+    if (chatSearchOn) parts.push(CHAT_SEARCH_PROMPT);
+    if (skillsOn) parts.push(skillsys.promptFor());
+    if (mcpOn) parts.push(mcp.promptFor());
+    if (endChatOn) parts.push(endChatPromptFor(model));
+    if (projFilesOn) parts.push(projectfiles.promptFor(chatRow.project_id, projRow ? projRow.name : ''));
+    if (longReminderOn) parts.push(longConvoReminderFor(chat.id));
+    return parts.filter(Boolean).join('\n\n') || null;
+  };
+  let base = buildMessages(model, history, extended, toolsP(), chatRow.summary, promptVars(chat.user_id), withStyle(await instrFor(chatRow)));
+  let inTurn = []; // assistant/tool exchanges accumulated during this response
+  const assistantId = uid();
+  const assistantParent = (db.chats.byId(chat.id) || {}).active_leaf || null;
+  let content = '', reasoning = '', usage = null;
+  safeSend(JSON.stringify({ type: 'start', chatId: chat.id, messageId: assistantId }));
+
+  const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, projFilesOn }) : [];
+  const runToolCall = async (call) => {
+    if (call.tool === 'end_conversation') {
+      if (!endChatOn) return null;
+      const reason = String(call.reason || '').trim().slice(0, 500);
+      db.chats.update(chat.id, { ended: 1, ended_at: now(), ended_reason: reason });
+      conversationEnded = true;
+      return { payload: { ok: true, ended: true }, formatted: 'end_conversation \u2192 The conversation has been permanently ended. Do not produce any further tool calls; finish your reply now.', hide: false };
+    }
+    if (call.tool === 'pf_search' || call.tool === 'pf_view') {
+      if (!projFilesOn) return null;
+      const r = await projectfiles.execTool(chatRow.project_id, call);
+      return { payload: projectfiles.resultPayload(call, r), formatted: projectfiles.formatResult(call, r), hide: false };
+    }
+    if (call.tool === 'chat_search' || call.tool === 'chat_view') {
+      if (!chatSearchOn) return null;
+      const r = runChatSearchTool(chat.user_id, chat.id, call);
+      return { payload: chatSearchPayload(call, r), formatted: formatChatSearchResult(call, r), hide: false };
+    }
+    if (call.tool === 'skill_view') {
+      if (!skillsOn) return null;
+      const r = skillsys.execTool(call);
+      return { payload: skillsys.resultPayload(call, r), formatted: skillsys.formatResult(call, r), hide: false };
+    }
+    if (mcpOn && mcp.isMcpTool(call.tool)) {
+      const r = await mcp.execTool(call);
+      return { payload: mcp.resultPayload(call, r), formatted: mcp.formatResult(call, r), hide: false };
+    }
+    if (call.tool === 'web_search') {
+      if (!webSearchOn) return null;
+      const r = await websearch.runWebSearch(call);
+      return { payload: websearch.webSearchResultPayload(call, r), formatted: websearch.formatWebSearchResult(call, r), hide: false };
+    }
+    if (call.tool === 'mb_view' || call.tool === 'mb_search') {
+      if (!membankOn) return null;
+      const r = membank.execTool(call);
+      return { payload: membank.resultPayload(call, r), formatted: membank.formatResult(call, r), hide: membankHideTools };
+    }
+    if (!sandboxOn) return null;
+    const r = await sandbox.execTool(chat.id, call, sandboxCap);
+    return { payload: resultPayload(call, r), formatted: formatToolResult(call, r), hide: false };
+  };
+
+  const threshold = compactThreshold(model, await modelCtx(model));
+  const rollCtx = await rollingCtxFor(model);
+  let rollNotified = false;
+  const stepCap = (model.agent_steps && model.agent_steps > 0) ? model.agent_steps : 1000;
+  const maxSteps = toolsOn ? stepCap : 1;
+  const callFails = new Map();
+  let prevStepSig = '';
+  let overflowRetried = false;
+  try {
+    for (let step = 0; step < maxSteps; step++) {
+      // running low on context mid-response? summarize older turns, then carry on where we left off
+      if (threshold !== Infinity && inTurn.length && (await exactTokens(chat.id, model, [...base, ...inTurn])) >= threshold) {
+        if (await compactStep(ws, chat, model)) base = buildMessages(model, await chatHistory(chat, model), extended, toolsP(), (db.chats.byId(chat.id) || {}).summary, promptVars(chat.user_id), withStyle(await instrFor(db.chats.byId(chat.id) || chat)));
+        if ((await exactTokens(chat.id, model, [...base, ...inTurn])) >= threshold) {
+          const t = trimInTurn(inTurn);
+          if (t.trimmed) {
+            inTurn = t.list;
+            safeSend(JSON.stringify({ type: 'compacted', chatId: chat.id, trimmedTools: t.trimmed }));
+          }
+        }
+      }
+      let convo = [...base, ...inTurn];
+      if (rollCtx) {
+        const t = truncateForRollingCtx(chat.id, convo, rollCtx);
+        if (t.dropped || t.trimmed) {
+          convo = t.msgs;
+          if (!rollNotified) {
+            rollNotified = true;
+            safeSend(JSON.stringify({ type: 'ctx_rolling', chatId: chat.id, dropped: t.dropped, trimmed: t.trimmed, limit: rollCtx }));
+          }
+        }
+      }
+      const stepEstimate = estimateTokens(convo);
+      let stepPromptTokens = 0;
+      const controller = new AbortController();
+      state.aborts.set(chat.id, controller);
+      let stepText = '';
+      let aborted = false;
+      let toolCalls = [];
+      let liveSent = false;
+      let liveState = { key: '', len: 0, lastAt: 0 };
+      try {
+        await streamCompletion({
+          model, messages: convo, tools, signal: controller.signal,
+          onEvent: (e) => {
+            if (e.type === 'usage') { stepPromptTokens = e.usage.prompt || stepPromptTokens; if (!usage) usage = { prompt: 0, completion: 0, total: 0 }; usage.prompt += e.usage.prompt || 0; usage.completion += e.usage.completion || 0; usage.total += e.usage.total || 0; return; }
+            if (e.type === 'reasoning') { reasoning += e.text; safeSend(JSON.stringify({ type: 'reasoning', chatId: chat.id, text: e.text })); return; }
+            if (e.type === 'content') {
+              content += e.text; stepText += e.text;
+              safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: e.text }));
+              return;
+            }
+            if (e.type === 'tool_call_delta') {
+              const live = livePreview(e.name, e.argsText);
+              if (!live || !live.tool) return;
+              const isFile = (live.tool === 'create_file' || live.tool === 'str_replace') && live.path;
+              if (isFile) {
+                const key = e.index + ':' + live.tool + ':' + live.path + ':' + (live.oldStr || '');
+                if (key !== liveState.key) {
+                  liveState = { key, len: (live.content || '').length, lastAt: Date.now() };
+                  liveSent = true;
+                  safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live }));
+                } else if ((live.content || '').length > liveState.len) {
+                  const text = live.content.slice(liveState.len);
+                  liveState.len = live.content.length;
+                  liveSent = true;
+                  safeSend(JSON.stringify({ type: 'tool_live_delta', chatId: chat.id, text }));
+                }
+              } else {
+                const key = e.index + ':' + JSON.stringify(live);
+                const t = Date.now();
+                if (key !== liveState.key && t - liveState.lastAt > 120) {
+                  liveState = { key, len: 0, lastAt: t };
+                  liveSent = true;
+                  safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live }));
+                }
+              }
+              return;
+            }
+            if (e.type === 'tool_calls') { toolCalls = e.calls; }
+          }
+        });
+      } catch (err) {
+        if (err.name === 'AbortError') aborted = true;
+        else if (isContextOverflowError(err) && !overflowRetried) {
+          overflowRetried = true;
+          safeSend(JSON.stringify({ type: 'compacting', chatId: chat.id }));
+          let freed = await compactStep(ws, chat, model);
+          if (freed) base = buildMessages(model, await chatHistory(chat, model), extended, toolsP(), (db.chats.byId(chat.id) || {}).summary, promptVars(chat.user_id), withStyle(await instrFor(db.chats.byId(chat.id) || chat)));
+          const t = trimInTurn(inTurn, 1);
+          if (t.trimmed) { inTurn = t.list; freed = true; }
+          safeSend(JSON.stringify({ type: 'compacted', chatId: chat.id, trimmedTools: t.trimmed || 0 }));
+          if (!freed) throw err;
+          step--;
+          continue;
+        }
+        else throw err;
+      }
+      updateCalib(chat.id, stepPromptTokens, stepEstimate);
+      if (aborted || !toolsOn || !toolCalls.length) {
+        if (liveSent) safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live: null }));
+        break;
+      }
+      const toolMsgs = [];
+      let stepOk = 0, stepFailed = 0;
+      for (const tc of toolCalls) {
+        const call = toCall(tc.name, tc.argsText);
+        if (conversationEnded) {
+          toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: `${call.tool} \u2192 ERROR: the conversation has been ended; no further tools may run.` });
+          continue;
+        }
+        safeSend(JSON.stringify({ type: 'tool_exec', chatId: chat.id, call: cleanCall(call) }));
+        let out;
+        try { out = await runToolCall(call); }
+        catch (e) { out = { payload: { ok: false, error: String(e.message || e).slice(0, 400) }, formatted: `${call.tool} → ERROR: ${String(e.message || e).slice(0, 400)}`, hide: false }; }
+        if (!out) out = { payload: { ok: false, error: `Unknown or disabled tool: ${call.tool}` }, formatted: `${call.tool} → ERROR: this tool is not available.`, hide: false };
+        const failed = !out.payload || out.payload.ok === false;
+        let formatted = out.formatted;
+        const sig = call.tool + '|' + (tc.argsText || '');
+        if (failed) {
+          stepFailed++;
+          const n = (callFails.get(sig) || 0) + 1; callFails.set(sig, n);
+          if (n >= 2) formatted += `\n(NOTE: this identical call has failed ${n} times. Do not repeat it. Change the arguments or approach, or tell the user why it cannot be done.)`;
+        } else { stepOk++; callFails.delete(sig); }
+        if (!out.hide) {
+          const block = '\n\n[[OQR:' + Buffer.from(JSON.stringify({ call: cleanCall(call), result: out.payload }), 'utf8').toString('base64') + ']]\n';
+          content += block;
+          safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: block }));
+        }
+        if (sandboxOn) safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
+        toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: formatted });
+      }
+      safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live: null }));
+      if (conversationEnded) {
+        const endedChat = db.chats.byId(chat.id);
+        safeSend(JSON.stringify({ type: 'chat_ended', chatId: chat.id, reason: (endedChat && endedChat.ended_reason) || '' }));
+        break;
+      }
+      inTurn = [
+        ...inTurn,
+        { role: 'assistant', content: stripThink(model, stepText), tool_calls: toolCalls.map(c => ({ id: c.id, name: c.name, argsText: c.argsText })) },
+        ...toolMsgs
+      ];
+      const stepSig = toolCalls.map(c => c.name + ':' + (c.argsText || '')).join('|');
+      const loopStuck = stepOk === 0 && stepFailed > 0 && stepSig === prevStepSig;
+      prevStepSig = stepSig;
+      if (loopStuck) {
+        const note = '\n\nI stopped because the last actions kept failing in the same way. Tell me how you would like to proceed.';
+        content += note;
+        safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: note }));
+        break;
+      }
+    }
+  } catch (err) {
+    if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: String(err.message || err) }));
+  }
+  state.aborts.delete(chat.id);
+
+  let usageRec = null;
+  if (usage && (usage.prompt || usage.completion)) {
+    const cost = (usage.prompt / 1e6) * (Number(model.cost_in) || 0) + (usage.completion / 1e6) * (Number(model.cost_out) || 0);
+    usageRec = { prompt: usage.prompt, completion: usage.completion, total: usage.total || (usage.prompt + usage.completion), cost };
+    db.usage.insert({ id: uid(), user_id: chat.user_id, model_id: model.id, model_name: model.display_name || '', prompt: usageRec.prompt, completion: usageRec.completion, total: usageRec.total, cost, cost_in: Number(model.cost_in) || 0, cost_out: Number(model.cost_out) || 0, created_at: now() });
+  }
+  const hasOutput = !!(content.trim() || reasoning.trim());
+  if (hasOutput || usageRec) {
+    db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: usageRec, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, kwarg_values: model.kwarg_values || null, created_at: now() });
+    db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
+  } else {
+    db.chats.update(chat.id, { updated_at: now() });
+  }
+  const truncated = !!(Number(model.max_tokens) > 0 && usage && usage.completion >= Number(model.max_tokens) - 2 && !conversationEnded);
+  safeSend(JSON.stringify({ type: 'done', chatId: chat.id, messageId: (hasOutput || usageRec) ? assistantId : null, truncated }));
+
+  const fresh = db.chats.byId(chat.id);
+  const lastUser = [...history].reverse().find(h => h.role === 'user');
+  const lastUserText = lastUser && (Array.isArray(lastUser.content)
+    ? (lastUser.content.find(p => p.type === 'text')?.text || 'Image')
+    : lastUser.content);
+  const cleanContent = stripToolSyntax(content).trim();
+  if (cleanContent && fresh && fresh.title === 'New chat' && lastUserText) {
+    const title = await generateTitle(model, lastUserText, cleanContent);
+    db.chats.update(chat.id, { title });
+    safeSend(JSON.stringify({ type: 'title', chatId: chat.id, title }));
+  }
+}

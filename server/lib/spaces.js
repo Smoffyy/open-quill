@@ -1,6 +1,6 @@
 import { db, uid, now } from '../db.js';
-import { oneShot, stripThink } from '../llm.js';
-import { clients } from './ws.js';
+import { oneShot, stripThink } from '../llm/index.js';
+import { clients } from './ws/index.js';
 
 export function broadcastSpace(spaceId, payload, excludeUserId) {
   const space = db.spaces.byId(spaceId);

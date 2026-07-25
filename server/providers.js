@@ -1,13 +1,13 @@
 import { getSetting } from './db.js';
 
 export const PROVIDER_TYPES = {
+  llamacpp: {
+    label: 'llama.cpp server', defaultBaseUrl: 'http://localhost:8080', protocol: 'openai', keyOptional: true,
+    samplers: ['temperature', 'top_p', 'top_k', 'min_p', 'repetition_penalty', 'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens'],
+    remap: { repetition_penalty: 'repeat_penalty' }, timingsPerToken: true
+  },
   lmstudio: {
     label: 'LM Studio', defaultBaseUrl: 'http://localhost:1234/v1', protocol: 'openai', keyOptional: true,
-    samplers: ['temperature', 'top_p', 'top_k', 'min_p', 'repetition_penalty', 'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens'],
-    remap: { repetition_penalty: 'repeat_penalty' }
-  },
-  llamacpp: {
-    label: 'llama.cpp server', defaultBaseUrl: 'http://localhost:8080/v1', protocol: 'openai', keyOptional: true,
     samplers: ['temperature', 'top_p', 'top_k', 'min_p', 'repetition_penalty', 'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens'],
     remap: { repetition_penalty: 'repeat_penalty' }
   },
@@ -68,7 +68,8 @@ export function resolveProvider(providerId) {
 }
 
 export function providerSpec(provider) {
-  const spec = PROVIDER_TYPES[provider?.type] || PROVIDER_TYPES.lmstudio;
-  const base = (provider?.base_url || spec.defaultBaseUrl).replace(/\/$/, '');
+  const spec = PROVIDER_TYPES[provider?.type] || PROVIDER_TYPES.llamacpp;
+  let base = (provider?.base_url || spec.defaultBaseUrl).replace(/\/+$/, '');
+  if (spec.protocol === 'openai' && !/\/v\d+$/.test(base)) base += '/v1';
   return { spec, base, key: provider?.api_key || '' };
 }

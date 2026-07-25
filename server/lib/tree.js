@@ -1,31 +1,88 @@
 import { db } from '../db.js';
 
-export function sortedMsgs(chatId) { return db.messages.byChat(chatId); }
+const CACHE_MAX = 24;
+const cache = new Map();
 
-export function ensureChain(chatId) {
-  const all = sortedMsgs(chatId);
-  let prev = null;
-  for (const m of all) { if (m.parent_id === undefined) db.messages.update(m.id, { parent_id: prev }); prev = m.id; }
-  const chat = db.chats.byId(chatId);
-  if (chat && !chat.active_leaf && all.length) db.chats.update(chatId, { active_leaf: all[all.length - 1].id });
+function buildGraph(chatId) {
+  const msgs = db.messages.byChat(chatId);
+  const byId = new Map();
+  const kids = new Map();
+  for (const m of msgs) {
+    byId.set(m.id, m);
+    const p = m.parent_id ?? null;
+    let arr = kids.get(p);
+    if (!arr) { arr = []; kids.set(p, arr); }
+    arr.push(m);
+  }
+  return { msgs, byId, kids, chained: false };
 }
 
-export function childrenOf(chatId, parentId) { return sortedMsgs(chatId).filter(m => (m.parent_id ?? null) === (parentId ?? null)); }
+export function graphOf(chatId) {
+  const version = db.messages.version();
+  const hit = cache.get(chatId);
+  if (hit && hit.version === version) {
+    cache.delete(chatId);
+    cache.set(chatId, hit);
+    return hit.graph;
+  }
+  const graph = buildGraph(chatId);
+  cache.set(chatId, { version, graph });
+  if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value);
+  return graph;
+}
+
+export function invalidateTree(chatId) {
+  if (chatId) cache.delete(chatId); else cache.clear();
+}
+
+export function sortedMsgs(chatId) { return graphOf(chatId).msgs; }
+
+export function ensureChain(chatId) {
+  let g = graphOf(chatId);
+  if (g.chained) return;
+  let prev = null;
+  let wrote = false;
+  for (const m of g.msgs) {
+    if (m.parent_id === undefined) { db.messages.update(m.id, { parent_id: prev }); wrote = true; }
+    prev = m.id;
+  }
+  const chat = db.chats.byId(chatId);
+  if (chat && !chat.active_leaf && g.msgs.length) db.chats.update(chatId, { active_leaf: g.msgs[g.msgs.length - 1].id });
+  if (wrote) g = graphOf(chatId);
+  g.chained = true;
+}
+
+export function childrenOf(chatId, parentId) {
+  return graphOf(chatId).kids.get(parentId ?? null) || [];
+}
 
 export function activePath(chatId) {
   ensureChain(chatId);
+  const g = graphOf(chatId);
   const chat = db.chats.byId(chatId);
-  const all = sortedMsgs(chatId);
-  const byId = new Map(all.map(m => [m.id, m]));
   let leaf = chat?.active_leaf;
-  if (!leaf || !byId.has(leaf)) leaf = all.length ? all[all.length - 1].id : null;
-  const path = []; const seen = new Set(); let cur = leaf;
-  while (cur && byId.has(cur) && !seen.has(cur)) { seen.add(cur); path.push(byId.get(cur)); cur = byId.get(cur).parent_id; }
+  if (!leaf || !g.byId.has(leaf)) leaf = g.msgs.length ? g.msgs[g.msgs.length - 1].id : null;
+  const path = [];
+  const seen = new Set();
+  let cur = leaf;
+  while (cur && g.byId.has(cur) && !seen.has(cur)) {
+    seen.add(cur);
+    const m = g.byId.get(cur);
+    path.push(m);
+    cur = m.parent_id;
+  }
   return path.reverse();
 }
 
 export function leafUnder(chatId, messageId) {
-  let cur = db.messages.byId(messageId);
-  while (cur) { const kids = childrenOf(chatId, cur.id); if (!kids.length) break; cur = kids[kids.length - 1]; }
+  const g = graphOf(chatId);
+  let cur = g.byId.get(messageId) || db.messages.byId(messageId);
+  const seen = new Set();
+  while (cur && !seen.has(cur.id)) {
+    seen.add(cur.id);
+    const kids = g.kids.get(cur.id);
+    if (!kids || !kids.length) break;
+    cur = kids[kids.length - 1];
+  }
   return cur ? cur.id : messageId;
 }

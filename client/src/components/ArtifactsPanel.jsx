@@ -9,7 +9,18 @@ import { t } from '../i18n.jsx';
 const PREVIEW_HTML = new Set(['html', 'htm', 'svg']);
 const PREVIEW_MD = new Set(['md', 'markdown']);
 const IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'avif']);
+const CodeRow = React.memo(function CodeRow({ n, html, hit, hasMatch }) {
+  return (
+    <div className={'art-line' + (hit ? ' hit' : '') + (hasMatch ? ' has-match' : '')}>
+      <span className="art-ln">{n}</span>
+      <span className="art-lc" dangerouslySetInnerHTML={{ __html: html || ' ' }} />
+    </div>
+  );
+});
+
 const HL_MAX_LINES = 5000;
+const AUTO_HL_MAX_LINES = 1200;
+const PAINT_MS = 90;
 
 const EXT_LANG = { rs: 'rust', py: 'python', js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript', html: 'xml', htm: 'xml', css: 'css', scss: 'scss', json: 'json', md: 'markdown', markdown: 'markdown', sh: 'bash', bash: 'bash', c: 'c', cpp: 'cpp', h: 'cpp', java: 'java', rb: 'ruby', go: 'go', php: 'php', sql: 'sql', yml: 'yaml', yaml: 'yaml', toml: 'ini', ini: 'ini', lua: 'lua', glsl: 'glsl', vert: 'glsl', frag: 'glsl', xml: 'xml', svg: 'xml', kt: 'kotlin', swift: 'swift', vue: 'xml' };
 const EXT_COLOR = { py: '#4b8bf4', js: '#e6b73a', jsx: '#e6b73a', mjs: '#e6b73a', ts: '#3a8ddb', tsx: '#3a8ddb', html: '#e3683c', htm: '#e3683c', css: '#3f7ff0', scss: '#cd6799', json: '#9aa0a6', md: '#8a93a0', markdown: '#8a93a0', sh: '#5bbd6a', bash: '#5bbd6a', rs: '#d6a07a', c: '#6b78c4', cpp: '#6b78c4', h: '#6b78c4', java: '#c0824a', rb: '#c5413b', go: '#39c0d4', php: '#8a8fd0', sql: '#d99440', yml: '#cb4b3e', yaml: '#cb4b3e', toml: '#b08b54', lua: '#5b8df0', svg: '#e3683c', xml: '#e3683c', txt: '#9aa0a6', csv: '#5bbd6a', zip: '#b48ad6' };
@@ -181,6 +192,7 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
   useEffect(() => { setMode(PREVIEW_HTML.has(extOf(path)) ? 'preview' : 'code'); }, [path]);
   const previewOn = canPreview && mode === 'preview' && !isLive && !diff;
   const liveEdit = isLive && liveInfo && liveInfo.tool === 'str_replace';
+  const liveActive = isLive || liveEdit;
   const rawStream = isLive ? liveText : (!committed && pendingText != null ? pendingText : null);
   const fromStream = rawStream != null;
   const streamText = useFrameThrottle(rawStream ?? '', fromStream);
@@ -233,20 +245,35 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
   }, [diff, viewingV, path, chatId]);
 
   const shownText = fromStream ? streamText : (data?.text != null ? data.text : null);
-  const rawLines = useMemo(() => shownText != null ? shownText.split('\n') : [], [shownText]);
+  const [viewText, setViewText] = useState(shownText);
+  const paintPending = useRef(shownText);
+  const paintTimer = useRef(null);
+  useEffect(() => {
+    paintPending.current = shownText;
+    if (!liveActive) {
+      if (paintTimer.current) { clearTimeout(paintTimer.current); paintTimer.current = null; }
+      setViewText(shownText);
+      return;
+    }
+    if (paintTimer.current) return;
+    paintTimer.current = setTimeout(() => { paintTimer.current = null; setViewText(paintPending.current); }, PAINT_MS);
+  }, [shownText, liveActive]);
+  useEffect(() => () => { if (paintTimer.current) clearTimeout(paintTimer.current); }, []);
+
+  const rawLines = useMemo(() => viewText != null ? viewText.split('\n') : [], [viewText]);
   const bigFile = rawLines.length > HL_MAX_LINES;
   const lineHtmls = useMemo(() => {
-    if (shownText == null) return [];
-    if (bigFile || (fromStream && shownText.length > 40000)) return rawLines.map(escHtml);
+    if (viewText == null) return [];
+    if (liveActive || bigFile || viewText.length > 40000) return rawLines.map(escHtml);
     const lang = EXT_LANG[(fromStream ? ext : (data?.ext || '').toLowerCase())];
     try {
       let full;
-      if (lang && hljs.getLanguage(lang)) full = hljs.highlight(shownText, { language: lang, ignoreIllegals: true }).value;
-      else if (fromStream) return rawLines.map(escHtml);
-      else full = hljs.highlightAuto(shownText).value;
+      if (lang && hljs.getLanguage(lang)) full = hljs.highlight(viewText, { language: lang, ignoreIllegals: true }).value;
+      else if (rawLines.length > AUTO_HL_MAX_LINES) return rawLines.map(escHtml);
+      else full = hljs.highlightAuto(viewText).value;
       return splitHighlightedLines(full);
     } catch { return rawLines.map(escHtml); }
-  }, [shownText, fromStream, bigFile]);
+  }, [viewText, rawLines, liveActive, fromStream, bigFile, ext, data]);
 
   const matches = useMemo(() => {
     if (!query) return [];
@@ -284,7 +311,6 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
   const [following, setFollowing] = useState(true);
   const progUntil = useRef(0);
   const touchY = useRef(0);
-  const liveActive = isLive || liveEdit;
   const scrollKey = chatId + '::' + path;
 
   useEffect(() => { followRef.current = true; setFollowing(true); }, [path]);
@@ -302,7 +328,7 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
       const el = bodyRef.current;
       if (el) { progUntil.current = Date.now() + 160; el.scrollTop = el.scrollHeight; }
     }
-  }, [streamText, liveActive]);
+  }, [viewText, liveActive]);
 
   useLayoutEffect(() => {
     if (liveActive && followRef.current) return;
@@ -450,14 +476,9 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
           <div className={'art-code2' + (isLive ? ' live' : '') + (wrap ? ' wrap' : '')} ref={codeRef}>
             {lineHtmls.map((lh, i) => {
               const lm = matchesByLine.get(i);
-              const hit = activeMatch && activeMatch.line === i;
+              const hit = !!(activeMatch && activeMatch.line === i);
               const inner = lm ? markLine(rawLines[i] ?? '', lm, activeMatch ? activeMatch.gid : -1) : lh;
-              return (
-                <div key={i} className={'art-line' + (hit ? ' hit' : '') + (lm ? ' has-match' : '')}>
-                  <span className="art-ln">{i + 1}</span>
-                  <span className="art-lc" dangerouslySetInnerHTML={{ __html: inner || ' ' }} />
-                </div>
-              );
+              return <CodeRow key={i} n={i + 1} html={inner} hit={hit} hasMatch={!!lm} />;
             })}
             {isLive && <div className="art-line caret"><span className="art-ln" /><span className="art-lc"><span className="live-caret" /></span></div>}
           </div>

@@ -151,7 +151,7 @@ export default function registerAdminRoutes(app) {
     if (!u) return res.json({ ok: true });
     if (u.is_owner) return res.status(403).json({ error: 'The top admin cannot be removed.' });
     if (u.id === req.user.id) return res.status(403).json({ error: 'You cannot remove your own account here.' });
-    const myChats = db.chats.filter(c => c.user_id === u.id);
+    const myChats = db.chats.byUser(u.id);
     for (const c of myChats) { try { sandbox.remove(c.id); } catch {} }
     const chatIds = new Set(myChats.map(c => c.id));
     purgeUploads(chatIds);

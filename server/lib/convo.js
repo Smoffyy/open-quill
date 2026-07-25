@@ -1,11 +1,12 @@
 import { db, getSetting } from '../db.js';
-import { oneShot, stripThink, summarizeConversation } from '../llm.js';
+import { oneShot, stripThink, summarizeConversation } from '../llm/index.js';
 import { resolveProvider } from '../providers.js';
 import { activePath } from './tree.js';
 import { historyText } from './history.js';
 import { isTextLike, readUploadText, readImageDataUri } from './uploads.js';
 import { modelCtx } from './models.js';
 import { pinnedFilesPrompt, lastUserQuery } from './prompts.js';
+import { llamaTokenCount, llamaContext, isLlamaCpp } from './llamacpp.js';
 
 export const STYLE_PRESETS = {
   concise: 'Respond concisely. Get to the point immediately, cut filler, hedging, and restatement, and keep answers as short as they can be while remaining complete and correct. Prefer tight prose over long lists.',
@@ -184,11 +185,44 @@ export function recentWindow(model) {
   return Number.isFinite(n) && n > 0 ? n : 4;
 }
 
+export const FALLBACK_CTX = 8192;
+
 export function compactThreshold(model, ctxOverride) {
-  const ctx = Number.isFinite(parseInt(ctxOverride)) && parseInt(ctxOverride) > 0 ? parseInt(ctxOverride) : parseInt(model.num_ctx);
-  if (!model.enable_summaries || !ctx || ctx <= 0) return Infinity;
+  if (!model.enable_summaries) return Infinity;
+  const over = parseInt(ctxOverride, 10);
+  const manual = parseInt(model.num_ctx, 10);
+  const ctx = (Number.isFinite(over) && over > 0) ? over : ((Number.isFinite(manual) && manual > 0) ? manual : FALLBACK_CTX);
   const padding = Math.max(0.03, Math.min(0.6, model.summary_padding || 0.125));
   return Math.floor(ctx * (1 - padding));
+}
+
+export async function exactTokens(chatId, model, messages) {
+  if (isLlamaCpp(model)) {
+    const n = await llamaTokenCount(model, messages);
+    if (n > 0) {
+      updateCalib(chatId, n, estimateTokens(messages));
+      return n;
+    }
+  }
+  return calibratedTokens(chatId, messages);
+}
+
+const TOOL_TRIM_NOTE = '[Tool output trimmed to fit the context window. Re-run the tool if you need the full result.]';
+
+export function trimInTurn(inTurn, keepRecent = 2) {
+  const toolIdx = [];
+  for (let i = 0; i < inTurn.length; i++) if (inTurn[i] && inTurn[i].role === 'tool') toolIdx.push(i);
+  if (toolIdx.length <= keepRecent) return { list: inTurn, trimmed: 0 };
+  const protect = new Set(toolIdx.slice(-keepRecent));
+  let trimmed = 0;
+  const list = inTurn.map((m, i) => {
+    if (m.role !== 'tool' || protect.has(i)) return m;
+    const text = String(m.content ?? '');
+    if (text.length <= 400 || m.__trimmed) return m;
+    trimmed++;
+    return { ...m, __trimmed: true, content: text.slice(0, 200) + '\n' + TOOL_TRIM_NOTE + '\n' + text.slice(-200) };
+  });
+  return { list, trimmed };
 }
 
 export const tokenCalib = new Map();

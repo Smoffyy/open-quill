@@ -1,6 +1,6 @@
 import { db, uid, now } from '../db.js';
 import { authMiddleware } from '../auth.js';
-import { broadcastToUser } from '../lib/ws.js';
+import { broadcastToUser } from '../lib/ws/index.js';
 import { broadcastSpace, isMember, isAccepted, memberOf, canPost, removeUserFromSpaces, shapeSpace, shapeSpaceMsg, spaceAssistantRespond } from '../lib/spaces.js';
 
 function ownSpace(req, res, { requireOwner = false } = {}) {

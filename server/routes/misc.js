@@ -5,7 +5,7 @@ import { getSetting, setSetting } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
 import { logAudit } from '../lib/audit.js';
 import { appConfig } from '../lib/appconfig.js';
-import { broadcastConfig } from '../lib/ws.js';
+import { broadcastConfig } from '../lib/ws/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DOCS = { credits: 'CREDITS.md', changelog: 'CHANGELOG.md', license: 'LICENSE' };

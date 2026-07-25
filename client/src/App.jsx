@@ -8,14 +8,12 @@ import Login from './components/Login.jsx';
 import Sidebar from './components/Sidebar.jsx';
 import AppBackground from './components/AppBackground.jsx';
 import Composer from './components/Composer.jsx';
+import QuickPrompts from './components/QuickPrompts.jsx';
+import CompactingBar from './components/CompactingBar.jsx';
+import SummaryModal from './components/SummaryModal.jsx';
+import CommandPalette from './components/CommandPalette.jsx';
+import { computeActiveBg } from './lib/appbg.js';
 
-function computeActiveBg(models, currentId, activeId, messagesLen, incognito, prefs) {
-  const m = models.find(x => x.id === currentId);
-  const isEmpty = !activeId && messagesLen === 0;
-  const inChat = prefs?.modelBgInChat !== false;
-  const has = !incognito && !!(m?.bgEnabled && m?.bgImage);
-  return has && (isEmpty || inChat) ? m.bgImage : null;
-}
 import Message from './components/Message.jsx';
 const SettingsModal = React.lazy(() => import('./components/SettingsModal.jsx'));
 const ModelDocs = React.lazy(() => import('./components/ModelDocs.jsx'));
@@ -41,118 +39,9 @@ import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X } from 
 
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: 'Assistants can make mistakes, double-check responses.', greetings: ['How can I help you?'], appIcon: '', quickPrompts: [], version: '' };
 
-function QuickPrompts({ prompts, visible, disabled, onPick }) {
-  const [render, setRender] = useState(visible);
-  const [leaving, setLeaving] = useState(false);
-  useEffect(() => {
-    if (visible) { setRender(true); setLeaving(false); return; }
-    if (!render) return;
-    setLeaving(true);
-    const off = document.documentElement.getAttribute('data-entrance') === 'off';
-    const dur = off ? 0 : 260 + prompts.length * 45 + 60;
-    const t = setTimeout(() => setRender(false), dur);
-    return () => clearTimeout(t);
-  }, [visible]);
-  const keepSpace = document.documentElement.getAttribute('data-preset') === 'openai';
-  if (!render && !keepSpace) return null;
-  return (
-    <div className={'quick-prompts' + (leaving ? ' leaving' : '') + (keepSpace && !visible ? ' qp-ghost' : '')}>
-      {prompts.map((q, i) => (
-        <button key={i} className="quick-prompt" style={{ animationDelay: i * 45 + 'ms' }} onClick={() => onPick(t(q.prompt))} disabled={disabled}>
-          {q.icon && q.icon !== 'none' && <span className="qp-icon"><QpIcon name={q.icon} style={{ width: 15, height: 15 }} /></span>}{t(q.label)}
-        </button>
-      ))}
-    </div>
-  );
-}
 
-function CompactingBar() {
-  const [pct, setPct] = useState(6);
-  useEffect(() => {
-    const t = setInterval(() => setPct(p => (p < 92 ? p + Math.max(0.6, (92 - p) * 0.05) : p)), 220);
-    return () => clearInterval(t);
-  }, []);
-  return (
-    <div className="compacting">
-      <span className="compacting-spin" />
-      <div className="compacting-body">
-        <div className="compacting-text">Compacting our conversation so we can keep chatting…</div>
-        <div className="compacting-row">
-          <div className="compacting-bar"><div className="compacting-fill" style={{ width: pct + '%' }} /></div>
-          <span className="compacting-pct">{Math.round(pct)}%</span>
-        </div>
-      </div>
-    </div>
-  );
-}
 
-function SummaryModal({ chatId, onClose, onChanged }) {
-  const [text, setText] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [saved, setSaved] = useState(false);
-  useEffect(() => {
-    let on = true;
-    api.get('/api/chats/' + chatId + '/summary').then(r => { if (on) { setText(r.summary || ''); setLoading(false); } }).catch(() => setLoading(false));
-    return () => { on = false; };
-  }, [chatId]);
-  async function save() { await api.patch('/api/chats/' + chatId + '/summary', { summary: text }); onChanged?.(!!text.trim()); setSaved(true); setTimeout(() => setSaved(false), 1400); }
-  async function clear() { await api.patch('/api/chats/' + chatId + '/summary', { clear: true }); setText(''); onChanged?.(false); onClose(); }
-  return (
-    <div className="overlay" onMouseDown={e => e.target.classList.contains('overlay') && onClose()}>
-      <div className="summary-modal">
-        <div className="sm-head"><h3>Conversation memory</h3><button className="modal-close" style={{ position: 'static' }} onClick={onClose}>✕</button></div>
-        <p className="muted-note" style={{ margin: '0 0 10px' }}>Older messages were compacted into this summary, which is fed to the model as context on every turn. You can edit or clear it.</p>
-        {loading ? <div className="art-empty">Loading…</div> : (
-          <textarea className="summary-text" value={text} onChange={e => setText(e.target.value)} placeholder="No summary yet." />
-        )}
-        <div className="edit-actions" style={{ marginTop: 12 }}>
-          <button className="btn ghost" onClick={clear}>Clear</button>
-          <button className="btn primary" onClick={save}>{saved ? 'Saved' : 'Save'}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
-function CommandPalette({ commands, onClose }) {
-  const [q, setQ] = useState('');
-  const [idx, setIdx] = useState(0);
-  const inputRef = useRef(null);
-  const listRef = useRef(null);
-  useEffect(() => { inputRef.current?.focus(); }, []);
-  const filtered = commands.filter(c => {
-    const s = (c.label + ' ' + (c.keywords || '')).toLowerCase();
-    return q.trim().toLowerCase().split(/\s+/).every(t => s.includes(t));
-  });
-  useEffect(() => { setIdx(0); }, [q]);
-  function run(c) { onClose(); c.action(); }
-  function onKey(e) {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setIdx(i => Math.min(i + 1, filtered.length - 1)); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setIdx(i => Math.max(i - 1, 0)); }
-    else if (e.key === 'Enter') { e.preventDefault(); const c = filtered[idx]; if (c) run(c); }
-    else if (e.key === 'Escape') { e.preventDefault(); onClose(); }
-  }
-  useEffect(() => {
-    const el = listRef.current?.children[idx];
-    if (el) el.scrollIntoView({ block: 'nearest' });
-  }, [idx]);
-  return (
-    <div className="overlay cmdk-overlay" onMouseDown={(e) => e.target.classList.contains('cmdk-overlay') && onClose()}>
-      <div className="cmdk">
-        <input ref={inputRef} className="cmdk-input" placeholder="Type a command…" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} />
-        <div className="cmdk-list" ref={listRef}>
-          {filtered.length === 0 && <div className="cmdk-empty">No matching commands</div>}
-          {filtered.map((c, i) => (
-            <button key={c.id} className={'cmdk-item' + (i === idx ? ' active' : '')} onMouseMove={() => setIdx(i)} onClick={() => run(c)}>
-              <span className="cmdk-label">{c.label}</span>
-              {c.shortcut && <span className="cmdk-shortcut">{c.shortcut}</span>}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function App() {
   const [user, setUser] = useState(undefined);
@@ -1092,6 +981,8 @@ export default function App() {
 
     dismissError();
     setCanContinue(false);
+    const sbAllowed = incognito ? false : (models.find(x => x.id === currentId)?.sandboxAllowed !== false);
+    if (sbAllowed && sandbox && !opts.call) { setArtifactFocus(null); setArtifactsOpen(true); }
     if (compareIds.length && !opts.call) {
       compareRef.current = { chatId: null, remaining: [...compareIds], messageId: null };
       setCompareIds([]);
