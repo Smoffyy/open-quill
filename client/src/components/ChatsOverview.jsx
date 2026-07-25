@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
+import { t } from '../i18n.jsx';
 
 function timeAgo(ts) {
   const s = Math.floor((Date.now() - ts) / 1000);
@@ -105,7 +106,7 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
   return (
     <div className="chats-overview">
       <div className="co-head">
-        <h2>Your chats</h2>
+        <h2>{t("Your chats")}</h2>
         <div className="co-tools">
           <div className="seg co-seg">
             <button className={tab === 'all' ? 'on' : ''} onClick={() => switchTab('all')}>Active</button>

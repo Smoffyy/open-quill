@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../../../api.js';
 import { SegPick } from '../widgets.jsx';
 import { Plus, Trash, Pencil, Plug, Refresh } from '../../icons.jsx';
+import { t } from '../../../i18n.jsx';
 
 export default function McpSection() {
   const [servers, setServers] = useState([]);
@@ -35,30 +36,30 @@ export default function McpSection() {
       </div>
       {edit && (
         <div className="fn-editor">
-          <div className="field"><label>Server name</label>
-            <input value={edit.name} onChange={(e) => setEdit(x => ({ ...x, name: e.target.value }))} placeholder="Filesystem" />
+          <div className="field"><label>{t("Server name")}</label>
+            <input value={edit.name} onChange={(e) => setEdit(x => ({ ...x, name: e.target.value }))} placeholder={t("Filesystem")} />
           </div>
-          <div className="field"><label>Transport</label>
+          <div className="field"><label>{t("Transport")}</label>
             <SegPick value={edit.transport === 'http' ? 'http' : 'stdio'} options={[['stdio', 'stdio (local command)'], ['http', 'HTTP']]}
               onChange={(v) => setEdit(x => ({ ...x, transport: v }))} />
           </div>
           {edit.transport !== 'http' && (
             <>
-              <div className="field"><label>Command</label>
-                <input value={edit.command} onChange={(e) => setEdit(x => ({ ...x, command: e.target.value }))} placeholder="npx" />
+              <div className="field"><label>{t("Command")}</label>
+                <input value={edit.command} onChange={(e) => setEdit(x => ({ ...x, command: e.target.value }))} placeholder={t("npx")} />
               </div>
-              <div className="field"><label>Arguments</label>
-                <input value={edit.args} onChange={(e) => setEdit(x => ({ ...x, args: e.target.value }))} placeholder="-y @modelcontextprotocol/server-filesystem /home/me/docs" />
-                <div className="muted-note">The command is spawned by this server and speaks MCP over stdio.</div>
+              <div className="field"><label>{t("Arguments")}</label>
+                <input value={edit.args} onChange={(e) => setEdit(x => ({ ...x, args: e.target.value }))} placeholder={t("-y @modelcontextprotocol/server-filesystem /home/me/docs")} />
+                <div className="muted-note">{t("The command is spawned by this server and speaks MCP over stdio.")}</div>
               </div>
             </>
           )}
           {edit.transport === 'http' && (
             <>
-              <div className="field"><label>URL</label>
-                <input value={edit.url} onChange={(e) => setEdit(x => ({ ...x, url: e.target.value }))} placeholder="http://localhost:8931/mcp" />
+              <div className="field"><label>{t("URL")}</label>
+                <input value={edit.url} onChange={(e) => setEdit(x => ({ ...x, url: e.target.value }))} placeholder={t("http://localhost:8931/mcp")} />
               </div>
-              <div className="field"><label>Headers</label>
+              <div className="field"><label>{t("Headers")}</label>
                 <textarea rows={2} value={edit.headers} onChange={(e) => setEdit(x => ({ ...x, headers: e.target.value }))} placeholder={'Authorization: Bearer …'} />
                 <div className="muted-note">Optional, one <code>Name: value</code> per line.</div>
               </div>
@@ -74,7 +75,7 @@ export default function McpSection() {
         </div>
       )}
       <div className="fn-list">
-        {servers.length === 0 && !edit && <div className="muted-note">No MCP servers yet.</div>}
+        {servers.length === 0 && !edit && <div className="muted-note">{t("No MCP servers yet.")}</div>}
         {servers.map(sv => (
           <div key={sv.id} className="fn-card">
             <div className="fn-card-main">
@@ -89,8 +90,8 @@ export default function McpSection() {
               </div>
             </div>
             <div className="fn-card-actions">
-              <button className="icon-btn" title="Reconnect and refresh tools" disabled={busy === sv.id} onClick={() => refresh(sv.id)}><Refresh style={{ width: 15, opacity: busy === sv.id ? .4 : 1 }} /></button>
-              <div className={'switch' + (sv.enabled ? ' on' : '')} title="Enabled" onClick={() => toggle(sv)} />
+              <button className="icon-btn" title={t("Reconnect and refresh tools")} disabled={busy === sv.id} onClick={() => refresh(sv.id)}><Refresh style={{ width: 15, opacity: busy === sv.id ? .4 : 1 }} /></button>
+              <div className={'switch' + (sv.enabled ? ' on' : '')} title={t("Enabled")} onClick={() => toggle(sv)} />
               <button className="icon-btn" onClick={() => setEdit({ ...sv })}><Pencil style={{ width: 15 }} /></button>
               <button className="icon-btn" onClick={() => remove(sv.id)}><Trash style={{ width: 15 }} /></button>
             </div>

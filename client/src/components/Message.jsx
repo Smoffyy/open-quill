@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Markdown from './Markdown.jsx';
 import { copyText } from '../clipboard.js';
 import { openLightbox } from '../lightbox.js';
@@ -7,6 +8,7 @@ import BranchCompare from './BranchCompare.jsx';
 import ToolCard from './ToolCard.jsx';
 import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash, Dots } from './icons.jsx';
 import { api } from '../api.js';
+import { t } from '../i18n.jsx';
 
 function Columns(props) {
   return (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect x="3" y="4" width="7" height="16" rx="1" /><rect x="14" y="4" width="7" height="16" rx="1" /></svg>);
@@ -61,27 +63,44 @@ function fmtTime(ts) {
 
 function MoreMenu({ items }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+  const [pos, setPos] = useState(null);
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
   useEffect(() => {
     if (!open) return;
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const h = (e) => { if (menuRef.current && !menuRef.current.contains(e.target) && btnRef.current && !btnRef.current.contains(e.target)) setOpen(false); };
+    const close = () => setOpen(false);
     document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
+    window.addEventListener('resize', close);
+    window.addEventListener('scroll', close, true);
+    return () => { document.removeEventListener('mousedown', h); window.removeEventListener('resize', close); window.removeEventListener('scroll', close, true); };
+  }, [open]);
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    const menu = menuRef.current;
+    const mh = menu ? menu.offsetHeight : 220;
+    const mw = menu ? menu.offsetWidth : 200;
+    const below = window.innerHeight - r.bottom;
+    const up = below < mh + 12 && r.top > below;
+    const top = up ? Math.max(8, r.top - mh - 6) : r.bottom + 6;
+    const left = Math.min(Math.max(8, r.right - mw), window.innerWidth - mw - 8);
+    setPos({ top, left });
   }, [open]);
   const list = items.filter(Boolean);
   if (!list.length) return null;
   return (
-    <span className="retry-wrap" ref={ref}>
-      <button className={'action-btn' + (open ? ' on' : '')} title="More actions" onClick={() => setOpen(o => !o)}><Dots style={{ width: 18 }} /></button>
-      {open && (
-        <div className="retry-menu more-menu">
+    <span className="retry-wrap">
+      <button ref={btnRef} className={'action-btn' + (open ? ' on' : '')} title={t("More actions")} onClick={() => setOpen(o => !o)}><Dots style={{ width: 18 }} /></button>
+      {open && createPortal(
+        <div ref={menuRef} className="retry-menu more-menu portal"
+          style={{ position: 'fixed', top: pos ? pos.top : -9999, left: pos ? pos.left : -9999, right: 'auto', bottom: 'auto', visibility: pos ? 'visible' : 'hidden', zIndex: 200 }}>
           {list.map((it, i) => (
             <button key={i} className={(it.on ? 'on' : '') + (it.danger ? ' danger' : '')} onClick={() => { setOpen(false); it.run(); }}>
               {it.icon}{it.label}
             </button>
           ))}
-        </div>
-      )}
+        </div>, document.body)}
     </span>
   );
 }
@@ -92,9 +111,9 @@ function BranchNav({ msg, onSelectBranch }) {
   const go = (d) => { const t = msg.siblings?.[i + d]; if (t) onSelectBranch?.(t); };
   return (
     <span className="branch-nav">
-      <button className="branch-arrow" disabled={i <= 0} onClick={() => go(-1)} title="Previous version">‹</button>
+      <button className="branch-arrow" disabled={i <= 0} onClick={() => go(-1)} title={t("Previous version")}>‹</button>
       <span className="branch-count">{i + 1}/{msg.branchCount}</span>
-      <button className="branch-arrow" disabled={i >= msg.branchCount - 1} onClick={() => go(1)} title="Next version">›</button>
+      <button className="branch-arrow" disabled={i >= msg.branchCount - 1} onClick={() => go(1)} title={t("Next version")}>›</button>
     </span>
   );
 }
@@ -199,13 +218,13 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
             <div className="actions user-actions">
               {(() => { const t = fmtTime(msg.created_at); return t ? <span className="msg-time" data-full={t.full}>{t.short}</span> : null; })()}
               <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
-              {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title="Compare versions"><Columns style={{ width: 18 }} /></button>}
-              <button className="action-btn" onClick={doCopy} title="Copy">{copied ? <Check /> : <Copy />}</button>
-              {onEdit && <button className="action-btn" onClick={startEdit} title="Edit"><Pencil style={{ width: 18 }} /></button>}
+              {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")}><Columns style={{ width: 18 }} /></button>}
+              <button className="action-btn" onClick={doCopy} title={t("Copy")}>{copied ? <Check /> : <Copy />}</button>
+              {onEdit && <button className="action-btn" onClick={startEdit} title={t("Edit")}><Pencil style={{ width: 18 }} /></button>}
               <MoreMenu items={[
-                onFork && { label: 'Branch into a new chat', icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
-                onTogglePin && { label: msg.pinned ? 'Unpin' : 'Pin (keep in context)', icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
-                onDelete && chatId && { label: 'Delete message', icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
+                onFork && { label: t('Branch into a new chat'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
+                onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin (keep in context)'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
+                onDelete && chatId && { label: t('Delete message'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
               ]} />
             </div>
           )}
@@ -243,18 +262,18 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
       )}
       {streaming && msg.content && (
         <div className="actions stream-actions">
-          <button className="action-btn" onClick={doCopy} title="Copy what's written so far">{copied ? <Check /> : <Copy />}</button>
+          <button className="action-btn" onClick={doCopy} title={t("Copy what's written so far")}>{copied ? <Check /> : <Copy />}</button>
         </div>
       )}
       {!streaming && msg.content && (
         <div className="actions">
-          <button className="action-btn" onClick={doCopy} title="Copy">{copied ? <Check /> : <Copy />}</button>
+          <button className="action-btn" onClick={doCopy} title={t("Copy")}>{copied ? <Check /> : <Copy />}</button>
           <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
-          {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title="Compare versions"><Columns style={{ width: 18 }} /></button>}
+          {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")}><Columns style={{ width: 18 }} /></button>}
           <span className="retry-wrap" ref={retryRef}>
-            {onRegenerate && <button className="action-btn" title="Retry" onClick={() => onRegenerate(msg.id)}><Retry /></button>}
+            {onRegenerate && <button className="action-btn" title={t("Retry")} onClick={() => onRegenerate(msg.id)}><Retry /></button>}
             {onRegenerateWith && models && models.length > 1 && (
-              <button className="action-caret" title="Retry with another model" onClick={() => setRetryMenu(o => !o)}>▾</button>
+              <button className="action-caret" title={t("Retry with another model")} onClick={() => setRetryMenu(o => !o)}>▾</button>
             )}
             {retryMenu && (
               <div className="retry-menu">
@@ -268,11 +287,11 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
             )}
           </span>
           <MoreMenu items={[
-            chatId && !String(msg.id).startsWith('inc-') && { label: 'Good response', icon: <ThumbUp style={{ width: 15 }} />, on: fb === 1, run: () => rate(1) },
-            chatId && !String(msg.id).startsWith('inc-') && { label: 'Bad response', icon: <ThumbDown style={{ width: 15 }} />, on: fb === -1, run: () => rate(-1) },
-            onFork && { label: 'Branch into a new chat', icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
-            onTogglePin && { label: msg.pinned ? 'Unpin' : 'Pin (keep in context)', icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
-            onDelete && chatId && !String(msg.id).startsWith('inc-') && { label: 'Delete message', icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
+            chatId && !String(msg.id).startsWith('inc-') && { label: t('Good response'), icon: <ThumbUp style={{ width: 15 }} />, on: fb === 1, run: () => rate(1) },
+            chatId && !String(msg.id).startsWith('inc-') && { label: t('Bad response'), icon: <ThumbDown style={{ width: 15 }} />, on: fb === -1, run: () => rate(-1) },
+            onFork && { label: t('Branch into a new chat'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
+            onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin (keep in context)'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
+            onDelete && chatId && !String(msg.id).startsWith('inc-') && { label: t('Delete message'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
           ]} />
           {model?.displayName && <span className="msg-model-badge">{model.displayName}</span>}
         </div>

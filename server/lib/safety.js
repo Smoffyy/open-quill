@@ -1,5 +1,5 @@
 import { db, getSetting } from '../db.js';
-import { stripThink } from '../llm.js';
+import { stripThink } from '../llm/index.js';
 import { resolveModelOrDefault } from './models.js';
 
 export const DEFAULT_SAFETY_PROMPT = 'You are a safety filter for a chat application. Analyze the user message below and decide whether it is safe and appropriate to forward to the assistant. Respond with a JSON object only, in exactly this format: {"verdict":"Yes"} if the message is acceptable, or {"verdict":"No"} if it must be blocked. Do not output anything besides the JSON object.';

@@ -71,10 +71,66 @@ Open http://localhost:5173.
 3. Set the API base URL (default `http://localhost:1234/v1`) and key, then Save.
 4. Under **Models**, set each model's **internal model name** to the id your server expects (LM Studio accepts `local-model`, or the loaded model's id). Add a description, system prompt, logos, and reasoning settings as desired.
 
+## Databases
+
+Open Quill can run multiple, fully isolated databases and switch between them with a single line in a `.env` file. Each database keeps its own users, chats, preferences, interface and model configuration, artifacts, uploaded content, sandbox, project files and memory. Nothing is shared between them.
+
+The active database is chosen by `OPEN_QUILL_DB` and is read **once at startup**. For safety it can never be switched while the server is running, change the value and restart to switch.
+
+### First-time setup
+
+You don't have to create the `.env` yourself, the server writes one automatically the first time it starts, so a fresh clone just works. To set it up ahead of time, copy the example that ships in the project root:
+
+```bash
+cp .env.example .env
+```
+
+Then pick a database name:
+
+```bash
+# .env  (in the project root, the folder you run npm from)
+OPEN_QUILL_DB=default
+```
+
+`default` uses `server/data/`, the original location, so existing installs are untouched. Any other name lives in its own folder under `server/data/databases/<name>/` and is created automatically the first time it loads. Names may use lowercase letters, numbers, dashes and underscores.
+
+The `.env` belongs in the **project root**. If both a project-root `.env` and a `server/.env` exist, the project-root one wins and the other is ignored. On startup the server prints exactly which database and which file are in effect:
+
+```
+[db] active database "default" -> .../server/data
+[db] database selector: .../.env (edit OPEN_QUILL_DB, then restart to switch)
+```
+
+### Switching or creating databases
+
+Two ways, both take effect on the next restart:
+
+- **Edit `.env`** — set `OPEN_QUILL_DB` to any name and restart. A brand-new name starts as a fresh, empty database.
+- **Admin panel** — sign in as the admin and open **Admin Panel -> Databases**. Create named databases, see which one is running versus which loads next, choose the one to load, and delete unused ones. Your choice is marked pending and applied on the next restart.
+
+Each database is encrypted with its own key stored beside its data. To use one key for every database instead, set `DB_ENCRYPTION_KEY` in your `.env`.
+
 ## Notes
 
-- All data lives in `server/data.json` and uploaded logos in `server/uploads/`. Delete `data.json` to reset.
+- All data lives under the active database's folder inside `server/data/` (see **Databases** above). To reset a database, stop the server and delete its folder.
 - To change the port, set `PORT` before `npm start`.
+
+## Privacy and local-only operation
+
+Open Quill is built to run entirely on your own machine, and by default nothing leaves it:
+
+- No telemetry, analytics, crash reporting, tracking, or update "phone-home" checks. The "Analytics" in the admin panel is your own local token/cost accounting, computed from the local database.
+- The web client only ever talks to its own backend (same-origin requests and a same-host WebSocket). It loads no third-party scripts; fonts are self-hosted, not fetched from a CDN.
+- Secrets (the database encryption key and the auth token secret) are generated and stored locally and are never transmitted. The database itself is encrypted at rest.
+- The server binds to `127.0.0.1` (this machine only) by default. Set `HOST=0.0.0.0` in your `.env` if you want to reach it from other devices on your network.
+
+Outbound network requests happen only when you explicitly configure or enable a feature, and only to the destination you specify:
+
+- **Model provider**: chat requests go to the provider base URL you set. The default is a local server (LM Studio at `http://localhost:1234/v1`). If you choose a cloud provider and enter an API key, requests go there.  
+- **Voice**: speech‑to‑text and text‑to‑speech use the base URL you configure (local by default).  
+- **Web search**: off unless you enable it and point it at your own SearXNG instance. When a search runs, the server fetches result pages from the web, which is the point of the feature.  
+- **Connectors (MCP)**: only those you add. These run as local subprocesses, or reach an `http(s)` URL if you configure one.  
+- **Code sandbox**: runs code the model or you generate; that code has the same network access as the host, so a script it runs could make its own requests.
 
 ## Updates / Version Information
 

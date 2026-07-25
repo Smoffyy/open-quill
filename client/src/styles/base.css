@@ -21,8 +21,8 @@
   --hover-soft: #ffffff14;
   --hover-mid: #ffffff1f;
   --hover: var(--hover-soft);
-  --font-serif: 'Source Serif 4 Variable', 'Source Serif 4', Georgia, serif;
-  --font-sans: 'Open Sans', system-ui, sans-serif;
+  --font-serif: 'Source Serif 4 Variable';
+  --font-sans: 'Open Sans';
   --radius: 14px;
   --pop-bg: #383835;
   --pop-border: rgba(255, 255, 255, .10);
@@ -180,7 +180,7 @@ body {
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
-button { font-family: inherit; color: inherit; cursor: pointer; border: none; background: none; }
+button { font-family: inherit; color: inherit; cursor: pointer; border: none; background: none; padding: 0; }
 input, textarea { font-family: inherit; color: inherit; }
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: var(--hover-mid); border-radius: 9px; }

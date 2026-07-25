@@ -4,7 +4,7 @@ import { authMiddleware } from '../auth.js';
 import * as projectfiles from '../projectfiles.js';
 
 function projectView(p) {
-  const chats = db.chats.filter(c => c.user_id === p.user_id && c.project_id === p.id);
+  const chats = db.chats.byUser(p.user_id).filter(c => c.project_id === p.id);
   return { id: p.id, name: p.name, description: p.description || '', instructions: p.instructions || '', starred: !!p.starred, updated_at: p.updated_at, created_at: p.created_at, chatCount: chats.length };
 }
 
@@ -26,7 +26,7 @@ export default function registerProjectRoutes(app) {
   app.get('/api/projects/:id', authMiddleware, (req, res) => {
     const p = db.projects.byId(req.params.id);
     if (!p || p.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
-    const chats = db.chats.filter(c => c.user_id === req.user.id && c.project_id === p.id)
+    const chats = db.chats.byUser(req.user.id).filter(c => c.project_id === p.id)
       .sort((a, b) => b.updated_at - a.updated_at)
       .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred }));
     res.json({ ...projectView(p), chats });
@@ -70,7 +70,7 @@ export default function registerProjectRoutes(app) {
     try { projectfiles.removeAll(req.params.id); } catch {}
     const p = db.projects.byId(req.params.id);
     if (p && p.user_id === req.user.id) {
-      for (const c of db.chats.filter(c => c.user_id === req.user.id && c.project_id === p.id)) db.chats.update(c.id, { project_id: null });
+      for (const c of db.chats.byUser(req.user.id)) { if (c.project_id === p.id) db.chats.update(c.id, { project_id: null }); }
       db.projects.remove(x => x.id === p.id);
     }
     res.json({ ok: true });

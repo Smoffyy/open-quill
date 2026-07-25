@@ -1,15 +1,16 @@
 {
   "name": "open-quill-server",
-  "version": "27.0.0-beta.2",
+  "version": "27.0.0-beta.3",
   "private": true,
   "type": "module",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "node --watch index.js"
+    "dev": "node --watch index.js",
+    "test": "node --test"
   },
   "dependencies": {
-    "argon2": "^0.44.0",
+    "argon2": "^0.45.1",
     "better-sqlite3-multiple-ciphers": "^12.11.1",
     "cookie": "^2.0.1",
     "express": "^5.2.1",

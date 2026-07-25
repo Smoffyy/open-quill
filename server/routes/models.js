@@ -4,7 +4,8 @@ import { getProviders, resolveProvider, providerSpec } from '../providers.js';
 import { matchPreset, presetList, setCustomPresets, getCustomPresets } from '../pricing.js';
 import { logAudit } from '../lib/audit.js';
 import { draftModels, publicModels, detectContextLength } from '../lib/models.js';
-import { broadcastConfig, broadcastAdminConfig } from '../lib/ws.js';
+import { sanitizeKwargs } from '../lib/kwargs.js';
+import { broadcastConfig, broadcastAdminConfig } from '../lib/ws/index.js';
 
 export default function registerModelRoutes(app) {
   app.get('/api/models', authMiddleware, (req, res) => res.json(req.user.is_admin ? draftModels() : publicModels()));
@@ -48,6 +49,7 @@ export default function registerModelRoutes(app) {
       call_prompt: b.call_prompt || '',
       provider_id: b.provider_id || (getProviders()[0]?.id || null), max_tokens: parseInt(b.max_tokens) || null,
       has_reasoning: b.has_reasoning ? 1 : 0, reasoning_token: b.reasoning_token || '', non_reasoning_token: b.non_reasoning_token || '',
+      kwargs: sanitizeKwargs(b.kwargs),
       effort_enabled: b.effort_enabled ? 1 : 0, effort_levels: Array.isArray(b.effort_levels) && b.effort_levels.length ? b.effort_levels : ['low', 'medium', 'high'], effort_default: b.effort_default || 'medium', effort_kwarg: b.effort_kwarg || 'reasoning_effort', effort_admin_only: b.effort_admin_only ? 1 : 0, hide_thinking: b.hide_thinking ? 1 : 0,
       reasoning_collapsible: b.reasoning_collapsible === false ? 0 : 1, icon_size: parseInt(b.icon_size) || (getSetting('ui_preset', '') === 'openai' ? 28 : 0),
       show_name: 'show_name' in b ? (b.show_name ? 1 : 0) : (getSetting('ui_preset', '') === 'openai' ? 1 : 0),
@@ -78,8 +80,8 @@ export default function registerModelRoutes(app) {
   app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
     const cur = db.models.byId(req.params.id);
     if (!cur) return res.status(404).json({ error: 'not found' });
-    const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'call_prompt', 'end_chat_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id', 'bg_image', 'effort_kwarg', 'effort_default'];
-    const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'show_name', 'skills_allowed', 'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'long_convo_reminder', 'effort_enabled', 'effort_admin_only', 'hide_thinking'];
+    const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'call_prompt', 'end_chat_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id', 'bg_image', 'effort_kwarg', 'effort_default', 'docs_cutoff', 'docs_body', 'docs_image', 'docs_icon'];
+    const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'show_name', 'skills_allowed', 'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'long_convo_reminder', 'effort_enabled', 'effort_admin_only', 'hide_thinking', 'docs_featured', 'docs_in_text', 'docs_in_image', 'docs_in_audio', 'docs_in_video', 'docs_out_text', 'docs_out_image', 'docs_out_audio', 'docs_out_video'];
     const patch = {};
     for (const k of str) if (k in req.body) patch[k] = req.body[k];
     for (const k of bool) if (k in req.body) patch[k] = req.body[k] ? 1 : 0;
@@ -91,6 +93,7 @@ export default function registerModelRoutes(app) {
       const v = String(req.body.sunset_action || '');
       patch.sunset_action = v === 'unavailable' ? 'unavailable' : 'hide';
     }
+    if ('kwargs' in req.body) patch.kwargs = sanitizeKwargs(req.body.kwargs);
     if ('effort_levels' in req.body) {
       const arr = Array.isArray(req.body.effort_levels) ? req.body.effort_levels : String(req.body.effort_levels || '').split(',');
       const clean = arr.map(s => String(s).trim().toLowerCase()).filter(Boolean).slice(0, 8);
@@ -102,7 +105,7 @@ export default function registerModelRoutes(app) {
     if ('icon_size' in req.body) patch.icon_size = Math.max(0, Math.min(80, parseInt(req.body.icon_size) || 0));
     if ('summary_padding' in req.body) patch.summary_padding = Math.max(0.03, Math.min(0.6, parseFloat(req.body.summary_padding) || 0.125));
     const numF = ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'repetition_penalty', 'min_p', 'cost_in', 'cost_out'];
-    const numI = ['top_k', 'seed', 'max_tokens'];
+    const numI = ['top_k', 'seed', 'max_tokens', 'docs_intelligence', 'docs_speed', 'docs_max_output'];
     for (const k of numF) if (k in req.body) { const v = req.body[k]; patch[k] = (v === '' || v == null || isNaN(Number(v))) ? null : Number(v); }
     for (const k of numI) if (k in req.body) { const v = req.body[k]; patch[k] = (v === '' || v == null || isNaN(parseInt(v))) ? null : parseInt(v); }
     if ('internal_name' in patch && !('cost_in' in req.body) && !('cost_out' in req.body) && cur.cost_in == null && cur.cost_out == null) {

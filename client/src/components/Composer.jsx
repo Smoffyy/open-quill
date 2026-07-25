@@ -1,10 +1,11 @@
-import React, { useRef, useEffect, useState, useLayoutEffect } from 'react';
+import React, { useRef, useEffect, useState, useLayoutEffect, useCallback } from 'react';
 import ModelDropdown from './ModelDropdown.jsx';
 import { api } from '../api.js';
 import { transcribeBlob } from '../voice.js';
 import { toast } from '../toast.js';
 import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand } from './icons.jsx';
 import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
+import { t, fmtDate } from '../i18n.jsx';
 
 const FILE_ACCEPT = '.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.py,.lua,.html,.css,.xml,.yml,.yaml,.pdf,.log';
 
@@ -37,21 +38,25 @@ function PmSub({ className = '', children, onMouseEnter, onMouseLeave }) {
   const [pos, setPos] = useState({ flipLeft: false, top: -6, maxH: 0, ready: false });
   useLayoutEffect(() => {
     const el = ref.current; if (!el) return;
-    const wrap = el.parentElement; if (!wrap) return;
     const measure = () => {
+      const wrap = el.parentElement; if (!wrap) return;
       const row = wrap.getBoundingClientRect();
       const pad = 8;
       const availH = window.innerHeight - pad * 2;
-      const h = el.offsetHeight;
+      const h = el.scrollHeight;
       const effH = Math.min(h, availH);
       const flipLeft = row.right + 4 + el.offsetWidth > window.innerWidth - pad;
       let top = -6;
       const over = row.top + top + effH - (window.innerHeight - pad);
       if (over > 0) top -= over;
       if (row.top + top < pad) top = pad - row.top;
-      setPos({ flipLeft, top, maxH: h > availH ? availH : 0, ready: true });
+      setPos(prev => (prev.ready && prev.flipLeft === flipLeft && prev.top === top && prev.maxH === (h > availH ? availH : 0)) ? prev : { flipLeft, top, maxH: h > availH ? availH : 0, ready: true });
     };
     measure();
+    let ro;
+    if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(measure); ro.observe(el); }
+    window.addEventListener('resize', measure);
+    return () => { if (ro) ro.disconnect(); window.removeEventListener('resize', measure); };
   }, [children]);
   return (
     <div ref={ref}
@@ -70,9 +75,9 @@ export default function Composer({
   safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
   conversationEnded = false, endedReason = '',
-  removedModel = null,
+  removedModel = null, onOpenDocs = null,
   queueCount = 0, onQueue, canContinue = false, onContinue,
-  compareIds = [], onSetCompare, hideModelPicker = false, reasoningEffort, onSetEffort
+  compareIds = [], onSetCompare, hideModelPicker = false, reasoningEffort, onSetEffort, kwargValues, onSetKwarg
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
@@ -192,17 +197,55 @@ export default function Composer({
   }, [plusMenu]);
 
   const grewOnce = useRef(false);
-  useEffect(() => {
+  const fitRaf = useRef(0);
+  const fitWidth = useRef(0);
+  const fit = useCallback((animate) => {
     const el = ta.current; if (!el) return;
-    const prev = el.style.height;
+    cancelAnimationFrame(fitRaf.current);
+    const MAX = 280;
+    if ((el.value ? el.value.length : 0) > 4000) {
+      el.style.overflowY = 'auto';
+      el.style.height = MAX + 'px';
+      setMultiline(m => (m === true ? m : true));
+      grewOnce.current = true;
+      return;
+    }
+    const prev = el.offsetHeight;
     el.style.height = 'auto';
-    const measured = Math.min(el.scrollHeight, 280);
-    const next = measured + 'px';
+    const raw = el.scrollHeight;
+    const measured = Math.min(raw, MAX);
+    el.style.overflowY = raw > MAX ? 'auto' : 'hidden';
     setMultiline(m => { const ml = measured > 44; return m === ml ? m : ml; });
-    if (!grewOnce.current) { el.style.height = next; grewOnce.current = true; return; } // no animation on first paint
-    el.style.height = prev || next;
-    requestAnimationFrame(() => { if (ta.current) ta.current.style.height = next; });
-  }, [value]);
+    if (!animate || !grewOnce.current || Math.abs(prev - measured) < 1) {
+      el.style.height = measured + 'px';
+      grewOnce.current = true;
+      return;
+    }
+    el.style.height = prev + 'px';
+    fitRaf.current = requestAnimationFrame(() => { if (ta.current) ta.current.style.height = measured + 'px'; });
+  }, []);
+  useEffect(() => { fit(true); }, [value, fit]);
+  useEffect(() => {
+    fit(false);
+    const onResize = () => fit(false);
+    window.addEventListener('resize', onResize);
+    let ro;
+    const host = ta.current ? (ta.current.parentElement || ta.current) : null;
+    if (typeof ResizeObserver !== 'undefined' && host) {
+      fitWidth.current = host.clientWidth;
+      ro = new ResizeObserver(() => {
+        const w = host.clientWidth;
+        if (w !== fitWidth.current) { fitWidth.current = w; fit(false); }
+      });
+      ro.observe(host);
+    }
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (ta.current) fit(false); });
+    return () => {
+      window.removeEventListener('resize', onResize);
+      if (ro) ro.disconnect();
+      cancelAnimationFrame(fitRaf.current);
+    };
+  }, [fit]);
   useEffect(() => { if (autoFocus || focusKey !== undefined) ta.current?.focus(); }, [autoFocus, focusKey]);
   const filesRef = useRef(files);
   filesRef.current = files;
@@ -336,7 +379,7 @@ export default function Composer({
     const t = Math.max(0, Math.min(1, 1 - days / 14));
     return {
       name: activeModel.displayName,
-      date: d.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' }),
+      date: fmtDate(d, { month: 'long', day: 'numeric', year: 'numeric' }),
       mix: Math.round(t * 62)
     };
   })();
@@ -357,7 +400,8 @@ export default function Composer({
   const showBudgetBanner = budgetState === 'warn' || budgetState === 'over';
   const sunsetOnly = !!sunsetInfo && !bannerMounted && !showBudgetBanner && !safetyFlagged && !conversationEnded && !removedModel;
   const enabledCount = (sandbox ? 1 : 0) + (webSearch ? 1 : 0);
-  const canSend = (value.trim().length > 0 || files.length > 0) && !uploading && !blockSend && !budgetBlock && !safetyFlagged && !safetyChecking && !conversationEnded;
+  const hasText = /\S/.test(value);
+  const canSend = (hasText || files.length > 0) && !uploading && !blockSend && !budgetBlock && !safetyFlagged && !safetyChecking && !conversationEnded;
   const [multiline, setMultiline] = useState(false);
   const cls = 'composer' + (multiline ? ' ml' : '') + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + ((unavailable || removedModel) ? ' unavailable' : '') + ((blockSend || budgetBlock) ? ' blocked' : '');
   const fmtUsd = (n) => '$' + (Number(n || 0) > 0 && Number(n || 0) < 0.01 ? Number(n).toFixed(4) : Number(n || 0).toFixed(2));
@@ -375,7 +419,7 @@ export default function Composer({
     {removedModel && (
       <div className="unavail-banner removed-banner">
         <div className="unavail-row">
-          <span className="unavail-msg"><strong>{removedModel.name}</strong> has been removed, try using a different model to continue this chat.</span>
+          <span className="unavail-msg"><strong>{removedModel.name}</strong> {t('has been removed, try using a different model to continue this chat.')}</span>
         </div>
       </div>
     )}
@@ -384,7 +428,7 @@ export default function Composer({
         <div className="unavail-row">
           <span className="unavail-msg sunset-msg">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="3.5" y="5" width="17" height="16" rx="2.5" /><path d="M8 3v4M16 3v4M3.5 10h17" /></svg>
-            <span><strong>{sunsetInfo.name}</strong> is going away {sunsetInfo.date}.</span>
+            <span><strong>{sunsetInfo.name}</strong> {t('is going away {date}.', { date: sunsetInfo.date })}</span>
           </span>
         </div>
       </div>
@@ -392,14 +436,14 @@ export default function Composer({
     {conversationEnded && (
       <div className="unavail-banner ended-banner">
         <div className="unavail-row">
-          <span className="unavail-msg"><strong>The assistant ended this conversation.</strong> {endedReason ? endedReason : 'It can no longer be continued, edited, or branched.'}</span>
+          <span className="unavail-msg"><strong>{t("The assistant ended this conversation.")}</strong> {endedReason ? endedReason : t('It can no longer be continued, edited, or branched.')}</span>
         </div>
       </div>
     )}
     {safetyFlagged && (
       <div className="unavail-banner safety-banner">
         <div className="unavail-row">
-          <span className="unavail-msg"><strong>Message flagged.</strong> {safetyReason && safetyReason.trim() ? safetyReason.trim() : 'This prompt was blocked by the safety check, please revise it and try again.'}</span>
+          <span className="unavail-msg"><strong>{t("Message flagged.")}</strong> {safetyReason && safetyReason.trim() ? safetyReason.trim() : t('This prompt was blocked by the safety check, please revise it and try again.')}</span>
         </div>
       </div>
     )}
@@ -408,8 +452,8 @@ export default function Composer({
         <div className="unavail-row">
           <span className="unavail-msg">
             {budgetState === 'over'
-              ? <><strong>Monthly budget reached.</strong> {fmtUsd(budget.spent)} of {fmtUsd(budget.cap)} used{budget.enforce && !canUseUnavailable ? '. New messages are paused until next month.' : '.'}</>
-              : <><strong>Approaching your monthly budget.</strong> {fmtUsd(budget.spent)} of {fmtUsd(budget.cap)} used.</>}
+              ? <><strong>{t("Monthly budget reached.")}</strong> {fmtUsd(budget.spent)} of {fmtUsd(budget.cap)} used{budget.enforce && !canUseUnavailable ? '. New messages are paused until next month.' : '.'}</>
+              : <><strong>{t("Approaching your monthly budget.")}</strong> {fmtUsd(budget.spent)} of {fmtUsd(budget.cap)} used.</>}
           </span>
         </div>
       </div>
@@ -437,7 +481,7 @@ export default function Composer({
               {f.preview
                 ? <img src={f.preview} alt={f.name} />
                 : <div className="attach-file"><FileText style={{ width: 18 }} /><div className="attach-meta"><div className="attach-name">{f.name}</div><div className="attach-type">{(f.name.split('.').pop() || 'file').toUpperCase()}</div></div></div>}
-              <button className="attach-x" onClick={() => removeFile(f.id)} title="Remove">✕</button>
+              <button className="attach-x" onClick={() => removeFile(f.id)} title={t("Remove")}>✕</button>
             </div>
           ))}
         </div>
@@ -470,13 +514,13 @@ export default function Composer({
         <div className="queued-chip compare-chip">
           <span className="queued-label">Compare:</span>
           <span className="queued-text">{[models?.find(m => m.id === currentId)?.displayName || 'Current', ...compareIds.map(id => models?.find(m => m.id === id)?.displayName || 'model')].join(' vs ')}</span>
-          <button className="queued-x" title="Cancel comparison" onClick={() => onSetCompare?.([])}><X style={{ width: 12 }} /></button>
+          <button className="queued-x" title={t("Cancel comparison")} onClick={() => onSetCompare?.([])}><X style={{ width: 12 }} /></button>
         </div>
       )}
       <div className="composer-bar">
         <div className="composer-left">
           <div className="plus-wrap" ref={plusRef}>
-            <button className="plus" onClick={() => setPlusMenu(m => !m)} title="More">
+            <button className="plus" onClick={() => setPlusMenu(m => !m)} title={t("More")}>
               <Plus style={{ width: 17, height: 17 }} />
               {enabledCount > 0 && <span className="plus-badge">{enabledCount}</span>}
             </button>
@@ -502,10 +546,10 @@ export default function Composer({
                           <button className="pm-prompt-use" title={p.text} onClick={() => { setPlusMenu(false); onUsePrompt && onUsePrompt(p.text); }}>
                             <Star style={{ width: 13 }} /> <span className="pm-prompt-title">{p.title}</span>
                           </button>
-                          {onDeletePrompt && <button className="pm-prompt-x" title="Delete" onClick={(e) => { e.stopPropagation(); onDeletePrompt(p.id); }}><X style={{ width: 12 }} /></button>}
+                          {onDeletePrompt && <button className="pm-prompt-x" title={t("Delete")} onClick={(e) => { e.stopPropagation(); onDeletePrompt(p.id); }}><X style={{ width: 12 }} /></button>}
                         </div>
                       ))}
-                      {onSavePrompt && value.trim() && (
+                      {onSavePrompt && hasText && (
                         <button className="pm-save-prompt" onClick={() => { onSavePrompt(); setPromptsOpen(false); }}>
                           <Plus style={{ width: 13 }} /> Save current text as prompt
                         </button>
@@ -529,7 +573,7 @@ export default function Composer({
                     )}
                   </div>
                 )}
-                <button className="pm-item" disabled={improving || (!value.trim() && !improvedNow)}
+                <button className="pm-item" disabled={improving || (!hasText && !improvedNow)}
                   onClick={() => { setPlusMenu(false); improvePrompt(); }}>
                   <Wand />
                   <span className="pm-label">{improvedNow ? 'Restore original prompt' : 'Improve prompt'}</span>
@@ -582,7 +626,7 @@ export default function Composer({
             <div className="composer-project" title={'In project: ' + project.name}>
               <Box style={{ width: 14 }} />
               <span className="cp-name">{project.name}</span>
-              {onClearProject && <button className="cp-x" onClick={onClearProject} title="Remove from project"><X style={{ width: 12 }} /></button>}
+              {onClearProject && <button className="cp-x" onClick={onClearProject} title={t("Remove from project")}><X style={{ width: 12 }} /></button>}
             </div>
           )}
         </div>
@@ -590,7 +634,11 @@ export default function Composer({
           {!hideModelPicker && <ModelDropdown models={models} currentId={currentId} onSelect={onSelect}
             extended={extended} onToggleExtended={onToggleExtended} up={modelUp} isAdmin={canUseUnavailable}
             reasoningEffort={reasoningEffort} onSetEffort={onSetEffort}
+            kwargValues={kwargValues} onSetKwarg={onSetKwarg}
             modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />}
+          {!hideModelPicker && onOpenDocs && (
+            <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={onOpenDocs}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>
+          )}
           {voiceMic && (
             <button className={'mic' + (dictating ? ' rec' : '') + (transcribing ? ' busy' : '')} onClick={toggleDictation}
               title={dictating ? 'Stop dictation' : transcribing ? 'Transcribing…' : 'Dictate'} disabled={transcribing}>
@@ -604,7 +652,7 @@ export default function Composer({
           ) : canSend ? (
             <button key="send" className="send" onClick={doSend} disabled={uploading}><Up style={{ width: 17, height: 17 }} /></button>
           ) : voiceCall ? (
-            <button key="call" className="mic call" onClick={onStartCall} title="Start a voice call"><Wave style={{ width: 20, height: 20 }} /></button>
+            <button key="call" className="mic call" onClick={onStartCall} title={t("Start a voice call")}><Wave style={{ width: 20, height: 20 }} /></button>
           ) : (
             <button key="send" className="send ghost" disabled><Up style={{ width: 17, height: 17 }} /></button>
           )}

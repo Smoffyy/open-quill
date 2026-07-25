@@ -1,5 +1,5 @@
 import { db, getSetting } from '../db.js';
-import { oneShot, stripThink } from '../llm.js';
+import { oneShot, stripThink } from '../llm/index.js';
 import { stripToolSyntax } from './history.js';
 
 export const DEFAULT_MEMORY_PROMPT = 'You maintain a compact long-term memory about a user of a chat assistant. You are given the CURRENT MEMORY and excerpts of the user\u2019s RECENT MESSAGES. Produce the UPDATED MEMORY: a short plain-text list of durable, useful facts about the user \u2014 their name and role if stated, ongoing projects, preferences, tools and languages they use, and standing instructions. Merge new facts with the current memory, drop stale or one-off details, never invent anything, and never store sensitive data like passwords or keys. Output ONLY the memory text, at most 20 short lines.';

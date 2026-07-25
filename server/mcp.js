@@ -92,7 +92,8 @@ function stdioClient(server) {
   stdioClients.delete(server.id);
   const args = server.args ? server.args.split(/\s+/).filter(Boolean) : [];
   const proc = spawn(server.command, args, { stdio: ['pipe', 'pipe', 'pipe'], env: process.env });
-  const client = { proc, seq: 0, pending: new Map(), buf: '', ready: null };
+  const client = { proc, seq: 0, pending: new Map(), buf: '', ready: null, stderr: '' };
+  proc.stderr.on('data', (chunk) => { client.stderr = (client.stderr + chunk.toString('utf8')).slice(-4000); });
   proc.stdout.on('data', (chunk) => {
     client.buf += chunk.toString('utf8');
     let idx;
@@ -113,7 +114,9 @@ function stdioClient(server) {
   });
   proc.on('error', () => {});
   proc.on('exit', () => {
-    for (const { reject, timer } of client.pending.values()) { clearTimeout(timer); reject(new Error('MCP server process exited.')); }
+    const detail = client.stderr.trim().slice(-500);
+    const err = new Error('MCP server process exited.' + (detail ? ' ' + detail : ''));
+    for (const { reject, timer } of client.pending.values()) { clearTimeout(timer); reject(err); }
     client.pending.clear();
     if (stdioClients.get(server.id) === client) stdioClients.delete(server.id);
   });

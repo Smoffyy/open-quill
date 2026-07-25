@@ -3,6 +3,7 @@ import { api } from '../../../api.js';
 import { useAdmin } from '../store.jsx';
 import { Card, fmtMoney } from '../widgets.jsx';
 import { Plus, Trash } from '../../icons.jsx';
+import { t } from '../../../i18n.jsx';
 
 export default function AnalyticsSection() {
   const A = useAdmin();
@@ -36,7 +37,7 @@ export default function AnalyticsSection() {
           <button key={v} className={usageDays === v ? 'on' : ''} onClick={() => { setUsageDays(v); loadUsage(v); }}>{l}</button>
         ))}
       </div>
-      {!usage && <div className="muted-note">Loading…</div>}
+      {!usage && <div className="muted-note">{t("Loading…")}</div>}
       {usage && (
         <>
           <div className="stat-grid">
@@ -48,7 +49,7 @@ export default function AnalyticsSection() {
             ))}
           </div>
           {usage.users.length > 0 && (
-            <Card title="By user">
+            <Card title={t("By user")}>
               <table className="aq-table">
                 <thead><tr><th>User</th><th className="num">Tokens</th><th className="num">Cost</th></tr></thead>
                 <tbody>{usage.users.slice(0, 30).map(u => (
@@ -62,7 +63,7 @@ export default function AnalyticsSection() {
             </Card>
           )}
           {usage.models.length > 0 && (
-            <Card title="By model">
+            <Card title={t("By model")}>
               <table className="aq-table">
                 <thead><tr><th>Model</th><th className="num">Tokens</th><th className="num">Cost</th></tr></thead>
                 <tbody>{usage.models.slice(0, 30).map(m => (
@@ -77,7 +78,7 @@ export default function AnalyticsSection() {
           )}
         </>
       )}
-      <Card title="Custom price presets" sub={'Add house models or override built-in prices. When a model\u2019s ID contains one of these fragments, its price is suggested automatically. Built-in presets (GPT, Claude, Gemini, and so on) always apply unless overridden here.'}>
+      <Card title={t("Custom price presets")} sub={'Add house models or override built-in prices. When a model\u2019s ID contains one of these fragments, its price is suggested automatically. Built-in presets (GPT, Claude, Gemini, and so on) always apply unless overridden here.'}>
         {presets.length > 0 && presets.map(p => (
           <div key={p.match} className="field row" style={{ alignItems: 'center' }}>
             <div><label>{p.label}</label><div className="muted-note">matches "{p.match}" · ${p.in} in / ${p.out} out per 1M</div></div>
@@ -85,10 +86,10 @@ export default function AnalyticsSection() {
           </div>
         ))}
         <div className="preset-form">
-          <input placeholder="my-model" value={form.match} onChange={(e) => setForm(f => ({ ...f, match: e.target.value }))} />
-          <input placeholder="Label" value={form.label} onChange={(e) => setForm(f => ({ ...f, label: e.target.value }))} />
-          <input type="number" step="any" min="0" placeholder="$ in" value={form.in} onChange={(e) => setForm(f => ({ ...f, in: e.target.value }))} />
-          <input type="number" step="any" min="0" placeholder="$ out" value={form.out} onChange={(e) => setForm(f => ({ ...f, out: e.target.value }))} />
+          <input placeholder={t("my-model")} value={form.match} onChange={(e) => setForm(f => ({ ...f, match: e.target.value }))} />
+          <input placeholder={t("Label")} value={form.label} onChange={(e) => setForm(f => ({ ...f, label: e.target.value }))} />
+          <input type="number" step="any" min="0" placeholder={t("$ in")} value={form.in} onChange={(e) => setForm(f => ({ ...f, in: e.target.value }))} />
+          <input type="number" step="any" min="0" placeholder={t("$ out")} value={form.out} onChange={(e) => setForm(f => ({ ...f, out: e.target.value }))} />
           <button className="btn" onClick={addPreset}><Plus style={{ width: 14, verticalAlign: '-2px' }} /> Add</button>
         </div>
         {err && <div className="dz-err" style={{ marginTop: 8 }}>{err}</div>}

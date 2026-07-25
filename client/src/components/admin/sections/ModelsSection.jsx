@@ -2,9 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAdmin } from '../store.jsx';
 import { Grip, EmptyState } from '../widgets.jsx';
 import ModelEditor from '../ModelEditor.jsx';
-import { Cube, Plus, Copy, Trash, Star, Pencil, Sliders } from '../../icons.jsx';
+import { Cube, Plus, Copy, Trash, Star, Pencil, Sliders, Chevron } from '../../icons.jsx';
+import { t } from '../../../i18n.jsx';
 
 const GROUPS_KEY = 'oq-model-groups';
+const COLLAPSED_KEY = 'oq-model-groups-collapsed';
 
 const EyeIcon = (p) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" {...p}>
@@ -41,6 +43,12 @@ export default function ModelsSection() {
   const [menu, setMenu] = useState(null);
   const [marquee, setMarquee] = useState(null);
   const [groupReg, setGroupReg] = useState(loadGroupReg);
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(COLLAPSED_KEY));
+      return new Set(Array.isArray(v) ? v : []);
+    } catch { return new Set(); }
+  });
   const [renamingGroup, setRenamingGroup] = useState(null);
   const [renameVal, setRenameVal] = useState('');
   const selAnchor = useRef(null);
@@ -49,6 +57,10 @@ export default function ModelsSection() {
   useEffect(() => {
     try { localStorage.setItem(GROUPS_KEY, JSON.stringify(groupReg)); } catch {}
   }, [groupReg]);
+
+  useEffect(() => {
+    try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...collapsed])); } catch {}
+  }, [collapsed]);
 
   useEffect(() => {
     const labels = [];
@@ -85,13 +97,13 @@ export default function ModelsSection() {
 
   if (!models.length) {
     return (
-      <EmptyState icon={<Cube style={{ width: 30 }} />} title="Add your first model"
+      <EmptyState icon={<Cube style={{ width: 30 }} />} title={t("Add your first model")}
         actions={<>
-          <button className="btn primary" onClick={A.addModel}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> Add model</button>
-          <button className="btn ghost" onClick={() => A.openDiscover(providers[0]?.id)}><Cube style={{ width: 14, verticalAlign: '-2px' }} /> Discover from a provider</button>
+          <button className="btn primary" onClick={A.addModel}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> {t('Add model')}</button>
+          <button className="btn ghost" onClick={() => A.openDiscover(providers[0]?.id)}><Cube style={{ width: 14, verticalAlign: '-2px' }} /> {t('Discover from a provider')}</button>
         </>}>
-        <p>Models are what users pick in the chat. Each one points at a provider (your LLM backend) and carries its own prompt, sampling, and capabilities.</p>
-        <div className="aq-empty-hint">No provider set up yet? Head to the <button className="linklike" onClick={() => A.setSection('providers')}>Providers</button> section first.</div>
+        <p>{t('Models are what users pick in the chat. Each one points at a provider (your LLM backend) and carries its own prompt, sampling, and capabilities.')}</p>
+        <div className="aq-empty-hint">{t('No provider set up yet? Head to the')} <button className="linklike" onClick={() => A.setSection('providers')}>{t('Providers')}</button> {t('section first.')}</div>
       </EmptyState>
     );
   }
@@ -112,7 +124,7 @@ export default function ModelsSection() {
   }
   const groupOrder = groupReg.filter(k => orderable || (groupMap.get(k) || []).length);
   const displaySeq = [...ungrouped, ...groupOrder.flatMap(k => groupMap.get(k) || [])];
-  const groupTitle = (k) => k || 'More models';
+  const groupTitle = (k) => k || t('More models');
   const membersOf = (k) => models.filter(m => m.in_more_models && (m.more_models_label || '') === k);
 
   function rowClick(e, m) {
@@ -208,6 +220,7 @@ export default function ModelsSection() {
   function createGroup(ids) {
     const l = newGroupLabel();
     setGroupReg(reg => reg.includes(l) ? reg : [...reg, l]);
+    setCollapsed(c => { if (!c.has(l)) return c; const n = new Set(c); n.delete(l); return n; });
     if (ids && ids.length) A.setModelsGroup(ids, l);
     setRenamingGroup(l);
     setRenameVal(l);
@@ -223,6 +236,7 @@ export default function ModelsSection() {
     setRenamingGroup(null);
     if (!v || v === oldLabel) return;
     setGroupReg(reg => [...new Set(reg.map(l => l === oldLabel ? v : l))]);
+    setCollapsed(c => { if (!c.has(oldLabel)) return c; const n = new Set(c); n.delete(oldLabel); n.add(v); return n; });
     if (membersOf(oldLabel).length) A.renameModelGroup(oldLabel, v);
   }
 
@@ -234,8 +248,8 @@ export default function ModelsSection() {
     };
     if (!members.length) { drop(); return; }
     setAsk({
-      message: `Delete the group “${groupTitle(k)}”? Its ${members.length} model${members.length === 1 ? '' : 's'} will move back to the main list.`,
-      danger: 'Delete group',
+      message: t('Delete the group “{g}”? Its models will move back to the main list.', { g: groupTitle(k) }),
+      danger: t('Delete group'),
       onConfirm: drop
     });
   }
@@ -298,21 +312,21 @@ export default function ModelsSection() {
         {m.static_icon ? <img className="mw-row-icon" src={m.static_icon} alt="" /> : <span className="mw-row-icon noicon">{(m.display_name || '?').trim().charAt(0).toUpperCase()}</span>}
         <div className="mw-row-meta">
           <span className="mw-row-name">
-            {m.display_name || 'Untitled model'}
-            {!!m.is_default && <span className="mw-star" title="Default">★</span>}
+            {m.display_name || t('Untitled model')}
+            {!!m.is_default && <span className="mw-star" title={t("Default")}>★</span>}
           </span>
           <span className="mw-row-sub">{m.internal_name || 'no id'}</span>
         </div>
         <span className="mw-row-hover">
-          <button type="button" className={'mw-hact' + (multiSel.has(m.id) ? ' on' : '')} title="Select for bulk actions" onClick={(e) => toggleCheck(e, m)}>
+          <button type="button" className={'mw-hact' + (multiSel.has(m.id) ? ' on' : '')} title={t("Select for bulk actions")} onClick={(e) => toggleCheck(e, m)}>
             {multiSel.has(m.id)
               ? <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5" fill="currentColor" /><path d="M8 12.4l2.8 2.8 5.6-6.4" fill="none" stroke="var(--card-bg)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
               : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="5" /></svg>}
           </button>
         </span>
         <span className="mw-dots">
-          {!m.enabled && <span className="mw-dot dim" title="Hidden" />}
-          {!!m.unavailable && <span className="mw-dot warn" title="Unavailable" />}
+          {!m.enabled && <span className="mw-dot dim" title={t("Hidden")} />}
+          {!!m.unavailable && <span className="mw-dot warn" title={t("Unavailable")} />}
         </span>
       </div>
     );
@@ -322,11 +336,18 @@ export default function ModelsSection() {
     const rows = groupMap.get(k) || [];
     const renaming = renamingGroup === k;
     const over = dragOver && dragOver.id === 'group:' + k;
+    const isCollapsed = collapsed.has(k) && !renaming;
+    const allMembers = membersOf(k);
+    const anyVisible = allMembers.some(x => !!x.enabled);
     return (
       <React.Fragment key={'grp:' + k}>
-        <div className={'mw-group-head' + (over ? ' drag-over' : '')}
+        <div className={'mw-group-head' + (over ? ' drag-over' : '') + (isCollapsed ? ' collapsed' : '')}
           onDragOver={(e) => { if (!orderable) return; e.preventDefault(); setDragOver({ id: 'group:' + k }); }}
           onDrop={(e) => { if (!orderable) return; e.preventDefault(); handleDrop(null, k); }}>
+          <button type="button" className="mw-group-chev" title={isCollapsed ? t('Expand group') : t('Collapse group')}
+            onClick={() => setCollapsed(c => { const n = new Set(c); if (n.has(k)) n.delete(k); else n.add(k); return n; })}>
+            <Chevron />
+          </button>
           {renaming ? (
             <input className="mw-group-rename" autoFocus value={renameVal}
               onChange={(e) => setRenameVal(e.target.value)}
@@ -334,21 +355,30 @@ export default function ModelsSection() {
               onKeyDown={(e) => { if (e.key === 'Enter') commitGroupRename(k); if (e.key === 'Escape') setRenamingGroup(null); }} />
           ) : (
             <>
-              <button type="button" className="mw-group-label" title="Click to rename this group" onClick={() => { setRenamingGroup(k); setRenameVal(groupTitle(k)); }}>
+              <button type="button" className="mw-group-label" title={t("Click to rename this group")} onClick={() => { setRenamingGroup(k); setRenameVal(groupTitle(k)); }}>
                 {groupTitle(k)}
               </button>
-              <button type="button" className="mw-group-edit" title="Rename group" onClick={() => { setRenamingGroup(k); setRenameVal(groupTitle(k)); }}><Pencil style={{ width: 12 }} /></button>
-              <button type="button" className="mw-group-edit del" title="Delete group" onClick={() => deleteGroup(k)}><Trash style={{ width: 12 }} /></button>
+              {isCollapsed && allMembers.length > 0 && <span className="mw-group-count">{allMembers.length}</span>}
+              {allMembers.length > 0 && (
+                <button type="button" className="mw-group-edit" title={anyVisible ? t('Hide all models in this group') : t('Show all models in this group')}
+                  onClick={() => A.setModelsEnabled(allMembers.map(x => x.id), !anyVisible)}>
+                  {anyVisible
+                    ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z" /><circle cx="12" cy="12" r="2.6" /></svg>
+                    : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3l18 18M10 5.9A9.9 9.9 0 0 1 12 5.5c6.5 0 10 6.5 10 6.5a17 17 0 0 1-3.2 3.9M6.4 6.9A16 16 0 0 0 2 12s3.5 6.5 10 6.5a10 10 0 0 0 3.4-.6" /><path d="M9.9 10.2a2.6 2.6 0 0 0 3.6 3.7" /></svg>}
+                </button>
+              )}
+              <button type="button" className="mw-group-edit" title={t("Rename group")} onClick={() => { setRenamingGroup(k); setRenameVal(groupTitle(k)); }}><Pencil /></button>
+              <button type="button" className="mw-group-edit del" title={t("Delete group")} onClick={() => deleteGroup(k)}><Trash /></button>
             </>
           )}
           <span className="mw-group-line" />
         </div>
-        {rows.map(renderRow)}
-        {orderable && rows.length === 0 && (
+        {!isCollapsed && rows.map(renderRow)}
+        {!isCollapsed && orderable && rows.length === 0 && (
           <div className={'mw-group-empty' + (over ? ' drag-over' : '')}
             onDragOver={(e) => { e.preventDefault(); setDragOver({ id: 'group:' + k }); }}
             onDrop={(e) => { e.preventDefault(); handleDrop(null, k); }}>
-            Drag models here
+            {t('Drag models here')}
           </div>
         )}
       </React.Fragment>
@@ -365,14 +395,14 @@ export default function ModelsSection() {
     <div className="mw">
       <div className="mw-rail">
         <div className="mw-rail-head">
-          <span className="mw-rail-title">Models <span className="mw-count">{models.length}</span></span>
-          <button className="mw-add" onClick={A.addModel} title="Add model"><Plus style={{ width: 16 }} /></button>
+          <span className="mw-rail-title">{t('Models')} <span className="mw-count">{models.length}</span></span>
+          <button className="mw-add" onClick={A.addModel} title={t("Add model")}><Plus style={{ width: 16 }} /></button>
         </div>
         <div className="mw-search">
-          <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search models…" />
+          <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={t("Search models…")} />
         </div>
         <div className="mw-filters">
-          {[['all', 'All', models.length], ['visible', 'Visible', visibleModels], ['hidden', 'Hidden', hiddenModels], ['unavailable', 'Down', unavailModels]].map(([v, l, n]) => (
+          {[['all', t('All'), models.length], ['visible', t('Visible'), visibleModels], ['hidden', t('Hidden'), hiddenModels], ['unavailable', t('Down'), unavailModels]].map(([v, l, n]) => (
             <button key={v} className={'mw-chip' + (view === v ? ' on' : '')} onClick={() => setView(v)}>{l}{n > 0 && <em>{n}</em>}</button>
           ))}
         </div>
@@ -383,14 +413,14 @@ export default function ModelsSection() {
           {groupOrder.map(renderGroup)}
           {orderable && (
             <button type="button" className="mw-new-group" onClick={() => createGroup([])}>
-              <Plus style={{ width: 12 }} /> New group
+              <Plus style={{ width: 12 }} /> {t('New group')}
             </button>
           )}
-          {shown.length === 0 && <div className="mw-none">{q ? `No models match “${filter}”.` : 'Nothing here with this filter.'}</div>}
+          {shown.length === 0 && <div className="mw-none">{q ? t('No models match “{q}”.', { q: filter }) : t('Nothing here with this filter.')}</div>}
         </div>
         <div className="mw-rail-foot">
-          <button className="btn add-model" onClick={A.addModel}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> Add model</button>
-          <button className="btn ghost" onClick={() => A.openDiscover(providers[0]?.id)}><Cube style={{ width: 14, verticalAlign: '-2px' }} /> Discover</button>
+          <button className="btn add-model" onClick={A.addModel}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> {t('Add model')}</button>
+          <button className="btn ghost" onClick={() => A.openDiscover(providers[0]?.id)}><Cube style={{ width: 14, verticalAlign: '-2px' }} /> {t('Discover')}</button>
         </div>
       </div>
       <div className="mw-detail">
@@ -407,46 +437,46 @@ export default function ModelsSection() {
           {menuSingle ? (
             <>
               <button onClick={() => act(() => A.changeModel({ ...menuSingle, enabled: menuSingle.enabled ? 0 : 1 }))}>
-                {menuSingle.enabled ? <EyeOffIcon /> : <EyeIcon />} {menuSingle.enabled ? 'Hide from users' : 'Show to users'}
+                {menuSingle.enabled ? <EyeOffIcon /> : <EyeIcon />} {menuSingle.enabled ? t('Hide from users') : t('Show to users')}
               </button>
               <button disabled={!!menuSingle.is_default} onClick={() => act(() => A.changeModel({ ...menuSingle, is_default: 1 }))}>
-                <Star /> {menuSingle.is_default ? 'Default model' : 'Make default'}
+                <Star /> {menuSingle.is_default ? t('Default model') : t('Make default')}
               </button>
-              <button onClick={() => act(() => A.duplicateModel(menuSingle.id))}><Copy /> Duplicate</button>
+              <button onClick={() => act(() => A.duplicateModel(menuSingle.id))}><Copy /> {t('Duplicate')}</button>
             </>
           ) : (
             <>
               <button onClick={() => act(() => A.setModelsEnabled(menu.ids, menuAllHidden))}>
-                {menuAllHidden ? <EyeIcon /> : <EyeOffIcon />} {menuAllHidden ? `Show ${menuModels.length} models` : `Hide ${menuModels.length} models`}
+                {menuAllHidden ? <EyeIcon /> : <EyeOffIcon />} {menuAllHidden ? t('Show {n} models', { n: menuModels.length }) : t('Hide {n} models', { n: menuModels.length })}
               </button>
-              <button onClick={() => act(async () => { await A.duplicateModels(menu.ids); setMultiSel(new Set()); })}><Copy /> Duplicate {menuModels.length} models</button>
+              <button onClick={() => act(async () => { await A.duplicateModels(menu.ids); setMultiSel(new Set()); })}><Copy /> {t('Duplicate {n} models', { n: menuModels.length })}</button>
             </>
           )}
           <div className="mw-menu-sep" />
           <button onClick={() => act(() => createGroup(menu.ids))}>
-            <FolderIcon /> {menuSingle ? 'New group' : 'Group models'}
+            <FolderIcon /> {menuSingle ? t('New group') : t('Group models')}
           </button>
           {groupReg.filter(k => k !== menuCurrentGroup).map(k => (
             <button key={'mv:' + k} onClick={() => act(() => A.setModelsGroup(menu.ids, k))}>
-              <FolderIcon /> Move to “{groupTitle(k)}”
+              <FolderIcon /> {t('Move to')} “{groupTitle(k)}”
             </button>
           ))}
           {menuAnyGrouped && (
-            <button onClick={() => act(() => A.setModelsGroup(menu.ids, null))}><FolderIcon /> {menuSingle ? 'Remove from group' : 'Ungroup'}</button>
+            <button onClick={() => act(() => A.setModelsGroup(menu.ids, null))}><FolderIcon /> {menuSingle ? t('Remove from group') : t('Ungroup')}</button>
           )}
           {!menuSingle && providers.length > 1 && (
             <>
               <div className="mw-menu-sep" />
               {providers.map(p => (
                 <button key={'pv:' + p.id} onClick={() => act(() => A.setModelsProvider(menu.ids, p.id))}>
-                  <Sliders /> Set provider: {p.name || (providerTypes[p.type]?.label || p.type)}
+                  <Sliders /> {t('Set provider:')} {p.name || (providerTypes[p.type]?.label || p.type)}
                 </button>
               ))}
             </>
           )}
           <div className="mw-menu-sep" />
           <button className="danger" onClick={() => act(() => A.deleteModels(menu.ids, () => setMultiSel(new Set())))}>
-            <Trash /> {menuSingle ? 'Delete' : `Delete ${menuModels.length} models`}
+            <Trash /> {menuSingle ? t('Delete') : t('Delete {n} models', { n: menuModels.length })}
           </button>
         </div>
       )}

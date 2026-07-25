@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
 import { Check, Trash, Sparkles } from './icons.jsx';
+import { t } from '../i18n.jsx';
 
 export const STYLE_PRESETS = [
   { id: 'normal', name: 'Normal', desc: 'Default responses' },
@@ -61,10 +62,10 @@ export default function StyleSubmenu({ styles = [], styleId = 'normal', onSelect
     return (
       <div className="style-create">
         <div className="style-menu-label">New style</div>
-        <input placeholder="Style name" value={name} maxLength={50} onChange={(e) => setName(e.target.value)} />
-        <textarea placeholder="Describe how the assistant should write (tone, length, formatting…)" rows={4} value={prompt} maxLength={4000} onChange={(e) => setPrompt(e.target.value)} />
+        <input placeholder={t("Style name")} value={name} maxLength={50} onChange={(e) => setName(e.target.value)} />
+        <textarea placeholder={t("Describe how the assistant should write (tone, length, formatting…)")} rows={4} value={prompt} maxLength={4000} onChange={(e) => setPrompt(e.target.value)} />
         <div className="style-gen">
-          <textarea placeholder="Or paste a writing sample to generate the style from…" rows={3} value={sample} maxLength={12000} onChange={(e) => setSample(e.target.value)} />
+          <textarea placeholder={t("Or paste a writing sample to generate the style from…")} rows={3} value={sample} maxLength={12000} onChange={(e) => setSample(e.target.value)} />
           <button className="style-gen-btn" disabled={!sample.trim() || genBusy} onClick={generate}>
             <Sparkles style={{ width: 13 }} /> {genBusy ? 'Generating…' : 'Generate from sample'}
           </button>
@@ -91,7 +92,7 @@ export default function StyleSubmenu({ styles = [], styleId = 'normal', onSelect
       {styles.map(x => (
         <button key={x.id} className={'style-item' + (x.id === styleId ? ' active' : '')} onClick={() => onSelect?.(x.id)}>
           <span className="style-item-name">{x.name}</span>
-          <span className="style-del" title="Delete style" onClick={(e) => removeStyle(e, x.id)}><Trash style={{ width: 13 }} /></span>
+          <span className="style-del" title={t("Delete style")} onClick={(e) => removeStyle(e, x.id)}><Trash style={{ width: 13 }} /></span>
           {x.id === styleId && <Check style={{ width: 14 }} />}
         </button>
       ))}

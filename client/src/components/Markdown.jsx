@@ -131,6 +131,8 @@ function remarkBreaks() {
   };
 }
 
+const BLOCK_HARD_LINES = 500;
+
 function blockify(text) {
   const lines = text.split('\n');
   const blocks = [];
@@ -144,6 +146,9 @@ function blockify(text) {
       continue;
     }
     if (!inFence && line.trim() === '' && buf.some(l => l.trim() !== '')) {
+      blocks.push(buf.join('\n'));
+      buf = [];
+    } else if (!inFence && buf.length >= BLOCK_HARD_LINES) {
       blocks.push(buf.join('\n'));
       buf = [];
     }
@@ -172,14 +177,17 @@ const mdComponents = {
 };
 
 const MarkdownBlock = React.memo(function MarkdownBlock({ text }) {
+  const prepared = React.useMemo(() => guardBlock(text), [text]);
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
-      rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}
+      rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false, macros: { '\\mdollar': '\\$' } }]]}
       components={mdComponents}
-    >{text}</ReactMarkdown>
+    >{prepared}</ReactMarkdown>
   );
 });
+
+const SENT = '\u0000';
 
 function guardDollars(s) {
   if (s.indexOf('$') === -1) return s;
@@ -189,6 +197,7 @@ function guardDollars(s) {
     if (c === '\\') { i++; continue; }
     if (c !== '$') continue;
     if (s[i + 1] === '$') { i++; continue; }
+    if (s[i - 1] === SENT || s[i + 1] === SENT) continue;
     singles.push(i);
   }
   if (!singles.length) return s;
@@ -197,92 +206,165 @@ function guardDollars(s) {
     const m = /^\d[\d,]*(?:\.\d+)?/.exec(s.slice(i + 1, i + 24));
     if (!m) continue;
     const after = s[i + 1 + m[0].length] || '';
-    if (!after || !'^_{\\'.includes(after)) esc.add(i);
+    if (after && '^_{\\'.includes(after)) continue;
+    let mathish = false;
+    for (let j = i + 1 + m[0].length; j < Math.min(s.length, i + 260); j++) {
+      const ch = s[j];
+      if (ch === '\\' || ch === '^' || ch === '_') { mathish = true; break; }
+      if (ch === '$' || ch === '\n') break;
+    }
+    if (!mathish) esc.add(i);
   }
   const rest = singles.filter(i => !esc.has(i));
+  const pairs = [];
   for (let k = 0; k + 1 < rest.length; k += 2) {
     const a = rest[k], b = rest[k + 1];
     const inner = s.slice(a + 1, b);
     if (!inner || /^\s/.test(inner) || /\s$/.test(inner) || inner.includes('**') || inner.includes('\n\n') || inner.length > 300) {
       esc.add(a);
       esc.add(b);
+    } else {
+      pairs.push([a, b]);
     }
   }
-  if (!esc.size) return s;
+  if (!esc.size && !pairs.some(([a, b]) => s.slice(a + 1, b).includes('\\$'))) return s;
   let out = '';
-  for (let i = 0; i < s.length; i++) out += esc.has(i) ? '\\$' : s[i];
+  let idx = 0;
+  let pi = 0;
+  while (idx < s.length) {
+    if (pi < pairs.length && idx === pairs[pi][0]) {
+      const [a, b] = pairs[pi++];
+      let inner = '';
+      for (let j = a + 1; j < b; j++) inner += esc.has(j) ? '\\$' : s[j];
+      out += '$' + inner.split('\\$').join('\\mdollar ') + '$';
+      idx = b + 1;
+      continue;
+    }
+    out += esc.has(idx) ? '\\$' : s[idx];
+    idx++;
+  }
   return out;
 }
 
-function normalizeMathDelims(text) {
-  if (!text || (text.indexOf('$') === -1 && text.indexOf('\\[') === -1 && text.indexOf('\\(') === -1)) return text;
+function guardBlock(text) {
+  if (text.indexOf(SENT) !== -1) {
+    text = text.replace(/\u0000(\${1,2})([\s\S]*?)\1\u0000/g, (full, d, inner) => SENT + d + inner.split('\\$').join('\\mdollar ') + d + SENT);
+  }
+  if (text.indexOf('$') === -1) return text.indexOf(SENT) === -1 ? text : text.split(SENT).join('');
   const parts = text.split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`)/);
   for (let i = 0; i < parts.length; i++) {
     const p = parts[i];
     if (!p || p.startsWith('`')) continue;
-    parts[i] = guardDollars(p)
-      .replace(/\\\[/g, () => '$$')
-      .replace(/\\\]/g, () => '$$')
-      .replace(/\\\(/g, () => '$')
-      .replace(/\\\)/g, () => '$');
+    parts[i] = guardDollars(p);
+  }
+  return parts.join('').split(SENT).join('');
+}
+
+function neutralizeOpenMath(text) {
+  let i = 0;
+  let open = -1;
+  let openLen = 0;
+  let inFence = false;
+  let inCode = false;
+  while (i < text.length) {
+    const ch = text[i];
+    if (inFence) {
+      if (ch === '`' && text.startsWith('```', i)) { inFence = false; i += 3; continue; }
+      i++;
+      continue;
+    }
+    if (inCode) {
+      if (ch === '`' || ch === '\n') inCode = false;
+      i++;
+      continue;
+    }
+    if (ch === '`') {
+      if (text.startsWith('```', i)) { inFence = true; i += 3; } else { inCode = true; i++; }
+      continue;
+    }
+    if (ch === '\\') { i += 2; continue; }
+    if (ch === '$') {
+      const len = text[i + 1] === '$' ? 2 : 1;
+      if (open === -1) {
+        open = i;
+        openLen = len;
+        i += len;
+        continue;
+      }
+      if (openLen === len) {
+        open = -1;
+        i += len;
+        continue;
+      }
+      if (openLen === 2 && len === 1) { i += 1; continue; }
+      open = -1;
+      i += 1;
+      continue;
+    }
+    i++;
+  }
+  if (open === -1) return text;
+  let out = text.slice(0, open) + '\\$';
+  if (openLen === 2) out += '\\$';
+  return out + text.slice(open + openLen);
+}
+
+function normalizeMathDelims(text) {
+  if (!text || (text.indexOf('\\[') === -1 && text.indexOf('\\(') === -1)) return text;
+  const parts = text.split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`)/);
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (!p || p.startsWith('`')) continue;
+    parts[i] = p
+      .replace(/\\\[/g, () => SENT + '$$')
+      .replace(/\\\]/g, () => '$$' + SENT)
+      .replace(/\\\(/g, () => SENT + '$')
+      .replace(/\\\)/g, () => '$' + SENT);
   }
   return parts.join('');
 }
 
-function autoCloseMath(text) {
-  let inFence = false, inCode = false, mode = 0, openIdx = -1;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (inFence) { if (c === '`' && text.slice(i, i + 3) === '```') { inFence = false; i += 2; } continue; }
-    if (inCode) { if (c === '`') inCode = false; continue; }
-    if (c === '`') { if (text.slice(i, i + 3) === '```') { inFence = true; i += 2; } else inCode = true; continue; }
-    if (c === '\\') { i++; continue; }
-    if (c !== '$') continue;
-    if (text[i + 1] === '$') { if (mode === 2) mode = 0; else if (mode === 0) { mode = 2; openIdx = i + 2; } i++; continue; }
-    if (mode === 1) mode = 0; else if (mode === 0) { mode = 1; openIdx = i + 1; }
-  }
-  if (!mode || inFence || inCode) return text;
-  let out = text.replace(/\\[a-zA-Z]+$/, '');
-  const seg = out.slice(openIdx);
-  let braces = 0, lefts = 0;
-  for (let i = 0; i < seg.length; i++) {
-    const c = seg[i];
-    if (c === '\\') {
-      if (seg.slice(i, i + 5) === '\\left') { lefts++; i += 4; }
-      else if (seg.slice(i, i + 6) === '\\right') { lefts = Math.max(0, lefts - 1); i += 5; }
-      else i++;
-      continue;
-    }
-    if (c === '{') braces++;
-    else if (c === '}') braces = Math.max(0, braces - 1);
-  }
-  out = out.replace(/[_^]$/, '');
-  out += '}'.repeat(braces) + '\\right.'.repeat(lefts) + (mode === 2 ? '$$' : '$');
-  return out;
+const PROGRESSIVE_SIZE_TRIGGER = 20000;
+const PROGRESSIVE_BLOCK_TRIGGER = 40;
+const PROGRESSIVE_INITIAL_LINES = 300;
+const PROGRESSIVE_STEP_LINES = 1200;
+
+function lineCount(str) {
+  let n = 1;
+  for (let i = 0; i < str.length; i++) if (str.charCodeAt(i) === 10) n++;
+  return n;
+}
+
+function ProgressiveBlocks({ blocks }) {
+  const sizes = React.useMemo(() => blocks.map(lineCount), [blocks]);
+  const advance = React.useCallback((from, budget) => {
+    let lines = 0, i = from;
+    while (i < blocks.length) { lines += sizes[i]; i++; if (lines >= budget) break; }
+    return Math.min(blocks.length, Math.max(i, from + 1));
+  }, [blocks, sizes]);
+  const [count, setCount] = React.useState(() => advance(0, PROGRESSIVE_INITIAL_LINES));
+  React.useEffect(() => { setCount(advance(0, PROGRESSIVE_INITIAL_LINES)); }, [advance]);
+  React.useEffect(() => {
+    if (count >= blocks.length) return;
+    const idle = window.requestIdleCallback || ((cb) => setTimeout(() => cb(), 16));
+    const cancel = window.cancelIdleCallback || clearTimeout;
+    const handle = idle(() => setCount(c => advance(c, PROGRESSIVE_STEP_LINES)));
+    return () => cancel(handle);
+  }, [count, blocks.length, advance]);
+  const shown = count >= blocks.length ? blocks : blocks.slice(0, count);
+  return shown.map((b, i) => <MarkdownBlock key={i} text={b} />);
 }
 
 function Markdown({ children, streaming }) {
-  const held = React.useRef({ src: '', out: '', at: 0 });
   if (typeof children !== 'string') {
     return <MarkdownBlock text={children} />;
   }
   let text = normalizeMathDelims(transformTools(children));
-  if (streaming) {
-    const closed = autoCloseMath(text);
-    if (closed === text) {
-      held.current = { src: '', out: '', at: 0 };
-    } else {
-      const now = performance.now();
-      const h = held.current;
-      if (h.out && text.startsWith(h.src) && now - h.at < 120) {
-        text = h.out;
-      } else {
-        held.current = { src: text, out: closed, at: now };
-        text = closed;
-      }
-    }
-  }
+  if (streaming) text = neutralizeOpenMath(text);
   const blocks = blockify(text);
+  if (!streaming && (text.length > PROGRESSIVE_SIZE_TRIGGER || blocks.length > PROGRESSIVE_BLOCK_TRIGGER)) {
+    return <ProgressiveBlocks blocks={blocks} />;
+  }
   return blocks.map((b, i) => <MarkdownBlock key={i} text={b} />);
 }
 

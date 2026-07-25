@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useAdmin } from '../store.jsx';
 import { Card, fmtWhen } from '../widgets.jsx';
 import { Cube, Sliders, Users, Wave, Plus, Sparkles, Clock, Gear } from '../../icons.jsx';
+import { t } from '../../../i18n.jsx';
 
 export default function DashboardSection() {
   const A = useAdmin();
@@ -33,14 +34,14 @@ export default function DashboardSection() {
             <span className="dash-stat-icon"><Icon /></span>
             <span className="dash-stat-main">
               <span className="dash-stat-v">{v}</span>
-              <span className="dash-stat-l">{l}</span>
+              <span className="dash-stat-l">{t(l)}</span>
               <span className="dash-stat-s">{s}</span>
             </span>
           </button>
         ))}
       </div>
       <div className="dash-cols">
-        <Card title="Publishing" sub="Drafts stay private to admins until pushed.">
+        <Card title={t("Publishing")} sub={t("Drafts stay private to admins until pushed.")}>
           <div className={'dash-pub' + (pub.dirty ? ' dirty' : '')}>
             <span className="dash-pub-dot" />
             <div className="dash-pub-text">
@@ -56,7 +57,7 @@ export default function DashboardSection() {
             </div>
           )}
         </Card>
-        <Card title="Quick actions" sub="Common tasks, one click away.">
+        <Card title={t("Quick actions")} sub={t("Common tasks, one click away.")}>
           <div className="dash-actions">
             <button className="dash-action" onClick={() => { A.setSection('models'); A.addModel(); }}><Plus /> <span>New model</span></button>
             <button className="dash-action" onClick={() => { A.setSection('models'); A.openDiscover(providers[0]?.id); }}><Cube /> <span>Discover models</span></button>
@@ -67,10 +68,10 @@ export default function DashboardSection() {
           </div>
         </Card>
       </div>
-      <Card title="Recent activity" sub="The latest sensitive admin actions."
+      <Card title={t("Recent activity")} sub={t("The latest sensitive admin actions.")}
         right={<button className="linklike" onClick={() => A.setSection('audit')}>View full log</button>}>
-        {!recentAudit && <div className="muted-note">Loading…</div>}
-        {recentAudit && recentAudit.length === 0 && <div className="muted-note">No admin activity recorded yet.</div>}
+        {!recentAudit && <div className="muted-note">{t("Loading…")}</div>}
+        {recentAudit && recentAudit.length === 0 && <div className="muted-note">{t("No admin activity recorded yet.")}</div>}
         {recentAudit && recentAudit.length > 0 && (
           <div className="dash-activity">
             {recentAudit.map(e => (

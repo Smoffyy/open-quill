@@ -1,6 +1,6 @@
 {
   "name": "open-quill",
-  "version": "27.0.0-beta.2",
+  "version": "27.0.0-beta.3",
   "private": true,
   "description": "Local Anthropic-style chat UI for OpenAI-compatible servers",
   "scripts": {
@@ -14,9 +14,9 @@
     "check:deps": "node update-deps.mjs --check"
   },
   "devDependencies": {
-    "concurrently": "^10.0.3"
+    "concurrently": "^10.0.4"
   },
   "overrides": {
-    "shell-quote": ">=1.8.4"
+    "shell-quote": ">=1.10.0"
   }
 }

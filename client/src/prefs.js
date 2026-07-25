@@ -39,6 +39,32 @@ export function applyPrefs(prefs, preset) {
   root.style.setProperty('--caret-pulse', pulse + 'ms');
   if (prefs?.accent) root.style.setProperty('--accent', prefs.accent);
   else root.style.removeProperty('--accent');
+  applyUserFont();
 }
 
 export const ACCENT_PRESETS = ['#d97757', '#4f8ff7', '#46b07a', '#9b6bd8', '#e0567f', '#e0a93c', '#3bb6c4', '#7a8794'];
+
+export const USER_FONT_KEY = 'oq-user-font';
+const USER_FONT_STACKS = {
+  sans: "'Open Sans'",
+  serif: "'Source Serif 4 Variable'",
+};
+export function getUserFont() {
+  try { const v = localStorage.getItem(USER_FONT_KEY); return v === 'sans' || v === 'serif' ? v : 'default'; } catch { return 'default'; }
+}
+export function applyUserFont(v) {
+  const font = v || getUserFont();
+  const root = document.documentElement;
+  if (font === 'sans' || font === 'serif') {
+    root.style.setProperty('--font-sans', USER_FONT_STACKS[font]);
+    root.style.setProperty('--font-serif', USER_FONT_STACKS[font]);
+  } else {
+    root.style.removeProperty('--font-sans');
+    root.style.removeProperty('--font-serif');
+  }
+}
+export function setUserFont(v) {
+  const font = v === 'sans' || v === 'serif' ? v : 'default';
+  try { if (font === 'default') localStorage.removeItem(USER_FONT_KEY); else localStorage.setItem(USER_FONT_KEY, font); } catch {}
+  applyUserFont(font);
+}

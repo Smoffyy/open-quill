@@ -1,14 +1,12 @@
 import fs from 'fs';
-import path from 'path';
 import crypto from 'crypto';
-import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3-multiple-ciphers';
+import { DATA_ROOT, dataPath } from './lib/dataroot.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, 'data');
+const DATA_DIR = DATA_ROOT;
 fs.mkdirSync(DATA_DIR, { recursive: true });
-const FILE = path.join(DATA_DIR, 'data.db');
-const KEYFILE = path.join(DATA_DIR, '.dbkey');
+const FILE = dataPath('data.db');
+const KEYFILE = dataPath('.dbkey');
 
 function loadKey() {
   const env = process.env.DB_ENCRYPTION_KEY;
@@ -135,9 +133,13 @@ const MIRROR = {
   feedback: { ts: o => o.ts ?? 0, user_id: o => o.user_id ?? null }
 };
 
+const bumps = new Map();
+export function tableVersion(table) { return bumps.get(table) || 0; }
+
 function collection(table) {
   const cols = Object.keys(MIRROR[table]);
   const mirror = MIRROR[table];
+  const bump = () => bumps.set(table, (bumps.get(table) || 0) + 1);
   const colList = ['id', ...cols, 'data'];
   const insSql = `INSERT INTO ${table} (${colList.join(',')}) VALUES (${colList.map(() => '?').join(',')})`;
   const insStmt = sdb.prepare(insSql);
@@ -150,23 +152,47 @@ function collection(table) {
   const parse = r => r ? JSON.parse(r.data) : undefined;
   const rowVals = o => [...cols.map(c => mirror[c](o)), JSON.stringify(o)];
 
+  const whereStmts = new Map();
+  const whereStmt = (col) => {
+    if (!whereStmts.has(col)) whereStmts.set(col, sdb.prepare(`SELECT data FROM ${table} WHERE ${col} IS ?`));
+    return whereStmts.get(col);
+  };
+  const countWhereStmts = new Map();
+  const countWhereStmt = (col) => {
+    if (!countWhereStmts.has(col)) countWhereStmts.set(col, sdb.prepare(`SELECT count(*) AS n FROM ${table} WHERE ${col} IS ?`));
+    return countWhereStmts.get(col);
+  };
+  const delWhereStmts = new Map();
+  const delWhereStmt = (col) => {
+    if (!delWhereStmts.has(col)) delWhereStmts.set(col, sdb.prepare(`DELETE FROM ${table} WHERE ${col} IS ?`));
+    return delWhereStmts.get(col);
+  };
+
   const api = {
+    version: () => bumps.get(table) || 0,
     all: () => allStmt.all().map(r => JSON.parse(r.data)),
     filter: fn => allStmt.all().map(r => JSON.parse(r.data)).filter(fn),
     find: fn => allStmt.all().map(r => JSON.parse(r.data)).find(fn),
     byId: id => parse(getStmt.get(id)),
-    insert: obj => { insStmt.run(obj.id, ...rowVals(obj)); return obj; },
+    where: (col, val) => (cols.includes(col) ? whereStmt(col).all(val ?? null).map(r => JSON.parse(r.data)) : api.filter(o => (o[col] ?? null) === (val ?? null))),
+    countWhere: (col, val) => (cols.includes(col) ? countWhereStmt(col).get(val ?? null).n : api.filter(o => (o[col] ?? null) === (val ?? null)).length),
+    removeWhere: (col, val) => { if (!cols.includes(col)) return api.remove(o => (o[col] ?? null) === (val ?? null)); delWhereStmt(col).run(val ?? null); bump(); },
+    insert: obj => { insStmt.run(obj.id, ...rowVals(obj)); bump(); return obj; },
     update: (id, patch) => {
       const cur = parse(getStmt.get(id));
       if (!cur) return undefined;
       Object.assign(cur, patch);
       updStmt.run(...rowVals(cur), id);
+      bump();
       return cur;
     },
+    removeById: id => { delStmt.run(id); bump(); },
     remove: fn => {
       const rows = allStmt.all().map(r => JSON.parse(r.data)).filter(fn);
+      if (!rows.length) return;
       const tx = sdb.transaction(list => { for (const r of list) delStmt.run(r.id); });
       tx(rows);
+      bump();
     },
     count: fn => fn ? api.filter(fn).length : cntStmt.get().n
   };
@@ -180,10 +206,16 @@ messagesCol.byChat = chatId => byChatStmt.all(chatId).map(r => JSON.parse(r.data
 const chatsCol = collection('chats');
 const byUserStmt = sdb.prepare('SELECT data FROM chats WHERE user_id=?');
 chatsCol.byUser = userId => byUserStmt.all(userId).map(r => JSON.parse(r.data));
+const byUserRecentStmt = sdb.prepare('SELECT data FROM chats WHERE user_id=? ORDER BY updated_at DESC LIMIT ?');
+chatsCol.recentByUser = (userId, limit) => byUserRecentStmt.all(userId, limit).map(r => JSON.parse(r.data));
+const byUserOldestStmt = sdb.prepare('SELECT data FROM chats WHERE user_id=? ORDER BY updated_at ASC');
+chatsCol.oldestByUser = userId => byUserOldestStmt.all(userId).map(r => JSON.parse(r.data));
 
 const usageCol = collection('usage');
 const usageByUserStmt = sdb.prepare('SELECT data FROM usage WHERE user_id=?');
 usageCol.byUser = userId => usageByUserStmt.all(userId).map(r => JSON.parse(r.data));
+const usageNameStmt = sdb.prepare("SELECT json_extract(data,'$.model_name') AS name FROM usage WHERE model_id=? AND json_extract(data,'$.model_name') NOT IN ('', 'null') LIMIT 1");
+usageCol.nameForModel = modelId => { const r = usageNameStmt.get(modelId); return (r && r.name) || ''; };
 
 const spaceMessagesCol = collection('space_messages');
 const spMsgBySpaceStmt = sdb.prepare('SELECT data FROM space_messages WHERE space_id=? ORDER BY created_at');
@@ -229,12 +261,27 @@ export const db = {
 const sGet = sdb.prepare('SELECT value FROM settings WHERE key=?');
 const sSet = sdb.prepare('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value');
 
+const settingsCache = new Map();
+
 export function getSetting(key, fallback = null) {
+  if (settingsCache.has(key)) {
+    const hit = settingsCache.get(key);
+    return hit === undefined ? fallback : hit;
+  }
   const r = sGet.get(key);
-  if (!r) return fallback;
-  try { return JSON.parse(r.value); } catch { return fallback; }
+  let val;
+  if (!r) val = undefined;
+  else { try { val = JSON.parse(r.value); } catch { val = undefined; } }
+  settingsCache.set(key, val);
+  return val === undefined ? fallback : val;
 }
-export function setSetting(key, value) { sSet.run(key, JSON.stringify(value)); }
+
+export function setSetting(key, value) {
+  sSet.run(key, JSON.stringify(value));
+  settingsCache.set(key, value);
+}
+
+export function clearSettingsCache() { settingsCache.clear(); }
 
 function checkpoint() { try { sdb.pragma('wal_checkpoint(TRUNCATE)'); } catch {} }
 process.on('exit', checkpoint);
@@ -242,10 +289,10 @@ process.on('SIGINT', () => { checkpoint(); process.exit(0); });
 process.on('SIGTERM', () => { checkpoint(); process.exit(0); });
 
 if (!getSetting('seeded')) {
-  setSetting('api_base_url', 'http://localhost:1234/v1');
-  setSetting('api_key', 'lm-studio');
+  setSetting('api_base_url', 'http://localhost:8080');
+  setSetting('api_key', '');
   const pid = uid();
-  setSetting('providers', [{ id: pid, name: 'LM Studio', type: 'lmstudio', base_url: 'http://localhost:1234/v1', api_key: 'lm-studio' }]);
+  setSetting('providers', [{ id: pid, name: 'llama.cpp', type: 'llamacpp', base_url: 'http://localhost:8080', api_key: '' }]);
   db.models.insert({
     id: uid(), display_name: 'Quillku 1', description: 'Fastest for quick answers',
     internal_name: 'local-model', system_prompt: 'You are a helpful assistant.', provider_id: pid,

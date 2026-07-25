@@ -1,16 +1,31 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
 import hljs from 'highlight.js';
 import { api } from '../api.js';
 import { copyText } from '../clipboard.js';
 import Markdown from './Markdown.jsx';
-import { Download, Refresh, FileText, Copy, Check, ChevDown, Folder, Chevron } from './icons.jsx';
+import { Download, Refresh, FileText, Copy, Check, ChevDown, Folder, Chevron, Search, X, Down, Panel } from './icons.jsx';
+import { t } from '../i18n.jsx';
 
 const PREVIEW_HTML = new Set(['html', 'htm', 'svg']);
 const PREVIEW_MD = new Set(['md', 'markdown']);
 const IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'avif']);
+const CodeRow = React.memo(function CodeRow({ n, html, hit, hasMatch }) {
+  return (
+    <div className={'art-line' + (hit ? ' hit' : '') + (hasMatch ? ' has-match' : '')}>
+      <span className="art-ln">{n}</span>
+      <span className="art-lc" dangerouslySetInnerHTML={{ __html: html || ' ' }} />
+    </div>
+  );
+});
+
+const HL_MAX_LINES = 5000;
+const AUTO_HL_MAX_LINES = 1200;
+const PAINT_MS = 90;
 
 const EXT_LANG = { rs: 'rust', py: 'python', js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript', html: 'xml', htm: 'xml', css: 'css', scss: 'scss', json: 'json', md: 'markdown', markdown: 'markdown', sh: 'bash', bash: 'bash', c: 'c', cpp: 'cpp', h: 'cpp', java: 'java', rb: 'ruby', go: 'go', php: 'php', sql: 'sql', yml: 'yaml', yaml: 'yaml', toml: 'ini', ini: 'ini', lua: 'lua', glsl: 'glsl', vert: 'glsl', frag: 'glsl', xml: 'xml', svg: 'xml', kt: 'kotlin', swift: 'swift', vue: 'xml' };
 const EXT_COLOR = { py: '#4b8bf4', js: '#e6b73a', jsx: '#e6b73a', mjs: '#e6b73a', ts: '#3a8ddb', tsx: '#3a8ddb', html: '#e3683c', htm: '#e3683c', css: '#3f7ff0', scss: '#cd6799', json: '#9aa0a6', md: '#8a93a0', markdown: '#8a93a0', sh: '#5bbd6a', bash: '#5bbd6a', rs: '#d6a07a', c: '#6b78c4', cpp: '#6b78c4', h: '#6b78c4', java: '#c0824a', rb: '#c5413b', go: '#39c0d4', php: '#8a8fd0', sql: '#d99440', yml: '#cb4b3e', yaml: '#cb4b3e', toml: '#b08b54', lua: '#5b8df0', svg: '#e3683c', xml: '#e3683c', txt: '#9aa0a6', csv: '#5bbd6a', zip: '#b48ad6' };
+
+const SCROLL_MEM = new Map();
 
 function baseName(p) { return p.split('/').pop(); }
 function extOf(p) { return (p.split('.').pop() || '').toLowerCase(); }
@@ -20,6 +35,8 @@ function fmtSize(n) {
   if (n < 1024 * 1024) return (n / 1024).toFixed(n < 10240 ? 1 : 0) + ' KB';
   return (n / 1048576).toFixed(1) + ' MB';
 }
+function escHtml(s) { return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+
 function FileChip({ ext, size = 'sm' }) {
   const e = (ext || '').toLowerCase();
   const color = EXT_COLOR[e] || '#9aa0a6';
@@ -36,34 +53,138 @@ function diffLines(a, b) {
     dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
   const out = []; let i = 0, j = 0;
   while (i < n && j < m) {
-    if (a[i] === b[j]) { out.push({ type: 'ctx', text: a[i] }); i++; j++; }
-    else if (dp[i + 1][j] >= dp[i][j + 1]) { out.push({ type: 'del', text: a[i] }); i++; }
-    else { out.push({ type: 'add', text: b[j] }); j++; }
+    if (a[i] === b[j]) { out.push({ type: 'ctx', text: a[i], key: 'c' + i + '_' + j }); i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { out.push({ type: 'del', text: a[i], key: 'd' + i }); i++; }
+    else { out.push({ type: 'add', text: b[j], key: 'a' + j }); j++; }
   }
-  while (i < n) out.push({ type: 'del', text: a[i++] });
-  while (j < m) out.push({ type: 'add', text: b[j++] });
+  while (i < n) out.push({ type: 'del', text: a[i++], key: 'd' + i });
+  while (j < m) out.push({ type: 'add', text: b[j++], key: 'a' + j });
   return out;
 }
 
-function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writingElsewhere, onJumpToLive, committed = true, pendingText = null, fileV = 0 }) {
+function stableLineDiff(a, b) {
+  const n = a.length, m = b.length;
+  let lead = 0;
+  while (lead < n && lead < m && a[lead] === b[lead]) lead++;
+  let trail = 0;
+  while (trail < n - lead && trail < m - lead && a[n - 1 - trail] === b[m - 1 - trail]) trail++;
+  const rows = [];
+  for (let i = 0; i < lead; i++) rows.push({ key: 'b' + i, type: 'ctx', text: a[i] });
+  for (let i = lead; i < n - trail; i++) rows.push({ key: 'd' + (i - lead), type: 'del', text: a[i] });
+  for (let i = lead; i < m - trail; i++) rows.push({ key: 'a' + (i - lead), type: 'add', text: b[i] });
+  for (let i = 0; i < trail; i++) rows.push({ key: 'f' + i, type: 'ctx', text: b[m - trail + i] });
+  return rows;
+}
+
+function collapseRuns(rows, keep, expanded) {
+  const out = [];
+  let i = 0;
+  while (i < rows.length) {
+    if (rows[i].type !== 'ctx') { out.push(rows[i]); i++; continue; }
+    let j = i; while (j < rows.length && rows[j].type === 'ctx') j++;
+    const runLen = j - i;
+    const foldKey = 'fold-' + (rows[i].key != null ? rows[i].key : i);
+    if (runLen > keep * 2 + 2 && !(expanded && expanded.has(foldKey))) {
+      const headEnd = (i === 0) ? i : i + keep;
+      const tailStart = (j === rows.length) ? j : j - keep;
+      for (let k = i; k < headEnd; k++) out.push(rows[k]);
+      out.push({ fold: true, key: foldKey, count: tailStart - headEnd });
+      for (let k = tailStart; k < j; k++) out.push(rows[k]);
+    } else { for (let k = i; k < j; k++) out.push(rows[k]); }
+    i = j;
+  }
+  return out;
+}
+
+function splitHighlightedLines(html) {
+  const lines = [];
+  let cur = '';
+  const open = [];
+  let i = 0;
+  while (i < html.length) {
+    const ch = html[i];
+    if (ch === '\n') { cur += '</span>'.repeat(open.length); lines.push(cur); cur = open.join(''); i++; }
+    else if (ch === '<') {
+      const end = html.indexOf('>', i);
+      if (end === -1) { cur += html.slice(i); break; }
+      const tag = html.slice(i, end + 1);
+      cur += tag;
+      if (tag[1] === '/') open.pop();
+      else if (tag[end - i - 1] !== '/') open.push(tag);
+      i = end + 1;
+    } else { cur += ch; i++; }
+  }
+  lines.push(cur);
+  return lines;
+}
+
+function markLine(text, matches, activeGid) {
+  let out = '', last = 0;
+  for (const mch of matches) {
+    if (mch.start < last) continue;
+    out += escHtml(text.slice(last, mch.start));
+    out += `<mark class="art-mark${mch.gid === activeGid ? ' active' : ''}">` + escHtml(text.slice(mch.start, mch.end)) + '</mark>';
+    last = mch.end;
+  }
+  out += escHtml(text.slice(last));
+  return out;
+}
+
+function useFrameThrottle(value, active) {
+  const [v, setV] = useState(value);
+  const latest = useRef(value);
+  const raf = useRef(0);
+  useEffect(() => {
+    latest.current = value;
+    if (!active) { if (raf.current) { cancelAnimationFrame(raf.current); raf.current = 0; } setV(value); return; }
+    if (raf.current) return;
+    raf.current = requestAnimationFrame(() => { raf.current = 0; setV(latest.current); });
+  }, [value, active]);
+  useEffect(() => () => { if (raf.current) cancelAnimationFrame(raf.current); }, []);
+  return active ? v : value;
+}
+
+function ImageView({ src, alt }) {
+  const [z, setZ] = useState(1);
+  const [off, setOff] = useState({ x: 0, y: 0 });
+  const drag = useRef(null);
+  const onWheel = (e) => { e.preventDefault(); setZ(v => Math.min(8, Math.max(0.2, v * (e.deltaY < 0 ? 1.12 : 0.89)))); };
+  const onDown = (e) => { drag.current = { x: e.clientX - off.x, y: e.clientY - off.y }; };
+  const onMove = (e) => { if (!drag.current) return; setOff({ x: e.clientX - drag.current.x, y: e.clientY - drag.current.y }); };
+  const onUp = () => { drag.current = null; };
+  const reset = () => { setZ(1); setOff({ x: 0, y: 0 }); };
+  return (
+    <div className="art-imgwrap">
+      <div className="art-imgstage" onWheel={onWheel} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onDoubleClick={reset} style={{ cursor: z > 1 ? 'grab' : 'default' }}>
+        <img className="art-img" src={src} alt={alt} draggable={false} style={{ transform: `translate(${off.x}px, ${off.y}px) scale(${z})` }} />
+      </div>
+      <div className="art-imgbar">
+        <button className="art-btn icon" onClick={() => setZ(v => Math.max(0.2, v * 0.8))} title="Zoom out">−</button>
+        <span className="art-imgzoom">{Math.round(z * 100)}%</span>
+        <button className="art-btn icon" onClick={() => setZ(v => Math.min(8, v * 1.25))} title="Zoom in">+</button>
+        <button className="art-btn icon" onClick={reset} title="Reset">⤢</button>
+        <a className="art-btn copy" href={src} style={{ borderRadius: 8 }}><Download style={{ width: 14 }} /> Download</a>
+      </div>
+    </div>
+  );
+}
+
+function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writingElsewhere, onJumpToLive, committed = true, pendingText = null, fileV = 0, headerExtra = null, onFocusPane }) {
   const [data, setData] = useState(null);
   const [copied, setCopied] = useState(false);
   const [menu, setMenu] = useState(false);
   const [diff, setDiff] = useState(false);
-  const [wrap, setWrap] = useState(false);
+  const [wrap, setWrap] = useState(() => localStorage.getItem('oq-art-wrap') === '1');
   const [prev, setPrev] = useState(null);
   const [restoring, setRestoring] = useState(false);
-  async function restore() {
-    if (restoring || !viewing) return;
-    setRestoring(true);
-    try {
-      await api.post(`/api/chats/${chatId}/restore`, { path, v: viewing });
-      await load();
-    } catch {}
-    setRestoring(false);
-  }
   const [baseText, setBaseText] = useState(null);
+  const [search, setSearch] = useState(false);
+  const [query, setQuery] = useState('');
+  const [matchIdx, setMatchIdx] = useState(0);
+  const [expanded, setExpanded] = useState(() => new Set());
   const loadTok = useRef(0);
+  const searchInputRef = useRef(null);
+
   const ext = extOf(path);
   const isLive = liveText != null;
   const canPreview = PREVIEW_HTML.has(ext) || PREVIEW_MD.has(ext);
@@ -71,10 +192,15 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
   useEffect(() => { setMode(PREVIEW_HTML.has(extOf(path)) ? 'preview' : 'code'); }, [path]);
   const previewOn = canPreview && mode === 'preview' && !isLive && !diff;
   const liveEdit = isLive && liveInfo && liveInfo.tool === 'str_replace';
-  const streamText = isLive ? liveText : (!committed && pendingText != null ? pendingText : null);
-  const fromStream = streamText != null;
+  const liveActive = isLive || liveEdit;
+  const rawStream = isLive ? liveText : (!committed && pendingText != null ? pendingText : null);
+  const fromStream = rawStream != null;
+  const streamText = useFrameThrottle(rawStream ?? '', fromStream);
 
-  // for a live edit, pull the current on-disk content as the diff base
+  useEffect(() => { setExpanded(new Set()); }, [path, diff]);
+  useEffect(() => { setWrap(localStorage.getItem('oq-art-wrap') === '1'); }, [path]);
+  useEffect(() => { if (search && searchInputRef.current) searchInputRef.current.focus(); }, [search]);
+
   useEffect(() => {
     if (!liveEdit) { setBaseText(null); return; }
     if (baseText != null) return;
@@ -84,29 +210,22 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
     return () => { on = false; };
   }, [liveEdit, path, chatId]);
 
-  // live applied-diff: splice the streaming new_str into the base where old_str sits
   const liveDiff = useMemo(() => {
     if (!liveEdit || baseText == null) return null;
-    const oldStr = liveInfo.oldStr;
-    const newStr = liveText || '';
-    let result;
-    if (oldStr && baseText.includes(oldStr)) {
-      const idx = baseText.indexOf(oldStr);
-      result = baseText.slice(0, idx) + newStr + baseText.slice(idx + oldStr.length);
-    } else {
-      result = baseText; // can't locate the target yet; show the file unchanged
-    }
-    const rows = diffLines(baseText.split('\n'), result.split('\n'));
-    return { rows, result };
-  }, [liveEdit, baseText, liveText, liveInfo]);
+    const oldStr = liveInfo.oldStr || '';
+    const newStr = streamText || '';
+    const idx = oldStr ? baseText.indexOf(oldStr) : -1;
+    const result = idx !== -1 ? baseText.slice(0, idx) + newStr + baseText.slice(idx + oldStr.length) : baseText;
+    return { rows: stableLineDiff(baseText.split('\n'), result.split('\n')) };
+  }, [liveEdit, baseText, streamText, liveInfo]);
 
-  async function load(v) {
+  async function load(v, { blank = false } = {}) {
     const tok = ++loadTok.current;
-    setData(null);
+    if (blank) setData(null);
     try { const r = await api.get(`/api/chats/${chatId}/file?path=${encodeURIComponent(path)}${v ? '&v=' + v : ''}`); if (tok === loadTok.current) setData(r); }
     catch { if (tok === loadTok.current) setData({ error: true }); }
   }
-  useEffect(() => { if (isLive) return; if (committed) { setDiff(false); setPrev(null); load(); } else setData(null); }, [path, isLive, committed]);
+  useEffect(() => { if (isLive) return; if (committed) { setDiff(false); setPrev(null); load(undefined, { blank: true }); } else setData(null); }, [path, isLive, committed]);
 
   const pinnedOld = data && data.viewing && data.v && data.viewing !== data.v;
   useEffect(() => {
@@ -126,90 +245,179 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
   }, [diff, viewingV, path, chatId]);
 
   const shownText = fromStream ? streamText : (data?.text != null ? data.text : null);
-  const html = useMemo(() => {
-    if (shownText == null) return '';
-    const esc = (s) => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const [viewText, setViewText] = useState(shownText);
+  const paintPending = useRef(shownText);
+  const paintTimer = useRef(null);
+  useEffect(() => {
+    paintPending.current = shownText;
+    if (!liveActive) {
+      if (paintTimer.current) { clearTimeout(paintTimer.current); paintTimer.current = null; }
+      setViewText(shownText);
+      return;
+    }
+    if (paintTimer.current) return;
+    paintTimer.current = setTimeout(() => { paintTimer.current = null; setViewText(paintPending.current); }, PAINT_MS);
+  }, [shownText, liveActive]);
+  useEffect(() => () => { if (paintTimer.current) clearTimeout(paintTimer.current); }, []);
+
+  const rawLines = useMemo(() => viewText != null ? viewText.split('\n') : [], [viewText]);
+  const bigFile = rawLines.length > HL_MAX_LINES;
+  const lineHtmls = useMemo(() => {
+    if (viewText == null) return [];
+    if (liveActive || bigFile || viewText.length > 40000) return rawLines.map(escHtml);
     const lang = EXT_LANG[(fromStream ? ext : (data?.ext || '').toLowerCase())];
     try {
-      if (lang && hljs.getLanguage(lang)) return hljs.highlight(shownText, { language: lang, ignoreIllegals: true }).value;
-      if (isLive) return esc(shownText);
-      return hljs.highlightAuto(shownText).value;
-    } catch { return esc(shownText); }
-  }, [shownText, fromStream]);
-  const lines = shownText != null ? shownText.split('\n') : [];
+      let full;
+      if (lang && hljs.getLanguage(lang)) full = hljs.highlight(viewText, { language: lang, ignoreIllegals: true }).value;
+      else if (rawLines.length > AUTO_HL_MAX_LINES) return rawLines.map(escHtml);
+      else full = hljs.highlightAuto(viewText).value;
+      return splitHighlightedLines(full);
+    } catch { return rawLines.map(escHtml); }
+  }, [viewText, rawLines, liveActive, fromStream, bigFile, ext, data]);
+
+  const matches = useMemo(() => {
+    if (!query) return [];
+    const q = query.toLowerCase();
+    const out = [];
+    for (let li = 0; li < rawLines.length; li++) {
+      const low = rawLines[li].toLowerCase();
+      let from = 0, idx;
+      while ((idx = low.indexOf(q, from)) !== -1) { out.push({ line: li, start: idx, end: idx + q.length, gid: out.length }); from = idx + q.length; }
+    }
+    return out;
+  }, [query, rawLines]);
+  useEffect(() => { setMatchIdx(0); }, [query]);
+  const matchesByLine = useMemo(() => { const m = new Map(); for (const x of matches) { if (!m.has(x.line)) m.set(x.line, []); m.get(x.line).push(x); } return m; }, [matches]);
+  const activeMatch = matches[matchIdx] || null;
+
   const diffRows = useMemo(() => {
     if (!diff || prev == null || data?.text == null) return null;
-    return diffLines(prev.split('\n'), data.text.split('\n'));
-  }, [diff, prev, data]);
+    const raw = diffLines(prev.split('\n'), data.text.split('\n'));
+    return raw == null ? null : collapseRuns(raw, 3, expanded);
+  }, [diff, prev, data, expanded]);
+  const liveRows = useMemo(() => liveDiff ? collapseRuns(liveDiff.rows, 4, expanded) : null, [liveDiff, expanded]);
 
-  async function copy() { const t = data?.text != null ? data.text : shownText; if (t != null && await copyText(t)) { setCopied(true); setTimeout(() => setCopied(false), 1400); } }
+  async function copy() { const text = data?.text != null ? data.text : shownText; if (text != null && await copyText(text)) { setCopied(true); setTimeout(() => setCopied(false), 1400); } }
+  async function restore() {
+    if (restoring || !viewing) return;
+    setRestoring(true);
+    try { await api.post(`/api/chats/${chatId}/restore`, { path, v: viewing }); await load(); } catch {}
+    setRestoring(false);
+  }
 
   const bodyRef = useRef(null);
+  const codeRef = useRef(null);
   const followRef = useRef(true);
-  const rafRef = useRef(0);
+  const [following, setFollowing] = useState(true);
+  const progUntil = useRef(0);
   const touchY = useRef(0);
-  const liveActive = isLive || liveEdit;
+  const scrollKey = chatId + '::' + path;
 
-  useEffect(() => { followRef.current = true; }, [path]);
-  useEffect(() => {
-    if (!canBack) return;
-    const onKey = (e) => {
-      if (e.key !== 'Escape' || menu) return;
-      const el = document.activeElement;
-      if (el && /^(INPUT|TEXTAREA)$/.test(el.tagName)) return;
-      if (el && el.isContentEditable) return;
-      onBack();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [canBack, menu, onBack]);
-  useEffect(() => {
-    if (!liveActive) { cancelAnimationFrame(rafRef.current); return; }
-    const tick = () => {
+  useEffect(() => { followRef.current = true; setFollowing(true); }, [path]);
+
+  const restoreScroll = useCallback(() => {
+    const el = bodyRef.current; if (!el) return;
+    const want = SCROLL_MEM.get(scrollKey) || 0;
+    const max = Math.max(0, el.scrollHeight - el.clientHeight);
+    progUntil.current = Date.now() + 160;
+    el.scrollTop = Math.min(want, max);
+  }, [scrollKey]);
+
+  useLayoutEffect(() => {
+    if (liveActive && followRef.current) {
       const el = bodyRef.current;
-      if (el && followRef.current) {
-        const target = el.scrollHeight - el.clientHeight;
-        const d = target - el.scrollTop;
-        if (d > 0.5) el.scrollTop += Math.max(1, d * 0.16);
-      }
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [liveActive]);
+      if (el) { progUntil.current = Date.now() + 160; el.scrollTop = el.scrollHeight; }
+    }
+  }, [viewText, liveActive]);
 
-  function nearBottom() { const el = bodyRef.current; return el && el.scrollHeight - el.scrollTop - el.clientHeight < 28; }
-  function onBodyScroll() { if (nearBottom()) followRef.current = true; }
-  function onBodyWheel(e) { if (e.deltaY < 0) followRef.current = false; }
+  useLayoutEffect(() => {
+    if (liveActive && followRef.current) return;
+    restoreScroll();
+  }, [path, mode, diff, wrap, previewOn, data?.viewing, shownText != null, restoreScroll]);
+
+  useLayoutEffect(() => {
+    if (!activeMatch) return;
+    const el = codeRef.current; if (!el) return;
+    const node = el.querySelector('.art-line.hit');
+    if (node && node.scrollIntoView) { progUntil.current = Date.now() + 160; node.scrollIntoView({ block: 'center' }); }
+  }, [matchIdx, activeMatch, query]);
+
+  function onBodyScroll() {
+    const el = bodyRef.current; if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 28;
+    if (Date.now() > progUntil.current) SCROLL_MEM.set(scrollKey, el.scrollTop);
+    if (liveActive && atBottom && !followRef.current) { followRef.current = true; setFollowing(true); }
+  }
+  function stopFollow() { if (liveActive && followRef.current) { followRef.current = false; setFollowing(false); } }
+  function onBodyWheel(e) { if (e.deltaY < 0) stopFollow(); }
   function onBodyTouchStart(e) { touchY.current = e.touches[0]?.clientY || 0; }
-  function onBodyTouchMove(e) { const y = e.touches[0]?.clientY || 0; if (y > touchY.current + 2) followRef.current = false; touchY.current = y; }
+  function onBodyTouchMove(e) { const y = e.touches[0]?.clientY || 0; if (y > touchY.current + 2) stopFollow(); touchY.current = y; }
+  function jumpLatest() { followRef.current = true; setFollowing(true); const el = bodyRef.current; if (el) { progUntil.current = Date.now() + 160; el.scrollTop = el.scrollHeight; } }
+  function nextMatch(d) { if (!matches.length) return; setMatchIdx(i => (i + d + matches.length) % matches.length); }
+  function onSearchKey(e) {
+    if (e.key === 'Enter') { e.preventDefault(); nextMatch(e.shiftKey ? -1 : 1); }
+    else if (e.key === 'Escape') { e.preventDefault(); setSearch(false); setQuery(''); }
+  }
+
+  function jumpToChange() {
+    const el = codeRef.current || bodyRef.current;
+    const node = el && el.querySelector('.art-diff-line.add, .art-diff-line.del');
+    if (node && node.scrollIntoView) node.scrollIntoView({ block: 'center' });
+  }
 
   const versions = data?.versions || [];
   const viewing = data?.viewing;
   const current = data?.v;
   const stale = viewing && current && viewing !== current;
   const showText = (fromStream || (committed && data && data.text != null));
+  const isCode = !liveEdit && showText && !diff && !previewOn;
+  const crumbs = path.split('/');
+
+  const renderDiffRows = (rows, live) => (
+    <div className={'art-diff' + (live ? ' live' : '') + (wrap ? ' wrap' : '')} ref={live ? codeRef : undefined}>
+      {(rows || []).map((r) => r.fold
+        ? <button key={r.key} className="art-fold" onClick={() => setExpanded(s => { const n = new Set(s); n.add(r.key); return n; })}>⋯ {r.count} unchanged line{r.count === 1 ? '' : 's'}</button>
+        : (
+          <div key={r.key} className={'art-diff-line ' + r.type}>
+            <span className="art-diff-sign">{r.type === 'add' ? '+' : r.type === 'del' ? '−' : ''}</span>
+            <span className="art-diff-text">{r.text || ' '}</span>
+          </div>
+        ))}
+      {live && <span className="live-caret diff" />}
+    </div>
+  );
 
   return (
-    <div className="art-viewer">
+    <div className="art-viewer" onMouseDown={onFocusPane}>
       <div className="art-vhead">
         <div className="art-vtitle">
           {canBack && <button className="art-back" onClick={onBack} title="Back to files"><Chevron style={{ width: 16, transform: 'rotate(180deg)' }} /></button>}
           <FileChip ext={ext} />
-          <span className="art-vname">{baseName(path)}</span>
-          {isLive && <span className="art-ver writing">{liveEdit ? 'editing…' : (liveText && liveText.length ? 'writing…' : 'creating…')}</span>}
+          <div className="art-crumbs">
+            {crumbs.map((c, i) => (
+              <span key={i} className="art-crumb-wrap">
+                {i > 0 && <span className="art-crumb-sep">/</span>}
+                {i < crumbs.length - 1
+                  ? <button className="art-crumb" onClick={onBack} title="Back to files">{c}</button>
+                  : <span className="art-crumb name">{c}</span>}
+              </span>
+            ))}
+          </div>
+          {isLive && <span className="art-ver writing">{liveEdit ? t('editing…') : (liveText && liveText.length ? t('writing…') : t('creating…'))}</span>}
           {!isLive && viewing && <span className={'art-ver' + (stale ? ' stale' : '')}>v{viewing}{stale ? ` of ${current}` : ''}</span>}
+          {isCode && rawLines.length > 0 && <span className="art-ver muted">{rawLines.length} ln</span>}
         </div>
         <div className="art-vactions">
           {canPreview && !isLive && showText && (
             <div className="art-mode-seg">
-              <button className={mode === 'preview' ? 'on' : ''} onClick={() => setMode('preview')}>Preview</button>
-              <button className={mode === 'code' ? 'on' : ''} onClick={() => setMode('code')}>Code</button>
+              <button className={mode === 'preview' ? 'on' : ''} onClick={() => setMode('preview')}>{t('Preview')}</button>
+              <button className={mode === 'code' ? 'on' : ''} onClick={() => setMode('code')}>{t('Code')}</button>
             </div>
           )}
-          {showText && !diff && !previewOn && <button className={'art-btn icon' + (wrap ? ' on' : '')} onClick={() => setWrap(w => !w)} title="Toggle word wrap">↩</button>}
+          {showText && !previewOn && !isLive && <button className={'art-btn icon' + (search ? ' on' : '')} onClick={() => setSearch(s => !s)} title={t('Find in file')}><Search style={{ width: 14 }} /></button>}
+          {isCode && <button className={'art-btn icon' + (wrap ? ' on' : '')} onClick={() => setWrap(w => { localStorage.setItem('oq-art-wrap', w ? '0' : '1'); return !w; })} title={t('Toggle word wrap')}>↩</button>}
           {!isLive && data?.text != null && viewing > 1 && (
-            <button className={'art-btn icon' + (diff ? ' on' : '')} onClick={() => setDiff(d => !d)} title="Show changes from previous version">Diff</button>
+            <button className={'art-btn icon' + (diff ? ' on' : '')} onClick={() => setDiff(d => !d)} title={t('Show changes from previous version')}>{t('Diff')}</button>
           )}
           {!isLive && data?.text != null && (
             <div className="art-copy-wrap">
@@ -230,9 +438,20 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
               )}
             </div>
           )}
+          {headerExtra}
           {!isLive && <button className="art-btn icon" onClick={() => load(viewing)} title="Refresh"><Refresh style={{ width: 15 }} /></button>}
         </div>
       </div>
+      {search && !isLive && (
+        <div className="art-search">
+          <Search style={{ width: 14, opacity: .6, flexShrink: 0 }} />
+          <input ref={searchInputRef} value={query} onChange={e => setQuery(e.target.value)} onKeyDown={onSearchKey} placeholder={t('Find in file')} spellCheck={false} />
+          <span className="art-search-count">{matches.length ? `${matchIdx + 1} / ${matches.length}` : (query ? '0' : '')}</span>
+          <button className="art-btn icon" disabled={!matches.length} onClick={() => nextMatch(-1)} title="Previous">↑</button>
+          <button className="art-btn icon" disabled={!matches.length} onClick={() => nextMatch(1)} title="Next">↓</button>
+          <button className="art-btn icon" onClick={() => { setSearch(false); setQuery(''); }} title="Close"><X style={{ width: 13 }} /></button>
+        </div>
+      )}
       {!isLive && writingElsewhere && (
         <button className="art-writing-bar" onClick={onJumpToLive}>✍ Writing {baseName(writingElsewhere)}…, view live</button>
       )}
@@ -246,27 +465,22 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
         {liveEdit && (
           baseText == null
             ? <div className="art-skel">{Array.from({ length: 14 }).map((_, i) => <span key={i} className="skeleton" style={{ width: (32 + ((i * 53) % 58)) + '%' }} />)}</div>
-            : liveDiff && liveDiff.rows == null
-              ? <div className={'art-code live wrap'}><pre><code className="hljs">{liveDiff.result}</code><span className="live-caret" /></pre></div>
-              : <div className="art-diff live">
-                  {(liveDiff?.rows || []).map((r, i) => (
-                    <div key={i} className={'art-diff-line ' + r.type}>
-                      <span className="art-diff-sign">{r.type === 'add' ? '+' : r.type === 'del' ? '−' : ''}</span>
-                      <span className="art-diff-text">{r.text || ' '}</span>
-                    </div>
-                  ))}
-                  <span className="live-caret diff" />
-                </div>
+            : renderDiffRows(liveRows, true)
         )}
         {!liveEdit && showText && !diff && previewOn && (
           PREVIEW_MD.has(ext)
             ? <div className="art-md"><Markdown>{shownText || ''}</Markdown></div>
             : <iframe className="art-preview-frame" sandbox="allow-scripts" srcDoc={shownText || ''} title={baseName(path)} />
         )}
-        {!liveEdit && showText && !diff && !previewOn && (
-          <div className={'art-code' + (isLive ? ' live' : '') + (wrap ? ' wrap' : '')}>
-            <div className="art-gutter">{lines.map((_, i) => <div key={i}>{i + 1}</div>)}</div>
-            <pre><code className="hljs" dangerouslySetInnerHTML={{ __html: html }} />{isLive && <span className="live-caret" />}</pre>
+        {isCode && (
+          <div className={'art-code2' + (isLive ? ' live' : '') + (wrap ? ' wrap' : '')} ref={codeRef}>
+            {lineHtmls.map((lh, i) => {
+              const lm = matchesByLine.get(i);
+              const hit = !!(activeMatch && activeMatch.line === i);
+              const inner = lm ? markLine(rawLines[i] ?? '', lm, activeMatch ? activeMatch.gid : -1) : lh;
+              return <CodeRow key={i} n={i + 1} html={inner} hit={hit} hasMatch={!!lm} />;
+            })}
+            {isLive && <div className="art-line caret"><span className="art-ln" /><span className="art-lc"><span className="live-caret" /></span></div>}
           </div>
         )}
         {!fromStream && !committed && <div className="art-empty"><div className="art-empty-spin" />This file is still being written…</div>}
@@ -279,30 +493,22 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
         {!fromStream && data && data.text != null && diff && (
           prev == null ? <div className="art-empty">Loading diff…</div>
             : diffRows == null ? <div className="art-empty">File too large to diff.</div>
-              : <div className="art-diff">
-                {diffRows.map((r, i) => (
-                  <div key={i} className={'art-diff-line ' + r.type}>
-                    <span className="art-diff-sign">{r.type === 'add' ? '+' : r.type === 'del' ? '−' : ''}</span>
-                    <span className="art-diff-text">{r.text || ' '}</span>
-                  </div>
-                ))}
-              </div>
+              : renderDiffRows(diffRows, false)
         )}
         {!isLive && data && data.binary && (
-          IMAGE_EXT.has(ext) ? (
-            <div className="art-imgwrap">
-              <img className="art-img" src={data.downloadUrl} alt={baseName(path)} />
-              <a className="btn primary art-img-dl" href={data.downloadUrl}><Download style={{ width: 15, verticalAlign: '-2px' }} /> Download</a>
-            </div>
-          ) : (
-            <div className="art-binary">
-              <div className="art-binary-icon"><FileChip ext={ext} size="lg" /></div>
-              <div className="art-bname">{baseName(path)}</div>
-              <a className="btn primary" href={data.downloadUrl}><Download style={{ width: 15, verticalAlign: '-2px' }} /> Download</a>
-            </div>
-          )
+          IMAGE_EXT.has(ext)
+            ? <ImageView src={data.downloadUrl} alt={baseName(path)} />
+            : (
+              <div className="art-binary">
+                <div className="art-binary-icon"><FileChip ext={ext} size="lg" /></div>
+                <div className="art-bname">{baseName(path)}</div>
+                <a className="btn primary" href={data.downloadUrl}><Download style={{ width: 15, verticalAlign: '-2px' }} /> Download</a>
+              </div>
+            )
         )}
       </div>
+      {diff && diffRows && <button className="art-jump change" onClick={jumpToChange} title="Jump to first change"><Down style={{ width: 14 }} /> Change</button>}
+      {liveActive && !following && <button className="art-jump" onClick={jumpLatest}><Down style={{ width: 14 }} /> {t('Jump to latest')}</button>}
     </div>
   );
 }
@@ -331,76 +537,172 @@ function FileRow({ f, chatId, depth, onOpen, sel, live }) {
     </div>
   );
 }
-function TreeFolder({ name, node, depth, chatId, onOpen, sel, live }) {
+function TreeFolder({ name, node, depth, chatId, onOpen, sel, live, forceOpen }) {
   const [open, setOpen] = useState(true);
+  const isOpen = forceOpen || open;
   return (
     <>
       <div className="art-tree-folder" style={{ paddingLeft: 10 + depth * 14 }} onClick={() => setOpen(o => !o)}>
-        <ChevDown className={'tf-chev' + (open ? ' open' : '')} style={{ width: 13 }} />
+        <ChevDown className={'tf-chev' + (isOpen ? ' open' : '')} style={{ width: 13 }} />
         <Folder style={{ width: 15 }} /><span className="tf-name">{name}</span>
       </div>
-      {open && <TreeChildren node={node} depth={depth + 1} chatId={chatId} onOpen={onOpen} sel={sel} live={live} />}
+      {isOpen && <TreeChildren node={node} depth={depth + 1} chatId={chatId} onOpen={onOpen} sel={sel} live={live} forceOpen={forceOpen} />}
     </>
   );
 }
-function TreeChildren({ node, depth, chatId, onOpen, sel, live }) {
+function TreeChildren({ node, depth, chatId, onOpen, sel, live, forceOpen }) {
   const dirs = Object.keys(node.dirs).sort();
   const files = node.files.slice().sort((a, b) => a.path.localeCompare(b.path));
   return (
     <>
-      {dirs.map(d => <TreeFolder key={d} name={d} node={node.dirs[d]} depth={depth} chatId={chatId} onOpen={onOpen} sel={sel} live={live} />)}
+      {dirs.map(d => <TreeFolder key={d} name={d} node={node.dirs[d]} depth={depth} chatId={chatId} onOpen={onOpen} sel={sel} live={live} forceOpen={forceOpen} />)}
       {files.map(f => <FileRow key={f.path} f={f} chatId={chatId} depth={depth} onOpen={onOpen} sel={sel} live={live} />)}
     </>
   );
 }
 
-function clampW(w) { return Math.max(320, Math.min(w, Math.round(window.innerWidth * 0.8))); }
+function clampW(w) { return Math.max(320, Math.min(w, Math.round(window.innerWidth * 0.85))); }
+
+const MemoViewer = React.memo(Viewer);
 
 export default function ArtifactsPanel({ chatId, files, live, pending = {}, focus = null, onClose }) {
-  const [sel, setSel] = useState(null);
+  const [tabs, setTabs] = useState([]);
+  const [active, setActive] = useState(null);
+  const [split, setSplit] = useState(null);
+  const [focusedPane, setFocusedPane] = useState('left');
+  const [filter, setFilter] = useState('');
   const [width, setWidth] = useState(() => { const s = parseInt(localStorage.getItem('oq-art-w')); return s ? clampW(s) : Math.min(480, Math.round(window.innerWidth * 0.42)); });
   const [resizing, setResizing] = useState(false);
-  const autoRef = useRef(null);
   const dragRef = useRef(null);
 
-  useEffect(() => { setSel(null); autoRef.current = null; }, [chatId]);
-  useEffect(() => { if (focus && focus.path) setSel(focus.path); }, [focus]);
-  useEffect(() => { if (sel && !(live && sel === live.path) && !(pending && sel in pending) && !files.find(f => f.path === sel)) setSel(null); }, [files, live, pending]);
-
-  useEffect(() => () => { document.body.style.cursor = ''; }, []);
-  function startResize(e) {
-    e.preventDefault();
-    setResizing(true);
-    const move = (ev) => { const x = ev.touches ? ev.touches[0].clientX : ev.clientX; setWidth(clampW(window.innerWidth - x)); };
-    const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); document.removeEventListener('touchmove', move); document.removeEventListener('touchend', up); document.body.style.cursor = ''; document.body.style.userSelect = ''; setResizing(false); setWidth(w => { localStorage.setItem('oq-art-w', String(w)); return w; }); };
-    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
-    document.addEventListener('touchmove', move, { passive: false }); document.addEventListener('touchend', up);
-    document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
-  }
-
-  const liveText = live && sel === live.path ? live.content : null;
-  const liveInfo = live && sel === live.path ? live : null;
   const byPath = new Map(files.map(f => [f.path, f]));
   for (const p of Object.keys(pending)) if (!byPath.has(p)) byPath.set(p, { path: p, ext: extOf(p), v: 0 });
   if (live && live.path && !byPath.has(live.path)) byPath.set(live.path, { path: live.path, ext: extOf(live.path), v: 0 });
   const treeFiles = [...byPath.values()];
 
+  const openFile = useCallback((path) => {
+    const toRight = focusedPane === 'right' && split != null;
+    setTabs(ts => ts.includes(path) ? ts : [...ts, path]);
+    if (toRight) setSplit(path); else setActive(path);
+  }, [focusedPane, split]);
+
+  const closeTab = useCallback((path, e) => {
+    if (e) e.stopPropagation();
+    setTabs(ts => ts.includes(path) ? ts.filter(p => p !== path) : ts);
+    setSplit(s => s === path ? null : s);
+    setActive(a => {
+      if (a !== path) return a;
+      const rest = tabs.filter(p => p !== path);
+      return rest.length ? rest[rest.length - 1] : null;
+    });
+  }, [tabs]);
+
+  const goOverview = useCallback(() => { setActive(null); setSplit(null); setFocusedPane('left'); }, []);
+
+  useEffect(() => { setTabs([]); setActive(null); setSplit(null); }, [chatId]);
+  useEffect(() => { if (focus && focus.path) { setTabs(ts => ts.includes(focus.path) ? ts : [...ts, focus.path]); setActive(focus.path); setFocusedPane('left'); } }, [focus]);
+  useEffect(() => {
+    const exists = (p) => p && byPath.has(p);
+    setTabs(ts => ts.every(exists) ? ts : ts.filter(exists));
+    setActive(a => exists(a) ? a : null);
+    setSplit(s => exists(s) ? s : null);
+  }, [files, live, pending]);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      const el = document.activeElement;
+      if (el && (/^(INPUT|TEXTAREA)$/.test(el.tagName) || el.isContentEditable)) return;
+      if (split) { setSplit(null); setFocusedPane('left'); }
+      else if (active) goOverview();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [active, split, goOverview]);
+
+  useEffect(() => () => { document.body.style.cursor = ''; }, []);
+  function startResize(e) {
+    e.preventDefault();
+    setResizing(true);
+    let raf = 0, nextW = null;
+    const apply = () => { raf = 0; if (nextW != null) setWidth(nextW); };
+    const move = (ev) => { const x = ev.touches ? ev.touches[0].clientX : ev.clientX; nextW = clampW(window.innerWidth - x); if (!raf) raf = requestAnimationFrame(apply); };
+    const up = () => {
+      document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
+      document.removeEventListener('touchmove', move); document.removeEventListener('touchend', up);
+      document.body.style.cursor = ''; document.body.style.userSelect = '';
+      if (raf) cancelAnimationFrame(raf);
+      setResizing(false);
+      if (nextW != null) { setWidth(nextW); localStorage.setItem('oq-art-w', String(nextW)); }
+    };
+    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+    document.addEventListener('touchmove', move, { passive: false }); document.addEventListener('touchend', up);
+    document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
+  }
+
+  const onJumpToLive = useCallback(() => { if (live && live.path) openFile(live.path); }, [live, openFile]);
+  const paneProps = (p) => ({
+    chatId, path: p,
+    liveText: live && p === live.path ? live.content : null,
+    liveInfo: live && p === live.path ? live : null,
+    committed: !!files.find(f => f.path === p),
+    fileV: byPath.get(p)?.v || 0,
+    pendingText: p in pending ? pending[p] : null,
+    writingElsewhere: live && live.path && p !== live.path ? live.path : null,
+    onJumpToLive
+  });
+
+  const filtered = filter.trim() ? treeFiles.filter(f => f.path.toLowerCase().includes(filter.trim().toLowerCase())) : treeFiles;
+
+  const splitBtn = <button className="art-btn icon" onClick={() => { setSplit(active); setFocusedPane('right'); }} title="Split view"><Panel style={{ width: 15 }} /></button>;
+  const closeSplitBtn = <button className="art-btn icon" onClick={() => { setSplit(null); setFocusedPane('left'); }} title="Close split"><X style={{ width: 14 }} /></button>;
+
   return (
     <div className={'artifacts' + (resizing ? ' resizing' : '')} style={{ width }}>
       <div className="art-resizer" onMouseDown={startResize} onTouchStart={startResize} ref={dragRef} title="Drag to resize"><span /></div>
-      {sel ? (
-        <Viewer chatId={chatId} path={sel} liveText={liveText} liveInfo={liveInfo} onBack={() => setSel(null)} canBack={treeFiles.length > 1}
-          committed={!!files.find(f => f.path === sel)}
-          fileV={byPath.get(sel)?.v || 0}
-          pendingText={sel in pending ? pending[sel] : null}
-          writingElsewhere={live && live.path && sel !== live.path ? live.path : null}
-          onJumpToLive={() => live && setSel(live.path)} />
+      {tabs.length > 0 && (
+        <div className="art-tabs">
+          <button className={'art-tabs-list' + (active == null ? ' on' : '')} onClick={goOverview} title="All files"><Folder style={{ width: 15 }} /></button>
+          <div className="art-tabs-scroll">
+            {tabs.map(p => (
+              <div key={p} className={'art-tab' + (p === active ? ' active' : '') + (p === split ? ' split' : '')} onClick={() => { if (focusedPane === 'right' && split != null) setSplit(p); else setActive(p); }} title={p}>
+                <FileChip ext={extOf(p)} />
+                <span className="art-tab-name">{baseName(p)}</span>
+                <button className="art-tab-close" onClick={(e) => closeTab(p, e)} title="Close"><X style={{ width: 12 }} /></button>
+              </div>
+            ))}
+          </div>
+          <button className="art-btn icon" onClick={onClose} title="Close panel"><X style={{ width: 15 }} /></button>
+        </div>
+      )}
+      {active != null ? (
+        <div className={'art-panes' + (split ? ' split' : '')}>
+          <div className={'art-pane' + (focusedPane === 'left' || !split ? ' focused' : '')}>
+            <MemoViewer {...paneProps(active)} onBack={goOverview} canBack
+              headerExtra={!split ? splitBtn : null}
+              onFocusPane={() => setFocusedPane('left')} />
+          </div>
+          {split && (
+            <div className={'art-pane' + (focusedPane === 'right' ? ' focused' : '')}>
+              <MemoViewer {...paneProps(split)} onBack={() => { setSplit(null); setFocusedPane('left'); }} canBack={false}
+                headerExtra={closeSplitBtn}
+                onFocusPane={() => setFocusedPane('right')} />
+            </div>
+          )}
+        </div>
       ) : (
         <>
           <div className="art-head">
             <div className="art-title">Artifacts{treeFiles.length > 0 && <span className="art-count">{treeFiles.length}</span>}</div>
-            <button className="art-btn icon" onClick={onClose} title="Close panel">✕</button>
+            {tabs.length === 0 && <button className="art-btn icon" onClick={onClose} title="Close panel"><X style={{ width: 15 }} /></button>}
           </div>
+          {treeFiles.length > 3 && (
+            <div className="art-filter">
+              <Search style={{ width: 14, opacity: .55, flexShrink: 0 }} />
+              <input value={filter} onChange={e => setFilter(e.target.value)} placeholder={t('Filter files')} spellCheck={false} />
+              {filter && <button className="art-btn icon" onClick={() => setFilter('')} title="Clear"><X style={{ width: 13 }} /></button>}
+            </div>
+          )}
           <div className="art-list">
             {treeFiles.length === 0 && (
               <div className="art-empty big">
@@ -409,7 +711,8 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
                 <div>When the assistant creates or edits files, they'll show up here, ready to view, diff, and download.</div>
               </div>
             )}
-            {treeFiles.length > 0 && <TreeChildren node={buildTree(treeFiles)} depth={0} chatId={chatId} onOpen={setSel} sel={sel} live={live} />}
+            {treeFiles.length > 0 && filtered.length === 0 && <div className="art-empty">No files match “{filter}”.</div>}
+            {filtered.length > 0 && <TreeChildren node={buildTree(filtered)} depth={0} chatId={chatId} onOpen={openFile} sel={active} live={live} forceOpen={!!filter.trim()} />}
           </div>
           {files.length > 0 && (
             <div className="art-foot">

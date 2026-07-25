@@ -20,6 +20,8 @@ import FeedbackSection from './sections/FeedbackSection.jsx';
 import LimitsSection from './sections/LimitsSection.jsx';
 import AuditSection from './sections/AuditSection.jsx';
 import AnalyticsSection from './sections/AnalyticsSection.jsx';
+import DatabasesSection from './sections/DatabasesSection.jsx';
+import { t } from '../../i18n.jsx';
 
 const SECTION_COMPONENTS = {
   dashboard: DashboardSection,
@@ -38,7 +40,8 @@ const SECTION_COMPONENTS = {
   feedback: FeedbackSection,
   limits: LimitsSection,
   audit: AuditSection,
-  analytics: AnalyticsSection
+  analytics: AnalyticsSection,
+  databases: DatabasesSection
 };
 
 function DiscoverModal() {
@@ -50,27 +53,27 @@ function DiscoverModal() {
       <div className="sp-modal" style={{ maxHeight: '80vh' }}>
         <div className="sp-head">
           <div>
-            <h3>Discover models</h3>
-            <div className="muted-note">Models your backend currently exposes. Add the ones you want, added models can be hidden or deleted like any other.</div>
+            <h3>{t("Discover models")}</h3>
+            <div className="muted-note">{t("Models your backend currently exposes. Add the ones you want, added models can be hidden or deleted like any other.")}</div>
           </div>
           <button className="modal-close" style={{ position: 'static' }} onClick={() => setDiscover(null)}>✕</button>
         </div>
         <div className="discover-list">
-          {discover.loading && <div className="muted-note" style={{ padding: 14 }}>Reaching the backend…</div>}
+          {discover.loading && <div className="muted-note" style={{ padding: 14 }}>{t('Reaching the backend…')}</div>}
           {discover.error && <div className="dz-err">{discover.error}</div>}
-          {!discover.loading && !discover.error && discover.list.length === 0 && <div className="muted-note" style={{ padding: 14 }}>No models returned by the backend.</div>}
+          {!discover.loading && !discover.error && discover.list.length === 0 && <div className="muted-note" style={{ padding: 14 }}>{t("No models returned by the backend.")}</div>}
           {discover.list.map(x => (
             <div key={x.id} className="discover-row">
               <span className="discover-id">{x.id}</span>
               {x.added
-                ? <span className="discover-added">Added ✓</span>
-                : <button className="btn" disabled={x.busy} onClick={() => A.addDiscovered(x.id)}>{x.busy ? 'Adding…' : 'Add'}</button>}
+                ? <span className="discover-added">{t("Added")} ✓</span>
+                : <button className="btn" disabled={x.busy} onClick={() => A.addDiscovered(x.id)}>{x.busy ? t('Adding…') : t('Add')}</button>}
             </div>
           ))}
         </div>
         <div className="sp-foot">
-          <button className="btn ghost" onClick={() => A.openDiscover(discover.providerId)} disabled={discover.loading}>Refresh</button>
-          <button className="btn primary" onClick={() => setDiscover(null)}>Done</button>
+          <button className="btn ghost" onClick={() => A.openDiscover(discover.providerId)} disabled={discover.loading}>{t("Refresh")}</button>
+          <button className="btn primary" onClick={() => setDiscover(null)}>{t("Done")}</button>
         </div>
       </div>
     </div>
@@ -115,6 +118,7 @@ function Shell() {
   }
 
   const Section = SECTION_COMPONENTS[section] || DashboardSection;
+  const showPublish = section !== 'dashboard' && section !== 'databases';
 
   return (
     <div className="oqa">
@@ -123,35 +127,35 @@ function Shell() {
           <img className="oqa-brand-icon" src={cfg.appIcon || '/starburst.svg'} alt="" />
           <div className="oqa-brand-text">
             <span className="oqa-brand-name">{cfg.appName || 'open-quill'}</span>
-            <span className="oqa-brand-sub">Control Center</span>
+            <span className="oqa-brand-sub">{t("Control Center")}</span>
           </div>
         </div>
         <div className="oqa-jump">
-          <input ref={navRef} value={navQ} onChange={(e) => setNavQ(e.target.value)} placeholder="Jump to anything… (Ctrl K)"
+          <input ref={navRef} value={navQ} onChange={(e) => setNavQ(e.target.value)} placeholder={t("Jump to anything… (Ctrl K)")}
             onKeyDown={(e) => { if (e.key === 'Enter') pickFirst(); if (e.key === 'Escape') { setNavQ(''); e.target.blur(); } }} />
         </div>
         <div className="oqa-scroll">
           {sectionMatches ? (
             <div className="oqa-group">
-              <div className="oqa-group-label">{sectionMatches.length || modelMatches.length ? 'Matches' : 'No matches'}</div>
+              <div className="oqa-group-label">{sectionMatches.length || modelMatches.length ? t('Matches') : t('No matches')}</div>
               {sectionMatches.map(({ id, label, Icon, group }) => (
                 <button key={id} className={'oqa-tab' + (section === id ? ' active' : '')} onClick={() => pickSection(id)}>
-                  <Icon /> <span>{label}</span>{group && <span className="oqa-tab-hint">{group}</span>}
+                  <Icon /> <span>{t(label)}</span>{group && <span className="oqa-tab-hint">{t(group)}</span>}
                 </button>
               ))}
               {modelMatches.map(m => (
                 <button key={m.id} className="oqa-tab" onClick={() => pickModel(m)}>
                   {m.static_icon ? <img className="oqa-tab-mico" src={m.static_icon} alt="" /> : <span className="oqa-tab-mico noicon">{(m.display_name || '?').trim().charAt(0).toUpperCase()}</span>}
-                  <span>{m.display_name || m.internal_name || 'Untitled'}</span><span className="oqa-tab-hint">Model</span>
+                  <span>{m.display_name || m.internal_name || 'Untitled'}</span><span className="oqa-tab-hint">{t("Model")}</span>
                 </button>
               ))}
             </div>
           ) : NAV_GROUPS.map((g) => (
             <div className="oqa-group" key={g.id}>
-              {g.label && <div className="oqa-group-label">{g.label}</div>}
+              {g.label && <div className="oqa-group-label">{t(g.label)}</div>}
               {g.items.map(({ id, label, Icon }) => (
                 <button key={id} className={'oqa-tab' + (section === id ? ' active' : '')} onClick={() => setSection(id)}>
-                  <Icon /> <span>{label}</span>
+                  <Icon /> <span>{t(label)}</span>
                   {id === 'models' && models.length > 0 && <span className="oqa-tab-count">{models.length}</span>}
                   {id === 'members' && users.length > 0 && <span className="oqa-tab-count">{users.length}</span>}
                 </button>
@@ -159,27 +163,27 @@ function Shell() {
             </div>
           ))}
         </div>
-        <button className="oqa-back" onClick={onClose}><Chevron style={{ transform: 'rotate(90deg)', width: 16 }} /> Back to chat</button>
+        <button className="oqa-back" onClick={onClose}><Chevron style={{ transform: 'rotate(90deg)', width: 16 }} /> {t("Back to chat")}</button>
       </nav>
       <div className="oqa-main">
         <header className="oqa-topbar">
           <div className="oqa-title">
-            {meta.group && <span className="oqa-crumb">{meta.group}</span>}
-            <h1>{meta.label}</h1>
-            <span className="oqa-desc">{meta.desc}</span>
+            {meta.group && <span className="oqa-crumb">{t(meta.group)}</span>}
+            <h1>{t(meta.label)}</h1>
+            <span className="oqa-desc">{t(meta.desc)}</span>
           </div>
-          {section !== 'dashboard' && (
+          {showPublish && (
             <div className="oqa-status">
               {pubFlash
-                ? <span className="saved-flash">Pushed to all clients ✓</span>
+                ? <span className="saved-flash">{t("Pushed to all clients")} ✓</span>
                 : pub.dirty
-                  ? <span className="pub-note dirty">Unpublished draft changes</span>
-                  : <span className="pub-note">{pub.published ? 'Clients are up to date' : 'Nothing published yet'}</span>}
+                  ? <span className="pub-note dirty">{t("Unpublished draft changes")}</span>
+                  : <span className="pub-note">{pub.published ? t('Clients are up to date') : t('Nothing published yet')}</span>}
             </div>
           )}
-          {section !== 'dashboard' && (
+          {showPublish && (
             <button className={'btn primary push-btn' + (pub.dirty ? ' dirty' : '')} onClick={A.publish} disabled={publishing || (!pub.dirty && pub.published)}>
-              {publishing ? 'Pushing…' : 'Push to all clients'}
+              {publishing ? t('Pushing…') : t('Push to all clients')}
             </button>
           )}
         </header>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
 import { Search, Star } from './icons.jsx';
+import { t } from '../i18n.jsx';
 
 export default function SearchModal({ onClose, onOpen }) {
   const [q, setQ] = useState('');
@@ -44,7 +45,7 @@ export default function SearchModal({ onClose, onOpen }) {
       <div className="search-modal" onKeyDown={onKey}>
         <div className="search-head">
           <Search style={{ width: 18 }} />
-          <input ref={inputRef} value={q} placeholder="Search your chats…" onChange={(e) => setQ(e.target.value)} />
+          <input ref={inputRef} value={q} placeholder={t("Search your chats…")} onChange={(e) => setQ(e.target.value)} />
         </div>
         <div className="search-body">
           {q.trim().length < 2 && <div className="search-empty">Type at least 2 characters to search across all your conversations.</div>}

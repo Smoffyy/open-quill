@@ -1,7 +1,17 @@
 import { db, getSetting, setSetting } from '../db.js';
 import { getProviders, resolveProvider, providerSpec } from '../providers.js';
+import { publicKwargDefs } from './kwargs.js';
+import { llamaContext } from './llamacpp.js';
+
+let sunsetCheckedAt = 0;
+let sunsetCheckedVersion = -1;
+const SUNSET_INTERVAL_MS = 60000;
 
 export function applySunsets() {
+  const version = db.models.version();
+  if (version === sunsetCheckedVersion && Date.now() - sunsetCheckedAt < SUNSET_INTERVAL_MS) return;
+  sunsetCheckedAt = Date.now();
+  sunsetCheckedVersion = version;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   for (const m of db.models.all()) {
@@ -28,6 +38,7 @@ export function shapePublic(m) {
     id: m.id, displayName: m.display_name, description: m.description,
     hasReasoning: !!m.has_reasoning, inMoreModels: !!m.in_more_models, moreModelsLabel: m.more_models_label,
     effortEnabled: !!m.effort_enabled, effortLevels: (Array.isArray(m.effort_levels) && m.effort_levels.length) ? m.effort_levels : ['low', 'medium', 'high'], effortDefault: m.effort_default || '', effortAdminOnly: !!m.effort_admin_only,
+    kwargs: publicKwargDefs(m),
     reasoningCollapsible: m.reasoning_collapsible !== 0, hideThinking: !!m.hide_thinking,
     staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon, generatingAnim: m.generating_anim || 'spin', thinkingAnim: m.thinking_anim || 'pulse',
     iconPosition: m.icon_position || 'below', hasVision: !!m.has_vision, iconSize: m.icon_size || 0, showName: !!m.show_name,
@@ -37,29 +48,59 @@ export function shapePublic(m) {
     unavailable: !!m.unavailable, unavailableReason: m.unavailable_reason || '',
     sunsetAt: m.sunset_at || '',
     bgEnabled: !!m.bg_enabled, bgImage: m.bg_image || '',
-    capVision: !!m.cap_vision, capReasoning: !!m.cap_reasoning, capText: !!m.cap_text, capCompact: !!m.cap_compact
+    capVision: !!m.cap_vision, capReasoning: !!m.cap_reasoning, capText: !!m.cap_text, capCompact: !!m.cap_compact,
+    priceIn: m.cost_in ?? null, priceOut: m.cost_out ?? null,
+    docsFeatured: !!m.docs_featured, docsIntelligence: m.docs_intelligence || 0, docsSpeed: m.docs_speed || 0,
+    docsMaxOutput: m.docs_max_output || 0, docsCutoff: m.docs_cutoff || '', docsBody: m.docs_body || '', docsImage: m.docs_image || '', docsIcon: m.docs_icon || '',
+    docsIn: { text: m.docs_in_text !== 0, image: !!m.docs_in_image || !!m.has_vision, audio: !!m.docs_in_audio, video: !!m.docs_in_video },
+    docsOut: { text: m.docs_out_text !== 0, image: !!m.docs_out_image, audio: !!m.docs_out_audio, video: !!m.docs_out_video }
   };
+}
+
+const shapeCache = { draft: null, published: null };
+
+function shapeList(rows) {
+  return rows.filter(m => m.enabled).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).map(shapePublic);
 }
 
 export function draftModels() {
   applySunsets();
-  return db.models.filter(m => m.enabled).sort((a, b) => a.sort_order - b.sort_order).map(shapePublic);
+  const version = db.models.version();
+  if (shapeCache.draft && shapeCache.draft.version === version) return shapeCache.draft.list;
+  const list = shapeList(db.models.all());
+  shapeCache.draft = { version, list };
+  return list;
 }
 
 export function publicModels() {
   applySunsets();
   const snap = getSetting('published_models', null);
   if (!Array.isArray(snap)) return draftModels();
-  return snap.filter(m => m.enabled).sort((a, b) => a.sort_order - b.sort_order).map(shapePublic);
+  if (shapeCache.published && shapeCache.published.snap === snap) return shapeCache.published.list;
+  const list = shapeList(snap);
+  shapeCache.published = { snap, list };
+  return list;
 }
 
+export function invalidateModelShapes() { shapeCache.draft = null; shapeCache.published = null; }
+
 // resolve the model used to RUN a completion: admins use live draft, clients use the published snapshot
+const snapIndex = { snap: null, byId: null };
+
+function publishedById(snap, modelId) {
+  if (snapIndex.snap !== snap) {
+    snapIndex.snap = snap;
+    snapIndex.byId = new Map(snap.map(m => [m.id, m]));
+  }
+  return snapIndex.byId.get(modelId) || null;
+}
+
 export function resolveModel(modelId, isAdmin) {
   applySunsets();
   if (isAdmin) return db.models.byId(modelId);
   const snap = getSetting('published_models', null);
   if (!Array.isArray(snap)) return db.models.byId(modelId);
-  return snap.find(m => m.id === modelId) || null;
+  return publishedById(snap, modelId);
 }
 
 export function resolveModelOrDefault(modelId, isAdmin) {
@@ -68,20 +109,6 @@ export function resolveModelOrDefault(modelId, isAdmin) {
   const snap = getSetting('published_models', null);
   const pool = (!isAdmin && Array.isArray(snap)) ? snap : db.models.all();
   return pool.filter(x => x.enabled).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))[0] || null;
-}
-
-export function effortLevelsOf(model) {
-  return (Array.isArray(model.effort_levels) && model.effort_levels.length) ? model.effort_levels : ['low', 'medium', 'high'];
-}
-
-export function applyEffort(model, requested, allowRequest = true) {
-  if (!model || !model.effort_enabled) return model;
-  const levels = effortLevelsOf(model);
-  const isBool = levels.length === 2 && levels.some(x => /^true$/i.test(x)) && levels.some(x => /^false$/i.test(x));
-  const fallback = isBool ? levels.find(x => /^false$/i.test(x)) : (levels[Math.floor(levels.length / 2)] || levels[0]);
-  const def = levels.includes(model.effort_default) ? model.effort_default : fallback;
-  const level = (allowRequest && typeof requested === 'string' && levels.includes(requested)) ? requested : def;
-  return { ...model, reasoning_effort_level: level, reasoning_effort_kwarg: (model.effort_kwarg || 'reasoning_effort').trim() || 'reasoning_effort' };
 }
 
 export function roleLimit(key, isAdmin, fallback) {
@@ -141,6 +168,8 @@ const CTX_AUTO_TYPES = new Set(['llamacpp', 'ollama', 'lmstudio']);
 export async function modelCtx(model) {
   const manual = parseInt(model.num_ctx);
   if (Number.isFinite(manual) && manual > 0) return manual;
+  const llama = await llamaContext(model);
+  if (llama > 0) return llama;
   const prov = resolveProvider(model.provider_id);
   if (!prov || !CTX_AUTO_TYPES.has(prov.type)) return 0;
   const cacheKey = prov.id + ':' + (model.internal_name || '');

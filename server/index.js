@@ -1,3 +1,4 @@
+import './lib/dataroot.js';
 import express from 'express';
 import http from 'http';
 import path from 'path';
@@ -9,12 +10,13 @@ import { setCustomPresets } from './pricing.js';
 import * as mcp from './mcp.js';
 import { pruneAudit } from './lib/audit.js';
 import { UPLOADS } from './lib/uploads.js';
-import { initWs } from './lib/ws.js';
+import { initWs } from './lib/ws/index.js';
 import registerAuthRoutes from './routes/auth.js';
-import registerChatRoutes from './routes/chats.js';
+import registerChatRoutes from './routes/chats/index.js';
 import registerProjectRoutes from './routes/projects.js';
 import registerArtifactRoutes from './routes/artifacts.js';
 import registerModelRoutes from './routes/models.js';
+import registerPlaygroundRoutes from './routes/playground.js';
 import registerSettingsRoutes from './routes/settings.js';
 import registerAdminRoutes from './routes/admin.js';
 import registerMediaRoutes from './routes/media.js';
@@ -23,6 +25,7 @@ import registerMiscRoutes from './routes/misc.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3001;
+const HOST = process.env.HOST || '127.0.0.1';
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -34,6 +37,7 @@ registerChatRoutes(app);
 registerProjectRoutes(app);
 registerArtifactRoutes(app);
 registerModelRoutes(app);
+registerPlaygroundRoutes(app);
 registerSettingsRoutes(app);
 registerAdminRoutes(app);
 registerMediaRoutes(app);
@@ -52,9 +56,11 @@ if (fs.existsSync(clientDist)) {
 const server = http.createServer(app);
 initWs(server);
 
+process.on('unhandledRejection', (reason) => { console.error('[unhandledRejection]', reason); });
+process.on('uncaughtException', (err) => { console.error('[uncaughtException]', err); });
 process.on('exit', () => { try { mcp.shutdown(); } catch {} });
 
-server.listen(PORT, () => console.log(`open-quill running on http://localhost:${PORT}`));
+server.listen(PORT, HOST, () => console.log(`open-quill running on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`));
 try { setCustomPresets(getSetting('custom_presets', [])); } catch {}
 pruneAudit();
 setInterval(pruneAudit, 24 * 60 * 60 * 1000).unref();

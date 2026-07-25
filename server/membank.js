@@ -1,10 +1,9 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { getSetting, setSetting } from './db.js';
+import { dataPath } from './lib/dataroot.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const MEMBANK_ROOT = path.join(__dirname, 'data', 'membank');
+export const MEMBANK_ROOT = dataPath('membank');
 const CACHE_DIR = path.join(MEMBANK_ROOT, '.cache');
 fs.mkdirSync(CACHE_DIR, { recursive: true });
 

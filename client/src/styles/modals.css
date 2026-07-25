@@ -39,7 +39,7 @@
 .version-desc h1 { font-size: 21px; } .version-desc h2 { font-size: 18px; } .version-desc h3 { font-size: 16px; }
 .version-desc h1:first-child, .version-desc h2:first-child, .version-desc h3:first-child { margin-top: 0; }
 .version-desc p { margin: 0 0 12px; }
-.version-desc code { background: var(--hover-mid); padding: 2px 7px; border-radius: 6px; font-family: ui-monospace, monospace; font-size: .88em; color: var(--text); }
+.version-desc code { background: var(--hover-mid); padding: 2px 7px; border-radius: 6px; font-family: monospace; font-size: .88em; color: var(--text); }
 .version-desc a { color: var(--accent); }
 .version-admin { margin-top: 18px; border-top: 1px solid var(--border-soft); padding-top: 16px; display: flex; flex-direction: column; gap: 10px; }
 .version-admin code { background: var(--surface-hover); padding: 1px 5px; border-radius: 5px; font-size: 12px; }
@@ -134,7 +134,7 @@
 .doc-body ul, .doc-body ol { margin: 0 0 12px; padding-left: 22px; }
 .doc-body li { margin: 4px 0; }
 .doc-body a { color: var(--accent); }
-.doc-body code:not(pre code) { background: var(--hover-soft); padding: 1px 5px; border-radius: 4px; font-family: ui-monospace, monospace; font-size: .88em; }
+.doc-body code:not(pre code) { background: var(--hover-soft); padding: 1px 5px; border-radius: 4px; font-family: monospace; font-size: .88em; }
 .doc-body hr { border: none; border-top: 1px solid var(--border-soft); margin: 16px 0; }
 
 /* ---------- micro-interactions ---------- */
