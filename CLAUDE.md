@@ -88,10 +88,10 @@ Entry point is `index.js` (~60 lines): express setup, cookie parsing, `/uploads`
 
 - `db.js` — encrypted SQLite (better-sqlite3-multiple-ciphers) with JSON-blob tables; exports `db.<table>` accessors plus `uid`, `now`, `getSetting`, `setSetting`. Data lives in `server/data/` (gitignored).
 - `auth.js` — password hashing, JWT-style token signing, cookie parsing, sessions, `authMiddleware`, `adminOnly`, `sessionFromRequest`.
-- `llm.js` — provider-agnostic completion streaming: `buildMessages`, `streamCompletion`, `oneShot`, `generateTitle`, `summarizeConversation`, `stripThink`.
+- `llm/` — provider-agnostic completion streaming, re-exported from `llm/index.js` (import that, never the leaf files): `provider.js` (endpoint/auth/prompt vars), `prompt.js` (`buildMessages`), `sampling.js`, `emitter.js` (think-tag splitting plus the text tool-call filter), `wire.js` (`normalizeMessages`, `requestKwargs`), `stream.js` (`streamCompletion`), `oneshot.js` (`oneShot`), `summarize.js` (`stripThink`, `generateTitle`, `summarizeConversation`).
 - `providers.js` — provider registry (`PROVIDER_TYPES`, `getProviders`, `resolveProvider`, `providerSpec`).
 - `pricing.js` — per-model cost presets (`matchPreset`, custom presets).
-- `tools.js` — JSON tool schemas for the LLM (`buildTools`, `toCall`, `livePreview`). No custom/live tools: that feature was removed.
+- `tools/` — re-exported from `tools/index.js`: `schemas.js` (`buildTools` and the per-capability schemas), `args.js` (`parseArgs`, `toCall`), `textcalls.js` (`parseTextToolCalls`, for models that emit tool calls as text instead of structured calls), `preview.js` (`livePreview`). No custom/live tools: that feature was removed.
 - `toolproto.js` — inline tool-call syntax scanner shared conceptually with `client/src/toolproto.js`.
 - `sandbox.js` — per-chat file sandbox (versioned files, bash, zip). `skills/sandbox.md` is the base sandbox system prompt.
 - `websearch.js`, `membank.js`, `skillsys.js`, `mcp.js`, `projectfiles.js` — self-contained tool backends (each exports `execTool`/`promptFor`/`resultPayload`/`formatResult` variants).
@@ -110,16 +110,17 @@ Entry point is `index.js` (~60 lines): express setup, cookie parsing, `/uploads`
 - `queue.js` — optional one-model-at-a-time request queue (`runQueued`).
 - `safety.js` — safety filter prompt + verdict parsing.
 - `spaces.js` — space membership helpers, `broadcastSpace`, `removeUserFromSpaces`, `spaceAssistantRespond`.
-- `tree.js` — message branching tree: `activePath`, `ensureChain`, `childrenOf`, `leafUnder`, `sortedMsgs`.
+- `tree.js` — message branching tree: `activePath`, `ensureChain`, `childrenOf`, `leafUnder`, `sortedMsgs`. All of these share one per-chat graph (`graphOf`) cached against `db.messages.version()`, so a chat's messages are loaded and parsed once per mutation rather than once per call. Do not go back to loading messages directly in these helpers.
+- `llamacpp.js` — llama-server integration: `/props` and `/slots` for exact `n_ctx`, `/apply-template` plus `/tokenize` for exact prompt token counts (`llamaTokenCount`), and `isContextOverflowError` for recovering from context overflow. Results are cached; llama.cpp is the default provider type.
 - `uploads.js` — `UPLOADS` dir, multer `diskStore`, attachment readers (`readUploadText`, `readImageDataUri`, `isTextLike`), `purgeUploads`.
-- `ws.js` — the websocket engine. Holds the `clients` map, `broadcastConfig`, `broadcastAdminConfig`, `broadcastToUser`, `killSessionSockets`, and `initWs(server)` which contains `runCompletion` (the agentic tool-call loop) and the `chat`/`regenerate`/`edit`/`incognito`/`stop` message handlers. **`lib/ws.js` must never import from `routes/`** — dependency direction is routes → lib.
+- `ws/` — the websocket engine, re-exported from `ws/index.js`: `broadcast.js` (the `clients` map, `broadcastConfig`, `broadcastAdminConfig`, `broadcastToUser`, `killSessionSockets`, `requestedKwargs`), `turn.js` (`runCompletion`, the agentic tool-call loop, plus `maybeCompact`), `connection.js` (`initWs(server)` and the `chat`/`regenerate`/`edit`/`incognito`/`stop` handlers). `runCompletion` is module-scope and takes `(ws, state, safeSend, chat, model, ...)` rather than closing over the socket. **`lib/ws/` must never import from `routes/`** — dependency direction is routes → lib.
 
 ### HTTP routes (`server/routes/`)
 
 Each exports `default function register(app)` and is wired in `index.js`.
 
 - `auth.js` — login/logout, `/api/me` (profile, styles, memory, personas, saved prompts, usage, sessions, budget, password, 2FA, delete-account), message feedback, improve-prompt, style generation, user search.
-- `chats.js` — chat CRUD, folders, search, overview, export/import, branching (`/branch`, `/fork`, `/siblings`), pins, context/inspect/summary endpoints.
+- `chats/` — split by concern and wired together by `chats/index.js`: `browse.js` (list, overview, search), `folders.js`, `crud.js` (create, delete, pins), `messages.js` (chat fetch, branching), `inspect.js` (context, summary), `transfer.js` (export/import).
 - `projects.js` — project CRUD + project file uploads.
 - `artifacts.js` — sandbox file viewing, versions, downloads, restore, zip.
 - `models.js` — public `/api/models`, admin model CRUD, discovery, reorder, publish/publish-state (draft vs published snapshot), pricing presets, context detection.
@@ -163,3 +164,11 @@ Permanent branches: `dev` → `beta` → `stable`. Versions live in tags, not br
 - Stable: merge `beta` into `stable`, tag `vX.Y.Z` → `.github/workflows/release.yml` publishes the release and marks it latest.
 - `ci.yml` runs build + server smoke test on every push/PR to the three branches. `version-guard.yml` blocks PRs into `beta`/`stable` unless the root `package.json` version was bumped.
 - Releases only fire on tags, never on branch pushes, so an accidental push to `beta` publishes nothing.
+
+## Tests
+
+`server/test/logic.test.js` runs on `node --test` with no extra dependencies: `npm test` from the repo root, or `cd server && npm test`. CI runs it after the build and smoke test.
+
+It covers the pure logic that is easy to break silently: kwarg resolution and pairing chains, text tool-call parsing (including the negative cases where prose or an unknown tool name must NOT become a call), compaction thresholds and in-turn tool trimming, llama.cpp overflow detection, and the Windows command translation in `sandbox.js`. Add cases here when touching any of those; they are cheap and they have already caught a real regression.
+
+CI syntax-checks every `.js` file under `server/` via `find`, so new files and folders are covered automatically. Do not replace that with a hand-written file list.

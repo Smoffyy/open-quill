@@ -27,9 +27,7 @@ jobs:
       - name: Syntax check server
         run: |
           cd server
-          for f in index.js tools.js llm.js db.js auth.js lib/*.js routes/*.js; do
-            node --check "$f"
-          done
+          find . -name node_modules -prune -o -name '*.js' -print0 | xargs -0 -n1 node --check
 
       - name: Build client
         run: npm run build
@@ -45,3 +43,6 @@ jobs:
           echo "POST /api/auth/check-email -> $API"
           kill $SERVER_PID
           [ "$STATUS" = "200" ] && [ "$API" = "200" ]
+
+      - name: Server tests
+        run: cd server && npm test
