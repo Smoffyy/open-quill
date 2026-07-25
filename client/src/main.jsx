@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './styles/fonts.css';
 import 'highlight.js/styles/github-dark.css';
 import './styles/app.css';
+import './styles/playground.css';
 import App from './App.jsx';
 import { useI18n } from './i18n.jsx';
 import { applyUserFont } from './prefs.js';

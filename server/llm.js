@@ -1,5 +1,6 @@
 import { resolveProvider, providerSpec } from './providers.js';
 import { defaultKwargPayload, oneShotKwargPayload, stripNestedKwargs } from './lib/kwargs.js';
+import { parseTextToolCalls } from './tools.js';
 
 function modelProvider(model) {
   return providerSpec(resolveProvider(model?.provider_id));
@@ -53,29 +54,101 @@ function ollamaOptions(model, spec) {
   return params;
 }
 
-function makeEmitter(model, onEvent) {
+const TEXT_CALL_TAGS = [
+  { open: '<tool_call>', close: '</tool_call>', keepOpen: false },
+  { open: '<|tool_call|>', close: '<|/tool_call|>', keepOpen: false },
+  { open: '<tool_calls>', close: '</tool_calls>', keepOpen: false },
+  { open: '<function_call>', close: '</function_call>', keepOpen: false },
+  { open: '[TOOL_CALLS]', close: '[/TOOL_CALLS]', keepOpen: false },
+  { open: '<function=', close: '</function>', keepOpen: true },
+  { open: '<function name=', close: '</function>', keepOpen: true }
+];
+
+const heldBack = (s, tag) => { for (let n = Math.min(s.length, tag.length - 1); n > 0; n--) if (s.endsWith(tag.slice(0, n))) return n; return 0; };
+
+function makeToolTextFilter(onText, onCalls, isAllowed) {
+  let carry = '', buf = '', block = null;
+  if (!isAllowed) return { feed: (raw) => { if (raw) onText(raw); }, flush: () => {} };
+  const feed = (raw) => {
+    let text = carry + raw; carry = '';
+    while (text.length) {
+      if (!block) {
+        let best = null;
+        for (const tag of TEXT_CALL_TAGS) {
+          const i = text.indexOf(tag.open);
+          if (i !== -1 && (!best || i < best.i)) best = { i, tag };
+        }
+        if (!best) {
+          let hold = 0;
+          for (const tag of TEXT_CALL_TAGS) hold = Math.max(hold, heldBack(text, tag.open));
+          if (text.length - hold > 0) onText(text.slice(0, text.length - hold));
+          carry = text.slice(text.length - hold);
+          return;
+        }
+        if (best.i > 0) onText(text.slice(0, best.i));
+        block = best.tag;
+        buf = best.tag.keepOpen ? best.tag.open : '';
+        text = text.slice(best.i + best.tag.open.length);
+      } else {
+        const ci = text.indexOf(block.close);
+        if (ci === -1) {
+          const hold = heldBack(text, block.close);
+          buf += text.slice(0, text.length - hold);
+          carry = text.slice(text.length - hold);
+          return;
+        }
+        buf += text.slice(0, ci);
+        const calls = parseTextToolCalls(buf, isAllowed);
+        if (calls.length) onCalls(calls);
+        else onText((block.keepOpen ? '' : block.open) + buf + block.close);
+        text = text.slice(ci + block.close.length);
+        block = null; buf = '';
+      }
+    }
+  };
+  const flush = () => {
+    if (block) {
+      const rest = buf + carry;
+      const calls = parseTextToolCalls(rest, isAllowed);
+      if (calls.length) onCalls(calls);
+      else onText((block.keepOpen ? '' : block.open) + rest);
+      block = null; buf = ''; carry = '';
+      return;
+    }
+    if (carry) { onText(carry); carry = ''; }
+  };
+  return { feed, flush };
+}
+
+function makeEmitter(model, onEvent, onCalls, isAllowed) {
   let inThink = false, carry = '';
   const TOPEN = (model.think_open && model.think_open.trim()) || '<think>';
   const TCLOSE = (model.think_close && model.think_close.trim()) || '</think>';
-  const heldBack = (s, tag) => { for (let n = Math.min(s.length, tag.length - 1); n > 0; n--) if (s.endsWith(tag.slice(0, n))) return n; return 0; };
+  const contentFilter = makeToolTextFilter((text) => onEvent({ type: 'content', text }), onCalls, isAllowed);
+  const reasonFilter = makeToolTextFilter((text) => onEvent({ type: 'reasoning', text }), onCalls, isAllowed);
   const emitContent = (raw) => {
     let text = carry + raw; carry = '';
     while (text.length) {
       if (!inThink) {
         const open = text.indexOf(TOPEN);
-        if (open === -1) { const h = heldBack(text, TOPEN); if (text.length - h) onEvent({ type: 'content', text: text.slice(0, text.length - h) }); carry = text.slice(text.length - h); return; }
-        if (open > 0) onEvent({ type: 'content', text: text.slice(0, open) });
+        if (open === -1) { const h = heldBack(text, TOPEN); if (text.length - h) contentFilter.feed(text.slice(0, text.length - h)); carry = text.slice(text.length - h); return; }
+        if (open > 0) contentFilter.feed(text.slice(0, open));
         text = text.slice(open + TOPEN.length); inThink = true;
       } else {
         const close = text.indexOf(TCLOSE);
-        if (close === -1) { const h = heldBack(text, TCLOSE); if (text.length - h) onEvent({ type: 'reasoning', text: text.slice(0, text.length - h) }); carry = text.slice(text.length - h); return; }
-        if (close > 0) onEvent({ type: 'reasoning', text: text.slice(0, close) });
+        if (close === -1) { const h = heldBack(text, TCLOSE); if (text.length - h) reasonFilter.feed(text.slice(0, text.length - h)); carry = text.slice(text.length - h); return; }
+        if (close > 0) reasonFilter.feed(text.slice(0, close));
         text = text.slice(close + TCLOSE.length); inThink = false;
       }
     }
   };
-  const flush = () => { if (carry) { onEvent({ type: inThink ? 'reasoning' : 'content', text: carry }); carry = ''; } };
-  return { emitContent, flush };
+  const emitReasoning = (raw) => { if (raw) reasonFilter.feed(raw); };
+  const flush = () => {
+    if (carry) { (inThink ? reasonFilter : contentFilter).feed(carry); carry = ''; }
+    contentFilter.flush();
+    reasonFilter.flush();
+  };
+  return { emitContent, emitReasoning, flush };
 }
 
 function normalizeMessages(protocol, messages) {
@@ -113,17 +186,29 @@ function requestKwargs(model) {
 
 export async function streamCompletion({ model, messages, tools, signal, onEvent }) {
   const { spec, base, key } = modelProvider(model);
-  const { emitContent, flush } = makeEmitter(model, onEvent);
   const hasTools = Array.isArray(tools) && tools.length > 0;
   const wire = normalizeMessages(spec.protocol, messages);
   const pending = new Map();
   let callSeq = 0;
   const nonce = Math.random().toString(36).slice(2, 8);
+  const toolNames = new Set(hasTools ? tools.map(t => t && t.function && t.function.name).filter(Boolean) : []);
+  const textCalls = [];
+  const addTextCalls = (calls) => {
+    for (const c of calls) {
+      const idx = textCalls.length;
+      const cid = `call_${nonce}_t${idx}`;
+      textCalls.push({ id: cid, name: c.name, argsText: c.argsText });
+      onEvent({ type: 'tool_call_delta', index: 1000 + idx, id: cid, name: c.name, argsText: c.argsText });
+    }
+  };
+  const { emitContent, emitReasoning, flush } = makeEmitter(model, onEvent, addTextCalls, toolNames.size ? (n) => toolNames.has(n) : null);
   const finishCalls = () => {
-    if (!pending.size) return;
-    const calls = [...pending.entries()].sort((a, b) => a[0] - b[0]).map(([, c]) => c).filter(c => c.name);
-    pending.clear();
-    if (calls.length) onEvent({ type: 'tool_calls', calls });
+    if (pending.size) {
+      const calls = [...pending.entries()].sort((a, b) => a[0] - b[0]).map(([, c]) => c).filter(c => c.name);
+      pending.clear();
+      if (calls.length) { textCalls.length = 0; onEvent({ type: 'tool_calls', calls }); return; }
+    }
+    if (textCalls.length) onEvent({ type: 'tool_calls', calls: textCalls.splice(0, textCalls.length) });
   };
 
   if (spec.protocol === 'ollama') {
@@ -138,7 +223,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
       try {
         const json = JSON.parse(t);
         const msg = json.message || {};
-        if (msg.thinking) onEvent({ type: 'reasoning', text: msg.thinking });
+        if (msg.thinking) emitReasoning(msg.thinking);
         if (msg.content) emitContent(msg.content);
         if (Array.isArray(msg.tool_calls)) {
           for (const tc of msg.tool_calls) {
@@ -183,8 +268,8 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
       const json = JSON.parse(data);
       if (json.usage) { const u = json.usage; onEvent({ type: 'usage', usage: { prompt: u.prompt_tokens || 0, completion: u.completion_tokens || 0, total: u.total_tokens || ((u.prompt_tokens || 0) + (u.completion_tokens || 0)) } }); }
       const delta = json.choices?.[0]?.delta || {};
-      if (delta.reasoning_content) onEvent({ type: 'reasoning', text: delta.reasoning_content });
-      if (delta.reasoning) onEvent({ type: 'reasoning', text: delta.reasoning });
+      if (delta.reasoning_content) emitReasoning(delta.reasoning_content);
+      if (typeof delta.reasoning === 'string' && delta.reasoning) emitReasoning(delta.reasoning);
       if (delta.content) emitContent(delta.content);
       if (Array.isArray(delta.tool_calls)) {
         for (const tc of delta.tool_calls) {

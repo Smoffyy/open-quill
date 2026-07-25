@@ -39,7 +39,7 @@ function CapInfo({ m }) {
 
 const capLevel = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
-function KwargControl({ def, value, isAdmin, onSet }) {
+export function KwargControl({ def, value, isAdmin, onSet }) {
   const values = kwargValuesArr(def);
   const locked = (!!def.adminOnly && !isAdmin) || !!def.parentId;
   const label = def.label || def.name || t('Option');

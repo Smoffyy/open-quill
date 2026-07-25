@@ -20,6 +20,7 @@ import Message from './components/Message.jsx';
 const SettingsModal = React.lazy(() => import('./components/SettingsModal.jsx'));
 const ModelDocs = React.lazy(() => import('./components/ModelDocs.jsx'));
 const AdminPanel = React.lazy(() => import('./components/AdminPanel.jsx'));
+const Playground = React.lazy(() => import('./components/Playground.jsx'));
 import DocModal from './components/DocModal.jsx';
 import ArtifactsPanel from './components/ArtifactsPanel.jsx';
 import ChatControls from './components/ChatControls.jsx';
@@ -200,6 +201,7 @@ export default function App() {
   const onMobileCloseCb = useCallback(() => setMobileDrawer(false), []);
   const onSettingsCb = useCallback(() => setShowSettings(true), []);
   const onAdminCb = useCallback(() => { history.pushState({}, '', '/admin'); setShowAdmin(true); }, []);
+  const onPlaygroundCb = useCallback(() => { history.pushState({}, '', '/playground'); setShowPlayground(true); }, []);
   const onCreditsCb = useCallback(() => setShowCredits(true), []);
   const onChangelogCb = useCallback(() => setShowChangelog(true), []);
   const onLicenseCb = useCallback(() => setShowLicense(true), []);
@@ -264,6 +266,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showDocs, setShowDocs] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showPlayground, setShowPlayground] = useState(false);
   const [showCredits, setShowCredits] = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
   const [showLicense, setShowLicense] = useState(false);
@@ -464,6 +467,7 @@ export default function App() {
   }, [currentId, activeId]);
   function openFromUrl() {
     if (/^\/admin(\/|$)/.test(location.pathname)) { if (user?.isAdmin) { setShowAdmin(true); return; } history.replaceState({}, '', '/'); }
+    if (/^\/playground(\/|$)/.test(location.pathname)) { if (user?.isAdmin) { setShowPlayground(true); return; } history.replaceState({}, '', '/'); }
     else setShowAdmin(false);
     if (/^\/spaces(\/|$)/.test(location.pathname)) { setShowSpaces(true); return; }
     else setShowSpaces(false);
@@ -1264,6 +1268,7 @@ export default function App() {
     { id: 'modeldocs', label: t('Model docs'), keywords: 'models compare docs catalog capabilities', action: () => setShowDocs(true) },
     { id: 'settings', label: t('Open settings'), keywords: 'preferences account theme', action: () => setShowSettings(true) },
     ...(user?.isAdmin ? [{ id: 'admin', label: t('Open admin panel'), keywords: 'models users connection providers', action: () => { history.pushState({}, '', '/admin'); setShowAdmin(true); } }] : []),
+    ...(user?.isAdmin ? [{ id: 'playground', label: t('Open playground'), keywords: 'test model tune sampling kwargs prompt', action: () => { history.pushState({}, '', '/playground'); setShowPlayground(true); } }] : []),
     { id: 'changelog', label: t('View changelog'), keywords: 'updates version', action: () => setShowChangelog(true) },
     { id: 'credits', label: t('View credits'), keywords: 'about', action: () => setShowCredits(true) },
     { id: 'license', label: t('View licensing'), keywords: 'legal', action: () => setShowLicense(true) },
@@ -1281,7 +1286,7 @@ export default function App() {
         onNew={sbNewChat} onOpen={sbOpenChat} onDelete={sbDeleteChat} onToggleStar={sbToggleStar}
         collapsed={collapsed} onToggle={onToggleSidebarCb}
         mobileOpen={mobileDrawer} onMobileClose={onMobileCloseCb}
-        onSettings={onSettingsCb} onAdmin={onAdminCb}
+        onSettings={onSettingsCb} onAdmin={onAdminCb} onPlayground={onPlaygroundCb}
         onCredits={onCreditsCb} onChangelog={onChangelogCb} onLicense={onLicenseCb} onLogout={sbLogout} version={cfg.version}
         onChatsOverview={onChatsOverviewCb}
         onSpaces={onSpacesCb} spacesPending={spacesPending}
@@ -1512,6 +1517,7 @@ export default function App() {
       {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
       <Lightbox />
       {showAdmin && <React.Suspense fallback={null}><AdminPanel user={user} onClose={() => { setShowAdmin(false); if (/^\/admin(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
+      {showPlayground && <React.Suspense fallback={null}><Playground onClose={() => { setShowPlayground(false); if (/^\/playground(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
       {showSpaces && <SpacesPanel user={user} onClose={() => { setShowSpaces(false); refreshSpacesPending(); if (/^\/spaces(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} />}
       {showProjects && <ProjectsPanel openId={projectOpenId} composerProps={composerProps}
         onClose={() => { setShowProjects(false); setProjectOpenId(null); if (/^\/projects?(\/|$)/.test(location.pathname) || /^\/project\//.test(location.pathname)) history.pushState({}, '', '/'); }}

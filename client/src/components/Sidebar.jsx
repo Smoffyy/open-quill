@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Chat, Search, Panel, Gear, Shield, Logout, Dots, Trash, Heart, FileText, Star, Download, Folder, Pencil, Chevron, Users, Box, Compact } from './icons.jsx';
+import { Plus, Chat, Search, Panel, Gear, Shield, Flask, Logout, Dots, Trash, Heart, FileText, Star, Download, Folder, Pencil, Chevron, Users, Box, Compact } from './icons.jsx';
 import { t } from '../i18n.jsx';
 
-function ProfileMenu({ user, version, onSettings, onAdmin, onCredits, onChangelog, onLicense, onLogout, onClose }) {
+function ProfileMenu({ user, version, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, onClose }) {
   const ref = useRef(null);
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
@@ -13,6 +13,7 @@ function ProfileMenu({ user, version, onSettings, onAdmin, onCredits, onChangelo
   return (
     <div className="popover" ref={ref}>
       {user.isAdmin && <button onClick={onAdmin}><Shield /> {t('Admin Panel')}</button>}
+      {user.isAdmin && <button onClick={onPlayground}><Flask /> {t('Playground')}</button>}
       <button onClick={onSettings}><Gear /> {t('Settings')}</button>
       <button onClick={onCredits}><Heart /> {t('Credits')}</button>
       <button onClick={onChangelog}><FileText /> {t('Changelog')}</button>
@@ -157,7 +158,7 @@ function FolderSection({ f, chats, active, showTrash, folders, dragChatId, onTog
 function Sidebar({
   user, chats, onSearch, chatsLoaded = true, activeId, appName, onNew, onOpen, onDelete, onToggleStar,
   folders = [], onCreateFolder, onRenameFolder, onToggleFolder, onDeleteFolder, onMoveChat,
-  collapsed, onToggle, onSettings, onAdmin, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview,
+  collapsed, onToggle, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview,
   onSpaces, spacesPending = 0, projects = [], onProjects, onOpenProject, mobileOpen = false, onMobileClose
 }) {
   const [menu, setMenu] = useState(false);
@@ -286,6 +287,7 @@ function Sidebar({
       <div className="profile">
         {menu && <ProfileMenu user={user} version={version}
           onSettings={() => { setMenu(false); onSettings(); }}
+          onPlayground={() => { setMenu(false); onPlayground && onPlayground(); }}
           onAdmin={() => { setMenu(false); onAdmin(); }}
           onCredits={() => { setMenu(false); onCredits(); }}
           onChangelog={() => { setMenu(false); onChangelog(); }}
