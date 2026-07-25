@@ -13,20 +13,33 @@ const DEFAULT_NAME = 'default';
 const RESERVED = new Set([DEFAULT_NAME, 'databases']);
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,39}$/;
 const ENV_TEMPLATE = `# open-quill environment configuration
-# Auto-generated on first run. Lives in the project root. Edit, then restart.
+# Copy this file to ".env" in this same folder (the project root). It is also
+# created there automatically the first time you start the server.
 #
-# OPEN_QUILL_DB selects which database loads at startup. Each named database
-# is fully isolated: its own users, chats, preferences, interface config,
-# models, artifacts, uploaded content, sandbox, project files and memory.
+# If both a project-root .env and a server/.env exist, the project-root one
+# wins and the server one is ignored (a note is printed at startup).
+#
+# OPEN_QUILL_DB selects which database loads at startup. Each named database is
+# fully isolated: its own users, chats, preferences, interface config, models,
+# artifacts, uploaded content, sandbox, project files and memory.
+#
 # The active database is read ONCE at startup and cannot be changed while the
 # server is running. Change it here, then restart to switch databases.
 #
-# If both this file and server/.env exist, this project-root .env wins.
+# "default" uses server/data/ (backwards compatible). Any other name lives in
+# server/data/databases/<name>/. Names may use lowercase letters, numbers,
+# dashes and underscores.
 OPEN_QUILL_DB=default
-#
+
+# Port the server listens on.
 # PORT=3001
-#
-# DB_ENCRYPTION_KEY leave empty to use a per-database key stored beside its data.
+
+# Network interface the server binds to. Defaults to 127.0.0.1 (this machine
+# only). Set to 0.0.0.0 to also allow access from other devices on your LAN.
+# HOST=127.0.0.1
+
+# Optional global SQLCipher key. Leave empty to use a per-database key stored
+# next to each database's data. If set, it applies to every database.
 # DB_ENCRYPTION_KEY=
 `;
 
