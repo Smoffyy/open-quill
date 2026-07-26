@@ -1,14 +1,13 @@
-import { db, uid, now, getSetting } from '../../db.js';
+import { db, getSetting } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
 import { buildMessages } from '../../llm/index.js';
-import * as sandbox from '../../sandbox.js';
 import * as membank from '../../membank.js';
 import * as websearch from '../../websearch.js';
-import { purgeUploads } from '../../lib/uploads.js';
-import { stripToolSyntax } from '../../lib/history.js';
-import { sortedMsgs, ensureChain, childrenOf, activePath, leafUnder } from '../../lib/tree.js';
 import { modelCtx } from '../../lib/models.js';
-import { chatHistory, estimateTokens, calibratedTokens, tokenCalib, compactThreshold, rollingCtxFor, promptVars, instrFor } from '../../lib/convo.js';
+import {
+  chatHistory, historyRows, estimateTokens, calibratedTokens, calibRatio, messageTokens,
+  tokenCalib, compactThreshold, rollingCtxFor, promptVars, instrFor
+} from '../../lib/convo.js';
 
 export default function registerInspectRoutes(app) {
   app.get('/api/chats/:id/context', authMiddleware, async (req, res) => {
@@ -23,6 +22,34 @@ export default function registerInspectRoutes(app) {
     const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
     const rolling = !!limit && (await rollingCtxFor(model)) > 0;
     res.json({ used, limit, pct, hasSummary: !!c.summary, measured: tokenCalib.has(c.id), compacts: model.enable_summaries ? compactThreshold(model, ctx) : 0, rolling });
+  });
+
+  app.get('/api/chats/:id/ledger', authMiddleware, async (req, res) => {
+    const c = db.chats.byId(req.params.id);
+    if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+    const model = db.models.byId(req.query.modelId) || db.models.all().find(m => m.enabled) || db.models.all()[0];
+    if (!model) return res.json({ limit: 0, used: 0, overhead: 0, messages: [] });
+    const rows = await historyRows(c, model);
+    const active = rows.filter(r => !r.summarized && !r.excluded);
+    const convo = buildMessages(model, active.map(r => r.msg), false, null, c.summary, promptVars(c.user_id), await instrFor(c));
+    const ratio = calibRatio(c.id);
+    const used = calibratedTokens(c.id, convo);
+    const messages = rows.map(r => ({
+      id: r.id,
+      role: r.role,
+      tokens: Math.round(messageTokens(r.msg) * ratio),
+      pinned: r.pinned,
+      excluded: r.excluded,
+      summarized: r.summarized
+    }));
+    const inContext = messages.filter(m => !m.summarized && !m.excluded).reduce((n, m) => n + m.tokens, 0);
+    const ctx = await modelCtx(model);
+    const limit = ctx || parseInt(model.num_ctx) || 0;
+    res.json({
+      limit, used, overhead: Math.max(0, used - inContext), messages,
+      measured: tokenCalib.has(c.id), hasSummary: !!c.summary,
+      compacts: model.enable_summaries ? compactThreshold(model, ctx) : 0
+    });
   });
 
   app.get('/api/chats/:id/inspect', authMiddleware, async (req, res) => {

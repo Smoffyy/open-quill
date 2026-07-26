@@ -2,7 +2,7 @@ import { modelProvider, endpoint, authHeaders } from './provider.js';
 import { samplingParams, ollamaOptions } from './sampling.js';
 import { makeEmitter } from './emitter.js';
 import { normalizeMessages, requestKwargs } from './wire.js';
-import { oneShotKwargPayload, stripNestedKwargs } from '../lib/kwargs.js';
+import { stripNestedKwargs } from '../lib/kwargs.js';
 
 export async function streamCompletion({ model, messages, tools, signal, onEvent }) {
   const { spec, base, key } = modelProvider(model);
@@ -86,6 +86,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
     if (data === '[DONE]') return true;
     try {
       const json = JSON.parse(data);
+      if (json.timings) onEvent({ type: 'timings', timings: json.timings });
       if (json.usage) { const u = json.usage; onEvent({ type: 'usage', usage: { prompt: u.prompt_tokens || 0, completion: u.completion_tokens || 0, total: u.total_tokens || ((u.prompt_tokens || 0) + (u.completion_tokens || 0)) } }); }
       else if (json.timings) {
         const pn = json.timings.prompt_n || 0, cn = json.timings.predicted_n || 0;

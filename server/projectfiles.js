@@ -2,6 +2,15 @@ import fs from 'fs';
 import path from 'path';
 import { dataPath } from './lib/dataroot.js';
 
+import { createRequire } from 'module';
+
+const pdfAssets = (() => {
+  try {
+    const root = path.dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'));
+    return { cMapUrl: path.join(root, 'cmaps') + path.sep, cMapPacked: true, standardFontDataUrl: path.join(root, 'standard_fonts') + path.sep };
+  } catch { return {}; }
+})();
+
 const ROOT = dataPath('projectfiles');
 
 const TEXT_EXT = new Set(['txt', 'md', 'markdown', 'csv', 'tsv', 'json', 'js', 'ts', 'jsx', 'tsx', 'py', 'html', 'css', 'xml', 'yaml', 'yml', 'log', 'ini', 'toml', 'sh', 'bat', 'sql', 'java', 'c', 'cpp', 'h', 'rs', 'go', 'rb', 'php']);
@@ -15,7 +24,7 @@ async function loadPdfjs() {
 }
 async function extractPdf(buffer) {
   const { getDocument } = await loadPdfjs();
-  const doc = await getDocument({ data: new Uint8Array(buffer), isEvalSupported: false, useSystemFonts: true, disableFontFace: true }).promise;
+  const doc = await getDocument({ data: new Uint8Array(buffer), isEvalSupported: false, useSystemFonts: true, disableFontFace: true, ...pdfAssets }).promise;
   const pages = [];
   for (let i = 1; i <= doc.numPages; i++) {
     const page = await doc.getPage(i);

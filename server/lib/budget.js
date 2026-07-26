@@ -6,10 +6,7 @@ export function monthStartMs() {
 }
 
 export function monthSpend(userId) {
-  const since = monthStartMs();
-  let cost = 0;
-  for (const r of db.usage.byUser(userId)) if ((r.created_at || 0) >= since) cost += r.cost || 0;
-  return cost;
+  return db.usage.spendSince(userId, monthStartMs());
 }
 
 export function budgetConfig() {

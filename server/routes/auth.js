@@ -34,7 +34,7 @@ const DEFAULT_IMPROVE_PROMPT = 'You are a prompt engineer. The user will give yo
 export default function registerAuthRoutes(app) {
   app.post('/api/auth/check-email', (req, res) => {
     const email = (req.body.email || '').trim().toLowerCase();
-    res.json({ exists: !!db.users.find(u => u.email === email) });
+    res.json({ exists: !!db.users.byEmail(email) });
   });
 
   app.post('/api/auth/login', async (req, res) => {
@@ -43,7 +43,7 @@ export default function registerAuthRoutes(app) {
     const email = (req.body.email || '').trim().toLowerCase();
     const pw = req.body.password || '';
     if (!email || pw.length < 4) return res.status(400).json({ error: 'Invalid email or password (min 4 chars).' });
-    let u = db.users.find(x => x.email === email);
+    let u = db.users.byEmail(email);
     if (u) {
       if (!(await check(pw, u.password_hash))) { noteLoginFail(ip); return res.status(401).json({ error: 'Incorrect password.' }); }
       loginFails.delete(ip);
@@ -320,7 +320,7 @@ export default function registerAuthRoutes(app) {
     if (q.length < 2) return res.json([]);
     const out = db.users.filter(u => u.id !== req.user.id && ((u.email || '').toLowerCase().includes(q) || (u.display_name || '').toLowerCase().includes(q)))
       .slice(0, 10)
-      .map(u => ({ id: u.id, email: u.email, displayName: u.display_name || u.email.split('@')[0] }));
+      .map(u => ({ id: u.id, email: u.email, displayName: u.display_name || (u.email || '').split('@')[0] }));
     res.json(out);
   });
 }

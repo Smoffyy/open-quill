@@ -6,8 +6,9 @@ import { openLightbox } from '../lightbox.js';
 import ReasoningBlock from './ReasoningBlock.jsx';
 import BranchCompare from './BranchCompare.jsx';
 import ToolCard from './ToolCard.jsx';
-import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash, Dots } from './icons.jsx';
+import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash, Dots, Steer } from './icons.jsx';
 import { api } from '../api.js';
+import { extLabel } from '../lib/files.js';
 import { t } from '../i18n.jsx';
 
 function Columns(props) {
@@ -127,9 +128,12 @@ function Attachments({ items, pins, onTogglePinFile }) {
         <button key={i} className="att image" onClick={() => openLightbox(a.url, a.name)}><img src={a.url} alt={a.name} /></button>
       ) : (
         <div key={i} className={'att file' + (pinnedUrls.has(a.url) ? ' pinned-file' : '')}>
-          <a className="att-link" href={a.url} target="_blank" rel="noreferrer">
-            <FileText style={{ width: 18 }} />
-            <div className="att-meta"><div className="att-name">{a.name}</div><div className="att-type">{(a.name.split('.').pop() || 'file').toUpperCase()}</div></div>
+          <a className="att-link" href={a.url} target="_blank" rel="noreferrer" title={a.name}>
+            <span className="att-name">{a.name}</span>
+            <span className="att-foot">
+              <FileText style={{ width: 13 }} />
+              <span className="att-type">{extLabel(a.name)}</span>
+            </span>
           </a>
           {onTogglePinFile && (
             <button className={'att-pin' + (pinnedUrls.has(a.url) ? ' on' : '')} title={pinnedUrls.has(a.url) ? 'Unpin from chat' : 'Pin to chat (keep in context)'} onClick={() => onTogglePinFile(a)}><Pin style={{ width: 13 }} /></button>
@@ -161,7 +165,38 @@ function ModelIcon({ model, phase, below, name }) {
   );
 }
 
-function Message({ msg, model, models, currentId, streaming, phase, liveCall, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false }) {
+function LedgerRow({ tokens, pct, state, id, onToggleExclude }) {
+  const excluded = state === 'excluded';
+  const summarized = state === 'summarized';
+  return (
+    <div className={'ctx-row' + (excluded ? ' excluded' : '') + (summarized ? ' summarized' : '')}>
+      <span className="ctx-tokens">{Number(tokens || 0).toLocaleString()} {t('tok')}</span>
+      {pct > 0 && <span className="ctx-bar"><span className="ctx-fill" style={{ width: Math.min(100, pct) + '%' }} /></span>}
+      {pct > 0 && <span className="ctx-pct">{pct}%</span>}
+      {summarized && <span className="ctx-tag">{t('in summary')}</span>}
+      {excluded && <span className="ctx-tag out">{t('not sent')}</span>}
+      {onToggleExclude && !summarized && (
+        <button className="ctx-btn" onClick={() => onToggleExclude(id, !excluded)}
+          title={excluded ? t('Send this message to the model again') : t('Stop sending this message to the model')}>
+          {excluded ? t('Restore') : t('Drop')}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function SteerChips({ notes }) {
+  if (!notes || !notes.length) return null;
+  return (
+    <div className="steer-chips">
+      {notes.map((n, i) => (
+        <span key={i} className="steer-chip" title={n}><Steer style={{ width: 11 }} /> {t('steered')}: {n}</span>
+      ))}
+    </div>
+  );
+}
+
+function Message({ msg, model, models, currentId, streaming, phase, liveCall, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null }) {
   if (chatEnded) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onFork = null; onDelete = null; }
   const [typing, setTyping] = useState(false);
   const typingTimer = useRef(null);
@@ -198,8 +233,9 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
   function saveEdit() { const v = draft.trim(); setEditing(false); if (v && v !== msg.content) onEdit?.(msg.id, v); }
   if (msg.role === 'user') {
     return (
-      <div className={'msg user' + (msg._enter ? ' enter' : '') + (msg.pinned ? ' pinned' : '')} data-mid={msg.id}>
+      <div className={'msg user' + (msg._enter ? ' enter' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
         <div className="user-col">
+          {ledger && ledgerState && <LedgerRow tokens={ledgerTokens} pct={ledgerPct} state={ledgerState} id={msg.id} onToggleExclude={onToggleExclude} />}
           {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> Pinned</div>}
           <Attachments items={msg.attachments} pins={pins} onTogglePinFile={onTogglePinFile} />
           {editing ? (
@@ -249,6 +285,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
 
   const inner = (
     <>
+      {ledger && ledgerState && <LedgerRow tokens={ledgerTokens} pct={ledgerPct} state={ledgerState} id={msg.id} onToggleExclude={onToggleExclude} />}
       {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> Pinned</div>}
       <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} collapsible={model?.reasoningCollapsible !== false} />
       {(msg.content || streaming) && (
@@ -296,6 +333,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
           {model?.displayName && <span className="msg-model-badge">{model.displayName}</span>}
         </div>
       )}
+      <SteerChips notes={steers} />
       {compare && chatId && <BranchCompare chatId={chatId} messageId={msg.id} onSelect={onSelectBranch} onClose={() => setCompare(false)} />}
     </>
   );
@@ -303,7 +341,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
   if (pos === 'left') {
     const gutter = model?.iconSize > 0 ? model.iconSize : 40;
     return (
-      <div className={'msg assistant icon-left' + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '')} data-mid={msg.id}>
+      <div className={'msg assistant icon-left' + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
         {icon && <div className="il-avatar" style={{ left: -(gutter + 14) }}>{icon}</div>}
         {showName && <div className="assistant-name">{model.displayName}</div>}
         {inner}
@@ -312,7 +350,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
   }
 
   return (
-    <div className={'msg assistant' + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '')} data-mid={msg.id}>
+    <div className={'msg assistant' + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
       {pos === 'above' && icon}
       {inner}
       {pos === 'below' && icon}

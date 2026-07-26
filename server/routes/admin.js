@@ -131,11 +131,12 @@ export default function registerAdminRoutes(app) {
 
   app.get('/api/admin/users', authMiddleware, adminOnly, (req, res) => {
     const since = monthStartMs();
+    const spend = db.usage.spendSinceByUser(since);
     res.json(db.users.all().sort((a, b) => a.created_at - b.created_at).map(u => ({
-      id: u.id, email: u.email, displayName: u.display_name || u.email.split('@')[0],
+      id: u.id, email: u.email, displayName: u.display_name || (u.email || '').split('@')[0],
       isAdmin: !!u.is_admin, isOwner: !!u.is_owner, createdAt: u.created_at,
       twoFactor: !!u.totp_enabled, budget: u.budget == null ? null : Number(u.budget),
-      monthSpend: db.usage.byUser(u.id).reduce((s, r) => s + ((r.created_at || 0) >= since ? (r.cost || 0) : 0), 0)
+      monthSpend: spend.get(u.id) || 0
     })));
   });
   app.patch('/api/admin/users/:id', authMiddleware, adminOnly, (req, res) => {
@@ -174,8 +175,9 @@ export default function registerAdminRoutes(app) {
     const match = r => (!action || (r.action || '').toLowerCase().includes(action))
       && (!actor || (r.actor_email || '').toLowerCase().includes(actor))
       && (!since || (r.ts || 0) >= since);
-    const all = db.audit.recent(100000, 0).filter(match);
-    const actions = [...new Set(db.audit.recent(100000, 0).map(r => r.action))].sort();
+    const rows = db.audit.recent(100000, 0);
+    const all = rows.filter(match);
+    const actions = [...new Set(rows.map(r => r.action))].sort();
     const page = all.slice(offset, offset + limit).map(r => ({
       id: r.id, ts: r.ts, actorEmail: r.actor_email || 'system', action: r.action,
       targetType: r.target_type || null, targetId: r.target_id || null, meta: r.meta || null, ip: r.ip || ''

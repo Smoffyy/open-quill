@@ -178,9 +178,19 @@ export default function CallPanel({ chatId, model, voice, onSendText, onClose })
     return new Promise((resolve) => {
       const u = new SpeechSynthesisUtterance(text);
       const voices = window.speechSynthesis.getVoices();
+      const local = voices.filter(v => v.localService !== false);
+      const pool = local.length ? local : voices;
       if (voice.ttsVoice) {
-        const match = voices.find(v => v.name === voice.ttsVoice) || voices.find(v => v.name.toLowerCase().includes(voice.ttsVoice.toLowerCase()));
+        const want = voice.ttsVoice.toLowerCase();
+        const named = (list) => list.find(v => v.name === voice.ttsVoice) || list.find(v => v.name.toLowerCase().includes(want));
+        const match = named(pool) || named(voices);
         if (match) u.voice = match;
+      }
+      if (!u.voice && local.length) {
+        const lang = (navigator.language || 'en').toLowerCase();
+        u.voice = local.find(v => (v.lang || '').toLowerCase() === lang)
+          || local.find(v => (v.lang || '').toLowerCase().startsWith(lang.slice(0, 2)))
+          || local[0];
       }
       u.rate = voice.ttsSpeed || 1;
       u.onend = resolve;

@@ -86,7 +86,9 @@ export default function registerSpaceRoutes(app) {
   app.post('/api/spaces/:id/leave', authMiddleware, (req, res) => {
     const s = db.spaces.byId(req.params.id);
     if (!s || !isMember(s, req.user.id)) return res.status(404).json({ error: 'not found' });
-    removeUserFromSpaces(req.user.id);
+    removeUserFromSpaces(req.user.id, s.id);
+    const after = db.spaces.byId(s.id);
+    if (after) broadcastSpace(s.id, { type: 'space_updated', spaceId: s.id, space: shapeSpace(after, null) });
     res.json({ ok: true });
   });
 

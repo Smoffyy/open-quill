@@ -6,7 +6,7 @@ import { historyText } from './history.js';
 import { isTextLike, readUploadText, readImageDataUri } from './uploads.js';
 import { modelCtx } from './models.js';
 import { pinnedFilesPrompt, lastUserQuery } from './prompts.js';
-import { llamaTokenCount, llamaContext, isLlamaCpp } from './llamacpp.js';
+import { llamaTokenCount, isLlamaCpp } from './llamacpp.js';
 
 export const STYLE_PRESETS = {
   concise: 'Respond concisely. Get to the point immediately, cut filler, hedging, and restatement, and keep answers as short as they can be while remaining complete and correct. Prefer tight prose over long lists.',
@@ -24,12 +24,26 @@ export function styleTextFor(userId, styleId) {
 }
 
 // history for the active branch, minus whatever the summary already covers
-export async function chatHistory(chat, model) {
+export async function historyRows(chat, model) {
   const fresh = db.chats.byId(chat.id) || chat;
   const upto = fresh.summary && fresh.summary_upto ? fresh.summary_upto : 0;
-  let rows = activePath(chat.id);
-  if (upto) rows = rows.filter(m => m.created_at > upto || m.pinned);
-  return rows.map(m => {
+  return activePath(chat.id).map(m => ({
+    id: m.id,
+    role: m.role,
+    pinned: !!m.pinned,
+    excluded: !!m.excluded,
+    summarized: !!(upto && m.created_at <= upto && !m.pinned),
+    msg: historyMessage(m, model)
+  }));
+}
+
+export async function chatHistory(chat, model) {
+  const rows = await historyRows(chat, model);
+  return rows.filter(r => !r.summarized && !r.excluded).map(r => r.msg);
+}
+
+function historyMessage(m, model) {
+  return (m => {
     let text = historyText(m.content || '').replace(/\n{3,}/g, '\n\n');
     const atts = m.attachments || [];
     const images = [];
@@ -50,7 +64,11 @@ export async function chatHistory(chat, model) {
       return { role: m.role, content: parts };
     }
     return { role: m.role, content: text };
-  });
+  })(m);
+}
+
+export function textTokens(s) {
+  return estTextTokens(s);
 }
 
 function estTextTokens(s) {
@@ -60,14 +78,17 @@ function estTextTokens(s) {
   return Math.ceil((s.length - cjk) / 3.6) + cjk;
 }
 
+export function messageTokens(m) {
+  let total = 4;
+  if (typeof m.content === 'string') total += estTextTokens(m.content);
+  else if (Array.isArray(m.content)) for (const p of m.content) total += p.type === 'text' ? estTextTokens(p.text || '') : 850;
+  if (Array.isArray(m.tool_calls)) for (const c of m.tool_calls) total += estTextTokens((c.argsText || '') + (c.name || '')) + 8;
+  return total;
+}
+
 export function estimateTokens(messages) {
   let total = 0;
-  for (const m of messages) {
-    total += 4;
-    if (typeof m.content === 'string') total += estTextTokens(m.content);
-    else if (Array.isArray(m.content)) for (const p of m.content) total += p.type === 'text' ? estTextTokens(p.text || '') : 850;
-    if (Array.isArray(m.tool_calls)) for (const c of m.tool_calls) total += estTextTokens((c.argsText || '') + (c.name || '')) + 8;
-  }
+  for (const m of messages) total += messageTokens(m);
   return total;
 }
 
@@ -89,23 +110,31 @@ function trimMsgToTokens(m, allowedTokens) {
 export function truncateForRollingCtx(chatId, msgs, ctx) {
   const reserve = Math.min(Math.max(256, Math.floor(ctx * 0.15)), 1536);
   const budget = Math.max(512, ctx - reserve);
-  if (calibratedTokens(chatId, msgs) <= budget) return { msgs, dropped: 0, trimmed: false };
+  const ratio = calibRatio(chatId);
+  const costs = msgs.map(messageTokens);
+  let est = 0;
+  for (const c of costs) est += c;
+  const scaled = () => Math.round(est * ratio);
+  if (scaled() <= budget) return { msgs, dropped: 0, trimmed: false };
   const out = msgs.slice();
+  const cost = costs.slice();
+  let nonSysCount = 0;
+  for (const m of out) if (m.role !== 'system') nonSysCount++;
   let dropped = 0;
-  const nonSys = () => out.reduce((a, m, i) => { if (m.role !== 'system') a.push(i); return a; }, []);
-  while (calibratedTokens(chatId, out) > budget) {
-    const idxs = nonSys();
-    if (idxs.length <= 1) break;
-    out.splice(idxs[0], 1);
+  while (scaled() > budget && nonSysCount > 1) {
+    const i = out.findIndex(m => m.role !== 'system');
+    if (i === -1) break;
+    est -= cost[i];
+    out.splice(i, 1);
+    cost.splice(i, 1);
+    nonSysCount--;
     dropped++;
   }
   let trimmed = false;
-  if (calibratedTokens(chatId, out) > budget) {
-    const idxs = nonSys();
-    if (idxs.length) {
-      const i = idxs[0];
-      const rest = out.filter((_, j) => j !== i);
-      const allowed = budget - calibratedTokens(chatId, rest) - 8;
+  if (scaled() > budget) {
+    const i = out.findIndex(m => m.role !== 'system');
+    if (i !== -1) {
+      const allowed = budget - Math.round((est - cost[i]) * ratio) - 8;
       const before = out[i];
       out[i] = trimMsgToTokens(before, allowed);
       trimmed = out[i] !== before;
@@ -238,6 +267,11 @@ export function updateCalib(chatId, actualPrompt, estimated) {
     const cutoff = Date.now() - 6 * 3600 * 1000;
     for (const [k, v] of tokenCalib) if (v.at < cutoff) tokenCalib.delete(k);
   }
+}
+
+export function calibRatio(chatId) {
+  const c = chatId && tokenCalib.get(chatId);
+  return c ? c.ratio : 1;
 }
 
 export function calibratedTokens(chatId, messages) {

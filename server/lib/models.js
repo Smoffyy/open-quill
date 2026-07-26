@@ -163,6 +163,7 @@ export async function detectContextLength(prov, internal) {
 
 const ctxDetectCache = new Map();
 const CTX_CACHE_MS = 5 * 60 * 1000;
+const CTX_CACHE_MAX = 200;
 const CTX_AUTO_TYPES = new Set(['llamacpp', 'ollama', 'lmstudio']);
 
 export async function modelCtx(model) {
@@ -177,6 +178,7 @@ export async function modelCtx(model) {
   if (hit && Date.now() - hit.at < CTX_CACHE_MS) return hit.ctx;
   const ctx = await detectContextLength(prov, model.internal_name || '');
   ctxDetectCache.set(cacheKey, { ctx, at: Date.now() });
+  if (ctxDetectCache.size > CTX_CACHE_MAX) ctxDetectCache.delete(ctxDetectCache.keys().next().value);
   return ctx;
 }
 

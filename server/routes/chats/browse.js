@@ -1,14 +1,6 @@
-import { db, uid, now, getSetting } from '../../db.js';
+import { db } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
-import { buildMessages } from '../../llm/index.js';
-import * as sandbox from '../../sandbox.js';
-import * as membank from '../../membank.js';
-import * as websearch from '../../websearch.js';
-import { purgeUploads } from '../../lib/uploads.js';
-import { stripToolSyntax } from '../../lib/history.js';
-import { sortedMsgs, ensureChain, childrenOf, activePath, leafUnder } from '../../lib/tree.js';
-import { modelCtx } from '../../lib/models.js';
-import { chatHistory, estimateTokens, calibratedTokens, tokenCalib, compactThreshold, rollingCtxFor, promptVars, instrFor } from '../../lib/convo.js';
+import { sortedMsgs } from '../../lib/tree.js';
 
 export default function registerBrowseRoutes(app) {
   app.get('/api/chats', authMiddleware, (req, res) => {

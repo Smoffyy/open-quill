@@ -3,31 +3,17 @@ import path from 'path';
 import { WebSocketServer } from 'ws';
 import { db, uid, now, getSetting } from '../../db.js';
 import { sessionFromRequest } from '../../auth.js';
-import { buildMessages, streamCompletion, generateTitle, stripThink } from '../../llm/index.js';
-import { buildTools, toCall, livePreview } from '../../tools/index.js';
+import { buildMessages, streamCompletion } from '../../llm/index.js';
 import * as websearch from '../../websearch.js';
 import * as sandbox from '../../sandbox.js';
-import * as membank from '../../membank.js';
-import * as skillsys from '../../skillsys.js';
-import * as mcp from '../../mcp.js';
-import * as projectfiles from '../../projectfiles.js';
-import { stripToolSyntax } from '../history.js';
 import { UPLOADS } from '../uploads.js';
 import { ensureChain, activePath } from '../tree.js';
-import { resolveModel, roleLimit, modelCtx } from '../models.js';
+import { resolveModel, roleLimit } from '../models.js';
 import { applyKwargs } from '../kwargs.js';
 import { budgetStatus } from '../budget.js';
 import { runQueued } from '../queue.js';
 import { maybeUpdateMemory } from '../memory.js';
-import {
-  chatHistory, estimateTokens, calibratedTokens, updateCalib, truncateForRollingCtx,
-  rollingCtxFor, compactStep, compactThreshold, promptVars, instrFor, styleTextFor
-} from '../convo.js';
-import {
-  sandboxPromptFor, cleanCall, resultPayload, formatToolResult,
-  runChatSearchTool, formatChatSearchResult, chatSearchPayload,
-  endChatPromptFor, longConvoReminderFor, CHAT_SEARCH_PROMPT
-} from '../prompts.js';
+import { promptVars, styleTextFor } from '../convo.js';
 
 import { clients, requestedKwargs } from './broadcast.js';
 import { runCompletion } from './turn.js';
@@ -41,14 +27,26 @@ export function initWs(server) {
     if (!u) { ws.close(); return; }
     ws.isAlive = true;
     ws.on('pong', () => { ws.isAlive = true; });
-    clients.set(ws, { userId: u.id, sessionId: r.sessionId || null, isAdmin: !!u.is_admin, aborts: new Map() });
+    clients.set(ws, { userId: u.id, sessionId: r.sessionId || null, isAdmin: !!u.is_admin, aborts: new Map(), steers: new Map() });
     const safeSend = (s) => { if (ws.readyState === 1) { try { ws.send(s); } catch {} } };
 
     ws.on('message', async (raw) => {
       let msg; try { msg = JSON.parse(raw); } catch { return; }
       const state = clients.get(ws);
       if (!state) return;
-      if (msg.type === 'stop') { const c = state.aborts.get(msg.chatId); if (c) { c.abort(); state.aborts.delete(msg.chatId); } return; }
+      if (msg.type === 'stop') { state.steers.delete(msg.chatId); const c = state.aborts.get(msg.chatId); if (c) { c.abort(); state.aborts.delete(msg.chatId); } return; }
+      if (msg.type === 'steer') {
+        const text = String(msg.text || '').trim().slice(0, 2000);
+        const c = text ? state.aborts.get(msg.chatId) : null;
+        if (!c) return;
+        if (db.users.byId(state.userId)?.prefs?.steering !== true) return;
+        const list = state.steers.get(msg.chatId) || [];
+        if (list.length >= 6) return;
+        list.push(text);
+        state.steers.set(msg.chatId, list);
+        c.abort();
+        return;
+      }
       if (msg.type === 'incognito') {
         try {
           const baseModel = resolveModel(msg.modelId, state.isAdmin);
@@ -147,7 +145,7 @@ export function initWs(server) {
     });
 
     ws.on('error', () => {});
-    ws.on('close', () => { const st = clients.get(ws); try { if (st) for (const c of st.aborts.values()) c.abort(); } catch {} clients.delete(ws); });
+    ws.on('close', () => { const st = clients.get(ws); try { if (st) { st.steers.clear(); for (const c of st.aborts.values()) c.abort(); } } catch {} clients.delete(ws); });
   });
 
   const heartbeat = setInterval(() => {

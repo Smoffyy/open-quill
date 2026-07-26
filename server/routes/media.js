@@ -11,8 +11,13 @@ const voiceUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize
 const voiceUrl = (base, p) => String(base || '').trim().replace(/\/+$/, '') + p;
 
 export default function registerMediaRoutes(app) {
-  app.post('/api/admin/upload', authMiddleware, adminOnly, upload.single('file'), (req, res) =>
-    res.json({ url: `/uploads/${req.file.filename}` }));
+  app.post('/api/admin/upload', authMiddleware, adminOnly, (req, res) => {
+    upload.single('file')(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'That file is too large (max 8 MB).' : 'Upload failed.' });
+      if (!req.file) return res.status(400).json({ error: 'No file received.' });
+      res.json({ url: `/uploads/${req.file.filename}` });
+    });
+  });
 
   app.post('/api/upload', authMiddleware, (req, res) => {
     const mb = roleLimit('upload_limit_mb', !!req.user.is_admin, 8) || 8;

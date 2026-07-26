@@ -3,6 +3,15 @@ import path from 'path';
 import { getSetting, setSetting } from './db.js';
 import { dataPath } from './lib/dataroot.js';
 
+import { createRequire } from 'module';
+
+const pdfAssets = (() => {
+  try {
+    const root = path.dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'));
+    return { cMapUrl: path.join(root, 'cmaps') + path.sep, cMapPacked: true, standardFontDataUrl: path.join(root, 'standard_fonts') + path.sep };
+  } catch { return {}; }
+})();
+
 export const MEMBANK_ROOT = dataPath('membank');
 const CACHE_DIR = path.join(MEMBANK_ROOT, '.cache');
 fs.mkdirSync(CACHE_DIR, { recursive: true });
@@ -31,7 +40,7 @@ async function loadPdfjs() {
 }
 async function extractPdf(buffer) {
   const { getDocument } = await loadPdfjs();
-  const doc = await getDocument({ data: new Uint8Array(buffer), isEvalSupported: false, useSystemFonts: true, disableFontFace: true }).promise;
+  const doc = await getDocument({ data: new Uint8Array(buffer), isEvalSupported: false, useSystemFonts: true, disableFontFace: true, ...pdfAssets }).promise;
   const pages = [];
   for (let i = 1; i <= doc.numPages; i++) {
     const page = await doc.getPage(i);
