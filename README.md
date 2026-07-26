@@ -19,6 +19,40 @@ This project is licensed under the [MIT License](LICENSE), by downloading, using
 
 ---
 
+<p align="center">
+  <img src="assets\v27\anthropic_screenshot1.jpeg" alt="Chat Interface with Artifacts"/>
+</p>
+
+<details>
+  <summary>More Screenshots.</summary>
+  <br>
+
+  <p align="center">
+    <img src="assets\v27\anthropic_screenshot2.jpeg" alt="Artifacts"/>
+    <br>
+    <sub>Chat with Artifacts.</sub>
+  </p>
+
+  <p align="center">
+    <img src="assets\v27\anthropic_screenshot4.jpeg" alt="Chat"/>
+    <br>
+    <sub>Chat response.</sub>
+  </p>
+
+  <p align="center">
+    <img src="assets\v27\anthropic_screenshot3.jpeg" alt="Admin panel"/>
+    <br>
+    <sub>Models tab in Admin Panel.</sub>
+  </p>
+
+  <p align="center">
+    <img src="assets\v27\openai_screenshot1.jpeg" alt="OpenAI chat"/>
+    <br>
+    <sub>OpenAI theme</sub>
+  </p>
+
+---
+
 ## Features
 
 - Anthropic-style UI with a serif assistant voice (Source Serif 4) and Open Sans user input
@@ -66,10 +100,10 @@ Open http://localhost:5173.
 
 ## Connecting your model
 
-1. Start your local server (e.g. LM Studio -> Developer -> Start Server) and load a model.
-2. Sign in as the admin, open the profile menu (bottom-left) -> **Admin Panel** -> **Connection**.
-3. Set the API base URL (default `http://localhost:1234/v1`) and key, then Save.
-4. Under **Models**, set each model's **internal model name** to the id your server expects (LM Studio accepts `local-model`, or the loaded model's id). Add a description, system prompt, logos, and reasoning settings as desired.
+1. Start your local server (e.g. llama.cpp server) and load a model.
+2. Sign in as the admin, open the profile menu (bottom-left) -> **Admin Panel** -> **Providers**.
+3. Set the API base URL (default `http://localhost:8080/v1`) and key, then Save.
+4. Under **Models**, set each model's **internal model name** to the id your server expects (llama.cpp accepts the model name configured when starting the server, or the model's id). Add a description, system prompt, logos, and reasoning settings as desired.
 
 ## Databases
 
