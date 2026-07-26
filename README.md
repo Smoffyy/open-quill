@@ -162,7 +162,7 @@ Open Quill is built to run entirely on your own machine, and by default nothing 
 
 Outbound network requests happen only when you explicitly configure or enable a feature, and only to the destination you specify:
 
-- **Model provider**: chat requests go to the provider base URL you set. The default is a local server (LM Studio at `http://localhost:1234/v1`). If you choose a cloud provider and enter an API key, requests go there.  
+- **Model provider**: chat requests go to the provider base URL you set. The default is a local server (llama.cpp at `http://localhost:8080/v1`). If you choose a cloud provider and enter an API key, requests go there.
 - **Voice**: speech‑to‑text and text‑to‑speech use the base URL you configure (local by default).  
 - **Web search**: off unless you enable it and point it at your own SearXNG instance. When a search runs, the server fetches result pages from the web, which is the point of the feature.  
 - **Connectors (MCP)**: only those you add. These run as local subprocesses, or reach an `http(s)` URL if you configure one.  
