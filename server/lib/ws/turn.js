@@ -242,6 +242,16 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       let genStart = 0;
       let exactTelemetry = false;
       let lastTelemetryAt = 0;
+      let lastStatusAt = 0;
+      let statusDone = false;
+      const sendStatus = (st, force) => {
+        if (statusDone && st.phase !== 'generating') return;
+        const nowMs = Date.now();
+        if (!force && nowMs - lastStatusAt < 200) return;
+        lastStatusAt = nowMs;
+        if (st.phase === 'generating') statusDone = true;
+        safeSend(JSON.stringify({ type: 'status', chatId: chat.id, ...st }));
+      };
       const sendTelemetry = (t) => {
         if (t.exact) exactTelemetry = true;
         const nowMs = Date.now();
@@ -258,12 +268,23 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         }));
       };
       try {
+        sendStatus({ phase: 'prefill' }, true);
         await streamCompletion({
           model, messages: convo, tools, signal: controller.signal,
           onEvent: (e) => {
             if (e.type === 'usage') {
               stepPromptTokens = e.usage.prompt || stepPromptTokens;
               stepUsage = { prompt: e.usage.prompt || 0, completion: e.usage.completion || 0, total: e.usage.total || 0 };
+              return;
+            }
+            if (e.type === 'prompt_progress') {
+              const pp = e.progress || {};
+              const total = Number(pp.total) || 0;
+              const cache = Number(pp.cache) || 0;
+              const processed = Number(pp.processed) || 0;
+              const span = total - cache;
+              const pct = span > 0 ? Math.max(0, Math.min(100, Math.round(((processed - cache) / span) * 100))) : (total > 0 ? 100 : 0);
+              sendStatus({ phase: 'prefill', processed, total, cache, pct, ms: Number(pp.time_ms) || 0 });
               return;
             }
             if (e.type === 'timings') {
@@ -279,10 +300,10 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
               });
               return;
             }
-            if (e.type === 'reasoning') { reasoning += e.text; safeSend(JSON.stringify({ type: 'reasoning', chatId: chat.id, text: e.text })); return; }
+            if (e.type === 'reasoning') { if (!statusDone) sendStatus({ phase: 'generating' }, true); reasoning += e.text; safeSend(JSON.stringify({ type: 'reasoning', chatId: chat.id, text: e.text })); return; }
             if (e.type === 'content') {
               content += e.text; stepText += e.text;
-              if (!genStart) genStart = Date.now();
+              if (!genStart) { genStart = Date.now(); sendStatus({ phase: 'generating' }, true); }
               safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: e.text }));
               if (!exactTelemetry) {
                 const secs = (Date.now() - genStart) / 1000;

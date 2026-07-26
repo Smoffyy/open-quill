@@ -968,3 +968,17 @@
 .ws-host { color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ws-chars { flex: 0 0 auto; }
 .ws-chars::before { content: '·'; margin: 0 6px; color: var(--text-faint); }
+
+/* ---------- model status while waiting ---------- */
+.model-status {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-family: var(--font-sans); font-size: 11.5px; line-height: 1.4;
+  color: var(--text-faint); font-variant-numeric: tabular-nums;
+  animation: msFade .5s var(--ease-out) 3.5s both;
+}
+@keyframes msFade { from { opacity: 0; } to { opacity: 1; } }
+.model-status .mst-label { color: var(--text-muted); }
+.model-status .mst-bar { width: 46px; height: 3px; border-radius: 999px; background: var(--hover-mid); overflow: hidden; }
+.model-status .mst-fill { display: block; height: 100%; background: var(--text-faint); transition: width .25s ease; }
+.model-status .mst-note { color: var(--text-faint); }
+[data-microfx="off"] .model-status { animation: none; opacity: 1; }

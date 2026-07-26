@@ -165,6 +165,25 @@ function ModelIcon({ model, phase, below, name }) {
   );
 }
 
+function StreamStatus({ status }) {
+  const pct = status && Number.isFinite(status.pct) ? status.pct : null;
+  const total = status && status.total ? status.total : 0;
+  const cached = status && status.cache ? status.cache : 0;
+  const label = status && status.phase === 'generating' ? t('Working') : t('Reading your prompt');
+  return (
+    <div className="model-status" role="status">
+      <span className="mst-label">{label}</span>
+      {pct !== null && total > 0 && (
+        <>
+          <span className="mst-bar"><span className="mst-fill" style={{ width: pct + '%' }} /></span>
+          <span className="mst-pct">{pct}%</span>
+        </>
+      )}
+      {total > 0 && <span className="mst-note">{cached > 0 ? `${cached.toLocaleString()} ${t('cached')} · ${total.toLocaleString()} ${t('tokens')}` : `${total.toLocaleString()} ${t('tokens')}`}</span>}
+    </div>
+  );
+}
+
 function LedgerRow({ tokens, pct, state, id, onToggleExclude }) {
   const excluded = state === 'excluded';
   const summarized = state === 'summarized';
@@ -196,7 +215,7 @@ function SteerChips({ notes }) {
   );
 }
 
-function Message({ msg, model, models, currentId, streaming, phase, liveCall, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null }) {
+function Message({ msg, model, models, currentId, streaming, phase, liveCall, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null }) {
   if (chatEnded) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onFork = null; onDelete = null; }
   const [typing, setTyping] = useState(false);
   const typingTimer = useRef(null);
@@ -294,6 +313,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
           {streaming && liveCall && liveCall.tool && (
             <div className="tool-live"><ToolCard call={liveCall} result={null} /></div>
           )}
+          {streaming && !msg.content && !liveCall && <StreamStatus status={status} />}
           {streaming && !msg.content && !liveCall && <p className="stream-wait" aria-hidden="true"></p>}
         </div>
       )}

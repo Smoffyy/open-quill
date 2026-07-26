@@ -4,7 +4,7 @@ export const PROVIDER_TYPES = {
   llamacpp: {
     label: 'llama.cpp server', defaultBaseUrl: 'http://localhost:8080', protocol: 'openai', keyOptional: true,
     samplers: ['temperature', 'top_p', 'top_k', 'min_p', 'repetition_penalty', 'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens'],
-    remap: { repetition_penalty: 'repeat_penalty' }, timingsPerToken: true
+    remap: { repetition_penalty: 'repeat_penalty' }, timingsPerToken: true, promptProgress: true
   },
   lmstudio: {
     label: 'LM Studio', defaultBaseUrl: 'http://localhost:1234/v1', protocol: 'openai', keyOptional: true,

@@ -195,6 +195,7 @@ export default function App() {
   const [cmdkOpen, setCmdkOpen] = useState(false);
 
   const [telemetry, setTelemetry] = useState(null);
+  const [modelStatus, setModelStatus] = useState(null);
   const [liveSteers, setLiveSteers] = useState([]);
   const [ledgerOpen, setLedgerOpen] = useState(false);
   const ledgerDefaultApplied = useRef(false);
@@ -463,7 +464,7 @@ export default function App() {
   }
   function recFor(key) {
     let r = gen.current.get(key);
-    if (!r) { r = { content: '', reasoning: '', phase: 'generating', done: false, assistantId: null, model_id: currentIdRef.current, live: null, steers: [] }; gen.current.set(key, r); }
+    if (!r) { r = { content: '', reasoning: '', phase: 'generating', done: false, assistantId: null, model_id: currentIdRef.current, live: null, steers: [], status: null }; gen.current.set(key, r); }
     return r;
   }
 
@@ -561,6 +562,12 @@ export default function App() {
       if (m.chatId === activeKey()) setQueued(true);
       return;
     }
+    if (m.type === 'status') {
+      const r = recFor(m.chatId);
+      r.status = m.phase === 'generating' ? null : { phase: m.phase, processed: m.processed, total: m.total, cache: m.cache, pct: m.pct, ms: m.ms };
+      if (m.chatId === activeKey()) setModelStatus(r.status);
+      return;
+    }
     if (m.type === 'telemetry') {
       if (m.chatId === activeKey()) setTelemetry({ tps: m.tps, promptTps: m.promptTps, promptTokens: m.promptTokens, genTokens: m.genTokens, ctx: m.ctx, exact: !!m.exact });
       return;
@@ -574,9 +581,9 @@ export default function App() {
     if (m.type === 'start') {
       voiceEmit({ type: 'start', chatId: m.chatId });
       const r = recFor(m.chatId);
-      r.content = ''; r.reasoning = ''; r.phase = 'generating'; r.done = false; r.error = false; r.assistantId = m.messageId; r.live = null; r.steers = [];
+      r.content = ''; r.reasoning = ''; r.phase = 'generating'; r.done = false; r.error = false; r.assistantId = m.messageId; r.live = null; r.steers = []; r.status = null;
       if (m.chatId === activeKey()) {
-        setTelemetry(null); setLiveSteers([]);
+        setTelemetry(null); setLiveSteers([]); setModelStatus(null);
         refreshSeq.current++;
         setCompacting(false); setLiveFile(null); setLiveCall(null); liveRef.current = null;
         targetContent.current = ''; targetReason.current = ''; pendingDone.current = false;
@@ -899,7 +906,7 @@ export default function App() {
     setMobileDrawer(false);
     if (incognito) setIncognito(false);
     setShowProjects(false);
-    if (id !== activeIdRef.current) { setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null); setTelemetry(null); setLiveSteers([]); setLedger(null); }
+    if (id !== activeIdRef.current) { setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null); setTelemetry(null); setLiveSteers([]); setLedger(null); setModelStatus(null); }
     setActiveId(id);
     const seq = ++openSeq.current;
     const cached = chatCache.current.get(id);
@@ -947,7 +954,7 @@ export default function App() {
     setCurrentProject(null);
     setActiveId(null); setMessages([]); setInput('');
     setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
-    setTelemetry(null); setLiveSteers([]); setLedger(null);
+    setTelemetry(null); setLiveSteers([]); setLedger(null); setModelStatus(null);
     setChatEnded(false); setChatEndedReason('');
     setChatRemovedModel(null);
     setCanContinue(false); setQueue([]);
@@ -1415,6 +1422,7 @@ export default function App() {
                       ledgerState={li ? (li.excluded ? 'excluded' : li.summarized ? 'summarized' : 'active') : ''}
                       onToggleExclude={toggleExclude}
                       steers={msg._streaming ? liveSteers : (msg.steers || null)}
+                      status={msg._streaming ? modelStatus : null}
                       streaming={!!msg._streaming} phase={msg._streaming ? ((modelById.get(currentId)?.hideThinking && phase === 'thinking') ? 'generating' : phase) : 'static'} liveCall={msg._streaming ? liveCall : null}
                       onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onDelete={streaming || queued ? null : deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
                       showIcon={msg.role === 'assistant' && (cfg.uiPreset === 'openai' || (lastA && msg.id === lastA.id))} />
