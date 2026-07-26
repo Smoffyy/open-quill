@@ -51,6 +51,8 @@ This project is licensed under the [MIT License](LICENSE), by downloading, using
     <sub>OpenAI theme</sub>
   </p>
 
+</details>
+
 ---
 
 ## Features
