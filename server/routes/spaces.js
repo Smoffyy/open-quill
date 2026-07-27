@@ -43,8 +43,8 @@ export default function registerSpaceRoutes(app) {
 
   app.delete('/api/spaces/:id', authMiddleware, (req, res) => {
     const s = ownSpace(req, res, { requireOwner: true }); if (!s) return;
-    db.spaceMessages.remove(m => m.space_id === s.id);
-    db.spaces.remove(x => x.id === s.id);
+    db.spaceMessages.removeWhere('space_id', s.id);
+    db.spaces.removeById(s.id);
     broadcastSpace(s.id, { type: 'space_deleted', spaceId: s.id });
     res.json({ ok: true });
   });

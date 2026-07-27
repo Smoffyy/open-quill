@@ -31,7 +31,7 @@ export default function registerFolderRoutes(app) {
     if (f && f.user_id === req.user.id) {
       // chats in this folder fall back to the default (no folder)
       for (const c of db.chats.where('folder_id', f.id)) { if (c.user_id === req.user.id) db.chats.update(c.id, { folder_id: null }); }
-      db.folders.remove(x => x.id === f.id);
+      db.folders.removeById(f.id);
     }
     res.json({ ok: true });
   });

@@ -96,8 +96,7 @@ export default function registerAdminRoutes(app) {
     const nameById = new Map(db.users.all().map(u => [u.id, u.display_name || u.email]));
     const byUser = new Map(), byModel = new Map(), byDay = new Map();
     let tp = 0, tc = 0, tcost = 0, gens = 0;
-    for (const r of db.usage.all()) {
-      if ((r.created_at || 0) < since) continue;
+    for (const r of db.usage.since(since)) {
       gens++; const p = r.prompt || 0, c = r.completion || 0, cost = r.cost || 0;
       tp += p; tc += c; tcost += cost;
       const uk = r.user_id || 'unknown';
@@ -156,11 +155,11 @@ export default function registerAdminRoutes(app) {
     for (const c of myChats) { try { sandbox.remove(c.id); } catch {} }
     const chatIds = new Set(myChats.map(c => c.id));
     purgeUploads(chatIds);
-    db.messages.remove(m => chatIds.has(m.chat_id));
-    db.chats.remove(c => c.user_id === u.id);
+    for (const id of chatIds) db.messages.removeWhere('chat_id', id);
+    db.chats.removeWhere('user_id', u.id);
     removeUserFromSpaces(u.id);
-    db.sessions.remove(s => s.user_id === u.id);
-    db.users.remove(x => x.id === u.id);
+    db.sessions.removeWhere('user_id', u.id);
+    db.users.removeById(u.id);
     logAudit(req, 'user.delete', { type: 'user', id: u.id, meta: { email: u.email } });
     res.json({ ok: true });
   });

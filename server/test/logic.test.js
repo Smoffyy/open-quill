@@ -5,7 +5,8 @@ import {
   oneShotKwargPayload, controlOf, defaultValueOf, isBoolPair, coerceKwargValue
 } from '../lib/kwargs.js';
 import { parseTextToolCalls, parseArgs, toCall } from '../tools/index.js';
-import { trimInTurn, compactThreshold, estimateTokens, FALLBACK_CTX } from '../lib/convo.js';
+import { trimInTurn, compactThreshold, estimateTokens, textTokens, makeTokenCounter, truncateForRollingCtx, FALLBACK_CTX } from '../lib/convo.js';
+import { scanTools } from '../toolproto.js';
 import { isContextOverflowError } from '../lib/llamacpp.js';
 import { winTranslate } from '../sandbox.js';
 
@@ -214,4 +215,64 @@ test('windows: arguments are never rewritten', () => {
 test('windows: untouched commands report no notes', () => {
   assert.equal(winTranslate('npm install').notes.length, 0);
   assert.equal(winTranslate('mkdir out').notes.length, 0);
+});
+
+test('rolling ctx: fits under budget returns the list untouched', () => {
+  const msgs = [{ role: 'system', content: 'sys' }, { role: 'user', content: 'hi' }];
+  const r = truncateForRollingCtx('c1', msgs, 8192);
+  assert.equal(r.msgs, msgs);
+  assert.equal(r.dropped, 0);
+  assert.equal(r.trimmed, false);
+});
+
+test('rolling ctx: drops oldest non-system turns first and keeps every system message', () => {
+  const msgs = [
+    { role: 'system', content: 'S'.repeat(100) },
+    { role: 'user', content: 'a'.repeat(6000) },
+    { role: 'assistant', content: 'b'.repeat(6000) },
+    { role: 'user', content: 'c'.repeat(600) }
+  ];
+  const r = truncateForRollingCtx('c2', msgs, 2048);
+  assert.ok(r.dropped > 0);
+  assert.equal(r.msgs.filter(m => m.role === 'system').length, 1);
+  assert.equal(r.msgs[r.msgs.length - 1].content, 'c'.repeat(600));
+  assert.ok(r.msgs.length < msgs.length);
+});
+
+test('rolling ctx: a single oversized turn is trimmed rather than dropped', () => {
+  const msgs = [{ role: 'system', content: 'S' }, { role: 'user', content: 'x'.repeat(200000) }];
+  const r = truncateForRollingCtx('c3', msgs, 2048);
+  assert.equal(r.dropped, 0);
+  assert.equal(r.trimmed, true);
+  assert.equal(r.msgs.length, 2);
+  assert.ok(r.msgs[1].content.length < 200000);
+});
+
+test('token counter: chunked adds match a whole-string estimate', () => {
+  const text = 'hello world '.repeat(120) + '日本語のテキスト'.repeat(40) + '한국어';
+  const counter = makeTokenCounter();
+  for (let i = 0; i < text.length; i += 7) counter.add(text.slice(i, i + 7));
+  assert.equal(counter.tokens, textTokens(text));
+  const empty = makeTokenCounter();
+  empty.add('');
+  assert.equal(empty.tokens, 0);
+});
+
+test('token estimates are stable across repeat calls on long strings', () => {
+  const long = 'word '.repeat(500);
+  const first = textTokens(long);
+  assert.equal(textTokens(long), first);
+  assert.equal(estimateTokens([{ role: 'user', content: long }]), first + 4);
+});
+
+test('scanTools: prose is never mistaken for a call, real calls still parse', () => {
+  assert.deepEqual(scanTools('just some prose with <angle> and [square] bits'), { calls: [], live: null });
+  assert.deepEqual(scanTools(''), { calls: [], live: null });
+  const parsed = scanTools('<tool bash>\ncmd: ls -la\n</tool>');
+  assert.equal(parsed.calls.length, 1);
+  assert.equal(parsed.calls[0].call.tool, 'bash');
+  assert.equal(parsed.calls[0].call.cmd, 'ls -la');
+  const live = scanTools('<tool create_file>\npath: a.txt\n<CONTENT>\npartial').live;
+  assert.equal(live.tool, 'create_file');
+  assert.equal(live.path, 'a.txt');
 });

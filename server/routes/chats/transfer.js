@@ -1,4 +1,4 @@
-import { db, uid, now } from '../../db.js';
+import { db, uid, now, tx } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
 import * as sandbox from '../../sandbox.js';
 import { activePath } from '../../lib/tree.js';
@@ -75,14 +75,16 @@ export default function registerTransferRoutes(app) {
       const t = now();
       const chat = db.chats.insert({ id: uid(), user_id: req.user.id, folder_id: folderId, title: String(c.title || 'Imported chat').slice(0, 120) || 'Imported chat', starred: c.starred ? 1 : 0, archived: c.archived ? 1 : 0, sandbox: 0, summary: String(c.summary || ''), created_at: t, updated_at: t });
       let parent = null;
-      for (const m of c.messages.slice(0, 2000)) {
-        if (!m || (m.role !== 'user' && m.role !== 'assistant') || typeof m.content !== 'string') continue;
-        const mid = uid();
-        db.messages.insert({ id: mid, chat_id: chat.id, role: m.role, content: m.content, reasoning: m.reasoning || '', model_id: null, attachments: [], parent_id: parent, created_at: now() });
-        parent = mid;
-      }
+      tx(() => {
+        for (const m of c.messages.slice(0, 2000)) {
+          if (!m || (m.role !== 'user' && m.role !== 'assistant') || typeof m.content !== 'string') continue;
+          const mid = uid();
+          db.messages.insert({ id: mid, chat_id: chat.id, role: m.role, content: m.content, reasoning: m.reasoning || '', model_id: null, attachments: [], parent_id: parent, created_at: now() });
+          parent = mid;
+        }
+      });
       if (parent) { db.chats.update(chat.id, { active_leaf: parent, updated_at: now() }); imported++; }
-      else db.chats.remove(x => x.id === chat.id);
+      else db.chats.removeById(chat.id);
     }
     res.json({ ok: true, imported });
   });

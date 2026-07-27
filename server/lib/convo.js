@@ -43,39 +43,79 @@ export async function chatHistory(chat, model) {
 }
 
 function historyMessage(m, model) {
-  return (m => {
-    let text = historyText(m.content || '').replace(/\n{3,}/g, '\n\n');
-    const atts = m.attachments || [];
-    const images = [];
-    if (atts.length) {
-      const notes = [];
-      for (const a of atts) {
-        const isImage = a.type && a.type.startsWith('image/');
-        if (isImage && model.has_vision) { const uri = readImageDataUri(a); if (uri) images.push(uri); }
-        else if (isTextLike(a)) notes.push(`--- Attached file: ${a.name} ---\n${readUploadText(a.url)}`);
-        else notes.push(`[Attached ${isImage ? 'image' : 'file'}: ${a.name}]`);
-      }
-      if (notes.length) text = (text ? text + '\n\n' : '') + notes.join('\n\n');
+  let text = historyText(m.content || '').replace(/\n{3,}/g, '\n\n');
+  const atts = m.attachments || [];
+  const images = [];
+  if (atts.length) {
+    const notes = [];
+    for (const a of atts) {
+      const isImage = a.type && a.type.startsWith('image/');
+      if (isImage && model.has_vision) { const uri = readImageDataUri(a); if (uri) images.push(uri); }
+      else if (isTextLike(a)) notes.push(`--- Attached file: ${a.name} ---\n${readUploadText(a.url)}`);
+      else notes.push(`[Attached ${isImage ? 'image' : 'file'}: ${a.name}]`);
     }
-    if (images.length) {
-      const parts = [];
-      if (text) parts.push({ type: 'text', text });
-      for (const url of images) parts.push({ type: 'image_url', image_url: { url } });
-      return { role: m.role, content: parts };
-    }
-    return { role: m.role, content: text };
-  })(m);
+    if (notes.length) text = (text ? text + '\n\n' : '') + notes.join('\n\n');
+  }
+  if (!images.length) return { role: m.role, content: text };
+  const parts = [];
+  if (text) parts.push({ type: 'text', text });
+  for (const url of images) parts.push({ type: 'image_url', image_url: { url } });
+  return { role: m.role, content: parts };
 }
 
 export function textTokens(s) {
   return estTextTokens(s);
 }
 
+function countCjk(s, from, to) {
+  let cjk = 0;
+  for (let i = from; i < to; i++) { const c = s.charCodeAt(i); if ((c >= 0x3000 && c <= 0x9fff) || (c >= 0xac00 && c <= 0xd7af)) cjk++; }
+  return cjk;
+}
+
+const TOK_CACHE = new Map();
+const TOK_CACHE_MIN = 1024;
+const TOK_CACHE_MAX_CHARS = 4 << 20;
+let tokCacheChars = 0;
+
 function estTextTokens(s) {
   if (!s) return 0;
-  let cjk = 0;
-  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); if ((c >= 0x3000 && c <= 0x9fff) || (c >= 0xac00 && c <= 0xd7af)) cjk++; }
-  return Math.ceil((s.length - cjk) / 3.6) + cjk;
+  if (s.length < TOK_CACHE_MIN) {
+    const c = countCjk(s, 0, s.length);
+    return Math.ceil((s.length - c) / 3.6) + c;
+  }
+  const hit = TOK_CACHE.get(s);
+  if (hit !== undefined) {
+    TOK_CACHE.delete(s);
+    TOK_CACHE.set(s, hit);
+    return hit;
+  }
+  const cjk = countCjk(s, 0, s.length);
+  const n = Math.ceil((s.length - cjk) / 3.6) + cjk;
+  if (s.length <= TOK_CACHE_MAX_CHARS) {
+    TOK_CACHE.set(s, n);
+    tokCacheChars += s.length;
+    while (tokCacheChars > TOK_CACHE_MAX_CHARS) {
+      const oldest = TOK_CACHE.keys().next().value;
+      if (oldest === undefined) break;
+      tokCacheChars -= oldest.length;
+      TOK_CACHE.delete(oldest);
+    }
+  }
+  return n;
+}
+
+export function makeTokenCounter() {
+  let plain = 0, cjk = 0;
+  return {
+    add(chunk) {
+      if (!chunk) return;
+      const c = countCjk(chunk, 0, chunk.length);
+      cjk += c;
+      plain += chunk.length - c;
+    },
+    get tokens() { return Math.ceil(plain / 3.6) + cjk; }
+  };
 }
 
 export function messageTokens(m) {
@@ -111,25 +151,30 @@ export function truncateForRollingCtx(chatId, msgs, ctx) {
   const reserve = Math.min(Math.max(256, Math.floor(ctx * 0.15)), 1536);
   const budget = Math.max(512, ctx - reserve);
   const ratio = calibRatio(chatId);
-  const costs = msgs.map(messageTokens);
+  const n = msgs.length;
+  const costs = new Array(n);
   let est = 0;
-  for (const c of costs) est += c;
+  let nonSysCount = 0;
+  for (let i = 0; i < n; i++) {
+    const c = messageTokens(msgs[i]);
+    costs[i] = c;
+    est += c;
+    if (msgs[i].role !== 'system') nonSysCount++;
+  }
   const scaled = () => Math.round(est * ratio);
   if (scaled() <= budget) return { msgs, dropped: 0, trimmed: false };
-  const out = msgs.slice();
-  const cost = costs.slice();
-  let nonSysCount = 0;
-  for (const m of out) if (m.role !== 'system') nonSysCount++;
+  const drop = new Uint8Array(n);
   let dropped = 0;
-  while (scaled() > budget && nonSysCount > 1) {
-    const i = out.findIndex(m => m.role !== 'system');
-    if (i === -1) break;
-    est -= cost[i];
-    out.splice(i, 1);
-    cost.splice(i, 1);
+  for (let i = 0; i < n && nonSysCount > 1 && scaled() > budget; i++) {
+    if (msgs[i].role === 'system') continue;
+    drop[i] = 1;
+    est -= costs[i];
     nonSysCount--;
     dropped++;
   }
+  const out = [];
+  const cost = [];
+  for (let i = 0; i < n; i++) if (!drop[i]) { out.push(msgs[i]); cost.push(costs[i]); }
   let trimmed = false;
   if (scaled() > budget) {
     const i = out.findIndex(m => m.role !== 'system');
@@ -290,14 +335,8 @@ export function promptVars(userId) {
   return { currentUser: name, currentDateTime: dt };
 }
 
-function userInstructions(userId) {
-  const u = userId ? db.users.byId(userId) : null;
-  return (u && u.instructions) ? u.instructions : '';
-}
-
-function userMemoryBlock(userId) {
+function userMemoryBlock(u) {
   if (getSetting('memory_enabled', '0') !== '1') return '';
-  const u = userId ? db.users.byId(userId) : null;
   if (!u || u.prefs?.memoryEnabled === false) return '';
   const mem = (u.memory || '').trim();
   if (!mem) return '';
@@ -305,10 +344,12 @@ function userMemoryBlock(userId) {
 }
 
 export function combinedInstructions(chat) {
+  const userId = chat && chat.user_id;
+  const u = userId ? db.users.byId(userId) : null;
   const parts = [];
-  const ui = userInstructions(chat && chat.user_id);
+  const ui = (u && u.instructions) ? u.instructions : '';
   if (ui && ui.trim()) parts.push(ui.trim());
-  const mem = userMemoryBlock(chat && chat.user_id);
+  const mem = userMemoryBlock(u);
   if (mem) parts.push(mem);
   if (chat && chat.instructions && chat.instructions.trim()) parts.push(chat.instructions.trim());
   return parts.join('\n\n');

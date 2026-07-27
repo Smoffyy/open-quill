@@ -136,24 +136,36 @@ const BLOCK_HARD_LINES = 500;
 function blockify(text) {
   const lines = text.split('\n');
   const blocks = [];
-  let buf = [];
+  let start = 0;
+  let count = 0;
   let inFence = false;
-  for (const line of lines) {
-    buf.push(line);
+  let hasContent = false;
+  let pos = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const end = pos + line.length;
+    const next = end + 1;
+    count++;
     if (isFenceLine(line)) {
-      if (inFence) { inFence = false; blocks.push(buf.join('\n')); buf = []; }
-      else inFence = true;
+      if (line.trim() !== '') hasContent = true;
+      if (inFence) {
+        inFence = false;
+        blocks.push(text.slice(start, end));
+        start = next; count = 0; hasContent = false;
+      } else inFence = true;
+      pos = next;
       continue;
     }
-    if (!inFence && line.trim() === '' && buf.some(l => l.trim() !== '')) {
-      blocks.push(buf.join('\n'));
-      buf = [];
-    } else if (!inFence && buf.length >= BLOCK_HARD_LINES) {
-      blocks.push(buf.join('\n'));
-      buf = [];
-    }
+    if (!inFence && line.trim() === '' && hasContent) {
+      blocks.push(text.slice(start, end));
+      start = next; count = 0; hasContent = false;
+    } else if (!inFence && count >= BLOCK_HARD_LINES) {
+      blocks.push(text.slice(start, end));
+      start = next; count = 0; hasContent = false;
+    } else if (line.trim() !== '') hasContent = true;
+    pos = next;
   }
-  if (buf.length) blocks.push(buf.join('\n'));
+  if (count) blocks.push(text.slice(start));
   return blocks;
 }
 

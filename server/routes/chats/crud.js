@@ -16,8 +16,8 @@ export default function registerCrudRoutes(app) {
     const c = db.chats.byId(req.params.id);
     if (c && c.user_id === req.user.id) {
       purgeUploads(c.id);
-      db.messages.remove(m => m.chat_id === c.id);
-      db.chats.remove(x => x.id === c.id);
+      db.messages.removeWhere('chat_id', c.id);
+      db.chats.removeById(c.id);
       sandbox.remove(c.id);
     }
     res.json({ ok: true });

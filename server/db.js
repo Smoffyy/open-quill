@@ -114,6 +114,14 @@ CREATE INDEX IF NOT EXISTS idx_feedback_ts ON feedback(ts);`);
   sdb.pragma('user_version = 7');
 }
 
+if (sdb.pragma('user_version', { simple: true }) < 8) {
+  sdb.exec(`CREATE INDEX IF NOT EXISTS idx_usage_created ON usage(created_at);
+CREATE INDEX IF NOT EXISTS idx_messages_parent ON messages(chat_id, parent_id);`);
+  sdb.pragma('user_version = 8');
+}
+
+export function tx(fn) { return sdb.transaction(fn)(); }
+
 export const uid = () => crypto.randomUUID();
 let lastTs = 0;
 export const now = () => { const t = Date.now(); lastTs = t > lastTs ? t : lastTs + 1; return lastTs; };
@@ -187,6 +195,13 @@ function collection(table) {
       return cur;
     },
     removeById: id => { delStmt.run(id); bump(); },
+    removeByIds: ids => {
+      const list = Array.isArray(ids) ? ids : [...ids];
+      if (!list.length) return;
+      const tx = sdb.transaction(rows => { for (const id of rows) delStmt.run(id); });
+      tx(list);
+      bump();
+    },
     remove: fn => {
       const rows = allStmt.all().map(r => JSON.parse(r.data)).filter(fn);
       if (!rows.length) return;
@@ -218,6 +233,10 @@ usersCol.byEmail = email => { const r = byEmailStmt.get(email ?? null); return r
 const usageCol = collection('usage');
 const usageByUserStmt = sdb.prepare('SELECT data FROM usage WHERE user_id=?');
 usageCol.byUser = userId => usageByUserStmt.all(userId).map(r => JSON.parse(r.data));
+const usageByUserSinceStmt = sdb.prepare('SELECT data FROM usage WHERE user_id=? AND created_at >= ?');
+usageCol.byUserSince = (userId, since) => usageByUserSinceStmt.all(userId, since || 0).map(r => JSON.parse(r.data));
+const usageSinceStmt = sdb.prepare('SELECT data FROM usage WHERE created_at >= ?');
+usageCol.since = since => usageSinceStmt.all(since || 0).map(r => JSON.parse(r.data));
 const usageNameStmt = sdb.prepare("SELECT json_extract(data,'$.model_name') AS name FROM usage WHERE model_id=? AND json_extract(data,'$.model_name') NOT IN ('', 'null') LIMIT 1");
 usageCol.nameForModel = modelId => { const r = usageNameStmt.get(modelId); return (r && r.name) || ''; };
 const usageSpendStmt = sdb.prepare("SELECT COALESCE(SUM(json_extract(data,'$.cost')), 0) AS cost FROM usage WHERE user_id=? AND created_at >= ?");

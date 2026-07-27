@@ -27,7 +27,7 @@ export function removeUserFromSpaces(userId, spaceId) {
       ownerId = next ? next.userId : null;
       if (next) members = members.map(m => m.userId === ownerId ? { ...m, role: 'owner' } : m);
     }
-    if (!members.length || !ownerId) { db.spaceMessages.remove(m => m.space_id === s.id); db.spaces.remove(x => x.id === s.id); }
+    if (!members.length || !ownerId) { db.spaceMessages.removeWhere('space_id', s.id); db.spaces.removeById(s.id); }
     else db.spaces.update(s.id, { members, owner_id: ownerId, updated_at: now() });
   }
 }

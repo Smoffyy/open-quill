@@ -97,6 +97,7 @@ export default function App() {
   const onLicenseCb = useCallback(() => setShowLicense(true), []);
   const onChatsOverviewCb = useCallback(() => { setMobileDrawer(false); setChatsOverview(true); }, []);
   const onSpacesCb = useCallback(() => { setMobileDrawer(false); history.pushState({}, '', '/spaces'); setShowSpaces(true); }, []);
+  const closeArtifacts = useCallback(() => setArtifactsOpen(false), []);
 
   const [extended, setExtended] = useState(false);
   const [kwargValues, setKwargValues] = useState({});
@@ -201,6 +202,8 @@ export default function App() {
   const ledgerDefaultApplied = useRef(false);
   const [ledger, setLedger] = useState(null);
   const [streaming, setStreaming] = useState(false);
+  const streamingRef = useRef(false);
+  useEffect(() => { streamingRef.current = streaming; }, [streaming]);
   const [queued, setQueued] = useState(false);
   const [chatErrors, setChatErrors] = useState({});
   const [dispContent, setDispContent] = useState('');
@@ -679,9 +682,9 @@ export default function App() {
     revealTimer.current = setInterval(() => {
       const target = targetContent.current;
       if (dispLen.current >= target.length) { if (pendingDone.current) finalize(); return; }
+      const instant = document.documentElement.getAttribute('data-preset') === 'openai' || !animateRef.current || revealRef.current <= 0;
       setDispContent(prev => {
         const remaining = target.length - prev.length;
-        const instant = document.documentElement.getAttribute('data-preset') === 'openai' || !animateRef.current || revealRef.current <= 0;
         const n = instant ? remaining
           : remaining > 1200 ? Math.ceil(remaining / 3)
           : remaining > 240 ? Math.ceil(remaining / 6)
@@ -996,13 +999,13 @@ export default function App() {
     setChats(cs => cs.filter(c => c.id !== id));
     if (id === activeId) newChat();
   }
-  async function deleteMessage(messageId) {
+  const deleteMessage = useCallback(async (messageId) => {
     const id = activeIdRef.current;
-    if (!id || streaming) return;
+    if (!id || streamingRef.current) return;
     setMessages(ms => ms.filter(m => m.id !== messageId));
     try { await api.del('/api/chats/' + id + '/messages/' + messageId); await refreshMessages(id); }
     catch { refreshMessages(id); }
-  }
+  }, []);
   function toggleArchive(id) {
     const cur = chats.find(c => c.id === id);
     const next = !cur?.archived;
@@ -1196,7 +1199,8 @@ export default function App() {
   if (user === undefined) return <div style={{ height: '100%', background: 'var(--bg)' }} />;
   if (!user) return <Login onLogin={(u) => { setUser(u); setIntro(true); }} />;
 
-  const model = models.find(m => m.id === currentId);
+  const model = modelById.get(currentId);
+  const activeChat = activeId ? chats.find(c => c.id === activeId) : null;
   const sandboxAllowed = incognito ? false : (model ? model.sandboxAllowed !== false : true);
   const sandboxOn = sandboxAllowed && sandbox;
   const webSearchAvailable = !incognito && !!cfg.webSearchAvailable && (model ? model.webSearchAllowed !== false : true);
@@ -1348,12 +1352,12 @@ export default function App() {
               ) : (
                 <div className="chat-name-wrap">
                   <button className="chat-name" onClick={() => setChatMenuOpen(o => !o)}>
-                    <span className="ct-title">{chats.find(c => c.id === activeId)?.title || 'New chat'}</span> <ChevDown style={{ width: 15 }} />
+                    <span className="ct-title">{activeChat?.title || 'New chat'}</span> <ChevDown style={{ width: 15 }} />
                   </button>
                   {(chatInstructions || '').trim() && <span className="chat-instr-dot" title="This chat has custom instructions" />}
                   {chatMenuOpen && activeId && (
                     <ChatMenu
-                      chat={{ id: activeId, title: chats.find(c => c.id === activeId)?.title || 'New chat', instructions: chatInstructions, starred: !!chats.find(c => c.id === activeId)?.starred, archived: !!chats.find(c => c.id === activeId)?.archived }}
+                      chat={{ id: activeId, title: activeChat?.title || 'New chat', instructions: chatInstructions, starred: !!activeChat?.starred, archived: !!activeChat?.archived }}
                       modelId={currentId}
                       pinned={messages.filter(m => m.pinned)}
                       pins={chatPins}
@@ -1362,7 +1366,7 @@ export default function App() {
                       onJump={jumpToMessage}
                       onCopyConversation={copyConversation}
                       onClose={() => setChatMenuOpen(false)}
-                      onRename={() => { setRenameVal(chats.find(c => c.id === activeId)?.title || ''); setRenaming(true); }}
+                      onRename={() => { setRenameVal(activeChat?.title || ''); setRenaming(true); }}
                       onFork={() => forkChat()}
                       onToggleStar={() => toggleStar(activeId)}
                       onToggleArchive={() => toggleArchive(activeId)}
@@ -1409,7 +1413,8 @@ export default function App() {
                   const renderList = streaming
                     ? [...messages.filter(m => m.id !== streamKey), { id: streamKey, _k: streamKey, role: 'assistant', content: dispContent, reasoning: dispReason, model_id: currentId, _streaming: true }]
                     : messages;
-                  const lastA = [...renderList].reverse().find(m => m.role === 'assistant');
+                  let lastA = null;
+                  for (let i = renderList.length - 1; i >= 0; i--) if (renderList[i].role === 'assistant') { lastA = renderList[i]; break; }
                   const ledgerById = new Map((ledgerOpen && ledger ? ledger.messages : []).map(m => [m.id, m]));
                   const ledgerLimit = (ledgerOpen && ledger && ledger.limit) || 0;
                   return renderList.map(msg => {
@@ -1470,7 +1475,7 @@ export default function App() {
       </div>
 
       {artifactsOpen && activeId && !callOpen && (
-        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} focus={artifactFocus} onClose={() => setArtifactsOpen(false)} />
+        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} focus={artifactFocus} onClose={closeArtifacts} />
       )}
       {ctlOpen && user?.isAdmin && !incognito && (
         <ChatControls chatId={activeId || null} initialParams={chatGenParams} initialOverride={chatSysOverride} onChange={(p, o) => { setChatGenParams(p && Object.keys(p).length ? p : null); setChatSysOverride(o || ''); }} onClose={() => setCtlOpen(false)} />

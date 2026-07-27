@@ -20,13 +20,34 @@ export function isTextLike(a) {
   return TEXT_EXT.has(path.extname(a?.name || '').toLowerCase());
 }
 
+const READ_CACHE_MAX = 64;
+const textCache = new Map();
+const imageCache = new Map();
+
+function cacheGet(store, key, mtime, size) {
+  const hit = store.get(key);
+  if (!hit || hit.mtime !== mtime || hit.size !== size) return undefined;
+  store.delete(key);
+  store.set(key, hit);
+  return hit.value;
+}
+
+function cacheSet(store, key, mtime, size, value) {
+  store.set(key, { mtime, size, value });
+  if (store.size > READ_CACHE_MAX) store.delete(store.keys().next().value);
+  return value;
+}
+
 export function readUploadText(url) {
   try {
     const p = path.join(UPLOADS, path.basename(url || ''));
     if (!p.startsWith(UPLOADS)) return '';
+    const st = fs.statSync(p);
+    const cached = cacheGet(textCache, p, st.mtimeMs, st.size);
+    if (cached !== undefined) return cached;
     let t = fs.readFileSync(p, 'utf8');
     if (t.length > 20000) t = t.slice(0, 20000) + '\n... [truncated]';
-    return t;
+    return cacheSet(textCache, p, st.mtimeMs, st.size, t);
   } catch { return ''; }
 }
 
@@ -35,7 +56,11 @@ export function readImageDataUri(a) {
     const p = path.join(UPLOADS, path.basename(a.url || ''));
     if (!p.startsWith(UPLOADS)) return null;
     const mime = a.type && a.type.startsWith('image/') ? a.type : (MIME[path.extname(a.name || '').toLowerCase()] || 'image/png');
-    return `data:${mime};base64,${fs.readFileSync(p).toString('base64')}`;
+    const st = fs.statSync(p);
+    const key = mime + '|' + p;
+    const cached = cacheGet(imageCache, key, st.mtimeMs, st.size);
+    if (cached !== undefined) return cached;
+    return cacheSet(imageCache, key, st.mtimeMs, st.size, `data:${mime};base64,${fs.readFileSync(p).toString('base64')}`);
   } catch { return null; }
 }
 

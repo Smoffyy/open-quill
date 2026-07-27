@@ -10,7 +10,7 @@ import * as projectfiles from '../../projectfiles.js';
 import { stripToolSyntax } from '../history.js';
 import { modelCtx } from '../models.js';
 import {
-  chatHistory, estimateTokens, textTokens, updateCalib, truncateForRollingCtx, rollingCtxFor,
+  chatHistory, estimateTokens, makeTokenCounter, updateCalib, truncateForRollingCtx, rollingCtxFor,
   compactStep, compactThreshold, promptVars, instrFor, exactTokens, trimInTurn
 } from '../convo.js';
 import { isContextOverflowError } from '../llamacpp.js';
@@ -88,6 +88,10 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   await maybeCompact(ws, chat, model, extended, sandboxOn);
   const history = await chatHistory(chat, model);
   const chatRow = db.chats.byId(chat.id) || chat;
+  const rebuildBase = async () => {
+    const row = db.chats.byId(chat.id);
+    return buildMessages(model, await chatHistory(chat, model), extended, toolsP(), row ? row.summary : undefined, promptVars(chat.user_id), withStyle(await instrFor(row || chat)));
+  };
   const membankOn = getSetting('membank_enabled', '0') === '1' && membank.list().length > 0;
   const membankHideTools = getSetting('membank_hide_tools', '0') === '1';
   if (membankOn) { try { await membank.ensureIndexedAll(); } catch {} }
@@ -208,9 +212,9 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   try {
     for (let step = 0; step < maxSteps; step++) {
       // running low on context mid-response? summarize older turns, then carry on where we left off
-      if (threshold !== Infinity && inTurn.length && (await exactTokens(chat.id, model, [...base, ...inTurn])) >= threshold) {
-        if (await compactStep(ws, chat, model)) base = buildMessages(model, await chatHistory(chat, model), extended, toolsP(), (db.chats.byId(chat.id) || {}).summary, promptVars(chat.user_id), withStyle(await instrFor(db.chats.byId(chat.id) || chat)));
-        if ((await exactTokens(chat.id, model, [...base, ...inTurn])) >= threshold) {
+      if (threshold !== Infinity && inTurn.length && (await exactTokens(chat.id, model, base.concat(inTurn))) >= threshold) {
+        if (await compactStep(ws, chat, model)) base = await rebuildBase();
+        if ((await exactTokens(chat.id, model, base.concat(inTurn))) >= threshold) {
           const t = trimInTurn(inTurn);
           if (t.trimmed) {
             inTurn = t.list;
@@ -218,7 +222,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           }
         }
       }
-      let convo = [...base, ...inTurn];
+      let convo = base.concat(inTurn);
       if (rollCtx) {
         const t = truncateForRollingCtx(chat.id, convo, rollCtx);
         if (t.dropped || t.trimmed) {
@@ -235,6 +239,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       const controller = new AbortController();
       state.aborts.set(chat.id, controller);
       let stepText = '';
+      const genTokens = makeTokenCounter();
       let aborted = false;
       let toolCalls = [];
       let liveSent = false;
@@ -306,8 +311,9 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
               if (!genStart) { genStart = Date.now(); sendStatus({ phase: 'generating' }, true); }
               safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: e.text }));
               if (!exactTelemetry) {
+                genTokens.add(e.text);
                 const secs = (Date.now() - genStart) / 1000;
-                const gen = textTokens(stepText);
+                const gen = genTokens.tokens;
                 sendTelemetry({ tps: secs > 0.4 ? gen / secs : 0, promptTps: 0, promptTokens: stepPromptTokens || stepEstimate, genTokens: gen, exact: false });
               }
               return;
@@ -364,7 +370,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           overflowRetried = true;
           safeSend(JSON.stringify({ type: 'compacting', chatId: chat.id }));
           let freed = await compactStep(ws, chat, model);
-          if (freed) base = buildMessages(model, await chatHistory(chat, model), extended, toolsP(), (db.chats.byId(chat.id) || {}).summary, promptVars(chat.user_id), withStyle(await instrFor(db.chats.byId(chat.id) || chat)));
+          if (freed) base = await rebuildBase();
           const t = trimInTurn(inTurn, 1);
           if (t.trimmed) { inTurn = t.list; freed = true; }
           safeSend(JSON.stringify({ type: 'compacted', chatId: chat.id, trimmedTools: t.trimmed || 0 }));
@@ -467,7 +473,8 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   safeSend(JSON.stringify({ type: 'done', chatId: chat.id, messageId: (hasOutput || usageRec) ? assistantId : null, truncated }));
 
   const fresh = db.chats.byId(chat.id);
-  const lastUser = [...history].reverse().find(h => h.role === 'user');
+  let lastUser = null;
+  for (let i = history.length - 1; i >= 0; i--) if (history[i].role === 'user') { lastUser = history[i]; break; }
   const lastUserText = lastUser && (Array.isArray(lastUser.content)
     ? (lastUser.content.find(p => p.type === 'text')?.text || 'Image')
     : lastUser.content);

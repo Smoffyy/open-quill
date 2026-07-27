@@ -9,11 +9,18 @@ import {
   tokenCalib, compactThreshold, rollingCtxFor, promptVars, instrFor
 } from '../../lib/convo.js';
 
+function pickModel(modelId) {
+  const chosen = modelId ? db.models.byId(modelId) : null;
+  if (chosen) return chosen;
+  const all = db.models.all();
+  return all.find(m => m.enabled) || all[0] || null;
+}
+
 export default function registerInspectRoutes(app) {
   app.get('/api/chats/:id/context', authMiddleware, async (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
-    const model = db.models.byId(req.query.modelId) || db.models.all().find(m => m.enabled) || db.models.all()[0];
+    const model = pickModel(req.query.modelId);
     if (!model) return res.json({ used: 0, limit: 0, pct: 0, hasSummary: !!c.summary, summaries: !!c.enable_summaries });
     const convo = buildMessages(model, await chatHistory(c, model), false, null, c.summary, promptVars(c.user_id), await instrFor(c));
     const used = calibratedTokens(c.id, convo);
@@ -27,7 +34,7 @@ export default function registerInspectRoutes(app) {
   app.get('/api/chats/:id/ledger', authMiddleware, async (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
-    const model = db.models.byId(req.query.modelId) || db.models.all().find(m => m.enabled) || db.models.all()[0];
+    const model = pickModel(req.query.modelId);
     if (!model) return res.json({ limit: 0, used: 0, overhead: 0, messages: [] });
     const rows = await historyRows(c, model);
     const active = rows.filter(r => !r.summarized && !r.excluded);
@@ -55,7 +62,7 @@ export default function registerInspectRoutes(app) {
   app.get('/api/chats/:id/inspect', authMiddleware, async (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
-    const model = db.models.byId(req.query.modelId) || db.models.all().find(m => m.enabled) || db.models.all()[0];
+    const model = pickModel(req.query.modelId);
     if (!model) return res.json({ segments: [], totalTokens: 0 });
     const membankOn = getSetting('membank_enabled', '0') === '1' && membank.list().length > 0;
     const memP = membankOn ? membank.promptFor(getSetting('membank_prompt', '')) : '';
