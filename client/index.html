@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>open-quill</title>
+    <meta name="description" content="A self-hosted chat interface for local and remote language models." />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#1f1f1e" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f4f3ee" media="(prefers-color-scheme: light)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="open-quill" />
+    <link rel="icon" href="/starburst.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icon-180.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <script>
       (function () {
         var BG = { light: '#f4f3ee', dark: '#1f1f1e', anthropic: '#1f1f1e', oled: '#000000', openai: '#000000' };
@@ -20,6 +30,9 @@
           }
           document.documentElement.setAttribute('data-theme', t);
           document.documentElement.style.background = BG[t] || BG.anthropic;
+          var meta = document.querySelector('meta[name="theme-color"]:not([media])');
+          if (!meta) { meta = document.createElement('meta'); meta.setAttribute('name', 'theme-color'); document.head.appendChild(meta); }
+          meta.setAttribute('content', BG[t] || BG.anthropic);
         } catch (e) {
           document.documentElement.setAttribute('data-preset', 'anthropic');
           document.documentElement.setAttribute('data-theme', 'anthropic');

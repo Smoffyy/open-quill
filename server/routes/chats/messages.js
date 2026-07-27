@@ -2,7 +2,15 @@ import { db, uid, now, tx } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
 import * as sandbox from '../../sandbox.js';
 import { stripToolSyntax } from '../../lib/history.js';
-import { ensureChain, childrenOf, activePath, leafUnder } from '../../lib/tree.js';
+import { ensureChain, childrenOf, activePath, leafUnder, sortedMsgs } from '../../lib/tree.js';
+
+const PREVIEW_MAX = 140;
+
+function previewText(content) {
+  const raw = stripToolSyntax(content || '');
+  const clean = raw.replace(/```[\s\S]*?(?:```|$)/g, ' ').replace(/\s+/g, ' ').trim();
+  return clean.length > PREVIEW_MAX ? clean.slice(0, PREVIEW_MAX - 1) + '…' : clean;
+}
 
 export default function registerMessageRoutes(app) {
   app.get('/api/chats/:id', authMiddleware, (req, res) => {
@@ -43,6 +51,26 @@ export default function registerMessageRoutes(app) {
         modelId: s.model_id || null, modelName: nameById.get(s.model_id) || '', created_at: s.created_at
       }))
     });
+  });
+
+  app.get('/api/chats/:id/tree', authMiddleware, (req, res) => {
+    const c = db.chats.byId(req.params.id);
+    if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+    ensureChain(c.id);
+    const msgs = sortedMsgs(c.id);
+    const path = activePath(c.id);
+    const onPath = new Set(path.map(m => m.id));
+    const nameById = new Map(db.models.all().map(x => [x.id, x.display_name || '']));
+    const nodes = msgs.map(m => ({
+      id: m.id,
+      parentId: m.parent_id ?? null,
+      role: m.role,
+      modelName: m.model_name || nameById.get(m.model_id) || '',
+      created_at: m.created_at,
+      onPath: onPath.has(m.id),
+      preview: previewText(m.content)
+    }));
+    res.json({ activeLeaf: db.chats.byId(c.id)?.active_leaf || null, path: path.map(m => m.id), nodes });
   });
 
   app.post('/api/chats/:id/branch', authMiddleware, (req, res) => {

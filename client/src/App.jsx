@@ -35,8 +35,13 @@ import SearchModal from './components/SearchModal.jsx';
 import Toaster from './components/Toaster.jsx';
 import Lightbox from './components/Lightbox.jsx';
 import ShortcutsModal from './components/ShortcutsModal.jsx';
+import ThreadRail from './components/ThreadRail.jsx';
+import ThreadFind from './components/ThreadFind.jsx';
+import { railItems } from './lib/threadmeta.js';
+const BranchTree = React.lazy(() => import('./components/BranchTree.jsx'));
 import { toast } from './toast.js';
-import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge } from './components/icons.jsx';
+import { copyText } from './clipboard.js';
+import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork } from './components/icons.jsx';
 
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: 'Assistants can make mistakes, double-check responses.', greetings: ['How can I help you?'], appIcon: '', quickPrompts: [], version: '' };
 
@@ -194,6 +199,31 @@ export default function App() {
   const [projectOpenId, setProjectOpenId] = useState(null);
   const [currentProject, setCurrentProject] = useState(null);
   const [cmdkOpen, setCmdkOpen] = useState(false);
+  const [findOpen, setFindOpen] = useState(false);
+  const [findMatches, setFindMatches] = useState(null);
+  const [treeOpen, setTreeOpen] = useState(false);
+  const [kbFocus, setKbFocus] = useState(null);
+  const kbFocusRef = useRef(null);
+  useEffect(() => { kbFocusRef.current = kbFocus; }, [kbFocus]);
+  const onFindMatches = useCallback((ids) => setFindMatches(ids), []);
+  const closeFind = useCallback(() => { setFindOpen(false); setFindMatches(null); }, []);
+  const msgActions = useRef({});
+  const railList = useMemo(() => railItems(messages), [messages]);
+  const findRevision = useMemo(() => {
+    let n = 0;
+    for (const m of messages) n += m.content ? m.content.length : 0;
+    return messages.length + ':' + n;
+  }, [messages]);
+  useEffect(() => {
+    const prev = document.querySelectorAll('.msg.kb-focus');
+    prev.forEach(el => el.classList.remove('kb-focus'));
+    if (!kbFocus) return;
+    const el = document.querySelector('[data-mid="' + kbFocus + '"]');
+    if (el) el.classList.add('kb-focus');
+  }, [kbFocus, messages]);
+  useEffect(() => { setKbFocus(null); }, [activeId]);
+  const msgKeysOn = user?.prefs?.msgKeys !== false;
+  useEffect(() => { if (!msgKeysOn) setKbFocus(null); }, [msgKeysOn]);
 
   const [telemetry, setTelemetry] = useState(null);
   const [modelStatus, setModelStatus] = useState(null);
@@ -241,6 +271,8 @@ export default function App() {
   const refreshSeq = useRef(0);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
   useEffect(() => { liveRef.current = liveFile; }, [liveFile]);
+  const messagesRef = useRef([]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => {
     const m = models.find(x => x.id === currentId);
     const defs = (m && Array.isArray(m.kwargs)) ? m.kwargs.filter(d => !d.parentId) : [];
@@ -350,6 +382,7 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!user) return;
+    const nav = user.prefs || {};
     const onKey = (e) => {
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.shiftKey && (e.key === 'S' || e.key === 's')) { e.preventDefault(); setCollapsed(c => !c); return; }
@@ -361,6 +394,61 @@ export default function App() {
         if (!typing) { e.preventDefault(); setShowShortcuts(s => !s); return; }
       }
       if (mod && e.shiftKey && (e.key === 'O' || e.key === 'o')) { e.preventDefault(); newChat(); return; }
+      if (mod && !e.shiftKey && (e.key === 'f' || e.key === 'F')) {
+        if (nav.threadFind === false || !messagesRef.current.length) return;
+        e.preventDefault();
+        setFindOpen(true);
+        return;
+      }
+      if (mod || e.altKey) return;
+      const el = document.activeElement;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      if (document.querySelector('.overlay')) return;
+      const list = messagesRef.current;
+      if (!list.length) return;
+      if (e.key === 'b') {
+        if (nav.branchMap === false) return;
+        e.preventDefault();
+        if (activeIdRef.current) setTreeOpen(true);
+        return;
+      }
+      if (nav.msgKeys === false) return;
+      if (e.key === 'j' || e.key === 'k') {
+        e.preventDefault();
+        const at = list.findIndex(m => m.id === kbFocusRef.current);
+        let next;
+        if (at < 0) next = e.key === 'j' ? 0 : list.length - 1;
+        else next = Math.max(0, Math.min(list.length - 1, at + (e.key === 'j' ? 1 : -1)));
+        const target = list[next];
+        if (target) { setKbFocus(target.id); jumpToMessage(target.id, { flash: false }); }
+        return;
+      }
+      const focused = kbFocusRef.current ? list.find(m => m.id === kbFocusRef.current) : null;
+      if (!focused) return;
+      if (e.key === 'Escape') { e.preventDefault(); setKbFocus(null); return; }
+      if (e.key === 'c') {
+        e.preventDefault();
+        const clean = (focused.content || '').replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
+        copyText(clean).then(ok => ok && toast(t('Message copied')));
+        return;
+      }
+      if (e.key === 'e') {
+        if (focused.role !== 'user' || streamingRef.current) return;
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('oq-msg-edit', { detail: { id: focused.id } }));
+        return;
+      }
+      if (e.key === 'r') {
+        if (focused.role !== 'assistant' || streamingRef.current) return;
+        e.preventDefault();
+        msgActions.current.regenerate?.(focused.id);
+        return;
+      }
+      if (e.key === 'y') {
+        if (streamingRef.current || !activeIdRef.current) return;
+        e.preventDefault();
+        msgActions.current.fork?.(focused.id);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -811,16 +899,19 @@ export default function App() {
       toast(isPinned ? t('File unpinned from chat') : t('File pinned, kept in context'), { icon: 'pin' });
     } catch {}
   }, [activeId, chatPins]);
-  function jumpToMessage(id) {
+  function jumpToMessage(id, opts) {
     setChatMenuOpen(false);
+    stick.current = false;
     requestAnimationFrame(() => {
       const el = document.querySelector('[data-mid="' + id + '"]');
       if (!el) return;
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.scrollIntoView({ behavior: opts?.instant ? 'auto' : 'smooth', block: 'center' });
+      if (opts?.flash === false) return;
       el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
       setTimeout(() => el.classList.remove('flash'), 1600);
     });
   }
+  const railJump = useCallback((id) => { setKbFocus(id); jumpToMessage(id, { flash: false }); }, []);
   async function copyConversation() {
     const text = messages.filter(m => m.role === 'user' || m.role === 'assistant')
       .map(m => (m.role === 'user' ? 'You' : 'Assistant') + ':\n' + (typeof m.content === 'string' ? m.content : '')).join('\n\n');
@@ -1167,6 +1258,11 @@ export default function App() {
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
   }, [streaming, activeId, currentId, extended, reasoningEffort, kwargValues, sandbox, webSearch]);
 
+  useEffect(() => {
+    msgActions.current.regenerate = regenerate;
+    msgActions.current.fork = forkChat;
+  }, [regenerate, forkChat]);
+
   const regenerateWith = useCallback((messageId, modelId) => {
     if (streaming || !activeId || !modelId) return;
     dismissError();
@@ -1262,6 +1358,7 @@ export default function App() {
 
   return (
     <div className={'app' + (incognito ? ' app-incognito' : '') + (intro ? ' intro' : '') + (bgVisible ? ' has-bg' : '') + (collapsed ? ' sb-collapsed' : '')}>
+      <a className="skip-link" href="#oq-composer">{t('Skip to message input')}</a>
       <AppBackground bg={activeBg} />
       {intro && <div className="intro-curtain" />}
       <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName} onSearch={onSearchCb}
@@ -1390,8 +1487,18 @@ export default function App() {
                     <Sliders style={{ width: 17 }} />
                   </button>
                 )}
+                {messages.length > 0 && user?.prefs?.threadFind !== false && (
+                  <button className={'paper-btn' + (findOpen ? ' active' : '')} onClick={() => (findOpen ? closeFind() : setFindOpen(true))} title={t('Find in conversation')} aria-label={t('Find in conversation')} aria-pressed={findOpen}>
+                    <Search style={{ width: 17 }} />
+                  </button>
+                )}
+                {activeId && messages.length > 0 && user?.prefs?.branchMap !== false && (
+                  <button className={'paper-btn' + (treeOpen ? ' active' : '')} onClick={() => setTreeOpen(o => !o)} title={t('Branch map')} aria-label={t('Branch map')} aria-pressed={treeOpen}>
+                    <Fork style={{ width: 17 }} />
+                  </button>
+                )}
                 {activeId && (
-                  <button className={'paper-btn' + (ledgerOpen ? ' active' : '')} onClick={() => setLedgerOpen(o => !o)} title={t('Context ledger')}>
+                  <button className={'paper-btn' + (ledgerOpen ? ' active' : '')} onClick={() => setLedgerOpen(o => !o)} title={t('Context ledger')} aria-label={t('Context ledger')} aria-pressed={ledgerOpen}>
                     <Gauge style={{ width: 18 }} />
                   </button>
                 )}
@@ -1405,8 +1512,10 @@ export default function App() {
                 */}
               </div>
             </div>
-            <div className="scroll-area" ref={scrollRef} onScroll={onScroll} onWheel={onWheel} onTouchMove={onTouchMove}>
-              <div className={'thread' + (threadStagger ? ' stagger' : '') + (ledgerOpen ? ' ledger-on' : '')}>
+            {findOpen && user?.prefs?.threadFind !== false && <ThreadFind scrollRef={scrollRef} revision={findRevision} onMatches={onFindMatches} onClose={closeFind} />}
+            <div className="scroll-area" id="oq-thread" ref={scrollRef} onScroll={onScroll} onWheel={onWheel} onTouchMove={onTouchMove}>
+              <div className={'thread' + (threadStagger ? ' stagger' : '') + (ledgerOpen ? ' ledger-on' : '') + (messages.length > 24 ? ' virt' : '') + (findOpen ? ' finding' : '')}
+                role="log" aria-label={t('Conversation')} aria-live="polite" aria-relevant="additions text" aria-busy={streaming ? 'true' : 'false'}>
                 {ledgerOpen && <LedgerBar ledger={ledger} />}
                 {(() => {
                   const streamKey = assistantIdRef.current || '_stream';
@@ -1464,7 +1573,8 @@ export default function App() {
                 <div className="thread-pad" />
               </div>
             </div>
-            {showJump && <button className="to-bottom" onClick={jumpDown}><Down style={{ width: 17 }} /></button>}
+            {user?.prefs?.threadRail !== false && <ThreadRail items={railList} scrollRef={scrollRef} matches={findMatches} onJump={railJump} />}
+            {showJump && <button className="to-bottom" onClick={jumpDown} title={t('Jump to latest')} aria-label={t('Jump to latest')}><Down style={{ width: 17 }} /></button>}
             <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')} style={{ maxWidth: cfg.uiPreset === 'openai' ? 808 : 760, margin: '0 auto', width: '100%', padding: '0 20px' }}>
               {user?.prefs?.engineStrip !== false && <EngineStrip telemetry={telemetry} streaming={streaming} />}
               <Composer {...composerProps} focusKey={focusTick} />
@@ -1517,7 +1627,8 @@ export default function App() {
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} onChatsChanged={() => loadChats()} />}
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} onOpen={(id) => openChat(id)} />}
       {personasOpen && <PersonasModal personas={user?.personas || []} models={models} currentId={currentId} onApply={applyPersona} onSave={savePersonas} onClose={() => setPersonasOpen(false)} />}
-      {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
+      {showShortcuts && <ShortcutsModal prefs={user?.prefs} onClose={() => setShowShortcuts(false)} />}
+      {treeOpen && activeId && user?.prefs?.branchMap !== false && <React.Suspense fallback={null}><BranchTree chatId={activeId} onSelect={selectBranch} onJump={jumpToMessage} onClose={() => setTreeOpen(false)} /></React.Suspense>}
       <Lightbox />
       {showAdmin && <React.Suspense fallback={null}><AdminPanel user={user} onClose={() => { setShowAdmin(false); if (/^\/admin(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
       {showPlayground && <React.Suspense fallback={null}><Playground onClose={() => { setShowPlayground(false); if (/^\/playground(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}

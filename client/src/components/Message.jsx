@@ -92,12 +92,12 @@ function MoreMenu({ items }) {
   if (!list.length) return null;
   return (
     <span className="retry-wrap">
-      <button ref={btnRef} className={'action-btn' + (open ? ' on' : '')} title={t("More actions")} onClick={() => setOpen(o => !o)}><Dots style={{ width: 18 }} /></button>
+      <button ref={btnRef} className={'action-btn' + (open ? ' on' : '')} title={t("More actions")} aria-label={t("More actions")} aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(o => !o)}><Dots style={{ width: 18 }} /></button>
       {open && createPortal(
-        <div ref={menuRef} className="retry-menu more-menu portal"
+        <div ref={menuRef} className="retry-menu more-menu portal" role="menu" aria-label={t("More actions")}
           style={{ position: 'fixed', top: pos ? pos.top : -9999, left: pos ? pos.left : -9999, right: 'auto', bottom: 'auto', visibility: pos ? 'visible' : 'hidden', zIndex: 200 }}>
           {list.map((it, i) => (
-            <button key={i} className={(it.on ? 'on' : '') + (it.danger ? ' danger' : '')} onClick={() => { setOpen(false); it.run(); }}>
+            <button key={i} role="menuitem" aria-checked={it.on ? 'true' : undefined} className={(it.on ? 'on' : '') + (it.danger ? ' danger' : '')} onClick={() => { setOpen(false); it.run(); }}>
               {it.icon}{it.label}
             </button>
           ))}
@@ -111,10 +111,10 @@ function BranchNav({ msg, onSelectBranch }) {
   const i = msg.branchIndex ?? 0;
   const go = (d) => { const t = msg.siblings?.[i + d]; if (t) onSelectBranch?.(t); };
   return (
-    <span className="branch-nav">
-      <button className="branch-arrow" disabled={i <= 0} onClick={() => go(-1)} title={t("Previous version")}>‹</button>
-      <span className="branch-count">{i + 1}/{msg.branchCount}</span>
-      <button className="branch-arrow" disabled={i >= msg.branchCount - 1} onClick={() => go(1)} title={t("Next version")}>›</button>
+    <span className="branch-nav" role="group" aria-label={t("Message versions")}>
+      <button className="branch-arrow" disabled={i <= 0} onClick={() => go(-1)} title={t("Previous version")} aria-label={t("Previous version")}>‹</button>
+      <span className="branch-count" aria-live="polite">{i + 1}/{msg.branchCount}</span>
+      <button className="branch-arrow" disabled={i >= msg.branchCount - 1} onClick={() => go(1)} title={t("Next version")} aria-label={t("Next version")}>›</button>
     </span>
   );
 }
@@ -125,7 +125,7 @@ function Attachments({ items, pins, onTogglePinFile }) {
   return (
     <div className="msg-attachments">
       {items.map((a, i) => a.type && a.type.startsWith('image/') ? (
-        <button key={i} className="att image" onClick={() => openLightbox(a.url, a.name)}><img src={a.url} alt={a.name} /></button>
+        <button key={i} className="att image" onClick={() => openLightbox(a.url, a.name)} aria-label={t('Open image {name}', { name: a.name })}><img src={a.url} alt={a.name} /></button>
       ) : (
         <div key={i} className={'att file' + (pinnedUrls.has(a.url) ? ' pinned-file' : '')}>
           <a className="att-link" href={a.url} target="_blank" rel="noreferrer" title={a.name}>
@@ -136,7 +136,7 @@ function Attachments({ items, pins, onTogglePinFile }) {
             </span>
           </a>
           {onTogglePinFile && (
-            <button className={'att-pin' + (pinnedUrls.has(a.url) ? ' on' : '')} title={pinnedUrls.has(a.url) ? 'Unpin from chat' : 'Pin to chat (keep in context)'} onClick={() => onTogglePinFile(a)}><Pin style={{ width: 13 }} /></button>
+            <button className={'att-pin' + (pinnedUrls.has(a.url) ? ' on' : '')} title={pinnedUrls.has(a.url) ? 'Unpin from chat' : 'Pin to chat (keep in context)'} aria-label={pinnedUrls.has(a.url) ? t('Unpin from chat') : t('Pin to chat')} aria-pressed={pinnedUrls.has(a.url)} onClick={() => onTogglePinFile(a)}><Pin style={{ width: 13 }} /></button>
           )}
         </div>
       ))}
@@ -195,7 +195,7 @@ function LedgerRow({ tokens, pct, state, id, onToggleExclude }) {
       {summarized && <span className="ctx-tag">{t('in summary')}</span>}
       {excluded && <span className="ctx-tag out">{t('not sent')}</span>}
       {onToggleExclude && !summarized && (
-        <button className="ctx-btn" onClick={() => onToggleExclude(id, !excluded)}
+        <button className="ctx-btn" aria-pressed={excluded} onClick={() => onToggleExclude(id, !excluded)}
           title={excluded ? t('Send this message to the model again') : t('Stop sending this message to the model')}>
           {excluded ? t('Restore') : t('Drop')}
         </button>
@@ -249,10 +249,16 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
     setCopied(true); setTimeout(() => setCopied(false), 1400);
   }
   function startEdit() { setDraft(msg.content || ''); setEditing(true); }
+  useEffect(() => {
+    if (!onEdit) return;
+    const h = (e) => { if (e.detail && e.detail.id === msg.id) startEdit(); };
+    window.addEventListener('oq-msg-edit', h);
+    return () => window.removeEventListener('oq-msg-edit', h);
+  }, [onEdit, msg.id, msg.content]);
   function saveEdit() { const v = draft.trim(); setEditing(false); if (v && v !== msg.content) onEdit?.(msg.id, v); }
   if (msg.role === 'user') {
     return (
-      <div className={'msg user' + (msg._enter ? ' enter' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
+      <div role="article" aria-label={t('Your message')} className={'msg user' + (msg._enter ? ' enter' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
         <div className="user-col">
           {ledger && ledgerState && <LedgerRow tokens={ledgerTokens} pct={ledgerPct} state={ledgerState} id={msg.id} onToggleExclude={onToggleExclude} />}
           {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> Pinned</div>}
@@ -273,9 +279,9 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
             <div className="actions user-actions">
               {(() => { const t = fmtTime(msg.created_at); return t ? <span className="msg-time" data-full={t.full}>{t.short}</span> : null; })()}
               <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
-              {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")}><Columns style={{ width: 18 }} /></button>}
-              <button className="action-btn" onClick={doCopy} title={t("Copy")}>{copied ? <Check /> : <Copy />}</button>
-              {onEdit && <button className="action-btn" onClick={startEdit} title={t("Edit")}><Pencil style={{ width: 18 }} /></button>}
+              {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")} aria-label={t("Compare versions")}><Columns style={{ width: 18 }} /></button>}
+              <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
+              {onEdit && <button className="action-btn" onClick={startEdit} title={t("Edit")} aria-label={t("Edit")}><Pencil style={{ width: 18 }} /></button>}
               <MoreMenu items={[
                 onFork && { label: t('Branch into a new chat'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
                 onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin (keep in context)'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
@@ -319,24 +325,24 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
       )}
       {streaming && msg.content && (
         <div className="actions stream-actions">
-          <button className="action-btn" onClick={doCopy} title={t("Copy what's written so far")}>{copied ? <Check /> : <Copy />}</button>
+          <button className="action-btn" onClick={doCopy} title={t("Copy what's written so far")} aria-label={t("Copy what's written so far")}>{copied ? <Check /> : <Copy />}</button>
         </div>
       )}
       {!streaming && msg.content && (
         <div className="actions">
-          <button className="action-btn" onClick={doCopy} title={t("Copy")}>{copied ? <Check /> : <Copy />}</button>
+          <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
           <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
-          {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")}><Columns style={{ width: 18 }} /></button>}
+          {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")} aria-label={t("Compare versions")}><Columns style={{ width: 18 }} /></button>}
           <span className="retry-wrap" ref={retryRef}>
-            {onRegenerate && <button className="action-btn" title={t("Retry")} onClick={() => onRegenerate(msg.id)}><Retry /></button>}
+            {onRegenerate && <button className="action-btn" title={t("Retry")} aria-label={t("Retry")} onClick={() => onRegenerate(msg.id)}><Retry /></button>}
             {onRegenerateWith && models && models.length > 1 && (
-              <button className="action-caret" title={t("Retry with another model")} onClick={() => setRetryMenu(o => !o)}>▾</button>
+              <button className="action-caret" title={t("Retry with another model")} aria-label={t("Retry with another model")} aria-expanded={retryMenu} aria-haspopup="menu" onClick={() => setRetryMenu(o => !o)}>▾</button>
             )}
             {retryMenu && (
-              <div className="retry-menu">
+              <div className="retry-menu" role="menu" aria-label={t("Retry with another model")}>
                 <div className="retry-menu-label">Retry with</div>
                 {models.map(mm => (
-                  <button key={mm.id} className={mm.id === currentId ? 'on' : ''} onClick={() => { setRetryMenu(false); onRegenerateWith(msg.id, mm.id); }}>
+                  <button key={mm.id} role="menuitem" className={mm.id === currentId ? 'on' : ''} onClick={() => { setRetryMenu(false); onRegenerateWith(msg.id, mm.id); }}>
                     {mm.staticIcon && <img src={mm.staticIcon} alt="" />}{mm.displayName}{mm.id === currentId && <Check style={{ width: 13, marginLeft: 'auto' }} />}
                   </button>
                 ))}
@@ -361,7 +367,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
   if (pos === 'left') {
     const gutter = model?.iconSize > 0 ? model.iconSize : 40;
     return (
-      <div className={'msg assistant icon-left' + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
+      <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant icon-left' + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
         {icon && <div className="il-avatar" style={{ left: -(gutter + 14) }}>{icon}</div>}
         {showName && <div className="assistant-name">{model.displayName}</div>}
         {inner}
@@ -370,7 +376,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
   }
 
   return (
-    <div className={'msg assistant' + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
+    <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant' + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
       {pos === 'above' && icon}
       {inner}
       {pos === 'below' && icon}

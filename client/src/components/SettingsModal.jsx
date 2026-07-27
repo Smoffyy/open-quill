@@ -51,7 +51,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
     const applied = document.documentElement.getAttribute('data-theme');
     const fallbackTheme = (applied === 'anthropic' || applied === 'openai' || applied === 'oled') ? 'dark' : (applied || 'system');
     const isOpenai = document.documentElement.getAttribute('data-preset') === 'openai';
-    const merged = { animations: true, autoscroll: true, theme: 'system', accent: '', density: 'comfortable', messageEntrance: true, streamCursor: isOpenai, cursorStyle: isOpenai ? 'circle' : 'block', cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40, chatStagger: true, themeFade: true, microFx: true, composerFx: true, iconGlow: false, focusGlow: false, oledShift: false, ...user.prefs };
+    const merged = { animations: true, autoscroll: true, theme: 'system', accent: '', density: 'comfortable', messageEntrance: true, streamCursor: isOpenai, cursorStyle: isOpenai ? 'circle' : 'block', cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40, chatStagger: true, themeFade: true, microFx: true, composerFx: true, iconGlow: false, focusGlow: false, oledShift: false, threadRail: true, threadFind: true, branchMap: true, msgKeys: true, ...user.prefs };
     if (!user.prefs || user.prefs.theme == null) merged.theme = fallbackTheme;
     if (merged.theme === 'oled') merged.theme = 'dark';
     return merged;
@@ -391,7 +391,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                 <h2>{t("Chat")}</h2>
                 <div className="hint">{t("How responses look, move, and feel.")}</div>
                 <div className="me-sections" style={{ marginBottom: 14 }}>
-                  {[['streaming', t('Streaming')], ['tools', t('Tools & context')], ['motion', t('Motion')], ['effects', t('Effects')]].map(([k, label]) => (
+                  {[['streaming', t('Streaming')], ['tools', t('Tools & context')], ['navigation', t('Navigation')], ['motion', t('Motion')], ['effects', t('Effects')]].map(([k, label]) => (
                     <button key={k} className={'me-sec' + (chatSec === k ? ' on' : '')} onClick={() => setChatSec(k)}>{label}</button>
                   ))}
                 </div>
@@ -447,6 +447,25 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                       </div>
                     );
                   })()}
+                </>}
+                {chatSec === 'navigation' && <>
+                  <div className="hint" style={{ marginTop: -4 }}>{t("Tools for moving around a long conversation. Turn any of them off to keep the chat view bare.")}</div>
+                  <div className="field row">
+                    <div><label>{t("Conversation map")}</label><div className="muted-note">{t("A slim rail down the right edge with one mark per turn, showing where you are and marking tool calls, branch points, and search hits. Click a mark to jump.")}</div></div>
+                    <div className={'switch' + (prefs.threadRail !== false ? ' on' : '')} onClick={() => setPref('threadRail', prefs.threadRail === false)} />
+                  </div>
+                  <div className="field row">
+                    <div><label>{t("Find in conversation")}</label><div className="muted-note">{t("Adds a search button to the chat header and takes over Ctrl+F to search the open conversation. Turn it off to give Ctrl+F back to your browser.")}</div></div>
+                    <div className={'switch' + (prefs.threadFind !== false ? ' on' : '')} onClick={() => setPref('threadFind', prefs.threadFind === false)} />
+                  </div>
+                  <div className="field row">
+                    <div><label>{t("Branch map")}</label><div className="muted-note">{t("Adds a button to the chat header that opens the full shape of the conversation, including every branch you have created by editing or retrying.")}</div></div>
+                    <div className={'switch' + (prefs.branchMap !== false ? ' on' : '')} onClick={() => setPref('branchMap', prefs.branchMap === false)} />
+                  </div>
+                  <div className="field row">
+                    <div><label>{t("Message shortcuts")}</label><div className="muted-note">{t("Single keys act on the conversation when you are not typing: J and K move between messages, then C copies, E edits, R retries, and Y branches.")}</div></div>
+                    <div className={'switch' + (prefs.msgKeys !== false ? ' on' : '')} onClick={() => setPref('msgKeys', prefs.msgKeys === false)} />
+                  </div>
                 </>}
                 {chatSec === 'motion' && <>
                   <div className="field row">

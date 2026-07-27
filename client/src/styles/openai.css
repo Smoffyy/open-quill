@@ -194,3 +194,32 @@
 [data-preset="openai"] .ws-num { border-radius: 50%; width: 19px; height: 19px; font-size: 9px; }
 [data-preset="openai"] .ws-title { font-size: 13px; }
 [data-preset="openai"] .ws-meta { font-size: 11px; }
+
+[data-preset="openai"] .trail { top: 66px; bottom: 168px; right: 8px; }
+[data-preset="openai"] .trail-tick { border-radius: 999px; background: color-mix(in srgb, var(--text) 32%, transparent); }
+[data-preset="openai"] .trail-tick.r-assistant { background: color-mix(in srgb, var(--text) 46%, transparent); }
+[data-preset="openai"] .trail-tick.in-view { background: var(--text); }
+[data-preset="openai"] .trail-tick.is-tool { background: color-mix(in srgb, var(--text) 24%, transparent); }
+[data-preset="openai"] .trail-tick.is-branch { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 70%, transparent); }
+[data-preset="openai"] .trail-tick.is-match { background: #d99a2b; }
+[data-preset="openai"] .trail-tick.is-match.in-view { background: #f0b64a; }
+[data-preset="openai"] .trail-tip { border-radius: 14px; font-weight: 500; }
+
+[data-preset="openai"] .thread-find { top: 58px; border-radius: 999px; padding: 6px 8px 6px 16px; }
+[data-preset="openai"] .tf-input { font-weight: 500; }
+[data-preset="openai"] .tf-btn { border-radius: 999px; width: 28px; height: 28px; }
+[data-preset="openai"] .thread.finding .msg { scroll-margin-top: 104px; }
+
+[data-preset="openai"] .bt-modal { border-radius: 24px; }
+[data-preset="openai"] .bt-node { border-radius: 14px; }
+[data-preset="openai"] .bt-node.r-assistant .bt-dot { background: color-mix(in srgb, var(--text) 55%, transparent); }
+[data-preset="openai"] .bt-node.on-path .bt-dot { box-shadow: 0 0 0 3px color-mix(in srgb, var(--text) 14%, transparent); }
+[data-preset="openai"] .bt-node.is-leaf { border-color: color-mix(in srgb, var(--text) 45%, transparent); }
+[data-preset="openai"] .bt-branch.on-path { border-left-color: color-mix(in srgb, var(--text) 45%, transparent); }
+[data-preset="openai"] .bt-branch.on-path .bt-branch-tag { color: var(--text); }
+[data-preset="openai"] .bt-x, [data-preset="openai"] .bt-fold { border-radius: 999px; }
+
+[data-preset="openai"] .skip-link { border-radius: 999px; background: var(--text); color: var(--bg); }
+[data-preset="openai"] .msg.kb-focus::before { background: color-mix(in srgb, var(--text) 60%, transparent); }
+
+[data-preset="openai"] .thread.virt > .msg:not(:nth-last-child(-n+8)):not(.icon-left) .assistant-body { contain-intrinsic-size: auto 460px; }

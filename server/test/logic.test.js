@@ -9,6 +9,7 @@ import { trimInTurn, compactThreshold, estimateTokens, textTokens, makeTokenCoun
 import { scanTools } from '../toolproto.js';
 import { isContextOverflowError } from '../lib/llamacpp.js';
 import { winTranslate } from '../sandbox.js';
+import { preferredChild } from '../lib/tree.js';
 
 test('kwargs: legacy effort fields migrate', () => {
   const m = { effort_enabled: 1, effort_levels: ['false', 'true'], effort_default: 'false', effort_kwarg: 'enable_thinking' };
@@ -275,4 +276,15 @@ test('scanTools: prose is never mistaken for a call, real calls still parse', ()
   const live = scanTools('<tool create_file>\npath: a.txt\n<CONTENT>\npartial').live;
   assert.equal(live.tool, 'create_file');
   assert.equal(live.path, 'a.txt');
+});
+
+test('preferredChild: descending keeps the active branch instead of the newest sibling', () => {
+  const kids = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+  assert.equal(preferredChild(kids, new Set(['b'])).id, 'b');
+  assert.equal(preferredChild(kids, new Set(['a'])).id, 'a');
+  assert.equal(preferredChild(kids, new Set(['zz'])).id, 'c');
+  assert.equal(preferredChild(kids, new Set()).id, 'c');
+  assert.equal(preferredChild(kids, null).id, 'c');
+  assert.equal(preferredChild([], new Set(['a'])), null);
+  assert.equal(preferredChild(undefined, new Set(['a'])), null);
 });

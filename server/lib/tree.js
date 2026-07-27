@@ -74,15 +74,22 @@ export function activePath(chatId) {
   return path.reverse();
 }
 
+export function preferredChild(kids, onPath) {
+  if (!kids || !kids.length) return null;
+  if (onPath && onPath.size) for (const k of kids) if (onPath.has(k.id)) return k;
+  return kids[kids.length - 1];
+}
+
 export function leafUnder(chatId, messageId) {
   const g = graphOf(chatId);
+  const onPath = new Set(activePath(chatId).map(m => m.id));
   let cur = g.byId.get(messageId) || db.messages.byId(messageId);
   const seen = new Set();
   while (cur && !seen.has(cur.id)) {
     seen.add(cur.id);
-    const kids = g.kids.get(cur.id);
-    if (!kids || !kids.length) break;
-    cur = kids[kids.length - 1];
+    const next = preferredChild(g.kids.get(cur.id), onPath);
+    if (!next) break;
+    cur = next;
   }
   return cur ? cur.id : messageId;
 }

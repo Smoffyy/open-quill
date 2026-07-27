@@ -11,7 +11,7 @@ function ProfileMenu({ user, version, onSettings, onAdmin, onPlayground, onCredi
     return () => document.removeEventListener('mousedown', h);
   }, []);
   return (
-    <div className="popover" ref={ref}>
+    <div className="popover" ref={ref} role="menu" aria-label={t('Profile menu')}>
       {user.isAdmin && <button onClick={onAdmin}><Shield /> {t('Admin Panel')}</button>}
       {user.isAdmin && <button onClick={onPlayground}><Flask /> {t('Playground')}</button>}
       <button onClick={onSettings}><Gear /> {t('Settings')}</button>
@@ -76,12 +76,12 @@ function ChatRow({ c, active, showTrash, folders, onOpen, onDelete, onToggleStar
       onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}>
       <span className="title">{c.title}</span>
       {showTrash ? (
-        <button className="row-ctrl shift-del" onClick={(e) => { e.stopPropagation(); onDelete(c.id); }} title={t("Delete chat")}><Trash style={{ width: 14 }} /></button>
+        <button className="row-ctrl shift-del" onClick={(e) => { e.stopPropagation(); onDelete(c.id); }} title={t("Delete chat")} aria-label={t("Delete chat")}><Trash style={{ width: 14 }} /></button>
       ) : (
-        <button className="row-ctrl" ref={btnRef} onClick={openMenu} title={t("Options")}><Dots style={{ width: 16 }} /></button>
+        <button className="row-ctrl" ref={btnRef} onClick={openMenu} title={t("Options")} aria-label={t("Options")} aria-expanded={!!menu} aria-haspopup="menu"><Dots style={{ width: 16 }} /></button>
       )}
       {menu && createPortal(
-        <div className="chat-menu" ref={menuRef} style={{ top: menu.top, left: menu.left, visibility: menu.ready ? undefined : 'hidden' }}>
+        <div className="chat-menu" ref={menuRef} role="menu" aria-label={t("Chat options")} style={{ top: menu.top, left: menu.left, visibility: menu.ready ? undefined : 'hidden' }}>
           <button onClick={(e) => { e.stopPropagation(); onToggleStar(c.id); close(); }}>
             <Star style={{ width: 15 }} /> {c.starred ? 'Unstar chat' : 'Star chat'}
           </button>

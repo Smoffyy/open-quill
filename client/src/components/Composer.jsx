@@ -532,6 +532,7 @@ export default function Composer({
         </div>
       )}
       <textarea ref={ta} rows={1} value={value} placeholder={steering ? 'Steer this reply, e.g. "shorter" or "you misread the file"…' : streaming ? (queueCount > 0 ? `Queue another message (${queueCount} waiting)…` : 'Type to queue a message…') : (placeholder || 'How can I help you today?')}
+        id="oq-composer" aria-label={t('Message input')}
         onChange={(e) => onChange(e.target.value)} onKeyDown={key} onPaste={onPaste} />
       <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}
         accept={(visionSupported ? 'image/*,' : '') + FILE_ACCEPT} />
