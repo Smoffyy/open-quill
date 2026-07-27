@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { copyText } from '../clipboard.js';
-import hljs from 'highlight.js';
+import hljs from 'highlight.js/lib/common';
 import { Copy, Check } from './icons.jsx';
 
 function escapeHtml(s) {
@@ -12,7 +12,9 @@ export default function CodeBlock({ lang, code }) {
   // re-highlight on each render so streaming code stays smooth
   const html = useMemo(() => {
     try {
+      if (code.length > 60000) return escapeHtml(code);
       if (lang && hljs.getLanguage(lang)) return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
+      if (code.length > 12000) return escapeHtml(code);
       return hljs.highlightAuto(code).value;
     } catch { return escapeHtml(code); }
   }, [code, lang]);
@@ -26,7 +28,7 @@ export default function CodeBlock({ lang, code }) {
     <div className="code-wrap">
       <div className={'code-bar' + (copied ? ' flash' : '')}>
         <span>{lang || 'text'}</span>
-        <button className="code-copy" onClick={copy}>
+        <button className="code-copy" onPointerDown={(e) => { e.preventDefault(); copy(); }}>
           {copied ? <Check key="c" className="copy-pop" /> : <Copy key="o" />} {copied ? 'Copied' : 'Copy'}
         </button>
       </div>

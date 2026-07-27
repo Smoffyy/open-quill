@@ -6,15 +6,12 @@ node_modules/
 client/dist/
 
 # runtime data
-server/data.json
-server/data.json.tmp
-server/data.json.corrupt.*
-server/uploads/
-server/sandbox/
+server/data/
 
 # secrets
 .env
 .env.*
+!.env.example
 *.local
 
 # logs

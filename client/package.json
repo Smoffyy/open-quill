@@ -1,25 +1,26 @@
 {
   "name": "open-quill-client",
-  "version": "2026.2.0",
+  "version": "27.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "i18n:check": "node scripts/i18n-check.mjs"
   },
   "dependencies": {
     "highlight.js": "^11.11.1",
-    "katex": "^0.17.0",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
+    "katex": "^0.18.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0",
     "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^6.0.2",
-    "vite": "^8.0.16"
+    "@vitejs/plugin-react": "^6.0.4",
+    "vite": "^8.1.5"
   }
 }

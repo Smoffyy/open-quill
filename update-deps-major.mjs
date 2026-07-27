@@ -56,7 +56,7 @@ for (const f of folders) {
 }
 
 if (check) {
-  console.log('\n(check only — nothing was changed)');
+  console.log('\n(check only, nothing was changed)');
 } else {
   console.log('\nAll folders updated to latest versions (including majors).');
 }

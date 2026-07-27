@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Chat, Search, Panel, Gear, Shield, Logout, Dots, Trash, Heart, FileText, Star, Download, Folder, Pencil, Chevron } from './icons.jsx';
+import { Plus, Chat, Search, Panel, Gear, Shield, Flask, Logout, Dots, Trash, Heart, FileText, Star, Download, Folder, Pencil, Chevron, Users, Box, Compact } from './icons.jsx';
+import { t } from '../i18n.jsx';
 
-function ProfileMenu({ user, version, onSettings, onAdmin, onCredits, onChangelog, onLicense, onLogout, onClose }) {
+function ProfileMenu({ user, version, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, onClose }) {
   const ref = useRef(null);
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
@@ -11,13 +12,14 @@ function ProfileMenu({ user, version, onSettings, onAdmin, onCredits, onChangelo
   }, []);
   return (
     <div className="popover" ref={ref}>
-      {user.isAdmin && <button onClick={onAdmin}><Shield /> Admin Panel</button>}
-      <button onClick={onSettings}><Gear /> Settings</button>
-      <button onClick={onCredits}><Heart /> Credits</button>
-      <button onClick={onChangelog}><FileText /> Changelog</button>
-      <button onClick={onLicense}><FileText /> Licensing</button>
+      {user.isAdmin && <button onClick={onAdmin}><Shield /> {t('Admin Panel')}</button>}
+      {user.isAdmin && <button onClick={onPlayground}><Flask /> {t('Playground')}</button>}
+      <button onClick={onSettings}><Gear /> {t('Settings')}</button>
+      <button onClick={onCredits}><Heart /> {t('Credits')}</button>
+      <button onClick={onChangelog}><FileText /> {t('Changelog')}</button>
+      <button onClick={onLicense}><FileText /> {t('Licensing')}</button>
       <hr />
-      <button onClick={onLogout}><Logout /> Log out</button>
+      <button onClick={onLogout}><Logout /> {t('Log out')}</button>
       {version && <div className="pm-version">open-quill v{version}</div>}
     </div>
   );
@@ -49,8 +51,19 @@ function ChatRow({ c, active, showTrash, folders, onOpen, onDelete, onToggleStar
     e.stopPropagation();
     if (menu) { setMenu(null); setSubOpen(false); return; }
     const r = btnRef.current.getBoundingClientRect();
-    setMenu({ top: r.bottom + 6, left: Math.min(r.left, window.innerWidth - 190) });
+    setMenu({ top: r.bottom + 6, left: r.left, anchorTop: r.top, ready: false });
   }
+  useLayoutEffect(() => {
+    if (!menu || menu.ready || !menuRef.current) return;
+    const pad = 8;
+    const mr = menuRef.current.getBoundingClientRect();
+    let top = menu.top;
+    let left = menu.left;
+    if (top + mr.height > window.innerHeight - pad) top = Math.max(pad, menu.anchorTop - mr.height - 6);
+    if (top + mr.height > window.innerHeight - pad) top = Math.max(pad, window.innerHeight - mr.height - pad);
+    left = Math.min(Math.max(pad, left), window.innerWidth - mr.width - pad);
+    setMenu(m => m ? { ...m, top, left, ready: true } : m);
+  }, [menu, subOpen]);
   const openInTab = () => window.open('/chat/' + c.id, '_blank', 'noopener');
   const close = () => { setMenu(null); setSubOpen(false); };
   return (
@@ -63,24 +76,24 @@ function ChatRow({ c, active, showTrash, folders, onOpen, onDelete, onToggleStar
       onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}>
       <span className="title">{c.title}</span>
       {showTrash ? (
-        <button className="row-ctrl shift-del" onClick={(e) => { e.stopPropagation(); onDelete(c.id); }} title="Delete chat"><Trash style={{ width: 14 }} /></button>
+        <button className="row-ctrl shift-del" onClick={(e) => { e.stopPropagation(); onDelete(c.id); }} title={t("Delete chat")}><Trash style={{ width: 14 }} /></button>
       ) : (
-        <button className="row-ctrl" ref={btnRef} onClick={openMenu} title="Options"><Dots style={{ width: 16 }} /></button>
+        <button className="row-ctrl" ref={btnRef} onClick={openMenu} title={t("Options")}><Dots style={{ width: 16 }} /></button>
       )}
       {menu && createPortal(
-        <div className="chat-menu" ref={menuRef} style={{ top: menu.top, left: menu.left }}>
+        <div className="chat-menu" ref={menuRef} style={{ top: menu.top, left: menu.left, visibility: menu.ready ? undefined : 'hidden' }}>
           <button onClick={(e) => { e.stopPropagation(); onToggleStar(c.id); close(); }}>
             <Star style={{ width: 15 }} /> {c.starred ? 'Unstar chat' : 'Star chat'}
           </button>
           <div className="cm-sub">
-            <button onClick={(e) => { e.stopPropagation(); setSubOpen(s => !s); }}>
+            <button onClick={(e) => { e.stopPropagation(); setSubOpen(s => !s); setMenu(m => m ? { ...m, ready: false } : m); }}>
               <Folder style={{ width: 15 }} /> Move to folder
               <Chevron style={{ width: 13, marginLeft: 'auto', transform: subOpen ? 'rotate(90deg)' : 'none' }} />
             </button>
             {subOpen && (
               <div className="cm-sublist">
                 {c.folderId && <button onClick={(e) => { e.stopPropagation(); onMoveChat(c.id, null); close(); }}>Remove from folder</button>}
-                {folders.length === 0 && <div className="cm-empty">No folders yet</div>}
+                {folders.length === 0 && <div className="cm-empty">{t("No folders yet")}</div>}
                 {folders.map(f => (
                   <button key={f.id} className={f.id === c.folderId ? 'on' : ''} onClick={(e) => { e.stopPropagation(); onMoveChat(c.id, f.id); close(); }}>
                     <Folder style={{ width: 14 }} /> {f.name}
@@ -128,8 +141,8 @@ function FolderSection({ f, chats, active, showTrash, folders, dragChatId, onTog
         )}
         <span className="folder-count">{chats.length}</span>
         <span className="folder-ctrls" onClick={(e) => e.stopPropagation()}>
-          <button className="row-ctrl" title="Rename" onClick={() => setEditing(true)}><Pencil style={{ width: 13 }} /></button>
-          <button className="row-ctrl" title="Delete folder" onClick={() => onDelete(f.id)}><Trash style={{ width: 13 }} /></button>
+          <button className="row-ctrl" title={t("Rename")} onClick={() => setEditing(true)}><Pencil style={{ width: 13 }} /></button>
+          <button className="row-ctrl" title={t("Delete folder")} onClick={() => onDelete(f.id)}><Trash style={{ width: 13 }} /></button>
         </span>
       </div>
       {!f.collapsed && (
@@ -142,10 +155,11 @@ function FolderSection({ f, chats, active, showTrash, folders, dragChatId, onTog
   );
 }
 
-export default function Sidebar({
-  user, chats, chatsLoaded = true, activeId, appName, onNew, onOpen, onDelete, onToggleStar,
+function Sidebar({
+  user, chats, onSearch, chatsLoaded = true, activeId, appName, onNew, onOpen, onDelete, onToggleStar,
   folders = [], onCreateFolder, onRenameFolder, onToggleFolder, onDeleteFolder, onMoveChat,
-  collapsed, onToggle, onSettings, onAdmin, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview
+  collapsed, onToggle, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview,
+  onSpaces, spacesPending = 0, projects = [], onProjects, onOpenProject, mobileOpen = false, onMobileClose
 }) {
   const [menu, setMenu] = useState(false);
   const [shiftHeld, setShiftHeld] = useState(false);
@@ -165,50 +179,80 @@ export default function Sidebar({
   }, []);
   const showTrash = shiftHeld && hover;
 
+  chats = chats.filter(c => !c.archived);
   const starred = chats.filter(c => c.starred);
+  const starredProjects = (projects || []).filter(p => p.starred);
   const folderIds = new Set(folders.map(f => f.id));
   const inFolder = (fid) => chats.filter(c => !c.starred && c.folderId === fid);
   const others = chats.filter(c => !c.starred && (!c.folderId || !folderIds.has(c.folderId)));
+  const nowMs = Date.now();
+  const DAY = 86400000;
+  const recentGroups = [
+    { key: 'recent', label: t('Recents'), items: [] },
+    { key: 'd3', label: '3+ days ago', items: [] },
+    { key: 'd7', label: '7+ days ago', items: [] },
+  ];
+  const SIDEBAR_CHAT_LIMIT = 40;
+  const capped = others.slice(0, SIDEBAR_CHAT_LIMIT);
+  const overflow = others.length > SIDEBAR_CHAT_LIMIT;
+  for (const c of capped) {
+    const age = nowMs - (c.updated_at || nowMs);
+    if (age < 3 * DAY) recentGroups[0].items.push(c);
+    else if (age < 7 * DAY) recentGroups[1].items.push(c);
+    else recentGroups[2].items.push(c);
+  }
   const rowProps = { onOpen, onDelete, onToggleStar, onMoveChat, onDragChat: setDragChatId, folders };
   const row = (c) => <ChatRow key={c.id} c={c} active={c.id === activeId} showTrash={showTrash} folders={folders} {...rowProps} />;
 
   return (
-    <div className={'sidebar' + (collapsed ? ' collapsed' : '')}
+    <div className={'sidebar' + (collapsed ? ' collapsed' : '') + (mobileOpen ? ' mobile-open' : '')}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
       <div className="sidebar-head">
         <div className="brand">{appName || 'open-quill'}</div>
         <div className="sidebar-head-actions">
-          <button className="icon-btn search-btn"><Search style={{ width: 17 }} /></button>
-          <button className="icon-btn" onClick={onToggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}><Panel style={{ width: 17 }} /></button>
+          <button className="icon-btn search-btn" onClick={onSearch} title={t("Search chats (Ctrl+Shift+F)")}><Search style={{ width: 17 }} /></button>
+          <button className="icon-btn collapse-btn" onClick={onToggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}><Panel style={{ width: 17 }} /></button>
+          <button className="icon-btn mobile-close-btn" onClick={onMobileClose} title={t("Close menu")}><span style={{ fontSize: 20, lineHeight: 1 }}>✕</span></button>
         </div>
       </div>
       <div className="nav">
-        <button className="nav-item new-chat" title="New chat"
+        <button className="nav-item new-chat" title={t("New chat")}
           onClick={(e) => { if (e.ctrlKey || e.metaKey) { window.open('/', '_blank', 'noopener'); return; } onNew(); }}
           onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); window.open('/', '_blank', 'noopener'); } }}
-          onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}><span className="new-chat-plus"><Plus /></span> <span className="nav-label">New chat</span></button>
-        <button className="nav-item" title="Chats" onClick={onChatsOverview}><Chat /> <span className="nav-label">Chats</span></button>
+          onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}><span className="new-chat-plus"><Plus /></span> <span className="nav-label">{t("New chat")}</span></button>
+        <button className="nav-item" title={t("Chats")} onClick={onChatsOverview}><Chat /> <span className="nav-label">{t("Chats")}</span></button>
+        <button className="nav-item" title={t("Projects")} onClick={onProjects}><Box /> <span className="nav-label">{t("Projects")}</span></button>
+        <button className="nav-item" title={t("Spaces")} onClick={onSpaces}>
+          <Users /> <span className="nav-label">{t("Spaces")}</span>
+          {spacesPending > 0 && <span className="nav-badge">{spacesPending}</span>}
+        </button>
       </div>
       <div className="chats">
         {!chatsLoaded ? (
           <>
-            <div className="section-label">Recents</div>
+            <div className="section-label">{t("Recents")}</div>
             {Array.from({ length: 7 }).map((_, i) => (
               <div key={i} className="chat-skel"><span className="skeleton" style={{ width: (55 + ((i * 37) % 40)) + '%' }} /></div>
             ))}
           </>
         ) : (
           <>
-            {starred.length > 0 && <>
+            {(starred.length > 0 || starredProjects.length > 0) && <>
               <div className="section-label"><Star style={{ width: 12, verticalAlign: '-1px' }} /> Starred</div>
+              {starredProjects.map(p => (
+                <div key={p.id} className="chat-row project-row" onClick={() => onOpenProject && onOpenProject(p.id)}>
+                  <Box style={{ width: 15, flexShrink: 0, opacity: .85 }} />
+                  <span className="title">{p.name}</span>
+                </div>
+              ))}
               {starred.map(row)}
             </>}
 
             <div className="section-label folders-label">
-              <span><Folder style={{ width: 12, verticalAlign: '-1px' }} /> Folders</span>
-              <button className="folder-add" title="New folder" onClick={() => onCreateFolder && onCreateFolder()}><Plus style={{ width: 13 }} /></button>
+              <span><Folder style={{ width: 12, verticalAlign: '-1px' }} /> {t('Folders')}</span>
+              <button className="folder-add" title={t("New folder")} onClick={() => onCreateFolder && onCreateFolder()}><Plus style={{ width: 13 }} /></button>
             </div>
-            {folders.length === 0 && <div className="chats-empty">No folders — click + to add one</div>}
+            {folders.length === 0 && <div className="chats-empty">{t("No folders, click + to add one")}</div>}
             {folders.map(f => (
               <FolderSection key={f.id} f={f} chats={inFolder(f.id)} active={activeId} showTrash={showTrash}
                 folders={folders} dragChatId={dragChatId}
@@ -225,7 +269,16 @@ export default function Sidebar({
             </div>
             {!recentsCollapsed && <>
               {others.length === 0 && <div className="chats-empty">No chats yet</div>}
-              {others.map(row)}
+              {recentGroups[0].items.map(row)}
+              {recentGroups.slice(1).map(g => g.items.length > 0 && (
+                <React.Fragment key={g.key}>
+                  <div className="section-label recents-sub">{g.label}</div>
+                  {g.items.map(row)}
+                </React.Fragment>
+              ))}
+              {overflow && (
+                <button className="all-chats-btn" onClick={onChatsOverview}><Compact style={{ width: 15, flexShrink: 0 }} /> <span>All chats</span></button>
+              )}
             </>}
           </>
         )}
@@ -234,6 +287,7 @@ export default function Sidebar({
       <div className="profile">
         {menu && <ProfileMenu user={user} version={version}
           onSettings={() => { setMenu(false); onSettings(); }}
+          onPlayground={() => { setMenu(false); onPlayground && onPlayground(); }}
           onAdmin={() => { setMenu(false); onAdmin(); }}
           onCredits={() => { setMenu(false); onCredits(); }}
           onChangelog={() => { setMenu(false); onChangelog(); }}
@@ -250,3 +304,5 @@ export default function Sidebar({
     </div>
   );
 }
+
+export default React.memo(Sidebar);

@@ -19,10 +19,25 @@ const VERBS = {
   make_dir: ['Creating folder', 'Created folder'],
   mkdir: ['Creating folder', 'Created folder'],
   search: ['Searching', 'Searched'],
+  find: ['Finding files', 'Found files'],
   web_search: ['Searching the web', 'Searched the web'],
   extract_zip: ['Extracting', 'Extracted'],
-  bundle_zip: ['Bundling', 'Bundled']
+  bundle_zip: ['Bundling', 'Bundled'],
+  mb_view: ['Reading', 'Read'],
+  mb_search: ['Searching memory', 'Searched memory'],
+  chat_search: ['Searching past chats', 'Searched past chats'],
+  chat_view: ['Reading a past chat', 'Read a past chat'],
+  skill_view: ['Loading skill', 'Loaded skill'],
+  end_conversation: ['Ending the conversation', 'Ended the conversation']
 };
+function verbsFor(tool) {
+  if (VERBS[tool]) return VERBS[tool];
+  if (String(tool || '').startsWith('mcp_')) {
+    const short = String(tool).split('_').slice(2).join(' ') || 'connector';
+    return ['Using ' + short, 'Used ' + short];
+  }
+  return null;
+}
 const FILE_TOOLS = new Set(['create_file', 'str_replace', 'delete_file', 'rename_file', 'move_file', 'copy_file', 'make_dir', 'mkdir']);
 
 function escapeHtml(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
@@ -47,7 +62,10 @@ function iconFor(tool) {
   if (tool === 'make_dir' || tool === 'mkdir') return Folder;
   if (tool === 'bundle_zip' || tool === 'extract_zip') return Download;
   if (tool === 'search') return Search;
+  if (tool === 'find') return Search;
+  if (tool === 'mb_search') return Search;
   if (tool === 'view') return FileText;
+  if (tool === 'mb_view') return FileText;
   if (tool === 'create_file') return Plus;
   if (tool === 'copy_file') return Copy;
   if (tool === 'str_replace' || tool === 'rename_file' || tool === 'move_file') return Pencil;
@@ -57,7 +75,9 @@ function targetName(call) {
   if (!call) return '';
   if (call.tool === 'bundle_zip') return (call.name || 'bundle') + '.zip';
   if (call.tool === 'rename_file' || call.tool === 'move_file' || call.tool === 'copy_file') return call.path && call.new_path ? `${baseName(call.path)} → ${baseName(call.new_path)}` : baseName(call.path);
-  if (call.tool === 'search') return call.query ? `"${call.query}"` : '';
+  if (call.tool === 'search' || call.tool === 'mb_search' || call.tool === 'chat_search') return call.query ? `"${call.query}"` : '';
+  if (call.tool === 'find') return call.pattern ? `"${call.pattern}"` : (call.query ? `"${call.query}"` : '');
+  if (call.tool === 'skill_view') return call.name || '';
   if (call.tool === 'list_files' || call.tool === 'clear_sandbox' || call.tool === 'delete_all') return '';
   return baseName(call.path) || '';
 }
@@ -66,7 +86,13 @@ function resultNote(call, res) {
   switch (call.tool) {
     case 'view': return res.lines ? `${res.lines} lines` : null;
     case 'list_files': return res.files ? `${res.files.length} file${res.files.length === 1 ? '' : 's'}` : null;
+    case 'find': return res.count != null ? `${res.count} file${res.count === 1 ? '' : 's'}` : null;
     case 'search': return res.count != null ? `${res.count} match${res.count === 1 ? '' : 'es'}` : null;
+    case 'mb_search': return res.count != null ? `${res.count} match${res.count === 1 ? '' : 'es'}` : null;
+    case 'mb_view': return res.total != null ? `${res.total} lines` : null;
+    case 'chat_search': return res.count != null ? `${res.count} match${res.count === 1 ? '' : 'es'}` : null;
+    case 'chat_view': return res.title ? `"${res.title}"` : null;
+    case 'skill_view': return res.name ? res.name : null;
     case 'extract_zip': return res.files ? `${res.files.length} file${res.files.length === 1 ? '' : 's'}` : null;
     case 'bundle_zip': return res.count != null ? `${res.count} file${res.count === 1 ? '' : 's'}` : null;
     case 'clear_sandbox': case 'delete_all': return res.cleared != null ? `${res.cleared} removed` : null;
@@ -114,17 +140,43 @@ function BashCard({ call, result }) {
   );
 }
 
+function chatIdFromUrl() {
+  const m = window.location.pathname.match(/\/chat\/([a-zA-Z0-9-]+)/);
+  return m ? m[1] : null;
+}
+
 function FileCard({ call, result }) {
-  const v = VERBS[call.tool] || [call.tool, call.tool];
+  const v = verbsFor(call.tool) || [call.tool, call.tool];
   const pending = !result;
   const verb = v[pending ? 0 : 1];
   const Icon = iconFor(call.tool);
   const name = targetName(call);
   const failed = result && !result.ok;
   const adds = result?.adds, dels = result?.dels;
+  const unchanged = result && result.ok && result.unchanged;
   const showDiff = result && result.ok && (adds || dels) && (call.tool === 'create_file' || call.tool === 'str_replace');
   const openPath = (!failed && call.tool !== 'delete_file') ? openPathFor(call) : null;
+  const [preview, setPreview] = React.useState(null);
+  const [previewBusy, setPreviewBusy] = React.useState(false);
+  const canPeek = !!openPath && result && result.ok && (call.tool === 'create_file' || call.tool === 'str_replace' || call.tool === 'view') && chatIdFromUrl();
+  async function togglePeek(e) {
+    e.stopPropagation();
+    if (preview != null) { setPreview(null); return; }
+    if (previewBusy) return;
+    setPreviewBusy(true);
+    try {
+      const cid = chatIdFromUrl();
+      const r = await fetch(`/api/chats/${cid}/file?path=${encodeURIComponent(openPath)}`, { credentials: 'include' });
+      const d = await r.json();
+      if (d && typeof d.text === 'string') {
+        const t = d.text.length > 6000 ? d.text.slice(0, 6000) + '\n\u2026 (truncated \u2014 open in artifacts for the full file)' : d.text;
+        setPreview(t || '(empty file)');
+      } else setPreview(d && d.binary ? '(binary file \u2014 open in artifacts to download)' : '(could not load preview)');
+    } catch { setPreview('(could not load preview)'); }
+    setPreviewBusy(false);
+  }
   return (
+    <>
     <span className={'tool-line' + (pending ? ' pending' : '') + (failed ? ' err' : '') + (openPath ? ' clickable' : '')}
       onClick={openPath ? () => openArtifact(openPath) : undefined}
       title={openPath ? 'Open ' + name + ' in artifacts' : undefined}>
@@ -137,14 +189,18 @@ function FileCard({ call, result }) {
           {dels ? <span className="del">−{dels}</span> : null}
         </span>
       )}
+      {unchanged && <span className="tl-note">unchanged</span>}
       {failed && <span className="tl-err">{result.error}</span>}
       {pending && <span className="tc-dots"><i /><i /><i /></span>}
+      {canPeek && <button className="tc-preview-btn" onClick={togglePeek}>{previewBusy ? '\u2026' : preview != null ? 'Hide' : 'Peek'}</button>}
     </span>
+    {preview != null && <div className="tc-preview">{preview}</div>}
+    </>
   );
 }
 
 function ChipCard({ call, result }) {
-  const v = VERBS[call.tool] || [call.tool || 'Working', call.tool || 'Done'];
+  const v = verbsFor(call.tool) || [call.tool || 'Working', call.tool || 'Done'];
   const pending = !result;
   const verb = v[pending ? 0 : 1];
   const Icon = iconFor(call.tool);
@@ -164,13 +220,19 @@ function ChipCard({ call, result }) {
   );
 }
 
+function hostOf(url) {
+  const raw = String(url || '');
+  try { return new URL(raw).hostname.replace(/^www\./, ''); }
+  catch { return raw.replace(/^[a-z]+:\/\//i, '').split(/[/?#]/)[0]; }
+}
+
 function WebSearchCard({ call, result }) {
   const [open, setOpen] = useState(false);
   const pending = !result;
   const failed = result && !result.ok;
   const results = (result && result.results) || [];
   return (
-    <div className={'tool-bash' + (failed ? ' err' : '') + (open ? ' open' : '')}>
+    <div className={'tool-bash ws' + (failed ? ' err' : '') + (open ? ' open' : '')}>
       <button className="tb-head" onClick={() => setOpen(o => !o)}>
         <Search style={{ width: 14 }} />
         <span className="tb-label">{pending ? 'Searching the web' : 'Web search'}</span>
@@ -185,13 +247,21 @@ function WebSearchCard({ call, result }) {
           {failed
             ? <div className="tb-out"><div className="tb-out-head">Error</div><div className="tb-out-empty">{result.error}</div></div>
             : results.length
-              ? <div className="ws-results">{results.map((r, i) => (
-                  <a key={i} className="ws-result" href={r.url} target="_blank" rel="noopener noreferrer">
-                    <span className="ws-title">{r.title || r.url}</span>
-                    <span className="ws-url">{r.url}</span>
-                    {r.chars != null && <span className="ws-chars">{r.chars.toLocaleString()} chars read</span>}
-                  </a>
-                ))}</div>
+              ? <div className="ws-results">{results.map((r, i) => {
+                  const host = hostOf(r.url);
+                  return (
+                    <a key={i} className="ws-result" href={r.url} target="_blank" rel="noopener noreferrer" title={[r.title, r.url].filter(Boolean).join('\n')}>
+                      <span className="ws-num">{i + 1}</span>
+                      <span className="ws-body">
+                        <span className="ws-title">{r.title || host || r.url}</span>
+                        <span className="ws-meta">
+                          <span className="ws-host">{host}</span>
+                          {r.chars != null && <span className="ws-chars">{r.chars.toLocaleString()} chars read</span>}
+                        </span>
+                      </span>
+                    </a>
+                  );
+                })}</div>
               : <div className="tb-out-empty" style={{ padding: '8px 12px' }}>No results.</div>}
         </div>
       </div>
@@ -199,12 +269,15 @@ function WebSearchCard({ call, result }) {
   );
 }
 
+const TOOL_ALIAS = { run: 'bash', shell: 'bash', write_file: 'create_file', edit_file: 'str_replace', insert_lines: 'str_replace', read_file: 'view', cat: 'view', ls: 'list_files', tree: 'list_files', glob: 'find', grep: 'search', mv: 'move_file', cp: 'copy_file', rm: 'delete_file', mkdir: 'make_dir', unzip: 'extract_zip', zip: 'bundle_zip', reset: 'clear_sandbox' };
+
 function ToolCard({ call, result }) {
   if (!call || !call.tool) return null;
-  if (call.tool === 'web_search') return <WebSearchCard call={call} result={result} />;
-  if (call.tool === 'bash' || call.tool === 'run') return <BashCard call={call} result={result} />;
-  if (FILE_TOOLS.has(call.tool)) return <FileCard call={call} result={result} />;
-  return <ChipCard call={call} result={result} />;
+  const c = TOOL_ALIAS[call.tool] ? { ...call, tool: TOOL_ALIAS[call.tool] } : call;
+  if (c.tool === 'web_search') return <WebSearchCard call={c} result={result} />;
+  if (c.tool === 'bash') return <BashCard call={c} result={result} />;
+  if (FILE_TOOLS.has(c.tool)) return <FileCard call={c} result={result} />;
+  return <ChipCard call={c} result={result} />;
 }
 export default React.memo(ToolCard, (a, b) =>
   JSON.stringify(a.call) === JSON.stringify(b.call) && JSON.stringify(a.result) === JSON.stringify(b.result));

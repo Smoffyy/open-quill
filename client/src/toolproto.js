@@ -2,8 +2,8 @@ const KV_MAP = { command: 'cmd', to: 'new_path', newpath: 'new_path', destinatio
 const SECTION_FIELD = { CONTENT: 'content', OLD: 'old_str', NEW: 'new_str', CMD: 'cmd', PATHS: 'paths' };
 const INT_KEYS = new Set(['start', 'end', 'count']);
 
-export const READ_TOOLS = new Set(['view', 'list_files', 'search', 'bash', 'run', 'web_search']);
-export const TOOL_NAMES = new Set(['web_search', 'bash', 'run', 'create_file', 'str_replace', 'view', 'list_files', 'delete_file', 'clear_sandbox', 'delete_all', 'rename_file', 'move_file', 'copy_file', 'make_dir', 'mkdir', 'search', 'extract_zip', 'bundle_zip']);
+export const READ_TOOLS = new Set(['view', 'read_file', 'cat', 'list_files', 'ls', 'tree', 'search', 'grep', 'find', 'glob', 'bash', 'run', 'shell', 'web_search', 'mb_view', 'mb_search']);
+export const TOOL_NAMES = new Set(['web_search', 'bash', 'run', 'shell', 'create_file', 'write_file', 'str_replace', 'edit_file', 'insert_lines', 'view', 'read_file', 'cat', 'list_files', 'ls', 'tree', 'find', 'glob', 'delete_file', 'rm', 'clear_sandbox', 'delete_all', 'reset', 'rename_file', 'move_file', 'mv', 'copy_file', 'cp', 'make_dir', 'mkdir', 'search', 'grep', 'extract_zip', 'unzip', 'bundle_zip', 'zip', 'mb_view', 'mb_search']);
 
 function deco(s) { return /[|<>/\[\]]/.test(s); }
 function isClose(t) { const s = t.trim(); return /^[<\[(|\s]*\/\s*\|?\s*tool\s*[|>\])/\s]*$/i.test(s); }
@@ -27,14 +27,18 @@ function finalizeBody(call, field, lines) {
 function enough(call) {
   if (!call || !call.tool) return false;
   switch (call.tool) {
-    case 'create_file': return call.path != null && call.content != null;
-    case 'str_replace': return call.path != null && call.old_str != null && call.new_str != null;
-    case 'bash': case 'run': return (call.cmd ?? call.command) != null;
-    case 'view': case 'delete_file': case 'make_dir': case 'mkdir': case 'extract_zip': return call.path != null;
-    case 'rename_file': case 'move_file': case 'copy_file': return call.path != null && (call.new_path ?? call.to) != null;
-    case 'search': case 'web_search': return call.query != null;
-    case 'bundle_zip': return call.name != null;
-    case 'list_files': case 'clear_sandbox': case 'delete_all': return true;
+    case 'create_file': case 'write_file': return call.path != null && call.content != null;
+    case 'str_replace': case 'edit_file': return call.path != null && call.old_str != null && call.new_str != null;
+    case 'insert_lines': return call.path != null && call.content != null;
+    case 'bash': case 'run': case 'shell': return (call.cmd ?? call.command) != null;
+    case 'view': case 'read_file': case 'cat': case 'delete_file': case 'rm': case 'make_dir': case 'mkdir': case 'extract_zip': case 'unzip': return call.path != null;
+    case 'rename_file': case 'move_file': case 'mv': case 'copy_file': case 'cp': return call.path != null && (call.new_path ?? call.to) != null;
+    case 'find': case 'glob': return (call.pattern ?? call.query ?? call.path) != null;
+    case 'search': case 'grep': case 'web_search': return (call.query ?? call.pattern) != null;
+    case 'mb_view': return call.path != null;
+    case 'mb_search': return call.query != null;
+    case 'bundle_zip': case 'zip': return call.name != null;
+    case 'list_files': case 'ls': case 'tree': case 'clear_sandbox': case 'delete_all': case 'reset': return true;
     default: return true;
   }
 }

@@ -106,32 +106,278 @@ function transformTools(text) {
   return out;
 }
 
-function Markdown({ children, streaming }) {
-  const text = typeof children === 'string' ? transformTools(children) : children;
+function isFenceLine(line) {
+  return /^\s*(`{3,}|~{3,})/.test(line);
+}
+
+function remarkBreaks() {
+  return (tree) => {
+    const walk = (node) => {
+      if (!node || !Array.isArray(node.children)) return;
+      const out = [];
+      for (const child of node.children) {
+        if (child.type === 'html' && typeof child.value === 'string' && /^(?:\s*<br\s*\/?>\s*)+$/i.test(child.value)) {
+          const count = (child.value.match(/<br\s*\/?>/gi) || []).length || 1;
+          for (let i = 0; i < count; i++) out.push({ type: 'break' });
+        } else {
+          walk(child);
+          out.push(child);
+        }
+      }
+      node.children = out;
+    };
+    walk(tree);
+    return tree;
+  };
+}
+
+const BLOCK_HARD_LINES = 500;
+
+function blockify(text) {
+  const lines = text.split('\n');
+  const blocks = [];
+  let start = 0;
+  let count = 0;
+  let inFence = false;
+  let hasContent = false;
+  let pos = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const end = pos + line.length;
+    const next = end + 1;
+    count++;
+    if (isFenceLine(line)) {
+      if (line.trim() !== '') hasContent = true;
+      if (inFence) {
+        inFence = false;
+        blocks.push(text.slice(start, end));
+        start = next; count = 0; hasContent = false;
+      } else inFence = true;
+      pos = next;
+      continue;
+    }
+    if (!inFence && line.trim() === '' && hasContent) {
+      blocks.push(text.slice(start, end));
+      start = next; count = 0; hasContent = false;
+    } else if (!inFence && count >= BLOCK_HARD_LINES) {
+      blocks.push(text.slice(start, end));
+      start = next; count = 0; hasContent = false;
+    } else if (line.trim() !== '') hasContent = true;
+    pos = next;
+  }
+  if (count) blocks.push(text.slice(start));
+  return blocks;
+}
+
+const mdComponents = {
+  pre({ children }) {
+    const el = Array.isArray(children) ? children[0] : children;
+    const props = el?.props || {};
+    const m = /language-(\w+)/.exec(props.className || '');
+    const raw = String(props.children || '').replace(/\n$/, '');
+    const lang = m ? m[1].toLowerCase() : '';
+    if (lang === 'toolcall') {
+      const data = (() => { try { return JSON.parse(b64decode(raw)); } catch { return null; } })();
+      if (data && data.call) return <ToolCard call={data.call} result={data.result} />;
+      return null;
+    }
+    return <CodeBlock lang={m ? m[1] : ''} code={raw} />;
+  },
+  code({ className, children }) {
+    return <code className={className}>{children}</code>;
+  }
+};
+
+const MarkdownBlock = React.memo(function MarkdownBlock({ text }) {
+  const prepared = React.useMemo(() => guardBlock(text), [text]);
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath]}
-      rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}
-      components={{
-        pre({ children }) {
-          const el = Array.isArray(children) ? children[0] : children;
-          const props = el?.props || {};
-          const m = /language-(\w+)/.exec(props.className || '');
-          const raw = String(props.children || '').replace(/\n$/, '');
-          const lang = m ? m[1].toLowerCase() : '';
-          if (lang === 'toolcall') {
-            const data = (() => { try { return JSON.parse(b64decode(raw)); } catch { return null; } })();
-            if (data && data.call) return <ToolCard call={data.call} result={data.result} />;
-            return null;
-          }
-          return <CodeBlock lang={m ? m[1] : ''} code={raw} />;
-        },
-        code({ className, children }) {
-          return <code className={className}>{children}</code>;
-        }
-      }}
-    >{text}</ReactMarkdown>
+      remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
+      rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false, macros: { '\\mdollar': '\\$' } }]]}
+      components={mdComponents}
+    >{prepared}</ReactMarkdown>
   );
+});
+
+const SENT = '\u0000';
+
+function guardDollars(s) {
+  if (s.indexOf('$') === -1) return s;
+  const singles = [];
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === '\\') { i++; continue; }
+    if (c !== '$') continue;
+    if (s[i + 1] === '$') { i++; continue; }
+    if (s[i - 1] === SENT || s[i + 1] === SENT) continue;
+    singles.push(i);
+  }
+  if (!singles.length) return s;
+  const esc = new Set();
+  for (const i of singles) {
+    const m = /^\d[\d,]*(?:\.\d+)?/.exec(s.slice(i + 1, i + 24));
+    if (!m) continue;
+    const after = s[i + 1 + m[0].length] || '';
+    if (after && '^_{\\'.includes(after)) continue;
+    let mathish = false;
+    for (let j = i + 1 + m[0].length; j < Math.min(s.length, i + 260); j++) {
+      const ch = s[j];
+      if (ch === '\\' || ch === '^' || ch === '_') { mathish = true; break; }
+      if (ch === '$' || ch === '\n') break;
+    }
+    if (!mathish) esc.add(i);
+  }
+  const rest = singles.filter(i => !esc.has(i));
+  const pairs = [];
+  for (let k = 0; k + 1 < rest.length; k += 2) {
+    const a = rest[k], b = rest[k + 1];
+    const inner = s.slice(a + 1, b);
+    if (!inner || /^\s/.test(inner) || /\s$/.test(inner) || inner.includes('**') || inner.includes('\n\n') || inner.length > 300) {
+      esc.add(a);
+      esc.add(b);
+    } else {
+      pairs.push([a, b]);
+    }
+  }
+  if (!esc.size && !pairs.some(([a, b]) => s.slice(a + 1, b).includes('\\$'))) return s;
+  let out = '';
+  let idx = 0;
+  let pi = 0;
+  while (idx < s.length) {
+    if (pi < pairs.length && idx === pairs[pi][0]) {
+      const [a, b] = pairs[pi++];
+      let inner = '';
+      for (let j = a + 1; j < b; j++) inner += esc.has(j) ? '\\$' : s[j];
+      out += '$' + inner.split('\\$').join('\\mdollar ') + '$';
+      idx = b + 1;
+      continue;
+    }
+    out += esc.has(idx) ? '\\$' : s[idx];
+    idx++;
+  }
+  return out;
+}
+
+function guardBlock(text) {
+  if (text.indexOf(SENT) !== -1) {
+    text = text.replace(/\u0000(\${1,2})([\s\S]*?)\1\u0000/g, (full, d, inner) => SENT + d + inner.split('\\$').join('\\mdollar ') + d + SENT);
+  }
+  if (text.indexOf('$') === -1) return text.indexOf(SENT) === -1 ? text : text.split(SENT).join('');
+  const parts = text.split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`)/);
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (!p || p.startsWith('`')) continue;
+    parts[i] = guardDollars(p);
+  }
+  return parts.join('').split(SENT).join('');
+}
+
+function neutralizeOpenMath(text) {
+  let i = 0;
+  let open = -1;
+  let openLen = 0;
+  let inFence = false;
+  let inCode = false;
+  while (i < text.length) {
+    const ch = text[i];
+    if (inFence) {
+      if (ch === '`' && text.startsWith('```', i)) { inFence = false; i += 3; continue; }
+      i++;
+      continue;
+    }
+    if (inCode) {
+      if (ch === '`' || ch === '\n') inCode = false;
+      i++;
+      continue;
+    }
+    if (ch === '`') {
+      if (text.startsWith('```', i)) { inFence = true; i += 3; } else { inCode = true; i++; }
+      continue;
+    }
+    if (ch === '\\') { i += 2; continue; }
+    if (ch === '$') {
+      const len = text[i + 1] === '$' ? 2 : 1;
+      if (open === -1) {
+        open = i;
+        openLen = len;
+        i += len;
+        continue;
+      }
+      if (openLen === len) {
+        open = -1;
+        i += len;
+        continue;
+      }
+      if (openLen === 2 && len === 1) { i += 1; continue; }
+      open = -1;
+      i += 1;
+      continue;
+    }
+    i++;
+  }
+  if (open === -1) return text;
+  let out = text.slice(0, open) + '\\$';
+  if (openLen === 2) out += '\\$';
+  return out + text.slice(open + openLen);
+}
+
+function normalizeMathDelims(text) {
+  if (!text || (text.indexOf('\\[') === -1 && text.indexOf('\\(') === -1)) return text;
+  const parts = text.split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`)/);
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (!p || p.startsWith('`')) continue;
+    parts[i] = p
+      .replace(/\\\[/g, () => SENT + '$$')
+      .replace(/\\\]/g, () => '$$' + SENT)
+      .replace(/\\\(/g, () => SENT + '$')
+      .replace(/\\\)/g, () => '$' + SENT);
+  }
+  return parts.join('');
+}
+
+const PROGRESSIVE_SIZE_TRIGGER = 20000;
+const PROGRESSIVE_BLOCK_TRIGGER = 40;
+const PROGRESSIVE_INITIAL_LINES = 300;
+const PROGRESSIVE_STEP_LINES = 1200;
+
+function lineCount(str) {
+  let n = 1;
+  for (let i = 0; i < str.length; i++) if (str.charCodeAt(i) === 10) n++;
+  return n;
+}
+
+function ProgressiveBlocks({ blocks }) {
+  const sizes = React.useMemo(() => blocks.map(lineCount), [blocks]);
+  const advance = React.useCallback((from, budget) => {
+    let lines = 0, i = from;
+    while (i < blocks.length) { lines += sizes[i]; i++; if (lines >= budget) break; }
+    return Math.min(blocks.length, Math.max(i, from + 1));
+  }, [blocks, sizes]);
+  const [count, setCount] = React.useState(() => advance(0, PROGRESSIVE_INITIAL_LINES));
+  React.useEffect(() => { setCount(advance(0, PROGRESSIVE_INITIAL_LINES)); }, [advance]);
+  React.useEffect(() => {
+    if (count >= blocks.length) return;
+    const idle = window.requestIdleCallback || ((cb) => setTimeout(() => cb(), 16));
+    const cancel = window.cancelIdleCallback || clearTimeout;
+    const handle = idle(() => setCount(c => advance(c, PROGRESSIVE_STEP_LINES)));
+    return () => cancel(handle);
+  }, [count, blocks.length, advance]);
+  const shown = count >= blocks.length ? blocks : blocks.slice(0, count);
+  return shown.map((b, i) => <MarkdownBlock key={i} text={b} />);
+}
+
+function Markdown({ children, streaming }) {
+  if (typeof children !== 'string') {
+    return <MarkdownBlock text={children} />;
+  }
+  let text = normalizeMathDelims(transformTools(children));
+  if (streaming) text = neutralizeOpenMath(text);
+  const blocks = blockify(text);
+  if (!streaming && (text.length > PROGRESSIVE_SIZE_TRIGGER || blocks.length > PROGRESSIVE_BLOCK_TRIGGER)) {
+    return <ProgressiveBlocks blocks={blocks} />;
+  }
+  return blocks.map((b, i) => <MarkdownBlock key={i} text={b} />);
 }
 
 export default React.memo(Markdown);

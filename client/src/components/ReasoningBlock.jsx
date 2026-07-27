@@ -8,8 +8,7 @@ export default function ReasoningBlock({ text, live, collapsible = true }) {
     if (!live) return null;
     return (
       <div className="reasoning">
-        <div className="reasoning-head static">
-          <img src="/starburst.svg" className="pulse think-dot" alt="" />
+        <div className="reasoning-head static live">
           <span><span className="rb-label">Thinking…</span></span>
         </div>
       </div>
@@ -19,7 +18,6 @@ export default function ReasoningBlock({ text, live, collapsible = true }) {
   return (
     <div className="reasoning">
       <button className={'reasoning-head' + (open ? ' open' : '') + (live ? ' live' : '')} onClick={() => setOpen(o => !o)}>
-        {live && <img src="/starburst.svg" className="pulse think-dot" alt="" />}
         <span><span className="rb-label">{label}</span></span>
         <Chevron className="chev" />
       </button>
