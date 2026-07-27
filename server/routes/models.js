@@ -122,7 +122,7 @@ export default function registerModelRoutes(app) {
 
   app.delete('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
     const m = db.models.byId(req.params.id);
-    db.models.remove(x => x.id === req.params.id);
+    db.models.removeById(req.params.id);
     logAudit(req, 'model.delete', { type: 'model', id: req.params.id, meta: { displayName: m?.display_name } });
     broadcastAdminConfig();
     res.json({ ok: true });

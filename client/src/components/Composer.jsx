@@ -3,8 +3,9 @@ import ModelDropdown from './ModelDropdown.jsx';
 import { api } from '../api.js';
 import { transcribeBlob } from '../voice.js';
 import { toast } from '../toast.js';
-import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand } from './icons.jsx';
+import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer } from './icons.jsx';
 import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
+import { extLabel } from '../lib/files.js';
 import { t, fmtDate } from '../i18n.jsx';
 
 const FILE_ACCEPT = '.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.py,.lua,.html,.css,.xml,.yml,.yaml,.pdf,.log';
@@ -76,7 +77,7 @@ export default function Composer({
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
   conversationEnded = false, endedReason = '',
   removedModel = null, onOpenDocs = null,
-  queueCount = 0, onQueue, canContinue = false, onContinue,
+  queueCount = 0, onQueue, canContinue = false, onContinue, onSteer, canSteer = false,
   compareIds = [], onSetCompare, hideModelPicker = false, reasoningEffort, onSetEffort, kwargValues, onSetKwarg
 }) {
   const ta = useRef(null);
@@ -251,6 +252,9 @@ export default function Composer({
   filesRef.current = files;
   useEffect(() => () => filesRef.current.forEach(f => f.preview && URL.revokeObjectURL(f.preview)), []);
 
+  const [steerMode, setSteerMode] = useState(true);
+  const steering = canSteer && steerMode && !!onSteer;
+  useEffect(() => { if (!canSteer) setSteerMode(true); }, [canSteer]);
   const [upErr, setUpErr] = useState('');
   function addFiles(list) {
     let picked = Array.from(list || []);
@@ -286,6 +290,13 @@ export default function Composer({
   async function doSend() {
     if (uploading) return;
     if (blockSend || budgetBlock || safetyFlagged || safetyChecking || conversationEnded) return;
+    if (steering) {
+      const t = value.trim();
+      if (!t) return;
+      onSteer(t);
+      onChange('');
+      return;
+    }
     if (streaming) {
       const t = value.trim();
       if (!t && files.length === 0) return;
@@ -480,7 +491,15 @@ export default function Composer({
             <div key={f.id} className={'attach-chip' + (f.preview ? ' image' : '')}>
               {f.preview
                 ? <img src={f.preview} alt={f.name} />
-                : <div className="attach-file"><FileText style={{ width: 18 }} /><div className="attach-meta"><div className="attach-name">{f.name}</div><div className="attach-type">{(f.name.split('.').pop() || 'file').toUpperCase()}</div></div></div>}
+                : (
+                  <div className="attach-file" title={f.name}>
+                    <div className="attach-name">{f.name}</div>
+                    <div className="attach-foot">
+                      <FileText style={{ width: 13 }} />
+                      <span className="attach-type">{extLabel(f.name)}</span>
+                    </div>
+                  </div>
+                )}
               <button className="attach-x" onClick={() => removeFile(f.id)} title={t("Remove")}>✕</button>
             </div>
           ))}
@@ -499,7 +518,20 @@ export default function Composer({
           ))}
         </div>
       )}
-      <textarea ref={ta} rows={1} value={value} placeholder={streaming ? (queueCount > 0 ? `Queue another message (${queueCount} waiting)…` : 'Type to queue a message…') : (placeholder || 'How can I help you today?')}
+      {canSteer && (
+        <div className="steer-row">
+          <div className="steer-seg">
+            <button className={steerMode ? 'on' : ''} onClick={() => setSteerMode(true)} title={t('Correct the reply that is being written right now')}>
+              <Steer style={{ width: 13 }} /> {t('Steer')}
+            </button>
+            <button className={!steerMode ? 'on' : ''} onClick={() => setSteerMode(false)} title={t('Send after this reply finishes')}>
+              {t('Queue')}{queueCount > 0 ? ` (${queueCount})` : ''}
+            </button>
+          </div>
+          <span className="steer-note">{steerMode ? t('Applied to the reply in progress, without losing what is already written.') : t('Sent as a new message when this reply finishes.')}</span>
+        </div>
+      )}
+      <textarea ref={ta} rows={1} value={value} placeholder={steering ? 'Steer this reply, e.g. "shorter" or "you misread the file"…' : streaming ? (queueCount > 0 ? `Queue another message (${queueCount} waiting)…` : 'Type to queue a message…') : (placeholder || 'How can I help you today?')}
         onChange={(e) => onChange(e.target.value)} onKeyDown={key} onPaste={onPaste} />
       <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}
         accept={(visionSupported ? 'image/*,' : '') + FILE_ACCEPT} />
@@ -645,8 +677,11 @@ export default function Composer({
               <Mic style={{ width: 18, height: 18 }} />
             </button>
           )}
+          {steering && hasText && (
+            <button key="steer" className="send steer" onClick={doSend} title={t('Steer this reply')}><Steer style={{ width: 16, height: 16 }} /></button>
+          )}
           {streaming ? (
-            <button key="stop" className="send stop" onClick={onStop}><Stop style={{ width: 16, height: 16 }} /></button>
+            <button key="stop" className="send stop" onClick={onStop} title={t('Stop generating')}><Stop style={{ width: 16, height: 16 }} /></button>
           ) : safetyChecking ? (
             <button key="send" className={'send' + (safetyVerbose ? ' checking' : ' quiet')} disabled title={safetyVerbose ? 'Safety check…' : undefined}><Up style={{ width: 17, height: 17 }} /></button>
           ) : canSend ? (

@@ -96,8 +96,7 @@ export default function registerAdminRoutes(app) {
     const nameById = new Map(db.users.all().map(u => [u.id, u.display_name || u.email]));
     const byUser = new Map(), byModel = new Map(), byDay = new Map();
     let tp = 0, tc = 0, tcost = 0, gens = 0;
-    for (const r of db.usage.all()) {
-      if ((r.created_at || 0) < since) continue;
+    for (const r of db.usage.since(since)) {
       gens++; const p = r.prompt || 0, c = r.completion || 0, cost = r.cost || 0;
       tp += p; tc += c; tcost += cost;
       const uk = r.user_id || 'unknown';
@@ -131,11 +130,12 @@ export default function registerAdminRoutes(app) {
 
   app.get('/api/admin/users', authMiddleware, adminOnly, (req, res) => {
     const since = monthStartMs();
+    const spend = db.usage.spendSinceByUser(since);
     res.json(db.users.all().sort((a, b) => a.created_at - b.created_at).map(u => ({
-      id: u.id, email: u.email, displayName: u.display_name || u.email.split('@')[0],
+      id: u.id, email: u.email, displayName: u.display_name || (u.email || '').split('@')[0],
       isAdmin: !!u.is_admin, isOwner: !!u.is_owner, createdAt: u.created_at,
       twoFactor: !!u.totp_enabled, budget: u.budget == null ? null : Number(u.budget),
-      monthSpend: db.usage.byUser(u.id).reduce((s, r) => s + ((r.created_at || 0) >= since ? (r.cost || 0) : 0), 0)
+      monthSpend: spend.get(u.id) || 0
     })));
   });
   app.patch('/api/admin/users/:id', authMiddleware, adminOnly, (req, res) => {
@@ -155,11 +155,11 @@ export default function registerAdminRoutes(app) {
     for (const c of myChats) { try { sandbox.remove(c.id); } catch {} }
     const chatIds = new Set(myChats.map(c => c.id));
     purgeUploads(chatIds);
-    db.messages.remove(m => chatIds.has(m.chat_id));
-    db.chats.remove(c => c.user_id === u.id);
+    for (const id of chatIds) db.messages.removeWhere('chat_id', id);
+    db.chats.removeWhere('user_id', u.id);
     removeUserFromSpaces(u.id);
-    db.sessions.remove(s => s.user_id === u.id);
-    db.users.remove(x => x.id === u.id);
+    db.sessions.removeWhere('user_id', u.id);
+    db.users.removeById(u.id);
     logAudit(req, 'user.delete', { type: 'user', id: u.id, meta: { email: u.email } });
     res.json({ ok: true });
   });
@@ -174,8 +174,9 @@ export default function registerAdminRoutes(app) {
     const match = r => (!action || (r.action || '').toLowerCase().includes(action))
       && (!actor || (r.actor_email || '').toLowerCase().includes(actor))
       && (!since || (r.ts || 0) >= since);
-    const all = db.audit.recent(100000, 0).filter(match);
-    const actions = [...new Set(db.audit.recent(100000, 0).map(r => r.action))].sort();
+    const rows = db.audit.recent(100000, 0);
+    const all = rows.filter(match);
+    const actions = [...new Set(rows.map(r => r.action))].sort();
     const page = all.slice(offset, offset + limit).map(r => ({
       id: r.id, ts: r.ts, actorEmail: r.actor_email || 'system', action: r.action,
       targetType: r.target_type || null, targetId: r.target_id || null, meta: r.meta || null, ip: r.ip || ''

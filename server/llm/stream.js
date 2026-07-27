@@ -2,7 +2,7 @@ import { modelProvider, endpoint, authHeaders } from './provider.js';
 import { samplingParams, ollamaOptions } from './sampling.js';
 import { makeEmitter } from './emitter.js';
 import { normalizeMessages, requestKwargs } from './wire.js';
-import { oneShotKwargPayload, stripNestedKwargs } from '../lib/kwargs.js';
+import { stripNestedKwargs } from '../lib/kwargs.js';
 
 export async function streamCompletion({ model, messages, tools, signal, onEvent }) {
   const { spec, base, key } = modelProvider(model);
@@ -75,7 +75,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
 
   const res = await fetch(endpoint(base, '/chat/completions'), {
     method: 'POST', headers: authHeaders(key), signal,
-    body: JSON.stringify({ model: model.internal_name, messages: wire, stream: true, stream_options: { include_usage: true }, ...(spec.timingsPerToken ? { timings_per_token: true } : {}), ...(hasTools ? { tools, tool_choice: 'auto' } : {}), ...samplingParams(model, spec), ...requestKwargs(model) })
+    body: JSON.stringify({ model: model.internal_name, messages: wire, stream: true, stream_options: { include_usage: true }, ...(spec.timingsPerToken ? { timings_per_token: true } : {}), ...(spec.promptProgress ? { return_progress: true } : {}), ...(hasTools ? { tools, tool_choice: 'auto' } : {}), ...samplingParams(model, spec), ...requestKwargs(model) })
   });
   if (!res.ok || !res.body) { const t = await res.text().catch(() => ''); throw new Error(`Upstream error ${res.status}: ${t.slice(0, 300)}`); }
   const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
@@ -86,6 +86,8 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
     if (data === '[DONE]') return true;
     try {
       const json = JSON.parse(data);
+      if (json.prompt_progress) onEvent({ type: 'prompt_progress', progress: json.prompt_progress });
+      if (json.timings) onEvent({ type: 'timings', timings: json.timings });
       if (json.usage) { const u = json.usage; onEvent({ type: 'usage', usage: { prompt: u.prompt_tokens || 0, completion: u.completion_tokens || 0, total: u.total_tokens || ((u.prompt_tokens || 0) + (u.completion_tokens || 0)) } }); }
       else if (json.timings) {
         const pn = json.timings.prompt_n || 0, cn = json.timings.predicted_n || 0;

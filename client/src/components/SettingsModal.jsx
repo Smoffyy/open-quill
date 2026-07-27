@@ -391,7 +391,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                 <h2>{t("Chat")}</h2>
                 <div className="hint">{t("How responses look, move, and feel.")}</div>
                 <div className="me-sections" style={{ marginBottom: 14 }}>
-                  {[['streaming', t('Streaming')], ['motion', t('Motion')], ['effects', t('Effects')]].map(([k, label]) => (
+                  {[['streaming', t('Streaming')], ['tools', t('Tools & context')], ['motion', t('Motion')], ['effects', t('Effects')]].map(([k, label]) => (
                     <button key={k} className={'me-sec' + (chatSec === k ? ' on' : '')} onClick={() => setChatSec(k)}>{label}</button>
                   ))}
                 </div>
@@ -467,6 +467,26 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                   <div className="field row">
                     <div><label>{t("Input focus ring")}</label><div className="muted-note">{t("Soft accent ring around the message bar while it's focused.")}</div></div>
                     <div className={'switch' + (prefs.focusGlow ? ' on' : '')} onClick={() => setPref('focusGlow', !prefs.focusGlow)} />
+                  </div>
+                </>}
+                {chatSec === 'tools' && <>
+                  {cfg?.webSearchAvailable && (
+                    <div className="field row">
+                      <div><label>{t("Web search on by default")}</label><div className="muted-note">{t("Start every new chat with web search enabled, when the model allows it.")}</div></div>
+                      <div className={'switch' + (prefs.webSearchDefault ? ' on' : '')} onClick={() => setPref('webSearchDefault', !prefs.webSearchDefault)} />
+                    </div>
+                  )}
+                  <div className="field row">
+                    <div><label>{t("Engine telemetry")}</label><div className="muted-note">{t("Show live generation speed and context fill above the message bar while a reply streams.")}</div></div>
+                    <div className={'switch' + (prefs.engineStrip !== false ? ' on' : '')} onClick={() => setPref('engineStrip', prefs.engineStrip === false)} />
+                  </div>
+                  <div className="field row">
+                    <div><label>{t("Context ledger on open")}</label><div className="muted-note">{t("Open chats with the per-message token ledger already showing.")}</div></div>
+                    <div className={'switch' + (prefs.ledgerDefault ? ' on' : '')} onClick={() => setPref('ledgerDefault', !prefs.ledgerDefault)} />
+                  </div>
+                  <div className="field row">
+                    <div><label>{t("Mid-stream steering")}</label><div className="muted-note">{t("Adds a Steer option while a reply is generating. Correcting a reply restarts it from the cut point and adds your correction to the conversation the model sees, which costs an extra request.")}</div></div>
+                    <div className={'switch' + (prefs.steering ? ' on' : '')} onClick={() => setPref('steering', !prefs.steering)} />
                   </div>
                 </>}
               </>

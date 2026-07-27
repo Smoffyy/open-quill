@@ -1,3 +1,5 @@
+import { defaultKwargPayload } from '../lib/kwargs.js';
+
 export function normalizeMessages(protocol, messages) {
   return messages.map(m => {
     if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length) {

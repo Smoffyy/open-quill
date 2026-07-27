@@ -39,17 +39,18 @@ export function sortedMsgs(chatId) { return graphOf(chatId).msgs; }
 
 export function ensureChain(chatId) {
   let g = graphOf(chatId);
-  if (g.chained) return;
+  let chat = db.chats.byId(chatId);
+  if (g.chained) return chat;
   let prev = null;
   let wrote = false;
   for (const m of g.msgs) {
     if (m.parent_id === undefined) { db.messages.update(m.id, { parent_id: prev }); wrote = true; }
     prev = m.id;
   }
-  const chat = db.chats.byId(chatId);
-  if (chat && !chat.active_leaf && g.msgs.length) db.chats.update(chatId, { active_leaf: g.msgs[g.msgs.length - 1].id });
+  if (chat && !chat.active_leaf && g.msgs.length) chat = db.chats.update(chatId, { active_leaf: g.msgs[g.msgs.length - 1].id }) || chat;
   if (wrote) g = graphOf(chatId);
   g.chained = true;
+  return chat;
 }
 
 export function childrenOf(chatId, parentId) {
@@ -57,9 +58,8 @@ export function childrenOf(chatId, parentId) {
 }
 
 export function activePath(chatId) {
-  ensureChain(chatId);
+  const chat = ensureChain(chatId);
   const g = graphOf(chatId);
-  const chat = db.chats.byId(chatId);
   let leaf = chat?.active_leaf;
   if (!leaf || !g.byId.has(leaf)) leaf = g.msgs.length ? g.msgs[g.msgs.length - 1].id : null;
   const path = [];

@@ -34,7 +34,7 @@ const DEFAULT_IMPROVE_PROMPT = 'You are a prompt engineer. The user will give yo
 export default function registerAuthRoutes(app) {
   app.post('/api/auth/check-email', (req, res) => {
     const email = (req.body.email || '').trim().toLowerCase();
-    res.json({ exists: !!db.users.find(u => u.email === email) });
+    res.json({ exists: !!db.users.byEmail(email) });
   });
 
   app.post('/api/auth/login', async (req, res) => {
@@ -43,7 +43,7 @@ export default function registerAuthRoutes(app) {
     const email = (req.body.email || '').trim().toLowerCase();
     const pw = req.body.password || '';
     if (!email || pw.length < 4) return res.status(400).json({ error: 'Invalid email or password (min 4 chars).' });
-    let u = db.users.find(x => x.email === email);
+    let u = db.users.byEmail(email);
     if (u) {
       if (!(await check(pw, u.password_hash))) { noteLoginFail(ip); return res.status(401).json({ error: 'Incorrect password.' }); }
       loginFails.delete(ip);
@@ -156,7 +156,7 @@ export default function registerAuthRoutes(app) {
     const rating = req.body?.rating === 1 ? 1 : req.body?.rating === -1 ? -1 : 0;
     const comment = String(req.body?.comment || '').trim().slice(0, 1000);
     db.messages.update(m.id, { feedback: rating });
-    db.feedback.remove(f => f.message_id === m.id && f.user_id === req.user.id);
+    db.feedback.removeByIds(db.feedback.byMessage(m.id).filter(f => f.user_id === req.user.id).map(f => f.id));
     if (rating !== 0) {
       db.feedback.insert({
         id: uid(), ts: Date.now(), user_id: req.user.id, kind: 'rating',
@@ -192,7 +192,7 @@ export default function registerAuthRoutes(app) {
     const windows = { '7': 7, '30': 30, '90': 90 };
     const days = windows[String(req.query.days)] || null;
     const since = days ? now() - days * 24 * 60 * 60 * 1000 : 0;
-    const rows = db.usage.byUser(req.user.id).filter(r => (r.created_at || 0) >= since);
+    const rows = since ? db.usage.byUserSince(req.user.id, since) : db.usage.byUser(req.user.id);
     const byModel = new Map();
     const byDay = new Map();
     let tp = 0, tc = 0, tcost = 0, priced = 0;
@@ -294,8 +294,8 @@ export default function registerAuthRoutes(app) {
     for (const c of myChats) { try { sandbox.remove(c.id); } catch {} }
     const chatIds = new Set(myChats.map(c => c.id));
     purgeUploads(chatIds);
-    db.messages.remove(m => chatIds.has(m.chat_id));
-    db.chats.remove(c => c.user_id === req.user.id);
+    for (const id of chatIds) db.messages.removeWhere('chat_id', id);
+    db.chats.removeWhere('user_id', req.user.id);
     res.json({ ok: true, deleted: myChats.length });
   });
 
@@ -306,11 +306,11 @@ export default function registerAuthRoutes(app) {
     for (const c of myChats) { try { sandbox.remove(c.id); } catch {} }
     const chatIds = new Set(myChats.map(c => c.id));
     purgeUploads(chatIds);
-    db.messages.remove(m => chatIds.has(m.chat_id));
-    db.chats.remove(c => c.user_id === u.id);
+    for (const id of chatIds) db.messages.removeWhere('chat_id', id);
+    db.chats.removeWhere('user_id', u.id);
     removeUserFromSpaces(u.id);
-    db.sessions.remove(s => s.user_id === u.id);
-    db.users.remove(x => x.id === u.id);
+    db.sessions.removeWhere('user_id', u.id);
+    db.users.removeById(u.id);
     setCookie(res, '');
     res.json({ ok: true });
   });
@@ -320,7 +320,7 @@ export default function registerAuthRoutes(app) {
     if (q.length < 2) return res.json([]);
     const out = db.users.filter(u => u.id !== req.user.id && ((u.email || '').toLowerCase().includes(q) || (u.display_name || '').toLowerCase().includes(q)))
       .slice(0, 10)
-      .map(u => ({ id: u.id, email: u.email, displayName: u.display_name || u.email.split('@')[0] }));
+      .map(u => ({ id: u.id, email: u.email, displayName: u.display_name || (u.email || '').split('@')[0] }));
     res.json(out);
   });
 }

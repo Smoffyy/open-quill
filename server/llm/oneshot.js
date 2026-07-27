@@ -1,6 +1,5 @@
 import { modelProvider, endpoint, authHeaders } from './provider.js';
 import { ollamaOptions } from './sampling.js';
-import { normalizeMessages } from './wire.js';
 import { oneShotKwargPayload, stripNestedKwargs } from '../lib/kwargs.js';
 
 export async function oneShot(model, messages) {

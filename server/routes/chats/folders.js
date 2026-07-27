@@ -1,14 +1,5 @@
-import { db, uid, now, getSetting } from '../../db.js';
+import { db, uid, now } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
-import { buildMessages } from '../../llm/index.js';
-import * as sandbox from '../../sandbox.js';
-import * as membank from '../../membank.js';
-import * as websearch from '../../websearch.js';
-import { purgeUploads } from '../../lib/uploads.js';
-import { stripToolSyntax } from '../../lib/history.js';
-import { sortedMsgs, ensureChain, childrenOf, activePath, leafUnder } from '../../lib/tree.js';
-import { modelCtx } from '../../lib/models.js';
-import { chatHistory, estimateTokens, calibratedTokens, tokenCalib, compactThreshold, rollingCtxFor, promptVars, instrFor } from '../../lib/convo.js';
 
 export default function registerFolderRoutes(app) {
   app.get('/api/folders', authMiddleware, (req, res) => {
@@ -40,7 +31,7 @@ export default function registerFolderRoutes(app) {
     if (f && f.user_id === req.user.id) {
       // chats in this folder fall back to the default (no folder)
       for (const c of db.chats.where('folder_id', f.id)) { if (c.user_id === req.user.id) db.chats.update(c.id, { folder_id: null }); }
-      db.folders.remove(x => x.id === f.id);
+      db.folders.removeById(f.id);
     }
     res.json({ ok: true });
   });

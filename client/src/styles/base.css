@@ -24,6 +24,8 @@
   --font-serif: 'Source Serif 4 Variable';
   --font-sans: 'Open Sans';
   --radius: 14px;
+  --attach-size: 104px;
+  --attach-radius: 12px;
   --pop-bg: #383835;
   --pop-border: rgba(255, 255, 255, .10);
   --pop-hover: #42423f;

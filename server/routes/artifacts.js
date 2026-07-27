@@ -2,6 +2,8 @@ import { db } from '../db.js';
 import { authMiddleware } from '../auth.js';
 import * as sandbox from '../sandbox.js';
 
+const attachName = (name) => String(name || 'file').replace(/[\r\n"\\]/g, '_');
+
 function ownChat(req, res) {
   const c = db.chats.byId(req.params.id);
   if (!c || c.user_id !== req.user.id) { res.status(404).json({ error: 'not found' }); return null; }
@@ -35,7 +37,7 @@ export default function registerArtifactRoutes(app) {
     const rel = req.query.path || '';
     const files = sandbox.list(c.id);
     if (!files.find(f => f.path === rel)) return res.status(404).json({ error: 'not found' });
-    const name = rel.split('/').pop();
+    const name = attachName(rel.split('/').pop());
     const vq = parseInt(req.query.v);
     const versions = sandbox.isText(rel) ? sandbox.listVersions(c.id, rel) : [];
     if (vq && versions.includes(vq) && vq !== sandbox.versionOf(c.id, rel)) {
@@ -65,7 +67,7 @@ export default function registerArtifactRoutes(app) {
   app.get('/api/chats/:id/zip', authMiddleware, (req, res) => {
     const c = ownChat(req, res); if (!c) return;
     res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${(c.title || 'sandbox').replace(/[^a-zA-Z0-9_-]/g, '_')}.zip"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${attachName((c.title || 'sandbox').replace(/[^a-zA-Z0-9_-]/g, '_'))}.zip"`);
     res.send(sandbox.zipAll(c.id));
   });
 }

@@ -1,14 +1,7 @@
-import { db, uid, now, getSetting } from '../../db.js';
+import { db, uid, now } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
-import { buildMessages } from '../../llm/index.js';
 import * as sandbox from '../../sandbox.js';
-import * as membank from '../../membank.js';
-import * as websearch from '../../websearch.js';
 import { purgeUploads } from '../../lib/uploads.js';
-import { stripToolSyntax } from '../../lib/history.js';
-import { sortedMsgs, ensureChain, childrenOf, activePath, leafUnder } from '../../lib/tree.js';
-import { modelCtx } from '../../lib/models.js';
-import { chatHistory, estimateTokens, calibratedTokens, tokenCalib, compactThreshold, rollingCtxFor, promptVars, instrFor } from '../../lib/convo.js';
 
 export default function registerCrudRoutes(app) {
   app.post('/api/chats', authMiddleware, (req, res) => {
@@ -23,8 +16,8 @@ export default function registerCrudRoutes(app) {
     const c = db.chats.byId(req.params.id);
     if (c && c.user_id === req.user.id) {
       purgeUploads(c.id);
-      db.messages.remove(m => m.chat_id === c.id);
-      db.chats.remove(x => x.id === c.id);
+      db.messages.removeWhere('chat_id', c.id);
+      db.chats.removeById(c.id);
       sandbox.remove(c.id);
     }
     res.json({ ok: true });

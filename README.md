@@ -19,6 +19,42 @@ This project is licensed under the [MIT License](LICENSE), by downloading, using
 
 ---
 
+<p align="center">
+  <img src="assets\v27\anthropic_screenshot1.jpeg" alt="Chat Interface with Artifacts"/>
+</p>
+
+<details>
+  <summary>More Screenshots.</summary>
+  <br>
+
+  <p align="center">
+    <img src="assets\v27\anthropic_screenshot2.jpeg" alt="Artifacts"/>
+    <br>
+    <sub>Chat with Artifacts.</sub>
+  </p>
+
+  <p align="center">
+    <img src="assets\v27\anthropic_screenshot4.jpeg" alt="Chat"/>
+    <br>
+    <sub>Chat response.</sub>
+  </p>
+
+  <p align="center">
+    <img src="assets\v27\anthropic_screenshot3.jpeg" alt="Admin panel"/>
+    <br>
+    <sub>Models tab in Admin Panel.</sub>
+  </p>
+
+  <p align="center">
+    <img src="assets\v27\openai_screenshot1.jpeg" alt="OpenAI chat"/>
+    <br>
+    <sub>OpenAI theme</sub>
+  </p>
+
+</details>
+
+---
+
 ## Features
 
 - Anthropic-style UI with a serif assistant voice (Source Serif 4) and Open Sans user input
@@ -66,10 +102,10 @@ Open http://localhost:5173.
 
 ## Connecting your model
 
-1. Start your local server (e.g. LM Studio -> Developer -> Start Server) and load a model.
-2. Sign in as the admin, open the profile menu (bottom-left) -> **Admin Panel** -> **Connection**.
-3. Set the API base URL (default `http://localhost:1234/v1`) and key, then Save.
-4. Under **Models**, set each model's **internal model name** to the id your server expects (LM Studio accepts `local-model`, or the loaded model's id). Add a description, system prompt, logos, and reasoning settings as desired.
+1. Start your local server (e.g. llama.cpp server) and load a model.
+2. Sign in as the admin, open the profile menu (bottom-left) -> **Admin Panel** -> **Providers**.
+3. Set the API base URL (default `http://localhost:8080/v1`) and key, then Save.
+4. Under **Models**, set each model's **internal model name** to the id your server expects (llama.cpp accepts the model name configured when starting the server, or the model's id). Add a description, system prompt, logos, and reasoning settings as desired.
 
 ## Databases
 
@@ -126,7 +162,7 @@ Open Quill is built to run entirely on your own machine, and by default nothing 
 
 Outbound network requests happen only when you explicitly configure or enable a feature, and only to the destination you specify:
 
-- **Model provider**: chat requests go to the provider base URL you set. The default is a local server (LM Studio at `http://localhost:1234/v1`). If you choose a cloud provider and enter an API key, requests go there.  
+- **Model provider**: chat requests go to the provider base URL you set. The default is a local server (llama.cpp at `http://localhost:8080/v1`). If you choose a cloud provider and enter an API key, requests go there.
 - **Voice**: speech‑to‑text and text‑to‑speech use the base URL you configure (local by default).  
 - **Web search**: off unless you enable it and point it at your own SearXNG instance. When a search runs, the server fetches result pages from the web, which is the point of the feature.  
 - **Connectors (MCP)**: only those you add. These run as local subprocesses, or reach an `http(s)` URL if you configure one.  

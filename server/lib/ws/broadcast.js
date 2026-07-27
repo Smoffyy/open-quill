@@ -1,6 +1,3 @@
-import { db, getSetting } from '../../db.js';
-import { draftModels, publicModels } from '../models.js';
-
 export const clients = new Map(); // ws -> {userId, abort}
 
 export function requestedKwargs(msg) {

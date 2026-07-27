@@ -110,8 +110,9 @@
 [data-preset="openai"] .send, [data-preset="openai"] .send.stop { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; }
 [data-preset="openai"] .send svg { width: 18px; height: 18px; }
 [data-preset="openai"] .mic, [data-preset="openai"] .mic.call { width: 36px; height: 36px; border-radius: 50%; }
-[data-preset="openai"] .composer .attachments, [data-preset="openai"] .composer .queued-chip,
-[data-preset="openai"] .composer .continue-row, [data-preset="openai"] .composer .slash-menu { margin-left: -36px; margin-right: -84px; }
+[data-preset="openai"] .composer .attach-row, [data-preset="openai"] .composer .queued-chip,
+[data-preset="openai"] .composer .continue-row, [data-preset="openai"] .composer .slash-menu,
+[data-preset="openai"] .composer .steer-row { margin-left: -36px; margin-right: -84px; }
 
 [data-preset="openai"] .composer-wrap.floating {
   position: absolute; bottom: 0; left: 0; right: 0; z-index: 30;
@@ -186,3 +187,10 @@
 :root[data-preset="openai"][data-theme="openai"] .code-bar { border-bottom: 1px solid rgba(255, 255, 255, .06); }
 
 [data-preset="openai"] .model-trigger .ext { color: var(--text-faint); font-weight: 400; font-size: 14px; }
+
+[data-preset="openai"] .tool-bash.ws.open .tb-inner { border-radius: 14px; }
+[data-preset="openai"] .ws-results { padding: 6px; }
+[data-preset="openai"] .ws-results a.ws-result { border-radius: 11px; padding: 8px 10px; gap: 11px; }
+[data-preset="openai"] .ws-num { border-radius: 50%; width: 19px; height: 19px; font-size: 9px; }
+[data-preset="openai"] .ws-title { font-size: 13px; }
+[data-preset="openai"] .ws-meta { font-size: 11px; }

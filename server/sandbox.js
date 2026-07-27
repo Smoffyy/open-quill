@@ -144,25 +144,27 @@ function walkFiles(chatId, { includeIgnored = false, under = '' } = {}) {
   const root = dirFor(chatId);
   const start = under ? resolveSafe(chatId, under) : root;
   const out = [];
+  const rels = [];
   let hidden = 0;
-  const stack = [start];
+  const stack = [[start, under ? relOf(chatId, start) : '']];
   while (stack.length) {
-    const dir = stack.pop();
+    const [dir, prefix] = stack.pop();
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
     for (const e of entries) {
       const abs = path.join(dir, e.name);
-      const rel = relOf(chatId, abs);
+      const rel = prefix ? prefix + '/' + e.name : e.name;
       if (e.isDirectory()) {
         if (!includeIgnored && (isIgnoredDir(e.name) || isIgnoredRel(chatId, rel))) { hidden += countUnder(abs); continue; }
-        stack.push(abs);
+        stack.push([abs, rel]);
       } else {
         if (!includeIgnored && isIgnoredRel(chatId, rel)) { hidden++; continue; }
         out.push(abs);
+        rels.push(rel);
       }
     }
   }
-  return { files: out, hidden };
+  return { files: out, rels, hidden };
 }
 function countUnder(dir) {
   let n = 0;
@@ -179,12 +181,14 @@ function countUnder(dir) {
 export function list(chatId, opts = {}) {
   const includeIgnored = !!(opts.includeIgnored || opts.all);
   const meta = readMeta(chatId).files || {};
-  const { files, hidden } = walkFiles(chatId, { includeIgnored, under: opts.under });
-  const out = files.map(abs => {
-    const rel = relOf(chatId, abs);
-    let size = 0; try { size = fs.statSync(abs).size; } catch {}
-    return { path: rel, ext: extOf(rel), size, v: meta[rel]?.v || 1 };
-  }).sort((a, b) => a.path.localeCompare(b.path));
+  const { files, rels, hidden } = walkFiles(chatId, { includeIgnored, under: opts.under });
+  const out = new Array(files.length);
+  for (let i = 0; i < files.length; i++) {
+    const rel = rels[i];
+    let size = 0; try { size = fs.statSync(files[i]).size; } catch {}
+    out[i] = { path: rel, ext: extOf(rel), size, v: meta[rel]?.v || 1 };
+  }
+  out.sort((a, b) => a.path.localeCompare(b.path));
   if (opts.withHidden) return { files: out, hidden };
   return out;
 }

@@ -19,7 +19,7 @@ export default function VoiceSection() {
           <div className="field"><label>{t("Engine")}</label>
             <SegPick value={settings.voiceSttEngine || 'browser'} options={[['browser', 'Browser built-in'], ['server', 'Server (Whisper)']]}
               onChange={(v) => setSettings(s => ({ ...s, voiceSttEngine: v }))} />
-            <div className="muted-note">{t("Browser uses Chrome's built-in speech recognition, zero setup, no audio leaves the machine beyond what the browser does. Server sends recorded audio to any OpenAI-compatible transcription endpoint: whisper.cpp's server, faster-whisper-server, Speaches, or OpenAI itself.")}</div>
+            <div className="muted-note">{t("Browser uses Chrome's built-in recognition: zero setup, but Chrome uploads the audio to Google to transcribe it, so it needs internet. Server sends recorded audio to any OpenAI-compatible transcription endpoint: whisper.cpp's server, faster-whisper-server, Speaches, or OpenAI itself. Point it at a local endpoint to keep audio on your machine.")}</div>
           </div>
           {settings.voiceSttEngine === 'server' && <>
             <div className="field"><label>{t("Base URL")}</label>
@@ -40,7 +40,7 @@ export default function VoiceSection() {
           <div className="field"><label>{t("Engine")}</label>
             <SegPick value={settings.voiceTtsEngine || 'browser'} options={[['browser', 'Browser built-in'], ['server', 'Server (OpenAI-compatible)']]}
               onChange={(v) => setSettings(s => ({ ...s, voiceTtsEngine: v }))} />
-            <div className="muted-note">Browser uses the operating system voices via Chrome, fully local, zero setup. Server sends text to any OpenAI-compatible <code>/audio/speech</code> endpoint: openedai-speech, Kokoro-FastAPI, Piper wrappers, or OpenAI.</div>
+            <div className="muted-note">Browser uses the voices Chrome exposes, zero setup. A local system voice is preferred automatically; Chrome's network voices are synthesised by Google, so they need internet. Server sends text to any OpenAI-compatible <code>/audio/speech</code> endpoint: openedai-speech, Kokoro-FastAPI, Piper wrappers, or OpenAI.</div>
           </div>
           {settings.voiceTtsEngine === 'server' && <>
             <div className="field"><label>{t("Base URL")}</label>

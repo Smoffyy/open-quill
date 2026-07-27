@@ -220,13 +220,19 @@ function ChipCard({ call, result }) {
   );
 }
 
+function hostOf(url) {
+  const raw = String(url || '');
+  try { return new URL(raw).hostname.replace(/^www\./, ''); }
+  catch { return raw.replace(/^[a-z]+:\/\//i, '').split(/[/?#]/)[0]; }
+}
+
 function WebSearchCard({ call, result }) {
   const [open, setOpen] = useState(false);
   const pending = !result;
   const failed = result && !result.ok;
   const results = (result && result.results) || [];
   return (
-    <div className={'tool-bash' + (failed ? ' err' : '') + (open ? ' open' : '')}>
+    <div className={'tool-bash ws' + (failed ? ' err' : '') + (open ? ' open' : '')}>
       <button className="tb-head" onClick={() => setOpen(o => !o)}>
         <Search style={{ width: 14 }} />
         <span className="tb-label">{pending ? 'Searching the web' : 'Web search'}</span>
@@ -241,13 +247,21 @@ function WebSearchCard({ call, result }) {
           {failed
             ? <div className="tb-out"><div className="tb-out-head">Error</div><div className="tb-out-empty">{result.error}</div></div>
             : results.length
-              ? <div className="ws-results">{results.map((r, i) => (
-                  <a key={i} className="ws-result" href={r.url} target="_blank" rel="noopener noreferrer">
-                    <span className="ws-title">{r.title || r.url}</span>
-                    <span className="ws-url">{r.url}</span>
-                    {r.chars != null && <span className="ws-chars">{r.chars.toLocaleString()} chars read</span>}
-                  </a>
-                ))}</div>
+              ? <div className="ws-results">{results.map((r, i) => {
+                  const host = hostOf(r.url);
+                  return (
+                    <a key={i} className="ws-result" href={r.url} target="_blank" rel="noopener noreferrer" title={[r.title, r.url].filter(Boolean).join('\n')}>
+                      <span className="ws-num">{i + 1}</span>
+                      <span className="ws-body">
+                        <span className="ws-title">{r.title || host || r.url}</span>
+                        <span className="ws-meta">
+                          <span className="ws-host">{host}</span>
+                          {r.chars != null && <span className="ws-chars">{r.chars.toLocaleString()} chars read</span>}
+                        </span>
+                      </span>
+                    </a>
+                  );
+                })}</div>
               : <div className="tb-out-empty" style={{ padding: '8px 12px' }}>No results.</div>}
         </div>
       </div>

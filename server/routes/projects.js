@@ -67,12 +67,11 @@ export default function registerProjectRoutes(app) {
   });
 
   app.delete('/api/projects/:id', authMiddleware, (req, res) => {
-    try { projectfiles.removeAll(req.params.id); } catch {}
     const p = db.projects.byId(req.params.id);
-    if (p && p.user_id === req.user.id) {
-      for (const c of db.chats.byUser(req.user.id)) { if (c.project_id === p.id) db.chats.update(c.id, { project_id: null }); }
-      db.projects.remove(x => x.id === p.id);
-    }
+    if (!p || p.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+    try { projectfiles.removeAll(p.id); } catch {}
+    for (const c of db.chats.byUser(req.user.id)) { if (c.project_id === p.id) db.chats.update(c.id, { project_id: null }); }
+    db.projects.remove(x => x.id === p.id);
     res.json({ ok: true });
   });
 }

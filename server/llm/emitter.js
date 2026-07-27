@@ -12,6 +12,10 @@ const TEXT_CALL_TAGS = [
 
 const heldBack = (s, tag) => { for (let n = Math.min(s.length, tag.length - 1); n > 0; n--) if (s.endsWith(tag.slice(0, n))) return n; return 0; };
 
+const TAG_MAX = TEXT_CALL_TAGS.reduce((n, t) => Math.max(n, t.open.length, t.close.length), 0);
+const startsTag = (s) => s.indexOf('<') !== -1 || s.indexOf('[') !== -1;
+const tailStartsTag = (s) => startsTag(s.length > TAG_MAX ? s.slice(s.length - TAG_MAX) : s);
+
 export function makeToolTextFilter(onText, onCalls, isAllowed) {
   let carry = '', buf = '', block = null;
   if (!isAllowed) return { feed: (raw) => { if (raw) onText(raw); }, flush: () => {} };
@@ -20,13 +24,15 @@ export function makeToolTextFilter(onText, onCalls, isAllowed) {
     while (text.length) {
       if (!block) {
         let best = null;
-        for (const tag of TEXT_CALL_TAGS) {
-          const i = text.indexOf(tag.open);
-          if (i !== -1 && (!best || i < best.i)) best = { i, tag };
+        if (startsTag(text)) {
+          for (const tag of TEXT_CALL_TAGS) {
+            const i = text.indexOf(tag.open);
+            if (i !== -1 && (!best || i < best.i)) best = { i, tag };
+          }
         }
         if (!best) {
           let hold = 0;
-          for (const tag of TEXT_CALL_TAGS) hold = Math.max(hold, heldBack(text, tag.open));
+          if (tailStartsTag(text)) for (const tag of TEXT_CALL_TAGS) hold = Math.max(hold, heldBack(text, tag.open));
           if (text.length - hold > 0) onText(text.slice(0, text.length - hold));
           carry = text.slice(text.length - hold);
           return;

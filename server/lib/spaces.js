@@ -15,8 +15,11 @@ export function isAccepted(space, userId) { return (space.members || []).some(m 
 export function memberOf(space, userId) { return (space.members || []).find(m => m.userId === userId) || null; }
 export function canPost(space, userId) { const m = memberOf(space, userId); return !!m && m.status === 'accepted' && m.role !== 'viewer'; }
 
-export function removeUserFromSpaces(userId) {
-  for (const s of db.spaces.filter(s => isMember(s, userId))) {
+export function removeUserFromSpaces(userId, spaceId) {
+  const list = spaceId
+    ? [db.spaces.byId(spaceId)].filter(s => s && isMember(s, userId))
+    : db.spaces.filter(s => isMember(s, userId));
+  for (const s of list) {
     let members = (s.members || []).filter(m => m.userId !== userId);
     let ownerId = s.owner_id;
     if (ownerId === userId) {
@@ -24,7 +27,7 @@ export function removeUserFromSpaces(userId) {
       ownerId = next ? next.userId : null;
       if (next) members = members.map(m => m.userId === ownerId ? { ...m, role: 'owner' } : m);
     }
-    if (!members.length || !ownerId) { db.spaceMessages.remove(m => m.space_id === s.id); db.spaces.remove(x => x.id === s.id); }
+    if (!members.length || !ownerId) { db.spaceMessages.removeWhere('space_id', s.id); db.spaces.removeById(s.id); }
     else db.spaces.update(s.id, { members, owner_id: ownerId, updated_at: now() });
   }
 }

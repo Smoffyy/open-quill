@@ -39,18 +39,18 @@ export function createSession(user, req) {
     const existing = db.sessions.byUser(user.id);
     if (existing.length >= cap) {
       const sorted = [...existing].sort((a, b) => (a.last_seen || 0) - (b.last_seen || 0));
-      for (const old of sorted.slice(0, existing.length - cap + 1)) db.sessions.remove(x => x.id === old.id);
+      db.sessions.removeByIds(sorted.slice(0, existing.length - cap + 1).map(o => o.id));
     }
   }
   const s = db.sessions.insert({ id: uid(), user_id: user.id, ip, user_agent: ua, last_seen: t, created_at: t });
   return s.id;
 }
 export function sign(user, sessionId) { return jwt.sign({ id: user.id, sid: sessionId }, SECRET, { expiresIn: `${tokenLifeDays()}d` }); }
-export function revokeSession(id) { db.sessions.remove(s => s.id === id); }
-export function revokeOtherSessions(userId, keepId) { db.sessions.remove(s => s.user_id === userId && s.id !== keepId); }
+export function revokeSession(id) { db.sessions.removeById(id); }
+export function revokeOtherSessions(userId, keepId) { db.sessions.removeByIds(db.sessions.byUser(userId).filter(s => s.id !== keepId).map(s => s.id)); }
 
 export function publicUser(u) {
-  return { id: u.id, email: u.email, displayName: u.display_name || u.email.split('@')[0], isAdmin: !!u.is_admin, isOwner: !!u.is_owner, twoFactor: !!u.totp_enabled, prefs: u.prefs || {}, instructions: u.instructions || '', savedPrompts: Array.isArray(u.saved_prompts) ? u.saved_prompts : [], personas: Array.isArray(u.personas) ? u.personas : [], styles: Array.isArray(u.styles) ? u.styles : [], memory: u.memory || '', memoryUpdatedAt: u.memory_updated_at || 0 };
+  return { id: u.id, email: u.email, displayName: u.display_name || (u.email || '').split('@')[0], isAdmin: !!u.is_admin, isOwner: !!u.is_owner, twoFactor: !!u.totp_enabled, prefs: u.prefs || {}, instructions: u.instructions || '', savedPrompts: Array.isArray(u.saved_prompts) ? u.saved_prompts : [], personas: Array.isArray(u.personas) ? u.personas : [], styles: Array.isArray(u.styles) ? u.styles : [], memory: u.memory || '', memoryUpdatedAt: u.memory_updated_at || 0 };
 }
 
 function resolveToken(token) {
@@ -61,7 +61,7 @@ function resolveToken(token) {
   if (payload.sid) {
     const s = db.sessions.byId(payload.sid);
     if (!s || s.user_id !== u.id) return null;
-    if (now() - (s.last_seen || 0) > sessionTtlMs()) { db.sessions.remove(x => x.id === s.id); return null; }
+    if (now() - (s.last_seen || 0) > sessionTtlMs()) { db.sessions.removeById(s.id); return null; }
     if (Date.now() - (s.last_seen || 0) > 60 * 1000) db.sessions.touch(s.id, now());
     return { user: u, sessionId: s.id };
   }

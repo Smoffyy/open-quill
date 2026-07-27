@@ -114,6 +114,14 @@ CREATE INDEX IF NOT EXISTS idx_feedback_ts ON feedback(ts);`);
   sdb.pragma('user_version = 7');
 }
 
+if (sdb.pragma('user_version', { simple: true }) < 8) {
+  sdb.exec(`CREATE INDEX IF NOT EXISTS idx_usage_created ON usage(created_at);
+CREATE INDEX IF NOT EXISTS idx_messages_parent ON messages(chat_id, parent_id);`);
+  sdb.pragma('user_version = 8');
+}
+
+export function tx(fn) { return sdb.transaction(fn)(); }
+
 export const uid = () => crypto.randomUUID();
 let lastTs = 0;
 export const now = () => { const t = Date.now(); lastTs = t > lastTs ? t : lastTs + 1; return lastTs; };
@@ -187,6 +195,13 @@ function collection(table) {
       return cur;
     },
     removeById: id => { delStmt.run(id); bump(); },
+    removeByIds: ids => {
+      const list = Array.isArray(ids) ? ids : [...ids];
+      if (!list.length) return;
+      const tx = sdb.transaction(rows => { for (const id of rows) delStmt.run(id); });
+      tx(list);
+      bump();
+    },
     remove: fn => {
       const rows = allStmt.all().map(r => JSON.parse(r.data)).filter(fn);
       if (!rows.length) return;
@@ -211,11 +226,27 @@ chatsCol.recentByUser = (userId, limit) => byUserRecentStmt.all(userId, limit).m
 const byUserOldestStmt = sdb.prepare('SELECT data FROM chats WHERE user_id=? ORDER BY updated_at ASC');
 chatsCol.oldestByUser = userId => byUserOldestStmt.all(userId).map(r => JSON.parse(r.data));
 
+const usersCol = collection('users');
+const byEmailStmt = sdb.prepare('SELECT data FROM users WHERE email IS ?');
+usersCol.byEmail = email => { const r = byEmailStmt.get(email ?? null); return r ? JSON.parse(r.data) : undefined; };
+
 const usageCol = collection('usage');
 const usageByUserStmt = sdb.prepare('SELECT data FROM usage WHERE user_id=?');
 usageCol.byUser = userId => usageByUserStmt.all(userId).map(r => JSON.parse(r.data));
+const usageByUserSinceStmt = sdb.prepare('SELECT data FROM usage WHERE user_id=? AND created_at >= ?');
+usageCol.byUserSince = (userId, since) => usageByUserSinceStmt.all(userId, since || 0).map(r => JSON.parse(r.data));
+const usageSinceStmt = sdb.prepare('SELECT data FROM usage WHERE created_at >= ?');
+usageCol.since = since => usageSinceStmt.all(since || 0).map(r => JSON.parse(r.data));
 const usageNameStmt = sdb.prepare("SELECT json_extract(data,'$.model_name') AS name FROM usage WHERE model_id=? AND json_extract(data,'$.model_name') NOT IN ('', 'null') LIMIT 1");
 usageCol.nameForModel = modelId => { const r = usageNameStmt.get(modelId); return (r && r.name) || ''; };
+const usageSpendStmt = sdb.prepare("SELECT COALESCE(SUM(json_extract(data,'$.cost')), 0) AS cost FROM usage WHERE user_id=? AND created_at >= ?");
+usageCol.spendSince = (userId, since) => { try { return Number(usageSpendStmt.get(userId, since)?.cost) || 0; } catch { return 0; } };
+const usageSpendAllStmt = sdb.prepare("SELECT user_id, COALESCE(SUM(json_extract(data,'$.cost')), 0) AS cost FROM usage WHERE created_at >= ? GROUP BY user_id");
+usageCol.spendSinceByUser = (since) => {
+  const out = new Map();
+  try { for (const r of usageSpendAllStmt.all(since)) out.set(r.user_id, Number(r.cost) || 0); } catch {}
+  return out;
+};
 
 const spaceMessagesCol = collection('space_messages');
 const spMsgBySpaceStmt = sdb.prepare('SELECT data FROM space_messages WHERE space_id=? ORDER BY created_at');
@@ -244,7 +275,7 @@ const projectsByUserStmt = sdb.prepare('SELECT data FROM projects WHERE user_id=
 projectsCol.byUser = userId => projectsByUserStmt.all(userId).map(r => JSON.parse(r.data));
 
 export const db = {
-  users: collection('users'),
+  users: usersCol,
   chats: chatsCol,
   messages: messagesCol,
   models: collection('models'),

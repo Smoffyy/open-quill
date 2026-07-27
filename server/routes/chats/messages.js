@@ -1,22 +1,14 @@
-import { db, uid, now, getSetting } from '../../db.js';
+import { db, uid, now, tx } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
-import { buildMessages } from '../../llm/index.js';
 import * as sandbox from '../../sandbox.js';
-import * as membank from '../../membank.js';
-import * as websearch from '../../websearch.js';
-import { purgeUploads } from '../../lib/uploads.js';
 import { stripToolSyntax } from '../../lib/history.js';
-import { sortedMsgs, ensureChain, childrenOf, activePath, leafUnder } from '../../lib/tree.js';
-import { modelCtx } from '../../lib/models.js';
-import { chatHistory, estimateTokens, calibratedTokens, tokenCalib, compactThreshold, rollingCtxFor, promptVars, instrFor } from '../../lib/convo.js';
+import { ensureChain, childrenOf, activePath, leafUnder } from '../../lib/tree.js';
 
 export default function registerMessageRoutes(app) {
   app.get('/api/chats/:id', authMiddleware, (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const path = activePath(c.id);
-    const kidsByParent = new Map();
-    for (const m of sortedMsgs(c.id)) { const p = m.parent_id ?? null; if (!kidsByParent.has(p)) kidsByParent.set(p, []); kidsByParent.get(p).push(m); }
     const modelById = new Map(db.models.all().map(x => [x.id, x]));
     const legacyName = new Map();
     for (const m of path) {
@@ -24,10 +16,10 @@ export default function registerMessageRoutes(app) {
       legacyName.set(m.model_id, db.usage.nameForModel(m.model_id));
     }
     const messages = path.map(m => {
-      const sibs = kidsByParent.get(m.parent_id ?? null) || [];
+      const sibs = childrenOf(c.id, m.parent_id ?? null);
       const mm = m.model_id ? modelById.get(m.model_id) : null;
       return {
-        id: m.id, role: m.role, content: m.content, reasoning: m.reasoning, model_id: m.model_id, attachments: m.attachments || [], created_at: m.created_at, pinned: !!m.pinned, feedback: m.feedback || 0,
+        id: m.id, role: m.role, content: m.content, reasoning: m.reasoning, model_id: m.model_id, attachments: m.attachments || [], created_at: m.created_at, pinned: !!m.pinned, excluded: !!m.excluded, steers: Array.isArray(m.steers) ? m.steers : null, feedback: m.feedback || 0,
         model_name: m.model_name || mm?.display_name || legacyName.get(m.model_id) || '', model_icon: m.model_icon || mm?.static_icon || '',
         extended: !!m.extended, reasoningEffort: m.reasoning_effort || null, kwargValues: m.kwarg_values || null,
         parentId: m.parent_id ?? null, branchIndex: sibs.findIndex(s => s.id === m.id), branchCount: sibs.length,
@@ -81,13 +73,15 @@ export default function registerMessageRoutes(app) {
       summary: '', summary_upto: 0, created_at: t, updated_at: t
     });
     let prev = null, ts = t, leaf = null;
-    for (const m of slice) {
-      const nid = uid();
-      const copy = { ...m, id: nid, chat_id: nc.id, parent_id: prev, created_at: ts++ };
-      delete copy.active_leaf;
-      db.messages.insert(copy);
-      prev = nid; leaf = nid;
-    }
+    tx(() => {
+      for (const m of slice) {
+        const nid = uid();
+        const copy = { ...m, id: nid, chat_id: nc.id, parent_id: prev, created_at: ts++ };
+        delete copy.active_leaf;
+        db.messages.insert(copy);
+        prev = nid; leaf = nid;
+      }
+    });
     db.chats.update(nc.id, { active_leaf: leaf });
     res.json({ id: nc.id, title: nc.title });
   });
@@ -99,8 +93,9 @@ export default function registerMessageRoutes(app) {
     if (!m || m.chat_id !== c.id) return res.status(404).json({ error: 'message not found' });
     const patch = {};
     if ('pinned' in req.body) patch.pinned = req.body.pinned ? 1 : 0;
-    db.messages.update(m.id, patch);
-    res.json({ ok: true, pinned: !!patch.pinned });
+    if ('excluded' in req.body) patch.excluded = req.body.excluded ? 1 : 0;
+    const saved = db.messages.update(m.id, patch);
+    res.json({ ok: true, pinned: !!(saved || m).pinned, excluded: !!(saved || m).excluded });
   });
 
   app.delete('/api/chats/:id/messages/:mid', authMiddleware, (req, res) => {
@@ -121,7 +116,7 @@ export default function registerMessageRoutes(app) {
     } else {
       for (const kid of childrenOf(c.id, m.id)) db.messages.update(kid.id, { parent_id: m.parent_id ?? null });
     }
-    db.messages.remove(x => removed.has(x.id));
+    db.messages.removeByIds(removed);
     const fresh = db.chats.byId(c.id);
     if (removed.has(fresh.active_leaf)) {
       const anchor = m.parent_id ?? null;

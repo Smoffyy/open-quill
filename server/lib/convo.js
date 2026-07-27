@@ -6,7 +6,7 @@ import { historyText } from './history.js';
 import { isTextLike, readUploadText, readImageDataUri } from './uploads.js';
 import { modelCtx } from './models.js';
 import { pinnedFilesPrompt, lastUserQuery } from './prompts.js';
-import { llamaTokenCount, llamaContext, isLlamaCpp } from './llamacpp.js';
+import { llamaTokenCount, isLlamaCpp } from './llamacpp.js';
 
 export const STYLE_PRESETS = {
   concise: 'Respond concisely. Get to the point immediately, cut filler, hedging, and restatement, and keep answers as short as they can be while remaining complete and correct. Prefer tight prose over long lists.',
@@ -24,50 +24,111 @@ export function styleTextFor(userId, styleId) {
 }
 
 // history for the active branch, minus whatever the summary already covers
-export async function chatHistory(chat, model) {
+export async function historyRows(chat, model) {
   const fresh = db.chats.byId(chat.id) || chat;
   const upto = fresh.summary && fresh.summary_upto ? fresh.summary_upto : 0;
-  let rows = activePath(chat.id);
-  if (upto) rows = rows.filter(m => m.created_at > upto || m.pinned);
-  return rows.map(m => {
-    let text = historyText(m.content || '').replace(/\n{3,}/g, '\n\n');
-    const atts = m.attachments || [];
-    const images = [];
-    if (atts.length) {
-      const notes = [];
-      for (const a of atts) {
-        const isImage = a.type && a.type.startsWith('image/');
-        if (isImage && model.has_vision) { const uri = readImageDataUri(a); if (uri) images.push(uri); }
-        else if (isTextLike(a)) notes.push(`--- Attached file: ${a.name} ---\n${readUploadText(a.url)}`);
-        else notes.push(`[Attached ${isImage ? 'image' : 'file'}: ${a.name}]`);
-      }
-      if (notes.length) text = (text ? text + '\n\n' : '') + notes.join('\n\n');
-    }
-    if (images.length) {
-      const parts = [];
-      if (text) parts.push({ type: 'text', text });
-      for (const url of images) parts.push({ type: 'image_url', image_url: { url } });
-      return { role: m.role, content: parts };
-    }
-    return { role: m.role, content: text };
-  });
+  return activePath(chat.id).map(m => ({
+    id: m.id,
+    role: m.role,
+    pinned: !!m.pinned,
+    excluded: !!m.excluded,
+    summarized: !!(upto && m.created_at <= upto && !m.pinned),
+    msg: historyMessage(m, model)
+  }));
 }
+
+export async function chatHistory(chat, model) {
+  const rows = await historyRows(chat, model);
+  return rows.filter(r => !r.summarized && !r.excluded).map(r => r.msg);
+}
+
+function historyMessage(m, model) {
+  let text = historyText(m.content || '').replace(/\n{3,}/g, '\n\n');
+  const atts = m.attachments || [];
+  const images = [];
+  if (atts.length) {
+    const notes = [];
+    for (const a of atts) {
+      const isImage = a.type && a.type.startsWith('image/');
+      if (isImage && model.has_vision) { const uri = readImageDataUri(a); if (uri) images.push(uri); }
+      else if (isTextLike(a)) notes.push(`--- Attached file: ${a.name} ---\n${readUploadText(a.url)}`);
+      else notes.push(`[Attached ${isImage ? 'image' : 'file'}: ${a.name}]`);
+    }
+    if (notes.length) text = (text ? text + '\n\n' : '') + notes.join('\n\n');
+  }
+  if (!images.length) return { role: m.role, content: text };
+  const parts = [];
+  if (text) parts.push({ type: 'text', text });
+  for (const url of images) parts.push({ type: 'image_url', image_url: { url } });
+  return { role: m.role, content: parts };
+}
+
+export function textTokens(s) {
+  return estTextTokens(s);
+}
+
+function countCjk(s, from, to) {
+  let cjk = 0;
+  for (let i = from; i < to; i++) { const c = s.charCodeAt(i); if ((c >= 0x3000 && c <= 0x9fff) || (c >= 0xac00 && c <= 0xd7af)) cjk++; }
+  return cjk;
+}
+
+const TOK_CACHE = new Map();
+const TOK_CACHE_MIN = 1024;
+const TOK_CACHE_MAX_CHARS = 4 << 20;
+let tokCacheChars = 0;
 
 function estTextTokens(s) {
   if (!s) return 0;
-  let cjk = 0;
-  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); if ((c >= 0x3000 && c <= 0x9fff) || (c >= 0xac00 && c <= 0xd7af)) cjk++; }
-  return Math.ceil((s.length - cjk) / 3.6) + cjk;
+  if (s.length < TOK_CACHE_MIN) {
+    const c = countCjk(s, 0, s.length);
+    return Math.ceil((s.length - c) / 3.6) + c;
+  }
+  const hit = TOK_CACHE.get(s);
+  if (hit !== undefined) {
+    TOK_CACHE.delete(s);
+    TOK_CACHE.set(s, hit);
+    return hit;
+  }
+  const cjk = countCjk(s, 0, s.length);
+  const n = Math.ceil((s.length - cjk) / 3.6) + cjk;
+  if (s.length <= TOK_CACHE_MAX_CHARS) {
+    TOK_CACHE.set(s, n);
+    tokCacheChars += s.length;
+    while (tokCacheChars > TOK_CACHE_MAX_CHARS) {
+      const oldest = TOK_CACHE.keys().next().value;
+      if (oldest === undefined) break;
+      tokCacheChars -= oldest.length;
+      TOK_CACHE.delete(oldest);
+    }
+  }
+  return n;
+}
+
+export function makeTokenCounter() {
+  let plain = 0, cjk = 0;
+  return {
+    add(chunk) {
+      if (!chunk) return;
+      const c = countCjk(chunk, 0, chunk.length);
+      cjk += c;
+      plain += chunk.length - c;
+    },
+    get tokens() { return Math.ceil(plain / 3.6) + cjk; }
+  };
+}
+
+export function messageTokens(m) {
+  let total = 4;
+  if (typeof m.content === 'string') total += estTextTokens(m.content);
+  else if (Array.isArray(m.content)) for (const p of m.content) total += p.type === 'text' ? estTextTokens(p.text || '') : 850;
+  if (Array.isArray(m.tool_calls)) for (const c of m.tool_calls) total += estTextTokens((c.argsText || '') + (c.name || '')) + 8;
+  return total;
 }
 
 export function estimateTokens(messages) {
   let total = 0;
-  for (const m of messages) {
-    total += 4;
-    if (typeof m.content === 'string') total += estTextTokens(m.content);
-    else if (Array.isArray(m.content)) for (const p of m.content) total += p.type === 'text' ? estTextTokens(p.text || '') : 850;
-    if (Array.isArray(m.tool_calls)) for (const c of m.tool_calls) total += estTextTokens((c.argsText || '') + (c.name || '')) + 8;
-  }
+  for (const m of messages) total += messageTokens(m);
   return total;
 }
 
@@ -89,23 +150,36 @@ function trimMsgToTokens(m, allowedTokens) {
 export function truncateForRollingCtx(chatId, msgs, ctx) {
   const reserve = Math.min(Math.max(256, Math.floor(ctx * 0.15)), 1536);
   const budget = Math.max(512, ctx - reserve);
-  if (calibratedTokens(chatId, msgs) <= budget) return { msgs, dropped: 0, trimmed: false };
-  const out = msgs.slice();
+  const ratio = calibRatio(chatId);
+  const n = msgs.length;
+  const costs = new Array(n);
+  let est = 0;
+  let nonSysCount = 0;
+  for (let i = 0; i < n; i++) {
+    const c = messageTokens(msgs[i]);
+    costs[i] = c;
+    est += c;
+    if (msgs[i].role !== 'system') nonSysCount++;
+  }
+  const scaled = () => Math.round(est * ratio);
+  if (scaled() <= budget) return { msgs, dropped: 0, trimmed: false };
+  const drop = new Uint8Array(n);
   let dropped = 0;
-  const nonSys = () => out.reduce((a, m, i) => { if (m.role !== 'system') a.push(i); return a; }, []);
-  while (calibratedTokens(chatId, out) > budget) {
-    const idxs = nonSys();
-    if (idxs.length <= 1) break;
-    out.splice(idxs[0], 1);
+  for (let i = 0; i < n && nonSysCount > 1 && scaled() > budget; i++) {
+    if (msgs[i].role === 'system') continue;
+    drop[i] = 1;
+    est -= costs[i];
+    nonSysCount--;
     dropped++;
   }
+  const out = [];
+  const cost = [];
+  for (let i = 0; i < n; i++) if (!drop[i]) { out.push(msgs[i]); cost.push(costs[i]); }
   let trimmed = false;
-  if (calibratedTokens(chatId, out) > budget) {
-    const idxs = nonSys();
-    if (idxs.length) {
-      const i = idxs[0];
-      const rest = out.filter((_, j) => j !== i);
-      const allowed = budget - calibratedTokens(chatId, rest) - 8;
+  if (scaled() > budget) {
+    const i = out.findIndex(m => m.role !== 'system');
+    if (i !== -1) {
+      const allowed = budget - Math.round((est - cost[i]) * ratio) - 8;
       const before = out[i];
       out[i] = trimMsgToTokens(before, allowed);
       trimmed = out[i] !== before;
@@ -240,6 +314,11 @@ export function updateCalib(chatId, actualPrompt, estimated) {
   }
 }
 
+export function calibRatio(chatId) {
+  const c = chatId && tokenCalib.get(chatId);
+  return c ? c.ratio : 1;
+}
+
 export function calibratedTokens(chatId, messages) {
   const est = estimateTokens(messages);
   const c = chatId && tokenCalib.get(chatId);
@@ -256,14 +335,8 @@ export function promptVars(userId) {
   return { currentUser: name, currentDateTime: dt };
 }
 
-function userInstructions(userId) {
-  const u = userId ? db.users.byId(userId) : null;
-  return (u && u.instructions) ? u.instructions : '';
-}
-
-function userMemoryBlock(userId) {
+function userMemoryBlock(u) {
   if (getSetting('memory_enabled', '0') !== '1') return '';
-  const u = userId ? db.users.byId(userId) : null;
   if (!u || u.prefs?.memoryEnabled === false) return '';
   const mem = (u.memory || '').trim();
   if (!mem) return '';
@@ -271,10 +344,12 @@ function userMemoryBlock(userId) {
 }
 
 export function combinedInstructions(chat) {
+  const userId = chat && chat.user_id;
+  const u = userId ? db.users.byId(userId) : null;
   const parts = [];
-  const ui = userInstructions(chat && chat.user_id);
+  const ui = (u && u.instructions) ? u.instructions : '';
   if (ui && ui.trim()) parts.push(ui.trim());
-  const mem = userMemoryBlock(chat && chat.user_id);
+  const mem = userMemoryBlock(u);
   if (mem) parts.push(mem);
   if (chat && chat.instructions && chat.instructions.trim()) parts.push(chat.instructions.trim());
   return parts.join('\n\n');

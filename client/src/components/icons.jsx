@@ -62,3 +62,5 @@ export const X = (p) => <I {...p}><path d="M18 6 6 18M6 6l12 12"/></I>;
 export const Wand = (p) => <I {...p}><path d="M15 4V2M15 10V8M11.5 6h2M17.5 6h2M6 20 16 10l-2-2L4 18l2 2zM20 15l1 1M19 20l1-1"/></I>;
 export const Plug = (p) => <I {...p}><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-6 6 6 6 0 0 1-6-6zM12 17v4"/></I>;
 export const Feather = (p) => <I {...p}><path d="M20 4c-5 0-11 3-13 8l-3 8 8-3c5-2 8-8 8-13zM7 17l7-7"/></I>;
+export const Gauge = (p) => <I {...p}><path d="M12 14l4-4M4.5 19a9 9 0 1 1 15 0"/><circle cx="12" cy="14" r="1.4"/></I>;
+export const Steer = (p) => <I {...p}><path d="M12 3v6M12 15v6M3 12h6M15 12h6"/><circle cx="12" cy="12" r="3"/></I>;
