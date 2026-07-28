@@ -711,6 +711,7 @@
   "Load \"{name}\" on the next restart? The running database will not change until the server restarts. Current chats, users and content stay untouched.": "¿Cargar \"{name}\" en el próximo reinicio? La base de datos en ejecución no cambiará hasta que el servidor se reinicie. Los chats, usuarios y contenido actuales permanecen intactos.",
   "Permanently delete the \"{name}\" database and everything inside it (chats, users, uploads, artifacts, memory)? This cannot be undone.": "¿Eliminar permanentemente la base de datos \"{name}\" y todo lo que contiene (chats, usuarios, archivos subidos, artefactos, memoria)? Esto no se puede deshacer.",
   "Preview": "Vista previa",
+  "Preparing preview…": "Preparando la vista previa…",
   "Diff": "Diferencias",
   "editing…": "editando…",
   "writing…": "escribiendo…",

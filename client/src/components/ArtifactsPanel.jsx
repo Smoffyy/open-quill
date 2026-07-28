@@ -5,6 +5,7 @@ import { copyText } from '../clipboard.js';
 import Markdown from './Markdown.jsx';
 import { Download, Refresh, FileText, Copy, Check, ChevDown, Folder, Chevron, Search, X, Down, Panel } from './icons.jsx';
 import { t } from '../i18n.jsx';
+import { buildPreviewDoc } from '../lib/preview.js';
 
 const PREVIEW_HTML = new Set(['html', 'htm', 'svg']);
 const PREVIEW_MD = new Set(['md', 'markdown']);
@@ -167,6 +168,22 @@ function ImageView({ src, alt }) {
       </div>
     </div>
   );
+}
+
+const PREVIEW_SANDBOX = 'allow-scripts allow-modals allow-forms allow-popups allow-downloads allow-pointer-lock';
+
+function HtmlPreview({ chatId, path, html }) {
+  const [doc, setDoc] = useState(null);
+  useEffect(() => {
+    let on = true;
+    setDoc(null);
+    buildPreviewDoc({ chatId, path, html })
+      .then(d => { if (on) setDoc(d); })
+      .catch(() => { if (on) setDoc(html); });
+    return () => { on = false; };
+  }, [chatId, path, html]);
+  if (doc == null) return <div className="art-empty"><div className="art-empty-spin" />{t('Preparing preview…')}</div>;
+  return <iframe className="art-preview-frame" sandbox={PREVIEW_SANDBOX} srcDoc={doc} title={baseName(path)} referrerPolicy="no-referrer" />;
 }
 
 function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writingElsewhere, onJumpToLive, committed = true, pendingText = null, fileV = 0, headerExtra = null, onFocusPane }) {
@@ -470,7 +487,7 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
         {!liveEdit && showText && !diff && previewOn && (
           PREVIEW_MD.has(ext)
             ? <div className="art-md"><Markdown>{shownText || ''}</Markdown></div>
-            : <iframe className="art-preview-frame" sandbox="allow-scripts" srcDoc={shownText || ''} title={baseName(path)} />
+            : <HtmlPreview chatId={chatId} path={path} html={shownText || ''} />
         )}
         {isCode && (
           <div className={'art-code2' + (isLive ? ' live' : '') + (wrap ? ' wrap' : '')} ref={codeRef}>

@@ -5,6 +5,7 @@ import {
   oneShotKwargPayload, controlOf, defaultValueOf, isBoolPair, coerceKwargValue
 } from '../lib/kwargs.js';
 import { parseTextToolCalls, parseArgs, toCall } from '../tools/index.js';
+import { makeToolTextFilter } from '../llm/emitter.js';
 import { trimInTurn, compactThreshold, estimateTokens, textTokens, makeTokenCounter, truncateForRollingCtx, FALLBACK_CTX } from '../lib/convo.js';
 import { scanTools } from '../toolproto.js';
 import { isContextOverflowError } from '../lib/llamacpp.js';
@@ -151,6 +152,64 @@ test('text tool calls: numeric and boolean coercion by key', () => {
 test('tool args: partial json survives', () => {
   assert.equal(toCall('bash', '{"cmd":"echo hi"}').tool, 'bash');
   assert.equal(parseArgs('{"cmd":"echo hi"}').cmd, 'echo hi');
+});
+
+test('tool args: unterminated json keeps the closed keys', () => {
+  assert.equal(parseArgs('{"path":"a.txt","content":"unterminated').path, 'a.txt');
+  assert.equal(parseArgs('Sure: {"path":"a.txt"} done').path, 'a.txt');
+  assert.equal(parseArgs('```json\n{"path":"a.txt"}\n```').path, 'a.txt');
+});
+
+test('tool args: nested arguments wrapper is unwrapped', () => {
+  assert.equal(parseArgs('{"arguments":{"path":"b.txt"}}').path, 'b.txt');
+  assert.deepEqual(parseArgs('not json at all'), {});
+  assert.equal(toCall('bash', 'garbage {{{').tool, 'bash');
+});
+
+test('text tool calls: imitation history marker is recovered', () => {
+  const calls = parseTextToolCalls('[used create_file]\n<parameter=path>a.txt</parameter>\n<parameter=content>hi</parameter>', allow);
+  assert.deepEqual(calls, [{ name: 'create_file', argsText: '{"path":"a.txt","content":"hi"}' }]);
+});
+
+test('text tool calls: missing closing tags still parse', () => {
+  const calls = parseTextToolCalls('<function=create_file><parameter=path>a.txt</parameter><parameter=content>body', allow);
+  assert.deepEqual(JSON.parse(calls[0].argsText), { path: 'a.txt', content: 'body' });
+});
+
+test('text tool calls: bare parameters recover the name from the hint', () => {
+  const calls = parseTextToolCalls('<parameter=path>a.txt</parameter>', allow, 'create_file');
+  assert.deepEqual(calls, [{ name: 'create_file', argsText: '{"path":"a.txt"}' }]);
+});
+
+test('text tool calls: python style call is recovered', () => {
+  const calls = parseTextToolCalls('functions.bash({"cmd":"ls -la"})', allow);
+  assert.deepEqual(calls, [{ name: 'bash', argsText: '{"cmd":"ls -la"}' }]);
+});
+
+test('text tool calls: openai style tool_calls wrapper', () => {
+  const calls = parseTextToolCalls('{"tool_calls":[{"function":{"name":"bash","arguments":"{\\"cmd\\":\\"ls\\"}"}}]}', allow);
+  assert.deepEqual(calls, [{ name: 'bash', argsText: '{"cmd":"ls"}' }]);
+});
+
+test('tool text filter: malformed block becomes a call, prose is untouched', () => {
+  const run = (input, size) => {
+    let text = '';
+    const calls = [];
+    const f = makeToolTextFilter(t => { text += t; }, cs => { calls.push(...cs); }, allow);
+    for (let i = 0; i < input.length; i += size) f.feed(input.slice(i, i + size));
+    f.flush();
+    return { text, calls };
+  };
+  const bad = 'Sure.\n[used create_file]\n<parameter=path>a.txt</parameter>\n<parameter=content>hi</parameter>\nDone!';
+  for (const size of [1, 5, 4096]) {
+    const r = run(bad, size);
+    assert.equal(r.calls.length, 1);
+    assert.deepEqual(JSON.parse(r.calls[0].argsText), { path: 'a.txt', content: 'hi' });
+    assert.equal(r.text, 'Sure.\nDone!');
+    const p = run('Compare a < b, list[0] and [used] in prose.', size);
+    assert.deepEqual(p.calls, []);
+    assert.equal(p.text, 'Compare a < b, list[0] and [used] in prose.');
+  }
 });
 
 test('compaction: threshold falls back when context is unknown', () => {
