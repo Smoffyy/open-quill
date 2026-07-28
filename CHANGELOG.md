@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [27.1.0] — TBD
+
+### Added
+- **Generations survive a refresh** - a reply now belongs to the chat, not to the browser tab that started it. Reloading mid-answer, dropping your connection, or opening the same chat in a second tab all pick the stream back up where it is, instead of leaving you staring at nothing until the model finishes. The server holds the in-progress text, reasoning, tool preview and prefill status, and hands all of it to whichever tab connects next.
+- **Stop and steer work after a reload** - since a running turn is no longer tied to one socket, the stop button and mid-generation steering still control the reply on a freshly loaded page.
+
+### Changed
+- **Closing a tab no longer cancels the reply** - any dropped websocket used to abort whatever it was generating. Saved chats now run to completion and land in the database as normal. Incognito is the exception; it has nothing to persist to, so it still stops when the socket goes.
+- **One reply at a time per chat** - two tabs can no longer start overlapping generations in the same conversation. The second is turned away with a message rather than interleaving into the same reply.
+
+### Fixed
+- **Context tracking was guessing, and llama.cpp router mode broke it entirely** - in router mode every request has to name the model so the router can reach the child process. open-quill was calling `/props`, `/tokenize` and `/apply-template` without one, so all three came back empty, context detection fell to the 8192 default and token counting fell back to a rough characters-per-token estimate. Every llama.cpp endpoint is now model-qualified, context comes from the server (`/props`, then `/v1/models` metadata, then `/slots`), and prompt size is measured by the model's own tokenizer rather than estimated.
+- **Prompts no longer overflow the context window** - conversations are now measured exactly and slid to fit before the request is sent. Oldest turns are dropped first, the system prompt and your newest message are always kept, and a single message too large for the window on its own is cut down with its beginning and end preserved. If the server ever disagrees with the count anyway, it reports the exact prompt size in the rejection and costs nothing to hit, so that number is used to re-fit and retry rather than failing the turn.
+- **The window no longer forgets far more than it needs to** - evicting whole messages meant a single large paste took its entire 23,000 tokens with it when only 5,000 needed to go, and the model would answer as though you had never sent it. The oldest message at the boundary is now cut down to exactly fill the space left instead of being discarded, keeping its beginning and end. In practice this fills 99% of the available window rather than 39%.
+- **Context ledger showed the wrong number** - it measured the whole conversation with the rough estimator and compared it against the raw context size, so it read 100% full while the request that actually went out was a third of that. It now reports what will really be sent, measured by the model's tokenizer, against the true prompt budget, and says how much was dropped or trimmed to get there.
+- **Reply length is capped to the space that is left** - the generation limit is now clamped to whatever room remains after the prompt, so a long conversation cannot run out of context part way through an answer.
+- **Tool schemas and images were invisible to the counter** - tool definitions are now passed to the template when measuring, and images carry a real reserve that corrects itself from the server's reported usage instead of a flat guess that was too low for vision models.
+- **Summarization and the sliding window are no longer mutually exclusive** - each previously switched the other off, so if summarization could not keep up there was nothing behind it. They now layer, with summarization preserving meaning and the window guaranteeing the request fits.
+- **Model dropdown grew scrollbars it did not need** - with a long message in the composer, the menu decided it did not fit, shrank itself and added a scrollbar, all while leaving most of the screen above it empty. It now measures against the whole viewport and slides into view instead of shrinking, so a scrollbar only appears when the list genuinely does not fit on screen.
+- **"More models" would not open** - the submenu was landing outside the menu's own scroll area, so hovering it did nothing except add a horizontal scrollbar you had to drag sideways to find it. It now floats above everything and flips to the other side when it would run off the edge of the window.
+- **Unsent text was lost on refresh** - anything typed but not sent on the new chat screen vanished when the page reloaded. Drafts are now saved when the tab is hidden as well as on a timer, so a quick reload cannot outrun the save, and they come back on reload, on back and forward navigation, on switching chats, and on leaving incognito.
+- **Incognito typing leaked into the new chat draft** - text typed in incognito was being written to the same draft slot the normal new chat screen uses. Incognito no longer saves drafts at all.
+- **Wrong model on a resumed stream** - a reply picked back up after a reload briefly showed the chat's previous model instead of the one actually generating.
+- **Escape closes the model menu** - it previously only closed by clicking away.
+
+---
+
 ## [27.0.0] — 2026-07-27
 
 > **Breaking:** This release replaces the plaintext `data.json` store with an encrypted SQLite database and is **not backward compatible** with previous versions. There is no automatic import; a fresh database is created on first run and the first account to sign in becomes the owner.

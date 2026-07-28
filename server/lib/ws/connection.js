@@ -17,6 +17,7 @@ import { promptVars, styleTextFor } from '../convo.js';
 
 import { clients, requestedKwargs } from './broadcast.js';
 import { runCompletion } from './turn.js';
+import * as live from './live.js';
 
 export function initWs(server) {
   const wss = new WebSocketServer({ server });
@@ -29,21 +30,41 @@ export function initWs(server) {
     ws.on('pong', () => { ws.isAlive = true; });
     clients.set(ws, { userId: u.id, sessionId: r.sessionId || null, isAdmin: !!u.is_admin, aborts: new Map(), steers: new Map() });
     const safeSend = (s) => { if (ws.readyState === 1) { try { ws.send(s); } catch {} } };
+    const liveSend = (s) => live.sendLive(u.id, s);
+    const liveState = { aborts: live.aborts, steers: live.steers };
+    const liveWs = { readyState: 1, send: liveSend };
+    {
+      const pending = live.snapshotsFor(u.id);
+      if (pending.length) safeSend(JSON.stringify({ type: 'resume', turns: pending }));
+    }
 
     ws.on('message', async (raw) => {
       let msg; try { msg = JSON.parse(raw); } catch { return; }
       const state = clients.get(ws);
       if (!state) return;
-      if (msg.type === 'stop') { state.steers.delete(msg.chatId); const c = state.aborts.get(msg.chatId); if (c) { c.abort(); state.aborts.delete(msg.chatId); } return; }
+      const ownsChat = (chatId) => {
+        if (!chatId || chatId === 'incognito') return false;
+        const c = db.chats.byId(chatId);
+        return !!c && c.user_id === state.userId;
+      };
+      if (msg.type === 'stop') {
+        const own = msg.chatId === 'incognito' ? state : (ownsChat(msg.chatId) ? liveState : null);
+        if (!own) return;
+        own.steers.delete(msg.chatId);
+        const c = own.aborts.get(msg.chatId);
+        if (c) { c.abort(); own.aborts.delete(msg.chatId); }
+        return;
+      }
       if (msg.type === 'steer') {
         const text = String(msg.text || '').trim().slice(0, 2000);
-        const c = text ? state.aborts.get(msg.chatId) : null;
+        const own = msg.chatId === 'incognito' ? state : (ownsChat(msg.chatId) ? liveState : null);
+        const c = text && own ? own.aborts.get(msg.chatId) : null;
         if (!c) return;
         if (db.users.byId(state.userId)?.prefs?.steering !== true) return;
-        const list = state.steers.get(msg.chatId) || [];
+        const list = own.steers.get(msg.chatId) || [];
         if (list.length >= 6) return;
         list.push(text);
-        state.steers.set(msg.chatId, list);
+        own.steers.set(msg.chatId, list);
         c.abort();
         return;
       }
@@ -94,6 +115,7 @@ export function initWs(server) {
         if (chat.ended) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'This conversation was ended by the assistant and can no longer be continued.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
         const bs = budgetStatus(u);
         if (bs.enforce && bs.state === 'over') { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'You have reached your monthly usage budget. It resets at the start of next month.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
+        if (live.activeTurn(chat.id)) { safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: 'A reply is already being generated in this chat. Wait for it to finish, or stop it first.' })); safeSend(JSON.stringify({ type: 'done', chatId: chat.id })); return; }
 
         const sandboxCap = roleLimit('sandbox_limit_mb', !!u.is_admin, u.is_admin ? 1024 : 256) * 1024 * 1024;
         const userSandbox = !!msg.sandbox;
@@ -133,19 +155,32 @@ export function initWs(server) {
 
         const queueOn = getSetting('model_queue', '0') === '1';
         const styleText = styleTextFor(u.id, msg.styleId);
-        await runQueued(queueOn, model.id,
-          () => { safeSend(JSON.stringify({ type: 'queued', chatId: chat.id })); },
-          () => runCompletion(ws, state, safeSend, chat, model, !!msg.extended, sandboxOn, sandboxCap, webSearchOn, !!msg.call, styleText));
+        live.beginTurn(u.id, chat.id, model.id);
+        try {
+          await runQueued(queueOn, model.id,
+            () => { liveSend(JSON.stringify({ type: 'queued', chatId: chat.id })); },
+            () => runCompletion(liveWs, liveState, liveSend, chat, model, !!msg.extended, sandboxOn, sandboxCap, webSearchOn, !!msg.call, styleText));
+        } finally { live.endTurn(chat.id); }
         maybeUpdateMemory(u.id, model);
       } catch (err) {
-        if (msg && msg.chatId) state.aborts.delete(msg.chatId);
-        safeSend(JSON.stringify({ type: 'error', chatId: msg && msg.chatId, error: String(err.message || err) }));
-        safeSend(JSON.stringify({ type: 'done', chatId: msg && msg.chatId }));
+        if (msg && msg.chatId) { live.endTurn(msg.chatId); state.aborts.delete(msg.chatId); }
+        liveSend(JSON.stringify({ type: 'error', chatId: msg && msg.chatId, error: String(err.message || err) }));
+        liveSend(JSON.stringify({ type: 'done', chatId: msg && msg.chatId }));
       }
     });
 
     ws.on('error', () => {});
-    ws.on('close', () => { const st = clients.get(ws); try { if (st) { st.steers.clear(); for (const c of st.aborts.values()) c.abort(); } } catch {} clients.delete(ws); });
+    ws.on('close', () => {
+      const st = clients.get(ws);
+      try {
+        if (st) {
+          st.steers.clear();
+          for (const c of st.aborts.values()) c.abort();
+          st.aborts.clear();
+        }
+      } catch {}
+      clients.delete(ws);
+    });
   });
 
   const heartbeat = setInterval(() => {

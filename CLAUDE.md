@@ -77,6 +77,33 @@ Global: `Ctrl+K` palette, `Ctrl+Shift+F` chat search, `Ctrl+Shift+O` new chat, `
 
 Plain keys, active only when focus is not in an input, no `.overlay` is mounted, and the matching pref above is on: `j`/`k` move the message focus, `b` opens the branch map, and on the focused message `c` copies, `e` edits, `r` retries, `y` branches, `Escape` clears. The focus ring is applied by toggling `.kb-focus` on the `[data-mid]` element from an effect rather than by passing a prop, so moving focus re-renders nothing. Keep new entries in sync with `ShortcutsModal.jsx`, whose `GROUPS` labels are extracted for translation by `client/scripts/i18n-check.mjs`.
 
+## Context window (`lib/ctxwindow.js`, `lib/llamacpp.js`)
+
+Prompt size is **measured, never estimated**, for any llama.cpp-backed model. The rules that keep it that way:
+
+- **Every llama.cpp endpoint must carry the model name.** Router mode (`llama-server` with no `--model`) proxies to per-model child processes and returns 400 without it. `/props`, `/tokenize`, `/apply-template` and `/slots` all go through `getWithModel`/`postWithModel`, which send it as both a query param and a body field, then retry bare for single-model servers. Dropping this is what silently disabled all exact counting before.
+- **Context length comes from the server**, in order: `/props` → `default_generation_settings.n_ctx`, then `/v1/models` → `meta.n_ctx`, then `/slots`. Note this is the **per-slot** value: `-np 4 -c 131072` gives each slot 32768, and that is the real limit. A manual `num_ctx` on the model overrides all of it, so a stale value there beats the truth.
+- **`/apply-template` is passed `tools` and `add_generation_prompt`.** Without them the tool schemas and the assistant suffix are not counted, which is a few hundred tokens of silent undercount on tool-enabled models.
+- **The estimator never decides anything.** `estimateTokens` is a character heuristic and is English-biased; it is used only to pick the first probe point in the slide search and as a fallback for providers with no tokenizer. Every candidate the slider returns has been verified by the real tokenizer.
+- **An oversized request is free.** llama.cpp rejects it before prefill (`n_tokens = 0`) and reports `n_prompt_tokens` and `n_ctx` in the error. `parseOverflow` reads them, so the recovery path corrects itself against ground truth instead of guessing again. Do not remove that parser; it is the backstop that makes the guarantee hold when images or a template quirk throw the pre-flight off.
+- **Images are the one thing the tokenizer cannot see.** `/tokenize` is text-only, so each image carries a reserve (1600 by default, deliberately above the 1024 Qwen-VL floor) that is corrected upward from real `usage.prompt_tokens` and never lowered.
+
+`slideToFit` keeps the system prompt and the newest user message, drops the oldest turns first via a verified binary search (typically two to four tokenizer calls, one when it already fits), and only trims message bodies when dropping is not enough, cutting the middle and keeping both ends. Trimming the system prompt happens only when it alone exceeds the budget, because refusing to answer is worse. The budget is `ctx - output reserve - 1%`, and the generation cap is clamped to the leftover room so a reply cannot overflow mid-stream.
+
+## Popover placement (model dropdown)
+
+`ModelDropdown` measures rather than guesses, and the rules below exist because the old "pick a side, then clamp it" logic produced a scrollbar on a menu that had 800px of free space above it:
+
+- Natural height is measured with the clamp temporarily lifted (`fullHeight`). Measuring an element that is already `max-height`-ed makes the result depend on its own output, which oscillates.
+- Clamping is decided against the **viewport budget** (`innerHeight - 20`), never against the space on one side. If the menu does not fit below or above, it is *shifted* to sit inside the viewport at its full height; a scrollbar only appears when the content genuinely exceeds the screen.
+- Anything that scrolls uses `overflow: hidden auto`, never `overflow-y: auto`. Per spec a `visible` axis paired with a non-`visible` one computes to `auto`, so `overflow-y: auto` alone silently creates a **horizontal** scroll container too. That is what used to hide the "More models" submenu behind a sideways scrollbar.
+- The submenu renders through a portal on `document.body` with viewport-fixed coordinates, so no scrolling ancestor can ever clip it. Two consequences: the outside-click handler must also ignore `.model-submenu` (or clicking a model in it would unmount the menu before the click landed), and any descendant-scoped styling for it needs a `body:has(...)` counterpart — see `.model-submenu.pinned` in `chat.css` and `extras.css`.
+- Below 768px the menu is a CSS bottom sheet driven by `!important` rules; the component detects that with `matchMedia` and writes no inline geometry at all.
+
+## Composer drafts
+
+Unsent composer text is kept in `localStorage` under `oq-draft-<chatId|new>`, debounced 200ms and flushed on `pagehide`, on `visibilitychange` to hidden, on unmount, and before any chat switch. Do not add a `beforeunload` listener for this; it costs back/forward-cache eligibility and the two events above already cover reloads. Restoration is explicit at every entry point — `openChat`, `newChat`, `openFromUrl`'s non-chat branch (this is the one that made a reload of `/` lose the draft), and on leaving incognito. Incognito never writes: `saveDraft` bails on `incognitoRef`, which `toggleIncognito` sets eagerly rather than waiting for the state effect, so the first keystroke after the toggle cannot leak into the home draft.
+
 ## Layout invariants worth knowing before editing
 
 - The OpenAI composer is a 52px pill: constant side padding (48px left / 96px right) in **both** single-line and `.ml` states; `.ml` only adds `padding-bottom: 52px`. Keeping the horizontal padding identical between states is what prevents wrap-point feedback loops (typing jitter). Don't reintroduce state-dependent horizontal padding.
@@ -146,7 +173,17 @@ Entry point is `index.js` (~60 lines): express setup, cookie parsing, `/uploads`
 - `tree.js` — message branching tree: `activePath`, `ensureChain`, `childrenOf`, `leafUnder`, `sortedMsgs`. All of these share one per-chat graph (`graphOf`) cached against `db.messages.version()`, so a chat's messages are loaded and parsed once per mutation rather than once per call. Do not go back to loading messages directly in these helpers. `leafUnder` descends via `preferredChild(kids, onPath)`, which follows the **currently active branch** when a node has several children and only falls back to the newest sibling when none of them is on the active path. Without that preference, selecting any ancestor silently moved the conversation onto whichever sibling happened to be created last, which is why the branch map must never be wired straight to a plain last-child walk.
 - `llamacpp.js` — llama-server integration: `/props` and `/slots` for exact `n_ctx`, `/apply-template` plus `/tokenize` for exact prompt token counts (`llamaTokenCount`), and `isContextOverflowError` for recovering from context overflow. Results are cached; llama.cpp is the default provider type.
 - `uploads.js` — `UPLOADS` dir, multer `diskStore`, attachment readers (`readUploadText`, `readImageDataUri`, `isTextLike`), `purgeUploads`.
-- `ws/` — the websocket engine, re-exported from `ws/index.js`: `broadcast.js` (the `clients` map, `broadcastConfig`, `broadcastAdminConfig`, `broadcastToUser`, `killSessionSockets`, `requestedKwargs`), `turn.js` (`runCompletion`, the agentic tool-call loop, plus `maybeCompact`), `connection.js` (`initWs(server)` and the `chat`/`regenerate`/`edit`/`incognito`/`stop` handlers). `runCompletion` is module-scope and takes `(ws, state, safeSend, chat, model, ...)` rather than closing over the socket. **`lib/ws/` must never import from `routes/`** — dependency direction is routes → lib.
+- `ws/` — the websocket engine, re-exported from `ws/index.js`: `broadcast.js` (the `clients` map, `broadcastConfig`, `broadcastAdminConfig`, `broadcastToUser`, `killSessionSockets`, `requestedKwargs`), `live.js` (the in-flight turn registry), `turn.js` (`runCompletion`, the agentic tool-call loop, plus `maybeCompact`), `connection.js` (`initWs(server)` and the `chat`/`regenerate`/`edit`/`incognito`/`stop` handlers). `runCompletion` is module-scope and takes `(ws, state, safeSend, chat, model, ...)` rather than closing over the socket. **`lib/ws/` must never import from `routes/`** — dependency direction is routes → lib.
+
+### Turns outlive sockets (`lib/ws/live.js`)
+
+A generation belongs to the *chat*, not to the socket that started it. `live.js` keeps one record per in-flight chat turn (accumulated content, reasoning, phase, tool preview, steer notes, prefill status) plus the global `aborts`/`steers` maps keyed by chat id, and `sendLive` fans every event out to **all** of that user's sockets while folding it into the record. Consequences to preserve when editing this area:
+
+1. `connection.js` passes `liveWs`/`liveState`/`liveSend` into `runCompletion` instead of the raw socket, so a reload, a dropped connection, or a second tab never truncates a reply.
+2. Socket close aborts **only** incognito turns (they are per-socket by definition and are never persisted). Saved chats keep generating and land in the DB as normal.
+3. Every new socket is handed `{ type: 'resume', turns: [...] }` before anything else. `App.jsx` seeds its `gen` map from that and calls `syncView()`, which is what makes a mid-stream refresh pick the response back up rather than waiting for `done`.
+4. Because `aborts` is keyed by chat rather than by socket, Stop and steering work from a freshly loaded page — both paths ownership-check the chat against the session user first.
+5. One turn per chat: a second `chat`/`regenerate`/`edit` for a chat that already has a live turn is rejected. `beginTurn` is paired with `endTurn` in a `finally`, and records older than 45 minutes are treated as stale, so a crashed turn can never wedge a chat permanently.
 
 ### HTTP routes (`server/routes/`)
 

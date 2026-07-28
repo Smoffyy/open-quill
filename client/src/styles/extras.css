@@ -173,6 +173,10 @@
   background: color-mix(in srgb, var(--pop-bg) 93%, transparent);
   backdrop-filter: blur(30px) saturate(1.4); -webkit-backdrop-filter: blur(30px) saturate(1.4);
 }
+body:has(.app.has-bg) > .model-submenu.pinned {
+  background: color-mix(in srgb, var(--pop-bg) 93%, transparent);
+  backdrop-filter: blur(30px) saturate(1.4); -webkit-backdrop-filter: blur(30px) saturate(1.4);
+}
 .app.has-bg .quick-prompt {
   background: color-mix(in srgb, var(--surface) 50%, transparent);
   backdrop-filter: blur(16px) saturate(1.25); -webkit-backdrop-filter: blur(16px) saturate(1.25);

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevDown, Chevron, ImageIcon, Brain, Info, TextIcon } from './icons.jsx';
 import { t } from '../i18n.jsx';
 import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues } from '../kwargs.js';
@@ -8,6 +9,36 @@ const CAP_ICONS = [
   { key: 'capVision', label: 'Vision', Icon: ImageIcon },
   { key: 'capReasoning', label: 'Reasoning', Icon: Brain }
 ];
+
+const EDGE = 10;
+const GAP = 6;
+const SHEET_MQ = '(max-width: 768px)';
+
+function sheetMode() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  try { return window.matchMedia(SHEET_MQ).matches; } catch { return false; }
+}
+
+function fullHeight(el) {
+  if (!el) return 0;
+  const s = el.style;
+  const maxH = s.maxHeight;
+  const ov = s.overflow;
+  if (maxH) { s.maxHeight = 'none'; s.overflow = 'visible'; }
+  const frame = Math.max(0, el.offsetHeight - el.clientHeight);
+  const h = el.scrollHeight + frame + 4;
+  if (maxH) { s.maxHeight = maxH; s.overflow = ov; }
+  return h;
+}
+
+function heightBudget(vh) {
+  return Math.max(160, vh - EDGE * 2);
+}
+
+function viewport() {
+  return { w: window.innerWidth || 0, h: window.innerHeight || 0 };
+}
+
 function CapRow({ m }) {
   const active = CAP_ICONS.filter(c => m[c.key]);
   if (!active.length) return null;
@@ -99,7 +130,7 @@ export function KwargControl({ def, value, isAdmin, onSet }) {
       <div className="effort-seg" style={{ '--n': values.length, '--i': idx }}>
         <span className="effort-seg-thumb" />
         {values.map((v, i) => (
-          <button key={v} disabled={locked} className={'effort-seg-btn' + (i === idx ? ' on' : '')}
+          <button key={v} type="button" disabled={locked} className={'effort-seg-btn' + (i === idx ? ' on' : '')}
             onClick={() => { if (!locked) onSet(def.id, v); }}>{capLevel(v)}</button>
         ))}
       </div>
@@ -109,36 +140,63 @@ export function KwargControl({ def, value, isAdmin, onSet }) {
 
 function MoreGroup({ label, items, renderOpt, openKey, setOpenKey }) {
   const open = openKey === label;
-  const [place, setPlace] = useState({ up: false, maxH: 0 });
   const rowRef = useRef(null);
   const subRef = useRef(null);
   const timer = useRef(null);
+  const [pos, setPos] = useState(null);
   useEffect(() => () => clearTimeout(timer.current), []);
   useLayoutEffect(() => {
-    if (!open) return;
-    const row = rowRef.current, sub = subRef.current;
-    if (!row || !sub) return;
-    const rr = row.getBoundingClientRect();
-    const subH = sub.scrollHeight;
-    const below = window.innerHeight - rr.top;
-    const above = rr.bottom;
-    const flip = below < subH + 14 && above > below;
-    const avail = (flip ? above : below) - 16;
-    const flipLeft = rr.right + 4 + sub.offsetWidth > window.innerWidth - 8;
-    setPlace({ up: flip, maxH: subH > avail ? Math.max(140, avail) : 0, left: flipLeft });
-  }, [open]);
+    if (!open) { setPos(null); return undefined; }
+    const measure = () => {
+      const row = rowRef.current, sub = subRef.current;
+      if (!row || !sub) return;
+      const rr = row.getBoundingClientRect();
+      const vp = viewport();
+      const w = sub.offsetWidth;
+      const nat = fullHeight(sub);
+      const budget = heightBudget(vp.h);
+      const h = Math.min(nat, budget);
+      const flip = rr.right + GAP + w > vp.w - EDGE && rr.left - GAP - w >= EDGE;
+      let left = flip ? rr.left - GAP - w : rr.right + GAP;
+      left = Math.max(EDGE, Math.min(left, Math.max(EDGE, vp.w - EDGE - w)));
+      const top = Math.max(EDGE, Math.min(rr.top - 5, Math.max(EDGE, vp.h - EDGE - h)));
+      const next = { left: Math.round(left), top: Math.round(top), maxH: nat > budget ? Math.round(budget) : 0, flip };
+      setPos(p => (p && p.left === next.left && p.top === next.top && p.maxH === next.maxH && p.flip === next.flip) ? p : next);
+    };
+    measure();
+    let ro = null;
+    if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(measure); if (subRef.current) ro.observe(subRef.current); }
+    window.addEventListener('resize', measure);
+    window.addEventListener('scroll', measure, true);
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, true);
+    };
+  }, [open, items]);
   const show = () => { clearTimeout(timer.current); setOpenKey(label); };
   const hide = () => { clearTimeout(timer.current); timer.current = setTimeout(() => setOpenKey(k => (k === label ? null : k)), 160); };
+  const sub = (
+    <div ref={subRef}
+      className={'model-submenu pinned' + (pos && pos.flip ? ' flip' : '')}
+      style={{
+        top: pos ? pos.top : 0,
+        left: pos ? pos.left : 0,
+        maxHeight: pos && pos.maxH ? pos.maxH : undefined,
+        overflow: pos && pos.maxH ? 'hidden auto' : undefined,
+        visibility: pos ? undefined : 'hidden'
+      }}
+      onMouseEnter={show} onMouseLeave={hide}>
+      {items.map(renderOpt)}
+    </div>
+  );
+  const host = typeof document !== 'undefined' ? document.body : null;
   return (
     <div className="more-wrap" ref={rowRef} onMouseEnter={show} onMouseLeave={hide}>
-      <button className={'submenu-row' + (open ? ' active' : '')} onClick={() => (open ? setOpenKey(null) : show())}>
+      <button type="button" className={'submenu-row' + (open ? ' active' : '')} onClick={() => (open ? setOpenKey(null) : show())}>
         <span>{label}</span><Chevron className="sub-chev" />
       </button>
-      {open && (
-        <div ref={subRef} className={'model-submenu' + (place.up ? ' up' : '') + (place.left ? ' left' : '')} style={place.maxH ? { maxHeight: place.maxH, overflowY: 'auto' } : undefined} onMouseEnter={show} onMouseLeave={hide}>
-          {items.map(renderOpt)}
-        </div>
-      )}
+      {open && (host ? createPortal(sub, host) : sub)}
     </div>
   );
 }
@@ -146,28 +204,64 @@ function MoreGroup({ label, items, renderOpt, openKey, setOpenKey }) {
 export default function ModelDropdown({ models, currentId, onSelect, extended, onToggleExtended, up, modelHasBg, bgInChat, onToggleBgInChat, reasoningEffort, onSetEffort, kwargValues, onSetKwarg, isAdmin = false }) {
   const [open, setOpen] = useState(false);
   const [openSub, setOpenSub] = useState(null);
-  const [place, setPlace] = useState({ down: !!up, maxH: 0 });
+  const [place, setPlace] = useState({ shift: 0, maxH: 0, sheet: false, ready: false });
   const [listMaxH, setListMaxH] = useState(0);
   const ref = useRef(null);
   const menuRef = useRef(null);
   const listRef = useRef(null);
   useEffect(() => {
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const h = (e) => {
+      const el = e.target;
+      if (ref.current && ref.current.contains(el)) return;
+      if (el && typeof el.closest === 'function' && el.closest('.model-submenu')) return;
+      setOpen(false);
+    };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, []);
   useEffect(() => { if (!open) setOpenSub(null); }, [open]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const h = (e) => { if (e.key === 'Escape') { setOpenSub(null); setOpen(false); } };
+    document.addEventListener('keydown', h);
+    return () => document.removeEventListener('keydown', h);
+  }, [open]);
   useLayoutEffect(() => {
-    if (!open) return;
-    const trig = ref.current && ref.current.querySelector('.model-trigger');
-    if (!trig) return;
-    const r = trig.getBoundingClientRect();
-    const menuH = (menuRef.current && menuRef.current.scrollHeight) || 340;
-    const below = window.innerHeight - r.bottom;
-    const above = r.top;
-    const down = below >= menuH + 14 ? true : below >= above;
-    const avail = (down ? below : above) - 16;
-    setPlace({ down, maxH: menuH > avail ? Math.max(160, avail) : 0 });
+    if (!open) {
+      setPlace(p => (p.ready ? { shift: 0, maxH: 0, sheet: false, ready: false } : p));
+      return undefined;
+    }
+    const measure = () => {
+      const wrap = ref.current, menu = menuRef.current;
+      if (!wrap || !menu) return;
+      if (sheetMode()) { setPlace(p => (p.sheet && p.ready ? p : { shift: 0, maxH: 0, sheet: true, ready: true })); return; }
+      const trig = wrap.querySelector('.model-trigger') || wrap;
+      const r = trig.getBoundingClientRect();
+      const wr = wrap.getBoundingClientRect();
+      const vp = viewport();
+      const nat = fullHeight(menu);
+      const budget = heightBudget(vp.h);
+      const h = Math.min(nat, budget);
+      const below = vp.h - r.bottom - GAP - EDGE;
+      const above = r.top - GAP - EDGE;
+      let top;
+      if (h <= below) top = r.bottom + GAP;
+      else if (h <= above) top = r.top - GAP - h;
+      else top = below >= above ? vp.h - EDGE - h : EDGE;
+      top = Math.max(EDGE, Math.min(top, Math.max(EDGE, vp.h - EDGE - h)));
+      const next = { shift: Math.round(top - wr.top), maxH: nat > budget ? Math.round(budget) : 0, sheet: false, ready: true };
+      setPlace(p => (p.ready && !p.sheet && p.shift === next.shift && p.maxH === next.maxH) ? p : next);
+    };
+    measure();
+    let ro = null;
+    if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(measure); if (menuRef.current) ro.observe(menuRef.current); }
+    window.addEventListener('resize', measure);
+    window.addEventListener('scroll', measure, true);
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, true);
+    };
   }, [open, listMaxH]);
   useLayoutEffect(() => {
     if (!open) { setListMaxH(0); return; }
@@ -210,7 +304,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
   }
 
   const Opt = (m) => (
-    <button key={m.id} className={'model-opt' + (m.unavailable ? ' unavail' : '')} onClick={() => { onSelect(m.id); setOpen(false); }}
+    <button key={m.id} type="button" className={'model-opt' + (m.unavailable ? ' unavail' : '')} onClick={() => { onSelect(m.id); setOpenSub(null); setOpen(false); }}
       title={m.unavailable ? (m.displayName + ' is currently unavailable.') : undefined}>
       {m.dropdownIcon !== false && m.staticIcon && <img className="mo-icon" src={m.staticIcon} alt="" />}
       <div className="mo-main">
@@ -228,9 +322,17 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
     </button>
   );
 
+  const menuStyle = place.sheet ? undefined : {
+    top: place.shift,
+    bottom: 'auto',
+    maxHeight: place.maxH || undefined,
+    overflow: place.maxH ? 'hidden auto' : undefined,
+    visibility: place.ready ? undefined : 'hidden'
+  };
+
   return (
     <div className="model-select" ref={ref}>
-      <button className="model-trigger" onClick={() => setOpen(o => !o)}>
+      <button type="button" className="model-trigger" onClick={() => setOpen(o => !o)}>
         {current?.displayName || 'Model'}
         {chips.length
           ? chips.map((c, i) => <span key={c + i} className="ext ext-effort">{t(c)}</span>)
@@ -239,8 +341,8 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
       </button>
       {open && <div className="model-scrim" onClick={() => setOpen(false)} />}
       {open && (
-        <div ref={menuRef} className={'model-menu' + (place.down ? ' up' : '')} style={place.maxH ? { maxHeight: place.maxH, overflowY: 'auto' } : undefined}>
-          <div className="model-main-list" ref={listRef} style={listMaxH ? { maxHeight: listMaxH, overflowY: 'auto' } : undefined}>
+        <div ref={menuRef} className={'model-menu' + (place.sheet ? '' : ' up')} style={menuStyle}>
+          <div className="model-main-list" ref={listRef} style={listMaxH ? { maxHeight: listMaxH, overflow: 'hidden auto' } : undefined}>
             {main.map(Opt)}
           </div>
           {shownKwargs.length ? (

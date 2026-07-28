@@ -143,14 +143,49 @@ export default function App() {
   const compareRef = useRef(null);
   const draftKey = (id) => 'oq-draft-' + (id || 'new');
   const draftTimer = useRef(null);
-  const saveDraft = (id, text) => {
+  const draftPending = useRef(null);
+  const flushDraftRef = useRef(null);
+  const writeDraft = (id, text) => {
+    try {
+      if (text && text.trim()) localStorage.setItem(draftKey(id), text);
+      else localStorage.removeItem(draftKey(id));
+    } catch {}
+  };
+  const flushDraft = () => {
     clearTimeout(draftTimer.current);
-    draftTimer.current = setTimeout(() => {
-      try { text && text.trim() ? localStorage.setItem(draftKey(id), text) : localStorage.removeItem(draftKey(id)); } catch {}
-    }, 250);
+    draftTimer.current = null;
+    const p = draftPending.current;
+    if (!p) return;
+    draftPending.current = null;
+    writeDraft(p.id, p.text);
+  };
+  flushDraftRef.current = flushDraft;
+  const saveDraft = (id, text) => {
+    if (incognitoRef.current) return;
+    const p = draftPending.current;
+    if (p && p.id !== id) flushDraft();
+    draftPending.current = { id, text };
+    clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(flushDraft, 200);
   };
   const loadDraft = (id) => { try { return localStorage.getItem(draftKey(id)) || ''; } catch { return ''; } };
-  const clearDraft = (id) => { clearTimeout(draftTimer.current); try { localStorage.removeItem(draftKey(id)); } catch {} };
+  const clearDraft = (id) => {
+    clearTimeout(draftTimer.current);
+    draftTimer.current = null;
+    draftPending.current = null;
+    try { localStorage.removeItem(draftKey(id)); } catch {}
+  };
+  useEffect(() => {
+    const flush = () => { if (flushDraftRef.current) flushDraftRef.current(); };
+    const onVis = () => { if (document.visibilityState === 'hidden') flush(); };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVis);
+      flush();
+    };
+  }, []);
   const styleId = user?.prefs?.styleId || 'normal';
   const setStyleId = (id) => updatePref('styleId', id);
   const saveStyles = async (list) => {
@@ -249,6 +284,7 @@ export default function App() {
   const selectingRef = useRef(false);
   const hasSelectionRef = useRef(false);
   const assistantIdRef = useRef(null);
+  const streamModelRef = useRef(null);
   const revealTimer = useRef(null);
   const followRaf = useRef(0);
   const followTs = useRef(0);
@@ -479,7 +515,11 @@ export default function App() {
     setShowProjects(false);
     const m = p.match(/^\/chat\/(.+)$/);
     if (m) openChat(decodeURIComponent(m[1]), false);
-    else { setActiveId(null); setMessages([]); }
+    else {
+      flushDraft();
+      setActiveId(null); setMessages([]);
+      if (!incognitoRef.current) setInput(loadDraft(null));
+    }
   }
 
   async function loadModels() {
@@ -596,6 +636,25 @@ export default function App() {
   function handleWs(m) {
     if (m.type === 'session_revoked') { location.href = '/'; return; }
     if (m.type === 'config') { loadModels(); loadAppConfig(); try { window.dispatchEvent(new CustomEvent('oq-config')); } catch {} return; }
+    if (m.type === 'resume') {
+      const list = Array.isArray(m.turns) ? m.turns : [];
+      for (const t of list) {
+        if (!t || !t.chatId) continue;
+        gen.current.set(t.chatId, {
+          content: t.content || '',
+          reasoning: t.reasoning || '',
+          phase: t.phase === 'queued' ? 'queued' : (t.phase === 'thinking' ? 'thinking' : 'generating'),
+          done: false,
+          assistantId: t.messageId || null,
+          model_id: t.modelId || currentIdRef.current,
+          live: t.live || null,
+          steers: Array.isArray(t.steers) ? t.steers : [],
+          status: t.status || null
+        });
+      }
+      if (list.some(t => t && t.chatId === activeKey())) syncView();
+      return;
+    }
     if (typeof m.type === 'string' && m.type.startsWith('space_')) {
       try { window.dispatchEvent(new CustomEvent('oq-space', { detail: m })); } catch {}
       if (m.type === 'space_invite' || m.type === 'space_updated' || m.type === 'space_removed' || m.type === 'space_deleted') refreshSpacesPending();
@@ -679,6 +738,7 @@ export default function App() {
         setCompacting(false); setLiveFile(null); setLiveCall(null); liveRef.current = null;
         targetContent.current = ''; targetReason.current = ''; pendingDone.current = false;
         assistantIdRef.current = m.messageId; dispLen.current = 0;
+        streamModelRef.current = r.model_id || currentIdRef.current;
         setDispContent(''); setDispReason(''); setPhase('generating'); setStreaming(true); setQueued(false);
         startStream();
       }
@@ -835,6 +895,7 @@ export default function App() {
       refreshSeq.current++;
       targetContent.current = r.content; targetReason.current = r.reasoning;
       assistantIdRef.current = r.assistantId; pendingDone.current = false;
+      streamModelRef.current = r.model_id || currentIdRef.current;
       dispLen.current = r.content.length;
       setDispContent(r.content); setDispReason(r.reasoning);
       const live = r.live;
@@ -843,6 +904,8 @@ export default function App() {
         liveRef.current = lf; setLiveFile(lf);
       } else { liveRef.current = null; setLiveFile(null); }
       setLiveCall(live && live.tool ? { ...live } : null);
+      setLiveSteers(Array.isArray(r.steers) ? r.steers : []);
+      setModelStatus(r.status || null);
       setPhase(r.phase === 'thinking' ? 'thinking' : 'generating');
       setStreaming(true); setQueued(r.phase === 'queued');
       startStream();
@@ -1016,6 +1079,7 @@ export default function App() {
     }
     setCtlOpen(false);
     setCanContinue(false); setQueue([]);
+    flushDraft();
     setInput(loadDraft(id));
     setChatMenuOpen(false);
     if (push) history.pushState({}, '', '/chat/' + id);
@@ -1053,6 +1117,7 @@ export default function App() {
     setChatRemovedModel(null);
     setCanContinue(false); setQueue([]);
     setChatGenParams(null); setChatSysOverride('');
+    flushDraft();
     setInput(loadDraft(null));
     const restored = homeSelectionRef.current;
     const targetId = (restored && restored.modelId && models.find(m => m.id === restored.modelId)) ? restored.modelId : currentId;
@@ -1071,10 +1136,13 @@ export default function App() {
     if (streaming || queued) return;
     if (incognito) {
       setIncognito(false);
-      setMessages([]); setInput('');
+      incognitoRef.current = false;
+      setMessages([]); setInput(loadDraft(null));
       setFocusTick(t => t + 1);
     } else {
+      flushDraft();
       setActiveId(null); setMessages([]); setInput('');
+      incognitoRef.current = true;
       setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
       setSandbox(false);
       const gs = ['Greetings, whoever you are', 'No names, no traces', 'This one stays between us', 'Off the record'];
@@ -1520,7 +1588,7 @@ export default function App() {
                 {(() => {
                   const streamKey = assistantIdRef.current || '_stream';
                   const renderList = streaming
-                    ? [...messages.filter(m => m.id !== streamKey), { id: streamKey, _k: streamKey, role: 'assistant', content: dispContent, reasoning: dispReason, model_id: currentId, _streaming: true }]
+                    ? [...messages.filter(m => m.id !== streamKey), { id: streamKey, _k: streamKey, role: 'assistant', content: dispContent, reasoning: dispReason, model_id: streamModelRef.current || currentId, _streaming: true }]
                     : messages;
                   let lastA = null;
                   for (let i = renderList.length - 1; i >= 0; i--) if (renderList[i].role === 'assistant') { lastA = renderList[i]; break; }

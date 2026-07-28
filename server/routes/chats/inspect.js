@@ -1,4 +1,5 @@
 import { db, getSetting } from '../../db.js';
+import { contextBudget, slideToFit, countExact } from '../../lib/ctxwindow.js';
 import { authMiddleware } from '../../auth.js';
 import { buildMessages } from '../../llm/index.js';
 import * as membank from '../../membank.js';
@@ -40,7 +41,8 @@ export default function registerInspectRoutes(app) {
     const active = rows.filter(r => !r.summarized && !r.excluded);
     const convo = buildMessages(model, active.map(r => r.msg), false, null, c.summary, promptVars(c.user_id), await instrFor(c));
     const ratio = calibRatio(c.id);
-    const used = calibratedTokens(c.id, convo);
+    const exact = await countExact(model, convo);
+    const used = exact || calibratedTokens(c.id, convo);
     const messages = rows.map(r => ({
       id: r.id,
       role: r.role,
@@ -51,10 +53,20 @@ export default function registerInspectRoutes(app) {
     }));
     const inContext = messages.filter(m => !m.summarized && !m.excluded).reduce((n, m) => n + m.tokens, 0);
     const ctx = await modelCtx(model);
-    const limit = ctx || parseInt(model.num_ctx) || 0;
+    const bud = await contextBudget(model);
+    let sent = used;
+    let dropped = 0;
+    let trimmed = false;
+    if (exact && bud.budget > 0 && used > bud.budget) {
+      const fit = await slideToFit(model, convo, bud.budget);
+      if (fit.tokens) { sent = fit.tokens; dropped = fit.dropped; trimmed = fit.trimmed; }
+    }
+    const limit = bud.budget || ctx || parseInt(model.num_ctx) || 0;
     res.json({
-      limit, used, overhead: Math.max(0, used - inContext), messages,
-      measured: tokenCalib.has(c.id), hasSummary: !!c.summary,
+      limit, used: sent, total: used, reserve: bud.reserve, ctx: bud.ctx || ctx,
+      overhead: Math.max(0, used - inContext), messages,
+      dropped, trimmed, windowed: dropped > 0 || trimmed,
+      measured: !!exact || tokenCalib.has(c.id), exact: !!exact, hasSummary: !!c.summary,
       compacts: model.enable_summaries ? compactThreshold(model, ctx) : 0
     });
   });

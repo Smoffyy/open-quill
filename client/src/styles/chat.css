@@ -126,6 +126,10 @@
 .model-submenu.up.left { transform-origin: bottom right; }
 .model-submenu::before { content: ''; position: absolute; top: 0; bottom: 0; left: -14px; width: 14px; }
 .model-submenu.left::before { left: auto; right: -14px; }
+.model-submenu.pinned { position: fixed; right: auto; bottom: auto; z-index: 90; scrollbar-width: thin; }
+.model-submenu.pinned::-webkit-scrollbar { width: 6px; }
+.model-submenu.pinned.flip { transform-origin: top right; }
+.model-submenu.pinned.flip::before { left: auto; right: -14px; }
 
 .kw-row { padding: 7px 8px; }
 .kw-row .mo-name { font-size: 14px; font-weight: 500; line-height: 20px; color: var(--pop-text); }
