@@ -107,6 +107,8 @@ Open http://localhost:5173.
 3. Set the API base URL (default `http://localhost:8080/v1`) and key, then Save.
 4. Under **Models**, set each model's **internal model name** to the id your server expects (llama.cpp accepts the model name configured when starting the server, or the model's id). Add a description, system prompt, logos, and reasoning settings as desired.
 
+> The interface is primarily designed for use with llama.cpp. Other providers may work, but full functionality and feature compatibility cannot be guaranteed.
+
 ## Databases
 
 Open Quill can run multiple, fully isolated databases and switch between them with a single line in a `.env` file. Each database keeps its own users, chats, preferences, interface and model configuration, artifacts, uploaded content, sandbox, project files and memory. Nothing is shared between them.
