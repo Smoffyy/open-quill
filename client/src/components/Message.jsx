@@ -166,10 +166,16 @@ function ModelIcon({ model, phase, below, name }) {
 }
 
 function StreamStatus({ status }) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setShow(true), 5000);
+    return () => clearTimeout(t);
+  }, []);
   const pct = status && Number.isFinite(status.pct) ? status.pct : null;
   const total = status && status.total ? status.total : 0;
   const cached = status && status.cache ? status.cache : 0;
   const label = status && status.phase === 'generating' ? t('Working') : t('Reading your prompt');
+  if (!show) return null;
   return (
     <div className="model-status" role="status">
       <span className="mst-label">{label}</span>
@@ -319,7 +325,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
           {streaming && liveCall && liveCall.tool && (
             <div className="tool-live"><ToolCard call={liveCall} result={null} /></div>
           )}
-          {streaming && !msg.content && !liveCall && <StreamStatus status={status} />}
+          {streaming && !msg.content && !msg.reasoning && !liveCall && <StreamStatus status={status} />}
           {streaming && !msg.content && !liveCall && <p className="stream-wait" aria-hidden="true"></p>}
         </div>
       )}
