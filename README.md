@@ -56,19 +56,32 @@ This project is licensed under the [MIT License](LICENSE), by downloading, using
 ---
 
 ## Features
-
-- Anthropic-style UI with a serif assistant voice (Source Serif 4) and Open Sans user input
-- Two-step email + password sign-in; the **first account created becomes the admin**
-- Letter-by-letter streaming with a fade-in reveal
-- Per-phase model logos (static / generating / thinking), admin-uploadable
-- Reasoning models: an **Extended** toggle and collapsible "Thought process" view; supports `<think>` tags and `reasoning_content` deltas
-- Admin panel: manage models (display name, internal API id, description, system prompt), tuck models under a renamable "More models" group, toggle reasoning and set reasoning / non-reasoning tokens, and upload the three state logos
-- Reasoning / non-reasoning tokens are appended to the end of the system prompt on a new line (e.g. `/think`, `/no_think`)
-- Changes save instantly and push to every connected client in real time over WebSocket
-- Auto-generated chat titles, code blocks with hover-to-copy, smart autoscroll with a jump-to-bottom button
-- Zero native dependencies, data is stored in a local JSON file (`server/data.json`)
-- Artifacts, enabling users to create entire projects natively inside the UI!
-- And much more!
+ 
+### Interface
+ 
+- Anthropic-style design with a serif assistant voice (Source Serif 4) and Open Sans for user input
+- Token-by-token streaming with a fade-in reveal, smart autoscroll, and a jump-to-bottom control
+- Auto-generated chat titles, hover-to-copy code blocks, branching conversations, and side-by-side branch comparison
+- Light and dark modes, selectable themes, and a configurable home screen
+- Full keyboard navigation, a command palette, and in-thread search
+- Localization support, currently shipping English and Spanish
+### Models and reasoning
+ 
+- Multiple providers configured side by side, each with its own base URL, key, and sampler set
+- Per-model display name, description, system prompt, icon, and sampling parameters
+- Reasoning models get an **Extended** toggle and a collapsible thought-process view, supporting both `<think>` tags and `reasoning_content` deltas
+- Reasoning and non-reasoning trigger tokens (for example `/think` and `/no_think`) appended to the system prompt automatically
+- Custom kwargs surfaced to users as toggles, sliders, or dropdowns
+- Exact context accounting using the model's own tokenizer, with a sliding window and summarization that layer rather than compete
+### Working with files and tools
+ 
+- **Artifacts** - the assistant writes real files into a per-chat workspace that you can view, diff, restore to any version, preview, and download
+- **Code sandbox** - a real shell and file toolset scoped to that workspace, so the assistant can scaffold, install, build, run, and test
+- **Web search** - optional, backed by your own SearXNG instance
+- **Connectors (MCP)** - add Model Context Protocol servers as local subprocesses or remote endpoints
+- **Projects and Spaces** - group chats, share files and instructions across a body of work
+- **Memory** - an editable, per-user memory assembled from recent conversations
+- **Voice** - speech-to-text and text-to-speech against an endpoint you configure
 
 ## Why was this project made?
 
