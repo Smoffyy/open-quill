@@ -6,6 +6,8 @@ const tokenCache = new Map();
 const imageCostCache = new Map();
 const TOKEN_CACHE_MAX = 400;
 const DEFAULT_IMAGE_TOKENS = 1600;
+const PER_MSG_OVERHEAD = 8;
+const templateBroken = new Map();
 
 const asInt = (v) => { const n = parseInt(v, 10); return Number.isFinite(n) && n > 0 ? n : 0; };
 
@@ -155,36 +157,47 @@ function wireFor(messages) {
   });
 }
 
-function signature(wire, tools, name) {
+function signature(wire, tools, name, images) {
   let chars = 0;
   for (const m of wire) chars += m.content.length + m.role.length;
   const tail = wire.length ? wire[wire.length - 1].content.slice(-96) : '';
-  return name + '|' + wire.length + '|' + chars + '|' + (Array.isArray(tools) ? tools.length : 0) + '|' + tail;
+  return name + '|' + wire.length + '|' + chars + '|' + images + '|' + (Array.isArray(tools) ? tools.length : 0) + '|' + tail;
 }
 
 export async function llamaPromptTokens(model, messages, tools) {
   const ep = endpointFor(model);
   if (!ep) return 0;
   const wire = wireFor(messages);
-  const sig = signature(wire, tools, ep.name);
+  const sig = signature(wire, tools, ep.name, countImages(messages));
   const cached = tokenCache.get(sig);
   if (cached) {
     tokenCache.delete(sig);
     tokenCache.set(sig, cached);
-    return cached;
+    return cached + countImages(messages) * imageTokenCost(model);
   }
-  const body = { messages: wire, add_generation_prompt: true };
-  if (Array.isArray(tools) && tools.length) { body.tools = tools; body.tool_choice = 'auto'; }
-  const tpl = await postWithModel(ep, '/apply-template', body, 15000);
-  const prompt = tpl && typeof tpl.prompt === 'string' ? tpl.prompt : null;
-  if (prompt === null) return 0;
+  const broken = templateBroken.get(ep.root + '|' + ep.name);
+  let prompt = null;
+  let pad = 0;
+  if (!broken || Date.now() - broken > CACHE_MS) {
+    const body = { messages: wire, add_generation_prompt: true };
+    if (Array.isArray(tools) && tools.length) { body.tools = tools; body.tool_choice = 'auto'; }
+    const tpl = await postWithModel(ep, '/apply-template', body, 15000);
+    prompt = tpl && typeof tpl.prompt === 'string' ? tpl.prompt : null;
+    if (prompt === null) templateBroken.set(ep.root + '|' + ep.name, Date.now());
+    else templateBroken.delete(ep.root + '|' + ep.name);
+  }
+  if (prompt === null) {
+    prompt = wire.map(m => m.role + '\n' + m.content).join('\n');
+    if (Array.isArray(tools) && tools.length) { try { prompt += '\n' + JSON.stringify(tools); } catch {} }
+    pad = wire.length * PER_MSG_OVERHEAD + 8;
+  }
   const tok = await postWithModel(ep, '/tokenize', { content: prompt, add_special: true }, 15000);
   const n = Array.isArray(tok?.tokens) ? tok.tokens.length : 0;
   if (!n) return 0;
-  const total = n + countImages(messages) * imageTokenCost(model);
-  tokenCache.set(sig, total);
+  const text = n + pad;
+  tokenCache.set(sig, text);
   if (tokenCache.size > TOKEN_CACHE_MAX) tokenCache.delete(tokenCache.keys().next().value);
-  return total;
+  return text + countImages(messages) * imageTokenCost(model);
 }
 
 export async function llamaTokenCount(model, messages, tools) {
@@ -215,4 +228,4 @@ export function parseOverflow(err) {
   return { prompt, ctx };
 }
 
-export function clearLlamaCaches() { infoCache.clear(); tokenCache.clear(); }
+export function clearLlamaCaches() { infoCache.clear(); tokenCache.clear(); templateBroken.clear(); }

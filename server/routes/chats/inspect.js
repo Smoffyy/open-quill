@@ -43,15 +43,21 @@ export default function registerInspectRoutes(app) {
     const ratio = calibRatio(c.id);
     const exact = await countExact(model, convo);
     const used = exact || calibratedTokens(c.id, convo);
-    const messages = rows.map(r => ({
+    const scaffold = buildMessages(model, [], false, null, c.summary, promptVars(c.user_id), await instrFor(c));
+    const exactHead = exact ? await countExact(model, scaffold) : 0;
+    const overheadTokens = exactHead || Math.round(calibratedTokens(c.id, scaffold) * (exact ? 1 : ratio));
+    const raw = rows.map(r => messageTokens(r.msg));
+    const activeRaw = rows.reduce((n, r, i) => n + (!r.summarized && !r.excluded ? raw[i] : 0), 0);
+    const body = Math.max(0, used - overheadTokens);
+    const scale = exact && activeRaw > 0 ? body / activeRaw : ratio;
+    const messages = rows.map((r, i) => ({
       id: r.id,
       role: r.role,
-      tokens: Math.round(messageTokens(r.msg) * ratio),
+      tokens: Math.max(1, Math.round(raw[i] * scale)),
       pinned: r.pinned,
       excluded: r.excluded,
       summarized: r.summarized
     }));
-    const inContext = messages.filter(m => !m.summarized && !m.excluded).reduce((n, m) => n + m.tokens, 0);
     const ctx = await modelCtx(model);
     const bud = await contextBudget(model);
     let sent = used;
@@ -64,7 +70,7 @@ export default function registerInspectRoutes(app) {
     const limit = bud.budget || ctx || parseInt(model.num_ctx) || 0;
     res.json({
       limit, used: sent, total: used, reserve: bud.reserve, ctx: bud.ctx || ctx,
-      overhead: Math.max(0, used - inContext), messages,
+      overhead: overheadTokens, messages,
       dropped, trimmed, windowed: dropped > 0 || trimmed,
       measured: !!exact || tokenCalib.has(c.id), exact: !!exact, hasSummary: !!c.summary,
       compacts: model.enable_summaries ? compactThreshold(model, ctx) : 0

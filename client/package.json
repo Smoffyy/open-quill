@@ -1,6 +1,6 @@
 {
   "name": "open-quill-client",
-  "version": "27.1.0-developer.4",
+  "version": "27.1.0-developer.5",
   "private": true,
   "type": "module",
   "scripts": {
@@ -22,5 +22,8 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^6.0.4",
     "vite": "^8.1.5"
+  },
+  "overrides": {
+    "lightningcss": "^1.33.0"
   }
 }

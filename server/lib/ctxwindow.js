@@ -3,6 +3,7 @@ import { isLlamaCpp, llamaPromptTokens } from './llamacpp.js';
 
 const HEAD_KEEP = 600;
 const DROP_NOTE = '[Older messages in this conversation were dropped to stay inside the model context window.]';
+const IMG_NOTE = '[{n} earlier image(s) from this message were removed to stay inside the model context window.]';
 const TRIM_NOTE = '\n\n[... middle of this message was cut to fit the model context window ...]\n\n';
 const MAX_PROBES = 8;
 const MIN_TAIL_CHARS = 200;
@@ -63,6 +64,63 @@ function textLen(m) {
   return 0;
 }
 
+function trimmableLen(m) {
+  const c = m.content;
+  if (typeof c === 'string') return c.length;
+  if (Array.isArray(c)) return c.reduce((n, p) => n + (p && p.type === 'text' ? (p.text || '').length : 0), 0);
+  return 0;
+}
+
+function imageCount(msgs) {
+  let n = 0;
+  for (const m of msgs) {
+    if (!Array.isArray(m.content)) continue;
+    for (const p of m.content) if (p && p.type === 'image_url') n++;
+  }
+  return n;
+}
+
+function applyImageDrop(msgs, dropCount) {
+  if (dropCount < 1) return msgs;
+  let seen = 0;
+  return msgs.map(m => {
+    if (!Array.isArray(m.content)) return m;
+    let removed = 0;
+    const parts = [];
+    for (const p of m.content) {
+      if (p && p.type === 'image_url') {
+        seen++;
+        if (seen <= dropCount) { removed++; continue; }
+      }
+      parts.push(p);
+    }
+    if (!removed) return m;
+    return { ...m, content: [{ type: 'text', text: IMG_NOTE.replace('{n}', String(removed)) }, ...parts] };
+  });
+}
+
+async function evictImages(msgs, budget, count) {
+  const total = imageCount(msgs);
+  if (total < 1) return { msgs, tokens: 0, fits: false, removed: 0 };
+  let lo = 1;
+  let hi = total;
+  let best = null;
+  let bestTokens = 0;
+  let bestRemoved = 0;
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    const cand = applyImageDrop(msgs, mid);
+    const t = await count(cand);
+    if (!t) return { msgs, tokens: 0, fits: false, removed: 0 };
+    if (t <= budget) { best = cand; bestTokens = t; bestRemoved = mid; hi = mid - 1; }
+    else lo = mid + 1;
+  }
+  if (best) return { msgs: best, tokens: bestTokens, fits: true, removed: bestRemoved };
+  const all = applyImageDrop(msgs, total);
+  const t = await count(all);
+  return { msgs: all, tokens: t, fits: !!t && t <= budget, removed: total };
+}
+
 function protectedFlags(msgs) {
   const keep = new Uint8Array(msgs.length);
   for (let i = 0; i < msgs.length; i++) if (msgs[i].role === 'system') keep[i] = 1;
@@ -89,13 +147,22 @@ function applyDrop(msgs, keep, dropCount, boundaryChars) {
     kept.push(msgs[i]);
   }
   if (!removed) return kept;
-  const out = [];
-  let noted = false;
-  for (const m of kept) {
-    if (!noted && m.role !== 'system') { out.push({ role: 'system', content: DROP_NOTE }); noted = true; }
-    out.push(m);
-  }
-  if (!noted) out.push({ role: 'system', content: DROP_NOTE });
+  return withNote(kept, DROP_NOTE);
+}
+
+function noteInto(m, note) {
+  if (typeof m.content === 'string') return { ...m, content: note + '\n\n' + m.content };
+  if (Array.isArray(m.content)) return { ...m, content: [{ type: 'text', text: note }, ...m.content] };
+  return { ...m, content: note };
+}
+
+function withNote(list, note) {
+  const out = list.slice();
+  if (!out.length) return [{ role: 'user', content: note }];
+  let idx = -1;
+  for (let i = 0; i < out.length; i++) if (out[i].role !== 'system') { idx = i; break; }
+  if (idx === -1) idx = out.length - 1;
+  out[idx] = noteInto(out[idx], note);
   return out;
 }
 
@@ -175,14 +242,14 @@ function largestIdx(msgs, includeSystem) {
   let bestLen = 0;
   for (let i = 0; i < msgs.length; i++) {
     if (!includeSystem && msgs[i].role === 'system') continue;
-    const l = textLen(msgs[i]);
+    const l = trimmableLen(msgs[i]);
     if (l > bestLen) { bestLen = l; best = i; }
   }
   return best;
 }
 
 async function trimAt(msgs, idx, budget, count) {
-  const full = textLen(msgs[idx]);
+  const full = trimmableLen(msgs[idx]);
   let lo = 200;
   let hi = full;
   let best = null;
@@ -207,21 +274,27 @@ async function trimAt(msgs, idx, budget, count) {
 }
 
 async function trimBiggest(msgs, budget, count) {
-  const idx = largestIdx(msgs, false);
   let work = msgs;
   let tokens = 0;
   let trimmed = false;
+  let images = 0;
+  if (imageCount(work) > 0) {
+    const ev = await evictImages(work, budget, count);
+    if (ev.removed > 0) { work = ev.msgs; tokens = ev.tokens; images = ev.removed; }
+    if (ev.fits) return { msgs: work, trimmed: false, tokens, images };
+  }
+  const idx = largestIdx(work, false);
   if (idx !== -1) {
     const r = await trimAt(work, idx, budget, count);
     work = r.msgs; tokens = r.tokens; trimmed = true;
-    if (r.fits) return { msgs: work, trimmed, tokens };
+    if (r.fits) return { msgs: work, trimmed, tokens, images };
   }
   const sysIdx = largestIdx(work, true);
   if (sysIdx !== -1 && work[sysIdx].role === 'system') {
     const r = await trimAt(work, sysIdx, budget, count);
-    return { msgs: r.msgs, trimmed: true, tokens: r.tokens };
+    return { msgs: r.msgs, trimmed: true, tokens: r.tokens, images };
   }
-  return { msgs: work, trimmed, tokens };
+  return { msgs: work, trimmed, tokens, images };
 }
 
 export async function slideToFit(model, msgs, budget, tools) {
@@ -275,7 +348,7 @@ export async function slideToFit(model, msgs, budget, tools) {
   if (after && after <= budget) return { msgs: stripped, dropped: maxDrop, trimmed: false, tokens: after, exact: true };
 
   const t = await trimBiggest(stripped, budget, count);
-  return { msgs: t.msgs, dropped: maxDrop, trimmed: true, tokens: t.tokens, exact: !!t.tokens };
+  return { msgs: t.msgs, dropped: maxDrop, trimmed: !!t.trimmed, images: t.images || 0, tokens: t.tokens, exact: !!t.tokens };
 }
 
 export function shrinkByRatio(msgs, factor) {

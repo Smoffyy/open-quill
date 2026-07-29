@@ -248,9 +248,9 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       if (exactCtx && budget > 0) {
         const fit = await slideToFit(model, convo, budget, tools);
         lastFitTokens = fit.tokens || 0;
-        if (fit.dropped || fit.trimmed) {
+        if (fit.dropped || fit.trimmed || fit.images) {
           convo = fit.msgs;
-          notifyWindow(fit.dropped, fit.trimmed);
+          notifyWindow(fit.dropped, fit.trimmed || !!fit.images);
         }
       } else if (rollCtx) {
         const t = truncateForRollingCtx(chat.id, convo, rollCtx);
