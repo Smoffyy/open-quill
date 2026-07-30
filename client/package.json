@@ -1,6 +1,6 @@
 {
   "name": "open-quill-client",
-  "version": "27.1.0-developer.5",
+  "version": "27.1.0-developer.6",
   "private": true,
   "type": "module",
   "scripts": {

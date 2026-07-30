@@ -70,7 +70,7 @@
 
 .thread-find {
   position: absolute;
-  top: 62px;
+  top: calc(62px + var(--ledger-h, 0px));
   left: 50%;
   transform: translateX(-50%);
   z-index: 12;

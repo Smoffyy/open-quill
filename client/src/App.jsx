@@ -57,11 +57,25 @@ export default function App() {
   const [models, setModels] = useState([]);
   const [currentId, setCurrentId] = useState(null);
   const [chatRemovedModel, setChatRemovedModel] = useState(null);
+  const modelsRef = useRef([]);
+  const modelsLoadedRef = useRef(false);
+  const pendingModelCheck = useRef(null);
   const pickModel = useCallback((id) => { setChatRemovedModel(null); setCurrentId(id); }, []);
   const modelById = useMemo(() => {
     const m = new Map();
     for (const x of models) m.set(x.id, x);
     return m;
+  }, [models]);
+  useEffect(() => {
+    modelsRef.current = models;
+    if (models.length) modelsLoadedRef.current = true;
+  }, [models]);
+  useEffect(() => {
+    if (!models.length) return;
+    const p = pendingModelCheck.current;
+    if (!p) return;
+    pendingModelCheck.current = null;
+    resolveLastModel(p);
   }, [models]);
   const ghostModels = useRef(new Map());
   const resolveMsgModel = useCallback((msg, fallback) => {
@@ -1045,19 +1059,23 @@ export default function App() {
     setChatInstructions(chat.instructions || '');
     setChatPins(Array.isArray(chat.pinnedFiles) ? chat.pinnedFiles : []);
   }
-  function applyLastModel(msgs) {
-    const lastA = [...msgs].reverse().find(mm => mm.role === 'assistant' && mm.model_id);
-    if (lastA && models.find(mm => mm.id === lastA.model_id)) {
+  function resolveLastModel(lastA) {
+    if (modelsRef.current.find(mm => mm.id === lastA.model_id)) {
       setCurrentId(lastA.model_id);
       setExtended(!!lastA.extended);
       if (lastA.kwargValues && typeof lastA.kwargValues === 'object') setKwargValues(prev => ({ ...prev, ...lastA.kwargValues }));
       else if (lastA.reasoningEffort) setReasoningEffort(lastA.reasoningEffort);
       setChatRemovedModel(null);
-    } else if (lastA) {
-      setChatRemovedModel({ id: lastA.model_id, name: lastA.model_name || t('The original model') });
     } else {
-      setChatRemovedModel(null);
+      setChatRemovedModel({ id: lastA.model_id, name: lastA.model_name || t('The original model') });
     }
+  }
+  function applyLastModel(msgs) {
+    const lastA = [...msgs].reverse().find(mm => mm.role === 'assistant' && mm.model_id);
+    if (!lastA) { pendingModelCheck.current = null; setChatRemovedModel(null); return; }
+    if (!modelsLoadedRef.current) { pendingModelCheck.current = lastA; setChatRemovedModel(null); return; }
+    pendingModelCheck.current = null;
+    resolveLastModel(lastA);
   }
   async function openChat(id, push = true) {
     setMobileDrawer(false);

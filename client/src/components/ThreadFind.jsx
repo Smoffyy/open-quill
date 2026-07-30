@@ -138,6 +138,21 @@ export default function ThreadFind({ scrollRef, revision, onMatches, onClose }) 
 
   useEffect(() => { paint(rangesRef.current, at); }, [paint, at, total]);
 
+  useEffect(() => {
+    const bar = barRef.current;
+    if (!bar) return;
+    const apply = () => document.documentElement.style.setProperty('--find-h', Math.round(bar.getBoundingClientRect().height) + 'px');
+    apply();
+    let ro;
+    if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(apply); ro.observe(bar); }
+    window.addEventListener('resize', apply);
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener('resize', apply);
+      document.documentElement.style.removeProperty('--find-h');
+    };
+  }, []);
+
   useEffect(() => () => { clearHighlights(); onMatches(null); }, [clearHighlights, onMatches]);
 
   const reveal = useCallback((index) => {
