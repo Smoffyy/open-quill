@@ -24,7 +24,7 @@ This project is licensed under the [MIT License](LICENSE), by downloading, using
 </p>
 
 <details>
-  <summary>More Screenshots.</summary>
+  <summary>More Screenshots</summary>
   <br>
 
   <p align="center">
@@ -91,8 +91,8 @@ I've created an official YouTube channel dedicated to this project, which will s
 
 ## Requirements
 
-- Node.js 18+ (Node 20+ recommended)
-- A running OpenAI-compatible server. Default target is LM Studio at `http://localhost:1234/v1`.
+* [Node.js](https://nodejs.org/en/download/) `>=22.23.2` (Node 26 recommended)
+* An OpenAI-compatible server. Default: [llama.cpp](https://github.com/ggml-org/llama.cpp) at `http://localhost:8080/v1`.
 
 ## Setup
 
@@ -156,8 +156,8 @@ The `.env` belongs in the **project root**. If both a project-root `.env` and a 
 
 Two ways, both take effect on the next restart:
 
-- **Edit `.env`** — set `OPEN_QUILL_DB` to any name and restart. A brand-new name starts as a fresh, empty database.
-- **Admin panel** — sign in as the admin and open **Admin Panel -> Databases**. Create named databases, see which one is running versus which loads next, choose the one to load, and delete unused ones. Your choice is marked pending and applied on the next restart.
+- **Edit `.env`** - set `OPEN_QUILL_DB` to any name and restart. A brand-new name starts as a fresh, empty database.
+- **Admin panel** - sign in as the admin and open **Admin Panel -> Databases**. Create named databases, see which one is running versus which loads next, choose the one to load, and delete unused ones. Your choice is marked pending and applied on the next restart.
 
 Each database is encrypted with its own key stored beside its data. To use one key for every database instead, set `DB_ENCRYPTION_KEY` in your `.env`.
 
