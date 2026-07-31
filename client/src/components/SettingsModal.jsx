@@ -39,6 +39,16 @@ function parseVersion(v) {
   return { full: s, base, channel, build, year };
 }
 
+function presetDefaults(isOpenai, fallbackTheme) {
+  return {
+    animations: !isOpenai, autoscroll: true, theme: fallbackTheme || 'system', accent: '', density: 'comfortable',
+    messageEntrance: true, streamCursor: isOpenai, cursorStyle: isOpenai ? 'circle' : 'block',
+    cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40, chatStagger: true, themeFade: true,
+    microFx: true, composerFx: true, iconGlow: false, focusGlow: false, oledShift: false,
+    threadRail: true, threadFind: true, branchMap: true, msgKeys: true
+  };
+}
+
 export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted, onExportChats, onImportChats }) {
   const [tab, setTab] = useState('general');
   const { lang: i18nLang, setLang: setAppLang, langs } = useI18n();
@@ -51,7 +61,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
     const applied = document.documentElement.getAttribute('data-theme');
     const fallbackTheme = (applied === 'anthropic' || applied === 'openai' || applied === 'oled') ? 'dark' : (applied || 'system');
     const isOpenai = document.documentElement.getAttribute('data-preset') === 'openai';
-    const merged = { animations: true, autoscroll: true, theme: 'system', accent: '', density: 'comfortable', messageEntrance: true, streamCursor: isOpenai, cursorStyle: isOpenai ? 'circle' : 'block', cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40, chatStagger: true, themeFade: true, microFx: true, composerFx: true, iconGlow: false, focusGlow: false, oledShift: false, threadRail: true, threadFind: true, branchMap: true, msgKeys: true, ...user.prefs };
+    const merged = { ...presetDefaults(isOpenai, fallbackTheme), ...user.prefs };
     if (!user.prefs || user.prefs.theme == null) merged.theme = fallbackTheme;
     if (merged.theme === 'oled') merged.theme = 'dark';
     return merged;
@@ -59,6 +69,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
   const [saved, setSaved] = useState(false);
   const [userFont, setUserFontState] = useState(getUserFont());
   const [confirmDel, setConfirmDel] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [delErr, setDelErr] = useState('');
   const [confirmClear, setConfirmClear] = useState(false);
   const [clearMsg, setClearMsg] = useState('');
@@ -157,6 +168,16 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
   }
 
   function setPref(k, v) { setPrefs(p => { const next = { ...p, [k]: v }; applyPrefs(next); scheduleSave(name, next); return next; }); }
+  function resetPrefs() {
+    const isOpenai = document.documentElement.getAttribute('data-preset') === 'openai';
+    const applied = document.documentElement.getAttribute('data-theme');
+    const fallbackTheme = (applied === 'anthropic' || applied === 'openai' || applied === 'oled') ? 'dark' : (applied || 'system');
+    const next = presetDefaults(isOpenai, fallbackTheme);
+    setPrefs(next);
+    applyPrefs(next);
+    scheduleSave(name, next);
+    setConfirmReset(false);
+  }
   const [memory, setMemory] = useState(user.memory || '');
   const [memBusy, setMemBusy] = useState(false);
   const memTimer = useRef(null);
@@ -252,6 +273,20 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
                     </div>
                   )}
                   {clearMsg && <div className="muted-note" style={{ marginTop: 8 }}>{clearMsg}</div>}
+                  {!confirmReset ? (
+                    <div className="field row" style={{ marginTop: 14 }}>
+                      <div><label>{t("Reset all settings")}</label><div className="muted-note">{t("Puts every appearance and behaviour setting back to the defaults for the current theme. Your chats and account are untouched.")}</div></div>
+                      <button className="btn ghost" onClick={() => setConfirmReset(true)}>{t("Reset all settings")}</button>
+                    </div>
+                  ) : (
+                    <div className="dz-confirm" style={{ marginTop: 14 }}>
+                      <div className="muted-note" style={{ marginBottom: 10 }}>{t("Reset every setting to this theme's defaults?")}</div>
+                      <div className="edit-actions">
+                        <button className="btn ghost" onClick={() => setConfirmReset(false)}>{t("Cancel")}</button>
+                        <button className="btn" onClick={resetPrefs}>{t("Yes, reset settings")}</button>
+                      </div>
+                    </div>
+                  )}
                   {!user.isOwner && (!confirmDel ? (
                     <div className="field row" style={{ marginTop: 14 }}>
                       <div><label>{t("Delete account")}</label><div className="muted-note">{t("Permanently removes your account, all chats, and files. This cannot be undone.")}</div></div>

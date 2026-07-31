@@ -308,7 +308,7 @@ export default function App() {
   const lastTop = useRef(0);
   const programmatic = useRef(false);
   const [showJump, setShowJump] = useState(false);
-  const animate = user?.prefs?.animations !== false;
+  const animate = user?.prefs?.animations == null ? document.documentElement.getAttribute('data-preset') !== 'openai' : user.prefs.animations !== false;
   const revealMs = (() => { const v = user?.prefs?.revealMs; return v == null || isNaN(parseInt(v)) ? 40 : Math.max(0, Math.min(100, parseInt(v))); })();
   const [threadStagger, setThreadStagger] = useState(false);
   const staggerTimer = useRef(null);
@@ -844,7 +844,7 @@ export default function App() {
     revealTimer.current = setInterval(() => {
       const target = targetContent.current;
       if (dispLen.current >= target.length) { if (pendingDone.current) finalize(); return; }
-      const instant = document.documentElement.getAttribute('data-preset') === 'openai' || !animateRef.current || revealRef.current <= 0;
+      const instant = !animateRef.current || revealRef.current <= 0;
       setDispContent(prev => {
         const remaining = target.length - prev.length;
         const n = instant ? remaining
