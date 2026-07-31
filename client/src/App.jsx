@@ -308,7 +308,7 @@ export default function App() {
   const lastTop = useRef(0);
   const programmatic = useRef(false);
   const [showJump, setShowJump] = useState(false);
-  const animate = user?.prefs?.animations == null ? document.documentElement.getAttribute('data-preset') !== 'openai' : user.prefs.animations !== false;
+  const animate = user?.prefs?.animations == null ? cfg.uiPreset !== 'openai' : user.prefs.animations !== false;
   const revealMs = (() => { const v = user?.prefs?.revealMs; return v == null || isNaN(parseInt(v)) ? 40 : Math.max(0, Math.min(100, parseInt(v))); })();
   const [threadStagger, setThreadStagger] = useState(false);
   const staggerTimer = useRef(null);
