@@ -161,7 +161,7 @@ Prompt size is **measured, never estimated**, for any llama.cpp-backed model. Th
 
 `client/scripts/smoke.jsx` server-renders every admin `ModelEditor` section plus the standalone modals and asserts none of them throw. It exists because `vite build` type-checks nothing: passing wrong props to a component compiles perfectly and then blanks the whole panel at runtime. That is exactly how the Routing tab shipped broken once — `Toggle` takes `{ m, set, k }` and reads `m[k]` internally, while `Switch` is the one that takes `{ on, onToggle }`. Passing `on`/`onToggle` to `Toggle` left `m` undefined and killed the admin app.
 
-Run it after touching any admin section or modal. Adding a component to the list is two lines and worth it for anything reachable behind a tab, since a crash there is invisible until someone clicks. Components needing React context (the `useAdmin` sections) are not covered; wrapping them in a provider is the obvious extension if that class of bug shows up.
+It runs in CI as **Components render without crashing**. Run it locally after touching any admin section or modal. Adding a component to the list is two lines and worth it for anything reachable behind a tab, since a crash there is invisible until someone clicks. Components needing React context (the `useAdmin` sections) are not covered; wrapping them in a provider is the obvious extension if that class of bug shows up.
 
 ## Router models (`lib/router.js`)
 
@@ -230,7 +230,7 @@ Three endpoints, and the split between the first two is the important part:
 
 `/api/auth/context` exists because `/api/app-config` is auth-gated, so before signing in the client knew nothing about the server. That is why the login screen used to render in the wrong preset on a first visit: the pre-paint boot script in `index.html` reads `localStorage 'oq-preset'`, which is empty on a new device, so it fell back to Anthropic. `App.jsx` now fetches the context on the `/api/me` failure path and applies preset, font and icon before rendering `Login`. Keep this endpoint free of anything an anonymous caller should not see — it is deliberately limited to branding and the two booleans the screen needs.
 
-`POST /api/auth/check-email` was removed. Nothing used it after the flow split, and it answered "does this account exist" to anonymous callers.
+`POST /api/auth/check-email` was removed. Nothing used it after the flow split, and it answered "does this account exist" to anonymous callers. CI used to probe it as its liveness check; that is now `GET /api/auth/context`, so if you remove another endpoint, check `.github/workflows/ci.yml` before assuming nothing depends on it.
 
 **The login screen must use theme variables.** It was originally written with literal hex values from the light Anthropic palette (`#f0efe7`, `#faf9f5`, `#d6d4c8`), so it rendered cream in dark mode and under the OpenAI preset no matter what. Every rule in `.login` now goes through `--bg`, `--text`, `--surface`, `--border`, `--input-bg`, `--card-bg` and `--accent`; preset-specific styling lives in `openai.css` under `[data-preset="openai"]`, per the preset architecture above. When logged out, `applyPrefs(null, preset)` resolves the theme from the OS preference since there are no user prefs yet.
 
