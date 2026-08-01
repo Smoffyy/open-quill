@@ -2,9 +2,8 @@ import { db, uid, now, getSetting } from '../db.js';
 import { hash, check, sign, publicUser, authMiddleware, sessionFromRequest, createSession, revokeSession, revokeOtherSessions, sessionMaxAgeSeconds } from '../auth.js';
 import { oneShot, stripThink } from '../llm/index.js';
 import { randomSecret, verifyTotp, otpauthUri, makeRecoveryCodes, hashRecovery } from '../totp.js';
-import * as sandbox from '../sandbox.js';
 import { logAudit } from '../lib/audit.js';
-import { purgeUploads } from '../lib/uploads.js';
+import { purgeUserChats } from '../lib/purge.js';
 import { resolveModelOrDefault } from '../lib/models.js';
 import { budgetStatus } from '../lib/budget.js';
 import { updateUserMemory } from '../lib/memory.js';
@@ -267,7 +266,7 @@ export default function registerAuthRoutes(app) {
   app.post('/api/me/password', authMiddleware, async (req, res) => {
     const current = String(req.body?.current || '');
     const next = String(req.body?.next || '');
-    if (next.length < 4) return res.status(400).json({ error: 'New password must be at least 4 characters.' });
+    if (next.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters.' });
     if (!(await check(current, req.user.password_hash))) return res.status(401).json({ error: 'Current password is incorrect.' });
     db.users.update(req.user.id, { password_hash: await hash(next) });
     revokeOtherSessions(req.user.id, req.sessionId);
@@ -311,24 +310,13 @@ export default function registerAuthRoutes(app) {
   });
 
   app.delete('/api/me/chats', authMiddleware, (req, res) => {
-    const myChats = db.chats.byUser(req.user.id);
-    for (const c of myChats) { try { sandbox.remove(c.id); } catch {} }
-    const chatIds = new Set(myChats.map(c => c.id));
-    purgeUploads(chatIds);
-    for (const id of chatIds) db.messages.removeWhere('chat_id', id);
-    db.chats.removeWhere('user_id', req.user.id);
-    res.json({ ok: true, deleted: myChats.length });
+    res.json({ ok: true, deleted: purgeUserChats(req.user.id) });
   });
 
   app.delete('/api/me', authMiddleware, (req, res) => {
     const u = req.user;
     if (u.is_owner) return res.status(403).json({ error: 'The owner account cannot be deleted.' });
-    const myChats = db.chats.byUser(u.id);
-    for (const c of myChats) { try { sandbox.remove(c.id); } catch {} }
-    const chatIds = new Set(myChats.map(c => c.id));
-    purgeUploads(chatIds);
-    for (const id of chatIds) db.messages.removeWhere('chat_id', id);
-    db.chats.removeWhere('user_id', u.id);
+    purgeUserChats(u.id);
     removeUserFromSpaces(u.id);
     db.sessions.removeWhere('user_id', u.id);
     db.users.removeById(u.id);

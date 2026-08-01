@@ -38,10 +38,12 @@ function cacheSet(store, key, mtime, size, value) {
   return value;
 }
 
+const UPLOADS_PREFIX = UPLOADS + path.sep;
+
 export function readUploadText(url) {
   try {
     const p = path.join(UPLOADS, path.basename(url || ''));
-    if (!p.startsWith(UPLOADS)) return '';
+    if (!p.startsWith(UPLOADS_PREFIX)) return '';
     const st = fs.statSync(p);
     const cached = cacheGet(textCache, p, st.mtimeMs, st.size);
     if (cached !== undefined) return cached;
@@ -54,7 +56,7 @@ export function readUploadText(url) {
 export function readImageDataUri(a) {
   try {
     const p = path.join(UPLOADS, path.basename(a.url || ''));
-    if (!p.startsWith(UPLOADS)) return null;
+    if (!p.startsWith(UPLOADS_PREFIX)) return null;
     const mime = a.type && a.type.startsWith('image/') ? a.type : (MIME[path.extname(a.name || '').toLowerCase()] || 'image/png');
     const st = fs.statSync(p);
     const key = mime + '|' + p;
@@ -74,7 +76,7 @@ export function purgeUploads(chatIds) {
         if (!fname || seen.has(fname)) continue;
         seen.add(fname);
         const p = path.join(UPLOADS, fname);
-        if (p.startsWith(UPLOADS)) { try { fs.unlinkSync(p); } catch {} }
+        if (p.startsWith(UPLOADS_PREFIX)) { try { fs.unlinkSync(p); } catch {} }
       }
     }
   }

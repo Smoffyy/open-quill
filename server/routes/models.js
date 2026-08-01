@@ -1,4 +1,4 @@
-import { db, uid, now, getSetting, setSetting } from '../db.js';
+import { db, uid, now, tx, getSetting, setSetting } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
 import { getProviders, resolveProvider, providerSpec } from '../providers.js';
 import { matchPreset, presetList, setCustomPresets, getCustomPresets } from '../pricing.js';
@@ -178,14 +178,15 @@ export default function registerModelRoutes(app) {
   });
 
   app.post('/api/admin/models/reorder', authMiddleware, adminOnly, (req, res) => {
-    (req.body.ids || []).forEach((id, i) => db.models.update(id, { sort_order: i }));
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    tx(() => ids.forEach((id, i) => db.models.update(id, { sort_order: i })));
     broadcastAdminConfig();
     res.json({ ok: true });
   });
 
   // publish the current draft (full model rows) to all clients
   app.post('/api/admin/models/publish', authMiddleware, adminOnly, (req, res) => {
-    const snapshot = db.models.all().map(m => ({ ...m }));
+    const snapshot = db.models.all();
     setSetting('published_models', snapshot);
     setSetting('published_at', now());
     logAudit(req, 'models.publish', { meta: { count: snapshot.length } });
@@ -196,8 +197,8 @@ export default function registerModelRoutes(app) {
   // has the draft diverged from what is published?
   app.get('/api/admin/models/publish-state', authMiddleware, adminOnly, (req, res) => {
     const snap = getSetting('published_models', null);
-    const draft = db.models.all().map(m => ({ ...m }));
-    const dirty = JSON.stringify(snap) !== JSON.stringify(snap === null ? null : draft);
-    res.json({ published: Array.isArray(snap), dirty: snap === null ? true : dirty, publishedAt: getSetting('published_at', null) });
+    const published = Array.isArray(snap);
+    const dirty = !published || JSON.stringify(snap) !== JSON.stringify(db.models.all());
+    res.json({ published, dirty, publishedAt: getSetting('published_at', null) });
   });
 }

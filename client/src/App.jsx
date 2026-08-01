@@ -245,6 +245,8 @@ export default function App() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [artifactsOpen, setArtifactsOpen] = useState(false);
+  const artifactsOpenRef = useRef(false);
+  useEffect(() => { artifactsOpenRef.current = artifactsOpen; }, [artifactsOpen]);
   const [callOpen, setCallOpen] = useState(false);
   const [artifactFocus, setArtifactFocus] = useState(null);
   const [incognito, setIncognito] = useState(false);
@@ -299,6 +301,8 @@ export default function App() {
   const [phase, setPhase] = useState('static');
 
   const ws = useRef(null);
+  const wsRetry = useRef(0);
+  const wsTimer = useRef(null);
   const gen = useRef(new Map());
   const targetContent = useRef('');
   const targetReason = useRef('');
@@ -376,6 +380,8 @@ export default function App() {
     stopLoops();
     clearTimeout(staggerTimer.current);
     clearTimeout(draftTimer.current);
+    clearTimeout(wsTimer.current);
+    try { ws.current?.close(); } catch {}
   }, []);
 
   useEffect(() => {
@@ -570,12 +576,19 @@ export default function App() {
   function connect() {
     const existing = ws.current;
     if (existing && (existing.readyState === 0 || existing.readyState === 1)) return;
+    clearTimeout(wsTimer.current);
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const sock = new WebSocket(`${proto}://${location.host}/ws`);
     ws.current = sock;
+    sock.onopen = () => { wsRetry.current = 0; };
     sock.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch { return; } handleWs(m); };
     sock.onerror = () => { try { sock.close(); } catch {} };
-    sock.onclose = () => { if (ws.current === sock) ws.current = null; setTimeout(() => { if (user) connect(); }, 1500); };
+    sock.onclose = () => {
+      if (ws.current === sock) ws.current = null;
+      const wait = Math.min(15000, 1500 * Math.pow(2, wsRetry.current++));
+      clearTimeout(wsTimer.current);
+      wsTimer.current = setTimeout(() => { if (userRef.current) connect(); }, wait);
+    };
   }
 
   function wsSend(obj) {
@@ -1027,6 +1040,7 @@ export default function App() {
     if (!target) return false;
     setKbFocus(target.id);
     jumpToMessage(target.id, { flash: false });
+    return true;
   }
 
   function scrollBottom(smooth) {
@@ -1092,7 +1106,7 @@ export default function App() {
       applyChatMeta(cached.chat || {});
       applyLastModel(cached.messages || []);
       setFiles(cached.files || []);
-      setArtifactsOpen((cached.files || []).length > 0 && artifactsOpen);
+      setArtifactsOpen((cached.files || []).length > 0 && artifactsOpenRef.current);
     } else {
       setMessages([]);
       setFiles([]);
@@ -1120,7 +1134,7 @@ export default function App() {
         setThreadStagger(true);
         staggerTimer.current = setTimeout(() => setThreadStagger(false), 700);
       }
-      try { const f = await api.get('/api/chats/' + id + '/files'); if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { files: f.files || [] }); return; } setFiles(f.files || []); setArtifactsOpen((f.files || []).length > 0 && artifactsOpen); cacheChat(id, { files: f.files || [] }); }
+      try { const f = await api.get('/api/chats/' + id + '/files'); if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { files: f.files || [] }); return; } setFiles(f.files || []); setArtifactsOpen((f.files || []).length > 0 && artifactsOpenRef.current); cacheChat(id, { files: f.files || [] }); }
       catch { if (seq === openSeq.current && activeIdRef.current === id && !cached) setFiles([]); }
       if (!cached) { stick.current = true; setTimeout(() => scrollBottom(false), 30); }
     } catch { if (seq === openSeq.current) { if (!cached) { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); } } }
@@ -1509,6 +1523,13 @@ export default function App() {
     { id: 'logout', label: t('Log out'), keywords: 'sign out exit', action: () => logout() }
   ];
 
+  const modelPicker = (
+    <div className="topbar-model tbm-flex">
+      <ModelDropdown models={models} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} kwargValues={kwargValues} onSetKwarg={setKwarg} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
+      <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={() => setShowDocs(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>
+    </div>
+  );
+
   sidebarFns.current = { createFolder, renameFolder, toggleFolder, deleteFolder, moveChatToFolder, newChat, openChat, deleteChat, toggleStar, logout, openProjects };
 
   return (
@@ -1552,10 +1573,7 @@ export default function App() {
         )}
         {empty && !incognito && cfg.uiPreset === 'openai' && (
           <div className="home-topbar">
-            <div className="topbar-model tbm-flex">
-              <ModelDropdown models={models} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} kwargValues={kwargValues} onSetKwarg={setKwarg} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
-              <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={() => setShowDocs(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>
-            </div>
+            {modelPicker}
           </div>
         )}
         {empty ? (
@@ -1590,10 +1608,7 @@ export default function App() {
           <>
             <div className="topbar">
               {cfg.uiPreset === 'openai' && (
-                <div className="topbar-model tbm-flex">
-                  <ModelDropdown models={models} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} kwargValues={kwargValues} onSetKwarg={setKwarg} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
-              <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={() => setShowDocs(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>
-                </div>
+                {modelPicker}
               )}
               <button className="mobile-menu-btn" onClick={() => setMobileDrawer(true)} title="Menu"><Menu style={{ width: 20 }} /></button>
               {renaming ? (

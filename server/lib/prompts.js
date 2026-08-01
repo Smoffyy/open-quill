@@ -212,20 +212,11 @@ export function longConvoReminderFor(chatId) {
 
 export const CHAT_SEARCH_PROMPT = "## Past conversations\nYou can search the user's other conversations in this app with `chat_search` (pass `query`) and read one with `chat_view` (pass `chat_id`). Use these when the user refers to something discussed in a previous chat instead of saying you have no memory of it.";
 
-export function lastUserQuery(chatId) {
-  const rows = activePath(chatId);
-  for (let i = rows.length - 1; i >= 0; i--) if (rows[i].role === 'user' && (rows[i].content || '').trim()) return stripToolSyntax(rows[i].content);
-  return '';
-}
-
-export async function pinnedFilesPrompt(chat, query) {
+export function pinnedFilesPrompt(chat) {
   const pins = Array.isArray(chat?.pinned_files) ? chat.pinned_files : [];
   if (!pins.length) return '';
-  const blocks = [];
-  for (const a of pins) {
-    if (isTextLike(a)) blocks.push(`--- Pinned file: ${a.name} ---\n${readUploadText(a.url)}`);
-    else blocks.push(`[Pinned file: ${a.name} (not readable as text)]`);
-  }
-  if (!blocks.length) return '';
+  const blocks = pins.map(a => (isTextLike(a)
+    ? `--- Pinned file: ${a.name} ---\n${readUploadText(a.url)}`
+    : `[Pinned file: ${a.name} (not readable as text)]`));
   return 'The user has pinned the following file(s) to this conversation. Keep their contents available as context for every turn:\n\n' + blocks.join('\n\n');
 }

@@ -66,7 +66,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
       const { done, value } = await reader.read(); if (done) break;
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n'); buffer = lines.pop();
-      for (const line of lines) if (handle(line)) { flush(); finishCalls(); return; }
+      for (const line of lines) if (handle(line)) { await reader.cancel().catch(() => {}); flush(); finishCalls(); return; }
     }
     buffer += decoder.decode();
     handle(buffer);
@@ -118,7 +118,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
     const { done, value } = await reader.read(); if (done) break;
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n'); buffer = lines.pop();
-    for (const line of lines) if (handle(line)) { flush(); finishCalls(); return; }
+    for (const line of lines) if (handle(line)) { await reader.cancel().catch(() => {}); flush(); finishCalls(); return; }
   }
   buffer += decoder.decode();
   handle(buffer);

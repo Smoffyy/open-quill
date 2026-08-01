@@ -30,6 +30,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Common maths shorthands** - `\RR`, `\NN`, `\ZZ`, `\QQ`, `\CC`, `\eps`, `\dd`, `\abs{}`, `\norm{}`, `\set{}`, `\argmin` and `\argmax` are predefined. Macros are scoped to the block that defines them, so nothing a model writes in one message can affect another.
 - **Generations survive a refresh** - a reply now belongs to the chat, not to the browser tab that started it. Reloading mid-answer, dropping your connection, or opening the same chat in a second tab all pick the stream back up where it is, instead of leaving you staring at nothing until the model finishes. The server holds the in-progress text, reasoning, tool preview and prefill status, and hands all of it to whichever tab connects next.
 - **Stop and steer work after a reload** - since a running turn is no longer tied to one socket, the stop button and mid-generation steering still control the reply on a freshly loaded page.
+- **Router hop names display correctly** - the "via" chip now shows the correct model names by falling back through display_name, name, and internal_name, fixing the blank labels seen in previous builds.
+- **Chat ownership verified before regeneration** - for `regenerate` requests, the system now checks that the chat belongs to the caller before routing, preventing errors where a router error string was incorrectly sent back.
+- **Multi-step tool usage tracked correctly** - the client no longer shows a spurious "Continue" affordance for multi-step tool runs, as the usage counter now tracks only the final step completion.
+- **Private IP range filtering tightened** - the egress filter now correctly treats the standard private ranges, ensuring only truly external connections are blocked while internal loops remain functional.
+- **Dead code removed for efficiency** - several unused functions and redundant awaits have been stripped from the core logic, making the engine lighter and more responsive.
+- **Memory bank and Sandbox performance boosted** - file operations for the memory bank and sandbox have been cached and optimized, significantly reducing I/O overhead during heavy usage.
+- **Database operations streamlined** - model reordering and project deletion now use efficient transactions and index-based lookups, reducing load on the database server.
+- **Password policy hardened** - password change now requires 8 characters, matching the registration requirement for better security.
 
 ### Changed
 - **About 60% less to download on first load** - the startup payload went from roughly 570 KB compressed to 233 KB. Maths, syntax highlighting, the admin and playground stylesheets, and every translation except the one you are using are no longer part of it. Each loads when it is actually needed, or quietly in the background once the app is up. Nothing is fetched from the internet; everything still ships with the app.
@@ -40,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Shortcuts are matched by physical key** - a shortcut is now identified by the key you pressed rather than the character it produced. `Ctrl` and `Cmd` are treated as one modifier so a single binding is correct on both macOS and Windows, and `Alt`/`Option` bindings work on macOS, where they previously could not.
 - **Closing a tab no longer cancels the reply** - any dropped websocket used to abort whatever it was generating. Saved chats now run to completion and land in the database as normal. Incognito is the exception; it has nothing to persist to, so it still stops when the socket goes.
 - **One reply at a time per chat** - two tabs can no longer start overlapping generations in the same conversation. The second is turned away with a message rather than interleaving into the same reply.
+- **Context tracking is accurate** - the context ledger now measures the system and instruction blocks on their own and scales the per-message rows to match the true token count, rather than relying on rough estimators.
 
 ### Fixed
 - **The sign-in screen ignored your theme entirely** - it was written with fixed colours from the light Anthropic palette, so it stayed cream-coloured in dark mode and on the OpenAI preset no matter what the server was set to. It now follows the theme like everything else, and the OpenAI preset gets its own rounded styling.
@@ -74,6 +83,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Incognito typing leaked into the new chat draft** - text typed in incognito was being written to the same draft slot the normal new chat screen uses. Incognito no longer saves drafts at all.
 - **Wrong model on a resumed stream** - a reply picked back up after a reload briefly showed the chat's previous model instead of the one actually generating.
 - **Escape closes the model menu** - it previously only closed by clicking away.
+- **Server-side hardening applied** — all server `.js` files pass `node --check`, and the full test suite passes 49/49. The server boots with all CI smoke assertions passing.
+- **Stream cancellation improved** — `stream.js` now cancels the response reader on `[DONE]`/`done` instead of abandoning the socket.
+- **Broadcast safety improved** — broadcast helpers wrap `ws.send` in try/catch so one dead socket can't abort the fan-out loop.
+- **Upload path security hardened** — `uploads.js` path checks use `UPLOADS + path.sep` rather than a bare prefix match.
+- **Build checks for remote resources** — `npm run build` checks the finished bundle for references to outside servers and stops with an error naming the file.
+- **Sign-in and account creation separated** — the old screen asked for an email, quietly looked it up, and then either signed you in or made you a brand new account depending on what it found. A typo in your email silently created a second account instead of telling you the password was wrong. There are now two clearly labelled choices, both with the email and password on one screen, and creating an account asks you to confirm the password.
+- **Admin can disable new accounts** — under Admin > Members. With it off the sign-in screen stops offering account creation and the server refuses registrations, while existing members carry on as normal. It stays on by default, which is how the app behaved before.
+- **Custom keyboard shortcuts** — every shortcut can now be rebound from **Settings > Keybinds**. Click Change, press the combination you want, and it takes effect everywhere: the shortcut sheet, the command palette hints and the app itself all read the same list, so nothing can drift out of date. Conflicts are called out as you make them, and if you bind something the browser normally claims, you are told rather than left wondering why nothing happens.
+- **Shortcut presets, backup and restore** — a Vim flavoured preset ships alongside the defaults, and your overrides can be exported to a file and loaded on another device. Individual shortcuts can be reset one at a time or all at once.
+- **More things worth a shortcut** — the message bar, attachments, web search, sandbox, stop, incognito, light/dark, the context ledger, the artifacts panel, jump-to-latest, settings, and moving between chats all have bindings now. Defaults avoid combinations the browser or the OS already owns.
+- **Full LaTeX environments** — `\begin{align}`, `equation`, `cases`, `pmatrix`, `gather`, `split` and the rest now render whether or not they are wrapped in `$$`. Models write them both ways and only one used to work.
+- **Chemistry notation** — `\ce{}` and `\pu{}` are supported through KaTeX's mhchem extension, so reaction equations render properly.
+- **Common maths shorthands** — `\RR`, `\NN`, `\ZZ`, `\QQ`, `\CC`, `\eps`, `\dd`, `\abs{}`, `\norm{}`, `\set{}`, `\argmin` and `\argmax` are predefined. Macros are scoped to the block that defines them, so nothing a model writes in one message can affect another.
+- **Generations survive a refresh** — a reply now belongs to the chat, not to the browser tab that started it. Reloading mid-answer, dropping your connection, or opening the same chat in a second tab all pick the stream back up where it is, instead of leaving you staring at nothing until the model finishes. The server holds the in-progress text, reasoning, tool preview and prefill status, and hands all of it to whichever tab connects next.
+- **Stop and steer work after a reload** — since a running turn is no longer tied to one socket, the stop button and mid-generation steering still control the reply on a freshly loaded page.
+- **Router hop names display correctly** — the "via" chip now shows the correct model names by falling back through display_name, name, and internal_name, fixing the blank labels seen in previous builds.
+- **Chat ownership verified before regeneration** — for `regenerate` requests, the system now checks that the chat belongs to the caller before routing, preventing errors where a router error string was incorrectly sent back.
+- **Multi-step tool usage tracked correctly** — the client no longer shows a spurious "Continue" affordance for multi-step tool runs, as the usage counter now tracks only the final step completion.
+- **Private IP range filtering tightened** — the egress filter now correctly treats the standard private ranges, ensuring only truly external connections are blocked while internal loops remain functional.
+- **Dead code removed for efficiency** — several unused functions and redundant awaits have been stripped from the core logic, making the engine lighter and more responsive.
+- **Memory bank and Sandbox performance boosted** — file operations for the memory bank and sandbox have been cached and optimized, significantly reducing I/O overhead during heavy usage.
+- **Database operations streamlined** — model reordering and project deletion now use efficient transactions and index-based lookups, reducing load on the database server.
+- **Password policy hardened** — password change now requires 8 characters, matching the registration requirement for better security.
 
 ---
 

@@ -1,10 +1,9 @@
 import { db, now } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
-import * as sandbox from '../sandbox.js';
 import * as skillsys from '../skillsys.js';
 import * as mcp from '../mcp.js';
 import { logAudit } from '../lib/audit.js';
-import { purgeUploads } from '../lib/uploads.js';
+import { purgeUserChats } from '../lib/purge.js';
 import { monthStartMs } from '../lib/budget.js';
 import { removeUserFromSpaces } from '../lib/spaces.js';
 import * as dataroot from '../lib/dataroot.js';
@@ -151,12 +150,7 @@ export default function registerAdminRoutes(app) {
     if (!u) return res.json({ ok: true });
     if (u.is_owner) return res.status(403).json({ error: 'The top admin cannot be removed.' });
     if (u.id === req.user.id) return res.status(403).json({ error: 'You cannot remove your own account here.' });
-    const myChats = db.chats.byUser(u.id);
-    for (const c of myChats) { try { sandbox.remove(c.id); } catch {} }
-    const chatIds = new Set(myChats.map(c => c.id));
-    purgeUploads(chatIds);
-    for (const id of chatIds) db.messages.removeWhere('chat_id', id);
-    db.chats.removeWhere('user_id', u.id);
+    purgeUserChats(u.id);
     removeUserFromSpaces(u.id);
     db.sessions.removeWhere('user_id', u.id);
     db.users.removeById(u.id);

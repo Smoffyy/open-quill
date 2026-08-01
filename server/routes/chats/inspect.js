@@ -28,7 +28,7 @@ export default function registerInspectRoutes(app) {
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const model = pickModel(req.query.modelId);
     if (!model) return res.json({ used: 0, limit: 0, pct: 0, hasSummary: !!c.summary, summaries: !!c.enable_summaries });
-    const convo = buildMessages(model, await chatHistory(c, model), false, null, c.summary, promptVars(c.user_id), await instrFor(c));
+    const convo = buildMessages(model, chatHistory(c, model), false, null, c.summary, promptVars(c.user_id), instrFor(c));
     const used = calibratedTokens(c.id, convo);
     const ctx = await modelCtx(model);
     const limit = ctx || parseInt(model.num_ctx) || 0;
@@ -42,13 +42,14 @@ export default function registerInspectRoutes(app) {
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const model = pickModel(req.query.modelId);
     if (!model) return res.json({ limit: 0, used: 0, overhead: 0, messages: [] });
-    const rows = await historyRows(c, model);
+    const rows = historyRows(c, model);
     const active = rows.filter(r => !r.summarized && !r.excluded);
-    const convo = buildMessages(model, active.map(r => r.msg), false, null, c.summary, promptVars(c.user_id), await instrFor(c));
+    const instructions = instrFor(c);
+    const convo = buildMessages(model, active.map(r => r.msg), false, null, c.summary, promptVars(c.user_id), instructions);
     const ratio = calibRatio(c.id);
     const exact = await countExact(model, convo);
     const used = exact || calibratedTokens(c.id, convo);
-    const scaffold = buildMessages(model, [], false, null, c.summary, promptVars(c.user_id), await instrFor(c));
+    const scaffold = buildMessages(model, [], false, null, c.summary, promptVars(c.user_id), instructions);
     const exactHead = exact ? await countExact(model, scaffold) : 0;
     const overheadTokens = exactHead || Math.round(calibratedTokens(c.id, scaffold) * (exact ? 1 : ratio));
     const raw = rows.map(r => messageTokens(r.msg));
@@ -87,9 +88,9 @@ export default function registerInspectRoutes(app) {
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const model = pickModel(req.query.modelId);
     if (!model) return res.json({ segments: [], totalTokens: 0 });
-    const membankOn = getSetting('membank_enabled', '0') === '1' && membank.list().length > 0;
+    const membankOn = getSetting('membank_enabled', '0') === '1' && membank.count() > 0;
     const memP = membankOn ? membank.promptFor(getSetting('membank_prompt', '')) : '';
-    const convo = buildMessages(model, await chatHistory(c, model), false, memP || null, c.summary, promptVars(c.user_id), await instrFor(c));
+    const convo = buildMessages(model, chatHistory(c, model), false, memP || null, c.summary, promptVars(c.user_id), instrFor(c));
     const segments = convo.map((m, i) => {
       const txt = typeof m.content === 'string' ? m.content : (m.content || []).map(p => p.type === 'text' ? p.text : '[image]').join('\n');
       return { index: i, role: m.role, tokens: estimateTokens([m]), chars: txt.length, preview: txt.slice(0, 600), hasImages: Array.isArray(m.content) && m.content.some(p => p.type === 'image_url') };
@@ -107,11 +108,11 @@ export default function registerInspectRoutes(app) {
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const model = pickModel(req.query.modelId);
     if (!model) return res.json({ sections: [], messages: [], total: 0 });
-    const membankOn = getSetting('membank_enabled', '0') === '1' && membank.list().length > 0;
+    const membankOn = getSetting('membank_enabled', '0') === '1' && membank.count() > 0;
     const memP = membankOn ? membank.promptFor(getSetting('membank_prompt', '')) : '';
-    const instructions = await instrFor(c);
-    const rows = await historyRows(c, model);
-    const convo = buildMessages(model, await chatHistory(c, model), false, memP || null, c.summary, promptVars(c.user_id), instructions);
+    const instructions = instrFor(c);
+    const rows = historyRows(c, model);
+    const convo = buildMessages(model, chatHistory(c, model), false, memP || null, c.summary, promptVars(c.user_id), instructions);
 
     const sys = convo.find(m => m.role === 'system');
     const sysText = sys ? String(sys.content || '') : '';

@@ -23,7 +23,7 @@ function isPrivateV4(ip) {
   if (a === 172 && b >= 16 && b <= 31) return true;
   if (a === 192 && b === 168) return true;
   if (a === 100 && b >= 64 && b <= 127) return true;
-  if (a === 192 && b === 0) return true;
+  if (a === 192 && b === 0 && (p[2] === 0 || p[2] === 2)) return true;
   if (a >= 224) return true;
   return false;
 }

@@ -73,7 +73,7 @@ export async function maybeCompact(ws, chat, model, extended, sandboxOn) {
   while (guard++ < 3) {
     const fresh = db.chats.byId(chat.id);
     const sandboxP = sandboxOn ? sandboxPromptFor(chat.id) : null;
-    const convo = buildMessages(model, await chatHistory(chat, model), extended, sandboxP, fresh.summary, promptVars(chat.user_id), await instrFor(fresh));
+    const convo = buildMessages(model, chatHistory(chat, model), extended, sandboxP, fresh.summary, promptVars(chat.user_id), instrFor(fresh));
     if ((await exactTokens(chat.id, model, convo)) < threshold) return;
     if (!(await compactStep(ws, chat, model))) return;
   }
@@ -87,13 +87,9 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     if ((cRow0.system_override || '').trim()) model = { ...model, system_prompt: cRow0.system_override };
   }
   await maybeCompact(ws, chat, model, extended, sandboxOn);
-  const history = await chatHistory(chat, model);
+  const history = chatHistory(chat, model);
   const chatRow = db.chats.byId(chat.id) || chat;
-  const rebuildBase = async () => {
-    const row = db.chats.byId(chat.id);
-    return buildMessages(model, await chatHistory(chat, model), extended, toolsP(), row ? row.summary : undefined, promptVars(chat.user_id), withStyle(await instrFor(row || chat)));
-  };
-  const membankOn = getSetting('membank_enabled', '0') === '1' && membank.list().length > 0;
+  const membankOn = getSetting('membank_enabled', '0') === '1' && membank.count() > 0;
   const membankHideTools = getSetting('membank_hide_tools', '0') === '1';
   if (membankOn) { try { await membank.ensureIndexedAll(); } catch {} }
   const chatSearchOn = !!model.chat_search_allowed && getSetting('chat_search_enabled', '0') === '1';
@@ -124,11 +120,15 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     if (longReminderOn) parts.push(longConvoReminderFor(chat.id));
     return parts.filter(Boolean).join('\n\n') || null;
   };
-  let base = buildMessages(model, history, extended, toolsP(), chatRow.summary, promptVars(chat.user_id), withStyle(await instrFor(chatRow)));
+  const rebuildBase = () => {
+    const row = db.chats.byId(chat.id) || chat;
+    return buildMessages(model, chatHistory(chat, model), extended, toolsP(), row.summary, promptVars(chat.user_id), withStyle(instrFor(row)));
+  };
+  let base = buildMessages(model, history, extended, toolsP(), chatRow.summary, promptVars(chat.user_id), withStyle(instrFor(chatRow)));
   let inTurn = []; // assistant/tool exchanges accumulated during this response
   const assistantId = uid();
   const assistantParent = (db.chats.byId(chat.id) || {}).active_leaf || null;
-  let content = '', reasoning = '', usage = null;
+  let content = '', reasoning = '', usage = null, lastStepCompletion = 0;
   safeSend(JSON.stringify({ type: 'start', chatId: chat.id, messageId: assistantId }));
 
   const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, projFilesOn }) : [];
@@ -203,7 +203,6 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   let maxSteps = toolsOn ? stepCap : 1;
   const callFails = new Map();
   let prevStepSig = '';
-  let overflowRetried = false;
   const steerNotes = [];
   let steerBudget = MAX_STEERS;
   const takeSteers = () => {
@@ -235,7 +234,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     for (let step = 0; step < maxSteps; step++) {
       // running low on context mid-response? summarize older turns, then carry on where we left off
       if (threshold !== Infinity && inTurn.length && (await exactTokens(chat.id, model, base.concat(inTurn))) >= threshold) {
-        if (await compactStep(ws, chat, model)) base = await rebuildBase();
+        if (await compactStep(ws, chat, model)) base = rebuildBase();
         if ((await exactTokens(chat.id, model, base.concat(inTurn))) >= threshold) {
           const t = trimInTurn(inTurn);
           if (t.trimmed) {
@@ -389,6 +388,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
               if (!usage) usage = { prompt: 0, completion: 0, total: 0 };
               usage.prompt += stepUsage.prompt; usage.completion += stepUsage.completion;
               usage.total += stepUsage.total || (stepUsage.prompt + stepUsage.completion);
+              lastStepCompletion = stepUsage.completion;
             }
             state.aborts.delete(chat.id);
             continue;
@@ -397,7 +397,6 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         }
         else if (isContextOverflowError(err) && overflowRetries < 3) {
           overflowRetries++;
-          overflowRetried = true;
           const info = parseOverflow(err);
           safeSend(JSON.stringify({ type: 'compacting', chatId: chat.id }));
           let freed = false;
@@ -421,7 +420,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
               notifyWindow(sh.dropped, sh.trimmed);
             }
           }
-          if (!freed && await compactStep(ws, chat, model)) { base = await rebuildBase(); freed = true; }
+          if (!freed && await compactStep(ws, chat, model)) { base = rebuildBase(); freed = true; }
           if (!freed) {
             const t = trimInTurn(inTurn, 1);
             if (t.trimmed) { inTurn = t.list; freed = true; }
@@ -444,6 +443,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         if (!usage) usage = { prompt: 0, completion: 0, total: 0 };
         usage.prompt += stepUsage.prompt; usage.completion += stepUsage.completion;
         usage.total += stepUsage.total || (stepUsage.prompt + stepUsage.completion);
+        lastStepCompletion = stepUsage.completion;
       }
       if (!aborted) {
         const notes = takeSteers();
@@ -488,7 +488,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         if (sandboxOn) safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
         toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: formatted });
       }
-      safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live: null }));
+      if (liveSent) safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live: null }));
       if (conversationEnded) {
         const endedChat = db.chats.byId(chat.id);
         safeSend(JSON.stringify({ type: 'chat_ended', chatId: chat.id, reason: (endedChat && endedChat.ended_reason) || '' }));
@@ -528,17 +528,19 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   } else {
     db.chats.update(chat.id, { updated_at: now() });
   }
-  const truncated = !!(Number(model.max_tokens) > 0 && usage && usage.completion >= Number(model.max_tokens) - 2 && !conversationEnded);
+  const outCap = Number(model.max_tokens) || 0;
+  const truncated = outCap > 0 && lastStepCompletion >= outCap - 2 && !conversationEnded;
   safeSend(JSON.stringify({ type: 'done', chatId: chat.id, messageId: (hasOutput || usageRec) ? assistantId : null, truncated }));
 
   const fresh = db.chats.byId(chat.id);
-  let lastUser = null;
-  for (let i = history.length - 1; i >= 0; i--) if (history[i].role === 'user') { lastUser = history[i]; break; }
-  const lastUserText = lastUser && (Array.isArray(lastUser.content)
-    ? (lastUser.content.find(p => p.type === 'text')?.text || 'Image')
-    : lastUser.content);
   const cleanContent = stripToolSyntax(content).trim();
-  if (cleanContent && fresh && fresh.title === 'New chat' && lastUserText) {
+  if (cleanContent && fresh && fresh.title === 'New chat') {
+    let lastUser = null;
+    for (let i = history.length - 1; i >= 0; i--) if (history[i].role === 'user') { lastUser = history[i]; break; }
+    const lastUserText = lastUser && (Array.isArray(lastUser.content)
+      ? (lastUser.content.find(p => p.type === 'text')?.text || 'Image')
+      : lastUser.content);
+    if (!lastUserText) return;
     const title = await generateTitle(model, lastUserText, cleanContent);
     db.chats.update(chat.id, { title });
     safeSend(JSON.stringify({ type: 'title', chatId: chat.id, title }));

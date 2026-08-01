@@ -58,6 +58,8 @@ if (fs.existsSync(clientDist)) {
   });
 }
 
+try { setCustomPresets(getSetting('custom_presets', [])); } catch {}
+
 const server = http.createServer(app);
 initWs(server);
 
@@ -66,6 +68,5 @@ process.on('uncaughtException', (err) => { console.error('[uncaughtException]', 
 process.on('exit', () => { try { mcp.shutdown(); } catch {} });
 
 server.listen(PORT, HOST, () => console.log(`open-quill running on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`));
-try { setCustomPresets(getSetting('custom_presets', [])); } catch {}
 pruneAudit();
 setInterval(pruneAudit, 24 * 60 * 60 * 1000).unref();

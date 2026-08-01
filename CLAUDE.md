@@ -174,6 +174,8 @@ Rules are ordered and the first match wins. Matchers live in `ROUTE_MATCHERS`; a
 
 Matching only ever looks at the *latest* user message. For `regenerate` there is no incoming content, so `connection.js` pulls the last user message from the chat, otherwise a regenerate would route on an empty string and always hit the fallback.
 
+Names in the `routed` payload go through `modelLabel`, which reads `display_name` first: model rows have no `name` field, and reading one is what made the EngineStrip "via" chip render blank.
+
 `shapePublic` exposes `kind` and `routerTargets` so the client can tell a hub from a model. Rules are sanitized on write in `routes/models.js` (unknown matcher becomes `keyword`, entries without a `modelId` are dropped, capped at 40).
 
 ## The prompt ledger
@@ -311,6 +313,7 @@ Entry point is `index.js` (~60 lines): express setup, cookie parsing, `/uploads`
 - `memory.js` — per-user long-term memory (`updateUserMemory`, `maybeUpdateMemory`, `DEFAULT_MEMORY_PROMPT`).
 - `models.js` — model shaping/resolution: `shapePublic`, `draftModels`, `publicModels`, `resolveModel(OrDefault)`, `applyEffort`, `roleLimit`, context-length detection (`modelCtx`, `detectContextLength`).
 - `prompts.js` — system-prompt builders and tool formatting: `sandboxPromptFor`, `cleanCall`, `resultPayload`, `formatToolResult`, chat-search tools, `endChatPromptFor`, `longConvoReminderFor`, `pinnedFilesPrompt`.
+- `purge.js` — `purgeUserChats(userId)`: the single implementation of "remove every chat this user owns" (sandboxes, uploads, messages and chat rows, in one transaction). `routes/auth.js` and `routes/admin.js` both call it; do not re-inline it.
 - `queue.js` — optional one-model-at-a-time request queue (`runQueued`).
 - `safety.js` — safety filter prompt + verdict parsing.
 - `spaces.js` — space membership helpers, `broadcastSpace`, `removeUserFromSpaces`, `spaceAssistantRespond`.

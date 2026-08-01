@@ -22,7 +22,6 @@ function loadKey() {
 }
 
 const KEY = loadKey();
-const existed = fs.existsSync(FILE);
 const sdb = new Database(FILE);
 try { fs.chmodSync(FILE, 0o600); } catch {}
 sdb.pragma(`cipher='sqlcipher'`);

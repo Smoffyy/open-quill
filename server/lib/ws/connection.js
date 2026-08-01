@@ -83,6 +83,7 @@ export function initWs(server) {
           const model = applyKwargs(baseModel, requestedKwargs(msg), state.isAdmin);
           if (!model) { safeSend(JSON.stringify({ type: 'error', error: 'Invalid model.' })); safeSend(JSON.stringify({ type: 'done' })); return; }
           if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', error: (model.unavailable_reason || 'This model is currently unavailable.') })); safeSend(JSON.stringify({ type: 'done' })); return; }
+          if (state.aborts.has('incognito')) { safeSend(JSON.stringify({ type: 'error', chatId: 'incognito', error: 'A reply is already being generated. Wait for it to finish, or stop it first.' })); safeSend(JSON.stringify({ type: 'done', chatId: 'incognito' })); return; }
           const history = (Array.isArray(msg.messages) ? msg.messages : [])
             .filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
             .slice(-40)
@@ -118,17 +119,18 @@ export function initWs(server) {
       try {
         const chat = db.chats.byId(msg.chatId);
         const hubModel = resolveModel(msg.modelId, state.isAdmin);
+        if (!chat || chat.user_id !== u.id || !hubModel) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'Invalid chat or model.' })); return; }
         let routedInfo = null;
         let baseModel = hubModel;
         if (isRouter(hubModel)) {
-          const probe = [{ role: 'user', content: msg.type === 'regenerate' ? lastUserContent(msg.chatId) : (msg.content || '') }];
+          const probe = [{ role: 'user', content: msg.type === 'regenerate' ? lastUserContent(chat.id) : (msg.content || '') }];
           const r = resolveRouted(hubModel, probe, msg.attachments, (id) => resolveModel(id, state.isAdmin));
           if (!r.model) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: r.routed?.error || 'This router could not pick a model.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
           baseModel = r.model;
           routedInfo = r.routed;
         }
         const model = applyKwargs(baseModel, requestedKwargs(msg), state.isAdmin);
-        if (!chat || chat.user_id !== u.id || !model) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'Invalid chat or model.' })); return; }
+        if (!model) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'Invalid chat or model.' })); return; }
         if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: (model.unavailable_reason || 'This model is currently unavailable.') })); return; }
         if (chat.ended) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'This conversation was ended by the assistant and can no longer be continued.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
         const bs = budgetStatus(u);
@@ -182,7 +184,7 @@ export function initWs(server) {
         } finally { live.endTurn(chat.id); }
         maybeUpdateMemory(u.id, model);
       } catch (err) {
-        if (msg && msg.chatId) { live.endTurn(msg.chatId); state.aborts.delete(msg.chatId); }
+        if (msg && msg.chatId) live.endTurn(msg.chatId);
         liveSend(JSON.stringify({ type: 'error', chatId: msg && msg.chatId, error: String(err.message || err) }));
         liveSend(JSON.stringify({ type: 'done', chatId: msg && msg.chatId }));
       }

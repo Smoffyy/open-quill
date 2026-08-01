@@ -7,7 +7,10 @@ export function broadcastSpace(spaceId, payload, excludeUserId) {
   if (!space) return;
   const ids = new Set((space.members || []).filter(m => m.status === 'accepted').map(m => m.userId));
   const msg = JSON.stringify(payload);
-  for (const [sock, st] of clients.entries()) if (sock.readyState === 1 && ids.has(st.userId) && st.userId !== excludeUserId) sock.send(msg);
+  for (const [sock, st] of clients.entries()) {
+    if (sock.readyState !== 1 || !ids.has(st.userId) || st.userId === excludeUserId) continue;
+    try { sock.send(msg); } catch {}
+  }
 }
 
 export function isMember(space, userId) { return (space.members || []).some(m => m.userId === userId); }

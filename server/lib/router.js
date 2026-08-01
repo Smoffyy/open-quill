@@ -6,6 +6,11 @@ export function isRouter(model) {
   return !!model && model.kind === 'router';
 }
 
+export function modelLabel(model) {
+  if (!model) return '';
+  return String(model.display_name || model.name || model.internal_name || model.id || '');
+}
+
 export function routerRules(model) {
   const raw = model?.router_rules;
   const list = Array.isArray(raw) ? raw : (() => { try { const p = JSON.parse(raw || '[]'); return Array.isArray(p) ? p : []; } catch { return []; } })();
@@ -80,23 +85,23 @@ export function resolveRouted(model, messages, attachments, lookup) {
   const get = lookup || ((id) => db.models.byId(id));
   const seen = new Set([model.id]);
   let current = model;
-  let hops = [];
+  const hops = [];
   while (isRouter(current)) {
     const { rule, index } = chooseRoute(current, messages, attachments);
     const targetId = rule ? rule.modelId : (current.router_default || '');
     const next = targetId ? get(targetId) : null;
     if (!next || seen.has(next.id)) {
-      return { model: null, routed: { hubId: model.id, hubName: model.name, error: next ? 'Routing loop detected.' : 'This router has no model to fall back on.', hops } };
+      return { model: null, routed: { hubId: model.id, hubName: modelLabel(model), error: next ? 'Routing loop detected.' : 'This router has no model to fall back on.', hops } };
     }
     seen.add(next.id);
     hops.push({
       from: current.id,
       to: next.id,
-      toName: next.name,
+      toName: modelLabel(next),
       via: rule ? (rule.label || `${rule.match}: ${rule.value}`.slice(0, 60)) : 'default',
       ruleIndex: index,
     });
     current = next;
   }
-  return { model: current, routed: { hubId: model.id, hubName: model.name, modelId: current.id, modelName: current.name, via: hops[hops.length - 1]?.via || 'default', hops } };
+  return { model: current, routed: { hubId: model.id, hubName: modelLabel(model), modelId: current.id, modelName: modelLabel(current), via: hops[hops.length - 1]?.via || 'default', hops } };
 }

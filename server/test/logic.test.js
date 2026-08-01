@@ -11,7 +11,7 @@ import { scanTools } from '../toolproto.js';
 import { isContextOverflowError } from '../lib/llamacpp.js';
 import { winTranslate } from '../sandbox.js';
 import { isPrivateAddress, hostAllowed } from '../lib/egress.js';
-import { resolveRouted, ruleMatches, routerRules } from '../lib/router.js';
+import { resolveRouted, ruleMatches, routerRules, modelLabel } from '../lib/router.js';
 import { preferredChild } from '../lib/tree.js';
 
 test('kwargs: legacy effort fields migrate', () => {
@@ -420,4 +420,30 @@ test('router rules reject entries without a target and cap bad matchers', () => 
 
 test('a broken regex rule does not throw', () => {
   assert.equal(ruleMatches({ match: 'regex', value: '([' }, { text: 'abc', lower: 'abc', length: 3 }), false);
+});
+
+test('routed payload carries real model names, not undefined', () => {
+  const hub = { id: 'h', display_name: 'Hub', kind: 'router', router_default: 'target', router_rules: [] };
+  const target = { id: 'target', display_name: 'Target' };
+  const r = resolveRouted(hub, [{ role: 'user', content: 'hi' }], [], (id) => (id === 'target' ? target : null));
+  assert.equal(r.model.id, 'target');
+  assert.equal(r.routed.hubName, 'Hub');
+  assert.equal(r.routed.modelName, 'Target');
+  assert.equal(r.routed.hops[0].toName, 'Target');
+  const dead = resolveRouted({ id: 'h2', display_name: 'Orphan', kind: 'router', router_default: '', router_rules: [] }, [{ role: 'user', content: 'x' }], [], () => null);
+  assert.equal(dead.model, null);
+  assert.equal(dead.routed.hubName, 'Orphan');
+});
+
+test('modelLabel falls back through the name fields a row may carry', () => {
+  assert.equal(modelLabel({ display_name: 'A', name: 'B', internal_name: 'C', id: 'D' }), 'A');
+  assert.equal(modelLabel({ name: 'B', internal_name: 'C', id: 'D' }), 'B');
+  assert.equal(modelLabel({ internal_name: 'C', id: 'D' }), 'C');
+  assert.equal(modelLabel({ id: 'D' }), 'D');
+  assert.equal(modelLabel(null), '');
+});
+
+test('egress: only the reserved slices of 192.0/16 count as private', () => {
+  for (const ip of ['192.0.0.1', '192.0.0.255', '192.0.2.1', '192.0.2.254']) assert.equal(isPrivateAddress(ip), true, ip);
+  for (const ip of ['192.0.1.1', '192.0.3.1', '192.0.77.9', '192.0.255.255']) assert.equal(isPrivateAddress(ip), false, ip);
 });

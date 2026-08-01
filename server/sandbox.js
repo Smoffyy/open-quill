@@ -9,15 +9,36 @@ const META_DIR = path.join(SANDBOX_ROOT, '.meta');
 
 const safeId = (chatId) => String(chatId).replace(/[^a-zA-Z0-9_-]/g, '');
 function metaPath(chatId) { return path.join(META_DIR, safeId(chatId) + '.json'); }
-function readMeta(chatId) { try { return JSON.parse(fs.readFileSync(metaPath(chatId), 'utf8')); } catch { return {}; } }
-function writeMeta(chatId, m) { try { fs.mkdirSync(META_DIR, { recursive: true }); fs.writeFileSync(metaPath(chatId), JSON.stringify(m)); } catch {} }
+
+const META_CACHE_MAX = 32;
+const metaCache = new Map();
+function readMeta(chatId) {
+  const key = safeId(chatId);
+  const hit = metaCache.get(key);
+  if (hit) return hit;
+  let m;
+  try { m = JSON.parse(fs.readFileSync(metaPath(chatId), 'utf8')); } catch { m = {}; }
+  if (!m || typeof m !== 'object') m = {};
+  metaCache.set(key, m);
+  if (metaCache.size > META_CACHE_MAX) metaCache.delete(metaCache.keys().next().value);
+  return m;
+}
+function writeMeta(chatId, m) {
+  const key = safeId(chatId);
+  metaCache.delete(key);
+  metaCache.set(key, m);
+  try { fs.mkdirSync(META_DIR, { recursive: true }); fs.writeFileSync(metaPath(chatId), JSON.stringify(m)); } catch {}
+}
+function forgetMeta(chatId) { metaCache.delete(safeId(chatId)); }
 
 export function versionOf(chatId, rel) { return readMeta(chatId).files?.[rel]?.v || 1; }
 function bumpVersion(chatId, rel) {
   const m = readMeta(chatId);
   if (!m.files) m.files = {};
-  m.files[rel] = { v: (m.files[rel]?.v || 0) + 1, at: Date.now() };
+  const v = (m.files[rel]?.v || 0) + 1;
+  m.files[rel] = { v, at: Date.now() };
   writeMeta(chatId, m);
+  return v;
 }
 function dropVersion(chatId, rel) {
   const m = readMeta(chatId);
@@ -189,8 +210,7 @@ export function list(chatId, opts = {}) {
     out[i] = { path: rel, ext: extOf(rel), size, v: meta[rel]?.v || 1 };
   }
   out.sort((a, b) => a.path.localeCompare(b.path));
-  if (opts.withHidden) return { files: out, hidden };
-  return out;
+  return opts.withHidden ? { files: out, hidden } : out;
 }
 
 export function dirSize(chatId) {
@@ -205,6 +225,7 @@ export function remove(chatId) {
   try { fs.rmSync(dirFor(chatId), { recursive: true, force: true }); } catch {}
   try { fs.rmSync(metaPath(chatId), { force: true }); } catch {}
   try { fs.rmSync(histRoot(chatId), { recursive: true, force: true }); } catch {}
+  forgetMeta(chatId);
   gitignoreCache.delete(chatId);
 }
 export function clearAll(chatId) {
@@ -213,6 +234,7 @@ export function clearAll(chatId) {
   try { for (const e of fs.readdirSync(root)) { fs.rmSync(path.join(root, e), { recursive: true, force: true }); cleared++; } } catch {}
   try { fs.rmSync(metaPath(chatId), { force: true }); } catch {}
   try { fs.rmSync(histRoot(chatId), { recursive: true, force: true }); } catch {}
+  forgetMeta(chatId);
   gitignoreCache.delete(chatId);
   return { ok: true, cleared };
 }
@@ -244,8 +266,7 @@ export function createFile(chatId, rel, content) {
   if (prev != null && prev === body) return { ok: true, path: rel, bytes: Buffer.byteLength(body), v: versionOf(chatId, rel), adds: 0, dels: 0, unchanged: true };
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, body, 'utf8');
-  bumpVersion(chatId, rel);
-  const v = versionOf(chatId, rel);
+  const v = bumpVersion(chatId, rel);
   if (isText(rel)) saveSnapshot(chatId, rel, v, body);
   const { adds, dels } = lineDelta(prev, body);
   return { ok: true, path: rel, bytes: Buffer.byteLength(body), v, adds, dels };
@@ -266,8 +287,7 @@ export function strReplace(chatId, rel, oldStr, newStr, replaceAll = false) {
   if (hits > 1 && !replaceAll) return { ok: false, error: `old_str is not unique (${hits} matches). Add surrounding lines to make it unique, or pass replace_all: true to change every occurrence.` };
   const next = replaceAll ? text.split(oldStr).join(repl) : (() => { const i = text.indexOf(oldStr); return text.slice(0, i) + repl + text.slice(i + oldStr.length); })();
   fs.writeFileSync(p, next, 'utf8');
-  bumpVersion(chatId, rel);
-  const v = versionOf(chatId, rel);
+  const v = bumpVersion(chatId, rel);
   saveSnapshot(chatId, rel, v, next);
   const { adds, dels } = lineDelta(text, next);
   return { ok: true, path: rel, v, adds, dels, replaced: replaceAll ? hits : 1 };
@@ -283,8 +303,7 @@ export function insertLines(chatId, rel, atLine, content) {
   lines.splice(at, 0, ...insert);
   const next = lines.join('\n');
   fs.writeFileSync(p, next, 'utf8');
-  bumpVersion(chatId, rel);
-  const v = versionOf(chatId, rel);
+  const v = bumpVersion(chatId, rel);
   saveSnapshot(chatId, rel, v, next);
   return { ok: true, path: rel, v, adds: insert.length, dels: 0 };
 }
@@ -384,7 +403,7 @@ export function copyFile(chatId, rel, newRel, maxBytes = 0) {
   fs.mkdirSync(path.dirname(dst), { recursive: true });
   fs.cpSync(src, dst, { recursive: true, force: true });
   const created = [];
-  const stamp = (r) => { bumpVersion(chatId, r); if (isText(r)) { try { saveSnapshot(chatId, r, versionOf(chatId, r), fs.readFileSync(resolveSafe(chatId, r), 'utf8')); } catch {} } created.push(r); };
+  const stamp = (r) => { const v = bumpVersion(chatId, r); if (isText(r)) { try { saveSnapshot(chatId, r, v, fs.readFileSync(resolveSafe(chatId, r), 'utf8')); } catch {} } created.push(r); };
   if (fs.statSync(dst).isDirectory()) { for (const f of list(chatId, { all: true })) if (f.path === newRel || f.path.startsWith(newRel + '/')) stamp(f.path); }
   else stamp(newRel);
   return { ok: true, path: newRel, from: rel, count: created.length };
@@ -518,7 +537,7 @@ export function extractZip(chatId, rel, dest, budget = 0) {
       fs.mkdirSync(path.dirname(outP), { recursive: true });
       fs.writeFileSync(outP, e.data);
       if (isDep) deps++;
-      else { bumpVersion(chatId, rel2); if (isText(rel2)) saveSnapshot(chatId, rel2, versionOf(chatId, rel2), e.data.toString('utf8')); created.push(rel2); }
+      else { const v = bumpVersion(chatId, rel2); if (isText(rel2)) saveSnapshot(chatId, rel2, v, e.data.toString('utf8')); created.push(rel2); }
     } catch {}
   }
   gitignoreCache.delete(chatId);
@@ -533,8 +552,8 @@ export function importBuffer(chatId, destRel, buffer, maxBytes = 0) {
     const p = resolveSafe(chatId, destRel);
     fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, buffer);
-    bumpVersion(chatId, destRel);
-    if (isText(destRel)) saveSnapshot(chatId, destRel, versionOf(chatId, destRel), buffer.toString('utf8'));
+    const v = bumpVersion(chatId, destRel);
+    if (isText(destRel)) saveSnapshot(chatId, destRel, v, buffer.toString('utf8'));
     return { ok: true, path: destRel };
   } catch (e) { return { ok: false, error: String(e.message || e) }; }
 }
