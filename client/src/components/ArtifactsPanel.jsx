@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
-import hljs from 'highlight.js';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
+import { ensureLanguage, hljsVersion, knowsLanguage, rawHighlight, subscribeHljs } from '../lib/hljs.js';
 import { api } from '../api.js';
 import { copyText } from '../clipboard.js';
 import Markdown from './Markdown.jsx';
@@ -277,6 +277,7 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
   }, [shownText, liveActive]);
   useEffect(() => () => { if (paintTimer.current) clearTimeout(paintTimer.current); }, []);
 
+  const hlVersion = useSyncExternalStore(subscribeHljs, hljsVersion);
   const rawLines = useMemo(() => viewText != null ? viewText.split('\n') : [], [viewText]);
   const bigFile = rawLines.length > HL_MAX_LINES;
   const lineHtmls = useMemo(() => {
@@ -285,12 +286,13 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
     const lang = EXT_LANG[(fromStream ? ext : (data?.ext || '').toLowerCase())];
     try {
       let full;
-      if (lang && hljs.getLanguage(lang)) full = hljs.highlight(viewText, { language: lang, ignoreIllegals: true }).value;
+      if (lang && knowsLanguage(lang)) full = rawHighlight(viewText, lang);
+      else if (lang) { ensureLanguage(lang); return rawLines.map(escHtml); }
       else if (rawLines.length > AUTO_HL_MAX_LINES) return rawLines.map(escHtml);
-      else full = hljs.highlightAuto(viewText).value;
+      else full = rawHighlight(viewText, '');
       return splitHighlightedLines(full);
     } catch { return rawLines.map(escHtml); }
-  }, [viewText, rawLines, liveActive, fromStream, bigFile, ext, data]);
+  }, [viewText, rawLines, liveActive, fromStream, bigFile, ext, data, hlVersion]);
 
   const matches = useMemo(() => {
     if (!query) return [];

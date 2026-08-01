@@ -32,9 +32,15 @@ const DEFAULT_STYLE_GEN_PROMPT = 'You create writing-style instructions for an A
 const DEFAULT_IMPROVE_PROMPT = 'You are a prompt engineer. The user will give you a draft prompt they intend to send to an AI assistant. Rewrite it to be clearer, more specific, and more likely to get an excellent result: state the goal explicitly, add helpful structure, specify the desired format or constraints when they are implied, and remove ambiguity. Preserve the user\u2019s intent, language, and any concrete details exactly. Output ONLY the improved prompt text, with no preamble, quotes, or explanation.';
 
 export default function registerAuthRoutes(app) {
-  app.post('/api/auth/check-email', (req, res) => {
-    const email = (req.body.email || '').trim().toLowerCase();
-    res.json({ exists: !!db.users.byEmail(email) });
+  app.get('/api/auth/context', (req, res) => {
+    res.json({
+      firstRun: db.users.count() === 0,
+      allowSignups: getSetting('allow_signups', '1') === '1',
+      appName: getSetting('app_name', 'open-quill'),
+      appIcon: getSetting('app_icon', ''),
+      appFont: getSetting('app_font', 'serif'),
+      uiPreset: getSetting('ui_preset', '') === 'openai' ? 'openai' : 'anthropic',
+    });
   });
 
   app.post('/api/auth/login', async (req, res) => {
@@ -42,28 +48,43 @@ export default function registerAuthRoutes(app) {
     if (loginLimited(ip)) return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
     const email = (req.body.email || '').trim().toLowerCase();
     const pw = req.body.password || '';
-    if (!email || pw.length < 4) return res.status(400).json({ error: 'Invalid email or password (min 4 chars).' });
-    let u = db.users.byEmail(email);
-    if (u) {
-      if (!(await check(pw, u.password_hash))) { noteLoginFail(ip); return res.status(401).json({ error: 'Incorrect password.' }); }
-      loginFails.delete(ip);
-      if (u.totp_enabled && u.totp_secret) {
-        const code = String(req.body.code || '').trim();
-        const recovery = String(req.body.recovery || '').trim();
-        if (!code && !recovery) return res.status(401).json({ error: 'two-factor required', twoFactor: true });
-        let ok = false;
-        if (code) ok = verifyTotp(u.totp_secret, code);
-        if (!ok && recovery) {
-          const h = hashRecovery(recovery);
-          const left = (u.recovery_codes || []).filter(c => c !== h);
-          if (left.length !== (u.recovery_codes || []).length) { ok = true; db.users.update(u.id, { recovery_codes: left }); }
-        }
-        if (!ok) { noteLoginFail(ip); return res.status(401).json({ error: 'Invalid two-factor code.', twoFactor: true }); }
+    if (!email || !pw) return res.status(400).json({ error: 'Enter your email and password.' });
+    const u = db.users.byEmail(email);
+    if (!u) { noteLoginFail(ip); return res.status(401).json({ error: 'Incorrect email or password.' }); }
+    if (!(await check(pw, u.password_hash))) { noteLoginFail(ip); return res.status(401).json({ error: 'Incorrect email or password.' }); }
+    loginFails.delete(ip);
+    if (u.totp_enabled && u.totp_secret) {
+      const code = String(req.body.code || '').trim();
+      const recovery = String(req.body.recovery || '').trim();
+      if (!code && !recovery) return res.status(401).json({ error: 'two-factor required', twoFactor: true });
+      let ok = false;
+      if (code) ok = verifyTotp(u.totp_secret, code);
+      if (!ok && recovery) {
+        const h = hashRecovery(recovery);
+        const left = (u.recovery_codes || []).filter(c => c !== h);
+        if (left.length !== (u.recovery_codes || []).length) { ok = true; db.users.update(u.id, { recovery_codes: left }); }
       }
-    } else {
-      const isFirst = db.users.count() === 0;
-      u = db.users.insert({ id: uid(), email, password_hash: await hash(pw), display_name: '', is_admin: isFirst ? 1 : 0, is_owner: isFirst ? 1 : 0, prefs: {}, created_at: now() });
+      if (!ok) { noteLoginFail(ip); return res.status(401).json({ error: 'Invalid two-factor code.', twoFactor: true }); }
     }
+    const sid = createSession(u, req);
+    setCookie(res, sign(u, sid));
+    res.json({ user: publicUser(u) });
+  });
+
+  app.post('/api/auth/register', async (req, res) => {
+    const ip = req.socket.remoteAddress || '';
+    if (loginLimited(ip)) return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
+    const email = (req.body.email || '').trim().toLowerCase();
+    const pw = req.body.password || '';
+    if (!/.+@.+\..+/.test(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
+    if (pw.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    const isFirst = db.users.count() === 0;
+    if (!isFirst && getSetting('allow_signups', '1') !== '1') {
+      return res.status(403).json({ error: 'New accounts are turned off on this server.' });
+    }
+    if (db.users.byEmail(email)) { noteLoginFail(ip); return res.status(409).json({ error: 'An account with that email already exists.' }); }
+    const u = db.users.insert({ id: uid(), email, password_hash: await hash(pw), display_name: '', is_admin: isFirst ? 1 : 0, is_owner: isFirst ? 1 : 0, prefs: {}, created_at: now() });
+    logAudit(req, 'user.register', { email, owner: isFirst });
     const sid = createSession(u, req);
     setCookie(res, sign(u, sid));
     res.json({ user: publicUser(u) });

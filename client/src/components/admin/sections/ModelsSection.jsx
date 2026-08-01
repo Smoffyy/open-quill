@@ -427,7 +427,7 @@ export default function ModelsSection() {
         {sel
           ? <ModelEditor key={sel.id} m={sel} onChange={A.changeModel}
               onDelete={(id) => A.deleteModels([id])} onDuplicate={A.duplicateModel}
-              autosaveState={modelSave} providers={providers} providerTypes={providerTypes}
+              autosaveState={modelSave} providers={providers} providerTypes={providerTypes} models={models}
               section={meSection} onSection={setMeSection} />
           : <div className="muted-note" style={{ padding: 20 }}>No models yet, add one to get started.</div>}
       </div>

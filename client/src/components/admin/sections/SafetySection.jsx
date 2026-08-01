@@ -24,6 +24,24 @@ export default function SafetySection() {
 
   return (
     <>
+      <Card title={t("Local only")} sub={t("Keeps this deployment self-contained. Nothing is loaded from the internet and nothing is sent to it unless you allow a host below.")}>
+        <SettingRow label={t("Block outbound internet connections")}
+          note={t("The server may reach loopback and private network addresses, so a local search engine like SearXNG and model backends on this machine or your LAN keep working, but other connections to the internet are refused. Allow specific hosts below to use a cloud provider.")}
+          on={A.cfg.egressLocalOnly !== false} onToggle={() => A.setCfg(c => ({ ...c, egressLocalOnly: c.egressLocalOnly === false }))} />
+        <SettingRow label={t("Let web search reach the internet")}
+          note={t("Web search needs to open the pages it finds, which are on the internet even when your search engine runs locally. This exemption applies only to web search; nothing else is affected. Turn it off and web search falls back to whatever your engine can reach.")}
+          on={A.cfg.egressAllowWebSearch !== false} onToggle={() => A.setCfg(c => ({ ...c, egressAllowWebSearch: c.egressAllowWebSearch === false }))} />
+        <div className="field">
+          <label>{t("Allowed internet hosts")}</label>
+          <div className="muted-note">{t("One host per line, for example api.openai.com. A leading *. covers subdomains. Everything else stays blocked.")}</div>
+          <textarea rows={4} spellCheck={false} placeholder={"api.openai.com\n*.anthropic.com"}
+            value={(A.cfg.egressAllowlist || []).join('\n')}
+            onChange={(e) => A.setCfg(c => ({ ...c, egressAllowlist: e.target.value.split('\n').map(x => x.trim()).filter(Boolean) }))} />
+        </div>
+        <SettingRow last label={t("Serve everything from this origin")}
+          note={t("Leave this on for an air-gapped or self-hosted deployment. Turn it off only if you set a remote image URL for the app icon or background, or if artifact previews need to load libraries from a CDN. Calls your server makes to model providers are unaffected.")}
+          on={A.cfg.localOnly !== false} onToggle={() => A.setCfg(c => ({ ...c, localOnly: c.localOnly === false }))} />
+      </Card>
       <Card title={t("Safety model")} sub={t("Every prompt is screened by a model before it reaches the assistant. Flagged prompts are blocked and the user is asked to revise them.")}>
         <SettingRow last={!settings.safetyEnabled} label={t("Enable safety checks")} note={t("When on, user prompts are sent to the safety model first. If it answers No, the prompt never reaches the assistant and a banner appears in the input bar.")}
           on={!!settings.safetyEnabled} onToggle={() => setSettings(s => ({ ...s, safetyEnabled: !s.safetyEnabled }))} />

@@ -17,6 +17,7 @@ import { computeActiveBg } from './lib/appbg.js';
 
 import Message from './components/Message.jsx';
 const SettingsModal = React.lazy(() => import('./components/SettingsModal.jsx'));
+const PromptLedger = React.lazy(() => import('./components/PromptLedger.jsx'));
 const ModelDocs = React.lazy(() => import('./components/ModelDocs.jsx'));
 const AdminPanel = React.lazy(() => import('./components/AdminPanel.jsx'));
 const Playground = React.lazy(() => import('./components/Playground.jsx'));
@@ -38,6 +39,7 @@ import ShortcutsModal from './components/ShortcutsModal.jsx';
 import ThreadRail from './components/ThreadRail.jsx';
 import ThreadFind from './components/ThreadFind.jsx';
 import { railItems } from './lib/threadmeta.js';
+import { CHORD_TIMEOUT, chordMenu, comboFromEvent, comboKeys, comboLabel, keybindIndex, resolveKeybinds } from './lib/keybinds.js';
 const BranchTree = React.lazy(() => import('./components/BranchTree.jsx'));
 import { toast } from './toast.js';
 import { copyText } from './clipboard.js';
@@ -108,7 +110,7 @@ export default function App() {
   const onSearchCb = useCallback(() => setShowSearch(true), []);
   const onToggleSidebarCb = useCallback(() => setCollapsed(c => !c), []);
   const onMobileCloseCb = useCallback(() => setMobileDrawer(false), []);
-  const onSettingsCb = useCallback(() => setShowSettings(true), []);
+  const onSettingsCb = useCallback(() => { setSettingsTab('general'); setShowSettings(true); }, []);
   const onAdminCb = useCallback(() => { history.pushState({}, '', '/admin'); setShowAdmin(true); }, []);
   const onPlaygroundCb = useCallback(() => { history.pushState({}, '', '/playground'); setShowPlayground(true); }, []);
   const onCreditsCb = useCallback(() => setShowCredits(true), []);
@@ -209,6 +211,12 @@ export default function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileDrawer, setMobileDrawer] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState('general');
+  const kbHandlers = useRef({});
+  const [chordHint, setChordHint] = useState(null);
+  const [routeInfo, setRouteInfo] = useState(null);
+  useEffect(() => { setRouteInfo(null); }, [activeId]);
+  const [ledgerPrompt, setLedgerPrompt] = useState(false);
   const [showDocs, setShowDocs] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showPlayground, setShowPlayground] = useState(false);
@@ -217,6 +225,7 @@ export default function App() {
   const [showLicense, setShowLicense] = useState(false);
   const [focusTick, setFocusTick] = useState(0);
   const [cfg, setCfg] = useState(DEFAULT_CFG);
+  const [authCtx, setAuthCtx] = useState(null);
   const [budget, setBudget] = useState(null);
   const [greeting, setGreeting] = useState(DEFAULT_CFG.greetings[0]);
   const [sandbox, setSandbox] = useState(false);
@@ -370,7 +379,17 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    api.get('/api/me').then(({ user }) => setUser(user)).catch(() => setUser(null));
+    api.get('/api/me').then(({ user }) => setUser(user)).catch(() => {
+      setUser(null);
+      api.get('/api/auth/context').then(c => {
+        setAuthCtx(c);
+        const preset = c.uiPreset === 'openai' ? 'openai' : 'anthropic';
+        document.documentElement.setAttribute('data-preset', preset);
+        try { localStorage.setItem('oq-preset', preset); } catch {}
+        document.documentElement.setAttribute('data-font', c.appFont === 'sans' ? 'sans' : 'serif');
+        applyPrefs(null, preset);
+      }).catch(() => {});
+    });
   }, []);
   useEffect(() => {
     if (!user) return;
@@ -433,72 +452,40 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     const nav = user.prefs || {};
+    const binds = resolveKeybinds(nav);
+    const index = keybindIndex(binds);
+    let pending = null;
+    let pendingTimer = null;
+    const clearPending = () => { pending = null; clearTimeout(pendingTimer); setChordHint(null); };
     const onKey = (e) => {
-      const mod = e.ctrlKey || e.metaKey;
-      if (mod && e.shiftKey && (e.key === 'S' || e.key === 's')) { e.preventDefault(); setCollapsed(c => !c); return; }
-      if (mod && !e.shiftKey && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); setCmdkOpen(o => !o); return; }
-      if (mod && e.shiftKey && (e.key === 'F' || e.key === 'f')) { e.preventDefault(); setShowSearch(true); return; }
-      if (e.key === '?' && !mod) {
-        const el = document.activeElement;
-        const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
-        if (!typing) { e.preventDefault(); setShowShortcuts(s => !s); return; }
+      const combo = comboFromEvent(e);
+      if (!combo) return;
+      const typingNow = (() => { const el = document.activeElement; return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable); })();
+      if (pending) {
+        const act2 = index.chords.get(pending)?.get(combo);
+        clearPending();
+        if (act2 && !(act2.pref && nav[act2.pref] === false)) {
+          e.preventDefault();
+          if (kbHandlers.current[act2.id]?.() === false) { /* inert */ }
+          return;
+        }
+        if (combo === 'Escape') { e.preventDefault(); return; }
       }
-      if (mod && e.shiftKey && (e.key === 'O' || e.key === 'o')) { e.preventDefault(); newChat(); return; }
-      if (mod && !e.shiftKey && (e.key === 'f' || e.key === 'F')) {
-        if (nav.threadFind === false || !messagesRef.current.length) return;
+      if (!typingNow && index.chords.has(combo) && !document.querySelector('.overlay')) {
         e.preventDefault();
-        setFindOpen(true);
+        pending = combo;
+        setChordHint({ head: combo, items: chordMenu(binds, combo) });
+        clearTimeout(pendingTimer);
+        pendingTimer = setTimeout(clearPending, CHORD_TIMEOUT);
         return;
       }
-      if (mod || e.altKey) return;
+      const act = index.get(combo);
+      if (!act) return;
+      if (act.pref && nav[act.pref] === false) return;
       const el = document.activeElement;
-      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
-      if (document.querySelector('.overlay')) return;
-      const list = messagesRef.current;
-      if (!list.length) return;
-      if (e.key === 'b') {
-        if (nav.branchMap === false) return;
-        e.preventDefault();
-        if (activeIdRef.current) setTreeOpen(true);
-        return;
-      }
-      if (nav.msgKeys === false) return;
-      if (e.key === 'j' || e.key === 'k') {
-        e.preventDefault();
-        const at = list.findIndex(m => m.id === kbFocusRef.current);
-        let next;
-        if (at < 0) next = e.key === 'j' ? 0 : list.length - 1;
-        else next = Math.max(0, Math.min(list.length - 1, at + (e.key === 'j' ? 1 : -1)));
-        const target = list[next];
-        if (target) { setKbFocus(target.id); jumpToMessage(target.id, { flash: false }); }
-        return;
-      }
-      const focused = kbFocusRef.current ? list.find(m => m.id === kbFocusRef.current) : null;
-      if (!focused) return;
-      if (e.key === 'Escape') { e.preventDefault(); setKbFocus(null); return; }
-      if (e.key === 'c') {
-        e.preventDefault();
-        const clean = (focused.content || '').replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
-        copyText(clean).then(ok => ok && toast(t('Message copied')));
-        return;
-      }
-      if (e.key === 'e') {
-        if (focused.role !== 'user' || streamingRef.current) return;
-        e.preventDefault();
-        window.dispatchEvent(new CustomEvent('oq-msg-edit', { detail: { id: focused.id } }));
-        return;
-      }
-      if (e.key === 'r') {
-        if (focused.role !== 'assistant' || streamingRef.current) return;
-        e.preventDefault();
-        msgActions.current.regenerate?.(focused.id);
-        return;
-      }
-      if (e.key === 'y') {
-        if (streamingRef.current || !activeIdRef.current) return;
-        e.preventDefault();
-        msgActions.current.fork?.(focused.id);
-      }
+      if (!act.typing && el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      if (!act.overlay && document.querySelector('.overlay')) return;
+      if (kbHandlers.current[act.id]?.() !== false) e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -719,6 +706,10 @@ export default function App() {
     if (m.type === 'chat_ended') {
       setChats(cs => cs.map(c => c.id === m.chatId ? { ...c, ended: true } : c));
       if (m.chatId === activeKey()) { setChatEnded(true); setChatEndedReason(m.reason || ''); }
+      return;
+    }
+    if (m.type === 'routed') {
+      if (m.chatId === activeKey()) setRouteInfo({ hubName: m.hubName, modelName: m.modelName, via: m.via });
       return;
     }
     if (m.type === 'queued') {
@@ -1025,6 +1016,17 @@ export default function App() {
     if (!activeId || !t) return;
     setChats(cs => cs.map(c => c.id === activeId ? { ...c, title: t } : c));
     api.patch('/api/chats/' + activeId, { title: t }).catch(() => {});
+  }
+
+  function stepFocus(delta) {
+    const list = messagesRef.current;
+    if (!list.length) return false;
+    const at = list.findIndex(m => m.id === kbFocusRef.current);
+    const next = at < 0 ? (delta > 0 ? 0 : list.length - 1) : Math.max(0, Math.min(list.length - 1, at + delta));
+    const target = list[next];
+    if (!target) return false;
+    setKbFocus(target.id);
+    jumpToMessage(target.id, { flash: false });
   }
 
   function scrollBottom(smooth) {
@@ -1379,7 +1381,7 @@ export default function App() {
   }
 
   if (user === undefined) return <div style={{ height: '100%', background: 'var(--bg)' }} />;
-  if (!user) return <Login onLogin={(u) => { setUser(u); setIntro(true); }} />;
+  if (!user) return <Login cfg={authCtx} onLogin={(u) => { setUser(u); setIntro(true); }} />;
 
   const model = modelById.get(currentId);
   const activeChat = activeId ? chats.find(c => c.id === activeId) : null;
@@ -1420,18 +1422,85 @@ export default function App() {
   };
   const showArtifactsBtn = sandboxOn || files.length > 0;
 
+  function focusedMsg() {
+    const list = messagesRef.current;
+    if (!list.length || !kbFocusRef.current) return null;
+    return list.find(m => m.id === kbFocusRef.current) || null;
+  }
+  function stepChat(delta) {
+    if (!chats.length) return false;
+    const at = chats.findIndex(c => c.id === activeId);
+    const next = at < 0 ? (delta > 0 ? 0 : chats.length - 1) : at + delta;
+    if (next < 0 || next >= chats.length) return false;
+    openChat(chats[next].id);
+    return true;
+  }
+  kbHandlers.current = {
+    toggleSidebar: () => setCollapsed(c => !c),
+    commandPalette: () => setCmdkOpen(o => !o),
+    searchChats: () => setShowSearch(true),
+    newChat: () => newChat(),
+    shortcuts: () => setShowShortcuts(x => !x),
+    openSettings: () => { setSettingsTab('general'); setShowSettings(true); },
+    toggleIncognito: () => { toggleIncognito(); },
+    toggleTheme: () => {
+      const applied = document.documentElement.getAttribute('data-theme');
+      updatePref('theme', applied === 'light' ? 'dark' : 'light');
+    },
+    focusComposer: () => { setFocusTick(x => x + 1); },
+    attachFiles: () => { window.dispatchEvent(new CustomEvent('oq-attach-files')); },
+    toggleWebSearch: () => { if (!webSearchAvailable) return false; setWebSearch(v => !v); },
+    toggleSandbox: () => { if (!sandboxAllowed) return false; setSandbox(v => !v); },
+    stopGeneration: () => { if (!streaming && !queued) return false; stop(); },
+    scrollBottom: () => { scrollBottom(true); stick.current = true; },
+    toggleLedger: () => setLedgerOpen(o => !o),
+    promptLedger: () => { if (!activeIdRef.current) return false; setLedgerPrompt(true); },
+    toggleArtifacts: () => { if (!showArtifactsBtn) return false; setCallOpen(false); setArtifactsOpen(o => !o); },
+    nextChat: () => stepChat(1),
+    prevChat: () => stepChat(-1),
+    findInChat: () => { if (!messagesRef.current.length) return false; setFindOpen(true); },
+    branchMap: () => { if (!activeIdRef.current || !messagesRef.current.length) return false; setTreeOpen(true); },
+    msgNext: () => stepFocus(1),
+    msgPrev: () => stepFocus(-1),
+    clearFocus: () => { if (!kbFocusRef.current) return false; setKbFocus(null); },
+    msgCopy: () => {
+      const m = focusedMsg();
+      if (!m) return false;
+      const clean = (m.content || '').replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
+      copyText(clean).then(ok => ok && toast(t('Message copied')));
+    },
+    msgEdit: () => {
+      const m = focusedMsg();
+      if (!m || m.role !== 'user' || streamingRef.current) return false;
+      window.dispatchEvent(new CustomEvent('oq-msg-edit', { detail: { id: m.id } }));
+    },
+    msgRetry: () => {
+      const m = focusedMsg();
+      if (!m || m.role !== 'assistant' || streamingRef.current) return false;
+      msgActions.current.regenerate?.(m.id);
+    },
+    msgFork: () => {
+      const m = focusedMsg();
+      if (!m || streamingRef.current || !activeIdRef.current) return false;
+      msgActions.current.fork?.(m.id);
+    },
+  };
+
+  const kb = resolveKeybinds(user?.prefs);
   const commands = [
-    { id: 'new', label: t('New chat'), shortcut: 'Ctrl Shift O', keywords: 'create start', action: () => newChat() },
-    { id: 'sidebar', label: collapsed ? t('Show sidebar') : t('Hide sidebar'), shortcut: 'Ctrl Shift S', keywords: 'toggle collapse panel', action: () => setCollapsed(c => !c) },
-    { id: 'ledger', label: ledgerOpen ? t('Hide context ledger') : t('Show context ledger'), keywords: 'context tokens ledger budget window', action: () => setLedgerOpen(o => !o) },
+    { id: 'new', label: t('New chat'), shortcut: comboLabel(kb.newChat), keywords: 'create start', action: () => newChat() },
+    { id: 'sidebar', label: collapsed ? t('Show sidebar') : t('Hide sidebar'), shortcut: comboLabel(kb.toggleSidebar), keywords: 'toggle collapse panel', action: () => setCollapsed(c => !c) },
+    { id: 'ledger', label: ledgerOpen ? t('Hide context ledger') : t('Show context ledger'), shortcut: comboLabel(kb.toggleLedger), keywords: 'context tokens ledger budget window', action: () => setLedgerOpen(o => !o) },
     { id: 'chats', label: t('Browse all chats'), keywords: 'overview history search', action: () => setChatsOverview(true) },
-    { id: 'search', label: t('Search chats'), shortcut: 'Ctrl Shift F', keywords: 'find message text', action: () => setShowSearch(true) },
-    { id: 'shortcuts', label: t('Keyboard shortcuts'), shortcut: '?', keywords: 'keys help hotkeys', action: () => setShowShortcuts(true) },
+    { id: 'search', label: t('Search chats'), shortcut: comboLabel(kb.searchChats), keywords: 'find message text', action: () => setShowSearch(true) },
+    { id: 'shortcuts', label: t('Keyboard shortcuts'), shortcut: comboLabel(kb.shortcuts), keywords: 'keys help hotkeys', action: () => setShowShortcuts(true) },
     { id: 'spaces', label: t('Open Spaces'), keywords: 'group chat invite users', action: () => { history.pushState({}, '', '/spaces'); setShowSpaces(true); } },
     { id: 'projects', label: t('Open Projects'), keywords: 'project workspace organize', action: () => openProjects(null) },
-    { id: 'incognito', label: incognito ? t('Exit incognito') : t('Start incognito chat'), keywords: 'private ghost', action: () => toggleIncognito() },
+    { id: 'incognito', label: incognito ? t('Exit incognito') : t('Start incognito chat'), shortcut: comboLabel(kb.toggleIncognito), keywords: 'private ghost', action: () => toggleIncognito() },
     { id: 'modeldocs', label: t('Model docs'), keywords: 'models compare docs catalog capabilities', action: () => setShowDocs(true) },
-    { id: 'settings', label: t('Open settings'), keywords: 'preferences account theme', action: () => setShowSettings(true) },
+    { id: 'settings', label: t('Open settings'), shortcut: comboLabel(kb.openSettings), keywords: 'preferences account theme', action: () => { setSettingsTab('general'); setShowSettings(true); } },
+    { id: 'promptledger', label: t('What gets sent'), keywords: 'prompt inspect context debug tokens', action: () => { if (activeId) setLedgerPrompt(true); } },
+    { id: 'keybinds', label: t('Customize shortcuts'), keywords: 'keybinds hotkeys keys remap', action: () => { setSettingsTab('keybinds'); setShowSettings(true); } },
     ...(user?.isAdmin ? [{ id: 'admin', label: t('Open admin panel'), keywords: 'models users connection providers', action: () => { history.pushState({}, '', '/admin'); setShowAdmin(true); } }] : []),
     ...(user?.isAdmin ? [{ id: 'playground', label: t('Open playground'), keywords: 'test model tune sampling kwargs prompt', action: () => { history.pushState({}, '', '/playground'); setShowPlayground(true); } }] : []),
     { id: 'changelog', label: t('View changelog'), keywords: 'updates version', action: () => setShowChangelog(true) },
@@ -1662,7 +1731,7 @@ export default function App() {
             {user?.prefs?.threadRail !== false && <ThreadRail items={railList} scrollRef={scrollRef} matches={findMatches} onJump={railJump} />}
             {showJump && <button className="to-bottom" onClick={jumpDown} title={t('Jump to latest')} aria-label={t('Jump to latest')}><Down style={{ width: 17 }} /></button>}
             <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')} style={{ maxWidth: cfg.uiPreset === 'openai' ? 808 : 760, margin: '0 auto', width: '100%', padding: '0 20px' }}>
-              {user?.prefs?.engineStrip !== false && <EngineStrip telemetry={telemetry} streaming={streaming} />}
+              {user?.prefs?.engineStrip !== false && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
               <Composer {...composerProps} focusKey={focusTick} />
               <div className="disclaimer">{t(cfg.disclaimer)}</div>
             </div>
@@ -1689,7 +1758,7 @@ export default function App() {
       )}
 
       {showDocs && <React.Suspense fallback={null}><ModelDocs models={models} currentId={currentId} onClose={() => setShowDocs(false)} onTry={(id) => { pickModel(id); setShowDocs(false); }} /></React.Suspense>}
-      {showSettings && <React.Suspense fallback={null}><SettingsModal user={user} cfg={cfg} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile} /></React.Suspense>}
+      {showSettings && <React.Suspense fallback={null}><SettingsModal user={user} cfg={cfg} initialTab={settingsTab} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile} /></React.Suspense>}
       {user?.isAdmin && cfg.uiPresetChosen === false && !presetPicked && (
         <div className="preset-scrim">
           <div className="preset-modal">
@@ -1713,8 +1782,24 @@ export default function App() {
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} onChatsChanged={() => loadChats()} />}
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} onOpen={(id) => openChat(id)} />}
       {personasOpen && <PersonasModal personas={user?.personas || []} models={models} currentId={currentId} onApply={applyPersona} onSave={savePersonas} onClose={() => setPersonasOpen(false)} />}
-      {showShortcuts && <ShortcutsModal prefs={user?.prefs} onClose={() => setShowShortcuts(false)} />}
-      {treeOpen && activeId && user?.prefs?.branchMap !== false && <React.Suspense fallback={null}><BranchTree chatId={activeId} onSelect={selectBranch} onJump={jumpToMessage} onClose={() => setTreeOpen(false)} /></React.Suspense>}
+      {ledgerPrompt && activeId && (
+        <React.Suspense fallback={null}>
+          <PromptLedger chatId={activeId} modelId={currentId} onClose={() => setLedgerPrompt(false)} />
+        </React.Suspense>
+      )}
+      {chordHint && (
+        <div className="chord-hint" role="status">
+          <div className="chord-hint-head">{comboKeys(chordHint.head).map((k, i) => <kbd key={i}>{k}</kbd>)}<span>{t('then…')}</span></div>
+          <div className="chord-hint-list">
+            {chordHint.items.map(({ action, key }) => (
+              <div className="chord-hint-item" key={action.id}><kbd>{comboKeys(key).join('')}</kbd><span>{t(action.label)}</span></div>
+            ))}
+            {!chordHint.items.length && <div className="chord-hint-item muted">{t('No chords bound yet.')}</div>}
+          </div>
+        </div>
+      )}
+      {showShortcuts && <ShortcutsModal prefs={user?.prefs} onClose={() => setShowShortcuts(false)} onCustomize={() => { setShowShortcuts(false); setSettingsTab('keybinds'); setShowSettings(true); }} />}
+      {treeOpen && activeId && user?.prefs?.branchMap !== false && <React.Suspense fallback={null}><BranchTree chatId={activeId} onSelect={selectBranch} onJump={jumpToMessage} onClose={() => setTreeOpen(false)} onChanged={async () => { await refreshMessages(activeId); setTimeout(() => scrollBottom(false), 20); toast(t('Message copied into this branch')); }} /></React.Suspense>}
       <Lightbox />
       {showAdmin && <React.Suspense fallback={null}><AdminPanel user={user} onClose={() => { setShowAdmin(false); if (/^\/admin(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
       {showPlayground && <React.Suspense fallback={null}><Playground onClose={() => { setShowPlayground(false); if (/^\/playground(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}

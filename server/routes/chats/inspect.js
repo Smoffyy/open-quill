@@ -2,6 +2,7 @@ import { db, getSetting } from '../../db.js';
 import { contextBudget, slideToFit, countExact } from '../../lib/ctxwindow.js';
 import { authMiddleware } from '../../auth.js';
 import { buildMessages } from '../../llm/index.js';
+import { applyPromptVars } from '../../llm/provider.js';
 import * as membank from '../../membank.js';
 import * as websearch from '../../websearch.js';
 import { modelCtx } from '../../lib/models.js';
@@ -9,6 +10,10 @@ import {
   chatHistory, historyRows, estimateTokens, calibratedTokens, calibRatio, messageTokens,
   tokenCalib, compactThreshold, rollingCtxFor, promptVars, instrFor
 } from '../../lib/convo.js';
+
+function applyPromptVarsSafe(text, userId) {
+  try { return applyPromptVars(text || '', promptVars(userId)); } catch { return text || ''; }
+}
 
 function pickModel(modelId) {
   const chosen = modelId ? db.models.byId(modelId) : null;
@@ -94,6 +99,44 @@ export default function registerInspectRoutes(app) {
     res.json({
       segments, totalTokens: total, limit, pct: limit ? Math.min(100, Math.round((total / limit) * 100)) : 0,
       flags: { memoryBank: membankOn, webSearch: websearch.webSearchAvailable(), summary: !!c.summary }
+    });
+  });
+
+  app.get('/api/chats/:id/prompt', authMiddleware, async (req, res) => {
+    const c = db.chats.byId(req.params.id);
+    if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+    const model = pickModel(req.query.modelId);
+    if (!model) return res.json({ sections: [], messages: [], total: 0 });
+    const membankOn = getSetting('membank_enabled', '0') === '1' && membank.list().length > 0;
+    const memP = membankOn ? membank.promptFor(getSetting('membank_prompt', '')) : '';
+    const instructions = await instrFor(c);
+    const rows = await historyRows(c, model);
+    const convo = buildMessages(model, await chatHistory(c, model), false, memP || null, c.summary, promptVars(c.user_id), instructions);
+
+    const sys = convo.find(m => m.role === 'system');
+    const sysText = sys ? String(sys.content || '') : '';
+    const pieces = [
+      ['Model system prompt', applyPromptVarsSafe(model.system_prompt || '', c.user_id)],
+      ['Your instructions', (instructions || '').trim()],
+      ['Conversation summary', (c.summary || '').trim()],
+      ['Memory bank', (memP || '').trim()],
+    ].filter(([, text]) => text);
+    const sections = pieces.map(([name, text]) => ({
+      name, chars: text.length, tokens: estimateTokens([{ role: 'system', content: text }]), text,
+      present: sysText.includes(text.slice(0, Math.min(60, text.length))),
+    }));
+
+    const messages = convo.filter(m => m.role !== 'system').map((m, i) => {
+      const txt = typeof m.content === 'string' ? m.content : (m.content || []).map(p => p.type === 'text' ? p.text : '[image]').join('\n');
+      return { index: i, role: m.role, tokens: estimateTokens([m]), chars: txt.length, text: txt };
+    });
+    const dropped = rows.filter(r => r.summarized || r.excluded).length;
+    res.json({
+      modelId: model.id, modelName: model.display_name || model.internal_name,
+      system: { text: sysText, tokens: sys ? estimateTokens([sys]) : 0, chars: sysText.length },
+      sections, messages, dropped,
+      total: estimateTokens(convo),
+      raw: convo,
     });
   });
 

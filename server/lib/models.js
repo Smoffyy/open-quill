@@ -36,6 +36,8 @@ export function applySunsets() {
 export function shapePublic(m) {
   return {
     id: m.id, displayName: m.display_name, description: m.description,
+    kind: m.kind === 'router' ? 'router' : 'model',
+    routerTargets: m.kind === 'router' ? [...new Set([...(Array.isArray(m.router_rules) ? m.router_rules : []).map(r => r.modelId), m.router_default].filter(Boolean))] : [],
     hasReasoning: !!m.has_reasoning, inMoreModels: !!m.in_more_models, moreModelsLabel: m.more_models_label,
     effortEnabled: !!m.effort_enabled, effortLevels: (Array.isArray(m.effort_levels) && m.effort_levels.length) ? m.effort_levels : ['low', 'medium', 'high'], effortDefault: m.effort_default || '', effortAdminOnly: !!m.effort_admin_only,
     kwargs: publicKwargDefs(m),

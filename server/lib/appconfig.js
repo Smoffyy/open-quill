@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getSetting } from '../db.js';
+import { db, getSetting } from '../db.js';
 import * as websearch from '../websearch.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -45,6 +45,12 @@ export function appConfig() {
     appIcon: getSetting('app_icon', ''),
     appFont: getSetting('app_font', 'serif'),
     uiPreset: getSetting('ui_preset', '') === 'openai' ? 'openai' : 'anthropic',
+    allowSignups: getSetting('allow_signups', '1') === '1',
+    localOnly: getSetting('local_only', '1') === '1',
+    egressLocalOnly: getSetting('egress_local_only', '1') === '1',
+    egressAllowWebSearch: getSetting('egress_allow_websearch', '1') === '1',
+    egressAllowlist: (() => { try { const a = JSON.parse(getSetting('egress_allowlist', '[]')); return Array.isArray(a) ? a : []; } catch { return []; } })(),
+    firstRun: db.users.count() === 0,
     uiPresetChosen: !!getSetting('ui_preset', ''),
     quickPrompts: (() => { const q = safeParse(getSetting('quick_prompts', '[]'), []); return Array.isArray(q) && q.length ? q : [{ icon: 'sparkles', label: 'Ideas', prompt: 'Give me ideas on what I should do today.' }, { icon: 'pencil', label: 'Write', prompt: 'Write a one paragraph summary about how Large Language Models (LLMs) work.' }, { icon: 'code', label: 'Code', prompt: 'Write a Python function that checks whether a string is a palindrome.' }, { icon: 'learn', label: 'Learn', prompt: 'How far away is the sun from Earth?' }, { icon: 'coffee', label: 'Life stuff', prompt: 'Give me practical advice for a life problem.' }]; })(),
     version: APP_VERSION,

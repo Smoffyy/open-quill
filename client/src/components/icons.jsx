@@ -28,6 +28,7 @@ export const Dots = (p) => <svg viewBox="0 0 24 24" fill="currentColor" {...p}><
 export const Cube = (p) => <I {...p}><path d="m12 2 9 5v10l-9 5-9-5V7z M12 12l9-5M12 12v10M12 12 3 7" /></I>;
 export const Clock = (p) => <I {...p}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></I>;
 export const Sliders = (p) => <I {...p}><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></I>;
+export const Keyboard = (p) => <I {...p}><rect x="2" y="5" width="20" height="14" rx="2.5" /><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M10 13h.01M14 13h.01M18 13h.01M8 16.5h8" /></I>;
 export const Heart = (p) => <I {...p}><path d="M12 21s-6.7-4.3-9.3-8.5C1 9.6 2.4 6 5.8 6 8 6 9 7.2 12 9.5 15 7.2 16 6 18.2 6c3.4 0 4.8 3.6 3.1 6.5C18.7 16.7 12 21 12 21z"/></I>;
 export const FileText = (p) => <I {...p}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z M14 3v5h5 M9 13h6 M9 17h5"/></I>;
 export const Sun = (p) => <I {...p}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></I>;

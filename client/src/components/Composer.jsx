@@ -248,6 +248,11 @@ export default function Composer({
     };
   }, [fit]);
   useEffect(() => { if (autoFocus || focusKey !== undefined) ta.current?.focus(); }, [autoFocus, focusKey]);
+  useEffect(() => {
+    const h = () => fileInput.current?.click();
+    window.addEventListener('oq-attach-files', h);
+    return () => window.removeEventListener('oq-attach-files', h);
+  }, []);
   const filesRef = useRef(files);
   filesRef.current = files;
   useEffect(() => () => filesRef.current.forEach(f => f.preview && URL.revokeObjectURL(f.preview)), []);

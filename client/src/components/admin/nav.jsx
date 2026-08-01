@@ -20,6 +20,7 @@ export const NAV_GROUPS = [
     { id: 'membank', label: 'Memory Bank', desc: 'Reference files every model can read on demand.', Icon: FileText, keywords: 'files knowledge documents reference' },
     { id: 'skills', label: 'Skills', desc: 'Reusable instruction files models load on demand for specific tasks.', Icon: Bulb, keywords: 'instructions markdown playbooks' },
     { id: 'mcp', label: 'Connectors', desc: 'Connect local MCP servers and expose their tools to every model.', Icon: Plug, keywords: 'mcp servers tools protocol integrations' },
+    { id: 'privacy', label: 'Privacy', desc: 'What this server has tried to connect to, and whether it was allowed.', Icon: Shield, keywords: 'egress outbound network local offline connections' },
     { id: 'safety', label: 'Safety', desc: 'Screen user prompts with a model before they reach the assistant.', Icon: Shield, keywords: 'moderation filter blocked screening guardrails' }
   ] },
   { id: 'insights', label: 'Insights', items: [

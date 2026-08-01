@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { api } from '../api.js';
 import { applyPrefs, ACCENT_PRESETS, getUserFont, setUserFont } from '../prefs.js';
-import { Sun, Moon, Gear, Sliders, Info, Chevron, Clock, Download, Upload, Shield, Trash, Brain, Refresh } from './icons.jsx';
+import { Sun, Moon, Gear, Sliders, Info, Chevron, Clock, Download, Upload, Shield, Trash, Brain, Refresh, Keyboard } from './icons.jsx';
 import Markdown from './Markdown.jsx';
+import KeybindsPanel from './KeybindsPanel.jsx';
 import { t, useI18n } from '../i18n.jsx';
 
 function Toggle({ prefs, setPref, k, label, desc }) {
@@ -45,12 +46,12 @@ function presetDefaults(isOpenai, fallbackTheme) {
     messageEntrance: true, streamCursor: isOpenai, cursorStyle: isOpenai ? 'circle' : 'block',
     cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40, chatStagger: true, themeFade: true,
     microFx: true, composerFx: true, iconGlow: false, focusGlow: false, oledShift: false,
-    threadRail: true, threadFind: true, branchMap: true, msgKeys: true
+    threadRail: true, threadFind: true, branchMap: true, msgKeys: true, keybinds: {}
   };
 }
 
-export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted, onExportChats, onImportChats }) {
-  const [tab, setTab] = useState('general');
+export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdated, onDeleted, onExportChats, onImportChats }) {
+  const [tab, setTab] = useState(initialTab || 'general');
   const { lang: i18nLang, setLang: setAppLang, langs } = useI18n();
   const [chatSec, setChatSec] = useState('streaming');
   const [name, setName] = useState(user.displayName);
@@ -216,6 +217,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
           <div className="ms-group">{t("Interface")}</div>
           <button className={'modal-tab' + (tab === 'appearance' ? ' active' : '')} onClick={() => setTab('appearance')}><Sun /> {t('Appearance')}</button>
           <button className={'modal-tab' + (tab === 'chat' ? ' active' : '')} onClick={() => setTab('chat')}><Sliders /> {t('Chat')}</button>
+          <button className={'modal-tab' + (tab === 'keybinds' ? ' active' : '')} onClick={() => setTab('keybinds')}><Keyboard /> {t('Keybinds')}</button>
           <div className="ms-group">{t("Insights")}</div>
           {cfg?.memoryFeature && <button className={'modal-tab' + (tab === 'memory' ? ' active' : '')} onClick={() => setTab('memory')}><Brain /> {t("Memory")}</button>}
           <button className={'modal-tab' + (tab === 'usage' ? ' active' : '')} onClick={() => setTab('usage')}><Clock /> {t("Usage")}</button>
@@ -419,6 +421,7 @@ export default function SettingsModal({ user, cfg, onClose, onUpdated, onDeleted
               </div>
             </>
           )}
+          {tab === 'keybinds' && <KeybindsPanel prefs={prefs} setPref={setPref} />}
           {tab === 'chat' && (() => {
             const rv = prefs.revealMs == null || isNaN(parseInt(prefs.revealMs)) ? 40 : Math.max(0, Math.min(100, parseInt(prefs.revealMs)));
             return (

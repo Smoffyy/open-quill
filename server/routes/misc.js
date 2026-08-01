@@ -6,6 +6,7 @@ import { authMiddleware, adminOnly } from '../auth.js';
 import { logAudit } from '../lib/audit.js';
 import { appConfig } from '../lib/appconfig.js';
 import { broadcastConfig } from '../lib/ws/index.js';
+import { egressLog, clearEgressLog } from '../lib/egress.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DOCS = { credits: 'CREDITS.md', changelog: 'CHANGELOG.md', license: 'LICENSE' };
@@ -28,6 +29,35 @@ export default function registerMiscRoutes(app) {
         .filter(q => q.label && q.prompt).slice(0, 8);
       setSetting('quick_prompts', JSON.stringify(list));
     }
+    if ('allowSignups' in b) {
+      setSetting('allow_signups', b.allowSignups ? '1' : '0');
+      logAudit(req, 'auth.signups', { meta: { allowed: !!b.allowSignups } });
+      broadcastConfig();
+    }
+    if ('localOnly' in b) {
+      setSetting('local_only', b.localOnly ? '1' : '0');
+      logAudit(req, 'security.localOnly', { meta: { enabled: !!b.localOnly } });
+      broadcastConfig();
+    }
+    if ('egressLocalOnly' in b) {
+      setSetting('egress_local_only', b.egressLocalOnly ? '1' : '0');
+      logAudit(req, 'security.egress', { meta: { localOnly: !!b.egressLocalOnly } });
+      broadcastConfig();
+    }
+    if ('egressAllowWebSearch' in b) {
+      setSetting('egress_allow_websearch', b.egressAllowWebSearch ? '1' : '0');
+      logAudit(req, 'security.egressWebSearch', { meta: { allowed: !!b.egressAllowWebSearch } });
+      broadcastConfig();
+    }
+    if ('egressAllowlist' in b) {
+      const list = (Array.isArray(b.egressAllowlist) ? b.egressAllowlist : [])
+        .map(h => String(h).trim().toLowerCase().replace(/^https?:\/\//, '').split('/')[0])
+        .filter(h => h && /^[a-z0-9.*_-]+$/.test(h))
+        .slice(0, 100);
+      setSetting('egress_allowlist', JSON.stringify([...new Set(list)]));
+      logAudit(req, 'security.egressAllowlist', { meta: { count: list.length } });
+      broadcastConfig();
+    }
     if ('appIcon' in b) setSetting('app_icon', b.appIcon || '');
     if ('appFont' in b) setSetting('app_font', b.appFont === 'sans' ? 'sans' : 'serif');
     if ('uiPreset' in b) {
@@ -40,6 +70,9 @@ export default function registerMiscRoutes(app) {
     }
     res.json({ ok: true });
   });
+
+  app.get('/api/admin/egress-log', authMiddleware, adminOnly, (req, res) => res.json(egressLog()));
+  app.delete('/api/admin/egress-log', authMiddleware, adminOnly, (req, res) => { clearEgressLog(); res.json({ ok: true }); });
 
   app.get('/api/docs/:name', authMiddleware, (req, res) => {
     const file = DOCS[req.params.name];

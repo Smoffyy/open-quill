@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import hljs from 'highlight.js';
+import { highlight } from '../lib/hljs.js';
 import { copyText } from '../clipboard.js';
 import { Wrench, FileText, Trash, Folder, Download, Search, Copy, Check, Terminal, Pencil, Plus, Chevron } from './icons.jsx';
 
@@ -104,10 +104,7 @@ function BashCard({ call, result }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const cmd = call?.cmd || '';
-  const html = useMemo(() => {
-    try { return hljs.highlight(cmd, { language: 'bash', ignoreIllegals: true }).value; }
-    catch { return escapeHtml(cmd); }
-  }, [cmd]);
+  const html = useMemo(() => highlight(cmd, 'bash', { auto: false }), [cmd]);
   const out = result ? stripAnsi(result.output) : '';
   const failed = result && !result.ok;
   const oneLine = cmd.split('\n')[0];

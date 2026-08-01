@@ -2,8 +2,7 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
+import { BASE_MACROS, KATEX_OPTIONS, ensureKatex, hasMath, katexPlugin, katexVersion, subscribeKatex, wrapMathEnvironments } from '../lib/mathjs.js';
 import CodeBlock from './CodeBlock.jsx';
 import ToolCard from './ToolCard.jsx';
 import { scanTools } from '../toolproto.js';
@@ -190,10 +189,17 @@ const mdComponents = {
 
 const MarkdownBlock = React.memo(function MarkdownBlock({ text }) {
   const prepared = React.useMemo(() => guardBlock(text), [text]);
+  const needsMath = React.useMemo(() => hasMath(prepared), [prepared]);
+  const mathReady = React.useSyncExternalStore(subscribeKatex, katexVersion);
+  React.useEffect(() => { if (needsMath && !katexPlugin()) ensureKatex(); }, [needsMath, mathReady]);
+  const rehypePlugins = React.useMemo(() => {
+    const plugin = needsMath ? katexPlugin() : null;
+    return plugin ? [[plugin, { ...KATEX_OPTIONS, macros: { ...BASE_MACROS } }]] : [];
+  }, [needsMath, mathReady]);
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
-      rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false, macros: { '\\mdollar': '\\$' } }]]}
+      rehypePlugins={rehypePlugins}
       components={mdComponents}
     >{prepared}</ReactMarkdown>
   );
@@ -358,8 +364,8 @@ function ProgressiveBlocks({ blocks }) {
   React.useEffect(() => { setCount(advance(0, PROGRESSIVE_INITIAL_LINES)); }, [advance]);
   React.useEffect(() => {
     if (count >= blocks.length) return;
-    const idle = window.requestIdleCallback || ((cb) => setTimeout(() => cb(), 16));
-    const cancel = window.cancelIdleCallback || clearTimeout;
+    const idle = window.requestIdleCallback ? window.requestIdleCallback.bind(window) : ((cb) => setTimeout(() => cb(), 16));
+    const cancel = window.cancelIdleCallback ? window.cancelIdleCallback.bind(window) : clearTimeout;
     const handle = idle(() => setCount(c => advance(c, PROGRESSIVE_STEP_LINES)));
     return () => cancel(handle);
   }, [count, blocks.length, advance]);
@@ -371,7 +377,7 @@ function Markdown({ children, streaming }) {
   if (typeof children !== 'string') {
     return <MarkdownBlock text={children} />;
   }
-  let text = normalizeMathDelims(transformTools(children));
+  let text = wrapMathEnvironments(normalizeMathDelims(transformTools(children)));
   if (streaming) text = neutralizeOpenMath(text);
   const blocks = blockify(text);
   if (!streaming && (text.length > PROGRESSIVE_SIZE_TRIGGER || blocks.length > PROGRESSIVE_BLOCK_TRIGGER)) {

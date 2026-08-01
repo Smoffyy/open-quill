@@ -248,3 +248,9 @@ button { transition: transform .12s ease, background .15s ease, color .15s ease,
 .preset-name { font-weight: 600; font-size: 15px; color: var(--text); }
 .preset-desc { font-size: 12.5px; color: var(--text-muted); line-height: 1.45; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.modal .me-sections { display: flex; gap: 2px; border-bottom: 1px solid var(--border-soft); margin-bottom: 16px; }
+.modal .me-sec { position: relative; padding: 9px 12px; font-size: 13.5px; font-weight: 500; color: var(--text-muted); background: transparent; border-radius: 0; }
+.modal .me-sec:hover { color: var(--text); }
+.modal .me-sec.on { color: var(--text); }
+.modal .me-sec.on::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px 2px 0 0; background: var(--accent); }

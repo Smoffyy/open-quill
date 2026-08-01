@@ -69,13 +69,80 @@ The rail, find and branch map are all opt-out, under **Settings > Chat > Navigat
 | `branchMap` | no header button, no `b` shortcut, and `BranchTree` is never imported |
 | `msgKeys` | `j`/`k` and the `c`/`e`/`r`/`y` message actions are inert |
 
-Two rules when adding to this area. Gate the *mount*, not just the visibility, so a disabled feature costs nothing. And add the pref key as a third element on the relevant `ShortcutsModal` `GROUPS` item so the shortcut list hides what is turned off; empty groups drop out on their own.
+Two rules when adding to this area. Gate the *mount*, not just the visibility, so a disabled feature costs nothing. And set the pref key as the `pref` field on the matching `KEYBIND_ACTIONS` entry in `lib/keybinds.js` (or as a third element on a static `ShortcutsModal` `GROUPS` item) so the shortcut list and the keybinds panel hide what is turned off; empty groups drop out on their own.
 
 ## Keyboard model
 
-Global: `Ctrl+K` palette, `Ctrl+Shift+F` chat search, `Ctrl+Shift+O` new chat, `Ctrl+Shift+S` sidebar, `Ctrl+F` in-thread find (intercepted only when the open chat has messages), `?` shortcuts.
+`client/src/lib/keybinds.js` is the single source of truth. `KEYBIND_ACTIONS` is one flat list; every consumer derives from it, so adding a shortcut is one entry plus one `case` in the `App.jsx` handler. Nothing else needs touching: the shortcuts modal, the settings panel and the i18n extractor all read the list.
 
-Plain keys, active only when focus is not in an input, no `.overlay` is mounted, and the matching pref above is on: `j`/`k` move the message focus, `b` opens the branch map, and on the focused message `c` copies, `e` edits, `r` retries, `y` branches, `Escape` clears. The focus ring is applied by toggling `.kb-focus` on the `[data-mid]` element from an effect rather than by passing a prop, so moving focus re-renders nothing. Keep new entries in sync with `ShortcutsModal.jsx`, whose `GROUPS` labels are extracted for translation by `client/scripts/i18n-check.mjs`.
+Each action carries:
+
+| Field | Meaning |
+| --- | --- |
+| `id` | stable key, also the storage key inside `prefs.keybinds` |
+| `group` | heading shared by `ShortcutsModal` and `KeybindsPanel` |
+| `label` | English string, translated via `t()` and extracted by `i18n-check.mjs` |
+| `def` | default combo |
+| `pref` | optional navigation pref that must not be `false` for the action to fire or be listed |
+| `typing` | may fire while focus is in an input or contenteditable |
+| `overlay` | may fire while an `.overlay` is mounted |
+| `fixed` | not rebindable (currently only `Escape` / clear focus) |
+
+Defaults: `Ctrl+K` palette, `Ctrl+Shift+F` chat search, `Ctrl+Shift+O` new chat, `Ctrl+Shift+S` sidebar, `Ctrl+F` in-thread find (intercepted only when the open chat has messages), `?` shortcuts, `b` branch map, `j`/`k` message focus, and on the focused message `c` copies, `e` edits, `r` retries, `y` branches, `Escape` clears.
+
+Combos are strings, `mod+alt+shift+key`, always in that order. `mod` is Ctrl or Cmd, deliberately not distinguished so one binding works on every platform. Matching is an exact string compare against a `Map` built once per prefs change by `keybindIndex`, not a chain of `if` tests. `comboKeys` renders a combo for display and swaps in ⌘/⌥/⇧ on Apple platforms.
+
+`comboFromEvent` resolves the key in this order, and every step exists because of a real platform failure:
+
+1. `e.key` when it is a single ASCII letter or digit. The normal path.
+2. Otherwise `e.code`, mapped through `CODE_KEYS`. **This is what makes `Alt` bindings work on macOS**, where `Option+W` reports `e.key` as `∑`, and it fixes non-US layouts at the same time.
+3. `Dead`, `Unidentified`, `Process` and `Compose` are *not* treated as modifiers. macOS reports `Option+I` as `Dead` because it is the circumflex dead key, so bailing on it would silently kill any binding using those keys. They fall through to the `e.code` lookup and only fail if that yields nothing.
+
+`shift` is recorded only for named keys, letters and digits, because a single punctuation character already encodes it: `Shift+/` is stored as `?`, not `shift+/`. Do not "simplify" this to always recording shift; `?` would stop matching.
+
+`typing` and `overlay` are properties of the *action*, not of the bound combo, so rebinding can never widen where a shortcut fires. That is why a rebound `msgCopy` still refuses to run while the composer has focus.
+
+Overrides live on `user.prefs.keybinds` as a sparse `{ actionId: combo }` map holding only what differs from the default. `resolveKeybinds` merges and validates on read, so an unparseable or stale entry silently falls back rather than disabling a shortcut, and `fixed` actions ignore stored values entirely. Users edit them in **Settings > Keybinds** (`KeybindsPanel.jsx`), which records a live keypress with a capture-phase listener; capture plus `stopPropagation` is what stops the app's own handler from firing the shortcut being recorded. `keybindConflicts` flags duplicates in the UI, and if a duplicate is saved anyway, `keybindIndex` gives it to the action listed first in `KEYBIND_ACTIONS`.
+
+`App.jsx` keeps the listener itself tiny: it resolves the combo, checks the gates, then calls `kbHandlers.current[act.id]`. That handler map is rebuilt every render, so handlers close over current state with no stale-closure risk and the listener never needs re-binding. A handler returning `false` means "not applicable right now" and suppresses the `preventDefault`, so an inert shortcut falls through to the browser instead of being swallowed.
+
+`KEYBIND_PRESETS` holds named override sets (`default`, `vim`); `activePresetId` reports which one is in effect by comparing the stored overrides, and returns `''` for a custom mix. `exportKeybinds`/`importKeybinds` round-trip the override map through JSON, and both run everything through `sanitizeKeybinds`, so an untrusted file can never install a malformed binding.
+
+The focus ring is applied by toggling `.kb-focus` on the `[data-mid]` element from an effect rather than by passing a prop, so moving focus re-renders nothing. Shortcuts that are not rebindable (composer `Enter`, version cycling, and so on) stay in `ShortcutsModal`'s `STATIC_GROUPS`; `GROUP_ORDER` there controls the column order of the merged list.
+
+## Maths and code rendering
+
+Both KaTeX and highlight.js are **lazy and local**. Nothing is fetched from a CDN; both are npm dependencies bundled into their own chunks, and KaTeX's fonts are emitted as assets by Vite. Together they were about 60% of the old startup payload.
+
+The loading pattern is the same for both and is worth copying for anything else heavy:
+
+- A module-level singleton holds the loaded library, a `version` counter and a `Set` of subscribers.
+- Consumers call `useSyncExternalStore(subscribe, version)` and put that version in their `useMemo` deps, so the render upgrades itself the moment the library lands. No prop drilling, no loading spinner.
+- `main.jsx` kicks both off on `requestIdleCallback`, so in practice they are ready before the first code block or formula appears and the upgrade is never visible.
+- Failures resolve to `null` and reset the in-flight promise, so a transient failure retries rather than wedging.
+
+highlight.js loads in **three** stages, because the full build is roughly seven times the common one (250 KB gzipped against 52 KB): `highlight.js/lib/common` covers the usual languages; the `EXTRA` map in `hljs.js` holds ~40 individually importable languages, each landing as its own 0.3-2.5 KB chunk via `registerLanguage`; and the full build is fetched only for something outside both. Every entry in `EXTRA` must be a real file under `highlight.js/lib/languages/` or the build fails to resolve it, which is how `purescript` was caught. Requested-but-unknown languages are remembered in `wanted`, so a language asked for before the common set arrives still triggers the upgrade afterwards.
+
+Note that KaTeX is genuinely ~166 KB gzipped and does not tree-shake; `lib/katexbundle.js` exists to pull katex, mhchem and rehype-katex into **one** chunk rather than three, which saves round trips, not bytes. Do not split it back apart expecting a size win.
+
+## Locales are per-language chunks
+
+`i18n.jsx` eagerly imports only each pack's `_meta` (via `import.meta.glob(..., { import: '_meta' })`) so the language menu can be built without loading any translations, plus `en.json` in full because it is 65 bytes and contains no translations anyway, which lets `loadLang('en')` resolve without a request. Everything else is fetched on demand by `loadLang`, and `main.jsx` awaits it before the first render so a non-English user never sees a flash of English.
+
+Two build-config pieces keep this honest, both in `vite.config.js`, and removing either silently undoes the whole optimization:
+
+1. `rolldownOptions.output.manualChunks` names locale chunks `locale-<code>`. Without an explicit name they are emitted as `es-<hash>.js`, which is indistinguishable from an ordinary chunk.
+2. `modulePreload.resolveDependencies` filters anything containing `/locale-`. Vite preloads dynamic imports reachable from the entry, so **without this filter every language is downloaded by everyone** and the split buys nothing. This was verified against the built `index.html`, not assumed.
+
+Adding a language is just dropping a JSON file in `src/locales/`; both rules match on path, so nothing else needs touching.
+
+## CSS splitting
+
+`admin.css` is imported by `AdminPanel.jsx` and `playground.css` by `Playground.jsx`, both lazy, so neither ships to ordinary users. `app.css` no longer imports `admin.css`.
+
+The catch worth knowing: `SettingsModal` reuses `.me-sections` / `.me-sec`, which lived in `admin.css`. Those five rules were moved to `modals.css`. Before moving any more admin styling, check for the same kind of cross-use; a settings tab quietly losing its underline is exactly the sort of regression this creates.
+
+For maths, `hasMath` gates everything: a block with no `$`, `\(`, `\[`, `\begin{` or `\ce{` never loads KaTeX and never runs the rehype plugin at all. `wrapMathEnvironments` wraps bare LaTeX environments (`align`, `equation`, `cases`, the matrix family, and so on) in `$$` so they render whether or not the model delimited them, and it is careful about two things: it skips fenced and inline code, and it tracks `$` depth so an environment already inside math is left alone. Macros are **copied per block** (`{ ...BASE_MACROS }`) rather than shared. A shared object would let a `\gdef` in one message silently redefine a command in another; the cost of the copy is far cheaper than that class of bug.
 
 ## Context window (`lib/ctxwindow.js`, `lib/llamacpp.js`)
 
@@ -89,6 +156,83 @@ Prompt size is **measured, never estimated**, for any llama.cpp-backed model. Th
 - **Images are the one thing the tokenizer cannot see.** `/tokenize` is text-only, so each image carries a reserve (1600 by default, deliberately above the 1024 Qwen-VL floor) that is corrected upward from real `usage.prompt_tokens` and never lowered.
 
 `slideToFit` keeps the system prompt and the newest user message, drops the oldest turns first via a verified binary search (typically two to four tokenizer calls, one when it already fits), and only trims message bodies when dropping is not enough, cutting the middle and keeping both ends. Trimming the system prompt happens only when it alone exceeds the budget, because refusing to answer is worse. The budget is `ctx - output reserve - 1%`, and the generation cap is clamped to the leftover room so a reply cannot overflow mid-stream.
+
+## Render smoke test (`npm run smoke`)
+
+`client/scripts/smoke.jsx` server-renders every admin `ModelEditor` section plus the standalone modals and asserts none of them throw. It exists because `vite build` type-checks nothing: passing wrong props to a component compiles perfectly and then blanks the whole panel at runtime. That is exactly how the Routing tab shipped broken once — `Toggle` takes `{ m, set, k }` and reads `m[k]` internally, while `Switch` is the one that takes `{ on, onToggle }`. Passing `on`/`onToggle` to `Toggle` left `m` undefined and killed the admin app.
+
+Run it after touching any admin section or modal. Adding a component to the list is two lines and worth it for anything reachable behind a tab, since a crash there is invisible until someone clicks. Components needing React context (the `useAdmin` sections) are not covered; wrapping them in a provider is the obvious extension if that class of bug shows up.
+
+## Router models (`lib/router.js`)
+
+A model row with `kind: 'router'` has no backend of its own. `lib/ws/connection.js` resolves it *before* `applyKwargs`, so kwargs apply to the model that actually runs, not to the hub. `resolveRouted` returns `{ model, routed }`; `model` is `null` when routing fails, and the caller must surface `routed.error` and stop rather than falling back to a default, because silently answering with the wrong model is worse than refusing.
+
+Rules are ordered and the first match wins. Matchers live in `ROUTE_MATCHERS`; adding one means a case in `ruleMatches` plus an entry in `MATCHERS` in `ModelEditor.jsx`. Two invariants worth keeping:
+
+- **Cycle safety.** Routers may target other routers. `resolveRouted` walks with a `seen` set and refuses on revisit. Without it a two-router cycle is an infinite loop inside a request.
+- **Regex is user input.** `new RegExp` is wrapped in try/catch and a broken pattern returns `false`, never throws. There is a test for this; an admin typing `([` must not break every turn.
+
+Matching only ever looks at the *latest* user message. For `regenerate` there is no incoming content, so `connection.js` pulls the last user message from the chat, otherwise a regenerate would route on an empty string and always hit the fallback.
+
+`shapePublic` exposes `kind` and `routerTargets` so the client can tell a hub from a model. Rules are sanitized on write in `routes/models.js` (unknown matcher becomes `keyword`, entries without a `modelId` are dropped, capped at 40).
+
+## The prompt ledger
+
+`GET /api/chats/:id/prompt` returns the assembled prompt broken into named sections plus the message list. It reuses `buildMessages`, so it cannot drift from what actually gets sent — do not reimplement the assembly here. The `sections` array is derived by re-deriving each contributing piece and reporting its own token count; `present` records whether the piece was actually found in the final system string, which catches the case where a source is configured but something upstream dropped it.
+
+This is deliberately read-only. Editing and re-running the raw prompt belongs in the Playground, which already exists for that.
+
+## Cherry-picking across branches
+
+`POST /api/chats/:id/cherrypick` copies a message onto the current `active_leaf` as a new message with a `copied_from` pointer. It is a copy, not a move: the source branch is untouched. Two guards, both tested end to end: a message already on the active path is refused (it would create a duplicate), and an unknown or foreign message id 404s. The client refreshes via `refreshMessages` afterwards, since the append happens server-side.
+
+## Chord shortcuts
+
+A binding containing a space is a chord (`'space l'`), validated as exactly two valid combos. `keybindIndex` returns the usual flat map plus `index.chords`, a `Map` of head to a `Map` of tail to action. `App.jsx` holds a `pending` head with a `CHORD_TIMEOUT` timer and shows the hint overlay listing what is bound under that head. The head only arms when focus is not in an input and no overlay is mounted, so `space` remains a normal space everywhere it should be. Escape cancels.
+
+## Everything is served from this origin
+
+The app is fully self-hosted: no CDN, no Google Fonts, no analytics, no phone-home. Fonts live in `client/public/fonts/`, KaTeX's 59 font files are emitted into `assets/` by Vite, and every heavy library is an npm dependency bundled locally. The lazy loading described above changes *when* things load, never *where from* — every dynamic `import()` is a relative path Vite resolves into a local chunk.
+
+Three mechanisms keep it that way, and they are deliberately different in kind:
+
+0. **Outbound**: `server/lib/egress.js` wraps the global `fetch` at boot (`installEgressGuard()` in `index.js`, before the app is built). Every outbound call in the server goes through global `fetch`, so this one wrapper is a complete chokepoint: providers, MCP, web search, TTS/STT, model discovery. Setting `egress_local_only` defaults to `'1'`.
+
+
+1. **Build-time**: `client/scripts/check-local.mjs` runs as part of `npm run build`. It parses `dist/` for anything that would *fetch* off-origin (`src`/`href` attributes, CSS `url()`, dynamic `import()`) and exits non-zero naming the file. It also prints external hosts that merely appear as strings, which is informational: React and highlight.js embed documentation URLs in error messages, and `w3.org` appears as XML namespaces. Those are in `ALLOWED_HOSTS`; extend that list only for strings that are genuinely never fetched.
+2. **Runtime**: `server/lib/localonly.js` sends a Content-Security-Policy confining the browser to this origin. Build-time catches our own mistakes; CSP also covers anything injected at runtime, including admin-configured content.
+
+The CSP is applied only to app HTML, never to `/api` (JSON needs no policy) or `/uploads` (which keeps its own stricter `script-src 'none'`). Details that matter if you edit it:
+
+- `connect-src` is built per request as `'self'` plus the exact `ws://` or `wss://` origin from the `Host` header, because `'self'` does not reliably cover WebSocket in every browser. The scheme follows `x-forwarded-proto` so it is correct behind a reverse proxy. The host is rejected if it contains anything outside `[a-zA-Z0-9.:_-]`, so a spoofed `Host` cannot inject directives.
+- `'unsafe-inline'` is required in `script-src` for the pre-paint theme script in `index.html`, and in `style-src` for React's inline `style` attributes. This does not weaken *locality*: inline code still cannot load remote resources.
+- `'wasm-unsafe-eval'` is needed by the WASM tokenizer, and `blob:` in `worker-src`/`child-src`/`img-src` by artifact previews, file attachments and the keybind export.
+
+### The egress guard
+
+Policy: loopback and private ranges are allowed, public addresses are not. `isPrivateAddress` covers IPv4 (`0/8`, `10/8`, `127/8`, `169.254/16`, `172.16-31`, `192.168/16`, CGNAT `100.64/10`, multicast) and IPv6 (`::1`, `fc00::/7`, `fe80::/10`, multicast, and IPv4-mapped `::ffff:` which is unwrapped and re-checked). The boundary cases are covered by tests: `172.15`/`172.32` are public while `172.16`-`172.31` are private, and `100.128` is public while `100.64` is not.
+
+A hostname is resolved with `dns.lookup(all: true)` and allowed only if **every** returned address is private, so a name with one private and one public record is refused. Note the honest limitation: this is resolve-then-connect, so a DNS rebinding attack could in principle return a private address to the check and a public one to the connection. Closing that needs a custom connect-time `lookup`, which Node does not expose without adding `undici` as a dependency. The guard is built to stop accidental egress and misconfiguration, not a hostile admin who already controls the server.
+
+**Web search is exempt, and this is deliberate.** A local SearXNG is reachable under the normal rule because it resolves to a private address, but that is only half of what web search does: `ingestPage` then fetches each *result page*, which is on the public internet regardless of where the engine runs. Without an exemption, search would appear to work while silently returning snippet-only results, because `ingestPage` swallows fetch errors and returns empty text. So `websearch.js` routes its requests through `unguardedFetch` (the original `fetch`, captured by `installEgressGuard` before wrapping) when `egress_allow_websearch` is `'1'`, the default. The exemption is scoped to that one module by construction: it is reached by importing a specific symbol, not by a flag that widens the global guard, so no other call site can pick it up. Turn the setting off and `websearch.js` falls back to the guarded `fetch` like everything else.
+
+`egress_allowlist` is the opt-in escape hatch. Matching is exact or `*.suffix`, and `*.anthropic.com` deliberately matches `anthropic.com` itself. It is **not** a substring match, because `anthropic.com.evil.com` must not pass; there is a test for exactly that. Entries are sanitized on write (scheme and path stripped, charset restricted, deduped, capped at 100).
+
+The setting is `local_only`, default `'1'`. It is a toggle rather than hardcoded because two legitimate features cross origins: an admin can point the app icon or background at a remote image URL, and artifact previews are `srcdoc` iframes that inherit the parent CSP, so an artifact loading a CDN library breaks under it. Both are documented in the admin UI. Do not silently widen the policy to accommodate these — that would remove the guarantee for everyone who does not need it.
+
+## Authentication and the sign-in screen
+
+Three endpoints, and the split between the first two is the important part:
+
+- `POST /api/auth/login` — **signs in only**. It used to create an account when the email was unknown, which meant a typo silently registered a second account. It now returns "Incorrect email or password" without saying which was wrong, so it is not an account-existence oracle.
+- `POST /api/auth/register` — **creates only**. Returns 409 on a duplicate, requires 8+ characters, and honours the `allow_signups` setting. The first account ever created is always allowed through regardless of that setting and becomes owner+admin, which is the bootstrap path.
+- `GET /api/auth/context` — the one **public** endpoint (no `authMiddleware`). Returns `firstRun`, `allowSignups`, `appName`, `appIcon`, `appFont` and `uiPreset`.
+
+`/api/auth/context` exists because `/api/app-config` is auth-gated, so before signing in the client knew nothing about the server. That is why the login screen used to render in the wrong preset on a first visit: the pre-paint boot script in `index.html` reads `localStorage 'oq-preset'`, which is empty on a new device, so it fell back to Anthropic. `App.jsx` now fetches the context on the `/api/me` failure path and applies preset, font and icon before rendering `Login`. Keep this endpoint free of anything an anonymous caller should not see — it is deliberately limited to branding and the two booleans the screen needs.
+
+`POST /api/auth/check-email` was removed. Nothing used it after the flow split, and it answered "does this account exist" to anonymous callers.
+
+**The login screen must use theme variables.** It was originally written with literal hex values from the light Anthropic palette (`#f0efe7`, `#faf9f5`, `#d6d4c8`), so it rendered cream in dark mode and under the OpenAI preset no matter what. Every rule in `.login` now goes through `--bg`, `--text`, `--surface`, `--border`, `--input-bg`, `--card-bg` and `--accent`; preset-specific styling lives in `openai.css` under `[data-preset="openai"]`, per the preset architecture above. When logged out, `applyPrefs(null, preset)` resolves the theme from the OS preference since there are no user prefs yet.
 
 ## Popover placement (model dropdown)
 
@@ -209,6 +353,9 @@ Vite + React. `vite.config.js` proxies `/api`, `/uploads`, and the websocket to 
 - `src/api.js` — fetch wrapper for every REST call (`api.get/post/patch/put/del`, uploads).
 - `src/prefs.js` — theme/preset application (see preset doc above). `src/toast.js`, `src/clipboard.js`, `src/lightbox.js`, `src/voice.js` — small utilities. `src/toolproto.js` — client-side tool-syntax scanner. `src/qpIcons.jsx` — quick-prompt icon set.
 - `src/lib/focus.js`: `useFocusTrap(ref, onClose, opts)` (Tab cycling, Escape, focus restore on unmount), `useRovingFocus` for menus, and `focusablesIn`/`focusFirstIn`. Focusables are re-queried on every keypress so traps keep working as contents change. Applied to `CommandPalette`, `ShortcutsModal`, `SearchModal`, `BranchTree`; use it for any new modal.
+- `src/lib/keybinds.js`: the keybind model (`KEYBIND_ACTIONS`, `comboFromEvent`, `resolveKeybinds`, `keybindIndex`, `comboKeys`, `keybindConflicts`, presets, import/export). See "Keyboard model" above.
+- `src/lib/mathjs.js`: everything KaTeX. `hasMath` (cheap pre-check), `wrapMathEnvironments`, `BASE_MACROS`, `KATEX_OPTIONS`, and the lazy loader (`ensureKatex`, `katexPlugin`, `subscribeKatex`, `katexVersion`). See "Maths and code rendering" below.
+- `src/lib/hljs.js`: the syntax-highlighting facade and its two-stage lazy loader (`ensureCommon`, `ensureFull`, `ensureLanguage`, `highlight`, `rawHighlight`, `subscribeHljs`, `hljsVersion`).
 - `src/lib/threadmeta.js`: `railItems` (rail model derived from the message list), `previewOf`, `hasToolCall`, plus `buildTree`/`collapseRuns` shared by the branch map.
 - `src/styles/` — `app.css` imports everything; `openai.css` is the OpenAI preset (always last). Others: `base`, `layout`, `chrome`, `chat`, `composer` styles live across `polish`, `extras`, `modals`, `admin`, `artifacts`, `fonts`, `threadnav`.
 - `src/styles/threadnav.css`: thread rail, find bar, branch map, `.skip-link`, `.sr-only`, the `.kb-focus` ring, and the thread occlusion rules. Imported second-to-last, immediately before `openai.css`.
@@ -225,6 +372,7 @@ Vite + React. `vite.config.js` proxies `/api`, `/uploads`, and the websocket to 
 - `ThreadFind.jsx`: in-thread find. Flattens thread text nodes into a single string plus an offset index, so matches spanning inline elements are found, then paints via the CSS Custom Highlight API (`CSS.highlights`, styled by `::highlight(oq-find)` / `::highlight(oq-find-active)` in `threadnav.css`). Where the API is missing it still navigates by message. Recomputes on a `revision` prop rather than watching the DOM.
 - `BranchTree.jsx`: the branch map modal (lazy-loaded, own chunk). Renders the whole message graph: linear runs collapse into a single column and fold above 6 nodes, fork points split into parallel branch columns, the active path is highlighted. Clicking a node already on the active path jumps to it in the thread (`onJump`); clicking anything else switches branches via `selectBranch`. Keep that split: making every click switch branches means clicking a shared ancestor mutates the conversation the user was only trying to look at.
 - `ArtifactsPanel.jsx` — sandbox file browser/preview. `ProjectsPanel.jsx`, `SpacesPanel.jsx` — projects and spaces UIs.
+- `KeybindsPanel.jsx` — the **Settings > Keybinds** tab. Pure view over `lib/keybinds.js`; it writes only the `keybinds` pref.
 - `SettingsModal.jsx`, `PersonasModal.jsx`, `StyleMenu.jsx`, `ShortcutsModal.jsx`, `DocModal.jsx`, `Login.jsx`, `CallPanel.jsx`, `ModelDropdown.jsx`, `ChatControls.jsx`, `AppBackground.jsx`, `Toaster.jsx`, `Lightbox.jsx`, `icons.jsx`.
 
 ## Removed features (do not resurrect)

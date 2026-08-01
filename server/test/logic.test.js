@@ -10,6 +10,8 @@ import { trimInTurn, compactThreshold, estimateTokens, textTokens, makeTokenCoun
 import { scanTools } from '../toolproto.js';
 import { isContextOverflowError } from '../lib/llamacpp.js';
 import { winTranslate } from '../sandbox.js';
+import { isPrivateAddress, hostAllowed } from '../lib/egress.js';
+import { resolveRouted, ruleMatches, routerRules } from '../lib/router.js';
 import { preferredChild } from '../lib/tree.js';
 
 test('kwargs: legacy effort fields migrate', () => {
@@ -346,4 +348,76 @@ test('preferredChild: descending keeps the active branch instead of the newest s
   assert.equal(preferredChild(kids, null).id, 'c');
   assert.equal(preferredChild([], new Set(['a'])), null);
   assert.equal(preferredChild(undefined, new Set(['a'])), null);
+});
+
+test('egress: private and loopback addresses are reachable', () => {
+  for (const ip of ['127.0.0.1', '10.0.0.5', '192.168.1.10', '172.16.0.1', '172.31.255.254', '169.254.1.1', '100.64.0.1', '::1', 'fd00::1', 'fe80::1', '::ffff:192.168.0.1']) {
+    assert.equal(isPrivateAddress(ip), true, ip);
+  }
+});
+
+test('egress: public addresses are not reachable', () => {
+  for (const ip of ['8.8.8.8', '1.1.1.1', '172.32.0.1', '172.15.0.1', '100.128.0.1', '93.184.216.34', '2606:4700::1111', 'not-an-ip', '']) {
+    assert.equal(isPrivateAddress(ip), false, ip);
+  }
+});
+
+test('egress allowlist matches hosts and subdomains without suffix confusion', () => {
+  const list = ['api.openai.com', '*.anthropic.com'];
+  assert.equal(hostAllowed('api.openai.com', list), true);
+  assert.equal(hostAllowed('API.OpenAI.com', list), true);
+  assert.equal(hostAllowed('api.anthropic.com', list), true);
+  assert.equal(hostAllowed('anthropic.com', list), true);
+  assert.equal(hostAllowed('anthropic.com.evil.com', list), false);
+  assert.equal(hostAllowed('notanthropic.com', list), false);
+  assert.equal(hostAllowed('example.com', list), false);
+  assert.equal(hostAllowed('', list), false);
+});
+
+const RT_MODELS = {
+  hub: { id: 'hub', name: 'Hub', kind: 'router', router_default: 'small', router_rules: [
+    { match: 'hasImage', value: '', modelId: 'vision', label: 'images' },
+    { match: 'hasCode', value: '', modelId: 'coder', label: 'code' },
+    { match: 'keyword', value: 'translate, traducir', modelId: 'trans', label: 'translation' },
+    { match: 'longerThan', value: '500', modelId: 'big', label: 'long' },
+  ] },
+  small: { id: 'small', name: 'Small' }, vision: { id: 'vision', name: 'Vision' },
+  coder: { id: 'coder', name: 'Coder' }, trans: { id: 'trans', name: 'Trans' }, big: { id: 'big', name: 'Big' },
+  loopA: { id: 'loopA', name: 'A', kind: 'router', router_default: 'loopB', router_rules: [] },
+  loopB: { id: 'loopB', name: 'B', kind: 'router', router_default: 'loopA', router_rules: [] },
+  orphan: { id: 'orphan', name: 'Orphan', kind: 'router', router_default: '', router_rules: [] },
+};
+const rtGet = (id) => RT_MODELS[id] || null;
+const rtGo = (hub, text, atts) => resolveRouted(RT_MODELS[hub], [{ role: 'user', content: text }], atts, rtGet);
+
+test('router picks the first matching rule and falls back otherwise', () => {
+  assert.equal(rtGo('hub', 'hi there').model.name, 'Small');
+  assert.equal(rtGo('hub', 'fix this ```js\nconst a=1```').model.name, 'Coder');
+  assert.equal(rtGo('hub', 'please translate this').model.name, 'Trans');
+  assert.equal(rtGo('hub', 'x'.repeat(600)).model.name, 'Big');
+  assert.equal(rtGo('hub', 'what is this', [{ mime: 'image/png' }]).model.name, 'Vision');
+});
+
+test('router refuses loops and missing fallbacks instead of guessing', () => {
+  const loop = rtGo('loopA', 'hi');
+  assert.equal(loop.model, null);
+  assert.match(loop.routed.error, /loop/i);
+  const orphan = rtGo('orphan', 'hi');
+  assert.equal(orphan.model, null);
+});
+
+test('non-router models pass straight through', () => {
+  const r = resolveRouted(RT_MODELS.small, [{ role: 'user', content: 'hi' }], [], rtGet);
+  assert.equal(r.model.name, 'Small');
+  assert.equal(r.routed, null);
+});
+
+test('router rules reject entries without a target and cap bad matchers', () => {
+  const rules = routerRules({ router_rules: [{ match: 'nonsense', value: 'x', modelId: 'a' }, { match: 'keyword', value: 'y' }] });
+  assert.equal(rules.length, 1);
+  assert.equal(rules[0].match, 'keyword');
+});
+
+test('a broken regex rule does not throw', () => {
+  assert.equal(ruleMatches({ match: 'regex', value: '([' }, { text: 'abc', lower: 'abc', length: 3 }), false);
 });

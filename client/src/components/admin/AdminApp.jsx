@@ -21,6 +21,7 @@ import LimitsSection from './sections/LimitsSection.jsx';
 import AuditSection from './sections/AuditSection.jsx';
 import AnalyticsSection from './sections/AnalyticsSection.jsx';
 import DatabasesSection from './sections/DatabasesSection.jsx';
+import PrivacySection from './sections/PrivacySection.jsx';
 import { t } from '../../i18n.jsx';
 
 const SECTION_COMPONENTS = {
@@ -37,6 +38,7 @@ const SECTION_COMPONENTS = {
   skills: SkillsSection,
   mcp: McpSection,
   safety: SafetySection,
+  privacy: PrivacySection,
   feedback: FeedbackSection,
   limits: LimitsSection,
   audit: AuditSection,

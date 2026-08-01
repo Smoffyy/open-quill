@@ -18,6 +18,15 @@ import { promptVars, styleTextFor } from '../convo.js';
 import { clients, requestedKwargs } from './broadcast.js';
 import { runCompletion } from './turn.js';
 import * as live from './live.js';
+import { isRouter, resolveRouted } from '../router.js';
+
+function lastUserContent(chatId) {
+  try {
+    const rows = db.messages.byChat(chatId) || [];
+    for (let i = rows.length - 1; i >= 0; i--) if (rows[i].role === 'user') return rows[i].content || '';
+  } catch {}
+  return '';
+}
 
 export function initWs(server) {
   const wss = new WebSocketServer({ server });
@@ -108,7 +117,16 @@ export function initWs(server) {
       if (msg.type !== 'chat' && msg.type !== 'regenerate' && msg.type !== 'edit') return;
       try {
         const chat = db.chats.byId(msg.chatId);
-        const baseModel = resolveModel(msg.modelId, state.isAdmin);
+        const hubModel = resolveModel(msg.modelId, state.isAdmin);
+        let routedInfo = null;
+        let baseModel = hubModel;
+        if (isRouter(hubModel)) {
+          const probe = [{ role: 'user', content: msg.type === 'regenerate' ? lastUserContent(msg.chatId) : (msg.content || '') }];
+          const r = resolveRouted(hubModel, probe, msg.attachments, (id) => resolveModel(id, state.isAdmin));
+          if (!r.model) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: r.routed?.error || 'This router could not pick a model.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
+          baseModel = r.model;
+          routedInfo = r.routed;
+        }
         const model = applyKwargs(baseModel, requestedKwargs(msg), state.isAdmin);
         if (!chat || chat.user_id !== u.id || !model) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'Invalid chat or model.' })); return; }
         if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: (model.unavailable_reason || 'This model is currently unavailable.') })); return; }
@@ -153,6 +171,7 @@ export function initWs(server) {
           }
         }
 
+        if (routedInfo) safeSend(JSON.stringify({ type: 'routed', chatId: chat.id, ...routedInfo }));
         const queueOn = getSetting('model_queue', '0') === '1';
         const styleText = styleTextFor(u.id, msg.styleId);
         live.beginTurn(u.id, chat.id, model.id);

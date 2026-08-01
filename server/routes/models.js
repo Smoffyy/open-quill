@@ -6,6 +6,17 @@ import { logAudit } from '../lib/audit.js';
 import { draftModels, publicModels, detectContextLength } from '../lib/models.js';
 import { sanitizeKwargs } from '../lib/kwargs.js';
 import { broadcastConfig, broadcastAdminConfig } from '../lib/ws/index.js';
+import { ROUTE_MATCHERS } from '../lib/router.js';
+
+function sanitizeRouterRules(raw) {
+  const list = Array.isArray(raw) ? raw : [];
+  return list.slice(0, 40).map(r => ({
+    match: ROUTE_MATCHERS.includes(r?.match) ? r.match : 'keyword',
+    value: String(r?.value ?? '').slice(0, 400),
+    modelId: String(r?.modelId ?? ''),
+    label: String(r?.label ?? '').slice(0, 60),
+  })).filter(r => r.modelId);
+}
 
 export default function registerModelRoutes(app) {
   app.get('/api/models', authMiddleware, (req, res) => res.json(req.user.is_admin ? draftModels() : publicModels()));
@@ -45,6 +56,7 @@ export default function registerModelRoutes(app) {
     const preset = matchPreset(b.internal_name || '');
     const m = db.models.insert({
       id: uid(), display_name: b.display_name || 'New model', description: b.description || '',
+      kind: b.kind === 'router' ? 'router' : 'model', router_rules: sanitizeRouterRules(b.router_rules), router_default: String(b.router_default || ''),
       internal_name: b.internal_name || 'local-model', system_prompt: b.system_prompt || '',
       call_prompt: b.call_prompt || '',
       provider_id: b.provider_id || (getProviders()[0]?.id || null), max_tokens: parseInt(b.max_tokens) || null,
@@ -93,6 +105,9 @@ export default function registerModelRoutes(app) {
       const v = String(req.body.sunset_action || '');
       patch.sunset_action = v === 'unavailable' ? 'unavailable' : 'hide';
     }
+    if ('kind' in req.body) patch.kind = req.body.kind === 'router' ? 'router' : 'model';
+    if ('router_default' in req.body) patch.router_default = String(req.body.router_default || '');
+    if ('router_rules' in req.body) patch.router_rules = sanitizeRouterRules(req.body.router_rules);
     if ('kwargs' in req.body) patch.kwargs = sanitizeKwargs(req.body.kwargs);
     if ('effort_levels' in req.body) {
       const arr = Array.isArray(req.body.effort_levels) ? req.body.effort_levels : String(req.body.effort_levels || '').split(',');

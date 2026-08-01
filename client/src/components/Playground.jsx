@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import '../styles/playground.css';
 import { api } from '../api.js';
 import { t } from '../i18n.jsx';
 import { Trash, Plus, Chevron, Panel, Gear } from './icons.jsx';

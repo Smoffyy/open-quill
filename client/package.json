@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/check-local.mjs",
     "preview": "vite preview",
-    "i18n:check": "node scripts/i18n-check.mjs"
+    "i18n:check": "node scripts/i18n-check.mjs",
+    "check:local": "node scripts/check-local.mjs",
+    "smoke": "vite build --config vite.smoke.config.js --logLevel error && node node_modules/.smoke/smoke.js"
   },
   "dependencies": {
     "highlight.js": "^11.11.1",

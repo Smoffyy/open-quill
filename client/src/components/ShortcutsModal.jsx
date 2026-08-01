@@ -1,15 +1,9 @@
 import React, { useMemo, useRef } from 'react';
 import { useFocusTrap } from '../lib/focus.js';
 import { t } from '../i18n.jsx';
+import { KEYBIND_ACTIONS, comboKeys, resolveKeybinds } from '../lib/keybinds.js';
 
-const GROUPS = [
-  { title: 'General', items: [
-    ['Command palette', ['Ctrl', 'K']],
-    ['Search chats', ['Ctrl', 'Shift', 'F']],
-    ['New chat', ['Ctrl', 'Shift', 'O']],
-    ['Toggle sidebar', ['Ctrl', 'Shift', 'S']],
-    ['Shortcuts (this)', ['?']],
-  ]},
+const STATIC_GROUPS = [
   { title: 'Composer', items: [
     ['Send message', ['Enter']],
     ['New line', ['Shift', 'Enter']],
@@ -17,17 +11,7 @@ const GROUPS = [
     ['Paste image', ['Ctrl', 'V']],
   ]},
   { title: 'In this conversation', items: [
-    ['Find in conversation', ['Ctrl', 'F'], 'threadFind'],
     ['Next / previous match', ['Enter', 'Shift+Enter'], 'threadFind'],
-    ['Branch map', ['B'], 'branchMap'],
-    ['Jump between messages', ['J', 'K'], 'msgKeys'],
-  ]},
-  { title: 'Focused message', items: [
-    ['Copy', ['C'], 'msgKeys'],
-    ['Edit (your message)', ['E'], 'msgKeys'],
-    ['Retry (assistant)', ['R'], 'msgKeys'],
-    ['Branch into new chat', ['Y'], 'msgKeys'],
-    ['Clear focus', ['Esc'], 'msgKeys'],
   ]},
   { title: 'Messages', items: [
     ['Pin / unpin', ['Hover', '📌']],
@@ -35,16 +19,38 @@ const GROUPS = [
   ]},
 ];
 
+const GROUP_ORDER = ['General', 'Composer', 'In this conversation', 'Focused message', 'Messages'];
+
 function Keys({ keys }) {
   return <span className="kbd-row">{keys.map((k, i) => <kbd key={i}>{k}</kbd>)}</span>;
 }
 
-export default function ShortcutsModal({ prefs, onClose }) {
+export default function ShortcutsModal({ prefs, onClose, onCustomize }) {
   const boxRef = useRef(null);
   useFocusTrap(boxRef, onClose);
-  const groups = useMemo(() => GROUPS
-    .map(g => ({ ...g, items: g.items.filter(([, , need]) => !need || (prefs || {})[need] !== false) }))
-    .filter(g => g.items.length), [prefs]);
+  const groups = useMemo(() => {
+    const p = prefs || {};
+    const binds = resolveKeybinds(p);
+    const map = new Map();
+    const push = (title, item) => {
+      if (!map.has(title)) map.set(title, []);
+      map.get(title).push(item);
+    };
+    for (const a of KEYBIND_ACTIONS) {
+      if (a.pref && p[a.pref] === false) continue;
+      push(a.group, [a.label, comboKeys(binds[a.id])]);
+    }
+    for (const g of STATIC_GROUPS) {
+      for (const [label, keys, need] of g.items) {
+        if (need && p[need] === false) continue;
+        push(g.title, [label, keys]);
+      }
+    }
+    return [...map.entries()]
+      .filter(([, items]) => items.length)
+      .sort((a, b) => GROUP_ORDER.indexOf(a[0]) - GROUP_ORDER.indexOf(b[0]))
+      .map(([title, items]) => ({ title, items }));
+  }, [prefs]);
   return (
     <div className="overlay" onMouseDown={(e) => e.target.classList.contains('overlay') && onClose()}>
       <div className="shortcuts-modal" ref={boxRef} role="dialog" aria-modal="true" aria-labelledby="oq-sc-title">
@@ -63,6 +69,11 @@ export default function ShortcutsModal({ prefs, onClose }) {
             </div>
           ))}
         </div>
+        {onCustomize && (
+          <div className="sc-foot">
+            <button className="btn ghost" onClick={onCustomize}>{t('Customize shortcuts')}</button>
+          </div>
+        )}
       </div>
     </div>
   );

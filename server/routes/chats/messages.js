@@ -83,6 +83,26 @@ export default function registerMessageRoutes(app) {
     res.json({ ok: true });
   });
 
+  app.post('/api/chats/:id/cherrypick', authMiddleware, (req, res) => {
+    const c = db.chats.byId(req.params.id);
+    if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+    if (c.ended) return res.status(403).json({ error: 'This conversation was ended by the assistant and cannot be continued.' });
+    ensureChain(c.id);
+    const src = db.messages.byId(req.body.messageId);
+    if (!src || src.chat_id !== c.id) return res.status(404).json({ error: 'message not found' });
+    const path = activePath(c.id);
+    if (path.some(m => m.id === src.id)) return res.status(400).json({ error: 'That message is already in this branch.' });
+    const leaf = (db.chats.byId(c.id) || {}).active_leaf || null;
+    const id = uid();
+    db.messages.insert({
+      id, chat_id: c.id, role: src.role, content: src.content || '', reasoning: src.reasoning || '',
+      model_id: src.model_id || null, attachments: src.attachments || [],
+      parent_id: leaf, created_at: now(), copied_from: src.id
+    });
+    db.chats.update(c.id, { active_leaf: id });
+    res.json({ ok: true, id });
+  });
+
   app.post('/api/chats/:id/fork', authMiddleware, (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });

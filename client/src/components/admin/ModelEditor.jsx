@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../api.js';
 import { Copy, Trash, Star } from '../icons.jsx';
-import { Toggle, IconSlot, SystemPromptEditor, StatusChips, CopyBtn, SegPick, bgPreviewStyle, BannerPicker } from './widgets.jsx';
+import { Toggle, Switch, IconSlot, SystemPromptEditor, StatusChips, CopyBtn, SegPick, bgPreviewStyle, BannerPicker } from './widgets.jsx';
 import KwargsEditor from './KwargsEditor.jsx';
 import { t } from '../../i18n.jsx';
 
 export const ME_SECTIONS = [
   ['essentials', 'Essentials'],
+  ['routing', 'Routing'],
   ['reasoning', 'Reasoning'],
   ['kwargs', 'Kwargs'],
   ['tools', 'Tools'],
@@ -54,7 +55,89 @@ export function GroupLabel({ anchor, first, children }) {
   return <div className={'med-group' + (first ? ' first' : '')} data-anchor={anchor}>{children}</div>;
 }
 
-export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, providers = [], providerTypes = {}, section = 'essentials', onSection }) {
+const MATCHERS = [
+  ['keyword', 'Message contains any of these words'],
+  ['regex', 'Message matches this regular expression'],
+  ['hasImage', 'Message has an image'],
+  ['hasFile', 'Message has an attachment'],
+  ['hasCode', 'Message looks like code'],
+  ['shorterThan', 'Message is shorter than N characters'],
+  ['longerThan', 'Message is longer than N characters'],
+  ['always', 'Always (catch-all)'],
+];
+const NEEDS_VALUE = new Set(['keyword', 'regex', 'shorterThan', 'longerThan']);
+
+function RoutingPane({ m, set, models }) {
+  const rules = Array.isArray(m.router_rules) ? m.router_rules : [];
+  const targets = models.filter(x => x.id !== m.id && x.kind !== 'router');
+  const routers = models.filter(x => x.id !== m.id && x.kind === 'router');
+  const pickable = [...targets, ...routers];
+  const upd = (i, patch) => set('router_rules', rules.map((r, j) => j === i ? { ...r, ...patch } : r));
+  const add = () => set('router_rules', [...rules, { match: 'keyword', value: '', modelId: targets[0]?.id || '', label: '' }]);
+  const del = (i) => set('router_rules', rules.filter((_, j) => j !== i));
+  const move = (i, d) => {
+    const next = rules.slice();
+    const j = i + d;
+    if (j < 0 || j >= next.length) return;
+    [next[i], next[j]] = [next[j], next[i]];
+    set('router_rules', next);
+  };
+  return (
+    <div className="med-pane">
+      <div className="field row">
+        <div>
+          <label>{t("Use this model as a router")}</label>
+          <div className="muted-note">{t("A router does not talk to a backend itself. It sits in the model picker like any other model, and when someone sends a message it hands the turn to whichever model matches first.")}</div>
+        </div>
+        <Switch on={m.kind === 'router'} onToggle={() => set('kind', m.kind === 'router' ? 'model' : 'router')} />
+      </div>
+      {m.kind === 'router' && (
+        <>
+          <div className="field">
+            <label>{t("Rules, in order")}</label>
+            <div className="muted-note">{t("The first rule that matches wins. Anything that matches nothing goes to the fallback below.")}</div>
+          </div>
+          {!rules.length && <div className="muted-note rt-empty">{t("No rules yet. Everything will go to the fallback model.")}</div>}
+          {rules.map((r, i) => (
+            <div className="rt-rule" key={i}>
+              <div className="rt-rule-head">
+                <span className="rt-num">{i + 1}</span>
+                <select value={r.match} onChange={(e) => upd(i, { match: e.target.value })}>
+                  {MATCHERS.map(([v, l]) => <option key={v} value={v}>{t(l)}</option>)}
+                </select>
+                <button className="btn ghost sm" onClick={() => move(i, -1)} disabled={i === 0} title={t("Move up")}>↑</button>
+                <button className="btn ghost sm" onClick={() => move(i, 1)} disabled={i === rules.length - 1} title={t("Move down")}>↓</button>
+                <button className="btn ghost sm" onClick={() => del(i)} title={t("Remove")}>✕</button>
+              </div>
+              <div className="rt-rule-body">
+                {NEEDS_VALUE.has(r.match) && (
+                  <input value={r.value || ''} onChange={(e) => upd(i, { value: e.target.value })}
+                    placeholder={r.match === 'keyword' ? t("translate, traducir, übersetzen") : r.match === 'regex' ? '^\\s*(fix|debug)\\b' : '400'} />
+                )}
+                <select value={r.modelId || ''} onChange={(e) => upd(i, { modelId: e.target.value })}>
+                  <option value="">{t("Pick a model…")}</option>
+                  {pickable.map(x => <option key={x.id} value={x.id}>{x.display_name || x.internal_name}{x.kind === 'router' ? ' ' + t('(router)') : ''}</option>)}
+                </select>
+                <input value={r.label || ''} onChange={(e) => upd(i, { label: e.target.value })} placeholder={t("Label, shown to users")} />
+              </div>
+            </div>
+          ))}
+          <div className="btn-row rt-actions"><button className="btn ghost" onClick={add}>{t("Add rule")}</button></div>
+          <div className="field rt-fallback">
+            <label>{t("Fallback model")}</label>
+            <div className="muted-note">{t("Used when no rule matches. A router without a fallback will refuse the turn rather than guess.")}</div>
+            <select value={m.router_default || ''} onChange={(e) => set('router_default', e.target.value)}>
+              <option value="">{t("None")}</option>
+              {pickable.map(x => <option key={x.id} value={x.id}>{x.display_name || x.internal_name}</option>)}
+            </select>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, providers = [], providerTypes = {}, models = [], section = 'essentials', onSection }) {
   const [spOpen, setSpOpen] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [detectMsg, setDetectMsg] = useState('');
@@ -163,6 +246,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
       </div>
 
       <div className="med-body" ref={bodyRef}>
+        {section === 'routing' && <RoutingPane m={m} set={set} models={models} />}
         {section === 'essentials' && (
           <div className="med-pane">
             <GroupLabel anchor="identity" first>{t("Identity")}</GroupLabel>

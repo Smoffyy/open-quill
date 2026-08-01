@@ -9,7 +9,7 @@ const RUN_HEAD = 2;
 const RUN_TAIL = 2;
 const RUN_FOLD = 6;
 
-function Node({ node, active, onSelect }) {
+function Node({ node, active, onSelect, onMenu }) {
   const cls = ['bt-node', 'r-' + node.role];
   if (node.onPath) cls.push('on-path');
   if (node.id === active) cls.push('is-leaf');
@@ -20,6 +20,7 @@ function Node({ node, active, onSelect }) {
       type="button"
       className={cls.join(' ')}
       onClick={() => onSelect(node)}
+      onContextMenu={(e) => { e.preventDefault(); onMenu?.(node, e); }}
       aria-current={node.onPath ? 'true' : undefined}
       title={(node.preview || who) + ' (' + action + ')'}
     >
@@ -30,7 +31,7 @@ function Node({ node, active, onSelect }) {
   );
 }
 
-function Run({ nodes, active, onSelect }) {
+function Run({ nodes, active, onSelect, onMenu }) {
   const [open, setOpen] = useState(false);
   const folded = nodes.length > RUN_FOLD && !open;
   const shown = folded ? [...nodes.slice(0, RUN_HEAD), null, ...nodes.slice(nodes.length - RUN_TAIL)] : nodes;
@@ -38,24 +39,24 @@ function Run({ nodes, active, onSelect }) {
   return (
     <div className="bt-run">
       {shown.map((n, i) => n
-        ? <Node key={n.id} node={n} active={active} onSelect={onSelect} />
+        ? <Node key={n.id} node={n} active={active} onSelect={onSelect} onMenu={onMenu} />
         : <button key="fold" type="button" className="bt-fold" onClick={() => setOpen(true)}>{t('{n} more turns', { n: hidden })}</button>
       )}
     </div>
   );
 }
 
-function Segment({ node, active, onSelect, depth }) {
+function Segment({ node, active, onSelect, onMenu, depth }) {
   const { run, forks } = useMemo(() => collapseRuns(node), [node]);
   return (
     <div className="bt-seg">
-      <Run nodes={run} active={active} onSelect={onSelect} />
+      <Run nodes={run} active={active} onSelect={onSelect} onMenu={onMenu} />
       {forks.length > 0 && (
         <div className="bt-split" data-depth={depth}>
           {forks.map((f, i) => (
             <div className={'bt-branch' + (f.onPath ? ' on-path' : '')} key={f.id}>
               <div className="bt-branch-tag">{t('Version {n}', { n: i + 1 })}</div>
-              <Segment node={f} active={active} onSelect={onSelect} depth={depth + 1} />
+              <Segment node={f} active={active} onSelect={onSelect} onMenu={onMenu} depth={depth + 1} />
             </div>
           ))}
         </div>
@@ -64,9 +65,12 @@ function Segment({ node, active, onSelect, depth }) {
   );
 }
 
-export default function BranchTree({ chatId, onSelect, onJump, onClose }) {
+export default function BranchTree({ chatId, onSelect, onJump, onClose, onChanged }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState('');
+  const [menu, setMenu] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState('');
   const boxRef = useRef(null);
   useFocusTrap(boxRef, onClose);
 
@@ -90,6 +94,21 @@ export default function BranchTree({ chatId, onSelect, onJump, onClose }) {
     for (const v of kids.values()) if (v > 1) splits++;
     return splits;
   }, [data]);
+
+  function openMenu(node, e) {
+    setMenu({ node, x: Math.min(e.clientX, window.innerWidth - 230), y: Math.min(e.clientY, window.innerHeight - 150) });
+  }
+
+  async function cherryPick(node) {
+    setMenu(null);
+    setBusy(true);
+    try {
+      await api.post('/api/chats/' + chatId + '/cherrypick', { messageId: node.id });
+      onChanged?.();
+      onClose();
+    } catch (e) { setNote(String(e.message || e)); }
+    setBusy(false);
+  }
 
   function pick(node) {
     onClose();
@@ -115,9 +134,22 @@ export default function BranchTree({ chatId, onSelect, onJump, onClose }) {
           {err && <div className="bt-empty">{err}</div>}
           {!err && !data && <div className="bt-empty">{t('Loading…')}</div>}
           {data && !roots.length && <div className="bt-empty">{t('Nothing here yet.')}</div>}
-          {roots.map(r => <Segment key={r.id} node={r} active={data.activeLeaf} onSelect={pick} depth={0} />)}
+          {roots.map(r => <Segment key={r.id} node={r} active={data.activeLeaf} onSelect={pick} onMenu={openMenu} depth={0} />)}
         </div>
-        <div className="bt-foot">{t('Messages on the current path jump you there. Anything else switches the conversation to that branch.')}</div>
+        {!!note && <div className="bt-empty" role="alert">{note}</div>}
+        <div className="bt-foot">{t('Messages on the current path jump you there. Anything else switches the conversation to that branch. Right-click any message to copy it across.')}</div>
+        {menu && (
+          <>
+            <div className="bt-menu-scrim" onMouseDown={() => setMenu(null)} />
+            <div className="bt-menu" style={{ left: menu.x, top: menu.y }}>
+              <div className="bt-menu-prev">{menu.node.preview || t('(empty)')}</div>
+              <button type="button" onClick={() => pick(menu.node)}>{menu.node.onPath ? t('Jump to this message') : t('Switch to this branch')}</button>
+              <button type="button" disabled={busy || menu.node.onPath} onClick={() => cherryPick(menu.node)}>
+                {t('Copy into the current branch')}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

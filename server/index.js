@@ -22,10 +22,14 @@ import registerAdminRoutes from './routes/admin.js';
 import registerMediaRoutes from './routes/media.js';
 import registerSpaceRoutes from './routes/spaces.js';
 import registerMiscRoutes from './routes/misc.js';
+import { localOnlyMiddleware } from './lib/localonly.js';
+import { installEgressGuard } from './lib/egress.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || '127.0.0.1';
+
+installEgressGuard();
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -46,6 +50,7 @@ registerMiscRoutes(app);
 
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
 if (fs.existsSync(clientDist)) {
+  app.use(localOnlyMiddleware);
   app.use(express.static(clientDist));
   app.use((req, res, next) => {
     if (req.method !== 'GET' || req.path.startsWith('/api')) return next();

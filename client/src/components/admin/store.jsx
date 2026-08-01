@@ -16,7 +16,7 @@ export const DEFAULT_SETTINGS = {
   memoryEnabled: false, memoryPrompt: '', chatSearchEnabled: false
 };
 
-export const DEFAULT_CFG = { appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [], appFont: 'serif', uiPreset: 'anthropic' };
+export const DEFAULT_CFG = { appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [], appFont: 'serif', uiPreset: 'anthropic', allowSignups: true, localOnly: true, egressLocalOnly: true, egressAllowWebSearch: true, egressAllowlist: [] };
 
 function initialSection() {
   try {
