@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { api } from './api.js';
-import { t } from './i18n.jsx';
+import { t, tk } from './i18n.jsx';
 import { applyPrefs } from './prefs.js';
 import { kwargValuesArr, defaultValueOf } from './kwargs.js';
 import Login from './components/Login.jsx';
@@ -46,7 +46,7 @@ import { toast } from './toast.js';
 import { copyText } from './clipboard.js';
 import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork } from './components/icons.jsx';
 
-const DEFAULT_CFG = { appName: 'open-quill', disclaimer: 'Assistants can make mistakes, double-check responses.', greetings: ['How can I help you?'], appIcon: '', quickPrompts: [], version: '' };
+const DEFAULT_CFG = { appName: 'open-quill', disclaimer: tk('Assistants can make mistakes, double-check responses.'), greetings: [tk('How can I help you?')], appIcon: '', quickPrompts: [], version: '' };
 
 
 
@@ -251,7 +251,7 @@ export default function App() {
   const [callOpen, setCallOpen] = useState(false);
   const [artifactFocus, setArtifactFocus] = useState(null);
   const [incognito, setIncognito] = useState(false);
-  const [incognitoGreeting, setIncognitoGreeting] = useState('Greetings, whoever you are');
+  const [incognitoGreeting, setIncognitoGreeting] = useState(tk('Greetings, whoever you are'));
   const [chatsOverview, setChatsOverview] = useState(false);
   const [showSpaces, setShowSpaces] = useState(false);
   const [spacesPending, setSpacesPending] = useState(0);
@@ -549,7 +549,7 @@ export default function App() {
   }
   useEffect(() => {
     const appName = cfg.appName || 'open-quill';
-    if (incognito) { document.title = 'Incognito chat - ' + appName; return; }
+    if (incognito) { document.title = t('Incognito chat - {app}', { app: appName }); return; }
     const active = activeId ? chats.find(c => c.id === activeId) : null;
     document.title = active ? `${active.title || t('Untitled chat')} - ${appName}` : `New chat - ${appName}`;
   }, [activeId, chats, cfg.appName, incognito]);
@@ -561,7 +561,7 @@ export default function App() {
       const r = await api.post('/api/chats/import', json);
       await loadChats(); await loadFolders();
       alert(`Imported ${r.imported} chat(s).`);
-    } catch (e) { alert(e.message || 'Could not import that file.'); }
+    } catch (e) { alert(e.message || t('Could not import that file.')); }
   }
   function applyCfg(c) {
     setCfg(c);
@@ -599,7 +599,7 @@ export default function App() {
     const sock = ws.current;
     if (!sock || sock.readyState !== 1) {
       if (!sock || sock.readyState >= 2) connect();
-      setChatErrors(prev => ({ ...prev, [activeKey()]: 'Connection lost, reconnecting. Try again in a moment.' }));
+      setChatErrors(prev => ({ ...prev, [activeKey()]: t('Connection lost, reconnecting. Try again in a moment.') }));
       return false;
     }
     try { sock.send(JSON.stringify(obj)); return true; }
@@ -822,7 +822,7 @@ export default function App() {
       } else {
         dropRec(m.chatId);
       }
-      setChatErrors(prev => ({ ...prev, [m.chatId]: String(m.error || 'The model returned an error.') }));
+      setChatErrors(prev => ({ ...prev, [m.chatId]: String(m.error || t('The model returned an error.')) }));
       return;
     }
     if (m.type === 'done') {
@@ -843,7 +843,7 @@ export default function App() {
             (() => { const g = genOptsRef.current; setTimeout(() => wsSend({ type: 'regenerate', chatId: cmp.chatId, modelId: nextId, extended: g.extended, reasoningEffort: g.reasoningEffort, kwargValues: g.kwargValues, messageId: cmp.messageId, sandbox: g.sandbox, webSearch: g.webSearch, styleId: g.styleId }), 150); })();
           } else {
             compareRef.current = null;
-            toast('Model comparison ready, use the version arrows or compare button on the response.', { duration: 6000 });
+            toast(t('Model comparison ready, use the version arrows or compare button on the response.'), { duration: 6000 });
             (() => { const q2 = queuedListRef.current[0]; if (q2) { setQueue(l => l.slice(1)); setTimeout(() => sendRef.current(q2.attachments || [], q2.text, { fromQueue: true }), 150); } })();
           }
         } else {
@@ -1016,7 +1016,7 @@ export default function App() {
   const railJump = useCallback((id) => { setKbFocus(id); jumpToMessage(id, { flash: false }); }, []);
   async function copyConversation() {
     const text = messages.filter(m => m.role === 'user' || m.role === 'assistant')
-      .map(m => (m.role === 'user' ? 'You' : 'Assistant') + ':\n' + (typeof m.content === 'string' ? m.content : '')).join('\n\n');
+      .map(m => (m.role === 'user' ? 'You' : t('Assistant')) + ':\n' + (typeof m.content === 'string' ? m.content : '')).join('\n\n');
     try { await navigator.clipboard.writeText(text); toast(t('Conversation copied'), { icon: 'copy' }); } catch {}
   }
   async function saveSavedPrompts(list) {
@@ -1200,7 +1200,7 @@ export default function App() {
       incognitoRef.current = true;
       setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
       setSandbox(false);
-      const gs = ['Greetings, whoever you are', 'No names, no traces', 'This one stays between us', 'Off the record'];
+      const gs = [tk('Greetings, whoever you are'), tk('No names, no traces'), tk('This one stays between us'), tk('Off the record')];
       setIncognitoGreeting(gs[Math.floor(Math.random() * gs.length)]);
       setIncognito(true);
       setFocusTick(t => t + 1);
@@ -1225,7 +1225,7 @@ export default function App() {
     const next = !cur?.archived;
     setChats(cs => cs.map(c => c.id === id ? { ...c, archived: next } : c));
     api.patch('/api/chats/' + id, { archived: next }).catch(() => {});
-    if (next && id === activeId) toast('Chat archived, find it under Chats → Archived.');
+    if (next && id === activeId) toast(t('Chat archived, find it under Chats → Archived.'));
   }
 
   function toggleStar(id) {
@@ -1440,7 +1440,7 @@ export default function App() {
     queueCount: queuedList.length,
     onQueue: (t, atts) => setQueue(l => [...l, { id: 'q' + Date.now() + Math.random().toString(36).slice(2, 7), text: t, attachments: atts || [] }]),
     onSteer: steer, canSteer: streaming && !!activeId && !incognito && user?.prefs?.steering === true,
-    canContinue, onContinue: () => { setCanContinue(false); send([], 'Continue exactly where your previous reply stopped, without repeating any content.'); },
+    canContinue, onContinue: () => { setCanContinue(false); send([], t('Continue exactly where your previous reply stopped, without repeating any content.')); },
     compareIds, onSetCompare: setCompareIds,
     safetyFlagged, safetyChecking, safetyReason, safetyVerbose: !!cfg.safetyCheckVerbose,
     styles: user?.styles || [], styleId, onSelectStyle: setStyleId, onSaveStyles: saveStyles,
@@ -1585,20 +1585,20 @@ export default function App() {
         <Toaster />
         {incognito && (
           <div className="incognito-bar">
-            <div className="incognito-title"><Ghost style={{ width: 18 }} /> Incognito chat</div>
+            <div className="incognito-title"><Ghost style={{ width: 18 }} /> {t("Incognito chat")}</div>
             <button className="incognito-close" onClick={toggleIncognito} title={t("Exit incognito")} disabled={streaming || queued}>✕</button>
           </div>
         )}
         {empty && (
-          <button className="mobile-menu-btn empty-menu" onClick={() => setMobileDrawer(true)} title="Menu"><Menu style={{ width: 20 }} /></button>
+          <button className="mobile-menu-btn empty-menu" onClick={() => setMobileDrawer(true)} title={t("Menu")}><Menu style={{ width: 20 }} /></button>
         )}
         {!incognito && empty && (
-          <button className={'incognito-fab' + (user?.isAdmin ? ' with-ctl' : '')} onClick={toggleIncognito} title="Incognito chat, not saved" disabled={streaming || queued}>
+          <button className={'incognito-fab' + (user?.isAdmin ? ' with-ctl' : '')} onClick={toggleIncognito} title={t("Incognito chat, not saved")} disabled={streaming || queued}>
             <Ghost style={{ width: 18 }} />
           </button>
         )}
         {empty && !incognito && user?.isAdmin && (
-          <button className={'incognito-fab ctl-fab' + (ctlOpen ? ' active' : '')} onClick={() => { setArtifactsOpen(false); setCtlOpen(o => !o); }} title="Chat controls (admin)" disabled={streaming || queued}>
+          <button className={'incognito-fab ctl-fab' + (ctlOpen ? ' active' : '')} onClick={() => { setArtifactsOpen(false); setCtlOpen(o => !o); }} title={t("Chat controls (admin)")} disabled={streaming || queued}>
             <Sliders style={{ width: 17 }} />
           </button>
         )}
@@ -1629,7 +1629,7 @@ export default function App() {
             </div>
             <div className="qp-slot">
               {incognito ? (
-                <div className={cfg.uiPreset === 'openai' ? 'incog-note' : 'incognito-note'}>{cfg.uiPreset === 'openai' ? "This chat won't appear in history. Incognito chats aren't saved." : "Incognito chats aren't saved to your history."}</div>
+                <div className={cfg.uiPreset === 'openai' ? 'incog-note' : 'incognito-note'}>{cfg.uiPreset === 'openai' ? t("This chat won't appear in history. Incognito chats aren't saved.") : t("Incognito chats aren't saved to your history.")}</div>
               ) : cfg.quickPrompts && cfg.quickPrompts.length > 0 && (
                 <QuickPrompts prompts={cfg.quickPrompts} visible={!input.trim()} disabled={streaming} onPick={(p) => send([], p)} />
               )}
@@ -1641,7 +1641,7 @@ export default function App() {
               {cfg.uiPreset === 'openai' && (
                 {modelPicker}
               )}
-              <button className="mobile-menu-btn" onClick={() => setMobileDrawer(true)} title="Menu"><Menu style={{ width: 20 }} /></button>
+              <button className="mobile-menu-btn" onClick={() => setMobileDrawer(true)} title={t("Menu")}><Menu style={{ width: 20 }} /></button>
               {renaming ? (
                 <input className="chat-rename" autoFocus value={renameVal}
                   onChange={(e) => setRenameVal(e.target.value)}
@@ -1650,12 +1650,12 @@ export default function App() {
               ) : (
                 <div className="chat-name-wrap">
                   <button className="chat-name" onClick={() => setChatMenuOpen(o => !o)}>
-                    <span className="ct-title">{activeChat?.title || 'New chat'}</span> <ChevDown style={{ width: 15 }} />
+                    <span className="ct-title">{activeChat?.title || t('New chat')}</span> <ChevDown style={{ width: 15 }} />
                   </button>
-                  {(chatInstructions || '').trim() && <span className="chat-instr-dot" title="This chat has custom instructions" />}
+                  {(chatInstructions || '').trim() && <span className="chat-instr-dot" title={t("This chat has custom instructions")} />}
                   {chatMenuOpen && activeId && (
                     <ChatMenu
-                      chat={{ id: activeId, title: activeChat?.title || 'New chat', instructions: chatInstructions, starred: !!activeChat?.starred, archived: !!activeChat?.archived }}
+                      chat={{ id: activeId, title: activeChat?.title || t('New chat'), instructions: chatInstructions, starred: !!activeChat?.starred, archived: !!activeChat?.archived }}
                       modelId={currentId}
                       pinned={messages.filter(m => m.pinned)}
                       pins={chatPins}
@@ -1674,17 +1674,17 @@ export default function App() {
               )}
               <div className="topbar-actions">
                 {!incognito && (
-                  <button className="paper-btn" onClick={toggleIncognito} title="Incognito chat, not saved" disabled={streaming || queued}>
+                  <button className="paper-btn" onClick={toggleIncognito} title={t("Incognito chat, not saved")} disabled={streaming || queued}>
                     <Ghost style={{ width: 18 }} />
                   </button>
                 )}
                 {hasSummary && (
-                  <button className="paper-btn" onClick={() => setSummaryOpen(true)} title="Conversation memory">
+                  <button className="paper-btn" onClick={() => setSummaryOpen(true)} title={t("Conversation memory")}>
                     <Compact style={{ width: 18 }} />
                   </button>
                 )}
                 {user?.isAdmin && activeId && (
-                  <button className={'paper-btn' + (ctlOpen ? ' active' : '')} onClick={() => { setArtifactsOpen(false); setCtlOpen(o => !o); }} title="Chat controls (admin)">
+                  <button className={'paper-btn' + (ctlOpen ? ' active' : '')} onClick={() => { setArtifactsOpen(false); setCtlOpen(o => !o); }} title={t("Chat controls (admin)")}>
                     <Sliders style={{ width: 17 }} />
                   </button>
                 )}
@@ -1704,12 +1704,12 @@ export default function App() {
                   </button>
                 )}
                 {showArtifactsBtn && (
-                  <button className={'paper-btn' + (artifactsOpen ? ' active' : '') + (liveFile ? ' writing' : '')} onClick={() => { setCallOpen(false); setArtifactsOpen(o => !o); }} title="Artifacts">
+                  <button className={'paper-btn' + (artifactsOpen ? ' active' : '') + (liveFile ? ' writing' : '')} onClick={() => { setCallOpen(false); setArtifactsOpen(o => !o); }} title={t("Artifacts")}>
                     <Paper style={{ width: 18 }} />{files.length > 0 && <span className="paper-count">{files.length}</span>}
                   </button>
                 )}
                 {/* Share button, disabled for now, kept for later use
-                <button className="share-btn">Share</button>
+                <button className="share-btn">{t("Share")}</button>
                 */}
               </div>
             </div>
@@ -1759,8 +1759,8 @@ export default function App() {
                     <div className="msg user ghost">
                       <div className="bubble-user"><div className="ghost-text">{q.text}</div></div>
                       <div className="ghost-row">
-                        <span className="ghost-note">Queued</span>
-                        <button className="ghost-remove" onClick={() => setQueue(l => l.filter(x => x.id !== q.id))}><X style={{ width: 12 }} /> Remove from queue</button>
+                        <span className="ghost-note">{t("Queued")}</span>
+                        <button className="ghost-remove" onClick={() => setQueue(l => l.filter(x => x.id !== q.id))}><X style={{ width: 12 }} /> {t("Remove from queue")}</button>
                       </div>
                     </div>
                     <div className="msg assistant ghost">
@@ -1769,7 +1769,7 @@ export default function App() {
                   </div>
                 ))}
                 {queued && !streaming && (
-                  <div className="msg assistant"><div className="queue-wait"><img src="/starburst.svg" className="pulse think-dot" alt="" /> Waiting for queue…</div></div>
+                  <div className="msg assistant"><div className="queue-wait"><img src="/starburst.svg" className="pulse think-dot" alt="" /> {t("Waiting for queue…")}</div></div>
                 )}
                 {compacting && <CompactingBar />}
                 <div className="thread-pad" />
@@ -1809,18 +1809,18 @@ export default function App() {
       {user?.isAdmin && cfg.uiPresetChosen === false && !presetPicked && (
         <div className="preset-scrim">
           <div className="preset-modal">
-            <h2 className="preset-title">Choose your interface</h2>
-            <p className="preset-sub">Pick the look for this workspace. You can change it any time in Admin → Branding.</p>
+            <h2 className="preset-title">{t("Choose your interface")}</h2>
+            <p className="preset-sub">{t("Pick the look for this workspace. You can change it any time in Admin → Branding.")}</p>
             <div className="preset-grid">
               <button className="preset-card" onClick={() => choosePreset('anthropic')}>
                 <span className="preset-swatch anthropic"><span className="ps-dot" /></span>
-                <span className="preset-name">Anthropic</span>
-                <span className="preset-desc">Warm serif look with the classic open-quill layout.</span>
+                <span className="preset-name">{t("Anthropic")}</span>
+                <span className="preset-desc">{t("Warm serif look with the classic open-quill layout.")}</span>
               </button>
               <button className="preset-card" onClick={() => choosePreset('openai')}>
                 <span className="preset-swatch openai"><span className="ps-dot" /></span>
-                <span className="preset-name">OpenAI</span>
-                <span className="preset-desc">Pitch-black ChatGPT layout with the model picker up top.</span>
+                <span className="preset-name">{t("OpenAI")}</span>
+                <span className="preset-desc">{t("Pitch-black ChatGPT layout with the model picker up top.")}</span>
               </button>
             </div>
           </div>
@@ -1855,9 +1855,9 @@ export default function App() {
         onClose={() => { setShowProjects(false); setProjectOpenId(null); if (/^\/projects?(\/|$)/.test(location.pathname) || /^\/project\//.test(location.pathname)) history.pushState({}, '', '/'); }}
         onOpenChat={openProjectChat} onStartChat={startProjectChat}
         onOpenProject={(id) => { setProjectOpenId(id); history.replaceState({}, '', id ? '/project/' + id : '/projects'); loadProjects(); }} />}
-      {showCredits && <DocModal title="Credits" name="credits" serif onClose={() => setShowCredits(false)} />}
-      {showLicense && <DocModal title="Licensing" name="license" onClose={() => setShowLicense(false)} />}
-      {showChangelog && <DocModal title="Changelog" name="changelog" onClose={() => setShowChangelog(false)} />}
+      {showCredits && <DocModal title={t("Credits")} name="credits" serif onClose={() => setShowCredits(false)} />}
+      {showLicense && <DocModal title={t("Licensing")} name="license" onClose={() => setShowLicense(false)} />}
+      {showChangelog && <DocModal title={t("Changelog")} name="changelog" onClose={() => setShowChangelog(false)} />}
       {cmdkOpen && <CommandPalette commands={commands} onClose={() => setCmdkOpen(false)} />}
     </div>
   );

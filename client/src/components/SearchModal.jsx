@@ -50,8 +50,8 @@ export default function SearchModal({ onClose, onOpen }) {
           <input ref={inputRef} value={q} placeholder={t("Search your chats…")} aria-label={t("Search your chats")} onChange={(e) => setQ(e.target.value)} />
         </div>
         <div className="search-body" role="listbox" aria-label={t("Search results")}>
-          {q.trim().length < 2 && <div className="search-empty">Type at least 2 characters to search across all your conversations.</div>}
-          {q.trim().length >= 2 && !loading && results.length === 0 && <div className="search-empty">No matches.</div>}
+          {q.trim().length < 2 && <div className="search-empty">{t("Type at least 2 characters to search across all your conversations.")}</div>}
+          {q.trim().length >= 2 && !loading && results.length === 0 && <div className="search-empty">{t("No matches.")}</div>}
           {results.map((r, i) => (
             <button key={r.id} role="option" aria-selected={i === active} className={'search-row' + (i === active ? ' active' : '')} onMouseEnter={() => setActive(i)} onClick={() => pick(r)}>
               <div className="search-title">{r.starred && <Star style={{ width: 13, marginRight: 4 }} />}{highlight(r.title || 'Untitled')}</div>

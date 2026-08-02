@@ -261,6 +261,17 @@
 .pv-status.ok { color: #6fbf73; background: color-mix(in srgb, #6fbf73 12%, transparent); border: 1px solid color-mix(in srgb, #6fbf73 35%, transparent); }
 .pv-status.err { color: #e5484d; background: color-mix(in srgb, #e5484d 8%, transparent); border: 1px solid color-mix(in srgb, #e5484d 35%, transparent); }
 
+.engine-facts { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-soft); display: flex; flex-direction: column; gap: 9px; }
+.engine-facts .ef-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.engine-facts .ef-item { display: flex; flex-direction: column; gap: 2px; padding: 7px 11px; border-radius: 9px; background: var(--hover-soft); min-width: 120px; }
+.engine-facts .ef-k { font-size: 11px; color: var(--text-faint); }
+.engine-facts .ef-v { font-size: 13px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.engine-facts .ef-models { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.engine-facts .ef-model {
+  font-size: 11.5px; padding: 3px 9px; border-radius: 999px; background: var(--hover-mid); color: var(--text-muted);
+  font-variant-numeric: tabular-nums; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 .mem-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 .mem-search { flex: 1; min-width: 200px; background: var(--input-bg); border: 1px solid var(--border-soft); border-radius: 9px; padding: 9px 12px; font-size: 13.5px; color: var(--text); transition: border-color .12s, box-shadow .12s; }
 .mem-search::placeholder { color: var(--text-faint); }

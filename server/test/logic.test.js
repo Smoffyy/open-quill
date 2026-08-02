@@ -13,6 +13,9 @@ import { winTranslate } from '../sandbox.js';
 import { isPrivateAddress, hostAllowed } from '../lib/egress.js';
 import { resolveRouted, ruleMatches, routerRules, modelLabel } from '../lib/router.js';
 import { preferredChild } from '../lib/tree.js';
+import { samplingParams, parseStop } from '../llm/sampling.js';
+import { PROVIDER_TYPES } from '../providers.js';
+import { slideWithCounter, trimMode } from '../lib/ctxwindow.js';
 
 test('kwargs: legacy effort fields migrate', () => {
   const m = { effort_enabled: 1, effort_levels: ['false', 'true'], effort_default: 'false', effort_kwarg: 'enable_thinking' };
@@ -446,4 +449,112 @@ test('modelLabel falls back through the name fields a row may carry', () => {
 test('egress: only the reserved slices of 192.0/16 count as private', () => {
   for (const ip of ['192.0.0.1', '192.0.0.255', '192.0.2.1', '192.0.2.254']) assert.equal(isPrivateAddress(ip), true, ip);
   for (const ip of ['192.0.1.1', '192.0.3.1', '192.0.77.9', '192.0.255.255']) assert.equal(isPrivateAddress(ip), false, ip);
+});
+
+test('stop sequences: split, trimmed, deduped and capped per provider', () => {
+  assert.deepEqual(parseStop('</s>\n  <|im_end|>  \n\n</s>\nEND', 8), ['</s>', '<|im_end|>', 'END']);
+  assert.deepEqual(parseStop('a\nb\nc\nd\ne\nf', 4), ['a', 'b', 'c', 'd']);
+  assert.deepEqual(parseStop('', 8), []);
+  assert.deepEqual(parseStop(null, 8), []);
+  assert.deepEqual(parseStop(['x', ' y ', 'x'], 8), ['x', 'y']);
+});
+
+test('samplingParams: stop is sent as a list, capped by the provider', () => {
+  const six = 'a\nb\nc\nd\ne\nf';
+  assert.deepEqual(samplingParams({ stop: six }, PROVIDER_TYPES.llamacpp).stop, ['a', 'b', 'c', 'd', 'e', 'f']);
+  assert.deepEqual(samplingParams({ stop: six }, PROVIDER_TYPES.openai).stop, ['a', 'b', 'c', 'd']);
+  assert.equal('stop' in samplingParams({ stop: '' }, PROVIDER_TYPES.llamacpp), false);
+  assert.equal('stop' in samplingParams({ stop: '   \n  ' }, PROVIDER_TYPES.llamacpp), false);
+  assert.equal('stop' in samplingParams({ stop: 'x' }, PROVIDER_TYPES.moonshot), true);
+});
+
+test('samplingParams: llama.cpp samplers pass through, unsupported ones are dropped', () => {
+  const m = { temperature: 0.7, dry_multiplier: 0.8, dry_allowed_length: 2, xtc_probability: 0.5, mirostat: 2, repetition_penalty: 1.1 };
+  const llama = samplingParams(m, PROVIDER_TYPES.llamacpp);
+  assert.equal(llama.dry_multiplier, 0.8);
+  assert.equal(llama.dry_allowed_length, 2);
+  assert.equal(llama.xtc_probability, 0.5);
+  assert.equal(llama.mirostat, 2);
+  assert.equal(llama.repeat_penalty, 1.1);
+  assert.equal('repetition_penalty' in llama, false);
+  const oai = samplingParams(m, PROVIDER_TYPES.openai);
+  assert.equal(oai.temperature, 0.7);
+  for (const k of ['dry_multiplier', 'dry_allowed_length', 'xtc_probability', 'mirostat', 'repetition_penalty', 'repeat_penalty']) {
+    assert.equal(k in oai, false, k);
+  }
+});
+
+test('trimMode only opts in on the exact value', () => {
+  assert.equal(trimMode({ ctx_trim_mode: 'cache' }), 'cache');
+  assert.equal(trimMode({ ctx_trim_mode: 'retain' }), 'retain');
+  assert.equal(trimMode({}), 'retain');
+  assert.equal(trimMode(null), 'retain');
+});
+
+const stubCount = (list) => list.reduce((n, m) => n + Math.ceil(String(m.content || '').length / 4) + 4, 0);
+const convo = (turns) => {
+  const out = [{ role: 'system', content: 'S'.repeat(200) }];
+  for (let i = 0; i < turns; i++) {
+    out.push({ role: 'user', content: `u${i} ` + 'x'.repeat(400) });
+    out.push({ role: 'assistant', content: `a${i} ` + 'y'.repeat(400) });
+  }
+  return out;
+};
+
+test('slideWithCounter: cache mode drops past what is needed, retain mode does not', async () => {
+  const msgs = convo(40);
+  const budget = 4000;
+  const retain = await slideWithCounter(stubCount, msgs, budget, { mode: 'retain' });
+  const cache = await slideWithCounter(stubCount, msgs, budget, { mode: 'cache' });
+  assert.ok(retain.tokens <= budget);
+  assert.ok(cache.tokens <= budget);
+  assert.ok(cache.tokens <= retain.tokens, `cache ${cache.tokens} should not exceed retain ${retain.tokens}`);
+  assert.ok(cache.dropped > retain.dropped, `cache ${cache.dropped} should exceed retain ${retain.dropped}`);
+});
+
+const firstKept = (r) => {
+  const m = r.msgs.find(x => x.role !== 'system');
+  const hit = String(m && m.content || '').match(/\b([ua]\d+)\b/);
+  return hit ? hit[1] : 'none';
+};
+
+test('slideWithCounter: cache mode holds the prefix still while retain mode moves it every turn', async () => {
+  const budget = 4000;
+  const retainHeads = new Set();
+  const cacheHeads = new Set();
+  for (let turns = 40; turns < 46; turns++) {
+    const msgs = convo(turns);
+    retainHeads.add(firstKept(await slideWithCounter(stubCount, msgs, budget, { mode: 'retain' })));
+    cacheHeads.add(firstKept(await slideWithCounter(stubCount, msgs, budget, { mode: 'cache' })));
+  }
+  assert.equal(retainHeads.size, 6, 'retain mode should move the boundary on every single turn');
+  assert.ok(cacheHeads.size <= 2, `cache mode moved the boundary ${cacheHeads.size} times over six turns`);
+});
+
+test('slideWithCounter: the cache boundary does move once the slack is used up', async () => {
+  const budget = 4000;
+  const heads = new Set();
+  for (let turns = 40; turns < 70; turns++) {
+    heads.add(firstKept(await slideWithCounter(stubCount, convo(turns), budget, { mode: 'cache' })));
+  }
+  assert.ok(heads.size > 1, 'cache mode must still slide, just less often');
+});
+
+test('slideWithCounter: an unreachable cache target still yields a prompt that fits', async () => {
+  const msgs = convo(3);
+  const budget = 420;
+  const r = await slideWithCounter(stubCount, msgs, budget, { mode: 'cache' });
+  assert.ok(r.tokens > 0);
+  assert.ok(r.tokens <= budget, `${r.tokens} > ${budget}`);
+});
+
+test('slideWithCounter: a prompt already inside the budget is left alone in both modes', async () => {
+  const msgs = convo(2);
+  const total = stubCount(msgs);
+  for (const mode of ['retain', 'cache']) {
+    const r = await slideWithCounter(stubCount, msgs, total + 500, { mode });
+    assert.equal(r.dropped, 0, mode);
+    assert.equal(r.trimmed, false, mode);
+    assert.equal(r.msgs, msgs, mode);
+  }
 });

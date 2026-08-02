@@ -112,6 +112,37 @@ export async function llamaInfo(model) {
 
 export async function llamaProps(model) { return llamaInfo(model); }
 
+export async function llamaEngine(provider) {
+  if (!provider || provider.type !== 'llamacpp') return null;
+  const { base, key } = providerSpec(provider);
+  const ep = { root: rootOf(base), headers: headersFor(key), name: '' };
+
+  const list = await jsonFetch(ep.root + '/v1/models', { headers: ep.headers }, 5000);
+  const rows = Array.isArray(list?.data) ? list.data : (Array.isArray(list) ? list : []);
+  if (!rows.length && !list) return { ok: false, models: [], slots: 0, slotsBusy: null, ctx: 0, vision: false, slotsHidden: false };
+
+  const props = await jsonFetch(ep.root + '/props', { headers: ep.headers }, 5000);
+  const slotList = await jsonFetch(ep.root + '/slots', { headers: ep.headers }, 5000);
+  const slotRows = Array.isArray(slotList) ? slotList : (Array.isArray(slotList?.slots) ? slotList.slots : []);
+
+  const models = rows.map(r => ({
+    id: String(r?.id || r?.name || ''),
+    ctx: asInt(r?.meta?.n_ctx) || asInt(r?.n_ctx) || 0,
+    trained: asInt(r?.meta?.n_ctx_train) || 0,
+    vision: !!(r?.meta?.vision || r?.meta?.modalities?.vision)
+  })).filter(m => m.id);
+
+  return {
+    ok: true,
+    models,
+    ctx: ctxFromProps(props) || (slotRows.length ? asInt(slotRows[0]?.n_ctx) : 0) || (models.length === 1 ? models[0].ctx : 0),
+    slots: asInt(props?.total_slots) || slotRows.length,
+    slotsBusy: slotRows.length ? slotRows.filter(s => s && s.is_processing).length : null,
+    slotsHidden: !slotRows.length,
+    vision: !!(props?.modalities && props.modalities.vision) || models.some(m => m.vision)
+  };
+}
+
 export async function llamaContext(model) {
   const p = await llamaInfo(model);
   return p ? p.ctx : 0;

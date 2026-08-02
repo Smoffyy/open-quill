@@ -69,6 +69,8 @@ export function setLang(code) {
   else loadLang(code).then(commit);
 }
 
+export const tk = (s) => s;
+
 export function t(key, vars) {
   const dict = byCode[lang];
   let s = dict && typeof dict[key] === 'string' ? dict[key] : key;

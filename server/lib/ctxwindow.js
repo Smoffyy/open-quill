@@ -9,6 +9,7 @@ const MAX_PROBES = 8;
 const MIN_TAIL_CHARS = 200;
 const MIN_RECLAIM_CHARS = 400;
 const RECLAIM_PROBES = 6;
+const CACHE_STEP = 0.25;
 
 const learnedCtx = new Map();
 const LEARNED_TTL = 30 * 60 * 1000;
@@ -297,14 +298,23 @@ async function trimBiggest(msgs, budget, count) {
   return { msgs: work, trimmed, tokens, images };
 }
 
-export async function slideToFit(model, msgs, budget, tools) {
+export function trimMode(model) {
+  return model && model.ctx_trim_mode === 'cache' ? 'cache' : 'retain';
+}
+
+export async function slideWithCounter(count, msgs, budget, opts = {}) {
   const none = { msgs, dropped: 0, trimmed: false, tokens: 0, exact: false };
   if (!budget || !Array.isArray(msgs) || !msgs.length) return none;
-  const count = (list) => countExact(model, list, tools);
+  const cacheMode = opts.mode === 'cache';
 
   const total = await count(msgs);
   if (!total) return none;
   if (total <= budget) return { msgs, dropped: 0, trimmed: false, tokens: total, exact: true };
+
+  const over = total - budget;
+  const step = Math.max(256, Math.floor(budget * CACHE_STEP));
+  const needRemoved = cacheMode ? Math.ceil(over / step) * step : over;
+  const target = total - needRemoved;
 
   const keep = protectedFlags(msgs);
   const maxDrop = droppableCount(keep);
@@ -317,13 +327,17 @@ export async function slideToFit(model, msgs, budget, tools) {
   let bestMsgs = null;
   let bestTokens = 0;
   let bestDrop = 0;
-  let probe = Math.min(maxDrop, Math.max(1, guessDrop(msgs, keep, total - budget, perChar)));
+  let fitMsgs = null;
+  let fitTokens = 0;
+  let fitDrop = 0;
+  let probe = Math.min(maxDrop, Math.max(1, guessDrop(msgs, keep, needRemoved, perChar)));
 
   for (let i = 0; i < MAX_PROBES && lo <= hi; i++) {
     const cand = applyDrop(msgs, keep, probe);
     const t = await count(cand);
     if (!t) return none;
-    if (t <= budget) {
+    if (t <= budget && (!fitMsgs || probe < fitDrop)) { fitMsgs = cand; fitTokens = t; fitDrop = probe; }
+    if (t <= target) {
       bestMsgs = cand; bestTokens = t; bestDrop = probe;
       hi = probe - 1;
     } else {
@@ -335,13 +349,16 @@ export async function slideToFit(model, msgs, budget, tools) {
   }
 
   if (bestMsgs) {
-    const headroom = budget - bestTokens;
-    if (bestDrop > 0 && headroom > Math.max(200, Math.floor(budget * 0.04))) {
-      const back = await reclaim(msgs, keep, bestDrop, budget, count, bestMsgs, bestTokens, perChar);
-      if (back.reclaimed) return { msgs: back.msgs, dropped: bestDrop - 1, trimmed: true, tokens: back.tokens, exact: true };
+    if (!cacheMode) {
+      const headroom = budget - bestTokens;
+      if (bestDrop > 0 && headroom > Math.max(200, Math.floor(budget * 0.04))) {
+        const back = await reclaim(msgs, keep, bestDrop, budget, count, bestMsgs, bestTokens, perChar);
+        if (back.reclaimed) return { msgs: back.msgs, dropped: bestDrop - 1, trimmed: true, tokens: back.tokens, exact: true };
+      }
     }
     return { msgs: bestMsgs, dropped: bestDrop, trimmed: false, tokens: bestTokens, exact: true };
   }
+  if (fitMsgs) return { msgs: fitMsgs, dropped: fitDrop, trimmed: false, tokens: fitTokens, exact: true };
 
   const stripped = applyDrop(msgs, keep, maxDrop);
   const after = await count(stripped);
@@ -349,6 +366,10 @@ export async function slideToFit(model, msgs, budget, tools) {
 
   const t = await trimBiggest(stripped, budget, count);
   return { msgs: t.msgs, dropped: maxDrop, trimmed: !!t.trimmed, images: t.images || 0, tokens: t.tokens, exact: !!t.tokens };
+}
+
+export async function slideToFit(model, msgs, budget, tools) {
+  return slideWithCounter((list) => countExact(model, list, tools), msgs, budget, { mode: trimMode(model) });
 }
 
 export function shrinkByRatio(msgs, factor) {

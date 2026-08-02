@@ -16,9 +16,9 @@ export default function McpSection() {
   async function save(sv) {
     try {
       if (sv.id) { const r = await api.patch('/api/admin/mcp/' + sv.id, sv); setServers(list => list.map(x => x.id === sv.id ? r.server : x)); }
-      else { const r = await api.post('/api/admin/mcp', sv); setServers(list => [...list, r.server]); if (r.warning) alert('Server saved, but connecting failed: ' + r.warning); }
+      else { const r = await api.post('/api/admin/mcp', sv); setServers(list => [...list, r.server]); if (r.warning) alert(t('Server saved, but connecting failed: ') + r.warning); }
       setEdit(null);
-    } catch (e) { alert(e.message || 'Could not save server.'); }
+    } catch (e) { alert(e.message || t('Could not save server.')); }
   }
   async function remove(id) { try { await api.del('/api/admin/mcp/' + id); setServers(list => list.filter(x => x.id !== id)); } catch {} }
   async function toggle(sv) { try { const r = await api.patch('/api/admin/mcp/' + sv.id, { enabled: !sv.enabled }); setServers(list => list.map(x => x.id === sv.id ? r.server : x)); } catch {} }
@@ -31,8 +31,8 @@ export default function McpSection() {
   return (
     <>
       <div className="admin-section-head">
-        <div><div className="muted-note">Connect MCP (Model Context Protocol) servers running on this machine or your network. Their tools are exposed to every model with tool calling, prefixed <code>mcp_</code>. Everything stays local, no cloud relay is involved.</div></div>
-        <button className="btn primary" onClick={() => setEdit({ name: '', transport: 'stdio', command: '', args: '', url: '', headers: '', enabled: true })}><Plus style={{ width: 15 }} /> Add server</button>
+        <div><div className="muted-note">{t("Connect MCP (Model Context Protocol) servers running on this machine or your network. Their tools are exposed to every model with tool calling, prefixed mcp_. Everything stays local, no cloud relay is involved.")}</div></div>
+        <button className="btn primary" onClick={() => setEdit({ name: '', transport: 'stdio', command: '', args: '', url: '', headers: '', enabled: true })}><Plus style={{ width: 15 }} /> {t("Add server")}</button>
       </div>
       {edit && (
         <div className="fn-editor">
@@ -61,16 +61,16 @@ export default function McpSection() {
               </div>
               <div className="field"><label>{t("Headers")}</label>
                 <textarea rows={2} value={edit.headers} onChange={(e) => setEdit(x => ({ ...x, headers: e.target.value }))} placeholder={'Authorization: Bearer …'} />
-                <div className="muted-note">Optional, one <code>Name: value</code> per line.</div>
+                <div className="muted-note">{t("Optional, one Name: value pair per line.")}</div>
               </div>
             </>
           )}
           <div className="med-toggle-card">
-            <label className="inline-toggle"><span>Enabled</span><div className={'switch' + (edit.enabled ? ' on' : '')} onClick={() => setEdit(x => ({ ...x, enabled: !x.enabled }))} /></label>
+            <label className="inline-toggle"><span>{t("Enabled")}</span><div className={'switch' + (edit.enabled ? ' on' : '')} onClick={() => setEdit(x => ({ ...x, enabled: !x.enabled }))} /></label>
           </div>
           <div className="editor-actions">
-            <button className="btn" onClick={() => setEdit(null)}>Cancel</button>
-            <button className="btn primary" onClick={() => save(edit)}>Save server</button>
+            <button className="btn" onClick={() => setEdit(null)}>{t("Cancel")}</button>
+            <button className="btn primary" onClick={() => save(edit)}>{t("Save server")}</button>
           </div>
         </div>
       )}

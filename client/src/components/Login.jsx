@@ -116,7 +116,7 @@ export default function Login({ onLogin, cfg }) {
           )}
         </div>
         <div className="sub">{t('{app} is a fully open-source web interface for large language model inference.', { app: appName })}</div>
-        <div className="byline">BY SMOFFYY</div>
+        <div className="byline">{t("BY SMOFFYY")}</div>
       </div>
     </div>
   );

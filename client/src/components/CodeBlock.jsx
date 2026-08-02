@@ -2,6 +2,7 @@ import React, { useMemo, useState, useSyncExternalStore } from 'react';
 import { copyText } from '../clipboard.js';
 import { highlight, hljsVersion, subscribeHljs } from '../lib/hljs.js';
 import { Copy, Check } from './icons.jsx';
+import { t } from '../i18n.jsx';
 
 export default function CodeBlock({ lang, code }) {
   const [copied, setCopied] = useState(false);
@@ -18,7 +19,7 @@ export default function CodeBlock({ lang, code }) {
       <div className={'code-bar' + (copied ? ' flash' : '')}>
         <span>{lang || 'text'}</span>
         <button className="code-copy" onPointerDown={(e) => { e.preventDefault(); copy(); }}>
-          {copied ? <Check key="c" className="copy-pop" /> : <Copy key="o" />} {copied ? 'Copied' : 'Copy'}
+          {copied ? <Check key="c" className="copy-pop" /> : <Copy key="o" />} {copied ? t('Copied') : t('Copy')}
         </button>
       </div>
       <pre><code className={'hljs' + (lang ? ` language-${lang}` : '')} dangerouslySetInnerHTML={{ __html: html }} /></pre>

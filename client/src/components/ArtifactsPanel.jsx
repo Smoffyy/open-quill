@@ -160,11 +160,11 @@ function ImageView({ src, alt }) {
         <img className="art-img" src={src} alt={alt} draggable={false} style={{ transform: `translate(${off.x}px, ${off.y}px) scale(${z})` }} />
       </div>
       <div className="art-imgbar">
-        <button className="art-btn icon" onClick={() => setZ(v => Math.max(0.2, v * 0.8))} title="Zoom out">−</button>
+        <button className="art-btn icon" onClick={() => setZ(v => Math.max(0.2, v * 0.8))} title={t("Zoom out")}>−</button>
         <span className="art-imgzoom">{Math.round(z * 100)}%</span>
-        <button className="art-btn icon" onClick={() => setZ(v => Math.min(8, v * 1.25))} title="Zoom in">+</button>
-        <button className="art-btn icon" onClick={reset} title="Reset">⤢</button>
-        <a className="art-btn copy" href={src} style={{ borderRadius: 8 }}><Download style={{ width: 14 }} /> Download</a>
+        <button className="art-btn icon" onClick={() => setZ(v => Math.min(8, v * 1.25))} title={t("Zoom in")}>+</button>
+        <button className="art-btn icon" onClick={reset} title={t("Reset")}>⤢</button>
+        <a className="art-btn copy" href={src} style={{ borderRadius: 8 }}><Download style={{ width: 14 }} /> {t("Download")}</a>
       </div>
     </div>
   );
@@ -410,14 +410,14 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
     <div className="art-viewer" onMouseDown={onFocusPane}>
       <div className="art-vhead">
         <div className="art-vtitle">
-          {canBack && <button className="art-back" onClick={onBack} title="Back to files"><Chevron style={{ width: 16, transform: 'rotate(180deg)' }} /></button>}
+          {canBack && <button className="art-back" onClick={onBack} title={t("Back to files")}><Chevron style={{ width: 16, transform: 'rotate(180deg)' }} /></button>}
           <FileChip ext={ext} />
           <div className="art-crumbs">
             {crumbs.map((c, i) => (
               <span key={i} className="art-crumb-wrap">
                 {i > 0 && <span className="art-crumb-sep">/</span>}
                 {i < crumbs.length - 1
-                  ? <button className="art-crumb" onClick={onBack} title="Back to files">{c}</button>
+                  ? <button className="art-crumb" onClick={onBack} title={t("Back to files")}>{c}</button>
                   : <span className="art-crumb name">{c}</span>}
               </span>
             ))}
@@ -440,13 +440,13 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
           )}
           {!isLive && data?.text != null && (
             <div className="art-copy-wrap">
-              <button className="art-btn copy" onClick={copy}>{copied ? <Check style={{ width: 14 }} /> : <Copy style={{ width: 14 }} />} {copied ? 'Copied' : 'Copy'}</button>
+              <button className="art-btn copy" onClick={copy}>{copied ? <Check style={{ width: 14 }} /> : <Copy style={{ width: 14 }} />} {copied ? t('Copied') : t('Copy')}</button>
               <button className="art-btn caret" onClick={() => setMenu(m => !m)}><ChevDown style={{ width: 13 }} /></button>
               {menu && (
                 <div className="art-menu" onMouseLeave={() => setMenu(false)}>
                   <a className="art-menu-item" href={`/api/chats/${chatId}/download?path=${encodeURIComponent(path)}${stale ? '&v=' + viewing : ''}`}>Download as {ext.toUpperCase()}</a>
                   {versions.length > 1 && <>
-                    <div className="art-menu-label">Version history</div>
+                    <div className="art-menu-label">{t("Version history")}</div>
                     {[...versions].reverse().map(v => (
                       <button key={v} className={'art-menu-item ver' + (v === viewing ? ' active' : '')} onClick={() => { setMenu(false); load(v); }}>
                         Version {v}{v === current ? ' · latest' : ''}{v === viewing && <Check style={{ width: 13 }} />}
@@ -458,7 +458,7 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
             </div>
           )}
           {headerExtra}
-          {!isLive && <button className="art-btn icon" onClick={() => load(viewing)} title="Refresh"><Refresh style={{ width: 15 }} /></button>}
+          {!isLive && <button className="art-btn icon" onClick={() => load(viewing)} title={t("Refresh")}><Refresh style={{ width: 15 }} /></button>}
         </div>
       </div>
       {search && !isLive && (
@@ -466,9 +466,9 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
           <Search style={{ width: 14, opacity: .6, flexShrink: 0 }} />
           <input ref={searchInputRef} value={query} onChange={e => setQuery(e.target.value)} onKeyDown={onSearchKey} placeholder={t('Find in file')} spellCheck={false} />
           <span className="art-search-count">{matches.length ? `${matchIdx + 1} / ${matches.length}` : (query ? '0' : '')}</span>
-          <button className="art-btn icon" disabled={!matches.length} onClick={() => nextMatch(-1)} title="Previous">↑</button>
-          <button className="art-btn icon" disabled={!matches.length} onClick={() => nextMatch(1)} title="Next">↓</button>
-          <button className="art-btn icon" onClick={() => { setSearch(false); setQuery(''); }} title="Close"><X style={{ width: 13 }} /></button>
+          <button className="art-btn icon" disabled={!matches.length} onClick={() => nextMatch(-1)} title={t("Previous")}>↑</button>
+          <button className="art-btn icon" disabled={!matches.length} onClick={() => nextMatch(1)} title={t("Next")}>↓</button>
+          <button className="art-btn icon" onClick={() => { setSearch(false); setQuery(''); }} title={t("Close")}><X style={{ width: 13 }} /></button>
         </div>
       )}
       {!isLive && writingElsewhere && (
@@ -502,16 +502,16 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
             {isLive && <div className="art-line caret"><span className="art-ln" /><span className="art-lc"><span className="live-caret" /></span></div>}
           </div>
         )}
-        {!fromStream && !committed && <div className="art-empty"><div className="art-empty-spin" />This file is still being written…</div>}
+        {!fromStream && !committed && <div className="art-empty"><div className="art-empty-spin" />{t("This file is still being written…")}</div>}
         {!fromStream && committed && !data && (
           <div className="art-skel">
             {Array.from({ length: 16 }).map((_, i) => <span key={i} className="skeleton" style={{ width: (32 + ((i * 53) % 58)) + '%' }} />)}
           </div>
         )}
-        {!fromStream && committed && data?.error && <div className="art-empty">Couldn't load this file.</div>}
+        {!fromStream && committed && data?.error && <div className="art-empty">{t("Couldn't load this file.")}</div>}
         {!fromStream && data && data.text != null && diff && (
-          prev == null ? <div className="art-empty">Loading diff…</div>
-            : diffRows == null ? <div className="art-empty">File too large to diff.</div>
+          prev == null ? <div className="art-empty">{t("Loading diff…")}</div>
+            : diffRows == null ? <div className="art-empty">{t("File too large to diff.")}</div>
               : renderDiffRows(diffRows, false)
         )}
         {!isLive && data && data.binary && (
@@ -521,12 +521,12 @@ function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writ
               <div className="art-binary">
                 <div className="art-binary-icon"><FileChip ext={ext} size="lg" /></div>
                 <div className="art-bname">{baseName(path)}</div>
-                <a className="btn primary" href={data.downloadUrl}><Download style={{ width: 15, verticalAlign: '-2px' }} /> Download</a>
+                <a className="btn primary" href={data.downloadUrl}><Download style={{ width: 15, verticalAlign: '-2px' }} /> {t("Download")}</a>
               </div>
             )
         )}
       </div>
-      {diff && diffRows && <button className="art-jump change" onClick={jumpToChange} title="Jump to first change"><Down style={{ width: 14 }} /> Change</button>}
+      {diff && diffRows && <button className="art-jump change" onClick={jumpToChange} title={t("Jump to first change")}><Down style={{ width: 14 }} /> {t("Change")}</button>}
       {liveActive && !following && <button className="art-jump" onClick={jumpLatest}><Down style={{ width: 14 }} /> {t('Jump to latest')}</button>}
     </div>
   );
@@ -550,9 +550,9 @@ function FileRow({ f, chatId, depth, onOpen, sel, live }) {
       <FileChip ext={f.ext} />
       <div className="art-rmeta">
         <div className="art-rname">{baseName(f.path)}</div>
-        <div className="art-rext">{writing ? <span className="row-writing">writing…</span> : <>{(f.ext || 'file').toUpperCase()}{f.v ? ' · v' + f.v : ''}{f.size != null ? ' · ' + fmtSize(f.size) : ''}</>}</div>
+        <div className="art-rext">{writing ? <span className="row-writing">{t("writing…")}</span> : <>{(f.ext || 'file').toUpperCase()}{f.v ? ' · v' + f.v : ''}{f.size != null ? ' · ' + fmtSize(f.size) : ''}</>}</div>
       </div>
-      {!writing && <a className="art-btn icon dl" href={`/api/chats/${chatId}/download?path=${encodeURIComponent(f.path)}`} onClick={(e) => e.stopPropagation()} title="Download"><Download style={{ width: 15 }} /></a>}
+      {!writing && <a className="art-btn icon dl" href={`/api/chats/${chatId}/download?path=${encodeURIComponent(f.path)}`} onClick={(e) => e.stopPropagation()} title={t("Download")}><Download style={{ width: 15 }} /></a>}
     </div>
   );
 }
@@ -673,25 +673,25 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
 
   const filtered = filter.trim() ? treeFiles.filter(f => f.path.toLowerCase().includes(filter.trim().toLowerCase())) : treeFiles;
 
-  const splitBtn = <button className="art-btn icon" onClick={() => { setSplit(active); setFocusedPane('right'); }} title="Split view"><Panel style={{ width: 15 }} /></button>;
-  const closeSplitBtn = <button className="art-btn icon" onClick={() => { setSplit(null); setFocusedPane('left'); }} title="Close split"><X style={{ width: 14 }} /></button>;
+  const splitBtn = <button className="art-btn icon" onClick={() => { setSplit(active); setFocusedPane('right'); }} title={t("Split view")}><Panel style={{ width: 15 }} /></button>;
+  const closeSplitBtn = <button className="art-btn icon" onClick={() => { setSplit(null); setFocusedPane('left'); }} title={t("Close split")}><X style={{ width: 14 }} /></button>;
 
   return (
     <div className={'artifacts' + (resizing ? ' resizing' : '')} style={{ width }}>
-      <div className="art-resizer" onMouseDown={startResize} onTouchStart={startResize} ref={dragRef} title="Drag to resize"><span /></div>
+      <div className="art-resizer" onMouseDown={startResize} onTouchStart={startResize} ref={dragRef} title={t("Drag to resize")}><span /></div>
       {tabs.length > 0 && (
         <div className="art-tabs">
-          <button className={'art-tabs-list' + (active == null ? ' on' : '')} onClick={goOverview} title="All files"><Folder style={{ width: 15 }} /></button>
+          <button className={'art-tabs-list' + (active == null ? ' on' : '')} onClick={goOverview} title={t("All files")}><Folder style={{ width: 15 }} /></button>
           <div className="art-tabs-scroll">
             {tabs.map(p => (
               <div key={p} className={'art-tab' + (p === active ? ' active' : '') + (p === split ? ' split' : '')} onClick={() => { if (focusedPane === 'right' && split != null) setSplit(p); else setActive(p); }} title={p}>
                 <FileChip ext={extOf(p)} />
                 <span className="art-tab-name">{baseName(p)}</span>
-                <button className="art-tab-close" onClick={(e) => closeTab(p, e)} title="Close"><X style={{ width: 12 }} /></button>
+                <button className="art-tab-close" onClick={(e) => closeTab(p, e)} title={t("Close")}><X style={{ width: 12 }} /></button>
               </div>
             ))}
           </div>
-          <button className="art-btn icon" onClick={onClose} title="Close panel"><X style={{ width: 15 }} /></button>
+          <button className="art-btn icon" onClick={onClose} title={t("Close panel")}><X style={{ width: 15 }} /></button>
         </div>
       )}
       {active != null ? (
@@ -713,21 +713,21 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
         <>
           <div className="art-head">
             <div className="art-title">Artifacts{treeFiles.length > 0 && <span className="art-count">{treeFiles.length}</span>}</div>
-            {tabs.length === 0 && <button className="art-btn icon" onClick={onClose} title="Close panel"><X style={{ width: 15 }} /></button>}
+            {tabs.length === 0 && <button className="art-btn icon" onClick={onClose} title={t("Close panel")}><X style={{ width: 15 }} /></button>}
           </div>
           {treeFiles.length > 3 && (
             <div className="art-filter">
               <Search style={{ width: 14, opacity: .55, flexShrink: 0 }} />
               <input value={filter} onChange={e => setFilter(e.target.value)} placeholder={t('Filter files')} spellCheck={false} />
-              {filter && <button className="art-btn icon" onClick={() => setFilter('')} title="Clear"><X style={{ width: 13 }} /></button>}
+              {filter && <button className="art-btn icon" onClick={() => setFilter('')} title={t("Clear")}><X style={{ width: 13 }} /></button>}
             </div>
           )}
           <div className="art-list">
             {treeFiles.length === 0 && (
               <div className="art-empty big">
                 <div className="art-empty-icon"><FileText style={{ width: 26 }} /></div>
-                <div className="art-empty-title">No files yet</div>
-                <div>When the assistant creates or edits files, they'll show up here, ready to view, diff, and download.</div>
+                <div className="art-empty-title">{t("No files yet")}</div>
+                <div>{t("When the assistant creates or edits files, they'll show up here, ready to view, diff, and download.")}</div>
               </div>
             )}
             {treeFiles.length > 0 && filtered.length === 0 && <div className="art-empty">No files match “{filter}”.</div>}
@@ -736,7 +736,7 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
           {files.length > 0 && (
             <div className="art-foot">
               <span className="art-foot-count">{files.length} file{files.length === 1 ? '' : 's'}</span>
-              <a className="art-dl-all" href={`/api/chats/${chatId}/zip`}><Download style={{ width: 15 }} /> Download all</a>
+              <a className="art-dl-all" href={`/api/chats/${chatId}/zip`}><Download style={{ width: 15 }} /> {t("Download all")}</a>
             </div>
           )}
         </>

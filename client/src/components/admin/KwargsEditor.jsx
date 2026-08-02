@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Copy, Trash, Chevron, Up, Down } from '../icons.jsx';
 import { SegPick } from './widgets.jsx';
-import { t } from '../../i18n.jsx';
+import { t, tk } from '../../i18n.jsx';
 import {
   KWARG_TARGETS, KWARG_CONTROLS, KWARG_TYPES, KWARG_PRESETS,
   blankKwarg, newKwargId, controlOf, defaultValueOf, isBoolPair,
@@ -9,9 +9,9 @@ import {
 } from '../../kwargs.js';
 
 const CONTROL_NOTE = {
-  toggle: 'Users get an on/off switch.',
-  slider: 'Users get a segmented slider through every value.',
-  select: 'Users get a dropdown of every value.'
+  toggle: tk('Users get an on/off switch.'),
+  slider: tk('Users get a segmented slider through every value.'),
+  select: tk('Users get a dropdown of every value.')
 };
 
 function legacyToKwarg(m) {
@@ -23,9 +23,9 @@ function legacyToKwarg(m) {
     ...blankKwarg(),
     id: 'effort',
     name: (m.effort_kwarg || 'reasoning_effort').trim() || 'reasoning_effort',
-    label: bool ? 'Extended thinking' : 'Reasoning effort',
-    description: bool ? 'Let the model think before answering' : '',
-    chip: bool ? 'Thinking' : '',
+    label: bool ? t('Extended thinking') : t('Reasoning effort'),
+    description: bool ? t('Let the model think before answering') : '',
+    chip: bool ? t('Thinking') : '',
     values: levels,
     default: levels.includes(m.effort_default) ? m.effort_default : '',
     adminOnly: !!m.effort_admin_only
@@ -269,7 +269,7 @@ export default function KwargsEditor({ m, onChange }) {
                       <div><label>{t('Who can change it')}</label>
                         <div className="muted-note">{t('Admins only greys the control out for users and always sends the default.')}</div>
                       </div>
-                      <SegPick value={def.adminOnly ? 'admins' : 'everyone'} options={[['admins', 'Admins only'], ['everyone', 'Everyone']]}
+                      <SegPick value={def.adminOnly ? 'admins' : 'everyone'} options={[['admins', tk('Admins only')], ['everyone', tk('Everyone')]]}
                         onChange={(v) => patch(def.id, { adminOnly: v === 'admins' })} />
                     </div>
                   )}

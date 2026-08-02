@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevDown, Chevron, ImageIcon, Brain, Info, TextIcon } from './icons.jsx';
-import { t } from '../i18n.jsx';
+import { t, tk } from '../i18n.jsx';
 import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues } from '../kwargs.js';
 
 const CAP_ICONS = [
-  { key: 'capText', label: 'Text-Only', Icon: TextIcon },
-  { key: 'capVision', label: 'Vision', Icon: ImageIcon },
-  { key: 'capReasoning', label: 'Reasoning', Icon: Brain }
+  { key: 'capText', label: tk('Text-Only'), Icon: TextIcon },
+  { key: 'capVision', label: tk('Vision'), Icon: ImageIcon },
+  { key: 'capReasoning', label: tk('Reasoning'), Icon: Brain }
 ];
 
 const EDGE = 10;
@@ -61,7 +61,7 @@ function CapInfo({ m }) {
       <Info style={{ width: 14, height: 14 }} />
       <span className="mo-capinfo-pop">
         {active.map(({ key, label, Icon }) => (
-          <span key={key} className="mo-capinfo-item"><Icon style={{ width: 12, height: 12 }} /> {label}</span>
+          <span key={key} className="mo-capinfo-item"><Icon style={{ width: 12, height: 12 }} /> {t(label)}</span>
         ))}
       </span>
     </span>
@@ -310,7 +310,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
       <div className="mo-main">
         <div className="mo-name">
           {m.displayName}
-          {m.unavailable && <span className="mo-unavail"><span className="mo-unavail-dot">ⓘ</span> Currently unavailable</span>}
+          {m.unavailable && <span className="mo-unavail"><span className="mo-unavail-dot">ⓘ</span> {t("Currently unavailable")}</span>}
         </div>
         {m.description && <div className="mo-desc">{m.description}</div>}
         {!m.capCompact && <CapRow m={m} />}
@@ -336,7 +336,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
         {current?.displayName || 'Model'}
         {chips.length
           ? chips.map((c, i) => <span key={c + i} className="ext ext-effort">{t(c)}</span>)
-          : (extended && current?.hasReasoning && <span className="ext">Extended</span>)}
+          : (extended && current?.hasReasoning && <span className="ext">{t("Extended")}</span>)}
         <ChevDown style={{ width: 16, height: 16 }} />
       </button>
       {open && <div className="model-scrim" onClick={() => setOpen(false)} />}
@@ -357,8 +357,8 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
               <hr />
               <div className="toggle-row" onClick={onToggleExtended}>
                 <div className="tr-main">
-                  <div className="mo-name">Extended</div>
-                  <div className="mo-desc">Always uses deep reasoning</div>
+                  <div className="mo-name">{t("Extended")}</div>
+                  <div className="mo-desc">{t("Always uses deep reasoning")}</div>
                 </div>
                 <div className={'switch' + (extended ? ' on' : '')} />
               </div>
@@ -369,8 +369,8 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
               <hr />
               <div className="toggle-row" onClick={onToggleBgInChat}>
                 <div className="tr-main">
-                  <div className="mo-name">Background in chat</div>
-                  <div className="mo-desc">Keep this model's backdrop during conversations</div>
+                  <div className="mo-name">{t("Background in chat")}</div>
+                  <div className="mo-desc">{t("Keep this model's backdrop during conversations")}</div>
                 </div>
                 <div className={'switch' + (bgInChat ? ' on' : '')} />
               </div>

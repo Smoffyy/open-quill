@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../api.js';
 import Markdown from './Markdown.jsx';
 import { Plus, Chevron, Users, Trash, Send, Gear, Check, Logout } from './icons.jsx';
+import { t } from '../i18n.jsx';
 
 function timeAgo(ts) {
   const s = Math.floor((Date.now() - ts) / 1000);
@@ -36,17 +37,17 @@ function InviteSearch({ spaceId, onInvited }) {
   async function invite(u) {
     setBusy(true);
     try { await api.post('/api/spaces/' + spaceId + '/invite', { userId: u.id }); onInvited?.(); setQ(''); setResults([]); setOpen(false); }
-    catch (e) { alert(e.message || 'Could not invite that user.'); }
+    catch (e) { alert(e.message || t('Could not invite that user.')); }
     setBusy(false);
   }
   return (
     <div className="spc-invite" ref={ref}>
-      <input className="spc-invite-input" placeholder="Search by name or email to invite…" value={q}
+      <input className="spc-invite-input" placeholder={t("Search by name or email to invite…")} value={q}
         onFocus={() => setOpen(true)} onChange={(e) => { setQ(e.target.value); setOpen(true); }} />
       {open && q.trim().length >= 2 && (
         <div className="spc-invite-results">
-          {busy && <div className="spc-invite-empty">Inviting…</div>}
-          {!busy && results.length === 0 && <div className="spc-invite-empty">No matching users.</div>}
+          {busy && <div className="spc-invite-empty">{t("Inviting…")}</div>}
+          {!busy && results.length === 0 && <div className="spc-invite-empty">{t("No matching users.")}</div>}
           {!busy && results.map(u => (
             <button key={u.id} className="spc-invite-row" onClick={() => invite(u)}>
               <span className="spc-avatar small">{initials(u.displayName)}</span>
@@ -74,7 +75,7 @@ function MembersPanel({ space, user, models, onChanged, onClose }) {
     onChanged?.();
   }
   async function removeMember(uid) {
-    if (!confirm('Remove this member from the space?')) return;
+    if (!confirm(t('Remove this member from the space?'))) return;
     await api.del('/api/spaces/' + space.id + '/members/' + uid);
     onChanged?.();
   }
@@ -82,12 +83,12 @@ function MembersPanel({ space, user, models, onChanged, onClose }) {
     try { await api.patch('/api/spaces/' + space.id + '/members/' + uid, { role }); onChanged?.(); } catch {}
   }
   async function leave() {
-    if (!confirm('Leave this space?')) return;
+    if (!confirm(t('Leave this space?'))) return;
     await api.post('/api/spaces/' + space.id + '/leave', {});
     onClose?.();
   }
   async function del() {
-    if (!confirm('Delete this space for everyone? This cannot be undone.')) return;
+    if (!confirm(t('Delete this space for everyone? This cannot be undone.'))) return;
     await api.del('/api/spaces/' + space.id);
     onClose?.();
   }
@@ -97,26 +98,26 @@ function MembersPanel({ space, user, models, onChanged, onClose }) {
       {isOwner && (
         <>
           <div className="field">
-            <label>Space name</label>
+            <label>{t("Space name")}</label>
             <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />
           </div>
           <div className="field">
-            <label>Assistant model</label>
+            <label>{t("Assistant model")}</label>
             <select value={modelId} onChange={(e) => setModelId(e.target.value)}>
-              <option value="">Default model</option>
+              <option value="">{t("Default model")}</option>
               {models.map(m => <option key={m.id} value={m.id}>{m.displayName}</option>)}
             </select>
           </div>
           <div className="field">
-            <label>Custom instructions for the assistant in this space</label>
+            <label>{t("Custom instructions for the assistant in this space")}</label>
             <textarea value={sys} onChange={(e) => setSys(e.target.value)}
-              placeholder="e.g. Only jump in to answer technical questions about our project; otherwise stay quiet." />
+              placeholder={t("e.g. Only jump in to answer technical questions about our project; otherwise stay quiet.")} />
           </div>
           <div className="btn-row">
-            <button className="btn primary" onClick={saveSettings}>Save settings</button>
+            <button className="btn primary" onClick={saveSettings}>{t("Save settings")}</button>
           </div>
           <hr />
-          <div className="field"><label>Invite someone</label>
+          <div className="field"><label>{t("Invite someone")}</label>
             <InviteSearch spaceId={space.id} onInvited={onChanged} />
           </div>
         </>
@@ -130,20 +131,20 @@ function MembersPanel({ space, user, models, onChanged, onClose }) {
               <span className="spc-member-name">{m.displayName}{m.userId === user.id ? ' (you)' : ''}{m.role === 'owner' ? ' · Owner' : ''}</span>
               {isOwner && m.role !== 'owner' && m.status === 'accepted' ? (
                 <div className="seg spc-role-seg">
-                  <button className={m.role !== 'viewer' ? 'on' : ''} onClick={() => setMemberRole(m.userId, 'editor')}>Editor</button>
-                  <button className={m.role === 'viewer' ? 'on' : ''} onClick={() => setMemberRole(m.userId, 'viewer')}>Viewer</button>
+                  <button className={m.role !== 'viewer' ? 'on' : ''} onClick={() => setMemberRole(m.userId, 'editor')}>{t("Editor")}</button>
+                  <button className={m.role === 'viewer' ? 'on' : ''} onClick={() => setMemberRole(m.userId, 'viewer')}>{t("Viewer")}</button>
                 </div>
               ) : (m.role !== 'owner' && <span className={'spc-status spc-status-' + m.status}>{m.status === 'accepted' ? (m.role === 'viewer' ? 'viewer' : 'editor') : m.status}</span>)}
               {isOwner && m.role !== 'owner' && (
-                <button className="row-ctrl" title="Remove" onClick={() => removeMember(m.userId)}><Trash style={{ width: 13 }} /></button>
+                <button className="row-ctrl" title={t("Remove")} onClick={() => removeMember(m.userId)}><Trash style={{ width: 13 }} /></button>
               )}
             </div>
           ))}
         </div>
       </div>
       <div className="btn-row">
-        {!isOwner && <button className="btn danger" onClick={leave}><Logout style={{ width: 14 }} /> Leave space</button>}
-        {isOwner && <button className="btn danger" onClick={del}><Trash style={{ width: 14 }} /> Delete space</button>}
+        {!isOwner && <button className="btn danger" onClick={leave}><Logout style={{ width: 14 }} /> {t("Leave space")}</button>}
+        {isOwner && <button className="btn danger" onClick={del}><Trash style={{ width: 14 }} /> {t("Delete space")}</button>}
       </div>
     </div>
   );
@@ -226,7 +227,7 @@ function SpaceChat({ space, user, models, onChanged, onClose }) {
     try {
       const m = await api.post('/api/spaces/' + space.id + '/messages', { content: text });
       setMessages(cs => cs.some(x => x.id === m.id) ? cs : [...cs, m]);
-    } catch (e) { alert(e.message || 'Could not send message.'); }
+    } catch (e) { alert(e.message || t('Could not send message.')); }
     setSending(false);
   }
   const typingNames = Object.values(peopleTyping);
@@ -236,14 +237,14 @@ function SpaceChat({ space, user, models, onChanged, onClose }) {
       <div className="spc-chat-head">
         <div className="spc-chat-title"><Users style={{ width: 17 }} /> {space.name}</div>
         <div className="spc-chat-sub">{space.members.filter(m => m.status === 'accepted').length} member(s)</div>
-        <button className="icon-btn" onClick={() => setSettingsOpen(o => !o)} title="Space settings"><Gear style={{ width: 17 }} /></button>
+        <button className="icon-btn" onClick={() => setSettingsOpen(o => !o)} title={t("Space settings")}><Gear style={{ width: 17 }} /></button>
       </div>
       {settingsOpen ? (
         <div className="spc-chat-body"><MembersPanel space={space} user={user} models={models} onChanged={onChanged} onClose={onClose} /></div>
       ) : (
         <>
           <div className="spc-chat-body" ref={bodyRef}>
-            {messages.length === 0 && <div className="spc-empty-msgs">No messages yet, say hello!</div>}
+            {messages.length === 0 && <div className="spc-empty-msgs">{t("No messages yet, say hello!")}</div>}
             {messages.map(m => (
               <div key={m.id} className={'spc-msg' + (m.role === 'assistant' ? ' assistant' : (m.userId === user.id ? ' mine' : ''))}>
                 <span className="spc-avatar small">{m.role === 'assistant' ? '✦' : initials(m.authorName)}</span>
@@ -257,7 +258,7 @@ function SpaceChat({ space, user, models, onChanged, onClose }) {
             {typingNames.length > 0 && <div className="spc-typing">{typingNames.length === 1 ? `${typingNames[0]} is typing…` : `${typingNames.slice(0, 2).join(', ')}${typingNames.length > 2 ? ' and others' : ''} are typing…`}</div>}
           </div>
           {viewOnly ? (
-            <div className="spc-viewonly">You have view-only access to this space.</div>
+            <div className="spc-viewonly">{t("You have view-only access to this space.")}</div>
           ) : (
             <div className="spc-composer">
               {mention && (
@@ -267,7 +268,7 @@ function SpaceChat({ space, user, models, onChanged, onClose }) {
                   ))}
                 </div>
               )}
-              <textarea ref={taRef} value={input} placeholder={'Message ' + space.name + '… (use @ to mention)'}
+              <textarea ref={taRef} value={input} placeholder={t('Message {name}… (use @ to mention)', { name: space.name })}
                 onChange={(e) => onInputChange(e.target.value)}
                 onKeyDown={(e) => { if (mention && e.key === 'Enter') { e.preventDefault(); pickMention(mention.matches[0]); return; } if (e.key === 'Escape') setMention(null); if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} />
               <button className="send" disabled={!input.trim() || sending} onClick={send}><Send style={{ width: 15 }} /></button>
@@ -284,10 +285,10 @@ function InviteCard({ space, onRespond }) {
     <div className="spc-invite-card">
       <div className="spc-avatar"><Users style={{ width: 20 }} /></div>
       <h3>{space.name}</h3>
-      <p>You've been invited to join this space, where you can chat alongside other people and the assistant.</p>
+      <p>{t("You've been invited to join this space, where you can chat alongside other people and the assistant.")}</p>
       <div className="btn-row">
-        <button className="btn primary" onClick={() => onRespond(space.id, true)}><Check style={{ width: 14 }} /> Accept</button>
-        <button className="btn ghost" onClick={() => onRespond(space.id, false)}>Decline</button>
+        <button className="btn primary" onClick={() => onRespond(space.id, true)}><Check style={{ width: 14 }} /> {t("Accept")}</button>
+        <button className="btn ghost" onClick={() => onRespond(space.id, false)}>{t("Decline")}</button>
       </div>
     </div>
   );
@@ -342,38 +343,38 @@ export default function SpacesPanel({ user, onClose }) {
   return (
     <div className="admin-page">
       <nav className="admin-rail">
-        <div className="ar-brand">Spaces</div>
-        <button className="ar-tab" onClick={() => setCreating(c => !c)}><Plus /> New space</button>
+        <div className="ar-brand">{t("Spaces")}</div>
+        <button className="ar-tab" onClick={() => setCreating(c => !c)}><Plus /> {t("New space")}</button>
         {creating && (
           <div className="spc-create-row">
-            <input autoFocus value={newName} placeholder="Space name" onChange={(e) => setNewName(e.target.value)}
+            <input autoFocus value={newName} placeholder={t("Space name")} onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') createSpace(); if (e.key === 'Escape') setCreating(false); }} />
-            <button className="btn primary" onClick={createSpace}>Create</button>
+            <button className="btn primary" onClick={createSpace}>{t("Create")}</button>
           </div>
         )}
-        {invites.length > 0 && <div className="section-label">Invites <span className="folder-count">{invites.length}</span></div>}
+        {invites.length > 0 && <div className="section-label">{t("Invites")} <span className="folder-count">{invites.length}</span></div>}
         {invites.map(s => (
           <button key={s.id} className={'ar-tab' + (s.id === activeId ? ' active' : '')} onClick={() => setActiveId(s.id)}>
             <Users /> {s.name}
           </button>
         ))}
-        <div className="section-label">Your spaces</div>
-        {accepted.length === 0 && <div className="chats-empty">No spaces yet</div>}
+        <div className="section-label">{t("Your spaces")}</div>
+        {accepted.length === 0 && <div className="chats-empty">{t("No spaces yet")}</div>}
         {accepted.map(s => (
           <button key={s.id} className={'ar-tab' + (s.id === activeId ? ' active' : '')} onClick={() => setActiveId(s.id)}>
             <Users /> {s.name}
           </button>
         ))}
-        <button className="ar-back" onClick={onClose}><Chevron style={{ transform: 'rotate(90deg)', width: 16 }} /> Back to chat</button>
+        <button className="ar-back" onClick={onClose}><Chevron style={{ transform: 'rotate(90deg)', width: 16 }} /> {t("Back to chat")}</button>
       </nav>
       <div className="admin-content">
         {!active && (
           <div className="admin-empty">
             <div className="ae-icon"><Users style={{ width: 30 }} /></div>
-            <h2>Chat together with Spaces</h2>
-            <p>Create a space to chat with other users and the assistant together, or pick one on the left. Invited people must accept before they can see messages.</p>
+            <h2>{t("Chat together with Spaces")}</h2>
+            <p>{t("Create a space to chat with other users and the assistant together, or pick one on the left. Invited people must accept before they can see messages.")}</p>
             <div className="ae-actions">
-              <button className="btn primary" onClick={() => setCreating(true)}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> Create a space</button>
+              <button className="btn primary" onClick={() => setCreating(true)}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> {t("Create a space")}</button>
             </div>
           </div>
         )}

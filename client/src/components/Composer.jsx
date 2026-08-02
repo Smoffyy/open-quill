@@ -107,7 +107,7 @@ export default function Composer({
     if (dictating) { stopDictation(); return; }
     if (sttEngine === 'browser') {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SR) { toastLocal('This browser has no built-in speech recognition.'); return; }
+      if (!SR) { toastLocal(t('This browser has no built-in speech recognition.')); return; }
       const rec = new SR();
       rec.continuous = true;
       rec.interimResults = true;
@@ -141,13 +141,13 @@ export default function Composer({
         if (blob.size < 1500) return;
         setTranscribing(true);
         try { const text = await transcribeBlob(blob); if (text) appendText(text); }
-        catch (e) { toastLocal(e.message || 'Transcription failed.'); }
+        catch (e) { toastLocal(e.message || t('Transcription failed.')); }
         setTranscribing(false);
       };
       dictMediaRef.current = mr;
       mr.start();
       setDictating(true);
-    } catch { toastLocal('Microphone access denied.'); }
+    } catch { toastLocal(t('Microphone access denied.')); }
   }
   function toastLocal(msg) { try { toast(msg, { icon: 'info', kind: 'warn', duration: 4200 }); } catch {} }
   const [dragActive, setDragActive] = useState(false);
@@ -311,7 +311,7 @@ export default function Composer({
       if (files.length) {
         setUploading(true);
         try { const r = await api.uploadFiles(files.map(f => f.file)); attachments = r.files || []; }
-        catch (e) { setUploading(false); setUpErr(e?.message || 'Upload failed, the file may be too large.'); return; }
+        catch (e) { setUploading(false); setUpErr(e?.message || t('Upload failed, the file may be too large.')); return; }
         setUploading(false);
         files.forEach(f => f.preview && URL.revokeObjectURL(f.preview));
         setFiles([]); setGlow('var(--accent)');
@@ -325,7 +325,7 @@ export default function Composer({
     if (files.length) {
       setUploading(true);
       try { const r = await api.uploadFiles(files.map(f => f.file)); attachments = r.files || []; }
-      catch (e) { setUploading(false); setUpErr(e?.message || 'Upload failed, the file may be too large.'); return; }
+      catch (e) { setUploading(false); setUpErr(e?.message || t('Upload failed, the file may be too large.')); return; }
       setUploading(false);
     }
     files.forEach(f => f.preview && URL.revokeObjectURL(f.preview));
@@ -339,10 +339,10 @@ export default function Composer({
   const slashQuery = slashActive ? value.slice(1).toLowerCase().trim() : '';
   const slashCmds = [];
   if (slashActive) {
-    if (onNewChat) slashCmds.push({ id: 'new', label: 'New chat', icon: <NewChatIcon style={{ width: 16 }} />, run: () => { onChange(''); onNewChat(); } });
-    if (sandboxAllowed && onToggleSandbox) slashCmds.push({ id: 'sandbox', label: (sandbox ? 'Disable' : 'Enable') + ' sandbox tools', icon: <Cube style={{ width: 16 }} />, run: () => { onChange(''); onToggleSandbox(); } });
-    if (webSearchAvailable && onToggleWebSearch) slashCmds.push({ id: 'web', label: (webSearch ? 'Disable' : 'Enable') + ' web search', icon: <Globe style={{ width: 16 }} />, run: () => { onChange(''); onToggleWebSearch(); } });
-    if (onShortcuts) slashCmds.push({ id: 'keys', label: 'Keyboard shortcuts', icon: <Sliders style={{ width: 16 }} />, run: () => { onChange(''); onShortcuts(); } });
+    if (onNewChat) slashCmds.push({ id: 'new', label: t('New chat'), icon: <NewChatIcon style={{ width: 16 }} />, run: () => { onChange(''); onNewChat(); } });
+    if (sandboxAllowed && onToggleSandbox) slashCmds.push({ id: 'sandbox', label: (sandbox ? t('Disable') : t('Enable')) + ' sandbox tools', icon: <Cube style={{ width: 16 }} />, run: () => { onChange(''); onToggleSandbox(); } });
+    if (webSearchAvailable && onToggleWebSearch) slashCmds.push({ id: 'web', label: (webSearch ? t('Disable') : t('Enable')) + ' web search', icon: <Globe style={{ width: 16 }} />, run: () => { onChange(''); onToggleWebSearch(); } });
+    if (onShortcuts) slashCmds.push({ id: 'keys', label: t('Keyboard shortcuts'), icon: <Sliders style={{ width: 16 }} />, run: () => { onChange(''); onShortcuts(); } });
     for (const p of (savedPrompts || [])) slashCmds.push({ id: 'p' + p.id, label: p.title, sub: 'prompt', icon: <Star style={{ width: 16 }} />, run: () => { onUsePrompt && onUsePrompt(p.text); } });
   }
   const slashShown = slashCmds.filter(c => c.label.toLowerCase().includes(slashQuery));
@@ -378,7 +378,7 @@ export default function Composer({
     try {
       const r = await api.post('/api/improve-prompt', { text, modelId: currentId });
       if (r.text) { improvedRef.current = { original: value, improved: r.text }; onChange(r.text); }
-    } catch (e) { toast(e.message || 'Could not improve the prompt.'); }
+    } catch (e) { toast(e.message || t('Could not improve the prompt.')); }
     setImproving(false);
   }
   const improvedNow = !!(improvedRef.current && value === improvedRef.current.improved);
@@ -478,9 +478,9 @@ export default function Composer({
     {bannerMounted && bannerInfo.current && (
       <div className={'unavail-banner' + (bannerOut ? ' out' : '') + (showReason ? ' open' : '')}>
         <div className="unavail-row">
-          <span className="unavail-msg"><strong>{bannerInfo.current.name}</strong> is currently unavailable.</span>
+          <span className="unavail-msg">{t("{name} is currently unavailable.", { name: bannerInfo.current.name })}</span>
           {bannerInfo.current.reason && (
-            <button className="unavail-learn" onClick={() => setShowReason(s => !s)}>{showReason ? 'Hide' : 'Learn more'}</button>
+            <button className="unavail-learn" onClick={() => setShowReason(s => !s)}>{showReason ? t('Hide') : t('Learn more')}</button>
           )}
         </div>
         {showReason && bannerInfo.current.reason && (
@@ -514,7 +514,7 @@ export default function Composer({
       {upErr && <div className="attach-err">{upErr}</div>}
       {slashOpen && (
         <div className="slash-menu">
-          <div className="slash-head">Commands</div>
+          <div className="slash-head">{t("Commands")}</div>
           {slashShown.map((c, i) => (
             <button key={c.id} className={'slash-item' + (i === slashIdx ? ' active' : '')} onMouseEnter={() => setSlashIdx(i)} onMouseDown={(e) => { e.preventDefault(); c.run(); }}>
               <span className="slash-ico">{c.icon}</span>
@@ -537,21 +537,21 @@ export default function Composer({
           <span className="steer-note">{steerMode ? t('Applied to the reply in progress, without losing what is already written.') : t('Sent as a new message when this reply finishes.')}</span>
         </div>
       )}
-      <textarea ref={ta} rows={1} value={value} placeholder={steering ? 'Steer this reply, e.g. "shorter" or "you misread the file"…' : streaming ? (queueCount > 0 ? `Queue another message (${queueCount} waiting)…` : 'Type to queue a message…') : (placeholder || 'How can I help you today?')}
+      <textarea ref={ta} rows={1} value={value} placeholder={steering ? t('Steer this reply, e.g. "shorter" or "you misread the file"…') : streaming ? (queueCount > 0 ? t('Queue another message ({n} waiting)…', { n: queueCount }) : t('Type to queue a message…')) : (placeholder || t('How can I help you today?'))}
         id="oq-composer" aria-label={t('Message input')}
         onChange={(e) => onChange(e.target.value)} onKeyDown={key} onPaste={onPaste} />
       <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}
         accept={(visionSupported ? 'image/*,' : '') + FILE_ACCEPT} />
-      {safetyChecking && safetyVerbose && <div className="safety-checking">Safety check…</div>}
-      {improving && <div className="safety-checking">Improving prompt…</div>}
+      {safetyChecking && safetyVerbose && <div className="safety-checking">{t("Safety check…")}</div>}
+      {improving && <div className="safety-checking">{t("Improving prompt…")}</div>}
       {canContinue && !streaming && !conversationEnded && (
         <div className="continue-row">
-          <button className="continue-btn" onClick={() => onContinue?.()}>Continue generating →</button>
+          <button className="continue-btn" onClick={() => onContinue?.()}>{t("Continue generating →")}</button>
         </div>
       )}
       {compareIds.length > 0 && (
         <div className="queued-chip compare-chip">
-          <span className="queued-label">Compare:</span>
+          <span className="queued-label">{t("Compare:")}</span>
           <span className="queued-text">{[models?.find(m => m.id === currentId)?.displayName || 'Current', ...compareIds.map(id => models?.find(m => m.id === id)?.displayName || 'model')].join(' vs ')}</span>
           <button className="queued-x" title={t("Cancel comparison")} onClick={() => onSetCompare?.([])}><X style={{ width: 12 }} /></button>
         </div>
@@ -567,19 +567,19 @@ export default function Composer({
               <div className={'plus-menu' + (plusDown ? ' down' : '')}>
                 <button className="pm-item" onClick={() => { setPlusMenu(false); fileInput.current?.click(); }}>
                   <FileText />
-                  <span className="pm-label">{visionSupported ? 'Add files or photos' : 'Add files'}</span>
-                  <span className="pm-shortcut">{/mac/i.test(navigator.platform) ? '⌘U' : 'Ctrl+U'}</span>
+                  <span className="pm-label">{visionSupported ? t('Add files or photos') : t('Add files')}</span>
+                  <span className="pm-shortcut">{/mac/i.test(navigator.platform) ? '⌘U' : t('Ctrl+U')}</span>
                 </button>
                 <div className="pm-divider" />
                 <div className="pm-subwrap" onMouseEnter={openPrompts} onMouseLeave={closePrompts}>
                   <button className={'pm-item' + (promptsOpen ? ' active' : '')} onClick={() => (promptsOpen ? closePrompts(true) : openPrompts())}>
                     <TextIcon />
-                    <span className="pm-label">Saved prompts</span>
+                    <span className="pm-label">{t("Saved prompts")}</span>
                     <Chevron className="pm-chev" />
                   </button>
                   {promptsOpen && (
                     <PmSub onMouseEnter={openPrompts} onMouseLeave={closePrompts}>
-                      {(savedPrompts || []).length === 0 && <div className="pm-empty">No saved prompts yet.</div>}
+                      {(savedPrompts || []).length === 0 && <div className="pm-empty">{t("No saved prompts yet.")}</div>}
                       {(savedPrompts || []).map(p => (
                         <div key={p.id} className="pm-prompt">
                           <button className="pm-prompt-use" title={p.text} onClick={() => { setPlusMenu(false); onUsePrompt && onUsePrompt(p.text); }}>
@@ -600,7 +600,7 @@ export default function Composer({
                   <div className="pm-subwrap" onMouseEnter={openStyles} onMouseLeave={closeStyles}>
                     <button className={'pm-item' + (stylesOpen ? ' active' : '')} onClick={() => (stylesOpen ? closeStyles(true) : openStyles())}>
                       <Sliders />
-                      <span className="pm-label">Response style</span>
+                      <span className="pm-label">{t("Response style")}</span>
                       <span className="pm-note">{styleNameFor(styleId, styles)}</span>
                       <Chevron className="pm-chev" />
                     </button>
@@ -615,19 +615,19 @@ export default function Composer({
                 <button className="pm-item" disabled={improving || (!hasText && !improvedNow)}
                   onClick={() => { setPlusMenu(false); improvePrompt(); }}>
                   <Wand />
-                  <span className="pm-label">{improvedNow ? 'Restore original prompt' : 'Improve prompt'}</span>
+                  <span className="pm-label">{improvedNow ? t('Restore original prompt') : t('Improve prompt')}</span>
                 </button>
                 {onSetCompare && models && models.length > 1 && (
                   <div className="pm-subwrap" onMouseEnter={openCompare} onMouseLeave={closeCompare}>
                     <button className={'pm-item' + (compareOpen ? ' active' : '')} onClick={() => (compareOpen ? closeCompare(true) : openCompare())}>
                       <Cube />
-                      <span className="pm-label">Compare models</span>
+                      <span className="pm-label">{t("Compare models")}</span>
                       {compareIds.length > 0 && <span className="pm-note">+{compareIds.length}</span>}
                       <Chevron className="pm-chev" />
                     </button>
                     {compareOpen && (
                       <PmSub className="styles" onMouseEnter={openCompare} onMouseLeave={closeCompare}>
-                        <div className="style-menu-label">Also answer with</div>
+                        <div className="style-menu-label">{t("Also answer with")}</div>
                         {models.filter(m => m.id !== currentId).map(m => {
                           const on = compareIds.includes(m.id);
                           return (
@@ -638,7 +638,7 @@ export default function Composer({
                             </button>
                           );
                         })}
-                        <div className="style-menu-label" style={{ textTransform: 'none', letterSpacing: 0 }}>Pick up to 2 extra models. Your next message will be answered by each as versions of one response.</div>
+                        <div className="style-menu-label" style={{ textTransform: 'none', letterSpacing: 0 }}>{t("Pick up to 2 extra models. Your next message will be answered by each as versions of one response.")}</div>
                       </PmSub>
                     )}
                   </div>
@@ -647,14 +647,14 @@ export default function Composer({
                 {sandboxAllowed && (
                   <button className="pm-item" onClick={() => onToggleSandbox && onToggleSandbox()}>
                     <Cube />
-                    <span className="pm-label">Sandbox tools</span>
+                    <span className="pm-label">{t("Sandbox tools")}</span>
                     {sandbox && <Check className="pm-check" />}
                   </button>
                 )}
                 {webSearchAvailable && (
                   <button className="pm-item" onClick={() => onToggleWebSearch && onToggleWebSearch()}>
                     <Globe />
-                    <span className="pm-label">Web search</span>
+                    <span className="pm-label">{t("Web search")}</span>
                     {webSearch && <Check className="pm-check" />}
                   </button>
                 )}
@@ -662,7 +662,7 @@ export default function Composer({
             )}
           </div>
           {project && (
-            <div className="composer-project" title={'In project: ' + project.name}>
+            <div className="composer-project" title={t('In project: {name}', { name: project.name })}>
               <Box style={{ width: 14 }} />
               <span className="cp-name">{project.name}</span>
               {onClearProject && <button className="cp-x" onClick={onClearProject} title={t("Remove from project")}><X style={{ width: 12 }} /></button>}
@@ -681,7 +681,7 @@ export default function Composer({
           )}
           {voiceMic && (
             <button className={'mic' + (dictating ? ' rec' : '') + (transcribing ? ' busy' : '')} onClick={toggleDictation}
-              title={dictating ? 'Stop dictation' : transcribing ? 'Transcribing…' : 'Dictate'} disabled={transcribing}>
+              title={dictating ? t('Stop dictation') : transcribing ? t('Transcribing…') : t('Dictate')} disabled={transcribing}>
               <Mic style={{ width: 18, height: 18 }} />
             </button>
           )}
@@ -691,7 +691,7 @@ export default function Composer({
           {streaming ? (
             <button key="stop" className="send stop" onClick={onStop} title={t('Stop generating')}><Stop style={{ width: 16, height: 16 }} /></button>
           ) : safetyChecking ? (
-            <button key="send" className={'send' + (safetyVerbose ? ' checking' : ' quiet')} disabled title={safetyVerbose ? 'Safety check…' : undefined}><Up style={{ width: 17, height: 17 }} /></button>
+            <button key="send" className={'send' + (safetyVerbose ? ' checking' : ' quiet')} disabled title={safetyVerbose ? t('Safety check…') : undefined}><Up style={{ width: 17, height: 17 }} /></button>
           ) : canSend ? (
             <button key="send" className="send" onClick={doSend} disabled={uploading}><Up style={{ width: 17, height: 17 }} /></button>
           ) : voiceCall ? (

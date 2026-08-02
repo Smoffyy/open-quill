@@ -24,7 +24,7 @@ export default function DatabasesSection() {
 
   const load = useCallback(async () => {
     try { setData(await api.get('/api/admin/databases')); }
-    catch (e) { setErr(e.message || 'Could not load databases.'); }
+    catch (e) { setErr(e.message || t('Could not load databases.')); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -33,7 +33,7 @@ export default function DatabasesSection() {
     setBusy(key);
     setErr('');
     try { setData(await fn()); }
-    catch (e) { setErr(e.message || 'Something went wrong.'); }
+    catch (e) { setErr(e.message || t('Something went wrong.')); }
     finally { setBusy(''); }
   }
 
@@ -83,7 +83,7 @@ export default function DatabasesSection() {
               ? <> · {t('loads on next restart')}: <code>{pending}</code> · <strong>{t('restart required')}</strong></>
               : <> · {t('this will also load on the next restart')}</>}
           </div>
-          {data?.envFile && <div className="muted-note">{t('Configured in')} <code>{data.envFile}</code> ({t('key')} <code>OPEN_QUILL_DB</code>).</div>}
+          {data?.envFile && <div className="muted-note">{t('Configured in')} <code>{data.envFile}</code> ({t('key')} <code>{t("OPEN_QUILL_DB")}</code>).</div>}
         </div>
       </Card>
 

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../api.js';
 import { SECTIONS, LEGACY_SECTION_IDS } from './nav.jsx';
+import { t } from '../../i18n.jsx';
 
 const AdminCtx = createContext(null);
 
@@ -220,8 +221,8 @@ export function AdminProvider({ user, onClose, children }) {
   const deleteModels = useCallback((ids, onDone) => {
     const n = ids.length;
     setAsk({
-      message: n === 1 ? 'Delete this model? This cannot be undone.' : `Delete ${n} models? This cannot be undone.`,
-      danger: n === 1 ? 'Delete model' : `Delete ${n} models`,
+      message: n === 1 ? t('Delete this model? This cannot be undone.') : t('Delete {n} models? This cannot be undone.', { n }),
+      danger: n === 1 ? t('Delete model') : t('Delete {n} models', { n }),
       onConfirm: async () => {
         for (const id of ids) await api.del('/api/admin/models/' + id);
         setModels(ms => ms.filter(m => !ids.includes(m.id)));
@@ -254,7 +255,7 @@ export function AdminProvider({ user, onClose, children }) {
     try {
       const r = await api.get('/api/admin/discover-models?provider=' + encodeURIComponent(pid));
       setDiscover({ loading: false, error: '', list: r.models || [], providerId: pid });
-    } catch (e) { setDiscover({ loading: false, error: e?.message || 'Could not reach the backend.', list: [], providerId: pid }); }
+    } catch (e) { setDiscover({ loading: false, error: e?.message || t('Could not reach the backend.'), list: [], providerId: pid }); }
   }, []);
 
   const addDiscovered = useCallback(async (id) => {
@@ -277,14 +278,19 @@ export function AdminProvider({ user, onClose, children }) {
 
   const deleteProvider = useCallback(async (id) => {
     try { await api.del('/api/admin/providers/' + id); await reloadProviders(); await loadAll(); }
-    catch (e) { setAsk({ message: e?.message || 'Could not delete provider.', onConfirm: () => {} }); }
+    catch (e) { setAsk({ message: e?.message || t('Could not delete provider.'), onConfirm: () => {} }); }
   }, [reloadProviders, loadAll]);
 
   const testProvider = useCallback(async (id) => {
     setProvTest(t => ({ ...t, [id]: { busy: true } }));
+    const prov = providersRef.current.find(p => p.id === id);
     try {
       const r = await api.get('/api/admin/discover-models?provider=' + encodeURIComponent(id));
-      setProvTest(t => ({ ...t, [id]: { ok: true, count: (r.models || []).length } }));
+      let engine = null;
+      if (prov && prov.type === 'llamacpp') {
+        try { engine = await api.get('/api/admin/providers/' + encodeURIComponent(id) + '/engine'); } catch {}
+      }
+      setProvTest(t => ({ ...t, [id]: { ok: true, count: (r.models || []).length, engine } }));
     } catch (e) {
       setProvTest(t => ({ ...t, [id]: { ok: false, err: e?.message || 'Unreachable' } }));
     }
@@ -311,7 +317,7 @@ export function AdminProvider({ user, onClose, children }) {
 
   const removeUser = useCallback((id) => {
     setAsk({
-      message: 'Remove this user and all their chats? This cannot be undone.', danger: 'Remove user',
+      message: t('Remove this user and all their chats? This cannot be undone.'), danger: t('Remove user'),
       onConfirm: async () => { await api.del('/api/admin/users/' + id); setUsers(us => us.filter(u => u.id !== id)); }
     });
   }, []);

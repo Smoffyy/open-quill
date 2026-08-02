@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { voiceSubscribe, setVoiceActive, transcribeBlob, fetchSpeech, cleanForSpeech, extractSentences } from '../voice.js';
 import { Mic, X } from './icons.jsx';
+import { t } from '../i18n.jsx';
 
 const MODES = { listening: 'Listening…', hearing: 'Listening…', thinking: 'Thinking…', speaking: 'Speaking' };
 
@@ -92,7 +93,7 @@ export default function CallPanel({ chatId, model, voice, onSendText, onClose })
           if (closedRef.current) return;
           if (text) { setLastHeard(text); sendUser(text); }
           else setModeSafe('listening');
-        } catch (e) { setErr(e.message || 'Transcription failed.'); setModeSafe('listening'); }
+        } catch (e) { setErr(e.message || t('Transcription failed.')); setModeSafe('listening'); }
       };
       recRef.current = mr;
       mr.start();
@@ -109,7 +110,7 @@ export default function CallPanel({ chatId, model, voice, onSendText, onClose })
 
   function startBrowserSR() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { setErr('This browser has no built-in speech recognition. Switch the speech-to-text engine to a server in the admin panel, or use Chrome.'); return false; }
+    if (!SR) { setErr(t('This browser has no built-in speech recognition. Switch the speech-to-text engine to a server in the admin panel, or use Chrome.')); return false; }
     const rec = new SR();
     rec.continuous = false;
     rec.interimResults = true;
@@ -129,7 +130,7 @@ export default function CallPanel({ chatId, model, voice, onSendText, onClose })
         sendUser(fin.trim());
       }
     };
-    rec.onerror = (e) => { if (e.error === 'not-allowed') setErr('Microphone permission denied.'); };
+    rec.onerror = (e) => { if (e.error === 'not-allowed') setErr(t('Microphone permission denied.')); };
     rec.onend = () => {
       if (closedRef.current) return;
       if ((modeRef.current === 'listening' || modeRef.current === 'hearing') && !mutedRef.current) {
@@ -169,7 +170,7 @@ export default function CallPanel({ chatId, model, voice, onSendText, onClose })
     try {
       if (item.browser) await speakBrowser(item.text);
       else await speakServer(item.text);
-    } catch (e) { setErr(e.message || 'Speech playback failed.'); ttsQ.current = []; genDone.current = true; }
+    } catch (e) { setErr(e.message || t('Speech playback failed.')); ttsQ.current = []; genDone.current = true; }
     ttsBusy.current = false;
     if (!closedRef.current) pumpTts();
   }
@@ -207,7 +208,7 @@ export default function CallPanel({ chatId, model, voice, onSendText, onClose })
       const url = URL.createObjectURL(blob);
       const done = () => { URL.revokeObjectURL(url); resolve(); };
       audio.onended = done;
-      audio.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Audio playback failed.')); };
+      audio.onerror = () => { URL.revokeObjectURL(url); reject(new Error(t('Audio playback failed.'))); };
       audio.src = url;
       audio.play().then(() => {
         if (!srcNode.current && ctxRef.current) {
@@ -217,7 +218,7 @@ export default function CallPanel({ chatId, model, voice, onSendText, onClose })
             outAnalyser.current.connect(ctxRef.current.destination);
           } catch {}
         }
-      }).catch(() => { URL.revokeObjectURL(url); reject(new Error('Audio playback blocked.')); });
+      }).catch(() => { URL.revokeObjectURL(url); reject(new Error(t('Audio playback blocked.'))); });
     });
   }
 
@@ -288,7 +289,7 @@ export default function CallPanel({ chatId, model, voice, onSendText, onClose })
         setModeSafe('listening');
         if (voice.stt === 'browser') startBrowserSR();
       } catch {
-        setErr('Microphone access is required for calls. Allow the microphone and try again.');
+        setErr(t('Microphone access is required for calls. Allow the microphone and try again.'));
         setModeSafe('error');
       }
     })();
@@ -324,22 +325,22 @@ export default function CallPanel({ chatId, model, voice, onSendText, onClose })
       <div className="cp-head">
         <div className="cp-title">
           {model?.staticIcon ? <img className="cp-model-icon" src={model.staticIcon} alt="" /> : null}
-          <span>{model?.displayName || 'Voice call'}</span>
+          <span>{model?.displayName || t('Voice call')}</span>
         </div>
-        <button className="cp-close" onClick={onClose} title="Close panel"><X style={{ width: 16 }} /></button>
+        <button className="cp-close" onClick={onClose} title={t("Close panel")}><X style={{ width: 16 }} /></button>
       </div>
-      <div className="cp-stage" onClick={interrupt} title={mode === 'speaking' ? 'Tap to interrupt' : ''}>
+      <div className="cp-stage" onClick={interrupt} title={mode === 'speaking' ? t('Tap to interrupt') : ''}>
         <div ref={orbRef} className={'cp-orb ' + mode + (muted ? ' muted' : '')} />
         <div className="cp-status">{statusText}</div>
         {lastHeard && !err && <div className="cp-heard">“{lastHeard}”</div>}
-        {mode === 'speaking' && <div className="cp-hint">Tap the orb to interrupt</div>}
+        {mode === 'speaking' && <div className="cp-hint">{t("Tap the orb to interrupt")}</div>}
       </div>
       <div className="cp-bar">
-        <button className={'cp-btn' + (muted ? ' on' : '')} onClick={() => setMuted(m => !m)} title={muted ? 'Unmute microphone' : 'Mute microphone'}>
+        <button className={'cp-btn' + (muted ? ' on' : '')} onClick={() => setMuted(m => !m)} title={muted ? t('Unmute microphone') : t('Mute microphone')}>
           <Mic style={{ width: 18 }} />
           {muted && <span className="cp-slash" />}
         </button>
-        <button className="cp-btn hangup" onClick={onClose} title="End call"><X style={{ width: 18 }} /></button>
+        <button className="cp-btn hangup" onClick={onClose} title={t("End call")}><X style={{ width: 18 }} /></button>
       </div>
     </div>
   );

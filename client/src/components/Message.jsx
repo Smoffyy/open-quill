@@ -136,7 +136,7 @@ function Attachments({ items, pins, onTogglePinFile }) {
             </span>
           </a>
           {onTogglePinFile && (
-            <button className={'att-pin' + (pinnedUrls.has(a.url) ? ' on' : '')} title={pinnedUrls.has(a.url) ? 'Unpin from chat' : 'Pin to chat (keep in context)'} aria-label={pinnedUrls.has(a.url) ? t('Unpin from chat') : t('Pin to chat')} aria-pressed={pinnedUrls.has(a.url)} onClick={() => onTogglePinFile(a)}><Pin style={{ width: 13 }} /></button>
+            <button className={'att-pin' + (pinnedUrls.has(a.url) ? ' on' : '')} title={pinnedUrls.has(a.url) ? t('Unpin from chat') : t('Pin to chat (keep in context)')} aria-label={pinnedUrls.has(a.url) ? t('Unpin from chat') : t('Pin to chat')} aria-pressed={pinnedUrls.has(a.url)} onClick={() => onTogglePinFile(a)}><Pin style={{ width: 13 }} /></button>
           )}
         </div>
       ))}
@@ -170,13 +170,24 @@ const compact = (n) => (n >= 10000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') +
 function StreamStatus({ status }) {
   const total = status && status.total ? status.total : 0;
   const hasProgress = total > 0;
+  const waiting = !!(status && status.phase === 'waiting');
   const [show, setShow] = useState(false);
   useEffect(() => {
-    if (hasProgress) { setShow(true); return; }
+    if (hasProgress || waiting) { setShow(true); return; }
     const timer = setTimeout(() => setShow(true), 1200);
     return () => clearTimeout(timer);
-  }, [hasProgress]);
+  }, [hasProgress, waiting]);
   if (!show) return null;
+
+  if (waiting) {
+    const secs = Math.round((status.ms || 0) / 1000);
+    return (
+      <div className="model-status" role="status">
+        <span className="mst-label">{t('Waiting for the backend')}</span>
+        <span className="mst-note">{t('Nothing back yet after {n}s. A local server loading a model can take a while.', { n: secs })}</span>
+      </div>
+    );
+  }
 
   const pct = status && Number.isFinite(status.pct) ? status.pct : null;
   const cached = status && status.cache ? status.cache : 0;
@@ -295,15 +306,15 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
       <div role="article" aria-label={t('Your message')} className={'msg user' + (msg._enter ? ' enter' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
         <div className="user-col">
           {ledger && ledgerState && <LedgerRow tokens={ledgerTokens} pct={ledgerPct} state={ledgerState} id={msg.id} onToggleExclude={onToggleExclude} />}
-          {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> Pinned</div>}
+          {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> {t("Pinned")}</div>}
           <Attachments items={msg.attachments} pins={pins} onTogglePinFile={onTogglePinFile} />
           {editing ? (
             <div className="edit-box">
               <textarea ref={taRef} value={draft} autoFocus onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit(); if (e.key === 'Escape') setEditing(false); }} />
               <div className="edit-actions">
-                <button className="btn ghost" onClick={() => setEditing(false)}>Cancel</button>
-                <button className="btn primary" onClick={saveEdit}>Save &amp; submit</button>
+                <button className="btn ghost" onClick={() => setEditing(false)}>{t("Cancel")}</button>
+                <button className="btn primary" onClick={saveEdit}>{t("Save &amp; submit")}</button>
               </div>
             </div>
           ) : (
@@ -345,7 +356,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
   const inner = (
     <>
       {ledger && ledgerState && <LedgerRow tokens={ledgerTokens} pct={ledgerPct} state={ledgerState} id={msg.id} onToggleExclude={onToggleExclude} />}
-      {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> Pinned</div>}
+      {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> {t("Pinned")}</div>}
       <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} collapsible={model?.reasoningCollapsible !== false} />
       {(msg.content || streaming) && (
         <div className={'assistant-body' + (streaming ? ' streaming' : '') + (streaming && typing ? ' typing' : '') + (streaming && phase === 'thinking' ? ' thinking' : '')}>
@@ -374,7 +385,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
             )}
             {retryMenu && (
               <div className="retry-menu" role="menu" aria-label={t("Retry with another model")}>
-                <div className="retry-menu-label">Retry with</div>
+                <div className="retry-menu-label">{t("Retry with")}</div>
                 {models.map(mm => (
                   <button key={mm.id} role="menuitem" className={mm.id === currentId ? 'on' : ''} onClick={() => { setRetryMenu(false); onRegenerateWith(msg.id, mm.id); }}>
                     {mm.staticIcon && <img src={mm.staticIcon} alt="" />}{mm.displayName}{mm.id === currentId && <Check style={{ width: 13, marginLeft: 'auto' }} />}

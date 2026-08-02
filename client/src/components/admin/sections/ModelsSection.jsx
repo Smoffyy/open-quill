@@ -429,7 +429,7 @@ export default function ModelsSection() {
               onDelete={(id) => A.deleteModels([id])} onDuplicate={A.duplicateModel}
               autosaveState={modelSave} providers={providers} providerTypes={providerTypes} models={models}
               section={meSection} onSection={setMeSection} />
-          : <div className="muted-note" style={{ padding: 20 }}>No models yet, add one to get started.</div>}
+          : <div className="muted-note" style={{ padding: 20 }}>{t("No models yet, add one to get started.")}</div>}
       </div>
       {marquee && <div className="mw-marquee" style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }} />}
       {menu && menuModels.length > 0 && (

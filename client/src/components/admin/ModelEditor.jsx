@@ -3,41 +3,41 @@ import { api } from '../../api.js';
 import { Copy, Trash, Star } from '../icons.jsx';
 import { Toggle, Switch, IconSlot, SystemPromptEditor, StatusChips, CopyBtn, SegPick, bgPreviewStyle, BannerPicker } from './widgets.jsx';
 import KwargsEditor from './KwargsEditor.jsx';
-import { t } from '../../i18n.jsx';
+import { t, tk } from '../../i18n.jsx';
 
 export const ME_SECTIONS = [
-  ['essentials', 'Essentials'],
-  ['routing', 'Routing'],
-  ['reasoning', 'Reasoning'],
-  ['kwargs', 'Kwargs'],
-  ['tools', 'Tools'],
-  ['appearance', 'Appearance'],
-  ['advanced', 'Advanced'],
-  ['docs', 'Docs']
+  ['essentials', tk('Essentials')],
+  ['routing', tk('Routing')],
+  ['reasoning', tk('Reasoning')],
+  ['kwargs', tk('Kwargs')],
+  ['tools', tk('Tools')],
+  ['appearance', tk('Appearance')],
+  ['advanced', tk('Advanced')],
+  ['docs', tk('Docs')]
 ];
 
 const FIELD_INDEX = [
-  { s: 'essentials', a: 'identity', label: 'Name, model ID & provider', k: 'display name internal id backend connection rename' },
-  { s: 'essentials', a: 'description', label: 'Description', k: 'tagline subtitle picker text' },
-  { s: 'essentials', a: 'sysprompt', label: 'System prompt', k: 'instructions persona behavior prompt' },
-  { s: 'essentials', a: 'visibility', label: 'Visibility & default', k: 'hidden default unavailable picker show hide' },
-  { s: 'essentials', a: 'sunset', label: 'Retirement date', k: 'sunset retire going away deprecate schedule date countdown' },
-  { s: 'docs', a: 'docs-page', label: 'Model docs page', k: 'docs documentation catalog page intelligence speed modalities cutoff frontier featured compare' },
-  { s: 'kwargs', a: 'kwargs-list', label: 'Kwargs & thinking controls', k: 'kwarg kwargs effort reasoning slider toggle extended levels enable_thinking preserve_thinking chat_template_kwargs paired custom values default' },
-  { s: 'reasoning', a: 'prompt-token', label: 'Extended thinking (prompt token)', k: 'think no_think token trigger mode' },
-  { s: 'reasoning', a: 'tags', label: 'Reasoning tags', k: 'think open close delimiter stream' },
-  { s: 'reasoning', a: 'reveal', label: 'Show reasoning to users', k: 'collapsible hide thinking status expand' },
-  { s: 'reasoning', a: 'summaries', label: 'Long conversations & context', k: 'summarize compact context window num ctx headroom recent turns detect' },
-  { s: 'tools', a: 'core-tools', label: 'Core abilities', k: 'vision image input sandbox code files web search' },
-  { s: 'tools', a: 'extra-tools', label: 'Assistant features', k: 'skills mcp connectors chat search end conversation long reminder' },
-  { s: 'tools', a: 'tool-limit', label: 'Tool-call limit', k: 'agent steps rounds maximum tools' },
-  { s: 'appearance', a: 'logo', label: 'Logo & animations', k: 'icon static generating thinking upload starburst motion size' },
-  { s: 'appearance', a: 'in-chat', label: 'In-chat display', k: 'picker logo show name position avatar left above below' },
-  { s: 'appearance', a: 'badges', label: 'Picker badges', k: 'cap text vision reasoning compact labels' },
-  { s: 'appearance', a: 'showcase', label: 'Showcase background', k: 'backdrop image gradient css frosted glass' },
-  { s: 'advanced', a: 'sampling', label: 'Sampling', k: 'temperature top p top k min p penalty seed max tokens' },
-  { s: 'advanced', a: 'pricing', label: 'Pricing', k: 'cost price input output per million usage preset' },
-  { s: 'advanced', a: 'call-prompt', label: 'Voice call prompt', k: 'call phone speech voice override' }
+  { s: 'essentials', a: 'identity', label: tk('Name, model ID & provider'), k: tk('display name internal id backend connection rename') },
+  { s: 'essentials', a: 'description', label: tk('Description'), k: tk('tagline subtitle picker text') },
+  { s: 'essentials', a: 'sysprompt', label: tk('System prompt'), k: tk('instructions persona behavior prompt') },
+  { s: 'essentials', a: 'visibility', label: tk('Visibility & default'), k: tk('hidden default unavailable picker show hide') },
+  { s: 'essentials', a: 'sunset', label: tk('Retirement date'), k: tk('sunset retire going away deprecate schedule date countdown') },
+  { s: 'docs', a: 'docs-page', label: tk('Model docs page'), k: tk('docs documentation catalog page intelligence speed modalities cutoff frontier featured compare') },
+  { s: 'kwargs', a: 'kwargs-list', label: tk('Kwargs & thinking controls'), k: tk('kwarg kwargs effort reasoning slider toggle extended levels enable_thinking preserve_thinking chat_template_kwargs paired custom values default') },
+  { s: 'reasoning', a: 'prompt-token', label: tk('Extended thinking (prompt token)'), k: tk('think no_think token trigger mode') },
+  { s: 'reasoning', a: 'tags', label: tk('Reasoning tags'), k: tk('think open close delimiter stream') },
+  { s: 'reasoning', a: 'reveal', label: tk('Show reasoning to users'), k: tk('collapsible hide thinking status expand') },
+  { s: 'reasoning', a: 'summaries', label: tk('Long conversations & context'), k: tk('summarize compact context window num ctx headroom recent turns detect trim drop prompt cache warm reuse prefill') },
+  { s: 'tools', a: 'core-tools', label: tk('Core abilities'), k: tk('vision image input sandbox code files web search') },
+  { s: 'tools', a: 'extra-tools', label: tk('Assistant features'), k: tk('skills mcp connectors chat search end conversation long reminder') },
+  { s: 'tools', a: 'tool-limit', label: tk('Tool-call limit'), k: tk('agent steps rounds maximum tools') },
+  { s: 'appearance', a: 'logo', label: tk('Logo & animations'), k: tk('icon static generating thinking upload starburst motion size') },
+  { s: 'appearance', a: 'in-chat', label: tk('In-chat display'), k: tk('picker logo show name position avatar left above below') },
+  { s: 'appearance', a: 'badges', label: tk('Picker badges'), k: tk('cap text vision reasoning compact labels') },
+  { s: 'appearance', a: 'showcase', label: tk('Showcase background'), k: tk('backdrop image gradient css frosted glass') },
+  { s: 'advanced', a: 'sampling', label: tk('Sampling'), k: tk('temperature top p top k min p penalty seed max tokens stop sequence dry xtc mirostat repetition') },
+  { s: 'advanced', a: 'pricing', label: tk('Pricing'), k: tk('cost price input output per million usage preset') },
+  { s: 'advanced', a: 'call-prompt', label: tk('Voice call prompt'), k: tk('call phone speech voice override') }
 ];
 
 const EyeIcon = (p) => (
@@ -56,14 +56,14 @@ export function GroupLabel({ anchor, first, children }) {
 }
 
 const MATCHERS = [
-  ['keyword', 'Message contains any of these words'],
-  ['regex', 'Message matches this regular expression'],
-  ['hasImage', 'Message has an image'],
-  ['hasFile', 'Message has an attachment'],
-  ['hasCode', 'Message looks like code'],
-  ['shorterThan', 'Message is shorter than N characters'],
-  ['longerThan', 'Message is longer than N characters'],
-  ['always', 'Always (catch-all)'],
+  ['keyword', tk('Message contains any of these words')],
+  ['regex', tk('Message matches this regular expression')],
+  ['hasImage', tk('Message has an image')],
+  ['hasFile', tk('Message has an attachment')],
+  ['hasCode', tk('Message looks like code')],
+  ['shorterThan', tk('Message is shorter than N characters')],
+  ['longerThan', tk('Message is longer than N characters')],
+  ['always', tk('Always (catch-all)')],
 ];
 const NEEDS_VALUE = new Set(['keyword', 'regex', 'shorterThan', 'longerThan']);
 
@@ -173,16 +173,16 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
     setDetecting(true); setDetectMsg('');
     try {
       const r = await api.get('/api/admin/detect-ctx?model=' + encodeURIComponent(m.internal_name || '') + '&provider=' + encodeURIComponent(m.provider_id || ''));
-      if (r.ok && r.numCtx) { set('num_ctx', r.numCtx); setDetectMsg('Detected ' + r.numCtx.toLocaleString() + ' tokens.'); }
-      else setDetectMsg('Could not detect from the server, enter it manually.');
-    } catch { setDetectMsg('Could not detect from the server, enter it manually.'); }
+      if (r.ok && r.numCtx) { set('num_ctx', r.numCtx); setDetectMsg(t('Detected ') + r.numCtx.toLocaleString() + ' tokens.'); }
+      else setDetectMsg(t('Could not detect from the server, enter it manually.'));
+    } catch { setDetectMsg(t('Could not detect from the server, enter it manually.')); }
     setDetecting(false);
   }
 
   const priced = Number(m.cost_in) === preset?.in && Number(m.cost_out) === preset?.out;
 
   const fq = findQ.trim().toLowerCase();
-  const findHits = fq ? FIELD_INDEX.filter(f => (f.label + ' ' + f.k).toLowerCase().includes(fq)).slice(0, 7) : [];
+  const findHits = fq ? FIELD_INDEX.filter(f => [f.label, f.k].map(v => v + ' ' + t(v)).join(' ').toLowerCase().includes(fq)).slice(0, 7) : [];
   function jumpTo(hit) {
     setFindQ('');
     if (onSection) onSection(hit.s);
@@ -206,7 +206,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
               onBlur={() => setRenaming(false)}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') setRenaming(false); }} />
           ) : (
-            <button type="button" className="med-name" title={t("Click to rename")} onClick={() => setRenaming(true)}>{m.display_name || 'Untitled model'}</button>
+            <button type="button" className="med-name" title={t("Click to rename")} onClick={() => setRenaming(true)}>{m.display_name || t('Untitled model')}</button>
           )}
           <div className="med-sub">
             <span className="med-sub-text">{m.internal_name || 'no model id'}</span>
@@ -215,8 +215,8 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
         </div>
         <StatusChips m={m} />
         <div className="med-actions">
-          <button type="button" className={'med-act' + (m.is_default ? ' star-on' : '')} title={m.is_default ? 'Default model' : 'Make default'} onClick={() => set('is_default', m.is_default ? 0 : 1)}><Star style={{ width: 16 }} /></button>
-          <button type="button" className="med-act" title={m.enabled ? 'Visible to users, click to hide' : 'Hidden from users, click to show'} onClick={() => set('enabled', m.enabled ? 0 : 1)}>{m.enabled ? <EyeIcon style={{ width: 16 }} /> : <EyeOffIcon style={{ width: 16 }} />}</button>
+          <button type="button" className={'med-act' + (m.is_default ? ' star-on' : '')} title={m.is_default ? t('Default model') : t('Make default')} onClick={() => set('is_default', m.is_default ? 0 : 1)}><Star style={{ width: 16 }} /></button>
+          <button type="button" className="med-act" title={m.enabled ? t('Visible to users, click to hide') : t('Hidden from users, click to show')} onClick={() => set('enabled', m.enabled ? 0 : 1)}>{m.enabled ? <EyeIcon style={{ width: 16 }} /> : <EyeOffIcon style={{ width: 16 }} />}</button>
           {onDuplicate && <button type="button" className="med-act dup" title={t("Duplicate model")} onClick={() => onDuplicate(m.id)}><Copy style={{ width: 16 }} /></button>}
           <button type="button" className="med-act del" title={t("Delete model")} onClick={() => onDelete(m.id)}><Trash style={{ width: 16 }} /></button>
         </div>
@@ -272,8 +272,8 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
               <button type="button" className="sp-preview" onClick={() => setSpOpen(true)}>
                 {(m.system_prompt || '').trim()
                   ? <><div className="sp-preview-text">{m.system_prompt}</div><div className="sp-preview-fade" /></>
-                  : <div className="sp-preview-empty">Click to write a system prompt…</div>}
-                <div className="sp-preview-hint">Click to edit</div>
+                  : <div className="sp-preview-empty">{t("Click to write a system prompt…")}</div>}
+                <div className="sp-preview-hint">{t("Click to edit")}</div>
               </button>
             </div>
             {spOpen && <SystemPromptEditor value={m.system_prompt || ''} onChange={(v) => set('system_prompt', v)} onClose={() => setSpOpen(false)} />}
@@ -304,8 +304,8 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
                     <div className="muted-note">{t("Hide removes it from every picker. Unavailable keeps it listed but unselectable, with a retirement notice.")}</div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                    <SegPick value={m.sunset_action || 'hide'} options={[['hide', 'Hide'], ['unavailable', 'Unavailable']]} onChange={(v) => set('sunset_action', v)} />
-                    <button type="button" className="btn ghost" onClick={() => onChange({ ...m, sunset_at: '' })}>Clear</button>
+                    <SegPick value={m.sunset_action || 'hide'} options={[['hide', tk('Hide')], ['unavailable', tk('Unavailable')]]} onChange={(v) => set('sunset_action', v)} />
+                    <button type="button" className="btn ghost" onClick={() => onChange({ ...m, sunset_at: '' })}>{t("Clear")}</button>
                   </div>
                 </div>
               )}
@@ -353,7 +353,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
             <GroupLabel anchor="reveal">{t("What users see")}</GroupLabel>
             <div className="med-toggle-card">
               <Toggle m={m} set={set} k="reasoning_collapsible" inverted label={t("Show reasoning to users")} note={t("When on, users can expand and read the thought process. When off, they see only a 'Thinking…' status.")} />
-              {m.reasoning_collapsible === 0 && <Toggle m={m} set={set} k="hide_thinking" label={'Hide the "Thinking…" status too'} note={t("No thinking indicator at all, the model just appears to be generating normally while it reasons.")} />}
+              {m.reasoning_collapsible === 0 && <Toggle m={m} set={set} k="hide_thinking" label={t('Hide the "Thinking…" status too')} note={t("No thinking indicator at all, the model just appears to be generating normally while it reasons.")} />}
             </div>
 
             <GroupLabel anchor="summaries">{t("Long conversations")}</GroupLabel>
@@ -363,12 +363,12 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
             {!!m.enable_summaries && <>
               <div className="field"><label>{t("Context window")}</label>
                 <div className="ctx-row">
-                  <input type="number" min="0" value={m.num_ctx ?? ''} onChange={(e) => set('num_ctx', e.target.value)} placeholder="e.g. 32768" />
-                  <button className="btn" type="button" onClick={detect} disabled={detecting}>{detecting ? 'Detecting…' : 'Detect'}</button>
+                  <input type="number" min="0" value={m.num_ctx ?? ''} onChange={(e) => set('num_ctx', e.target.value)} placeholder={t("e.g. 32768")} />
+                  <button className="btn" type="button" onClick={detect} disabled={detecting}>{detecting ? t('Detecting…') : t('Detect')}</button>
                 </div>
                 <div className="muted-note">{detectMsg || 'The model\u2019s maximum context in tokens. Detect asks the provider; otherwise enter it manually.'}</div>
               </div>
-              <div className="field"><label>Context headroom <span className="muted-note" style={{ display: 'inline' }}>(%)</span></label>
+              <div className="field"><label>{t("Context headroom")} <span className="muted-note" style={{ display: 'inline' }}>(%)</span></label>
                 <input type="number" step="1" min="3" max="60" value={Math.round((m.summary_padding ?? 0.125) * 100)} onChange={(e) => set('summary_padding', (parseFloat(e.target.value) || 0) / 100)} style={{ maxWidth: 140 }} />
                 <div className="muted-note">{t("Summarize once the chat fills past this much of the context window's free space. 12% leaves a safety margin.")}</div>
               </div>
@@ -377,6 +377,11 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
                 <div className="muted-note">{t("The newest messages are never summarized, they stay word-for-word. Higher keeps more recent detail but uses more context.")}</div>
               </div>
             </>}
+            <div className="field"><label>{t("When the chat outgrows the window")}</label>
+              <SegPick value={m.ctx_trim_mode === 'cache' ? 'cache' : 'retain'} onChange={(v) => set('ctx_trim_mode', v)}
+                options={[['retain', tk('Keep as much history as possible')], ['cache', tk('Keep the prompt cache warm')]]} />
+              <div className="muted-note">{t("Keeping history drops the least it can get away with, which means the prompt changes every turn and a local backend has to re-read the whole conversation each time. Keeping the cache warm drops further than needed, so the prompt stays identical for several turns and only the new message is processed. Much faster on long chats, at the cost of forgetting older turns sooner.")}</div>
+            </div>
           </div>
         )}
 
@@ -401,7 +406,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
             </div>
             {!!m.end_chat_allowed && (
               <div className="field"><label>{t("End-conversation instructions")}</label>
-                <textarea rows={4} value={m.end_chat_prompt ?? ''} onChange={(e) => set('end_chat_prompt', e.target.value)} placeholder={'End the conversation if the user repeatedly…'} />
+                <textarea rows={4} value={m.end_chat_prompt ?? ''} onChange={(e) => set('end_chat_prompt', e.target.value)} placeholder={t('End the conversation if the user repeatedly…')} />
                 <div className="muted-note">{t("Appended to the system prompt to tell the model WHEN it should end conversations. Leave blank to append nothing beyond the basic tool description.")}</div>
               </div>
             )}
@@ -424,24 +429,24 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
               <div className="icon-grid anim-row">
                 <div />
                 <select className="anim-sel" value={m.generating_anim || 'spin'} onChange={(e) => set('generating_anim', e.target.value)}>
-                  <option value="spin">Spin</option><option value="pulse">Breathe</option><option value="bounce">Bounce</option><option value="wobble">Wobble</option><option value="fade">Fade</option><option value="none">No motion</option>
+                  <option value="spin">{t("Spin")}</option><option value="pulse">{t("Breathe")}</option><option value="bounce">{t("Bounce")}</option><option value="wobble">{t("Wobble")}</option><option value="fade">{t("Fade")}</option><option value="none">{t("No motion")}</option>
                 </select>
                 <select className="anim-sel" value={m.thinking_anim || 'pulse'} onChange={(e) => set('thinking_anim', e.target.value)}>
-                  <option value="pulse">Breathe</option><option value="spin">Spin</option><option value="bounce">Bounce</option><option value="wobble">Wobble</option><option value="fade">Fade</option><option value="none">No motion</option>
+                  <option value="pulse">{t("Breathe")}</option><option value="spin">{t("Spin")}</option><option value="bounce">{t("Bounce")}</option><option value="wobble">{t("Wobble")}</option><option value="fade">{t("Fade")}</option><option value="none">{t("No motion")}</option>
                 </select>
               </div>
               <div className="icon-actions">
                 {!m.static_icon
-                  ? <button type="button" className="btn ghost" onClick={() => onChange({ ...m, static_icon: '/starburst.svg', generating_icon: '/starburst-generating.svg', thinking_icon: '/starburst-thinking.svg' })}>Use starburst icon</button>
-                  : <button type="button" className="btn ghost" onClick={() => onChange({ ...m, static_icon: '', generating_icon: '', thinking_icon: '' })}>Remove icon</button>}
+                  ? <button type="button" className="btn ghost" onClick={() => onChange({ ...m, static_icon: '/starburst.svg', generating_icon: '/starburst-generating.svg', thinking_icon: '/starburst-thinking.svg' })}>{t("Use starburst icon")}</button>
+                  : <button type="button" className="btn ghost" onClick={() => onChange({ ...m, static_icon: '', generating_icon: '', thinking_icon: '' })}>{t("Remove icon")}</button>}
               </div>
               <div className="muted-note">{t("With no icon set the model shows no logo in chat or the picker. Click a slot to upload a png, svg, jpeg, or gif, or use the starburst. Generating and Thinking fall back to the static logo when left empty.")}</div>
             </div>
             <div className="field">
-              <label>Icon size <span className="muted-note" style={{ display: 'inline' }}>{(m.icon_size || 40)}px</span></label>
+              <label>{t("Icon size")} <span className="muted-note" style={{ display: 'inline' }}>{(m.icon_size || 40)}px</span></label>
               <div className="icon-size-row">
                 <input type="range" min="14" max="64" value={m.icon_size || 40} onChange={(e) => set('icon_size', parseInt(e.target.value))} />
-                <button className="btn ghost icon-size-reset" disabled={!m.icon_size} onClick={() => set('icon_size', 0)}>Reset</button>
+                <button className="btn ghost icon-size-reset" disabled={!m.icon_size} onClick={() => set('icon_size', 0)}>{t("Reset")}</button>
               </div>
               <div className="muted-note">{t("Size of the model's icon shown beside its messages. Default is 40px. Legacy is 26px.")}</div>
             </div>
@@ -453,12 +458,12 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
             </div>
             <div className="field">
               <label>{t("Logo position")}</label>
-              <SegPick value={m.icon_position || 'below'} options={[['above', 'Above text'], ['below', 'Below text'], ['left', 'Left of text']]} onChange={(v) => set('icon_position', v)} />
-              <div className="muted-note">Where the logo sits relative to the message it generates. "Left of text" places it as an avatar in a gutter beside the message.</div>
+              <SegPick value={m.icon_position || 'below'} options={[['above', tk('Above text')], ['below', tk('Below text')], ['left', tk('Left of text')]]} onChange={(v) => set('icon_position', v)} />
+              <div className="muted-note">{t("Where the logo sits relative to the message it generates. \"Left of text\" places it as an avatar in a gutter beside the message.")}</div>
             </div>
 
             <GroupLabel anchor="badges">{t("Picker badges")}</GroupLabel>
-            <div className="muted-note" style={{ marginBottom: 4 }}>Cosmetic labels shown beside the model in the picker. They don't change behaviour.</div>
+            <div className="muted-note" style={{ marginBottom: 4 }}>{t("Cosmetic labels shown beside the model in the picker. They don't change behaviour.")}</div>
             <div className="med-toggle-card">
               <Toggle m={m} set={set} k="cap_text" label={t("Text-only badge")} note={t("Marks the model as accepting text input only.")} />
               <Toggle m={m} set={set} k="cap_vision" label={t("Image badge")} note={t("Marks the model as accepting images.")} />
@@ -474,15 +479,15 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
               <div className="field">
                 <label>{t("Background image or CSS")}</label>
                 <button type="button" className="bg-preview" style={bgPreviewStyle(m.bg_image)} onClick={() => bgRef.current?.click()} title={t("Click to upload an image")}>
-                  {!m.bg_image && <span className="bg-preview-empty">Click to upload an image</span>}
+                  {!m.bg_image && <span className="bg-preview-empty">{t("Click to upload an image")}</span>}
                 </button>
                 <input ref={bgRef} type="file" hidden onChange={pickBg} accept=".png,.jpg,.jpeg,.gif,.webp,.svg,image/*" />
                 <input value={m.bg_image || ''} onChange={(e) => set('bg_image', e.target.value)} placeholder={t("Image URL, or a CSS gradient")} />
                 <div className="bg-up-row">
-                  <button type="button" className="btn ghost" onClick={() => bgRef.current?.click()}>Upload image…</button>
-                  {m.bg_image && <button type="button" className="btn ghost" onClick={() => set('bg_image', '')}>Clear</button>}
+                  <button type="button" className="btn ghost" onClick={() => bgRef.current?.click()}>{t("Upload image…")}</button>
+                  {m.bg_image && <button type="button" className="btn ghost" onClick={() => set('bg_image', '')}>{t("Clear")}</button>}
                 </div>
-                <div className="muted-note">Paste an image URL, upload a file, or use a CSS gradient like <code>linear-gradient(120deg, #a0c4ff, #ffc6ff)</code>.</div>
+                <div className="muted-note">{t("Paste an image URL, upload a file, or use a CSS gradient such as linear-gradient(120deg, #a0c4ff, #ffc6ff).")}</div>
               </div>
             )}
           </div>
@@ -522,7 +527,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
             <GroupLabel anchor="docs-modalities">{t("Modalities")}</GroupLabel>
             <div className="two-col">
               <div className="field"><label>{t("Input")}</label>
-                {[['docs_in_text', 'Text'], ['docs_in_image', 'Image'], ['docs_in_audio', 'Audio'], ['docs_in_video', 'Video']].map(([k, l]) => (
+                {[['docs_in_text', tk('Text')], ['docs_in_image', tk('Image')], ['docs_in_audio', tk('Audio')], ['docs_in_video', tk('Video')]].map(([k, l]) => (
                   <label key={k} className="inline-toggle" style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0' }}>
                     <span>{t(l)}</span>
                     <div className={'switch' + ((k === 'docs_in_text' ? m[k] !== 0 : (k === 'docs_in_image' ? (!!m[k] || !!m.has_vision) : !!m[k])) ? ' on' : '')}
@@ -531,7 +536,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
                 ))}
               </div>
               <div className="field"><label>{t("Output")}</label>
-                {[['docs_out_text', 'Text'], ['docs_out_image', 'Image'], ['docs_out_audio', 'Audio'], ['docs_out_video', 'Video']].map(([k, l]) => (
+                {[['docs_out_text', tk('Text')], ['docs_out_image', tk('Image')], ['docs_out_audio', tk('Audio')], ['docs_out_video', tk('Video')]].map(([k, l]) => (
                   <label key={k} className="inline-toggle" style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0' }}>
                     <span>{t(l)}</span>
                     <div className={'switch' + ((k === 'docs_out_text' ? m[k] !== 0 : !!m[k]) ? ' on' : '')}
@@ -572,11 +577,15 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
             <div className="muted-note">Optional overrides sent with each request. Leave a field blank to use the provider's default. Only parameters supported by {curType?.label || 'this provider'} are shown.</div>
             <div className="sampling-grid">
               {[
-                ['temperature', 'Temperature', '0.0 \u2013 2.0'], ['top_p', 'Top P', '0.0 \u2013 1.0'],
-                ['top_k', 'Top K', 'e.g. 40'], ['min_p', 'Min P', '0.0 \u2013 1.0'],
-                ['repetition_penalty', 'Repetition penalty', 'e.g. 1.1'], ['presence_penalty', 'Presence penalty', '-2.0 \u2013 2.0'],
-                ['frequency_penalty', 'Frequency penalty', '-2.0 \u2013 2.0'], ['seed', 'Seed', 'integer'],
-                ['max_tokens', 'Max tokens', 'e.g. 2048']
+                ['temperature', tk('Temperature'), '0.0 \u2013 2.0'], ['top_p', tk('Top P'), '0.0 \u2013 1.0'],
+                ['top_k', tk('Top K'), 'e.g. 40'], ['min_p', tk('Min P'), '0.0 \u2013 1.0'],
+                ['repetition_penalty', tk('Repetition penalty'), 'e.g. 1.1'], ['presence_penalty', tk('Presence penalty'), '-2.0 \u2013 2.0'],
+                ['frequency_penalty', tk('Frequency penalty'), '-2.0 \u2013 2.0'], ['seed', tk('Seed'), 'integer'],
+                ['max_tokens', tk('Max tokens'), 'e.g. 2048'],
+                ['dry_multiplier', tk('DRY multiplier'), '0 = off, e.g. 0.8'], ['dry_base', tk('DRY base'), 'e.g. 1.75'],
+                ['dry_allowed_length', tk('DRY allowed length'), 'e.g. 2'], ['dry_penalty_last_n', tk('DRY range'), '-1 = whole context'],
+                ['xtc_probability', tk('XTC probability'), '0 = off, 0.0 \u2013 1.0'], ['xtc_threshold', tk('XTC threshold'), 'e.g. 0.1'],
+                ['mirostat', tk('Mirostat'), '0 off, 1 or 2'], ['mirostat_tau', tk('Mirostat tau'), 'e.g. 5.0'], ['mirostat_eta', tk('Mirostat eta'), 'e.g. 0.1']
               ].filter(([k]) => allowedSamplers.includes(k)).map(([k, label, ph]) => (
                 <div className="samp-field" key={k}>
                   <label>{t(label)}</label>
@@ -584,32 +593,38 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
                 </div>
               ))}
             </div>
+            {allowedSamplers.includes('stop') && (
+              <div className="field"><label>{t("Stop sequences")}</label>
+                <textarea rows={3} value={m.stop ?? ''} onChange={(e) => set('stop', e.target.value)} placeholder={'</s>\n<|im_end|>'} />
+                <div className="muted-note">{t("One per line. Generation stops as soon as any of them appears, and the sequence itself is not shown. Useful when a model's chat template leaks its own end-of-turn marker. Up to {n} are sent.", { n: curType?.stopMax || 4 })}</div>
+              </div>
+            )}
 
             <GroupLabel anchor="pricing">{t("Pricing")}</GroupLabel>
             <div className="muted-note">{t("Optional. Used to estimate cost in each user's Usage tab. Prices are per 1,000,000 tokens. Leave blank or 0 for local or free models.")}</div>
             {preset && (
               <div className="med-preset">
-                <span>Recognized as <strong>{preset.label}</strong> (${preset.in}/${preset.out} per 1M). {priced ? 'Applied.' : 'You can apply or override it.'}</span>
-                {!priced && <button type="button" className="btn" onClick={applyPreset}>Apply preset</button>}
+                <span>{t("Recognized as {name} (${in}/{out} per 1M).", { name: preset.label, in: preset.in, out: preset.out })} {priced ? t("Applied.") : t("You can apply or override it.")}</span>
+                {!priced && <button type="button" className="btn" onClick={applyPreset}>{t("Apply preset")}</button>}
               </div>
             )}
             <div className="sampling-grid">
               <div className="samp-field">
                 <label>{t("Input $ / 1M tokens")}</label>
-                <input type="number" step="any" min="0" placeholder="e.g. 3.00" value={m.cost_in ?? ''} onChange={(e) => set('cost_in', e.target.value)} />
+                <input type="number" step="any" min="0" placeholder={t("e.g. 3.00")} value={m.cost_in ?? ''} onChange={(e) => set('cost_in', e.target.value)} />
               </div>
               <div className="samp-field">
                 <label>{t("Output $ / 1M tokens")}</label>
-                <input type="number" step="any" min="0" placeholder="e.g. 15.00" value={m.cost_out ?? ''} onChange={(e) => set('cost_out', e.target.value)} />
+                <input type="number" step="any" min="0" placeholder={t("e.g. 15.00")} value={m.cost_out ?? ''} onChange={(e) => set('cost_out', e.target.value)} />
               </div>
             </div>
             {(m.cost_in != null || m.cost_out != null) && (
-              <button type="button" className="linklike" style={{ marginTop: 10 }} onClick={clearPrice}>Clear price (treat as local / free)</button>
+              <button type="button" className="linklike" style={{ marginTop: 10 }} onClick={clearPrice}>{t("Clear price (treat as local / free)")}</button>
             )}
 
             <GroupLabel anchor="call-prompt">{t("Voice calls")}</GroupLabel>
             <div className="field">
-              <label>Call system prompt <span className="muted-note" style={{ display: 'inline' }}>(optional)</span></label>
+              <label>{t("Call system prompt")} <span className="muted-note" style={{ display: 'inline' }}>{t("(optional)")}</span></label>
               <textarea rows={4} value={m.call_prompt || ''} onChange={(e) => set('call_prompt', e.target.value)} placeholder={t("You are on a voice call. Keep replies short and conversational, a couple of sentences. No markdown, no lists, no code.")} />
               <div className="muted-note">{t("Replaces the system prompt whenever a message comes in through a voice call. Leave empty to use the regular prompt during calls too.")}</div>
             </div>
@@ -619,7 +634,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
 
       <div className="med-foot">
         <span className={'autosave-dot' + (autosaveState === 'saved' ? ' flash' : '')} />
-        {autosaveState === 'saving' ? 'Saving…' : autosaveState === 'saved' ? 'All changes saved to draft' : 'Edits save automatically to your draft'}
+        {autosaveState === 'saving' ? 'Saving…' : autosaveState === 'saved' ? t('All changes saved to draft') : t('Edits save automatically to your draft')}
       </div>
     </div>
   );

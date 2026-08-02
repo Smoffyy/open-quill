@@ -134,7 +134,19 @@ Two build-config pieces keep this honest, both in `vite.config.js`, and removing
 1. `rolldownOptions.output.manualChunks` names locale chunks `locale-<code>`. Without an explicit name they are emitted as `es-<hash>.js`, which is indistinguishable from an ordinary chunk.
 2. `modulePreload.resolveDependencies` filters anything containing `/locale-`. Vite preloads dynamic imports reachable from the entry, so **without this filter every language is downloaded by everyone** and the split buys nothing. This was verified against the built `index.html`, not assumed.
 
-Adding a language is just dropping a JSON file in `src/locales/`; both rules match on path, so nothing else needs touching.
+Shipping languages are `es`, `zh`, `fr` and `pt`, each complete at 1641 keys, plus `en` which is 65 bytes of `_meta`. Adding a language is just dropping a JSON file in `src/locales/`; both rules match on path, so nothing else needs touching. `_meta` carries `code`, `name` and `dir`; **the `code` must be the two-letter prefix** `detect()` compares against `navigator.language.slice(0, 2)`, which is why Brazilian Portuguese ships as `pt` rather than `pt-BR`. Keys are sorted with `localeCompare` in every pack so diffs across languages line up. **There is no RTL support** — no `[dir="rtl"]` rules exist and the stylesheets use physical `left`/`right` properties throughout, so a `dir: 'rtl'` pack would flip the text and leave the layout wrong. Converting to logical properties is a prerequisite for Arabic, Hebrew, Farsi or Urdu.
+
+### `t()` translates, `tk()` marks
+
+`client/scripts/i18n-check.mjs` finds keys by scanning for `t('…')` and `tk('…')` literals. That means a string only reaches the dictionary if the literal is *visible to the scanner* — and a great many strings live in module-level tables (`NAV_GROUPS`, `ME_SECTIONS`, `FIELD_INDEX`, `MATCHERS`, `VERBS`, `CAP_ICONS`, `STYLE_PRESETS`, the sampling grid) where calling `t()` at definition time would freeze English in before any language pack has loaded.
+
+`tk` is the answer: an identity function exported from `i18n.jsx` that does nothing at runtime and exists purely so the extractor can see the literal. **Mark at definition with `tk()`, translate at render with `t()`.** Both are required — `tk` alone renders English, `t` alone leaves the key out of every dictionary.
+
+This replaced a hand-maintained list of special cases in the extractor (a regex for `nav.jsx`, another for `keybinds.js` and `ShortcutsModal.jsx`, plus a ~100-entry hardcoded `extra` array). The `keybinds`/`ShortcutsModal` regexes remain because those files' shapes are load-bearing elsewhere; the `nav.jsx` one was deleted once `tk()` covered it, verified by the key count not moving. Prefer `tk()` over adding another special case.
+
+Two failure modes this design does not catch, both of which were real bugs found while wiring it up: a table whose labels are `tk()`-marked but rendered bare (English for everyone, extractor happy), and the same table translated in one render site and not another. `ModelDropdown`'s capability labels had exactly the second problem.
+
+**Run `node scripts/i18n-check.mjs` from `client/` after touching any user-facing string.** It exits non-zero on missing keys and lists orphans. It is not part of `npm run build`, so nothing forces it — but every locale is expected to report `complete`.
 
 ## CSS splitting
 
@@ -157,6 +169,21 @@ Prompt size is **measured, never estimated**, for any llama.cpp-backed model. Th
 
 `slideToFit` keeps the system prompt and the newest user message, drops the oldest turns first via a verified binary search (typically two to four tokenizer calls, one when it already fits), and only trims message bodies when dropping is not enough, cutting the middle and keeping both ends. Trimming the system prompt happens only when it alone exceeds the budget, because refusing to answer is worse. The budget is `ctx - output reserve - 1%`, and the generation cap is clamped to the leftover room so a reply cannot overflow mid-stream.
 
+### Trim mode, and why it quantises removals rather than the remainder
+
+`slideToFit` is a thin wrapper over `slideWithCounter(count, msgs, budget, opts)`; the counter is injected purely so the search is testable without a live tokenizer. `opts.mode` comes from the model's `ctx_trim_mode`, `'retain'` (default) or `'cache'`.
+
+**Retain** is the original behaviour: find the smallest drop that fits, then `reclaim` text back until the prompt nearly touches the ceiling. Maximum history, and the prompt prefix therefore changes on every single turn. llama.cpp reuses KV cache only up to the longest common prefix, and dropping from the front leaves nothing in common but the system block, so a conversation past its window re-prefills itself in full on every message.
+
+**Cache** buys prefix stability by dropping further than needed and skipping `reclaim`. The subtlety is *what* gets quantised, and getting it wrong looks like it works while doing nothing:
+
+- Quantising the **remaining** tokens ("drop until we are under 75% of budget") does not work. Every turn appends to the tail, so the same 75% target lands on a different message each time and the boundary still moves every turn. This was written that way first and the test caught it.
+- Quantising the **removed** tokens does work. `needRemoved = ceil((total - budget) / step) * step` with `step = 25%` of budget, and candidates are accepted at `count(cand) <= total - needRemoved`. That condition is `removed(D) >= needRemoved`, in which `total` cancels out entirely — and `removed(D)`, the size of the first D messages, cannot change when you append to the end. So the boundary holds still until `needRemoved` crosses a step, roughly every `0.25 × budget` tokens of new conversation.
+
+The reduced target is a preference, never a constraint: `budget` remains the hard ceiling in both modes, and if no drop count reaches the quantised target the search falls back to the smallest candidate that merely fits. Refusing to answer is worse than dropping less than intended. Because `needRemoved >= over`, the target is naturally bounded at 75% of budget, so cache mode discards at most a quarter of the window more than it had to.
+
+`enable_summaries` compaction rewrites the prefix too. It fires far less often, so it is left alone.
+
 ## The four engine readouts
 
 Four separate surfaces report on the running model. They exist separately because they answer different questions at different times, and collapsing any two of them loses one of the answers:
@@ -166,13 +193,16 @@ Four separate surfaces report on the running model. They exist separately becaus
 | `StreamStatus` (`Message.jsx`) | before the first token | is it prefilling, how far, how much was reused from KV cache, roughly how long left |
 | `EngineStrip` | during the reply, plus 5s after | current tok/s with a sparkline, prompt tok/s, ctx fill for this turn |
 | `SpeedChip` (`Message.jsx`) | forever, on hover | what tok/s that specific reply ran at |
+| `EngineFacts` (`ProvidersSection.jsx`) | on Test connection | what the llama.cpp server itself is running |
 | `CtxGauge` | always, between turns | how full the window is *right now*, before you send anything |
 
 Details that are load-bearing:
 
+- **`StreamStatus` also owns the `waiting` phase.** `turn.js` starts a `SILENT_MS` (2500ms) interval next to the opening `sendStatus({ phase: 'prefill' })` and cancels it on the first event of any kind from `streamCompletion`. In router mode a llama-server loads the model before answering, which is otherwise indistinguishable from a hang. The label must stay honest: the server knows only that nothing has come back, not why, so it says exactly that and shows elapsed seconds rather than claiming a model is loading.
 - **`StreamStatus` shows immediately when it has real numbers** and only waits 1.2s when it does not. It used to wait a flat 5 seconds, which is precisely the window you are staring at nothing during a long local prefill. It leads with cache reuse when there is any, because "94% reused" is the number that tells you the KV cache is working; the generic label does not.
 - **Speed is persisted on the message row** (`speed: { tps, promptTps, exact }`, written in `turn.js`, exposed by `routes/chats/messages.js`). It is recorded *before* the telemetry throttle, so the final tick of a turn is never the one that gets dropped. `exact` is false when the numbers were estimated from streamed text rather than reported by llama.cpp `timings`, and the UI marks that with a `~`.
 - **Only speed is exposed to the client, never the cost** that sits beside it in `m.usage`.
+- **`llamaEngine(provider)` is the provider-level sibling of `llamaInfo(model)`**, behind `GET /api/admin/providers/:id/engine` and folded into the existing Test connection button rather than polled. `/slots` returns 501 when the server ran with `--no-slots`; that is a normal configuration, so `slotsHidden` says so instead of the panel reporting a failure.
 - Both `ctxGauge` and `msgSpeed` are **opt-in** prefs (default off) under **Settings > Chat > Tools**, next to `engineStrip`. They are extra numbers on screen that mostly matter when you are running the model yourself.
 
 ## Render smoke test (`npm run smoke`)

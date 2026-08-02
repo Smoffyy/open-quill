@@ -2,39 +2,40 @@ import React, { useMemo, useState } from 'react';
 import { highlight } from '../lib/hljs.js';
 import { copyText } from '../clipboard.js';
 import { Wrench, FileText, Trash, Folder, Download, Search, Copy, Check, Terminal, Pencil, Plus, Chevron } from './icons.jsx';
+import { t, tk } from '../i18n.jsx';
 
 const VERBS = {
-  bash: ['Running', 'Ran'],
-  run: ['Running', 'Ran'],
-  create_file: ['Creating', 'Created'],
-  str_replace: ['Editing', 'Edited'],
-  view: ['Reading', 'Read'],
-  list_files: ['Listing files', 'Listed files'],
-  delete_file: ['Deleting', 'Deleted'],
-  clear_sandbox: ['Clearing sandbox', 'Cleared sandbox'],
-  delete_all: ['Clearing sandbox', 'Cleared sandbox'],
-  rename_file: ['Moving', 'Moved'],
-  move_file: ['Moving', 'Moved'],
-  copy_file: ['Copying', 'Copied'],
-  make_dir: ['Creating folder', 'Created folder'],
-  mkdir: ['Creating folder', 'Created folder'],
-  search: ['Searching', 'Searched'],
-  find: ['Finding files', 'Found files'],
-  web_search: ['Searching the web', 'Searched the web'],
-  extract_zip: ['Extracting', 'Extracted'],
-  bundle_zip: ['Bundling', 'Bundled'],
-  mb_view: ['Reading', 'Read'],
-  mb_search: ['Searching memory', 'Searched memory'],
-  chat_search: ['Searching past chats', 'Searched past chats'],
-  chat_view: ['Reading a past chat', 'Read a past chat'],
-  skill_view: ['Loading skill', 'Loaded skill'],
-  end_conversation: ['Ending the conversation', 'Ended the conversation']
+  bash: [tk('Running'), tk('Ran')],
+  run: [tk('Running'), tk('Ran')],
+  create_file: [tk('Creating'), tk('Created')],
+  str_replace: [tk('Editing'), tk('Edited')],
+  view: [tk('Reading'), tk('Read')],
+  list_files: [tk('Listing files'), tk('Listed files')],
+  delete_file: [tk('Deleting'), tk('Deleted')],
+  clear_sandbox: [tk('Clearing sandbox'), tk('Cleared sandbox')],
+  delete_all: [tk('Clearing sandbox'), tk('Cleared sandbox')],
+  rename_file: [tk('Moving'), tk('Moved')],
+  move_file: [tk('Moving'), tk('Moved')],
+  copy_file: [tk('Copying'), tk('Copied')],
+  make_dir: [tk('Creating folder'), tk('Created folder')],
+  mkdir: [tk('Creating folder'), tk('Created folder')],
+  search: [tk('Searching'), tk('Searched')],
+  find: [tk('Finding files'), tk('Found files')],
+  web_search: [tk('Searching the web'), tk('Searched the web')],
+  extract_zip: [tk('Extracting'), tk('Extracted')],
+  bundle_zip: [tk('Bundling'), tk('Bundled')],
+  mb_view: [tk('Reading'), tk('Read')],
+  mb_search: [tk('Searching memory'), tk('Searched memory')],
+  chat_search: [tk('Searching past chats'), tk('Searched past chats')],
+  chat_view: [tk('Reading a past chat'), tk('Read a past chat')],
+  skill_view: [tk('Loading skill'), tk('Loaded skill')],
+  end_conversation: [tk('Ending the conversation'), tk('Ended the conversation')]
 };
 function verbsFor(tool) {
-  if (VERBS[tool]) return VERBS[tool];
+  if (VERBS[tool]) return VERBS[tool].map(v => t(v));
   if (String(tool || '').startsWith('mcp_')) {
-    const short = String(tool).split('_').slice(2).join(' ') || 'connector';
-    return ['Using ' + short, 'Used ' + short];
+    const short = String(tool).split('_').slice(2).join(' ') || t('connector');
+    return [t('Using {name}', { name: short }), t('Used {name}', { name: short })];
   }
   return null;
 }
@@ -113,7 +114,7 @@ function BashCard({ call, result }) {
     <div className={'tool-bash' + (failed ? ' err' : '') + (open ? ' open' : '')}>
       <button className="tb-head" onClick={() => setOpen(o => !o)}>
         <Terminal style={{ width: 14 }} />
-        <span className="tb-label">{result ? 'Terminal' : 'Running'}</span>
+        <span className="tb-label">{result ? t('Terminal') : t('Running')}</span>
         <code className="tb-peek">{oneLine}</code>
         {failed && <span className="tb-badge err">{result.exit != null ? `exit ${result.exit}` : 'error'}</span>}
         {!result && <span className="tc-dots"><i /><i /><i /></span>}
@@ -128,7 +129,7 @@ function BashCard({ call, result }) {
           {result && (
             <div className="tb-out">
               <div className="tb-out-head">{failed ? (result.error || 'Error') : 'Output'}{result.exit != null && result.exit !== 0 ? ` · exit ${result.exit}` : ''}</div>
-              {out ? <pre className="tb-out-body">{out}</pre> : <div className="tb-out-empty">No output</div>}
+              {out ? <pre className="tb-out-body">{out}</pre> : <div className="tb-out-empty">{t("No output")}</div>}
             </div>
           )}
         </div>
@@ -189,7 +190,7 @@ function FileCard({ call, result }) {
       {unchanged && <span className="tl-note">unchanged</span>}
       {failed && <span className="tl-err">{result.error}</span>}
       {pending && <span className="tc-dots"><i /><i /><i /></span>}
-      {canPeek && <button className="tc-preview-btn" onClick={togglePeek}>{previewBusy ? '\u2026' : preview != null ? 'Hide' : 'Peek'}</button>}
+      {canPeek && <button className="tc-preview-btn" onClick={togglePeek}>{previewBusy ? '\u2026' : preview != null ? t('Hide') : t('Peek')}</button>}
     </span>
     {preview != null && <div className="tc-preview">{preview}</div>}
     </>
@@ -232,7 +233,7 @@ function WebSearchCard({ call, result }) {
     <div className={'tool-bash ws' + (failed ? ' err' : '') + (open ? ' open' : '')}>
       <button className="tb-head" onClick={() => setOpen(o => !o)}>
         <Search style={{ width: 14 }} />
-        <span className="tb-label">{pending ? 'Searching the web' : 'Web search'}</span>
+        <span className="tb-label">{pending ? t('Searching the web') : t('Web search')}</span>
         <code className="tb-peek">{call.query ? `"${call.query}"` : ''}</code>
         {!failed && result && <span className="tl-note">{result.count} result{result.count === 1 ? '' : 's'}</span>}
         {failed && <span className="tb-badge err">error</span>}
@@ -242,7 +243,7 @@ function WebSearchCard({ call, result }) {
       <div className={'tb-collapse' + (open ? ' open' : '')}>
         <div className="tb-inner">
           {failed
-            ? <div className="tb-out"><div className="tb-out-head">Error</div><div className="tb-out-empty">{result.error}</div></div>
+            ? <div className="tb-out"><div className="tb-out-head">{t("Error")}</div><div className="tb-out-empty">{result.error}</div></div>
             : results.length
               ? <div className="ws-results">{results.map((r, i) => {
                   const host = hostOf(r.url);
@@ -259,7 +260,7 @@ function WebSearchCard({ call, result }) {
                     </a>
                   );
                 })}</div>
-              : <div className="tb-out-empty" style={{ padding: '8px 12px' }}>No results.</div>}
+              : <div className="tb-out-empty" style={{ padding: '8px 12px' }}>{t("No results.")}</div>}
         </div>
       </div>
     </div>

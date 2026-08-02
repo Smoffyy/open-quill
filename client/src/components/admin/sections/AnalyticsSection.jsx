@@ -24,7 +24,7 @@ export default function AnalyticsSection() {
       const r = await api.post('/api/admin/pricing/presets', { match: form.match, label: form.label, in: Number(form.in), out: Number(form.out) });
       setPresets(r.custom || []);
       setForm({ match: '', label: '', in: '', out: '' });
-    } catch (e) { setErr(e?.message || 'Could not save preset.'); }
+    } catch (e) { setErr(e?.message || t('Could not save preset.')); }
   }
   async function delPreset(match) {
     try { const r = await api.del('/api/admin/pricing/presets/' + encodeURIComponent(match)); setPresets(r.custom || []); } catch {}
@@ -41,7 +41,7 @@ export default function AnalyticsSection() {
       {usage && (
         <>
           <div className="stat-grid">
-            {[['Total tokens', usage.totals.total.toLocaleString()], ['Est. cost', '$' + usage.totals.cost.toFixed(2)], ['Generations', usage.totals.generations.toLocaleString()], ['Active users', String(usage.totals.users)]].map(([l, v]) => (
+            {[[t('Total tokens'), usage.totals.total.toLocaleString()], [t('Est. cost'), '$' + usage.totals.cost.toFixed(2)], [t('Generations'), usage.totals.generations.toLocaleString()], [t('Active users'), String(usage.totals.users)]].map(([l, v]) => (
               <div key={l} className="stat-card">
                 <div className="sc-v">{v}</div>
                 <div className="sc-l">{l}</div>
@@ -51,7 +51,7 @@ export default function AnalyticsSection() {
           {usage.users.length > 0 && (
             <Card title={t("By user")}>
               <table className="aq-table">
-                <thead><tr><th>User</th><th className="num">Tokens</th><th className="num">Cost</th></tr></thead>
+                <thead><tr><th>{t("User")}</th><th className="num">{t("Tokens")}</th><th className="num">{t("Cost")}</th></tr></thead>
                 <tbody>{usage.users.slice(0, 30).map(u => (
                   <tr key={u.userId}>
                     <td>{u.name}</td>
@@ -65,7 +65,7 @@ export default function AnalyticsSection() {
           {usage.models.length > 0 && (
             <Card title={t("By model")}>
               <table className="aq-table">
-                <thead><tr><th>Model</th><th className="num">Tokens</th><th className="num">Cost</th></tr></thead>
+                <thead><tr><th>{t("Model")}</th><th className="num">{t("Tokens")}</th><th className="num">{t("Cost")}</th></tr></thead>
                 <tbody>{usage.models.slice(0, 30).map(m => (
                   <tr key={m.modelId}>
                     <td>{m.name}</td>
@@ -90,7 +90,7 @@ export default function AnalyticsSection() {
           <input placeholder={t("Label")} value={form.label} onChange={(e) => setForm(f => ({ ...f, label: e.target.value }))} />
           <input type="number" step="any" min="0" placeholder={t("$ in")} value={form.in} onChange={(e) => setForm(f => ({ ...f, in: e.target.value }))} />
           <input type="number" step="any" min="0" placeholder={t("$ out")} value={form.out} onChange={(e) => setForm(f => ({ ...f, out: e.target.value }))} />
-          <button className="btn" onClick={addPreset}><Plus style={{ width: 14, verticalAlign: '-2px' }} /> Add</button>
+          <button className="btn" onClick={addPreset}><Plus style={{ width: 14, verticalAlign: '-2px' }} /> {t("Add")}</button>
         </div>
         {err && <div className="dz-err" style={{ marginTop: 8 }}>{err}</div>}
       </Card>

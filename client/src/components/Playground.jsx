@@ -188,7 +188,7 @@ export default function Playground({ onClose }) {
           messages: history.map(m => ({ role: m.role, content: m.content }))
         })
       });
-      if (!res.ok || !res.body) throw new Error((await res.json().catch(() => ({}))).error || ('Upstream error ' + res.status));
+      if (!res.ok || !res.body) throw new Error((await res.json().catch(() => ({}))).error || t('Upstream error {status}', { status: res.status }));
       const reader = res.body.getReader();
       const dec = new TextDecoder();
       let buf = '';

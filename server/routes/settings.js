@@ -2,6 +2,7 @@ import { db, uid, getSetting, setSetting } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
 import { oneShot } from '../llm/index.js';
 import { PROVIDER_TYPES, getProviders, typesForClient } from '../providers.js';
+import { llamaEngine } from '../lib/llamacpp.js';
 import * as membank from '../membank.js';
 import * as websearch from '../websearch.js';
 import { logAudit } from '../lib/audit.js';
@@ -134,6 +135,17 @@ export default function registerSettingsRoutes(app) {
 
   app.get('/api/admin/provider-types', authMiddleware, adminOnly, (req, res) => res.json(typesForClient()));
   app.get('/api/admin/providers', authMiddleware, adminOnly, (req, res) => res.json({ providers: getProviders(), types: typesForClient() }));
+
+  app.get('/api/admin/providers/:id/engine', authMiddleware, adminOnly, async (req, res) => {
+    const prov = getProviders().find(p => p.id === req.params.id);
+    if (!prov) return res.status(404).json({ error: 'not found' });
+    if (prov.type !== 'llamacpp') return res.status(400).json({ error: 'Only llama.cpp servers report engine details.' });
+    try {
+      const info = await llamaEngine(prov);
+      if (!info || !info.ok) return res.status(502).json({ error: 'The server did not answer.' });
+      res.json(info);
+    } catch (e) { res.status(502).json({ error: String(e.message || e).slice(0, 200) }); }
+  });
   app.post('/api/admin/providers', authMiddleware, adminOnly, (req, res) => {
     const b = req.body || {};
     const type = PROVIDER_TYPES[b.type] ? b.type : 'lmstudio';

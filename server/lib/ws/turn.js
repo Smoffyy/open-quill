@@ -23,6 +23,7 @@ import {
 
 const MAX_STEERS = 6;
 const TELEMETRY_MS = 220;
+const SILENT_MS = 2500;
 
 function openFence(text) {
   let open = null;
@@ -308,11 +309,22 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           exact: !!t.exact
         }));
       };
+      let silentTimer = null;
+      let heardBack = false;
+      const stopSilenceWatch = () => { if (silentTimer) { clearInterval(silentTimer); silentTimer = null; } };
+      const heard = () => { if (heardBack) return; heardBack = true; stopSilenceWatch(); };
       try {
         sendStatus({ phase: 'prefill' }, true);
+        const askedAt = Date.now();
+        silentTimer = setInterval(() => {
+          if (heardBack) { stopSilenceWatch(); return; }
+          sendStatus({ phase: 'waiting', ms: Date.now() - askedAt }, true);
+        }, SILENT_MS);
+        if (typeof silentTimer.unref === 'function') silentTimer.unref();
         await streamCompletion({
           model: capForOutput(model), messages: convo, tools, signal: controller.signal,
           onEvent: (e) => {
+            heard();
             if (e.type === 'usage') {
               stepPromptTokens = e.usage.prompt || stepPromptTokens;
               stepUsage = { prompt: e.usage.prompt || 0, completion: e.usage.completion || 0, total: e.usage.total || 0 };
@@ -384,7 +396,9 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
             if (e.type === 'tool_calls') { toolCalls = e.calls; }
           }
         });
+        stopSilenceWatch();
       } catch (err) {
+        stopSilenceWatch();
         if (err.name === 'AbortError') {
           const notes = takeSteers();
           if (notes && steerBudget > 0) {

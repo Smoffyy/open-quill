@@ -18,6 +18,20 @@ function sanitizeRouterRules(raw) {
   })).filter(r => r.modelId);
 }
 
+function sanitizeStop(raw) {
+  const lines = Array.isArray(raw) ? raw : String(raw ?? '').split('\n');
+  const seen = new Set();
+  const out = [];
+  for (const line of lines) {
+    const s = String(line ?? '').trim().slice(0, 120);
+    if (!s || seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+    if (out.length >= 8) break;
+  }
+  return out.join('\n');
+}
+
 export default function registerModelRoutes(app) {
   app.get('/api/models', authMiddleware, (req, res) => res.json(req.user.is_admin ? draftModels() : publicModels()));
 
@@ -119,8 +133,12 @@ export default function registerModelRoutes(app) {
     if ('recent_window' in req.body) patch.recent_window = Math.max(1, parseInt(req.body.recent_window) || 4);
     if ('icon_size' in req.body) patch.icon_size = Math.max(0, Math.min(80, parseInt(req.body.icon_size) || 0));
     if ('summary_padding' in req.body) patch.summary_padding = Math.max(0.03, Math.min(0.6, parseFloat(req.body.summary_padding) || 0.125));
-    const numF = ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'repetition_penalty', 'min_p', 'cost_in', 'cost_out'];
-    const numI = ['top_k', 'seed', 'max_tokens', 'docs_intelligence', 'docs_speed', 'docs_max_output'];
+    if ('ctx_trim_mode' in req.body) patch.ctx_trim_mode = req.body.ctx_trim_mode === 'cache' ? 'cache' : 'retain';
+    if ('stop' in req.body) patch.stop = sanitizeStop(req.body.stop);
+    const numF = ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'repetition_penalty', 'min_p', 'cost_in', 'cost_out',
+      'dry_multiplier', 'dry_base', 'xtc_probability', 'xtc_threshold', 'mirostat_tau', 'mirostat_eta'];
+    const numI = ['top_k', 'seed', 'max_tokens', 'docs_intelligence', 'docs_speed', 'docs_max_output',
+      'dry_allowed_length', 'dry_penalty_last_n', 'mirostat'];
     for (const k of numF) if (k in req.body) { const v = req.body[k]; patch[k] = (v === '' || v == null || isNaN(Number(v))) ? null : Number(v); }
     for (const k of numI) if (k in req.body) { const v = req.body[k]; patch[k] = (v === '' || v == null || isNaN(parseInt(v))) ? null : parseInt(v); }
     if ('internal_name' in patch && !('cost_in' in req.body) && !('cost_out' in req.body) && cur.cost_in == null && cur.cost_out == null) {

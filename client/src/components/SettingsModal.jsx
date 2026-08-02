@@ -85,12 +85,12 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
     if (tab !== 'usage') return;
     let alive = true; setUsageErr(''); setUsageData(null);
     const q = usageWindow === 'all' ? '' : '?days=' + usageWindow;
-    api.get('/api/me/usage' + q).then(d => { if (alive) setUsageData(d); }).catch(() => { if (alive) setUsageErr('Could not load usage.'); });
+    api.get('/api/me/usage' + q).then(d => { if (alive) setUsageData(d); }).catch(() => { if (alive) setUsageErr(t('Could not load usage.')); });
     return () => { alive = false; };
   }, [tab, usageWindow]);
   function loadSessions() {
     setSessionErr('');
-    api.get('/api/me/sessions').then(d => setSessions(d.sessions || [])).catch(() => setSessionErr('Could not load sessions.'));
+    api.get('/api/me/sessions').then(d => setSessions(d.sessions || [])).catch(() => setSessionErr(t('Could not load sessions.')));
   }
   useEffect(() => { if (tab === 'sessions') loadSessions(); }, [tab]);
   const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
@@ -104,45 +104,45 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
   const [disablePw, setDisablePw] = useState('');
   async function changePassword() {
     setPwErr(''); setPwMsg('');
-    if (pw.next !== pw.confirm) { setPwErr('New passwords do not match.'); return; }
-    if (pw.next.length < 4) { setPwErr('New password must be at least 4 characters.'); return; }
-    try { await api.post('/api/me/password', { current: pw.current, next: pw.next }); setPw({ current: '', next: '', confirm: '' }); setPwMsg('Password updated. Other sessions were signed out.'); }
-    catch (e) { setPwErr(e?.message || 'Could not change password.'); }
+    if (pw.next !== pw.confirm) { setPwErr(t('New passwords do not match.')); return; }
+    if (pw.next.length < 4) { setPwErr(t('New password must be at least 4 characters.')); return; }
+    try { await api.post('/api/me/password', { current: pw.current, next: pw.next }); setPw({ current: '', next: '', confirm: '' }); setPwMsg(t('Password updated. Other sessions were signed out.')); }
+    catch (e) { setPwErr(e?.message || t('Could not change password.')); }
   }
   async function start2fa() {
     setSecErr(''); setRecovery(null);
     try { setSetup(await api.post('/api/me/2fa/setup', {})); }
-    catch (e) { setSecErr(e?.message || 'Could not start setup.'); }
+    catch (e) { setSecErr(e?.message || t('Could not start setup.')); }
   }
   async function confirm2fa() {
     setSecErr('');
     try { const r = await api.post('/api/me/2fa/enable', { code: setupCode }); setSetup(null); setSetupCode(''); setTwoFa('on'); setRecovery(r.recoveryCodes); onUpdated?.({ ...user, twoFactor: true }); }
-    catch (e) { setSecErr(e?.message || 'Invalid code.'); }
+    catch (e) { setSecErr(e?.message || t('Invalid code.')); }
   }
   async function disable2fa() {
     setSecErr('');
     try { await api.post('/api/me/2fa/disable', { password: disablePw }); setTwoFa('off'); setDisablePw(''); setRecovery(null); onUpdated?.({ ...user, twoFactor: false }); }
-    catch (e) { setSecErr(e?.message || 'Could not disable.'); }
+    catch (e) { setSecErr(e?.message || t('Could not disable.')); }
   }
   async function regenRecovery() {
     setSecErr('');
     try { const r = await api.post('/api/me/2fa/recovery', { password: disablePw }); setDisablePw(''); setRecovery(r.recoveryCodes); }
-    catch (e) { setSecErr(e?.message || 'Could not regenerate codes.'); }
+    catch (e) { setSecErr(e?.message || t('Could not regenerate codes.')); }
   }
   const _securityAnchor = null;
   async function revokeSession(id) {
     try { await api.del('/api/me/sessions/' + id); setSessions(s => (s || []).filter(x => x.id !== id)); }
-    catch { setSessionErr('Could not revoke that session.'); }
+    catch { setSessionErr(t('Could not revoke that session.')); }
   }
   async function revokeOthers() {
     try { await api.del('/api/me/sessions'); loadSessions(); }
-    catch { setSessionErr('Could not revoke other sessions.'); }
+    catch { setSessionErr(t('Could not revoke other sessions.')); }
   }
   const fmtN = (n) => Number(n || 0).toLocaleString();
   const fmtUsd = (n) => { const v = Number(n || 0); if (!v) return '$0.00'; return '$' + (v < 0.01 ? v.toFixed(6) : v.toFixed(4)); };
   const fmtWhen = (ts) => { if (!ts) return 'unknown'; const d = new Date(ts); const diff = Date.now() - ts; if (diff < 60000) return 'just now'; if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago'; if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago'; return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); };
   const deviceLabel = (ua) => { const s = String(ua || ''); if (/edg/i.test(s)) return 'Edge'; if (/chrome|crios/i.test(s)) return 'Chrome'; if (/firefox|fxios/i.test(s)) return 'Firefox'; if (/safari/i.test(s)) return 'Safari'; return 'Browser'; };
-  const osLabel = (ua) => { const s = String(ua || ''); if (/windows/i.test(s)) return 'Windows'; if (/android/i.test(s)) return 'Android'; if (/iphone|ipad|ios/i.test(s)) return 'iOS'; if (/mac os|macintosh/i.test(s)) return 'macOS'; if (/linux/i.test(s)) return 'Linux'; return 'Unknown OS'; };
+  const osLabel = (ua) => { const s = String(ua || ''); if (/windows/i.test(s)) return 'Windows'; if (/android/i.test(s)) return 'Android'; if (/iphone|ipad|ios/i.test(s)) return 'iOS'; if (/mac os|macintosh/i.test(s)) return 'macOS'; if (/linux/i.test(s)) return 'Linux'; return t('Unknown OS'); };
 
   function scheduleSave(nextName, nextPrefs) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -160,12 +160,12 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
   async function clearChats() {
     setClearMsg('');
     try { const r = await api.del('/api/me/chats'); setConfirmClear(false); setClearMsg(`Deleted ${r.deleted || 0} chat${r.deleted === 1 ? '' : 's'}.`); setTimeout(() => { location.href = '/'; }, 700); }
-    catch { setClearMsg('Could not delete chats.'); }
+    catch { setClearMsg(t('Could not delete chats.')); }
   }
   async function deleteAccount() {
     setDelErr('');
     try { await api.del('/api/me'); onDeleted?.(); }
-    catch (e) { setDelErr(e?.message || 'Could not delete account.'); }
+    catch (e) { setDelErr(e?.message || t('Could not delete account.')); }
   }
 
   function setPref(k, v) { setPrefs(p => { const next = { ...p, [k]: v }; applyPrefs(next); scheduleSave(name, next); return next; }); }
@@ -197,7 +197,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
       const r = await api.post('/api/me/memory/refresh', { modelId });
       setMemory(r.memory || '');
       onUpdated?.({ ...user, memory: r.memory || '' });
-    } catch (e) { alert(e.message || 'Could not update memory.'); }
+    } catch (e) { alert(e.message || t('Could not update memory.')); }
     setMemBusy(false);
   }
   async function clearMemory() {
@@ -352,18 +352,18 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                 {vp && (
                   <div className="vh-list">
                     <div className="vh-li">
-                      <span className="vh-li-k">Release</span>
+                      <span className="vh-li-k">{t("Release")}</span>
                       <span className="vh-li-v">{vp.base || ', '}</span>
                     </div>
                                 
                     <div className="vh-li">
-                      <span className="vh-li-k">Channel</span>
+                      <span className="vh-li-k">{t("Channel")}</span>
                       <span className="vh-li-v">{channel || 'Stable'}</span>
                     </div>
                                 
                     {vp.build && (
                       <div className="vh-li">
-                        <span className="vh-li-k">Build</span>
+                        <span className="vh-li-k">{t("Build")}</span>
                         <span className="vh-li-v">{vp.build}</span>
                       </div>
                     )}
@@ -375,7 +375,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                     )}
                 
                     {!notes && (
-                      <div className="vh-empty">No release notes for this build.</div>
+                      <div className="vh-empty">{t("No release notes for this build.")}</div>
                     )}
                   </div>
                 )}
@@ -402,7 +402,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                     <input type="color" value={prefs.accent || '#d97757'} onChange={(e) => setPref('accent', e.target.value)} />
                     <span>+</span>
                   </label>
-                  {prefs.accent && <button className="btn ghost accent-reset" onClick={() => setPref('accent', '')}>Reset</button>}
+                  {prefs.accent && <button className="btn ghost accent-reset" onClick={() => setPref('accent', '')}>{t("Reset")}</button>}
                 </div>
               </div>
               <div className="field row">
@@ -434,7 +434,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                   ))}
                 </div>
                 {chatSec === 'streaming' && <>
-                  <Toggle prefs={prefs} setPref={setPref} k="animations" label={t("Typewriter reveal")} desc="Reveal each response gradually as it generates, instead of all at once." />
+                  <Toggle prefs={prefs} setPref={setPref} k="animations" label={t("Typewriter reveal")} desc={t("Reveal each response gradually as it generates, instead of all at once.")} />
                   {prefs.animations !== false && (
                     <div className="field">
                       <label>{t("Reveal speed")}</label>
@@ -445,7 +445,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                       <div className="muted-note">{t("Delay between reveal steps. Lower is faster; 0 shows responses instantly. Default 40 ms.")}</div>
                     </div>
                   )}
-                  <Toggle prefs={prefs} setPref={setPref} k="autoscroll" label={t("Auto-scroll")} desc="Keep the latest text in view unless you scroll up." />
+                  <Toggle prefs={prefs} setPref={setPref} k="autoscroll" label={t("Auto-scroll")} desc={t("Keep the latest text in view unless you scroll up.")} />
                   <div className="field row">
                     <div><label>{t("Streaming cursor")}</label><div className="muted-note">{t("Show a soft cursor at the write position as text streams in.")}</div></div>
                     <div className={'switch' + (prefs.streamCursor ? ' on' : '')} onClick={() => setPref('streamCursor', !prefs.streamCursor)} />
@@ -454,8 +454,8 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                     <div className="field">
                       <label>{t("Cursor style")}</label>
                       <div className="seg">
-                        <button className={(prefs.cursorStyle || 'block') === 'block' ? 'on' : ''} onClick={() => setPref('cursorStyle', 'block')}>Block</button>
-                        <button className={prefs.cursorStyle === 'circle' ? 'on' : ''} onClick={() => setPref('cursorStyle', 'circle')}>Circle</button>
+                        <button className={(prefs.cursorStyle || 'block') === 'block' ? 'on' : ''} onClick={() => setPref('cursorStyle', 'block')}>{t("Block")}</button>
+                        <button className={prefs.cursorStyle === 'circle' ? 'on' : ''} onClick={() => setPref('cursorStyle', 'circle')}>{t("Circle")}</button>
                       </div>
                     </div>
                   )}
@@ -511,16 +511,16 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                     <div className={'switch' + (prefs.messageEntrance !== false ? ' on' : '')} onClick={() => setPref('messageEntrance', prefs.messageEntrance === false)} />
                   </div>
                   {prefs.messageEntrance !== false && (
-                    <Toggle prefs={prefs} setPref={setPref} k="chatStagger" label={t("Staggered open")} desc="When opening a chat, messages assemble into view one after another." />
+                    <Toggle prefs={prefs} setPref={setPref} k="chatStagger" label={t("Staggered open")} desc={t("When opening a chat, messages assemble into view one after another.")} />
                   )}
                 </>}
                 {chatSec === 'effects' && <>
-                  <Toggle prefs={prefs} setPref={setPref} k="microFx" label={t("Micro-interactions")} desc="Subtle feedback on hover, copy, and button presses." />
+                  <Toggle prefs={prefs} setPref={setPref} k="microFx" label={t("Micro-interactions")} desc={t("Subtle feedback on hover, copy, and button presses.")} />
                   <div className="field row">
                     <div><label>{t("Model logo glow")}</label><div className="muted-note">{t("Soft glow on the model's logo while it generates or thinks, tinted to match.")}</div></div>
                     <div className={'switch' + (prefs.iconGlow ? ' on' : '')} onClick={() => setPref('iconGlow', !prefs.iconGlow)} />
                   </div>
-                  <Toggle prefs={prefs} setPref={setPref} k="composerFx" label={t("Input bar effects")} desc="Attachment animations and press feedback in the message bar." />
+                  <Toggle prefs={prefs} setPref={setPref} k="composerFx" label={t("Input bar effects")} desc={t("Attachment animations and press feedback in the message bar.")} />
                   <div className="field row">
                     <div><label>{t("Input focus ring")}</label><div className="muted-note">{t("Soft accent ring around the message bar while it's focused.")}</div></div>
                     <div className={'switch' + (prefs.focusGlow ? ' on' : '')} onClick={() => setPref('focusGlow', !prefs.focusGlow)} />
@@ -619,10 +619,10 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                   {sessions.map(s => (
                     <div className="field row" key={s.id} style={{ alignItems: 'center' }}>
                       <div>
-                        <label>{deviceLabel(s.userAgent)} on {osLabel(s.userAgent)} {s.current && <span className="you-tag">this device</span>}</label>
+                        <label>{t("{device} on {os}", { device: deviceLabel(s.userAgent), os: osLabel(s.userAgent) })} {s.current && <span className="you-tag">{t("this device")}</span>}</label>
                         <div className="muted-note">{s.ip ? s.ip + ' • ' : ''}active {fmtWhen(s.lastSeen)} • signed in {fmtWhen(s.createdAt)}</div>
                       </div>
-                      {!s.current && <button className="btn danger" onClick={() => revokeSession(s.id)}>Revoke</button>}
+                      {!s.current && <button className="btn danger" onClick={() => revokeSession(s.id)}>{t("Revoke")}</button>}
                     </div>
                   ))}
                   {sessions.filter(s => !s.current).length > 0 && (
@@ -630,7 +630,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                       <div className="dz-title">{t("Sign out everywhere else")}</div>
                       <div className="field row">
                         <div><label>{t("Revoke all other sessions")}</label><div className="muted-note">{t("Keeps this device signed in and ends every other session.")}</div></div>
-                        <button className="btn danger" onClick={revokeOthers}>Revoke others</button>
+                        <button className="btn danger" onClick={revokeOthers}>{t("Revoke others")}</button>
                       </div>
                     </div>
                   )}
@@ -648,7 +648,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                 <input type="password" placeholder={t("Confirm new password")} value={pw.confirm} onChange={(e) => setPw(p => ({ ...p, confirm: e.target.value }))} style={{ marginBottom: 8 }} />
                 {pwErr && <div className="dz-err">{pwErr}</div>}
                 {pwMsg && <div className="muted-note" style={{ color: 'var(--accent)' }}>{pwMsg}</div>}
-                <button className="btn" onClick={changePassword} disabled={!pw.current || !pw.next}>Update password</button>
+                <button className="btn" onClick={changePassword} disabled={!pw.current || !pw.next}>{t("Update password")}</button>
               </div>
               <div className="danger-zone" style={{ borderColor: 'var(--border-soft)' }}>
                 <div className="dz-title" style={{ color: 'var(--text)' }}>Two-factor authentication {twoFa === 'on' && <span className="you-tag">enabled</span>}</div>
@@ -662,18 +662,18 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                 {twoFa === 'off' && !setup && (
                   <>
                     <div className="muted-note" style={{ marginBottom: 8 }}>{t("Add a time-based one-time code from an authenticator app (Aegis, Google Authenticator, 1Password, and so on) as a second step at login.")}</div>
-                    <button className="btn" onClick={start2fa}>Set up two-factor</button>
+                    <button className="btn" onClick={start2fa}>{t("Set up two-factor")}</button>
                   </>
                 )}
                 {twoFa === 'off' && setup && (
                   <>
                     <div className="muted-note" style={{ marginBottom: 8 }}>{t("In your authenticator app, add an account using this key, then enter the 6-digit code it shows.")}</div>
-                    <div className="field"><label className="sub">Secret key</label><code className="totp-secret">{setup.secret}</code></div>
-                    <div className="field"><label className="sub">Or paste this setup URL</label><code className="totp-uri">{setup.otpauth}</code></div>
+                    <div className="field"><label className="sub">{t("Secret key")}</label><code className="totp-secret">{setup.secret}</code></div>
+                    <div className="field"><label className="sub">{t("Or paste this setup URL")}</label><code className="totp-uri">{setup.otpauth}</code></div>
                     <input placeholder="123456" inputMode="numeric" value={setupCode} onChange={(e) => setSetupCode(e.target.value.replace(/\D/g, '').slice(0, 6))} style={{ marginBottom: 8, maxWidth: 160 }} />
                     <div className="edit-actions">
                       <button className="btn ghost" onClick={() => { setSetup(null); setSetupCode(''); }}>{t("Cancel")}</button>
-                      <button className="btn primary" onClick={confirm2fa} disabled={setupCode.length !== 6}>Verify & enable</button>
+                      <button className="btn primary" onClick={confirm2fa} disabled={setupCode.length !== 6}>{t("Verify & enable")}</button>
                     </div>
                   </>
                 )}
@@ -682,8 +682,8 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                     <div className="muted-note" style={{ marginBottom: 8 }}>{t("Enter your password to regenerate recovery codes or turn off two-factor.")}</div>
                     <input type="password" placeholder={t("Password")} value={disablePw} onChange={(e) => setDisablePw(e.target.value)} style={{ marginBottom: 8, maxWidth: 240 }} />
                     <div className="edit-actions">
-                      <button className="btn ghost" onClick={regenRecovery} disabled={!disablePw}>Regenerate recovery codes</button>
-                      <button className="btn danger" onClick={disable2fa} disabled={!disablePw}>Disable two-factor</button>
+                      <button className="btn ghost" onClick={regenRecovery} disabled={!disablePw}>{t("Regenerate recovery codes")}</button>
+                      <button className="btn danger" onClick={disable2fa} disabled={!disablePw}>{t("Disable two-factor")}</button>
                     </div>
                   </>
                 )}

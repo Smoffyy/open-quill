@@ -90,7 +90,7 @@ function ChatRow({ c, active, showTrash, folders, onOpen, onDelete, onToggleStar
             </button>
           )}
           <button onClick={(e) => { e.stopPropagation(); onToggleStar(c.id); close(); }}>
-            <Star style={{ width: 15 }} /> {c.starred ? 'Unstar chat' : 'Star chat'}
+            <Star style={{ width: 15 }} /> {c.starred ? t('Unstar chat') : t('Star chat')}
           </button>
           <div className="cm-sub">
             <button onClick={(e) => { e.stopPropagation(); setSubOpen(s => !s); setMenu(m => m ? { ...m, ready: false } : m); }}>
@@ -99,7 +99,7 @@ function ChatRow({ c, active, showTrash, folders, onOpen, onDelete, onToggleStar
             </button>
             {subOpen && (
               <div className="cm-sublist">
-                {c.folderId && <button onClick={(e) => { e.stopPropagation(); onMoveChat(c.id, null); close(); }}>Remove from folder</button>}
+                {c.folderId && <button onClick={(e) => { e.stopPropagation(); onMoveChat(c.id, null); close(); }}>{t("Remove from folder")}</button>}
                 {folders.length === 0 && <div className="cm-empty">{t("No folders yet")}</div>}
                 {folders.map(f => (
                   <button key={f.id} className={f.id === c.folderId ? 'on' : ''} onClick={(e) => { e.stopPropagation(); onMoveChat(c.id, f.id); close(); }}>
@@ -154,7 +154,7 @@ function FolderSection({ f, chats, active, showTrash, folders, dragChatId, onTog
       </div>
       {!f.collapsed && (
         <div className="folder-body">
-          {chats.length === 0 && <div className="chats-empty sub">Drag chats here</div>}
+          {chats.length === 0 && <div className="chats-empty sub">{t("Drag chats here")}</div>}
           {chats.map(c => <ChatRow key={c.id} c={c} active={c.id === active} showTrash={showTrash} folders={folders} {...rowProps} />)}
         </div>
       )}
@@ -220,7 +220,7 @@ function Sidebar({
         <div className="brand">{appName || 'open-quill'}</div>
         <div className="sidebar-head-actions">
           <button className="icon-btn search-btn" onClick={onSearch} title={t("Search chats (Ctrl+Shift+F)")}><Search style={{ width: 17 }} /></button>
-          <button className="icon-btn collapse-btn" onClick={onToggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}><Panel style={{ width: 17 }} /></button>
+          <button className="icon-btn collapse-btn" onClick={onToggle} title={collapsed ? t('Expand sidebar') : t('Collapse sidebar')}><Panel style={{ width: 17 }} /></button>
           <button className="icon-btn mobile-close-btn" onClick={onMobileClose} title={t("Close menu")}><span style={{ fontSize: 20, lineHeight: 1 }}>✕</span></button>
         </div>
       </div>
@@ -247,7 +247,7 @@ function Sidebar({
         ) : (
           <>
             {(starred.length > 0 || starredProjects.length > 0) && <>
-              <div className="section-label"><Star style={{ width: 12, verticalAlign: '-1px' }} /> Starred</div>
+              <div className="section-label"><Star style={{ width: 12, verticalAlign: '-1px' }} /> {t("Starred")}</div>
               {starredProjects.map(p => (
                 <div key={p.id} className="chat-row project-row" onClick={() => onOpenProject && onOpenProject(p.id)}>
                   <Box style={{ width: 15, flexShrink: 0, opacity: .85 }} />
@@ -277,7 +277,7 @@ function Sidebar({
               <Chevron className="rl-chev" style={{ width: 13 }} /> Recents
             </div>
             {!recentsCollapsed && <>
-              {others.length === 0 && <div className="chats-empty">No chats yet</div>}
+              {others.length === 0 && <div className="chats-empty">{t("No chats yet")}</div>}
               {recentGroups[0].items.map(row)}
               {recentGroups.slice(1).map(g => g.items.length > 0 && (
                 <React.Fragment key={g.key}>
@@ -286,7 +286,7 @@ function Sidebar({
                 </React.Fragment>
               ))}
               {overflow && (
-                <button className="all-chats-btn" onClick={onChatsOverview}><Compact style={{ width: 15, flexShrink: 0 }} /> <span>All chats</span></button>
+                <button className="all-chats-btn" onClick={onChatsOverview}><Compact style={{ width: 15, flexShrink: 0 }} /> <span>{t("All chats")}</span></button>
               )}
             </>}
           </>
@@ -306,7 +306,7 @@ function Sidebar({
           <div className="avatar">{(user.displayName || user.email)[0].toUpperCase()}</div>
           <div className="profile-info">
             <div className="name">{user.displayName}</div>
-            <div className="plan">{user.isAdmin ? 'Admin' : 'Member'}</div>
+            <div className="plan">{user.isAdmin ? t('Admin') : t('Member')}</div>
           </div>
         </button>
       </div>
