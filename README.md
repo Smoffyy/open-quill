@@ -2,25 +2,26 @@
 
 # Open Quill
 
-<img src="assets\v27\icon.svg" alt="Starburst Logo" width="200"/>
+<img src="assets/v27/icon.svg" alt="Starburst Logo" width="200"/>
 
 *A fully open-source chat interface featuring Anthropic inspired theming.*
 
 [![Latest Stable Release](https://img.shields.io/github/v/release/Smoffyy/open-quill?label=Latest%20Stable%20Release)](https://github.com/Smoffyy/open-quill/releases/latest)
 [![Latest Beta Release](https://img.shields.io/github/v/release/Smoffyy/open-quill?include_prereleases&label=Latest%20Beta%20Release)](https://github.com/Smoffyy/open-quill/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 </div>
 
-A **chat interface** inspired by **[Anthropic's Chat Interface](https://claude.ai/new)**, enhanced with new features while preserving the Anthropic's aesthetic. This project aims to recreate the look and feel of Anthropic's interface while introducing the ability to run everything **entirely locally** for greater privacy and control.
+A **chat interface** inspired by **[Anthropic's Chat Interface](https://claude.ai/new)**, enhanced with new features while preserving Anthropic's aesthetic. This project aims to recreate the look and feel of Anthropic's interface while introducing the ability to run everything **entirely locally** for greater privacy and control.
 
-This project is licensed under the [MIT License](LICENSE), by downloading, using, or modifying this project, you agree to the terms of the [LICENSE](LICENSE) file. **Forever free. Built by the community, for the community.**
+This project is licensed under the [MIT License](LICENSE); by downloading, using, or modifying this project, you agree to the terms of the [LICENSE](LICENSE) file. **Forever free. Built by the community, for the community.**
 
 > **This project is not enterprise ready and is not intended to be. It is a community built interface designed to be customized, modified, and configured however you prefer.**
 
 ---
 
 <p align="center">
-  <img src="assets\v27\anthropic_screenshot1.jpeg" alt="Chat Interface with Artifacts"/>
+  <img src="assets/v27/anthropic_screenshot1.jpeg" alt="Chat Interface with Artifacts"/>
 </p>
 
 <details>
@@ -28,25 +29,25 @@ This project is licensed under the [MIT License](LICENSE), by downloading, using
   <br>
 
   <p align="center">
-    <img src="assets\v27\anthropic_screenshot2.jpeg" alt="Artifacts"/>
+    <img src="assets/v27/anthropic_screenshot2.jpeg" alt="Artifacts"/>
     <br>
     <sub>Chat with Artifacts.</sub>
   </p>
 
   <p align="center">
-    <img src="assets\v27\anthropic_screenshot4.jpeg" alt="Chat"/>
+    <img src="assets/v27/anthropic_screenshot4.jpeg" alt="Chat"/>
     <br>
     <sub>Chat response.</sub>
   </p>
 
   <p align="center">
-    <img src="assets\v27\anthropic_screenshot3.jpeg" alt="Admin panel"/>
+    <img src="assets/v27/anthropic_screenshot3.jpeg" alt="Admin panel"/>
     <br>
     <sub>Models tab in Admin Panel.</sub>
   </p>
 
   <p align="center">
-    <img src="assets\v27\openai_screenshot1.jpeg" alt="OpenAI chat"/>
+    <img src="assets/v27/openai_screenshot1.jpeg" alt="OpenAI chat"/>
     <br>
     <sub>OpenAI theme</sub>
   </p>
@@ -55,26 +56,41 @@ This project is licensed under the [MIT License](LICENSE), by downloading, using
 
 ---
 
+## Contents
+
+- [Features](#features)
+- [Documentation](#documentation)
+- [Why was this project made?](#why-was-this-project-made)
+- [Requirements](#requirements)
+- [Setup](#setup)
+- [Connecting your model](#connecting-your-model)
+- [Databases](#databases)
+- [Notes](#notes)
+- [Privacy and local-only operation](#privacy-and-local-only-operation)
+- [Updates / Version Information](#updates--version-information)
+
 ## Features
- 
+
 ### Interface
- 
+
 - Anthropic-style design with a serif assistant voice (Source Serif 4) and Open Sans for user input
 - Token-by-token streaming with a fade-in reveal, smart autoscroll, and a jump-to-bottom control
 - Auto-generated chat titles, hover-to-copy code blocks, branching conversations, and side-by-side branch comparison
 - Light and dark modes, selectable themes, and a configurable home screen
 - Full keyboard navigation, a command palette, and in-thread search
-- Localization support, currently shipping English and Spanish
+- Localization support, currently shipping English, Spanish, Chinese, French, and Portuguese
+
 ### Models and reasoning
- 
+
 - Multiple providers configured side by side, each with its own base URL, key, and sampler set
 - Per-model display name, description, system prompt, icon, and sampling parameters
 - Reasoning models get an **Extended** toggle and a collapsible thought-process view, supporting both `<think>` tags and `reasoning_content` deltas
 - Reasoning and non-reasoning trigger tokens (for example `/think` and `/no_think`) appended to the system prompt automatically
 - Custom kwargs surfaced to users as toggles, sliders, or dropdowns
 - Exact context accounting using the model's own tokenizer, with a sliding window and summarization that layer rather than compete
+
 ### Working with files and tools
- 
+
 - **Artifacts** - the assistant writes real files into a per-chat workspace that you can view, diff, restore to any version, preview, and download
 - **Code sandbox** - a real shell and file toolset scoped to that workspace, so the assistant can scaffold, install, build, run, and test
 - **Web search** - optional, backed by your own SearXNG instance
@@ -89,7 +105,7 @@ The [`docs/`](docs/README.md) folder has an in-depth guide to using the interfac
 
 ## Why was this project made?
 
-This project was made mainly because I was fascinated by the Anthropic interface and colors. There's many other apps that have recreated simliar styles of other interfaces and I wanted to contribute openly for others to build upon what I've created. This entire project will **FOREVER** be listed under the MIT License. The front end aims to keep a balance between useful functionality and a clean, aesthetically pleasing experience. This project was made with the help of my local assistants alongside me.
+This project was made mainly because I was fascinated by the Anthropic interface and colors. There are many other apps that have recreated similar styles of other interfaces, and I wanted to contribute openly for others to build upon what I've created. This entire project will **FOREVER** be listed under the MIT License. The front end aims to keep a balance between useful functionality and a clean, aesthetically pleasing experience. This project was made with the help of my local assistants alongside me.
 
 ## Requirements
 
