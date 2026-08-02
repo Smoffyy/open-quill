@@ -149,13 +149,31 @@ For maths, `hasMath` gates everything: a block with no `$`, `\(`, `\[`, `\begin{
 Prompt size is **measured, never estimated**, for any llama.cpp-backed model. The rules that keep it that way:
 
 - **Every llama.cpp endpoint must carry the model name.** Router mode (`llama-server` with no `--model`) proxies to per-model child processes and returns 400 without it. `/props`, `/tokenize`, `/apply-template` and `/slots` all go through `getWithModel`/`postWithModel`, which send it as both a query param and a body field, then retry bare for single-model servers. Dropping this is what silently disabled all exact counting before.
-- **Context length comes from the server**, in order: `/props` → `default_generation_settings.n_ctx`, then `/v1/models` → `meta.n_ctx`, then `/slots`. Note this is the **per-slot** value: `-np 4 -c 131072` gives each slot 32768, and that is the real limit. A manual `num_ctx` on the model overrides all of it, so a stale value there beats the truth.
+- **Context length comes from the server**, in order: `/props` → `default_generation_settings.n_ctx`, then `/v1/models` → `meta.n_ctx`, then `/slots`. Note this is the **per-slot** value: `-np 4 -c 131072` gives each slot 32768, and that is the real limit. A manual `num_ctx` on the model overrides all of it, so a stale value there beats the truth. **`n_ctx_train` is not the window** — it is the model's architectural ceiling, often 16× what was actually loaded, and it is only ever a last resort. `detectContextLength` in `lib/models.js` preferring it over `n_ctx` (while also calling `/props` without the model name, so router mode 400'd straight past it) is exactly how the budget silently overstated itself. Same rule as everywhere else here: never guess a row from `/v1/models` when the name does not match and more than one model is listed.
 - **`/apply-template` is passed `tools` and `add_generation_prompt`.** Without them the tool schemas and the assistant suffix are not counted, which is a few hundred tokens of silent undercount on tool-enabled models.
 - **The estimator never decides anything.** `estimateTokens` is a character heuristic and is English-biased; it is used only to pick the first probe point in the slide search and as a fallback for providers with no tokenizer. Every candidate the slider returns has been verified by the real tokenizer.
 - **An oversized request is free.** llama.cpp rejects it before prefill (`n_tokens = 0`) and reports `n_prompt_tokens` and `n_ctx` in the error. `parseOverflow` reads them, so the recovery path corrects itself against ground truth instead of guessing again. Do not remove that parser; it is the backstop that makes the guarantee hold when images or a template quirk throw the pre-flight off.
 - **Images are the one thing the tokenizer cannot see.** `/tokenize` is text-only, so each image carries a reserve (1600 by default, deliberately above the 1024 Qwen-VL floor) that is corrected upward from real `usage.prompt_tokens` and never lowered.
 
 `slideToFit` keeps the system prompt and the newest user message, drops the oldest turns first via a verified binary search (typically two to four tokenizer calls, one when it already fits), and only trims message bodies when dropping is not enough, cutting the middle and keeping both ends. Trimming the system prompt happens only when it alone exceeds the budget, because refusing to answer is worse. The budget is `ctx - output reserve - 1%`, and the generation cap is clamped to the leftover room so a reply cannot overflow mid-stream.
+
+## The four engine readouts
+
+Four separate surfaces report on the running model. They exist separately because they answer different questions at different times, and collapsing any two of them loses one of the answers:
+
+| Surface | When | Answers |
+| --- | --- | --- |
+| `StreamStatus` (`Message.jsx`) | before the first token | is it prefilling, how far, how much was reused from KV cache, roughly how long left |
+| `EngineStrip` | during the reply, plus 5s after | current tok/s with a sparkline, prompt tok/s, ctx fill for this turn |
+| `SpeedChip` (`Message.jsx`) | forever, on hover | what tok/s that specific reply ran at |
+| `CtxGauge` | always, between turns | how full the window is *right now*, before you send anything |
+
+Details that are load-bearing:
+
+- **`StreamStatus` shows immediately when it has real numbers** and only waits 1.2s when it does not. It used to wait a flat 5 seconds, which is precisely the window you are staring at nothing during a long local prefill. It leads with cache reuse when there is any, because "94% reused" is the number that tells you the KV cache is working; the generic label does not.
+- **Speed is persisted on the message row** (`speed: { tps, promptTps, exact }`, written in `turn.js`, exposed by `routes/chats/messages.js`). It is recorded *before* the telemetry throttle, so the final tick of a turn is never the one that gets dropped. `exact` is false when the numbers were estimated from streamed text rather than reported by llama.cpp `timings`, and the UI marks that with a `~`.
+- **Only speed is exposed to the client, never the cost** that sits beside it in `m.usage`.
+- Both `ctxGauge` and `msgSpeed` are **opt-in** prefs (default off) under **Settings > Chat > Tools**, next to `engineStrip`. They are extra numbers on screen that mostly matter when you are running the model yourself.
 
 ## Render smoke test (`npm run smoke`)
 
@@ -331,6 +349,7 @@ A generation belongs to the *chat*, not to the socket that started it. `live.js`
 3. Every new socket is handed `{ type: 'resume', turns: [...] }` before anything else. `App.jsx` seeds its `gen` map from that and calls `syncView()`, which is what makes a mid-stream refresh pick the response back up rather than waiting for `done`.
 4. Because `aborts` is keyed by chat rather than by socket, Stop and steering work from a freshly loaded page — both paths ownership-check the chat against the session user first.
 5. One turn per chat: a second `chat`/`regenerate`/`edit` for a chat that already has a live turn is rejected. `beginTurn` is paired with `endTurn` in a `finally`, and records older than 45 minutes are treated as stale, so a crashed turn can never wedge a chat permanently.
+6. The client mirror of this is `App.jsx`'s `gen` map, which is a **ref** so a token never re-renders the tree. `busyChats` state is the one thing derived from it, refreshed only by `syncBusy()` and only when membership actually changes; `Sidebar` turns that into the pulsing `.row-busy` dot and a Stop entry on rows generating out of view. Every mutation of `gen` goes through `queueRec`/`dropRec`/`recFor` so the mirror cannot drift — do not call `gen.current.set/delete` directly.
 
 ### HTTP routes (`server/routes/`)
 
@@ -371,6 +390,7 @@ Vite + React. `vite.config.js` proxies `/api`, `/uploads`, and the websocket to 
 - `Composer.jsx` — the input: attachments, dictation, slash commands, style menu, sandbox/web-search toggles, saved prompts.
 - `Message.jsx`, `Markdown.jsx`, `CodeBlock.jsx`, `ReasoningBlock.jsx`, `StreamingText.jsx`, `ToolCard.jsx` — message rendering pipeline.
 - `Sidebar.jsx`, `ChatMenu.jsx`, `ChatsOverview.jsx`, `SearchModal.jsx`, `BranchCompare.jsx` — navigation and history.
+- `CtxGauge.jsx`: the persistent context fill beside the model picker, behind the `ctxGauge` pref (default off). Reads `GET /api/chats/:id/context`, which counts with the real tokenizer when the backend has one. It measures against the **budget** (window minus the reply reserve), not the raw window, because the raw window reads empty right up to a truncation. Deliberately not recomputed on keystrokes: each refresh is a live `/tokenize` round trip, so it is keyed on chat, model and the last message id, debounced 350ms, and skipped entirely while streaming.
 - `ThreadRail.jsx`: the conversation minimap pinned to the right edge of `.main`. One `IntersectionObserver` rooted on `.scroll-area` tracks which turns are on screen (there is deliberately no pixel measurement, so it survives streaming and reflow); one `ResizeObserver` compresses the tick gap to fit. Hidden below 4 messages and under 900px.
 - `ThreadFind.jsx`: in-thread find. Flattens thread text nodes into a single string plus an offset index, so matches spanning inline elements are found, then paints via the CSS Custom Highlight API (`CSS.highlights`, styled by `::highlight(oq-find)` / `::highlight(oq-find-active)` in `threadnav.css`). Where the API is missing it still navigates by message. Recomputes on a `revision` prop rather than watching the DOM.
 - `BranchTree.jsx`: the branch map modal (lazy-loaded, own chunk). Renders the whole message graph: linear runs collapse into a single column and fold above 6 nodes, fork points split into parallel branch columns, the active path is highlighted. Clicking a node already on the active path jumps to it in the thread (`onJump`); clicking anything else switches branches via `selectBranch`. Keep that split: making every click switch branches means clicking a shared ancestor mutates the conversation the user was only trying to look at.

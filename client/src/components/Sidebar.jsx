@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Chat, Search, Panel, Gear, Shield, Flask, Logout, Dots, Trash, Heart, FileText, Star, Download, Folder, Pencil, Chevron, Users, Box, Compact } from './icons.jsx';
+import { Plus, Chat, Search, Panel, Gear, Shield, Flask, Logout, Dots, Trash, Heart, FileText, Star, Download, Folder, Pencil, Chevron, Users, Box, Compact, Stop } from './icons.jsx';
 import { t } from '../i18n.jsx';
 
 function ProfileMenu({ user, version, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, onClose }) {
@@ -25,7 +25,8 @@ function ProfileMenu({ user, version, onSettings, onAdmin, onPlayground, onCredi
   );
 }
 
-function ChatRow({ c, active, showTrash, folders, onOpen, onDelete, onToggleStar, onMoveChat, onDragChat }) {
+function ChatRow({ c, active, showTrash, folders, onOpen, onDelete, onToggleStar, onMoveChat, onDragChat, busyIds, onStopChat }) {
+  const busy = !!(busyIds && busyIds.has(c.id));
   const [menu, setMenu] = useState(null); // null or {top,left}
   const [subOpen, setSubOpen] = useState(false);
   const btnRef = useRef(null);
@@ -67,13 +68,14 @@ function ChatRow({ c, active, showTrash, folders, onOpen, onDelete, onToggleStar
   const openInTab = () => window.open('/chat/' + c.id, '_blank', 'noopener');
   const close = () => { setMenu(null); setSubOpen(false); };
   return (
-    <div className={'chat-row' + (active ? ' active' : '')}
+    <div className={'chat-row' + (active ? ' active' : '') + (busy ? ' busy' : '')}
       draggable
       onDragStart={(e) => { onDragChat?.(c.id); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', c.id); } catch {} }}
       onDragEnd={() => onDragChat?.(null)}
       onClick={(e) => { if (e.ctrlKey || e.metaKey) { openInTab(); return; } onOpen(c.id); }}
       onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); openInTab(); } }}
       onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}>
+      {busy && <span className="row-busy" role="img" aria-label={t('Still generating')} title={t('Still generating')} />}
       <span className="title">{c.title}</span>
       {showTrash ? (
         <button className="row-ctrl shift-del" onClick={(e) => { e.stopPropagation(); onDelete(c.id); }} title={t("Delete chat")} aria-label={t("Delete chat")}><Trash style={{ width: 14 }} /></button>
@@ -82,6 +84,11 @@ function ChatRow({ c, active, showTrash, folders, onOpen, onDelete, onToggleStar
       )}
       {menu && createPortal(
         <div className="chat-menu" ref={menuRef} role="menu" aria-label={t("Chat options")} style={{ top: menu.top, left: menu.left, visibility: menu.ready ? undefined : 'hidden' }}>
+          {busy && onStopChat && (
+            <button onClick={(e) => { e.stopPropagation(); onStopChat(c.id); close(); }}>
+              <Stop style={{ width: 15 }} /> {t('Stop generating')}
+            </button>
+          )}
           <button onClick={(e) => { e.stopPropagation(); onToggleStar(c.id); close(); }}>
             <Star style={{ width: 15 }} /> {c.starred ? 'Unstar chat' : 'Star chat'}
           </button>
@@ -159,8 +166,10 @@ function Sidebar({
   user, chats, onSearch, chatsLoaded = true, activeId, appName, onNew, onOpen, onDelete, onToggleStar,
   folders = [], onCreateFolder, onRenameFolder, onToggleFolder, onDeleteFolder, onMoveChat,
   collapsed, onToggle, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview,
-  onSpaces, spacesPending = 0, projects = [], onProjects, onOpenProject, mobileOpen = false, onMobileClose
+  onSpaces, spacesPending = 0, projects = [], onProjects, onOpenProject, mobileOpen = false, onMobileClose,
+  busyChats = [], onStopChat
 }) {
+  const busyIds = React.useMemo(() => new Set(busyChats), [busyChats]);
   const [menu, setMenu] = useState(false);
   const [shiftHeld, setShiftHeld] = useState(false);
   const [hover, setHover] = useState(false);
@@ -201,7 +210,7 @@ function Sidebar({
     else if (age < 7 * DAY) recentGroups[1].items.push(c);
     else recentGroups[2].items.push(c);
   }
-  const rowProps = { onOpen, onDelete, onToggleStar, onMoveChat, onDragChat: setDragChatId, folders };
+  const rowProps = { onOpen, onDelete, onToggleStar, onMoveChat, onDragChat: setDragChatId, folders, busyIds, onStopChat };
   const row = (c) => <ChatRow key={c.id} c={c} active={c.id === activeId} showTrash={showTrash} folders={folders} {...rowProps} />;
 
   return (

@@ -507,6 +507,13 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 @keyframes msgFlash { 0%, 100% { box-shadow: none; } 12% { box-shadow: 0 0 0 2px var(--accent), 0 0 22px color-mix(in srgb, var(--accent) 45%, transparent); } }
 .msg-model-badge { margin-left: 6px; font-size: 11px; color: var(--text-faint); font-family: var(--font-sans); opacity: 0; transition: opacity .15s; }
 .msg.has-actions:hover .msg-model-badge { opacity: .8; }
+.msg-speed {
+  margin-left: 6px; font-size: 11px; color: var(--text-faint); font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums; white-space: nowrap; opacity: 0; transition: opacity .15s; cursor: default;
+}
+.msg-speed + .msg-model-badge { margin-left: 6px; }
+.msg-speed .ms-est { margin-left: 1px; opacity: .7; }
+.msg.has-actions:hover .msg-speed { opacity: .75; }
 .pin-tag { animation: pinPop .3s cubic-bezier(.2,1.4,.4,1); }
 @keyframes pinPop { from { opacity: 0; transform: translateY(-3px) scale(.9); } to { opacity: 1; transform: none; } }
 
@@ -861,6 +868,23 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .mdocs-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; color: var(--text-faint); transition: color .12s, background .12s; flex-shrink: 0; }
 .mdocs-btn:hover { color: var(--text); background: var(--hover-soft); }
 .mdocs-btn svg { width: 17px; height: 17px; }
+
+/* ---------- persistent context fill, next to the model picker ---------- */
+.ctx-gauge {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  padding: 0 8px; height: 28px; border-radius: 8px;
+  font-family: var(--font-sans); font-size: 11.5px; font-variant-numeric: tabular-nums;
+  color: var(--text-faint); cursor: default; transition: color .12s, background .12s;
+}
+.ctx-gauge:hover { background: var(--hover-soft); color: var(--text-muted); }
+.ctx-gauge .cg-bar { width: 34px; height: 3px; border-radius: 999px; background: var(--hover-mid); overflow: hidden; }
+.ctx-gauge .cg-fill { display: block; height: 100%; background: currentColor; opacity: .65; transition: width .3s ease; }
+.ctx-gauge .cg-sep { opacity: .5; margin: 0 1px; }
+.ctx-gauge .cg-est { opacity: .6; }
+.ctx-gauge.warn { color: #d99a3c; }
+.ctx-gauge.danger { color: #e06a52; }
+.ctx-gauge.warn .cg-fill, .ctx-gauge.danger .cg-fill { opacity: 1; }
+@media (max-width: 620px) { .ctx-gauge .cg-text, .ctx-gauge .cg-est { display: none; } .ctx-gauge { padding: 0 6px; } }
 @media (max-width: 760px) {
   .mdoc { padding: 22px 18px 30px; }
   .mdoc-grid { grid-template-columns: 1fr; }

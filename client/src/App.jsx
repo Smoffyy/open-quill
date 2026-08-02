@@ -10,6 +10,7 @@ import Composer from './components/Composer.jsx';
 import QuickPrompts from './components/QuickPrompts.jsx';
 import CompactingBar from './components/CompactingBar.jsx';
 import EngineStrip from './components/EngineStrip.jsx';
+import CtxGauge from './components/CtxGauge.jsx';
 import LedgerBar from './components/LedgerBar.jsx';
 import SummaryModal from './components/SummaryModal.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
@@ -304,6 +305,7 @@ export default function App() {
   const wsRetry = useRef(0);
   const wsTimer = useRef(null);
   const gen = useRef(new Map());
+  const [busyChats, setBusyChats] = useState([]);
   const targetContent = useRef('');
   const targetReason = useRef('');
   const pendingDone = useRef(false);
@@ -325,6 +327,8 @@ export default function App() {
   const revealMs = (() => { const v = user?.prefs?.revealMs; return v == null || isNaN(parseInt(v)) ? 40 : Math.max(0, Math.min(100, parseInt(v))); })();
   const [threadStagger, setThreadStagger] = useState(false);
   const staggerTimer = useRef(null);
+  const showMsgSpeed = !!user?.prefs?.msgSpeed;
+  const showCtxGauge = !!user?.prefs?.ctxGauge;
 
   const activeIdRef = useRef(null);
   const currentIdRef = useRef(null);
@@ -607,9 +611,24 @@ export default function App() {
     const k = key || activeKey();
     setChatErrors(prev => { if (!(k in prev)) return prev; const n = { ...prev }; delete n[k]; return n; });
   }
+  function syncBusy() {
+    const next = [];
+    for (const [id, r] of gen.current.entries()) if (id && id !== 'incognito' && !r.done) next.push(id);
+    next.sort();
+    setBusyChats(prev => (prev.length === next.length && prev.every((v, i) => v === next[i])) ? prev : next);
+  }
+  function queueRec(key, modelId) {
+    gen.current.set(key, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: modelId, live: null });
+    syncBusy();
+  }
+  function dropRec(key) { gen.current.delete(key); syncBusy(); }
   function recFor(key) {
     let r = gen.current.get(key);
-    if (!r) { r = { content: '', reasoning: '', phase: 'generating', done: false, assistantId: null, model_id: currentIdRef.current, live: null, steers: [], status: null }; gen.current.set(key, r); }
+    if (!r) {
+      r = { content: '', reasoning: '', phase: 'generating', done: false, assistantId: null, model_id: currentIdRef.current, live: null, steers: [], status: null };
+      gen.current.set(key, r);
+      syncBusy();
+    }
     return r;
   }
 
@@ -666,6 +685,7 @@ export default function App() {
           status: t.status || null
         });
       }
+      syncBusy();
       if (list.some(t => t && t.chatId === activeKey())) syncView();
       return;
     }
@@ -791,7 +811,7 @@ export default function App() {
         if (hadContent) { pendingDone.current = true; finalize(); }
         else {
           stopLoops();
-          gen.current.delete(m.chatId);
+          dropRec(m.chatId);
           targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
           setDispContent(''); setDispReason('');
           setLiveFile(null); setLiveCall(null); liveRef.current = null;
@@ -800,7 +820,7 @@ export default function App() {
       } else if (hadContent) {
         finalizeBackground(m.chatId);
       } else {
-        gen.current.delete(m.chatId);
+        dropRec(m.chatId);
       }
       setChatErrors(prev => ({ ...prev, [m.chatId]: String(m.error || 'The model returned an error.') }));
       return;
@@ -808,6 +828,7 @@ export default function App() {
     if (m.type === 'done') {
       voiceEmit({ type: 'done', chatId: m.chatId });
       const r = recFor(m.chatId); r.done = true;
+      syncBusy();
       if (m.chatId === activeKey()) { pendingDone.current = true; if (!animateRef.current) finalize(); }
       else finalizeBackground(m.chatId);
       loadBudget();
@@ -888,7 +909,7 @@ export default function App() {
     const reasoning = r ? r.reasoning : targetReason.current;
     const id = (r && r.assistantId) || assistantIdRef.current || ('a' + Date.now());
     const mid = r ? r.model_id : currentIdRef.current;
-    gen.current.delete(key);
+    dropRec(key);
     setStreaming(false); setPhase('static'); setQueued(false);
     setMessages(ms => ms.some(m => m.id === id) ? ms : [...ms, { id, role: 'assistant', content, reasoning, model_id: mid }]);
     setDispContent(''); setDispReason('');
@@ -901,7 +922,7 @@ export default function App() {
   }
 
   function finalizeBackground(key) {
-    gen.current.delete(key);
+    dropRec(key);
     if (key !== 'incognito') loadChats();
   }
 
@@ -928,7 +949,7 @@ export default function App() {
       setStreaming(true); setQueued(r.phase === 'queued');
       startStream();
     } else {
-      if (r && r.done) gen.current.delete(key);
+      if (r && r.done) dropRec(key);
       targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
       setStreaming(false); setQueued(false); setPhase('static');
       setDispContent(''); setDispReason('');
@@ -1289,7 +1310,7 @@ export default function App() {
         .map(m => ({ role: m.role, content: m.content })),
         { role: 'user', content: text }];
       if (!wsSend({ type: 'incognito', modelId: currentId, extended, reasoningEffort, kwargValues, messages: history })) return;
-      gen.current.set('incognito', { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
+      queueRec('incognito', currentId);
       setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments: [], _enter: true }]);
       setInput('');
       stick.current = true; setTimeout(() => scrollBottom(true), 20);
@@ -1309,7 +1330,7 @@ export default function App() {
     if (compareRef.current && !compareRef.current.chatId) compareRef.current.chatId = chatId;
     clearDraft(activeId);
     if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, reasoningEffort, kwargValues, content: text, attachments, sandbox, webSearch, call: !!opts.call, styleId })) return;
-    gen.current.set(chatId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
+    queueRec(chatId, currentId);
     setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     if (!opts.call) setInput('');
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
@@ -1327,7 +1348,7 @@ export default function App() {
     setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
     history.pushState({}, '', '/chat/' + c.id);
     if (!wsSend({ type: 'chat', chatId: c.id, modelId: currentId, extended, reasoningEffort, kwargValues, content: text, attachments, sandbox, webSearch, styleId })) return;
-    gen.current.set(c.id, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
+    queueRec(c.id, currentId);
     setMessages([{ id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
   }
@@ -1355,7 +1376,7 @@ export default function App() {
     if (streaming || !activeId || !currentId) return;
     dismissError();
     if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, reasoningEffort, kwargValues, messageId, sandbox, webSearch, styleId })) return;
-    gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
+    queueRec(activeId, currentId);
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
   }, [streaming, activeId, currentId, extended, reasoningEffort, kwargValues, sandbox, webSearch]);
@@ -1371,7 +1392,7 @@ export default function App() {
     setChatRemovedModel(null);
     setCurrentId(modelId);
     if (!wsSend({ type: 'regenerate', chatId: activeId, modelId, extended, reasoningEffort, kwargValues, messageId, sandbox, webSearch, styleId })) return;
-    gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: modelId, live: null });
+    queueRec(activeId, modelId);
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
     const mm = models.find(m => m.id === modelId);
@@ -1383,10 +1404,15 @@ export default function App() {
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); if (idx === -1) return ms; const copy = ms.slice(0, idx + 1); copy[idx] = { ...copy[idx], content: newContent }; return copy; });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
     if (!wsSend({ type: 'edit', chatId: activeId, modelId: currentId, extended, reasoningEffort, kwargValues, messageId, content: newContent, sandbox, webSearch, styleId })) return;
-    gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
+    queueRec(activeId, currentId);
   }, [streaming, activeId, currentId, extended, reasoningEffort, kwargValues, sandbox, webSearch]);
 
   function stop() { const key = activeKey(); try { ws.current?.readyState === 1 && ws.current.send(JSON.stringify({ type: 'stop', chatId: key })); } catch {} pendingDone.current = true; setQueued(false); }
+  const stopChat = useCallback((chatId) => {
+    if (!chatId) return;
+    if (chatId === activeKey()) { stop(); return; }
+    wsSend({ type: 'stop', chatId });
+  }, []);
   async function logout() { await api.post('/api/auth/logout'); location.href = '/'; }
   function updatePref(key, value) {
     const prefs = { ...(user?.prefs || {}), [key]: value };
@@ -1432,7 +1458,11 @@ export default function App() {
     savedPrompts: user?.savedPrompts || [], onUsePrompt: (t) => { setInput(t); setFocusTick(x => x + 1); }, onSavePrompt: savePromptFromInput, onDeletePrompt: deleteSavedPrompt,
     onNewChat: () => newChat(), onShortcuts: () => setShowShortcuts(true),
     voiceMic: !!cfg.voiceMic, voiceCall: !!cfg.voiceCall && !incognito, sttEngine: cfg.voiceStt || 'browser',
-    onStartCall: () => { setArtifactsOpen(false); setCallOpen(true); }
+    onStartCall: () => { setArtifactsOpen(false); setCallOpen(true); },
+    ctxGauge: (showCtxGauge && activeId && !incognito)
+      ? <CtxGauge chatId={activeId} modelId={currentId} streaming={streaming || queued}
+          revision={messages.length + ':' + (messages[messages.length - 1]?.id || '')} />
+      : null
   };
   const showArtifactsBtn = sandboxOn || files.length > 0;
 
@@ -1546,7 +1576,8 @@ export default function App() {
         onCredits={onCreditsCb} onChangelog={onChangelogCb} onLicense={onLicenseCb} onLogout={sbLogout} version={cfg.version}
         onChatsOverview={onChatsOverviewCb}
         onSpaces={onSpacesCb} spacesPending={spacesPending}
-        projects={projects} onProjects={sbProjects} onOpenProject={sbOpenProject} />
+        projects={projects} onProjects={sbProjects} onOpenProject={sbOpenProject}
+        busyChats={busyChats} onStopChat={stopChat} />
 
       {mobileDrawer && <div className="drawer-backdrop" onClick={() => setMobileDrawer(false)} />}
 
@@ -1709,6 +1740,7 @@ export default function App() {
                       status={msg._streaming ? modelStatus : null}
                       streaming={!!msg._streaming} phase={msg._streaming ? ((modelById.get(currentId)?.hideThinking && phase === 'thinking') ? 'generating' : phase) : 'static'} liveCall={msg._streaming ? liveCall : null}
                       onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onDelete={streaming || queued ? null : deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
+                      showSpeed={showMsgSpeed}
                       showIcon={msg.role === 'assistant' && (cfg.uiPreset === 'openai' || (lastA && msg.id === lastA.id))} />
                     );
                   });

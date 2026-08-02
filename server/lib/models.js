@@ -134,21 +134,27 @@ export async function detectContextLength(prov, internal) {
       return asInt(ctxKey ? info[ctxKey] : 0);
     }
     if (prov?.type === 'llamacpp') {
-      try {
-        const r = await fetch(root + '/props', { headers });
-        if (r.ok) {
+      const propsUrls = internal
+        ? [root + '/props?model=' + encodeURIComponent(internal), root + '/props']
+        : [root + '/props'];
+      for (const url of propsUrls) {
+        try {
+          const r = await fetch(url, { headers });
+          if (!r.ok) continue;
           const json = await r.json();
-          const ctx = asInt(json?.default_generation_settings?.n_ctx) || asInt(json?.n_ctx);
+          const ctx = asInt(json?.default_generation_settings?.n_ctx)
+            || asInt(json?.default_generation_settings?.params?.n_ctx)
+            || asInt(json?.n_ctx);
           if (ctx) return ctx;
-        }
-      } catch {}
+        } catch {}
+      }
       try {
         const r = await fetch(base + '/models', { headers });
         if (r.ok) {
           const json = await r.json();
           const list = Array.isArray(json.data) ? json.data : [];
-          const hit = list.find(m => m.id === internal) || list[0];
-          const ctx = asInt(hit?.meta?.n_ctx_train) || asInt(hit?.meta?.n_ctx);
+          const hit = list.find(m => m.id === internal) || (list.length === 1 ? list[0] : null);
+          const ctx = asInt(hit?.meta?.n_ctx) || asInt(hit?.n_ctx) || asInt(hit?.meta?.n_ctx_train);
           if (ctx) return ctx;
         }
       } catch {}

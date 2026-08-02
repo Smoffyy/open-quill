@@ -52,6 +52,18 @@
 .chat-row .row-ctrl:hover { background: var(--hover-mid); color: var(--text); }
 .chat-row .row-ctrl.shift-del { opacity: 1; color: #e06a52; }
 .chat-row { position: relative; }
+.chat-row .row-busy {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+  background: var(--accent); animation: row-busy-pulse 1.4s ease-in-out infinite;
+}
+.chat-row.busy .title { color: var(--text); }
+@keyframes row-busy-pulse {
+  0%, 100% { opacity: .35; transform: scale(.8); }
+  50% { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-row .row-busy { animation: none; opacity: .9; }
+}
 .chat-menu {
   position: fixed; z-index: 60; min-width: 152px; padding: 5px;
   background: var(--menu-bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 32px #00000055;

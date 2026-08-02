@@ -26,12 +26,12 @@ export default function EngineStrip({ telemetry, streaming, route }) {
   const [show, setShow] = useState(false);
   const [history, setHistory] = useState([]);
   useEffect(() => {
-    if (!streaming) return;
-    const v = Number(telemetry?.tps || 0);
+    if (!streaming || !telemetry) return;
+    const v = Number(telemetry.tps || 0);
     if (!v) return;
     setHistory(h => (h.length > 47 ? [...h.slice(-47), v] : [...h, v]));
-  }, [telemetry?.tps, streaming]);
-  useEffect(() => { if (streaming && history.length && !telemetry) setHistory([]); }, [streaming]);
+  }, [telemetry, streaming]);
+  useEffect(() => { if (streaming) setHistory([]); }, [streaming]);
   useEffect(() => {
     if (streaming && telemetry) { setShow(true); return; }
     if (!telemetry) { setShow(false); return; }

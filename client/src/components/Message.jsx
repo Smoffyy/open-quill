@@ -165,27 +165,45 @@ function ModelIcon({ model, phase, below, name }) {
   );
 }
 
+const compact = (n) => (n >= 10000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : Number(n).toLocaleString());
+
 function StreamStatus({ status }) {
+  const total = status && status.total ? status.total : 0;
+  const hasProgress = total > 0;
   const [show, setShow] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setShow(true), 5000);
-    return () => clearTimeout(t);
-  }, []);
-  const pct = status && Number.isFinite(status.pct) ? status.pct : null;
-  const total = status && status.total ? status.total : 0;
-  const cached = status && status.cache ? status.cache : 0;
-  const label = status && status.phase === 'generating' ? t('Working') : t('Reading your prompt');
+    if (hasProgress) { setShow(true); return; }
+    const timer = setTimeout(() => setShow(true), 1200);
+    return () => clearTimeout(timer);
+  }, [hasProgress]);
   if (!show) return null;
+
+  const pct = status && Number.isFinite(status.pct) ? status.pct : null;
+  const cached = status && status.cache ? status.cache : 0;
+  const processed = status && status.total ? Math.max(cached, status.processed || 0) : 0;
+  const ms = status && status.ms ? status.ms : 0;
+  const generating = status && status.phase === 'generating';
+  const label = generating ? t('Working') : cached > 0 ? t('Reusing cache') : t('Reading your prompt');
+  const fresh = processed - cached;
+  const eta = (!generating && ms > 400 && fresh > 0 && total > processed)
+    ? Math.round((total - processed) / (fresh / (ms / 1000)))
+    : 0;
+
+  const parts = [];
+  if (hasProgress) parts.push(`${compact(processed)} / ${compact(total)} ${t('tokens')}`);
+  if (cached > 0) parts.push(`${Math.round((cached / total) * 100)}% ${t('reused')}`);
+  if (eta >= 2) parts.push(`~${eta}s ${t('left')}`);
+
   return (
     <div className="model-status" role="status">
       <span className="mst-label">{label}</span>
-      {pct !== null && total > 0 && (
+      {pct !== null && hasProgress && (
         <>
           <span className="mst-bar"><span className="mst-fill" style={{ width: pct + '%' }} /></span>
           <span className="mst-pct">{pct}%</span>
         </>
       )}
-      {total > 0 && <span className="mst-note">{cached > 0 ? `${cached.toLocaleString()} ${t('cached')} · ${total.toLocaleString()} ${t('tokens')}` : `${total.toLocaleString()} ${t('tokens')}`}</span>}
+      {parts.length > 0 && <span className="mst-note">{parts.join(' · ')}</span>}
     </div>
   );
 }
@@ -210,6 +228,16 @@ function LedgerRow({ tokens, pct, state, id, onToggleExclude }) {
   );
 }
 
+function SpeedChip({ speed }) {
+  if (!speed || !(speed.tps > 0)) return null;
+  const rate = speed.tps >= 100 ? Math.round(speed.tps) : Math.round(speed.tps * 10) / 10;
+  const bits = [];
+  if (speed.promptTps > 0) bits.push(`${t('prompt')} ${Math.round(speed.promptTps)} tok/s`);
+  if (speed.out > 0) bits.push(`${Number(speed.out).toLocaleString()} ${t('tokens out')}`);
+  if (!speed.exact) bits.push(t('Estimated from streamed text, this provider does not report timings.'));
+  return <span className="msg-speed" title={bits.join(' · ')}>{rate} tok/s{!speed.exact && <span className="ms-est">~</span>}</span>;
+}
+
 function SteerChips({ notes }) {
   if (!notes || !notes.length) return null;
   return (
@@ -221,7 +249,7 @@ function SteerChips({ notes }) {
   );
 }
 
-function Message({ msg, model, models, currentId, streaming, phase, liveCall, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null }) {
+function Message({ msg, model, models, currentId, streaming, phase, liveCall, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, showSpeed = false }) {
   if (chatEnded) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onFork = null; onDelete = null; }
   const [typing, setTyping] = useState(false);
   const typingTimer = useRef(null);
@@ -362,6 +390,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
             onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin (keep in context)'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
             onDelete && chatId && !String(msg.id).startsWith('inc-') && { label: t('Delete message'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
           ]} />
+          {showSpeed && <SpeedChip speed={msg.speed} />}
           {model?.displayName && <span className="msg-model-badge">{model.displayName}</span>}
         </div>
       )}

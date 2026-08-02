@@ -157,11 +157,24 @@ function wireFor(messages) {
   });
 }
 
+function toolSig(tools) {
+  if (!Array.isArray(tools) || !tools.length) return '0';
+  let chars = 0;
+  const names = [];
+  for (const t of tools) {
+    const fn = t && t.function;
+    if (!fn) continue;
+    names.push(fn.name || '');
+    try { chars += JSON.stringify(fn.parameters || {}).length + (fn.description || '').length; } catch {}
+  }
+  return tools.length + ':' + chars + ':' + names.join(',');
+}
+
 function signature(wire, tools, name, images) {
   let chars = 0;
   for (const m of wire) chars += m.content.length + m.role.length;
   const tail = wire.length ? wire[wire.length - 1].content.slice(-96) : '';
-  return name + '|' + wire.length + '|' + chars + '|' + images + '|' + (Array.isArray(tools) ? tools.length : 0) + '|' + tail;
+  return name + '|' + wire.length + '|' + chars + '|' + images + '|' + toolSig(tools) + '|' + tail;
 }
 
 export async function llamaPromptTokens(model, messages, tools) {

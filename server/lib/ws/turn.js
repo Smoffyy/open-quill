@@ -129,6 +129,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   const assistantId = uid();
   const assistantParent = (db.chats.byId(chat.id) || {}).active_leaf || null;
   let content = '', reasoning = '', usage = null, lastStepCompletion = 0;
+  let speed = null;
   safeSend(JSON.stringify({ type: 'start', chatId: chat.id, messageId: assistantId }));
 
   const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, projFilesOn }) : [];
@@ -287,6 +288,13 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       };
       const sendTelemetry = (t) => {
         if (t.exact) exactTelemetry = true;
+        if (t.tps > 0 && (t.exact || !speed || !speed.exact)) {
+          speed = {
+            tps: Math.round(t.tps * 10) / 10,
+            promptTps: Math.round((t.promptTps || 0) * 10) / 10,
+            exact: !!t.exact
+          };
+        }
         const nowMs = Date.now();
         if (nowMs - lastTelemetryAt < TELEMETRY_MS) return;
         lastTelemetryAt = nowMs;
@@ -296,7 +304,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           promptTps: Math.round((t.promptTps || 0) * 10) / 10,
           promptTokens: t.promptTokens || 0,
           genTokens: t.genTokens || 0,
-          ctx: ctxSize || 0,
+          ctx: ctxFull || ctxSize || 0,
           exact: !!t.exact
         }));
       };
@@ -523,7 +531,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   }
   const hasOutput = !!(content.trim() || reasoning.trim());
   if (hasOutput || usageRec) {
-    db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: usageRec, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, kwarg_values: model.kwarg_values || null, steers: steerNotes.length ? steerNotes.slice(0, MAX_STEERS) : null, created_at: now() });
+    db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: usageRec, speed, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, kwarg_values: model.kwarg_values || null, steers: steerNotes.length ? steerNotes.slice(0, MAX_STEERS) : null, created_at: now() });
     db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
   } else {
     db.chats.update(chat.id, { updated_at: now() });

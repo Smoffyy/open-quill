@@ -538,6 +538,14 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                     <div className={'switch' + (prefs.engineStrip !== false ? ' on' : '')} onClick={() => setPref('engineStrip', prefs.engineStrip === false)} />
                   </div>
                   <div className="field row">
+                    <div><label>{t("Context gauge")}</label><div className="muted-note">{t("A small how-full-is-the-window meter beside the model picker, updated after every message rather than only while a reply streams.")}</div></div>
+                    <div className={'switch' + (prefs.ctxGauge ? ' on' : '')} onClick={() => setPref('ctxGauge', !prefs.ctxGauge)} />
+                  </div>
+                  <div className="field row">
+                    <div><label>{t("Speed on each reply")}</label><div className="muted-note">{t("Keep the tokens per second a reply was generated at next to it, so models and quantisations stay comparable after the fact.")}</div></div>
+                    <div className={'switch' + (prefs.msgSpeed ? ' on' : '')} onClick={() => setPref('msgSpeed', !prefs.msgSpeed)} />
+                  </div>
+                  <div className="field row">
                     <div><label>{t("Context ledger on open")}</label><div className="muted-note">{t("Open chats with the per-message token ledger already showing.")}</div></div>
                     <div className={'switch' + (prefs.ledgerDefault ? ' on' : '')} onClick={() => setPref('ledgerDefault', !prefs.ledgerDefault)} />
                   </div>

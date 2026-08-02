@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
-const SRC = new URL('../src', import.meta.url).pathname;
+const SRC = fileURLToPath(new URL('../src', import.meta.url));
 const keys = new Set();
 const re = /\bt\(\s*("((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')/g;
 

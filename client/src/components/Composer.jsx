@@ -78,7 +78,8 @@ export default function Composer({
   conversationEnded = false, endedReason = '',
   removedModel = null, onOpenDocs = null,
   queueCount = 0, onQueue, canContinue = false, onContinue, onSteer, canSteer = false,
-  compareIds = [], onSetCompare, hideModelPicker = false, reasoningEffort, onSetEffort, kwargValues, onSetKwarg
+  compareIds = [], onSetCompare, hideModelPicker = false, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
+  ctxGauge = null
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
@@ -669,6 +670,7 @@ export default function Composer({
           )}
         </div>
         <div className="composer-right">
+          {ctxGauge}
           {!hideModelPicker && <ModelDropdown models={models} currentId={currentId} onSelect={onSelect}
             extended={extended} onToggleExtended={onToggleExtended} up={modelUp} isAdmin={canUseUnavailable}
             reasoningEffort={reasoningEffort} onSetEffort={onSetEffort}

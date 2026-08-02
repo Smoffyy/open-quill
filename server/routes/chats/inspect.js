@@ -29,12 +29,19 @@ export default function registerInspectRoutes(app) {
     const model = pickModel(req.query.modelId);
     if (!model) return res.json({ used: 0, limit: 0, pct: 0, hasSummary: !!c.summary, summaries: !!c.enable_summaries });
     const convo = buildMessages(model, chatHistory(c, model), false, null, c.summary, promptVars(c.user_id), instrFor(c));
-    const used = calibratedTokens(c.id, convo);
+    const exact = await countExact(model, convo);
+    const used = exact || calibratedTokens(c.id, convo);
     const ctx = await modelCtx(model);
     const limit = ctx || parseInt(model.num_ctx) || 0;
     const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
     const rolling = !!limit && (await rollingCtxFor(model)) > 0;
-    res.json({ used, limit, pct, hasSummary: !!c.summary, measured: tokenCalib.has(c.id), compacts: model.enable_summaries ? compactThreshold(model, ctx) : 0, rolling });
+    const bud = await contextBudget(model);
+    res.json({
+      used, limit, pct, exact: !!exact,
+      budget: bud.budget || 0, reserve: bud.reserve || 0,
+      hasSummary: !!c.summary, measured: !!exact || tokenCalib.has(c.id),
+      compacts: model.enable_summaries ? compactThreshold(model, ctx) : 0, rolling
+    });
   });
 
   app.get('/api/chats/:id/ledger', authMiddleware, async (req, res) => {
