@@ -8,7 +8,7 @@
 
 [![Latest Stable Release](https://img.shields.io/github/v/release/Smoffyy/open-quill?label=Latest%20Stable%20Release)](https://github.com/Smoffyy/open-quill/releases/latest)
 [![Latest Beta Release](https://img.shields.io/github/v/release/Smoffyy/open-quill?include_prereleases&label=Latest%20Beta%20Release)](https://github.com/Smoffyy/open-quill/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 </div>
 
