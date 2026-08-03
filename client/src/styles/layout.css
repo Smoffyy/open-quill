@@ -39,7 +39,30 @@
 .recents-label:hover { color: var(--text-muted); }
 .recents-label .rl-chev { transform: rotate(90deg); transition: transform .2s cubic-bezier(.2,.7,.3,1); flex-shrink: 0; opacity: .7; }
 .recents-label.collapsed .rl-chev { transform: rotate(0deg); }
-.chats { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
+.chats { flex: 1; overflow: hidden auto; padding: 0 8px 12px; }
+
+/* stepper arrows at each end of the sidebar scrollbar, both presets */
+.chats::-webkit-scrollbar { width: 11px; }
+.chats::-webkit-scrollbar-thumb { background: var(--hover-mid); border-radius: 9px; border: 3px solid transparent; background-clip: content-box; }
+.chats::-webkit-scrollbar-thumb:hover { background: var(--border); background-clip: content-box; }
+.chats::-webkit-scrollbar-track { background: transparent; }
+.chats::-webkit-scrollbar-button { display: none; }
+.chats::-webkit-scrollbar-button:single-button {
+  display: block; height: 14px; width: 11px;
+  background-repeat: no-repeat; background-position: center; background-size: 9px 9px;
+}
+.chats::-webkit-scrollbar-button:single-button:vertical:decrement {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'><path d='M3 7.5 6 4.5 9 7.5' fill='none' stroke='%238a8981' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+}
+.chats::-webkit-scrollbar-button:single-button:vertical:increment {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'><path d='M3 4.5 6 7.5 9 4.5' fill='none' stroke='%238a8981' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+}
+:root[data-theme="light"] .chats::-webkit-scrollbar-button:single-button:vertical:decrement {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'><path d='M3 7.5 6 4.5 9 7.5' fill='none' stroke='%238a8a8a' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+}
+:root[data-theme="light"] .chats::-webkit-scrollbar-button:single-button:vertical:increment {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'><path d='M3 4.5 6 7.5 9 4.5' fill='none' stroke='%238a8a8a' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+}
 .chat-row {
   display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 5px 10px;
   border-radius: 8px; color: var(--text-muted); font-size: 13.5px; cursor: pointer; transition: background .15s, color .15s;
