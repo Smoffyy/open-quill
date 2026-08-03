@@ -1,6 +1,7 @@
 import { modelProvider, endpoint, authHeaders } from './provider.js';
 import { samplingParams, ollamaOptions } from './sampling.js';
 import { makeEmitter } from './emitter.js';
+import { makeToolResolver } from '../tools/aliases.js';
 import { normalizeMessages, requestKwargs } from './wire.js';
 import { stripNestedKwargs } from '../lib/kwargs.js';
 
@@ -21,7 +22,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
       onEvent({ type: 'tool_call_delta', index: 1000 + idx, id: cid, name: c.name, argsText: c.argsText });
     }
   };
-  const { emitContent, emitReasoning, flush } = makeEmitter(model, onEvent, addTextCalls, toolNames.size ? (n) => toolNames.has(n) : null);
+  const { emitContent, emitReasoning, flush } = makeEmitter(model, onEvent, addTextCalls, makeToolResolver(toolNames));
   const finishCalls = () => {
     if (pending.size) {
       const calls = [...pending.entries()].sort((a, b) => a[0] - b[0]).map(([, c]) => c).filter(c => c.name);

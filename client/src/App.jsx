@@ -232,6 +232,7 @@ export default function App() {
   const [sandbox, setSandbox] = useState(false);
   const [webSearch, setWebSearch] = useState(false);
   const [files, setFiles] = useState([]);
+  const [pendingFiles, setPendingFiles] = useState({});
   const [liveFile, setLiveFile] = useState(null);
   const [liveCall, setLiveCall] = useState(null);
   const [compacting, setCompacting] = useState(false);
@@ -697,14 +698,27 @@ export default function App() {
     if (m.type === 'files') {
       if (m.chatId && m.chatId !== activeIdRef.current) return;
       setFiles(m.files || []);
+      const done = new Set((m.files || []).map(f => f.path));
+      setPendingFiles(p => {
+        const stale = Object.keys(p).filter(k => done.has(k));
+        if (!stale.length) return p;
+        const next = { ...p };
+        for (const k of stale) delete next[k];
+        return next;
+      });
       const lf = liveRef.current;
-      if (lf && lf.path && (m.files || []).some(f => f.path === lf.path)) { liveRef.current = null; setLiveFile(null); }
+      if (lf && lf.path && done.has(lf.path)) { liveRef.current = null; setLiveFile(null); }
       return;
     }
     if (m.type === 'tool_live') {
       const r = recFor(m.chatId); r.live = m.live || null;
       if (m.chatId !== activeKey()) return;
       const live = m.live;
+      const prev = liveRef.current;
+      if (prev && prev.path && prev.tool === 'create_file' && (!live || live.path !== prev.path)) {
+        const path = prev.path, text = prev.content || '';
+        setPendingFiles(p => (p[path] === text ? p : { ...p, [path]: text }));
+      }
       if (live && live.path && (live.tool === 'create_file' || live.tool === 'str_replace')) {
         const lf = { path: live.path, content: live.content || '', tool: live.tool, oldStr: live.oldStr ?? null };
         liveRef.current = lf; setLiveFile(lf);
@@ -829,6 +843,7 @@ export default function App() {
       voiceEmit({ type: 'done', chatId: m.chatId });
       const r = recFor(m.chatId); r.done = true;
       syncBusy();
+      if (m.chatId === activeKey()) setPendingFiles(p => (Object.keys(p).length ? {} : p));
       if (m.chatId === activeKey()) { pendingDone.current = true; if (!animateRef.current) finalize(); }
       else finalizeBackground(m.chatId);
       loadBudget();
@@ -1127,10 +1142,12 @@ export default function App() {
       applyChatMeta(cached.chat || {});
       applyLastModel(cached.messages || []);
       setFiles(cached.files || []);
+      setPendingFiles({});
       setArtifactsOpen((cached.files || []).length > 0 && artifactsOpenRef.current);
     } else {
       setMessages([]);
       setFiles([]);
+      setPendingFiles({});
     }
     setCtlOpen(false);
     setCanContinue(false); setQueue([]);
@@ -1166,7 +1183,7 @@ export default function App() {
     setShowProjects(false);
     setCurrentProject(null);
     setActiveId(null); setMessages([]); setInput('');
-    setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
+    setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
     setTelemetry(null); setLiveSteers([]); setLedger(null); setModelStatus(null);
     setChatEnded(false); setChatEndedReason('');
     setChatRemovedModel(null);
@@ -1198,7 +1215,7 @@ export default function App() {
       flushDraft();
       setActiveId(null); setMessages([]); setInput('');
       incognitoRef.current = true;
-      setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
+      setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
       setSandbox(false);
       const gs = [tk('Greetings, whoever you are'), tk('No names, no traces'), tk('This one stays between us'), tk('Off the record')];
       setIncognitoGreeting(gs[Math.floor(Math.random() * gs.length)]);
@@ -1345,7 +1362,7 @@ export default function App() {
     setShowProjects(false); setProjectOpenId(null);
     setCurrentProject(project);
     setActiveId(c.id); setMessages([]); setInput('');
-    setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
+    setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
     history.pushState({}, '', '/chat/' + c.id);
     if (!wsSend({ type: 'chat', chatId: c.id, modelId: currentId, extended, reasoningEffort, kwargValues, content: text, attachments, sandbox, webSearch, styleId })) return;
     queueRec(c.id, currentId);
@@ -1435,6 +1452,11 @@ export default function App() {
   const activeBg = computeActiveBg(models, currentId, activeId, messages.length, incognito, user?.prefs);
   sendRef.current = send;
   genOptsRef.current = { extended, reasoningEffort, kwargValues, sandbox, webSearch, styleId };
+  const ctxGaugeEl = (showCtxGauge && activeId && !incognito)
+    ? <CtxGauge chatId={activeId} modelId={currentId} streaming={streaming || queued}
+        revision={messages.length + ':' + (messages[messages.length - 1]?.id || '')} />
+    : null;
+
   const composerProps = {
     value: input, onChange: (v) => { if (safetyFlagged) { setSafetyFlagged(false); setSafetyReason(''); } setInput(v); saveDraft(activeId, v); }, onSend: send, onStop: stop, streaming: streaming || queued,
     queueCount: queuedList.length,
@@ -1459,10 +1481,7 @@ export default function App() {
     onNewChat: () => newChat(), onShortcuts: () => setShowShortcuts(true),
     voiceMic: !!cfg.voiceMic, voiceCall: !!cfg.voiceCall && !incognito, sttEngine: cfg.voiceStt || 'browser',
     onStartCall: () => { setArtifactsOpen(false); setCallOpen(true); },
-    ctxGauge: (showCtxGauge && activeId && !incognito)
-      ? <CtxGauge chatId={activeId} modelId={currentId} streaming={streaming || queued}
-          revision={messages.length + ':' + (messages[messages.length - 1]?.id || '')} />
-      : null
+    ctxGauge: cfg.uiPreset === 'openai' ? null : ctxGaugeEl
   };
   const showArtifactsBtn = sandboxOn || files.length > 0;
 
@@ -1557,6 +1576,7 @@ export default function App() {
     <div className="topbar-model tbm-flex">
       <ModelDropdown models={models} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} kwargValues={kwargValues} onSetKwarg={setKwarg} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
       <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={() => setShowDocs(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>
+      {ctxGaugeEl}
     </div>
   );
 
@@ -1638,9 +1658,7 @@ export default function App() {
         ) : (
           <>
             <div className="topbar">
-              {cfg.uiPreset === 'openai' && (
-                {modelPicker}
-              )}
+              {cfg.uiPreset === 'openai' && modelPicker}
               <button className="mobile-menu-btn" onClick={() => setMobileDrawer(true)} title={t("Menu")}><Menu style={{ width: 20 }} /></button>
               {renaming ? (
                 <input className="chat-rename" autoFocus value={renameVal}
@@ -1777,7 +1795,7 @@ export default function App() {
             </div>
             {user?.prefs?.threadRail !== false && <ThreadRail items={railList} scrollRef={scrollRef} matches={findMatches} onJump={railJump} />}
             {showJump && <button className="to-bottom" onClick={jumpDown} title={t('Jump to latest')} aria-label={t('Jump to latest')}><Down style={{ width: 17 }} /></button>}
-            <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')} style={{ maxWidth: cfg.uiPreset === 'openai' ? 808 : 760, margin: '0 auto', width: '100%', padding: '0 20px' }}>
+            <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')} style={{ maxWidth: cfg.uiPreset === 'openai' ? undefined : 760, margin: '0 auto', width: '100%', padding: '0 20px' }}>
               {user?.prefs?.engineStrip !== false && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
               <Composer {...composerProps} focusKey={focusTick} />
               <div className="disclaimer">{t(cfg.disclaimer)}</div>
@@ -1787,7 +1805,7 @@ export default function App() {
       </div>
 
       {artifactsOpen && activeId && !callOpen && (
-        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} focus={artifactFocus} onClose={closeArtifacts} />
+        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} pending={pendingFiles} focus={artifactFocus} onClose={closeArtifacts} />
       )}
       {ctlOpen && user?.isAdmin && !incognito && (
         <ChatControls chatId={activeId || null} initialParams={chatGenParams} initialOverride={chatSysOverride} onChange={(p, o) => { setChatGenParams(p && Object.keys(p).length ? p : null); setChatSysOverride(o || ''); }} onClose={() => setCtlOpen(false)} />

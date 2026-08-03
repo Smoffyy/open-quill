@@ -10,6 +10,8 @@ import { trimInTurn, compactThreshold, estimateTokens, textTokens, makeTokenCoun
 import { scanTools } from '../toolproto.js';
 import { isContextOverflowError } from '../lib/llamacpp.js';
 import { winTranslate } from '../sandbox.js';
+import { screenCommand, normalizeRel } from '../lib/sandboxguard.js';
+import { resolveToolName, makeToolResolver, nearestTool, SANDBOX_TOOLS } from '../tools/aliases.js';
 import { isPrivateAddress, hostAllowed } from '../lib/egress.js';
 import { resolveRouted, ruleMatches, routerRules, modelLabel } from '../lib/router.js';
 import { preferredChild } from '../lib/tree.js';
@@ -557,4 +559,122 @@ test('slideWithCounter: a prompt already inside the budget is left alone in both
     assert.equal(r.trimmed, false, mode);
     assert.equal(r.msgs, msgs, mode);
   }
+});
+
+test('sandbox guard: ordinary build and run commands are not blocked', () => {
+  const ok = [
+    'npm install express', 'node app.js', 'python sum.py nums.txt',
+    'pip install -r requirements.txt', 'cd src && node index.js',
+    'git init && git add -A', 'npm run build --silent',
+    'sed -i s/a/b/g file.txt', 'curl https://example.com/x -o out.html',
+    'mkdir -p src/utils', 'cargo build --release', 'echo hi > out.txt',
+    'node test.js 2>/dev/null', './gradlew build', 'tar -czf out.tgz src',
+    'npx tsc --outDir dist', 'python -c "print(1/2)"'
+  ];
+  for (const cmd of ok) assert.equal(screenCommand(cmd).ok, true, cmd);
+});
+
+test('sandbox guard: paths outside the workspace are refused', () => {
+  const bad = [
+    'cat /etc/passwd', 'cd /', 'rm -rf /', 'cp ~/.ssh/id_rsa .',
+    'node ../../evil.js', 'cd ../../..', 'echo x > /usr/local/bin/y',
+    'type C:\\Windows\\System32\\drivers\\etc\\hosts', 'dir \\\\server\\share'
+  ];
+  for (const cmd of bad) assert.equal(screenCommand(cmd).ok, false, cmd);
+});
+
+test('sandbox guard: host administration commands are refused', () => {
+  const bad = ['sudo apt-get install nginx', 'systemctl restart nginx', 'reg add HKLM\\x', 'docker run -it x', 'ssh user@host', 'apt install foo', 'shutdown /s'];
+  for (const cmd of bad) assert.equal(screenCommand(cmd).ok, false, cmd);
+});
+
+test('sandbox guard: cd escapes are judged against the current depth', () => {
+  assert.equal(screenCommand('cd ..', 'src/utils').ok, true);
+  assert.equal(screenCommand('cd ../..', 'src/utils').ok, true);
+  assert.equal(screenCommand('cd ../../..', 'src/utils').ok, false);
+  assert.equal(screenCommand('cd ..', '').ok, false);
+});
+
+test('sandbox guard: refusals explain the boundary rather than just failing', () => {
+  const r = screenCommand('cat /etc/passwd');
+  assert.match(r.error, /relative/i);
+  assert.match(r.error, /workspace/i);
+});
+
+test('normalizeRel: forgiving where intent is clear, strict where it is not', () => {
+  assert.equal(normalizeRel('src/app.py').rel, 'src/app.py');
+  assert.equal(normalizeRel('/notes.md').rel, 'notes.md');
+  assert.equal(normalizeRel('./x/../y.txt').rel, 'y.txt');
+  assert.equal(normalizeRel('a\\b\\c.txt').rel, 'a/b/c.txt');
+  assert.equal(normalizeRel('"quoted.txt"').rel, 'quoted.txt');
+  for (const bad of ['C:/x', 'C:\\Windows\\x', '~/a', '../x', '//server/share', '/etc/passwd', '']) {
+    assert.equal(normalizeRel(bad).ok, false, bad);
+  }
+});
+
+test('normalizeRel: an empty path is only allowed when the caller opts in', () => {
+  assert.equal(normalizeRel('', { allowEmpty: true }).rel, '');
+  assert.equal(normalizeRel('.', { allowEmpty: true }).rel, '');
+  assert.equal(normalizeRel('').ok, false);
+});
+
+test('tool aliases: common wrong names resolve to the real tool', () => {
+  assert.equal(resolveToolName('write_file'), 'create_file');
+  assert.equal(resolveToolName('str_replace_editor'), 'str_replace');
+  assert.equal(resolveToolName('read_file'), 'view');
+  assert.equal(resolveToolName('run_terminal_cmd'), 'bash');
+  assert.equal(resolveToolName('functions.write_to_file'), 'create_file');
+  assert.equal(resolveToolName('create_file'), 'create_file');
+});
+
+test('tool aliases: bare English words only resolve in loose mode', () => {
+  for (const w of ['read', 'list', 'copy', 'type', 'delete', 'open']) {
+    assert.equal(resolveToolName(w), null, w);
+    assert.ok(resolveToolName(w, true), w);
+  }
+});
+
+test('tool aliases: unknown names never resolve', () => {
+  for (const n of ['browse_web', 'send_email', '', null]) assert.equal(resolveToolName(n, true), null);
+});
+
+test('tool resolver: only maps onto tools that are actually enabled', () => {
+  const resolve = makeToolResolver(['create_file', 'view']);
+  assert.equal(resolve('write_file'), 'create_file');
+  assert.equal(resolve('view'), 'view');
+  assert.equal(resolve('bash'), null);
+  assert.equal(resolve('run_terminal_cmd'), null);
+});
+
+test('tool resolver: an exact name always wins over an alias', () => {
+  const resolve = makeToolResolver(['write_file', 'create_file']);
+  assert.equal(resolve('write_file'), 'write_file');
+});
+
+test('tool resolver: no enabled tools means no resolver at all', () => {
+  assert.equal(makeToolResolver([]), null);
+});
+
+test('nearestTool suggests a fix for a typo but not for nonsense', () => {
+  assert.equal(nearestTool('creat_file'), 'create_file');
+  assert.equal(nearestTool('lst_files'), 'list_files');
+  assert.equal(nearestTool('send_email_to_bob'), null);
+});
+
+test('text tool calls resolve aliases through the enabled set', () => {
+  const resolve = makeToolResolver(['create_file']);
+  const calls = parseTextToolCalls('<function=write_file><parameter=path>a.txt</parameter><parameter=content>hi</parameter></function>', resolve);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].name, 'create_file');
+  assert.deepEqual(JSON.parse(calls[0].argsText), { path: 'a.txt', content: 'hi' });
+});
+
+test('text tool calls still reject names that are not enabled at all', () => {
+  const resolve = makeToolResolver(['view']);
+  assert.equal(parseTextToolCalls('<function=send_email><parameter=to>x</parameter></function>', resolve).length, 0);
+});
+
+test('every sandbox tool name is unique and resolves to itself', () => {
+  assert.equal(new Set(SANDBOX_TOOLS).size, SANDBOX_TOOLS.length);
+  for (const t of SANDBOX_TOOLS) assert.equal(resolveToolName(t), t);
 });

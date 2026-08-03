@@ -552,7 +552,7 @@ function FileRow({ f, chatId, depth, onOpen, sel, live }) {
         <div className="art-rname">{baseName(f.path)}</div>
         <div className="art-rext">{writing ? <span className="row-writing">{t("writing…")}</span> : <>{(f.ext || 'file').toUpperCase()}{f.v ? ' · v' + f.v : ''}{f.size != null ? ' · ' + fmtSize(f.size) : ''}</>}</div>
       </div>
-      {!writing && <a className="art-btn icon dl" href={`/api/chats/${chatId}/download?path=${encodeURIComponent(f.path)}`} onClick={(e) => e.stopPropagation()} title={t("Download")}><Download style={{ width: 15 }} /></a>}
+      {!writing && !!f.v && <a className="art-btn icon dl" href={`/api/chats/${chatId}/download?path=${encodeURIComponent(f.path)}`} onClick={(e) => e.stopPropagation()} title={t("Download")}><Download style={{ width: 15 }} /></a>}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { db, uid, now, getSetting } from '../../db.js';
 import { buildMessages, streamCompletion, generateTitle, stripThink } from '../../llm/index.js';
-import { buildTools, toCall, livePreview } from '../../tools/index.js';
+import { buildTools, toCall, livePreview, resolveToolName } from '../../tools/index.js';
 import * as websearch from '../../websearch.js';
 import * as sandbox from '../../sandbox.js';
 import * as membank from '../../membank.js';
@@ -133,7 +133,14 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   let speed = null;
   safeSend(JSON.stringify({ type: 'start', chatId: chat.id, messageId: assistantId }));
 
-  const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, projFilesOn }) : [];
+  const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, projFilesOn, hostEnv: sandboxOn ? sandbox.hostEnvInfo() : null }) : [];
+  const toolNameSet = new Set(tools.map(t => t && t.function && t.function.name).filter(Boolean));
+  const canonicalize = (call) => {
+    if (!sandboxOn || !call.tool || toolNameSet.has(call.tool)) return call;
+    const canon = resolveToolName(call.tool, true);
+    if (canon && toolNameSet.has(canon)) call.tool = canon;
+    return call;
+  };
   const runToolCall = async (call) => {
     if (call.tool === 'end_conversation') {
       if (!endChatOn) return null;
@@ -171,7 +178,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       const r = membank.execTool(call);
       return { payload: membank.resultPayload(call, r), formatted: membank.formatResult(call, r), hide: membankHideTools };
     }
-    if (!sandboxOn) return null;
+    if (!sandboxOn || !resolveToolName(call.tool, true)) return null;
     const r = await sandbox.execTool(chat.id, call, sandboxCap);
     return { payload: resultPayload(call, r), formatted: formatToolResult(call, r), hide: false };
   };
@@ -484,7 +491,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       const toolMsgs = [];
       let stepOk = 0, stepFailed = 0;
       for (const tc of toolCalls) {
-        const call = toCall(tc.name, tc.argsText);
+        const call = canonicalize(toCall(tc.name, tc.argsText));
         if (conversationEnded) {
           toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: `${call.tool} \u2192 ERROR: the conversation has been ended; no further tools may run.` });
           continue;
@@ -493,7 +500,11 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         let out;
         try { out = await runToolCall(call); }
         catch (e) { out = { payload: { ok: false, error: String(e.message || e).slice(0, 400) }, formatted: `${call.tool} → ERROR: ${String(e.message || e).slice(0, 400)}`, hide: false }; }
-        if (!out) out = { payload: { ok: false, error: `Unknown or disabled tool: ${call.tool}` }, formatted: `${call.tool} → ERROR: this tool is not available.`, hide: false };
+        if (!out) {
+          const avail = [...toolNameSet].join(', ') || 'none';
+          const msg = `There is no tool called "${call.tool}" in this conversation. The tools you can call are: ${avail}. Use one of those exact names, or answer without tools.`;
+          out = { payload: { ok: false, error: msg }, formatted: `${call.tool} → ERROR: ${msg}`, hide: false };
+        }
         const failed = !out.payload || out.payload.ok === false;
         let formatted = out.formatted;
         const sig = call.tool + '|' + (tc.argsText || '');

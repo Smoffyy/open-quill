@@ -1,8 +1,13 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import zlib from 'zlib';
 import { spawn, spawnSync } from 'child_process';
 import { dataPath } from './lib/dataroot.js';
+import { screenCommand, normalizeRel } from './lib/sandboxguard.js';
+import { SANDBOX_TOOLS, resolveToolName, nearestTool } from './tools/aliases.js';
+
+export { screenCommand, normalizeRel } from './lib/sandboxguard.js';
 
 export const SANDBOX_ROOT = dataPath('sandbox');
 const META_DIR = path.join(SANDBOX_ROOT, '.meta');
@@ -155,8 +160,10 @@ export function isIgnoredPath(rel) { return String(rel || '').split('/').slice(0
 export function dirFor(chatId) { return path.join(SANDBOX_ROOT, safeId(chatId)); }
 function resolveSafe(chatId, rel) {
   const root = dirFor(chatId);
-  const p = path.resolve(root, String(rel || '').replace(/\\/g, '/'));
-  if (p !== root && !p.startsWith(root + path.sep)) throw new Error('Path escapes the sandbox root');
+  const norm = normalizeRel(rel, { allowEmpty: true });
+  if (!norm.ok) throw new Error(norm.error);
+  const p = path.resolve(root, norm.rel);
+  if (p !== root && !p.startsWith(root + path.sep)) throw new Error('That path leaves the workspace root. Use a path relative to the workspace, such as "src/app.py".');
   return p;
 }
 function relOf(chatId, abs) { return path.relative(dirFor(chatId), abs).split(path.sep).join('/'); }
@@ -570,36 +577,153 @@ function pickShell() {
   return SHELL_CACHE;
 }
 
+function pathDirs() {
+  const raw = process.env.PATH || process.env.Path || '';
+  return raw.split(path.delimiter).filter(Boolean);
+}
+
+let PATH_EXTS = null;
+function pathExts() {
+  if (PATH_EXTS) return PATH_EXTS;
+  if (process.platform !== 'win32') { PATH_EXTS = ['']; return PATH_EXTS; }
+  PATH_EXTS = String(process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean).map(e => e.toLowerCase());
+  return PATH_EXTS;
+}
+
+function whichBin(name) {
+  if (name.includes('/') || name.includes('\\')) { try { return fs.existsSync(name) ? name : null; } catch { return null; } }
+  for (const dir of pathDirs()) {
+    for (const ext of pathExts()) {
+      const p = path.join(dir, name + ext);
+      try { if (fs.existsSync(p) && fs.statSync(p).isFile()) return p; } catch {}
+    }
+  }
+  return null;
+}
+
+const RUNTIME_PROBES = [
+  { name: 'node', args: ['-v'], label: 'Node.js', run: 'node script.js' },
+  { name: 'npm', args: ['-v'], label: 'npm', run: 'npm install <pkg>' },
+  { name: 'npx', args: ['-v'], label: 'npx' },
+  { name: 'bun', args: ['-v'], label: 'Bun' },
+  { name: 'deno', args: ['-V'], label: 'Deno' },
+  { name: 'python', args: ['--version'], label: 'Python', run: 'python script.py' },
+  { name: 'python3', args: ['--version'], label: 'Python 3', run: 'python3 script.py' },
+  { name: 'pip', args: ['--version'], label: 'pip', run: 'pip install <pkg>' },
+  { name: 'pip3', args: ['--version'], label: 'pip3' },
+  { name: 'git', args: ['--version'], label: 'git' },
+  { name: 'gcc', args: ['--version'], label: 'gcc' },
+  { name: 'g++', args: ['--version'], label: 'g++' },
+  { name: 'clang', args: ['--version'], label: 'clang' },
+  { name: 'make', args: ['--version'], label: 'make' },
+  { name: 'java', args: ['-version'], label: 'Java' },
+  { name: 'javac', args: ['-version'], label: 'javac' },
+  { name: 'go', args: ['version'], label: 'Go' },
+  { name: 'rustc', args: ['--version'], label: 'Rust' },
+  { name: 'cargo', args: ['--version'], label: 'cargo' },
+  { name: 'dotnet', args: ['--version'], label: '.NET' },
+  { name: 'php', args: ['--version'], label: 'PHP' },
+  { name: 'ruby', args: ['--version'], label: 'Ruby' },
+  { name: 'perl', args: ['--version'], label: 'Perl' }
+];
+
+const UTIL_PROBES = [
+  'curl', 'wget', 'tar', 'zip', 'unzip', 'grep', 'sed', 'awk', 'jq',
+  'cat', 'ls', 'head', 'tail', 'wc', 'touch', 'which', 'xargs', 'diff', 'patch', 'rsync'
+];
+
+const WIN_DIFFERENT = ['find', 'sort', 'more', 'echo'];
+
+function cleanVersion(text) {
+  const line = String(text || '').trim().split(/\r?\n/)[0] || '';
+  const flat = line.replace(/\s+/g, ' ').trim();
+  const m = flat.match(/(\d+(?:\.\d+)+(?:[._-][A-Za-z0-9.]+)?)/);
+  if (m) return m[1].slice(0, 32);
+  return flat.split(' ').slice(0, 3).join(' ').slice(0, 32);
+}
+
 let ENV_CACHE = null;
 export function hostEnvInfo() {
   if (ENV_CACHE) return ENV_CACHE;
-  const osName = process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux';
-  const shellName = path.basename(String(pickShell()));
+  const win = process.platform === 'win32';
+  const osName = win ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux';
+  const shellPath = String(pickShell());
+  const shellName = path.basename(shellPath);
   const probe = (bin, args) => {
+    const found = whichBin(bin);
+    if (!found) return null;
+    const opts = { timeout: 8000, windowsHide: true, encoding: 'utf8' };
     try {
-      const r = spawnSync(bin, args, { timeout: 4000, windowsHide: true, shell: process.platform === 'win32' });
-      if (r.status === 0) return (String(r.stdout || r.stderr || '').trim().split('\n')[0].slice(0, 40)) || 'available';
+      const r = /\.(cmd|bat)$/i.test(found)
+        ? spawnSync(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `""${found}" ${args.join(' ')}"`], { ...opts, windowsVerbatimArguments: true })
+        : spawnSync(found, args, opts);
+      if (r.error) return null;
+      const text = cleanVersion(r.stdout || r.stderr || '');
+      if (!text || /[\\/]/.test(text)) return 'available';
+      return text;
     } catch {}
     return null;
   };
+
+  const runtimes = {};
   const interpreters = [];
-  const node = probe('node', ['-v']); if (node) interpreters.push(`node ${node}`);
-  const py = probe('python', ['--version']); if (py) interpreters.push(`python (${py})`);
-  const py3 = probe('python3', ['--version']); if (py3) interpreters.push(`python3 (${py3})`);
-  if (py && !py3) interpreters.push('python3 is NOT available, use `python`');
-  const npm = probe('npm', ['-v']); if (npm) interpreters.push(`npm ${npm}`);
-  const git = probe('git', ['--version']); if (git) interpreters.push('git');
-  const gcc = probe('gcc', ['--version']); if (gcc) interpreters.push('gcc');
-  ENV_CACHE = { osName, shellName, interpreters, unix: process.platform !== 'win32' };
+  for (const p of RUNTIME_PROBES) {
+    const v = probe(p.name, p.args);
+    if (!v) continue;
+    runtimes[p.name] = v;
+    interpreters.push({ name: p.name, label: p.label, version: v, run: p.run || '' });
+  }
+  const utils = UTIL_PROBES.filter(u => !!whichBin(u));
+  const missingUtils = UTIL_PROBES.filter(u => !utils.includes(u));
+
+  const pythonCmd = runtimes.python ? 'python' : runtimes.python3 ? 'python3' : null;
+  const pipCmd = runtimes.pip ? 'pip' : runtimes.pip3 ? 'pip3' : null;
+
+  let osVersion = '';
+  try { osVersion = `${os.release()}`; } catch {}
+
+  ENV_CACHE = {
+    osName,
+    osVersion,
+    arch: process.arch,
+    shellName,
+    shellPath,
+    shellKind: win ? 'cmd' : 'posix',
+    unix: !win,
+    pathSep: '/',
+    runtimes,
+    interpreters,
+    utils,
+    missingUtils,
+    winDifferent: win ? WIN_DIFFERENT : [],
+    pythonCmd,
+    pipCmd,
+    hasNode: !!runtimes.node,
+    names: interpreters.map(i => i.name)
+  };
   return ENV_CACHE;
+}
+
+function missingCommandHint() {
+  const env = hostEnvInfo();
+  const have = env.interpreters.length ? env.interpreters.map(i => i.name).join(', ') : 'none';
+  const parts = [`that program is not installed on this host (${env.osName}, ${env.shellName}).`];
+  parts.push(`Commands available here: ${have}.`);
+  if (env.utils.length) parts.push(`Utilities on PATH: ${env.utils.join(', ')}.`);
+  if (env.missingUtils.length) parts.push(`NOT installed here: ${env.missingUtils.join(', ')}.`);
+  if (!env.unix) parts.push('This is cmd.exe, not a Unix shell, so Unix flags such as `-p`, `-rf`, `-r`, `-la` fail even on commands that do exist.');
+  if (env.pythonCmd && env.pythonCmd !== 'python3') parts.push(`Use \`${env.pythonCmd}\`, not \`python3\`.`);
+  parts.push('For anything file-related use the file tools (view, list_files, find, search, create_file, str_replace, copy_file, move_file, make_dir, delete_file, extract_zip, bundle_zip) — they work identically on every OS. Do not retry the same command.');
+  return parts.join(' ');
 }
 
 const CWD_MARK = '__OQ_CWD__';
 function wrapCommand(base, cmd) {
   if (process.platform === 'win32') {
-    return `cd /d ${JSON.stringify(base)} & ( ${cmd} ) & set "__oq_ec=!errorlevel!" & echo ${CWD_MARK}!CD!& exit /b !__oq_ec!`;
+    return `cd /d "${base}" & ( ${cmd} ) & set "__oq_ec=!errorlevel!" & echo ${CWD_MARK}!CD!& exit /b !__oq_ec!`;
   }
-  return `cd ${JSON.stringify(base)} || exit 1\n${cmd}\n__oq_ec=$?\nprintf '\\n${CWD_MARK}%s\\n' "$PWD"\nexit $__oq_ec`;
+  const quoted = "'" + String(base).replace(/'/g, `'\\''`) + "'";
+  return `cd ${quoted} || exit 1\n${cmd}\n__oq_ec=$?\nprintf '\\n${CWD_MARK}%s\\n' "$PWD"\nexit $__oq_ec`;
 }
 
 const WIN_REWRITES = [
@@ -642,14 +766,23 @@ export function winTranslate(cmd) {
 }
 
 export function bash(chatId, cmd, timeoutMs = 60000, workdir) {
-  if (!cmd || !String(cmd).trim()) return Promise.resolve({ ok: false, error: 'cmd is required', output: '' });
+  if (!cmd || !String(cmd).trim()) {
+    return Promise.resolve({ ok: false, error: 'cmd is required. Pass the command line to run, for example {"cmd": "node app.js"}.', output: '' });
+  }
   const root = dirFor(chatId);
   try { fs.mkdirSync(root, { recursive: true }); } catch {}
   let baseRel = getCwd(chatId);
-  if (workdir != null && String(workdir).trim()) baseRel = String(workdir).replace(/^\.?\/+/, '');
+  if (workdir != null && String(workdir).trim()) {
+    const wd = normalizeRel(workdir, { allowEmpty: true, label: 'workdir' });
+    if (!wd.ok) return Promise.resolve({ ok: false, error: wd.error, output: '' });
+    baseRel = wd.rel;
+  }
   let base;
   try { base = resolveSafe(chatId, baseRel); if (!fs.existsSync(base) || !fs.statSync(base).isDirectory()) { base = root; baseRel = ''; } }
   catch { base = root; baseRel = ''; }
+
+  const screened = screenCommand(cmd, baseRel);
+  if (!screened.ok) return Promise.resolve({ ok: false, error: screened.error, output: '', exit: null, cwd: baseRel, blocked: true });
 
   const win = process.platform === 'win32';
   const shell = pickShell();
@@ -659,7 +792,7 @@ export function bash(chatId, cmd, timeoutMs = 60000, workdir) {
   return new Promise((resolve) => {
     let child;
     try {
-      if (win) child = spawn(shell, ['/d', '/s', '/v:on', '/c', wrapped], { cwd: base, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+      if (win) child = spawn(shell, ['/d', '/s', '/v:on', '/c', `"${wrapped}"`], { cwd: base, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, windowsVerbatimArguments: true });
       else child = spawn(shell, ['-c', wrapped], { cwd: base, stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (e) { return resolve({ ok: false, output: '', error: String(e.message || e), exit: null }); }
 
@@ -694,9 +827,9 @@ export function bash(chatId, cmd, timeoutMs = 60000, workdir) {
       const xnote = xlat.notes.length ? `\n\n[Adjusted for Windows: ${xlat.notes.join(', ')}. Unix flags like -p and -rf do not exist here; prefer the dedicated file tools.]` : '';
       if (exit === 0) return done({ ok: true, output: capOut(text) + xnote, exit: 0, cwd });
       let hinted = capOut(text) || `Exited with code ${exit}`;
-      if (win && (/is not recognized as an internal or external command/i.test(hinted) || exit === 9009)) {
-        hinted += '\n\nHINT: this host runs Windows (cmd.exe). Unix flags do not exist here either: `mkdir -p`, `rm -rf`, `cp -r`, `ls -la` all fail even though some of those command names exist. Unix-only utilities are unavailable. Use the dedicated file tools (view, list_files, search, find, extract_zip, bundle_zip, copy_file, move_file, delete_file, make_dir) and invoke only interpreters listed in the Host environment section. On this host the Python command is `python`, not `python3`.';
-      }
+      const notFound = /is not recognized as an internal or external command/i.test(hinted)
+        || /: (?:command )?not found/i.test(hinted) || exit === 9009 || exit === 127;
+      if (notFound) hinted += '\n\nHINT: ' + missingCommandHint();
       return done({ ok: false, output: hinted, exit, error: `Exited with code ${exit}`, cwd });
     });
   });
@@ -704,37 +837,129 @@ export function bash(chatId, cmd, timeoutMs = 60000, workdir) {
 
 function parseIntOr(v) { const n = parseInt(v); return Number.isFinite(n) ? n : undefined; }
 
+function asText(v) {
+  if (v == null) return null;
+  if (typeof v === 'string') return v;
+  if (Array.isArray(v)) return v.map(x => (typeof x === 'string' ? x : String(x))).join('\n');
+  if (typeof v === 'object') { try { return JSON.stringify(v, null, 2); } catch { return String(v); } }
+  return String(v);
+}
+
+function missingArg(tool, arg, how) {
+  return { ok: false, error: `${tool} needs "${arg}". ${how} Send the call again with that argument included.` };
+}
+
+export function unknownToolError(name) {
+  const guess = nearestTool(name);
+  const list = SANDBOX_TOOLS.join(', ');
+  return {
+    ok: false,
+    error: `There is no tool called "${name}".${guess ? ` Did you mean "${guess}"?` : ''} The tools you can call in this workspace are: ${list}. Use one of those exact names.`
+  };
+}
+
 export async function execTool(chatId, call, maxBytes = 0) {
   try {
-    const yes = (v) => v === true || v === 'true';
-    switch (call.tool) {
-      case 'bash': case 'run': case 'shell': {
+    const yes = (v) => v === true || v === 'true' || v === 1 || v === '1' || v === 'yes';
+    const tool = resolveToolName(call.tool, true);
+    if (!tool) return unknownToolError(call.tool);
+    const rawRel = call.path ?? call.file ?? call.filename ?? call.file_path ?? call.filepath;
+    let relArg = rawRel;
+    if (rawRel != null && rawRel !== '') {
+      const n = normalizeRel(rawRel, { allowEmpty: true });
+      if (!n.ok) return { ok: false, error: n.error };
+      relArg = n.rel;
+    }
+    const destOf = (v, label) => {
+      if (v == null || v === '') return { ok: false, error: null };
+      const n = normalizeRel(v, { label });
+      return n.ok ? { ok: true, rel: n.rel } : { ok: false, error: n.error };
+    };
+    switch (tool) {
+      case 'bash': {
         const t = parseInt(call.timeout_s ?? call.timeout);
         const ms = Number.isFinite(t) && t > 0 ? Math.min(t, 600) * 1000 : 60000;
-        return await bash(chatId, call.cmd ?? call.command, ms, call.workdir ?? call.cwd);
+        return await bash(chatId, call.cmd ?? call.command ?? call.script, ms, call.workdir ?? call.cwd);
       }
-      case 'create_file': case 'write_file': {
-        const sz = Buffer.byteLength(String(call.content ?? ''), 'utf8');
+      case 'create_file': {
+        if (relArg == null || relArg === '') return missingArg('create_file', 'path', 'It is the relative path of the file to write, e.g. "src/app.py".');
+        const body = asText(call.content ?? call.text ?? call.file_text);
+        if (body == null) return missingArg('create_file', 'content', 'It is the COMPLETE text of the file (use "" for an empty file). Never write a placeholder like "rest unchanged".');
+        const sz = Buffer.byteLength(body, 'utf8');
         if (overCap(chatId, sz, maxBytes)) return capError(maxBytes);
-        return createFile(chatId, call.path, call.content);
+        return createFile(chatId, relArg, body);
       }
-      case 'str_replace': case 'edit_file': return strReplace(chatId, call.path, call.old_str, call.new_str, yes(call.replace_all));
-      case 'insert_lines': return insertLines(chatId, call.path, parseIntOr(call.line ?? call.at), call.content);
-      case 'view': case 'read_file': case 'cat': return view(chatId, call.path, parseIntOr(call.start), parseIntOr(call.end));
-      case 'list_files': case 'ls': case 'tree': {
-        const t = treeString(chatId, call.path || '', yes(call.all));
-        return { ok: true, path: call.path || '.', tree: t.text, hidden: t.hidden, files: list(chatId, { all: yes(call.all), under: call.path || '' }) };
+      case 'str_replace': {
+        if (relArg == null || relArg === '') return missingArg('str_replace', 'path', 'It is the relative path of the file to edit, e.g. "src/app.py".');
+        const oldStr = asText(call.old_str ?? call.old_string ?? call.old ?? call.search);
+        if (oldStr == null) return missingArg('str_replace', 'old_str', 'It is the exact text to find, copied character for character from the file (view it first).');
+        const newStr = asText(call.new_str ?? call.new_string ?? call.new ?? call.replace ?? call.replacement);
+        if (newStr == null) return missingArg('str_replace', 'new_str', 'It is the replacement text; pass an empty string "" to delete old_str.');
+        return strReplace(chatId, relArg, oldStr, newStr, yes(call.replace_all));
       }
-      case 'find': case 'glob': return findFiles(chatId, call.pattern ?? call.query ?? call.path, yes(call.all));
-      case 'search': case 'grep': return search(chatId, call.query ?? call.pattern, call.path ?? call.glob, yes(call.regex));
-      case 'delete_file': case 'rm': return deleteFile(chatId, call.path);
-      case 'clear_sandbox': case 'delete_all': case 'reset': return clearAll(chatId);
-      case 'rename_file': case 'move_file': case 'mv': return renameFile(chatId, call.path, call.new_path ?? call.to);
-      case 'copy_file': case 'cp': return copyFile(chatId, call.path, call.new_path ?? call.to, maxBytes);
-      case 'make_dir': case 'mkdir': return makeDir(chatId, call.path);
-      case 'extract_zip': case 'unzip': { if (overCap(chatId, 0, maxBytes)) return capError(maxBytes); return extractZip(chatId, call.path, call.dest, maxBytes ? Math.max(0, maxBytes - dirSize(chatId)) : 0); }
-      case 'bundle_zip': case 'zip': return bundleZip(chatId, call.name, call.paths, yes(call.all));
-      default: return { ok: false, error: `Unknown tool: ${call.tool}` };
+      case 'insert_lines': {
+        if (relArg == null || relArg === '') return missingArg('insert_lines', 'path', 'It is the relative path of the file to edit.');
+        const body = asText(call.content ?? call.text);
+        if (body == null) return missingArg('insert_lines', 'content', 'It is the text to insert.');
+        return insertLines(chatId, relArg, parseIntOr(call.line ?? call.at ?? call.insert_line), body);
+      }
+      case 'view': return view(chatId, relArg ?? '', parseIntOr(call.start ?? call.from), parseIntOr(call.end ?? call.to));
+      case 'list_files': {
+        let under = relArg ?? '';
+        if (!under) {
+          const alt = call.dir ?? call.directory ?? '';
+          if (alt) {
+            const n = normalizeRel(alt, { allowEmpty: true });
+            if (!n.ok) return { ok: false, error: n.error };
+            under = n.rel;
+          }
+        }
+        const t = treeString(chatId, under, yes(call.all));
+        return { ok: true, path: under || '.', tree: t.text, hidden: t.hidden, files: list(chatId, { all: yes(call.all), under }) };
+      }
+      case 'find': {
+        const pattern = call.pattern ?? call.glob ?? call.query ?? relArg;
+        if (!pattern) return missingArg('find', 'pattern', 'It is a glob such as "**/*.py" or "src/**/*.ts".');
+        return findFiles(chatId, pattern, yes(call.all));
+      }
+      case 'search': {
+        const query = call.query ?? call.pattern ?? call.text ?? call.q;
+        if (!query) return missingArg('search', 'query', 'It is the text (or regex, with regex:true) to look for inside files.');
+        return search(chatId, query, call.path ?? call.glob ?? call.filter, yes(call.regex));
+      }
+      case 'delete_file': {
+        if (relArg == null || relArg === '') return missingArg('delete_file', 'path', 'It is the relative path of the file or folder to delete.');
+        return deleteFile(chatId, relArg);
+      }
+      case 'clear_sandbox': return clearAll(chatId);
+      case 'move_file': {
+        if (relArg == null || relArg === '') return missingArg('move_file', 'path', 'It is the current relative path.');
+        const to = destOf(call.new_path ?? call.to ?? call.destination ?? call.dest ?? call.target, 'new_path');
+        if (to.error) return { ok: false, error: to.error };
+        if (!to.ok) return missingArg('move_file', 'new_path', 'It is the new relative path.');
+        return renameFile(chatId, relArg, to.rel);
+      }
+      case 'copy_file': {
+        if (relArg == null || relArg === '') return missingArg('copy_file', 'path', 'It is the source relative path.');
+        const to = destOf(call.new_path ?? call.to ?? call.destination ?? call.dest ?? call.target, 'new_path');
+        if (to.error) return { ok: false, error: to.error };
+        if (!to.ok) return missingArg('copy_file', 'new_path', 'It is the destination relative path.');
+        return copyFile(chatId, relArg, to.rel, maxBytes);
+      }
+      case 'make_dir': {
+        if (relArg == null || relArg === '') return missingArg('make_dir', 'path', 'It is the relative path of the folder to create, e.g. "src/utils".');
+        return makeDir(chatId, relArg);
+      }
+      case 'extract_zip': {
+        if (relArg == null || relArg === '') return missingArg('extract_zip', 'path', 'It is the relative path of a .zip already in your workspace.');
+        if (overCap(chatId, 0, maxBytes)) return capError(maxBytes);
+        return extractZip(chatId, relArg, call.dest ?? call.destination, maxBytes ? Math.max(0, maxBytes - dirSize(chatId)) : 0);
+      }
+      case 'bundle_zip': {
+        const paths = Array.isArray(call.paths) ? call.paths : (typeof call.paths === 'string' && call.paths.trim() ? call.paths.split(/\s*,\s*/) : null);
+        return bundleZip(chatId, call.name ?? call.zip_name, paths, yes(call.all));
+      }
+      default: return unknownToolError(call.tool);
     }
   } catch (e) { return { ok: false, error: String(e.message || e) }; }
 }

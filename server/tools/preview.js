@@ -1,10 +1,12 @@
 import { extractPartial } from './partial.js';
+import { resolveToolName } from './aliases.js';
 
 const PREVIEW_TOOLS = new Set(['create_file', 'str_replace']);
 
 export function livePreview(name, argsText) {
-  const tool = String(name || '').trim();
-  if (!tool) return null;
+  const raw = String(name || '').trim();
+  if (!raw) return null;
+  const tool = resolveToolName(raw, false) || raw;
   const p = extractPartial(String(argsText || ''));
   const get = (k) => (p[k] ? p[k].value : undefined);
   if (!PREVIEW_TOOLS.has(tool)) {

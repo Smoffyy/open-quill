@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { db } from '../db.js';
 import * as sandbox from '../sandbox.js';
+import { canonicalTool } from '../tools/aliases.js';
 import { activePath } from './tree.js';
 import { stripToolSyntax } from './history.js';
 import { isTextLike, readUploadText } from './uploads.js';
@@ -10,31 +11,64 @@ import { isTextLike, readUploadText } from './uploads.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let SKILLS_CACHE = null;
+
+function hostEnvSection() {
+  const env = sandbox.hostEnvInfo();
+  const L = [];
+  L.push('## Host environment (READ THIS BEFORE EVERY bash CALL)');
+  L.push(`- Operating system: **${env.osName}** (${env.arch}). Shell used by \`bash\`: \`${env.shellName}\`.`);
+  if (env.interpreters.length) {
+    L.push('- Programs installed on this host. These are the ONLY ones you may invoke:');
+    for (const i of env.interpreters) L.push(`  - \`${i.name}\` — ${i.label}, ${i.version}${i.run ? ` (e.g. \`${i.run}\`)` : ''}`);
+  } else {
+    L.push('- **No language runtimes were detected on this host.** Do not assume `node`, `python`, `npm` or a compiler exist. Do everything with the file tools, and tell the user if a task genuinely needs a runtime that is missing.');
+  }
+  if (env.utils.length) L.push(`- Extra utilities on PATH, safe to call: ${env.utils.map(u => '`' + u + '`').join(', ')}.`);
+  if (env.missingUtils.length) L.push(`- **NOT installed on this host.** Calling any of these fails, so never try, not even to check: ${env.missingUtils.map(u => '`' + u + '`').join(', ')}.`);
+  if (env.pythonCmd && env.pythonCmd !== 'python3') L.push(`- The Python command here is \`${env.pythonCmd}\`. \`python3\` does NOT exist on this host.`);
+  if (!env.pythonCmd) L.push('- Python is NOT installed here. Do not write `python`, `python3` or `pip` commands.');
+  if (!env.runtimes.node) L.push('- Node.js is NOT installed here. Do not write `node` or `npm` commands.');
+  if (!env.unix) {
+    L.push('- This is **cmd.exe on Windows, not a Unix shell.** `find`, `sort` and `more` exist but are the Windows commands with different syntax, not the Unix ones.');
+    L.push('- Unix FLAGS fail, even on commands that do exist: `mkdir -p`, `rm -rf`, `cp -r`, `ls -la`. Plain `mkdir a\\b` already creates parent folders.');
+    L.push('- cmd.exe mangles quotes and newlines in long one-liners. To run real logic, write a script file with `create_file` and then run that file, instead of a `-c "..."` one-liner.');
+  } else {
+    L.push('- Standard Unix utilities are available, but the file tools are still preferred for file work because their results are structured, versioned, and shown to the user.');
+  }
+  L.push('- Your shell working directory PERSISTS across `bash` calls: after `cd sub`, later commands run in `sub` until you `cd` elsewhere. The current directory is reported back with every result.');
+  return L.join('\n');
+}
+
+const BOUNDARY_SECTION = [
+  '## The workspace boundary is enforced',
+  'You are confined to one folder. The harness checks this, so a violating call simply fails and wastes a turn. Get it right the first time.',
+  '',
+  '- **Every path is relative to the workspace root**: `src/app.py`, `data/in.csv`, `out.txt`.',
+  '- Rejected in tool arguments AND in shell commands: `/etc/passwd`, `/usr/local/bin`, `C:\\Users\\...`, `\\\\server\\share`, `~/notes.txt`, `../../secret`.',
+  '- There is no `/tmp`. Put scratch files inside the workspace, e.g. `tmp/scratch.txt`.',
+  '- `cd` may only move into folders inside the workspace.',
+  '- Host administration is blocked and cannot be worked around: `sudo`, `su`, `runas`, `shutdown`, `systemctl`, `service`, `reg`, `regedit`, `diskpart`, `format`, `mount`, `netsh`, `net`, `schtasks`, `crontab`, `taskkill`, `chown`, `icacls`, system package managers (`apt`, `apt-get`, `yum`, `dnf`, `pacman`, `brew`, `choco`, `winget`), `docker`, `kubectl`, `ssh`, `telnet`, `nc`.',
+  '- Project-local installs are fine and encouraged: `npm install`, `pip install`, `cargo build` and the like, run inside the workspace.',
+  '',
+  'If a task genuinely needs something outside the workspace, say so plainly in your reply. Never retry a blocked call with a different spelling.'
+].join('\n');
+
 export function sandboxPromptFor(chatId) {
   if (SKILLS_CACHE === null) {
     try { SKILLS_CACHE = fs.readFileSync(path.join(__dirname, '..', 'skills', 'sandbox.md'), 'utf8'); }
     catch { SKILLS_CACHE = ''; }
   }
   let p = SKILLS_CACHE;
-  const env = sandbox.hostEnvInfo();
-  p += `\n\n## Host environment (READ THIS BEFORE USING bash)\n- Operating system: **${env.osName}**. Shell: \`${env.shellName}\`.\n`;
-  if (!env.unix) {
-    p += '- This is NOT a Unix system. Commands like `cat`, `ls`, `grep`, `find`, `unzip`, `zipinfo`, `file`, `head`, `tail`, `wc`, `sed`, `awk`, `which`, `touch`, `chmod` DO NOT EXIST and will fail with exit code 9009 or "not recognized". Never call them, not even once to check.\n- Unix FLAGS do not exist here either, even on commands that do exist. `mkdir -p x/y` fails; plain `mkdir x\\y` already creates parent folders. `rm -rf`, `cp -r`, `ls -la`, `python3` are all invalid. A few of these are auto-corrected for you and the correction is reported back, but do not rely on it.\n- For every file operation use the dedicated tools: `view`, `list_files`, `find`, `search`, `extract_zip`, `bundle_zip`, `copy_file`, `move_file`, `make_dir`, `delete_file`. They always work and are cross-platform.\n- If you need to inspect data programmatically, write a small script file with `create_file` and run it with an interpreter listed below, instead of long shell one-liners (cmd.exe quoting mangles quotes and newlines in one-liners).\n';
-  } else {
-    p += '- Standard Unix utilities are available, but the dedicated file tools (`view`, `list_files`, `find`, `search`, `extract_zip`, `copy_file` and friends) are still preferred for file operations because their results are structured and versioned.\n';
-  }
-  p += '- Your shell working directory PERSISTS across bash calls: `cd sub` now stays in effect for later commands until you `cd` elsewhere.\n';
-  p += env.interpreters.length
-    ? `- Interpreters detected on this host: ${env.interpreters.join(', ')}. Only invoke interpreters from this list.\n`
-    : '- No language interpreters were detected on this host. Rely on the dedicated file tools; do not assume node or python exist.\n';
-  p += '\n## History markers are NOT a syntax\nEarlier tool activity may appear in this conversation as compact bracketed summaries like `[used bash: ...]` or `[used view: ...]`. Those are generated by the platform AFTER a real tool call, purely to save space. Writing text like `[used view: file.txt]` yourself does NOTHING: no tool runs, and it looks broken to the user. The ONLY way to use a tool is a real function/tool call with JSON arguments. Never write `[used`, `[tool`, or imitation tool-call text in your replies.';
+  p += '\n\n' + hostEnvSection();
+  p += '\n\n' + BOUNDARY_SECTION;
+  p += '\n\n## History markers are NOT a syntax\nEarlier tool activity may appear in this conversation as compact bracketed summaries like `[used bash: ...]` or `[used view: ...]`. The platform writes those AFTER a real tool call, purely to save space. Writing `[used view: file.txt]` yourself does NOTHING: no tool runs, nothing is read, and it looks broken to the user. The ONLY way to use a tool is a real tool call with JSON arguments. Never write `[used`, `[tool`, or any imitation tool-call text in a reply.';
   const { files, hidden } = sandbox.list(chatId, { withHidden: true });
-  if (!files.length && !hidden) return p + '\n\n## Current sandbox\nThe sandbox is empty.';
+  if (!files.length && !hidden) return p + '\n\n## Current workspace\nThe workspace is empty. Create what you need with `create_file`. There is nothing to read yet, so do not call `view` on files that do not exist.';
   const LIST_CAP = 200, INLINE_CAP = 12;
-  p += '\n\n## Current sandbox files\nThese are the LATEST versions on disk. Always edit these directly, never assume older content. The version number (vN) increases each time a file changes.\n';
+  p += '\n\n## Current workspace files\nThis is what is on disk RIGHT NOW, after every edit made so far. It is the truth: edit these, never an older version you remember. `vN` is the version number and increases on every change.\n';
   for (const f of files.slice(0, LIST_CAP)) p += `- ${f.path} (v${f.v}, ${f.size} bytes)\n`;
-  if (files.length > LIST_CAP) p += `- … and ${files.length - LIST_CAP} more file(s). The list is truncated to protect context, use \`list_files\`, \`search\`, or \`view\` to inspect anything not shown here.\n`;
-  if (hidden) p += `\n(${hidden} file(s) inside dependency or build folders (node_modules, .venv, target, dist, and similar) and anything matched by .gitignore are hidden from this listing and from context to keep things clean. They still exist on disk and your bash commands and interpreters use them normally; pass all:true to list_files/find to see them, or reference them by exact path.)\n`;
+  if (files.length > LIST_CAP) p += `- … and ${files.length - LIST_CAP} more file(s). The list is truncated to protect context; use \`list_files\`, \`find\` or \`search\` to reach anything not shown here.\n`;
+  if (hidden) p += `\n(${hidden} file(s) inside dependency or build folders (node_modules, .venv, target, dist, and similar) and anything matched by .gitignore are hidden from this listing to keep context clean. They still exist on disk and your commands use them normally; pass \`all: true\` to \`list_files\`/\`find\` to see them, or reference them by exact path.)\n`;
   p += '\n## Latest file contents (a sample; use `view` for anything not shown)\n';
   let budget = 40000, inlined = 0;
   for (const f of files) {
@@ -42,22 +76,22 @@ export function sandboxPromptFor(chatId) {
     if (f.ext === 'zip' || !sandbox.isText(f.path)) continue;
     const txt = sandbox.readText(chatId, f.path) || '';
     if (txt.length > 8000 || txt.length > budget) {
-      p += `\n### ${f.path} (v${f.v}), ${f.size} bytes, too large to inline; use the view tool to read it.\n`;
+      p += `\n### ${f.path} (v${f.v}), ${f.size} bytes, too large to inline; use the \`view\` tool to read it.\n`;
       continue;
     }
     p += `\n### ${f.path} (v${f.v})\n\`\`\`${f.ext || ''}\n${txt}\n\`\`\`\n`;
     budget -= txt.length; inlined++;
   }
-  p += '\n---\nREMINDER: The workspace is ON and the files above are the current truth. Edit existing files with `str_replace` (never recreate them from scratch), and use the dedicated file tools, `copy_file`, `move_file`, `make_dir`, `delete_file`, `find`, `search`, `bundle_zip`, `extract_zip`, for file operations. Use relative paths only. Keep calling tools until the task is fully done; do not stop to ask permission, do not paste whole file contents or fake terminal output into the chat, and when a tool fails, read the error and change approach instead of repeating the same call. Never write imitation tool text like `[used bash: ...]` in a reply; make real tool calls.';
+  p += '\n---\nREMINDER: the workspace is ON and the files above are the current truth. Change existing files with `str_replace`, never by rewriting them from scratch. Use the file tools (`copy_file`, `move_file`, `make_dir`, `delete_file`, `find`, `search`, `bundle_zip`, `extract_zip`) for file work, with relative paths only. Keep calling tools until the task is genuinely finished: do not stop to ask permission, never paste whole files or fake terminal output into the chat, and when a tool fails read the error and change approach instead of repeating the same call. Never write imitation tool text like `[used bash: ...]`; make real tool calls.';
   return p;
 }
 
 const BASH_TOOLS = new Set(['bash', 'run', 'shell']);
 
 export function cleanCall(call) {
-  const o = { tool: call.tool };
+  const o = { tool: canonicalTool(call.tool) };
   if (call.path != null) o.path = call.path;
-  if (BASH_TOOLS.has(call.tool)) { o.cmd = call.cmd ?? call.command ?? ''; if (call.workdir ?? call.cwd) o.workdir = call.workdir ?? call.cwd; }
+  if (BASH_TOOLS.has(o.tool)) { o.cmd = call.cmd ?? call.command ?? ''; if (call.workdir ?? call.cwd) o.workdir = call.workdir ?? call.cwd; }
   if (call.new_path != null || call.to != null) o.new_path = call.new_path ?? call.to;
   if (call.query != null) o.query = call.query;
   if (call.pattern != null) o.pattern = call.pattern;
@@ -71,7 +105,8 @@ export function cleanCall(call) {
   return o;
 }
 
-export function resultPayload(call, r) {
+export function resultPayload(rawCall, r) {
+  const call = { ...rawCall, tool: canonicalTool(rawCall.tool) };
   const o = { ok: !!r.ok };
   if (r.error) o.error = r.error;
   if (r.v != null) o.v = r.v;
@@ -97,7 +132,8 @@ export function resultPayload(call, r) {
   return o;
 }
 
-export function formatToolResult(call, r) {
+export function formatToolResult(rawCall, r) {
+  const call = { ...rawCall, tool: canonicalTool(rawCall.tool) };
   const head = `${call.tool}${call.path ? ' ' + call.path : ''}`;
   if (!r.ok) return `${head} → ERROR: ${r.error}` + (r.output ? `\n${r.output}` : '');
   switch (call.tool) {

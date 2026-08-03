@@ -68,5 +68,6 @@ process.on('uncaughtException', (err) => { console.error('[uncaughtException]', 
 process.on('exit', () => { try { mcp.shutdown(); } catch {} });
 
 server.listen(PORT, HOST, () => console.log(`open-quill running on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`));
+setTimeout(() => { import('./sandbox.js').then(s => { try { s.hostEnvInfo(); } catch {} }).catch(() => {}); }, 0).unref();
 pruneAudit();
 setInterval(pruneAudit, 24 * 60 * 60 * 1000).unref();

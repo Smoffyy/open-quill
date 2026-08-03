@@ -116,6 +116,7 @@
 
 [data-preset="openai"] .composer-wrap.floating {
   position: absolute; bottom: 0; left: 0; right: 0; z-index: 30;
+  max-width: none;
   padding-top: 64px !important;
   background: linear-gradient(to top,
     var(--bg) 0%,
@@ -127,7 +128,7 @@
   pointer-events: none;
 }
 [data-preset="openai"] .composer-wrap.floating > * { pointer-events: auto; }
-[data-preset="openai"] .composer-wrap.floating .disclaimer { margin: 0; padding: 8px 0 10px; }
+[data-preset="openai"] .composer-wrap.floating .disclaimer { margin: 0 auto; padding: 8px 0 10px; max-width: 768px; }
 [data-preset="openai"] .scroll-area .thread-pad { height: 160px; }
 [data-preset="openai"] .to-bottom { bottom: 130px; }
 [data-preset="openai"] .disclaimer { font-family: var(--font-sans); font-size: 12px; text-align: center; }

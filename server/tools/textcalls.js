@@ -73,9 +73,12 @@ function nameFromHint(head, isAllowed) {
   const ids = tail.match(IDENT_RE) || [];
   for (let i = ids.length - 1; i >= 0; i--) {
     const id = ids[i];
-    if (isAllowed(id)) return id;
+    const hit = isAllowed(id);
+    if (hit) return typeof hit === 'string' ? hit : id;
     const dot = id.includes('.') ? id.split('.').pop() : null;
-    if (dot && isAllowed(dot)) return dot;
+    if (!dot) continue;
+    const dotHit = isAllowed(dot);
+    if (dotHit) return typeof dotHit === 'string' ? dotHit : dot;
   }
   return null;
 }
@@ -172,8 +175,13 @@ export function parseTextToolCalls(block, isAllowed, hint = '') {
   for (const c of calls) {
     const name = String(c.name || '').trim().replace(/^functions\./, '');
     if (!name) continue;
-    if (isAllowed && !isAllowed(name)) continue;
-    out.push({ name, argsText: JSON.stringify(c.args || {}) });
+    let final = name;
+    if (isAllowed) {
+      const hit = isAllowed(name);
+      if (!hit) continue;
+      if (typeof hit === 'string') final = hit;
+    }
+    out.push({ name: final, argsText: JSON.stringify(c.args || {}) });
   }
   return out;
 }
