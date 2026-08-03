@@ -1,6 +1,6 @@
 {
   "name": "open-quill-server",
-  "version": "27.1.0-developer.13",
+  "version": "27.1.0-developer.14",
   "private": true,
   "type": "module",
   "main": "index.js",

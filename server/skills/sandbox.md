@@ -62,6 +62,8 @@ Note what did not happen: no file content was pasted into the chat, no output wa
 
 - Writing the file into the chat instead of calling `create_file`.
 - Saying "I've created the file" without having called a tool.
+- Calling `create_file` with only a `path`. Both arguments go in the same call: the whole file body must be the `content` string of that call. There is no second call that fills it in later.
+- Calling `make_dir` for each folder in a path before writing a file there. `create_file "a/b/c.txt"` creates `a` and `a/b` for you.
 - Calling `create_file` on an existing file to change two lines — use `str_replace`.
 - `str_replace` with `old_str` you remembered rather than copied — `view` the file first; whitespace and indentation must match exactly.
 - Absolute paths (`/tmp/x`, `C:\Users\...`), `~`, or `..` above the root. Every path is relative to the workspace root.

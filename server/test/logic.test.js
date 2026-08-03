@@ -256,7 +256,9 @@ test('llamacpp: overflow errors are recognised', () => {
 });
 
 test('windows: unix idioms are translated', () => {
-  assert.equal(winTranslate('mkdir -p src/main/java').cmd, 'mkdir src/main/java');
+  // mkdir -p src/main/java also has its forward slashes fixed: cmd.exe's own mkdir
+  // reads a bare "/" as a switch, so the unpatched output would fail outright.
+  assert.equal(winTranslate('mkdir -p src/main/java').cmd, 'mkdir src\\main\\java');
   assert.equal(winTranslate('rm -rf build').cmd, 'rmdir /s /q build');
   assert.equal(winTranslate('cp -r a b').cmd, 'xcopy /e /i /y a b');
   assert.equal(winTranslate('mv a b').cmd, 'move /y a b');
@@ -271,10 +273,11 @@ test('windows: chained segments each translate', () => {
   assert.equal(r.notes.length, 2);
 });
 
-test('windows: arguments are never rewritten', () => {
+test('windows: arguments to ordinary programs are never rewritten', () => {
   assert.equal(winTranslate('gradle build --info').cmd, 'gradle build --info');
   assert.equal(winTranslate('echo please rm -rf nothing').cmd, 'echo please rm -rf nothing');
   assert.equal(winTranslate('node scripts/cp.js').cmd, 'node scripts/cp.js');
+  assert.equal(winTranslate('python src/app.py').cmd, 'python src/app.py');
   assert.equal(winTranslate('').cmd, '');
   assert.equal(winTranslate(null).cmd, '');
 });
@@ -282,6 +285,40 @@ test('windows: arguments are never rewritten', () => {
 test('windows: untouched commands report no notes', () => {
   assert.equal(winTranslate('npm install').notes.length, 0);
   assert.equal(winTranslate('mkdir out').notes.length, 0);
+});
+
+test('windows: forward slashes in cmd.exe builtin path arguments become backslashes', () => {
+  // mkdir a/b is parsed by cmd.exe as "mkdir a" plus a bogus "/b" switch and fails
+  // with "The syntax of the command is incorrect." — this is the actual reported bug.
+  assert.equal(winTranslate('mkdir a/b/c').cmd, 'mkdir a\\b\\c');
+  assert.equal(winTranslate('rmdir /s /q old/stuff').cmd, 'rmdir /s /q old\\stuff');
+  assert.equal(winTranslate('del /q /f a/b.txt').cmd, 'del /q /f a\\b.txt');
+  assert.equal(winTranslate('copy src/a.txt dst/b.txt').cmd, 'copy src\\a.txt dst\\b.txt');
+  assert.equal(winTranslate('dir /s /b src/main').cmd, 'dir /s /b src\\main');
+  assert.equal(winTranslate('type src/a.txt').cmd, 'type src\\a.txt');
+  assert.equal(winTranslate('MKDIR a/b').cmd, 'MKDIR a\\b', 'the builtin name is matched case-insensitively');
+});
+
+test('windows: real switches on slash-sensitive builtins survive untouched', () => {
+  const r = winTranslate('xcopy /e /i /y src/a dst/b');
+  assert.equal(r.cmd, 'xcopy /e /i /y src\\a dst\\b', '/e /i /y are flags, not paths, and must not be turned into backslashes');
+});
+
+test('windows: quoted paths with spaces are slash-fixed inside the quotes', () => {
+  assert.equal(winTranslate('mkdir "my folder/sub"').cmd, 'mkdir "my folder\\sub"');
+});
+
+test('windows: cd is deliberately excluded from the slash fix', () => {
+  // cmd.exe's cd/chdir hands the path straight to SetCurrentDirectoryW and accepts
+  // forward slashes fine, unlike mkdir/del/copy/etc. Rewriting it would be a no-op
+  // at best; this test exists so nobody "completes" the SLASH_SENSITIVE set later
+  // without re-checking that cd actually needs it.
+  assert.equal(winTranslate('cd src/main').cmd, 'cd src/main');
+});
+
+test('windows: the slash fix reports a note, same as every other auto-correction', () => {
+  const r = winTranslate('mkdir a/b');
+  assert.equal(r.notes.length, 1);
 });
 
 test('rolling ctx: fits under budget returns the list untouched', () => {
@@ -677,4 +714,169 @@ test('text tool calls still reject names that are not enabled at all', () => {
 test('every sandbox tool name is unique and resolves to itself', () => {
   assert.equal(new Set(SANDBOX_TOOLS).size, SANDBOX_TOOLS.length);
   for (const t of SANDBOX_TOOLS) assert.equal(resolveToolName(t), t);
+});
+
+// --- sandbox tool surface -------------------------------------------------
+// These touch a real (temporary) workspace on purpose: a missing cross-module
+// import only shows up when a handler actually runs, which module-load checks
+// and node --check both miss.
+const SBOX = 'oq-test-sandbox';
+
+async function sbox(call) {
+  const { execTool } = await import('../sandbox.js');
+  return execTool(SBOX, call);
+}
+async function sboxReset() {
+  const { remove } = await import('../sandbox.js');
+  remove(SBOX);
+}
+
+test('sandbox: write, read back, edit and list round-trip', async () => {
+  await sboxReset();
+  assert.equal((await sbox({ tool: 'create_file', path: 'app.py', content: 'print(1)\n' })).ok, true);
+  const read = await sbox({ tool: 'view', path: 'app.py' });
+  assert.equal(read.ok, true);
+  assert.match(read.content, /print\(1\)/);
+  assert.equal((await sbox({ tool: 'str_replace', path: 'app.py', old_str: 'print(1)', new_str: 'print(2)' })).ok, true);
+  const listed = await sbox({ tool: 'list_files' });
+  assert.equal(listed.ok, true);
+  assert.ok(listed.files.some(f => f.path === 'app.py'), 'app.py is listed');
+  await sboxReset();
+});
+
+test('sandbox: search and find reach the workspace', async () => {
+  await sboxReset();
+  await sbox({ tool: 'create_file', path: 'src/a.py', content: 'import os\n' });
+  const found = await sbox({ tool: 'find', pattern: '**/*.py' });
+  assert.equal(found.ok, true);
+  assert.equal(found.count, 1);
+  const hits = await sbox({ tool: 'search', query: 'import' });
+  assert.equal(hits.ok, true);
+  assert.equal(hits.count, 1);
+  await sboxReset();
+});
+
+test('sandbox: aliases and alternate argument names resolve', async () => {
+  await sboxReset();
+  assert.equal((await sbox({ tool: 'write_file', path: 'b.txt', content: 'hi' })).ok, true);
+  assert.equal((await sbox({ tool: 'read_file', file_path: 'b.txt' })).ok, true, 'file_path is accepted for path');
+  assert.equal((await sbox({ tool: 'edit', path: 'b.txt', old_str: 'hi', new_str: 'yo' })).ok, true, 'loose alias resolves');
+  await sboxReset();
+});
+
+test('sandbox: every path argument is normalized once', async () => {
+  await sboxReset();
+  const made = await sbox({ tool: 'create_file', path: '/notes.md', content: 'ok' });
+  assert.equal(made.path, 'notes.md', 'leading slash is stripped before it reaches metadata');
+  const moved = await sbox({ tool: 'move_file', path: '/notes.md', new_path: 'docs/notes.md' });
+  assert.equal(moved.path, 'docs/notes.md');
+  await sboxReset();
+});
+
+test('sandbox: escaping paths are refused with a teaching error', async () => {
+  await sboxReset();
+  for (const bad of ['/etc/passwd', 'C:/Windows/x', '../out.txt']) {
+    const r = await sbox({ tool: 'create_file', path: bad, content: 'x' });
+    assert.equal(r.ok, false, bad);
+    assert.match(r.error, /workspace|relative/i, bad);
+  }
+  await sboxReset();
+});
+
+test('sandbox: a missing required argument names the argument', async () => {
+  await sboxReset();
+  const noContent = await sbox({ tool: 'create_file', path: 'x.txt' });
+  assert.equal(noContent.ok, false);
+  assert.match(noContent.error, /"content"/);
+  const noNew = await sbox({ tool: 'str_replace', path: 'x.txt', old_str: 'a' });
+  assert.equal(noNew.ok, false);
+  assert.match(noNew.error, /"new_str"/);
+  await sboxReset();
+});
+
+test('sandbox: an empty string is a real file body, not a missing argument', async () => {
+  await sboxReset();
+  const made = await sbox({ tool: 'create_file', path: 'empty.txt', content: '' });
+  assert.equal(made.ok, true, 'content:"" creates an empty file');
+  assert.equal(made.bytes, 0);
+  await sbox({ tool: 'create_file', path: 'd.txt', content: 'keep\ndrop\n' });
+  const cut = await sbox({ tool: 'str_replace', path: 'd.txt', old_str: 'drop\n', new_str: '' });
+  assert.equal(cut.ok, true, 'new_str:"" deletes old_str');
+  const after = await sbox({ tool: 'view', path: 'd.txt' });
+  assert.equal(/drop/.test(after.content), false);
+  await sboxReset();
+});
+
+test('sandbox: create_file accepts the other names models use for content', async () => {
+  await sboxReset();
+  for (const k of ['contents', 'body', 'code', 'file_text', 'source']) {
+    const r = await sbox({ tool: 'create_file', path: `${k}.txt`, [k]: 'x' });
+    assert.equal(r.ok, true, k);
+  }
+  await sboxReset();
+});
+
+test('sandbox: create_file salvages a body sent under an invented argument name', async () => {
+  await sboxReset();
+  const long = 'line one of the file\n'.repeat(6);
+  const r = await sbox({ tool: 'create_file', path: 'salvaged.txt', the_file_body: long });
+  assert.equal(r.ok, true);
+  assert.match(r.note, /the_file_body/);
+  const back = await sbox({ tool: 'view', path: 'salvaged.txt' });
+  assert.match(back.content, /line one of the file/);
+
+  const short = await sbox({ tool: 'create_file', path: 'nope.txt', mood: 'happy' });
+  assert.equal(short.ok, false, 'a short unrelated string is not mistaken for a file body');
+  await sboxReset();
+});
+
+test('sandbox: str_replace tolerates indentation but not ambiguity', async () => {
+  await sboxReset();
+  await sbox({ tool: 'create_file', path: 'App.java', content: 'class A {\n    void run() {\n        int x = 1;\n    }\n}\n' });
+  const fixed = await sbox({ tool: 'str_replace', path: 'App.java', old_str: 'void run() {\nint x = 1;\n}', new_str: 'void run() {\nint x = 2;\n}' });
+  assert.equal(fixed.ok, true, 'a snippet retyped without its indentation still matches');
+  assert.match(fixed.note, /indentation/i);
+  const body = (await sbox({ tool: 'view', path: 'App.java' })).content;
+  assert.match(body, /    void run\(\) \{/, "the file's own indentation is preserved");
+  assert.match(body, /int x = 2;/);
+
+  await sbox({ tool: 'create_file', path: 'two.txt', content: '  a\n\ta\n' });
+  const amb = await sbox({ tool: 'str_replace', path: 'two.txt', old_str: 'a', new_str: 'b' });
+  assert.equal(amb.ok, false, 'two indentation-insensitive matches stay an error');
+  await sboxReset();
+});
+
+test('sandbox: a failed str_replace shows the closest text in the file', async () => {
+  await sboxReset();
+  await sbox({ tool: 'create_file', path: 'cfg.json', content: '{\n  "name": "enderium",\n  "version": "1.0.0"\n}\n' });
+  const r = await sbox({ tool: 'str_replace', path: 'cfg.json', old_str: '"version": "9.9.9"', new_str: '"version": "2"' });
+  assert.equal(r.ok, false);
+  assert.match(r.error, /closest text/i);
+  assert.match(r.error, /1\.0\.0/, 'the real line is quoted back with its line number');
+  await sboxReset();
+});
+
+test('sandbox: an unknown tool suggests the nearest real one', async () => {
+  const r = await sbox({ tool: 'creat_file', path: 'a', content: 'b' });
+  assert.equal(r.ok, false);
+  assert.match(r.error, /create_file/);
+});
+
+test('sandbox: bash refuses host commands and paths outside the workspace', async () => {
+  for (const cmd of ['sudo apt-get install nginx', 'cat /etc/passwd']) {
+    const r = await sbox({ tool: 'bash', cmd });
+    assert.equal(r.ok, false, cmd);
+    assert.match(r.error, /Blocked/, cmd);
+  }
+});
+
+test('sandbox: hostEnvInfo reports a usable shape without leaking host paths', async () => {
+  const { hostEnvInfo } = await import('../sandbox.js');
+  const env = hostEnvInfo();
+  assert.ok(env.osName && env.shellName);
+  assert.ok(Array.isArray(env.interpreters));
+  assert.ok(Array.isArray(env.missingUtils));
+  for (const i of env.interpreters) {
+    assert.equal(/[\/]/.test(i.version), false, `${i.name} version must not contain a path: ${i.version}`);
+  }
 });

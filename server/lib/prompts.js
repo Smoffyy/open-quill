@@ -31,6 +31,7 @@ function hostEnvSection() {
   if (!env.unix) {
     L.push('- This is **cmd.exe on Windows, not a Unix shell.** `find`, `sort` and `more` exist but are the Windows commands with different syntax, not the Unix ones.');
     L.push('- Unix FLAGS fail, even on commands that do exist: `mkdir -p`, `rm -rf`, `cp -r`, `ls -la`. Plain `mkdir a\\b` already creates parent folders.');
+    L.push('- **In a `bash` command, cmd.exe\'s own builtins (`mkdir`, `del`, `copy`, `move`, `ren`, `rmdir`, `dir`, `type`) do NOT accept forward slashes as path separators — they read `/` as the start of a switch.** `mkdir src/main/java` fails with "The syntax of the command is incorrect." even though forward slashes work fine in `cd`, in every real interpreter, and in this app\'s own file tools. In `bash`, write these paths with backslashes: `mkdir src\\main\\java`. This is auto-corrected for you when it can be, but do not rely on that — write backslashes for these commands the first time. This does NOT apply to the `path` argument of `create_file`, `make_dir`, `view` and the other file tools, which always take forward slashes on every OS.');
     L.push('- cmd.exe mangles quotes and newlines in long one-liners. To run real logic, write a script file with `create_file` and then run that file, instead of a `-c "..."` one-liner.');
   } else {
     L.push('- Standard Unix utilities are available, but the file tools are still preferred for file work because their results are structured, versioned, and shown to the user.');
@@ -138,8 +139,8 @@ export function formatToolResult(rawCall, r) {
   if (!r.ok) return `${head} → ERROR: ${r.error}` + (r.output ? `\n${r.output}` : '');
   switch (call.tool) {
     case 'bash': case 'run': case 'shell': return `$ ${call.cmd ?? call.command ?? ''}\n${r.output || '(no output)'}\n(exit ${r.exit ?? 0}${r.cwd ? `, cwd: ${r.cwd || '.'}` : ''})`;
-    case 'create_file': case 'write_file': return r.unchanged ? `${head} → unchanged (already v${r.v}, identical content, no write needed)` : `${head} → created (v${r.v}, ${r.bytes} bytes, +${r.adds ?? 0}/-${r.dels ?? 0})`;
-    case 'str_replace': case 'edit_file': return `${head} → edited (now v${r.v}, +${r.adds ?? 0}/-${r.dels ?? 0}${r.replaced > 1 ? `, ${r.replaced} occurrences` : ''})`;
+    case 'create_file': case 'write_file': return (r.unchanged ? `${head} → unchanged (already v${r.v}, identical content, no write needed)` : `${head} → created (v${r.v}, ${r.bytes} bytes, +${r.adds ?? 0}/-${r.dels ?? 0})`) + (r.note ? `\nNOTE: ${r.note}` : '');
+    case 'str_replace': case 'edit_file': return `${head} → edited (now v${r.v}, +${r.adds ?? 0}/-${r.dels ?? 0}${r.replaced > 1 ? `, ${r.replaced} occurrences` : ''})` + (r.note ? `\nNOTE: ${r.note}` : '');
     case 'insert_lines': return `${head} → inserted ${r.adds} line(s) (now v${r.v})`;
     case 'view': case 'read_file': case 'cat': return `${head} →\n${r.content}`;
     case 'list_files': case 'ls': case 'tree': return `${head} →\n${r.tree || '(empty)'}` + (r.hidden ? `\n(${r.hidden} item(s) in ignored dependency/build folders hidden; pass all:true to include them)` : '');

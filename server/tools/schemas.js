@@ -29,6 +29,7 @@ function bashDescription(env) {
   }
   if (env && !env.unix) {
     lines.push('This host is Windows cmd.exe, NOT a Unix shell: Unix flags (`-p`, `-rf`, `-r`, `-la`) fail even on commands that do exist, and `find`, `sort` and `more` are the Windows versions, not the Unix ones.');
+    lines.push('cmd.exe builtins (`mkdir`, `del`, `copy`, `move`, `ren`, `rmdir`, `dir`, `type`) read a `/` inside a path as a switch, not a separator, so `mkdir a/b` fails — use backslashes in these commands, e.g. `mkdir a\\b`. This does not apply to the file tools\' own `path` argument, which always takes forward slashes.');
   }
   if (env && env.pythonCmd && env.pythonCmd !== 'python3') lines.push(`The Python command here is \`${env.pythonCmd}\`, not \`python3\`.`);
   lines.push('The shell is confined to the workspace: absolute paths, "~", ".." above the root, and host administration commands (sudo, systemctl, reg, apt, docker, ssh, shutdown, ...) are blocked.');
@@ -44,7 +45,7 @@ export function sandboxToolSchemas(env = null) {
       workdir: str('Optional directory to run in for this call, relative to the workspace root. Also becomes the new persistent working directory.'),
       timeout_s: int('Optional timeout in seconds (default 60, max 600). Raise it for slow installs or long builds.')
     }, ['cmd']),
-    fn('create_file', 'Create a new file, or completely overwrite an existing one. Provide the COMPLETE final text: never truncate, never write placeholders such as "rest of file unchanged" or "...". Missing parent folders are created automatically. Every write is versioned so the user can diff and roll back. To change part of an existing file use str_replace instead.', {
+    fn('create_file', 'Create a new file, or completely overwrite an existing one. BOTH arguments are required on every call: a call carrying only a path is invalid and does nothing. Provide the COMPLETE final text: never truncate, never write placeholders such as "rest of file unchanged" or "...". Missing parent folders are created automatically, so you do not need make_dir first. Every write is versioned so the user can diff and roll back. To change part of an existing file use str_replace instead.', {
       path: str(REL),
       content: str('The complete raw text content of the file. Pass "" to create an empty file.')
     }, ['path', 'content']),
@@ -88,7 +89,7 @@ export function sandboxToolSchemas(env = null) {
       path: str('Source path, relative to the workspace root.'),
       new_path: str('Destination path, relative to the workspace root.')
     }, ['path', 'new_path']),
-    fn('make_dir', 'Create a directory, including any missing parent directories.', {
+    fn('make_dir', 'Create a directory, including any missing parent directories. You rarely need this: create_file already creates every missing parent folder on the way to the file. Use it only for a directory that must exist while still being empty.', {
       path: str(REL)
     }, ['path']),
     fn('extract_zip', 'Unpack a .zip that is already in the workspace. This is the only correct way to unpack an archive; shell `unzip`/`tar` may not exist. Files inside dependency/build folders are written to disk but kept out of listings automatically.', {
