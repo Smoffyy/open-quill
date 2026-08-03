@@ -10,7 +10,7 @@
 .to-bottom:hover { background: var(--surface-hover); }
 
 /* ---------- login ---------- */
-.login { height: 100%; display: flex; align-items: center; justify-content: center; background: var(--bg); color: var(--text); overflow-y: auto; padding: 24px 0; }
+.login { height: 100%; display: flex; align-items: center; justify-content: center; background: var(--bg); color: var(--text); overflow: hidden auto; padding: 24px 0; }
 .login-card { width: 100%; max-width: 420px; padding: 40px 24px; text-align: center; }
 .login-logo { display: flex; align-items: center; gap: 9px; justify-content: center; font-size: 22px; font-weight: 600; margin-bottom: 38px; color: var(--text); }
 .login-logo img { width: 26px; height: 26px; }

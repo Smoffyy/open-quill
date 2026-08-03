@@ -175,6 +175,7 @@ function Sidebar({
   const [hover, setHover] = useState(false);
   const [dragChatId, setDragChatId] = useState(null);
   const [rootDragOver, setRootDragOver] = useState(false);
+  const chatsRef = useRef(null);
   const [recentsCollapsed, setRecentsCollapsed] = useState(() => { try { return localStorage.getItem('oq-recents-collapsed') === '1'; } catch { return false; } });
   const toggleRecents = () => setRecentsCollapsed(v => { const n = !v; try { localStorage.setItem('oq-recents-collapsed', n ? '1' : '0'); } catch {} return n; });
   useEffect(() => {
@@ -236,7 +237,12 @@ function Sidebar({
           {spacesPending > 0 && <span className="nav-badge">{spacesPending}</span>}
         </button>
       </div>
-      <div className="chats">
+      <div className="chats-wrap">
+      <button type="button" className="chats-arrow up" title={t("Scroll up")} aria-label={t("Scroll up")}
+        onClick={() => chatsRef.current?.scrollBy({ top: -160, behavior: 'smooth' })}>
+        <Chevron style={{ width: 12 }} />
+      </button>
+      <div className="chats" ref={chatsRef}>
         {!chatsLoaded ? (
           <>
             <div className="section-label">{t("Recents")}</div>
@@ -291,6 +297,11 @@ function Sidebar({
             </>}
           </>
         )}
+      </div>
+      <button type="button" className="chats-arrow down" title={t("Scroll down")} aria-label={t("Scroll down")}
+        onClick={() => chatsRef.current?.scrollBy({ top: 160, behavior: 'smooth' })}>
+        <Chevron style={{ width: 12 }} />
+      </button>
       </div>
       <div className="rail-spacer" />
       <div className="profile">

@@ -38,6 +38,9 @@ jobs:
       - name: Components render without crashing
         run: npm run smoke
 
+      - name: Client logic tests
+        run: npm run test:client
+
       - name: Smoke test server
         run: |
           set -euo pipefail

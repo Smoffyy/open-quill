@@ -324,7 +324,7 @@ export default function App() {
   const lastTop = useRef(0);
   const programmatic = useRef(false);
   const [showJump, setShowJump] = useState(false);
-  const animate = cfg.uiPreset === 'openai' ? false : user?.prefs?.animations !== false;
+  const animate = cfg.uiPreset === 'openai' ? false : (user?.prefs?.typewriter ?? user?.prefs?.animations) !== false;
   const revealMs = (() => { const v = user?.prefs?.revealMs; return v == null || isNaN(parseInt(v)) ? 40 : Math.max(0, Math.min(100, parseInt(v))); })();
   const [threadStagger, setThreadStagger] = useState(false);
   const staggerTimer = useRef(null);

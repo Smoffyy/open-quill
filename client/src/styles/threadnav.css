@@ -18,7 +18,7 @@
   align-items: center;
   justify-content: flex-start;
   width: 100%;
-  overflow-y: auto;
+  overflow: hidden auto;
   scrollbar-width: none;
   padding: 2px 0;
 }

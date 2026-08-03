@@ -7,6 +7,7 @@
     "install:all": "npm install && cd server && npm install && cd ../client && npm install",
     "build": "cd client && npm run build",
     "smoke": "cd client && npm run smoke",
+    "test:client": "cd client && npm test",
     "i18n:check": "cd client && npm run i18n:check",
     "check:local": "cd client && npm run check:local",
     "dev": "concurrently -n server,client -c blue,magenta \"npm:dev:server\" \"npm:dev:client\"",

@@ -40,14 +40,20 @@ Rules:
 
 **No preset may make a user pref inert.** `applyPrefs` writes every pref to a `data-*` attribute on `<html>` regardless of preset, and `openai.css` must not override those attribute-driven rules. A preset may change a pref's *default* (as the cursor does) but never its effect — a settings toggle that visibly does nothing in one skin is a bug, not a style choice.
 
-### `animations` gates two different things
+### Motion and the typewriter reveal are two separate prefs
 
-The pref is labelled "Typewriter reveal", but it drives both the reveal loop (`animate` in `App.jsx`) and `data-animations`, which every CSS transition and keyframe opt-out keys off. Those two now default differently, and the split is deliberate:
+They used to be one key, and conflating them caused a genuinely expensive bug: `animations` defaulted off under `openai`, which silently disabled every CSS transition in that skin. The reasoning open/close animation was written, shipped, and appeared completely dead for exactly that reason, with nothing wrong in the CSS. They are now split:
 
-- **`data-animations` defaults on in both presets** (`prefs?.animations === false ? 'off' : 'on'`). It used to default off under `openai`, which silently disabled every transition in that skin — the reasoning open/close animation was written, shipped, and appeared completely dead for exactly this reason, with nothing wrong in the CSS.
-- **The reveal loop is off entirely under `openai`**, not merely defaulted off: `animate` is hard-coded false for that preset, so `App.jsx` writes each chunk straight to state as it arrives and `finalize()` runs the moment `done` lands. Tokens render exactly as the server sends them, matching chatgpt.com. This is the one place a preset overrides a pref rather than its default, so `SettingsModal` compensates — under `openai` the toggle is relabelled "Motion", loses the typewriter description, and the "Reveal speed" slider is hidden, because a control that visibly does nothing is the bug this document warns about elsewhere.
+| Pref | Drives | Default |
+| --- | --- | --- |
+| `animations` | `data-animations` on `<html>`, which every CSS transition and keyframe opt-out keys off | on in both presets |
+| `typewriter` | the reveal loop (`animate` in `App.jsx`) | on under `anthropic`, **forced off under `openai`** |
 
-Under `anthropic` the pref still moves both halves together. When something animates in one preset and not the other, **check `document.documentElement.dataset.animations` before touching a single CSS rule.**
+`animate` is hard-coded false for `openai`, so `App.jsx` writes each chunk straight to state as it arrives and `finalize()` runs the moment `done` lands — tokens render exactly as the server sends them, matching chatgpt.com. That is the one place a preset overrides a pref rather than its default, so `SettingsModal` hides the "Typewriter reveal" toggle and the "Reveal speed" slider entirely under `openai` rather than leaving controls that visibly do nothing.
+
+Reading `typewriter` always goes through `(prefs.typewriter ?? prefs.animations) !== false`, and `SettingsModal` seeds `typewriter` from a pre-split `animations` value on first open. Without that, anyone who had turned animations off would have the reveal switch itself back on the next time they touched any setting.
+
+When something animates in one preset and not the other, **check `document.documentElement.dataset.animations` before touching a single CSS rule.**
 
 ## The complete JS branch list (`cfg.uiPreset === 'openai'` or data-preset reads)
 
@@ -269,11 +275,25 @@ Details that are load-bearing:
 - **`llamaEngine(provider)` is the provider-level sibling of `llamaInfo(model)`**, behind `GET /api/admin/providers/:id/engine` and folded into the existing Test connection button rather than polled. `/slots` returns 501 when the server ran with `--no-slots`; that is a normal configuration, so `slotsHidden` says so instead of the panel reporting a failure.
 - Both `ctxGauge` and `msgSpeed` are **opt-in** prefs (default off) under **Settings > Chat > Tools**, next to `engineStrip`. They are extra numbers on screen that mostly matter when you are running the model yourself.
 
+## Client tests (`npm test` in `client/`, `npm run test:client` from the root)
+
+`client/test/logic.test.js` runs on `node --test` with no extra dependencies, mirroring the server suite, and runs in CI as **Client logic tests**. It covers the pure logic that build tooling cannot check: the keybind model (`comboFromEvent` including the macOS Option-symbol and dead-key paths, combo validation, sanitize/resolve/index, chords, presets, import/export), reasoning parsing (`lastSentence`, `parseSteps`), `hasMath`/`wrapMathEnvironments`, `previewOf`/`buildTree`/`collapseRuns`, and `scanTools`.
+
+Two rules make this possible and are worth preserving. **Only modules with no imports are testable** — `node --test` cannot parse JSX, so anything importing a `.jsx` file is off limits. That is why `lastSentence`/`parseSteps` live in `lib/reasoning.js` rather than inside `ReasoningBlock.jsx`; pull pure logic out of components rather than reaching for a JSX-aware runner. And there is a test asserting `lib/reasoning.js` contains **no regex lookbehind**, because that is a parse-time error on Safari below 16.4 and would take down the whole bundle rather than one component.
+
+Writing these immediately found a real bug: `isValidCombo` only validated the modifier half, so junk like `'(((('` passed and was stored, which *disabled* that shortcut instead of falling back to its default — the opposite of what the keyboard section promises. `isValidKey` now requires a single character or a real DOM key name.
+
+## Dead CSS report (`npm run dead:css`)
+
+`client/scripts/dead-css.mjs` lists class names in `src/styles/` that no `.js`/`.jsx`/`.html` under `src/` references, accounting for dynamically composed names (`'r-' + role`) by also testing every hyphen prefix. It is **advisory and never fails the build**, because a zero-hit class can still be emitted by a library — `katex-display` is the obvious case, and `EXTERNAL` at the top of the script is where those go. Verify before deleting; the report is a starting point, not a verdict.
+
 ## Render smoke test (`npm run smoke`)
 
 `client/scripts/smoke.jsx` server-renders every admin `ModelEditor` section plus the standalone modals and asserts none of them throw. It exists because `vite build` type-checks nothing: passing wrong props to a component compiles perfectly and then blanks the whole panel at runtime. That is exactly how the Routing tab shipped broken once — `Toggle` takes `{ m, set, k }` and reads `m[k]` internally, while `Switch` is the one that takes `{ on, onToggle }`. Passing `on`/`onToggle` to `Toggle` left `m` undefined and killed the admin app.
 
-It runs in CI as **Components render without crashing**. Run it locally after touching any admin section or modal. Adding a component to the list is two lines and worth it for anything reachable behind a tab, since a crash there is invisible until someone clicks. Components needing React context (the `useAdmin` sections) are not covered; wrapping them in a provider is the obvious extension if that class of bug shows up.
+It runs in CI as **Components render without crashing**. Run it locally after touching any admin section or modal. Adding a component to the list is two lines and worth it for anything reachable behind a tab, since a crash there is invisible until someone clicks.
+
+All 19 `useAdmin` sections are now covered by wrapping each in `AdminProvider`; `renderToString` never runs effects, so the provider's API calls do not fire. That took coverage from 14 components to 33.
 
 ## Router models (`lib/router.js`)
 
@@ -536,3 +556,11 @@ Permanent branches: `dev` → `beta` → `stable`. Versions live in tags, not br
 It covers the pure logic that is easy to break silently: kwarg resolution and pairing chains, text tool-call parsing (including the negative cases where prose or an unknown tool name must NOT become a call), compaction thresholds and in-turn tool trimming, llama.cpp overflow detection, the Windows command translation in `sandbox.js`, and `preferredChild` from `lib/tree.js` (branch descent preference). Add cases here when touching any of those; they are cheap and they have already caught a real regression.
 
 CI syntax-checks every `.js` file under `server/` via `find`, so new files and folders are covered automatically. Do not replace that with a hand-written file list.
+
+## Scrolling containers
+
+Never write `overflow-y: auto` on its own. Per spec a `visible` axis paired with a non-`visible` one computes to `auto`, so it silently creates a **horizontal** scroll container too — that is what once hid the "More models" submenu behind a sideways scrollbar. Always `overflow: hidden auto`. All 41 pre-existing instances were converted; `.katex-display` is the one intentional exception, since it pairs `overflow-x: auto` with `overflow-y: hidden` on purpose.
+
+This is safe across the app because wide content already scrolls inside its own container: `table` is `display: block; width: max-content; overflow-x: auto` in `chat.css`, `pre` carries `overflow-x: auto` in both `.code-wrap` and `.art-md`, and `.katex-display` handles wide formulae. Anything new that can exceed its column needs the same treatment rather than relying on an ancestor to scroll sideways.
+
+The sidebar chat list adds stepper arrows at each end of its scrollbar via `::-webkit-scrollbar-button`. Firefox has no equivalent, so `.chats-arrow` DOM buttons are rendered behind `@supports not selector(::-webkit-scrollbar-button)` — they appear only in engines lacking the pseudo-element, which keeps Chrome and Safari on the native-looking steppers and avoids double arrows anywhere.

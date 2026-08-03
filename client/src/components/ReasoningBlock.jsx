@@ -2,34 +2,11 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Chevron, Bulb, Copy, Check, CheckCircle, Clock } from './icons.jsx';
 import { copyText } from '../clipboard.js';
 import { t } from '../i18n.jsx';
-
-const SENTENCE_RE = /[^.!?]+[.!?]+(?=\s|$)/g;
-const LINE_MAX = 150;
-const LINE_HOLD_MS = 3000;
-
-function parseSteps(text) {
-  const raw = String(text || '').replace(/\r\n/g, '\n').trim();
-  if (!raw) return [];
-  return raw.split(/\n{2,}/)
-    .map(block => block.split('\n').map(l => l.trim()).filter(Boolean))
-    .filter(lines => lines.length);
-}
-
-function lastSentence(text) {
-  const raw = String(text || '').replace(/\s+/g, ' ').trim();
-  if (!raw) return '';
-  const found = raw.match(SENTENCE_RE);
-  if (!found) return '';
-  for (let i = found.length - 1; i >= 0; i--) {
-    const s = found[i].trim();
-    if (s.length > 3) return s.length > LINE_MAX ? s.slice(0, LINE_MAX).trimEnd() + '…' : s;
-  }
-  return '';
-}
+import { parseSteps, lastSentence, thoughtSeconds, LINE_HOLD_MS } from '../lib/reasoning.js';
 
 function thoughtLabel(ms) {
-  if (!(ms > 0)) return t('Thought process');
-  const secs = Math.max(1, Math.round(ms / 1000));
+  const secs = thoughtSeconds(ms);
+  if (!secs) return t('Thought process');
   if (secs < 60) return secs === 1 ? t('Thought for 1 second') : t('Thought for {n} seconds', { n: secs });
   const mins = Math.round(secs / 60);
   return mins === 1 ? t('Thought for 1 minute') : t('Thought for {n} minutes', { n: mins });

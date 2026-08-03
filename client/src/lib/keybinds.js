@@ -119,6 +119,12 @@ export function chordParts(combo) {
   return String(combo || '').split(' ').filter(Boolean);
 }
 
+function isValidKey(key) {
+  if (typeof key !== 'string' || !key) return false;
+  if (key.length === 1) return true;
+  return /^[A-Za-z][A-Za-z0-9]*$/.test(key);
+}
+
 export function isValidCombo(combo) {
   if (typeof combo !== 'string' || !combo) return false;
   if (combo.includes(' ')) {
@@ -127,7 +133,7 @@ export function isValidCombo(combo) {
   }
   const parts = combo.split('+');
   const key = parts.pop();
-  if (!key || FLAG_SET.has(key) || MODIFIER_KEYS.has(key)) return false;
+  if (!isValidKey(key) || FLAG_SET.has(key) || MODIFIER_KEYS.has(key)) return false;
   const seen = new Set();
   for (const p of parts) {
     if (!FLAG_SET.has(p) || seen.has(p)) return false;

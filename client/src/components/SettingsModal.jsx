@@ -42,7 +42,7 @@ function parseVersion(v) {
 
 function presetDefaults(isOpenai, fallbackTheme) {
   return {
-    animations: true, autoscroll: true, theme: fallbackTheme || 'system', accent: '', density: 'comfortable',
+    animations: true, typewriter: true, autoscroll: true, theme: fallbackTheme || 'system', accent: '', density: 'comfortable',
     messageEntrance: true, streamCursor: isOpenai, cursorStyle: isOpenai ? 'circle' : 'block',
     cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40, chatStagger: true, themeFade: true,
     microFx: true, composerFx: true, iconGlow: false, focusGlow: false, oledShift: false,
@@ -63,6 +63,9 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
     const fallbackTheme = (applied === 'anthropic' || applied === 'openai' || applied === 'oled') ? 'dark' : (applied || 'system');
     const isOpenai = document.documentElement.getAttribute('data-preset') === 'openai';
     const merged = { ...presetDefaults(isOpenai, fallbackTheme), ...user.prefs };
+    if (user.prefs && user.prefs.typewriter == null && user.prefs.animations != null) {
+      merged.typewriter = user.prefs.animations !== false;
+    }
     if (!user.prefs || user.prefs.theme == null) merged.theme = fallbackTheme;
     if (merged.theme === 'oled') merged.theme = 'dark';
     return merged;
@@ -425,6 +428,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
           {tab === 'chat' && (() => {
             const rv = prefs.revealMs == null || isNaN(parseInt(prefs.revealMs)) ? 40 : Math.max(0, Math.min(100, parseInt(prefs.revealMs)));
             const noReveal = cfg?.uiPreset === 'openai';
+            const typewriterOn = (prefs.typewriter ?? prefs.animations) !== false;
             return (
               <>
                 <h2>{t("Chat")}</h2>
@@ -435,10 +439,13 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                   ))}
                 </div>
                 {chatSec === 'streaming' && <>
-                  <Toggle prefs={prefs} setPref={setPref} k="animations"
-                    label={noReveal ? t("Motion") : t("Typewriter reveal")}
-                    desc={noReveal ? '' : t("Reveal each response gradually as it generates, instead of all at once.")} />
-                  {prefs.animations !== false && !noReveal && (
+                  <Toggle prefs={prefs} setPref={setPref} k="animations" label={t("Motion")}
+                    desc={t("Animate transitions, expanding panels, and hover effects.")} />
+                  {!noReveal && (
+                    <Toggle prefs={prefs} setPref={setPref} k="typewriter" label={t("Typewriter reveal")}
+                      desc={t("Reveal each response gradually as it generates, instead of all at once.")} />
+                  )}
+                  {typewriterOn && !noReveal && (
                     <div className="field">
                       <label>{t("Reveal speed")}</label>
                       <div className="reveal-row">
