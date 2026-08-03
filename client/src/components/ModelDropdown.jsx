@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevDown, Chevron, ImageIcon, Brain, Info, TextIcon } from './icons.jsx';
 import { t, tk } from '../i18n.jsx';
-import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues } from '../kwargs.js';
+import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues, isRange, clampToRange, rangeStep, kwargVisible } from '../kwargs.js';
 
 const CAP_ICONS = [
   { key: 'capText', label: tk('Text-Only'), Icon: TextIcon },
@@ -85,6 +85,26 @@ export function KwargControl({ def, value, isAdmin, onSet }) {
           {note && <div className="mo-desc">{note}</div>}
         </div>
         <span className="kw-pill">{value == null ? t('off') : String(value)}</span>
+      </div>
+    );
+  }
+  if (isRange(def)) {
+    const cur = clampToRange(def, value);
+    const at = cur == null ? Number(defaultValueOf(def)) : cur;
+    const min = Number(def.min), max = Number(def.max), step = rangeStep(def);
+    const pct = max > min ? ((at - min) / (max - min)) * 100 : 0;
+    return (
+      <div className={'kw-range' + (locked ? ' locked' : '')}>
+        <div className="kw-head">
+          <span className="mo-name">{label}</span>
+          <span className="kw-cur">{at}{locked ? ' · ' + t('admin set') : ''}</span>
+        </div>
+        {note && <div className="mo-desc" style={{ marginBottom: 8, marginTop: -2 }}>{note}</div>}
+        <input type="range" className="kw-slider" style={{ '--pct': pct + '%' }}
+          min={min} max={max} step={step} value={at} disabled={locked}
+          aria-label={label}
+          onChange={(e) => { if (!locked) onSet(def.id, String(clampToRange(def, e.target.value))); }} />
+        <div className="kw-range-ends"><span>{min}</span><span>{max}</span></div>
       </div>
     );
   }
@@ -285,9 +305,9 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
     else if (id === 'effort' && onSetEffort) onSetEffort(value);
   };
   const ownKwargs = kwDefs.filter(d => !d.parentId);
-  const shownKwargs = kwDefs.filter(d => d.visible !== false);
+  const shownKwargs = kwDefs.filter(d => kwargVisible(kwDefs, kwActive, d));
   const chips = ownKwargs
-    .filter(d => d.visible !== false)
+    .filter(d => kwargVisible(kwDefs, kwActive, d))
     .map(d => kwargChip(d, kwActive[d.id]))
     .filter(Boolean)
     .slice(0, 2);

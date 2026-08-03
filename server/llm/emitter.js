@@ -147,16 +147,44 @@ export function makeToolTextFilter(onText, onCalls, isAllowed) {
 
 export function makeEmitter(model, onEvent, onCalls, isAllowed) {
   let inThink = false, carry = '';
+  let sawReasoning = false, contentStarted = false;
   const TOPEN = (model.think_open && model.think_open.trim()) || '<think>';
   const TCLOSE = (model.think_close && model.think_close.trim()) || '</think>';
-  const contentFilter = makeToolTextFilter((text) => onEvent({ type: 'content', text }), onCalls, isAllowed);
-  const reasonFilter = makeToolTextFilter((text) => onEvent({ type: 'reasoning', text }), onCalls, isAllowed);
+  const contentFilter = makeToolTextFilter((text) => {
+    if (text.trim()) contentStarted = true;
+    onEvent({ type: 'content', text });
+  }, onCalls, isAllowed);
+  const reasonFilter = makeToolTextFilter((text) => {
+    if (text.trim()) sawReasoning = true;
+    onEvent({ type: 'reasoning', text });
+  }, onCalls, isAllowed);
+
+  // `inThink` only ever learns about thinking that arrived as content. A provider
+  // that streams the thought through reasoning_content and then closes it with a
+  // literal tag on the content channel leaves that tag with nothing to consume it,
+  // and it is printed as the first line of the answer. llama.cpp does exactly that
+  // when a thinking budget forces the thought shut. The tag is swallowed only at
+  // the very start of the answer and only once thinking has actually happened, so
+  // an answer that legitimately talks about a closing think tag is untouched.
+  const orphanClose = () => sawReasoning && !contentStarted && !inThink;
+
   const emitContent = (raw) => {
     let text = carry + raw; carry = '';
     while (text.length) {
       if (!inThink) {
         const open = text.indexOf(TOPEN);
-        if (open === -1) { const h = heldBack(text, TOPEN); if (text.length - h) contentFilter.feed(text.slice(0, text.length - h)); carry = text.slice(text.length - h); return; }
+        const close = orphanClose() ? text.indexOf(TCLOSE) : -1;
+        if (close !== -1 && (open === -1 || close < open)) {
+          if (close > 0) contentFilter.feed(text.slice(0, close));
+          text = text.slice(close + TCLOSE.length);
+          continue;
+        }
+        if (open === -1) {
+          const h = Math.max(heldBack(text, TOPEN), orphanClose() ? heldBack(text, TCLOSE) : 0);
+          if (text.length - h) contentFilter.feed(text.slice(0, text.length - h));
+          carry = text.slice(text.length - h);
+          return;
+        }
         if (open > 0) contentFilter.feed(text.slice(0, open));
         text = text.slice(open + TOPEN.length); inThink = true;
       } else {

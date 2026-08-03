@@ -106,6 +106,22 @@ export function cleanCall(call) {
   return o;
 }
 
+const BODY_TOOLS = new Set(['create_file', 'write_file', 'str_replace', 'edit_file', 'insert_lines']);
+
+export function cutOffError(tool, cut, hitOutputLimit) {
+  const name = canonicalTool(tool) || tool || 'the call';
+  const parts = [
+    `this call was cut off before it finished sending, so it was NOT run and nothing was changed. The "${cut.key}" argument was still open after ${cut.chars} characters.`
+  ];
+  if (hitOutputLimit) parts.push('The reply reached its maximum output length mid-call.');
+  if (BODY_TOOLS.has(canonicalTool(tool))) {
+    parts.push(`Do not resend the same call: it will be cut off in the same place. Write the file in pieces instead — create_file with roughly the first half, then insert_lines to append the rest, one call each.`);
+  } else {
+    parts.push(`Send ${name} again with shorter arguments.`);
+  }
+  return parts.join(' ');
+}
+
 export function resultPayload(rawCall, r) {
   const call = { ...rawCall, tool: canonicalTool(rawCall.tool) };
   const o = { ok: !!r.ok };

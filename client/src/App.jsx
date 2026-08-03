@@ -40,6 +40,7 @@ import ShortcutsModal from './components/ShortcutsModal.jsx';
 import ThreadRail from './components/ThreadRail.jsx';
 import ThreadFind from './components/ThreadFind.jsx';
 import { railItems } from './lib/threadmeta.js';
+import { useDrafts } from './lib/drafts.js';
 import { CHORD_TIMEOUT, chordMenu, comboFromEvent, comboKeys, comboLabel, keybindIndex, resolveKeybinds } from './lib/keybinds.js';
 const BranchTree = React.lazy(() => import('./components/BranchTree.jsx'));
 import { toast } from './toast.js';
@@ -158,51 +159,6 @@ export default function App() {
   const [canContinue, setCanContinue] = useState(false);
   const [compareIds, setCompareIds] = useState([]);
   const compareRef = useRef(null);
-  const draftKey = (id) => 'oq-draft-' + (id || 'new');
-  const draftTimer = useRef(null);
-  const draftPending = useRef(null);
-  const flushDraftRef = useRef(null);
-  const writeDraft = (id, text) => {
-    try {
-      if (text && text.trim()) localStorage.setItem(draftKey(id), text);
-      else localStorage.removeItem(draftKey(id));
-    } catch {}
-  };
-  const flushDraft = () => {
-    clearTimeout(draftTimer.current);
-    draftTimer.current = null;
-    const p = draftPending.current;
-    if (!p) return;
-    draftPending.current = null;
-    writeDraft(p.id, p.text);
-  };
-  flushDraftRef.current = flushDraft;
-  const saveDraft = (id, text) => {
-    if (incognitoRef.current) return;
-    const p = draftPending.current;
-    if (p && p.id !== id) flushDraft();
-    draftPending.current = { id, text };
-    clearTimeout(draftTimer.current);
-    draftTimer.current = setTimeout(flushDraft, 200);
-  };
-  const loadDraft = (id) => { try { return localStorage.getItem(draftKey(id)) || ''; } catch { return ''; } };
-  const clearDraft = (id) => {
-    clearTimeout(draftTimer.current);
-    draftTimer.current = null;
-    draftPending.current = null;
-    try { localStorage.removeItem(draftKey(id)); } catch {}
-  };
-  useEffect(() => {
-    const flush = () => { if (flushDraftRef.current) flushDraftRef.current(); };
-    const onVis = () => { if (document.visibilityState === 'hidden') flush(); };
-    window.addEventListener('pagehide', flush);
-    document.addEventListener('visibilitychange', onVis);
-    return () => {
-      window.removeEventListener('pagehide', flush);
-      document.removeEventListener('visibilitychange', onVis);
-      flush();
-    };
-  }, []);
   const styleId = user?.prefs?.styleId || 'normal';
   const setStyleId = (id) => updatePref('styleId', id);
   const saveStyles = async (list) => {
@@ -336,6 +292,7 @@ export default function App() {
   const animateRef = useRef(animate);
   const incognitoRef = useRef(false);
   useEffect(() => { incognitoRef.current = incognito; }, [incognito]);
+  const { saveDraft, loadDraft, clearDraft, flushDraft } = useDrafts(incognitoRef);
   const refreshSeq = useRef(0);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
   useEffect(() => { liveRef.current = liveFile; }, [liveFile]);
@@ -384,7 +341,6 @@ export default function App() {
   useEffect(() => () => {
     stopLoops();
     clearTimeout(staggerTimer.current);
-    clearTimeout(draftTimer.current);
     clearTimeout(wsTimer.current);
     try { ws.current?.close(); } catch {}
   }, []);
@@ -1872,7 +1828,7 @@ export default function App() {
       {showShortcuts && <ShortcutsModal prefs={user?.prefs} onClose={() => setShowShortcuts(false)} onCustomize={() => { setShowShortcuts(false); setSettingsTab('keybinds'); setShowSettings(true); }} />}
       {treeOpen && activeId && user?.prefs?.branchMap !== false && <React.Suspense fallback={null}><BranchTree chatId={activeId} onSelect={selectBranch} onJump={jumpToMessage} onClose={() => setTreeOpen(false)} onChanged={async () => { await refreshMessages(activeId); setTimeout(() => scrollBottom(false), 20); toast(t('Message copied into this branch')); }} /></React.Suspense>}
       <Lightbox />
-      {showAdmin && <React.Suspense fallback={null}><AdminPanel user={user} onClose={() => { setShowAdmin(false); if (/^\/admin(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
+      {showAdmin && <React.Suspense fallback={null}><AdminPanel user={user} modelId={currentId} onClose={() => { setShowAdmin(false); if (/^\/admin(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
       {showPlayground && <React.Suspense fallback={null}><Playground onClose={() => { setShowPlayground(false); if (/^\/playground(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
       {showSpaces && <SpacesPanel user={user} onClose={() => { setShowSpaces(false); refreshSpacesPending(); if (/^\/spaces(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} />}
       {showProjects && <ProjectsPanel openId={projectOpenId} composerProps={composerProps}

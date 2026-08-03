@@ -91,6 +91,7 @@ export function fmtDateTime(value, opts) {
 export function useI18n() {
   const current = useSyncExternalStore(
     (cb) => { subs.add(cb); return () => subs.delete(cb); },
+    () => lang,
     () => lang
   );
   return { t, lang: current, setLang, langs: LANGS, fmtDate, fmtDateTime };

@@ -119,6 +119,12 @@ CREATE INDEX IF NOT EXISTS idx_messages_parent ON messages(chat_id, parent_id);`
   sdb.pragma('user_version = 8');
 }
 
+if (sdb.pragma('user_version', { simple: true }) < 9) {
+  sdb.exec(`CREATE TABLE IF NOT EXISTS toolstats (id TEXT PRIMARY KEY, ts INTEGER, data TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_toolstats_ts ON toolstats(ts);`);
+  sdb.pragma('user_version = 9');
+}
+
 export function tx(fn) { return sdb.transaction(fn)(); }
 
 export const uid = () => crypto.randomUUID();
@@ -137,7 +143,8 @@ const MIRROR = {
   sessions: { user_id: o => o.user_id ?? null, last_seen: o => o.last_seen ?? 0, created_at: o => o.created_at ?? 0 },
   audit: { ts: o => o.ts ?? 0, actor_id: o => o.actor_id ?? null },
   projects: { user_id: o => o.user_id ?? null, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 },
-  feedback: { ts: o => o.ts ?? 0, user_id: o => o.user_id ?? null }
+  feedback: { ts: o => o.ts ?? 0, user_id: o => o.user_id ?? null },
+  toolstats: { ts: o => o.ts ?? 0 }
 };
 
 const bumps = new Map();
@@ -269,6 +276,12 @@ feedbackCol.recent = (limit, offset) => feedbackRecentStmt.all(limit, offset).ma
 const feedbackByMsgStmt = sdb.prepare("SELECT data FROM feedback WHERE json_extract(data,'$.message_id')=?");
 feedbackCol.byMessage = mid => feedbackByMsgStmt.all(mid).map(r => JSON.parse(r.data));
 
+const toolStatsCol = collection('toolstats');
+const toolStatsPruneStmt = sdb.prepare('DELETE FROM toolstats WHERE ts < ?');
+toolStatsCol.prune = before => { try { return toolStatsPruneStmt.run(before).changes; } catch { return 0; } };
+const toolStatsClearStmt = sdb.prepare('DELETE FROM toolstats');
+toolStatsCol.clear = () => { try { toolStatsClearStmt.run(); } catch {} };
+
 const projectsCol = collection('projects');
 const projectsByUserStmt = sdb.prepare('SELECT data FROM projects WHERE user_id=? ORDER BY updated_at DESC');
 projectsCol.byUser = userId => projectsByUserStmt.all(userId).map(r => JSON.parse(r.data));
@@ -285,7 +298,8 @@ export const db = {
   sessions: sessionsCol,
   audit: auditCol,
   projects: projectsCol,
-  feedback: feedbackCol
+  feedback: feedbackCol,
+  toolStats: toolStatsCol
 };
 
 const sGet = sdb.prepare('SELECT value FROM settings WHERE key=?');

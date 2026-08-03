@@ -3,7 +3,87 @@ import { api } from '../../../api.js';
 import { useAdmin } from '../store.jsx';
 import { Card, fmtMoney } from '../widgets.jsx';
 import { Plus, Trash } from '../../icons.jsx';
-import { t } from '../../../i18n.jsx';
+import { t, tk } from '../../../i18n.jsx';
+
+const KIND_LABELS = {
+  cut_off: tk('Call cut off mid-argument'),
+  unknown_tool: tk('Tool name not recognised'),
+  missing_arg: tk('Required argument missing'),
+  no_match: tk('Edit did not match the file'),
+  blocked: tk('Blocked by the workspace boundary'),
+  missing_program: tk('Program not installed'),
+  not_found: tk('File not found'),
+  timeout: tk('Timed out'),
+  too_big: tk('Too large'),
+  nonzero_exit: tk('Command exited non-zero'),
+  other: tk('Other')
+};
+
+function ToolReliability() {
+  const [data, setData] = useState(null);
+  const [open, setOpen] = useState('');
+
+  const load = useCallback(async () => {
+    try { setData(await api.get('/api/admin/tool-stats')); } catch { setData({ rows: [], totals: { calls: 0, fail: 0 } }); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  async function reset() {
+    try { await api.del('/api/admin/tool-stats'); load(); } catch {}
+  }
+
+  if (!data) return null;
+  const { rows, totals } = data;
+  return (
+    <Card
+      title={t('Tool reliability')}
+      sub={t('Every tool call this workspace has run, and how often each one failed. A high failure rate usually means the model needs a clearer tool description, not that the tool is broken.')}
+    >
+      {!rows.length && <div className="muted-note">{t('No tool calls recorded yet.')}</div>}
+      {rows.length > 0 && (
+        <>
+          <div className="muted-note" style={{ marginBottom: 10 }}>
+            {totals.calls.toLocaleString()} {t('calls')} · {totals.fail.toLocaleString()} {t('failed')} ({Math.round((totals.fail / Math.max(1, totals.calls)) * 100)}%)
+          </div>
+          <table className="aq-table">
+            <thead><tr>
+              <th>{t('Tool')}</th><th>{t('Model')}</th>
+              <th className="num">{t('Calls')}</th><th className="num">{t('Failed')}</th><th className="num">{t('Rate')}</th>
+            </tr></thead>
+            <tbody>{rows.slice(0, 40).map(r => {
+              const id = r.modelId + '|' + r.tool;
+              const isOpen = open === id;
+              return (
+                <React.Fragment key={id}>
+                  <tr onClick={() => setOpen(isOpen ? '' : id)} style={{ cursor: r.fail ? 'pointer' : 'default' }}>
+                    <td>{r.tool}</td>
+                    <td className="muted-note">{r.modelName || '—'}</td>
+                    <td className="num">{r.calls.toLocaleString()}</td>
+                    <td className="num">{r.fail.toLocaleString()}</td>
+                    <td className="num">{Math.round(r.rate * 100)}%</td>
+                  </tr>
+                  {isOpen && r.fail > 0 && (
+                    <tr>
+                      <td colSpan={5}>
+                        <div className="muted-note">
+                          {r.kinds.map(k => (
+                            <div key={k.kind}>{k.n}× {t(KIND_LABELS[k.kind] || KIND_LABELS.other)}</div>
+                          ))}
+                          {r.lastError && <div style={{ marginTop: 6, opacity: 0.8 }}>{t('Last error')}: {r.lastError}</div>}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}</tbody>
+          </table>
+          <button className="btn" style={{ marginTop: 12 }} onClick={reset}>{t('Reset counts')}</button>
+        </>
+      )}
+    </Card>
+  );
+}
 
 export default function AnalyticsSection() {
   const A = useAdmin();
@@ -78,6 +158,7 @@ export default function AnalyticsSection() {
           )}
         </>
       )}
+      <ToolReliability />
       <Card title={t("Custom price presets")} sub={'Add house models or override built-in prices. When a model\u2019s ID contains one of these fragments, its price is suggested automatically. Built-in presets (GPT, Claude, Gemini, and so on) always apply unless overridden here.'}>
         {presets.length > 0 && presets.map(p => (
           <div key={p.match} className="field row" style={{ alignItems: 'center' }}>

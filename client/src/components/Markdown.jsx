@@ -190,7 +190,7 @@ const mdComponents = {
 const MarkdownBlock = React.memo(function MarkdownBlock({ text }) {
   const prepared = React.useMemo(() => guardBlock(text), [text]);
   const needsMath = React.useMemo(() => hasMath(prepared), [prepared]);
-  const mathReady = React.useSyncExternalStore(subscribeKatex, katexVersion);
+  const mathReady = React.useSyncExternalStore(subscribeKatex, katexVersion, katexVersion);
   React.useEffect(() => { if (needsMath && !katexPlugin()) ensureKatex(); }, [needsMath, mathReady]);
   const rehypePlugins = React.useMemo(() => {
     const plugin = needsMath ? katexPlugin() : null;

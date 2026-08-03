@@ -7,6 +7,7 @@ import { purgeUserChats } from '../lib/purge.js';
 import { monthStartMs } from '../lib/budget.js';
 import { removeUserFromSpaces } from '../lib/spaces.js';
 import * as dataroot from '../lib/dataroot.js';
+import { toolStatsReport } from '../lib/toolstats.js';
 
 export default function registerAdminRoutes(app) {
   app.get('/api/admin/skills', authMiddleware, adminOnly, (req, res) => res.json({ skills: skillsys.list() }));
@@ -115,6 +116,16 @@ export default function registerAdminRoutes(app) {
       daily: [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day)).slice(-90),
       window: days
     });
+  });
+
+  app.get('/api/admin/tool-stats', authMiddleware, adminOnly, (req, res) => {
+    res.json(toolStatsReport());
+  });
+
+  app.delete('/api/admin/tool-stats', authMiddleware, adminOnly, (req, res) => {
+    db.toolStats.clear();
+    logAudit(req, 'toolstats.clear', { type: 'toolstats', id: '' });
+    res.json({ ok: true });
   });
 
   app.patch('/api/admin/users/:id/budget', authMiddleware, adminOnly, (req, res) => {

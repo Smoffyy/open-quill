@@ -2,10 +2,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   sanitizeKwargs, kwargDefs, applyKwargs, resolveKwargValues, kwargPayload,
-  oneShotKwargPayload, controlOf, defaultValueOf, isBoolPair, coerceKwargValue
+  oneShotKwargPayload, controlOf, defaultValueOf, isBoolPair, coerceKwargValue,
+  isRange, clampToRange, normalizeKwarg, gateOpen, kwargVisible
 } from '../lib/kwargs.js';
-import { parseTextToolCalls, parseArgs, toCall } from '../tools/index.js';
-import { makeToolTextFilter } from '../llm/emitter.js';
+import { parseTextToolCalls, parseArgs, toCall, cutOffOf } from '../tools/index.js';
+import { classifyToolError } from '../lib/toolstats.js';
+import { cutOffError } from '../lib/prompts.js';
+import { makeToolTextFilter, makeEmitter } from '../llm/emitter.js';
 import { trimInTurn, compactThreshold, estimateTokens, textTokens, makeTokenCounter, truncateForRollingCtx, FALLBACK_CTX } from '../lib/convo.js';
 import { scanTools } from '../toolproto.js';
 import { isContextOverflowError } from '../lib/llamacpp.js';
@@ -27,6 +30,136 @@ test('kwargs: legacy effort fields migrate', () => {
   assert.equal(defs[0].name, 'enable_thinking');
   assert.equal(applyKwargs(m, {}, false).resolved_kwargs.chat_template_kwargs.enable_thinking, false);
   assert.equal(applyKwargs(m, { effort: 'true' }, false).resolved_kwargs.chat_template_kwargs.enable_thinking, true);
+});
+
+test('kwargs: a min and a max make a range, and the range owns the value list', () => {
+  const d = normalizeKwarg({ id: 'b', name: 'reasoning_budget', min: 0, max: 4096, step: 128, values: ['1', '2'], default: '512' });
+  assert.equal(isRange(d), true);
+  assert.equal(controlOf(d), 'range');
+  assert.deepEqual(d.values, [], 'an enumerated list alongside a range would be a second source of truth');
+  assert.equal(d.default, '512');
+  assert.equal(d.step, 128);
+
+  const plain = normalizeKwarg({ id: 'p', name: 'x', values: ['low', 'high'] });
+  assert.equal(isRange(plain), false);
+  assert.equal(plain.min, null);
+  assert.equal(plain.max, null);
+});
+
+test('kwargs: a range with no usable bounds falls back to a value list', () => {
+  for (const bad of [{ min: 5, max: 5 }, { min: 10, max: 2 }, { min: 0 }, { max: 10 }, { min: 'a', max: 'b' }]) {
+    const d = normalizeKwarg({ id: 'k', name: 'x', values: ['low', 'high'], ...bad });
+    assert.equal(isRange(d), false, JSON.stringify(bad));
+    assert.deepEqual(d.values, ['low', 'high'], 'the list survives when the range is unusable');
+  }
+});
+
+test('kwargs: a range value is clamped and snapped to the step', () => {
+  const d = normalizeKwarg({ id: 'b', name: 'budget', min: 0, max: 1000, step: 100 });
+  assert.equal(clampToRange(d, 250), 300);
+  assert.equal(clampToRange(d, -50), 0, 'below the minimum clamps up');
+  assert.equal(clampToRange(d, 99999), 1000, 'above the maximum clamps down');
+  assert.equal(clampToRange(d, 'nonsense'), null);
+
+  const off = normalizeKwarg({ id: 'o', name: 'x', min: 5, max: 100, step: 10 });
+  assert.equal(clampToRange(off, 6), 5, 'steps are measured from the minimum, not from zero');
+  assert.equal(clampToRange(off, 100), 100, 'the maximum stays reachable when it is off the step grid');
+
+  // Snapping alone would round 2048 down to 2000, so the value under the slider
+  // could never reach the maximum printed at the end of its own track.
+  const odd = normalizeKwarg({ id: 'x', name: 'x', min: 0, max: 2048, step: 100 });
+  assert.equal(clampToRange(odd, 2048), 2048);
+  assert.equal(clampToRange(odd, 99999), 2048);
+  assert.equal(clampToRange(odd, 2000), 2000);
+  assert.equal(clampToRange(odd, 1250), 1300, 'everything between the ends still snaps');
+
+  const frac = normalizeKwarg({ id: 'f', name: 'temp', min: 0, max: 2, step: 0.1 });
+  assert.equal(clampToRange(frac, 0.30000000000000004), 0.3, 'float dust is rounded away');
+});
+
+test('kwargs: a hand-edited request cannot escape the range the admin set', () => {
+  const m = { kwargs: [{ id: 'b', name: 'reasoning_budget', target: 'extra_body', type: 'number', min: 0, max: 2048, step: 256, default: '512' }] };
+  const body = (req) => applyKwargs(m, req, false).resolved_kwargs.extra_body.reasoning_budget;
+  assert.equal(body({}), 512, 'the default is used when nothing is asked for');
+  assert.equal(body({ b: '1024' }), 1024);
+  assert.equal(body({ b: '999999' }), 2048, 'over the maximum is clamped to the maximum, not rejected');
+  assert.equal(body({ b: '-5' }), 0);
+  assert.equal(body({ b: '600' }), 512, 'snapped to the nearest step');
+  assert.equal(body({ b: 'drop table' }), 512, 'junk falls back to the default');
+  assert.equal(typeof body({ b: '1024' }), 'number', 'it lands in extra_body as a number');
+});
+
+test('kwargs: a hidden range still sends its default, and an admin-only one ignores the user', () => {
+  const hidden = { kwargs: [{ id: 'b', name: 'budget', min: 0, max: 100, step: 10, default: '40', visible: false }] };
+  assert.equal(applyKwargs(hidden, { b: '90' }, false).resolved_kwargs.chat_template_kwargs.budget, 40);
+
+  const silent = { kwargs: [{ id: 'b', name: 'budget', min: 0, max: 100, default: '40', visible: false, sendWhenHidden: false }] };
+  assert.deepEqual(applyKwargs(silent, {}, false).resolved_kwargs, {}, 'hidden and not sent means nothing goes out');
+
+  const adminOnly = { kwargs: [{ id: 'b', name: 'budget', min: 0, max: 100, step: 10, default: '40', adminOnly: true }] };
+  assert.equal(applyKwargs(adminOnly, { b: '90' }, false).resolved_kwargs.chat_template_kwargs.budget, 40);
+  assert.equal(applyKwargs(adminOnly, { b: '90' }, true).resolved_kwargs.chat_template_kwargs.budget, 90);
+});
+
+test('kwargs: a range default outside its own bounds is corrected on save', () => {
+  const d = normalizeKwarg({ id: 'b', name: 'x', min: 10, max: 20, step: 1, default: '999' });
+  assert.equal(d.default, '20');
+  const none = normalizeKwarg({ id: 'b', name: 'x', min: 10, max: 20, step: 1, default: '' });
+  assert.equal(defaultValueOf(none), '10', 'no default starts at the minimum');
+});
+
+test('kwargs: a gated kwarg keeps its own value but hides until the gate opens', () => {
+  const kwargs = [
+    { id: 'think', name: 'enable_thinking', values: ['false', 'true'], default: 'false' },
+    { id: 'budget', name: 'thinking_budget_tokens', target: 'body', type: 'number',
+      min: 1024, max: 8192, step: 1024, default: '1024', showIf: { id: 'think', value: 'true' } }
+  ];
+  const defs = sanitizeKwargs(kwargs);
+
+  const off = resolveKwargValues(defs, {}, false);
+  assert.equal(gateOpen(defs, off, defs[1]), false);
+  assert.equal(kwargVisible(defs, off, defs[1]), false);
+  assert.equal(off.budget, '1024', 'the value survives while hidden, it is only the control that goes');
+
+  const on = resolveKwargValues(defs, { think: 'true', budget: '4096' }, false);
+  assert.equal(gateOpen(defs, on, defs[1]), true);
+  assert.equal(kwargVisible(defs, on, defs[1]), true);
+  assert.equal(kwargPayload(defs, on).thinking_budget_tokens, 4096);
+});
+
+test('kwargs: a closed gate is a kind of hidden, so sendWhenHidden decides', () => {
+  const mk = (send) => sanitizeKwargs([
+    { id: 'think', name: 'enable_thinking', values: ['false', 'true'], default: 'false' },
+    { id: 'budget', name: 'thinking_budget_tokens', target: 'body', type: 'number',
+      min: 1024, max: 8192, step: 1024, default: '1024', sendWhenHidden: send,
+      showIf: { id: 'think', value: 'true' } }
+  ]);
+
+  const kept = mk(true);
+  assert.equal(kwargPayload(kept, resolveKwargValues(kept, {}, false)).thinking_budget_tokens, 1024);
+
+  const dropped = mk(false);
+  const shut = kwargPayload(dropped, resolveKwargValues(dropped, {}, false));
+  assert.equal('thinking_budget_tokens' in shut, false, 'gate shut and set not to send means it is left out');
+  const open = kwargPayload(dropped, resolveKwargValues(dropped, { think: 'true' }, false));
+  assert.equal(open.thinking_budget_tokens, 1024, 'and it comes back when the gate opens');
+});
+
+test('kwargs: a gate pointing at itself or at nothing is dropped', () => {
+  const defs = sanitizeKwargs([
+    { id: 'a', name: 'a', values: ['1', '2'], showIf: { id: 'a', value: '1' } },
+    { id: 'b', name: 'b', values: ['1', '2'], showIf: { id: 'ghost', value: '1' } },
+    { id: 'c', name: 'c', values: ['1', '2'], showIf: { id: 'a', value: '2' } }
+  ]);
+  assert.equal(defs[0].showIf, null, 'self-reference');
+  assert.equal(defs[1].showIf, null, 'unknown id');
+  assert.deepEqual(defs[2].showIf, { id: 'a', value: '2' }, 'a real reference survives');
+});
+
+test('kwargs: an ungated kwarg is always visible', () => {
+  const defs = sanitizeKwargs([{ id: 'a', name: 'a', values: ['1', '2'] }]);
+  assert.equal(gateOpen(defs, {}, defs[0]), true);
+  assert.equal(kwargVisible(defs, {}, defs[0]), true);
 });
 
 test('kwargs: paired child sends only on match', () => {
@@ -716,6 +849,57 @@ test('every sandbox tool name is unique and resolves to itself', () => {
   for (const t of SANDBOX_TOOLS) assert.equal(resolveToolName(t), t);
 });
 
+// --- truncated tool calls -------------------------------------------------
+
+test('a tool call cut off mid-argument is reported, not silently emptied', () => {
+  const call = toCall('create_file', '{"path": "oe_enderium.json", "content": "{\\n  \\"parent\\": \\"item/gen');
+  assert.equal(call.path, 'oe_enderium.json', 'the arguments that did arrive are still usable');
+  const cut = cutOffOf(call);
+  assert.ok(cut, 'the unclosed argument is reported instead of being dropped');
+  assert.equal(cut.key, 'content');
+  assert.ok(cut.chars > 0, 'it says how much of the argument arrived');
+});
+
+test('a complete tool call carries no cut-off marker', () => {
+  for (const args of [
+    '{"path": "a.txt", "content": "hello"}',
+    '{"path": "a.txt", "content": "hello"',
+    '{"path": "a.txt", "content": ""}'
+  ]) {
+    assert.equal(cutOffOf(toCall('create_file', args)), null, args);
+  }
+});
+
+test('a cut-off write is told to split the file, not to resend', () => {
+  const msg = cutOffError('create_file', { key: 'content', chars: 4213 }, true);
+  assert.match(msg, /cut off/i);
+  assert.match(msg, /"content"/);
+  assert.match(msg, /4213/);
+  assert.match(msg, /maximum output length/i);
+  assert.match(msg, /insert_lines/, 'it names the tool that appends');
+  assert.match(msg, /NOT run/, 'it says nothing was written');
+
+  const other = cutOffError('search', { key: 'query', chars: 90 }, false);
+  assert.equal(/insert_lines/.test(other), false, 'the split-write advice is only for file writes');
+});
+
+test('tool errors are classified into stable kinds', () => {
+  const cases = [
+    ['this call was cut off before it finished sending', 'cut_off'],
+    ['There is no tool called "creat_file".', 'unknown_tool'],
+    ['create_file needs "content". It is the COMPLETE text', 'missing_arg'],
+    ['old_str was not found in App.java.', 'no_match'],
+    ['Blocked: absolute paths are outside the workspace', 'blocked'],
+    ["'gcc' is not recognized as an internal or external command", 'missing_program'],
+    ['File not found: app.py. Create it with create_file first.', 'not_found'],
+    ['Timed out after 60s', 'timeout'],
+    ['Exited with code 1', 'nonzero_exit'],
+    ['something nobody predicted', 'other'],
+    ['', 'other']
+  ];
+  for (const [err, kind] of cases) assert.equal(classifyToolError(err), kind, err);
+});
+
 // --- sandbox tool surface -------------------------------------------------
 // These touch a real (temporary) workspace on purpose: a missing cross-module
 // import only shows up when a handler actually runs, which module-load checks
@@ -879,4 +1063,98 @@ test('sandbox: hostEnvInfo reports a usable shape without leaking host paths', a
   for (const i of env.interpreters) {
     assert.equal(/[\/]/.test(i.version), false, `${i.name} version must not contain a path: ${i.version}`);
   }
+});
+
+// --- reasoning / content split ---------------------------------------------
+
+function emitTo(model, feed) {
+  const out = { content: '', reasoning: '' };
+  const e = makeEmitter(model, (ev) => {
+    if (ev.type === 'content') out.content += ev.text;
+    if (ev.type === 'reasoning') out.reasoning += ev.text;
+  }, () => {}, null);
+  feed(e);
+  e.flush();
+  return out;
+}
+
+test('emitter: a forced close tag on the content channel is swallowed, not printed', () => {
+  // llama.cpp streams the thought through reasoning_content, then a thinking
+  // budget forces it shut by emitting the raw closing tag as content. Nothing
+  // was tracking an open tag, so it used to be printed as the first line.
+  const r = emitTo({}, (e) => {
+    e.emitReasoning('Thinking Process: 1. Analyze');
+    e.emitContent("</think>\n\nI'd be happy to help!");
+  });
+  assert.equal(r.reasoning, 'Thinking Process: 1. Analyze');
+  assert.equal(r.content, "\n\nI'd be happy to help!");
+});
+
+test('emitter: a forced close tag split across chunks is still swallowed', () => {
+  const r = emitTo({}, (e) => {
+    e.emitReasoning('some thought');
+    e.emitContent('</thi');
+    e.emitContent('nk>Answer here.');
+  });
+  assert.equal(r.content, 'Answer here.');
+});
+
+test('emitter: an answer that talks about a closing tag keeps it', () => {
+  // The swallow is scoped to the very start of the answer, so a real mention of
+  // the tag further in is never eaten.
+  const r = emitTo({}, (e) => {
+    e.emitReasoning('thinking');
+    e.emitContent('You close a thought with ');
+    e.emitContent('</think> in most models.');
+  });
+  assert.equal(r.content, 'You close a thought with </think> in most models.');
+});
+
+test('emitter: with no reasoning at all the tag is left exactly where it is', () => {
+  const r = emitTo({}, (e) => { e.emitContent('</think> stays put.'); });
+  assert.equal(r.content, '</think> stays put.');
+  assert.equal(r.reasoning, '');
+});
+
+test('emitter: inline think tags in the content stream still split normally', () => {
+  const r = emitTo({}, (e) => { e.emitContent('<think>hidden</think>Visible answer.'); });
+  assert.equal(r.reasoning, 'hidden');
+  assert.equal(r.content, 'Visible answer.');
+
+  const chunked = emitTo({}, (e) => {
+    e.emitContent('<thi'); e.emitContent('nk>hid'); e.emitContent('den</thi'); e.emitContent('nk>out');
+  });
+  assert.equal(chunked.reasoning, 'hidden');
+  assert.equal(chunked.content, 'out');
+});
+
+test('emitter: a second thinking block after an answer still opens normally', () => {
+  const r = emitTo({}, (e) => {
+    e.emitReasoning('first');
+    e.emitContent('Answer one. <think>second</think> Answer two.');
+  });
+  assert.equal(r.reasoning, 'firstsecond');
+  assert.equal(r.content, 'Answer one.  Answer two.');
+});
+
+test('emitter: custom think tokens are honoured on both paths', () => {
+  const model = { think_open: '<reasoning>', think_close: '</reasoning>' };
+  const inline = emitTo(model, (e) => { e.emitContent('<reasoning>r</reasoning>c'); });
+  assert.equal(inline.reasoning, 'r');
+  assert.equal(inline.content, 'c');
+
+  const forced = emitTo(model, (e) => { e.emitReasoning('r'); e.emitContent('</reasoning>c'); });
+  assert.equal(forced.content, 'c', 'the configured close tag is the one swallowed');
+
+  const other = emitTo(model, (e) => { e.emitReasoning('r'); e.emitContent('</think>c'); });
+  assert.equal(other.content, '</think>c', 'a tag this model never uses is not touched');
+});
+
+test('emitter: providers that only ever send structured reasoning are unaffected', () => {
+  const r = emitTo({}, (e) => {
+    e.emitReasoning('Let me think.');
+    e.emitContent('Here is the answer.');
+  });
+  assert.equal(r.reasoning, 'Let me think.');
+  assert.equal(r.content, 'Here is the answer.');
 });

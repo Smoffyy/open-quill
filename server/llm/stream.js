@@ -58,6 +58,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
         if (json.done) {
           const p = json.prompt_eval_count || 0, c = json.eval_count || 0;
           if (p || c) onEvent({ type: 'usage', usage: { prompt: p, completion: c, total: p + c } });
+          if (json.done_reason) onEvent({ type: 'finish', reason: String(json.done_reason) });
           return true;
         }
       } catch {}
@@ -94,6 +95,8 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
         const pn = json.timings.prompt_n || 0, cn = json.timings.predicted_n || 0;
         if (pn || cn) onEvent({ type: 'usage', usage: { prompt: pn, completion: cn, total: pn + cn } });
       }
+      const fin = json.choices?.[0]?.finish_reason;
+      if (fin) onEvent({ type: 'finish', reason: String(fin) });
       const delta = json.choices?.[0]?.delta || {};
       if (delta.reasoning_content) emitReasoning(delta.reasoning_content);
       if (typeof delta.reasoning === 'string' && delta.reasoning) emitReasoning(delta.reasoning);

@@ -1,38 +1,15 @@
 import React, { useRef, useEffect, useState, useLayoutEffect, useCallback } from 'react';
 import ModelDropdown from './ModelDropdown.jsx';
 import { api } from '../api.js';
-import { transcribeBlob } from '../voice.js';
 import { toast } from '../toast.js';
+import { useAttachments } from '../lib/attachments.js';
+import { useDictation } from '../lib/dictation.js';
 import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer } from './icons.jsx';
 import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
 import { extLabel } from '../lib/files.js';
 import { t, fmtDate } from '../i18n.jsx';
 
 const FILE_ACCEPT = '.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.py,.lua,.html,.css,.xml,.yml,.yaml,.pdf,.log';
-
-// grab the most common solid color from an image
-function dominantColor(url) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const s = 24; const c = document.createElement('canvas'); c.width = s; c.height = s;
-        const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, s, s);
-        const data = ctx.getImageData(0, 0, s, s).data;
-        const counts = {}; let best = null, bestN = 0;
-        for (let i = 0; i < data.length; i += 4) {
-          if (data[i + 3] < 128) continue;
-          const key = (data[i] >> 4) + ',' + (data[i + 1] >> 4) + ',' + (data[i + 2] >> 4);
-          counts[key] = (counts[key] || 0) + 1;
-          if (counts[key] > bestN) { bestN = counts[key]; best = [data[i], data[i + 1], data[i + 2]]; }
-        }
-        resolve(best ? `rgb(${best[0]},${best[1]},${best[2]})` : null);
-      } catch { resolve(null); }
-    };
-    img.onerror = () => resolve(null);
-    img.src = url;
-  });
-}
 
 function PmSub({ className = '', children, onMouseEnter, onMouseLeave }) {
   const ref = useRef(null);
@@ -83,75 +60,17 @@ export default function Composer({
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
-  const dragDepth = useRef(0);
   const plusRef = useRef(null);
-  const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
-  const [dictating, setDictating] = useState(false);
-  const [transcribing, setTranscribing] = useState(false);
-  const dictRef = useRef(null);
-  const dictMediaRef = useRef(null);
   const valueRef = useRef(value);
   useEffect(() => { valueRef.current = value; }, [value]);
-  useEffect(() => () => { stopDictation(true); }, []);
-  function appendText(text) {
-    const cur = valueRef.current || '';
-    onChange((cur ? cur.replace(/\s+$/, '') + ' ' : '') + text.trim());
-  }
-  function stopDictation(silent) {
-    if (dictRef.current) { try { dictRef.current.stop(); } catch {} dictRef.current = null; }
-    if (dictMediaRef.current && dictMediaRef.current.state !== 'inactive') { try { dictMediaRef.current.stop(); } catch {} }
-    if (!silent) setDictating(false);
-  }
-  async function toggleDictation() {
-    if (dictating) { stopDictation(); return; }
-    if (sttEngine === 'browser') {
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SR) { toastLocal(t('This browser has no built-in speech recognition.')); return; }
-      const rec = new SR();
-      rec.continuous = true;
-      rec.interimResults = true;
-      rec.lang = navigator.language || 'en-US';
-      let base = valueRef.current || '';
-      rec.onresult = (e) => {
-        let fin = '', interim = '';
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          const t = e.results[i][0].transcript;
-          if (e.results[i].isFinal) fin += t; else interim += t;
-        }
-        if (fin) base = (base ? base.replace(/\s+$/, '') + ' ' : '') + fin.trim();
-        onChange(base + (interim ? (base ? ' ' : '') + interim : ''));
-      };
-      rec.onend = () => { setDictating(false); dictRef.current = null; };
-      rec.onerror = () => { setDictating(false); dictRef.current = null; };
-      dictRef.current = rec;
-      try { rec.start(); setDictating(true); } catch {}
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-      const mr = new MediaRecorder(stream);
-      const chunks = [];
-      mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-      mr.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        dictMediaRef.current = null;
-        setDictating(false);
-        const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
-        if (blob.size < 1500) return;
-        setTranscribing(true);
-        try { const text = await transcribeBlob(blob); if (text) appendText(text); }
-        catch (e) { toastLocal(e.message || t('Transcription failed.')); }
-        setTranscribing(false);
-      };
-      dictMediaRef.current = mr;
-      mr.start();
-      setDictating(true);
-    } catch { toastLocal(t('Microphone access denied.')); }
-  }
-  function toastLocal(msg) { try { toast(msg, { icon: 'info', kind: 'warn', duration: 4200 }); } catch {} }
-  const [dragActive, setDragActive] = useState(false);
-  const [glow, setGlow] = useState('var(--accent)');
+
+  const { dictating, transcribing, toggleDictation } = useDictation({ sttEngine, valueRef, onChange });
+  const {
+    files, dragActive, glow, upErr, setUpErr,
+    pickFiles, onPaste, removeFile, clearFiles, dragProps
+  } = useAttachments({ visionSupported });
+
   const [plusMenu, setPlusMenu] = useState(false);
   const [plusDown, setPlusDown] = useState(false);
   const [promptsOpen, setPromptsOpen] = useState(false);
@@ -254,45 +173,10 @@ export default function Composer({
     window.addEventListener('oq-attach-files', h);
     return () => window.removeEventListener('oq-attach-files', h);
   }, []);
-  const filesRef = useRef(files);
-  filesRef.current = files;
-  useEffect(() => () => filesRef.current.forEach(f => f.preview && URL.revokeObjectURL(f.preview)), []);
 
   const [steerMode, setSteerMode] = useState(true);
   const steering = canSteer && steerMode && !!onSteer;
   useEffect(() => { if (!canSteer) setSteerMode(true); }, [canSteer]);
-  const [upErr, setUpErr] = useState('');
-  function addFiles(list) {
-    let picked = Array.from(list || []);
-    if (!visionSupported) picked = picked.filter(f => !f.type.startsWith('image/'));
-    if (!picked.length) return;
-    setUpErr('');
-    const mapped = picked.map(file => ({
-      id: Math.random().toString(36).slice(2), file, name: file.name, type: file.type, size: file.size,
-      preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
-    }));
-    setFiles(fs => [...fs, ...mapped]);
-    const lastImg = [...mapped].reverse().find(f => f.preview);
-    if (lastImg) dominantColor(lastImg.preview).then(c => c && setGlow(c));
-  }
-  function pickFiles(e) { addFiles(e.target.files); e.target.value = ''; }
-  // ctrl+v / cmd+v an image (or any file) straight into the box
-  function onPaste(e) {
-    const dt = e.clipboardData; if (!dt) return;
-    const found = [];
-    if (dt.files && dt.files.length) found.push(...Array.from(dt.files));
-    else if (dt.items) for (const it of dt.items) if (it.kind === 'file') { const f = it.getAsFile(); if (f) found.push(f); }
-    if (found.length) { e.preventDefault(); addFiles(found); }
-  }
-  function removeFile(id) {
-    setFiles(fs => { const t = fs.find(f => f.id === id); if (t?.preview) URL.revokeObjectURL(t.preview); return fs.filter(f => f.id !== id); });
-  }
-
-  function onDragEnter(e) { e.preventDefault(); dragDepth.current++; setDragActive(true); }
-  function onDragOver(e) { e.preventDefault(); }
-  function onDragLeave(e) { e.preventDefault(); dragDepth.current--; if (dragDepth.current <= 0) { dragDepth.current = 0; setDragActive(false); } }
-  function onDrop(e) { e.preventDefault(); dragDepth.current = 0; setDragActive(false); addFiles(e.dataTransfer.files); }
-
   async function doSend() {
     if (uploading) return;
     if (blockSend || budgetBlock || safetyFlagged || safetyChecking || conversationEnded) return;
@@ -313,8 +197,7 @@ export default function Composer({
         try { const r = await api.uploadFiles(files.map(f => f.file)); attachments = r.files || []; }
         catch (e) { setUploading(false); setUpErr(e?.message || t('Upload failed, the file may be too large.')); return; }
         setUploading(false);
-        files.forEach(f => f.preview && URL.revokeObjectURL(f.preview));
-        setFiles([]); setGlow('var(--accent)');
+        clearFiles();
       }
       onQueue(t, attachments);
       onChange('');
@@ -328,8 +211,7 @@ export default function Composer({
       catch (e) { setUploading(false); setUpErr(e?.message || t('Upload failed, the file may be too large.')); return; }
       setUploading(false);
     }
-    files.forEach(f => f.preview && URL.revokeObjectURL(f.preview));
-    setFiles([]); setGlow('var(--accent)');
+    clearFiles();
     onSend(attachments);
   }
 
@@ -489,7 +371,7 @@ export default function Composer({
       </div>
     )}
     <div className={cls} style={{ '--glow': glow }}
-      onDragEnter={onDragEnter} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
+      {...dragProps}>
       {dragActive && <div className="drop-hint">Drop to attach{visionSupported ? '' : ' files'}</div>}
       {files.length > 0 && (
         <div className="attach-row">

@@ -199,9 +199,9 @@ function Shell() {
   );
 }
 
-export default function AdminApp({ user, onClose }) {
+export default function AdminApp({ user, onClose, modelId }) {
   return (
-    <AdminProvider user={user} onClose={onClose}>
+    <AdminProvider user={user} onClose={onClose} modelId={modelId}>
       <Shell />
     </AdminProvider>
   );

@@ -28,7 +28,7 @@ function initialSection() {
   return 'dashboard';
 }
 
-export function AdminProvider({ user, onClose, children }) {
+export function AdminProvider({ user, onClose, children, modelId = null }) {
   const [section, setSection] = useState(initialSection);
   const [models, setModels] = useState([]);
   const [providers, setProviders] = useState([]);
@@ -57,6 +57,15 @@ export function AdminProvider({ user, onClose, children }) {
   const modelsRef = useRef([]);
   const providersRef = useRef([]);
   useEffect(() => { modelsRef.current = models; }, [models]);
+  // Open on whatever model the user currently has equipped rather than on the top
+  // of the list. Seeded once, and only while nothing has been picked, so it cannot
+  // yank the selection back after the admin clicks something else.
+  const seededSel = useRef(false);
+  useEffect(() => {
+    if (seededSel.current || !modelId || !models.length) return;
+    seededSel.current = true;
+    if (models.some(m => m.id === modelId)) setSelModel(s => s ?? modelId);
+  }, [models, modelId]);
   useEffect(() => { providersRef.current = providers; }, [providers]);
   useEffect(() => { try { localStorage.setItem('oq-admin-tab', section); } catch {} }, [section]);
 

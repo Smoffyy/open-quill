@@ -9,6 +9,16 @@ import { parseSteps, lastSentence, thoughtSeconds } from '../src/lib/reasoning.j
 import { hasMath, wrapMathEnvironments } from '../src/lib/mathjs.js';
 import { hasToolCall, previewOf, buildTree, collapseRuns } from '../src/lib/threadmeta.js';
 import { scanTools } from '../src/toolproto.js';
+import {
+  isRange, clampToRange, allNumeric, kwargPayload,
+  controlOf as controlOfKwarg, defaultValueOf as defaultValueOfKwarg,
+  resolveKwargValues as resolveKwargs, gateOpen, kwargVisible, KWARG_PRESETS
+} from '../src/kwargs.js';
+import {
+  baseName, extOf, fmtSize, escHtml, diffLines, stableLineDiff,
+  collapseRuns as collapseDiffRuns, splitHighlightedLines, markLine,
+  buildTree as buildFileTree, findMatches
+} from '../src/lib/artifacts.js';
 
 const ev = (o) => ({ key: '', code: '', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...o });
 
@@ -298,4 +308,207 @@ test('scanTools does not turn prose into a tool call', () => {
   const r = scanTools('I would call bash here but I will not.');
   assert.equal(r.calls.length, 0);
   assert.equal(r.live, null);
+});
+
+// --- artifacts panel logic -------------------------------------------------
+
+test('artifact paths split into a name and an extension', () => {
+  assert.equal(baseName('src/main/java/App.java'), 'App.java');
+  assert.equal(baseName('README.md'), 'README.md');
+  assert.equal(extOf('src/App.JAVA'), 'java');
+  assert.equal(extOf('Makefile'), 'makefile');
+});
+
+test('file sizes render at a sensible precision', () => {
+  assert.equal(fmtSize(null), '');
+  assert.equal(fmtSize(512), '512 B');
+  assert.equal(fmtSize(2048), '2.0 KB');
+  assert.equal(fmtSize(1024 * 100), '100 KB');
+  assert.equal(fmtSize(1024 * 1024 * 3), '3.0 MB');
+});
+
+test('escHtml neutralises markup but leaves quotes alone', () => {
+  assert.equal(escHtml('<script>a && b</script>'), '&lt;script&gt;a &amp;&amp; b&lt;/script&gt;');
+  assert.equal(escHtml('say "hi"'), 'say "hi"');
+});
+
+test('diffLines finds the minimal edit and marks both sides', () => {
+  const rows = diffLines(['a', 'b', 'c'], ['a', 'x', 'c']);
+  assert.deepEqual(rows.map(r => r.type), ['ctx', 'del', 'add', 'ctx']);
+  assert.equal(rows.find(r => r.type === 'add').text, 'x');
+  assert.equal(rows.find(r => r.type === 'del').text, 'b');
+  assert.equal(new Set(rows.map(r => r.key)).size, rows.length, 'every row key is unique');
+});
+
+test('diffLines refuses to run on a file pair that would blow up', () => {
+  const big = Array.from({ length: 2100 }, (_, i) => 'line ' + i);
+  assert.equal(diffLines(big, big.slice().reverse()), null);
+});
+
+test('stableLineDiff keeps the shared head and tail as context', () => {
+  const rows = stableLineDiff(['a', 'b', 'z'], ['a', 'c', 'z']);
+  assert.deepEqual(rows.map(r => r.type), ['ctx', 'del', 'add', 'ctx']);
+  assert.equal(rows[0].text, 'a');
+  assert.equal(rows[3].text, 'z');
+});
+
+test('collapseRuns folds long unchanged stretches and expands on demand', () => {
+  const rows = [
+    { key: 'x', type: 'add', text: '+' },
+    ...Array.from({ length: 20 }, (_, i) => ({ key: 'c' + i, type: 'ctx', text: 'same ' + i })),
+    { key: 'y', type: 'del', text: '-' }
+  ];
+  const folded = collapseDiffRuns(rows, 3, new Set());
+  const fold = folded.find(r => r.fold);
+  assert.ok(fold, 'a long context run collapses');
+  assert.equal(fold.count, 14, 'three lines are kept at each end');
+  assert.equal(folded.length, 2 + 3 + 3 + 1);
+
+  const opened = collapseDiffRuns(rows, 3, new Set([fold.key]));
+  assert.equal(opened.some(r => r.fold), false, 'expanding that fold key shows every line');
+  assert.equal(opened.length, rows.length);
+
+  const short = [{ key: 'a', type: 'ctx', text: '1' }, { key: 'b', type: 'ctx', text: '2' }];
+  assert.deepEqual(collapseDiffRuns(short, 3, new Set()), short, 'a short run is left alone');
+});
+
+test('splitHighlightedLines reopens spans that straddle a newline', () => {
+  const lines = splitHighlightedLines('<span class="c">one\ntwo</span>\nthree');
+  assert.equal(lines.length, 3);
+  assert.equal(lines[0], '<span class="c">one</span>');
+  assert.equal(lines[1], '<span class="c">two</span>');
+  assert.equal(lines[2], 'three');
+});
+
+test('splitHighlightedLines survives a truncated tag', () => {
+  const lines = splitHighlightedLines('ok<span class="unclosed');
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /^ok/);
+});
+
+test('markLine highlights matches and escapes everything around them', () => {
+  const html = markLine('a <b> a', [{ start: 0, end: 1, gid: 0 }, { start: 6, end: 7, gid: 1 }], 1);
+  assert.match(html, /&lt;b&gt;/, 'text between matches is escaped');
+  assert.equal((html.match(/art-mark/g) || []).length, 2);
+  assert.equal((html.match(/art-mark active/g) || []).length, 1, 'only the active match is marked active');
+});
+
+test('markLine drops a match that overlaps the previous one', () => {
+  const html = markLine('abcd', [{ start: 0, end: 3, gid: 0 }, { start: 1, end: 2, gid: 1 }], -1);
+  assert.equal((html.match(/art-mark/g) || []).length, 1);
+});
+
+test('findMatches reports every occurrence on a line, case-insensitively', () => {
+  const m = findMatches(['Foo foo', 'bar'], 'foo');
+  assert.equal(m.length, 2);
+  assert.deepEqual(m.map(x => x.start), [0, 4]);
+  assert.deepEqual(m.map(x => x.gid), [0, 1]);
+  assert.equal(findMatches(['anything'], '').length, 0);
+});
+
+test('buildFileTree nests paths into folders', () => {
+  const root = buildFileTree([
+    { path: 'README.md' },
+    { path: 'src/main.js' },
+    { path: 'src/util/fmt.js' }
+  ]);
+  assert.deepEqual(root.files.map(f => f.path), ['README.md']);
+  assert.deepEqual(Object.keys(root.dirs), ['src']);
+  assert.deepEqual(root.dirs.src.files.map(f => f.path), ['src/main.js']);
+  assert.deepEqual(root.dirs.src.dirs.util.files.map(f => f.path), ['src/util/fmt.js']);
+});
+
+// --- kwarg number ranges ---------------------------------------------------
+// The client mirrors server/lib/kwargs.js. If the two disagree the payload
+// preview in the admin editor lies about what the server will actually send.
+
+test('a kwarg range is detected the same way on the client', () => {
+  assert.equal(isRange({ min: 0, max: 4096 }), true);
+  for (const bad of [{ min: 5, max: 5 }, { min: 10, max: 2 }, { min: 0 }, { max: 10 }, {}, { min: '', max: '' }, { min: 'a', max: 'b' }]) {
+    assert.equal(isRange(bad), false, JSON.stringify(bad));
+  }
+  assert.equal(isRange({ min: '0', max: '100' }), true, 'the editor holds these as strings while being typed');
+});
+
+test('a range control wins over any other control setting', () => {
+  assert.equal(controlOfKwarg({ min: 0, max: 100, control: 'select' }), 'range');
+  assert.equal(controlOfKwarg({ values: ['false', 'true'] }), 'toggle');
+  assert.equal(controlOfKwarg({ values: ['a', 'b', 'c'] }), 'slider');
+});
+
+test('client clamping matches the server, including the reachable maximum', () => {
+  const d = { min: 0, max: 1000, step: 100 };
+  assert.equal(clampToRange(d, 250), 300);
+  assert.equal(clampToRange(d, -50), 0);
+  assert.equal(clampToRange(d, 99999), 1000);
+  assert.equal(clampToRange(d, 'nonsense'), null);
+  assert.equal(clampToRange({ min: 5, max: 100, step: 10 }, 100), 100);
+  assert.equal(clampToRange({ min: 0, max: 2048, step: 100 }, 2048), 2048, 'an off-grid maximum is still reachable');
+  assert.equal(clampToRange({ min: 0, max: 2048, step: 100 }, 1250), 1300);
+  assert.equal(clampToRange({ min: 0, max: 2, step: 0.1 }, 0.30000000000000004), 0.3);
+  assert.equal(clampToRange({ min: 0, max: 10 }, 3.7), 4, 'no step means whole numbers');
+});
+
+test('a range default falls back to the minimum, and the payload carries a number', () => {
+  assert.equal(defaultValueOfKwarg({ min: 10, max: 20, step: 1, default: '' }), '10');
+  assert.equal(defaultValueOfKwarg({ min: 10, max: 20, step: 1, default: '999' }), '20');
+  const defs = [{ id: 'b', name: 'reasoning_budget', target: 'extra_body', type: 'number', min: 0, max: 2048, step: 256 }];
+  const out = kwargPayload(defs, resolveKwargs(defs, { b: '600' }, false));
+  assert.equal(out.extra_body.reasoning_budget, 512);
+  assert.equal(typeof out.extra_body.reasoning_budget, 'number');
+});
+
+test('allNumeric decides whether a slider is worth offering', () => {
+  assert.equal(allNumeric(['0', '512', '2048']), true);
+  assert.equal(allNumeric(['low', 'high']), false);
+  assert.equal(allNumeric(['1', 'high']), false);
+  assert.equal(allNumeric([]), false);
+});
+
+test('a gated kwarg hides its control but keeps its value', () => {
+  const defs = [
+    { id: 'think', name: 'enable_thinking', values: ['false', 'true'], default: 'false' },
+    { id: 'budget', name: 'thinking_budget_tokens', target: 'body', type: 'number',
+      min: 1024, max: 8192, step: 1024, default: '1024', showIf: { id: 'think', value: 'true' } }
+  ];
+  const off = resolveKwargs(defs, {}, false);
+  assert.equal(gateOpen(defs, off, defs[1]), false);
+  assert.equal(kwargVisible(defs, off, defs[1]), false);
+  assert.equal(off.budget, '1024');
+
+  const on = resolveKwargs(defs, { think: 'true', budget: '4096' }, false);
+  assert.equal(kwargVisible(defs, on, defs[1]), true);
+  assert.equal(kwargPayload(defs, on).thinking_budget_tokens, 4096);
+});
+
+test('a closed gate drops the value only when sendWhenHidden is off', () => {
+  const mk = (send) => [
+    { id: 'think', name: 'enable_thinking', values: ['false', 'true'], default: 'false' },
+    { id: 'budget', name: 'thinking_budget_tokens', target: 'body', type: 'number',
+      min: 1024, max: 8192, step: 1024, default: '1024', sendWhenHidden: send,
+      showIf: { id: 'think', value: 'true' } }
+  ];
+  const kept = mk(true);
+  assert.equal(kwargPayload(kept, resolveKwargs(kept, {}, false)).thinking_budget_tokens, 1024);
+  const dropped = mk(false);
+  assert.equal('thinking_budget_tokens' in kwargPayload(dropped, resolveKwargs(dropped, {}, false)), false);
+});
+
+test('an unresolvable or absent gate leaves the kwarg visible', () => {
+  const defs = [{ id: 'a', name: 'a', values: ['1', '2'] }];
+  assert.equal(gateOpen(defs, {}, defs[0]), true);
+  assert.equal(gateOpen(defs, {}, { id: 'b', showIf: { id: 'ghost', value: '1' } }), true);
+});
+
+test('the thinking budget preset matches the shape llama.cpp expects', () => {
+  const p = KWARG_PRESETS.find(x => x.key === 'thinking_budget_tokens').make();
+  assert.equal(p.name, 'thinking_budget_tokens');
+  assert.equal(p.target, 'body', 'top level, not nested under extra_body');
+  assert.equal(p.type, 'number');
+  assert.deepEqual([p.min, p.max, p.step, p.default], [1024, 8192, 1024, '1024']);
+  assert.equal(defaultValueOfKwarg(p), '1024');
+  assert.equal(controlOfKwarg(p), 'range');
+  const out = kwargPayload([p], resolveKwargs([p], { [p.id]: '5000' }, false));
+  assert.equal(out.thinking_budget_tokens, 5120, 'snapped to the 1024 grid');
+  assert.equal('extra_body' in out, false);
 });

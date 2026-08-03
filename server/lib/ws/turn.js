@@ -1,6 +1,6 @@
 import { db, uid, now, getSetting } from '../../db.js';
 import { buildMessages, streamCompletion, generateTitle, stripThink } from '../../llm/index.js';
-import { buildTools, toCall, livePreview, resolveToolName } from '../../tools/index.js';
+import { buildTools, toCall, cutOffOf, livePreview, resolveToolName } from '../../tools/index.js';
 import * as websearch from '../../websearch.js';
 import * as sandbox from '../../sandbox.js';
 import * as membank from '../../membank.js';
@@ -18,8 +18,9 @@ import { contextBudget, slideToFit, noteRealCtx, shrinkByRatio } from '../ctxwin
 import {
   sandboxPromptFor, cleanCall, resultPayload, formatToolResult, runChatSearchTool,
   formatChatSearchResult, chatSearchPayload, endChatPromptFor, longConvoReminderFor,
-  CHAT_SEARCH_PROMPT
+  cutOffError, CHAT_SEARCH_PROMPT
 } from '../prompts.js';
+import { noteToolCall } from '../toolstats.js';
 
 const MAX_STEERS = 6;
 const TELEMETRY_MS = 220;
@@ -214,6 +215,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   let maxSteps = toolsOn ? stepCap : 1;
   const callFails = new Map();
   let prevStepSig = '';
+  let lastFinish = '';
   const steerNotes = [];
   let steerBudget = MAX_STEERS;
   const takeSteers = () => {
@@ -280,6 +282,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       let stepText = '';
       const genTokens = makeTokenCounter();
       let aborted = false;
+      let stepFinish = '';
       let toolCalls = [];
       let liveSent = false;
       let liveState = { key: '', len: 0, lastAt: 0 };
@@ -403,6 +406,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
               }
               return;
             }
+            if (e.type === 'finish') { stepFinish = String(e.reason || ''); return; }
             if (e.type === 'tool_calls') { toolCalls = e.calls; }
           }
         });
@@ -487,6 +491,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           continue;
         }
       }
+      if (stepFinish) lastFinish = stepFinish;
       if (aborted || !toolsOn || !toolCalls.length) {
         if (liveSent) safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live: null }));
         break;
@@ -495,6 +500,18 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       let stepOk = 0, stepFailed = 0;
       for (const tc of toolCalls) {
         const call = canonicalize(toCall(tc.name, tc.argsText));
+        const cut = cutOffOf(call);
+        if (cut) {
+          stepFailed++;
+          const msg = cutOffError(call.tool, cut, stepFinish === 'length');
+          noteToolCall(model, call.tool, false, msg);
+          safeSend(JSON.stringify({ type: 'tool_exec', chatId: chat.id, call: cleanCall(call) }));
+          const block = '\n\n[[OQR:' + Buffer.from(JSON.stringify({ call: cleanCall(call), result: { ok: false, error: msg } }), 'utf8').toString('base64') + ']]\n';
+          content += block;
+          safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: block }));
+          toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: `${call.tool} → ERROR: ${msg}` });
+          continue;
+        }
         if (conversationEnded) {
           toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: `${call.tool} \u2192 ERROR: the conversation has been ended; no further tools may run.` });
           continue;
@@ -509,6 +526,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           out = { payload: { ok: false, error: msg }, formatted: `${call.tool} → ERROR: ${msg}`, hide: false };
         }
         const failed = !out.payload || out.payload.ok === false;
+        noteToolCall(model, call.tool, !failed, failed ? (out.payload && out.payload.error) : '');
         let formatted = out.formatted;
         const sig = call.tool + '|' + (tc.argsText || '');
         if (failed) {
@@ -566,7 +584,8 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     db.chats.update(chat.id, { updated_at: now() });
   }
   const outCap = Number(model.max_tokens) || 0;
-  const truncated = outCap > 0 && lastStepCompletion >= outCap - 2 && !conversationEnded;
+  const hitCap = outCap > 0 && lastStepCompletion >= outCap - 2;
+  const truncated = (lastFinish === 'length' || hitCap) && !conversationEnded;
   safeSend(JSON.stringify({ type: 'done', chatId: chat.id, messageId: (hasOutput || usageRec) ? assistantId : null, truncated }));
 
   const fresh = db.chats.byId(chat.id);

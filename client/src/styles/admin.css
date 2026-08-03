@@ -405,6 +405,10 @@
 .kwe-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .kwe-tag { font-style: normal; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-faint); border: 1px solid var(--border-soft); border-radius: 5px; padding: 1px 5px; }
 .kwe-tag.link { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); text-transform: none; letter-spacing: 0; font-family: var(--font-mono, monospace); }
+.kwe-range-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.kwe-range-row input { min-width: 0; }
+.kwe-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; font: inherit; }
+.kwe-link:hover { opacity: .8; }
 .kwe-acts { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 .kwe-acts .med-act { width: 27px; height: 27px; }
 .kwe-acts .med-act:disabled { opacity: .35; pointer-events: none; }

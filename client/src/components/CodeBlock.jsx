@@ -6,7 +6,7 @@ import { t } from '../i18n.jsx';
 
 export default function CodeBlock({ lang, code }) {
   const [copied, setCopied] = useState(false);
-  const hlVersion = useSyncExternalStore(subscribeHljs, hljsVersion);
+  const hlVersion = useSyncExternalStore(subscribeHljs, hljsVersion, hljsVersion);
   const html = useMemo(() => highlight(code, lang), [code, lang, hlVersion]);
   async function copy() {
     if (await copyText(code)) {

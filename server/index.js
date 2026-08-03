@@ -9,6 +9,7 @@ import { parseCookies } from './auth.js';
 import { setCustomPresets } from './pricing.js';
 import * as mcp from './mcp.js';
 import { pruneAudit } from './lib/audit.js';
+import { pruneToolStats } from './lib/toolstats.js';
 import { UPLOADS } from './lib/uploads.js';
 import { initWs } from './lib/ws/index.js';
 import registerAuthRoutes from './routes/auth.js';
@@ -69,5 +70,6 @@ process.on('exit', () => { try { mcp.shutdown(); } catch {} });
 
 server.listen(PORT, HOST, () => console.log(`open-quill running on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`));
 setTimeout(() => { import('./sandbox.js').then(s => { try { s.hostEnvInfo(); } catch {} }).catch(() => {}); }, 0).unref();
-pruneAudit();
-setInterval(pruneAudit, 24 * 60 * 60 * 1000).unref();
+const pruneOld = () => { pruneAudit(); pruneToolStats(); };
+pruneOld();
+setInterval(pruneOld, 24 * 60 * 60 * 1000).unref();

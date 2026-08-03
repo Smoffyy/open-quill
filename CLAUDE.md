@@ -277,7 +277,7 @@ Details that are load-bearing:
 
 ## Client tests (`npm test` in `client/`, `npm run test:client` from the root)
 
-`client/test/logic.test.js` runs on `node --test` with no extra dependencies, mirroring the server suite, and runs in CI as **Client logic tests**. It covers the pure logic that build tooling cannot check: the keybind model (`comboFromEvent` including the macOS Option-symbol and dead-key paths, combo validation, sanitize/resolve/index, chords, presets, import/export), reasoning parsing (`lastSentence`, `parseSteps`), `hasMath`/`wrapMathEnvironments`, `previewOf`/`buildTree`/`collapseRuns`, and `scanTools`.
+`client/test/logic.test.js` runs on `node --test` with no extra dependencies, mirroring the server suite, and runs in CI as **Client logic tests**. It covers the pure logic that build tooling cannot check: the keybind model (`comboFromEvent` including the macOS Option-symbol and dead-key paths, combo validation, sanitize/resolve/index, chords, presets, import/export), reasoning parsing (`lastSentence`, `parseSteps`), `hasMath`/`wrapMathEnvironments`, `previewOf`/`buildTree`/`collapseRuns`, `scanTools`, and the artifacts panel's diff and highlight logic (`diffLines`, `stableLineDiff`, `collapseRuns`, `splitHighlightedLines`, `markLine`, `findMatches`, `buildTree`).
 
 Two rules make this possible and are worth preserving. **Only modules with no imports are testable** — `node --test` cannot parse JSX, so anything importing a `.jsx` file is off limits. That is why `lastSentence`/`parseSteps` live in `lib/reasoning.js` rather than inside `ReasoningBlock.jsx`; pull pure logic out of components rather than reaching for a JSX-aware runner. And there is a test asserting `lib/reasoning.js` contains **no regex lookbehind**, because that is a parse-time error on Safari below 16.4 and would take down the whole bundle rather than one component.
 
@@ -293,7 +293,12 @@ Writing these immediately found a real bug: `isValidCombo` only validated the mo
 
 It runs in CI as **Components render without crashing**. Run it locally after touching any admin section or modal. Adding a component to the list is two lines and worth it for anything reachable behind a tab, since a crash there is invisible until someone clicks.
 
-All 19 `useAdmin` sections are now covered by wrapping each in `AdminProvider`; `renderToString` never runs effects, so the provider's API calls do not fire. That took coverage from 14 components to 33.
+All 19 `useAdmin` sections are covered by wrapping each in `AdminProvider`; `renderToString` never runs effects, so the provider's API calls do not fire. That took coverage from 14 components to 33, and `Composer`, `ArtifactsPanel` and the artifacts `Viewer` bring it to 41.
+
+Two things had to change for a component to be renderable here at all, and both are worth knowing before adding another:
+
+- **The harness shims `localStorage` and `window`.** Node has neither, and a component that reads either one *during render* (both of these read stored width and `window.innerWidth`) crashes on the environment rather than on anything the test is meant to catch. The shim is deliberately minimal — enough geometry to render, no DOM.
+- **`useSyncExternalStore` needs its third argument.** Without a `getServerSnapshot`, React throws outright when server-rendering. All four call sites (the hljs and KaTeX lazy loaders, `useI18n`) now pass the same snapshot function twice. This costs nothing in the browser: the app renders client-side only and never hydrates, so React ignores the server snapshot entirely — it exists so this test can reach the components that consume a lazily-loaded library.
 
 ## Router models (`lib/router.js`)
 
@@ -340,6 +345,79 @@ Resolution is always **scoped to the enabled tool set** (`makeToolResolver`), an
 `formatToolResult` must keep surfacing `note` for `create_file` and `str_replace` — a salvage or a fuzzy match that the model is not told about is a silent behaviour change it will repeat.
 
 **Every failure teaches.** A missing argument names the argument, says what it is for, and shows a complete example call; an unknown tool suggests the nearest real name (edit distance) and lists the valid ones; a blocked path explains the boundary and gives a correct example; a not-found command lists what *is* installed. `turn.js` already appends a "this identical call failed N times" note. The goal is that a small model's second attempt succeeds, so when adding a tool or a guard, write the error for the model that just got it wrong.
+
+## A cut-off tool call is not a malformed one
+
+When a model's output stops mid-call — its own token cap, a provider cutting the stream — the arguments arrive as unterminated JSON. `parseArgs` falls through to `extractPartial`, which used to keep only the *closed* keys and silently drop the rest. A `create_file` truncated inside its `content` string therefore arrived as `{path}` alone and was answered with "create_file needs content", which is false: the model did send content, and being told otherwise it resends the identical oversized file and is cut off in the identical place. That is the mechanism behind a small model looping on the same call until its turn budget is gone.
+
+`parseArgs` now attaches the unclosed key to the result under the exported `CUT_OFF` **symbol** — read it with `cutOffOf(call)`. A symbol is what makes this safe: object spread carries it through `toCall` and `canonicalize`, while `JSON.stringify` ignores it, so it can never leak into `cleanCall`, a tool payload or the database.
+
+`turn.js` checks it **before dispatching** and refuses the call, because running a handler with half its arguments is what produced the misleading error. `cutOffError` names the argument, says how many characters arrived, states plainly that nothing was written, and — for the tools that take a file body — tells the model to split the write (`create_file` for the first part, `insert_lines` to append) instead of resending. Deliberately, the partial body is **not** written to disk: a file that is silently half-written but reported as created is worse than an error, since the model moves on and the user gets corrupt output.
+
+`finish_reason` (OpenAI-shape) and `done_reason` (ollama) were previously read by nothing at all. `stream.js` now emits them as a `finish` event, which sharpens the message when the cause really was the output cap and makes the `done` payload's `truncated` flag — the one driving the client's Continue affordance — honest. The old heuristic (`completion >= max_tokens - 2`) is kept as a fallback but cannot fire at all when a model has no `max_tokens` set, which is the common case for local models and exactly when truncation matters most.
+
+## Reasoning arrives on two channels, and only one of them has tags
+
+`makeEmitter` in `llm/emitter.js` splits thinking from the answer, and it has to cope with providers doing this two completely different ways:
+
+- **Inline**, where `<think>…</think>` (or the model's configured `think_open`/`think_close`) arrives in the ordinary content stream. `inThink` tracks the state machine and both tags are consumed.
+- **Structured**, where the thought arrives on its own field (`reasoning_content` / `reasoning`) and `emitReasoning` forwards it directly. **`inThink` never becomes true on this path**, because there was never an opening tag to see.
+
+That asymmetry is a real trap. When llama.cpp is given a thinking budget and the budget runs out, it forces the thought shut by emitting the **closing tag on the content channel** — a close with no matching open, which nothing was tracking, so it was printed as the literal first line of the answer.
+
+`orphanClose()` handles it: a closing tag in the content stream is swallowed only when thinking has actually been seen this turn **and** no non-whitespace content has been emitted yet. Both halves matter. Without the first, any model could have a stray tag eaten; without the second, an answer that legitimately *mentions* `</think>` mid-sentence would lose it. Partial tags split across chunks are held back the same way opening tags already were. Providers that only ever send structured reasoning and never a stray tag are untouched, which is the whole point — this must not change behaviour for Anthropic or OpenAI.
+
+**What this does not fix, because it cannot:** once the budget forces the thought closed, everything the model generates afterwards *is* content by definition. A model cut off mid-sentence carries on writing its plan, and that plan lands in the answer. There is no signal left to distinguish it from a real reply, and guessing would eat genuine answers. The fix is a budget large enough for the model to finish a thought — which is an argument for setting a sane **minimum** on a thinking-budget range kwarg rather than letting it reach values no model can complete in.
+
+## Model kwargs, and the two shapes a value can take
+
+`lib/kwargs.js` (server) and `src/kwargs.js` (client) are **parallel implementations of the same rules**, and they must agree: the client renders the control and previews the payload, the server decides what is actually sent. A divergence shows up as an admin editor that promises one request body and a backend that sends another. There is a client test asserting the two match on detection, clamping and defaults — extend it when you touch either file.
+
+A kwarg carries its value in one of two ways, and `isRange(def)` is the only thing that distinguishes them:
+
+- **A value list** (`values: ['low','medium','high']`). `controlOf` picks a toggle for a true/false pair, a dropdown above five entries, and the segmented `slider` otherwise. A request is honoured only if it is *in the list*.
+- **A number range** (`min`, `max`, `step`), which is what makes something like `thinking_budget_tokens: 300` expressible — enumerating 0…4096 never was. `controlOf` returns `range` and the user gets a real draggable `<input type="range">`.
+
+Rules that hold the range design together:
+
+- **A range clears `values` in `normalizeKwarg`.** Two sources of truth for "what may be sent" is how you get an editor showing a list next to a slider that ignores it. The editor's two link buttons (*use a slider instead* / *use a fixed list instead*) are the only way to move between the shapes, and each clears the other's fields.
+- **The bounds are enforced server-side, in `resolveKwargValues`.** The slider is a convenience; `clampToRange` is the guarantee. A hand-edited socket message asking for `99999` gets the admin's maximum, not an error and not the raw number — refusing outright would break a turn over a value we can obviously correct.
+- **Both ends stay reachable even when they are off the step grid.** Snapping alone rounds a max of 2048 with a step of 100 down to 2000, so the number under the thumb could never equal the maximum printed at the end of its own track. `clampToRange` returns `min`/`max` verbatim outside the interior, matching what a native range input does at the end of its travel; everything strictly between them still snaps.
+- **Steps are measured from `min`, not from zero**, so a range of 5–100 in tens gives 5, 15, 25 … and not 0, 10, 20. `stepDecimals` then rounds off float dust, or `0.1` steps produce values like `0.30000000000000004` in the request body.
+- Hiding is orthogonal and already existed: `visible: false` removes the control while `sendWhenHidden` still sends the default, and `adminOnly` greys it out for users. Both work for ranges — that is the "no slider at all" case.
+- A range parent has no enumerated values for a paired child to match on, so `KwargsEditor` offers such a child the single `*` catch-all rule instead of a per-value list.
+
+### `showIf` gates a control; `parentId` replaces it
+
+These look similar and are not. **`parentId` makes a kwarg fully derived** — it loses its control entirely and its value comes from the parent's `rules`. **`showIf: { id, value }` only gates visibility**: the kwarg keeps its own slider or toggle and simply does not appear while the named kwarg holds a different value. That is what lets a thinking budget show up only once thinking is switched on.
+
+A closed gate is treated as a *kind of hidden*, so `kwargVisible` is `visible !== false && gateOpen(...)` and everything downstream — the picker's control list, its chips, and `kwargPayload` — asks that one question rather than reading `visible` directly. The consequence worth knowing: **`sendWhenHidden` decides what a gated-off kwarg does**, exactly as it does for an admin-hidden one, and it defaults to still sending. That is deliberate for the budget case, where sending a budget while thinking is off is harmless, but it means "hidden" never silently means "not sent".
+
+The gate is display-only in one further respect: a request that names a gated-off kwarg is still honoured, because the value belongs to the user and should survive toggling thinking off and on again. Only `adminOnly` actually refuses a requested value.
+
+Gates are sanitized like `parentId`: a self-reference or a pointer at an id that does not exist is dropped on write. Only a kwarg with discrete `values` may gate another — `gateValues` in the editor excludes ranges, since "show when the budget is exactly 3072" is never what anyone means.
+
+`target` decides where the value lands, and **two of the three nest while one does not** — getting this wrong produces a request the server silently ignores, with no error anywhere:
+
+| Target | On the wire |
+| --- | --- |
+| `chat_template_kwargs` (default) | `{"chat_template_kwargs": {"enable_thinking": true}}` — what a chat template reads for values it uses itself |
+| `body` | `{"thinking_budget_tokens": 1024}` — a plain field beside `model` and `messages` |
+| `extra_body` | `{"extra_body": {...}}` — a literal nested object |
+
+**`extra_body` is a client-side SDK concept, not a wire format.** The OpenAI SDKs take `extra_body={...}` and *flatten it into the top level* before sending; the server never sees a key called `extra_body`. Ours sends it nested, which llama.cpp and vLLM ignore outright. So the target that reproduces what an SDK's `extra_body` does is **`body`**, and the `thinking_budget_tokens` preset uses it. The nested target is kept only for gateways that genuinely unwrap it, and `TARGET_NOTE` in `KwargsEditor.jsx` says so at the point of choice — this cost a real debugging session once.
+
+For the same reason `PayloadPreview` renders the **whole request body** (`model` and `messages` elided) rather than just the kwarg fragment: `{"extra_body": {"x": 1}}` and `{"x": 1}` are indistinguishable at a glance when shown alone, and they are the entire difference between working and not.
+
+`RESERVED_BODY_KEYS` blocks a top-level kwarg from overwriting `model`, `messages`, `tools` and friends.
+
+## Tool reliability telemetry
+
+`lib/toolstats.js` counts every tool call by `(model, tool)` in the `toolstats` table: successes, failures, a breakdown by failure *kind*, and the last error text. `GET /api/admin/tool-stats` serves it and Admin → Analytics renders it, with a `DELETE` to reset.
+
+The point is diagnosis, not accounting. Every harness bug fixed here so far was found because someone happened to be watching a chat and screenshotted it; a ranked failure list finds the next one without that luck, and shows whether a fix actually moved the number.
+
+`classifyToolError` maps error text onto a fixed set of kinds (`cut_off`, `unknown_tool`, `missing_arg`, `no_match`, `blocked`, `missing_program`, `not_found`, `timeout`, `too_big`, `nonzero_exit`, `other`). It matches on the error strings the sandbox actually produces, so **changing an error message can silently reclassify a whole failure mode** — when you reword one, check `KIND_PATTERNS` and the test that pins each kind to a real message. Rows are aggregates rather than an event log, so the table stays small; `pruneToolStats` drops anything untouched for 90 days.
 
 ## The prompt ledger
 
@@ -535,7 +613,8 @@ Vite + React. `vite.config.js` proxies `/api`, `/uploads`, and the websocket to 
 - `src/lib/keybinds.js`: the keybind model (`KEYBIND_ACTIONS`, `comboFromEvent`, `resolveKeybinds`, `keybindIndex`, `comboKeys`, `keybindConflicts`, presets, import/export). See "Keyboard model" above.
 - `src/lib/mathjs.js`: everything KaTeX. `hasMath` (cheap pre-check), `wrapMathEnvironments`, `BASE_MACROS`, `KATEX_OPTIONS`, and the lazy loader (`ensureKatex`, `katexPlugin`, `subscribeKatex`, `katexVersion`). See "Maths and code rendering" below.
 - `src/lib/hljs.js`: the syntax-highlighting facade and its two-stage lazy loader (`ensureCommon`, `ensureFull`, `ensureLanguage`, `highlight`, `rawHighlight`, `subscribeHljs`, `hljsVersion`).
-- `src/lib/threadmeta.js`: `railItems` (rail model derived from the message list), `previewOf`, `hasToolCall`, plus `buildTree`/`collapseRuns` shared by the branch map.
+- `src/lib/threadmeta.js`: `railItems` (rail model derived from the message list), `previewOf`, `hasToolCall`, plus `buildTree`/`collapseRuns` shared by the branch map. Note `lib/artifacts.js` exports its own `buildTree` and `collapseRuns` for files and diff rows — same names, unrelated shapes; do not merge them.
+- `src/lib/drafts.js`: `useDrafts(skipRef)`, the unsent-composer-text persistence described under "Composer drafts". The ref is what suppresses writes in incognito, and it is passed rather than read so the hook has no knowledge of chat state.
 - `src/styles/` — `app.css` imports everything; `openai.css` is the OpenAI preset (always last). Others: `base`, `layout`, `chrome`, `chat`, `composer` styles live across `polish`, `extras`, `modals`, `admin`, `artifacts`, `fonts`, `threadnav`.
 - `src/styles/threadnav.css`: thread rail, find bar, branch map, `.skip-link`, `.sr-only`, the `.kb-focus` ring, and the thread occlusion rules. Imported second-to-last, immediately before `openai.css`.
 
@@ -544,14 +623,15 @@ Vite + React. `vite.config.js` proxies `/api`, `/uploads`, and the websocket to 
 - `AdminPanel.jsx` — admin shell: tab navigation, models list/publish flow, branding, members, settings tabs. Tab ids: `overview, models, providers, branding, home, members, websearch, membank, voice, safety, memory, skills, mcp, feedback, limits, audit, analytics`.
 - `admin/widgets.jsx` — shared admin primitives: `Card`, `Toggle`, `IconSlot`, `IconCropModal`, `SystemPromptEditor`, `QpIconPicker`, `AutosaveNote`, `CopyBtn`, `StatusChips`, `Grip`, `bgPreviewStyle`.
 - `admin/ModelEditor.jsx` — the per-model editor (sections: General, Intelligence, Abilities, Style, Tuning; `ME_SECTIONS`).
-- `Composer.jsx` — the input: attachments, dictation, slash commands, style menu, sandbox/web-search toggles, saved prompts.
+- `Composer.jsx` — the input: slash commands, style menu, sandbox/web-search toggles, saved prompts, send/queue/steer. Attachments and dictation are **not** here: they are `useAttachments` (`lib/attachments.js` — the file list, drag state, paste, object-URL lifetime and the dominant-colour glow) and `useDictation` (`lib/dictation.js` — both the browser `SpeechRecognition` path and the `MediaRecorder`-plus-server path). Each owns its own state and cleanup, so neither can leak an object URL or leave a recorder running when the composer unmounts.
 - `Message.jsx`, `Markdown.jsx`, `CodeBlock.jsx`, `ReasoningBlock.jsx`, `StreamingText.jsx`, `ToolCard.jsx` — message rendering pipeline.
 - `Sidebar.jsx`, `ChatMenu.jsx`, `ChatsOverview.jsx`, `SearchModal.jsx`, `BranchCompare.jsx` — navigation and history.
 - `CtxGauge.jsx`: the persistent context fill beside the model picker, behind the `ctxGauge` pref (default off). It follows the picker: composer under the Anthropic preset, topbar under OpenAI. Rendered from one `ctxGaugeEl` in `App.jsx` so the two sites cannot drift. Reads `GET /api/chats/:id/context`, which counts with the real tokenizer when the backend has one. It measures against the **budget** (window minus the reply reserve), not the raw window, because the raw window reads empty right up to a truncation. Deliberately not recomputed on keystrokes: each refresh is a live `/tokenize` round trip, so it is keyed on chat, model and the last message id, debounced 350ms, and skipped entirely while streaming.
 - `ThreadRail.jsx`: the conversation minimap pinned to the right edge of `.main`. One `IntersectionObserver` rooted on `.scroll-area` tracks which turns are on screen (there is deliberately no pixel measurement, so it survives streaming and reflow); one `ResizeObserver` compresses the tick gap to fit. Hidden below 4 messages and under 900px.
 - `ThreadFind.jsx`: in-thread find. Flattens thread text nodes into a single string plus an offset index, so matches spanning inline elements are found, then paints via the CSS Custom Highlight API (`CSS.highlights`, styled by `::highlight(oq-find)` / `::highlight(oq-find-active)` in `threadnav.css`). Where the API is missing it still navigates by message. Recomputes on a `revision` prop rather than watching the DOM.
 - `BranchTree.jsx`: the branch map modal (lazy-loaded, own chunk). Renders the whole message graph: linear runs collapse into a single column and fold above 6 nodes, fork points split into parallel branch columns, the active path is highlighted. Clicking a node already on the active path jumps to it in the thread (`onJump`); clicking anything else switches branches via `selectBranch`. Keep that split: making every click switch branches means clicking a shared ancestor mutates the conversation the user was only trying to look at.
-- `ArtifactsPanel.jsx` — sandbox file browser/preview. `ProjectsPanel.jsx`, `SpacesPanel.jsx` — projects and spaces UIs.
+- `ArtifactsPanel.jsx` — the sandbox file browser: tabs, split panes, resize, the file tree. The pieces live under `components/artifacts/`: `Viewer.jsx` (one file — code, diff, preview, image, live-write follow, find-in-file), `FileTree.jsx` and `FileChip.jsx`. Everything pure sits in `lib/artifacts.js` (`diffLines`, `stableLineDiff`, `collapseRuns`, `splitHighlightedLines`, `markLine`, `findMatches`, `buildTree`, plus the extension tables), which is why that logic is unit-tested rather than only exercised by eye.
+- `ProjectsPanel.jsx`, `SpacesPanel.jsx` — projects and spaces UIs.
 - `KeybindsPanel.jsx` — the **Settings > Keybinds** tab. Pure view over `lib/keybinds.js`; it writes only the `keybinds` pref.
 - `SettingsModal.jsx`, `PersonasModal.jsx`, `StyleMenu.jsx`, `ShortcutsModal.jsx`, `DocModal.jsx`, `Login.jsx`, `CallPanel.jsx`, `ModelDropdown.jsx`, `ChatControls.jsx`, `AppBackground.jsx`, `Toaster.jsx`, `Lightbox.jsx`, `icons.jsx`.
 
