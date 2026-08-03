@@ -16,6 +16,7 @@ export const ThumbUp = (p) => <I {...p}><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 
 export const ThumbDown = (p) => <I {...p} style={{ transform: 'rotate(180deg)' }}><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1zM7 11l4-7a2 2 0 0 1 2 1v4h5a2 2 0 0 1 2 2l-1.5 7a2 2 0 0 1-2 1H7" /></I>;
 export const Retry = (p) => <I {...p}><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 4v4h-4" /></I>;
 export const Check = (p) => <I {...p}><path d="M20 6 9 17l-5-5" /></I>;
+export const CheckCircle = (p) => <I {...p}><circle cx="12" cy="12" r="9" /><path d="m8.5 12.2 2.4 2.4 4.6-4.9" /></I>;
 export const Chevron = (p) => <I {...p}><path d="m9 6 6 6-6 6" /></I>;
 export const ChevDown = (p) => <I {...p}><path d="m6 9 6 6 6-6" /></I>;
 export const Down = (p) => <I {...p}><path d="M12 5v14M5 12l7 7 7-7" /></I>;

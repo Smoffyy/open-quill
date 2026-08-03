@@ -205,18 +205,106 @@
 .stream-text { white-space: pre-wrap; word-break: break-word; }
 
 /* ---------- reasoning ---------- */
-.reasoning { margin-bottom: 2px; }
-.reasoning-head { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 14.5px; padding: 3px 0 1px; cursor: pointer; transition: color .15s; }
-.reasoning-head.static { cursor: default; }
-.reasoning-head.static:hover { color: var(--text-muted); }
-.reasoning-head:hover { color: var(--text); }
-.reasoning-head svg { width: 15px; height: 15px; transition: transform .2s; }
-.reasoning-head.open svg.chev { transform: rotate(90deg); }
-.reasoning-body {
-  border-left: 2px solid var(--border); margin-left: 6px; padding: 6px 0 4px 16px;
-  color: var(--text-muted); font-size: 14.5px; line-height: 1.7; white-space: pre-wrap;
-  font-family: var(--font-sans);
+.reasoning { margin: 0 0 6px; }
+.reasoning-head {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-left: -10px; padding: 5px 12px 5px 10px; border-radius: 9px;
+  font-family: var(--font-sans); font-size: 15.5px; font-weight: 400; letter-spacing: -.01em;
+  color: var(--text-muted); cursor: pointer;
+  transition: color .15s, background .15s;
 }
+.reasoning-head:hover { color: var(--text); background: var(--hover-soft); }
+.reasoning-head .rb-icon { width: 17px; height: 17px; opacity: .8; flex-shrink: 0; }
+.reasoning-head .chev { width: 15px; height: 15px; opacity: .6; transition: transform .38s cubic-bezier(.16, 1, .3, 1), opacity .15s ease; }
+.reasoning-head.open .chev { transform: rotate(90deg); }
+.reasoning-head.static { cursor: default; }
+.reasoning-head.static:hover { color: var(--text-muted); background: none; }
+
+.rb-inner { position: relative; overflow: hidden; min-height: 0; }
+
+/* the thought timeline: a node per block, joined by a rail */
+.rb-steps {
+  list-style: none; margin: 4px 0 0; padding: 0;
+  color: var(--text-faint); font-family: var(--font-sans); font-size: 15px; line-height: 1.72;
+  max-height: 620px; overflow: hidden auto; overscroll-behavior: contain;
+  scrollbar-width: thin; scrollbar-color: var(--hover-mid) transparent;
+}
+.rb-steps::-webkit-scrollbar { width: 8px; }
+.rb-steps::-webkit-scrollbar-thumb { background: var(--hover-mid); border-radius: 999px; }
+.rb-steps::-webkit-scrollbar-track { background: transparent; }
+.rb-step { position: relative; padding: 0 34px 16px 30px; }
+.rb-step:last-child { padding-bottom: 2px; }
+.rb-step::before {
+  content: ''; position: absolute; left: 0; top: 7px; width: 9px; height: 9px;
+  border-radius: 50%; border: 1.5px solid var(--text-faint); background: var(--bg);
+  box-sizing: border-box; z-index: 1;
+}
+.rb-step::after {
+  content: ''; position: absolute; left: 4px; top: 18px; bottom: 0; width: 1.5px;
+  background: var(--border); border-radius: 999px;
+}
+.rb-step:last-child::after { display: none; }
+.rb-step p { margin: 0 0 12px; white-space: pre-wrap; word-break: break-word; }
+.rb-step p:last-child { margin-bottom: 0; }
+
+/* while the model is thinking the whole block is a card, closed or open, so the
+   header never leaves it and clicking cannot move it */
+.reasoning.carded {
+  border: 1px solid var(--border-soft); border-radius: 16px;
+  padding: 6px 16px 12px; margin: 2px 0 10px;
+}
+.reasoning.carded .rb-steps { max-height: 460px; }
+.rb-peek-in {
+  color: var(--text-faint); font-family: var(--font-sans); font-size: 15px; line-height: 1.72;
+  white-space: pre-wrap; word-break: break-word;
+  max-height: 170px; min-height: 0; overflow: hidden; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 30px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 30px);
+}
+.rb-peek-in::-webkit-scrollbar { display: none; }
+
+/* anthropic: the header is a rolling one-line summary of the current thought */
+.reasoning.rolling .reasoning-head { max-width: 100%; font-size: 14.5px; color: var(--text-faint); }
+.reasoning.rolling .reasoning-head:hover { color: var(--text-muted); }
+.reasoning.rolling .chev { opacity: 0; }
+.reasoning.rolling:hover .chev, .reasoning.rolling .reasoning-head:focus-visible .chev { opacity: .5; }
+.rb-lines {
+  position: relative; display: block; min-width: 0; max-width: 620px;
+  min-height: 1.5em; line-height: 1.5;
+}
+.rb-line {
+  display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  animation: rbLineIn .34s var(--ease-out) both;
+}
+.rb-line.out {
+  position: absolute; inset: 0; pointer-events: none;
+  animation: rbLineOut .34s var(--ease-out) both;
+}
+@keyframes rbLineIn { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+@keyframes rbLineOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-7px); } }
+[data-animations="off"] .rb-line { animation: none; }
+[data-animations="off"] .rb-line.out { display: none; }
+
+/* anthropic: clock node per step, closed off by a Done row */
+.reasoning.rolling .rb-step { padding-left: 34px; }
+.reasoning.rolling .rb-step::before { display: none; }
+.reasoning.rolling .rb-step::after { left: 10px; top: 21px; }
+.rb-node {
+  position: absolute; left: 2px; top: 4px; width: 17px; height: 17px;
+  color: var(--text-faint); opacity: .85;
+}
+.rb-done { padding-bottom: 2px; }
+.rb-done p { color: var(--text-muted); }
+.rb-done::after { display: none; }
+
+.rb-copy {
+  position: absolute; top: 2px; right: 0; display: grid; place-items: center;
+  width: 28px; height: 28px; border-radius: 8px; color: var(--text-faint);
+  background: transparent; opacity: 0; transition: opacity .15s, color .15s, background .15s;
+}
+.rb-copy svg { width: 15px; height: 15px; }
+.rb-copy:hover { color: var(--text); background: var(--hover-soft); }
+.reasoning:hover .rb-copy, .rb-copy:focus-visible { opacity: 1; }
 .thinking-live { color: var(--text-muted); font-size: 14.5px; display: inline-flex; align-items: center; gap: 9px; }
 
 /* ---------- code blocks ---------- */

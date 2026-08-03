@@ -23,7 +23,7 @@ export function applyPrefs(prefs, preset) {
   try { localStorage.setItem('oq-theme', nextTheme); } catch {}
   root.setAttribute('data-density', prefs?.density === 'compact' ? 'compact' : 'comfortable');
   root.setAttribute('data-entrance', prefs?.messageEntrance === false ? 'off' : 'on');
-  root.setAttribute('data-animations', (prefs?.animations == null ? p !== 'openai' : prefs.animations !== false) ? 'on' : 'off');
+  root.setAttribute('data-animations', prefs?.animations === false ? 'off' : 'on');
   const cursorOn = prefs?.streamCursor == null ? p === 'openai' : !!prefs.streamCursor;
   const cursorStyle = prefs?.cursorStyle || (p === 'openai' ? 'circle' : 'block');
   root.setAttribute('data-cursor', cursorOn ? (cursorStyle === 'circle' ? 'circle' : 'block') : 'off');

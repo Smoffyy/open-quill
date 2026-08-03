@@ -172,7 +172,42 @@
 [data-preset="openai"] .msg-icon img { border-radius: 8px; }
 [data-preset="openai"] .msg-icon-name { font-family: var(--font-sans); font-size: 13.5px; font-weight: 600; color: var(--text); }
 [data-preset="openai"] .msg.assistant.icon-left .il-avatar { top: -4px; }
-[data-preset="openai"] .reasoning-head, [data-preset="openai"] .rb-label { font-family: var(--font-sans); font-size: 13.5px; }
+[data-preset="openai"] .reasoning-head, [data-preset="openai"] .rb-label { font-family: var(--font-sans); font-size: 15px; }
+[data-preset="openai"] .reasoning-head { border-radius: 999px; padding: 5px 13px 5px 11px; }
+[data-preset="openai"] .reasoning-head:hover { background: var(--surface-hover); }
+[data-preset="openai"] .rb-steps, [data-preset="openai"] .rb-peek-in { font-size: 14.5px; line-height: 1.7; }
+[data-preset="openai"] .reasoning.carded { border-radius: 20px; animation: oaiPeekIn .3s var(--ease-out) backwards; }
+[data-preset="openai"] .rb-copy { border-radius: 999px; }
+
+/* openai: restated from the base sheet so the preset (which loads last) cannot
+   end up with only one half of the open/close pair */
+[data-preset="openai"] .reasoning-collapse {
+  transition: grid-template-rows .28s cubic-bezier(.4, 0, .2, 1), opacity .16s ease;
+}
+[data-preset="openai"] .reasoning-collapse.open {
+  transition: grid-template-rows .44s cubic-bezier(.16, 1, .3, 1), opacity .28s ease .04s;
+}
+[data-preset="openai"] .rb-peek { transition: grid-template-rows .28s cubic-bezier(.4, 0, .2, 1), opacity .16s ease; }
+[data-preset="openai"] .rb-peek.shown { transition: grid-template-rows .44s cubic-bezier(.16, 1, .3, 1), opacity .28s ease .04s; }
+
+/* openai: the steps rise in and the dotted timeline draws down behind the panel */
+[data-preset="openai"] .reasoning-collapse.open .rb-step { animation: oaiStepIn .44s var(--ease-out) var(--rb-d, 0s) backwards; }
+[data-preset="openai"] .reasoning-collapse.open .rb-step::before { animation: oaiDotIn .4s var(--ease-out) var(--rb-d, 0s) backwards; }
+[data-preset="openai"] .reasoning-collapse.open .rb-step::after { transform-origin: top; animation: oaiRailIn .5s var(--ease-out) var(--rb-d, 0s) backwards; }
+[data-preset="openai"] .reasoning-head .chev { transition: transform .4s cubic-bezier(.22, 1, .36, 1); }
+@keyframes oaiStepIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes oaiDotIn { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: none; } }
+@keyframes oaiRailIn { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes oaiPeekIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: none; } }
+[data-preset="openai"][data-animations="off"] .reasoning-collapse.open .rb-step,
+[data-preset="openai"][data-animations="off"] .reasoning-collapse.open .rb-step::before,
+[data-preset="openai"][data-animations="off"] .reasoning-collapse.open .rb-step::after,
+[data-preset="openai"][data-animations="off"] .reasoning.carded { animation: none; }
+[data-preset="openai"][data-animations="off"] .reasoning-head .chev,
+[data-preset="openai"][data-animations="off"] .reasoning-collapse,
+[data-preset="openai"][data-animations="off"] .reasoning-collapse.open,
+[data-preset="openai"][data-animations="off"] .rb-peek,
+[data-preset="openai"][data-animations="off"] .rb-peek.shown { transition: none; }
 [data-preset="openai"] .actions .action-btn { border-radius: 8px; }
 
 [data-preset="openai"] .incognito-title { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }

@@ -38,11 +38,21 @@ Rules:
 - Under preset `openai`: dark → `data-theme="openai"` (the pitch-black palette).
 - Cursor: under preset `openai` the streaming cursor **defaults** to circle+on, under `anthropic` to block+off. These are defaults only — a user who has set `streamCursor`/`cursorStyle` keeps their choice in both presets, and the default is computed at apply time rather than written into their prefs.
 
-**No preset may make a user pref inert.** `applyPrefs` writes every pref to a `data-*` attribute on `<html>` regardless of preset, and `openai.css` must not override those attribute-driven rules. A preset may change a pref's *default* (as `animations` and the cursor do) but never its effect — a settings toggle that visibly does nothing in one skin is a bug, not a style choice.
+**No preset may make a user pref inert.** `applyPrefs` writes every pref to a `data-*` attribute on `<html>` regardless of preset, and `openai.css` must not override those attribute-driven rules. A preset may change a pref's *default* (as the cursor does) but never its effect — a settings toggle that visibly does nothing in one skin is a bug, not a style choice.
+
+### `animations` gates two different things
+
+The pref is labelled "Typewriter reveal", but it drives both the reveal loop (`animate` in `App.jsx`) and `data-animations`, which every CSS transition and keyframe opt-out keys off. Those two now default differently, and the split is deliberate:
+
+- **`data-animations` defaults on in both presets** (`prefs?.animations === false ? 'off' : 'on'`). It used to default off under `openai`, which silently disabled every transition in that skin — the reasoning open/close animation was written, shipped, and appeared completely dead for exactly this reason, with nothing wrong in the CSS.
+- **The reveal loop is off entirely under `openai`**, not merely defaulted off: `animate` is hard-coded false for that preset, so `App.jsx` writes each chunk straight to state as it arrives and `finalize()` runs the moment `done` lands. Tokens render exactly as the server sends them, matching chatgpt.com. This is the one place a preset overrides a pref rather than its default, so `SettingsModal` compensates — under `openai` the toggle is relabelled "Motion", loses the typewriter description, and the "Reveal speed" slider is hidden, because a control that visibly does nothing is the bug this document warns about elsewhere.
+
+Under `anthropic` the pref still moves both halves together. When something animates in one preset and not the other, **check `document.documentElement.dataset.animations` before touching a single CSS rule.**
 
 ## The complete JS branch list (`cfg.uiPreset === 'openai'` or data-preset reads)
 
-- `App.jsx` — chat topbar ModelDropdown; home-screen `.home-topbar` ModelDropdown; `hideModelPicker` for the composer, and `CtxGauge` moves into the topbar `modelPicker` block with it (the gauge belongs beside the picker, and the OpenAI composer pill reserves only 96px on the right for the mic and send button, so anything left there is squeezed out of sight); persistent per-message assistant icons (`showIcon`); floating chat composer wrapper class + 808px max width; incognito hero renders "Temporary Chat" + note; instant streaming (reveal loop `instant` flag); `QuickPrompts` keeps layout space when hidden (`qp-ghost`).
+- `App.jsx` — chat topbar ModelDropdown; home-screen `.home-topbar` ModelDropdown; `hideModelPicker` for the composer, and `CtxGauge` moves into the topbar `modelPicker` block with it (the gauge belongs beside the picker, and the OpenAI composer pill reserves only 96px on the right for the mic and send button, so anything left there is squeezed out of sight); persistent per-message assistant icons (`showIcon`); floating chat composer wrapper class + 808px max width; incognito hero renders "Temporary Chat" + note; `animate` is forced false so the reveal loop never runs and tokens render as they stream, with `SettingsModal` adapting the Animations control to match (see "`animations` gates two different things"); `QuickPrompts` keeps layout space when hidden (`qp-ghost`).
+- `App.jsx` → `Message` → `ReasoningBlock` — a `preset` prop, because the two skins show reasoning differently (see "The reasoning block").
 - `prefs.js` — theme mapping and forced circle cursor described above.
 - `SettingsModal.jsx` — preset-aware cursor defaults when seeding the prefs object.
 - `Composer.jsx` — none. The `.ml` multiline class is preset-agnostic; only `openai.css` styles it.
@@ -111,6 +121,58 @@ Overrides live on `user.prefs.keybinds` as a sparse `{ actionId: combo }` map ho
 `KEYBIND_PRESETS` holds named override sets (`default`, `vim`); `activePresetId` reports which one is in effect by comparing the stored overrides, and returns `''` for a custom mix. `exportKeybinds`/`importKeybinds` round-trip the override map through JSON, and both run everything through `sanitizeKeybinds`, so an untrusted file can never install a malformed binding.
 
 The focus ring is applied by toggling `.kb-focus` on the `[data-mid]` element from an effect rather than by passing a prop, so moving focus re-renders nothing. Shortcuts that are not rebindable (composer `Enter`, version cycling, and so on) stay in `ShortcutsModal`'s `STATIC_GROUPS`; `GROUP_ORDER` there controls the column order of the merged list.
+
+## The reasoning block
+
+The two skins deliberately show reasoning in different shapes, so `ReasoningBlock` takes a `preset` prop (threaded `App.jsx` → `Message` → block) and sets a `.rolling` class for everything that is not `openai`. It never toggles itself; the user is always in control of `open`.
+
+**OpenAI** — a bulb, a fixed label, and a live tail card:
+
+| State | Looks like |
+| --- | --- |
+| thinking, closed (`.carded`) | a bordered card holding the bulb, "Thinking…", the chevron, and a live tail of the reasoning |
+| thinking, open (`.carded`) | the same card, grown to hold the full thought timeline of hollow dots |
+| finished | flat header, "Thought for 57 seconds", expanding to the timeline |
+
+`openai.css` owns its open/close animation: the panel eases on `grid-template-rows` and the steps rise in on a short `nth-child` stagger, capped at the fifth so a hundred-step thought does not queue a two-second cascade.
+
+Toggling dispatches **`oq-release-scroll`**, which `App.jsx` turns into `stick.current = false`. This is what keeps the header under the cursor when it is clicked mid-stream: during streaming the autoscroll pins the thread to the bottom, so a block growing by several hundred pixels drags the whole conversation up — the block was never moving, the scroll was. Releasing the pin is also the correct reading of intent, since someone who opens the reasoning wants to read it rather than keep chasing the tail.
+
+**`.carded` is keyed on `live` alone, never on `open`.** The card is the block itself, holding the header in both the closed and open thinking states, and expanding simply grows it. That is what keeps the header still: it never crosses the card boundary, so its padding context never changes. Two earlier arrangements failed and are worth not repeating — a card present only when closed jumps the header ~17px sideways on every toggle, and cancelling that with negative margins on the card pushes it up and left of the content column, straight into the assistant name in the icon-left layout. The card must stay flush with the column (`margin: 2px 0 10px`).
+
+The fade at the top of the live text is a `mask-image` on `.rb-peek-in`, the inner text element, and must not move up onto the card — a mask on the card fades its own top border out along with the text.
+
+**Anthropic** — no card and no fixed label. The header is a rolling one-line summary: `lastSentence` pulls the most recent *complete* sentence out of the raw reasoning, so while the model writes sentence N+1 the header shows sentence N, and each new one cross-fades over the last (`.rb-line` in, `.rb-line.out` absolutely positioned over it, cleared by a 420ms timer). Before the first sentence closes it falls back to the shimmering "Thinking…", and the last sentence stays as the collapsed header once thinking ends. Expanding shows the same timeline with clock nodes and a terminal "Done" row.
+
+The line is **throttled to one change per `LINE_HOLD_MS` (3s)**, and this is the point of the feature rather than a detail: a fast local model closes a sentence every few hundred milliseconds, which flickers unreadably. `nextLine` always holds the newest sentence and the timer promotes whatever is newest when it fires, so what you get is a glimpse of where the model *is* every three seconds, not a queue of every sentence it wrote. `lineAt` is seeded on the first sentence rather than left at `0` — left at `0`, `Date.now() - 0` is a twelve-digit number, `wait` is hugely negative, and the first line fires instantly instead of holding. `live` going false bypasses the throttle so the block always settles on the final sentence.
+
+`lastSentence` must not use a regex lookbehind. It is a *parse-time* error on Safari below 16.4, which would take down the entire bundle rather than just this component; the lookahead form (`[^.!?]+[.!?]+(?=\s|$)`) is equivalent here and safe everywhere. It also has to tolerate decimals — `0.5` must not read as a sentence end — which the lookahead gives for free.
+
+The timeline is what `parseSteps` builds: the text is split on blank lines into **steps**, each getting a node dot and a connecting rail, and single newlines inside a step become plain paragraphs under the same node. So a model that separates every thought with `\n\n` gets one node per thought, and one that uses single newlines gets grouped paragraphs — both read correctly without any model-specific handling.
+
+Details that are load-bearing:
+
+- **The duration is measured on the server, not the client.** `turn.js` accumulates `reasonMs` across every thinking phase of the turn (`closeReasoning()` is called when content starts and again after the loop, so a turn that ends mid-thought is still counted), stores it as `reasoning_ms`, and `routes/chats/messages.js` exposes it as `reasoningMs`. A client-side timer would be wrong after a reload and would disagree between two tabs watching the same turn. With no duration the label falls back to "Thought process", which is what every message written before this field existed shows.
+- **The live tail is `.rb-peek`, capped at 190px with a top mask** — it is deliberately *not* the same element as the expanded body. The block sits outside `.assistant-body`, so it is never occluded by `.thread.virt`, and an uncapped live view would push the streaming reply down the page while the `stick`/`scrollHeight` autoscroll chases it.
+- **The follow-scroll is coalesced through one `requestAnimationFrame`.** Reading `scrollHeight` on every reasoning token forces a synchronous reflow per token; the rAF collapses a burst into a single write after layout, and the cleanup cancels a pending frame so only the newest survives.
+
+### Opening and closing
+
+The expand/collapse is the grid-rows trick in `polish.css`, which needs a single child to size against — that is what `.rb-inner` is for. Adding a second child directly under `.reasoning-collapse` creates an implicit second row and silently breaks the animation.
+
+The motion is **asymmetric on purpose**: opening runs 440ms on a long ease-out (`cubic-bezier(.16,1,.3,1)`) while closing runs 280ms on a standard ease-in-out, because a slow collapse feels unresponsive where a slow reveal feels considered. Both timings live in the base sheet and apply to both presets; `openai.css` must not override `.reasoning-collapse`'s transition, since the open and closed rules tie on specificity and the preset sheet loads last, which would silently drop the open-state timing.
+
+Three pieces move together, and all three are needed for the card to morph rather than jump:
+
+1. `.reasoning-collapse` animates its row from `0fr` to `1fr`.
+2. `.rb-steps` slides from `translateY(-10px)`, so the timeline arrives with the panel instead of appearing fully formed inside it.
+3. `.rb-peek` runs the **same grid collapse in reverse** (`.shown` when closed). Without this the live tail unmounts instantly on click, the card snaps ~170px shorter, and only then grows — the single ugliest frame in the whole interaction.
+
+Each preset then adds its own reveal over the same skeleton: the step rises in, its node scales up, and its rail segment draws down with a `scaleY`. Anthropic animates `.rb-node` (the clock SVG), OpenAI animates `.rb-step::before` (the hollow dot); both animate `.rb-step::after` for the rail.
+
+The stagger is one **`--rb-d` custom property set on `.rb-step` in the base sheet**, not a per-preset pile of `nth-child` + `animation-delay` rules. Pseudo-elements inherit custom properties from their originating element, so `::before` and `::after` pick up the same delay as the step without repeating a single selector — which is the only reason adding node and rail animations to both presets did not triple the rule count. It is capped at the fifth child so a hundred-step thought does not queue a multi-second cascade.
+
+**Watch specificity when opting these out of `[data-animations="off"]`.** The animation selectors are deep (`.reasoning.rolling .reasoning-collapse.open .rb-node` is four classes), so a naive `[data-animations="off"] .reasoning .rb-node` loses and the pref silently does nothing. The opt-outs must repeat the full selector, and preset-specific ones must carry both attributes (`[data-preset="openai"][data-animations="off"]`) to beat the preset sheet's later position.
 
 ## Maths and code rendering
 

@@ -30,6 +30,7 @@ export default function registerMessageRoutes(app) {
         id: m.id, role: m.role, content: m.content, reasoning: m.reasoning, model_id: m.model_id, attachments: m.attachments || [], created_at: m.created_at, pinned: !!m.pinned, excluded: !!m.excluded, steers: Array.isArray(m.steers) ? m.steers : null, feedback: m.feedback || 0,
         model_name: m.model_name || mm?.display_name || legacyName.get(m.model_id) || '', model_icon: m.model_icon || mm?.static_icon || '',
         extended: !!m.extended, reasoningEffort: m.reasoning_effort || null, kwargValues: m.kwarg_values || null,
+        reasoningMs: Number(m.reasoning_ms) > 0 ? Number(m.reasoning_ms) : null,
         speed: m.speed && m.speed.tps > 0 ? { tps: m.speed.tps, promptTps: m.speed.promptTps || 0, exact: !!m.speed.exact, out: (m.usage && m.usage.completion) || 0 } : null,
         parentId: m.parent_id ?? null, branchIndex: sibs.findIndex(s => s.id === m.id), branchCount: sibs.length,
         siblings: sibs.map(s => s.id)

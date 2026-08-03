@@ -324,7 +324,7 @@ export default function App() {
   const lastTop = useRef(0);
   const programmatic = useRef(false);
   const [showJump, setShowJump] = useState(false);
-  const animate = user?.prefs?.animations == null ? cfg.uiPreset !== 'openai' : user.prefs.animations !== false;
+  const animate = cfg.uiPreset === 'openai' ? false : user?.prefs?.animations !== false;
   const revealMs = (() => { const v = user?.prefs?.revealMs; return v == null || isNaN(parseInt(v)) ? 40 : Math.max(0, Math.min(100, parseInt(v))); })();
   const [threadStagger, setThreadStagger] = useState(false);
   const staggerTimer = useRef(null);
@@ -1097,6 +1097,11 @@ export default function App() {
   function onWheel(e) { if (e.deltaY < -1) stick.current = false; }
   function onTouchMove() { const el = scrollRef.current; if (el && el.scrollHeight - el.scrollTop - el.clientHeight > 24) stick.current = false; }
   function jumpDown() { stick.current = true; setShowJump(false); scrollBottom(true); }
+  useEffect(() => {
+    const release = () => { stick.current = false; setShowJump(true); };
+    window.addEventListener('oq-release-scroll', release);
+    return () => window.removeEventListener('oq-release-scroll', release);
+  }, []);
 
   const openSeq = useRef(0);
   function applyChatMeta(chat) {
@@ -1759,7 +1764,8 @@ export default function App() {
                       streaming={!!msg._streaming} phase={msg._streaming ? ((modelById.get(currentId)?.hideThinking && phase === 'thinking') ? 'generating' : phase) : 'static'} liveCall={msg._streaming ? liveCall : null}
                       onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onDelete={streaming || queued ? null : deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
                       showSpeed={showMsgSpeed}
-                      showIcon={msg.role === 'assistant' && (cfg.uiPreset === 'openai' || (lastA && msg.id === lastA.id))} />
+                      showIcon={msg.role === 'assistant' && (cfg.uiPreset === 'openai' || (lastA && msg.id === lastA.id))}
+                      preset={cfg.uiPreset === 'openai' ? 'openai' : 'anthropic'} />
                     );
                   });
                 })()}

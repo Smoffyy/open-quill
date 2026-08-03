@@ -131,6 +131,8 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   const assistantParent = (db.chats.byId(chat.id) || {}).active_leaf || null;
   let content = '', reasoning = '', usage = null, lastStepCompletion = 0;
   let speed = null;
+  let reasonStart = 0, reasonMs = 0;
+  const closeReasoning = () => { if (reasonStart) { reasonMs += Date.now() - reasonStart; reasonStart = 0; } };
   safeSend(JSON.stringify({ type: 'start', chatId: chat.id, messageId: assistantId }));
 
   const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, projFilesOn, hostEnv: sandboxOn ? sandbox.hostEnvInfo() : null }) : [];
@@ -360,8 +362,9 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
               });
               return;
             }
-            if (e.type === 'reasoning') { if (!statusDone) sendStatus({ phase: 'generating' }, true); reasoning += e.text; safeSend(JSON.stringify({ type: 'reasoning', chatId: chat.id, text: e.text })); return; }
+            if (e.type === 'reasoning') { if (!statusDone) sendStatus({ phase: 'generating' }, true); if (!reasonStart) reasonStart = Date.now(); reasoning += e.text; safeSend(JSON.stringify({ type: 'reasoning', chatId: chat.id, text: e.text })); return; }
             if (e.type === 'content') {
+              closeReasoning();
               content += e.text; stepText += e.text;
               if (!genStart) { genStart = Date.now(); sendStatus({ phase: 'generating' }, true); }
               safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: e.text }));
@@ -545,6 +548,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   } catch (err) {
     if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: String(err.message || err) }));
   }
+  closeReasoning();
   state.aborts.delete(chat.id);
   if (state.steers) state.steers.delete(chat.id);
 
@@ -556,7 +560,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   }
   const hasOutput = !!(content.trim() || reasoning.trim());
   if (hasOutput || usageRec) {
-    db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: usageRec, speed, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, kwarg_values: model.kwarg_values || null, steers: steerNotes.length ? steerNotes.slice(0, MAX_STEERS) : null, created_at: now() });
+    db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: usageRec, speed, reasoning_ms: reasonMs || null, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, kwarg_values: model.kwarg_values || null, steers: steerNotes.length ? steerNotes.slice(0, MAX_STEERS) : null, created_at: now() });
     db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
   } else {
     db.chats.update(chat.id, { updated_at: now() });
