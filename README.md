@@ -105,7 +105,10 @@ The [`docs/`](docs/README.md) folder has an in-depth guide to using the interfac
 
 ## Why was this project made?
 
-This project was made mainly because I was fascinated by the Anthropic interface and colors. There are many other apps that have recreated similar styles of other interfaces, and I wanted to contribute openly for others to build upon what I've created. This entire project will **FOREVER** be listed under the MIT License. The front end aims to keep a balance between useful functionality and a clean, aesthetically pleasing experience. This project was made with the help of my local assistants alongside me.
+This project was made mainly because I was fascinated by the Anthropic interface and colors. There are many other apps that have recreated similar styles of other interfaces, and I wanted to contribute openly for others to build upon what I've created. This entire project will **FOREVER** be listed under the MIT License. The front end aims to keep a balance between useful functionality and a clean, aesthetically pleasing experience.
+
+> **It is important to note that this project was developed in collaboration with my local agents, with additional design, refinement, and implementation performed by me. In the interest of transparency and community collaboration, this project will remain fully open-source and freely available in perpetuity.**
+
 
 ## Requirements
 
