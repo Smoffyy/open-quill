@@ -1757,7 +1757,7 @@ export default function App() {
             </div>
             {user?.prefs?.threadRail !== false && <ThreadRail items={railList} scrollRef={scrollRef} matches={findMatches} onJump={railJump} />}
             {showJump && <button className="to-bottom" onClick={jumpDown} title={t('Jump to latest')} aria-label={t('Jump to latest')}><Down style={{ width: 17 }} /></button>}
-            <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')} style={{ maxWidth: cfg.uiPreset === 'openai' ? undefined : 760, margin: '0 auto', width: '100%', padding: '0 20px' }}>
+            <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')} style={{ maxWidth: cfg.uiPreset === 'openai' ? undefined : 792, margin: '0 auto', width: '100%', padding: '0 20px' }}>
               {user?.prefs?.engineStrip !== false && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
               <Composer {...composerProps} focusKey={focusTick} />
               <div className="disclaimer">{t(cfg.disclaimer)}</div>
