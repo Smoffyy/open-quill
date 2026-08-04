@@ -1,7 +1,9 @@
 import { db, uid, now } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
 import * as sandbox from '../../sandbox.js';
-import { purgeUploads } from '../../lib/uploads.js';
+import { attachmentUrlsOf, purgeUnreferencedUploads } from '../../lib/uploads.js';
+
+const MAX_PINS = 40;
 
 export default function registerCrudRoutes(app) {
   app.post('/api/chats', authMiddleware, (req, res) => {
@@ -15,10 +17,11 @@ export default function registerCrudRoutes(app) {
   app.delete('/api/chats/:id', authMiddleware, (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (c && c.user_id === req.user.id) {
-      purgeUploads(c.id);
+      const urls = attachmentUrlsOf(c.id);
       db.messages.removeWhere('chat_id', c.id);
       db.chats.removeById(c.id);
       sandbox.remove(c.id);
+      purgeUnreferencedUploads(urls);
     }
     res.json({ ok: true });
   });
@@ -27,7 +30,7 @@ export default function registerCrudRoutes(app) {
     const c = db.chats.byId(req.params.id);
     if (c && c.user_id === req.user.id) {
       const patch = {};
-      if ('title' in req.body) patch.title = req.body.title || 'New chat';
+      if ('title' in req.body) patch.title = String(req.body.title ?? '').slice(0, 200) || 'New chat';
       if ('starred' in req.body) patch.starred = req.body.starred ? 1 : 0;
       if ('archived' in req.body) patch.archived = req.body.archived ? 1 : 0;
       if (req.user.is_admin && 'genParams' in req.body) {
@@ -66,9 +69,12 @@ export default function registerCrudRoutes(app) {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const a = req.body || {};
-    if (!a.url || !a.name) return res.status(400).json({ error: 'name and url required' });
+    const url = String(a.url ?? '').slice(0, 512);
+    const name = String(a.name ?? '').slice(0, 256);
+    if (!url || !name) return res.status(400).json({ error: 'name and url required' });
     const pins = Array.isArray(c.pinned_files) ? c.pinned_files.slice() : [];
-    if (!pins.some(p => p.url === a.url)) pins.push({ name: String(a.name), url: String(a.url), type: a.type ? String(a.type) : '' });
+    if (pins.length >= MAX_PINS) return res.status(400).json({ error: `A chat can pin at most ${MAX_PINS} files.` });
+    if (!pins.some(p => p.url === url)) pins.push({ name, url, type: a.type ? String(a.type).slice(0, 128) : '' });
     db.chats.update(c.id, { pinned_files: pins });
     res.json({ pins });
   });

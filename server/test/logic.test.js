@@ -1,5 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   sanitizeKwargs, kwargDefs, applyKwargs, resolveKwargValues, kwargPayload,
   oneShotKwargPayload, controlOf, defaultValueOf, isBoolPair, coerceKwargValue,
@@ -13,14 +16,133 @@ import { trimInTurn, compactThreshold, estimateTokens, textTokens, makeTokenCoun
 import { scanTools } from '../toolproto.js';
 import { isContextOverflowError } from '../lib/llamacpp.js';
 import { winTranslate } from '../sandbox.js';
-import { screenCommand, normalizeRel } from '../lib/sandboxguard.js';
+import { screenCommand, normalizeRel, compileSearchPattern } from '../lib/sandboxguard.js';
 import { resolveToolName, makeToolResolver, nearestTool, SANDBOX_TOOLS } from '../tools/aliases.js';
 import { isPrivateAddress, hostAllowed } from '../lib/egress.js';
 import { resolveRouted, ruleMatches, routerRules, modelLabel } from '../lib/router.js';
 import { preferredChild } from '../lib/tree.js';
 import { samplingParams, parseStop } from '../llm/sampling.js';
-import { PROVIDER_TYPES } from '../providers.js';
+import { PROVIDER_TYPES, isProviderType, providerSpec } from '../providers.js';
 import { slideWithCounter, trimMode } from '../lib/ctxwindow.js';
+import { sameOrigin, sameOriginGuard, requestHost } from '../lib/origin.js';
+
+const asReq = (headers = {}, method = 'POST', localAddress = '10.0.0.5') =>
+  ({ method, headers, socket: { localAddress } });
+
+test('origin: Sec-Fetch-Site is believed over anything Host says', () => {
+  // The browser computes this against the real document origin, before any proxy exists,
+  // and it is forwarded untouched. Comparing Origin to Host instead is what refused every
+  // write behind Vite's dev proxy, which rewrites Host but not Origin.
+  const proxied = { host: 'localhost:3001', origin: 'http://localhost:5173' };
+  assert.equal(sameOrigin(asReq({ ...proxied, 'sec-fetch-site': 'same-origin' })), true);
+  assert.equal(sameOrigin(asReq({ ...proxied, 'sec-fetch-site': 'same-site' })), true);
+  assert.equal(sameOrigin(asReq({ ...proxied, 'sec-fetch-site': 'none' })), true, 'typed URL or bookmark');
+  assert.equal(sameOrigin(asReq({ ...proxied, 'sec-fetch-site': 'cross-site' })), false);
+  // and it still wins when Origin and Host happen to agree
+  assert.equal(sameOrigin(asReq({ host: 'quill.local', origin: 'http://quill.local', 'sec-fetch-site': 'cross-site' })), false);
+});
+
+test('origin: a request from another site is not the same origin', () => {
+  const host = { host: 'quill.local:3001' };
+  assert.equal(sameOrigin(asReq({ ...host, origin: 'http://quill.local:3001' })), true);
+  assert.equal(sameOrigin(asReq({ ...host, origin: 'https://quill.local:3001' })), true, 'scheme alone does not make it cross-site');
+  assert.equal(sameOrigin(asReq({ ...host, origin: 'http://evil.example' })), false);
+  assert.equal(sameOrigin(asReq({ ...host, origin: 'http://quill.local:3002' })), false, 'a different port is a different origin');
+  assert.equal(sameOrigin(asReq({ ...host, origin: 'http://quill.local.evil.example' })), false, 'suffix tricks do not pass');
+});
+
+test('origin: a missing Origin is allowed but a null one is not', () => {
+  const host = { host: 'quill.local:3001' };
+  // curl and the CI probe send no Origin at all and cannot be driven by a hostile page.
+  assert.equal(sameOrigin(asReq(host)), true);
+  assert.equal(sameOrigin(asReq({ ...host, origin: '' })), true);
+  // A sandboxed iframe or data: document sends the literal string "null".
+  assert.equal(sameOrigin(asReq({ ...host, origin: 'null' })), false);
+  assert.equal(sameOrigin(asReq({ ...host, origin: 'file://' })), false);
+  assert.equal(sameOrigin(asReq({ ...host, origin: 'not a url' })), false);
+  assert.equal(sameOrigin(asReq({ origin: 'http://quill.local' })), false, 'no Host to compare against');
+});
+
+test('origin: loopback to loopback survives a dev proxy without Sec-Fetch-Site', () => {
+  // Safari below 16.4 sends no Sec-Fetch-Site, and Vite still rewrites Host, so the dev
+  // setup has to fall through to this. The carve-out reaches only servers already running
+  // on this machine.
+  const devProxied = { host: 'localhost:3001', origin: 'http://localhost:5173' };
+  assert.equal(sameOrigin(asReq(devProxied, 'POST', '127.0.0.1')), true);
+  assert.equal(sameOrigin(asReq({ ...devProxied, origin: 'http://127.0.0.1:5173' }, 'POST', '::1')), true);
+  // but never to a public page, and never when we are not the one on loopback
+  assert.equal(sameOrigin(asReq({ ...devProxied, origin: 'http://evil.example' }, 'POST', '127.0.0.1')), false);
+  assert.equal(sameOrigin(asReq(devProxied, 'POST', '10.0.0.5')), false);
+  assert.equal(sameOrigin(asReq({ ...devProxied, origin: 'http://localhost.evil.example' }, 'POST', '127.0.0.1')), false);
+});
+
+test('origin: the guard lets safe methods through and refuses forged writes', () => {
+  const run = (req) => {
+    let status = 0, body = null, passed = false;
+    const res = { status(c) { status = c; return this; }, json(b) { body = b; } };
+    sameOriginGuard(req, res, () => { passed = true; });
+    return { status, body, passed };
+  };
+  const evil = { host: 'quill.local', origin: 'http://evil.example' };
+  assert.equal(run(asReq(evil, 'GET')).passed, true, 'reads are not state-changing');
+  assert.equal(run(asReq(evil, 'HEAD')).passed, true);
+  for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+    const r = run(asReq(evil, method));
+    assert.equal(r.passed, false, `${method} must not reach the route`);
+    assert.equal(r.status, 403);
+  }
+  assert.equal(run(asReq({ host: 'quill.local', origin: 'http://quill.local' }, 'POST')).passed, true);
+});
+
+test('origin: x-forwarded-host is what a proxy rewrites the host to', () => {
+  assert.equal(requestHost(asReq({ host: 'internal:3001', 'x-forwarded-host': 'quill.example' })), 'quill.example');
+  assert.equal(requestHost(asReq({ host: 'Quill.Local:3001' })), 'quill.local:3001');
+  assert.equal(sameOrigin(asReq({ host: 'internal:3001', 'x-forwarded-host': 'quill.example', origin: 'https://quill.example' })), true);
+});
+
+test('every configurable environment variable is documented', () => {
+  // .env.example is both the documentation and the template written into .env on a fresh
+  // install. That template used to be a second copy inline in dataroot.js, and the two
+  // drifted the first time an option was added, so a new install got a config file missing
+  // the newest setting. There is one copy now; this keeps it complete.
+  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  const example = fs.readFileSync(path.join(path.dirname(root), '.env.example'), 'utf8');
+
+  // Read from the environment rather than configured by the operator.
+  const AMBIENT = new Set(['PATH', 'Path', 'PATHEXT', 'ComSpec', 'NODE_ENV', 'DB_NAME']);
+  const found = new Set();
+  const walk = (dir) => {
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (ent.name === 'node_modules' || ent.name === 'data' || ent.name === 'test') continue;
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) { walk(full); continue; }
+      if (!ent.name.endsWith('.js')) continue;
+      for (const m of fs.readFileSync(full, 'utf8').matchAll(/process\.env\.([A-Za-z_][A-Za-z0-9_]*)/g)) found.add(m[1]);
+    }
+  };
+  walk(root);
+
+  const undocumented = [...found].filter(v => !AMBIENT.has(v) && !new RegExp(`^#?\\s*${v}=`, 'm').test(example));
+  assert.deepEqual(undocumented, [], `add these to .env.example: ${undocumented.join(', ')}`);
+});
+
+test('providers: an inherited property is not a provider type', () => {
+  // PROVIDER_TYPES is indexed by a value straight off the wire.
+  for (const key of ['constructor', '__proto__', 'toString', 'hasOwnProperty', '']) {
+    assert.equal(isProviderType(key), false, `${key} must not resolve`);
+  }
+  assert.equal(isProviderType('llamacpp'), true);
+  assert.equal(isProviderType(null), false);
+  // and a row carrying one still falls back to a real spec rather than throwing
+  assert.equal(providerSpec({ type: 'constructor', base_url: 'http://x:1' }).spec, PROVIDER_TYPES.llamacpp);
+});
+
+test('tools: an inherited property is not a tool alias', () => {
+  for (const key of ['constructor', '__proto__', 'toString', 'valueOf']) {
+    assert.equal(resolveToolName(key, true), null, `${key} must not resolve to a tool`);
+  }
+  assert.equal(resolveToolName('write_file'), 'create_file', 'real aliases still resolve');
+});
 
 test('kwargs: legacy effort fields migrate', () => {
   const m = { effort_enabled: 1, effort_levels: ['false', 'true'], effort_default: 'false', effort_kwarg: 'enable_thinking' };
@@ -593,8 +715,20 @@ test('router rules reject entries without a target and cap bad matchers', () => 
   assert.equal(rules[0].match, 'keyword');
 });
 
-test('a broken regex rule does not throw', () => {
-  assert.equal(ruleMatches({ match: 'regex', value: '([' }, { text: 'abc', lower: 'abc', length: 3 }), false);
+test('a broken or dangerous regex rule does not throw or hang', () => {
+  const sig = (text) => ({ text, lower: text.toLowerCase(), length: text.length });
+  assert.equal(ruleMatches({ match: 'regex', value: '([' }, sig('abc')), false);
+
+  // A routing rule is evaluated on every turn against whatever the user typed, so a rule
+  // that backtracks catastrophically would hang the server on every message, not just one
+  // tool call. It has to decline rather than run.
+  const started = Date.now();
+  assert.equal(ruleMatches({ match: 'regex', value: '(a+)+$' }, sig('a'.repeat(4000) + '!')), false);
+  assert.ok(Date.now() - started < 1000, 'declined immediately rather than backtracking');
+
+  // and ordinary rules still route
+  assert.equal(ruleMatches({ match: 'regex', value: '^translate\\b' }, sig('translate this please')), true);
+  assert.equal(ruleMatches({ match: 'regex', value: '(cat|dog)s?' }, sig('my dogs')), true);
 });
 
 test('routed payload carries real model names, not undefined', () => {
@@ -1052,6 +1186,82 @@ test('sandbox: bash refuses host commands and paths outside the workspace', asyn
     assert.equal(r.ok, false, cmd);
     assert.match(r.error, /Blocked/, cmd);
   }
+});
+
+test('search patterns that could hang the server are refused', () => {
+  // Node has no regex timeout and this server is single-threaded: one of these, from a
+  // model that meant no harm, stalls every request for every user.
+  const catastrophic = ['(a+)+', '(a*)*', '(a+)*', '(\\w*)*$', '(x{2,})+', '((a+))+', '([a-z]+)+@'];
+  for (const p of catastrophic) {
+    const r = compileSearchPattern(p);
+    assert.equal(r.ok, false, `${p} must be refused`);
+    assert.match(r.error, /nests one repetition inside another/, p);
+  }
+
+  // The false-positive set is the thing to protect. These are ordinary searches and the
+  // check is deliberately narrow enough to let them all through.
+  const fine = [
+    'TODO', 'function\\s+\\w+', '^\\s*import .*from', '(foo|bar)+', '(https?://\\S+)',
+    'a+', '\\d{2,}', '(?:abc)+', '[(]a+[)]+', '\\(a+\\)+', 'class\\s+(\\w+)\\s*\\{', 'a{1,3}b*'
+  ];
+  for (const p of fine) assert.equal(compileSearchPattern(p).ok, true, `${p} must still work`);
+
+  assert.equal(compileSearchPattern('(unclosed').ok, false, 'a broken pattern is still an error');
+  assert.match(compileSearchPattern('a'.repeat(600)).error, /too long/);
+  assert.equal(compileSearchPattern('').ok, false);
+});
+
+test('sandbox: a search that cannot finish is killed, and normal ones still work', async () => {
+  await sboxReset();
+  await sbox({ tool: 'create_file', path: 'ok.txt', content: 'hello world\nfind me here\nconst total = 42;\n' });
+  await sbox({ tool: 'create_file', path: 'big.txt', content: Array.from({ length: 400 }, () => 'a'.repeat(3000) + '!').join('\n') });
+
+  // The shapes compileSearchPattern refuses are the classic ones. This is the backstop:
+  // /(?:a|aa)+b/ against 3000 characters backtracks past the age of the universe, and
+  // static analysis of the pattern alone would never have caught it. Nothing inside
+  // JavaScript can interrupt it, which is why the regex runs in a killable worker.
+  const started = Date.now();
+  const bomb = await sbox({ tool: 'search', query: '(?:a|aa)+b', regex: true });
+  const elapsed = Date.now() - started;
+  assert.equal(bomb.ok, false);
+  assert.match(bomb.error, /did not finish/);
+  assert.ok(elapsed < 30000, `stopped after ${elapsed}ms instead of running forever`);
+
+  // and the thread that was just killed did not take normal searching with it
+  const normal = await sbox({ tool: 'search', query: 'find\\s+me', regex: true });
+  assert.equal(normal.ok, true, normal.error);
+  assert.equal(normal.count, 1);
+  assert.equal(normal.matches[0].path, 'ok.txt');
+  assert.equal(normal.matches[0].line, 2);
+
+  const captured = await sbox({ tool: 'search', query: 'const (\\w+) =', regex: true });
+  assert.equal(captured.matches[0].text, 'const total = 42;');
+
+  const filtered = await sbox({ tool: 'search', query: 'find', regex: true, filter: 'ok.txt' });
+  assert.equal(filtered.count, 1, 'the filter still narrows which files are read');
+
+  const plain = await sbox({ tool: 'search', query: 'world' });
+  assert.equal(plain.count, 1, 'plain substring search never needed a worker');
+
+  const broken = await sbox({ tool: 'search', query: '(unclosed', regex: true });
+  assert.equal(broken.ok, false);
+  assert.match(broken.error, /Invalid regex/);
+
+  assert.equal((await sbox({ tool: 'list_files' })).ok, true, 'the server is still usable');
+  await sboxReset();
+});
+
+test('sandbox: shell output survives a chunk boundary inside a character', async () => {
+  await sboxReset();
+  // Long enough that the pipe splits it, and every character is multi-byte, so a naive
+  // per-Buffer toString() is guaranteed to cut one in half and emit U+FFFD.
+  const body = '日本語テスト'.repeat(4000);
+  await sbox({ tool: 'create_file', path: 'wide.txt', content: body });
+  const r = await sbox({ tool: 'bash', cmd: process.platform === 'win32' ? 'type wide.txt' : 'cat wide.txt' });
+  assert.equal(r.ok, true, r.error);
+  assert.equal((r.output.match(/�/g) || []).length, 0, 'no character was decoded in half');
+  assert.ok(r.output.startsWith('日本語テスト'), 'output begins with the real text');
+  await sboxReset();
 });
 
 test('sandbox: hostEnvInfo reports a usable shape without leaking host paths', async () => {

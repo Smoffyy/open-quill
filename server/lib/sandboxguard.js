@@ -189,6 +189,56 @@ export function screenCommand(cmd, baseRel = '') {
   return { ok: true };
 }
 
+const MAX_PATTERN = 500;
+
+// A quantified group whose body is itself quantified — (a+)+, (\w*)*, (x{2,})+ — is the
+// classic catastrophic backtracking shape, and on a single long line it can run for
+// longer than the universe has existed. Node has no regex timeout and this server is
+// single-threaded, so one of these from a model would hang every request for every user.
+//
+// Deliberately narrow: it looks only for that shape. Alternation under a quantifier,
+// (foo|bar)*, can also backtrack badly but is overwhelmingly written on purpose and
+// refusing it would break ordinary searches. The per-search deadline in `search` is what
+// covers everything this does not.
+function nestedQuantifier(pattern) {
+  const opens = [];
+  let inClass = false;
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === '\\') { i++; continue; }
+    if (inClass) { if (c === ']') inClass = false; continue; }
+    if (c === '[') { inClass = true; continue; }
+    if (c === '(') { opens.push({ at: i, quantified: false }); continue; }
+    if (c === ')') {
+      const group = opens.pop();
+      if (!group) continue;
+      const after = pattern[i + 1];
+      const outerQuantified = after === '+' || after === '*' || (after === '{' && /^\{\d+,\d*\}/.test(pattern.slice(i + 1)));
+      if (group.quantified && outerQuantified) return true;
+      // a group that backtracks marks its parent, so ((a+))+ is caught too
+      if (group.quantified && opens.length) opens[opens.length - 1].quantified = true;
+      continue;
+    }
+    if (c === '+' || c === '*' || (c === '{' && /^\{\d+,\d*\}/.test(pattern.slice(i)))) {
+      if (opens.length) opens[opens.length - 1].quantified = true;
+    }
+  }
+  return false;
+}
+
+export function compileSearchPattern(pattern, flags = 'i') {
+  const src = String(pattern ?? '');
+  if (!src) return { ok: false, error: 'query is required' };
+  if (src.length > MAX_PATTERN) {
+    return { ok: false, error: `That regular expression is too long (${src.length} characters, limit ${MAX_PATTERN}). Search for a shorter distinctive fragment instead.` };
+  }
+  if (nestedQuantifier(src)) {
+    return { ok: false, error: 'That regular expression nests one repetition inside another (something like "(a+)+"), which can take effectively forever to evaluate. Rewrite it without the inner repetition — "(a+)" or "a+" usually means the same thing — or search for plain text instead.' };
+  }
+  try { return { ok: true, re: new RegExp(src, flags) }; }
+  catch (e) { return { ok: false, error: 'Invalid regex: ' + e.message }; }
+}
+
 export function normalizeRel(rel, { allowEmpty = false, label = 'path' } = {}) {
   let v = rel;
   if (v == null) v = '';

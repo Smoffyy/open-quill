@@ -19,6 +19,32 @@ import { clients, requestedKwargs } from './broadcast.js';
 import { runCompletion } from './turn.js';
 import * as live from './live.js';
 import { isRouter, resolveRouted } from '../router.js';
+import { sameOrigin } from '../origin.js';
+
+// A frame this large is already far beyond any real composer paste; the cap exists so a
+// hostile client cannot make the server buffer an arbitrary amount before we ever look
+// at the payload. MAX_CONTENT then bounds what actually reaches a database row.
+const MAX_FRAME_BYTES = 8 * 1024 * 1024;
+const MAX_CONTENT = 1_000_000;
+const MAX_ATTACHMENTS = 20;
+const MAX_INCOGNITO_TURNS = 40;
+
+function textField(v, cap = MAX_CONTENT) {
+  return typeof v === 'string' ? v.slice(0, cap) : '';
+}
+
+function sanitizeAttachments(list) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const a of list) {
+    if (!a || typeof a !== 'object') continue;
+    const url = textField(a.url, 512);
+    if (!url) continue;
+    out.push({ url, name: textField(a.name, 256), type: textField(a.type, 128), size: Number(a.size) || 0 });
+    if (out.length >= MAX_ATTACHMENTS) break;
+  }
+  return out;
+}
 
 function lastUserContent(chatId) {
   try {
@@ -29,7 +55,19 @@ function lastUserContent(chatId) {
 }
 
 export function initWs(server) {
-  const wss = new WebSocketServer({ server });
+  // The session cookie alone is not enough to authorise a socket: SameSite does not
+  // reliably cover the websocket handshake in every browser, so a hostile page could
+  // otherwise open an authenticated socket to this server and read the user's stream.
+  const wss = new WebSocketServer({
+    server,
+    path: '/ws',
+    maxPayload: MAX_FRAME_BYTES,
+    verifyClient: ({ req }, done) => {
+      if (!sameOrigin(req)) return done(false, 403, 'Forbidden');
+      if (!sessionFromRequest(req)) return done(false, 401, 'Unauthorized');
+      done(true);
+    }
+  });
 
   wss.on('connection', (ws, req) => {
     const r = sessionFromRequest(req);
@@ -49,10 +87,11 @@ export function initWs(server) {
 
     ws.on('message', async (raw) => {
       let msg; try { msg = JSON.parse(raw); } catch { return; }
+      if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') return;
       const state = clients.get(ws);
       if (!state) return;
       const ownsChat = (chatId) => {
-        if (!chatId || chatId === 'incognito') return false;
+        if (typeof chatId !== 'string' || !chatId || chatId === 'incognito') return false;
         const c = db.chats.byId(chatId);
         return !!c && c.user_id === state.userId;
       };
@@ -86,8 +125,8 @@ export function initWs(server) {
           if (state.aborts.has('incognito')) { safeSend(JSON.stringify({ type: 'error', chatId: 'incognito', error: 'A reply is already being generated. Wait for it to finish, or stop it first.' })); safeSend(JSON.stringify({ type: 'done', chatId: 'incognito' })); return; }
           const history = (Array.isArray(msg.messages) ? msg.messages : [])
             .filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
-            .slice(-40)
-            .map(m => ({ role: m.role, content: m.content }));
+            .slice(-MAX_INCOGNITO_TURNS)
+            .map(m => ({ role: m.role, content: m.content.slice(0, MAX_CONTENT) }));
           if (!history.length || history[history.length - 1].role !== 'user') {
             safeSend(JSON.stringify({ type: 'error', error: 'Nothing to send.' })); safeSend(JSON.stringify({ type: 'done' })); return;
           }
@@ -116,6 +155,10 @@ export function initWs(server) {
         return;
       }
       if (msg.type !== 'chat' && msg.type !== 'regenerate' && msg.type !== 'edit') return;
+      if (typeof msg.chatId !== 'string' || !msg.chatId) return;
+      const content = textField(msg.content);
+      const attachments = sanitizeAttachments(msg.attachments);
+      const messageId = typeof msg.messageId === 'string' ? msg.messageId : '';
       try {
         const chat = db.chats.byId(msg.chatId);
         const hubModel = resolveModel(msg.modelId, state.isAdmin);
@@ -123,8 +166,8 @@ export function initWs(server) {
         let routedInfo = null;
         let baseModel = hubModel;
         if (isRouter(hubModel)) {
-          const probe = [{ role: 'user', content: msg.type === 'regenerate' ? lastUserContent(chat.id) : (msg.content || '') }];
-          const r = resolveRouted(hubModel, probe, msg.attachments, (id) => resolveModel(id, state.isAdmin));
+          const probe = [{ role: 'user', content: msg.type === 'regenerate' ? lastUserContent(chat.id) : content }];
+          const r = resolveRouted(hubModel, probe, attachments, (id) => resolveModel(id, state.isAdmin));
           if (!r.model) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: r.routed?.error || 'This router could not pick a model.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
           baseModel = r.model;
           routedInfo = r.routed;
@@ -145,23 +188,23 @@ export function initWs(server) {
         ensureChain(chat.id);
 
         if (msg.type === 'regenerate') {
-          const target = db.messages.byId(msg.messageId) || activePath(chat.id).slice().reverse().find(m => m.role === 'assistant');
-          if (!target) { safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: 'Nothing to regenerate.' })); return; }
+          const target = (messageId && db.messages.byId(messageId)) || activePath(chat.id).slice().reverse().find(m => m.role === 'assistant');
+          if (!target || target.chat_id !== chat.id) { safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: 'Nothing to regenerate.' })); return; }
           const parent = target.role === 'assistant' ? (target.parent_id ?? null) : target.id;
           db.chats.update(chat.id, { active_leaf: parent });
         } else if (msg.type === 'edit') {
-          const orig = db.messages.byId(msg.messageId);
+          const orig = messageId ? db.messages.byId(messageId) : null;
           if (!orig || orig.chat_id !== chat.id) { safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: 'Message not found.' })); return; }
           const umid = uid();
-          db.messages.insert({ id: umid, chat_id: chat.id, role: 'user', content: msg.content || '', reasoning: '', model_id: null, attachments: orig.attachments || [], parent_id: orig.parent_id ?? null, created_at: now() });
+          db.messages.insert({ id: umid, chat_id: chat.id, role: 'user', content, reasoning: '', model_id: null, attachments: orig.attachments || [], parent_id: orig.parent_id ?? null, created_at: now() });
           db.chats.update(chat.id, { active_leaf: umid });
         } else {
           const parent = (db.chats.byId(chat.id) || {}).active_leaf || null;
           const umid = uid();
-          db.messages.insert({ id: umid, chat_id: chat.id, role: 'user', content: msg.content, reasoning: '', model_id: null, attachments: Array.isArray(msg.attachments) ? msg.attachments : [], parent_id: parent, created_at: now() });
+          db.messages.insert({ id: umid, chat_id: chat.id, role: 'user', content, reasoning: '', model_id: null, attachments, parent_id: parent, created_at: now() });
           db.chats.update(chat.id, { active_leaf: umid });
-          if (sandboxOn && Array.isArray(msg.attachments) && msg.attachments.length) {
-            for (const a of msg.attachments) {
+          if (sandboxOn && attachments.length) {
+            for (const a of attachments) {
               try {
                 const fname = path.basename(a.url || '');
                 const src = fname ? path.join(UPLOADS, fname) : '';

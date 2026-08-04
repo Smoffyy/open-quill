@@ -1,4 +1,5 @@
 import { db } from '../db.js';
+import { compileSearchPattern } from './sandboxguard.js';
 
 export const ROUTE_MATCHERS = ['keyword', 'regex', 'shorterThan', 'longerThan', 'hasImage', 'hasFile', 'hasCode', 'always'];
 
@@ -61,7 +62,13 @@ export function ruleMatches(rule, sig) {
     case 'longerThan': { const n = parseInt(v, 10); return Number.isFinite(n) && sig.length > n; }
     case 'regex': {
       if (!v) return false;
-      try { return new RegExp(v, 'i').test(sig.text); } catch { return false; }
+      // This runs on every single turn, against whatever the user typed. A rule that
+      // backtracks catastrophically would hang not just routing but the whole server, so
+      // the pattern goes through the same screen the sandbox search uses. A rule that
+      // cannot be compiled safely simply does not match, as a malformed one already did.
+      const compiled = compileSearchPattern(v);
+      if (!compiled.ok) return false;
+      try { return compiled.re.test(sig.text); } catch { return false; }
     }
     case 'keyword':
     default: {

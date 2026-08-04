@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
+import { StringDecoder } from 'string_decoder';
 import { dirFor, resolveSafe, relOf } from './paths.js';
 import { getCwd, setCwd } from './meta.js';
 import { pickShell, missingCommandHint } from './hostenv.js';
@@ -126,9 +127,19 @@ export function bash(chatId, cmd, timeoutMs = 60000, workdir) {
 
     const MAX = 12 * 1024 * 1024;
     let out = '', size = 0, killed = false, timedOut = false, settled = false;
-    const grab = (b) => { if (killed) return; size += b.length; out += b.toString('utf8'); if (size > MAX) { killed = true; out = out.slice(0, MAX); try { child.kill('SIGKILL'); } catch {} } };
-    child.stdout.on('data', grab);
-    child.stderr.on('data', grab);
+    // stdout and stderr are interleaved into one transcript, and a chunk boundary can
+    // land in the middle of a multi-byte character. Decoding each Buffer on its own
+    // turned those into U+FFFD, so any non-ASCII program output came back mangled; one
+    // decoder per stream carries the partial sequence across chunks instead.
+    const decoders = { out: new StringDecoder('utf8'), err: new StringDecoder('utf8') };
+    const grab = (which) => (b) => {
+      if (killed) return;
+      size += b.length;
+      out += decoders[which].write(b);
+      if (size > MAX) { killed = true; try { child.kill('SIGKILL'); } catch {} }
+    };
+    child.stdout.on('data', grab('out'));
+    child.stderr.on('data', grab('err'));
     const timer = setTimeout(() => { timedOut = true; try { child.kill('SIGKILL'); } catch {} }, timeoutMs);
 
     const finalize = (raw) => {

@@ -9,7 +9,7 @@ import { broadcastConfig } from '../lib/ws/index.js';
 import { egressLog, clearEgressLog } from '../lib/egress.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DOCS = { credits: 'CREDITS.md', changelog: 'CHANGELOG.md', license: 'LICENSE' };
+const DOCS = { __proto__: null, credits: 'CREDITS.md', changelog: 'CHANGELOG.md', license: 'LICENSE' };
 
 export default function registerMiscRoutes(app) {
   app.get('/api/app-config', authMiddleware, (req, res) => res.json(appConfig()));

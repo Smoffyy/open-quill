@@ -1,3 +1,5 @@
+import { escHtml } from './artifacts.js';
+
 let common = null;
 let full = null;
 let commonLoad = null;
@@ -121,25 +123,21 @@ export function ensureLanguage(lang) {
   ensureFull();
 }
 
-export function escapeHtml(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
 export function highlight(code, lang, opts = {}) {
   const hl = engine();
-  if (!hl) { ensureCommon(); if (lang) wanted.add(lang); return escapeHtml(code); }
+  if (!hl) { ensureCommon(); if (lang) wanted.add(lang); return escHtml(code); }
   const auto = opts.auto !== false;
   const maxAuto = opts.maxAuto ?? 12000;
   const maxTotal = opts.maxTotal ?? 60000;
   try {
-    if (code.length > maxTotal) return escapeHtml(code);
+    if (code.length > maxTotal) return escHtml(code);
     if (lang) {
       if (hl.getLanguage(lang)) return hl.highlight(code, { language: lang, ignoreIllegals: true }).value;
       ensureLanguage(lang);
     }
-    if (!auto || code.length > maxAuto) return escapeHtml(code);
+    if (!auto || code.length > maxAuto) return escHtml(code);
     return hl.highlightAuto(code).value;
-  } catch { return escapeHtml(code); }
+  } catch { return escHtml(code); }
 }
 
 export function rawHighlight(code, lang) {

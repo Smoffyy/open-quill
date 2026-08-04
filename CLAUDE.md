@@ -463,6 +463,74 @@ A hostname is resolved with `dns.lookup(all: true)` and allowed only if **every*
 
 The setting is `local_only`, default `'1'`. It is a toggle rather than hardcoded because two legitimate features cross origins: an admin can point the app icon or background at a remote image URL, and artifact previews are `srcdoc` iframes that inherit the parent CSP, so an artifact loading a CDN library breaks under it. Both are documented in the admin UI. Do not silently widen the policy to accommodate these — that would remove the guarantee for everyone who does not need it.
 
+## Query in SQL, not in JavaScript
+
+Rows are JSON blobs, which makes `db.<table>.all()`, `.filter()`, `.find()` and `.count(fn)` read *and `JSON.parse`* the entire table. They are convenient and they are the wrong tool for anything on a hot path. Four endpoints were built on them and each was quadratic in a way that only showed up with real data:
+
+| Endpoint | What it used to do | Now |
+| --- | --- | --- |
+| `GET /api/search` | built a full message graph for **every chat the user owns, on every keystroke** — and evicted the open chat's cached graph from `lib/tree.js` while doing it | one `messages ⋈ chats` query per search |
+| `GET /api/chats-overview` | loaded and parsed every message of each chat on the page to find one preview line | `messages.lastUserText`, one indexed lookup per chat |
+| `GET /api/users/search` | parsed every user row per keystroke | indexed `users.search` |
+| `GET /api/admin/audit` | pulled up to 100 000 rows into JS twice per request to filter, count and page them | filtering, counting and paging in SQL |
+
+Two things make this possible without changing behaviour:
+
+- **`oq_icontains` is a JS function registered on the connection.** SQLite's own `LIKE` and `lower()` fold ASCII only, so using them would have quietly stopped matching `ДОМ` against `дом`, which the JavaScript scans always did. The needle is lowercased once by the caller; only the haystack is folded per row. There is an end-to-end check for exactly that pair.
+- **`json_extract` reads the one field a query needs** instead of parsing the whole row into an object.
+
+`messages.attachmentUrls()` uses `json_each` over every message's attachment array to answer "is this upload still referenced by anything", which is what makes the two-phase upload purge above correct.
+
+## Nothing off-origin may drive this server (`lib/origin.js`)
+
+Auth is a cookie, so anything a hostile page can make the browser send arrives already authenticated. `sameOrigin(req)` is the single answer to "did this really come from our own UI", and both entry points use it:
+
+- **HTTP**: `sameOriginGuard` runs before `express.json`, so a cross-origin `POST`/`PUT`/`PATCH`/`DELETE` is refused with 403 before its body is even parsed. `GET`/`HEAD`/`OPTIONS` pass through — they are not state-changing, and blocking them would break ordinary navigation.
+- **WebSocket**: `verifyClient` in `lib/ws/connection.js` checks the origin *and* the session before the socket exists. `SameSite=Lax` does not reliably cover the websocket handshake, so without this a page on any other origin could open an authenticated socket and read the user's entire stream. There are handshake tests for 403 (wrong origin), 401 (no session) and 400 (wrong path).
+
+**`Sec-Fetch-Site` is the primary signal, and comparing `Origin` to `Host` is not.** This is the thing to get right. The obvious check — does the Origin header match the Host header — is wrong the moment anything proxies, and it shipped broken for exactly that reason: Vite's dev proxy rewrites `Host` to the backend (`localhost:3001`) while forwarding the browser's `Origin` (`localhost:5173`) untouched, and sets no `x-forwarded-host`. Every write from the real UI was refused, so in `npm run dev` nothing could be sent, logged out, or streamed. A reverse proxy in production can do the same.
+
+`Sec-Fetch-Site` does not have that problem: the *browser* computes it from the document's own origin against the request URL, before any proxy exists, and proxies forward it unchanged (verified against Vite's). So it is checked first, and `same-origin`, `same-site` and `none` pass while `cross-site` is refused — `none` being a typed URL or bookmark, which a cross-site page can never produce for a write.
+
+Everything after it is a fallback for callers that do not send it, in order:
+
+1. **A missing `Origin` is allowed.** Browsers attach it to every request a cross-site page can forge; curl, scripts and the CI liveness probe do not send it and cannot be driven by a hostile page. Rejecting on absence would break every non-browser caller and buy nothing.
+2. **A literal `"null"` origin is refused.** That is what a sandboxed iframe or a `data:` document sends. It is not "absent" — it is an origin that deliberately carries no identity.
+3. **`TRUSTED_ORIGINS`** (comma-separated env var) is the operator's escape hatch for a proxy that rewrites `Host` in front of a browser too old to send `Sec-Fetch-Site`.
+4. **`Origin` host equals the request host**, taking `x-forwarded-host` when present. The plain unproxied case.
+5. **Loopback to loopback.** The dev proxy on a browser that sends no `Sec-Fetch-Site` (Safari below 16.4): the page is on `localhost:5173` and we are answering on loopback. It widens the boundary only to other servers already running on this machine, which is the boundary every local dev tool works within — and it is a fallback, so it never applies to a browser that sent the header.
+
+When changing any of this, test **both** `npm run dev` (proxied) and `npm start` (direct). The failure mode is silent and total: the UI renders fine and every button stops working.
+
+The socket is bounded as well as authenticated: `maxPayload` caps a frame at 8 MB so nothing is buffered before it is inspected, and every field is normalized on arrival (`content` capped, `attachments` reshaped to `{url,name,type,size}` and capped at 20, ids required to be strings). Any of these arriving as an object used to reach `better-sqlite3` and throw; `db.*.byId` now returns `undefined` for a non-primitive id rather than throwing, which is the choke point for every route as well.
+
+`clientIp` in `lib/audit.js` honours `x-forwarded-for` **only when `TRUST_PROXY` is set**. Read unconditionally, it lets any caller forge audit-log entries and — because the login limiter keys on it — hand themselves unlimited login attempts by rotating one header.
+
+## A user-supplied regex runs somewhere killable
+
+`search` with `regex: true` compiles a pattern a *model* wrote. Catastrophic backtracking is a property of the pattern and the text together, so inspecting the pattern alone only ever catches the shapes someone thought to look for, and once `RegExp.test` has started nothing in JavaScript can interrupt it — no timeout option, no step budget. On a single-threaded server one bad search stalls every request for every user, indefinitely.
+
+So the regex path runs in a `worker_threads` worker that the parent kills after 5s (`sandbox/regexsearch.js`). That is the only sound fix short of adding a linear-time engine as a dependency. Two things make it cheap:
+
+- **Only the regex path pays.** Plain substring search stays in-process, because `String.includes` cannot backtrack. Worker startup is ~25ms, which is nothing beside reading the files.
+- **`compileSearchPattern` runs first** (`lib/sandboxguard.js`). It rejects a malformed pattern, one over 500 characters, and the classic `(a+)+` / `(x{2,})+` nested-quantifier shape — in under a millisecond, with an error that tells the model what to write instead, and without paying for a worker to discover it.
+
+That static check is **deliberately narrow**: it looks for a quantified group whose body is itself quantified, and nothing else. Alternation under a quantifier, `(foo|bar)+`, can also backtrack badly but is overwhelmingly written on purpose; refusing it would break ordinary searching. There is a test listing the patterns that must keep working, and it should grow whenever the check does. Everything the static check misses — `(?:a|aa)+b` is the test case — is caught by the worker timeout instead.
+
+**`ruleMatches` in `lib/router.js` goes through the same screen**, for a sharper reason: a routing rule is evaluated on *every turn* against whatever the user typed. It cannot afford a worker per turn, so it declines a pattern it cannot compile safely, exactly as it already declined a malformed one.
+
+## Uploads are stored and served defensively
+
+**`/uploads` requires a session.** Attachments are other people's conversations; a URL is not authorisation, however unguessable it is. A signed-out caller gets **404, not 401**, because whether a given upload exists is itself something only a member should learn.
+
+Exactly one upload stays public, and the exemption is narrow by construction: the file currently named by the `app_icon` setting, because the sign-in screen shows it to someone who by definition has no session yet. `isPublicUpload` compares against that setting on every request, so changing or clearing the icon changes what is public with it — nothing is latched. If you ever add another asset the logged-out screen needs, extend that predicate rather than widening the mount.
+
+The stored filename is a fresh uuid plus a normalized extension (`safeExt`: a short alphanumeric suffix or nothing at all); the user's own filename lives only in the message row. Serving adds `default-src 'none'; … sandbox` as CSP, `nosniff`, `Cross-Origin-Resource-Policy: same-origin`, and `Content-Disposition: attachment` for everything outside `INLINE_EXT`. So an uploaded `.html` downloads instead of becoming a live same-origin document, while images and audio — which the app renders through `<img>`/`<audio>`, where disposition does not apply — still display.
+
+What this does *not* do is check which user an upload belongs to: any signed-in member who has the URL can fetch it. Closing that needs a per-request lookup from URL to owning chat on every image in a thread, and the exposure it removes is small next to what the session gate already closed.
+
+Deleting a chat's uploads is deliberately two-phase (`attachmentUrlsOf` → delete the rows → `purgeUnreferencedUploads`). Fork and cherry-pick copy a message verbatim, attachments included, so one `/uploads` file can be referenced from several chats; unlinking everything the deleted chat pointed at silently broke the images in the copy.
+
 ## Authentication and the sign-in screen
 
 Three endpoints, and the split between the first two is the important part:
@@ -473,7 +541,11 @@ Three endpoints, and the split between the first two is the important part:
 
 `/api/auth/context` exists because `/api/app-config` is auth-gated, so before signing in the client knew nothing about the server. That is why the login screen used to render in the wrong preset on a first visit: the pre-paint boot script in `index.html` reads `localStorage 'oq-preset'`, which is empty on a new device, so it fell back to Anthropic. `App.jsx` now fetches the context on the `/api/me` failure path and applies preset, font and icon before rendering `Login`. Keep this endpoint free of anything an anonymous caller should not see — it is deliberately limited to branding and the two booleans the screen needs.
 
-`POST /api/auth/check-email` was removed. Nothing used it after the flow split, and it answered "does this account exist" to anonymous callers. CI used to probe it as its liveness check; that is now `GET /api/auth/context`, so if you remove another endpoint, check `.github/workflows/ci.yml` before assuming nothing depends on it.
+`POST /api/auth/check-email` was removed. Nothing used it after the flow split, and it answered "does this account exist" to anonymous callers. CI used to probe it as its liveness check; that job now lives in `test/http.test.js`, which asserts the whole sign-in loop rather than a status code, so check there before assuming nothing depends on an endpoint you are removing.
+
+The login limiter keys on **both** the address and the account (`ip:` / `user:`), so one address cannot spray a whole user list and a botnet cannot grind one account from many addresses. Two details are load-bearing: the counter is cleared only after the *whole* login succeeds, so a stolen password cannot be used to grind TOTP codes without limit; and when the map is full it drops only what has aged out, because clearing it wholesale — which it used to do — let an attacker wipe every other address's counter with 5000 junk attempts.
+
+The session cookie is `HttpOnly; SameSite=Lax`, plus `Secure` **only when the request arrived over TLS**. Forcing `Secure` unconditionally makes the browser discard the cookie on a plain-http install and locks everyone out of an ordinary localhost deployment.
 
 **The login screen must use theme variables.** It was originally written with literal hex values from the light Anthropic palette (`#f0efe7`, `#faf9f5`, `#d6d4c8`), so it rendered cream in dark mode and under the OpenAI preset no matter what. Every rule in `.login` now goes through `--bg`, `--text`, `--surface`, `--border`, `--input-bg`, `--card-bg` and `--accent`; preset-specific styling lives in `openai.css` under `[data-preset="openai"]`, per the preset architecture above. When logged out, `applyPrefs(null, preset)` resolves the theme from the OS preference since there are no user prefs yet.
 
@@ -510,6 +582,18 @@ Unsent composer text is kept in `localStorage` under `oq-draft-<chatId|new>`, de
 3. If it needs different *behavior*, branch on `cfg.uiPreset` and add the branch to the list above.
 4. Verify both presets and both light/dark before shipping. Preset switching is live — test by toggling in Admin → Branding with a second window open.
 
+## Handling untrusted input
+
+Everything below has already caused a real bug here at least once.
+
+**A lookup table indexed by a value from outside gets `__proto__: null`.** `PROVIDER_TYPES['constructor']` inherits `Object`, which is truthy, so `if (TABLE[req.body.type])` accepts it as a real entry and the next line reads a property off a function. `PROVIDER_TYPES`, `STRICT_ALIASES`/`LOOSE_ALIASES` (indexed by a tool name a model invented), `STYLE_PRESETS`, `DOCS` and the client's `EXT_LANG`/`EXT_COLOR` are all null-prototype for this reason, and there are tests asserting `constructor` and `__proto__` resolve to nothing. A fixed set of allowed values is a `Set`, not an object.
+
+**Coerce and cap at the boundary, once.** A row is a JSON blob, so an unbounded string or object on a `PATCH` body grows a row that is then re-parsed on every request that touches it. `String(x ?? '').slice(0, n)` at the route, not `x` straight into the patch — `display_name` was storing whatever it was given, including objects. `prefs` is the one free-form bag and is bounded by serialized size rather than schema.
+
+**Never index the database with something you have not type-checked.** `db.*.byId` returns `undefined` for a non-primitive rather than letting `better-sqlite3` throw, which is what turned "look up this thing" into a 500 in any route that forgot to coerce. Websocket handlers must still check `typeof chatId === 'string'` themselves, because they are outside the express error handler.
+
+**An id from a request body must be checked against the resource it will be used on.** `regenerate` accepted a `messageId` from any chat and wrote its parent into *this* chat's `active_leaf`; the fix is one `target.chat_id !== chat.id`.
+
 ---
 
 # Project map
@@ -534,7 +618,7 @@ Entry point is `index.js` (~60 lines): express setup, cookie parsing, `/uploads`
 
 ### Core modules (pre-existing)
 
-- `db.js` — encrypted SQLite (better-sqlite3-multiple-ciphers) with JSON-blob tables; exports `db.<table>` accessors plus `uid`, `now`, `getSetting`, `setSetting`. Data lives in `server/data/` (gitignored).
+- `db.js` — encrypted SQLite (better-sqlite3-multiple-ciphers) with JSON-blob tables; exports `db.<table>` accessors plus `uid`, `now`, `getSetting`, `setSetting`. Data lives in `server/data/` (gitignored). See "Query in SQL, not in JavaScript" below before adding an accessor.
 - `auth.js` — password hashing, JWT-style token signing, cookie parsing, sessions, `authMiddleware`, `adminOnly`, `sessionFromRequest`.
 - `llm/` — provider-agnostic completion streaming, re-exported from `llm/index.js` (import that, never the leaf files): `provider.js` (endpoint/auth/prompt vars), `prompt.js` (`buildMessages`), `sampling.js`, `emitter.js` (think-tag splitting plus the text tool-call filter), `wire.js` (`normalizeMessages`, `requestKwargs`), `stream.js` (`streamCompletion`), `oneshot.js` (`oneShot`), `summarize.js` (`stripThink`, `generateTitle`, `summarizeConversation`).
 - `providers.js` — provider registry (`PROVIDER_TYPES`, `getProviders`, `resolveProvider`, `providerSpec`).
@@ -558,7 +642,8 @@ Entry point is `index.js` (~60 lines): express setup, cookie parsing, `/uploads`
 ### Shared logic (`server/lib/`)
 
 - `appconfig.js` — `APP_VERSION` + `appConfig()` (the `GET /api/app-config` payload).
-- `audit.js` — `logAudit`, `pruneAudit`, `clientIp`.
+- `audit.js` — `logAudit`, `pruneAudit`, `clientIp` (which trusts `x-forwarded-for` only under `TRUST_PROXY`).
+- `origin.js` — `sameOrigin`, `sameOriginGuard`, `requestHost`. Pure, no imports, covered by tests. See "Nothing off-origin may drive this server".
 - `budget.js` — monthly spend math: `budgetStatus`, `budgetFor`, `monthStartMs`.
 - `convo.js` — conversation assembly: `chatHistory`, token estimation + per-chat calibration (`estimateTokens`, `calibratedTokens`, `tokenCalib`), rolling-context truncation, auto-summarization (`compactStep`, `compactThreshold`), `promptVars`, `instrFor`, `styleTextFor`.
 - `history.js` — `stripToolSyntax` / `historyText` (turn stored tool blocks into compact markers), `decodeOqr`.
@@ -572,7 +657,7 @@ Entry point is `index.js` (~60 lines): express setup, cookie parsing, `/uploads`
 - `spaces.js` — space membership helpers, `broadcastSpace`, `removeUserFromSpaces`, `spaceAssistantRespond`.
 - `tree.js` — message branching tree: `activePath`, `ensureChain`, `childrenOf`, `leafUnder`, `sortedMsgs`. All of these share one per-chat graph (`graphOf`) cached against `db.messages.version()`, so a chat's messages are loaded and parsed once per mutation rather than once per call. Do not go back to loading messages directly in these helpers. `leafUnder` descends via `preferredChild(kids, onPath)`, which follows the **currently active branch** when a node has several children and only falls back to the newest sibling when none of them is on the active path. Without that preference, selecting any ancestor silently moved the conversation onto whichever sibling happened to be created last, which is why the branch map must never be wired straight to a plain last-child walk.
 - `llamacpp.js` — llama-server integration: `/props` and `/slots` for exact `n_ctx`, `/apply-template` plus `/tokenize` for exact prompt token counts (`llamaTokenCount`), and `isContextOverflowError` for recovering from context overflow. Results are cached; llama.cpp is the default provider type.
-- `uploads.js` — `UPLOADS` dir, multer `diskStore`, attachment readers (`readUploadText`, `readImageDataUri`, `isTextLike`), `purgeUploads`.
+- `uploads.js` — `UPLOADS` dir, multer `diskStore`, the `uploadHeaders` serving middleware, attachment readers (`readUploadText`, `readImageDataUri`, `isTextLike`), and the two-phase `attachmentUrlsOf` / `purgeUnreferencedUploads`.
 - `ws/` — the websocket engine, re-exported from `ws/index.js`: `broadcast.js` (the `clients` map, `broadcastConfig`, `broadcastAdminConfig`, `broadcastToUser`, `killSessionSockets`, `requestedKwargs`), `live.js` (the in-flight turn registry), `turn.js` (`runCompletion`, the agentic tool-call loop, plus `maybeCompact`), `connection.js` (`initWs(server)` and the `chat`/`regenerate`/`edit`/`incognito`/`stop` handlers). `runCompletion` is module-scope and takes `(ws, state, safeSend, chat, model, ...)` rather than closing over the socket. **`lib/ws/` must never import from `routes/`** — dependency direction is routes → lib.
 
 ### Turns outlive sockets (`lib/ws/live.js`)
@@ -651,13 +736,29 @@ Permanent branches: `dev` → `beta` → `stable`. Versions live in tags, not br
 
 ## Tests
 
-`server/test/logic.test.js` runs on `node --test` with no extra dependencies: `npm test` from the repo root, or `cd server && npm test`. CI runs it after the build and smoke test.
+`cd server && npm test` is `node --test`, which **discovers** every `*.test.js` under `server/`. There are two files and they answer different questions. Do not replace the discovery with a named list, or a new test file silently stops running in CI.
 
-It covers the pure logic that is easy to break silently: kwarg resolution and pairing chains, text tool-call parsing (including the negative cases where prose or an unknown tool name must NOT become a call), compaction thresholds and in-turn tool trimming, llama.cpp overflow detection, the Windows command translation, the sandbox path/command guards, tool-name alias resolution, and `preferredChild` from `lib/tree.js`. Add cases here when touching any of those; they are cheap and they have already caught real regressions.
+### `test/http.test.js` — the real server, started the way it ships
+
+This boots `index.js` as a child process against a throwaway database on an ephemeral port, then drives it over `node:http` and `ws`. `node:http` rather than `fetch` on purpose: `Origin` and `Sec-Fetch-Site` are *forbidden header names* in a browser and undici may refuse to set them, and reproducing exactly what a browser sends is the entire point.
+
+**It exists because 128 unit tests passed while every button in the app was dead.** The CSRF guard compared `Origin` against `Host`, which is right until something proxies — and Vite's dev proxy rewrites `Host` while forwarding `Origin` untouched. Under `npm run dev` nothing could be sent, logged out, or streamed. Nothing in a unit test starts a server, and the CI smoke script it replaced drove the server with `curl`, which sends no `Origin` at all, so neither could see it.
+
+So the assertions are header shapes, not just status codes: a browser on this origin, a browser behind a dev proxy (`Origin` and `Host` disagreeing) with and without `Sec-Fetch-Site`, a cross-site page, a sandboxed iframe's `null` origin, and a non-browser caller with no `Origin`. Same again for the websocket handshake, plus a frame sent on an open socket that must be answered — the user-visible symptom was a send button that did nothing, so "it opened" is not enough. Reverting `lib/origin.js` to the broken version fails exactly two of these; that is the check to repeat if you touch it.
+
+Also covered: the whole sign-in loop including that logout genuinely revokes, uploads serving (disposition, CSP, honest 404s), profile input validation, and that unknown `/api` routes answer in JSON while client routes still reach the app.
+
+Two mechanical details. The database is `OPEN_QUILL_DB=oqhttptest`, removed before *and* after, so a crashed run cannot poison the next one. And teardown waits for the child to actually exit before removing it — Windows keeps the SQLite file locked until then, and `kill()` only asks.
+
+### `test/logic.test.js` — pure logic
+
+It covers the logic that is easy to break silently: kwarg resolution and pairing chains, text tool-call parsing (including the negative cases where prose or an unknown tool name must NOT become a call), compaction thresholds and in-turn tool trimming, llama.cpp overflow detection, the Windows command translation, the sandbox path/command guards, tool-name alias resolution, and `preferredChild` from `lib/tree.js`. Add cases here when touching any of those; they are cheap and they have already caught real regressions.
 
 The **sandbox tool tests deliberately touch a real temporary workspace** (`oq-test-sandbox`, removed before and after each case). That is not laziness about mocking: `node --check` and even importing a module both pass while a handler references an identifier it never imported, because the reference is only resolved when the handler runs. Splitting `sandbox.js` produced exactly that bug — `list()` called `readMeta` without importing it, and every static check was green. Only running the tool caught it.
 
 CI syntax-checks every `.js` file under `server/` via `find`, so new files and folders are covered automatically. Do not replace that with a hand-written file list.
+
+**Adding an endpoint or middleware means an `http.test.js` case, not just a `logic.test.js` one.** Anything that depends on middleware order, a header, a cookie or the websocket handshake is invisible to a unit test by construction.
 
 ## Scrolling containers
 

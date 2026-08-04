@@ -8,6 +8,7 @@ import { monthStartMs } from '../lib/budget.js';
 import { removeUserFromSpaces } from '../lib/spaces.js';
 import * as dataroot from '../lib/dataroot.js';
 import { toolStatsReport } from '../lib/toolstats.js';
+import { USAGE_WINDOWS } from './auth.js';
 
 export default function registerAdminRoutes(app) {
   app.get('/api/admin/skills', authMiddleware, adminOnly, (req, res) => res.json({ skills: skillsys.list() }));
@@ -54,44 +55,48 @@ export default function registerAdminRoutes(app) {
     res.json({ server: r.server, error: r.error || undefined });
   });
 
+  const FEEDBACK_PAGE = 50;
+  const labelMaps = () => ({
+    users: new Map(db.users.all().map(u => [u.id, u.email])),
+    models: new Map(db.models.all().map(m => [m.id, m.display_name]))
+  });
+
   app.get('/api/admin/safety-log', authMiddleware, adminOnly, (req, res) => {
     const offset = Math.max(0, parseInt(req.query.offset) || 0);
-    const rows = db.feedback.filter(f => f.kind === 'safety').sort((a, b) => b.ts - a.ts).slice(offset, offset + 50);
-    const users = new Map(db.users.all().map(u => [u.id, u]));
-    const models = new Map(db.models.all().map(m => [m.id, m]));
+    const rows = db.feedback.pageByKind(true, FEEDBACK_PAGE, offset);
+    const { users, models } = labelMaps();
     res.json({
       entries: rows.map(f => ({
         id: f.id, ts: f.ts, snippet: f.snippet || '', reason: f.comment || '',
-        user: users.get(f.user_id)?.email || 'deleted user',
-        model: models.get(f.model_id)?.display_name || f.model_id || '\u2014'
+        user: users.get(f.user_id) || 'deleted user',
+        model: models.get(f.model_id) || f.model_id || '\u2014'
       })),
-      total: db.feedback.count(f => f.kind === 'safety')
+      total: db.feedback.countByKind(true)
     });
   });
   app.delete('/api/admin/safety-log', authMiddleware, adminOnly, (req, res) => {
-    db.feedback.remove(f => f.kind === 'safety');
+    db.feedback.clearSafety();
+    logAudit(req, 'safety.log_clear', {});
     res.json({ ok: true });
   });
 
   app.get('/api/admin/feedback', authMiddleware, adminOnly, (req, res) => {
     const offset = Math.max(0, parseInt(req.query.offset) || 0);
-    const rows = db.feedback.filter(f => f.kind !== 'safety').sort((a, b) => b.ts - a.ts).slice(offset, offset + 50);
-    const users = new Map(db.users.all().map(u => [u.id, u]));
-    const models = new Map(db.models.all().map(m => [m.id, m]));
+    const rows = db.feedback.pageByKind(false, FEEDBACK_PAGE, offset);
+    const { users, models } = labelMaps();
     res.json({
       feedback: rows.map(f => ({
         id: f.id, ts: f.ts, rating: f.rating, comment: f.comment || '', snippet: f.snippet || '',
-        user: users.get(f.user_id)?.email || 'deleted user',
-        model: models.get(f.model_id)?.display_name || f.model_id || '\u2014',
+        user: users.get(f.user_id) || 'deleted user',
+        model: models.get(f.model_id) || f.model_id || '\u2014',
         chatId: f.chat_id
       })),
-      counts: { up: db.feedback.count(f => f.kind !== 'safety' && f.rating === 1), down: db.feedback.count(f => f.kind !== 'safety' && f.rating === -1) }
+      counts: db.feedback.ratingCounts()
     });
   });
 
   app.get('/api/admin/usage', authMiddleware, adminOnly, (req, res) => {
-    const windows = { '7': 7, '30': 30, '90': 90 };
-    const days = windows[String(req.query.days)] || 30;
+    const days = USAGE_WINDOWS.has(Number(req.query.days)) ? Number(req.query.days) : 30;
     const since = now() - days * 24 * 60 * 60 * 1000;
     const nameById = new Map(db.users.all().map(u => [u.id, u.display_name || u.email]));
     const byUser = new Map(), byModel = new Map(), byDay = new Map();
@@ -176,29 +181,27 @@ export default function registerAdminRoutes(app) {
     const actor = String(req.query.actor || '').trim().toLowerCase();
     const sinceDays = parseInt(req.query.days) || 0;
     const since = sinceDays > 0 ? now() - sinceDays * 24 * 60 * 60 * 1000 : 0;
-    const match = r => (!action || (r.action || '').toLowerCase().includes(action))
-      && (!actor || (r.actor_email || '').toLowerCase().includes(actor))
-      && (!since || (r.ts || 0) >= since);
-    const rows = db.audit.recent(100000, 0);
-    const all = rows.filter(match);
-    const actions = [...new Set(rows.map(r => r.action))].sort();
-    const page = all.slice(offset, offset + limit).map(r => ({
+    const filter = { action, actor, since, limit, offset };
+    const total = db.audit.countMatching(filter);
+    const page = db.audit.query(filter).map(r => ({
       id: r.id, ts: r.ts, actorEmail: r.actor_email || 'system', action: r.action,
       targetType: r.target_type || null, targetId: r.target_id || null, meta: r.meta || null, ip: r.ip || ''
     }));
-    res.json({ entries: page, total: all.length, offset, hasMore: offset + page.length < all.length, actions });
+    res.json({ entries: page, total, offset, hasMore: offset + page.length < total, actions: db.audit.actions() });
   });
 
   app.get('/api/admin/audit/export', authMiddleware, adminOnly, (req, res) => {
     const esc = v => { const s = v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : String(v)); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-    const lines = ['timestamp,actor,action,target_type,target_id,ip,meta'];
-    for (const r of db.audit.recent(100000, 0)) {
-      lines.push([new Date(r.ts).toISOString(), r.actor_email || 'system', r.action, r.target_type || '', r.target_id || '', r.ip || '', r.meta].map(esc).join(','));
-    }
     logAudit(req, 'audit.export', {});
-    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="audit-${new Date().toISOString().slice(0, 10)}.csv"`);
-    res.send(lines.join('\n'));
+    // Streamed a row at a time: the whole log no longer has to exist in memory twice
+    // (once parsed, once as joined text) to be downloaded.
+    res.write('timestamp,actor,action,target_type,target_id,ip,meta\n');
+    for (const r of db.audit.stream()) {
+      res.write([new Date(r.ts).toISOString(), r.actor_email || 'system', r.action, r.target_type || '', r.target_id || '', r.ip || '', r.meta].map(esc).join(',') + '\n');
+    }
+    res.end();
   });
 
   app.get('/api/admin/databases', authMiddleware, adminOnly, (req, res) => {

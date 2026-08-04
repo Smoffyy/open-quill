@@ -9,6 +9,7 @@ import { pinnedFilesPrompt } from './prompts.js';
 import { llamaTokenCount, isLlamaCpp } from './llamacpp.js';
 
 export const STYLE_PRESETS = {
+  __proto__: null,
   concise: 'Respond concisely. Get to the point immediately, cut filler, hedging, and restatement, and keep answers as short as they can be while remaining complete and correct. Prefer tight prose over long lists.',
   explanatory: 'Respond in an explanatory, educational way. Walk through the reasoning behind answers, define terms the user may not know, use short examples or analogies where they aid understanding, and make sure the user leaves knowing WHY, not just WHAT.',
   formal: 'Respond in a polished, professional register suitable for business or academic contexts. Use complete sentences, precise vocabulary, and a measured tone. Avoid slang, contractions where practical, and overly casual phrasing.'

@@ -41,7 +41,6 @@ function verbsFor(tool) {
 }
 const FILE_TOOLS = new Set(['create_file', 'str_replace', 'delete_file', 'rename_file', 'move_file', 'copy_file', 'make_dir', 'mkdir']);
 
-function escapeHtml(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
 function stripAnsi(s) { return String(s || '').replace(/\u001b\[[0-9;]*m/g, ''); }
 function baseName(p) { return (p || '').split('/').pop(); }
 

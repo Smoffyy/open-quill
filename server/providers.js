@@ -1,6 +1,10 @@
 import { getSetting } from './db.js';
 
+// Null prototype on purpose: these are looked up by a key that comes straight off the
+// wire, and an inherited "constructor" or "toString" would otherwise answer truthy and
+// be accepted as a real provider type.
 export const PROVIDER_TYPES = {
+  __proto__: null,
   llamacpp: {
     label: 'llama.cpp server', defaultBaseUrl: 'http://localhost:8080', protocol: 'openai', keyOptional: true,
     samplers: ['temperature', 'top_p', 'top_k', 'min_p', 'repetition_penalty', 'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens', 'stop',
@@ -51,6 +55,10 @@ export const PROVIDER_TYPES = {
 
 export const DEFAULT_STOP_MAX = 4;
 
+export function isProviderType(type) {
+  return typeof type === 'string' && Object.hasOwn(PROVIDER_TYPES, type);
+}
+
 export function typesForClient() {
   const out = {};
   for (const [k, v] of Object.entries(PROVIDER_TYPES)) out[k] = { label: v.label, defaultBaseUrl: v.defaultBaseUrl, keyOptional: v.keyOptional, samplers: v.samplers, stopMax: v.stopMax || DEFAULT_STOP_MAX };
@@ -71,7 +79,7 @@ export function resolveProvider(providerId) {
 }
 
 export function providerSpec(provider) {
-  const spec = PROVIDER_TYPES[provider?.type] || PROVIDER_TYPES.llamacpp;
+  const spec = (isProviderType(provider?.type) && PROVIDER_TYPES[provider.type]) || PROVIDER_TYPES.llamacpp;
   let base = (provider?.base_url || spec.defaultBaseUrl).replace(/\/+$/, '');
   if (spec.protocol === 'openai' && !/\/v\d+$/.test(base)) base += '/v1';
   return { spec, base, key: provider?.api_key || '' };

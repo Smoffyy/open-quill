@@ -1,6 +1,14 @@
 import { db } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
-import { sortedMsgs } from '../../lib/tree.js';
+
+const SNIPPET_BEFORE = 40;
+const SNIPPET_AFTER = 60;
+const MAX_RESULTS = 40;
+
+function snippetAround(text, at, len) {
+  const from = Math.max(0, at - SNIPPET_BEFORE);
+  return (from > 0 ? '…' : '') + text.slice(from, at + len + SNIPPET_AFTER).trim();
+}
 
 export default function registerBrowseRoutes(app) {
   app.get('/api/chats', authMiddleware, (req, res) => {
@@ -15,14 +23,11 @@ export default function registerBrowseRoutes(app) {
     const limit = Math.min(60, Math.max(1, parseInt(req.query.limit) || 18));
     const wantArchived = req.query.archived === '1';
     const all = db.chats.byUser(req.user.id).filter(c => !!c.archived === wantArchived).sort((a, b) => b.updated_at - a.updated_at);
-    const page = all.slice(offset, offset + limit).map(c => {
-      const msgs = sortedMsgs(c.id);
-      let preview = '';
-      for (let i = msgs.length - 1; i >= 0; i--) {
-        if (msgs[i].role === 'user' && typeof msgs[i].content === 'string' && msgs[i].content.trim()) { preview = msgs[i].content.slice(0, 220); break; }
-      }
-      return { id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred, archived: !!c.archived, ended: !!c.ended, preview };
-    });
+    const page = all.slice(offset, offset + limit).map(c => ({
+      id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred,
+      archived: !!c.archived, ended: !!c.ended,
+      preview: db.messages.lastUserText(c.id).slice(0, 220)
+    }));
     res.json({ chats: page, total: all.length, offset, hasMore: offset + page.length < all.length });
   });
 
@@ -30,21 +35,26 @@ export default function registerBrowseRoutes(app) {
     const q = String(req.query.q || '').trim().toLowerCase();
     if (q.length < 2) return res.json({ results: [] });
     const chats = db.chats.byUser(req.user.id);
+    const byId = new Map(chats.map(c => [c.id, c]));
+
+    // One pass over the user's messages, keeping the earliest hit per chat, which is what
+    // the old per-chat scan surfaced. Title matches win and need no message at all.
+    const hits = new Map();
+    for (const row of db.messages.searchForUser(req.user.id, q)) {
+      if (hits.has(row.chatId) || !byId.has(row.chatId)) continue;
+      const at = row.content.toLowerCase().indexOf(q);
+      if (at === -1) continue;
+      hits.set(row.chatId, snippetAround(row.content, at, q.length));
+    }
+
     const results = [];
     for (const c of chats) {
-      let titleHit = (c.title || '').toLowerCase().includes(q);
-      let snippet = '', matched = false;
-      if (!titleHit) {
-        const msgs = sortedMsgs(c.id);
-        for (const m of msgs) {
-          const text = typeof m.content === 'string' ? m.content : '';
-          const i = text.toLowerCase().indexOf(q);
-          if (i !== -1) { matched = true; const s = Math.max(0, i - 40); snippet = (s > 0 ? '…' : '') + text.slice(s, i + q.length + 60).trim(); break; }
-        }
-      }
-      if (titleHit || matched) results.push({ id: c.id, title: c.title, updated_at: c.updated_at, snippet: snippet || (c.title || ''), starred: !!c.starred });
+      const titleHit = (c.title || '').toLowerCase().includes(q);
+      const snippet = titleHit ? '' : hits.get(c.id);
+      if (!titleHit && snippet === undefined) continue;
+      results.push({ id: c.id, title: c.title, updated_at: c.updated_at, snippet: snippet || (c.title || ''), starred: !!c.starred });
     }
     results.sort((a, b) => b.updated_at - a.updated_at);
-    res.json({ results: results.slice(0, 40) });
+    res.json({ results: results.slice(0, MAX_RESULTS) });
   });
 }

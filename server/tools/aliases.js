@@ -6,7 +6,14 @@ export const SANDBOX_TOOLS = [
 
 const SANDBOX_SET = new Set(SANDBOX_TOOLS);
 
+// The tools that can only read. Callers use this to skip work that is only needed after
+// the workspace actually changed.
+export const SANDBOX_READONLY = new Set(['view', 'list_files', 'find', 'search']);
+
+// Null prototype: the key is a tool name a model invented, so an inherited "constructor"
+// or "toString" would otherwise resolve to a function and be treated as a real tool.
 const STRICT_ALIASES = {
+  __proto__: null,
   run: 'bash', shell: 'bash', exec: 'bash', execute: 'bash', terminal: 'bash',
   run_command: 'bash', execute_command: 'bash', run_terminal_cmd: 'bash', run_shell: 'bash',
   shell_command: 'bash', bash_command: 'bash', run_bash: 'bash', execute_bash: 'bash', run_script: 'bash',
@@ -54,6 +61,7 @@ const STRICT_ALIASES = {
 };
 
 const LOOSE_ALIASES = {
+  __proto__: null,
   sh: 'bash', cmd: 'bash', command: 'bash',
   write: 'create_file', create: 'create_file',
   edit: 'str_replace', replace: 'str_replace', patch: 'str_replace',

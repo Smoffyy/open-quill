@@ -41,69 +41,12 @@ jobs:
       - name: Client logic tests
         run: npm run test:client
 
-      - name: Smoke test server
-        run: |
-          set -euo pipefail
-          node server/index.js &
-          SERVER_PID=$!
-          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
-
-          for i in $(seq 1 30); do
-            if curl -fsS -o /dev/null http://127.0.0.1:3001/api/auth/context 2>/dev/null; then break; fi
-            if [ "$i" = "30" ]; then echo "server did not come up"; exit 1; fi
-            sleep 1
-          done
-
-          fail=0
-          check() {
-            local name="$1" expected="$2" actual="$3"
-            if [ "$actual" = "$expected" ]; then
-              echo "ok    $name -> $actual"
-            else
-              echo "FAIL  $name -> $actual (expected $expected)"
-              fail=1
-            fi
-          }
-
-          code() { curl -s -o /dev/null -w "%{http_code}" "$@"; }
-
-          check "GET /" 200 "$(code http://127.0.0.1:3001/)"
-          check "GET /api/auth/context" 200 "$(code http://127.0.0.1:3001/api/auth/context)"
-          check "GET /api/me (no session)" 401 "$(code http://127.0.0.1:3001/api/me)"
-
-          # signing in must not create an account for an unknown email
-          check "POST /api/auth/login (unknown email)" 401 \
-            "$(code -X POST -H 'Content-Type: application/json' \
-               -d '{"email":"ci@test.dev","password":"ci-password"}' \
-               http://127.0.0.1:3001/api/auth/login)"
-
-          # the first registration bootstraps the owner account
-          check "POST /api/auth/register (first user)" 200 \
-            "$(code -X POST -H 'Content-Type: application/json' \
-               -d '{"email":"ci@test.dev","password":"ci-password"}' \
-               http://127.0.0.1:3001/api/auth/register)"
-
-          check "POST /api/auth/register (duplicate)" 409 \
-            "$(code -X POST -H 'Content-Type: application/json' \
-               -d '{"email":"ci@test.dev","password":"ci-password"}' \
-               http://127.0.0.1:3001/api/auth/register)"
-
-          check "POST /api/auth/login (correct password)" 200 \
-            "$(code -X POST -H 'Content-Type: application/json' \
-               -d '{"email":"ci@test.dev","password":"ci-password"}' \
-               http://127.0.0.1:3001/api/auth/login)"
-
-          check "POST /api/auth/login (wrong password)" 401 \
-            "$(code -X POST -H 'Content-Type: application/json' \
-               -d '{"email":"ci@test.dev","password":"nope"}' \
-               http://127.0.0.1:3001/api/auth/login)"
-
-          # the local-only policy must be served with the app
-          csp=$(curl -s -D - -o /dev/null http://127.0.0.1:3001/ | grep -ic '^content-security-policy' || true)
-          check "CSP header on app HTML" 1 "$csp"
-
-          exit $fail
-
+      # Runs every *.test.js under server/ — the pure-logic suite and the integration
+      # suite, which boots the real server against a throwaway database and drives it
+      # with the header shapes a browser actually sends. This replaced a hand-written
+      # curl script: that script set no Origin header, so it could not see a CSRF guard
+      # that refused every write from the real UI. Keep this discovering files rather
+      # than naming them, or a new test file silently stops running in CI.
       - name: Server tests
         run: cd server && npm test
 

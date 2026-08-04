@@ -4,6 +4,8 @@ import { SANDBOX_ROOT, safeId, dirFor, resolveSafe, relOf, META_DIR } from './pa
 import { readMeta, versionOf, bumpVersion, dropVersion, moveVersion, saveSnapshot, forgetMeta, histRoot, metaPath } from './meta.js';
 import { extOf, isText, isIgnoredDir, isIgnoredRel, globToRe, gitignoreCacheDrop } from './ignore.js';
 import { zipBuffer, unzipBuffer } from './zip.js';
+import { compileSearchPattern } from '../lib/sandboxguard.js';
+import { runRegexSearch } from './regexsearch.js';
 
 function walkFiles(chatId, { includeIgnored = false, under = '' } = {}) {
   const root = dirFor(chatId);
@@ -358,26 +360,56 @@ export function makeDir(chatId, rel) {
   return { ok: true, path: rel };
 }
 
-export function search(chatId, query, filter, useRegex = false) {
-  if (!query) return { ok: false, error: 'query is required' };
-  let re = null;
-  if (useRegex) { try { re = new RegExp(query, 'i'); } catch (e) { return { ok: false, error: 'Invalid regex: ' + e.message }; } }
-  const q = String(query).toLowerCase();
+const SEARCH_CAP = 100;
+const SEARCH_TIMEOUT_MS = 5000;
+// Backtracking cost grows with the length of the text, so a very long line — a minified
+// bundle, a base64 blob — is the worst thing to hand a regex. Matching is capped; a hit
+// past this point in a single line is not something a person is reading anyway.
+const SEARCH_LINE_MAX = 4000;
+
+// Which files a search would look at, after the ignore rules and the caller's filter.
+function searchCandidates(chatId, filter) {
   const fre = filter && (filter.includes('*') || filter.includes('/') || filter.includes('?')) ? globToRe(filter) : null;
+  const needle = filter ? String(filter).toLowerCase() : '';
   const out = [];
-  const CAP = 100;
   for (const f of list(chatId)) {
     if (f.ext === 'zip' || !isText(f.path)) continue;
-    if (filter) { if (fre ? !fre.test(f.path) : !f.path.toLowerCase().includes(String(filter).toLowerCase())) continue; }
-    const txt = readText(chatId, f.path); if (txt == null) continue;
+    if (filter && (fre ? !fre.test(f.path) : !f.path.toLowerCase().includes(needle))) continue;
+    try { out.push({ rel: f.path, abs: resolveSafe(chatId, f.path) }); } catch {}
+  }
+  return out;
+}
+
+export async function search(chatId, query, filter, useRegex = false) {
+  if (!query) return { ok: false, error: 'query is required' };
+  const files = searchCandidates(chatId, filter);
+
+  if (useRegex) {
+    // Compile here first: a pattern that is malformed, absurdly long, or one of the
+    // known catastrophic shapes gets a specific error rather than a generic timeout,
+    // and we avoid paying for a worker to find that out.
+    const compiled = compileSearchPattern(query);
+    if (!compiled.ok) return { ok: false, error: compiled.error };
+    const r = await runRegexSearch({ files, source: compiled.re.source, flags: compiled.re.flags, cap: SEARCH_CAP, lineMax: SEARCH_LINE_MAX, timeoutMs: SEARCH_TIMEOUT_MS });
+    if (!r.ok) return { ok: false, error: r.error };
+    return { ok: true, matches: r.matches, count: r.matches.length, truncated: r.truncated };
+  }
+
+  // Plain substring: String.includes cannot backtrack, so this is safe in-process.
+  const q = String(query).toLowerCase();
+  const out = [];
+  for (const f of files) {
+    const txt = readText(chatId, f.rel);
+    if (txt == null) continue;
     const lines = txt.split('\n');
     for (let i = 0; i < lines.length; i++) {
-      const hit = re ? re.test(lines[i]) : lines[i].toLowerCase().includes(q);
-      if (hit) { out.push({ path: f.path, line: i + 1, text: lines[i].trim().slice(0, 240) }); if (out.length >= CAP) break; }
+      if (!lines[i].toLowerCase().includes(q)) continue;
+      out.push({ path: f.rel, line: i + 1, text: lines[i].trim().slice(0, 240) });
+      if (out.length >= SEARCH_CAP) break;
     }
-    if (out.length >= CAP) break;
+    if (out.length >= SEARCH_CAP) break;
   }
-  return { ok: true, matches: out, count: out.length, truncated: out.length >= CAP };
+  return { ok: true, matches: out, count: out.length, truncated: out.length >= SEARCH_CAP };
 }
 
 export function findFiles(chatId, pattern, includeIgnored = false) {

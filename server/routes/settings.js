@@ -1,7 +1,7 @@
 import { db, uid, getSetting, setSetting } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
 import { oneShot } from '../llm/index.js';
-import { PROVIDER_TYPES, getProviders, typesForClient } from '../providers.js';
+import { PROVIDER_TYPES, getProviders, typesForClient, isProviderType } from '../providers.js';
 import { llamaEngine } from '../lib/llamacpp.js';
 import * as membank from '../membank.js';
 import * as websearch from '../websearch.js';
@@ -148,8 +148,8 @@ export default function registerSettingsRoutes(app) {
   });
   app.post('/api/admin/providers', authMiddleware, adminOnly, (req, res) => {
     const b = req.body || {};
-    const type = PROVIDER_TYPES[b.type] ? b.type : 'lmstudio';
-    const prov = { id: uid(), name: (b.name || PROVIDER_TYPES[type].label).trim(), type, base_url: (b.base_url || '').trim() || PROVIDER_TYPES[type].defaultBaseUrl, api_key: b.api_key || '' };
+    const type = isProviderType(b.type) ? b.type : 'lmstudio';
+    const prov = { id: uid(), name: String(b.name || PROVIDER_TYPES[type].label).trim().slice(0, 120), type, base_url: String(b.base_url || '').trim().slice(0, 500) || PROVIDER_TYPES[type].defaultBaseUrl, api_key: String(b.api_key || '').slice(0, 500) };
     setSetting('providers', [...getProviders(), prov]);
     logAudit(req, 'provider.create', { type: 'provider', id: prov.id, meta: { name: prov.name, type: prov.type } });
     res.json({ id: prov.id });
@@ -160,10 +160,11 @@ export default function registerSettingsRoutes(app) {
     const i = list.findIndex(p => p.id === req.params.id);
     if (i === -1) return res.status(404).json({ error: 'not found' });
     const p = { ...list[i] };
-    if ('name' in b) p.name = (b.name || '').trim() || p.name;
-    if ('type' in b && PROVIDER_TYPES[b.type]) p.type = b.type;
-    if ('base_url' in b) p.base_url = (b.base_url || '').trim() || PROVIDER_TYPES[p.type].defaultBaseUrl;
-    if ('api_key' in b) p.api_key = b.api_key || '';
+    if ('name' in b) p.name = String(b.name || '').trim().slice(0, 120) || p.name;
+    if ('type' in b && isProviderType(b.type)) p.type = b.type;
+    if (!isProviderType(p.type)) p.type = 'lmstudio';
+    if ('base_url' in b) p.base_url = String(b.base_url || '').trim().slice(0, 500) || PROVIDER_TYPES[p.type].defaultBaseUrl;
+    if ('api_key' in b) p.api_key = String(b.api_key || '').slice(0, 500);
     list[i] = p;
     setSetting('providers', list);
     logAudit(req, 'provider.update', { type: 'provider', id: p.id, meta: { name: p.name } });

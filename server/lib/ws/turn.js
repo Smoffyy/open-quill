@@ -1,6 +1,6 @@
 import { db, uid, now, getSetting } from '../../db.js';
 import { buildMessages, streamCompletion, generateTitle, stripThink } from '../../llm/index.js';
-import { buildTools, toCall, cutOffOf, livePreview, resolveToolName } from '../../tools/index.js';
+import { buildTools, toCall, cutOffOf, livePreview, resolveToolName, SANDBOX_READONLY } from '../../tools/index.js';
 import * as websearch from '../../websearch.js';
 import * as sandbox from '../../sandbox.js';
 import * as membank from '../../membank.js';
@@ -184,6 +184,15 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     if (!sandboxOn || !resolveToolName(call.tool, true)) return null;
     const r = await sandbox.execTool(chat.id, call, sandboxCap);
     return { payload: resultPayload(call, r), formatted: formatToolResult(call, r), hide: false };
+  };
+
+  // Re-listing the workspace is a recursive directory walk plus a stat per file. It only
+  // needs to happen after a tool that can actually change the tree, not after every
+  // web_search or file read in a sandbox-enabled chat.
+  const mayChangeFiles = (tool) => {
+    if (!sandboxOn) return false;
+    const canon = resolveToolName(tool, true);
+    return !!canon && !SANDBOX_READONLY.has(canon);
   };
 
   const ctxSize = await modelCtx(model);
@@ -539,7 +548,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           content += block;
           safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: block }));
         }
-        if (sandboxOn) safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
+        if (mayChangeFiles(call.tool)) safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
         toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: formatted });
       }
       if (liveSent) safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live: null }));
