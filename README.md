@@ -16,7 +16,6 @@ A **chat interface** inspired by **[Anthropic's Chat Interface](https://claude.a
 
 This project is licensed under the [MIT License](LICENSE); by downloading, using, or modifying this project, you agree to the terms of the [LICENSE](LICENSE) file. **Forever free. Built by the community, for the community.**
 
-> [!IMPORTANT]
 > **This project is not enterprise ready and is not intended to be. It is a community built interface designed to be customized, modified, and configured however you prefer.**
 
 ---
@@ -24,10 +23,6 @@ This project is licensed under the [MIT License](LICENSE); by downloading, using
 <p align="center">
   <img src="assets/v27/anthropic_screenshot1.jpeg" alt="Chat Interface with Artifacts"/>
 </p>
-
-> [!TIP]
-> If you want to track updates, see features, or an all-in-one spot for up-to-date information, check out the official [Bluesky](https://bsky.app/profile/open-quill.bsky.social)!
-> If you wanna just use the repo, check out the [Changelog](CHANGELOG.md)!
 
 <details>
   <summary>More Screenshots</summary>
