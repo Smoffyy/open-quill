@@ -266,6 +266,7 @@ export default function App() {
   const targetContent = useRef('');
   const targetReason = useRef('');
   const pendingDone = useRef(false);
+  const nextTurnPending = useRef(false);
   const liveRef = useRef(null);
   const selectingRef = useRef(false);
   const hasSelectionRef = useRef(false);
@@ -738,6 +739,7 @@ export default function App() {
     }
     if (m.type === 'start') {
       voiceEmit({ type: 'start', chatId: m.chatId });
+      if (m.chatId === activeKey() && pendingDone.current) { nextTurnPending.current = false; finalize(); }
       const r = recFor(m.chatId);
       r.content = ''; r.reasoning = ''; r.phase = 'generating'; r.done = false; r.error = false; r.assistantId = m.messageId; r.live = null; r.steers = []; r.status = null;
       if (m.chatId === activeKey()) {
@@ -799,29 +801,17 @@ export default function App() {
       voiceEmit({ type: 'done', chatId: m.chatId });
       const r = recFor(m.chatId); r.done = true;
       syncBusy();
-      if (m.chatId === activeKey()) setPendingFiles(p => (Object.keys(p).length ? {} : p));
-      if (m.chatId === activeKey()) { pendingDone.current = true; if (!animateRef.current) finalize(); }
-      else finalizeBackground(m.chatId);
       loadBudget();
-      if (m.chatId === activeKey()) {
-        if (ledgerOpenRef.current) loadLedger();
-        setCanContinue(!!m.truncated);
-        const cmp = compareRef.current;
-        if (cmp && cmp.chatId === m.chatId) {
-          if (!cmp.messageId && m.messageId) cmp.messageId = m.messageId;
-          const nextId = cmp.remaining.shift();
-          if (nextId && cmp.messageId) {
-            (() => { const g = genOptsRef.current; setTimeout(() => wsSend({ type: 'regenerate', chatId: cmp.chatId, modelId: nextId, extended: g.extended, reasoningEffort: g.reasoningEffort, kwargValues: g.kwargValues, messageId: cmp.messageId, sandbox: g.sandbox, webSearch: g.webSearch, styleId: g.styleId }), 150); })();
-          } else {
-            compareRef.current = null;
-            toast(t('Model comparison ready, use the version arrows or compare button on the response.'), { duration: 6000 });
-            (() => { const q2 = queuedListRef.current[0]; if (q2) { setQueue(l => l.slice(1)); setTimeout(() => sendRef.current(q2.attachments || [], q2.text, { fromQueue: true }), 150); } })();
-          }
-        } else {
-          const q = queuedListRef.current[0];
-          if (q) { setQueue(l => l.slice(1)); setTimeout(() => sendRef.current(q.attachments || [], q.text, { fromQueue: true }), 120); }
-        }
-      }
+      if (m.chatId !== activeKey()) { finalizeBackground(m.chatId); return; }
+      setPendingFiles(p => (Object.keys(p).length ? {} : p));
+      if (ledgerOpenRef.current) loadLedger();
+      setCanContinue(!!m.truncated);
+      const cmp = compareRef.current;
+      if (cmp && cmp.chatId === m.chatId && !cmp.messageId && m.messageId) cmp.messageId = m.messageId;
+      nextTurnPending.current = true;
+      pendingDone.current = true;
+      const revealed = dispLen.current >= targetContent.current.length;
+      if (!animateRef.current || revealed) finalize();
       return;
     }
   }
@@ -876,20 +866,39 @@ export default function App() {
     const r = gen.current.get(key);
     if (!r && !streaming) return;
     stopLoops();
-    const content = r ? r.content : targetContent.current;
-    const reasoning = r ? r.reasoning : targetReason.current;
-    const id = (r && r.assistantId) || assistantIdRef.current || ('a' + Date.now());
-    const mid = r ? r.model_id : currentIdRef.current;
-    dropRec(key);
+    const content = targetContent.current;
+    const reasoning = targetReason.current;
+    const id = assistantIdRef.current || (r && r.assistantId) || ('a' + Date.now());
+    const mid = streamModelRef.current || (r ? r.model_id : currentIdRef.current);
+    if (r && r.done) dropRec(key);
     setStreaming(false); setPhase('static'); setQueued(false);
-    setMessages(ms => ms.some(m => m.id === id) ? ms : [...ms, { id, role: 'assistant', content, reasoning, model_id: mid }]);
+    if (content || reasoning) setMessages(ms => ms.some(m => m.id === id) ? ms : [...ms, { id, role: 'assistant', content, reasoning, model_id: mid }]);
     setDispContent(''); setDispReason('');
     setLiveFile(null); setLiveCall(null); liveRef.current = null;
     targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
     if (stick.current && !selectingRef.current && !hasSelectionRef.current) setTimeout(() => scrollBottom(false), 0);
-    if (key === 'incognito') return;
-    loadChats();
-    if (key) refreshMessages(key);
+    if (key !== 'incognito') { loadChats(); if (key) refreshMessages(key); }
+    startNextTurn();
+  }
+
+  function startNextTurn() {
+    if (!nextTurnPending.current) return;
+    nextTurnPending.current = false;
+    const cmp = compareRef.current;
+    if (cmp && cmp.chatId === activeIdRef.current) {
+      const nextId = cmp.remaining.shift();
+      if (nextId && cmp.messageId) {
+        const g = genOptsRef.current;
+        setTimeout(() => wsSend({ type: 'regenerate', chatId: cmp.chatId, modelId: nextId, extended: g.extended, reasoningEffort: g.reasoningEffort, kwargValues: g.kwargValues, messageId: cmp.messageId, sandbox: g.sandbox, webSearch: g.webSearch, styleId: g.styleId }), 150);
+        return;
+      }
+      compareRef.current = null;
+      toast(t('Model comparison ready, use the version arrows or compare button on the response.'), { duration: 6000 });
+    }
+    const q = queuedListRef.current[0];
+    if (!q) return;
+    setQueue(l => l.slice(1));
+    setTimeout(() => sendRef.current(q.attachments || [], q.text, { fromQueue: true }), 120);
   }
 
   function finalizeBackground(key) {

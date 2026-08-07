@@ -110,8 +110,6 @@ export async function llamaInfo(model) {
   return info;
 }
 
-export async function llamaProps(model) { return llamaInfo(model); }
-
 export async function llamaEngine(provider) {
   if (!provider || provider.type !== 'llamacpp') return null;
   const { base, key } = providerSpec(provider);
@@ -271,5 +269,3 @@ export function parseOverflow(err) {
   if (!prompt || !ctx) return null;
   return { prompt, ctx };
 }
-
-export function clearLlamaCaches() { infoCache.clear(); tokenCache.clear(); templateBroken.clear(); }

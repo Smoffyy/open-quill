@@ -1,10 +1,19 @@
 import { getSetting } from '../db.js';
 
 function selfOrigins(req) {
-  const host = String(req.headers.host || '').trim();
-  if (!host || /[^a-zA-Z0-9.:_-]/.test(host)) return [];
   const secure = req.socket?.encrypted || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
-  return [secure ? `wss://${host}` : `ws://${host}`];
+  const scheme = secure ? 'wss' : 'ws';
+  const hosts = [
+    String(req.headers['x-forwarded-host'] || '').split(',')[0].trim(),
+    String(req.headers.host || '').trim()
+  ];
+  const out = [];
+  for (const host of hosts) {
+    if (!host || /[^a-zA-Z0-9.:_-]/.test(host)) continue;
+    const origin = `${scheme}://${host}`;
+    if (!out.includes(origin)) out.push(origin);
+  }
+  return out;
 }
 
 export function localOnlyEnabled() {

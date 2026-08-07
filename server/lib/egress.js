@@ -28,15 +28,42 @@ function isPrivateV4(ip) {
   return false;
 }
 
+function expandV6(ip) {
+  let text = ip;
+  let embedded = null;
+  const dotted = /:((?:\d{1,3}\.){3}\d{1,3})$/.exec(text);
+  if (dotted) {
+    const parts = dotted[1].split('.').map(Number);
+    if (parts.some(n => !Number.isInteger(n) || n < 0 || n > 255)) return null;
+    embedded = dotted[1];
+    text = text.slice(0, dotted.index) + ':' +
+      ((parts[0] << 8) | parts[1]).toString(16) + ':' + ((parts[2] << 8) | parts[3]).toString(16);
+  }
+  const halves = text.split('::');
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(':') : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+  let words;
+  if (halves.length === 1) {
+    if (head.length !== 8) return null;
+    words = head;
+  } else {
+    const fill = 8 - head.length - tail.length;
+    if (fill < 0) return null;
+    words = [...head, ...Array(fill).fill('0'), ...tail];
+  }
+  const groups = words.map(h => (/^[0-9a-f]{1,4}$/.test(h) ? parseInt(h, 16) : NaN));
+  return groups.some(g => !Number.isInteger(g)) ? null : { groups, embedded };
+}
+
 function isPrivateV6(ip) {
-  const lower = ip.toLowerCase();
-  if (lower === '::' || lower === '::1') return true;
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(lower);
-  if (mapped) return isPrivateV4(mapped[1]);
-  const head = lower.split(':')[0];
-  if (!head) return false;
-  const n = parseInt(head, 16);
-  if (Number.isNaN(n)) return false;
+  const parsed = expandV6(ip.toLowerCase());
+  if (!parsed) return false;
+  const { groups, embedded } = parsed;
+  if (embedded && groups.slice(0, 5).every(g => g === 0) && groups[5] === 0xffff) return isPrivateV4(embedded);
+  if (groups.every(g => g === 0)) return true;
+  if (groups.slice(0, 7).every(g => g === 0) && groups[7] === 1) return true;
+  const n = groups[0];
   if ((n & 0xfe00) === 0xfc00) return true;
   if ((n & 0xffc0) === 0xfe80) return true;
   if ((n & 0xff00) === 0xff00) return true;

@@ -325,12 +325,26 @@ Three details there are load-bearing. `PATH_EXTS` must not include `''` on Windo
 
 The same quoting rule applies to `bash` itself: `spawn(cmd.exe, ['/d','/s','/v:on','/c', '"'+wrapped+'"'], { windowsVerbatimArguments: true })`. Without it Node escapes the inner quotes as `\"`, the wrapper's `cd /d "<base>"` fails, and every single command on Windows prefixes its output with "The filename, directory name, or volume label syntax is incorrect." It still *worked*, because `spawn` sets `cwd` anyway — which is exactly why it went unnoticed.
 
+### The shell's working directory is the other thing small models get stuck on
+
+`bash` keeps a per-chat cwd (`getCwd`/`setCwd` in `sandbox/meta.js`) so `cd sub` carries to the next call. That is genuinely useful and stays — but combined with a model that reflexively prefixes `cd <project>` to every command it is an infinite loop, and it produced one in the wild: `cd proj && …` moves the shell into `proj`, the next `cd proj && …` resolves to `proj/proj`, cmd.exe answers with a bare "The system cannot find the path specified.", and every retry reproduces it. Three rules now hold it together, and all three are needed:
+
+1. **The shell only moves when the command succeeded.** `parseTail` reads the cwd marker but `bash` commits it only on exit 0 (or a benign mkdir collision, below). A failed `cd proj && <broken>` used to relocate the shell anyway, so the *retry* ran somewhere else than the original — the failure was not even reproducible, which is what made it unrecoverable. A failed command now leaves the shell exactly where it was, so retrying does the same thing and the existing `callFails` note can see it.
+2. **A `cd` the shell has already made is refused before it runs.** `staleCdError` fires only in the unambiguous case: the target does not exist relative to the cwd *and* does exist relative to the workspace root. It names the path that was actually looked for, says the shell is already there, and points at `workdir`. A genuine nested `cd`, and a target that exists nowhere, both fall through to ordinary behaviour.
+3. **`workdir` is the stateless way to do this**, and both the tool schema and the host-environment prompt now say to prefer it over `cd`. It is resolved from the workspace root on every call, so it is safe to repeat.
+
+**A directory that already exists is the state the model asked for.** `mkdir build` twice returned exit 1 and "A subdirectory or file build already exists.", which reads as a failure worth retrying — and the retry reproduces it forever. `bash` now reports it as success with a `note`, but only when the **last** segment is a mkdir and **every** output line is an already-exists error: with `&&` or `&` a trailing mkdir means nothing after it was skipped, and any other command that also failed would put a non-matching line in the output. `mkdir build && <something that fails>` is still a failure.
+
+**Windows `find`/`sort`/`more` are not the Unix ones.** They exist, so the not-installed hint never fired; they just reject Unix flags with "FIND: Parameter format not correct". That now gets its own hint pointing at the `find`, `search` and `list_files` tools.
+
 **cmd.exe's own builtins reject forward slashes as path separators**, and this is the single most common way a model's first `bash` command fails on Windows. `mkdir a/b`, `del x/y`, `copy`, `move`, `ren`, `rmdir`, `dir` and `type` all parse a bare `/` inside a path argument as the start of a switch — `mkdir a/b` is read as `mkdir a` plus a bogus `/b` flag and fails with "The syntax of the command is incorrect." `cd` is the one exception: it hands the path straight to `SetCurrentDirectoryW`, which accepts either separator. Every real interpreter, this app's own file tools, and even the URL bar take forward slashes fine, so a model has no reason to expect this and every reason to write `/` out of habit — its training data is overwhelmingly Unix-flavoured. `winTranslate` in `sandbox/shell.js` auto-corrects this: for the fixed `SLASH_SENSITIVE` set of builtins, every token that doesn't itself start with `/` (a token starting with `/` is a real switch like `/s` or `/q` and is left alone) gets its slashes flipped to backslashes before the command runs. The host-environment prompt section and the `bash` tool's own schema description both warn about this explicitly and scope the warning to shell commands only — the file tools' `path` argument still always takes forward slashes, on every OS, and must not be confused with this. If a path token happens to start with `/` (so the auto-fix skips it) and the command still fails, `bash`'s failure path pattern-matches "Invalid switch" / "the syntax of the command is incorrect" on Windows and appends a targeted hint rather than the generic not-found one.
 
 **The boundary is enforced, not requested.** `lib/sandboxguard.js` holds both halves and is pure so it can be tested without a filesystem:
 
 - `normalizeRel` is forgiving where intent is unambiguous and strict where it is not. `\` becomes `/`, `.` and `..` inside the path collapse, surrounding quotes are stripped, and a leading `/` is dropped — `/notes.md` plainly means the workspace root. But `/etc/passwd`, `C:\...`, `\\server\share`, `~/x` and `..` above the root are refused, each with an error naming the correct form. Every relative path is normalized **once** in `execTool`, so the version metadata key, the path echoed back, and the file on disk can never disagree.
 - `screenCommand` refuses a shell command before it runs: absolute or system paths in any token, `..` that escapes given the current depth, `cd` out of the workspace, and host administration (`sudo`, `systemctl`, `reg`, `apt`, `docker`, `ssh`, `shutdown`, …). Project-local installs (`npm install`, `pip install`, `cargo build`) stay allowed. Tokenizing respects quotes, `/dev/null` is allowed, and single-segment `/x` is not treated as a path so cmd flags like `/d` and `/s` survive. The false-positive set is the thing to protect: there is a test listing ordinary build commands, and it should grow whenever the screen does.
+
+  The host-command half is only as good as `SEGMENT_SPLIT`, because it reads the *first word of each segment*. It splits on `&&`, `||`, `;`, `|`, a bare `&`, a backtick and `$(` — every position where a new command can begin. It deliberately does **not** split on plain `(`/`)`: a conventional-commit message like `git commit -m "fix(net): retry"` would then present `net` as a segment's base command and be refused, and breaking real commands is worse than missing a subshell the path screen already covers. `foo & sudo rm -rf x` used to pass for exactly this reason.
 
 **Wrong tool names are resolved, not rejected.** `tools/aliases.js` maps what models actually emit (`write_file`, `str_replace_editor`, `run_terminal_cmd`, …) onto the canonical names. Two tiers, and conflating them is a bug: `STRICT_ALIASES` holds unambiguous compound names, `LOOSE_ALIASES` holds bare words like `read`, `list` and `copy`. Only the strict tier reaches the streaming text-call path, because `nameFromHint` scans identifiers in the preceding prose and a loose tier there would turn the word "list" in a sentence into a tool call. The loose tier is used only by `execTool`, where the model has explicitly named a tool.
 
@@ -345,6 +359,8 @@ Resolution is always **scoped to the enabled tool set** (`makeToolResolver`), an
 `formatToolResult` must keep surfacing `note` for `create_file` and `str_replace` — a salvage or a fuzzy match that the model is not told about is a silent behaviour change it will repeat.
 
 **Every failure teaches.** A missing argument names the argument, says what it is for, and shows a complete example call; an unknown tool suggests the nearest real name (edit distance) and lists the valid ones; a blocked path explains the boundary and gives a correct example; a not-found command lists what *is* installed. `turn.js` already appends a "this identical call failed N times" note. The goal is that a small model's second attempt succeeds, so when adding a tool or a guard, write the error for the model that just got it wrong.
+
+**And when it never succeeds, stop early.** `turn.js` breaks out of the agentic loop on two signals, not one. The old one is the identical step twice over (`stepSig === prevStepSig`). That misses the common shape, because a stuck model rarely repeats itself *byte for byte* — it quotes the path, adds a `cd`, drops a flag — so the signature never matched and it burned the whole step budget. The second signal is `noProgress`: a step with zero successful calls whose failures classify to the same `tool:kind` set as the previous step, three in a row. `stepOk === 0` is what keeps it safe; a step that got anything done resets the counter.
 
 ## A cut-off tool call is not a malformed one
 
@@ -470,6 +486,7 @@ Rows are JSON blobs, which makes `db.<table>.all()`, `.filter()`, `.find()` and 
 | Endpoint | What it used to do | Now |
 | --- | --- | --- |
 | `GET /api/search` | built a full message graph for **every chat the user owns, on every keystroke** — and evicted the open chat's cached graph from `lib/tree.js` while doing it | one `messages ⋈ chats` query per search |
+| `chat_search` (the model-facing tool) | `db.messages.byChat()` for up to 300 chats, parsing the user's whole history on a single tool call | the same `messages.searchForUser` query, which now also returns `role` and takes a row limit |
 | `GET /api/chats-overview` | loaded and parsed every message of each chat on the page to find one preview line | `messages.lastUserText`, one indexed lookup per chat |
 | `GET /api/users/search` | parsed every user row per keystroke | indexed `users.search` |
 | `GET /api/admin/audit` | pulled up to 100 000 rows into JS twice per request to filter, count and page them | filtering, counting and paging in SQL |
@@ -535,7 +552,7 @@ Deleting a chat's uploads is deliberately two-phase (`attachmentUrlsOf` → dele
 
 Three endpoints, and the split between the first two is the important part:
 
-- `POST /api/auth/login` — **signs in only**. It used to create an account when the email was unknown, which meant a typo silently registered a second account. It now returns "Incorrect email or password" without saying which was wrong, so it is not an account-existence oracle.
+- `POST /api/auth/login` — **signs in only**. It used to create an account when the email was unknown, which meant a typo silently registered a second account. It now returns "Incorrect email or password" without saying which was wrong, so it is not an account-existence oracle. **The wording is only half of that**: an unknown address used to skip the argon2 verify entirely and answer in a fraction of the time, which is the same oracle measured with a stopwatch. `passwordMatches` always pays for one verify, against a lazily-created decoy hash when there is no account.
 - `POST /api/auth/register` — **creates only**. Returns 409 on a duplicate, requires 8+ characters, and honours the `allow_signups` setting. The first account ever created is always allowed through regardless of that setting and becomes owner+admin, which is the bootstrap path.
 - `GET /api/auth/context` — the one **public** endpoint (no `authMiddleware`). Returns `firstRun`, `allowSignups`, `appName`, `appIcon`, `appFont` and `uiPreset`.
 
@@ -544,6 +561,8 @@ Three endpoints, and the split between the first two is the important part:
 `POST /api/auth/check-email` was removed. Nothing used it after the flow split, and it answered "does this account exist" to anonymous callers. CI used to probe it as its liveness check; that job now lives in `test/http.test.js`, which asserts the whole sign-in loop rather than a status code, so check there before assuming nothing depends on an endpoint you are removing.
 
 The login limiter keys on **both** the address and the account (`ip:` / `user:`), so one address cannot spray a whole user list and a botnet cannot grind one account from many addresses. Two details are load-bearing: the counter is cleared only after the *whole* login succeeds, so a stolen password cannot be used to grind TOTP codes without limit; and when the map is full it drops only what has aged out, because clearing it wholesale — which it used to do — let an attacker wipe every other address's counter with 5000 junk attempts.
+
+**Registration counts under `reg:`, not `user:`.** Sharing the account key with login turned the duplicate-email 409 into a lockout: eight registration attempts against a known address locked its real owner out of signing in for ten minutes, from any device.
 
 The session cookie is `HttpOnly; SameSite=Lax`, plus `Secure` **only when the request arrived over TLS**. Forcing `Secure` unconditionally makes the browser discard the cookie on a plain-http install and locks everyone out of an ordinary localhost deployment.
 
@@ -590,6 +609,8 @@ Everything below has already caused a real bug here at least once.
 
 **Coerce and cap at the boundary, once.** A row is a JSON blob, so an unbounded string or object on a `PATCH` body grows a row that is then re-parsed on every request that touches it. `String(x ?? '').slice(0, n)` at the route, not `x` straight into the patch — `display_name` was storing whatever it was given, including objects. `prefs` is the one free-form bag and is bounded by serialized size rather than schema.
 
+**`PATCH /api/admin/settings` does this from a table, not from 40 hand-written `if` lines.** `SETTING_FIELDS` in `routes/settings.js` maps each body key to its setting key and its shape (`bool`, `enum`, `int`/`num` with bounds, `text` with a cap, or a `map` function), and `coerceSetting` is the single place a value is turned into what gets stored. Both are exported so the coercion is unit-tested without booting a server. The table is null-prototype for the reason above: it is indexed by a key straight off the wire. Adding a setting is one row — writing another `if ('x' in req.body) setSetting(...)` beside it reintroduces exactly the drift this replaced, where `apiBaseUrl` stored whatever object it was handed and `appName` threw a 500 on `.trim()` when sent a number.
+
 **Never index the database with something you have not type-checked.** `db.*.byId` returns `undefined` for a non-primitive rather than letting `better-sqlite3` throw, which is what turned "look up this thing" into a 500 in any route that forgot to coerce. Websocket handlers must still check `typeof chatId === 'string'` themselves, because they are outside the express error handler.
 
 **An id from a request body must be checked against the resource it will be used on.** `regenerate` accepted a `messageId` from any chat and wrote its parent into *this* chat's `active_leaf`; the fix is one `target.chat_id !== chat.id`.
@@ -630,10 +651,10 @@ Entry point is `index.js` (~60 lines): express setup, cookie parsing, `/uploads`
   - `paths.js` — `SANDBOX_ROOT`, `dirFor`, `resolveSafe` (the escape guard), `relOf`.
   - `meta.js` — per-file version numbers, history snapshots, the persisted shell cwd, and the bounded meta cache.
   - `ignore.js` — `extOf`/`isText` plus dependency, build and `.gitignore` filtering. Owns the gitignore cache; `files.js` drops entries through `gitignoreCacheDrop` rather than reaching into the `Map`.
-  - `zip.js` — the zip codec (`zipBuffer`, `unzipBuffer`). Pure: no filesystem, no chat id.
+  - `zip.js` — the zip codec (`zipBuffer`, `unzipBuffer`). Pure: no filesystem, no chat id. `unzipBuffer` inflates under a `maxOutputLength` and a running total (64 MB per entry, 256 MB per archive), because `extractZip`'s own size check happens *after* the entry is already expanded in memory — a few hundred kilobytes of zeroes deflates small enough to exhaust the heap before anything got to look at it.
   - `files.js` — the versioned workspace filesystem: list, read, write, edit, tree, search, find, and the zip wrappers that touch disk.
   - `hostenv.js` — `pickShell` and the PATH-scanning host detection described under "The sandbox harness".
-  - `shell.js` — `bash`, the cmd.exe/POSIX wrapper and `winTranslate`.
+  - `shell.js` — `bash`, the cmd.exe/POSIX wrapper and `winTranslate`. The transcript is kept as a bounded head plus a rolling tail rather than one growing string: only the first `OUT_CAP` characters are ever shown and only the last line carries the cwd marker, so buffering everything a process may emit held up to 12 MB per concurrent command to produce 20 KB of output.
   - `args.js` — the argument readers (`argText`, `argPath`, `argBool`, …) that absorb the many spellings models use for the same argument.
   - `exec.js` — `execTool`, a **dispatch table** keyed by canonical tool name. Adding a tool is one entry plus one schema in `tools/schemas.js`; handlers receive an already-normalized relative path and never re-validate one.
 - `websearch.js`, `membank.js`, `skillsys.js`, `mcp.js`, `projectfiles.js` — self-contained tool backends (each exports `execTool`/`promptFor`/`resultPayload`/`formatResult` variants).
@@ -670,6 +691,21 @@ A generation belongs to the *chat*, not to the socket that started it. `live.js`
 4. Because `aborts` is keyed by chat rather than by socket, Stop and steering work from a freshly loaded page — both paths ownership-check the chat against the session user first.
 5. One turn per chat: a second `chat`/`regenerate`/`edit` for a chat that already has a live turn is rejected. `beginTurn` is paired with `endTurn` in a `finally`, and records older than 45 minutes are treated as stale, so a crashed turn can never wedge a chat permanently.
 6. The client mirror of this is `App.jsx`'s `gen` map, which is a **ref** so a token never re-renders the tree. `busyChats` state is the one thing derived from it, refreshed only by `syncBusy()` and only when membership actually changes; `Sidebar` turns that into the pulsing `.row-busy` dot and a Stop entry on rows generating out of view. Every mutation of `gen` goes through `queueRec`/`dropRec`/`recFor` so the mirror cannot drift — do not call `gen.current.set/delete` directly.
+
+### A queued message may only be sent from `finalize()`
+
+While a reply streams, `App.jsx` renders it by force-appending the streaming placeholder to the **end** of the list (`renderList` pins `streamKey` last). So the ordering invariant is: **nothing may be appended to `messages` between `done` arriving and `finalize()` committing the reply.** Break it and every following turn renders one slot out of place — the queued user message sits above the answer it came after — and it stays wrong locally, because the `refreshMessages` that would repair it is cancelled by the next turn bumping `refreshSeq`. Only the last turn in a run gets corrected, which is why the bug looks like the thread "settling" at the end.
+
+`done` therefore commits nothing itself. It sets `nextTurnPending` and `pendingDone` and leaves; the reveal loop calls `finalize()` when the typewriter catches up, and `finalize()` calls `startNextTurn()` **after** its `setMessages`. `startNextTurn` is the single place a queued send or a compare-mode regenerate is dispatched.
+
+Details that are load-bearing:
+
+- **`done` finalizes immediately when there is nothing left to reveal** (`dispLen >= targetContent.length`), not only when `animate` is off. The reveal interval is the only other caller, and an `error` earlier in the turn has already run `stopLoops()` — without this check a turn that errored then completed would leave `nextTurnPending` set with no loop alive to drain it, and the queue would stall silently for the rest of the session.
+- **`start` clears `nextTurnPending` before its catch-up `finalize()`.** A new turn is already running, so dispatching another send there would be refused by the server's one-turn-per-chat guard and the message would be lost. Clearing it instead leaves the item in `queuedList` to drain at *that* turn's `done`.
+- **The compare `remaining.shift()` happens in `startNextTurn`, not in `done`.** Shifting at `done` discards the id if the continuation never runs.
+- `finalize()` skips the `setMessages` append entirely when content and reasoning are both empty, so a turn that produced nothing does not flash an empty assistant bubble before `refreshMessages` removes it.
+
+Server side, the pairing rule is that **`done` and `endTurn` must land in the same tick.** `runCompletion` generates a chat's title after sending `done`; awaiting it kept `live.activeTurn(chat.id)` true for the length of an extra LLM call, so the client's queued send arrived while the turn still looked live and was rejected — the user message was never even inserted, since that check runs before the insert. Title generation is now detached (`.then(...).catch(() => {})`) so nothing async separates `done` from the `finally` that ends the turn. The trade-off is that the title call escapes `runQueued`, so with `model_queue` on it can overlap the next turn; that is preferred over dropping a message.
 
 ### HTTP routes (`server/routes/`)
 

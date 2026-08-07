@@ -27,8 +27,12 @@ export function zipBuffer(entries) {
   return Buffer.concat([...local, ...central, end]);
 }
 
+const MAX_ENTRY_BYTES = 64 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 256 * 1024 * 1024;
+
 function unzipBuffer(buf) {
   const out = [];
+  let produced = 0;
   let eocd = -1;
   for (let i = buf.length - 22; i >= 0 && i >= buf.length - 22 - 65536; i--) { if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; } }
   if (eocd === -1) throw new Error('no end-of-central-directory (not a zip?)');
@@ -47,9 +51,18 @@ function unzipBuffer(buf) {
     const lhExtraLen = buf.readUInt16LE(localOff + 28);
     const dataStart = localOff + 30 + lhNameLen + lhExtraLen;
     const comp = buf.subarray(dataStart, dataStart + compSize);
+    const room = Math.min(MAX_ENTRY_BYTES, MAX_TOTAL_BYTES - produced);
     let data = null;
-    try { if (method === 0) data = Buffer.from(comp); else if (method === 8) data = zlib.inflateRawSync(comp); } catch { data = null; }
-    if (data && !name.endsWith('/') && !name.includes('..')) out.push({ name: name.replace(/\\/g, '/'), data });
+    if (room > 0) {
+      try {
+        if (method === 0) data = comp.length <= room ? Buffer.from(comp) : null;
+        else if (method === 8) data = zlib.inflateRawSync(comp, { maxOutputLength: room });
+      } catch { data = null; }
+    }
+    if (data && !name.endsWith('/') && !name.includes('..')) {
+      produced += data.length;
+      out.push({ name: name.replace(/\\/g, '/'), data });
+    }
     off += 46 + nameLen + extraLen + commentLen;
   }
   return out;

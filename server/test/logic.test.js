@@ -25,6 +25,8 @@ import { samplingParams, parseStop } from '../llm/sampling.js';
 import { PROVIDER_TYPES, isProviderType, providerSpec } from '../providers.js';
 import { slideWithCounter, trimMode } from '../lib/ctxwindow.js';
 import { sameOrigin, sameOriginGuard, requestHost } from '../lib/origin.js';
+import { SETTING_FIELDS, coerceSetting } from '../routes/settings.js';
+import { unzipBuffer, zipBuffer } from '../sandbox/zip.js';
 
 const asReq = (headers = {}, method = 'POST', localAddress = '10.0.0.5') =>
   ({ method, headers, socket: { localAddress } });
@@ -892,6 +894,93 @@ test('sandbox guard: host administration commands are refused', () => {
   for (const cmd of bad) assert.equal(screenCommand(cmd).ok, false, cmd);
 });
 
+test('toCall: an argument named "tool" cannot rename the tool being called', () => {
+  const call = toCall('create_file', JSON.stringify({ tool: 'bash', path: 'a.txt', content: 'x' }));
+  assert.equal(call.tool, 'create_file');
+  assert.equal(call.path, 'a.txt');
+  assert.equal(call.content, 'x');
+});
+
+test('toCall: a cut-off marker survives the tool name being reapplied', () => {
+  const call = toCall('create_file', '{"path": "a.txt", "content": "half of the fi');
+  assert.equal(call.tool, 'create_file');
+  assert.equal(cutOffOf(call)?.key, 'content');
+});
+
+test('unzip: a compression bomb cannot be inflated without bound', () => {
+  const huge = Buffer.alloc(80 * 1024 * 1024, 0);
+  const zip = zipBuffer([{ name: 'bomb.bin', data: huge }]);
+  assert.ok(zip.length < 1024 * 1024, 'the bomb should compress to almost nothing');
+  const entries = unzipBuffer(zip);
+  const total = entries.reduce((n, e) => n + e.data.length, 0);
+  assert.ok(total <= 64 * 1024 * 1024, `inflated ${total} bytes, expected the per-entry cap to hold`);
+});
+
+test('unzip: ordinary archives still round-trip through the cap', () => {
+  const zip = zipBuffer([
+    { name: 'a.txt', data: Buffer.from('hello') },
+    { name: 'dir/b.txt', data: Buffer.from('x'.repeat(5000)) }
+  ]);
+  const entries = unzipBuffer(zip);
+  assert.deepEqual(entries.map(e => e.name), ['a.txt', 'dir/b.txt']);
+  assert.equal(entries[0].data.toString(), 'hello');
+  assert.equal(entries[1].data.length, 5000);
+});
+
+test('egress: loopback and ULA are private however the address is written', () => {
+  for (const ip of ['::1', '0:0:0:0:0:0:0:1', '::', 'fc00::1', 'fe80::1', 'ff02::1', '::ffff:192.168.1.1', '0:0:0:0:0:ffff:10.0.0.1']) {
+    assert.equal(isPrivateAddress(ip), true, ip);
+  }
+  for (const ip of ['2001:4860:4860::8888', '2001:db8::1', '::ffff:8.8.8.8', '64:ff9b::8.8.8.8', 'not-an-ip', 'fg::1']) {
+    assert.equal(isPrivateAddress(ip), false, ip);
+  }
+});
+
+test('admin settings: every field is coerced and clamped at the boundary', () => {
+  assert.equal(coerceSetting(SETTING_FIELDS.apiBaseUrl, { evil: 1 }), '[object Object]'.slice(0, 500));
+  assert.equal(coerceSetting(SETTING_FIELDS.apiBaseUrl, '  http://x  '), 'http://x');
+  assert.equal(coerceSetting(SETTING_FIELDS.apiKey, 'k'.repeat(9999)).length, 500);
+  assert.equal(coerceSetting(SETTING_FIELDS.modelQueue, 'yes'), '1');
+  assert.equal(coerceSetting(SETTING_FIELDS.modelQueue, 0), '0');
+  assert.equal(coerceSetting(SETTING_FIELDS.webSearchCount, 9999), '20');
+  assert.equal(coerceSetting(SETTING_FIELDS.webSearchCount, 'abc'), '5');
+  assert.equal(coerceSetting(SETTING_FIELDS.uploadLimitUserMb, -5), '0');
+  assert.equal(coerceSetting(SETTING_FIELDS.voiceTtsSpeed, 99), '4');
+  assert.equal(coerceSetting(SETTING_FIELDS.voiceSttEngine, 'nonsense'), 'browser');
+  assert.equal(coerceSetting(SETTING_FIELDS.voiceSttEngine, 'server'), 'server');
+  assert.equal(coerceSetting(SETTING_FIELDS.voiceTtsModel, ''), 'tts-1');
+  assert.deepEqual(
+    JSON.parse(coerceSetting(SETTING_FIELDS.webSearchDomains, 'https://A.com/x\nb.com, a.com')),
+    ['a.com', 'b.com']
+  );
+});
+
+test('admin settings: an unknown or inherited field name writes nothing', () => {
+  assert.equal(SETTING_FIELDS.constructor, undefined);
+  assert.equal(SETTING_FIELDS.__proto__, undefined);
+  assert.equal(SETTING_FIELDS.toString, undefined);
+});
+
+test('sandbox guard: a host command is screened wherever a command can start', () => {
+  const bad = [
+    'echo hi & sudo rm -rf x',
+    'echo $(systemctl restart nginx)',
+    'echo `apt-get install nginx`',
+    'true & docker run -it x'
+  ];
+  for (const cmd of bad) assert.equal(screenCommand(cmd).ok, false, cmd);
+});
+
+test('sandbox guard: & and parentheses in ordinary arguments are not commands', () => {
+  const ok = [
+    'curl "http://localhost:8080/x?a=1&net=2" -o out.html',
+    'git commit -m "fix(net): retry on timeout"',
+    'node -e "console.log(1 & 2)"',
+    'npm run build && npm test'
+  ];
+  for (const cmd of ok) assert.equal(screenCommand(cmd).ok, true, cmd);
+});
+
 test('sandbox guard: cd escapes are judged against the current depth', () => {
   assert.equal(screenCommand('cd ..', 'src/utils').ok, true);
   assert.equal(screenCommand('cd ../..', 'src/utils').ok, true);
@@ -1261,6 +1350,73 @@ test('sandbox: shell output survives a chunk boundary inside a character', async
   assert.equal(r.ok, true, r.error);
   assert.equal((r.output.match(/�/g) || []).length, 0, 'no character was decoded in half');
   assert.ok(r.output.startsWith('日本語テスト'), 'output begins with the real text');
+  await sboxReset();
+});
+
+test('sandbox: a failed command does not move the shell', async () => {
+  await sboxReset();
+  await sbox({ tool: 'create_file', path: 'proj/a.txt', content: 'x' });
+  const ok = await sbox({ tool: 'bash', cmd: 'cd proj' });
+  assert.equal(ok.ok, true);
+  assert.equal(ok.cwd, 'proj', 'a successful cd still persists');
+  assert.equal((await sbox({ tool: 'bash', cmd: 'cd ..' })).cwd, '');
+
+  // A cd that succeeds inside a command that then fails must leave the shell where it was.
+  // Persisting it is what turned one bad command into an endless loop: every retry of
+  // `cd proj && ...` resolved one level deeper than the last.
+  const failed = await sbox({ tool: 'bash', cmd: 'cd proj && nosuchprogram-xyz-qq' });
+  assert.equal(failed.ok, false);
+  assert.equal(failed.cwd, '', 'the shell must not have moved');
+
+  assert.equal((await sbox({ tool: 'bash', cmd: 'cd proj' })).ok, true, 'so a retry repeats rather than compounds');
+  await sboxReset();
+});
+
+test('sandbox: repeating a cd the shell already made is explained, not just refused', async () => {
+  await sboxReset();
+  await sbox({ tool: 'create_file', path: 'proj/src/a.txt', content: 'x' });
+  assert.equal((await sbox({ tool: 'bash', cmd: 'cd proj' })).cwd, 'proj');
+
+  const again = await sbox({ tool: 'bash', cmd: 'cd proj && ' + (process.platform === 'win32' ? 'dir' : 'ls') });
+  assert.equal(again.ok, false);
+  assert.match(again.error, /already in "proj"/);
+  assert.match(again.error, /proj\/proj/, 'names the path it actually looked for');
+  assert.match(again.error, /workdir/, 'points at the stateless alternative');
+
+  // A genuine nested cd is untouched, and so is a target that exists nowhere.
+  const nested = await sbox({ tool: 'bash', cmd: 'cd src' });
+  assert.equal(nested.ok, true);
+  assert.equal(nested.cwd, 'proj/src');
+  const missing = await sbox({ tool: 'bash', cmd: 'cd nope-xyz' });
+  assert.equal(missing.ok, false);
+  assert.ok(!/already in/.test(missing.error || ''), 'not the stale-cd message');
+  await sboxReset();
+});
+
+test('sandbox: workdir is absolute from the root however the shell has wandered', async () => {
+  await sboxReset();
+  await sbox({ tool: 'create_file', path: 'proj/src/deep/a.txt', content: 'x' });
+  await sbox({ tool: 'bash', cmd: 'cd proj' });
+  await sbox({ tool: 'bash', cmd: 'cd src' });
+  const r = await sbox({ tool: 'bash', cmd: process.platform === 'win32' ? 'dir' : 'ls', workdir: 'proj/src/deep' });
+  assert.equal(r.ok, true);
+  assert.equal(r.cwd, 'proj/src/deep');
+  await sboxReset();
+});
+
+test('sandbox: a directory that already exists is the asked-for state, not a failure', async () => {
+  await sboxReset();
+  assert.equal((await sbox({ tool: 'bash', cmd: 'mkdir build' })).ok, true);
+
+  const second = await sbox({ tool: 'bash', cmd: 'mkdir build' });
+  assert.equal(second.ok, true, 'repeating it must not read as a failure worth retrying');
+  assert.match(second.note || '', /already existed/);
+
+  const trailing = await sbox({ tool: 'bash', cmd: 'cd . && mkdir build' });
+  assert.equal(trailing.ok, true, 'a trailing mkdir is still the last thing that ran');
+
+  // But a real failure sitting behind the collision must not be laundered away.
+  assert.equal((await sbox({ tool: 'bash', cmd: 'mkdir build && nosuchprogram-xyz-qq' })).ok, false);
   await sboxReset();
 });
 

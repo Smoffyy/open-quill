@@ -179,7 +179,7 @@ function MoreGroup({ label, items, renderOpt, openKey, setOpenKey }) {
       const flip = rr.right + GAP + w > vp.w - EDGE && rr.left - GAP - w >= EDGE;
       let left = flip ? rr.left - GAP - w : rr.right + GAP;
       left = Math.max(EDGE, Math.min(left, Math.max(EDGE, vp.w - EDGE - w)));
-      const top = Math.max(EDGE, Math.min(rr.top - 5, Math.max(EDGE, vp.h - EDGE - h)));
+      const top = Math.max(EDGE, Math.min(rr.top, Math.max(EDGE, vp.h - EDGE - h)));
       const next = { left: Math.round(left), top: Math.round(top), maxH: nat > budget ? Math.round(budget) : 0, flip };
       setPos(p => (p && p.left === next.left && p.top === next.top && p.maxH === next.maxH && p.flip === next.flip) ? p : next);
     };

@@ -31,10 +31,6 @@ export function graphOf(chatId) {
   return graph;
 }
 
-export function invalidateTree(chatId) {
-  if (chatId) cache.delete(chatId); else cache.clear();
-}
-
 export function sortedMsgs(chatId) { return graphOf(chatId).msgs; }
 
 export function ensureChain(chatId) {

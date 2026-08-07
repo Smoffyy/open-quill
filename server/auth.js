@@ -83,13 +83,6 @@ export function adminOnly(req, res, next) {
   next();
 }
 
-export function userFromRequest(req) {
-  const raw = req.headers.cookie ? cookie.parseCookie(req.headers.cookie) : {};
-  if (!raw.token) return null;
-  const r = resolveToken(raw.token);
-  return r ? r.user : null;
-}
-
 export function sessionFromRequest(req) {
   const raw = req.headers.cookie ? cookie.parseCookie(req.headers.cookie) : {};
   if (!raw.token) return null;

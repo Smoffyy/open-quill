@@ -139,9 +139,8 @@ export function initWs(server) {
             await streamCompletion({
               model, messages, signal: controller.signal,
               onEvent: (e) => {
-                if (e.type === 'usage') return;
                 if (e.type === 'reasoning') safeSend(JSON.stringify({ type: 'reasoning', chatId: 'incognito', text: e.text }));
-                else safeSend(JSON.stringify({ type: 'content', chatId: 'incognito', text: e.text }));
+                else if (e.type === 'content') safeSend(JSON.stringify({ type: 'content', chatId: 'incognito', text: e.text }));
               }
             });
           } catch (err) { if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', chatId: 'incognito', error: String(err.message || err) })); }
@@ -159,6 +158,7 @@ export function initWs(server) {
       const content = textField(msg.content);
       const attachments = sanitizeAttachments(msg.attachments);
       const messageId = typeof msg.messageId === 'string' ? msg.messageId : '';
+      let ownsTurn = false;
       try {
         const chat = db.chats.byId(msg.chatId);
         const hubModel = resolveModel(msg.modelId, state.isAdmin);
@@ -220,6 +220,7 @@ export function initWs(server) {
         const queueOn = getSetting('model_queue', '0') === '1';
         const styleText = styleTextFor(u.id, msg.styleId);
         live.beginTurn(u.id, chat.id, model.id);
+        ownsTurn = true;
         try {
           await runQueued(queueOn, model.id,
             () => { liveSend(JSON.stringify({ type: 'queued', chatId: chat.id })); },
@@ -227,9 +228,9 @@ export function initWs(server) {
         } finally { live.endTurn(chat.id); }
         maybeUpdateMemory(u.id, model);
       } catch (err) {
-        if (msg && msg.chatId) live.endTurn(msg.chatId);
-        liveSend(JSON.stringify({ type: 'error', chatId: msg && msg.chatId, error: String(err.message || err) }));
-        liveSend(JSON.stringify({ type: 'done', chatId: msg && msg.chatId }));
+        const send = ownsTurn ? liveSend : safeSend;
+        send(JSON.stringify({ type: 'error', chatId: msg.chatId, error: String(err.message || err) }));
+        send(JSON.stringify({ type: 'done', chatId: msg.chatId }));
       }
     });
 
