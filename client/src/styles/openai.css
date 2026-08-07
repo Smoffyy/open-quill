@@ -155,6 +155,9 @@
 [data-preset="openai"] .plus-menu .pm-item:hover, [data-preset="openai"] .plus-menu .pm-item.active { background: var(--pop-hover) !important; }
 [data-preset="openai"] .model-menu, [data-preset="openai"] .model-submenu { border-radius: 16px; }
 [data-preset="openai"] .model-menu { min-width: 268px; border: 1px solid var(--pop-border); box-shadow: var(--pop-shadow); }
+[data-preset="openai"] .model-submenu { min-width: 176px; border: 1px solid var(--pop-border); box-shadow: var(--pop-shadow); }
+[data-preset="openai"] .model-submenu .model-opt { padding: 6px 8px; }
+[data-preset="openai"] .submenu-row svg { color: var(--pop-faint); }
 [data-preset="openai"] .model-opt { padding: 6px 8px; }
 [data-preset="openai"] .model-opt .mo-name, [data-preset="openai"] .submenu-row { font-weight: 500; }
 [data-preset="openai"] .toggle-row { padding: 7px 8px; }

@@ -113,16 +113,17 @@
 .switch.on::after { transform: translateX(16px); }
 .submenu-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 10px; border-radius: 8px; width: 100%; font-size: 14px; font-weight: 400; line-height: 20px; color: var(--pop-text); }
 .submenu-row:hover, .submenu-row.active { background: var(--pop-hover); }
-.submenu-row svg { width: 16px; height: 16px; color: var(--pop-faint); flex-shrink: 0; }
+.submenu-row svg { width: 16px; height: 16px; color: var(--mo-desc); flex-shrink: 0; }
 .more-wrap { position: relative; }
 .model-submenu {
-  position: absolute; left: calc(100% + 4px); top: -5px; min-width: 176px; max-width: 260px; width: max-content; background: var(--pop-bg);
-  border: 1px solid var(--pop-border); border-radius: 12px; padding: 4px; box-shadow: var(--pop-shadow);
+  position: absolute; left: calc(100% + 4px); top: 0; min-width: 137.6px; max-width: 260px; width: max-content; background: var(--pop-bg);
+  border: 0; border-radius: 12px; padding: 4px;
+  box-shadow: inset 0 0 0 1px var(--pop-border), 0 8px 24px rgba(0, 0, 0, .32), 0 2px 6px rgba(0, 0, 0, .2);
   z-index: 60; animation: pop .14s ease; transform-origin: top left;
 }
-.model-submenu .model-opt { min-width: 0; }
+.model-submenu .model-opt { min-width: 0; padding: 6px 10px; }
 .model-submenu .mo-name, .model-submenu .mo-desc { overflow-wrap: anywhere; }
-.model-submenu.up { top: auto; bottom: -5px; transform-origin: bottom left; }
+.model-submenu.up { top: auto; bottom: 0; transform-origin: bottom left; }
 .model-submenu.left { left: auto; right: calc(100% + 4px); transform-origin: top right; }
 .model-submenu.up.left { transform-origin: bottom right; }
 .model-submenu::before { content: ''; position: absolute; top: 0; bottom: 0; left: -14px; width: 14px; }
