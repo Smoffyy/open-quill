@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Chat, Search, Panel, Gear, Shield, Flask, Logout, Dots, Trash, Heart, FileText, Star, Download, Folder, Pencil, Chevron, Users, Box, Compact, Stop } from './icons.jsx';
+import { Plus, Chat, Search, Panel, Gear, Shield, Flask, Logout, Dots, DotsV, Trash, Heart, FileText, Star, Download, Folder, Pencil, Chevron, Users, Box, Compact, Stop } from './icons.jsx';
 import { t } from '../i18n.jsx';
 
 function ProfileMenu({ user, version, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, onClose }) {
@@ -80,21 +80,21 @@ function ChatRow({ c, active, showTrash, folders, onOpen, onDelete, onToggleStar
       {showTrash ? (
         <button className="row-ctrl shift-del" onClick={(e) => { e.stopPropagation(); onDelete(c.id); }} title={t("Delete chat")} aria-label={t("Delete chat")}><Trash style={{ width: 14 }} /></button>
       ) : (
-        <button className="row-ctrl" ref={btnRef} onClick={openMenu} title={t("Options")} aria-label={t("Options")} aria-expanded={!!menu} aria-haspopup="menu"><Dots style={{ width: 16 }} /></button>
+        <button className="row-ctrl" ref={btnRef} onClick={openMenu} title={t("Options")} aria-label={t("Options")} aria-expanded={!!menu} aria-haspopup="menu"><DotsV style={{ width: 20 }} /></button>
       )}
       {menu && createPortal(
         <div className="chat-menu" ref={menuRef} role="menu" aria-label={t("Chat options")} style={{ top: menu.top, left: menu.left, visibility: menu.ready ? undefined : 'hidden' }}>
           {busy && onStopChat && (
             <button onClick={(e) => { e.stopPropagation(); onStopChat(c.id); close(); }}>
-              <Stop style={{ width: 15 }} /> {t('Stop generating')}
+              <Stop style={{ width: 20 }} /> {t('Stop generating')}
             </button>
           )}
           <button onClick={(e) => { e.stopPropagation(); onToggleStar(c.id); close(); }}>
-            <Star style={{ width: 15 }} /> {c.starred ? t('Unstar chat') : t('Star chat')}
+            <Star style={{ width: 20 }} /> {c.starred ? t('Unstar chat') : t('Star chat')}
           </button>
           <div className="cm-sub">
             <button onClick={(e) => { e.stopPropagation(); setSubOpen(s => !s); setMenu(m => m ? { ...m, ready: false } : m); }}>
-              <Folder style={{ width: 15 }} /> Move to folder
+              <Folder style={{ width: 20 }} /> Move to folder
               <Chevron style={{ width: 13, marginLeft: 'auto', transform: subOpen ? 'rotate(90deg)' : 'none' }} />
             </button>
             {subOpen && (
@@ -110,13 +110,13 @@ function ChatRow({ c, active, showTrash, folders, onOpen, onDelete, onToggleStar
             )}
           </div>
           <button onClick={(e) => { e.stopPropagation(); window.open('/api/chats/' + c.id + '/export?format=md', '_blank'); close(); }}>
-            <Download style={{ width: 15 }} /> Export as Markdown
+            <Download style={{ width: 20 }} /> Export as Markdown
           </button>
           <button onClick={(e) => { e.stopPropagation(); window.open('/api/chats/' + c.id + '/export?format=json', '_blank'); close(); }}>
-            <Download style={{ width: 15 }} /> Export as JSON
+            <Download style={{ width: 20 }} /> Export as JSON
           </button>
           <button className="danger" onClick={(e) => { e.stopPropagation(); onDelete(c.id); close(); }}>
-            <Trash style={{ width: 15 }} /> Delete chat
+            <Trash style={{ width: 20 }} /> Delete chat
           </button>
         </div>, document.body)}
     </div>

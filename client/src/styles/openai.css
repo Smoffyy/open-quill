@@ -47,9 +47,16 @@
 [data-preset="openai"] .sidebar { background: var(--sidebar); border-right: 1px solid var(--border-soft); font-family: var(--font-sans); }
 @media (min-width: 721px) { [data-preset="openai"] .sidebar:not(.collapsed) { width: 260px; } }
 [data-preset="openai"] .sidebar .brand, [data-preset="openai"] .side-title { font-family: var(--font-sans); font-size: 16px; font-weight: 600; letter-spacing: 0; }
-[data-preset="openai"] .nav-item { border-radius: 10px; padding: 7px 10px; font-size: 14px; font-weight: 500; }
+[data-preset="openai"] .nav-item { border-radius: 10px; padding: 7px 10px; font-size: 14px; line-height: normal; font-weight: 500; gap: 11px; }
+[data-preset="openai"] .nav-item svg { width: 17px; height: 17px; }
+[data-preset="openai"] .section-label { padding: 12px 14px 5px; line-height: normal; }
+[data-preset="openai"] .chat-row .row-ctrl { position: static; width: 20px; height: 20px; }
+[data-preset="openai"] .chat-menu { padding: 5px; background: var(--menu-bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 32px #00000055; }
+[data-preset="openai"] .chat-menu button { gap: 9px; padding: 8px 9px; border-radius: 7px; font-size: 13.5px; line-height: normal; color: var(--text); }
+[data-preset="openai"] .chat-menu button:hover { background: var(--surface-hover); }
+[data-preset="openai"] .chat-menu svg { width: 15px; height: 15px; }
 [data-preset="openai"] .nav-item:hover { background: var(--surface-hover); }
-[data-preset="openai"] .chat-row { border-radius: 8px; padding: 7px 10px; font-size: 13.5px; color: var(--text); }
+[data-preset="openai"] .chat-row { border-radius: 8px; padding: 7px 10px; font-size: 13.5px; line-height: normal; color: var(--text); }
 :root[data-theme="openai"] .chat-row:hover, :root[data-theme="openai"] .chat-row.active { background: #393939; color: var(--text); }
 :root[data-preset="openai"][data-theme="light"] .chat-row:hover, :root[data-preset="openai"][data-theme="light"] .chat-row.active { background: #e2e2e2; color: var(--text); }
 [data-preset="openai"] .section-label, [data-preset="openai"] .recents-label { color: var(--text); font-weight: 700; opacity: 1; font-size: 12.5px; }
@@ -79,7 +86,7 @@
   bottom: auto; top: 42px; left: 0; right: auto; transform-origin: top left; border-radius: 16px;
 }
 
-[data-preset="openai"] .greeting { font-size: 28px; font-weight: 600; font-family: var(--font-sans); gap: 10px; margin-bottom: 26px; }
+[data-preset="openai"] .greeting { font-size: 28px; line-height: normal; font-weight: 600; font-family: var(--font-sans); gap: 10px; margin-bottom: 26px; }
 [data-preset="openai"] .greeting img { display: none; }
 [data-preset="openai"] .center-wrap { justify-content: center; padding-top: 24px; padding-bottom: 24px; }
 
@@ -147,6 +154,10 @@
 }
 [data-preset="openai"] .plus-menu .pm-item:hover, [data-preset="openai"] .plus-menu .pm-item.active { background: var(--pop-hover) !important; }
 [data-preset="openai"] .model-menu, [data-preset="openai"] .model-submenu { border-radius: 16px; }
+[data-preset="openai"] .model-menu { min-width: 268px; border: 1px solid var(--pop-border); box-shadow: var(--pop-shadow); }
+[data-preset="openai"] .model-opt { padding: 6px 8px; }
+[data-preset="openai"] .model-opt .mo-name, [data-preset="openai"] .submenu-row { font-weight: 500; }
+[data-preset="openai"] .toggle-row { padding: 7px 8px; }
 [data-preset="openai"] .model-opt, [data-preset="openai"] .submenu-row, [data-preset="openai"] .toggle-row { border-radius: 10px; }
 [data-preset="openai"] .effort-seg { border-radius: 11px; }
 [data-preset="openai"] .effort-seg-thumb, [data-preset="openai"] .effort-seg-btn { border-radius: 9px; }
@@ -164,6 +175,8 @@
 [data-preset="openai"] .thread { max-width: 808px; padding: 30px 20px 0; }
 [data-preset="openai"] .msg { margin-bottom: 20px; font-family: var(--font-sans); }
 [data-preset="openai"] .assistant-body { font-size: 15px; line-height: 1.7; font-family: var(--font-sans); }
+[data-preset="openai"] .assistant-body p, [data-preset="openai"] .assistant-body ul, [data-preset="openai"] .assistant-body ol { margin-bottom: 14px; }
+[data-preset="openai"] .msg.user { margin-bottom: 26px; }
 [data-preset="openai"] .user-col { max-width: 70%; }
 [data-preset="openai"] .bubble-user {
   background: var(--user-bubble); border-radius: 22px; padding: 8px 18px; font-size: 15px; line-height: 22px;
