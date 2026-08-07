@@ -20,7 +20,7 @@ import {
   formatChatSearchResult, chatSearchPayload, endChatPromptFor, longConvoReminderFor,
   cutOffError, CHAT_SEARCH_PROMPT
 } from '../prompts.js';
-import { noteToolCall } from '../toolstats.js';
+import { noteToolCall, classifyToolError } from '../toolstats.js';
 
 const MAX_STEERS = 6;
 const TELEMETRY_MS = 220;
@@ -224,6 +224,8 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   let maxSteps = toolsOn ? stepCap : 1;
   const callFails = new Map();
   let prevStepSig = '';
+  let prevFailShape = '';
+  let noProgress = 0;
   let lastFinish = '';
   const steerNotes = [];
   let steerBudget = MAX_STEERS;
@@ -507,12 +509,14 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       }
       const toolMsgs = [];
       let stepOk = 0, stepFailed = 0;
+      const stepFailKinds = new Set();
       for (const tc of toolCalls) {
         const call = canonicalize(toCall(tc.name, tc.argsText));
         const cut = cutOffOf(call);
         if (cut) {
           stepFailed++;
           const msg = cutOffError(call.tool, cut, stepFinish === 'length');
+          stepFailKinds.add(call.tool + ':' + classifyToolError(msg));
           noteToolCall(model, call.tool, false, msg);
           safeSend(JSON.stringify({ type: 'tool_exec', chatId: chat.id, call: cleanCall(call) }));
           const block = '\n\n[[OQR:' + Buffer.from(JSON.stringify({ call: cleanCall(call), result: { ok: false, error: msg } }), 'utf8').toString('base64') + ']]\n';
@@ -540,6 +544,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         const sig = call.tool + '|' + (tc.argsText || '');
         if (failed) {
           stepFailed++;
+          stepFailKinds.add(call.tool + ':' + classifyToolError(out.payload && out.payload.error));
           const n = (callFails.get(sig) || 0) + 1; callFails.set(sig, n);
           if (n >= 2) formatted += `\n(NOTE: this identical call has failed ${n} times. Do not repeat it. Change the arguments or approach, or tell the user why it cannot be done.)`;
         } else { stepOk++; callFails.delete(sig); }
@@ -562,9 +567,17 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         { role: 'assistant', content: stripThink(model, stepText), tool_calls: toolCalls.map(c => ({ id: c.id, name: c.name, argsText: c.argsText })) },
         ...toolMsgs
       ];
+      // Two ways to be stuck. The identical call twice over is the obvious one. The other
+      // is the same tool failing the same way while the arguments wobble cosmetically —
+      // quoting a path, prefixing a `cd` — which the signature check never matches, so it
+      // burned the whole step budget before anything noticed.
       const stepSig = toolCalls.map(c => c.name + ':' + (c.argsText || '')).join('|');
-      const loopStuck = stepOk === 0 && stepFailed > 0 && stepSig === prevStepSig;
+      const barren = stepOk === 0 && stepFailed > 0;
+      const failShape = barren ? [...stepFailKinds].sort().join(',') : '';
+      noProgress = failShape && failShape === prevFailShape ? noProgress + 1 : 0;
+      const loopStuck = (barren && stepSig === prevStepSig) || noProgress >= 2;
       prevStepSig = stepSig;
+      prevFailShape = failShape;
       if (loopStuck) {
         const note = '\n\nI stopped because the last actions kept failing in the same way. Tell me how you would like to proceed.';
         content += note;

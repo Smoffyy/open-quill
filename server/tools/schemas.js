@@ -42,7 +42,7 @@ export function sandboxToolSchemas(env = null) {
   return [
     fn('bash', bashDescription(env), {
       cmd: str('The shell command to run. May span multiple lines. Every path in it must be relative to the workspace root.'),
-      workdir: str('Optional directory to run in for this call, relative to the workspace root. Also becomes the new persistent working directory.'),
+      workdir: str('Optional directory to run in for this call, relative to the workspace root. PREFER THIS over writing "cd <dir> && ..." — the shell keeps its directory between calls, so a cd you repeat every time compounds into <dir>/<dir> and fails. workdir is absolute from the workspace root and gives the same result no matter where the shell happens to be.'),
       timeout_s: int('Optional timeout in seconds (default 60, max 600). Raise it for slow installs or long builds.')
     }, ['cmd']),
     fn('create_file', 'Create a new file, or completely overwrite an existing one. BOTH arguments are required on every call: a call carrying only a path is invalid and does nothing. Provide the COMPLETE final text: never truncate, never write placeholders such as "rest of file unchanged" or "...". Missing parent folders are created automatically, so you do not need make_dir first. Every write is versioned so the user can diff and roll back. To change part of an existing file use str_replace instead.', {

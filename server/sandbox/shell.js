@@ -94,6 +94,72 @@ export function winTranslate(cmd) {
   return { cmd: out, notes };
 }
 
+// "the folder is already there" is the state the model asked for, not a failure. Reported
+// as one it drives a retry loop, because every retry reproduces it exactly. Only the LAST
+// segment is inspected: with `&&` or `&` a trailing mkdir means nothing after it was
+// skipped, and any earlier command that also failed would put a non-matching line in the
+// output, so `every` below refuses the shortcut.
+const MKDIR_WORDS = new Set(['mkdir', 'md']);
+const SEGMENT_SPLIT = /(?:&&|\|\||[;|&])/;
+const MKDIR_EXISTS = /^(?:a subdirectory or file .+ already exists\.?|mkdir: cannot create directory .+: file exists)$/i;
+
+function lastSegment(cmd) {
+  const parts = String(cmd || '').split(SEGMENT_SPLIT);
+  for (let i = parts.length - 1; i >= 0; i--) { const s = parts[i].trim(); if (s) return s; }
+  return '';
+}
+
+function baseWord(segment) {
+  const m = /^\s*"?([^\s"]+)"?/.exec(segment);
+  if (!m) return '';
+  return m[1].replace(/\\/g, '/').split('/').pop().replace(/\.(exe|cmd|bat|com)$/i, '').toLowerCase();
+}
+
+function onlyMkdirCollisions(text) {
+  const lines = String(text || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  return lines.length > 0 && lines.every(l => MKDIR_EXISTS.test(l));
+}
+
+const CD_WORDS = new Set(['cd', 'chdir', 'pushd']);
+
+function cdTargets(cmd) {
+  const out = [];
+  for (const seg of String(cmd || '').split(SEGMENT_SPLIT)) {
+    const toks = seg.trim().split(/\s+/).filter(Boolean);
+    if (!toks.length || !CD_WORDS.has(toks[0].toLowerCase())) continue;
+    let i = 1;
+    while (i < toks.length && /^[-/][A-Za-z]$/.test(toks[i])) i++;
+    if (i < toks.length) out.push(toks[i].replace(/^["']|["']$/g, ''));
+  }
+  return out;
+}
+
+function isDir(chatId, rel) {
+  try { return fs.statSync(resolveSafe(chatId, rel)).isDirectory(); } catch { return false; }
+}
+
+// The shell's directory persists between bash calls, and small models re-issue the same
+// `cd <project>` on every command. Once the shell is already inside <project> that resolves
+// to <project>/<project> and fails with a generic "cannot find the path specified", which
+// tells the model nothing — so it retries the identical command forever. Catch it before
+// running and say exactly what happened.
+function staleCdError(chatId, cmd, baseRel) {
+  if (!baseRel) return null;
+  for (const target of cdTargets(cmd)) {
+    const t = target.replace(/\\/g, '/');
+    if (!t || t === '.' || t.startsWith('..') || t.startsWith('/') || /^[A-Za-z]:/.test(t)) continue;
+    const here = normalizeRel(baseRel + '/' + t, { allowEmpty: true });
+    const atRoot = normalizeRel(t, { allowEmpty: true });
+    if (!here.ok || !atRoot.ok || !atRoot.rel) continue;
+    if (isDir(chatId, here.rel) || !isDir(chatId, atRoot.rel)) continue;
+    const where = baseRel === atRoot.rel
+      ? `you are already in it`
+      : `you are already inside it, at "${baseRel}"`;
+    return `Blocked: your shell is already in "${baseRel}", so "cd ${target}" looked for "${here.rel}", which does not exist. "${atRoot.rel}" is a folder at the workspace ROOT and ${where}.\n\nThe shell's working directory PERSISTS between bash calls and is reported as "cwd" with every result. Do not prefix "cd ${target}" again. Either run the rest of the command on its own, or pass workdir to be explicit and stateless: {"cmd": "<your command>", "workdir": "${atRoot.rel}"}.`;
+  }
+  return null;
+}
+
 export function bash(chatId, cmd, timeoutMs = 60000, workdir) {
   if (!cmd || !String(cmd).trim()) {
     return Promise.resolve({ ok: false, error: 'cmd is required. Pass the command line to run, for example {"cmd": "node app.js"}.', output: '' });
@@ -112,6 +178,9 @@ export function bash(chatId, cmd, timeoutMs = 60000, workdir) {
 
   const screened = screenCommand(cmd, baseRel);
   if (!screened.ok) return Promise.resolve({ ok: false, error: screened.error, output: '', exit: null, cwd: baseRel, blocked: true });
+
+  const stale = staleCdError(chatId, cmd, baseRel);
+  if (stale) return Promise.resolve({ ok: false, error: stale, output: '', exit: null, cwd: baseRel, blocked: true });
 
   const win = process.platform === 'win32';
   const shell = pickShell();
@@ -150,34 +219,55 @@ export function bash(chatId, cmd, timeoutMs = 60000, workdir) {
     child.stderr.on('data', grab('err'));
     const timer = setTimeout(() => { timedOut = true; try { child.kill('SIGKILL'); } catch {} }, timeoutMs);
 
-    const finalize = (raw) => {
+    const parseTail = (raw) => {
       let text = raw;
+      let nextCwd = null;
       const mi = text.lastIndexOf(CWD_MARK);
       if (mi !== -1) {
         const after = text.slice(mi + CWD_MARK.length);
         const nl = after.indexOf('\n');
         const cwdAbs = (nl === -1 ? after : after.slice(0, nl)).trim();
         text = text.slice(0, mi).replace(/\n$/, '');
-        if (cwdAbs) { try { const r = relOf(chatId, path.resolve(cwdAbs)); if (!r.startsWith('..') && !path.isAbsolute(r)) setCwd(chatId, r); else setCwd(chatId, ''); } catch {} }
-      } else if (workdir != null && String(workdir).trim()) { try { setCwd(chatId, relOf(chatId, base)); } catch {} }
-      return text;
+        if (cwdAbs) {
+          try {
+            const r = relOf(chatId, path.resolve(cwdAbs));
+            nextCwd = (!r.startsWith('..') && !path.isAbsolute(r)) ? r : '';
+          } catch { nextCwd = null; }
+        }
+      } else if (workdir != null && String(workdir).trim()) {
+        try { nextCwd = relOf(chatId, base); } catch { nextCwd = null; }
+      }
+      return { text, nextCwd };
     };
 
     const done = (r) => { if (settled) return; settled = true; clearTimeout(timer); resolve(r); };
-    child.on('error', (e) => done({ ok: false, output: capOut(finalize(transcript())), error: String(e.message || e), exit: null }));
+    child.on('error', (e) => done({ ok: false, output: capOut(parseTail(transcript()).text), error: String(e.message || e), exit: null, cwd: getCwd(chatId) }));
     child.on('close', (code) => {
-      const text = finalize(transcript());
-      if (timedOut) return done({ ok: false, output: capOut(text), error: `Timed out after ${Math.round(timeoutMs / 1000)}s`, exit: null });
-      if (killed) return done({ ok: false, output: capOut(text), error: `Output exceeded ${Math.round(MAX / 1048576)} MB; process killed.`, exit: null });
+      const { text, nextCwd } = parseTail(transcript());
+      if (timedOut) return done({ ok: false, output: capOut(text), error: `Timed out after ${Math.round(timeoutMs / 1000)}s`, exit: null, cwd: getCwd(chatId) });
+      if (killed) return done({ ok: false, output: capOut(text), error: `Output exceeded ${Math.round(MAX / 1048576)} MB; process killed.`, exit: null, cwd: getCwd(chatId) });
       const exit = typeof code === 'number' ? code : 1;
+      const benignMkdir = exit !== 0 && MKDIR_WORDS.has(baseWord(lastSegment(xlat.cmd))) && onlyMkdirCollisions(text);
+      // The shell only moves when the command worked. A failed `cd dir && ...` that still
+      // relocated the shell is what turns one mistake into an endless loop: the model
+      // retries `cd dir && ...`, which now resolves to dir/dir, and never recovers.
+      if ((exit === 0 || benignMkdir) && nextCwd !== null) setCwd(chatId, nextCwd);
       const cwd = getCwd(chatId);
       const xnote = xlat.notes.length ? `\n\n[Adjusted for Windows: ${xlat.notes.join(', ')}. Unix flags like -p and -rf do not exist here; prefer the dedicated file tools.]` : '';
       if (exit === 0) return done({ ok: true, output: capOut(text) + xnote, exit: 0, cwd });
+      if (benignMkdir) {
+        return done({
+          ok: true, exit: 0, cwd, output: capOut(text) + xnote,
+          note: 'the directory already existed, so there was nothing to create. This is the state you asked for — do not retry. `make_dir` succeeds whether or not the folder is already there.'
+        });
+      }
       let hinted = (capOut(text) || `Exited with code ${exit}`) + xnote;
       const notFound = /is not recognized as an internal or external command/i.test(hinted)
         || /: (?:command )?not found/i.test(hinted) || exit === 9009 || exit === 127;
+      const unixFlavoured = win && /parameter format not correct|invalid number of parameters/i.test(hinted);
       const badSlash = win && /invalid switch|the syntax of the command is incorrect/i.test(hinted);
       if (notFound) hinted += '\n\nHINT: ' + missingCommandHint();
+      else if (unixFlavoured) hinted += '\n\nHINT: `find`, `sort` and `more` exist on Windows but they are the WINDOWS commands, not the Unix ones. Windows `find` searches file contents for a literal string and does not understand `-name`, `-type`, `-exec` or `.` as a starting directory. Do not retry it with different flags. Use the dedicated file tools instead: `find` for name patterns (e.g. {"pattern": "**/*.java"}), `search` for text inside files, and `list_files` for the tree. They work identically on every OS.';
       else if (badSlash) hinted += '\n\nHINT: this is almost always cmd.exe reading a `/` inside a path as a switch, not a separator. `mkdir a/b`, `del x/y.txt` and similar fail this way even though `cd`, this app\'s file tools, and every real interpreter accept forward slashes fine. Rewrite the path with backslashes (`mkdir a\\b`) or, better, use the dedicated file tools (make_dir, create_file, delete_file, copy_file, move_file) which take forward-slash paths on every OS.';
       return done({ ok: false, output: hinted, exit, error: `Exited with code ${exit}`, cwd });
     });

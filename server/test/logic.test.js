@@ -1353,6 +1353,73 @@ test('sandbox: shell output survives a chunk boundary inside a character', async
   await sboxReset();
 });
 
+test('sandbox: a failed command does not move the shell', async () => {
+  await sboxReset();
+  await sbox({ tool: 'create_file', path: 'proj/a.txt', content: 'x' });
+  const ok = await sbox({ tool: 'bash', cmd: 'cd proj' });
+  assert.equal(ok.ok, true);
+  assert.equal(ok.cwd, 'proj', 'a successful cd still persists');
+  assert.equal((await sbox({ tool: 'bash', cmd: 'cd ..' })).cwd, '');
+
+  // A cd that succeeds inside a command that then fails must leave the shell where it was.
+  // Persisting it is what turned one bad command into an endless loop: every retry of
+  // `cd proj && ...` resolved one level deeper than the last.
+  const failed = await sbox({ tool: 'bash', cmd: 'cd proj && nosuchprogram-xyz-qq' });
+  assert.equal(failed.ok, false);
+  assert.equal(failed.cwd, '', 'the shell must not have moved');
+
+  assert.equal((await sbox({ tool: 'bash', cmd: 'cd proj' })).ok, true, 'so a retry repeats rather than compounds');
+  await sboxReset();
+});
+
+test('sandbox: repeating a cd the shell already made is explained, not just refused', async () => {
+  await sboxReset();
+  await sbox({ tool: 'create_file', path: 'proj/src/a.txt', content: 'x' });
+  assert.equal((await sbox({ tool: 'bash', cmd: 'cd proj' })).cwd, 'proj');
+
+  const again = await sbox({ tool: 'bash', cmd: 'cd proj && ' + (process.platform === 'win32' ? 'dir' : 'ls') });
+  assert.equal(again.ok, false);
+  assert.match(again.error, /already in "proj"/);
+  assert.match(again.error, /proj\/proj/, 'names the path it actually looked for');
+  assert.match(again.error, /workdir/, 'points at the stateless alternative');
+
+  // A genuine nested cd is untouched, and so is a target that exists nowhere.
+  const nested = await sbox({ tool: 'bash', cmd: 'cd src' });
+  assert.equal(nested.ok, true);
+  assert.equal(nested.cwd, 'proj/src');
+  const missing = await sbox({ tool: 'bash', cmd: 'cd nope-xyz' });
+  assert.equal(missing.ok, false);
+  assert.ok(!/already in/.test(missing.error || ''), 'not the stale-cd message');
+  await sboxReset();
+});
+
+test('sandbox: workdir is absolute from the root however the shell has wandered', async () => {
+  await sboxReset();
+  await sbox({ tool: 'create_file', path: 'proj/src/deep/a.txt', content: 'x' });
+  await sbox({ tool: 'bash', cmd: 'cd proj' });
+  await sbox({ tool: 'bash', cmd: 'cd src' });
+  const r = await sbox({ tool: 'bash', cmd: process.platform === 'win32' ? 'dir' : 'ls', workdir: 'proj/src/deep' });
+  assert.equal(r.ok, true);
+  assert.equal(r.cwd, 'proj/src/deep');
+  await sboxReset();
+});
+
+test('sandbox: a directory that already exists is the asked-for state, not a failure', async () => {
+  await sboxReset();
+  assert.equal((await sbox({ tool: 'bash', cmd: 'mkdir build' })).ok, true);
+
+  const second = await sbox({ tool: 'bash', cmd: 'mkdir build' });
+  assert.equal(second.ok, true, 'repeating it must not read as a failure worth retrying');
+  assert.match(second.note || '', /already existed/);
+
+  const trailing = await sbox({ tool: 'bash', cmd: 'cd . && mkdir build' });
+  assert.equal(trailing.ok, true, 'a trailing mkdir is still the last thing that ran');
+
+  // But a real failure sitting behind the collision must not be laundered away.
+  assert.equal((await sbox({ tool: 'bash', cmd: 'mkdir build && nosuchprogram-xyz-qq' })).ok, false);
+  await sboxReset();
+});
+
 test('sandbox: hostEnvInfo reports a usable shape without leaking host paths', async () => {
   const { hostEnvInfo } = await import('../sandbox.js');
   const env = hostEnvInfo();

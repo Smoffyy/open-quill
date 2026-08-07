@@ -36,7 +36,8 @@ function hostEnvSection() {
   } else {
     L.push('- Standard Unix utilities are available, but the file tools are still preferred for file work because their results are structured, versioned, and shown to the user.');
   }
-  L.push('- Your shell working directory PERSISTS across `bash` calls: after `cd sub`, later commands run in `sub` until you `cd` elsewhere. The current directory is reported back with every result.');
+  L.push('- **Your shell working directory PERSISTS across `bash` calls.** After `cd sub`, every later command already runs in `sub` until you `cd` elsewhere. The current directory comes back as `cwd` with every result — read it.');
+  L.push('- **So do not re-issue the same `cd` on every call.** `cd myproject && ...` twice in a row is the single most common way to get stuck here: the second one looks for `myproject/myproject`, fails with "the system cannot find the path specified", and repeating it can never work. If you want a command to run somewhere specific regardless of where the shell is, pass `workdir` instead: `{"cmd": "npm test", "workdir": "myproject"}`. `workdir` is always relative to the workspace root, so it is safe to repeat.');
   return L.join('\n');
 }
 
@@ -140,7 +141,7 @@ export function resultPayload(rawCall, r) {
   if (r.note) o.note = r.note;
   if (r.path != null) o.path = r.path;
   if (r.from != null) o.from = r.from;
-  if (r.cwd) o.cwd = r.cwd;
+  if (r.cwd != null) o.cwd = r.cwd || '.';
   if (BASH_TOOLS.has(call.tool)) { o.output = (r.output || '').slice(0, 8000); o.exit = r.exit ?? null; }
   if ((call.tool === 'list_files' || call.tool === 'ls' || call.tool === 'tree') && Array.isArray(r.files)) o.files = r.files.slice(0, 100).map(f => ({ path: f.path, size: f.size }));
   if ((call.tool === 'find' || call.tool === 'glob') && Array.isArray(r.matches)) o.matches = r.matches.slice(0, 60);
@@ -152,9 +153,17 @@ export function resultPayload(rawCall, r) {
 export function formatToolResult(rawCall, r) {
   const call = { ...rawCall, tool: canonicalTool(rawCall.tool) };
   const head = `${call.tool}${call.path ? ' ' + call.path : ''}`;
-  if (!r.ok) return `${head} → ERROR: ${r.error}` + (r.output ? `\n${r.output}` : '');
+  if (!r.ok) {
+    // The shell's directory persists between calls, so "cannot find the path" is very
+    // often a path that is correct from the workspace root and wrong from where the
+    // shell actually is. Dropping the cwd here left that unknowable.
+    const where = BASH_TOOLS.has(call.tool) && r.cwd != null
+      ? `\n(the shell is in "${r.cwd || '.'}" — paths in the command are resolved from there, not from the workspace root)`
+      : '';
+    return `${head} → ERROR: ${r.error}` + (r.output ? `\n${r.output}` : '') + where;
+  }
   switch (call.tool) {
-    case 'bash': case 'run': case 'shell': return `$ ${call.cmd ?? call.command ?? ''}\n${r.output || '(no output)'}\n(exit ${r.exit ?? 0}${r.cwd ? `, cwd: ${r.cwd || '.'}` : ''})`;
+    case 'bash': case 'run': case 'shell': return `$ ${call.cmd ?? call.command ?? ''}\n${r.output || '(no output)'}\n(exit ${r.exit ?? 0}${r.cwd != null ? `, cwd: ${r.cwd || '.'}` : ''})` + (r.note ? `\nNOTE: ${r.note}` : '');
     case 'create_file': case 'write_file': return (r.unchanged ? `${head} → unchanged (already v${r.v}, identical content, no write needed)` : `${head} → created (v${r.v}, ${r.bytes} bytes, +${r.adds ?? 0}/-${r.dels ?? 0})`) + (r.note ? `\nNOTE: ${r.note}` : '');
     case 'str_replace': case 'edit_file': return `${head} → edited (now v${r.v}, +${r.adds ?? 0}/-${r.dels ?? 0}${r.replaced > 1 ? `, ${r.replaced} occurrences` : ''})` + (r.note ? `\nNOTE: ${r.note}` : '');
     case 'insert_lines': return `${head} → inserted ${r.adds} line(s) (now v${r.v})`;
