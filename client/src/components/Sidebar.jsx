@@ -3,15 +3,22 @@ import { createPortal } from 'react-dom';
 import { Plus, Chat, Search, Panel, Gear, Shield, Flask, Logout, Dots, DotsV, Trash, Heart, FileText, Star, Download, Folder, Pencil, Chevron, Users, Box, Compact, Stop } from './icons.jsx';
 import { t } from '../i18n.jsx';
 
-function ProfileMenu({ user, version, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, onClose }) {
+function ProfileMenu({ user, version, anchorRef, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, onClose }) {
   const ref = useRef(null);
+  const [pos, setPos] = useState(null);
+  useLayoutEffect(() => {
+    const r = anchorRef.current?.getBoundingClientRect();
+    if (!r) return;
+    setPos({ left: r.left, width: Math.max(210, r.width), bottom: window.innerHeight - r.top + 6 });
+  }, [anchorRef]);
   useEffect(() => {
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target) && !anchorRef.current?.contains(e.target)) onClose(); };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, []);
-  return (
-    <div className="popover" ref={ref} role="menu" aria-label={t('Profile menu')}>
+  return createPortal(
+    <div className="popover" ref={ref} role="menu" aria-label={t('Profile menu')}
+      style={pos ? { position: 'fixed', left: pos.left, bottom: pos.bottom, width: pos.width, right: 'auto' } : { visibility: 'hidden' }}>
       {user.isAdmin && <button onClick={onAdmin}><Shield /> {t('Admin Panel')}</button>}
       {user.isAdmin && <button onClick={onPlayground}><Flask /> {t('Playground')}</button>}
       <button onClick={onSettings}><Gear /> {t('Settings')}</button>
@@ -21,7 +28,7 @@ function ProfileMenu({ user, version, onSettings, onAdmin, onPlayground, onCredi
       <hr />
       <button onClick={onLogout}><Logout /> {t('Log out')}</button>
       {version && <div className="pm-version">open-quill v{version}</div>}
-    </div>
+    </div>, document.body
   );
 }
 
@@ -176,6 +183,7 @@ function Sidebar({
   const [dragChatId, setDragChatId] = useState(null);
   const [rootDragOver, setRootDragOver] = useState(false);
   const chatsRef = useRef(null);
+  const profileBtnRef = useRef(null);
   const [recentsCollapsed, setRecentsCollapsed] = useState(() => { try { return localStorage.getItem('oq-recents-collapsed') === '1'; } catch { return false; } });
   const toggleRecents = () => setRecentsCollapsed(v => { const n = !v; try { localStorage.setItem('oq-recents-collapsed', n ? '1' : '0'); } catch {} return n; });
   useEffect(() => {
@@ -305,7 +313,7 @@ function Sidebar({
       </div>
       <div className="rail-spacer" />
       <div className="profile">
-        {menu && <ProfileMenu user={user} version={version}
+        {menu && <ProfileMenu user={user} version={version} anchorRef={profileBtnRef}
           onSettings={() => { setMenu(false); onSettings(); }}
           onPlayground={() => { setMenu(false); onPlayground && onPlayground(); }}
           onAdmin={() => { setMenu(false); onAdmin(); }}
@@ -313,7 +321,7 @@ function Sidebar({
           onChangelog={() => { setMenu(false); onChangelog(); }}
           onLicense={() => { setMenu(false); onLicense(); }}
           onLogout={onLogout} onClose={() => setMenu(false)} />}
-        <button className="profile-btn" onClick={() => setMenu(m => !m)}>
+        <button className="profile-btn" ref={profileBtnRef} onClick={() => setMenu(m => !m)}>
           <div className="avatar">{(user.displayName || user.email)[0].toUpperCase()}</div>
           <div className="profile-info">
             <div className="name">{user.displayName}</div>

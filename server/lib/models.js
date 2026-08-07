@@ -114,9 +114,10 @@ export function resolveModelOrDefault(modelId, isAdmin) {
 }
 
 export function roleLimit(key, isAdmin, fallback) {
-  const v = getSetting(key + (isAdmin ? '_admin' : '_user'));
-  if (v != null) return Number(v);
-  return Number(getSetting(key, String(fallback)));
+  const scoped = Number(getSetting(key + (isAdmin ? '_admin' : '_user')));
+  if (Number.isFinite(scoped) && scoped >= 0) return scoped;
+  const shared = Number(getSetting(key));
+  return Number.isFinite(shared) && shared >= 0 ? shared : Number(fallback) || 0;
 }
 
 export async function detectContextLength(prov, internal) {

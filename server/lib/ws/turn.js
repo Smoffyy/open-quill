@@ -605,9 +605,11 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     const lastUserText = lastUser && (Array.isArray(lastUser.content)
       ? (lastUser.content.find(p => p.type === 'text')?.text || 'Image')
       : lastUser.content);
-    if (!lastUserText) return;
-    const title = await generateTitle(model, lastUserText, cleanContent);
-    db.chats.update(chat.id, { title });
-    safeSend(JSON.stringify({ type: 'title', chatId: chat.id, title }));
+    if (lastUserText) {
+      generateTitle(model, lastUserText, cleanContent).then((title) => {
+        db.chats.update(chat.id, { title });
+        safeSend(JSON.stringify({ type: 'title', chatId: chat.id, title }));
+      }).catch(() => {});
+    }
   }
 }

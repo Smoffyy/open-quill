@@ -64,7 +64,7 @@ export function parseArgs(argsText) {
 export function toCall(name, argsText) {
   let args = {};
   try { args = parseArgs(argsText); } catch { args = {}; }
-  return { tool: String(name || '').trim(), ...args };
+  return { ...args, tool: String(name || '').trim() };
 }
 
 export function cutOffOf(call) {

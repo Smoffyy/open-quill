@@ -126,7 +126,9 @@ export function bash(chatId, cmd, timeoutMs = 60000, workdir) {
     } catch (e) { return resolve({ ok: false, output: '', error: String(e.message || e), exit: null }); }
 
     const MAX = 12 * 1024 * 1024;
-    let out = '', size = 0, killed = false, timedOut = false, settled = false;
+    const HEAD_KEEP = OUT_CAP + 2000;
+    const TAIL_KEEP = 4096;
+    let head = '', tail = '', chars = 0, size = 0, killed = false, timedOut = false, settled = false;
     // stdout and stderr are interleaved into one transcript, and a chunk boundary can
     // land in the middle of a multi-byte character. Decoding each Buffer on its own
     // turned those into U+FFFD, so any non-ASCII program output came back mangled; one
@@ -135,9 +137,15 @@ export function bash(chatId, cmd, timeoutMs = 60000, workdir) {
     const grab = (which) => (b) => {
       if (killed) return;
       size += b.length;
-      out += decoders[which].write(b);
+      const s = decoders[which].write(b);
+      if (s) {
+        chars += s.length;
+        if (head.length < HEAD_KEEP) head += s.slice(0, HEAD_KEEP - head.length);
+        tail = tail.length + s.length > TAIL_KEEP ? (tail + s).slice(-TAIL_KEEP) : tail + s;
+      }
       if (size > MAX) { killed = true; try { child.kill('SIGKILL'); } catch {} }
     };
+    const transcript = () => (chars <= HEAD_KEEP ? head : head + tail);
     child.stdout.on('data', grab('out'));
     child.stderr.on('data', grab('err'));
     const timer = setTimeout(() => { timedOut = true; try { child.kill('SIGKILL'); } catch {} }, timeoutMs);
@@ -156,9 +164,9 @@ export function bash(chatId, cmd, timeoutMs = 60000, workdir) {
     };
 
     const done = (r) => { if (settled) return; settled = true; clearTimeout(timer); resolve(r); };
-    child.on('error', (e) => done({ ok: false, output: capOut(finalize(out)), error: String(e.message || e), exit: null }));
+    child.on('error', (e) => done({ ok: false, output: capOut(finalize(transcript())), error: String(e.message || e), exit: null }));
     child.on('close', (code) => {
-      const text = finalize(out);
+      const text = finalize(transcript());
       if (timedOut) return done({ ok: false, output: capOut(text), error: `Timed out after ${Math.round(timeoutMs / 1000)}s`, exit: null });
       if (killed) return done({ ok: false, output: capOut(text), error: `Output exceeded ${Math.round(MAX / 1048576)} MB; process killed.`, exit: null });
       const exit = typeof code === 'number' ? code : 1;

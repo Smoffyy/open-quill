@@ -51,9 +51,22 @@ function noteLoginFail(key) {
 }
 
 // Keyed per address AND per account: one address cannot spray a whole user list, and a
-// botnet cannot grind a single account from many addresses.
+// botnet cannot grind a single account from many addresses. Registration uses its own
+// account namespace, or repeatedly re-registering a known address would lock its owner
+// out of signing in. passwordMatches always pays for one argon2 verify, even when the
+// address is unknown: returning early there answers in a fraction of the time and is an
+// account-existence oracle however carefully the error text is worded.
 const limitKeys = (req, email) => [`ip:${clientIp(req)}`, ...(email ? [`user:${email}`] : [])];
+const registerKeys = (req, email) => [`ip:${clientIp(req)}`, ...(email ? [`reg:${email}`] : [])];
 const anyLimited = (keys) => keys.some(loginLimited);
+
+let decoyHash = null;
+async function passwordMatches(pw, stored) {
+  if (stored) return check(pw, stored);
+  if (!decoyHash) decoyHash = await hash(randomSecret());
+  await check(pw, decoyHash);
+  return false;
+}
 
 const PREFS_MAX_BYTES = 256 * 1024;
 export const USAGE_WINDOWS = new Set([7, 30, 90]);
@@ -80,8 +93,10 @@ export default function registerAuthRoutes(app) {
     if (anyLimited(keys)) return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
     if (!email || !pw) return res.status(400).json({ error: 'Enter your email and password.' });
     const u = db.users.byEmail(email);
-    if (!u) { keys.forEach(noteLoginFail); return res.status(401).json({ error: 'Incorrect email or password.' }); }
-    if (!(await check(pw, u.password_hash))) { keys.forEach(noteLoginFail); return res.status(401).json({ error: 'Incorrect email or password.' }); }
+    if (!(await passwordMatches(pw, u?.password_hash))) {
+      keys.forEach(noteLoginFail);
+      return res.status(401).json({ error: 'Incorrect email or password.' });
+    }
     if (u.totp_enabled && u.totp_secret) {
       const code = String(req.body?.code || '').trim();
       const recovery = String(req.body?.recovery || '').trim();
@@ -107,7 +122,7 @@ export default function registerAuthRoutes(app) {
   app.post('/api/auth/register', async (req, res) => {
     const email = String(req.body?.email || '').trim().toLowerCase().slice(0, 320);
     const pw = String(req.body?.password || '');
-    const keys = limitKeys(req, email);
+    const keys = registerKeys(req, email);
     if (anyLimited(keys)) return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
     if (!/.+@.+\..+/.test(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
     if (pw.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
@@ -315,7 +330,9 @@ export default function registerAuthRoutes(app) {
     if (next.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters.' });
     if (!(await check(current, req.user.password_hash))) return res.status(401).json({ error: 'Current password is incorrect.' });
     db.users.update(req.user.id, { password_hash: await hash(next) });
+    const others = db.sessions.byUser(req.user.id).filter(s => s.id !== req.sessionId);
     revokeOtherSessions(req.user.id, req.sessionId);
+    for (const s of others) killSessionSockets(s.id);
     logAudit(req, 'account.password_change', { type: 'user', id: req.user.id });
     res.json({ ok: true });
   });

@@ -295,6 +295,38 @@ test('profile input is validated rather than stored as sent', async () => {
   assert.deepEqual(ok.json.user.prefs, { theme: 'dark' });
 });
 
+test('admin settings and branding survive hostile input rather than 500', async () => {
+  const hostile = await browser('PATCH', '/api/admin/settings', {
+    body: {
+      apiBaseUrl: { nested: 'object' },
+      apiKey: 'k'.repeat(5000),
+      webSearchCount: 9999,
+      sessionTtlDays: 'not a number',
+      voiceSttEngine: 'nonsense',
+      modelQueue: 'truthy',
+      notARealSetting: 'ignored'
+    }
+  });
+  assert.equal(hostile.status, 200);
+
+  const back = await browser('GET', '/api/admin/settings');
+  assert.equal(back.status, 200);
+  assert.equal(typeof back.json.apiBaseUrl, 'string', 'never stored as the object it arrived as');
+  assert.equal(back.json.apiKey.length, 500, 'capped at the boundary');
+  assert.equal(back.json.webSearchCount, 20, 'clamped, not stored raw');
+  assert.equal(back.json.sessionTtlDays, 30, 'unparseable falls back to the default');
+  assert.equal(back.json.voiceSttEngine, 'browser', 'an unknown enum value is refused');
+  assert.equal(back.json.modelQueue, true);
+
+  const branding = await browser('PATCH', '/api/admin/app-config', { body: { appName: 12345, disclaimer: { x: 1 } } });
+  assert.equal(branding.status, 200, 'a non-string name must not throw on .trim()');
+  const cfg = await browser('GET', '/api/app-config');
+  assert.equal(typeof cfg.json.appName, 'string');
+
+  await browser('PATCH', '/api/admin/settings', { body: { apiKey: '', apiBaseUrl: 'http://localhost:8080' } });
+  await browser('PATCH', '/api/admin/app-config', { body: { appName: 'open-quill' } });
+});
+
 test('uploads are served defensively and misses are honest', async () => {
   const missing = await request('GET', '/uploads/does-not-exist.html', { cookie });
   assert.equal(missing.status, 404, 'a missing upload is not the app HTML with a 200');

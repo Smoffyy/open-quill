@@ -173,29 +173,39 @@ export function formatToolResult(rawCall, r) {
   }
 }
 
+const CHAT_SEARCH_MAX = 25;
+const CHAT_SEARCH_SCAN = 400;
+
 export function runChatSearchTool(userId, currentChatId, call) {
   if (call.tool === 'chat_search') {
     const q = String(call.query || '').trim().toLowerCase();
     if (!q) return { ok: false, error: 'Empty query.' };
+    const byId = new Map();
+    for (const c of db.chats.byUser(userId)) if (c.id !== currentChatId) byId.set(c.id, c);
+    const dateOf = (c) => new Date(c.updated_at || 0).toISOString().slice(0, 10);
     const matches = [];
-    const chats = db.chats.byUser(userId).sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0)).slice(0, 300);
-    let scanned = 0;
-    for (const c of chats) {
-      if (c.id === currentChatId) continue;
-      if (scanned > 30000) break;
+    const seen = new Set();
+    for (const c of [...byId.values()].sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0))) {
       const title = c.title || 'Untitled';
-      if (title.toLowerCase().includes(q)) matches.push({ chat_id: c.id, title, date: new Date(c.updated_at || 0).toISOString().slice(0, 10), text: '(title match)' });
-      if (matches.length >= 25) break;
-      for (const m of db.messages.byChat(c.id)) {
-        scanned++;
-        const content = String(m.content || '');
+      if (!title.toLowerCase().includes(q)) continue;
+      seen.add(c.id);
+      matches.push({ chat_id: c.id, title, date: dateOf(c), text: '(title match)' });
+      if (matches.length >= CHAT_SEARCH_MAX) break;
+    }
+    if (matches.length < CHAT_SEARCH_MAX) {
+      for (const row of db.messages.searchForUser(userId, q, CHAT_SEARCH_SCAN)) {
+        const c = byId.get(row.chatId);
+        if (!c || seen.has(c.id)) continue;
+        const content = String(row.content || '');
         const idx = content.toLowerCase().indexOf(q);
         if (idx === -1) continue;
-        const from = Math.max(0, idx - 80);
-        matches.push({ chat_id: c.id, title, date: new Date(c.updated_at || 0).toISOString().slice(0, 10), role: m.role, text: content.slice(from, idx + q.length + 120).replace(/\s+/g, ' ') });
-        if (matches.length >= 25) break;
+        seen.add(c.id);
+        matches.push({
+          chat_id: c.id, title: c.title || 'Untitled', date: dateOf(c), role: row.role || '',
+          text: content.slice(Math.max(0, idx - 80), idx + q.length + 120).replace(/\s+/g, ' ')
+        });
+        if (matches.length >= CHAT_SEARCH_MAX) break;
       }
-      if (matches.length >= 25) break;
     }
     return { ok: true, query: call.query, count: matches.length, matches };
   }

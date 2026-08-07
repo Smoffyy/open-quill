@@ -195,13 +195,20 @@ export default function registerAdminRoutes(app) {
     logAudit(req, 'audit.export', {});
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="audit-${new Date().toISOString().slice(0, 10)}.csv"`);
-    // Streamed a row at a time: the whole log no longer has to exist in memory twice
-    // (once parsed, once as joined text) to be downloaded.
+    // Streamed a row at a time, paused when the socket is full: the whole log never has
+    // to exist in memory, in Node's write buffer, or as one joined string.
+    const rows = db.audit.stream();
+    const pump = () => {
+      for (;;) {
+        const { value: r, done } = rows.next();
+        if (done) return res.end();
+        const line = [new Date(r.ts).toISOString(), r.actor_email || 'system', r.action, r.target_type || '', r.target_id || '', r.ip || '', r.meta].map(esc).join(',') + '\n';
+        if (!res.write(line)) return res.once('drain', pump);
+      }
+    };
+    res.on('close', () => { try { rows.return(); } catch {} });
     res.write('timestamp,actor,action,target_type,target_id,ip,meta\n');
-    for (const r of db.audit.stream()) {
-      res.write([new Date(r.ts).toISOString(), r.actor_email || 'system', r.action, r.target_type || '', r.target_id || '', r.ip || '', r.meta].map(esc).join(',') + '\n');
-    }
-    res.end();
+    pump();
   });
 
   app.get('/api/admin/databases', authMiddleware, adminOnly, (req, res) => {

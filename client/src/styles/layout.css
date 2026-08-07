@@ -19,7 +19,6 @@
 .sidebar.collapsed .nav-item { justify-content: center; padding: 9px; width: auto; }
 .sidebar.collapsed .profile { display: flex; justify-content: center; padding: 10px 0; }
 .sidebar.collapsed .profile-btn { justify-content: center; padding: 6px; }
-.sidebar.collapsed .popover { left: 8px; right: auto; width: 210px; }
 .rail-spacer { display: none; }
 .sidebar.collapsed .rail-spacer { display: block; flex: 1; }
 .sidebar-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 10px; }

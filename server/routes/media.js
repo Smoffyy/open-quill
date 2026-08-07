@@ -19,10 +19,20 @@ export default function registerMediaRoutes(app) {
     });
   });
 
+  const uploaders = new Map();
+  const uploaderFor = (mb) => {
+    let mw = uploaders.get(mb);
+    if (!mw) {
+      mw = multer({ storage: diskStore, limits: { fileSize: mb * 1024 * 1024 } }).array('files', 10);
+      if (uploaders.size > 16) uploaders.clear();
+      uploaders.set(mb, mw);
+    }
+    return mw;
+  };
+
   app.post('/api/upload', authMiddleware, (req, res) => {
-    const mb = roleLimit('upload_limit_mb', !!req.user.is_admin, 8) || 8;
-    const mw = multer({ storage: diskStore, limits: { fileSize: Math.max(1, mb) * 1024 * 1024 } }).array('files', 10);
-    mw(req, res, (err) => {
+    const mb = Math.max(1, roleLimit('upload_limit_mb', !!req.user.is_admin, 8) || 8);
+    uploaderFor(mb)(req, res, (err) => {
       if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? `That file is too large (max ${mb} MB).` : 'Upload failed.' });
       res.json({ files: (req.files || []).map(f => ({ url: `/uploads/${f.filename}`, name: f.originalname, type: f.mimetype, size: f.size })) });
     });

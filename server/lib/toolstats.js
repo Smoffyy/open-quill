@@ -13,8 +13,6 @@ const KIND_PATTERNS = [
   [/exited with code/i, 'nonzero_exit']
 ];
 
-export const TOOL_FAILURE_KINDS = [...new Set(KIND_PATTERNS.map(p => p[1])), 'other'];
-
 export function classifyToolError(error) {
   const s = String(error || '');
   if (!s.trim()) return 'other';

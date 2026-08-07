@@ -25,6 +25,8 @@ import { samplingParams, parseStop } from '../llm/sampling.js';
 import { PROVIDER_TYPES, isProviderType, providerSpec } from '../providers.js';
 import { slideWithCounter, trimMode } from '../lib/ctxwindow.js';
 import { sameOrigin, sameOriginGuard, requestHost } from '../lib/origin.js';
+import { SETTING_FIELDS, coerceSetting } from '../routes/settings.js';
+import { unzipBuffer, zipBuffer } from '../sandbox/zip.js';
 
 const asReq = (headers = {}, method = 'POST', localAddress = '10.0.0.5') =>
   ({ method, headers, socket: { localAddress } });
@@ -890,6 +892,93 @@ test('sandbox guard: paths outside the workspace are refused', () => {
 test('sandbox guard: host administration commands are refused', () => {
   const bad = ['sudo apt-get install nginx', 'systemctl restart nginx', 'reg add HKLM\\x', 'docker run -it x', 'ssh user@host', 'apt install foo', 'shutdown /s'];
   for (const cmd of bad) assert.equal(screenCommand(cmd).ok, false, cmd);
+});
+
+test('toCall: an argument named "tool" cannot rename the tool being called', () => {
+  const call = toCall('create_file', JSON.stringify({ tool: 'bash', path: 'a.txt', content: 'x' }));
+  assert.equal(call.tool, 'create_file');
+  assert.equal(call.path, 'a.txt');
+  assert.equal(call.content, 'x');
+});
+
+test('toCall: a cut-off marker survives the tool name being reapplied', () => {
+  const call = toCall('create_file', '{"path": "a.txt", "content": "half of the fi');
+  assert.equal(call.tool, 'create_file');
+  assert.equal(cutOffOf(call)?.key, 'content');
+});
+
+test('unzip: a compression bomb cannot be inflated without bound', () => {
+  const huge = Buffer.alloc(80 * 1024 * 1024, 0);
+  const zip = zipBuffer([{ name: 'bomb.bin', data: huge }]);
+  assert.ok(zip.length < 1024 * 1024, 'the bomb should compress to almost nothing');
+  const entries = unzipBuffer(zip);
+  const total = entries.reduce((n, e) => n + e.data.length, 0);
+  assert.ok(total <= 64 * 1024 * 1024, `inflated ${total} bytes, expected the per-entry cap to hold`);
+});
+
+test('unzip: ordinary archives still round-trip through the cap', () => {
+  const zip = zipBuffer([
+    { name: 'a.txt', data: Buffer.from('hello') },
+    { name: 'dir/b.txt', data: Buffer.from('x'.repeat(5000)) }
+  ]);
+  const entries = unzipBuffer(zip);
+  assert.deepEqual(entries.map(e => e.name), ['a.txt', 'dir/b.txt']);
+  assert.equal(entries[0].data.toString(), 'hello');
+  assert.equal(entries[1].data.length, 5000);
+});
+
+test('egress: loopback and ULA are private however the address is written', () => {
+  for (const ip of ['::1', '0:0:0:0:0:0:0:1', '::', 'fc00::1', 'fe80::1', 'ff02::1', '::ffff:192.168.1.1', '0:0:0:0:0:ffff:10.0.0.1']) {
+    assert.equal(isPrivateAddress(ip), true, ip);
+  }
+  for (const ip of ['2001:4860:4860::8888', '2001:db8::1', '::ffff:8.8.8.8', '64:ff9b::8.8.8.8', 'not-an-ip', 'fg::1']) {
+    assert.equal(isPrivateAddress(ip), false, ip);
+  }
+});
+
+test('admin settings: every field is coerced and clamped at the boundary', () => {
+  assert.equal(coerceSetting(SETTING_FIELDS.apiBaseUrl, { evil: 1 }), '[object Object]'.slice(0, 500));
+  assert.equal(coerceSetting(SETTING_FIELDS.apiBaseUrl, '  http://x  '), 'http://x');
+  assert.equal(coerceSetting(SETTING_FIELDS.apiKey, 'k'.repeat(9999)).length, 500);
+  assert.equal(coerceSetting(SETTING_FIELDS.modelQueue, 'yes'), '1');
+  assert.equal(coerceSetting(SETTING_FIELDS.modelQueue, 0), '0');
+  assert.equal(coerceSetting(SETTING_FIELDS.webSearchCount, 9999), '20');
+  assert.equal(coerceSetting(SETTING_FIELDS.webSearchCount, 'abc'), '5');
+  assert.equal(coerceSetting(SETTING_FIELDS.uploadLimitUserMb, -5), '0');
+  assert.equal(coerceSetting(SETTING_FIELDS.voiceTtsSpeed, 99), '4');
+  assert.equal(coerceSetting(SETTING_FIELDS.voiceSttEngine, 'nonsense'), 'browser');
+  assert.equal(coerceSetting(SETTING_FIELDS.voiceSttEngine, 'server'), 'server');
+  assert.equal(coerceSetting(SETTING_FIELDS.voiceTtsModel, ''), 'tts-1');
+  assert.deepEqual(
+    JSON.parse(coerceSetting(SETTING_FIELDS.webSearchDomains, 'https://A.com/x\nb.com, a.com')),
+    ['a.com', 'b.com']
+  );
+});
+
+test('admin settings: an unknown or inherited field name writes nothing', () => {
+  assert.equal(SETTING_FIELDS.constructor, undefined);
+  assert.equal(SETTING_FIELDS.__proto__, undefined);
+  assert.equal(SETTING_FIELDS.toString, undefined);
+});
+
+test('sandbox guard: a host command is screened wherever a command can start', () => {
+  const bad = [
+    'echo hi & sudo rm -rf x',
+    'echo $(systemctl restart nginx)',
+    'echo `apt-get install nginx`',
+    'true & docker run -it x'
+  ];
+  for (const cmd of bad) assert.equal(screenCommand(cmd).ok, false, cmd);
+});
+
+test('sandbox guard: & and parentheses in ordinary arguments are not commands', () => {
+  const ok = [
+    'curl "http://localhost:8080/x?a=1&net=2" -o out.html',
+    'git commit -m "fix(net): retry on timeout"',
+    'node -e "console.log(1 & 2)"',
+    'npm run build && npm test'
+  ];
+  for (const cmd of ok) assert.equal(screenCommand(cmd).ok, true, cmd);
 });
 
 test('sandbox guard: cd escapes are judged against the current depth', () => {

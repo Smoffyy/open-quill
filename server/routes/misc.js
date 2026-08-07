@@ -11,21 +11,23 @@ import { egressLog, clearEgressLog } from '../lib/egress.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DOCS = { __proto__: null, credits: 'CREDITS.md', changelog: 'CHANGELOG.md', license: 'LICENSE' };
 
+const text = (v, cap) => String(v ?? '').slice(0, cap);
+
 export default function registerMiscRoutes(app) {
   app.get('/api/app-config', authMiddleware, (req, res) => res.json(appConfig()));
 
   app.patch('/api/admin/app-config', authMiddleware, adminOnly, (req, res) => {
-    const b = req.body;
-    if ('appName' in b) setSetting('app_name', (b.appName || 'open-quill').trim());
-    if ('disclaimer' in b) setSetting('disclaimer', b.disclaimer || '');
+    const b = req.body && typeof req.body === 'object' ? req.body : {};
+    if ('appName' in b) setSetting('app_name', text(b.appName, 120).trim() || 'open-quill');
+    if ('disclaimer' in b) setSetting('disclaimer', text(b.disclaimer, 500));
     if ('greetings' in b) {
-      const list = (Array.isArray(b.greetings) ? b.greetings : []).map(g => String(g).trim()).filter(Boolean);
+      const list = (Array.isArray(b.greetings) ? b.greetings : []).map(g => text(g, 200).trim()).filter(Boolean).slice(0, 40);
       setSetting('greetings', JSON.stringify(list.length ? list : ['How can I help you?']));
     }
     if ('quickPrompts' in b) {
       const QP_ICONS = ['none', 'bulb', 'pencil', 'code', 'coffee', 'learn', 'sparkles', 'search', 'chat', 'file', 'star'];
       const list = (Array.isArray(b.quickPrompts) ? b.quickPrompts : [])
-        .map(q => ({ label: String(q.label || '').trim().slice(0, 40), icon: QP_ICONS.includes(String(q.icon || '').trim()) ? String(q.icon).trim() : 'none', prompt: String(q.prompt || '').trim() }))
+        .map(q => ({ label: text(q?.label, 40).trim(), icon: QP_ICONS.includes(text(q?.icon, 20).trim()) ? text(q.icon, 20).trim() : 'none', prompt: text(q?.prompt, 4000).trim() }))
         .filter(q => q.label && q.prompt).slice(0, 8);
       setSetting('quick_prompts', JSON.stringify(list));
     }
@@ -58,7 +60,7 @@ export default function registerMiscRoutes(app) {
       logAudit(req, 'security.egressAllowlist', { meta: { count: list.length } });
       broadcastConfig();
     }
-    if ('appIcon' in b) setSetting('app_icon', b.appIcon || '');
+    if ('appIcon' in b) setSetting('app_icon', text(b.appIcon, 1024));
     if ('appFont' in b) setSetting('app_font', b.appFont === 'sans' ? 'sans' : 'serif');
     if ('uiPreset' in b) {
       const next = b.uiPreset === 'openai' ? 'openai' : 'anthropic';

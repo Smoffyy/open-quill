@@ -38,7 +38,7 @@ const HOST_COMMANDS = new Map([
   ['nc', 'opens raw network connections'], ['ncat', 'opens raw network connections']
 ]);
 
-const SEGMENT_SPLIT = /(?:&&|\|\||[;|\n\r])+/;
+const SEGMENT_SPLIT = /(?:&&|\|\||\$\(|[;|&`\n\r])+/;
 
 function stripQuotes(tok) {
   let t = tok;

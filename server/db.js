@@ -168,7 +168,6 @@ const MIRROR = {
 };
 
 const bumps = new Map();
-export function tableVersion(table) { return bumps.get(table) || 0; }
 function bumpTable(table) { bumps.set(table, (bumps.get(table) || 0) + 1); }
 
 function collection(table) {
@@ -252,13 +251,14 @@ messagesCol.byChat = chatId => byChatStmt.all(chatId).map(r => JSON.parse(r.data
 // message. The scans these replaced built a full message graph for every chat the user
 // owned, on every keystroke, and evicted the open chat's cached graph while doing it.
 const searchStmt = sdb.prepare(`
-  SELECT m.chat_id AS chatId, json_extract(m.data,'$.content') AS content
+  SELECT m.chat_id AS chatId, json_extract(m.data,'$.role') AS role, json_extract(m.data,'$.content') AS content
   FROM messages m JOIN chats c ON c.id = m.chat_id
   WHERE c.user_id = ?
     AND json_extract(m.data,'$.content') IS NOT NULL
     AND oq_icontains(json_extract(m.data,'$.content'), ?)
-  ORDER BY m.created_at`);
-messagesCol.searchForUser = (userId, needle) => searchStmt.all(userId, needle);
+  ORDER BY m.created_at
+  LIMIT ?`);
+messagesCol.searchForUser = (userId, needle, limit = 5000) => searchStmt.all(userId, needle, limit);
 
 const lastUserStmt = sdb.prepare(`
   SELECT json_extract(data,'$.content') AS content
@@ -419,8 +419,6 @@ export function setSetting(key, value) {
   sSet.run(key, JSON.stringify(value));
   settingsCache.set(key, value);
 }
-
-export function clearSettingsCache() { settingsCache.clear(); }
 
 function checkpoint() { try { sdb.pragma('wal_checkpoint(TRUNCATE)'); } catch {} }
 process.on('exit', checkpoint);
