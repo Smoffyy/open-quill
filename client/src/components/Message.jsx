@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import Markdown from './Markdown.jsx';
+import Markdown, { ReasonSegs } from './Markdown.jsx';
 import { copyText } from '../clipboard.js';
 import { openLightbox } from '../lightbox.js';
 import ReasoningBlock from './ReasoningBlock.jsx';
@@ -252,7 +252,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
     if (editing && taRef.current) { const el = taRef.current; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight + 2, 460) + 'px'; }
   }, [editing, draft]);
   async function doCopy() {
-    const clean = (msg.content || '').replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
+    const clean = (msg.content || '').replace(/\[\[OQ(?:R:[A-Za-z0-9+/=]+|T:\d+)\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
     if (!(await copyText(clean))) return;
     setCopied(true); setTimeout(() => setCopied(false), 1400);
   }
@@ -316,6 +316,13 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
     try { await api.post(`/api/messages/${msg.id}/feedback`, { rating: next }); } catch { setFb(fb); }
   }
 
+  const segs = Array.isArray(msg.reasoningSegs) ? msg.reasoningSegs : null;
+  const tailIsMarker = segs && /\[\[OQT:\d+\]\]\s*$/.test(msg.content || '');
+  const segCtx = useMemo(
+    () => (segs ? { segs, segMs: Array.isArray(msg.reasoningSegMs) ? msg.reasoningSegMs : null, live: !!(streaming && tailIsMarker), preset, collapsible: model?.reasoningCollapsible !== false } : null),
+    [segs, msg.reasoningSegMs, streaming, tailIsMarker, preset, model]
+  );
+
   const inner = (
     <>
       {ledger && ledgerState && <LedgerRow tokens={ledgerTokens} pct={ledgerPct} state={ledgerState} id={msg.id} onToggleExclude={onToggleExclude} />}
@@ -323,7 +330,11 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
       <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} durationMs={msg.reasoningMs || 0} preset={preset} collapsible={model?.reasoningCollapsible !== false} />
       {(msg.content || streaming) && (
         <div className={'assistant-body' + (streaming ? ' streaming' : '') + (streaming && typing ? ' typing' : '') + (streaming && phase === 'thinking' ? ' thinking' : '')}>
-          {msg.content ? <Markdown streaming={streaming}>{msg.content}</Markdown> : null}
+          {msg.content ? (
+            <ReasonSegs.Provider value={segCtx}>
+              <Markdown streaming={streaming}>{msg.content}</Markdown>
+            </ReasonSegs.Provider>
+          ) : null}
           {streaming && liveCall && liveCall.tool && (
             <div className="tool-live"><ToolCard call={liveCall} result={null} /></div>
           )}

@@ -27,7 +27,7 @@ export default function registerMessageRoutes(app) {
       const sibs = childrenOf(c.id, m.parent_id ?? null);
       const mm = m.model_id ? modelById.get(m.model_id) : null;
       return {
-        id: m.id, role: m.role, content: m.content, reasoning: m.reasoning, model_id: m.model_id, attachments: m.attachments || [], created_at: m.created_at, pinned: !!m.pinned, excluded: !!m.excluded, steers: Array.isArray(m.steers) ? m.steers : null, feedback: m.feedback || 0,
+        id: m.id, role: m.role, content: m.content, reasoning: m.reasoning, reasoningSegs: Array.isArray(m.reasoning_segs) ? m.reasoning_segs : null, reasoningSegMs: Array.isArray(m.reasoning_seg_ms) ? m.reasoning_seg_ms : null, model_id: m.model_id, attachments: m.attachments || [], created_at: m.created_at, pinned: !!m.pinned, excluded: !!m.excluded, steers: Array.isArray(m.steers) ? m.steers : null, feedback: m.feedback || 0,
         model_name: m.model_name || mm?.display_name || legacyName.get(m.model_id) || '', model_icon: m.model_icon || mm?.static_icon || '',
         extended: !!m.extended, reasoningEffort: m.reasoning_effort || null, kwargValues: m.kwarg_values || null,
         reasoningMs: Number(m.reasoning_ms) > 0 ? Number(m.reasoning_ms) : null,

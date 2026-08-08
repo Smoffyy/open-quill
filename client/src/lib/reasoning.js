@@ -1,4 +1,4 @@
-export const SENTENCE_RE = /[^.!?]+[.!?]+(?=\s|$)/g;
+export const SENTENCE_RE = /(?:[^.!?]|[.!?](?!\s|$))+[.!?]+(?=\s|$)/g;
 export const LINE_MAX = 150;
 export const LINE_HOLD_MS = 3000;
 

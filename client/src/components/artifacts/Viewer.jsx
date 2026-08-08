@@ -4,7 +4,7 @@ import { api } from '../../api.js';
 import { copyText } from '../../clipboard.js';
 import Markdown from '../Markdown.jsx';
 import FileChip from './FileChip.jsx';
-import { Download, Refresh, Copy, Check, ChevDown, Chevron, Search, X, Down } from '../icons.jsx';
+import { Download, Check, ChevDown, Chevron, Search, X, Down } from '../icons.jsx';
 import { t } from '../../i18n.jsx';
 import { buildPreviewDoc } from '../../lib/preview.js';
 import {
@@ -81,7 +81,7 @@ function HtmlPreview({ chatId, path, html }) {
   return <iframe className="art-preview-frame" sandbox={PREVIEW_SANDBOX} srcDoc={doc} title={baseName(path)} referrerPolicy="no-referrer" />;
 }
 
-export default function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, writingElsewhere, onJumpToLive, committed = true, pendingText = null, fileV = 0, headerExtra = null, onFocusPane }) {
+export default function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, committed = true, pendingText = null, fileV = 0, headerExtra = null, onFocusPane }) {
   const [data, setData] = useState(null);
   const [copied, setCopied] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -296,40 +296,34 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
       <div className="art-vhead">
         <div className="art-vtitle">
           {canBack && <button className="art-back" onClick={onBack} title={t("Back to files")}><Chevron style={{ width: 16, transform: 'rotate(180deg)' }} /></button>}
-          <FileChip ext={ext} />
-          <div className="art-crumbs">
-            {crumbs.map((c, i) => (
-              <span key={i} className="art-crumb-wrap">
-                {i > 0 && <span className="art-crumb-sep">/</span>}
-                {i < crumbs.length - 1
-                  ? <button className="art-crumb" onClick={onBack} title={t("Back to files")}>{c}</button>
-                  : <span className="art-crumb name">{c}</span>}
-              </span>
-            ))}
-          </div>
-          {isLive && <span className="art-ver writing">{liveEdit ? t('editing…') : (liveText && liveText.length ? t('writing…') : t('creating…'))}</span>}
-          {!isLive && viewing && <span className={'art-ver' + (stale ? ' stale' : '')}>v{viewing}{stale ? ` of ${current}` : ''}</span>}
-          {isCode && rawLines.length > 0 && <span className="art-ver muted">{rawLines.length} ln</span>}
+          <span className="art-vname">{crumbs[crumbs.length - 1]}</span>
+          <span className="art-vkind">{isLive ? (liveEdit ? t('editing…') : (liveText && liveText.length ? t('writing…') : t('creating…'))) : ext.toUpperCase()}</span>
+          {!isLive && stale && <span className="art-vkind">v{viewing} of {current}</span>}
         </div>
         <div className="art-vactions">
-          {canPreview && !isLive && showText && (
-            <div className="art-mode-seg">
-              <button className={mode === 'preview' ? 'on' : ''} onClick={() => setMode('preview')}>{t('Preview')}</button>
-              <button className={mode === 'code' ? 'on' : ''} onClick={() => setMode('code')}>{t('Code')}</button>
-            </div>
-          )}
-          {showText && !previewOn && !isLive && <button className={'art-btn icon' + (search ? ' on' : '')} onClick={() => setSearch(s => !s)} title={t('Find in file')}><Search style={{ width: 14 }} /></button>}
-          {isCode && <button className={'art-btn icon' + (wrap ? ' on' : '')} onClick={() => setWrap(w => { localStorage.setItem('oq-art-wrap', w ? '0' : '1'); return !w; })} title={t('Toggle word wrap')}>↩</button>}
-          {!isLive && data?.text != null && viewing > 1 && (
-            <button className={'art-btn icon' + (diff ? ' on' : '')} onClick={() => setDiff(d => !d)} title={t('Show changes from previous version')}>{t('Diff')}</button>
-          )}
           {!isLive && data?.text != null && (
             <div className="art-copy-wrap">
-              <button className="art-btn copy" onClick={copy}>{copied ? <Check style={{ width: 14 }} /> : <Copy style={{ width: 14 }} />} {copied ? t('Copied') : t('Copy')}</button>
+              <button className="art-btn copy" onClick={copy}>{copied ? <Check style={{ width: 14 }} /> : null} {copied ? t('Copied') : t('Copy')}</button>
               <button className="art-btn caret" onClick={() => setMenu(m => !m)}><ChevDown style={{ width: 13 }} /></button>
               {menu && (
                 <div className="art-menu" onMouseLeave={() => setMenu(false)}>
                   <a className="art-menu-item" href={`/api/chats/${chatId}/download?path=${encodeURIComponent(path)}${stale ? '&v=' + viewing : ''}`}>Download as {ext.toUpperCase()}</a>
+                  {canPreview && showText && (
+                    <button className="art-menu-item" onClick={() => { setMenu(false); setMode(mode === 'preview' ? 'code' : 'preview'); }}>
+                      {mode === 'preview' ? t('Code') : t('Preview')}
+                    </button>
+                  )}
+                  {showText && !previewOn && <button className="art-menu-item" onClick={() => { setMenu(false); setSearch(true); }}>{t('Find in file')}</button>}
+                  {isCode && (
+                    <button className="art-menu-item" onClick={() => { setMenu(false); setWrap(w => { localStorage.setItem('oq-art-wrap', w ? '0' : '1'); return !w; }); }}>
+                      {t('Toggle word wrap')}{wrap && <Check style={{ width: 13 }} />}
+                    </button>
+                  )}
+                  {viewing > 1 && (
+                    <button className="art-menu-item" onClick={() => { setMenu(false); setDiff(d => !d); }}>
+                      {t('Show changes from previous version')}{diff && <Check style={{ width: 13 }} />}
+                    </button>
+                  )}
                   {versions.length > 1 && <>
                     <div className="art-menu-label">{t("Version history")}</div>
                     {[...versions].reverse().map(v => (
@@ -343,7 +337,6 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
             </div>
           )}
           {headerExtra}
-          {!isLive && <button className="art-btn icon" onClick={() => load(viewing)} title={t("Refresh")}><Refresh style={{ width: 15 }} /></button>}
         </div>
       </div>
       {search && !isLive && (
@@ -355,9 +348,6 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
           <button className="art-btn icon" disabled={!matches.length} onClick={() => nextMatch(1)} title={t("Next")}>↓</button>
           <button className="art-btn icon" onClick={() => { setSearch(false); setQuery(''); }} title={t("Close")}><X style={{ width: 13 }} /></button>
         </div>
-      )}
-      {!isLive && writingElsewhere && (
-        <button className="art-writing-bar" onClick={onJumpToLive}>✍ Writing {baseName(writingElsewhere)}…, view live</button>
       )}
       {stale && (
         <div className="art-stale-row">

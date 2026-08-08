@@ -1,4 +1,4 @@
-const OQR = /\[\[OQR:[A-Za-z0-9+/=]+\]\]/g;
+const OQR = /\[\[OQ(?:R:[A-Za-z0-9+/=]+|T:\d+)\]\]/g;
 const TOOL_HINT = /```tool|\[\[OQR:|<\s*\|?\s*tool\b|\|tool\|/i;
 const FENCE = /```[\s\S]*?(?:```|$)/g;
 

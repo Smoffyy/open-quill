@@ -253,6 +253,7 @@ export default function App() {
   const [chatErrors, setChatErrors] = useState({});
   const [dispContent, setDispContent] = useState('');
   const [dispReason, setDispReason] = useState('');
+  const [dispSegs, setDispSegs] = useState(null);
   const [phase, setPhase] = useState('static');
 
   const ws = useRef(null);
@@ -746,13 +747,20 @@ export default function App() {
         targetContent.current = ''; targetReason.current = ''; pendingDone.current = false;
         assistantIdRef.current = m.messageId; dispLen.current = 0;
         streamModelRef.current = r.model_id || currentIdRef.current;
-        setDispContent(''); setDispReason(''); setPhase('generating'); setStreaming(true); setQueued(false);
+        setDispContent(''); setDispReason(''); setDispSegs(null); setPhase('generating'); setStreaming(true); setQueued(false);
         startStream();
       }
       return;
     }
     if (m.type === 'reasoning') {
-      const r = recFor(m.chatId); r.reasoning += m.text;
+      const r = recFor(m.chatId);
+      if (m.seg != null) {
+        if (!r.reasonSegs) r.reasonSegs = [];
+        r.reasonSegs[m.seg] = (r.reasonSegs[m.seg] || '') + m.text;
+        if (m.chatId === activeKey()) setDispSegs(r.reasonSegs.slice());
+        return;
+      }
+      r.reasoning += m.text;
       if (!r.content) r.phase = 'thinking';
       if (m.chatId === activeKey()) {
         targetReason.current = r.reasoning;
@@ -767,7 +775,7 @@ export default function App() {
       if (m.chatId === activeKey()) {
         targetContent.current = r.content;
         setPhase('generating');
-        if (m.text.indexOf('[[OQR:') !== -1) { dispLen.current = r.content.length; setDispContent(r.content); setLiveCall(null); }
+        if (m.text.indexOf('[[OQR:') !== -1 || m.text.indexOf('[[OQT:') !== -1) { dispLen.current = r.content.length; setDispContent(r.content); setLiveCall(null); }
         else if (!animateRef.current) { setDispContent(r.content); dispLen.current = r.content.length; }
       }
       return;
@@ -782,7 +790,7 @@ export default function App() {
           stopLoops();
           dropRec(m.chatId);
           targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
-          setDispContent(''); setDispReason('');
+          setDispContent(''); setDispReason(''); setDispSegs(null);
           setLiveFile(null); setLiveCall(null); liveRef.current = null;
           setQueued(false); setStreaming(false); setPhase('static');
         }
@@ -870,7 +878,7 @@ export default function App() {
     if (r && r.done) dropRec(key);
     setStreaming(false); setPhase('static'); setQueued(false);
     if (content || reasoning) setMessages(ms => ms.some(m => m.id === id) ? ms : [...ms, { id, role: 'assistant', content, reasoning, model_id: mid }]);
-    setDispContent(''); setDispReason('');
+    setDispContent(''); setDispReason(''); setDispSegs(null);
     setLiveFile(null); setLiveCall(null); liveRef.current = null;
     targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
     if (stick.current && !selectingRef.current && !hasSelectionRef.current) setTimeout(() => scrollBottom(false), 0);
@@ -913,7 +921,7 @@ export default function App() {
       assistantIdRef.current = r.assistantId; pendingDone.current = false;
       streamModelRef.current = r.model_id || currentIdRef.current;
       dispLen.current = r.content.length;
-      setDispContent(r.content); setDispReason(r.reasoning);
+      setDispContent(r.content); setDispReason(r.reasoning); setDispSegs(r.reasonSegs ? r.reasonSegs.slice() : null);
       const live = r.live;
       if (live && live.path && (live.tool === 'create_file' || live.tool === 'str_replace')) {
         const lf = { path: live.path, content: live.content || '', tool: live.tool, oldStr: live.oldStr ?? null };
@@ -929,7 +937,7 @@ export default function App() {
       if (r && r.done) dropRec(key);
       targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
       setStreaming(false); setQueued(false); setPhase('static');
-      setDispContent(''); setDispReason('');
+      setDispContent(''); setDispReason(''); setDispSegs(null);
       setLiveCall(null);
     }
   }
@@ -1478,7 +1486,7 @@ export default function App() {
     msgCopy: () => {
       const m = focusedMsg();
       if (!m) return false;
-      const clean = (m.content || '').replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
+      const clean = (m.content || '').replace(/\[\[OQ(?:R:[A-Za-z0-9+/=]+|T:\d+)\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
       copyText(clean).then(ok => ok && toast(t('Message copied')));
     },
     msgEdit: () => {
@@ -1696,7 +1704,7 @@ export default function App() {
                 {(() => {
                   const streamKey = assistantIdRef.current || '_stream';
                   const renderList = streaming
-                    ? [...messages.filter(m => m.id !== streamKey), { id: streamKey, _k: streamKey, role: 'assistant', content: dispContent, reasoning: dispReason, model_id: streamModelRef.current || currentId, _streaming: true }]
+                    ? [...messages.filter(m => m.id !== streamKey), { id: streamKey, _k: streamKey, role: 'assistant', content: dispContent, reasoning: dispReason, reasoningSegs: dispSegs, model_id: streamModelRef.current || currentId, _streaming: true }]
                     : messages;
                   let lastA = null;
                   for (let i = renderList.length - 1; i >= 0; i--) if (renderList[i].role === 'assistant') { lastA = renderList[i]; break; }

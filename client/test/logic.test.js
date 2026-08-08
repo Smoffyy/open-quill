@@ -186,6 +186,11 @@ test('lastSentence returns the newest COMPLETE sentence, so the header lags by o
   assert.equal(lastSentence('I need to edit this file. Then I will run it.'), 'Then I will run it.');
 });
 
+test('lastSentence does not treat a dotted filename as a sentence end', () => {
+  assert.equal(lastSentence('Created it. Now thinking about beta.py...'), 'Now thinking about beta.py...');
+  assert.equal(lastSentence("Done with alpha.py's functions."), "Done with alpha.py's functions.");
+});
+
 test('lastSentence does not treat a decimal point as a sentence end', () => {
   assert.equal(lastSentence('The value is 0.5 meters. Done here.'), 'Done here.');
 });
