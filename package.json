@@ -1,6 +1,6 @@
 {
   "name": "open-quill",
-  "version": "27.1.0-developer.17",
+  "version": "27.1.0-developer.18",
   "private": true,
   "description": "Local Anthropic-style chat UI for OpenAI-compatible servers",
   "scripts": {
