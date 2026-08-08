@@ -7,9 +7,6 @@
 .art-skel { display: flex; flex-direction: column; gap: 11px; padding: 20px 18px; }
 .art-skel .skeleton { height: 13px; }
 
-/* thread placeholder while a slow uncached chat loads.
-   tinted with the user bubble so it reads as the conversation arriving
-   rather than as a generic grey loader */
 .thread-skel { display: flex; flex-direction: column; gap: 26px; padding: 10px 0 40px; }
 .thread-skel .skeleton {
   background: linear-gradient(90deg, var(--user-bubble) 25%,
@@ -334,38 +331,6 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .anim-row { margin-top: 6px; }
 .anim-row .anim-sel { width: 100%; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 5px 7px; font-size: 12.5px; font-family: var(--font-sans); }
 .field label.sub { font-size: 12px; color: var(--text-faint); margin-bottom: 4px; }
-/* ============ folders ============ */
-.section-label.folders-label { display: flex; align-items: center; justify-content: space-between; padding-right: 12px; }
-.folder-add { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; color: var(--text-muted); transition: background var(--fx-t, .12s), color var(--fx-t, .12s), transform var(--fx-t, .12s); }
-.folder-add:hover { background: var(--hover-soft); color: var(--text); }
-
-.section-label.drag-over { color: var(--accent); }
-
-.folder { margin: 0 8px; border-radius: 9px; transition: background var(--fx-t, .14s) ease, box-shadow var(--fx-t, .14s) ease; }
-.folder.drag-over { background: color-mix(in srgb, var(--accent) 13%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
-.folder-head { display: flex; align-items: center; gap: 7px; padding: 7px 8px; border-radius: 9px; cursor: pointer; color: var(--text); font-size: 14px; transition: background var(--fx-t, .12s) ease, color var(--fx-t, .15s) ease; user-select: none; }
-.folder-head:hover { background: var(--hover-soft); }
-.fl-chev { color: var(--text-faint); flex-shrink: 0; transition: transform var(--fx-t, .18s) var(--ease-soft, ease); }
-.fl-icon { color: var(--text-muted); flex-shrink: 0; }
-.folder-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.folder-rename { flex: 1; min-width: 0; background: var(--input-bg); border: 1px solid var(--accent); color: var(--text); border-radius: 6px; padding: 3px 7px; font: inherit; font-size: 13.5px; outline: none; }
-.folder-count { font-size: 11px; color: var(--text-faint); background: var(--surface-2); border-radius: 20px; padding: 1px 7px; font-variant-numeric: tabular-nums; flex-shrink: 0; }
-.folder-ctrls { display: flex; gap: 1px; opacity: 0; transition: opacity var(--fx-t, .12s) ease; flex-shrink: 0; }
-.folder-head:hover .folder-ctrls { opacity: 1; }
-.folder-ctrls .row-ctrl { color: var(--text-muted); padding: 3px; border-radius: 6px; display: grid; place-items: center; }
-.folder-ctrls .row-ctrl:hover { background: var(--hover-mid); color: var(--text); }
-.folder-body { padding: 2px 0 4px 10px; margin-left: 8px; border-left: 1px solid var(--border-soft); }
-.folder-body .chat-row { margin-left: 0; }
-.chats-empty.sub { padding: 5px 10px; font-size: 12px; opacity: .7; font-style: italic; }
-
-/* move-to-folder submenu inside the chat row menu */
-.cm-sub { position: relative; }
-.cm-sublist { margin: 2px 0 2px 8px; padding-left: 6px; border-left: 1px solid var(--border-soft); display: flex; flex-direction: column; gap: 1px; max-height: 220px; overflow: hidden auto; }
-.cm-sublist button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 8px; border-radius: 6px; font-size: 13px; color: var(--text); text-align: left; transition: background var(--fx-t, .12s); }
-.cm-sublist button:hover { background: var(--surface-hover); }
-.cm-sublist button.on { color: var(--accent); }
-.cm-empty { padding: 6px 8px; font-size: 12px; color: var(--text-faint); font-style: italic; }
-
 /* dragging feedback */
 .chat-row[draggable="true"]:active { cursor: grabbing; }
 

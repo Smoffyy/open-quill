@@ -48,7 +48,7 @@ function PmSub({ className = '', children, onMouseEnter, onMouseLeave }) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, models,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, projects = [], onSetProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
   voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall,
   safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
@@ -92,6 +92,7 @@ export default function Composer({
   useEffect(() => () => clearTimeout(stylesTimer.current), []);
   useEffect(() => { if (!plusMenu) setStylesOpen(false); }, [plusMenu]);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [projOpen, setProjOpen] = useState(false);
   const compareTimer = useRef(null);
   const openCompare = () => { clearTimeout(compareTimer.current); setCompareOpen(true); setPromptsOpen(false); setStylesOpen(false); };
   const closeCompare = (now) => {
@@ -452,6 +453,32 @@ export default function Composer({
                   <span className="pm-label">{visionSupported ? t('Add files or photos') : t('Add files')}</span>
                   <span className="pm-shortcut">{/mac/i.test(navigator.platform) ? '⌘U' : t('Ctrl+U')}</span>
                 </button>
+                {onSetProject && (
+                  <div className="pm-subwrap" onMouseEnter={() => setProjOpen(true)} onMouseLeave={() => setProjOpen(false)}>
+                    <button className={'pm-item' + (projOpen ? ' active' : '')} onClick={() => setProjOpen(o => !o)}>
+                      <Box />
+                      <span className="pm-label">{t('Add to project')}</span>
+                      <Chevron className="pm-chev" />
+                    </button>
+                    {projOpen && (
+                      <PmSub onMouseEnter={() => setProjOpen(true)} onMouseLeave={() => setProjOpen(false)}>
+                        {projects.length === 0 && <div className="pm-empty">{t('No projects yet')}</div>}
+                        {projects.map(p => (
+                          <button key={p.id} className={'pm-item' + (project && p.id === project.id ? ' active' : '')}
+                            onClick={() => { onSetProject(p); setProjOpen(false); setPlusMenu(false); }}>
+                            <Box />
+                            <span className="pm-label">{p.name}</span>
+                          </button>
+                        ))}
+                        {project && onClearProject && (
+                          <button className="pm-item" onClick={() => { onClearProject(); setProjOpen(false); setPlusMenu(false); }}>
+                            <span className="pm-label">{t('Remove from project')}</span>
+                          </button>
+                        )}
+                      </PmSub>
+                    )}
+                  </div>
+                )}
                 <div className="pm-divider" />
                 <div className="pm-subwrap" onMouseEnter={openPrompts} onMouseLeave={closePrompts}>
                   <button className={'pm-item' + (promptsOpen ? ' active' : '')} onClick={() => (promptsOpen ? closePrompts(true) : openPrompts())}>

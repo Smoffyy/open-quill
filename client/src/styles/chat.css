@@ -182,6 +182,10 @@
 .msg { margin-bottom: 26px; }
 .msg.user { display: flex; justify-content: flex-end; margin-bottom: 6px; }
 .user-col { display: flex; flex-direction: column; align-items: flex-end; max-width: 75%; }
+.ct-crumb { height: 28px; padding: 0 10px; border-radius: 7px; font-family: var(--font-sans); font-size: 14px; font-weight: 400; color: var(--text); white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; transition: background var(--fx-t, .15s); }
+.ct-crumb:hover { background: var(--surface-hover); }
+.ct-sep { color: var(--text-muted); font-size: 14px; flex-shrink: 0; }
+
 .bubble-user {
   background: var(--user-bubble); border-radius: 12px; padding: 12px 16px; max-width: 100%;
   font-family: var(--font-sans); font-size: 15px; line-height: 20px; word-break: break-word;
@@ -453,9 +457,9 @@
 .chatctl-default { margin-left: auto; padding: 4px 12px; border-radius: 7px; font-size: 11.5px; font-weight: 600; color: var(--text-muted); border: 1px dashed var(--border); }
 .chatctl-default:hover { color: var(--text); border-style: solid; }
 .chatctl-reset { margin-top: 14px; width: 100%; padding: 8px; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
-.pm-menu, .plus-menu { padding: 6px !important; border-radius: 12px !important; }
-.plus-menu .pm-item { border-radius: 8px !important; padding: 6px 10px !important; gap: 10px !important; font-size: 14px !important; }
-.plus-menu .pm-item > svg:first-child { width: 18px !important; height: 18px !important; opacity: 1; }
+.pm-menu, .plus-menu { padding: 4px !important; border-radius: 12px !important; }
+.plus-menu .pm-item { border-radius: 8px !important; padding: 6px 10px !important; gap: 8px !important; font-size: 14px !important; font-weight: 400 !important; }
+.plus-menu .pm-item > svg:first-child { width: 20px !important; height: 20px !important; opacity: 1; }
 .pm-divider { margin: 5px -6px !important; }
 .pm-sub { border-radius: 12px !important; padding: 6px !important; }
 .topbar-model.tbm-flex { display: inline-flex; align-items: center; gap: 4px; }

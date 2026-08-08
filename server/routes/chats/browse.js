@@ -14,7 +14,7 @@ export default function registerBrowseRoutes(app) {
   app.get('/api/chats', authMiddleware, (req, res) => {
     const list = db.chats.byUser(req.user.id)
       .sort((a, b) => b.updated_at - a.updated_at)
-      .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred, archived: !!c.archived, folderId: c.folder_id || null, projectId: c.project_id || null, ended: !!c.ended }));
+      .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred, archived: !!c.archived, projectId: c.project_id || null, ended: !!c.ended }));
     res.json(list);
   });
 
