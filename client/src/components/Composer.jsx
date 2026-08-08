@@ -105,7 +105,7 @@ export default function Composer({
   const [showReason, setShowReason] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!plusMenu) { setPromptsOpen(false); return; }
     const btn = plusRef.current && plusRef.current.querySelector('.plus');
     if (btn) {

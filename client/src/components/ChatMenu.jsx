@@ -15,7 +15,11 @@ export default function ChatMenu({ chat, modelId, pinned = [], pins = [], onUnpi
   const baseInstr = useRef(chat.instructions || '');
 
   useEffect(() => {
-    const h = (e) => { if (inspectOpen) return; if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    const h = (e) => {
+      if (inspectOpen || !ref.current) return;
+      const scope = ref.current.closest('.chat-name-wrap') || ref.current;
+      if (!scope.contains(e.target)) onClose();
+    };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, [onClose, inspectOpen]);

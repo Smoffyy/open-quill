@@ -12,6 +12,7 @@ import CompactingBar from './components/CompactingBar.jsx';
 import EngineStrip from './components/EngineStrip.jsx';
 import CtxGauge from './components/CtxGauge.jsx';
 import LedgerBar from './components/LedgerBar.jsx';
+import ThreadSkeleton from './components/ThreadSkeleton.jsx';
 import SummaryModal from './components/SummaryModal.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
 import { computeActiveBg } from './lib/appbg.js';
@@ -47,6 +48,7 @@ import { toast } from './toast.js';
 import { copyText } from './clipboard.js';
 import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork } from './components/icons.jsx';
 
+const SKELETON_DELAY = 3000;
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: tk('Assistants can make mistakes, double-check responses.'), greetings: [tk('How can I help you?')], appIcon: '', quickPrompts: [], version: '' };
 
 
@@ -284,6 +286,8 @@ export default function App() {
   const animate = cfg.uiPreset === 'openai' ? false : (user?.prefs?.typewriter ?? user?.prefs?.animations) !== false;
   const revealMs = (() => { const v = user?.prefs?.revealMs; return v == null || isNaN(parseInt(v)) ? 40 : Math.max(0, Math.min(100, parseInt(v))); })();
   const [threadStagger, setThreadStagger] = useState(false);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const skelTimer = useRef(null);
   const staggerTimer = useRef(null);
   const showMsgSpeed = !!user?.prefs?.msgSpeed;
   const showCtxGauge = !!user?.prefs?.ctxGauge;
@@ -341,6 +345,7 @@ export default function App() {
 
   useEffect(() => () => {
     stopLoops();
+    clearTimeout(skelTimer.current);
     clearTimeout(staggerTimer.current);
     clearTimeout(wsTimer.current);
     try { ws.current?.close(); } catch {}
@@ -376,10 +381,8 @@ export default function App() {
   async function loadProjects() { try { setProjects(await api.get('/api/projects')); } catch {} }
 
   useEffect(() => {
-    const root = document.documentElement;
-    if (intro) root.setAttribute('data-entrance', 'off');
-    else root.setAttribute('data-entrance', user?.prefs?.messageEntrance === false ? 'off' : 'on');
-  }, [intro, user]);
+    document.documentElement.setAttribute('data-entrance', user?.prefs?.minimalAnims ? 'off' : 'on');
+  }, [user]);
 
   useEffect(() => {
     const onPop = () => openFromUrl();
@@ -1099,6 +1102,11 @@ export default function App() {
     pendingModelCheck.current = null;
     resolveLastModel(lastA);
   }
+  function armSkeleton(on) {
+    clearTimeout(skelTimer.current);
+    if (!on) { setThreadLoading(false); return; }
+    skelTimer.current = setTimeout(() => setThreadLoading(true), SKELETON_DELAY);
+  }
   async function openChat(id, push = true) {
     setMobileDrawer(false);
     if (incognito) setIncognito(false);
@@ -1119,6 +1127,7 @@ export default function App() {
       setFiles([]);
       setPendingFiles({});
     }
+    armSkeleton(!cached);
     setCtlOpen(false);
     setCanContinue(false); setQueue([]);
     flushDraft();
@@ -1130,6 +1139,7 @@ export default function App() {
     try {
       const { chat, messages } = await api.get('/api/chats/' + id);
       if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { chat, messages }); return; }
+      armSkeleton(false);
       refreshSeq.current++;
       setMessages(prev => (cached && prev.length === messages.length)
         ? messages.map((sm, i) => { const pm = prev[i]; return { ...sm, _k: (pm && pm.role === sm.role) ? (pm._k || pm.id) : sm.id }; })
@@ -1137,7 +1147,7 @@ export default function App() {
       applyChatMeta(chat);
       applyLastModel(messages);
       cacheChat(id, { chat, messages });
-      if (!cached && user?.prefs?.chatStagger !== false && user?.prefs?.messageEntrance !== false) {
+      if (!cached && user?.prefs?.chatStagger !== false && !user?.prefs?.minimalAnims) {
         clearTimeout(staggerTimer.current);
         setThreadStagger(true);
         staggerTimer.current = setTimeout(() => setThreadStagger(false), 700);
@@ -1145,13 +1155,14 @@ export default function App() {
       try { const f = await api.get('/api/chats/' + id + '/files'); if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { files: f.files || [] }); return; } setFiles(f.files || []); setArtifactsOpen((f.files || []).length > 0 && artifactsOpenRef.current); cacheChat(id, { files: f.files || [] }); }
       catch { if (seq === openSeq.current && activeIdRef.current === id && !cached) setFiles([]); }
       if (!cached) { stick.current = true; setTimeout(() => scrollBottom(false), 30); }
-    } catch { if (seq === openSeq.current) { if (!cached) { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); } } }
+    } catch { if (seq === openSeq.current) { armSkeleton(false); if (!cached) { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); } } }
   }
   function newChat(fromPop) {
     setMobileDrawer(false);
     if (incognito) setIncognito(false);
     setShowProjects(false);
     setCurrentProject(null);
+    armSkeleton(false);
     setActiveId(null); setMessages([]); setInput('');
     setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
     setTelemetry(null); setLiveSteers([]); setLedger(null); setModelStatus(null);
@@ -1706,6 +1717,7 @@ export default function App() {
               <div className={'thread' + (threadStagger ? ' stagger' : '') + (ledgerOpen ? ' ledger-on' : '') + (messages.length > 24 ? ' virt' : '') + (findOpen ? ' finding' : '')}
                 role="log" aria-label={t('Conversation')} aria-live="polite" aria-relevant="additions text" aria-busy={streaming ? 'true' : 'false'}>
                 {ledgerOpen && <LedgerBar ledger={ledger} />}
+                {threadLoading && messages.length === 0 && <ThreadSkeleton />}
                 {(() => {
                   const streamKey = assistantIdRef.current || '_stream';
                   const renderList = streaming

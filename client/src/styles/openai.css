@@ -169,10 +169,10 @@
 [data-preset="openai"] .quick-prompts { position: relative; z-index: 1; flex-direction: column; align-items: flex-start; width: 100%; max-width: 768px; margin: 18px auto 0; gap: 2px; }
 [data-preset="openai"] .quick-prompt {
   background: transparent; border: none; justify-content: flex-start; padding: 10px 12px; border-radius: 12px;
-  font-size: 15px; font-family: var(--font-sans); color: var(--text); opacity: .62; transition: opacity .12s ease; width: fit-content;
+  font-size: 15px; font-family: var(--font-sans); color: var(--text); opacity: .62; transition: opacity var(--fx-t, .12s) ease; width: fit-content;
 }
 [data-preset="openai"] .quick-prompt:hover, [data-preset="openai"] .quick-prompt:focus-visible { background: transparent; opacity: 1; }
-[data-preset="openai"] .quick-prompt:active { transform: none; }
+
 .quick-prompts.qp-ghost { visibility: hidden; pointer-events: none; }
 
 [data-preset="openai"] .thread { max-width: 808px; padding: 30px 20px 0; }
@@ -295,3 +295,20 @@
 :root[data-preset="openai"][data-theme="light"] .login-tabs { background: #f4f4f4; }
 :root[data-preset="openai"][data-theme="light"] .login-tabs button.on { background: #fff; }
 :root[data-preset="openai"][data-theme="light"] .login input { background: #fff; border-color: #0000001f; }
+
+/* Settings modal, openai preset. Rounder than the plain skin and the active
+   nav row is a flat neutral fill rather than an accent tint. */
+[data-preset="openai"] .modal { border-radius: 24px; }
+[data-preset="openai"] .modal-tab { border-radius: 10px; }
+[data-preset="openai"] .modal-tab.active { background: var(--surface-hover); color: var(--text); }
+[data-preset="openai"] .modal-side { border-right-color: var(--border-soft); }
+[data-preset="openai"] .modal h2 { font-family: var(--font-sans); }
+[data-preset="openai"] .confirm-box,
+[data-preset="openai"] .preset-modal { border-radius: 20px; }
+:root[data-preset="openai"][data-theme="light"] .overlay,
+:root[data-preset="openai"][data-theme="light"] .confirm-overlay,
+:root[data-preset="openai"][data-theme="light"] .ctx-inspect-overlay,
+:root[data-preset="openai"][data-theme="light"] .bc-overlay,
+:root[data-preset="openai"][data-theme="light"] .pm-overlay,
+:root[data-preset="openai"][data-theme="light"] .preset-scrim,
+:root[data-preset="openai"][data-theme="light"] .mdoc-overlay { background: rgba(0, 0, 0, .32); }

@@ -6,7 +6,7 @@
 .disclaimer { text-align: center; font-size: 12px; color: var(--text-faint); font-family: var(--font-sans); padding: 8px 0 10px; }
 
 /* ---------- scroll-to-bottom ---------- */
-.to-bottom { position: absolute; left: 50%; transform: translateX(-50%); bottom: 190px; width: 34px; height: 34px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); display: grid; place-items: center; color: var(--text); box-shadow: 0 4px 14px #0000004d; animation: pop .18s ease; z-index: 5; }
+.to-bottom { position: absolute; left: 50%; transform: translateX(-50%); bottom: 190px; width: 34px; height: 34px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); display: grid; place-items: center; color: var(--text); box-shadow: 0 4px 14px #0000004d; animation: pop var(--fx-a, .18s) ease; z-index: 5; }
 .to-bottom:hover { background: var(--surface-hover); }
 
 /* ---------- login ---------- */
@@ -19,13 +19,13 @@
 .login-box { background: var(--card-bg, var(--surface)); border: 1px solid var(--border); border-radius: 14px; padding: 22px; box-shadow: 0 1px 3px #0000000f; text-align: left; }
 .login-box .lbl { font-size: 14px; color: var(--text-muted); margin-bottom: 12px; font-family: var(--font-sans); text-align: center; }
 .login-tabs { display: flex; gap: 4px; padding: 3px; margin-bottom: 16px; background: var(--surface-2); border-radius: 10px; }
-.login-tabs button { flex: 1; padding: 8px 10px; border-radius: 8px; font-size: 13.5px; font-weight: 500; font-family: var(--font-sans); color: var(--text-muted); background: transparent; transition: background .15s, color .15s; }
+.login-tabs button { flex: 1; padding: 8px 10px; border-radius: 8px; font-size: 13.5px; font-weight: 500; font-family: var(--font-sans); color: var(--text-muted); background: transparent; transition: background var(--fx-t, .15s), color var(--fx-t, .15s); }
 .login-tabs button:hover { color: var(--text); }
 .login-tabs button.on { background: var(--card-bg, var(--surface)); color: var(--text); box-shadow: 0 1px 2px #00000014; }
 .login input { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 9px; font-size: 15px; background: var(--input-bg, var(--surface-2)); color: var(--text); outline: none; font-family: var(--font-sans); margin-bottom: 10px; }
 .login input::placeholder { color: var(--text-faint); }
 .login input:focus { border-color: var(--accent); }
-.login .primary { width: 100%; padding: 12px; background: var(--accent); color: var(--on-accent); border-radius: 9px; font-size: 15px; font-family: var(--font-sans); font-weight: 600; transition: background .15s, opacity .15s; }
+.login .primary { width: 100%; padding: 12px; background: var(--accent); color: var(--on-accent); border-radius: 9px; font-size: 15px; font-family: var(--font-sans); font-weight: 600; transition: background var(--fx-t, .15s), opacity var(--fx-t, .15s); }
 .login .primary:hover { background: color-mix(in srgb, var(--accent) 86%, var(--on-accent)); }
 .login .primary:disabled { opacity: .6; pointer-events: none; }
 .login .back { display: block; width: 100%; margin-top: 12px; font-size: 13px; color: var(--text-muted); font-family: var(--font-sans); background: transparent; }
