@@ -5,10 +5,11 @@ import { activePath } from './tree.js';
 import { historyText } from './history.js';
 import { isTextLike, readUploadText, readImageDataUri } from './uploads.js';
 import { modelCtx } from './models.js';
-import { pinnedFilesPrompt, lastUserQuery } from './prompts.js';
+import { pinnedFilesPrompt } from './prompts.js';
 import { llamaTokenCount, isLlamaCpp } from './llamacpp.js';
 
 export const STYLE_PRESETS = {
+  __proto__: null,
   concise: 'Respond concisely. Get to the point immediately, cut filler, hedging, and restatement, and keep answers as short as they can be while remaining complete and correct. Prefer tight prose over long lists.',
   explanatory: 'Respond in an explanatory, educational way. Walk through the reasoning behind answers, define terms the user may not know, use short examples or analogies where they aid understanding, and make sure the user leaves knowing WHY, not just WHAT.',
   formal: 'Respond in a polished, professional register suitable for business or academic contexts. Use complete sentences, precise vocabulary, and a measured tone. Avoid slang, contractions where practical, and overly casual phrasing.'
@@ -24,7 +25,7 @@ export function styleTextFor(userId, styleId) {
 }
 
 // history for the active branch, minus whatever the summary already covers
-export async function historyRows(chat, model) {
+export function historyRows(chat, model) {
   const fresh = db.chats.byId(chat.id) || chat;
   const upto = fresh.summary && fresh.summary_upto ? fresh.summary_upto : 0;
   return activePath(chat.id).map(m => ({
@@ -37,9 +38,8 @@ export async function historyRows(chat, model) {
   }));
 }
 
-export async function chatHistory(chat, model) {
-  const rows = await historyRows(chat, model);
-  return rows.filter(r => !r.summarized && !r.excluded).map(r => r.msg);
+export function chatHistory(chat, model) {
+  return historyRows(chat, model).filter(r => !r.summarized && !r.excluded).map(r => r.msg);
 }
 
 function historyMessage(m, model) {
@@ -63,9 +63,7 @@ function historyMessage(m, model) {
   return { role: m.role, content: parts };
 }
 
-export function textTokens(s) {
-  return estTextTokens(s);
-}
+export const textTokens = estTextTokens;
 
 function countCjk(s, from, to) {
   let cjk = 0;
@@ -355,9 +353,9 @@ export function combinedInstructions(chat) {
   return parts.join('\n\n');
 }
 
-export async function instrFor(chat, query) {
+export function instrFor(chat) {
   const base = combinedInstructions(chat);
   let pinned = '';
-  try { pinned = await pinnedFilesPrompt(chat, query == null ? lastUserQuery(chat.id) : query); } catch { pinned = ''; }
+  try { pinned = pinnedFilesPrompt(chat); } catch { pinned = ''; }
   return pinned ? (base ? base + '\n\n' + pinned : pinned) : base;
 }

@@ -2,88 +2,170 @@ import { db, uid, now, getSetting } from '../db.js';
 import { hash, check, sign, publicUser, authMiddleware, sessionFromRequest, createSession, revokeSession, revokeOtherSessions, sessionMaxAgeSeconds } from '../auth.js';
 import { oneShot, stripThink } from '../llm/index.js';
 import { randomSecret, verifyTotp, otpauthUri, makeRecoveryCodes, hashRecovery } from '../totp.js';
-import * as sandbox from '../sandbox.js';
-import { logAudit } from '../lib/audit.js';
-import { purgeUploads } from '../lib/uploads.js';
+import { logAudit, clientIp } from '../lib/audit.js';
+import { purgeUserChats } from '../lib/purge.js';
 import { resolveModelOrDefault } from '../lib/models.js';
 import { budgetStatus } from '../lib/budget.js';
 import { updateUserMemory } from '../lib/memory.js';
 import { killSessionSockets } from '../lib/ws/index.js';
 import { removeUserFromSpaces } from '../lib/spaces.js';
 
-const setCookie = (res, token) =>
-  res.setHeader('Set-Cookie', `token=${token}; HttpOnly; Path=/; Max-Age=${token ? sessionMaxAgeSeconds() : 0}; SameSite=Lax`);
+const isHttps = (req) =>
+  !!req.socket?.encrypted || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
 
+// Secure is set only over TLS: forcing it on a plain-http install would make the browser
+// drop the cookie and lock everyone out of a normal localhost deployment.
+const setCookie = (req, res, token) =>
+  res.setHeader('Set-Cookie', [
+    `token=${token}`, 'HttpOnly', 'Path=/',
+    `Max-Age=${token ? sessionMaxAgeSeconds() : 0}`,
+    'SameSite=Lax',
+    ...(isHttps(req) ? ['Secure'] : [])
+  ].join('; '));
+
+const FAIL_WINDOW_MS = 10 * 60 * 1000;
+const FAIL_MAX = 8;
+const FAIL_MAX_KEYS = 5000;
 const loginFails = new Map();
-function loginLimited(ip) {
-  const rec = loginFails.get(ip);
-  if (!rec) return false;
-  if (Date.now() - rec.t > 10 * 60 * 1000) { loginFails.delete(ip); return false; }
-  return rec.n >= 8;
+
+function pruneLoginFails(cutoff) {
+  for (const [k, v] of loginFails) if (v.t < cutoff) loginFails.delete(k);
 }
-function noteLoginFail(ip) {
-  const rec = loginFails.get(ip);
-  if (rec && Date.now() - rec.t < 10 * 60 * 1000) { rec.n++; rec.t = Date.now(); }
-  else loginFails.set(ip, { n: 1, t: Date.now() });
-  if (loginFails.size > 5000) loginFails.clear();
+function loginLimited(key) {
+  const rec = loginFails.get(key);
+  if (!rec) return false;
+  if (Date.now() - rec.t > FAIL_WINDOW_MS) { loginFails.delete(key); return false; }
+  return rec.n >= FAIL_MAX;
+}
+function noteLoginFail(key) {
+  const t = Date.now();
+  const rec = loginFails.get(key);
+  if (rec && t - rec.t < FAIL_WINDOW_MS) { rec.n++; rec.t = t; }
+  else loginFails.set(key, { n: 1, t });
+  // Drop only what has aged out. Clearing the whole map, as this used to, let an
+  // attacker wipe every other address's counter by making 5000 junk attempts.
+  if (loginFails.size > FAIL_MAX_KEYS) {
+    pruneLoginFails(t - FAIL_WINDOW_MS);
+    if (loginFails.size > FAIL_MAX_KEYS) loginFails.delete(loginFails.keys().next().value);
+  }
 }
 
-const DEFAULT_STYLE_GEN_PROMPT = 'You create writing-style instructions for an AI assistant. The user will provide a sample of writing they like. Analyze its tone, sentence structure, vocabulary, formality, formatting habits, and personality, then output ONLY a concise instruction paragraph (under 120 words) telling an assistant how to write in that style. Do not mention the sample, do not add a preamble, output only the instruction text.';
+// Keyed per address AND per account: one address cannot spray a whole user list, and a
+// botnet cannot grind a single account from many addresses. Registration uses its own
+// account namespace, or repeatedly re-registering a known address would lock its owner
+// out of signing in. passwordMatches always pays for one argon2 verify, even when the
+// address is unknown: returning early there answers in a fraction of the time and is an
+// account-existence oracle however carefully the error text is worded.
+const limitKeys = (req, email) => [`ip:${clientIp(req)}`, ...(email ? [`user:${email}`] : [])];
+const registerKeys = (req, email) => [`ip:${clientIp(req)}`, ...(email ? [`reg:${email}`] : [])];
+const anyLimited = (keys) => keys.some(loginLimited);
+
+let decoyHash = null;
+async function passwordMatches(pw, stored) {
+  if (stored) return check(pw, stored);
+  if (!decoyHash) decoyHash = await hash(randomSecret());
+  await check(pw, decoyHash);
+  return false;
+}
+
+const PREFS_MAX_BYTES = 256 * 1024;
+export const USAGE_WINDOWS = new Set([7, 30, 90]);
+
+const DEFAULT_STYLE_GEN_PROMPT ='You create writing-style instructions for an AI assistant. The user will provide a sample of writing they like. Analyze its tone, sentence structure, vocabulary, formality, formatting habits, and personality, then output ONLY a concise instruction paragraph (under 120 words) telling an assistant how to write in that style. Do not mention the sample, do not add a preamble, output only the instruction text.';
 const DEFAULT_IMPROVE_PROMPT = 'You are a prompt engineer. The user will give you a draft prompt they intend to send to an AI assistant. Rewrite it to be clearer, more specific, and more likely to get an excellent result: state the goal explicitly, add helpful structure, specify the desired format or constraints when they are implied, and remove ambiguity. Preserve the user\u2019s intent, language, and any concrete details exactly. Output ONLY the improved prompt text, with no preamble, quotes, or explanation.';
 
 export default function registerAuthRoutes(app) {
-  app.post('/api/auth/check-email', (req, res) => {
-    const email = (req.body.email || '').trim().toLowerCase();
-    res.json({ exists: !!db.users.byEmail(email) });
+  app.get('/api/auth/context', (req, res) => {
+    res.json({
+      firstRun: db.users.count() === 0,
+      allowSignups: getSetting('allow_signups', '1') === '1',
+      appName: getSetting('app_name', 'open-quill'),
+      appIcon: getSetting('app_icon', ''),
+      appFont: getSetting('app_font', 'serif'),
+      uiPreset: getSetting('ui_preset', '') === 'openai' ? 'openai' : 'anthropic',
+    });
   });
 
   app.post('/api/auth/login', async (req, res) => {
-    const ip = req.socket.remoteAddress || '';
-    if (loginLimited(ip)) return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
-    const email = (req.body.email || '').trim().toLowerCase();
-    const pw = req.body.password || '';
-    if (!email || pw.length < 4) return res.status(400).json({ error: 'Invalid email or password (min 4 chars).' });
-    let u = db.users.byEmail(email);
-    if (u) {
-      if (!(await check(pw, u.password_hash))) { noteLoginFail(ip); return res.status(401).json({ error: 'Incorrect password.' }); }
-      loginFails.delete(ip);
-      if (u.totp_enabled && u.totp_secret) {
-        const code = String(req.body.code || '').trim();
-        const recovery = String(req.body.recovery || '').trim();
-        if (!code && !recovery) return res.status(401).json({ error: 'two-factor required', twoFactor: true });
-        let ok = false;
-        if (code) ok = verifyTotp(u.totp_secret, code);
-        if (!ok && recovery) {
-          const h = hashRecovery(recovery);
-          const left = (u.recovery_codes || []).filter(c => c !== h);
-          if (left.length !== (u.recovery_codes || []).length) { ok = true; db.users.update(u.id, { recovery_codes: left }); }
-        }
-        if (!ok) { noteLoginFail(ip); return res.status(401).json({ error: 'Invalid two-factor code.', twoFactor: true }); }
-      }
-    } else {
-      const isFirst = db.users.count() === 0;
-      u = db.users.insert({ id: uid(), email, password_hash: await hash(pw), display_name: '', is_admin: isFirst ? 1 : 0, is_owner: isFirst ? 1 : 0, prefs: {}, created_at: now() });
+    const email = String(req.body?.email || '').trim().toLowerCase().slice(0, 320);
+    const pw = String(req.body?.password || '');
+    const keys = limitKeys(req, email);
+    if (anyLimited(keys)) return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
+    if (!email || !pw) return res.status(400).json({ error: 'Enter your email and password.' });
+    const u = db.users.byEmail(email);
+    if (!(await passwordMatches(pw, u?.password_hash))) {
+      keys.forEach(noteLoginFail);
+      return res.status(401).json({ error: 'Incorrect email or password.' });
     }
+    if (u.totp_enabled && u.totp_secret) {
+      const code = String(req.body?.code || '').trim();
+      const recovery = String(req.body?.recovery || '').trim();
+      if (!code && !recovery) return res.status(401).json({ error: 'two-factor required', twoFactor: true });
+      let ok = false;
+      if (code) ok = verifyTotp(u.totp_secret, code);
+      if (!ok && recovery) {
+        const h = hashRecovery(recovery);
+        const left = (u.recovery_codes || []).filter(c => c !== h);
+        if (left.length !== (u.recovery_codes || []).length) { ok = true; db.users.update(u.id, { recovery_codes: left }); }
+      }
+      // The counter is cleared only once the whole login succeeds, so a stolen password
+      // still cannot be used to grind second-factor codes without limit.
+      if (!ok) { keys.forEach(noteLoginFail); return res.status(401).json({ error: 'Invalid two-factor code.', twoFactor: true }); }
+    }
+    keys.forEach(k => loginFails.delete(k));
     const sid = createSession(u, req);
-    setCookie(res, sign(u, sid));
+    setCookie(req, res, sign(u, sid));
+    logAudit(req, 'auth.login', { type: 'user', id: u.id });
+    res.json({ user: publicUser(u) });
+  });
+
+  app.post('/api/auth/register', async (req, res) => {
+    const email = String(req.body?.email || '').trim().toLowerCase().slice(0, 320);
+    const pw = String(req.body?.password || '');
+    const keys = registerKeys(req, email);
+    if (anyLimited(keys)) return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
+    if (!/.+@.+\..+/.test(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
+    if (pw.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    if (pw.length > 1024) return res.status(400).json({ error: 'That password is too long.' });
+    const isFirst = db.users.count() === 0;
+    if (!isFirst && getSetting('allow_signups', '1') !== '1') {
+      return res.status(403).json({ error: 'New accounts are turned off on this server.' });
+    }
+    if (db.users.byEmail(email)) { keys.forEach(noteLoginFail); return res.status(409).json({ error: 'An account with that email already exists.' }); }
+    const u = db.users.insert({ id: uid(), email, password_hash: await hash(pw), display_name: '', is_admin: isFirst ? 1 : 0, is_owner: isFirst ? 1 : 0, prefs: {}, created_at: now() });
+    logAudit(req, 'user.register', { type: 'user', id: u.id, meta: { email, owner: isFirst } });
+    const sid = createSession(u, req);
+    setCookie(req, res, sign(u, sid));
     res.json({ user: publicUser(u) });
   });
 
   app.post('/api/auth/logout', (req, res) => {
     const r = sessionFromRequest(req);
     if (r?.sessionId) revokeSession(r.sessionId);
-    setCookie(res, '');
+    setCookie(req, res, '');
     res.json({ ok: true });
   });
 
   app.get('/api/me', authMiddleware, (req, res) => res.json({ user: publicUser(req.user) }));
   app.patch('/api/me', authMiddleware, (req, res) => {
+    const b = req.body || {};
     const patch = {};
-    if ('prefs' in req.body) patch.prefs = req.body.prefs;
-    if ('displayName' in req.body) patch.display_name = req.body.displayName;
-    if ('instructions' in req.body) patch.instructions = String(req.body.instructions || '').slice(0, 8000);
-    db.users.update(req.user.id, patch);
-    res.json({ user: publicUser(db.users.byId(req.user.id)) });
+    // prefs is a free-form client bag, so it is bounded rather than schema-checked: the
+    // whole user row is one JSON blob, and an unbounded object here would grow it without
+    // limit and be re-parsed on every single authenticated request.
+    if ('prefs' in b) {
+      if (b.prefs !== null && (typeof b.prefs !== 'object' || Array.isArray(b.prefs))) {
+        return res.status(400).json({ error: 'prefs must be an object.' });
+      }
+      const prefs = b.prefs || {};
+      if (JSON.stringify(prefs).length > PREFS_MAX_BYTES) return res.status(413).json({ error: 'Settings are too large to save.' });
+      patch.prefs = prefs;
+    }
+    if ('displayName' in b) patch.display_name = String(b.displayName ?? '').slice(0, 80);
+    if ('instructions' in b) patch.instructions = String(b.instructions ?? '').slice(0, 8000);
+    if (!Object.keys(patch).length) return res.json({ user: publicUser(req.user) });
+    const saved = db.users.update(req.user.id, patch);
+    res.json({ user: publicUser(saved || req.user) });
   });
 
   app.put('/api/me/styles', authMiddleware, (req, res) => {
@@ -189,8 +271,7 @@ export default function registerAuthRoutes(app) {
   });
 
   app.get('/api/me/usage', authMiddleware, (req, res) => {
-    const windows = { '7': 7, '30': 30, '90': 90 };
-    const days = windows[String(req.query.days)] || null;
+    const days = USAGE_WINDOWS.has(Number(req.query.days)) ? Number(req.query.days) : null;
     const since = days ? now() - days * 24 * 60 * 60 * 1000 : 0;
     const rows = since ? db.usage.byUserSince(req.user.id, since) : db.usage.byUser(req.user.id);
     const byModel = new Map();
@@ -246,10 +327,12 @@ export default function registerAuthRoutes(app) {
   app.post('/api/me/password', authMiddleware, async (req, res) => {
     const current = String(req.body?.current || '');
     const next = String(req.body?.next || '');
-    if (next.length < 4) return res.status(400).json({ error: 'New password must be at least 4 characters.' });
+    if (next.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters.' });
     if (!(await check(current, req.user.password_hash))) return res.status(401).json({ error: 'Current password is incorrect.' });
     db.users.update(req.user.id, { password_hash: await hash(next) });
+    const others = db.sessions.byUser(req.user.id).filter(s => s.id !== req.sessionId);
     revokeOtherSessions(req.user.id, req.sessionId);
+    for (const s of others) killSessionSockets(s.id);
     logAudit(req, 'account.password_change', { type: 'user', id: req.user.id });
     res.json({ ok: true });
   });
@@ -290,36 +373,25 @@ export default function registerAuthRoutes(app) {
   });
 
   app.delete('/api/me/chats', authMiddleware, (req, res) => {
-    const myChats = db.chats.byUser(req.user.id);
-    for (const c of myChats) { try { sandbox.remove(c.id); } catch {} }
-    const chatIds = new Set(myChats.map(c => c.id));
-    purgeUploads(chatIds);
-    for (const id of chatIds) db.messages.removeWhere('chat_id', id);
-    db.chats.removeWhere('user_id', req.user.id);
-    res.json({ ok: true, deleted: myChats.length });
+    res.json({ ok: true, deleted: purgeUserChats(req.user.id) });
   });
 
   app.delete('/api/me', authMiddleware, (req, res) => {
     const u = req.user;
     if (u.is_owner) return res.status(403).json({ error: 'The owner account cannot be deleted.' });
-    const myChats = db.chats.byUser(u.id);
-    for (const c of myChats) { try { sandbox.remove(c.id); } catch {} }
-    const chatIds = new Set(myChats.map(c => c.id));
-    purgeUploads(chatIds);
-    for (const id of chatIds) db.messages.removeWhere('chat_id', id);
-    db.chats.removeWhere('user_id', u.id);
+    purgeUserChats(u.id);
     removeUserFromSpaces(u.id);
     db.sessions.removeWhere('user_id', u.id);
     db.users.removeById(u.id);
-    setCookie(res, '');
+    logAudit(req, 'account.delete', { type: 'user', id: u.id, meta: { email: u.email } });
+    setCookie(req, res, '');
     res.json({ ok: true });
   });
 
   app.get('/api/users/search', authMiddleware, (req, res) => {
-    const q = String(req.query.q || '').trim().toLowerCase();
+    const q = String(req.query.q || '').trim().toLowerCase().slice(0, 120);
     if (q.length < 2) return res.json([]);
-    const out = db.users.filter(u => u.id !== req.user.id && ((u.email || '').toLowerCase().includes(q) || (u.display_name || '').toLowerCase().includes(q)))
-      .slice(0, 10)
+    const out = db.users.search(q, req.user.id, 10)
       .map(u => ({ id: u.id, email: u.email, displayName: u.display_name || (u.email || '').split('@')[0] }));
     res.json(out);
   });

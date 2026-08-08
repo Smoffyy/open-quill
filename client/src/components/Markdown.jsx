@@ -2,10 +2,12 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
+import { BASE_MACROS, KATEX_OPTIONS, ensureKatex, hasMath, katexPlugin, katexVersion, subscribeKatex, wrapMathEnvironments } from '../lib/mathjs.js';
 import CodeBlock from './CodeBlock.jsx';
 import ToolCard from './ToolCard.jsx';
+import ReasoningBlock from './ReasoningBlock.jsx';
+
+export const ReasonSegs = React.createContext(null);
 import { scanTools } from '../toolproto.js';
 
 function b64encode(str) {
@@ -63,8 +65,9 @@ function legacyBlocks(text) {
 function transformTools(text) {
   const hasNew = /[|<]\s*\/?\s*\|?\s*tool/i.test(text);
   const hasOqr = text.indexOf('[[OQR:') !== -1;
+  const hasOqt = text.indexOf('[[OQT:') !== -1;
   const hasLegacy = text.indexOf('```tool') !== -1;
-  if (!hasNew && !hasOqr && !hasLegacy) return text;
+  if (!hasNew && !hasOqr && !hasOqt && !hasLegacy) return text;
 
   const spans = [];
   const results = [];
@@ -76,7 +79,9 @@ function transformTools(text) {
     spans.push({ kind: 'oqr', start: m.index, end: m.index + m[0].length, ri: results.length });
     results.push(r);
   }
-  const partial = text.match(/\[\[OQR:[A-Za-z0-9+/=]*$/);
+  const oqtRe = /\[\[OQT:(\d+)\]\]/g;
+  while ((m = oqtRe.exec(text))) spans.push({ kind: 'oqt', start: m.index, end: m.index + m[0].length, seg: Number(m[1]) });
+  const partial = text.match(/\[\[OQ[RT]?:?[A-Za-z0-9+/=]*$/);
   if (partial) spans.push({ kind: 'strip', start: partial.index, end: text.length });
 
   if (hasNew) {
@@ -100,6 +105,7 @@ function transformTools(text) {
     if (s.kind === 'block') { const r = results[ri]; emit((r && r.call) || s.call, r && r.result); ri++; }
     else if (s.kind === 'live') { emit(s.call, null); }
     else if (s.kind === 'oqr') { if (s.ri >= ri) { const r = results[s.ri]; emit(r && r.call, r && r.result); ri = s.ri + 1; } }
+    else if (s.kind === 'oqt') { out += '```reasonseg\n' + s.seg + '\n```'; }
     cursor = s.end;
   }
   out += text.slice(cursor);
@@ -169,6 +175,15 @@ function blockify(text) {
   return blocks;
 }
 
+function ReasonSeg({ index }) {
+  const ctx = React.useContext(ReasonSegs);
+  const segs = ctx && ctx.segs;
+  const text = segs && segs[index];
+  if (text == null) return null;
+  const live = !!(ctx.live && index === segs.length - 1);
+  return <ReasoningBlock text={text} live={live} durationMs={(ctx.segMs && ctx.segMs[index]) || 0} preset={ctx.preset} collapsible={ctx.collapsible !== false} />;
+}
+
 const mdComponents = {
   pre({ children }) {
     const el = Array.isArray(children) ? children[0] : children;
@@ -176,6 +191,7 @@ const mdComponents = {
     const m = /language-(\w+)/.exec(props.className || '');
     const raw = String(props.children || '').replace(/\n$/, '');
     const lang = m ? m[1].toLowerCase() : '';
+    if (lang === 'reasonseg') return <ReasonSeg index={Number(raw.trim())} />;
     if (lang === 'toolcall') {
       const data = (() => { try { return JSON.parse(b64decode(raw)); } catch { return null; } })();
       if (data && data.call) return <ToolCard call={data.call} result={data.result} />;
@@ -190,10 +206,17 @@ const mdComponents = {
 
 const MarkdownBlock = React.memo(function MarkdownBlock({ text }) {
   const prepared = React.useMemo(() => guardBlock(text), [text]);
+  const needsMath = React.useMemo(() => hasMath(prepared), [prepared]);
+  const mathReady = React.useSyncExternalStore(subscribeKatex, katexVersion, katexVersion);
+  React.useEffect(() => { if (needsMath && !katexPlugin()) ensureKatex(); }, [needsMath, mathReady]);
+  const rehypePlugins = React.useMemo(() => {
+    const plugin = needsMath ? katexPlugin() : null;
+    return plugin ? [[plugin, { ...KATEX_OPTIONS, macros: { ...BASE_MACROS } }]] : [];
+  }, [needsMath, mathReady]);
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
-      rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false, macros: { '\\mdollar': '\\$' } }]]}
+      rehypePlugins={rehypePlugins}
       components={mdComponents}
     >{prepared}</ReactMarkdown>
   );
@@ -358,8 +381,8 @@ function ProgressiveBlocks({ blocks }) {
   React.useEffect(() => { setCount(advance(0, PROGRESSIVE_INITIAL_LINES)); }, [advance]);
   React.useEffect(() => {
     if (count >= blocks.length) return;
-    const idle = window.requestIdleCallback || ((cb) => setTimeout(() => cb(), 16));
-    const cancel = window.cancelIdleCallback || clearTimeout;
+    const idle = window.requestIdleCallback ? window.requestIdleCallback.bind(window) : ((cb) => setTimeout(() => cb(), 16));
+    const cancel = window.cancelIdleCallback ? window.cancelIdleCallback.bind(window) : clearTimeout;
     const handle = idle(() => setCount(c => advance(c, PROGRESSIVE_STEP_LINES)));
     return () => cancel(handle);
   }, [count, blocks.length, advance]);
@@ -371,7 +394,7 @@ function Markdown({ children, streaming }) {
   if (typeof children !== 'string') {
     return <MarkdownBlock text={children} />;
   }
-  let text = normalizeMathDelims(transformTools(children));
+  let text = wrapMathEnvironments(normalizeMathDelims(transformTools(children)));
   if (streaming) text = neutralizeOpenMath(text);
   const blocks = blockify(text);
   if (!streaming && (text.length > PROGRESSIVE_SIZE_TRIGGER || blocks.length > PROGRESSIVE_BLOCK_TRIGGER)) {

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import Markdown from './Markdown.jsx';
+import { t } from '../i18n.jsx';
 
 export default function BranchCompare({ chatId, messageId, onSelect, onClose }) {
   const [data, setData] = useState(null);
@@ -29,9 +30,9 @@ export default function BranchCompare({ chatId, messageId, onSelect, onClose }) 
           <div>Compare versions{sibs.length ? ` · ${sibs.length}` : ''}</div>
           <button className="bc-x" onClick={onClose}>✕</button>
         </div>
-        {err ? <div className="bc-empty">Could not load versions.</div>
-          : !data ? <div className="bc-empty">Loading…</div>
-          : sibs.length < 2 ? <div className="bc-empty">This message has only one version.</div>
+        {err ? <div className="bc-empty">{t("Could not load versions.")}</div>
+          : !data ? <div className="bc-empty">{t("Loading…")}</div>
+          : sibs.length < 2 ? <div className="bc-empty">{t("This message has only one version.")}</div>
           : (
             <div className="bc-cols" style={{ gridTemplateColumns: `repeat(${sibs.length}, minmax(260px, 1fr))` }}>
               {sibs.map(s => (
@@ -44,7 +45,7 @@ export default function BranchCompare({ chatId, messageId, onSelect, onClose }) 
                   <div className="bc-col-body"><Markdown>{s.content || '(empty)'}</Markdown></div>
                   <div className="bc-col-foot">
                     <button className="bc-use" disabled={s.id === data.activeId} onClick={() => { onSelect?.(s.id); onClose(); }}>
-                      {s.id === data.activeId ? 'In use' : 'Use this version'}
+                      {s.id === data.activeId ? t('In use') : t('Use this version')}
                     </button>
                   </div>
                 </div>

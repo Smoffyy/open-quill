@@ -1,17 +1,21 @@
 {
   "name": "open-quill-client",
-  "version": "27.0.0-beta.4",
+  "version": "27.1.0-beta.1",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/check-local.mjs",
     "preview": "vite preview",
-    "i18n:check": "node scripts/i18n-check.mjs"
+    "test": "node --test test/logic.test.js",
+    "i18n:check": "node scripts/i18n-check.mjs",
+    "check:local": "node scripts/check-local.mjs",
+    "dead:css": "node scripts/dead-css.mjs",
+    "smoke": "vite build --config vite.smoke.config.js --logLevel error && node node_modules/.smoke/smoke.js"
   },
   "dependencies": {
     "highlight.js": "^11.11.1",
-    "katex": "^0.18.1",
+    "katex": "^0.18.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0",
@@ -20,7 +24,10 @@
     "remark-math": "^6.0.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^6.0.4",
-    "vite": "^8.1.5"
+    "@vitejs/plugin-react": "^6.0.5",
+    "vite": "^8.2.1"
+  },
+  "overrides": {
+    "lightningcss": "^1.33.0"
   }
 }

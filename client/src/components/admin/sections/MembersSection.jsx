@@ -19,6 +19,13 @@ export default function MembersSection() {
   });
   return (
     <>
+      <div className="field row">
+        <div>
+          <label>{t("Allow new accounts")}</label>
+          <div className="muted-note">{t("When off, the sign-in screen stops offering account creation and the server refuses new registrations. Existing members are unaffected.")}</div>
+        </div>
+        <div className={'switch' + (A.cfg.allowSignups !== false ? ' on' : '')} onClick={() => A.setCfg(c => ({ ...c, allowSignups: c.allowSignups === false }))} />
+      </div>
       <div className="mem-toolbar">
         <input className="mem-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search by name or email…")} />
         <div className="seg">
@@ -32,7 +39,7 @@ export default function MembersSection() {
         <div className="user-row" key={u.id}>
           <div className="avatar">{(u.displayName || u.email)[0].toUpperCase()}</div>
           <div className="u-main">
-            <div className="u-name">{u.displayName}{u.isOwner && <span className="badge">Top admin</span>}{u.twoFactor && <span className="badge" title={t("Two-factor enabled")}>2FA</span>}{u.id === user?.id && !u.isOwner && <span className="you-tag">you</span>}</div>
+            <div className="u-name">{u.displayName}{u.isOwner && <span className="badge">{t("Top admin")}</span>}{u.twoFactor && <span className="badge" title={t("Two-factor enabled")}>{t("2FA")}</span>}{u.id === user?.id && !u.isOwner && <span className="you-tag">you</span>}</div>
             <div className="u-email">{u.email}{typeof u.monthSpend === 'number' && u.monthSpend > 0 ? ` · $${u.monthSpend.toFixed(u.monthSpend < 0.01 ? 4 : 2)} this month` : ''}</div>
           </div>
           <div className="u-budget" title={t("Monthly budget override ($). Blank uses the role default.")}>
@@ -44,8 +51,8 @@ export default function MembersSection() {
           </div>
           {!u.isOwner && (
             <div className="seg">
-              <button className={u.isAdmin ? '' : 'on'} onClick={() => A.setRole(u.id, false)}>User</button>
-              <button className={u.isAdmin ? 'on' : ''} onClick={() => A.setRole(u.id, true)}>Admin</button>
+              <button className={u.isAdmin ? '' : 'on'} onClick={() => A.setRole(u.id, false)}>{t("User")}</button>
+              <button className={u.isAdmin ? 'on' : ''} onClick={() => A.setRole(u.id, true)}>{t("Admin")}</button>
             </div>
           )}
           {!u.isOwner && u.id !== user?.id && (

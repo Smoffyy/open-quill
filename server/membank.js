@@ -85,10 +85,21 @@ function readableTextSync(base) {
   if (TEXT_EXT.has(ext(base))) { try { return fs.readFileSync(s.p, 'utf8'); } catch { return null; } }
   return null;
 }
+
+const lineCache = new Map();
 function countLines(base) {
+  const s = safe(base);
+  if (!s) return 0;
+  const src = isPdf(base) ? cachePathFor(s.base) : s.p;
+  let stamp = '';
+  try { const st = fs.statSync(src); stamp = st.mtimeMs + ':' + st.size; } catch { return 0; }
+  const hit = lineCache.get(src);
+  if (hit && hit.stamp === stamp) return hit.lines;
   const t = readableTextSync(base);
-  if (t == null) return 0;
-  return t.length ? t.split('\n').length : 0;
+  const lines = t == null ? 0 : (t.length ? t.split('\n').length : 0);
+  lineCache.set(src, { stamp, lines });
+  if (lineCache.size > 500) lineCache.delete(lineCache.keys().next().value);
+  return lines;
 }
 
 function rawList() {
@@ -101,10 +112,13 @@ function rawList() {
     if (!st.isFile()) continue;
     out.push({ name: n, size: st.size });
   }
+  out.sort((a, b) => a.name.localeCompare(b.name));
   return out;
 }
 function getMeta() { try { return getSetting('membank_meta', {}) || {}; } catch { return {}; } }
 function setMeta(m) { try { setSetting('membank_meta', m || {}); } catch {} }
+
+export function count() { return rawList().length; }
 
 export function list() {
   const meta = getMeta();
@@ -213,8 +227,8 @@ export function execTool(call) {
     if (!q) return { ok: false, error: 'Empty query.' };
     const needle = q.toLowerCase();
     const matches = [];
-    for (const f of list()) {
-      if (!f.readable) continue;
+    for (const f of rawList()) {
+      if (!isReadable(f.name)) continue;
       const text = readableTextSync(f.name);
       if (text == null) continue;
       const ls = text.split('\n');

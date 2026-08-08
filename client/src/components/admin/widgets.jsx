@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../api.js';
 import { Copy, Check } from '../icons.jsx';
 import { QP_ICON_LIST, QpIcon } from '../../qpIcons.jsx';
-import { t } from '../../i18n.jsx';
+import { t, tk } from '../../i18n.jsx';
 
 export function QpIconPicker({ value, onPick }) {
   const [open, setOpen] = useState(false);
@@ -176,9 +176,9 @@ export function IconCropModal({ file, onDone, onCancel }) {
           <div className="crop-controls">
             <div className="field"><label>{t("Shape")}</label>
               <div className="seg" style={{ width: 'fit-content' }}>
-                <button className={shape === 'circle' ? 'on' : ''} onClick={() => setShape('circle')}>Circle</button>
-                <button className={shape === 'rounded' ? 'on' : ''} onClick={() => setShape('rounded')}>Rounded</button>
-                <button className={shape === 'square' ? 'on' : ''} onClick={() => setShape('square')}>Square</button>
+                <button className={shape === 'circle' ? 'on' : ''} onClick={() => setShape('circle')}>{t("Circle")}</button>
+                <button className={shape === 'rounded' ? 'on' : ''} onClick={() => setShape('rounded')}>{t("Rounded")}</button>
+                <button className={shape === 'square' ? 'on' : ''} onClick={() => setShape('square')}>{t("Square")}</button>
               </div>
             </div>
             <div className="field"><label>{t("Zoom")}</label>
@@ -186,7 +186,7 @@ export function IconCropModal({ file, onDone, onCancel }) {
             </div>
             <div className="editor-actions">
               <button className="btn" onClick={onCancel}>{t('Cancel')}</button>
-              <button className="btn primary" disabled={!img} onClick={apply}>Use icon</button>
+              <button className="btn primary" disabled={!img} onClick={apply}>{t("Use icon")}</button>
             </div>
           </div>
         </div>
@@ -349,7 +349,7 @@ export function IconSlot({ label, value, def, anim, onChange }) {
     <div className="icon-slot">
       <div className="preview-wrap">
         <button type="button" className={'preview' + (shown ? '' : ' empty')} onClick={() => ref.current?.click()} title={t("Click to upload (png, svg, jpeg, gif)")}>
-          {shown ? <img src={shown} className={anim} alt="" /> : <span className="preview-none">None</span>}
+          {shown ? <img src={shown} className={anim} alt="" /> : <span className="preview-none">{t("None")}</span>}
         </button>
         {value && (
           <button type="button" className="reset-icon" title={t("Remove icon")} onClick={() => onChange('')}>
@@ -390,17 +390,17 @@ export function SystemPromptEditor({ value, onChange, onClose }) {
           <button className="modal-close" style={{ position: 'static' }} onClick={onClose}>✕</button>
         </div>
         <div className="sp-vars">
-          <button className="sp-chip" onClick={() => insert(dt)}><code>{dt}</code> Insert local date &amp; time</button>
-          <button className="sp-chip" onClick={() => insert(cu)}><code>{cu}</code> Insert the user's name</button>
+          <button className="sp-chip" onClick={() => insert(dt)}><code>{dt}</code> {t("Insert local date &amp; time")}</button>
+          <button className="sp-chip" onClick={() => insert(cu)}><code>{cu}</code> {t("Insert the user's name")}</button>
         </div>
         <textarea ref={taRef} className="sp-text" value={value || ''} onChange={(e) => onChange(e.target.value)} placeholder={t("You are a helpful assistant…")} autoFocus />
         <div className="sp-tips">
-          <div className="sp-tip"><b>{dt}</b>, replaced with the current date and time from this device, in your local timezone.</div>
-          <div className="sp-tip"><b>{cu}</b>, replaced with the signed-in user's name. Everything stays on your machine.</div>
+          <div className="sp-tip"><b>{dt}</b> — {t("Replaced with the current date and time from this device, in your local timezone.")}</div>
+          <div className="sp-tip"><b>{cu}</b> — {t("Replaced with the signed-in user name. Everything stays on your machine.")}</div>
         </div>
         <div className="sp-foot">
-          <span className="muted-note">Edits save to your draft automatically.</span>
-          <button className="btn primary" onClick={onClose}>Done</button>
+          <span className="muted-note">{t("Edits save to your draft automatically.")}</span>
+          <button className="btn primary" onClick={onClose}>{t("Done")}</button>
         </div>
       </div>
     </div>
@@ -472,7 +472,7 @@ export function AutosaveNote({ status, live }) {
   return (
     <div className="settings-autosave">
       <span className={'autosave-dot' + (status === 'saved' ? ' flash' : '')} />
-      {status === 'saving' ? t('Saving…') : status === 'saved' ? (live ? 'Saved, applies immediately' : 'Saved to draft, use Push to all clients to make it live') : (live ? t('Changes save automatically') : 'Changes save automatically to your draft')}
+      {status === 'saving' ? t('Saving…') : status === 'saved' ? (live ? t('Saved, applies immediately') : t('Saved to draft, use Push to all clients to make it live')) : (live ? t('Changes save automatically') : t('Changes save automatically to your draft'))}
     </div>
   );
 }
@@ -489,14 +489,14 @@ export function CopyBtn({ text, title }) {
 
 export function StatusChips({ m }) {
   const chips = [];
-  if (m.is_default) chips.push(['default', 'Default']);
-  if (!m.enabled) chips.push(['dim', 'Hidden']);
-  if (m.unavailable) chips.push(['warn', 'Unavailable']);
+  if (m.is_default) chips.push(['default', tk('Default')]);
+  if (!m.enabled) chips.push(['dim', tk('Hidden')]);
+  if (m.unavailable) chips.push(['warn', tk('Unavailable')]);
   if (m.sunset_at) chips.push(['warn', t('Retiring') + ' ' + m.sunset_at]);
   if (m.effort_enabled || m.has_reasoning || (Array.isArray(m.kwargs) && m.kwargs.length)) chips.push(['', 'Reasoning']);
   if (m.has_vision) chips.push(['', 'Vision']);
   if (m.sandbox_allowed !== 0 && m.sandbox_auto) chips.push(['', 'Sandbox']);
-  if (m.in_more_models) chips.push(['dim', 'Grouped']);
+  if (m.in_more_models) chips.push(['dim', tk('Grouped')]);
   if (!chips.length) return null;
   return <div className="aq-chips">{chips.map(([cls, label]) => <span key={label} className={'aq-chip' + (cls ? ' ' + cls : '')}>{t(label)}</span>)}</div>;
 }

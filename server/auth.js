@@ -1,10 +1,12 @@
 import jwt from 'jsonwebtoken';
 import argon2 from 'argon2';
+import crypto from 'crypto';
 import * as cookie from 'cookie';
 import { db, uid, now, getSetting, setSetting } from './db.js';
+import { clientIp } from './lib/audit.js';
 
 let SECRET = getSetting('jwt_secret');
-if (!SECRET) { SECRET = uid() + uid(); setSetting('jwt_secret', SECRET); }
+if (!SECRET) { SECRET = crypto.randomBytes(48).toString('base64url'); setSetting('jwt_secret', SECRET); }
 
 const ARGON_OPTS = { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 };
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -33,7 +35,7 @@ export async function check(pw, h) { try { return await argon2.verify(h, pw); } 
 export function createSession(user, req) {
   const t = now();
   const ua = String(req?.headers?.['user-agent'] || '').slice(0, 300);
-  const ip = (req?.headers?.['x-forwarded-for']?.split(',')[0] || req?.socket?.remoteAddress || '').trim().slice(0, 64);
+  const ip = clientIp(req);
   const cap = maxSessions();
   if (cap) {
     const existing = db.sessions.byUser(user.id);
@@ -79,13 +81,6 @@ export function authMiddleware(req, res, next) {
 export function adminOnly(req, res, next) {
   if (!req.user?.is_admin) return res.status(403).json({ error: 'forbidden' });
   next();
-}
-
-export function userFromRequest(req) {
-  const raw = req.headers.cookie ? cookie.parseCookie(req.headers.cookie) : {};
-  if (!raw.token) return null;
-  const r = resolveToken(raw.token);
-  return r ? r.user : null;
 }
 
 export function sessionFromRequest(req) {

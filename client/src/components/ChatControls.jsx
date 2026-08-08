@@ -71,7 +71,7 @@ export default function ChatControls({ chatId, initialParams, initialOverride, o
                 <>
                   <input type="range" min={f.min} max={f.max} step={f.step} value={params[f.k]} onChange={(e) => setField(f.k, e.target.value)} />
                   <input className="chatctl-num" type="number" min={f.min} max={f.max} step={f.step} value={params[f.k]} onChange={(e) => setField(f.k, e.target.value)} />
-                  <button className="chatctl-clear" title={t("Use model default")} onClick={() => setField(f.k, '')}>\u00d7</button>
+                  <button className="chatctl-clear" title={t("Use model default")} onClick={() => setField(f.k, '')}>×</button>
                 </>
               ) : (
                 <button className="chatctl-default" onClick={() => setField(f.k, f.k === 'max_tokens' ? 4096 : f.k === 'top_k' ? 40 : f.k === 'repeat_penalty' ? 1.1 : f.k === 'top_p' ? 0.95 : f.k === 'temperature' ? 0.7 : 0)}>{t('Default')}</button>
@@ -79,7 +79,7 @@ export default function ChatControls({ chatId, initialParams, initialOverride, o
             </div>
           );
         })}
-        {activeCount > 0 && <button className="chatctl-reset" onClick={resetAll}>Reset all to model defaults</button>}
+        {activeCount > 0 && <button className="chatctl-reset" onClick={resetAll}>{t("Reset all to model defaults")}</button>}
       </div>
     </aside>
   );

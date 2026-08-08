@@ -16,7 +16,7 @@ export default function SkillsSection() {
       if (sk.id) { const r = await api.patch('/api/admin/skills/' + sk.id, sk); setSkills(list => list.map(x => x.id === sk.id ? r.skill : x)); }
       else { const r = await api.post('/api/admin/skills', sk); setSkills(list => [...list, r.skill]); }
       setEdit(null);
-    } catch (e) { alert(e.message || 'Could not save skill.'); }
+    } catch (e) { alert(e.message || t('Could not save skill.')); }
   }
   async function remove(id) { try { await api.del('/api/admin/skills/' + id); setSkills(list => list.filter(x => x.id !== id)); } catch {} }
   async function toggle(sk) { try { const r = await api.patch('/api/admin/skills/' + sk.id, { enabled: !sk.enabled }); setSkills(list => list.map(x => x.id === sk.id ? r.skill : x)); } catch {} }
@@ -24,8 +24,8 @@ export default function SkillsSection() {
   return (
     <>
       <div className="admin-section-head">
-        <div><div className="muted-note">Skills are markdown instruction files listed in the system prompt. When a task matches a skill's description, the model loads it with <code>skill_view</code> and follows it. Offered to any model with tool calling.</div></div>
-        <button className="btn primary" onClick={() => setEdit({ name: '', description: '', content: '', enabled: true })}><Plus style={{ width: 15 }} /> New skill</button>
+        <div><div className="muted-note">{t("Skills are markdown instruction files listed in the system prompt. When a task matches a skill description, the model loads it with skill_view and follows it. Offered to any model with tool calling.")}</div></div>
+        <button className="btn primary" onClick={() => setEdit({ name: '', description: '', content: '', enabled: true })}><Plus style={{ width: 15 }} /> {t("New skill")}</button>
       </div>
       {edit && (
         <div className="fn-editor">
@@ -42,11 +42,11 @@ export default function SkillsSection() {
             <div className="muted-note">{t("Markdown works well. The full content is returned to the model when it loads the skill.")}</div>
           </div>
           <div className="med-toggle-card">
-            <label className="inline-toggle"><span>Enabled</span><div className={'switch' + (edit.enabled ? ' on' : '')} onClick={() => setEdit(x => ({ ...x, enabled: !x.enabled }))} /></label>
+            <label className="inline-toggle"><span>{t("Enabled")}</span><div className={'switch' + (edit.enabled ? ' on' : '')} onClick={() => setEdit(x => ({ ...x, enabled: !x.enabled }))} /></label>
           </div>
           <div className="editor-actions">
-            <button className="btn" onClick={() => setEdit(null)}>Cancel</button>
-            <button className="btn primary" onClick={() => save(edit)}>Save skill</button>
+            <button className="btn" onClick={() => setEdit(null)}>{t("Cancel")}</button>
+            <button className="btn primary" onClick={() => save(edit)}>{t("Save skill")}</button>
           </div>
         </div>
       )}
@@ -56,7 +56,7 @@ export default function SkillsSection() {
           <div key={sk.id} className="fn-card">
             <div className="fn-card-main">
               <div className="fn-card-title"><Bulb style={{ width: 15 }} /> <code>{sk.name}</code> <span className="muted-note" style={{ display: 'inline' }}>{(sk.content || '').split('\n').length} lines</span></div>
-              <div className="fn-card-desc">{sk.description || 'No description.'}</div>
+              <div className="fn-card-desc">{sk.description || t('No description.')}</div>
             </div>
             <div className="fn-card-actions">
               <div className={'switch' + (sk.enabled ? ' on' : '')} title={t("Enabled")} onClick={() => toggle(sk)} />

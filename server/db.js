@@ -8,25 +8,35 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 const FILE = dataPath('data.db');
 const KEYFILE = dataPath('.dbkey');
 
+const HEX_KEY = /^[0-9a-fA-F]{64}$/;
+
 function loadKey() {
   const env = process.env.DB_ENCRYPTION_KEY;
   if (env && env.trim()) return env.trim();
   try {
     const k = fs.readFileSync(KEYFILE, 'utf8').trim();
     if (k) return k;
-  } catch {}
+  } catch (e) { if (e?.code !== 'ENOENT') throw e; }
   const k = crypto.randomBytes(32).toString('hex');
   fs.writeFileSync(KEYFILE, k, { mode: 0o600 });
   try { fs.chmodSync(KEYFILE, 0o600); } catch {}
   return k;
 }
 
+// The key ends up inside a PRAGMA string, so it is never interpolated raw. 64 hex
+// characters are the raw-key blob literal SQLCipher wants (what this server generates);
+// anything else is treated as a passphrase with its quotes doubled, so a stray ' in
+// DB_ENCRYPTION_KEY cannot close the literal and be parsed as SQL.
+function keyPragma(key) {
+  if (HEX_KEY.test(key)) return `key="x'${key.toLowerCase()}'"`;
+  return `key='${key.replace(/'/g, "''")}'`;
+}
+
 const KEY = loadKey();
-const existed = fs.existsSync(FILE);
 const sdb = new Database(FILE);
 try { fs.chmodSync(FILE, 0o600); } catch {}
 sdb.pragma(`cipher='sqlcipher'`);
-sdb.pragma(`key="x'${KEY}'"`);
+sdb.pragma(keyPragma(KEY));
 
 try {
   sdb.prepare('SELECT count(*) FROM sqlite_master').get();
@@ -120,6 +130,21 @@ CREATE INDEX IF NOT EXISTS idx_messages_parent ON messages(chat_id, parent_id);`
   sdb.pragma('user_version = 8');
 }
 
+if (sdb.pragma('user_version', { simple: true }) < 9) {
+  sdb.exec(`CREATE TABLE IF NOT EXISTS toolstats (id TEXT PRIMARY KEY, ts INTEGER, data TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_toolstats_ts ON toolstats(ts);`);
+  sdb.pragma('user_version = 9');
+}
+
+// Case-insensitive substring test done inside SQLite. SQLite's own LIKE and lower() fold
+// ASCII only, so using them here would quietly stop matching "ДОМ" against "дом" the way
+// the JavaScript scans these queries replaced always did. The needle is lowercased by the
+// caller; only the haystack is folded per row.
+sdb.function('oq_icontains', { deterministic: true }, (hay, needle) => {
+  if (typeof hay !== 'string' || !hay || !needle) return 0;
+  return hay.toLowerCase().includes(needle) ? 1 : 0;
+});
+
 export function tx(fn) { return sdb.transaction(fn)(); }
 
 export const uid = () => crypto.randomUUID();
@@ -138,16 +163,17 @@ const MIRROR = {
   sessions: { user_id: o => o.user_id ?? null, last_seen: o => o.last_seen ?? 0, created_at: o => o.created_at ?? 0 },
   audit: { ts: o => o.ts ?? 0, actor_id: o => o.actor_id ?? null },
   projects: { user_id: o => o.user_id ?? null, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 },
-  feedback: { ts: o => o.ts ?? 0, user_id: o => o.user_id ?? null }
+  feedback: { ts: o => o.ts ?? 0, user_id: o => o.user_id ?? null },
+  toolstats: { ts: o => o.ts ?? 0 }
 };
 
 const bumps = new Map();
-export function tableVersion(table) { return bumps.get(table) || 0; }
+function bumpTable(table) { bumps.set(table, (bumps.get(table) || 0) + 1); }
 
 function collection(table) {
   const cols = Object.keys(MIRROR[table]);
   const mirror = MIRROR[table];
-  const bump = () => bumps.set(table, (bumps.get(table) || 0) + 1);
+  const bump = () => bumpTable(table);
   const colList = ['id', ...cols, 'data'];
   const insSql = `INSERT INTO ${table} (${colList.join(',')}) VALUES (${colList.map(() => '?').join(',')})`;
   const insStmt = sdb.prepare(insSql);
@@ -181,7 +207,10 @@ function collection(table) {
     all: () => allStmt.all().map(r => JSON.parse(r.data)),
     filter: fn => allStmt.all().map(r => JSON.parse(r.data)).filter(fn),
     find: fn => allStmt.all().map(r => JSON.parse(r.data)).find(fn),
-    byId: id => parse(getStmt.get(id)),
+    // Ids arrive from request bodies and params. better-sqlite3 throws on a bound object
+    // or array, which turned "look up this thing" into a 500 in every route that did not
+    // coerce first; a non-primitive id simply matches nothing.
+    byId: id => (typeof id === 'string' || typeof id === 'number' ? parse(getStmt.get(id)) : undefined),
     where: (col, val) => (cols.includes(col) ? whereStmt(col).all(val ?? null).map(r => JSON.parse(r.data)) : api.filter(o => (o[col] ?? null) === (val ?? null))),
     countWhere: (col, val) => (cols.includes(col) ? countWhereStmt(col).get(val ?? null).n : api.filter(o => (o[col] ?? null) === (val ?? null)).length),
     removeWhere: (col, val) => { if (!cols.includes(col)) return api.remove(o => (o[col] ?? null) === (val ?? null)); delWhereStmt(col).run(val ?? null); bump(); },
@@ -218,6 +247,37 @@ const messagesCol = collection('messages');
 const byChatStmt = sdb.prepare('SELECT data FROM messages WHERE chat_id=? ORDER BY created_at');
 messagesCol.byChat = chatId => byChatStmt.all(chatId).map(r => JSON.parse(r.data));
 
+// Search and preview read one extracted field per row instead of parsing the whole
+// message. The scans these replaced built a full message graph for every chat the user
+// owned, on every keystroke, and evicted the open chat's cached graph while doing it.
+const searchStmt = sdb.prepare(`
+  SELECT m.chat_id AS chatId, json_extract(m.data,'$.role') AS role, json_extract(m.data,'$.content') AS content
+  FROM messages m JOIN chats c ON c.id = m.chat_id
+  WHERE c.user_id = ?
+    AND json_extract(m.data,'$.content') IS NOT NULL
+    AND oq_icontains(json_extract(m.data,'$.content'), ?)
+  ORDER BY m.created_at
+  LIMIT ?`);
+messagesCol.searchForUser = (userId, needle, limit = 5000) => searchStmt.all(userId, needle, limit);
+
+const lastUserStmt = sdb.prepare(`
+  SELECT json_extract(data,'$.content') AS content
+  FROM messages
+  WHERE chat_id = ? AND json_extract(data,'$.role') = 'user'
+    AND json_extract(data,'$.content') IS NOT NULL
+  ORDER BY created_at DESC LIMIT 1`);
+messagesCol.lastUserText = chatId => lastUserStmt.get(chatId)?.content || '';
+
+const attachUrlStmt = sdb.prepare(`
+  SELECT DISTINCT json_extract(a.value,'$.url') AS url
+  FROM messages m, json_each(json_extract(m.data,'$.attachments')) a
+  WHERE json_type(m.data,'$.attachments') = 'array'`);
+messagesCol.attachmentUrls = () => {
+  const out = new Set();
+  for (const r of attachUrlStmt.all()) if (r.url) out.add(r.url);
+  return out;
+};
+
 const chatsCol = collection('chats');
 const byUserStmt = sdb.prepare('SELECT data FROM chats WHERE user_id=?');
 chatsCol.byUser = userId => byUserStmt.all(userId).map(r => JSON.parse(r.data));
@@ -229,6 +289,13 @@ chatsCol.oldestByUser = userId => byUserOldestStmt.all(userId).map(r => JSON.par
 const usersCol = collection('users');
 const byEmailStmt = sdb.prepare('SELECT data FROM users WHERE email IS ?');
 usersCol.byEmail = email => { const r = byEmailStmt.get(email ?? null); return r ? JSON.parse(r.data) : undefined; };
+const userSearchStmt = sdb.prepare(`
+  SELECT data FROM users
+  WHERE id IS NOT ?
+    AND (oq_icontains(email, ?) OR oq_icontains(json_extract(data,'$.display_name'), ?))
+  ORDER BY created_at LIMIT ?`);
+usersCol.search = (needle, excludeId, limit) =>
+  userSearchStmt.all(excludeId ?? null, needle, needle, limit).map(r => JSON.parse(r.data));
 
 const usageCol = collection('usage');
 const usageByUserStmt = sdb.prepare('SELECT data FROM usage WHERE user_id=?');
@@ -264,11 +331,51 @@ auditCol.recent = (limit, offset) => auditRecentStmt.all(limit, offset).map(r =>
 const auditPruneStmt = sdb.prepare('DELETE FROM audit WHERE ts < ?');
 auditCol.prune = before => { try { return auditPruneStmt.run(before).changes; } catch { return 0; } };
 
+// Filtering, counting and paging all happen in SQL. The admin panel used to pull every
+// audit row into JavaScript — twice per request, once more for the export — and filter
+// there, which grows without bound until the 120-day prune catches up.
+const AUDIT_WHERE = `
+  WHERE ts >= @since
+    AND (@action = '' OR oq_icontains(json_extract(data,'$.action'), @action))
+    AND (@actor  = '' OR oq_icontains(json_extract(data,'$.actor_email'), @actor))`;
+const auditQueryStmt = sdb.prepare(`SELECT data FROM audit ${AUDIT_WHERE} ORDER BY ts DESC LIMIT @limit OFFSET @offset`);
+const auditCountStmt = sdb.prepare(`SELECT count(*) AS n FROM audit ${AUDIT_WHERE}`);
+const auditActionsStmt = sdb.prepare(`SELECT DISTINCT json_extract(data,'$.action') AS action FROM audit WHERE action IS NOT NULL ORDER BY action`);
+const auditAllStmt = sdb.prepare('SELECT data FROM audit ORDER BY ts DESC');
+auditCol.query = (f) => auditQueryStmt.all(f).map(r => JSON.parse(r.data));
+auditCol.countMatching = (f) => auditCountStmt.get(f).n;
+auditCol.actions = () => auditActionsStmt.all().map(r => r.action).filter(Boolean);
+auditCol.stream = function* () { for (const r of auditAllStmt.iterate()) yield JSON.parse(r.data); };
+
 const feedbackCol = collection('feedback');
 const feedbackRecentStmt = sdb.prepare('SELECT data FROM feedback ORDER BY ts DESC LIMIT ? OFFSET ?');
 feedbackCol.recent = (limit, offset) => feedbackRecentStmt.all(limit, offset).map(r => JSON.parse(r.data));
 const feedbackByMsgStmt = sdb.prepare("SELECT data FROM feedback WHERE json_extract(data,'$.message_id')=?");
 feedbackCol.byMessage = mid => feedbackByMsgStmt.all(mid).map(r => JSON.parse(r.data));
+
+const IS_SAFETY = `(COALESCE(json_extract(data,'$.kind'),'') = 'safety')`;
+const feedbackPageStmt = sdb.prepare(`SELECT data FROM feedback WHERE ${IS_SAFETY} = @safety ORDER BY ts DESC LIMIT @limit OFFSET @offset`);
+const feedbackCountStmt = sdb.prepare(`SELECT count(*) AS n FROM feedback WHERE ${IS_SAFETY} = @safety`);
+const feedbackRatingStmt = sdb.prepare(`SELECT json_extract(data,'$.rating') AS rating, count(*) AS n FROM feedback WHERE ${IS_SAFETY} = 0 GROUP BY rating`);
+feedbackCol.pageByKind = (safety, limit, offset) =>
+  feedbackPageStmt.all({ safety: safety ? 1 : 0, limit, offset }).map(r => JSON.parse(r.data));
+feedbackCol.countByKind = safety => feedbackCountStmt.get({ safety: safety ? 1 : 0 }).n;
+feedbackCol.ratingCounts = () => {
+  const out = { up: 0, down: 0 };
+  for (const r of feedbackRatingStmt.all()) {
+    if (r.rating === 1) out.up = r.n;
+    else if (r.rating === -1) out.down = r.n;
+  }
+  return out;
+};
+const feedbackDeleteSafetyStmt = sdb.prepare(`DELETE FROM feedback WHERE ${IS_SAFETY}`);
+feedbackCol.clearSafety = () => { feedbackDeleteSafetyStmt.run(); bumpTable('feedback'); };
+
+const toolStatsCol = collection('toolstats');
+const toolStatsPruneStmt = sdb.prepare('DELETE FROM toolstats WHERE ts < ?');
+toolStatsCol.prune = before => { try { return toolStatsPruneStmt.run(before).changes; } catch { return 0; } };
+const toolStatsClearStmt = sdb.prepare('DELETE FROM toolstats');
+toolStatsCol.clear = () => { try { toolStatsClearStmt.run(); } catch {} };
 
 const projectsCol = collection('projects');
 const projectsByUserStmt = sdb.prepare('SELECT data FROM projects WHERE user_id=? ORDER BY updated_at DESC');
@@ -286,7 +393,8 @@ export const db = {
   sessions: sessionsCol,
   audit: auditCol,
   projects: projectsCol,
-  feedback: feedbackCol
+  feedback: feedbackCol,
+  toolStats: toolStatsCol
 };
 
 const sGet = sdb.prepare('SELECT value FROM settings WHERE key=?');
@@ -311,8 +419,6 @@ export function setSetting(key, value) {
   sSet.run(key, JSON.stringify(value));
   settingsCache.set(key, value);
 }
-
-export function clearSettingsCache() { settingsCache.clear(); }
 
 function checkpoint() { try { sdb.pragma('wal_checkpoint(TRUNCATE)'); } catch {} }
 process.on('exit', checkpoint);

@@ -1,4 +1,5 @@
 import { getSetting } from './db.js';
+import { unguardedFetch, webSearchEgressAllowed } from './lib/egress.js';
 
 export function webSearchConfig() {
   let domains = [];
@@ -44,7 +45,8 @@ function htmlToText(html) {
 async function fetchTimeout(url, opts = {}, ms = 12000) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
-  try { return await fetch(url, { ...opts, signal: ctrl.signal }); }
+  const call = webSearchEgressAllowed() ? unguardedFetch : fetch;
+  try { return await call(url, { ...opts, signal: ctrl.signal }); }
   finally { clearTimeout(t); }
 }
 

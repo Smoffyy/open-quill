@@ -1,6 +1,7 @@
 import { modelProvider, endpoint, authHeaders } from './provider.js';
 import { samplingParams, ollamaOptions } from './sampling.js';
 import { makeEmitter } from './emitter.js';
+import { makeToolResolver } from '../tools/aliases.js';
 import { normalizeMessages, requestKwargs } from './wire.js';
 import { stripNestedKwargs } from '../lib/kwargs.js';
 
@@ -21,7 +22,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
       onEvent({ type: 'tool_call_delta', index: 1000 + idx, id: cid, name: c.name, argsText: c.argsText });
     }
   };
-  const { emitContent, emitReasoning, flush } = makeEmitter(model, onEvent, addTextCalls, toolNames.size ? (n) => toolNames.has(n) : null);
+  const { emitContent, emitReasoning, flush } = makeEmitter(model, onEvent, addTextCalls, makeToolResolver(toolNames));
   const finishCalls = () => {
     if (pending.size) {
       const calls = [...pending.entries()].sort((a, b) => a[0] - b[0]).map(([, c]) => c).filter(c => c.name);
@@ -57,6 +58,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
         if (json.done) {
           const p = json.prompt_eval_count || 0, c = json.eval_count || 0;
           if (p || c) onEvent({ type: 'usage', usage: { prompt: p, completion: c, total: p + c } });
+          if (json.done_reason) onEvent({ type: 'finish', reason: String(json.done_reason) });
           return true;
         }
       } catch {}
@@ -66,7 +68,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
       const { done, value } = await reader.read(); if (done) break;
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n'); buffer = lines.pop();
-      for (const line of lines) if (handle(line)) { flush(); finishCalls(); return; }
+      for (const line of lines) if (handle(line)) { await reader.cancel().catch(() => {}); flush(); finishCalls(); return; }
     }
     buffer += decoder.decode();
     handle(buffer);
@@ -93,6 +95,8 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
         const pn = json.timings.prompt_n || 0, cn = json.timings.predicted_n || 0;
         if (pn || cn) onEvent({ type: 'usage', usage: { prompt: pn, completion: cn, total: pn + cn } });
       }
+      const fin = json.choices?.[0]?.finish_reason;
+      if (fin) onEvent({ type: 'finish', reason: String(fin) });
       const delta = json.choices?.[0]?.delta || {};
       if (delta.reasoning_content) emitReasoning(delta.reasoning_content);
       if (typeof delta.reasoning === 'string' && delta.reasoning) emitReasoning(delta.reasoning);
@@ -118,7 +122,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
     const { done, value } = await reader.read(); if (done) break;
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n'); buffer = lines.pop();
-    for (const line of lines) if (handle(line)) { flush(); finishCalls(); return; }
+    for (const line of lines) if (handle(line)) { await reader.cancel().catch(() => {}); flush(); finishCalls(); return; }
   }
   buffer += decoder.decode();
   handle(buffer);

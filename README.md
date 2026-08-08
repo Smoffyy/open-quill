@@ -2,51 +2,52 @@
 
 # Open Quill
 
-<img src="assets\v27\icon.svg" alt="Starburst Logo" width="200"/>
+<img src="assets/v27/icon.svg" alt="Starburst Logo" width="200"/>
 
-*A fully open-sourced chat interface featuring Anthropic inspired theming.*
+*A fully open-source chat interface featuring Anthropic inspired theming.*
 
 [![Latest Stable Release](https://img.shields.io/github/v/release/Smoffyy/open-quill?label=Latest%20Stable%20Release)](https://github.com/Smoffyy/open-quill/releases/latest)
 [![Latest Beta Release](https://img.shields.io/github/v/release/Smoffyy/open-quill?include_prereleases&label=Latest%20Beta%20Release)](https://github.com/Smoffyy/open-quill/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 </div>
 
-A **chat interface** inspired by **[Anthropic's Chat Interface](https://claude.ai/new)**, enhanced with new features while preserving the Anthropic's aesthetic. This project aims to recreate the look and feel of Anthropic's interface while introducing the ability to run everything **entirely locally** for greater privacy and control.
+A **chat interface** inspired by **[Anthropic's Chat Interface](https://claude.ai/new)**, enhanced with new features while preserving Anthropic's aesthetic. This project aims to recreate the look and feel of Anthropic's interface while introducing the ability to run everything **entirely locally** for greater privacy and control.
 
-This project is licensed under the [MIT License](LICENSE), by downloading, using, or modifying this project, you agree to the terms of the [LICENSE](LICENSE) file. **Forever free. Built by the community, for the community.**
+This project is licensed under the [MIT License](LICENSE); by downloading, using, or modifying this project, you agree to the terms of the [LICENSE](LICENSE) file. **Forever free. Built by the community, for the community.**
 
 > **This project is not enterprise ready and is not intended to be. It is a community built interface designed to be customized, modified, and configured however you prefer.**
 
 ---
 
 <p align="center">
-  <img src="assets\v27\anthropic_screenshot1.jpeg" alt="Chat Interface with Artifacts"/>
+  <img src="assets/v27/anthropic_screenshot1.jpeg" alt="Chat Interface with Artifacts"/>
 </p>
 
 <details>
-  <summary>More Screenshots.</summary>
+  <summary>More Screenshots</summary>
   <br>
 
   <p align="center">
-    <img src="assets\v27\anthropic_screenshot2.jpeg" alt="Artifacts"/>
+    <img src="assets/v27/anthropic_screenshot2.jpeg" alt="Artifacts"/>
     <br>
     <sub>Chat with Artifacts.</sub>
   </p>
 
   <p align="center">
-    <img src="assets\v27\anthropic_screenshot4.jpeg" alt="Chat"/>
+    <img src="assets/v27/anthropic_screenshot4.jpeg" alt="Chat"/>
     <br>
     <sub>Chat response.</sub>
   </p>
 
   <p align="center">
-    <img src="assets\v27\anthropic_screenshot3.jpeg" alt="Admin panel"/>
+    <img src="assets/v27/anthropic_screenshot3.jpeg" alt="Admin panel"/>
     <br>
     <sub>Models tab in Admin Panel.</sub>
   </p>
 
   <p align="center">
-    <img src="assets\v27\openai_screenshot1.jpeg" alt="OpenAI chat"/>
+    <img src="assets/v27/openai_screenshot1.jpeg" alt="OpenAI chat"/>
     <br>
     <sub>OpenAI theme</sub>
   </p>
@@ -55,31 +56,64 @@ This project is licensed under the [MIT License](LICENSE), by downloading, using
 
 ---
 
+## Contents
+
+- [Features](#features)
+- [Documentation](#documentation)
+- [Why was this project made?](#why-was-this-project-made)
+- [Requirements](#requirements)
+- [Setup](#setup)
+- [Connecting your model](#connecting-your-model)
+- [Databases](#databases)
+- [Notes](#notes)
+- [Privacy and local-only operation](#privacy-and-local-only-operation)
+- [Updates / Version Information](#updates--version-information)
+
 ## Features
 
-- Anthropic-style UI with a serif assistant voice (Source Serif 4) and Open Sans user input
-- Two-step email + password sign-in; the **first account created becomes the admin**
-- Letter-by-letter streaming with a fade-in reveal
-- Per-phase model logos (static / generating / thinking), admin-uploadable
-- Reasoning models: an **Extended** toggle and collapsible "Thought process" view; supports `<think>` tags and `reasoning_content` deltas
-- Admin panel: manage models (display name, internal API id, description, system prompt), tuck models under a renamable "More models" group, toggle reasoning and set reasoning / non-reasoning tokens, and upload the three state logos
-- Reasoning / non-reasoning tokens are appended to the end of the system prompt on a new line (e.g. `/think`, `/no_think`)
-- Changes save instantly and push to every connected client in real time over WebSocket
-- Auto-generated chat titles, code blocks with hover-to-copy, smart autoscroll with a jump-to-bottom button
-- Zero native dependencies, data is stored in a local JSON file (`server/data.json`)
-- Artifacts, enabling users to create entire projects natively inside the UI!
-- And much more!
+### Interface
+
+- Anthropic-style design with a serif assistant voice (Source Serif 4) and Open Sans for user input
+- Token-by-token streaming with a fade-in reveal, smart autoscroll, and a jump-to-bottom control
+- Auto-generated chat titles, hover-to-copy code blocks, branching conversations, and side-by-side branch comparison
+- Light and dark modes, selectable themes, and a configurable home screen
+- Full keyboard navigation, a command palette, and in-thread search
+- Localization support, currently shipping English, Spanish, Chinese, French, and Portuguese
+
+### Models and reasoning
+
+- Multiple providers configured side by side, each with its own base URL, key, and sampler set
+- Per-model display name, description, system prompt, icon, and sampling parameters
+- Reasoning models get an **Extended** toggle and a collapsible thought-process view, supporting both `<think>` tags and `reasoning_content` deltas
+- Reasoning and non-reasoning trigger tokens (for example `/think` and `/no_think`) appended to the system prompt automatically
+- Custom kwargs surfaced to users as toggles, sliders, or dropdowns
+- Exact context accounting using the model's own tokenizer, with a sliding window and summarization that layer rather than compete
+
+### Working with files and tools
+
+- **Artifacts** - the assistant writes real files into a per-chat workspace that you can view, diff, restore to any version, preview, and download
+- **Code sandbox** - a real shell and file toolset scoped to that workspace, so the assistant can scaffold, install, build, run, and test
+- **Web search** - optional, backed by your own SearXNG instance
+- **Connectors (MCP)** - add Model Context Protocol servers as local subprocesses or remote endpoints
+- **Projects and Spaces** - group chats, share files and instructions across a body of work
+- **Memory** - an editable, per-user memory assembled from recent conversations
+- **Voice** - speech-to-text and text-to-speech against an endpoint you configure
+
+## Documentation
+
+The [`docs/`](docs/README.md) folder has an in-depth guide to using the interface: chatting and branching, the composer, models and reasoning, personas/styles/prompts, organizing chats (folders, projects, spaces), artifacts and the sandbox, settings, keyboard shortcuts, privacy and security, and a full admin panel reference. Start at [docs/README.md](docs/README.md).
 
 ## Why was this project made?
 
-This project was made mainly because I was fascinated by the Anthropic interface and colors. There's many other apps that have recreated simliar styles of other interfaces and I wanted to contribute openly for others to build upon what I've created. This entire project will **FOREVER** be listed under the MIT License. The front end aims to keep a balance between useful functionality and a clean, aesthetically pleasing experience. This project was made with the help of my local assistants alongside me.
+This project was made mainly because I was fascinated by the Anthropic interface and colors. There are many other apps that have recreated similar styles of other interfaces, and I wanted to contribute openly for others to build upon what I've created. This entire project will **FOREVER** be listed under the MIT License. The front end aims to keep a balance between useful functionality and a clean, aesthetically pleasing experience.
 
-I've created an official YouTube channel dedicated to this project, which will showcase major updates as well as tutorials on how to use the interface. Check it out at [open-quill-git YouTube](https://www.youtube.com/@open-quill-git)
+> **It is important to note that this project was developed in collaboration with my local agents, with additional design, refinement, and implementation performed by me. In the interest of transparency and community collaboration, this project will remain fully open-source and freely available in perpetuity.**
+
 
 ## Requirements
 
-- Node.js 18+ (Node 20+ recommended)
-- A running OpenAI-compatible server. Default target is LM Studio at `http://localhost:1234/v1`.
+* [Node.js](https://nodejs.org/en/download/) `>=22.23.2` (Node 26 recommended)
+* An OpenAI-compatible server. Default: [llama.cpp](https://github.com/ggml-org/llama.cpp) at `http://localhost:8080/v1`.
 
 ## Setup
 
@@ -106,6 +140,8 @@ Open http://localhost:5173.
 2. Sign in as the admin, open the profile menu (bottom-left) -> **Admin Panel** -> **Providers**.
 3. Set the API base URL (default `http://localhost:8080/v1`) and key, then Save.
 4. Under **Models**, set each model's **internal model name** to the id your server expects (llama.cpp accepts the model name configured when starting the server, or the model's id). Add a description, system prompt, logos, and reasoning settings as desired.
+
+> The interface is primarily designed for use with llama.cpp. Other providers may work, but full functionality and feature compatibility cannot be guaranteed.
 
 ## Databases
 
@@ -141,8 +177,8 @@ The `.env` belongs in the **project root**. If both a project-root `.env` and a 
 
 Two ways, both take effect on the next restart:
 
-- **Edit `.env`** — set `OPEN_QUILL_DB` to any name and restart. A brand-new name starts as a fresh, empty database.
-- **Admin panel** — sign in as the admin and open **Admin Panel -> Databases**. Create named databases, see which one is running versus which loads next, choose the one to load, and delete unused ones. Your choice is marked pending and applied on the next restart.
+- **Edit `.env`** - set `OPEN_QUILL_DB` to any name and restart. A brand-new name starts as a fresh, empty database.
+- **Admin panel** - sign in as the admin and open **Admin Panel -> Databases**. Create named databases, see which one is running versus which loads next, choose the one to load, and delete unused ones. Your choice is marked pending and applied on the next restart.
 
 Each database is encrypted with its own key stored beside its data. To use one key for every database instead, set `DB_ENCRYPTION_KEY` in your `.env`.
 

@@ -2,8 +2,18 @@ import { db, uid, now } from '../db.js';
 
 const AUDIT_RETENTION_MS = 120 * 24 * 60 * 60 * 1000;
 
+// X-Forwarded-For is attacker-controlled unless something in front of this server
+// rewrites it, so it is honoured only when the operator says a proxy is there. Reading
+// it unconditionally would let any caller forge audit-log entries and, worse, hand
+// themselves an unlimited number of login attempts by rotating the header.
+const TRUST_PROXY = /^(1|true|yes|on)$/i.test(String(process.env.TRUST_PROXY || ''));
+
 export function clientIp(req) {
-  return (req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress || '').trim().slice(0, 64);
+  if (TRUST_PROXY) {
+    const fwd = String(req?.headers?.['x-forwarded-for'] || '').split(',')[0].trim();
+    if (fwd) return fwd.slice(0, 64);
+  }
+  return String(req?.socket?.remoteAddress || '').trim().slice(0, 64);
 }
 
 export function logAudit(req, action, target = {}) {

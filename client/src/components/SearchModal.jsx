@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
 import { Search, Star } from './icons.jsx';
+import { useFocusTrap } from '../lib/focus.js';
 import { t } from '../i18n.jsx';
 
 export default function SearchModal({ onClose, onOpen }) {
@@ -9,9 +10,10 @@ export default function SearchModal({ onClose, onOpen }) {
   const [loading, setLoading] = useState(false);
   const [active, setActive] = useState(0);
   const inputRef = useRef(null);
+  const boxRef = useRef(null);
   const seq = useRef(0);
+  useFocusTrap(boxRef, onClose, { initial: inputRef });
 
-  useEffect(() => { inputRef.current?.focus(); }, []);
   useEffect(() => {
     const s = ++seq.current;
     if (q.trim().length < 2) { setResults([]); setLoading(false); return; }
@@ -42,16 +44,16 @@ export default function SearchModal({ onClose, onOpen }) {
 
   return (
     <div className="overlay search-overlay" onMouseDown={(e) => e.target.classList.contains('overlay') && onClose()}>
-      <div className="search-modal" onKeyDown={onKey}>
+      <div className="search-modal" ref={boxRef} role="dialog" aria-modal="true" aria-label={t("Search your chats")} onKeyDown={onKey}>
         <div className="search-head">
           <Search style={{ width: 18 }} />
-          <input ref={inputRef} value={q} placeholder={t("Search your chats…")} onChange={(e) => setQ(e.target.value)} />
+          <input ref={inputRef} value={q} placeholder={t("Search your chats…")} aria-label={t("Search your chats")} onChange={(e) => setQ(e.target.value)} />
         </div>
-        <div className="search-body">
-          {q.trim().length < 2 && <div className="search-empty">Type at least 2 characters to search across all your conversations.</div>}
-          {q.trim().length >= 2 && !loading && results.length === 0 && <div className="search-empty">No matches.</div>}
+        <div className="search-body" role="listbox" aria-label={t("Search results")}>
+          {q.trim().length < 2 && <div className="search-empty">{t("Type at least 2 characters to search across all your conversations.")}</div>}
+          {q.trim().length >= 2 && !loading && results.length === 0 && <div className="search-empty">{t("No matches.")}</div>}
           {results.map((r, i) => (
-            <button key={r.id} className={'search-row' + (i === active ? ' active' : '')} onMouseEnter={() => setActive(i)} onClick={() => pick(r)}>
+            <button key={r.id} role="option" aria-selected={i === active} className={'search-row' + (i === active ? ' active' : '')} onMouseEnter={() => setActive(i)} onClick={() => pick(r)}>
               <div className="search-title">{r.starred && <Star style={{ width: 13, marginRight: 4 }} />}{highlight(r.title || 'Untitled')}</div>
               {r.snippet && <div className="search-snippet">{highlight(r.snippet)}</div>}
             </button>

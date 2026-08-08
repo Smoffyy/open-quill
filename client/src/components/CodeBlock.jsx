@@ -1,23 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useSyncExternalStore } from 'react';
 import { copyText } from '../clipboard.js';
-import hljs from 'highlight.js/lib/common';
+import { highlight, hljsVersion, subscribeHljs } from '../lib/hljs.js';
 import { Copy, Check } from './icons.jsx';
-
-function escapeHtml(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
+import { t } from '../i18n.jsx';
 
 export default function CodeBlock({ lang, code }) {
   const [copied, setCopied] = useState(false);
-  // re-highlight on each render so streaming code stays smooth
-  const html = useMemo(() => {
-    try {
-      if (code.length > 60000) return escapeHtml(code);
-      if (lang && hljs.getLanguage(lang)) return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
-      if (code.length > 12000) return escapeHtml(code);
-      return hljs.highlightAuto(code).value;
-    } catch { return escapeHtml(code); }
-  }, [code, lang]);
+  const hlVersion = useSyncExternalStore(subscribeHljs, hljsVersion, hljsVersion);
+  const html = useMemo(() => highlight(code, lang), [code, lang, hlVersion]);
   async function copy() {
     if (await copyText(code)) {
       setCopied(true);
@@ -29,7 +19,7 @@ export default function CodeBlock({ lang, code }) {
       <div className={'code-bar' + (copied ? ' flash' : '')}>
         <span>{lang || 'text'}</span>
         <button className="code-copy" onPointerDown={(e) => { e.preventDefault(); copy(); }}>
-          {copied ? <Check key="c" className="copy-pop" /> : <Copy key="o" />} {copied ? 'Copied' : 'Copy'}
+          {copied ? <Check key="c" className="copy-pop" /> : <Copy key="o" />} {copied ? t('Copied') : t('Copy')}
         </button>
       </div>
       <pre><code className={'hljs' + (lang ? ` language-${lang}` : '')} dangerouslySetInnerHTML={{ __html: html }} /></pre>

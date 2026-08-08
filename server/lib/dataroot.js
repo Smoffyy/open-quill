@@ -12,36 +12,25 @@ const ENV_CANDIDATES = [path.join(REPO_ROOT, '.env'), path.join(SERVER_ROOT, '.e
 const DEFAULT_NAME = 'default';
 const RESERVED = new Set([DEFAULT_NAME, 'databases']);
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,39}$/;
-const ENV_TEMPLATE = `# open-quill environment configuration
-# Copy this file to ".env" in this same folder (the project root). It is also
-# created there automatically the first time you start the server.
-#
-# If both a project-root .env and a server/.env exist, the project-root one
-# wins and the server one is ignored (a note is printed at startup).
-#
-# OPEN_QUILL_DB selects which database loads at startup. Each named database is
-# fully isolated: its own users, chats, preferences, interface config, models,
-# artifacts, uploaded content, sandbox, project files and memory.
-#
-# The active database is read ONCE at startup and cannot be changed while the
-# server is running. Change it here, then restart to switch databases.
-#
-# "default" uses server/data/ (backwards compatible). Any other name lives in
-# server/data/databases/<name>/. Names may use lowercase letters, numbers,
-# dashes and underscores.
+
+// The .env written on first run is a copy of .env.example, which is the one place these
+// options are documented. This used to be a second copy of that text inline, and the two
+// drifted the first time an option was added — a fresh install got a config file missing
+// the newest setting. The inline text below is only a floor for the case where
+// .env.example is absent, and deliberately carries nothing but the selector.
+const ENV_FALLBACK = `# OPEN_QUILL_DB selects the database to load at startup. Each database is
+# completely isolated (users, chats, files, models, memory, etc.).
+# Change this value and restart the server to switch databases.
 OPEN_QUILL_DB=default
-
-# Port the server listens on.
-# PORT=3001
-
-# Network interface the server binds to. Defaults to 127.0.0.1 (this machine
-# only). Set to 0.0.0.0 to also allow access from other devices on your LAN.
-# HOST=127.0.0.1
-
-# Optional global SQLCipher key. Leave empty to use a per-database key stored
-# next to each database's data. If set, it applies to every database.
-# DB_ENCRYPTION_KEY=
 `;
+
+function envTemplate() {
+  try {
+    const text = fs.readFileSync(path.join(REPO_ROOT, '.env.example'), 'utf8');
+    if (text.includes('OPEN_QUILL_DB')) return text;
+  } catch {}
+  return ENV_FALLBACK;
+}
 
 function parseEnv(text) {
   const out = {};
@@ -68,7 +57,7 @@ function resolveEnv() {
     primary = ENV_CANDIDATES[0];
     try {
       fs.mkdirSync(path.dirname(primary), { recursive: true });
-      fs.writeFileSync(primary, ENV_TEMPLATE, { flag: 'wx' });
+      fs.writeFileSync(primary, envTemplate(), { flag: 'wx' });
     } catch {}
   }
   let parsed = {};
@@ -189,7 +178,7 @@ export function setPendingDatabase(name) {
     if (!fs.existsSync(path.join(DATABASES_DIR, n))) return { ok: false, error: 'That database does not exist yet.' };
   }
   let text = '';
-  try { text = fs.readFileSync(ENV_FILE, 'utf8'); } catch { text = ENV_TEMPLATE; }
+  try { text = fs.readFileSync(ENV_FILE, 'utf8'); } catch { text = envTemplate(); }
   const lines = text.split(/\r?\n/);
   let replaced = false;
   for (let i = 0; i < lines.length; i++) {

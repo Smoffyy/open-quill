@@ -1,13 +1,14 @@
 import { db, now } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
-import * as sandbox from '../sandbox.js';
 import * as skillsys from '../skillsys.js';
 import * as mcp from '../mcp.js';
 import { logAudit } from '../lib/audit.js';
-import { purgeUploads } from '../lib/uploads.js';
+import { purgeUserChats } from '../lib/purge.js';
 import { monthStartMs } from '../lib/budget.js';
 import { removeUserFromSpaces } from '../lib/spaces.js';
 import * as dataroot from '../lib/dataroot.js';
+import { toolStatsReport } from '../lib/toolstats.js';
+import { USAGE_WINDOWS } from './auth.js';
 
 export default function registerAdminRoutes(app) {
   app.get('/api/admin/skills', authMiddleware, adminOnly, (req, res) => res.json({ skills: skillsys.list() }));
@@ -54,44 +55,48 @@ export default function registerAdminRoutes(app) {
     res.json({ server: r.server, error: r.error || undefined });
   });
 
+  const FEEDBACK_PAGE = 50;
+  const labelMaps = () => ({
+    users: new Map(db.users.all().map(u => [u.id, u.email])),
+    models: new Map(db.models.all().map(m => [m.id, m.display_name]))
+  });
+
   app.get('/api/admin/safety-log', authMiddleware, adminOnly, (req, res) => {
     const offset = Math.max(0, parseInt(req.query.offset) || 0);
-    const rows = db.feedback.filter(f => f.kind === 'safety').sort((a, b) => b.ts - a.ts).slice(offset, offset + 50);
-    const users = new Map(db.users.all().map(u => [u.id, u]));
-    const models = new Map(db.models.all().map(m => [m.id, m]));
+    const rows = db.feedback.pageByKind(true, FEEDBACK_PAGE, offset);
+    const { users, models } = labelMaps();
     res.json({
       entries: rows.map(f => ({
         id: f.id, ts: f.ts, snippet: f.snippet || '', reason: f.comment || '',
-        user: users.get(f.user_id)?.email || 'deleted user',
-        model: models.get(f.model_id)?.display_name || f.model_id || '\u2014'
+        user: users.get(f.user_id) || 'deleted user',
+        model: models.get(f.model_id) || f.model_id || '\u2014'
       })),
-      total: db.feedback.count(f => f.kind === 'safety')
+      total: db.feedback.countByKind(true)
     });
   });
   app.delete('/api/admin/safety-log', authMiddleware, adminOnly, (req, res) => {
-    db.feedback.remove(f => f.kind === 'safety');
+    db.feedback.clearSafety();
+    logAudit(req, 'safety.log_clear', {});
     res.json({ ok: true });
   });
 
   app.get('/api/admin/feedback', authMiddleware, adminOnly, (req, res) => {
     const offset = Math.max(0, parseInt(req.query.offset) || 0);
-    const rows = db.feedback.filter(f => f.kind !== 'safety').sort((a, b) => b.ts - a.ts).slice(offset, offset + 50);
-    const users = new Map(db.users.all().map(u => [u.id, u]));
-    const models = new Map(db.models.all().map(m => [m.id, m]));
+    const rows = db.feedback.pageByKind(false, FEEDBACK_PAGE, offset);
+    const { users, models } = labelMaps();
     res.json({
       feedback: rows.map(f => ({
         id: f.id, ts: f.ts, rating: f.rating, comment: f.comment || '', snippet: f.snippet || '',
-        user: users.get(f.user_id)?.email || 'deleted user',
-        model: models.get(f.model_id)?.display_name || f.model_id || '\u2014',
+        user: users.get(f.user_id) || 'deleted user',
+        model: models.get(f.model_id) || f.model_id || '\u2014',
         chatId: f.chat_id
       })),
-      counts: { up: db.feedback.count(f => f.kind !== 'safety' && f.rating === 1), down: db.feedback.count(f => f.kind !== 'safety' && f.rating === -1) }
+      counts: db.feedback.ratingCounts()
     });
   });
 
   app.get('/api/admin/usage', authMiddleware, adminOnly, (req, res) => {
-    const windows = { '7': 7, '30': 30, '90': 90 };
-    const days = windows[String(req.query.days)] || 30;
+    const days = USAGE_WINDOWS.has(Number(req.query.days)) ? Number(req.query.days) : 30;
     const since = now() - days * 24 * 60 * 60 * 1000;
     const nameById = new Map(db.users.all().map(u => [u.id, u.display_name || u.email]));
     const byUser = new Map(), byModel = new Map(), byDay = new Map();
@@ -116,6 +121,16 @@ export default function registerAdminRoutes(app) {
       daily: [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day)).slice(-90),
       window: days
     });
+  });
+
+  app.get('/api/admin/tool-stats', authMiddleware, adminOnly, (req, res) => {
+    res.json(toolStatsReport());
+  });
+
+  app.delete('/api/admin/tool-stats', authMiddleware, adminOnly, (req, res) => {
+    db.toolStats.clear();
+    logAudit(req, 'toolstats.clear', { type: 'toolstats', id: '' });
+    res.json({ ok: true });
   });
 
   app.patch('/api/admin/users/:id/budget', authMiddleware, adminOnly, (req, res) => {
@@ -151,12 +166,7 @@ export default function registerAdminRoutes(app) {
     if (!u) return res.json({ ok: true });
     if (u.is_owner) return res.status(403).json({ error: 'The top admin cannot be removed.' });
     if (u.id === req.user.id) return res.status(403).json({ error: 'You cannot remove your own account here.' });
-    const myChats = db.chats.byUser(u.id);
-    for (const c of myChats) { try { sandbox.remove(c.id); } catch {} }
-    const chatIds = new Set(myChats.map(c => c.id));
-    purgeUploads(chatIds);
-    for (const id of chatIds) db.messages.removeWhere('chat_id', id);
-    db.chats.removeWhere('user_id', u.id);
+    purgeUserChats(u.id);
     removeUserFromSpaces(u.id);
     db.sessions.removeWhere('user_id', u.id);
     db.users.removeById(u.id);
@@ -171,29 +181,34 @@ export default function registerAdminRoutes(app) {
     const actor = String(req.query.actor || '').trim().toLowerCase();
     const sinceDays = parseInt(req.query.days) || 0;
     const since = sinceDays > 0 ? now() - sinceDays * 24 * 60 * 60 * 1000 : 0;
-    const match = r => (!action || (r.action || '').toLowerCase().includes(action))
-      && (!actor || (r.actor_email || '').toLowerCase().includes(actor))
-      && (!since || (r.ts || 0) >= since);
-    const rows = db.audit.recent(100000, 0);
-    const all = rows.filter(match);
-    const actions = [...new Set(rows.map(r => r.action))].sort();
-    const page = all.slice(offset, offset + limit).map(r => ({
+    const filter = { action, actor, since, limit, offset };
+    const total = db.audit.countMatching(filter);
+    const page = db.audit.query(filter).map(r => ({
       id: r.id, ts: r.ts, actorEmail: r.actor_email || 'system', action: r.action,
       targetType: r.target_type || null, targetId: r.target_id || null, meta: r.meta || null, ip: r.ip || ''
     }));
-    res.json({ entries: page, total: all.length, offset, hasMore: offset + page.length < all.length, actions });
+    res.json({ entries: page, total, offset, hasMore: offset + page.length < total, actions: db.audit.actions() });
   });
 
   app.get('/api/admin/audit/export', authMiddleware, adminOnly, (req, res) => {
     const esc = v => { const s = v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : String(v)); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-    const lines = ['timestamp,actor,action,target_type,target_id,ip,meta'];
-    for (const r of db.audit.recent(100000, 0)) {
-      lines.push([new Date(r.ts).toISOString(), r.actor_email || 'system', r.action, r.target_type || '', r.target_id || '', r.ip || '', r.meta].map(esc).join(','));
-    }
     logAudit(req, 'audit.export', {});
-    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="audit-${new Date().toISOString().slice(0, 10)}.csv"`);
-    res.send(lines.join('\n'));
+    // Streamed a row at a time, paused when the socket is full: the whole log never has
+    // to exist in memory, in Node's write buffer, or as one joined string.
+    const rows = db.audit.stream();
+    const pump = () => {
+      for (;;) {
+        const { value: r, done } = rows.next();
+        if (done) return res.end();
+        const line = [new Date(r.ts).toISOString(), r.actor_email || 'system', r.action, r.target_type || '', r.target_id || '', r.ip || '', r.meta].map(esc).join(',') + '\n';
+        if (!res.write(line)) return res.once('drain', pump);
+      }
+    };
+    res.on('close', () => { try { rows.return(); } catch {} });
+    res.write('timestamp,actor,action,target_type,target_id,ip,meta\n');
+    pump();
   });
 
   app.get('/api/admin/databases', authMiddleware, adminOnly, (req, res) => {

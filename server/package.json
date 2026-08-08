@@ -1,6 +1,6 @@
 {
   "name": "open-quill-server",
-  "version": "27.0.0-beta.4",
+  "version": "27.1.0-beta.1",
   "private": true,
   "type": "module",
   "main": "index.js",
@@ -11,12 +11,12 @@
   },
   "dependencies": {
     "argon2": "^0.45.1",
-    "better-sqlite3-multiple-ciphers": "^12.11.1",
+    "better-sqlite3-multiple-ciphers": "^13.0.3",
     "cookie": "^2.0.1",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.2.0",
-    "pdfjs-dist": "^6.1.200",
-    "ws": "^8.21.1"
+    "pdfjs-dist": "^6.2.108",
+    "ws": "^8.21.3"
   }
 }

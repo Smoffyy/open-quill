@@ -1,38 +1,15 @@
 import React, { useRef, useEffect, useState, useLayoutEffect, useCallback } from 'react';
 import ModelDropdown from './ModelDropdown.jsx';
 import { api } from '../api.js';
-import { transcribeBlob } from '../voice.js';
 import { toast } from '../toast.js';
+import { useAttachments } from '../lib/attachments.js';
+import { useDictation } from '../lib/dictation.js';
 import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer } from './icons.jsx';
 import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
 import { extLabel } from '../lib/files.js';
 import { t, fmtDate } from '../i18n.jsx';
 
 const FILE_ACCEPT = '.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.py,.lua,.html,.css,.xml,.yml,.yaml,.pdf,.log';
-
-// grab the most common solid color from an image
-function dominantColor(url) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const s = 24; const c = document.createElement('canvas'); c.width = s; c.height = s;
-        const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, s, s);
-        const data = ctx.getImageData(0, 0, s, s).data;
-        const counts = {}; let best = null, bestN = 0;
-        for (let i = 0; i < data.length; i += 4) {
-          if (data[i + 3] < 128) continue;
-          const key = (data[i] >> 4) + ',' + (data[i + 1] >> 4) + ',' + (data[i + 2] >> 4);
-          counts[key] = (counts[key] || 0) + 1;
-          if (counts[key] > bestN) { bestN = counts[key]; best = [data[i], data[i + 1], data[i + 2]]; }
-        }
-        resolve(best ? `rgb(${best[0]},${best[1]},${best[2]})` : null);
-      } catch { resolve(null); }
-    };
-    img.onerror = () => resolve(null);
-    img.src = url;
-  });
-}
 
 function PmSub({ className = '', children, onMouseEnter, onMouseLeave }) {
   const ref = useRef(null);
@@ -71,86 +48,29 @@ function PmSub({ className = '', children, onMouseEnter, onMouseLeave }) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, models,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, projects = [], onSetProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
   voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall,
   safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
   conversationEnded = false, endedReason = '',
   removedModel = null, onOpenDocs = null,
   queueCount = 0, onQueue, canContinue = false, onContinue, onSteer, canSteer = false,
-  compareIds = [], onSetCompare, hideModelPicker = false, reasoningEffort, onSetEffort, kwargValues, onSetKwarg
+  compareIds = [], onSetCompare, hideModelPicker = false, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
+  ctxGauge = null
 }) {
   const ta = useRef(null);
   const fileInput = useRef(null);
-  const dragDepth = useRef(0);
   const plusRef = useRef(null);
-  const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
-  const [dictating, setDictating] = useState(false);
-  const [transcribing, setTranscribing] = useState(false);
-  const dictRef = useRef(null);
-  const dictMediaRef = useRef(null);
   const valueRef = useRef(value);
   useEffect(() => { valueRef.current = value; }, [value]);
-  useEffect(() => () => { stopDictation(true); }, []);
-  function appendText(text) {
-    const cur = valueRef.current || '';
-    onChange((cur ? cur.replace(/\s+$/, '') + ' ' : '') + text.trim());
-  }
-  function stopDictation(silent) {
-    if (dictRef.current) { try { dictRef.current.stop(); } catch {} dictRef.current = null; }
-    if (dictMediaRef.current && dictMediaRef.current.state !== 'inactive') { try { dictMediaRef.current.stop(); } catch {} }
-    if (!silent) setDictating(false);
-  }
-  async function toggleDictation() {
-    if (dictating) { stopDictation(); return; }
-    if (sttEngine === 'browser') {
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SR) { toastLocal('This browser has no built-in speech recognition.'); return; }
-      const rec = new SR();
-      rec.continuous = true;
-      rec.interimResults = true;
-      rec.lang = navigator.language || 'en-US';
-      let base = valueRef.current || '';
-      rec.onresult = (e) => {
-        let fin = '', interim = '';
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          const t = e.results[i][0].transcript;
-          if (e.results[i].isFinal) fin += t; else interim += t;
-        }
-        if (fin) base = (base ? base.replace(/\s+$/, '') + ' ' : '') + fin.trim();
-        onChange(base + (interim ? (base ? ' ' : '') + interim : ''));
-      };
-      rec.onend = () => { setDictating(false); dictRef.current = null; };
-      rec.onerror = () => { setDictating(false); dictRef.current = null; };
-      dictRef.current = rec;
-      try { rec.start(); setDictating(true); } catch {}
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-      const mr = new MediaRecorder(stream);
-      const chunks = [];
-      mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-      mr.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        dictMediaRef.current = null;
-        setDictating(false);
-        const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
-        if (blob.size < 1500) return;
-        setTranscribing(true);
-        try { const text = await transcribeBlob(blob); if (text) appendText(text); }
-        catch (e) { toastLocal(e.message || 'Transcription failed.'); }
-        setTranscribing(false);
-      };
-      dictMediaRef.current = mr;
-      mr.start();
-      setDictating(true);
-    } catch { toastLocal('Microphone access denied.'); }
-  }
-  function toastLocal(msg) { try { toast(msg, { icon: 'info', kind: 'warn', duration: 4200 }); } catch {} }
-  const [dragActive, setDragActive] = useState(false);
-  const [glow, setGlow] = useState('var(--accent)');
+
+  const { dictating, transcribing, toggleDictation } = useDictation({ sttEngine, valueRef, onChange });
+  const {
+    files, dragActive, glow, upErr, setUpErr,
+    pickFiles, onPaste, removeFile, clearFiles, dragProps
+  } = useAttachments({ visionSupported });
+
   const [plusMenu, setPlusMenu] = useState(false);
   const [plusDown, setPlusDown] = useState(false);
   const [promptsOpen, setPromptsOpen] = useState(false);
@@ -172,6 +92,7 @@ export default function Composer({
   useEffect(() => () => clearTimeout(stylesTimer.current), []);
   useEffect(() => { if (!plusMenu) setStylesOpen(false); }, [plusMenu]);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [projOpen, setProjOpen] = useState(false);
   const compareTimer = useRef(null);
   const openCompare = () => { clearTimeout(compareTimer.current); setCompareOpen(true); setPromptsOpen(false); setStylesOpen(false); };
   const closeCompare = (now) => {
@@ -185,7 +106,7 @@ export default function Composer({
   const [showReason, setShowReason] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!plusMenu) { setPromptsOpen(false); return; }
     const btn = plusRef.current && plusRef.current.querySelector('.plus');
     if (btn) {
@@ -248,45 +169,15 @@ export default function Composer({
     };
   }, [fit]);
   useEffect(() => { if (autoFocus || focusKey !== undefined) ta.current?.focus(); }, [autoFocus, focusKey]);
-  const filesRef = useRef(files);
-  filesRef.current = files;
-  useEffect(() => () => filesRef.current.forEach(f => f.preview && URL.revokeObjectURL(f.preview)), []);
+  useEffect(() => {
+    const h = () => fileInput.current?.click();
+    window.addEventListener('oq-attach-files', h);
+    return () => window.removeEventListener('oq-attach-files', h);
+  }, []);
 
   const [steerMode, setSteerMode] = useState(true);
   const steering = canSteer && steerMode && !!onSteer;
   useEffect(() => { if (!canSteer) setSteerMode(true); }, [canSteer]);
-  const [upErr, setUpErr] = useState('');
-  function addFiles(list) {
-    let picked = Array.from(list || []);
-    if (!visionSupported) picked = picked.filter(f => !f.type.startsWith('image/'));
-    if (!picked.length) return;
-    setUpErr('');
-    const mapped = picked.map(file => ({
-      id: Math.random().toString(36).slice(2), file, name: file.name, type: file.type, size: file.size,
-      preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
-    }));
-    setFiles(fs => [...fs, ...mapped]);
-    const lastImg = [...mapped].reverse().find(f => f.preview);
-    if (lastImg) dominantColor(lastImg.preview).then(c => c && setGlow(c));
-  }
-  function pickFiles(e) { addFiles(e.target.files); e.target.value = ''; }
-  // ctrl+v / cmd+v an image (or any file) straight into the box
-  function onPaste(e) {
-    const dt = e.clipboardData; if (!dt) return;
-    const found = [];
-    if (dt.files && dt.files.length) found.push(...Array.from(dt.files));
-    else if (dt.items) for (const it of dt.items) if (it.kind === 'file') { const f = it.getAsFile(); if (f) found.push(f); }
-    if (found.length) { e.preventDefault(); addFiles(found); }
-  }
-  function removeFile(id) {
-    setFiles(fs => { const t = fs.find(f => f.id === id); if (t?.preview) URL.revokeObjectURL(t.preview); return fs.filter(f => f.id !== id); });
-  }
-
-  function onDragEnter(e) { e.preventDefault(); dragDepth.current++; setDragActive(true); }
-  function onDragOver(e) { e.preventDefault(); }
-  function onDragLeave(e) { e.preventDefault(); dragDepth.current--; if (dragDepth.current <= 0) { dragDepth.current = 0; setDragActive(false); } }
-  function onDrop(e) { e.preventDefault(); dragDepth.current = 0; setDragActive(false); addFiles(e.dataTransfer.files); }
-
   async function doSend() {
     if (uploading) return;
     if (blockSend || budgetBlock || safetyFlagged || safetyChecking || conversationEnded) return;
@@ -305,10 +196,9 @@ export default function Composer({
       if (files.length) {
         setUploading(true);
         try { const r = await api.uploadFiles(files.map(f => f.file)); attachments = r.files || []; }
-        catch (e) { setUploading(false); setUpErr(e?.message || 'Upload failed, the file may be too large.'); return; }
+        catch (e) { setUploading(false); setUpErr(e?.message || t('Upload failed, the file may be too large.')); return; }
         setUploading(false);
-        files.forEach(f => f.preview && URL.revokeObjectURL(f.preview));
-        setFiles([]); setGlow('var(--accent)');
+        clearFiles();
       }
       onQueue(t, attachments);
       onChange('');
@@ -319,11 +209,10 @@ export default function Composer({
     if (files.length) {
       setUploading(true);
       try { const r = await api.uploadFiles(files.map(f => f.file)); attachments = r.files || []; }
-      catch (e) { setUploading(false); setUpErr(e?.message || 'Upload failed, the file may be too large.'); return; }
+      catch (e) { setUploading(false); setUpErr(e?.message || t('Upload failed, the file may be too large.')); return; }
       setUploading(false);
     }
-    files.forEach(f => f.preview && URL.revokeObjectURL(f.preview));
-    setFiles([]); setGlow('var(--accent)');
+    clearFiles();
     onSend(attachments);
   }
 
@@ -333,10 +222,10 @@ export default function Composer({
   const slashQuery = slashActive ? value.slice(1).toLowerCase().trim() : '';
   const slashCmds = [];
   if (slashActive) {
-    if (onNewChat) slashCmds.push({ id: 'new', label: 'New chat', icon: <NewChatIcon style={{ width: 16 }} />, run: () => { onChange(''); onNewChat(); } });
-    if (sandboxAllowed && onToggleSandbox) slashCmds.push({ id: 'sandbox', label: (sandbox ? 'Disable' : 'Enable') + ' sandbox tools', icon: <Cube style={{ width: 16 }} />, run: () => { onChange(''); onToggleSandbox(); } });
-    if (webSearchAvailable && onToggleWebSearch) slashCmds.push({ id: 'web', label: (webSearch ? 'Disable' : 'Enable') + ' web search', icon: <Globe style={{ width: 16 }} />, run: () => { onChange(''); onToggleWebSearch(); } });
-    if (onShortcuts) slashCmds.push({ id: 'keys', label: 'Keyboard shortcuts', icon: <Sliders style={{ width: 16 }} />, run: () => { onChange(''); onShortcuts(); } });
+    if (onNewChat) slashCmds.push({ id: 'new', label: t('New chat'), icon: <NewChatIcon style={{ width: 16 }} />, run: () => { onChange(''); onNewChat(); } });
+    if (sandboxAllowed && onToggleSandbox) slashCmds.push({ id: 'sandbox', label: (sandbox ? t('Disable') : t('Enable')) + ' sandbox tools', icon: <Cube style={{ width: 16 }} />, run: () => { onChange(''); onToggleSandbox(); } });
+    if (webSearchAvailable && onToggleWebSearch) slashCmds.push({ id: 'web', label: (webSearch ? t('Disable') : t('Enable')) + ' web search', icon: <Globe style={{ width: 16 }} />, run: () => { onChange(''); onToggleWebSearch(); } });
+    if (onShortcuts) slashCmds.push({ id: 'keys', label: t('Keyboard shortcuts'), icon: <Sliders style={{ width: 16 }} />, run: () => { onChange(''); onShortcuts(); } });
     for (const p of (savedPrompts || [])) slashCmds.push({ id: 'p' + p.id, label: p.title, sub: 'prompt', icon: <Star style={{ width: 16 }} />, run: () => { onUsePrompt && onUsePrompt(p.text); } });
   }
   const slashShown = slashCmds.filter(c => c.label.toLowerCase().includes(slashQuery));
@@ -372,7 +261,7 @@ export default function Composer({
     try {
       const r = await api.post('/api/improve-prompt', { text, modelId: currentId });
       if (r.text) { improvedRef.current = { original: value, improved: r.text }; onChange(r.text); }
-    } catch (e) { toast(e.message || 'Could not improve the prompt.'); }
+    } catch (e) { toast(e.message || t('Could not improve the prompt.')); }
     setImproving(false);
   }
   const improvedNow = !!(improvedRef.current && value === improvedRef.current.improved);
@@ -472,9 +361,9 @@ export default function Composer({
     {bannerMounted && bannerInfo.current && (
       <div className={'unavail-banner' + (bannerOut ? ' out' : '') + (showReason ? ' open' : '')}>
         <div className="unavail-row">
-          <span className="unavail-msg"><strong>{bannerInfo.current.name}</strong> is currently unavailable.</span>
+          <span className="unavail-msg">{t("{name} is currently unavailable.", { name: bannerInfo.current.name })}</span>
           {bannerInfo.current.reason && (
-            <button className="unavail-learn" onClick={() => setShowReason(s => !s)}>{showReason ? 'Hide' : 'Learn more'}</button>
+            <button className="unavail-learn" onClick={() => setShowReason(s => !s)}>{showReason ? t('Hide') : t('Learn more')}</button>
           )}
         </div>
         {showReason && bannerInfo.current.reason && (
@@ -483,7 +372,7 @@ export default function Composer({
       </div>
     )}
     <div className={cls} style={{ '--glow': glow }}
-      onDragEnter={onDragEnter} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
+      {...dragProps}>
       {dragActive && <div className="drop-hint">Drop to attach{visionSupported ? '' : ' files'}</div>}
       {files.length > 0 && (
         <div className="attach-row">
@@ -508,7 +397,7 @@ export default function Composer({
       {upErr && <div className="attach-err">{upErr}</div>}
       {slashOpen && (
         <div className="slash-menu">
-          <div className="slash-head">Commands</div>
+          <div className="slash-head">{t("Commands")}</div>
           {slashShown.map((c, i) => (
             <button key={c.id} className={'slash-item' + (i === slashIdx ? ' active' : '')} onMouseEnter={() => setSlashIdx(i)} onMouseDown={(e) => { e.preventDefault(); c.run(); }}>
               <span className="slash-ico">{c.icon}</span>
@@ -531,20 +420,21 @@ export default function Composer({
           <span className="steer-note">{steerMode ? t('Applied to the reply in progress, without losing what is already written.') : t('Sent as a new message when this reply finishes.')}</span>
         </div>
       )}
-      <textarea ref={ta} rows={1} value={value} placeholder={steering ? 'Steer this reply, e.g. "shorter" or "you misread the file"…' : streaming ? (queueCount > 0 ? `Queue another message (${queueCount} waiting)…` : 'Type to queue a message…') : (placeholder || 'How can I help you today?')}
+      <textarea ref={ta} rows={1} value={value} placeholder={steering ? t('Steer this reply, e.g. "shorter" or "you misread the file"…') : streaming ? (queueCount > 0 ? t('Queue another message ({n} waiting)…', { n: queueCount }) : t('Type to queue a message…')) : (placeholder || t('How can I help you today?'))}
+        id="oq-composer" aria-label={t('Message input')}
         onChange={(e) => onChange(e.target.value)} onKeyDown={key} onPaste={onPaste} />
       <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}
         accept={(visionSupported ? 'image/*,' : '') + FILE_ACCEPT} />
-      {safetyChecking && safetyVerbose && <div className="safety-checking">Safety check…</div>}
-      {improving && <div className="safety-checking">Improving prompt…</div>}
+      {safetyChecking && safetyVerbose && <div className="safety-checking">{t("Safety check…")}</div>}
+      {improving && <div className="safety-checking">{t("Improving prompt…")}</div>}
       {canContinue && !streaming && !conversationEnded && (
         <div className="continue-row">
-          <button className="continue-btn" onClick={() => onContinue?.()}>Continue generating →</button>
+          <button className="continue-btn" onClick={() => onContinue?.()}>{t("Continue generating →")}</button>
         </div>
       )}
       {compareIds.length > 0 && (
         <div className="queued-chip compare-chip">
-          <span className="queued-label">Compare:</span>
+          <span className="queued-label">{t("Compare:")}</span>
           <span className="queued-text">{[models?.find(m => m.id === currentId)?.displayName || 'Current', ...compareIds.map(id => models?.find(m => m.id === id)?.displayName || 'model')].join(' vs ')}</span>
           <button className="queued-x" title={t("Cancel comparison")} onClick={() => onSetCompare?.([])}><X style={{ width: 12 }} /></button>
         </div>
@@ -560,19 +450,45 @@ export default function Composer({
               <div className={'plus-menu' + (plusDown ? ' down' : '')}>
                 <button className="pm-item" onClick={() => { setPlusMenu(false); fileInput.current?.click(); }}>
                   <FileText />
-                  <span className="pm-label">{visionSupported ? 'Add files or photos' : 'Add files'}</span>
-                  <span className="pm-shortcut">{/mac/i.test(navigator.platform) ? '⌘U' : 'Ctrl+U'}</span>
+                  <span className="pm-label">{visionSupported ? t('Add files or photos') : t('Add files')}</span>
+                  <span className="pm-shortcut">{/mac/i.test(navigator.platform) ? '⌘U' : t('Ctrl+U')}</span>
                 </button>
+                {onSetProject && (
+                  <div className="pm-subwrap" onMouseEnter={() => setProjOpen(true)} onMouseLeave={() => setProjOpen(false)}>
+                    <button className={'pm-item' + (projOpen ? ' active' : '')} onClick={() => setProjOpen(o => !o)}>
+                      <Box />
+                      <span className="pm-label">{t('Add to project')}</span>
+                      <Chevron className="pm-chev" />
+                    </button>
+                    {projOpen && (
+                      <PmSub onMouseEnter={() => setProjOpen(true)} onMouseLeave={() => setProjOpen(false)}>
+                        {projects.length === 0 && <div className="pm-empty">{t('No projects yet')}</div>}
+                        {projects.map(p => (
+                          <button key={p.id} className={'pm-item' + (project && p.id === project.id ? ' active' : '')}
+                            onClick={() => { onSetProject(p); setProjOpen(false); setPlusMenu(false); }}>
+                            <Box />
+                            <span className="pm-label">{p.name}</span>
+                          </button>
+                        ))}
+                        {project && onClearProject && (
+                          <button className="pm-item" onClick={() => { onClearProject(); setProjOpen(false); setPlusMenu(false); }}>
+                            <span className="pm-label">{t('Remove from project')}</span>
+                          </button>
+                        )}
+                      </PmSub>
+                    )}
+                  </div>
+                )}
                 <div className="pm-divider" />
                 <div className="pm-subwrap" onMouseEnter={openPrompts} onMouseLeave={closePrompts}>
                   <button className={'pm-item' + (promptsOpen ? ' active' : '')} onClick={() => (promptsOpen ? closePrompts(true) : openPrompts())}>
                     <TextIcon />
-                    <span className="pm-label">Saved prompts</span>
+                    <span className="pm-label">{t("Saved prompts")}</span>
                     <Chevron className="pm-chev" />
                   </button>
                   {promptsOpen && (
                     <PmSub onMouseEnter={openPrompts} onMouseLeave={closePrompts}>
-                      {(savedPrompts || []).length === 0 && <div className="pm-empty">No saved prompts yet.</div>}
+                      {(savedPrompts || []).length === 0 && <div className="pm-empty">{t("No saved prompts yet.")}</div>}
                       {(savedPrompts || []).map(p => (
                         <div key={p.id} className="pm-prompt">
                           <button className="pm-prompt-use" title={p.text} onClick={() => { setPlusMenu(false); onUsePrompt && onUsePrompt(p.text); }}>
@@ -593,7 +509,7 @@ export default function Composer({
                   <div className="pm-subwrap" onMouseEnter={openStyles} onMouseLeave={closeStyles}>
                     <button className={'pm-item' + (stylesOpen ? ' active' : '')} onClick={() => (stylesOpen ? closeStyles(true) : openStyles())}>
                       <Sliders />
-                      <span className="pm-label">Response style</span>
+                      <span className="pm-label">{t("Response style")}</span>
                       <span className="pm-note">{styleNameFor(styleId, styles)}</span>
                       <Chevron className="pm-chev" />
                     </button>
@@ -608,19 +524,19 @@ export default function Composer({
                 <button className="pm-item" disabled={improving || (!hasText && !improvedNow)}
                   onClick={() => { setPlusMenu(false); improvePrompt(); }}>
                   <Wand />
-                  <span className="pm-label">{improvedNow ? 'Restore original prompt' : 'Improve prompt'}</span>
+                  <span className="pm-label">{improvedNow ? t('Restore original prompt') : t('Improve prompt')}</span>
                 </button>
                 {onSetCompare && models && models.length > 1 && (
                   <div className="pm-subwrap" onMouseEnter={openCompare} onMouseLeave={closeCompare}>
                     <button className={'pm-item' + (compareOpen ? ' active' : '')} onClick={() => (compareOpen ? closeCompare(true) : openCompare())}>
                       <Cube />
-                      <span className="pm-label">Compare models</span>
+                      <span className="pm-label">{t("Compare models")}</span>
                       {compareIds.length > 0 && <span className="pm-note">+{compareIds.length}</span>}
                       <Chevron className="pm-chev" />
                     </button>
                     {compareOpen && (
                       <PmSub className="styles" onMouseEnter={openCompare} onMouseLeave={closeCompare}>
-                        <div className="style-menu-label">Also answer with</div>
+                        <div className="style-menu-label">{t("Also answer with")}</div>
                         {models.filter(m => m.id !== currentId).map(m => {
                           const on = compareIds.includes(m.id);
                           return (
@@ -631,7 +547,7 @@ export default function Composer({
                             </button>
                           );
                         })}
-                        <div className="style-menu-label" style={{ textTransform: 'none', letterSpacing: 0 }}>Pick up to 2 extra models. Your next message will be answered by each as versions of one response.</div>
+                        <div className="style-menu-label" style={{ textTransform: 'none', letterSpacing: 0 }}>{t("Pick up to 2 extra models. Your next message will be answered by each as versions of one response.")}</div>
                       </PmSub>
                     )}
                   </div>
@@ -640,14 +556,14 @@ export default function Composer({
                 {sandboxAllowed && (
                   <button className="pm-item" onClick={() => onToggleSandbox && onToggleSandbox()}>
                     <Cube />
-                    <span className="pm-label">Sandbox tools</span>
+                    <span className="pm-label">{t("Sandbox tools")}</span>
                     {sandbox && <Check className="pm-check" />}
                   </button>
                 )}
                 {webSearchAvailable && (
                   <button className="pm-item" onClick={() => onToggleWebSearch && onToggleWebSearch()}>
                     <Globe />
-                    <span className="pm-label">Web search</span>
+                    <span className="pm-label">{t("Web search")}</span>
                     {webSearch && <Check className="pm-check" />}
                   </button>
                 )}
@@ -655,7 +571,7 @@ export default function Composer({
             )}
           </div>
           {project && (
-            <div className="composer-project" title={'In project: ' + project.name}>
+            <div className="composer-project" title={t('In project: {name}', { name: project.name })}>
               <Box style={{ width: 14 }} />
               <span className="cp-name">{project.name}</span>
               {onClearProject && <button className="cp-x" onClick={onClearProject} title={t("Remove from project")}><X style={{ width: 12 }} /></button>}
@@ -663,6 +579,7 @@ export default function Composer({
           )}
         </div>
         <div className="composer-right">
+          {ctxGauge}
           {!hideModelPicker && <ModelDropdown models={models} currentId={currentId} onSelect={onSelect}
             extended={extended} onToggleExtended={onToggleExtended} up={modelUp} isAdmin={canUseUnavailable}
             reasoningEffort={reasoningEffort} onSetEffort={onSetEffort}
@@ -673,7 +590,7 @@ export default function Composer({
           )}
           {voiceMic && (
             <button className={'mic' + (dictating ? ' rec' : '') + (transcribing ? ' busy' : '')} onClick={toggleDictation}
-              title={dictating ? 'Stop dictation' : transcribing ? 'Transcribing…' : 'Dictate'} disabled={transcribing}>
+              title={dictating ? t('Stop dictation') : transcribing ? t('Transcribing…') : t('Dictate')} disabled={transcribing}>
               <Mic style={{ width: 18, height: 18 }} />
             </button>
           )}
@@ -683,7 +600,7 @@ export default function Composer({
           {streaming ? (
             <button key="stop" className="send stop" onClick={onStop} title={t('Stop generating')}><Stop style={{ width: 16, height: 16 }} /></button>
           ) : safetyChecking ? (
-            <button key="send" className={'send' + (safetyVerbose ? ' checking' : ' quiet')} disabled title={safetyVerbose ? 'Safety check…' : undefined}><Up style={{ width: 17, height: 17 }} /></button>
+            <button key="send" className={'send' + (safetyVerbose ? ' checking' : ' quiet')} disabled title={safetyVerbose ? t('Safety check…') : undefined}><Up style={{ width: 17, height: 17 }} /></button>
           ) : canSend ? (
             <button key="send" className="send" onClick={doSend} disabled={uploading}><Up style={{ width: 17, height: 17 }} /></button>
           ) : voiceCall ? (

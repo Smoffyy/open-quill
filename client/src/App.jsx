@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { api } from './api.js';
-import { t } from './i18n.jsx';
+import { t, tk } from './i18n.jsx';
 import { applyPrefs } from './prefs.js';
 import { kwargValuesArr, defaultValueOf } from './kwargs.js';
 import Login from './components/Login.jsx';
@@ -10,13 +10,16 @@ import Composer from './components/Composer.jsx';
 import QuickPrompts from './components/QuickPrompts.jsx';
 import CompactingBar from './components/CompactingBar.jsx';
 import EngineStrip from './components/EngineStrip.jsx';
+import CtxGauge from './components/CtxGauge.jsx';
 import LedgerBar from './components/LedgerBar.jsx';
+import ThreadSkeleton from './components/ThreadSkeleton.jsx';
 import SummaryModal from './components/SummaryModal.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
 import { computeActiveBg } from './lib/appbg.js';
 
 import Message from './components/Message.jsx';
 const SettingsModal = React.lazy(() => import('./components/SettingsModal.jsx'));
+const PromptLedger = React.lazy(() => import('./components/PromptLedger.jsx'));
 const ModelDocs = React.lazy(() => import('./components/ModelDocs.jsx'));
 const AdminPanel = React.lazy(() => import('./components/AdminPanel.jsx'));
 const Playground = React.lazy(() => import('./components/Playground.jsx'));
@@ -35,10 +38,18 @@ import SearchModal from './components/SearchModal.jsx';
 import Toaster from './components/Toaster.jsx';
 import Lightbox from './components/Lightbox.jsx';
 import ShortcutsModal from './components/ShortcutsModal.jsx';
+import ThreadRail from './components/ThreadRail.jsx';
+import ThreadFind from './components/ThreadFind.jsx';
+import { railItems } from './lib/threadmeta.js';
+import { useDrafts } from './lib/drafts.js';
+import { CHORD_TIMEOUT, chordMenu, comboFromEvent, comboKeys, comboLabel, keybindIndex, resolveKeybinds } from './lib/keybinds.js';
+const BranchTree = React.lazy(() => import('./components/BranchTree.jsx'));
 import { toast } from './toast.js';
-import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge } from './components/icons.jsx';
+import { copyText } from './clipboard.js';
+import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork } from './components/icons.jsx';
 
-const DEFAULT_CFG = { appName: 'open-quill', disclaimer: 'Assistants can make mistakes, double-check responses.', greetings: ['How can I help you?'], appIcon: '', quickPrompts: [], version: '' };
+const SKELETON_DELAY = 3000;
+const DEFAULT_CFG = { appName: 'open-quill', disclaimer: tk('Assistants can make mistakes, double-check responses.'), greetings: [tk('How can I help you?')], appIcon: '', quickPrompts: [], version: '' };
 
 
 
@@ -52,11 +63,25 @@ export default function App() {
   const [models, setModels] = useState([]);
   const [currentId, setCurrentId] = useState(null);
   const [chatRemovedModel, setChatRemovedModel] = useState(null);
+  const modelsRef = useRef([]);
+  const modelsLoadedRef = useRef(false);
+  const pendingModelCheck = useRef(null);
   const pickModel = useCallback((id) => { setChatRemovedModel(null); setCurrentId(id); }, []);
   const modelById = useMemo(() => {
     const m = new Map();
     for (const x of models) m.set(x.id, x);
     return m;
+  }, [models]);
+  useEffect(() => {
+    modelsRef.current = models;
+    if (models.length) modelsLoadedRef.current = true;
+  }, [models]);
+  useEffect(() => {
+    if (!models.length) return;
+    const p = pendingModelCheck.current;
+    if (!p) return;
+    pendingModelCheck.current = null;
+    resolveLastModel(p);
   }, [models]);
   const ghostModels = useRef(new Map());
   const resolveMsgModel = useCallback((msg, fallback) => {
@@ -74,22 +99,18 @@ export default function App() {
     return fallback;
   }, [modelById]);
   const sidebarFns = useRef({});
-  const sbCreateFolder = useCallback((...a) => sidebarFns.current.createFolder(...a), []);
-  const sbRenameFolder = useCallback((...a) => sidebarFns.current.renameFolder(...a), []);
-  const sbToggleFolder = useCallback((...a) => sidebarFns.current.toggleFolder(...a), []);
-  const sbDeleteFolder = useCallback((...a) => sidebarFns.current.deleteFolder(...a), []);
-  const sbMoveChat = useCallback((...a) => sidebarFns.current.moveChatToFolder(...a), []);
   const sbNewChat = useCallback((...a) => sidebarFns.current.newChat(...a), []);
   const sbOpenChat = useCallback((...a) => sidebarFns.current.openChat(...a), []);
   const sbDeleteChat = useCallback((...a) => sidebarFns.current.deleteChat(...a), []);
   const sbToggleStar = useCallback((...a) => sidebarFns.current.toggleStar(...a), []);
   const sbLogout = useCallback((...a) => sidebarFns.current.logout(...a), []);
+  const sbMoveToProject = useCallback((...a) => sidebarFns.current.moveChatToProject(...a), []);
   const sbProjects = useCallback(() => sidebarFns.current.openProjects(null), []);
   const sbOpenProject = useCallback((id) => sidebarFns.current.openProjects(id), []);
-  const onSearchCb = useCallback(() => setShowSearch(true), []);
+  const onSearchCb = useCallback(() => setCmdkOpen(true), []);
   const onToggleSidebarCb = useCallback(() => setCollapsed(c => !c), []);
   const onMobileCloseCb = useCallback(() => setMobileDrawer(false), []);
-  const onSettingsCb = useCallback(() => setShowSettings(true), []);
+  const onSettingsCb = useCallback(() => { setSettingsTab('general'); setShowSettings(true); }, []);
   const onAdminCb = useCallback(() => { history.pushState({}, '', '/admin'); setShowAdmin(true); }, []);
   const onPlaygroundCb = useCallback(() => { history.pushState({}, '', '/playground'); setShowPlayground(true); }, []);
   const onCreditsCb = useCallback(() => setShowCredits(true), []);
@@ -106,7 +127,6 @@ export default function App() {
   const setReasoningEffort = useCallback((value) => setKwargValues(prev => ({ ...prev, effort: typeof value === 'function' ? value(prev.effort || '') : value })), []);
   const [bgVisible, setBgVisible] = useState(false);
   const [chats, setChats] = useState([]);
-  const [folders, setFolders] = useState([]);
   const [chatsLoaded, setChatsLoaded] = useState(false);
   const [activeId, setActiveId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -136,16 +156,6 @@ export default function App() {
   const [canContinue, setCanContinue] = useState(false);
   const [compareIds, setCompareIds] = useState([]);
   const compareRef = useRef(null);
-  const draftKey = (id) => 'oq-draft-' + (id || 'new');
-  const draftTimer = useRef(null);
-  const saveDraft = (id, text) => {
-    clearTimeout(draftTimer.current);
-    draftTimer.current = setTimeout(() => {
-      try { text && text.trim() ? localStorage.setItem(draftKey(id), text) : localStorage.removeItem(draftKey(id)); } catch {}
-    }, 250);
-  };
-  const loadDraft = (id) => { try { return localStorage.getItem(draftKey(id)) || ''; } catch { return ''; } };
-  const clearDraft = (id) => { clearTimeout(draftTimer.current); try { localStorage.removeItem(draftKey(id)); } catch {} };
   const styleId = user?.prefs?.styleId || 'normal';
   const setStyleId = (id) => updatePref('styleId', id);
   const saveStyles = async (list) => {
@@ -155,6 +165,12 @@ export default function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileDrawer, setMobileDrawer] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState('general');
+  const kbHandlers = useRef({});
+  const [chordHint, setChordHint] = useState(null);
+  const [routeInfo, setRouteInfo] = useState(null);
+  useEffect(() => { setRouteInfo(null); }, [activeId]);
+  const [ledgerPrompt, setLedgerPrompt] = useState(false);
   const [showDocs, setShowDocs] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showPlayground, setShowPlayground] = useState(false);
@@ -163,11 +179,13 @@ export default function App() {
   const [showLicense, setShowLicense] = useState(false);
   const [focusTick, setFocusTick] = useState(0);
   const [cfg, setCfg] = useState(DEFAULT_CFG);
+  const [authCtx, setAuthCtx] = useState(null);
   const [budget, setBudget] = useState(null);
   const [greeting, setGreeting] = useState(DEFAULT_CFG.greetings[0]);
   const [sandbox, setSandbox] = useState(false);
   const [webSearch, setWebSearch] = useState(false);
   const [files, setFiles] = useState([]);
+  const [pendingFiles, setPendingFiles] = useState({});
   const [liveFile, setLiveFile] = useState(null);
   const [liveCall, setLiveCall] = useState(null);
   const [compacting, setCompacting] = useState(false);
@@ -182,10 +200,12 @@ export default function App() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [artifactsOpen, setArtifactsOpen] = useState(false);
+  const artifactsOpenRef = useRef(false);
+  useEffect(() => { artifactsOpenRef.current = artifactsOpen; }, [artifactsOpen]);
   const [callOpen, setCallOpen] = useState(false);
   const [artifactFocus, setArtifactFocus] = useState(null);
   const [incognito, setIncognito] = useState(false);
-  const [incognitoGreeting, setIncognitoGreeting] = useState('Greetings, whoever you are');
+  const [incognitoGreeting, setIncognitoGreeting] = useState(tk('Greetings, whoever you are'));
   const [chatsOverview, setChatsOverview] = useState(false);
   const [showSpaces, setShowSpaces] = useState(false);
   const [spacesPending, setSpacesPending] = useState(0);
@@ -194,6 +214,31 @@ export default function App() {
   const [projectOpenId, setProjectOpenId] = useState(null);
   const [currentProject, setCurrentProject] = useState(null);
   const [cmdkOpen, setCmdkOpen] = useState(false);
+  const [findOpen, setFindOpen] = useState(false);
+  const [findMatches, setFindMatches] = useState(null);
+  const [treeOpen, setTreeOpen] = useState(false);
+  const [kbFocus, setKbFocus] = useState(null);
+  const kbFocusRef = useRef(null);
+  useEffect(() => { kbFocusRef.current = kbFocus; }, [kbFocus]);
+  const onFindMatches = useCallback((ids) => setFindMatches(ids), []);
+  const closeFind = useCallback(() => { setFindOpen(false); setFindMatches(null); }, []);
+  const msgActions = useRef({});
+  const railList = useMemo(() => railItems(messages), [messages]);
+  const findRevision = useMemo(() => {
+    let n = 0;
+    for (const m of messages) n += m.content ? m.content.length : 0;
+    return messages.length + ':' + n;
+  }, [messages]);
+  useEffect(() => {
+    const prev = document.querySelectorAll('.msg.kb-focus');
+    prev.forEach(el => el.classList.remove('kb-focus'));
+    if (!kbFocus) return;
+    const el = document.querySelector('[data-mid="' + kbFocus + '"]');
+    if (el) el.classList.add('kb-focus');
+  }, [kbFocus, messages]);
+  useEffect(() => { setKbFocus(null); }, [activeId]);
+  const msgKeysOn = user?.prefs?.msgKeys !== false;
+  useEffect(() => { if (!msgKeysOn) setKbFocus(null); }, [msgKeysOn]);
 
   const [telemetry, setTelemetry] = useState(null);
   const [modelStatus, setModelStatus] = useState(null);
@@ -208,17 +253,23 @@ export default function App() {
   const [chatErrors, setChatErrors] = useState({});
   const [dispContent, setDispContent] = useState('');
   const [dispReason, setDispReason] = useState('');
+  const [dispSegs, setDispSegs] = useState(null);
   const [phase, setPhase] = useState('static');
 
   const ws = useRef(null);
+  const wsRetry = useRef(0);
+  const wsTimer = useRef(null);
   const gen = useRef(new Map());
+  const [busyChats, setBusyChats] = useState([]);
   const targetContent = useRef('');
   const targetReason = useRef('');
   const pendingDone = useRef(false);
+  const nextTurnPending = useRef(false);
   const liveRef = useRef(null);
   const selectingRef = useRef(false);
   const hasSelectionRef = useRef(false);
   const assistantIdRef = useRef(null);
+  const streamModelRef = useRef(null);
   const revealTimer = useRef(null);
   const followRaf = useRef(0);
   const followTs = useRef(0);
@@ -228,19 +279,26 @@ export default function App() {
   const lastTop = useRef(0);
   const programmatic = useRef(false);
   const [showJump, setShowJump] = useState(false);
-  const animate = user?.prefs?.animations !== false;
+  const animate = cfg.uiPreset === 'openai' ? false : (user?.prefs?.typewriter ?? user?.prefs?.animations) !== false;
   const revealMs = (() => { const v = user?.prefs?.revealMs; return v == null || isNaN(parseInt(v)) ? 40 : Math.max(0, Math.min(100, parseInt(v))); })();
   const [threadStagger, setThreadStagger] = useState(false);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const skelTimer = useRef(null);
   const staggerTimer = useRef(null);
+  const showMsgSpeed = !!user?.prefs?.msgSpeed;
+  const showCtxGauge = !!user?.prefs?.ctxGauge;
 
   const activeIdRef = useRef(null);
   const currentIdRef = useRef(null);
   const animateRef = useRef(animate);
   const incognitoRef = useRef(false);
   useEffect(() => { incognitoRef.current = incognito; }, [incognito]);
+  const { saveDraft, loadDraft, clearDraft, flushDraft } = useDrafts(incognitoRef);
   const refreshSeq = useRef(0);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
   useEffect(() => { liveRef.current = liveFile; }, [liveFile]);
+  const messagesRef = useRef([]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => {
     const m = models.find(x => x.id === currentId);
     const defs = (m && Array.isArray(m.kwargs)) ? m.kwargs.filter(d => !d.parentId) : [];
@@ -283,12 +341,24 @@ export default function App() {
 
   useEffect(() => () => {
     stopLoops();
+    clearTimeout(skelTimer.current);
     clearTimeout(staggerTimer.current);
-    clearTimeout(draftTimer.current);
+    clearTimeout(wsTimer.current);
+    try { ws.current?.close(); } catch {}
   }, []);
 
   useEffect(() => {
-    api.get('/api/me').then(({ user }) => setUser(user)).catch(() => setUser(null));
+    api.get('/api/me').then(({ user }) => setUser(user)).catch(() => {
+      setUser(null);
+      api.get('/api/auth/context').then(c => {
+        setAuthCtx(c);
+        const preset = c.uiPreset === 'openai' ? 'openai' : 'anthropic';
+        document.documentElement.setAttribute('data-preset', preset);
+        try { localStorage.setItem('oq-preset', preset); } catch {}
+        document.documentElement.setAttribute('data-font', c.appFont === 'sans' ? 'sans' : 'serif');
+        applyPrefs(null, preset);
+      }).catch(() => {});
+    });
   }, []);
   useEffect(() => {
     if (!user) return;
@@ -302,15 +372,13 @@ export default function App() {
       return () => mq.removeEventListener?.('change', h);
     }
   }, [user, cfg?.uiPreset]);
-  useEffect(() => { if (user) { loadModels(); loadChats(); loadFolders(); loadAppConfig(); loadBudget(); connect(); openFromUrl(); refreshSpacesPending(); loadProjects(); } }, [!!user]);
+  useEffect(() => { if (user) { loadModels(); loadChats(); loadAppConfig(); loadBudget(); connect(); openFromUrl(); refreshSpacesPending(); loadProjects(); } }, [!!user]);
   async function loadBudget() { try { setBudget(await api.get('/api/me/budget')); } catch {} }
   async function loadProjects() { try { setProjects(await api.get('/api/projects')); } catch {} }
 
   useEffect(() => {
-    const root = document.documentElement;
-    if (intro) root.setAttribute('data-entrance', 'off');
-    else root.setAttribute('data-entrance', user?.prefs?.messageEntrance === false ? 'off' : 'on');
-  }, [intro, user]);
+    document.documentElement.setAttribute('data-entrance', user?.prefs?.minimalAnims ? 'off' : 'on');
+  }, [user]);
 
   useEffect(() => {
     const onPop = () => openFromUrl();
@@ -350,17 +418,41 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!user) return;
+    const nav = user.prefs || {};
+    const binds = resolveKeybinds(nav);
+    const index = keybindIndex(binds);
+    let pending = null;
+    let pendingTimer = null;
+    const clearPending = () => { pending = null; clearTimeout(pendingTimer); setChordHint(null); };
     const onKey = (e) => {
-      const mod = e.ctrlKey || e.metaKey;
-      if (mod && e.shiftKey && (e.key === 'S' || e.key === 's')) { e.preventDefault(); setCollapsed(c => !c); return; }
-      if (mod && !e.shiftKey && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); setCmdkOpen(o => !o); return; }
-      if (mod && e.shiftKey && (e.key === 'F' || e.key === 'f')) { e.preventDefault(); setShowSearch(true); return; }
-      if (e.key === '?' && !mod) {
-        const el = document.activeElement;
-        const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
-        if (!typing) { e.preventDefault(); setShowShortcuts(s => !s); return; }
+      const combo = comboFromEvent(e);
+      if (!combo) return;
+      const typingNow = (() => { const el = document.activeElement; return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable); })();
+      if (pending) {
+        const act2 = index.chords.get(pending)?.get(combo);
+        clearPending();
+        if (act2 && !(act2.pref && nav[act2.pref] === false)) {
+          e.preventDefault();
+          if (kbHandlers.current[act2.id]?.() === false) { /* inert */ }
+          return;
+        }
+        if (combo === 'Escape') { e.preventDefault(); return; }
       }
-      if (mod && e.shiftKey && (e.key === 'O' || e.key === 'o')) { e.preventDefault(); newChat(); return; }
+      if (!typingNow && index.chords.has(combo) && !document.querySelector('.overlay')) {
+        e.preventDefault();
+        pending = combo;
+        setChordHint({ head: combo, items: chordMenu(binds, combo) });
+        clearTimeout(pendingTimer);
+        pendingTimer = setTimeout(clearPending, CHORD_TIMEOUT);
+        return;
+      }
+      const act = index.get(combo);
+      if (!act) return;
+      if (act.pref && nav[act.pref] === false) return;
+      const el = document.activeElement;
+      if (!act.typing && el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      if (!act.overlay && document.querySelector('.overlay')) return;
+      if (kbHandlers.current[act.id]?.() !== false) e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -391,7 +483,11 @@ export default function App() {
     setShowProjects(false);
     const m = p.match(/^\/chat\/(.+)$/);
     if (m) openChat(decodeURIComponent(m[1]), false);
-    else { setActiveId(null); setMessages([]); }
+    else {
+      flushDraft();
+      setActiveId(null); setMessages([]);
+      if (!incognitoRef.current) setInput(loadDraft(null));
+    }
   }
 
   async function loadModels() {
@@ -401,7 +497,6 @@ export default function App() {
     setCurrentId(id => id && m.find(x => x.id === id) ? id : (m.find(x => x.isDefault)?.id || m[0]?.id || null));
   }
   async function loadChats() { try { setChats(await api.get('/api/chats')); } catch {} finally { setChatsLoaded(true); } }
-  async function loadFolders() { try { setFolders(await api.get('/api/folders')); } catch {} }
   async function loadAppConfig() { try { applyCfg(await api.get('/api/app-config')); } catch {} }
   const [presetPicked, setPresetPicked] = useState(false);
   async function choosePreset(p) {
@@ -410,7 +505,7 @@ export default function App() {
   }
   useEffect(() => {
     const appName = cfg.appName || 'open-quill';
-    if (incognito) { document.title = 'Incognito chat - ' + appName; return; }
+    if (incognito) { document.title = t('Incognito chat - {app}', { app: appName }); return; }
     const active = activeId ? chats.find(c => c.id === activeId) : null;
     document.title = active ? `${active.title || t('Untitled chat')} - ${appName}` : `New chat - ${appName}`;
   }, [activeId, chats, cfg.appName, incognito]);
@@ -420,9 +515,9 @@ export default function App() {
     try {
       const json = JSON.parse(await file.text());
       const r = await api.post('/api/chats/import', json);
-      await loadChats(); await loadFolders();
+      await loadChats();
       alert(`Imported ${r.imported} chat(s).`);
-    } catch (e) { alert(e.message || 'Could not import that file.'); }
+    } catch (e) { alert(e.message || t('Could not import that file.')); }
   }
   function applyCfg(c) {
     setCfg(c);
@@ -441,19 +536,26 @@ export default function App() {
   function connect() {
     const existing = ws.current;
     if (existing && (existing.readyState === 0 || existing.readyState === 1)) return;
+    clearTimeout(wsTimer.current);
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const sock = new WebSocket(`${proto}://${location.host}/ws`);
     ws.current = sock;
+    sock.onopen = () => { wsRetry.current = 0; };
     sock.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch { return; } handleWs(m); };
     sock.onerror = () => { try { sock.close(); } catch {} };
-    sock.onclose = () => { if (ws.current === sock) ws.current = null; setTimeout(() => { if (user) connect(); }, 1500); };
+    sock.onclose = () => {
+      if (ws.current === sock) ws.current = null;
+      const wait = Math.min(15000, 1500 * Math.pow(2, wsRetry.current++));
+      clearTimeout(wsTimer.current);
+      wsTimer.current = setTimeout(() => { if (userRef.current) connect(); }, wait);
+    };
   }
 
   function wsSend(obj) {
     const sock = ws.current;
     if (!sock || sock.readyState !== 1) {
       if (!sock || sock.readyState >= 2) connect();
-      setChatErrors(prev => ({ ...prev, [activeKey()]: 'Connection lost, reconnecting. Try again in a moment.' }));
+      setChatErrors(prev => ({ ...prev, [activeKey()]: t('Connection lost, reconnecting. Try again in a moment.') }));
       return false;
     }
     try { sock.send(JSON.stringify(obj)); return true; }
@@ -465,9 +567,24 @@ export default function App() {
     const k = key || activeKey();
     setChatErrors(prev => { if (!(k in prev)) return prev; const n = { ...prev }; delete n[k]; return n; });
   }
+  function syncBusy() {
+    const next = [];
+    for (const [id, r] of gen.current.entries()) if (id && id !== 'incognito' && !r.done) next.push(id);
+    next.sort();
+    setBusyChats(prev => (prev.length === next.length && prev.every((v, i) => v === next[i])) ? prev : next);
+  }
+  function queueRec(key, modelId) {
+    gen.current.set(key, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: modelId, live: null });
+    syncBusy();
+  }
+  function dropRec(key) { gen.current.delete(key); syncBusy(); }
   function recFor(key) {
     let r = gen.current.get(key);
-    if (!r) { r = { content: '', reasoning: '', phase: 'generating', done: false, assistantId: null, model_id: currentIdRef.current, live: null, steers: [], status: null }; gen.current.set(key, r); }
+    if (!r) {
+      r = { content: '', reasoning: '', phase: 'generating', done: false, assistantId: null, model_id: currentIdRef.current, live: null, steers: [], status: null };
+      gen.current.set(key, r);
+      syncBusy();
+    }
     return r;
   }
 
@@ -508,6 +625,26 @@ export default function App() {
   function handleWs(m) {
     if (m.type === 'session_revoked') { location.href = '/'; return; }
     if (m.type === 'config') { loadModels(); loadAppConfig(); try { window.dispatchEvent(new CustomEvent('oq-config')); } catch {} return; }
+    if (m.type === 'resume') {
+      const list = Array.isArray(m.turns) ? m.turns : [];
+      for (const t of list) {
+        if (!t || !t.chatId) continue;
+        gen.current.set(t.chatId, {
+          content: t.content || '',
+          reasoning: t.reasoning || '',
+          phase: t.phase === 'queued' ? 'queued' : (t.phase === 'thinking' ? 'thinking' : 'generating'),
+          done: false,
+          assistantId: t.messageId || null,
+          model_id: t.modelId || currentIdRef.current,
+          live: t.live || null,
+          steers: Array.isArray(t.steers) ? t.steers : [],
+          status: t.status || null
+        });
+      }
+      syncBusy();
+      if (list.some(t => t && t.chatId === activeKey())) syncView();
+      return;
+    }
     if (typeof m.type === 'string' && m.type.startsWith('space_')) {
       try { window.dispatchEvent(new CustomEvent('oq-space', { detail: m })); } catch {}
       if (m.type === 'space_invite' || m.type === 'space_updated' || m.type === 'space_removed' || m.type === 'space_deleted') refreshSpacesPending();
@@ -516,14 +653,27 @@ export default function App() {
     if (m.type === 'files') {
       if (m.chatId && m.chatId !== activeIdRef.current) return;
       setFiles(m.files || []);
+      const done = new Set((m.files || []).map(f => f.path));
+      setPendingFiles(p => {
+        const stale = Object.keys(p).filter(k => done.has(k));
+        if (!stale.length) return p;
+        const next = { ...p };
+        for (const k of stale) delete next[k];
+        return next;
+      });
       const lf = liveRef.current;
-      if (lf && lf.path && (m.files || []).some(f => f.path === lf.path)) { liveRef.current = null; setLiveFile(null); }
+      if (lf && lf.path && done.has(lf.path)) { liveRef.current = null; setLiveFile(null); }
       return;
     }
     if (m.type === 'tool_live') {
       const r = recFor(m.chatId); r.live = m.live || null;
       if (m.chatId !== activeKey()) return;
       const live = m.live;
+      const prev = liveRef.current;
+      if (prev && prev.path && prev.tool === 'create_file' && (!live || live.path !== prev.path)) {
+        const path = prev.path, text = prev.content || '';
+        setPendingFiles(p => (p[path] === text ? p : { ...p, [path]: text }));
+      }
       if (live && live.path && (live.tool === 'create_file' || live.tool === 'str_replace')) {
         const lf = { path: live.path, content: live.content || '', tool: live.tool, oldStr: live.oldStr ?? null };
         liveRef.current = lf; setLiveFile(lf);
@@ -560,6 +710,10 @@ export default function App() {
       if (m.chatId === activeKey()) { setChatEnded(true); setChatEndedReason(m.reason || ''); }
       return;
     }
+    if (m.type === 'routed') {
+      if (m.chatId === activeKey()) setRouteInfo({ hubName: m.hubName, modelName: m.modelName, via: m.via });
+      return;
+    }
     if (m.type === 'queued') {
       const r = recFor(m.chatId); r.phase = 'queued';
       if (m.chatId === activeKey()) setQueued(true);
@@ -583,6 +737,7 @@ export default function App() {
     }
     if (m.type === 'start') {
       voiceEmit({ type: 'start', chatId: m.chatId });
+      if (m.chatId === activeKey() && pendingDone.current) { nextTurnPending.current = false; finalize(); }
       const r = recFor(m.chatId);
       r.content = ''; r.reasoning = ''; r.phase = 'generating'; r.done = false; r.error = false; r.assistantId = m.messageId; r.live = null; r.steers = []; r.status = null;
       if (m.chatId === activeKey()) {
@@ -591,13 +746,21 @@ export default function App() {
         setCompacting(false); setLiveFile(null); setLiveCall(null); liveRef.current = null;
         targetContent.current = ''; targetReason.current = ''; pendingDone.current = false;
         assistantIdRef.current = m.messageId; dispLen.current = 0;
-        setDispContent(''); setDispReason(''); setPhase('generating'); setStreaming(true); setQueued(false);
+        streamModelRef.current = r.model_id || currentIdRef.current;
+        setDispContent(''); setDispReason(''); setDispSegs(null); setPhase('generating'); setStreaming(true); setQueued(false);
         startStream();
       }
       return;
     }
     if (m.type === 'reasoning') {
-      const r = recFor(m.chatId); r.reasoning += m.text;
+      const r = recFor(m.chatId);
+      if (m.seg != null) {
+        if (!r.reasonSegs) r.reasonSegs = [];
+        r.reasonSegs[m.seg] = (r.reasonSegs[m.seg] || '') + m.text;
+        if (m.chatId === activeKey()) setDispSegs(r.reasonSegs.slice());
+        return;
+      }
+      r.reasoning += m.text;
       if (!r.content) r.phase = 'thinking';
       if (m.chatId === activeKey()) {
         targetReason.current = r.reasoning;
@@ -612,7 +775,7 @@ export default function App() {
       if (m.chatId === activeKey()) {
         targetContent.current = r.content;
         setPhase('generating');
-        if (m.text.indexOf('[[OQR:') !== -1) { dispLen.current = r.content.length; setDispContent(r.content); setLiveCall(null); }
+        if (m.text.indexOf('[[OQR:') !== -1 || m.text.indexOf('[[OQT:') !== -1) { dispLen.current = r.content.length; setDispContent(r.content); setLiveCall(null); }
         else if (!animateRef.current) { setDispContent(r.content); dispLen.current = r.content.length; }
       }
       return;
@@ -625,45 +788,35 @@ export default function App() {
         if (hadContent) { pendingDone.current = true; finalize(); }
         else {
           stopLoops();
-          gen.current.delete(m.chatId);
+          dropRec(m.chatId);
           targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
-          setDispContent(''); setDispReason('');
+          setDispContent(''); setDispReason(''); setDispSegs(null);
           setLiveFile(null); setLiveCall(null); liveRef.current = null;
           setQueued(false); setStreaming(false); setPhase('static');
         }
       } else if (hadContent) {
         finalizeBackground(m.chatId);
       } else {
-        gen.current.delete(m.chatId);
+        dropRec(m.chatId);
       }
-      setChatErrors(prev => ({ ...prev, [m.chatId]: String(m.error || 'The model returned an error.') }));
+      setChatErrors(prev => ({ ...prev, [m.chatId]: String(m.error || t('The model returned an error.')) }));
       return;
     }
     if (m.type === 'done') {
       voiceEmit({ type: 'done', chatId: m.chatId });
       const r = recFor(m.chatId); r.done = true;
-      if (m.chatId === activeKey()) { pendingDone.current = true; if (!animateRef.current) finalize(); }
-      else finalizeBackground(m.chatId);
+      syncBusy();
       loadBudget();
-      if (m.chatId === activeKey()) {
-        if (ledgerOpenRef.current) loadLedger();
-        setCanContinue(!!m.truncated);
-        const cmp = compareRef.current;
-        if (cmp && cmp.chatId === m.chatId) {
-          if (!cmp.messageId && m.messageId) cmp.messageId = m.messageId;
-          const nextId = cmp.remaining.shift();
-          if (nextId && cmp.messageId) {
-            (() => { const g = genOptsRef.current; setTimeout(() => wsSend({ type: 'regenerate', chatId: cmp.chatId, modelId: nextId, extended: g.extended, reasoningEffort: g.reasoningEffort, kwargValues: g.kwargValues, messageId: cmp.messageId, sandbox: g.sandbox, webSearch: g.webSearch, styleId: g.styleId }), 150); })();
-          } else {
-            compareRef.current = null;
-            toast('Model comparison ready, use the version arrows or compare button on the response.', { duration: 6000 });
-            (() => { const q2 = queuedListRef.current[0]; if (q2) { setQueue(l => l.slice(1)); setTimeout(() => sendRef.current(q2.attachments || [], q2.text, { fromQueue: true }), 150); } })();
-          }
-        } else {
-          const q = queuedListRef.current[0];
-          if (q) { setQueue(l => l.slice(1)); setTimeout(() => sendRef.current(q.attachments || [], q.text, { fromQueue: true }), 120); }
-        }
-      }
+      if (m.chatId !== activeKey()) { finalizeBackground(m.chatId); return; }
+      setPendingFiles(p => (Object.keys(p).length ? {} : p));
+      if (ledgerOpenRef.current) loadLedger();
+      setCanContinue(!!m.truncated);
+      const cmp = compareRef.current;
+      if (cmp && cmp.chatId === m.chatId && !cmp.messageId && m.messageId) cmp.messageId = m.messageId;
+      nextTurnPending.current = true;
+      pendingDone.current = true;
+      const revealed = dispLen.current >= targetContent.current.length;
+      if (!animateRef.current || revealed) finalize();
       return;
     }
   }
@@ -682,7 +835,7 @@ export default function App() {
     revealTimer.current = setInterval(() => {
       const target = targetContent.current;
       if (dispLen.current >= target.length) { if (pendingDone.current) finalize(); return; }
-      const instant = document.documentElement.getAttribute('data-preset') === 'openai' || !animateRef.current || revealRef.current <= 0;
+      const instant = !animateRef.current || revealRef.current <= 0;
       setDispContent(prev => {
         const remaining = target.length - prev.length;
         const n = instant ? remaining
@@ -718,24 +871,43 @@ export default function App() {
     const r = gen.current.get(key);
     if (!r && !streaming) return;
     stopLoops();
-    const content = r ? r.content : targetContent.current;
-    const reasoning = r ? r.reasoning : targetReason.current;
-    const id = (r && r.assistantId) || assistantIdRef.current || ('a' + Date.now());
-    const mid = r ? r.model_id : currentIdRef.current;
-    gen.current.delete(key);
+    const content = targetContent.current;
+    const reasoning = targetReason.current;
+    const id = assistantIdRef.current || (r && r.assistantId) || ('a' + Date.now());
+    const mid = streamModelRef.current || (r ? r.model_id : currentIdRef.current);
+    if (r && r.done) dropRec(key);
     setStreaming(false); setPhase('static'); setQueued(false);
-    setMessages(ms => ms.some(m => m.id === id) ? ms : [...ms, { id, role: 'assistant', content, reasoning, model_id: mid }]);
-    setDispContent(''); setDispReason('');
+    if (content || reasoning) setMessages(ms => ms.some(m => m.id === id) ? ms : [...ms, { id, role: 'assistant', content, reasoning, model_id: mid }]);
+    setDispContent(''); setDispReason(''); setDispSegs(null);
     setLiveFile(null); setLiveCall(null); liveRef.current = null;
     targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
     if (stick.current && !selectingRef.current && !hasSelectionRef.current) setTimeout(() => scrollBottom(false), 0);
-    if (key === 'incognito') return;
-    loadChats();
-    if (key) refreshMessages(key);
+    if (key !== 'incognito') { loadChats(); if (key) refreshMessages(key); }
+    startNextTurn();
+  }
+
+  function startNextTurn() {
+    if (!nextTurnPending.current) return;
+    nextTurnPending.current = false;
+    const cmp = compareRef.current;
+    if (cmp && cmp.chatId === activeIdRef.current) {
+      const nextId = cmp.remaining.shift();
+      if (nextId && cmp.messageId) {
+        const g = genOptsRef.current;
+        setTimeout(() => wsSend({ type: 'regenerate', chatId: cmp.chatId, modelId: nextId, extended: g.extended, reasoningEffort: g.reasoningEffort, kwargValues: g.kwargValues, messageId: cmp.messageId, sandbox: g.sandbox, webSearch: g.webSearch, styleId: g.styleId }), 150);
+        return;
+      }
+      compareRef.current = null;
+      toast(t('Model comparison ready, use the version arrows or compare button on the response.'), { duration: 6000 });
+    }
+    const q = queuedListRef.current[0];
+    if (!q) return;
+    setQueue(l => l.slice(1));
+    setTimeout(() => sendRef.current(q.attachments || [], q.text, { fromQueue: true }), 120);
   }
 
   function finalizeBackground(key) {
-    gen.current.delete(key);
+    dropRec(key);
     if (key !== 'incognito') loadChats();
   }
 
@@ -747,22 +919,25 @@ export default function App() {
       refreshSeq.current++;
       targetContent.current = r.content; targetReason.current = r.reasoning;
       assistantIdRef.current = r.assistantId; pendingDone.current = false;
+      streamModelRef.current = r.model_id || currentIdRef.current;
       dispLen.current = r.content.length;
-      setDispContent(r.content); setDispReason(r.reasoning);
+      setDispContent(r.content); setDispReason(r.reasoning); setDispSegs(r.reasonSegs ? r.reasonSegs.slice() : null);
       const live = r.live;
       if (live && live.path && (live.tool === 'create_file' || live.tool === 'str_replace')) {
         const lf = { path: live.path, content: live.content || '', tool: live.tool, oldStr: live.oldStr ?? null };
         liveRef.current = lf; setLiveFile(lf);
       } else { liveRef.current = null; setLiveFile(null); }
       setLiveCall(live && live.tool ? { ...live } : null);
+      setLiveSteers(Array.isArray(r.steers) ? r.steers : []);
+      setModelStatus(r.status || null);
       setPhase(r.phase === 'thinking' ? 'thinking' : 'generating');
       setStreaming(true); setQueued(r.phase === 'queued');
       startStream();
     } else {
-      if (r && r.done) gen.current.delete(key);
+      if (r && r.done) dropRec(key);
       targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
       setStreaming(false); setQueued(false); setPhase('static');
-      setDispContent(''); setDispReason('');
+      setDispContent(''); setDispReason(''); setDispSegs(null);
       setLiveCall(null);
     }
   }
@@ -811,19 +986,22 @@ export default function App() {
       toast(isPinned ? t('File unpinned from chat') : t('File pinned, kept in context'), { icon: 'pin' });
     } catch {}
   }, [activeId, chatPins]);
-  function jumpToMessage(id) {
+  function jumpToMessage(id, opts) {
     setChatMenuOpen(false);
+    stick.current = false;
     requestAnimationFrame(() => {
       const el = document.querySelector('[data-mid="' + id + '"]');
       if (!el) return;
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.scrollIntoView({ behavior: opts?.instant ? 'auto' : 'smooth', block: 'center' });
+      if (opts?.flash === false) return;
       el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
       setTimeout(() => el.classList.remove('flash'), 1600);
     });
   }
+  const railJump = useCallback((id) => { setKbFocus(id); jumpToMessage(id, { flash: false }); }, []);
   async function copyConversation() {
     const text = messages.filter(m => m.role === 'user' || m.role === 'assistant')
-      .map(m => (m.role === 'user' ? 'You' : 'Assistant') + ':\n' + (typeof m.content === 'string' ? m.content : '')).join('\n\n');
+      .map(m => (m.role === 'user' ? 'You' : t('Assistant')) + ':\n' + (typeof m.content === 'string' ? m.content : '')).join('\n\n');
     try { await navigator.clipboard.writeText(text); toast(t('Conversation copied'), { icon: 'copy' }); } catch {}
   }
   async function saveSavedPrompts(list) {
@@ -859,6 +1037,18 @@ export default function App() {
     api.patch('/api/chats/' + activeId, { title: t }).catch(() => {});
   }
 
+  function stepFocus(delta) {
+    const list = messagesRef.current;
+    if (!list.length) return false;
+    const at = list.findIndex(m => m.id === kbFocusRef.current);
+    const next = at < 0 ? (delta > 0 ? 0 : list.length - 1) : Math.max(0, Math.min(list.length - 1, at + delta));
+    const target = list[next];
+    if (!target) return false;
+    setKbFocus(target.id);
+    jumpToMessage(target.id, { flash: false });
+    return true;
+  }
+
   function scrollBottom(smooth) {
     const el = scrollRef.current; if (!el) return;
     programmatic.current = true;
@@ -877,6 +1067,11 @@ export default function App() {
   function onWheel(e) { if (e.deltaY < -1) stick.current = false; }
   function onTouchMove() { const el = scrollRef.current; if (el && el.scrollHeight - el.scrollTop - el.clientHeight > 24) stick.current = false; }
   function jumpDown() { stick.current = true; setShowJump(false); scrollBottom(true); }
+  useEffect(() => {
+    const release = () => { stick.current = false; setShowJump(true); };
+    window.addEventListener('oq-release-scroll', release);
+    return () => window.removeEventListener('oq-release-scroll', release);
+  }, []);
 
   const openSeq = useRef(0);
   function applyChatMeta(chat) {
@@ -891,19 +1086,28 @@ export default function App() {
     setChatInstructions(chat.instructions || '');
     setChatPins(Array.isArray(chat.pinnedFiles) ? chat.pinnedFiles : []);
   }
-  function applyLastModel(msgs) {
-    const lastA = [...msgs].reverse().find(mm => mm.role === 'assistant' && mm.model_id);
-    if (lastA && models.find(mm => mm.id === lastA.model_id)) {
+  function resolveLastModel(lastA) {
+    if (modelsRef.current.find(mm => mm.id === lastA.model_id)) {
       setCurrentId(lastA.model_id);
       setExtended(!!lastA.extended);
       if (lastA.kwargValues && typeof lastA.kwargValues === 'object') setKwargValues(prev => ({ ...prev, ...lastA.kwargValues }));
       else if (lastA.reasoningEffort) setReasoningEffort(lastA.reasoningEffort);
       setChatRemovedModel(null);
-    } else if (lastA) {
-      setChatRemovedModel({ id: lastA.model_id, name: lastA.model_name || t('The original model') });
     } else {
-      setChatRemovedModel(null);
+      setChatRemovedModel({ id: lastA.model_id, name: lastA.model_name || t('The original model') });
     }
+  }
+  function applyLastModel(msgs) {
+    const lastA = [...msgs].reverse().find(mm => mm.role === 'assistant' && mm.model_id);
+    if (!lastA) { pendingModelCheck.current = null; setChatRemovedModel(null); return; }
+    if (!modelsLoadedRef.current) { pendingModelCheck.current = lastA; setChatRemovedModel(null); return; }
+    pendingModelCheck.current = null;
+    resolveLastModel(lastA);
+  }
+  function armSkeleton(on) {
+    clearTimeout(skelTimer.current);
+    if (!on) { setThreadLoading(false); return; }
+    skelTimer.current = setTimeout(() => setThreadLoading(true), SKELETON_DELAY);
   }
   async function openChat(id, push = true) {
     setMobileDrawer(false);
@@ -918,13 +1122,17 @@ export default function App() {
       applyChatMeta(cached.chat || {});
       applyLastModel(cached.messages || []);
       setFiles(cached.files || []);
-      setArtifactsOpen((cached.files || []).length > 0 && artifactsOpen);
+      setPendingFiles({});
+      setArtifactsOpen((cached.files || []).length > 0 && artifactsOpenRef.current);
     } else {
       setMessages([]);
       setFiles([]);
+      setPendingFiles({});
     }
+    armSkeleton(!cached);
     setCtlOpen(false);
     setCanContinue(false); setQueue([]);
+    flushDraft();
     setInput(loadDraft(id));
     setChatMenuOpen(false);
     if (push) history.pushState({}, '', '/chat/' + id);
@@ -933,6 +1141,7 @@ export default function App() {
     try {
       const { chat, messages } = await api.get('/api/chats/' + id);
       if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { chat, messages }); return; }
+      armSkeleton(false);
       refreshSeq.current++;
       setMessages(prev => (cached && prev.length === messages.length)
         ? messages.map((sm, i) => { const pm = prev[i]; return { ...sm, _k: (pm && pm.role === sm.role) ? (pm._k || pm.id) : sm.id }; })
@@ -940,28 +1149,30 @@ export default function App() {
       applyChatMeta(chat);
       applyLastModel(messages);
       cacheChat(id, { chat, messages });
-      if (!cached && user?.prefs?.chatStagger !== false && user?.prefs?.messageEntrance !== false) {
+      if (!cached && user?.prefs?.chatStagger !== false && !user?.prefs?.minimalAnims) {
         clearTimeout(staggerTimer.current);
         setThreadStagger(true);
         staggerTimer.current = setTimeout(() => setThreadStagger(false), 700);
       }
-      try { const f = await api.get('/api/chats/' + id + '/files'); if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { files: f.files || [] }); return; } setFiles(f.files || []); setArtifactsOpen((f.files || []).length > 0 && artifactsOpen); cacheChat(id, { files: f.files || [] }); }
+      try { const f = await api.get('/api/chats/' + id + '/files'); if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { files: f.files || [] }); return; } setFiles(f.files || []); setArtifactsOpen((f.files || []).length > 0 && artifactsOpenRef.current); cacheChat(id, { files: f.files || [] }); }
       catch { if (seq === openSeq.current && activeIdRef.current === id && !cached) setFiles([]); }
       if (!cached) { stick.current = true; setTimeout(() => scrollBottom(false), 30); }
-    } catch { if (seq === openSeq.current) { if (!cached) { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); } } }
+    } catch { if (seq === openSeq.current) { armSkeleton(false); if (!cached) { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); } } }
   }
   function newChat(fromPop) {
     setMobileDrawer(false);
     if (incognito) setIncognito(false);
     setShowProjects(false);
     setCurrentProject(null);
+    armSkeleton(false);
     setActiveId(null); setMessages([]); setInput('');
-    setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
+    setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
     setTelemetry(null); setLiveSteers([]); setLedger(null); setModelStatus(null);
     setChatEnded(false); setChatEndedReason('');
     setChatRemovedModel(null);
     setCanContinue(false); setQueue([]);
     setChatGenParams(null); setChatSysOverride('');
+    flushDraft();
     setInput(loadDraft(null));
     const restored = homeSelectionRef.current;
     const targetId = (restored && restored.modelId && models.find(m => m.id === restored.modelId)) ? restored.modelId : currentId;
@@ -980,13 +1191,16 @@ export default function App() {
     if (streaming || queued) return;
     if (incognito) {
       setIncognito(false);
-      setMessages([]); setInput('');
+      incognitoRef.current = false;
+      setMessages([]); setInput(loadDraft(null));
       setFocusTick(t => t + 1);
     } else {
+      flushDraft();
       setActiveId(null); setMessages([]); setInput('');
-      setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
+      incognitoRef.current = true;
+      setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
       setSandbox(false);
-      const gs = ['Greetings, whoever you are', 'No names, no traces', 'This one stays between us', 'Off the record'];
+      const gs = [tk('Greetings, whoever you are'), tk('No names, no traces'), tk('This one stays between us'), tk('Off the record')];
       setIncognitoGreeting(gs[Math.floor(Math.random() * gs.length)]);
       setIncognito(true);
       setFocusTick(t => t + 1);
@@ -1011,7 +1225,7 @@ export default function App() {
     const next = !cur?.archived;
     setChats(cs => cs.map(c => c.id === id ? { ...c, archived: next } : c));
     api.patch('/api/chats/' + id, { archived: next }).catch(() => {});
-    if (next && id === activeId) toast('Chat archived, find it under Chats → Archived.');
+    if (next && id === activeId) toast(t('Chat archived, find it under Chats → Archived.'));
   }
 
   function toggleStar(id) {
@@ -1021,44 +1235,14 @@ export default function App() {
     api.patch('/api/chats/' + id, { starred: next }).catch(() => {});
   }
 
-  async function createFolder(name = t('New folder')) {
-    try {
-      const f = await api.post('/api/folders', { name });
-      setFolders(fs => [...fs, { id: f.id, name: f.name, collapsed: false, sortOrder: f.sortOrder }]);
-      return f.id;
-    } catch { return null; }
-  }
-  function renameFolder(id, name) {
-    const prev = folders.find(f => f.id === id)?.name;
-    setFolders(fs => fs.map(f => f.id === id ? { ...f, name } : f));
-    api.patch('/api/folders/' + id, { name }).catch(() => {
-      setFolders(fs => fs.map(f => f.id === id ? { ...f, name: prev } : f));
-    });
-  }
-  function toggleFolder(id) {
-    const cur = folders.find(f => f.id === id);
-    const next = !cur?.collapsed;
-    setFolders(fs => fs.map(f => f.id === id ? { ...f, collapsed: next } : f));
-    api.patch('/api/folders/' + id, { collapsed: next }).catch(() => {
-      setFolders(fs => fs.map(f => f.id === id ? { ...f, collapsed: !next } : f));
-    });
-  }
-  async function deleteFolder(id) {
-    const prevFolders = folders;
-    const prevChats = chats;
-    setFolders(fs => fs.filter(f => f.id !== id));
-    setChats(cs => cs.map(c => c.folderId === id ? { ...c, folderId: null } : c));
-    try { await api.del('/api/folders/' + id); }
-    catch { setFolders(prevFolders); setChats(prevChats); }
-  }
-  function moveChatToFolder(chatId, folderId) {
-    const prev = chats.find(c => c.id === chatId)?.folderId ?? null;
-    const target = folderId || null;
+  function moveChatToProject(chatId, projectId) {
+    const prev = chats.find(c => c.id === chatId)?.projectId ?? null;
+    const target = projectId || null;
     if (prev === target) return;
-    setChats(cs => cs.map(c => c.id === chatId ? { ...c, folderId: target } : c));
-    api.patch('/api/chats/' + chatId, { folderId: target || '' }).catch(() => {
-      setChats(cs => cs.map(c => c.id === chatId ? { ...c, folderId: prev } : c));
-    });
+    setChats(cs => cs.map(c => c.id === chatId ? { ...c, projectId: target } : c));
+    api.patch('/api/chats/' + chatId, { projectId: target || '' })
+      .then(() => loadProjects())
+      .catch(() => setChats(cs => cs.map(c => c.id === chatId ? { ...c, projectId: prev } : c)));
   }
 
   async function send(attachments = [], overrideText, opts = {}) {
@@ -1096,7 +1280,7 @@ export default function App() {
         .map(m => ({ role: m.role, content: m.content })),
         { role: 'user', content: text }];
       if (!wsSend({ type: 'incognito', modelId: currentId, extended, reasoningEffort, kwargValues, messages: history })) return;
-      gen.current.set('incognito', { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
+      queueRec('incognito', currentId);
       setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments: [], _enter: true }]);
       setInput('');
       stick.current = true; setTimeout(() => scrollBottom(true), 20);
@@ -1107,7 +1291,7 @@ export default function App() {
     if (!chatId) {
       const c = await api.post('/api/chats');
       chatId = c.id; setActiveId(chatId);
-      setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false, folderId: null }, ...cs]);
+      setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false }, ...cs]);
       history.pushState({}, '', '/chat/' + chatId);
       if ((chatGenParams && Object.keys(chatGenParams).length) || (chatSysOverride && chatSysOverride.trim())) {
         try { await api.patch('/api/chats/' + chatId, { genParams: chatGenParams || {}, systemOverride: chatSysOverride || '' }); } catch {}
@@ -1116,7 +1300,7 @@ export default function App() {
     if (compareRef.current && !compareRef.current.chatId) compareRef.current.chatId = chatId;
     clearDraft(activeId);
     if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, reasoningEffort, kwargValues, content: text, attachments, sandbox, webSearch, call: !!opts.call, styleId })) return;
-    gen.current.set(chatId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
+    queueRec(chatId, currentId);
     setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     if (!opts.call) setInput('');
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
@@ -1127,14 +1311,14 @@ export default function App() {
     const text = (rawText || '').trim();
     if (!text && attachments.length === 0) return;
     const c = await api.post('/api/chats', { projectId: project.id });
-    setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false, folderId: null, projectId: project.id }, ...cs]);
+    setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false, projectId: project.id }, ...cs]);
     setShowProjects(false); setProjectOpenId(null);
     setCurrentProject(project);
     setActiveId(c.id); setMessages([]); setInput('');
-    setFiles([]); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
+    setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
     history.pushState({}, '', '/chat/' + c.id);
     if (!wsSend({ type: 'chat', chatId: c.id, modelId: currentId, extended, reasoningEffort, kwargValues, content: text, attachments, sandbox, webSearch, styleId })) return;
-    gen.current.set(c.id, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
+    queueRec(c.id, currentId);
     setMessages([{ id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
   }
@@ -1162,10 +1346,15 @@ export default function App() {
     if (streaming || !activeId || !currentId) return;
     dismissError();
     if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, reasoningEffort, kwargValues, messageId, sandbox, webSearch, styleId })) return;
-    gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
+    queueRec(activeId, currentId);
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
   }, [streaming, activeId, currentId, extended, reasoningEffort, kwargValues, sandbox, webSearch]);
+
+  useEffect(() => {
+    msgActions.current.regenerate = regenerate;
+    msgActions.current.fork = forkChat;
+  }, [regenerate, forkChat]);
 
   const regenerateWith = useCallback((messageId, modelId) => {
     if (streaming || !activeId || !modelId) return;
@@ -1173,7 +1362,7 @@ export default function App() {
     setChatRemovedModel(null);
     setCurrentId(modelId);
     if (!wsSend({ type: 'regenerate', chatId: activeId, modelId, extended, reasoningEffort, kwargValues, messageId, sandbox, webSearch, styleId })) return;
-    gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: modelId, live: null });
+    queueRec(activeId, modelId);
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
     const mm = models.find(m => m.id === modelId);
@@ -1185,10 +1374,15 @@ export default function App() {
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); if (idx === -1) return ms; const copy = ms.slice(0, idx + 1); copy[idx] = { ...copy[idx], content: newContent }; return copy; });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
     if (!wsSend({ type: 'edit', chatId: activeId, modelId: currentId, extended, reasoningEffort, kwargValues, messageId, content: newContent, sandbox, webSearch, styleId })) return;
-    gen.current.set(activeId, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: currentId, live: null });
+    queueRec(activeId, currentId);
   }, [streaming, activeId, currentId, extended, reasoningEffort, kwargValues, sandbox, webSearch]);
 
   function stop() { const key = activeKey(); try { ws.current?.readyState === 1 && ws.current.send(JSON.stringify({ type: 'stop', chatId: key })); } catch {} pendingDone.current = true; setQueued(false); }
+  const stopChat = useCallback((chatId) => {
+    if (!chatId) return;
+    if (chatId === activeKey()) { stop(); return; }
+    wsSend({ type: 'stop', chatId });
+  }, []);
   async function logout() { await api.post('/api/auth/logout'); location.href = '/'; }
   function updatePref(key, value) {
     const prefs = { ...(user?.prefs || {}), [key]: value };
@@ -1197,10 +1391,11 @@ export default function App() {
   }
 
   if (user === undefined) return <div style={{ height: '100%', background: 'var(--bg)' }} />;
-  if (!user) return <Login onLogin={(u) => { setUser(u); setIntro(true); }} />;
+  if (!user) return <Login cfg={authCtx} onLogin={(u) => { setUser(u); setIntro(true); }} />;
 
   const model = modelById.get(currentId);
   const activeChat = activeId ? chats.find(c => c.id === activeId) : null;
+  const activeProject = activeChat?.projectId ? projects.find(p => p.id === activeChat.projectId) : null;
   const sandboxAllowed = incognito ? false : (model ? model.sandboxAllowed !== false : true);
   const sandboxOn = sandboxAllowed && sandbox;
   const webSearchAvailable = !incognito && !!cfg.webSearchAvailable && (model ? model.webSearchAllowed !== false : true);
@@ -1211,12 +1406,20 @@ export default function App() {
   const activeBg = computeActiveBg(models, currentId, activeId, messages.length, incognito, user?.prefs);
   sendRef.current = send;
   genOptsRef.current = { extended, reasoningEffort, kwargValues, sandbox, webSearch, styleId };
+  const ctxGaugeEl = (showCtxGauge && activeId && !incognito)
+    ? <CtxGauge chatId={activeId} modelId={currentId} streaming={streaming || queued}
+        revision={messages.length + ':' + (messages[messages.length - 1]?.id || '')} />
+    : null;
+
   const composerProps = {
+    placeholder: activeId && !incognito ? t('Write a message...') : undefined,
+    projects,
+    onSetProject: activeId ? (p) => moveChatToProject(activeId, p.id) : null,
     value: input, onChange: (v) => { if (safetyFlagged) { setSafetyFlagged(false); setSafetyReason(''); } setInput(v); saveDraft(activeId, v); }, onSend: send, onStop: stop, streaming: streaming || queued,
     queueCount: queuedList.length,
     onQueue: (t, atts) => setQueue(l => [...l, { id: 'q' + Date.now() + Math.random().toString(36).slice(2, 7), text: t, attachments: atts || [] }]),
     onSteer: steer, canSteer: streaming && !!activeId && !incognito && user?.prefs?.steering === true,
-    canContinue, onContinue: () => { setCanContinue(false); send([], 'Continue exactly where your previous reply stopped, without repeating any content.'); },
+    canContinue, onContinue: () => { setCanContinue(false); send([], t('Continue exactly where your previous reply stopped, without repeating any content.')); },
     compareIds, onSetCompare: setCompareIds,
     safetyFlagged, safetyChecking, safetyReason, safetyVerbose: !!cfg.safetyCheckVerbose,
     styles: user?.styles || [], styleId, onSelectStyle: setStyleId, onSaveStyles: saveStyles,
@@ -1234,22 +1437,90 @@ export default function App() {
     savedPrompts: user?.savedPrompts || [], onUsePrompt: (t) => { setInput(t); setFocusTick(x => x + 1); }, onSavePrompt: savePromptFromInput, onDeletePrompt: deleteSavedPrompt,
     onNewChat: () => newChat(), onShortcuts: () => setShowShortcuts(true),
     voiceMic: !!cfg.voiceMic, voiceCall: !!cfg.voiceCall && !incognito, sttEngine: cfg.voiceStt || 'browser',
-    onStartCall: () => { setArtifactsOpen(false); setCallOpen(true); }
+    onStartCall: () => { setArtifactsOpen(false); setCallOpen(true); },
+    ctxGauge: cfg.uiPreset === 'openai' ? null : ctxGaugeEl
   };
   const showArtifactsBtn = sandboxOn || files.length > 0;
 
+  function focusedMsg() {
+    const list = messagesRef.current;
+    if (!list.length || !kbFocusRef.current) return null;
+    return list.find(m => m.id === kbFocusRef.current) || null;
+  }
+  function stepChat(delta) {
+    if (!chats.length) return false;
+    const at = chats.findIndex(c => c.id === activeId);
+    const next = at < 0 ? (delta > 0 ? 0 : chats.length - 1) : at + delta;
+    if (next < 0 || next >= chats.length) return false;
+    openChat(chats[next].id);
+    return true;
+  }
+  kbHandlers.current = {
+    toggleSidebar: () => setCollapsed(c => !c),
+    commandPalette: () => setCmdkOpen(o => !o),
+    searchChats: () => setShowSearch(true),
+    newChat: () => newChat(),
+    shortcuts: () => setShowShortcuts(x => !x),
+    openSettings: () => { setSettingsTab('general'); setShowSettings(true); },
+    toggleIncognito: () => { toggleIncognito(); },
+    toggleTheme: () => {
+      const applied = document.documentElement.getAttribute('data-theme');
+      updatePref('theme', applied === 'light' ? 'dark' : 'light');
+    },
+    focusComposer: () => { setFocusTick(x => x + 1); },
+    attachFiles: () => { window.dispatchEvent(new CustomEvent('oq-attach-files')); },
+    toggleWebSearch: () => { if (!webSearchAvailable) return false; setWebSearch(v => !v); },
+    toggleSandbox: () => { if (!sandboxAllowed) return false; setSandbox(v => !v); },
+    stopGeneration: () => { if (!streaming && !queued) return false; stop(); },
+    scrollBottom: () => { scrollBottom(true); stick.current = true; },
+    toggleLedger: () => setLedgerOpen(o => !o),
+    promptLedger: () => { if (!activeIdRef.current) return false; setLedgerPrompt(true); },
+    toggleArtifacts: () => { if (!showArtifactsBtn) return false; setCallOpen(false); setArtifactsOpen(o => !o); },
+    nextChat: () => stepChat(1),
+    prevChat: () => stepChat(-1),
+    findInChat: () => { if (!messagesRef.current.length) return false; setFindOpen(true); },
+    branchMap: () => { if (!activeIdRef.current || !messagesRef.current.length) return false; setTreeOpen(true); },
+    msgNext: () => stepFocus(1),
+    msgPrev: () => stepFocus(-1),
+    clearFocus: () => { if (!kbFocusRef.current) return false; setKbFocus(null); },
+    msgCopy: () => {
+      const m = focusedMsg();
+      if (!m) return false;
+      const clean = (m.content || '').replace(/\[\[OQ(?:R:[A-Za-z0-9+/=]+|T:\d+)\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
+      copyText(clean).then(ok => ok && toast(t('Message copied')));
+    },
+    msgEdit: () => {
+      const m = focusedMsg();
+      if (!m || m.role !== 'user' || streamingRef.current) return false;
+      window.dispatchEvent(new CustomEvent('oq-msg-edit', { detail: { id: m.id } }));
+    },
+    msgRetry: () => {
+      const m = focusedMsg();
+      if (!m || m.role !== 'assistant' || streamingRef.current) return false;
+      msgActions.current.regenerate?.(m.id);
+    },
+    msgFork: () => {
+      const m = focusedMsg();
+      if (!m || streamingRef.current || !activeIdRef.current) return false;
+      msgActions.current.fork?.(m.id);
+    },
+  };
+
+  const kb = resolveKeybinds(user?.prefs);
   const commands = [
-    { id: 'new', label: t('New chat'), shortcut: 'Ctrl Shift O', keywords: 'create start', action: () => newChat() },
-    { id: 'sidebar', label: collapsed ? t('Show sidebar') : t('Hide sidebar'), shortcut: 'Ctrl Shift S', keywords: 'toggle collapse panel', action: () => setCollapsed(c => !c) },
-    { id: 'ledger', label: ledgerOpen ? t('Hide context ledger') : t('Show context ledger'), keywords: 'context tokens ledger budget window', action: () => setLedgerOpen(o => !o) },
+    { id: 'new', label: t('New chat'), shortcut: comboLabel(kb.newChat), keywords: 'create start', action: () => newChat() },
+    { id: 'sidebar', label: collapsed ? t('Show sidebar') : t('Hide sidebar'), shortcut: comboLabel(kb.toggleSidebar), keywords: 'toggle collapse panel', action: () => setCollapsed(c => !c) },
+    { id: 'ledger', label: ledgerOpen ? t('Hide context ledger') : t('Show context ledger'), shortcut: comboLabel(kb.toggleLedger), keywords: 'context tokens ledger budget window', action: () => setLedgerOpen(o => !o) },
     { id: 'chats', label: t('Browse all chats'), keywords: 'overview history search', action: () => setChatsOverview(true) },
-    { id: 'search', label: t('Search chats'), shortcut: 'Ctrl Shift F', keywords: 'find message text', action: () => setShowSearch(true) },
-    { id: 'shortcuts', label: t('Keyboard shortcuts'), shortcut: '?', keywords: 'keys help hotkeys', action: () => setShowShortcuts(true) },
+    { id: 'search', label: t('Search chats'), shortcut: comboLabel(kb.searchChats), keywords: 'find message text', action: () => setShowSearch(true) },
+    { id: 'shortcuts', label: t('Keyboard shortcuts'), shortcut: comboLabel(kb.shortcuts), keywords: 'keys help hotkeys', action: () => setShowShortcuts(true) },
     { id: 'spaces', label: t('Open Spaces'), keywords: 'group chat invite users', action: () => { history.pushState({}, '', '/spaces'); setShowSpaces(true); } },
     { id: 'projects', label: t('Open Projects'), keywords: 'project workspace organize', action: () => openProjects(null) },
-    { id: 'incognito', label: incognito ? t('Exit incognito') : t('Start incognito chat'), keywords: 'private ghost', action: () => toggleIncognito() },
+    { id: 'incognito', label: incognito ? t('Exit incognito') : t('Start incognito chat'), shortcut: comboLabel(kb.toggleIncognito), keywords: 'private ghost', action: () => toggleIncognito() },
     { id: 'modeldocs', label: t('Model docs'), keywords: 'models compare docs catalog capabilities', action: () => setShowDocs(true) },
-    { id: 'settings', label: t('Open settings'), keywords: 'preferences account theme', action: () => setShowSettings(true) },
+    { id: 'settings', label: t('Open settings'), shortcut: comboLabel(kb.openSettings), keywords: 'preferences account theme', action: () => { setSettingsTab('general'); setShowSettings(true); } },
+    { id: 'promptledger', label: t('What gets sent'), keywords: 'prompt inspect context debug tokens', action: () => { if (activeId) setLedgerPrompt(true); } },
+    { id: 'keybinds', label: t('Customize shortcuts'), keywords: 'keybinds hotkeys keys remap', action: () => { setSettingsTab('keybinds'); setShowSettings(true); } },
     ...(user?.isAdmin ? [{ id: 'admin', label: t('Open admin panel'), keywords: 'models users connection providers', action: () => { history.pushState({}, '', '/admin'); setShowAdmin(true); } }] : []),
     ...(user?.isAdmin ? [{ id: 'playground', label: t('Open playground'), keywords: 'test model tune sampling kwargs prompt', action: () => { history.pushState({}, '', '/playground'); setShowPlayground(true); } }] : []),
     { id: 'changelog', label: t('View changelog'), keywords: 'updates version', action: () => setShowChangelog(true) },
@@ -1258,14 +1529,22 @@ export default function App() {
     { id: 'logout', label: t('Log out'), keywords: 'sign out exit', action: () => logout() }
   ];
 
-  sidebarFns.current = { createFolder, renameFolder, toggleFolder, deleteFolder, moveChatToFolder, newChat, openChat, deleteChat, toggleStar, logout, openProjects };
+  const modelPicker = (
+    <div className="topbar-model tbm-flex">
+      <ModelDropdown models={models} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} kwargValues={kwargValues} onSetKwarg={setKwarg} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
+      <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={() => setShowDocs(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>
+      {ctxGaugeEl}
+    </div>
+  );
+
+  sidebarFns.current = { newChat, openChat, deleteChat, toggleStar, logout, openProjects, moveChatToProject };
 
   return (
     <div className={'app' + (incognito ? ' app-incognito' : '') + (intro ? ' intro' : '') + (bgVisible ? ' has-bg' : '') + (collapsed ? ' sb-collapsed' : '')}>
+      <a className="skip-link" href="#oq-composer">{t('Skip to message input')}</a>
       <AppBackground bg={activeBg} />
       {intro && <div className="intro-curtain" />}
       <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName} onSearch={onSearchCb}
-        folders={folders} onCreateFolder={sbCreateFolder} onRenameFolder={sbRenameFolder} onToggleFolder={sbToggleFolder} onDeleteFolder={sbDeleteFolder} onMoveChat={sbMoveChat}
         onNew={sbNewChat} onOpen={sbOpenChat} onDelete={sbDeleteChat} onToggleStar={sbToggleStar}
         collapsed={collapsed} onToggle={onToggleSidebarCb}
         mobileOpen={mobileDrawer} onMobileClose={onMobileCloseCb}
@@ -1273,7 +1552,8 @@ export default function App() {
         onCredits={onCreditsCb} onChangelog={onChangelogCb} onLicense={onLicenseCb} onLogout={sbLogout} version={cfg.version}
         onChatsOverview={onChatsOverviewCb}
         onSpaces={onSpacesCb} spacesPending={spacesPending}
-        projects={projects} onProjects={sbProjects} onOpenProject={sbOpenProject} />
+        projects={projects} onProjects={sbProjects} onOpenProject={sbOpenProject} onMoveToProject={sbMoveToProject}
+        busyChats={busyChats} onStopChat={stopChat} />
 
       {mobileDrawer && <div className="drawer-backdrop" onClick={() => setMobileDrawer(false)} />}
 
@@ -1281,29 +1561,26 @@ export default function App() {
         <Toaster />
         {incognito && (
           <div className="incognito-bar">
-            <div className="incognito-title"><Ghost style={{ width: 18 }} /> Incognito chat</div>
+            <div className="incognito-title"><Ghost style={{ width: 18 }} /> {t("Incognito chat")}</div>
             <button className="incognito-close" onClick={toggleIncognito} title={t("Exit incognito")} disabled={streaming || queued}>✕</button>
           </div>
         )}
         {empty && (
-          <button className="mobile-menu-btn empty-menu" onClick={() => setMobileDrawer(true)} title="Menu"><Menu style={{ width: 20 }} /></button>
+          <button className="mobile-menu-btn empty-menu" onClick={() => setMobileDrawer(true)} title={t("Menu")}><Menu style={{ width: 20 }} /></button>
         )}
         {!incognito && empty && (
-          <button className={'incognito-fab' + (user?.isAdmin ? ' with-ctl' : '')} onClick={toggleIncognito} title="Incognito chat, not saved" disabled={streaming || queued}>
+          <button className={'incognito-fab' + (user?.isAdmin ? ' with-ctl' : '')} onClick={toggleIncognito} title={t("Incognito chat, not saved")} disabled={streaming || queued}>
             <Ghost style={{ width: 18 }} />
           </button>
         )}
         {empty && !incognito && user?.isAdmin && (
-          <button className={'incognito-fab ctl-fab' + (ctlOpen ? ' active' : '')} onClick={() => { setArtifactsOpen(false); setCtlOpen(o => !o); }} title="Chat controls (admin)" disabled={streaming || queued}>
+          <button className={'incognito-fab ctl-fab' + (ctlOpen ? ' active' : '')} onClick={() => { setArtifactsOpen(false); setCtlOpen(o => !o); }} title={t("Chat controls (admin)")} disabled={streaming || queued}>
             <Sliders style={{ width: 17 }} />
           </button>
         )}
         {empty && !incognito && cfg.uiPreset === 'openai' && (
           <div className="home-topbar">
-            <div className="topbar-model tbm-flex">
-              <ModelDropdown models={models} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} kwargValues={kwargValues} onSetKwarg={setKwarg} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
-              <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={() => setShowDocs(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>
-            </div>
+            {modelPicker}
           </div>
         )}
         {empty ? (
@@ -1328,7 +1605,7 @@ export default function App() {
             </div>
             <div className="qp-slot">
               {incognito ? (
-                <div className={cfg.uiPreset === 'openai' ? 'incog-note' : 'incognito-note'}>{cfg.uiPreset === 'openai' ? "This chat won't appear in history. Incognito chats aren't saved." : "Incognito chats aren't saved to your history."}</div>
+                <div className={cfg.uiPreset === 'openai' ? 'incog-note' : 'incognito-note'}>{cfg.uiPreset === 'openai' ? t("This chat won't appear in history. Incognito chats aren't saved.") : t("Incognito chats aren't saved to your history.")}</div>
               ) : cfg.quickPrompts && cfg.quickPrompts.length > 0 && (
                 <QuickPrompts prompts={cfg.quickPrompts} visible={!input.trim()} disabled={streaming} onPick={(p) => send([], p)} />
               )}
@@ -1337,13 +1614,8 @@ export default function App() {
         ) : (
           <>
             <div className="topbar">
-              {cfg.uiPreset === 'openai' && (
-                <div className="topbar-model tbm-flex">
-                  <ModelDropdown models={models} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} kwargValues={kwargValues} onSetKwarg={setKwarg} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
-              <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={() => setShowDocs(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>
-                </div>
-              )}
-              <button className="mobile-menu-btn" onClick={() => setMobileDrawer(true)} title="Menu"><Menu style={{ width: 20 }} /></button>
+              {cfg.uiPreset === 'openai' && modelPicker}
+              <button className="mobile-menu-btn" onClick={() => setMobileDrawer(true)} title={t("Menu")}><Menu style={{ width: 20 }} /></button>
               {renaming ? (
                 <input className="chat-rename" autoFocus value={renameVal}
                   onChange={(e) => setRenameVal(e.target.value)}
@@ -1351,13 +1623,21 @@ export default function App() {
                   onKeyDown={(e) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenaming(false); }} />
               ) : (
                 <div className="chat-name-wrap">
+                  {activeProject && (
+                    <>
+                      <button className="ct-crumb" onClick={() => { setProjectOpenId(activeProject.id); setShowProjects(true); history.pushState({}, '', '/project/' + activeProject.id); }}>
+                        {activeProject.name}
+                      </button>
+                      <span className="ct-sep">/</span>
+                    </>
+                  )}
                   <button className="chat-name" onClick={() => setChatMenuOpen(o => !o)}>
-                    <span className="ct-title">{activeChat?.title || 'New chat'}</span> <ChevDown style={{ width: 15 }} />
+                    <span className="ct-title">{activeChat?.title || t('New chat')}</span> <ChevDown style={{ width: 15 }} />
                   </button>
-                  {(chatInstructions || '').trim() && <span className="chat-instr-dot" title="This chat has custom instructions" />}
+                  {(chatInstructions || '').trim() && <span className="chat-instr-dot" title={t("This chat has custom instructions")} />}
                   {chatMenuOpen && activeId && (
                     <ChatMenu
-                      chat={{ id: activeId, title: activeChat?.title || 'New chat', instructions: chatInstructions, starred: !!activeChat?.starred, archived: !!activeChat?.archived }}
+                      chat={{ id: activeId, title: activeChat?.title || t('New chat'), instructions: chatInstructions, starred: !!activeChat?.starred, archived: !!activeChat?.archived }}
                       modelId={currentId}
                       pinned={messages.filter(m => m.pinned)}
                       pins={chatPins}
@@ -1376,42 +1656,55 @@ export default function App() {
               )}
               <div className="topbar-actions">
                 {!incognito && (
-                  <button className="paper-btn" onClick={toggleIncognito} title="Incognito chat, not saved" disabled={streaming || queued}>
+                  <button className="paper-btn" onClick={toggleIncognito} title={t("Incognito chat, not saved")} disabled={streaming || queued}>
                     <Ghost style={{ width: 18 }} />
                   </button>
                 )}
                 {hasSummary && (
-                  <button className="paper-btn" onClick={() => setSummaryOpen(true)} title="Conversation memory">
+                  <button className="paper-btn" onClick={() => setSummaryOpen(true)} title={t("Conversation memory")}>
                     <Compact style={{ width: 18 }} />
                   </button>
                 )}
                 {user?.isAdmin && activeId && (
-                  <button className={'paper-btn' + (ctlOpen ? ' active' : '')} onClick={() => { setArtifactsOpen(false); setCtlOpen(o => !o); }} title="Chat controls (admin)">
+                  <button className={'paper-btn' + (ctlOpen ? ' active' : '')} onClick={() => { setArtifactsOpen(false); setCtlOpen(o => !o); }} title={t("Chat controls (admin)")}>
                     <Sliders style={{ width: 17 }} />
                   </button>
                 )}
+                {messages.length > 0 && user?.prefs?.threadFind !== false && (
+                  <button className={'paper-btn' + (findOpen ? ' active' : '')} onClick={() => (findOpen ? closeFind() : setFindOpen(true))} title={t('Find in conversation')} aria-label={t('Find in conversation')} aria-pressed={findOpen}>
+                    <Search style={{ width: 17 }} />
+                  </button>
+                )}
+                {activeId && messages.length > 0 && user?.prefs?.branchMap !== false && (
+                  <button className={'paper-btn' + (treeOpen ? ' active' : '')} onClick={() => setTreeOpen(o => !o)} title={t('Branch map')} aria-label={t('Branch map')} aria-pressed={treeOpen}>
+                    <Fork style={{ width: 17 }} />
+                  </button>
+                )}
                 {activeId && (
-                  <button className={'paper-btn' + (ledgerOpen ? ' active' : '')} onClick={() => setLedgerOpen(o => !o)} title={t('Context ledger')}>
+                  <button className={'paper-btn' + (ledgerOpen ? ' active' : '')} onClick={() => setLedgerOpen(o => !o)} title={t('Context ledger')} aria-label={t('Context ledger')} aria-pressed={ledgerOpen}>
                     <Gauge style={{ width: 18 }} />
                   </button>
                 )}
                 {showArtifactsBtn && (
-                  <button className={'paper-btn' + (artifactsOpen ? ' active' : '') + (liveFile ? ' writing' : '')} onClick={() => { setCallOpen(false); setArtifactsOpen(o => !o); }} title="Artifacts">
+                  <button className={'paper-btn' + (artifactsOpen ? ' active' : '') + (liveFile ? ' writing' : '')} onClick={() => { setCallOpen(false); setArtifactsOpen(o => !o); }} title={t("Artifacts")}>
                     <Paper style={{ width: 18 }} />{files.length > 0 && <span className="paper-count">{files.length}</span>}
                   </button>
                 )}
                 {/* Share button, disabled for now, kept for later use
-                <button className="share-btn">Share</button>
+                <button className="share-btn">{t("Share")}</button>
                 */}
               </div>
             </div>
-            <div className="scroll-area" ref={scrollRef} onScroll={onScroll} onWheel={onWheel} onTouchMove={onTouchMove}>
-              <div className={'thread' + (threadStagger ? ' stagger' : '') + (ledgerOpen ? ' ledger-on' : '')}>
+            {findOpen && user?.prefs?.threadFind !== false && <ThreadFind scrollRef={scrollRef} revision={findRevision} onMatches={onFindMatches} onClose={closeFind} />}
+            <div className="scroll-area" id="oq-thread" ref={scrollRef} onScroll={onScroll} onWheel={onWheel} onTouchMove={onTouchMove}>
+              <div className={'thread' + (threadStagger ? ' stagger' : '') + (ledgerOpen ? ' ledger-on' : '') + (messages.length > 24 ? ' virt' : '') + (findOpen ? ' finding' : '')}
+                role="log" aria-label={t('Conversation')} aria-live="polite" aria-relevant="additions text" aria-busy={streaming ? 'true' : 'false'}>
                 {ledgerOpen && <LedgerBar ledger={ledger} />}
+                {threadLoading && messages.length === 0 && <ThreadSkeleton />}
                 {(() => {
                   const streamKey = assistantIdRef.current || '_stream';
                   const renderList = streaming
-                    ? [...messages.filter(m => m.id !== streamKey), { id: streamKey, _k: streamKey, role: 'assistant', content: dispContent, reasoning: dispReason, model_id: currentId, _streaming: true }]
+                    ? [...messages.filter(m => m.id !== streamKey), { id: streamKey, _k: streamKey, role: 'assistant', content: dispContent, reasoning: dispReason, reasoningSegs: dispSegs, model_id: streamModelRef.current || currentId, _streaming: true }]
                     : messages;
                   let lastA = null;
                   for (let i = renderList.length - 1; i >= 0; i--) if (renderList[i].role === 'assistant') { lastA = renderList[i]; break; }
@@ -1430,7 +1723,9 @@ export default function App() {
                       status={msg._streaming ? modelStatus : null}
                       streaming={!!msg._streaming} phase={msg._streaming ? ((modelById.get(currentId)?.hideThinking && phase === 'thinking') ? 'generating' : phase) : 'static'} liveCall={msg._streaming ? liveCall : null}
                       onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onDelete={streaming || queued ? null : deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
-                      showIcon={msg.role === 'assistant' && (cfg.uiPreset === 'openai' || (lastA && msg.id === lastA.id))} />
+                      showSpeed={showMsgSpeed}
+                      showIcon={msg.role === 'assistant' && (cfg.uiPreset === 'openai' || (lastA && msg.id === lastA.id))}
+                      preset={cfg.uiPreset === 'openai' ? 'openai' : 'anthropic'} />
                     );
                   });
                 })()}
@@ -1448,8 +1743,8 @@ export default function App() {
                     <div className="msg user ghost">
                       <div className="bubble-user"><div className="ghost-text">{q.text}</div></div>
                       <div className="ghost-row">
-                        <span className="ghost-note">Queued</span>
-                        <button className="ghost-remove" onClick={() => setQueue(l => l.filter(x => x.id !== q.id))}><X style={{ width: 12 }} /> Remove from queue</button>
+                        <span className="ghost-note">{t("Queued")}</span>
+                        <button className="ghost-remove" onClick={() => setQueue(l => l.filter(x => x.id !== q.id))}><X style={{ width: 12 }} /> {t("Remove from queue")}</button>
                       </div>
                     </div>
                     <div className="msg assistant ghost">
@@ -1458,15 +1753,16 @@ export default function App() {
                   </div>
                 ))}
                 {queued && !streaming && (
-                  <div className="msg assistant"><div className="queue-wait"><img src="/starburst.svg" className="pulse think-dot" alt="" /> Waiting for queue…</div></div>
+                  <div className="msg assistant"><div className="queue-wait"><img src="/starburst.svg" className="pulse think-dot" alt="" /> {t("Waiting for queue…")}</div></div>
                 )}
                 {compacting && <CompactingBar />}
                 <div className="thread-pad" />
               </div>
             </div>
-            {showJump && <button className="to-bottom" onClick={jumpDown}><Down style={{ width: 17 }} /></button>}
-            <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')} style={{ maxWidth: cfg.uiPreset === 'openai' ? 808 : 760, margin: '0 auto', width: '100%', padding: '0 20px' }}>
-              {user?.prefs?.engineStrip !== false && <EngineStrip telemetry={telemetry} streaming={streaming} />}
+            {user?.prefs?.threadRail !== false && <ThreadRail items={railList} scrollRef={scrollRef} matches={findMatches} onJump={railJump} />}
+            {showJump && <button className="to-bottom" onClick={jumpDown} title={t('Jump to latest')} aria-label={t('Jump to latest')}><Down style={{ width: 17 }} /></button>}
+            <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')} style={{ maxWidth: cfg.uiPreset === 'openai' ? undefined : 792, margin: '0 auto', width: '100%', padding: '0 20px' }}>
+              {user?.prefs?.engineStrip !== false && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
               <Composer {...composerProps} focusKey={focusTick} />
               <div className="disclaimer">{t(cfg.disclaimer)}</div>
             </div>
@@ -1475,7 +1771,7 @@ export default function App() {
       </div>
 
       {artifactsOpen && activeId && !callOpen && (
-        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} focus={artifactFocus} onClose={closeArtifacts} />
+        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} pending={pendingFiles} focus={artifactFocus} onClose={closeArtifacts} />
       )}
       {ctlOpen && user?.isAdmin && !incognito && (
         <ChatControls chatId={activeId || null} initialParams={chatGenParams} initialOverride={chatSysOverride} onChange={(p, o) => { setChatGenParams(p && Object.keys(p).length ? p : null); setChatSysOverride(o || ''); }} onClose={() => setCtlOpen(false)} />
@@ -1493,22 +1789,22 @@ export default function App() {
       )}
 
       {showDocs && <React.Suspense fallback={null}><ModelDocs models={models} currentId={currentId} onClose={() => setShowDocs(false)} onTry={(id) => { pickModel(id); setShowDocs(false); }} /></React.Suspense>}
-      {showSettings && <React.Suspense fallback={null}><SettingsModal user={user} cfg={cfg} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile} /></React.Suspense>}
+      {showSettings && <React.Suspense fallback={null}><SettingsModal user={user} cfg={cfg} initialTab={settingsTab} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile} /></React.Suspense>}
       {user?.isAdmin && cfg.uiPresetChosen === false && !presetPicked && (
         <div className="preset-scrim">
           <div className="preset-modal">
-            <h2 className="preset-title">Choose your interface</h2>
-            <p className="preset-sub">Pick the look for this workspace. You can change it any time in Admin → Branding.</p>
+            <h2 className="preset-title">{t("Choose your interface")}</h2>
+            <p className="preset-sub">{t("Pick the look for this workspace. You can change it any time in Admin → Branding.")}</p>
             <div className="preset-grid">
               <button className="preset-card" onClick={() => choosePreset('anthropic')}>
                 <span className="preset-swatch anthropic"><span className="ps-dot" /></span>
-                <span className="preset-name">Anthropic</span>
-                <span className="preset-desc">Warm serif look with the classic open-quill layout.</span>
+                <span className="preset-name">{t("Anthropic")}</span>
+                <span className="preset-desc">{t("Warm serif look with the classic open-quill layout.")}</span>
               </button>
               <button className="preset-card" onClick={() => choosePreset('openai')}>
                 <span className="preset-swatch openai"><span className="ps-dot" /></span>
-                <span className="preset-name">OpenAI</span>
-                <span className="preset-desc">Pitch-black ChatGPT layout with the model picker up top.</span>
+                <span className="preset-name">{t("OpenAI")}</span>
+                <span className="preset-desc">{t("Pitch-black ChatGPT layout with the model picker up top.")}</span>
               </button>
             </div>
           </div>
@@ -1517,18 +1813,35 @@ export default function App() {
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} onChatsChanged={() => loadChats()} />}
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} onOpen={(id) => openChat(id)} />}
       {personasOpen && <PersonasModal personas={user?.personas || []} models={models} currentId={currentId} onApply={applyPersona} onSave={savePersonas} onClose={() => setPersonasOpen(false)} />}
-      {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
+      {ledgerPrompt && activeId && (
+        <React.Suspense fallback={null}>
+          <PromptLedger chatId={activeId} modelId={currentId} onClose={() => setLedgerPrompt(false)} />
+        </React.Suspense>
+      )}
+      {chordHint && (
+        <div className="chord-hint" role="status">
+          <div className="chord-hint-head">{comboKeys(chordHint.head).map((k, i) => <kbd key={i}>{k}</kbd>)}<span>{t('then…')}</span></div>
+          <div className="chord-hint-list">
+            {chordHint.items.map(({ action, key }) => (
+              <div className="chord-hint-item" key={action.id}><kbd>{comboKeys(key).join('')}</kbd><span>{t(action.label)}</span></div>
+            ))}
+            {!chordHint.items.length && <div className="chord-hint-item muted">{t('No chords bound yet.')}</div>}
+          </div>
+        </div>
+      )}
+      {showShortcuts && <ShortcutsModal prefs={user?.prefs} onClose={() => setShowShortcuts(false)} onCustomize={() => { setShowShortcuts(false); setSettingsTab('keybinds'); setShowSettings(true); }} />}
+      {treeOpen && activeId && user?.prefs?.branchMap !== false && <React.Suspense fallback={null}><BranchTree chatId={activeId} onSelect={selectBranch} onJump={jumpToMessage} onClose={() => setTreeOpen(false)} onChanged={async () => { await refreshMessages(activeId); setTimeout(() => scrollBottom(false), 20); toast(t('Message copied into this branch')); }} /></React.Suspense>}
       <Lightbox />
-      {showAdmin && <React.Suspense fallback={null}><AdminPanel user={user} onClose={() => { setShowAdmin(false); if (/^\/admin(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
+      {showAdmin && <React.Suspense fallback={null}><AdminPanel user={user} modelId={currentId} onClose={() => { setShowAdmin(false); if (/^\/admin(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
       {showPlayground && <React.Suspense fallback={null}><Playground onClose={() => { setShowPlayground(false); if (/^\/playground(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
       {showSpaces && <SpacesPanel user={user} onClose={() => { setShowSpaces(false); refreshSpacesPending(); if (/^\/spaces(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} />}
       {showProjects && <ProjectsPanel openId={projectOpenId} composerProps={composerProps}
         onClose={() => { setShowProjects(false); setProjectOpenId(null); if (/^\/projects?(\/|$)/.test(location.pathname) || /^\/project\//.test(location.pathname)) history.pushState({}, '', '/'); }}
         onOpenChat={openProjectChat} onStartChat={startProjectChat}
         onOpenProject={(id) => { setProjectOpenId(id); history.replaceState({}, '', id ? '/project/' + id : '/projects'); loadProjects(); }} />}
-      {showCredits && <DocModal title="Credits" name="credits" serif onClose={() => setShowCredits(false)} />}
-      {showLicense && <DocModal title="Licensing" name="license" onClose={() => setShowLicense(false)} />}
-      {showChangelog && <DocModal title="Changelog" name="changelog" onClose={() => setShowChangelog(false)} />}
+      {showCredits && <DocModal title={t("Credits")} name="credits" serif onClose={() => setShowCredits(false)} />}
+      {showLicense && <DocModal title={t("Licensing")} name="license" onClose={() => setShowLicense(false)} />}
+      {showChangelog && <DocModal title={t("Changelog")} name="changelog" onClose={() => setShowChangelog(false)} />}
       {cmdkOpen && <CommandPalette commands={commands} onClose={() => setCmdkOpen(false)} />}
     </div>
   );

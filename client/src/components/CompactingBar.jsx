@@ -11,7 +11,7 @@ export default function CompactingBar() {
     <div className="compacting">
       <span className="compacting-spin" />
       <div className="compacting-body">
-        <div className="compacting-text">Compacting our conversation so we can keep chatting…</div>
+        <div className="compacting-text">{t("Compacting our conversation so we can keep chatting…")}</div>
         <div className="compacting-row">
           <div className="compacting-bar"><div className="compacting-fill" style={{ width: pct + '%' }} /></div>
           <span className="compacting-pct">{Math.round(pct)}%</span>

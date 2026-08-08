@@ -1,12 +1,13 @@
 export const KWARG_TARGETS = [
-  ['chat_template_kwargs', 'chat_template_kwargs'],
+  ['chat_template_kwargs', 'chat_template_kwargs (nested)'],
   ['body', 'Top level of the request'],
-  ['extra_body', 'extra_body']
+  ['extra_body', 'extra_body (nested)']
 ];
 export const KWARG_CONTROLS = [
   ['auto', 'Automatic'],
   ['toggle', 'On/off toggle'],
-  ['slider', 'Slider'],
+  ['slider', 'Steps'],
+  ['range', 'Number slider'],
   ['select', 'Dropdown']
 ];
 export const KWARG_TYPES = [
@@ -28,7 +29,38 @@ export const kwargValuesArr = (def) =>
 
 export const kwargValuesStr = (def) => kwargValuesArr(def).join(', ');
 
+export const isRange = (def) =>
+  !!def && def.min != null && def.max != null && def.min !== '' && def.max !== '' &&
+  Number.isFinite(Number(def.min)) && Number.isFinite(Number(def.max)) && Number(def.max) > Number(def.min);
+
+export const rangeStep = (def) => (Number(def?.step) > 0 ? Number(def.step) : 1);
+
+export function stepDecimals(step) {
+  const s = String(step);
+  const dot = s.indexOf('.');
+  return dot === -1 ? 0 : Math.min(6, s.length - dot - 1);
+}
+
+export function clampToRange(def, value) {
+  const min = Number(def.min), max = Number(def.max);
+  const step = rangeStep(def);
+  let n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  if (n <= min) return min;
+  if (n >= max) return max;
+  n = min + Math.round((n - min) / step) * step;
+  n = Math.min(max, Math.max(min, n));
+  const d = stepDecimals(step);
+  return d ? Number(n.toFixed(d)) : Math.round(n);
+}
+
+// "300" reads as a number; "low" does not. Used by the editor to decide whether a
+// range slider is even offered for what the admin has typed.
+export const allNumeric = (values) =>
+  values.length > 0 && values.every(v => v !== '' && Number.isFinite(Number(v)));
+
 export function controlOf(def) {
+  if (isRange(def)) return 'range';
   const values = kwargValuesArr(def);
   if (def?.control && def.control !== 'auto') return def.control;
   if (isBoolPair(values)) return 'toggle';
@@ -37,6 +69,10 @@ export function controlOf(def) {
 }
 
 export function defaultValueOf(def) {
+  if (isRange(def)) {
+    const d = clampToRange(def, def.default);
+    return String(d == null ? clampToRange(def, def.min) : d);
+  }
   const values = kwargValuesArr(def);
   if (values.includes(def?.default)) return def.default;
   if (isBoolPair(values)) return values.find(v => /^false$/i.test(v));
@@ -60,10 +96,14 @@ export function resolveKwargValues(defs, requested, isAdmin = false) {
   for (const d of list) {
     if (d.parentId) continue;
     const values = kwargValuesArr(d);
+    const range = isRange(d);
     let v = defaultValueOf(d);
     if (d.visible !== false && (isAdmin || !d.adminOnly)) {
       const asked = req[d.id];
-      if (asked != null && values.includes(String(asked))) v = String(asked);
+      if (asked != null) {
+        if (range) { const c = clampToRange(d, asked); if (c != null) v = String(c); }
+        else if (values.includes(String(asked))) v = String(asked);
+      }
     }
     out[d.id] = v === '' ? null : v;
   }
@@ -85,6 +125,23 @@ export function resolveKwargValues(defs, requested, isAdmin = false) {
   return out;
 }
 
+// A gate hides the control without taking its value away: unlike parentId, which
+// makes a kwarg fully derived, a gated kwarg keeps its own control and simply does
+// not appear while the gate is shut. Whether it is still sent is `sendWhenHidden`,
+// exactly as for an admin-hidden one.
+export function gateOpen(defs, values, def) {
+  if (!def || !def.showIf || !def.showIf.id) return true;
+  const src = (Array.isArray(defs) ? defs : []).find(d => d.id === def.showIf.id);
+  if (!src) return true;
+  const v = values ? values[def.showIf.id] : null;
+  if (v == null) return false;
+  return String(v) === String(def.showIf.value);
+}
+
+export function kwargVisible(defs, values, def) {
+  return def.visible !== false && gateOpen(defs, values, def);
+}
+
 export function coerceKwargValue(value, type) {
   const s = String(value);
   if (type === 'string') return s;
@@ -100,7 +157,7 @@ export function kwargPayload(defs, values) {
   for (const d of (Array.isArray(defs) ? defs : [])) {
     const v = values ? values[d.id] : null;
     if (v == null || v === '' || !d.name) continue;
-    if (!d.parentId && d.visible === false && d.sendWhenHidden === false) continue;
+    if (!d.parentId && !kwargVisible(defs, values, d) && d.sendWhenHidden === false) continue;
     const val = coerceKwargValue(v, d.type);
     const target = d.target || 'chat_template_kwargs';
     if (target === 'body') {
@@ -123,7 +180,8 @@ export function blankKwarg() {
     id: newKwargId(), name: '', label: '', description: '', chip: '',
     values: ['false', 'true'], default: 'false', control: 'auto',
     target: 'chat_template_kwargs', type: 'auto',
-    visible: true, adminOnly: false, sendWhenHidden: true, parentId: '', rules: []
+    visible: true, adminOnly: false, sendWhenHidden: true, parentId: '', showIf: null,
+    min: null, max: null, step: null, rules: []
   };
 }
 
@@ -151,6 +209,16 @@ export const KWARG_PRESETS = [
     })
   },
   {
+    key: 'thinking_budget_tokens', label: 'thinking_budget_tokens (number slider)',
+    note: 'A draggable slider between a minimum and a maximum you set.',
+    make: () => ({
+      ...blankKwarg(), name: 'thinking_budget_tokens', label: 'Thinking budget',
+      description: 'How many tokens the model may spend thinking',
+      values: [], default: '1024', min: 1024, max: 8192, step: 1024,
+      target: 'body', type: 'number'
+    })
+  },
+  {
     key: 'preserve_thinking', label: 'preserve_thinking (paired)',
     note: 'Hidden kwarg meant to follow a thinking toggle.',
     make: () => ({
@@ -164,6 +232,7 @@ export function kwargChip(def, value) {
   if (value == null || value === '') return '';
   const control = controlOf(def);
   if (control === 'toggle') return /^true$/i.test(String(value)) ? (def.chip || def.label || 'On') : '';
+  if (control === 'range') return def.chip ? def.chip + ' ' + value : String(value);
   if (def.chip) return def.chip;
   const s = String(value);
   return s.charAt(0).toUpperCase() + s.slice(1);

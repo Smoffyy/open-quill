@@ -36,6 +36,8 @@ export function applySunsets() {
 export function shapePublic(m) {
   return {
     id: m.id, displayName: m.display_name, description: m.description,
+    kind: m.kind === 'router' ? 'router' : 'model',
+    routerTargets: m.kind === 'router' ? [...new Set([...(Array.isArray(m.router_rules) ? m.router_rules : []).map(r => r.modelId), m.router_default].filter(Boolean))] : [],
     hasReasoning: !!m.has_reasoning, inMoreModels: !!m.in_more_models, moreModelsLabel: m.more_models_label,
     effortEnabled: !!m.effort_enabled, effortLevels: (Array.isArray(m.effort_levels) && m.effort_levels.length) ? m.effort_levels : ['low', 'medium', 'high'], effortDefault: m.effort_default || '', effortAdminOnly: !!m.effort_admin_only,
     kwargs: publicKwargDefs(m),
@@ -112,9 +114,10 @@ export function resolveModelOrDefault(modelId, isAdmin) {
 }
 
 export function roleLimit(key, isAdmin, fallback) {
-  const v = getSetting(key + (isAdmin ? '_admin' : '_user'));
-  if (v != null) return Number(v);
-  return Number(getSetting(key, String(fallback)));
+  const scoped = Number(getSetting(key + (isAdmin ? '_admin' : '_user')));
+  if (Number.isFinite(scoped) && scoped >= 0) return scoped;
+  const shared = Number(getSetting(key));
+  return Number.isFinite(shared) && shared >= 0 ? shared : Number(fallback) || 0;
 }
 
 export async function detectContextLength(prov, internal) {
@@ -132,21 +135,27 @@ export async function detectContextLength(prov, internal) {
       return asInt(ctxKey ? info[ctxKey] : 0);
     }
     if (prov?.type === 'llamacpp') {
-      try {
-        const r = await fetch(root + '/props', { headers });
-        if (r.ok) {
+      const propsUrls = internal
+        ? [root + '/props?model=' + encodeURIComponent(internal), root + '/props']
+        : [root + '/props'];
+      for (const url of propsUrls) {
+        try {
+          const r = await fetch(url, { headers });
+          if (!r.ok) continue;
           const json = await r.json();
-          const ctx = asInt(json?.default_generation_settings?.n_ctx) || asInt(json?.n_ctx);
+          const ctx = asInt(json?.default_generation_settings?.n_ctx)
+            || asInt(json?.default_generation_settings?.params?.n_ctx)
+            || asInt(json?.n_ctx);
           if (ctx) return ctx;
-        }
-      } catch {}
+        } catch {}
+      }
       try {
         const r = await fetch(base + '/models', { headers });
         if (r.ok) {
           const json = await r.json();
           const list = Array.isArray(json.data) ? json.data : [];
-          const hit = list.find(m => m.id === internal) || list[0];
-          const ctx = asInt(hit?.meta?.n_ctx_train) || asInt(hit?.meta?.n_ctx);
+          const hit = list.find(m => m.id === internal) || (list.length === 1 ? list[0] : null);
+          const ctx = asInt(hit?.meta?.n_ctx) || asInt(hit?.n_ctx) || asInt(hit?.meta?.n_ctx_train);
           if (ctx) return ctx;
         }
       } catch {}

@@ -21,6 +21,7 @@ import LimitsSection from './sections/LimitsSection.jsx';
 import AuditSection from './sections/AuditSection.jsx';
 import AnalyticsSection from './sections/AnalyticsSection.jsx';
 import DatabasesSection from './sections/DatabasesSection.jsx';
+import PrivacySection from './sections/PrivacySection.jsx';
 import { t } from '../../i18n.jsx';
 
 const SECTION_COMPONENTS = {
@@ -37,6 +38,7 @@ const SECTION_COMPONENTS = {
   skills: SkillsSection,
   mcp: McpSection,
   safety: SafetySection,
+  privacy: PrivacySection,
   feedback: FeedbackSection,
   limits: LimitsSection,
   audit: AuditSection,
@@ -100,7 +102,7 @@ function Shell() {
 
   const meta = sectionById(section);
   const nq = navQ.trim().toLowerCase();
-  const sectionMatches = nq ? SECTIONS.filter(t => (t.label + ' ' + (t.group || '') + ' ' + (t.keywords || '')).toLowerCase().includes(nq)) : null;
+  const sectionMatches = nq ? SECTIONS.filter(s => [s.label, s.group, s.keywords].filter(Boolean).map(v => v + ' ' + t(v)).join(' ').toLowerCase().includes(nq)) : null;
   const modelMatches = nq ? models.filter(m => (m.display_name || '').toLowerCase().includes(nq) || (m.internal_name || '').toLowerCase().includes(nq)).slice(0, 5) : [];
 
   function pickSection(id) {
@@ -197,9 +199,9 @@ function Shell() {
   );
 }
 
-export default function AdminApp({ user, onClose }) {
+export default function AdminApp({ user, onClose, modelId }) {
   return (
-    <AdminProvider user={user} onClose={onClose}>
+    <AdminProvider user={user} onClose={onClose} modelId={modelId}>
       <Shell />
     </AdminProvider>
   );

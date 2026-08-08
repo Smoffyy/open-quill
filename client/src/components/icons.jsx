@@ -1,7 +1,12 @@
 import React from 'react';
 const I = (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...p} />;
 export const Plus = (p) => <I {...p}><path d="M12 5v14M5 12h14" /></I>;
-export const Chat = (p) => <I {...p}><path d="M21 11.5a8.5 8.5 0 0 1-12.5 7.5L3 21l2-5.5A8.5 8.5 0 1 1 21 11.5z" /></I>;
+export const Chat = (p) => <I {...p}>
+  <g transform="translate(12 12) scale(.985) translate(-12 -12)" strokeWidth="1.726">
+    <path className="ic-b1" d="M3.37 13.98A7.7 7.7 0 1 1 7.91 17.34L2.2 17.6Z" />
+    <path className="ic-b2" d="M17.17 7.35A7.7 7.7 0 0 1 12.31 21.94L6.6 22.2 7.77 18.58A7.7 7.7 0 0 1 7.03 17.05" />
+  </g>
+</I>;
 export const NewChatIcon = Plus;
 export const Search = (p) => <I {...p}><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></I>;
 export const Globe = (p) => <I {...p}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18" /></I>;
@@ -16,6 +21,7 @@ export const ThumbUp = (p) => <I {...p}><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 
 export const ThumbDown = (p) => <I {...p} style={{ transform: 'rotate(180deg)' }}><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1zM7 11l4-7a2 2 0 0 1 2 1v4h5a2 2 0 0 1 2 2l-1.5 7a2 2 0 0 1-2 1H7" /></I>;
 export const Retry = (p) => <I {...p}><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 4v4h-4" /></I>;
 export const Check = (p) => <I {...p}><path d="M20 6 9 17l-5-5" /></I>;
+export const CheckCircle = (p) => <I {...p}><circle cx="12" cy="12" r="9" /><path d="m8.5 12.2 2.4 2.4 4.6-4.9" /></I>;
 export const Chevron = (p) => <I {...p}><path d="m9 6 6 6-6 6" /></I>;
 export const ChevDown = (p) => <I {...p}><path d="m6 9 6 6 6-6" /></I>;
 export const Down = (p) => <I {...p}><path d="M12 5v14M5 12l7 7 7-7" /></I>;
@@ -25,9 +31,11 @@ export const Flask = (p) => <I {...p}><path d="M9 3h6M10 3v6.5L4.6 18A2 2 0 0 0 
 export const Logout = (p) => <I {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></I>;
 export const Trash = (p) => <I {...p}><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></I>;
 export const Dots = (p) => <svg viewBox="0 0 24 24" fill="currentColor" {...p}><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>;
+export const DotsV = (p) => <svg viewBox="0 0 24 24" fill="currentColor" {...p}><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>;
 export const Cube = (p) => <I {...p}><path d="m12 2 9 5v10l-9 5-9-5V7z M12 12l9-5M12 12v10M12 12 3 7" /></I>;
 export const Clock = (p) => <I {...p}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></I>;
 export const Sliders = (p) => <I {...p}><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></I>;
+export const Keyboard = (p) => <I {...p}><rect x="2" y="5" width="20" height="14" rx="2.5" /><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M10 13h.01M14 13h.01M18 13h.01M8 16.5h8" /></I>;
 export const Heart = (p) => <I {...p}><path d="M12 21s-6.7-4.3-9.3-8.5C1 9.6 2.4 6 5.8 6 8 6 9 7.2 12 9.5 15 7.2 16 6 18.2 6c3.4 0 4.8 3.6 3.1 6.5C18.7 16.7 12 21 12 21z"/></I>;
 export const FileText = (p) => <I {...p}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z M14 3v5h5 M9 13h6 M9 17h5"/></I>;
 export const Sun = (p) => <I {...p}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></I>;
@@ -57,7 +65,12 @@ export const Coffee = (p) => <I {...p}><path d="M17 8h1a3 3 0 0 1 0 6h-1M3 8h14v
 export const Graduation = (p) => <I {...p}><path d="M22 9L12 5 2 9l10 4 10-4zM6 11v5c0 1 2.5 3 6 3s6-2 6-3v-5"/></I>;
 export const Upload = (p) => <I {...p}><path d="M12 21V9m0 0l-4 4m4-4l4 4M5 3h14"/></I>;
 export const Send = (p) => <I {...p}><path d="M22 2 11 13M22 2 15 22l-4-9-9-4z"/></I>;
-export const Box = (p) => <I {...p}><rect x="4" y="8" width="16" height="12" rx="1.5"/><path d="M3 5.5h18v2.5H3zM9.5 12h5"/></I>;
+export const Box = (p) => <I {...p}>
+  <g transform="translate(12 12) scale(1.01) translate(-12 -12)" strokeWidth="1.683">
+    <path className="ic-lid" d="M6 2.6h12" />
+    <path d="M4.6 6.2h14.8M3.2 9.8h17.6l-1.85 10.4a1.8 1.8 0 0 1-1.79 1.55H6.84a1.8 1.8 0 0 1-1.79-1.55Z" />
+  </g>
+</I>;
 export const X = (p) => <I {...p}><path d="M18 6 6 18M6 6l12 12"/></I>;
 export const Wand = (p) => <I {...p}><path d="M15 4V2M15 10V8M11.5 6h2M17.5 6h2M6 20 16 10l-2-2L4 18l2 2zM20 15l1 1M19 20l1-1"/></I>;
 export const Plug = (p) => <I {...p}><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-6 6 6 6 0 0 1-6-6zM12 17v4"/></I>;

@@ -71,7 +71,7 @@ export default function registerProjectRoutes(app) {
     if (!p || p.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     try { projectfiles.removeAll(p.id); } catch {}
     for (const c of db.chats.byUser(req.user.id)) { if (c.project_id === p.id) db.chats.update(c.id, { project_id: null }); }
-    db.projects.remove(x => x.id === p.id);
+    db.projects.removeById(p.id);
     res.json({ ok: true });
   });
 }
