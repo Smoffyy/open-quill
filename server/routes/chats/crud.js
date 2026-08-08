@@ -45,11 +45,6 @@ export default function registerCrudRoutes(app) {
       if (req.user.is_admin && 'systemOverride' in req.body) patch.system_override = String(req.body.systemOverride || '').slice(0, 24000);
       if ('sandbox' in req.body) patch.sandbox = req.body.sandbox ? 1 : 0;
       if ('instructions' in req.body) patch.instructions = String(req.body.instructions || '').slice(0, 8000);
-      if ('folderId' in req.body) {
-        const fid = req.body.folderId;
-        if (fid === null || fid === '') patch.folder_id = null;
-        else { const f = db.folders.byId(fid); if (f && f.user_id === req.user.id) patch.folder_id = fid; }
-      }
       if ('projectId' in req.body) {
         const pid = req.body.projectId;
         if (pid === null || pid === '') patch.project_id = null;

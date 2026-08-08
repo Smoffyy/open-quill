@@ -22,16 +22,16 @@ export function applyPrefs(prefs, preset) {
   root.setAttribute('data-theme', nextTheme);
   try { localStorage.setItem('oq-theme', nextTheme); } catch {}
   root.setAttribute('data-density', prefs?.density === 'compact' ? 'compact' : 'comfortable');
-  root.setAttribute('data-entrance', prefs?.messageEntrance === false ? 'off' : 'on');
-  root.setAttribute('data-animations', prefs?.animations === false ? 'off' : 'on');
+  const minimal = !!prefs?.minimalAnims;
+  root.setAttribute('data-entrance', minimal ? 'off' : 'on');
+  root.setAttribute('data-animations', minimal ? 'off' : 'on');
   const cursorOn = prefs?.streamCursor == null ? p === 'openai' : !!prefs.streamCursor;
   const cursorStyle = prefs?.cursorStyle || (p === 'openai' ? 'circle' : 'block');
   root.setAttribute('data-cursor', cursorOn ? (cursorStyle === 'circle' ? 'circle' : 'block') : 'off');
-  root.setAttribute('data-microfx', prefs?.microFx === false ? 'off' : 'on');
-  root.setAttribute('data-composerfx', prefs?.composerFx === false ? 'off' : 'on');
-  root.setAttribute('data-focusglow', prefs?.focusGlow ? 'on' : 'off');
-  root.setAttribute('data-iconglow', prefs?.iconGlow ? 'on' : 'off');
+  root.setAttribute('data-microfx', minimal ? 'off' : 'on');
+  root.setAttribute('data-composerfx', minimal ? 'off' : 'on');
   root.setAttribute('data-oled', prefs?.oledShift ? 'on' : 'off');
+  root.setAttribute('data-minimal', prefs?.minimalAnims ? 'on' : 'off');
   const blink = Math.max(150, Math.min(2000, parseInt(prefs?.cursorBlinkMs) || 500));
   const pulse = Math.max(300, Math.min(4000, parseInt(prefs?.cursorPulseMs) || 1000));
   root.style.setProperty('--caret-blink', blink + 'ms');

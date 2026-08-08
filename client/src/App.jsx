@@ -12,6 +12,7 @@ import CompactingBar from './components/CompactingBar.jsx';
 import EngineStrip from './components/EngineStrip.jsx';
 import CtxGauge from './components/CtxGauge.jsx';
 import LedgerBar from './components/LedgerBar.jsx';
+import ThreadSkeleton from './components/ThreadSkeleton.jsx';
 import SummaryModal from './components/SummaryModal.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
 import { computeActiveBg } from './lib/appbg.js';
@@ -47,6 +48,7 @@ import { toast } from './toast.js';
 import { copyText } from './clipboard.js';
 import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork } from './components/icons.jsx';
 
+const SKELETON_DELAY = 3000;
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: tk('Assistants can make mistakes, double-check responses.'), greetings: [tk('How can I help you?')], appIcon: '', quickPrompts: [], version: '' };
 
 
@@ -97,19 +99,15 @@ export default function App() {
     return fallback;
   }, [modelById]);
   const sidebarFns = useRef({});
-  const sbCreateFolder = useCallback((...a) => sidebarFns.current.createFolder(...a), []);
-  const sbRenameFolder = useCallback((...a) => sidebarFns.current.renameFolder(...a), []);
-  const sbToggleFolder = useCallback((...a) => sidebarFns.current.toggleFolder(...a), []);
-  const sbDeleteFolder = useCallback((...a) => sidebarFns.current.deleteFolder(...a), []);
-  const sbMoveChat = useCallback((...a) => sidebarFns.current.moveChatToFolder(...a), []);
   const sbNewChat = useCallback((...a) => sidebarFns.current.newChat(...a), []);
   const sbOpenChat = useCallback((...a) => sidebarFns.current.openChat(...a), []);
   const sbDeleteChat = useCallback((...a) => sidebarFns.current.deleteChat(...a), []);
   const sbToggleStar = useCallback((...a) => sidebarFns.current.toggleStar(...a), []);
   const sbLogout = useCallback((...a) => sidebarFns.current.logout(...a), []);
+  const sbMoveToProject = useCallback((...a) => sidebarFns.current.moveChatToProject(...a), []);
   const sbProjects = useCallback(() => sidebarFns.current.openProjects(null), []);
   const sbOpenProject = useCallback((id) => sidebarFns.current.openProjects(id), []);
-  const onSearchCb = useCallback(() => setShowSearch(true), []);
+  const onSearchCb = useCallback(() => setCmdkOpen(true), []);
   const onToggleSidebarCb = useCallback(() => setCollapsed(c => !c), []);
   const onMobileCloseCb = useCallback(() => setMobileDrawer(false), []);
   const onSettingsCb = useCallback(() => { setSettingsTab('general'); setShowSettings(true); }, []);
@@ -129,7 +127,6 @@ export default function App() {
   const setReasoningEffort = useCallback((value) => setKwargValues(prev => ({ ...prev, effort: typeof value === 'function' ? value(prev.effort || '') : value })), []);
   const [bgVisible, setBgVisible] = useState(false);
   const [chats, setChats] = useState([]);
-  const [folders, setFolders] = useState([]);
   const [chatsLoaded, setChatsLoaded] = useState(false);
   const [activeId, setActiveId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -256,6 +253,7 @@ export default function App() {
   const [chatErrors, setChatErrors] = useState({});
   const [dispContent, setDispContent] = useState('');
   const [dispReason, setDispReason] = useState('');
+  const [dispSegs, setDispSegs] = useState(null);
   const [phase, setPhase] = useState('static');
 
   const ws = useRef(null);
@@ -284,6 +282,8 @@ export default function App() {
   const animate = cfg.uiPreset === 'openai' ? false : (user?.prefs?.typewriter ?? user?.prefs?.animations) !== false;
   const revealMs = (() => { const v = user?.prefs?.revealMs; return v == null || isNaN(parseInt(v)) ? 40 : Math.max(0, Math.min(100, parseInt(v))); })();
   const [threadStagger, setThreadStagger] = useState(false);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const skelTimer = useRef(null);
   const staggerTimer = useRef(null);
   const showMsgSpeed = !!user?.prefs?.msgSpeed;
   const showCtxGauge = !!user?.prefs?.ctxGauge;
@@ -341,6 +341,7 @@ export default function App() {
 
   useEffect(() => () => {
     stopLoops();
+    clearTimeout(skelTimer.current);
     clearTimeout(staggerTimer.current);
     clearTimeout(wsTimer.current);
     try { ws.current?.close(); } catch {}
@@ -371,15 +372,13 @@ export default function App() {
       return () => mq.removeEventListener?.('change', h);
     }
   }, [user, cfg?.uiPreset]);
-  useEffect(() => { if (user) { loadModels(); loadChats(); loadFolders(); loadAppConfig(); loadBudget(); connect(); openFromUrl(); refreshSpacesPending(); loadProjects(); } }, [!!user]);
+  useEffect(() => { if (user) { loadModels(); loadChats(); loadAppConfig(); loadBudget(); connect(); openFromUrl(); refreshSpacesPending(); loadProjects(); } }, [!!user]);
   async function loadBudget() { try { setBudget(await api.get('/api/me/budget')); } catch {} }
   async function loadProjects() { try { setProjects(await api.get('/api/projects')); } catch {} }
 
   useEffect(() => {
-    const root = document.documentElement;
-    if (intro) root.setAttribute('data-entrance', 'off');
-    else root.setAttribute('data-entrance', user?.prefs?.messageEntrance === false ? 'off' : 'on');
-  }, [intro, user]);
+    document.documentElement.setAttribute('data-entrance', user?.prefs?.minimalAnims ? 'off' : 'on');
+  }, [user]);
 
   useEffect(() => {
     const onPop = () => openFromUrl();
@@ -498,7 +497,6 @@ export default function App() {
     setCurrentId(id => id && m.find(x => x.id === id) ? id : (m.find(x => x.isDefault)?.id || m[0]?.id || null));
   }
   async function loadChats() { try { setChats(await api.get('/api/chats')); } catch {} finally { setChatsLoaded(true); } }
-  async function loadFolders() { try { setFolders(await api.get('/api/folders')); } catch {} }
   async function loadAppConfig() { try { applyCfg(await api.get('/api/app-config')); } catch {} }
   const [presetPicked, setPresetPicked] = useState(false);
   async function choosePreset(p) {
@@ -517,7 +515,7 @@ export default function App() {
     try {
       const json = JSON.parse(await file.text());
       const r = await api.post('/api/chats/import', json);
-      await loadChats(); await loadFolders();
+      await loadChats();
       alert(`Imported ${r.imported} chat(s).`);
     } catch (e) { alert(e.message || t('Could not import that file.')); }
   }
@@ -749,13 +747,20 @@ export default function App() {
         targetContent.current = ''; targetReason.current = ''; pendingDone.current = false;
         assistantIdRef.current = m.messageId; dispLen.current = 0;
         streamModelRef.current = r.model_id || currentIdRef.current;
-        setDispContent(''); setDispReason(''); setPhase('generating'); setStreaming(true); setQueued(false);
+        setDispContent(''); setDispReason(''); setDispSegs(null); setPhase('generating'); setStreaming(true); setQueued(false);
         startStream();
       }
       return;
     }
     if (m.type === 'reasoning') {
-      const r = recFor(m.chatId); r.reasoning += m.text;
+      const r = recFor(m.chatId);
+      if (m.seg != null) {
+        if (!r.reasonSegs) r.reasonSegs = [];
+        r.reasonSegs[m.seg] = (r.reasonSegs[m.seg] || '') + m.text;
+        if (m.chatId === activeKey()) setDispSegs(r.reasonSegs.slice());
+        return;
+      }
+      r.reasoning += m.text;
       if (!r.content) r.phase = 'thinking';
       if (m.chatId === activeKey()) {
         targetReason.current = r.reasoning;
@@ -770,7 +775,7 @@ export default function App() {
       if (m.chatId === activeKey()) {
         targetContent.current = r.content;
         setPhase('generating');
-        if (m.text.indexOf('[[OQR:') !== -1) { dispLen.current = r.content.length; setDispContent(r.content); setLiveCall(null); }
+        if (m.text.indexOf('[[OQR:') !== -1 || m.text.indexOf('[[OQT:') !== -1) { dispLen.current = r.content.length; setDispContent(r.content); setLiveCall(null); }
         else if (!animateRef.current) { setDispContent(r.content); dispLen.current = r.content.length; }
       }
       return;
@@ -785,7 +790,7 @@ export default function App() {
           stopLoops();
           dropRec(m.chatId);
           targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
-          setDispContent(''); setDispReason('');
+          setDispContent(''); setDispReason(''); setDispSegs(null);
           setLiveFile(null); setLiveCall(null); liveRef.current = null;
           setQueued(false); setStreaming(false); setPhase('static');
         }
@@ -873,7 +878,7 @@ export default function App() {
     if (r && r.done) dropRec(key);
     setStreaming(false); setPhase('static'); setQueued(false);
     if (content || reasoning) setMessages(ms => ms.some(m => m.id === id) ? ms : [...ms, { id, role: 'assistant', content, reasoning, model_id: mid }]);
-    setDispContent(''); setDispReason('');
+    setDispContent(''); setDispReason(''); setDispSegs(null);
     setLiveFile(null); setLiveCall(null); liveRef.current = null;
     targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
     if (stick.current && !selectingRef.current && !hasSelectionRef.current) setTimeout(() => scrollBottom(false), 0);
@@ -916,7 +921,7 @@ export default function App() {
       assistantIdRef.current = r.assistantId; pendingDone.current = false;
       streamModelRef.current = r.model_id || currentIdRef.current;
       dispLen.current = r.content.length;
-      setDispContent(r.content); setDispReason(r.reasoning);
+      setDispContent(r.content); setDispReason(r.reasoning); setDispSegs(r.reasonSegs ? r.reasonSegs.slice() : null);
       const live = r.live;
       if (live && live.path && (live.tool === 'create_file' || live.tool === 'str_replace')) {
         const lf = { path: live.path, content: live.content || '', tool: live.tool, oldStr: live.oldStr ?? null };
@@ -932,7 +937,7 @@ export default function App() {
       if (r && r.done) dropRec(key);
       targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
       setStreaming(false); setQueued(false); setPhase('static');
-      setDispContent(''); setDispReason('');
+      setDispContent(''); setDispReason(''); setDispSegs(null);
       setLiveCall(null);
     }
   }
@@ -1099,6 +1104,11 @@ export default function App() {
     pendingModelCheck.current = null;
     resolveLastModel(lastA);
   }
+  function armSkeleton(on) {
+    clearTimeout(skelTimer.current);
+    if (!on) { setThreadLoading(false); return; }
+    skelTimer.current = setTimeout(() => setThreadLoading(true), SKELETON_DELAY);
+  }
   async function openChat(id, push = true) {
     setMobileDrawer(false);
     if (incognito) setIncognito(false);
@@ -1119,6 +1129,7 @@ export default function App() {
       setFiles([]);
       setPendingFiles({});
     }
+    armSkeleton(!cached);
     setCtlOpen(false);
     setCanContinue(false); setQueue([]);
     flushDraft();
@@ -1130,6 +1141,7 @@ export default function App() {
     try {
       const { chat, messages } = await api.get('/api/chats/' + id);
       if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { chat, messages }); return; }
+      armSkeleton(false);
       refreshSeq.current++;
       setMessages(prev => (cached && prev.length === messages.length)
         ? messages.map((sm, i) => { const pm = prev[i]; return { ...sm, _k: (pm && pm.role === sm.role) ? (pm._k || pm.id) : sm.id }; })
@@ -1137,7 +1149,7 @@ export default function App() {
       applyChatMeta(chat);
       applyLastModel(messages);
       cacheChat(id, { chat, messages });
-      if (!cached && user?.prefs?.chatStagger !== false && user?.prefs?.messageEntrance !== false) {
+      if (!cached && user?.prefs?.chatStagger !== false && !user?.prefs?.minimalAnims) {
         clearTimeout(staggerTimer.current);
         setThreadStagger(true);
         staggerTimer.current = setTimeout(() => setThreadStagger(false), 700);
@@ -1145,13 +1157,14 @@ export default function App() {
       try { const f = await api.get('/api/chats/' + id + '/files'); if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { files: f.files || [] }); return; } setFiles(f.files || []); setArtifactsOpen((f.files || []).length > 0 && artifactsOpenRef.current); cacheChat(id, { files: f.files || [] }); }
       catch { if (seq === openSeq.current && activeIdRef.current === id && !cached) setFiles([]); }
       if (!cached) { stick.current = true; setTimeout(() => scrollBottom(false), 30); }
-    } catch { if (seq === openSeq.current) { if (!cached) { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); } } }
+    } catch { if (seq === openSeq.current) { armSkeleton(false); if (!cached) { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); } } }
   }
   function newChat(fromPop) {
     setMobileDrawer(false);
     if (incognito) setIncognito(false);
     setShowProjects(false);
     setCurrentProject(null);
+    armSkeleton(false);
     setActiveId(null); setMessages([]); setInput('');
     setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
     setTelemetry(null); setLiveSteers([]); setLedger(null); setModelStatus(null);
@@ -1222,44 +1235,14 @@ export default function App() {
     api.patch('/api/chats/' + id, { starred: next }).catch(() => {});
   }
 
-  async function createFolder(name = t('New folder')) {
-    try {
-      const f = await api.post('/api/folders', { name });
-      setFolders(fs => [...fs, { id: f.id, name: f.name, collapsed: false, sortOrder: f.sortOrder }]);
-      return f.id;
-    } catch { return null; }
-  }
-  function renameFolder(id, name) {
-    const prev = folders.find(f => f.id === id)?.name;
-    setFolders(fs => fs.map(f => f.id === id ? { ...f, name } : f));
-    api.patch('/api/folders/' + id, { name }).catch(() => {
-      setFolders(fs => fs.map(f => f.id === id ? { ...f, name: prev } : f));
-    });
-  }
-  function toggleFolder(id) {
-    const cur = folders.find(f => f.id === id);
-    const next = !cur?.collapsed;
-    setFolders(fs => fs.map(f => f.id === id ? { ...f, collapsed: next } : f));
-    api.patch('/api/folders/' + id, { collapsed: next }).catch(() => {
-      setFolders(fs => fs.map(f => f.id === id ? { ...f, collapsed: !next } : f));
-    });
-  }
-  async function deleteFolder(id) {
-    const prevFolders = folders;
-    const prevChats = chats;
-    setFolders(fs => fs.filter(f => f.id !== id));
-    setChats(cs => cs.map(c => c.folderId === id ? { ...c, folderId: null } : c));
-    try { await api.del('/api/folders/' + id); }
-    catch { setFolders(prevFolders); setChats(prevChats); }
-  }
-  function moveChatToFolder(chatId, folderId) {
-    const prev = chats.find(c => c.id === chatId)?.folderId ?? null;
-    const target = folderId || null;
+  function moveChatToProject(chatId, projectId) {
+    const prev = chats.find(c => c.id === chatId)?.projectId ?? null;
+    const target = projectId || null;
     if (prev === target) return;
-    setChats(cs => cs.map(c => c.id === chatId ? { ...c, folderId: target } : c));
-    api.patch('/api/chats/' + chatId, { folderId: target || '' }).catch(() => {
-      setChats(cs => cs.map(c => c.id === chatId ? { ...c, folderId: prev } : c));
-    });
+    setChats(cs => cs.map(c => c.id === chatId ? { ...c, projectId: target } : c));
+    api.patch('/api/chats/' + chatId, { projectId: target || '' })
+      .then(() => loadProjects())
+      .catch(() => setChats(cs => cs.map(c => c.id === chatId ? { ...c, projectId: prev } : c)));
   }
 
   async function send(attachments = [], overrideText, opts = {}) {
@@ -1308,7 +1291,7 @@ export default function App() {
     if (!chatId) {
       const c = await api.post('/api/chats');
       chatId = c.id; setActiveId(chatId);
-      setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false, folderId: null }, ...cs]);
+      setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false }, ...cs]);
       history.pushState({}, '', '/chat/' + chatId);
       if ((chatGenParams && Object.keys(chatGenParams).length) || (chatSysOverride && chatSysOverride.trim())) {
         try { await api.patch('/api/chats/' + chatId, { genParams: chatGenParams || {}, systemOverride: chatSysOverride || '' }); } catch {}
@@ -1328,7 +1311,7 @@ export default function App() {
     const text = (rawText || '').trim();
     if (!text && attachments.length === 0) return;
     const c = await api.post('/api/chats', { projectId: project.id });
-    setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false, folderId: null, projectId: project.id }, ...cs]);
+    setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false, projectId: project.id }, ...cs]);
     setShowProjects(false); setProjectOpenId(null);
     setCurrentProject(project);
     setActiveId(c.id); setMessages([]); setInput('');
@@ -1412,6 +1395,7 @@ export default function App() {
 
   const model = modelById.get(currentId);
   const activeChat = activeId ? chats.find(c => c.id === activeId) : null;
+  const activeProject = activeChat?.projectId ? projects.find(p => p.id === activeChat.projectId) : null;
   const sandboxAllowed = incognito ? false : (model ? model.sandboxAllowed !== false : true);
   const sandboxOn = sandboxAllowed && sandbox;
   const webSearchAvailable = !incognito && !!cfg.webSearchAvailable && (model ? model.webSearchAllowed !== false : true);
@@ -1428,6 +1412,9 @@ export default function App() {
     : null;
 
   const composerProps = {
+    placeholder: activeId && !incognito ? t('Write a message...') : undefined,
+    projects,
+    onSetProject: activeId ? (p) => moveChatToProject(activeId, p.id) : null,
     value: input, onChange: (v) => { if (safetyFlagged) { setSafetyFlagged(false); setSafetyReason(''); } setInput(v); saveDraft(activeId, v); }, onSend: send, onStop: stop, streaming: streaming || queued,
     queueCount: queuedList.length,
     onQueue: (t, atts) => setQueue(l => [...l, { id: 'q' + Date.now() + Math.random().toString(36).slice(2, 7), text: t, attachments: atts || [] }]),
@@ -1499,7 +1486,7 @@ export default function App() {
     msgCopy: () => {
       const m = focusedMsg();
       if (!m) return false;
-      const clean = (m.content || '').replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
+      const clean = (m.content || '').replace(/\[\[OQ(?:R:[A-Za-z0-9+/=]+|T:\d+)\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
       copyText(clean).then(ok => ok && toast(t('Message copied')));
     },
     msgEdit: () => {
@@ -1550,7 +1537,7 @@ export default function App() {
     </div>
   );
 
-  sidebarFns.current = { createFolder, renameFolder, toggleFolder, deleteFolder, moveChatToFolder, newChat, openChat, deleteChat, toggleStar, logout, openProjects };
+  sidebarFns.current = { newChat, openChat, deleteChat, toggleStar, logout, openProjects, moveChatToProject };
 
   return (
     <div className={'app' + (incognito ? ' app-incognito' : '') + (intro ? ' intro' : '') + (bgVisible ? ' has-bg' : '') + (collapsed ? ' sb-collapsed' : '')}>
@@ -1558,7 +1545,6 @@ export default function App() {
       <AppBackground bg={activeBg} />
       {intro && <div className="intro-curtain" />}
       <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName} onSearch={onSearchCb}
-        folders={folders} onCreateFolder={sbCreateFolder} onRenameFolder={sbRenameFolder} onToggleFolder={sbToggleFolder} onDeleteFolder={sbDeleteFolder} onMoveChat={sbMoveChat}
         onNew={sbNewChat} onOpen={sbOpenChat} onDelete={sbDeleteChat} onToggleStar={sbToggleStar}
         collapsed={collapsed} onToggle={onToggleSidebarCb}
         mobileOpen={mobileDrawer} onMobileClose={onMobileCloseCb}
@@ -1566,7 +1552,7 @@ export default function App() {
         onCredits={onCreditsCb} onChangelog={onChangelogCb} onLicense={onLicenseCb} onLogout={sbLogout} version={cfg.version}
         onChatsOverview={onChatsOverviewCb}
         onSpaces={onSpacesCb} spacesPending={spacesPending}
-        projects={projects} onProjects={sbProjects} onOpenProject={sbOpenProject}
+        projects={projects} onProjects={sbProjects} onOpenProject={sbOpenProject} onMoveToProject={sbMoveToProject}
         busyChats={busyChats} onStopChat={stopChat} />
 
       {mobileDrawer && <div className="drawer-backdrop" onClick={() => setMobileDrawer(false)} />}
@@ -1637,6 +1623,14 @@ export default function App() {
                   onKeyDown={(e) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenaming(false); }} />
               ) : (
                 <div className="chat-name-wrap">
+                  {activeProject && (
+                    <>
+                      <button className="ct-crumb" onClick={() => { setProjectOpenId(activeProject.id); setShowProjects(true); history.pushState({}, '', '/project/' + activeProject.id); }}>
+                        {activeProject.name}
+                      </button>
+                      <span className="ct-sep">/</span>
+                    </>
+                  )}
                   <button className="chat-name" onClick={() => setChatMenuOpen(o => !o)}>
                     <span className="ct-title">{activeChat?.title || t('New chat')}</span> <ChevDown style={{ width: 15 }} />
                   </button>
@@ -1706,10 +1700,11 @@ export default function App() {
               <div className={'thread' + (threadStagger ? ' stagger' : '') + (ledgerOpen ? ' ledger-on' : '') + (messages.length > 24 ? ' virt' : '') + (findOpen ? ' finding' : '')}
                 role="log" aria-label={t('Conversation')} aria-live="polite" aria-relevant="additions text" aria-busy={streaming ? 'true' : 'false'}>
                 {ledgerOpen && <LedgerBar ledger={ledger} />}
+                {threadLoading && messages.length === 0 && <ThreadSkeleton />}
                 {(() => {
                   const streamKey = assistantIdRef.current || '_stream';
                   const renderList = streaming
-                    ? [...messages.filter(m => m.id !== streamKey), { id: streamKey, _k: streamKey, role: 'assistant', content: dispContent, reasoning: dispReason, model_id: streamModelRef.current || currentId, _streaming: true }]
+                    ? [...messages.filter(m => m.id !== streamKey), { id: streamKey, _k: streamKey, role: 'assistant', content: dispContent, reasoning: dispReason, reasoningSegs: dispSegs, model_id: streamModelRef.current || currentId, _streaming: true }]
                     : messages;
                   let lastA = null;
                   for (let i = renderList.length - 1; i >= 0; i--) if (renderList[i].role === 'assistant') { lastA = renderList[i]; break; }

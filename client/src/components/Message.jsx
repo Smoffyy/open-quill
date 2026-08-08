@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import Markdown from './Markdown.jsx';
+import Markdown, { ReasonSegs } from './Markdown.jsx';
 import { copyText } from '../clipboard.js';
 import { openLightbox } from '../lightbox.js';
 import ReasoningBlock from './ReasoningBlock.jsx';
@@ -13,43 +13,6 @@ import { t } from '../i18n.jsx';
 
 function Columns(props) {
   return (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect x="3" y="4" width="7" height="16" rx="1" /><rect x="14" y="4" width="7" height="16" rx="1" /></svg>);
-}
-
-const glowCache = new Map();
-function useLogoGlow(src) {
-  const [color, setColor] = useState(() => glowCache.get(src) || null);
-  useEffect(() => {
-    if (!src) return;
-    if (glowCache.has(src)) { setColor(glowCache.get(src)); return; }
-    let on = true;
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      try {
-        const S = 24;
-        const cv = document.createElement('canvas');
-        cv.width = S; cv.height = S;
-        const cx = cv.getContext('2d', { willReadFrequently: true });
-        cx.drawImage(img, 0, 0, S, S);
-        const d = cx.getImageData(0, 0, S, S).data;
-        let r = 0, g = 0, b = 0, n = 0;
-        for (let i = 0; i < d.length; i += 4) {
-          const a = d[i + 3];
-          if (a < 40) continue;
-          const lum = d[i] + d[i + 1] + d[i + 2];
-          if (lum > 720 || lum < 36) continue;
-          r += d[i]; g += d[i + 1]; b += d[i + 2]; n++;
-        }
-        const c = n > 8 ? `rgb(${Math.round(r / n)}, ${Math.round(g / n)}, ${Math.round(b / n)})` : null;
-        glowCache.set(src, c);
-        if (on) setColor(c);
-      } catch { glowCache.set(src, null); if (on) setColor(null); }
-    };
-    img.onerror = () => { glowCache.set(src, null); if (on) setColor(null); };
-    img.src = src;
-    return () => { on = false; };
-  }, [src]);
-  return color;
 }
 
 function fmtTime(ts) {
@@ -152,14 +115,13 @@ function ModelIcon({ model, phase, below, name }) {
     thinking: model?.thinkingIcon || base
   };
   const src = map[phase] || base;
-  const glow = useLogoGlow(phase === 'generating' || phase === 'thinking' ? src : null);
   if (!base && !name) return null;
   const anim = phase === 'generating' ? (model?.generatingAnim || 'spin') : phase === 'thinking' ? (model?.thinkingAnim || 'pulse') : '';
   const cls = anim === 'none' ? '' : anim;
   const sz = model?.iconSize > 0 ? model.iconSize : 40;
   return (
     <div className={'msg-icon' + (below ? ' below' : '') + (name ? ' with-name' : '')}>
-      {base && <img src={src} className={cls} style={{ width: sz, height: sz, ...(glow ? { '--icon-glow': glow } : {}) }} alt="" />}
+      {base && <img src={src} className={cls} style={{ width: sz, height: sz }} alt="" />}
       {name && <span className="msg-icon-name">{name}</span>}
     </div>
   );
@@ -290,7 +252,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
     if (editing && taRef.current) { const el = taRef.current; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight + 2, 460) + 'px'; }
   }, [editing, draft]);
   async function doCopy() {
-    const clean = (msg.content || '').replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
+    const clean = (msg.content || '').replace(/\[\[OQ(?:R:[A-Za-z0-9+/=]+|T:\d+)\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
     if (!(await copyText(clean))) return;
     setCopied(true); setTimeout(() => setCopied(false), 1400);
   }
@@ -354,6 +316,13 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
     try { await api.post(`/api/messages/${msg.id}/feedback`, { rating: next }); } catch { setFb(fb); }
   }
 
+  const segs = Array.isArray(msg.reasoningSegs) ? msg.reasoningSegs : null;
+  const tailIsMarker = segs && /\[\[OQT:\d+\]\]\s*$/.test(msg.content || '');
+  const segCtx = useMemo(
+    () => (segs ? { segs, segMs: Array.isArray(msg.reasoningSegMs) ? msg.reasoningSegMs : null, live: !!(streaming && tailIsMarker), preset, collapsible: model?.reasoningCollapsible !== false } : null),
+    [segs, msg.reasoningSegMs, streaming, tailIsMarker, preset, model]
+  );
+
   const inner = (
     <>
       {ledger && ledgerState && <LedgerRow tokens={ledgerTokens} pct={ledgerPct} state={ledgerState} id={msg.id} onToggleExclude={onToggleExclude} />}
@@ -361,7 +330,11 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
       <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} durationMs={msg.reasoningMs || 0} preset={preset} collapsible={model?.reasoningCollapsible !== false} />
       {(msg.content || streaming) && (
         <div className={'assistant-body' + (streaming ? ' streaming' : '') + (streaming && typing ? ' typing' : '') + (streaming && phase === 'thinking' ? ' thinking' : '')}>
-          {msg.content ? <Markdown streaming={streaming}>{msg.content}</Markdown> : null}
+          {msg.content ? (
+            <ReasonSegs.Provider value={segCtx}>
+              <Markdown streaming={streaming}>{msg.content}</Markdown>
+            </ReasonSegs.Provider>
+          ) : null}
           {streaming && liveCall && liveCall.tool && (
             <div className="tool-live"><ToolCard call={liveCall} result={null} /></div>
           )}

@@ -15,7 +15,7 @@ export function stripToolSyntax(text) {
       s = s.slice(0, after.start) + (oi === -1 ? '' : s.slice(oi));
     }
   }
-  return s.replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '').replace(/```tool[\s\S]*?```/g, '');
+  return s.replace(/\[\[OQR:[A-Za-z0-9+/=]+\]\]/g, '').replace(/\[\[OQT:\d+\]\]/g, '').replace(/```tool[\s\S]*?```/g, '');
 }
 
 export function historyText(text) {
@@ -24,7 +24,7 @@ export function historyText(text) {
   for (let i = calls.length - 1; i >= 0; i--) {
     const c = calls[i].call;
     const ref = c && (c.path || c.cmd || c.query || c.name) || '';
-    s = s.slice(0, calls[i].start) + `[${c?.tool || 'tool'}${ref ? ' ' + String(ref).split('\n')[0].slice(0, 80) : ''}]` + s.slice(calls[i].end);
+    s = s.slice(0, calls[i].start) + `(tool already run: ${c?.tool || 'tool'}${ref ? ' ' + String(ref).split('\n')[0].slice(0, 80) : ''})` + s.slice(calls[i].end);
   }
   if (live && live.start != null) {
     const after = toolproto.scanTools(s).live;
@@ -39,7 +39,8 @@ export function historyText(text) {
     if (!c || !c.tool) return '';
     const ref = c.path || c.cmd || c.query || c.name || '';
     const failed = d.result && d.result.ok === false;
-    return `[used ${c.tool}${ref ? ': ' + String(ref).split('\n')[0].slice(0, 80) : ''}${failed ? ' → error' : ''}]`;
+    return `(tool already run: ${c.tool}${ref ? ' ' + String(ref).split('\n')[0].slice(0, 80) : ''}${failed ? ' → error' : ''})`;
   });
+  s = s.replace(/\[\[OQT:\d+\]\]/g, '');
   return s.replace(/```tool[\s\S]*?```/g, '');
 }

@@ -177,7 +177,7 @@ function FileCard({ call, result }) {
     <span className={'tool-line' + (pending ? ' pending' : '') + (failed ? ' err' : '') + (openPath ? ' clickable' : '')}
       onClick={openPath ? () => openArtifact(openPath) : undefined}
       title={openPath ? 'Open ' + name + ' in artifacts' : undefined}>
-      <Icon style={{ width: 14 }} className="tl-icon" />
+      <Icon style={{ width: 20 }} className="tl-icon" />
       <span className="tl-verb">{verb}</span>
       {name && <span className="tl-name">{name}</span>}
       {showDiff && (
@@ -188,7 +188,6 @@ function FileCard({ call, result }) {
       )}
       {unchanged && <span className="tl-note">unchanged</span>}
       {failed && <span className="tl-err">{result.error}</span>}
-      {pending && <span className="tc-dots"><i /><i /><i /></span>}
       {canPeek && <button className="tc-preview-btn" onClick={togglePeek}>{previewBusy ? '\u2026' : preview != null ? t('Hide') : t('Peek')}</button>}
     </span>
     {preview != null && <div className="tc-preview">{preview}</div>}
@@ -209,10 +208,9 @@ function ChipCard({ call, result }) {
     <span className={'tool-line' + (pending ? ' pending' : '') + (failed ? ' err' : '') + (openPath ? ' clickable' : '')}
       onClick={openPath ? () => openArtifact(openPath) : undefined}
       title={openPath ? 'Open ' + name + ' in artifacts' : undefined}>
-      <Icon style={{ width: 14 }} className="tl-icon" /><span className="tl-verb">{verb}</span>{name && <span className="tl-name">{name}</span>}
+      <Icon style={{ width: 20 }} className="tl-icon" /><span className="tl-verb">{verb}</span>{name && <span className="tl-name">{name}</span>}
       {note && <span className="tl-note">{note}</span>}
       {failed && <span className="tl-err">{result.error}</span>}
-      {pending && <span className="tc-dots"><i /><i /><i /></span>}
     </span>
   );
 }

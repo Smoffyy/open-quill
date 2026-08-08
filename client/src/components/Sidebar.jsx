@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Chat, Search, Panel, Gear, Shield, Flask, Logout, Dots, DotsV, Trash, Heart, FileText, Star, Download, Folder, Pencil, Chevron, Users, Box, Compact, Stop } from './icons.jsx';
+import { Plus, Chat, Search, Panel, Gear, Shield, Flask, Logout, Dots, DotsV, Trash, Heart, FileText, Star, Download, Chevron, Users, Box, Compact, Stop, Sliders, Check } from './icons.jsx';
 import { t } from '../i18n.jsx';
+import { resolveKeybinds, comboKeys } from '../lib/keybinds.js';
 
 function ProfileMenu({ user, version, anchorRef, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, onClose }) {
   const ref = useRef(null);
@@ -32,7 +33,7 @@ function ProfileMenu({ user, version, anchorRef, onSettings, onAdmin, onPlaygrou
   );
 }
 
-function ChatRow({ c, active, showTrash, folders, onOpen, onDelete, onToggleStar, onMoveChat, onDragChat, busyIds, onStopChat }) {
+function ChatRow({ c, active, showTrash, projects = [], onMoveToProject, onOpen, onDelete, onToggleStar, onDragChat, busyIds, onStopChat }) {
   const busy = !!(busyIds && busyIds.has(c.id));
   const [menu, setMenu] = useState(null); // null or {top,left}
   const [subOpen, setSubOpen] = useState(false);
@@ -83,6 +84,7 @@ function ChatRow({ c, active, showTrash, folders, onOpen, onDelete, onToggleStar
       onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); openInTab(); } }}
       onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}>
       {busy && <span className="row-busy" role="img" aria-label={t('Still generating')} title={t('Still generating')} />}
+      {c.projectId && <Box className="row-project" style={{ width: 15 }} aria-label={t('In a project')} />}
       <span className="title">{c.title}</span>
       {showTrash ? (
         <button className="row-ctrl shift-del" onClick={(e) => { e.stopPropagation(); onDelete(c.id); }} title={t("Delete chat")} aria-label={t("Delete chat")}><Trash style={{ width: 14 }} /></button>
@@ -99,23 +101,25 @@ function ChatRow({ c, active, showTrash, folders, onOpen, onDelete, onToggleStar
           <button onClick={(e) => { e.stopPropagation(); onToggleStar(c.id); close(); }}>
             <Star style={{ width: 20 }} /> {c.starred ? t('Unstar chat') : t('Star chat')}
           </button>
-          <div className="cm-sub">
-            <button onClick={(e) => { e.stopPropagation(); setSubOpen(s => !s); setMenu(m => m ? { ...m, ready: false } : m); }}>
-              <Folder style={{ width: 20 }} /> Move to folder
-              <Chevron style={{ width: 13, marginLeft: 'auto', transform: subOpen ? 'rotate(90deg)' : 'none' }} />
-            </button>
-            {subOpen && (
-              <div className="cm-sublist">
-                {c.folderId && <button onClick={(e) => { e.stopPropagation(); onMoveChat(c.id, null); close(); }}>{t("Remove from folder")}</button>}
-                {folders.length === 0 && <div className="cm-empty">{t("No folders yet")}</div>}
-                {folders.map(f => (
-                  <button key={f.id} className={f.id === c.folderId ? 'on' : ''} onClick={(e) => { e.stopPropagation(); onMoveChat(c.id, f.id); close(); }}>
-                    <Folder style={{ width: 14 }} /> {f.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          {onMoveToProject && (
+            <div className="cm-sub">
+              <button onClick={(e) => { e.stopPropagation(); setSubOpen(s => !s); setMenu(m => m ? { ...m, ready: false } : m); }}>
+                <Box style={{ width: 20 }} /> {t('Add to project')}
+                <Chevron style={{ width: 13, marginLeft: 'auto', transform: subOpen ? 'rotate(90deg)' : 'none' }} />
+              </button>
+              {subOpen && (
+                <div className="cm-sublist">
+                  {c.projectId && <button onClick={(e) => { e.stopPropagation(); onMoveToProject(c.id, null); close(); }}>{t('Remove from project')}</button>}
+                  {projects.length === 0 && <div className="cm-empty">{t('No projects yet')}</div>}
+                  {projects.map(p => (
+                    <button key={p.id} className={p.id === c.projectId ? 'on' : ''} onClick={(e) => { e.stopPropagation(); onMoveToProject(c.id, p.id); close(); }}>
+                      <Box style={{ width: 15 }} /> {p.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <button onClick={(e) => { e.stopPropagation(); window.open('/api/chats/' + c.id + '/export?format=md', '_blank'); close(); }}>
             <Download style={{ width: 20 }} /> Export as Markdown
           </button>
@@ -130,62 +134,34 @@ function ChatRow({ c, active, showTrash, folders, onOpen, onDelete, onToggleStar
   );
 }
 
-function FolderSection({ f, chats, active, showTrash, folders, dragChatId, onToggle, onRename, onDelete, onDrop, rowProps }) {
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(f.name);
-  const [dragOver, setDragOver] = useState(false);
-  useEffect(() => setName(f.name), [f.name]);
-  function commit() { setEditing(false); const v = name.trim(); if (v && v !== f.name) onRename(f.id, v); else setName(f.name); }
-  return (
-    <div className={'folder' + (dragOver ? ' drag-over' : '')}
-      onDragOver={(e) => { if (dragChatId) { e.preventDefault(); setDragOver(true); } }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => { e.preventDefault(); setDragOver(false); const id = e.dataTransfer.getData('text/plain') || dragChatId; if (id) onDrop(id, f.id); }}>
-      <div className="folder-head" onClick={() => !editing && onToggle(f.id)}>
-        <Chevron className="fl-chev" style={{ width: 13, transform: f.collapsed ? 'none' : 'rotate(90deg)' }} />
-        <Folder style={{ width: 14 }} className="fl-icon" />
-        {editing ? (
-          <input className="folder-rename" autoFocus value={name}
-            onClick={(e) => e.stopPropagation()}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setName(f.name); setEditing(false); } }} />
-        ) : (
-          <span className="folder-name">{f.name}</span>
-        )}
-        <span className="folder-count">{chats.length}</span>
-        <span className="folder-ctrls" onClick={(e) => e.stopPropagation()}>
-          <button className="row-ctrl" title={t("Rename")} onClick={() => setEditing(true)}><Pencil style={{ width: 13 }} /></button>
-          <button className="row-ctrl" title={t("Delete folder")} onClick={() => onDelete(f.id)}><Trash style={{ width: 13 }} /></button>
-        </span>
-      </div>
-      {!f.collapsed && (
-        <div className="folder-body">
-          {chats.length === 0 && <div className="chats-empty sub">{t("Drag chats here")}</div>}
-          {chats.map(c => <ChatRow key={c.id} c={c} active={c.id === active} showTrash={showTrash} folders={folders} {...rowProps} />)}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function Sidebar({
   user, chats, onSearch, chatsLoaded = true, activeId, appName, onNew, onOpen, onDelete, onToggleStar,
-  folders = [], onCreateFolder, onRenameFolder, onToggleFolder, onDeleteFolder, onMoveChat,
   collapsed, onToggle, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview,
-  onSpaces, spacesPending = 0, projects = [], onProjects, onOpenProject, mobileOpen = false, onMobileClose,
+  onSpaces, spacesPending = 0, projects = [], onProjects, onOpenProject, onMoveToProject, mobileOpen = false, onMobileClose,
   busyChats = [], onStopChat
 }) {
   const busyIds = React.useMemo(() => new Set(busyChats), [busyChats]);
+  const newChatCombo = React.useMemo(() => {
+    const combo = resolveKeybinds(user?.prefs).newChat;
+    return combo ? comboKeys(combo).join('+') : '';
+  }, [user?.prefs]);
   const [menu, setMenu] = useState(false);
   const [shiftHeld, setShiftHeld] = useState(false);
   const [hover, setHover] = useState(false);
   const [dragChatId, setDragChatId] = useState(null);
-  const [rootDragOver, setRootDragOver] = useState(false);
   const chatsRef = useRef(null);
+  const [scrolled, setScrolled] = useState(false);
   const profileBtnRef = useRef(null);
-  const [recentsCollapsed, setRecentsCollapsed] = useState(() => { try { return localStorage.getItem('oq-recents-collapsed') === '1'; } catch { return false; } });
-  const toggleRecents = () => setRecentsCollapsed(v => { const n = !v; try { localStorage.setItem('oq-recents-collapsed', n ? '1' : '0'); } catch {} return n; });
+  const [groupBy, setGroupBy] = useState(() => { try { return localStorage.getItem('oq-group-by') || 'date'; } catch { return 'date'; } });
+  const [groupMenu, setGroupMenu] = useState(false);
+  const groupRef = useRef(null);
+  const pickGroup = (v) => { setGroupBy(v); setGroupMenu(false); try { localStorage.setItem('oq-group-by', v); } catch {} };
+  useEffect(() => {
+    if (!groupMenu) return;
+    const h = (e) => { if (groupRef.current && !groupRef.current.contains(e.target)) setGroupMenu(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [groupMenu]);
   useEffect(() => {
     const down = (e) => { if (e.key === 'Shift') setShiftHeld(true); };
     const up = (e) => { if (e.key === 'Shift') setShiftHeld(false); };
@@ -200,27 +176,41 @@ function Sidebar({
   chats = chats.filter(c => !c.archived);
   const starred = chats.filter(c => c.starred);
   const starredProjects = (projects || []).filter(p => p.starred);
-  const folderIds = new Set(folders.map(f => f.id));
-  const inFolder = (fid) => chats.filter(c => !c.starred && c.folderId === fid);
-  const others = chats.filter(c => !c.starred && (!c.folderId || !folderIds.has(c.folderId)));
+  const others = chats.filter(c => !c.starred);
   const nowMs = Date.now();
   const DAY = 86400000;
-  const recentGroups = [
-    { key: 'recent', label: t('Recents'), items: [] },
-    { key: 'd3', label: '3+ days ago', items: [] },
-    { key: 'd7', label: '7+ days ago', items: [] },
-  ];
   const SIDEBAR_CHAT_LIMIT = 40;
   const capped = others.slice(0, SIDEBAR_CHAT_LIMIT);
   const overflow = others.length > SIDEBAR_CHAT_LIMIT;
-  for (const c of capped) {
-    const age = nowMs - (c.updated_at || nowMs);
-    if (age < 3 * DAY) recentGroups[0].items.push(c);
-    else if (age < 7 * DAY) recentGroups[1].items.push(c);
-    else recentGroups[2].items.push(c);
-  }
-  const rowProps = { onOpen, onDelete, onToggleStar, onMoveChat, onDragChat: setDragChatId, folders, busyIds, onStopChat };
-  const row = (c) => <ChatRow key={c.id} c={c} active={c.id === activeId} showTrash={showTrash} folders={folders} {...rowProps} />;
+  const recentGroups = (() => {
+    if (groupBy === 'none') return [{ key: 'all', label: '', items: capped }];
+    if (groupBy === 'project') {
+      const byId = new Map(projects.map(p => [p.id, p.name]));
+      const buckets = new Map();
+      for (const c of capped) {
+        const k = c.projectId && byId.has(c.projectId) ? c.projectId : '_none';
+        if (!buckets.has(k)) buckets.set(k, { key: k, label: k === '_none' ? t('No project') : byId.get(k), items: [] });
+        buckets.get(k).items.push(c);
+      }
+      const list = [...buckets.values()];
+      list.sort((a, b) => a.key === '_none' ? 1 : b.key === '_none' ? -1 : a.label.localeCompare(b.label));
+      return [{ key: 'lead', label: '', items: [] }, ...list];
+    }
+    const g = [
+      { key: 'recent', label: '', items: [] },
+      { key: 'd3', label: '3+ days ago', items: [] },
+      { key: 'd7', label: '7+ days ago', items: [] },
+    ];
+    for (const c of capped) {
+      const age = nowMs - (c.updated_at || nowMs);
+      if (age < 3 * DAY) g[0].items.push(c);
+      else if (age < 7 * DAY) g[1].items.push(c);
+      else g[2].items.push(c);
+    }
+    return g;
+  })();
+  const rowProps = { onOpen, onDelete, onToggleStar, onDragChat: setDragChatId, busyIds, onStopChat, projects, onMoveToProject };
+  const row = (c) => <ChatRow key={c.id} c={c} active={c.id === activeId} showTrash={showTrash} {...rowProps} />;
 
   return (
     <div className={'sidebar' + (collapsed ? ' collapsed' : '') + (mobileOpen ? ' mobile-open' : '')}
@@ -228,8 +218,8 @@ function Sidebar({
       <div className="sidebar-head">
         <div className="brand">{appName || 'open-quill'}</div>
         <div className="sidebar-head-actions">
-          <button className="icon-btn search-btn" onClick={onSearch} title={t("Search chats (Ctrl+Shift+F)")}><Search style={{ width: 17 }} /></button>
-          <button className="icon-btn collapse-btn" onClick={onToggle} title={collapsed ? t('Expand sidebar') : t('Collapse sidebar')}><Panel style={{ width: 17 }} /></button>
+          <button className="icon-btn search-btn" onClick={onSearch} title={t("Search chats (Ctrl+Shift+F)")}><Search style={{ width: 16 }} /></button>
+          <button className="icon-btn collapse-btn" onClick={onToggle} title={collapsed ? t('Expand sidebar') : t('Collapse sidebar')}><Panel style={{ width: 16 }} /></button>
           <button className="icon-btn mobile-close-btn" onClick={onMobileClose} title={t("Close menu")}><span style={{ fontSize: 20, lineHeight: 1 }}>✕</span></button>
         </div>
       </div>
@@ -237,20 +227,19 @@ function Sidebar({
         <button className="nav-item new-chat" title={t("New chat")}
           onClick={(e) => { if (e.ctrlKey || e.metaKey) { window.open('/', '_blank', 'noopener'); return; } onNew(); }}
           onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); window.open('/', '_blank', 'noopener'); } }}
-          onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}><span className="new-chat-plus"><Plus /></span> <span className="nav-label">{t("New chat")}</span></button>
-        <button className="nav-item" title={t("Chats")} onClick={onChatsOverview}><Chat /> <span className="nav-label">{t("Chats")}</span></button>
-        <button className="nav-item" title={t("Projects")} onClick={onProjects}><Box /> <span className="nav-label">{t("Projects")}</span></button>
-        <button className="nav-item" title={t("Spaces")} onClick={onSpaces}>
-          <Users /> <span className="nav-label">{t("Spaces")}</span>
-          {spacesPending > 0 && <span className="nav-badge">{spacesPending}</span>}
-        </button>
+          onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}><span className="new-chat-plus"><Plus /></span> <span className="nav-label">{t("New chat")}</span>
+          {newChatCombo && <span className="nav-shortcut">{newChatCombo}</span>}</button>
       </div>
       <div className="chats-wrap">
-      <button type="button" className="chats-arrow up" title={t("Scroll up")} aria-label={t("Scroll up")}
-        onClick={() => chatsRef.current?.scrollBy({ top: -160, behavior: 'smooth' })}>
-        <Chevron style={{ width: 12 }} />
-      </button>
-      <div className="chats" ref={chatsRef}>
+      <div className={'chats' + (scrolled ? ' scrolled' : '')} ref={chatsRef} onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}>
+        <div className="nav nav-scrolled">
+          <button className="nav-item" title={t("Chats")} onClick={onChatsOverview}><Chat /> <span className="nav-label">{t("Chats")}</span></button>
+          <button className="nav-item" title={t("Projects")} onClick={onProjects}><Box /> <span className="nav-label">{t("Projects")}</span></button>
+          <button className="nav-item" title={t("Spaces")} onClick={onSpaces}>
+            <Users /> <span className="nav-label">{t("Spaces")}</span>
+            {spacesPending > 0 && <span className="nav-badge">{spacesPending}</span>}
+          </button>
+        </div>
         {!chatsLoaded ? (
           <>
             <div className="section-label">{t("Recents")}</div>
@@ -261,55 +250,46 @@ function Sidebar({
         ) : (
           <>
             {(starred.length > 0 || starredProjects.length > 0) && <>
-              <div className="section-label"><Star style={{ width: 12, verticalAlign: '-1px' }} /> {t("Starred")}</div>
+              <div className="section-label">{t("Starred")}</div>
               {starredProjects.map(p => (
                 <div key={p.id} className="chat-row project-row" onClick={() => onOpenProject && onOpenProject(p.id)}>
-                  <Box style={{ width: 15, flexShrink: 0, opacity: .85 }} />
+                  <Box style={{ width: 20, flexShrink: 0, opacity: .85 }} />
                   <span className="title">{p.name}</span>
                 </div>
               ))}
               {starred.map(row)}
             </>}
 
-            <div className="section-label folders-label">
-              <span><Folder style={{ width: 12, verticalAlign: '-1px' }} /> {t('Folders')}</span>
-              <button className="folder-add" title={t("New folder")} onClick={() => onCreateFolder && onCreateFolder()}><Plus style={{ width: 13 }} /></button>
-            </div>
-            {folders.length === 0 && <div className="chats-empty">{t("No folders, click + to add one")}</div>}
-            {folders.map(f => (
-              <FolderSection key={f.id} f={f} chats={inFolder(f.id)} active={activeId} showTrash={showTrash}
-                folders={folders} dragChatId={dragChatId}
-                onToggle={onToggleFolder} onRename={onRenameFolder} onDelete={onDeleteFolder} onDrop={onMoveChat}
-                rowProps={rowProps} />
-            ))}
-
-            <div className={'section-label recents-label' + (rootDragOver ? ' drag-over' : '') + (recentsCollapsed ? ' collapsed' : '')}
-              onClick={toggleRecents}
-              onDragOver={(e) => { if (dragChatId) { e.preventDefault(); setRootDragOver(true); } }}
-              onDragLeave={() => setRootDragOver(false)}
-              onDrop={(e) => { e.preventDefault(); setRootDragOver(false); const id = e.dataTransfer.getData('text/plain') || dragChatId; if (id) onMoveChat(id, null); }}>
-              <Chevron className="rl-chev" style={{ width: 13 }} /> Recents
-            </div>
-            {!recentsCollapsed && <>
-              {others.length === 0 && <div className="chats-empty">{t("No chats yet")}</div>}
-              {recentGroups[0].items.map(row)}
-              {recentGroups.slice(1).map(g => g.items.length > 0 && (
-                <React.Fragment key={g.key}>
-                  <div className="section-label recents-sub">{g.label}</div>
-                  {g.items.map(row)}
-                </React.Fragment>
-              ))}
-              {overflow && (
-                <button className="all-chats-btn" onClick={onChatsOverview}><Compact style={{ width: 15, flexShrink: 0 }} /> <span>{t("All chats")}</span></button>
+            <div className="section-label recents-label" ref={groupRef}>
+              {t('Recents')}
+              <button className="rl-group" title={t('Group by')} aria-label={t('Group by')} aria-haspopup="menu" aria-expanded={groupMenu}
+                onClick={() => setGroupMenu(o => !o)}><Sliders style={{ width: 16 }} /></button>
+              {groupMenu && (
+                <div className="rl-menu" role="menu">
+                  <div className="rl-menu-head">{t('Group by')}</div>
+                  {[['none', t('None')], ['date', t('Date')], ['project', t('Project')]].map(([v, label]) => (
+                    <button key={v} role="menuitemradio" aria-checked={groupBy === v} onClick={() => pickGroup(v)}>
+                      <span>{label}</span>
+                      {groupBy === v && <Check style={{ width: 16, marginLeft: 'auto' }} />}
+                    </button>
+                  ))}
+                </div>
               )}
-            </>}
+            </div>
+            {others.length === 0 && <div className="chats-empty">{t("No chats yet")}</div>}
+            {recentGroups[0].items.map(row)}
+            {recentGroups.slice(1).map(g => g.items.length > 0 && (
+              <React.Fragment key={g.key}>
+                <div className="section-label recents-sub">{g.label}</div>
+                {g.items.map(row)}
+              </React.Fragment>
+            ))}
+            {overflow && (
+              <button className="all-chats-btn" onClick={onChatsOverview}><Compact style={{ width: 15, flexShrink: 0 }} /> <span>{t("All chats")}</span></button>
+            )}
           </>
         )}
       </div>
-      <button type="button" className="chats-arrow down" title={t("Scroll down")} aria-label={t("Scroll down")}
-        onClick={() => chatsRef.current?.scrollBy({ top: 160, behavior: 'smooth' })}>
-        <Chevron style={{ width: 12 }} />
-      </button>
       </div>
       <div className="rail-spacer" />
       <div className="profile">

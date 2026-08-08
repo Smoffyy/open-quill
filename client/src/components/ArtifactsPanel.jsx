@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { FileText, Download, Folder, Search, X, Panel } from './icons.jsx';
+import { FileText, Download, Search, X, Panel } from './icons.jsx';
 import { t } from '../i18n.jsx';
-import FileChip from './artifacts/FileChip.jsx';
-import TreeChildren from './artifacts/FileTree.jsx';
 import Viewer from './artifacts/Viewer.jsx';
-import { baseName, extOf, buildTree } from '../lib/artifacts.js';
+import { baseName, extOf } from '../lib/artifacts.js';
 
 function clampW(w) { return Math.max(320, Math.min(w, Math.round(window.innerWidth * 0.85))); }
 
@@ -30,17 +28,6 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
     setTabs(ts => ts.includes(path) ? ts : [...ts, path]);
     if (toRight) setSplit(path); else setActive(path);
   }, [focusedPane, split]);
-
-  const closeTab = useCallback((path, e) => {
-    if (e) e.stopPropagation();
-    setTabs(ts => ts.includes(path) ? ts.filter(p => p !== path) : ts);
-    setSplit(s => s === path ? null : s);
-    setActive(a => {
-      if (a !== path) return a;
-      const rest = tabs.filter(p => p !== path);
-      return rest.length ? rest[rest.length - 1] : null;
-    });
-  }, [tabs]);
 
   const goOverview = useCallback(() => { setActive(null); setSplit(null); setFocusedPane('left'); }, []);
 
@@ -85,7 +72,6 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
     document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
   }
 
-  const onJumpToLive = useCallback(() => { if (live && live.path) openFile(live.path); }, [live, openFile]);
   const paneProps = (p) => ({
     chatId, path: p,
     liveText: live && p === live.path ? live.content : null,
@@ -93,8 +79,6 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
     committed: !!files.find(f => f.path === p),
     fileV: byPath.get(p)?.v || 0,
     pendingText: p in pending ? pending[p] : null,
-    writingElsewhere: live && live.path && p !== live.path ? live.path : null,
-    onJumpToLive
   });
 
   const filtered = filter.trim() ? treeFiles.filter(f => f.path.toLowerCase().includes(filter.trim().toLowerCase())) : treeFiles;
@@ -105,26 +89,11 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
   return (
     <div className={'artifacts' + (resizing ? ' resizing' : '')} style={{ width }}>
       <div className="art-resizer" onMouseDown={startResize} onTouchStart={startResize} ref={dragRef} title={t("Drag to resize")}><span /></div>
-      {tabs.length > 0 && (
-        <div className="art-tabs">
-          <button className={'art-tabs-list' + (active == null ? ' on' : '')} onClick={goOverview} title={t("All files")}><Folder style={{ width: 15 }} /></button>
-          <div className="art-tabs-scroll">
-            {tabs.map(p => (
-              <div key={p} className={'art-tab' + (p === active ? ' active' : '') + (p === split ? ' split' : '')} onClick={() => { if (focusedPane === 'right' && split != null) setSplit(p); else setActive(p); }} title={p}>
-                <FileChip ext={extOf(p)} />
-                <span className="art-tab-name">{baseName(p)}</span>
-                <button className="art-tab-close" onClick={(e) => closeTab(p, e)} title={t("Close")}><X style={{ width: 12 }} /></button>
-              </div>
-            ))}
-          </div>
-          <button className="art-btn icon" onClick={onClose} title={t("Close panel")}><X style={{ width: 15 }} /></button>
-        </div>
-      )}
       {active != null ? (
         <div className={'art-panes' + (split ? ' split' : '')}>
           <div className={'art-pane' + (focusedPane === 'left' || !split ? ' focused' : '')}>
             <MemoViewer {...paneProps(active)} onBack={goOverview} canBack
-              headerExtra={!split ? splitBtn : null}
+              headerExtra={<>{!split && splitBtn}<button className="art-btn icon" onClick={onClose} title={t("Close panel")}><X style={{ width: 15 }} /></button></>}
               onFocusPane={() => setFocusedPane('left')} />
           </div>
           {split && (
@@ -139,7 +108,10 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
         <>
           <div className="art-head">
             <div className="art-title">Artifacts{treeFiles.length > 0 && <span className="art-count">{treeFiles.length}</span>}</div>
-            {tabs.length === 0 && <button className="art-btn icon" onClick={onClose} title={t("Close panel")}><X style={{ width: 15 }} /></button>}
+            <div className="art-head-actions">
+              {files.length > 0 && <a className="art-dl-all" href={`/api/chats/${chatId}/zip`}><Download style={{ width: 15 }} /> {t("Download all")}</a>}
+              <button className="art-btn icon" onClick={onClose} title={t("Close panel")}><X style={{ width: 15 }} /></button>
+            </div>
           </div>
           {treeFiles.length > 3 && (
             <div className="art-filter">
@@ -148,21 +120,34 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
               {filter && <button className="art-btn icon" onClick={() => setFilter('')} title={t("Clear")}><X style={{ width: 13 }} /></button>}
             </div>
           )}
-          <div className="art-list">
-            {treeFiles.length === 0 && (
-              <div className="art-empty big">
-                <div className="art-empty-icon"><FileText style={{ width: 26 }} /></div>
-                <div className="art-empty-title">{t("No files yet")}</div>
-                <div>{t("When the assistant creates or edits files, they'll show up here, ready to view, diff, and download.")}</div>
-              </div>
-            )}
-            {treeFiles.length > 0 && filtered.length === 0 && <div className="art-empty">No files match “{filter}”.</div>}
-            {filtered.length > 0 && <TreeChildren node={buildTree(filtered)} depth={0} chatId={chatId} onOpen={openFile} sel={active} live={live} forceOpen={!!filter.trim()} />}
-          </div>
-          {files.length > 0 && (
-            <div className="art-foot">
-              <span className="art-foot-count">{files.length} file{files.length === 1 ? '' : 's'}</span>
-              <a className="art-dl-all" href={`/api/chats/${chatId}/zip`}><Download style={{ width: 15 }} /> {t("Download all")}</a>
+          {filtered.length === 0 && (
+            <div className="art-list">
+              {treeFiles.length === 0 ? (
+                <div className="art-empty big">
+                  <div className="art-empty-icon"><FileText style={{ width: 26 }} /></div>
+                  <div className="art-empty-title">{t("No files yet")}</div>
+                  <div>{t("When the assistant creates or edits files, they'll show up here, ready to view, diff, and download.")}</div>
+                </div>
+              ) : <div className="art-empty">No files match “{filter}”.</div>}
+            </div>
+          )}
+          {filtered.length > 0 && (
+            <div className="art-cards">
+              {filtered.map(f => {
+                const dir = f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : '';
+                const writing = live && live.path === f.path;
+                return (
+                  <div key={f.path} className={'art-card' + (writing ? ' writing' : '')} onClick={() => openFile(f.path)} title={f.path}>
+                    <div className="art-thumbcol"><div className="art-thumb"><FileText /></div></div>
+                    <div className="art-card-body">
+                      <div className="art-card-title">{baseName(f.path)}</div>
+                      <div className="art-card-sub">{writing ? t('Writing…') : [extOf(f.path).toUpperCase(), dir].filter(Boolean).join(' · ')}</div>
+                    </div>
+                    <a className="art-card-dl" href={`/api/chats/${chatId}/file?path=${encodeURIComponent(f.path)}&download=1`}
+                      onClick={e => e.stopPropagation()} title={t("Download")}><Download style={{ width: 16 }} /></a>
+                  </div>
+                );
+              })}
             </div>
           )}
         </>

@@ -87,6 +87,7 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
     try { const d = await api.del('/api/projects/' + id + '/files/' + encodeURIComponent(name)); setPjFiles(d.files || []); } catch {}
   }
   const fmtSize = (n) => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+  const capPct = Math.min(100, Math.round(pjFiles.reduce((n, f) => n + (f.size || 0), 0) / (20 * 1048576) * 100));
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState('');
   const menuRef = useRef(null);
@@ -156,6 +157,7 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
           </div>
 
           <div className="pj-chats">
+            {project.chats.length > 0 && <div className="pj-chats-head">{t("Recents")}</div>}
             {project.chats.length === 0 ? (
               <div className="pj-empty">{t("Start a chat to keep conversations organized and re-use project knowledge.")}</div>
             ) : (
@@ -192,22 +194,22 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
               <input ref={fileInputRef} type="file" multiple hidden accept=".pdf,.txt,.md,.markdown,.csv,.tsv,.json,.js,.ts,.jsx,.tsx,.py,.html,.css,.xml,.yaml,.yml,.log,.ini,.toml,.sh,.bat,.sql,.java,.c,.cpp,.h,.rs,.go,.rb,.php"
                 onChange={(e) => { uploadFiles([...(e.target.files || [])]); e.target.value = ''; }} />
             </div>
+            <div className="pj-cap">{t("{pct}% of project capacity used").replace('{pct}', capPct)}</div>
             {pjFiles.length === 0 ? (
               <div className="pj-files-empty" onClick={() => fileInputRef.current?.click()} style={{ cursor: 'pointer' }}>
                 <FileText style={{ width: 30 }} />
                 <span>{fileBusy ? t('Uploading…') : t('Add PDFs or text documents, chats in this project can search and read them.')}</span>
               </div>
             ) : (
-              <div className="pj-file-list">
+              <div className="pj-file-grid">
                 {pjFiles.map(f => (
-                  <div key={f.name} className="pj-file-row">
-                    <FileText style={{ width: 14 }} />
-                    <span className="pj-file-name" title={f.name}>{f.name}</span>
-                    <span className="pj-file-size">{fmtSize(f.size)}</span>
-                    <button className="pj-file-del" title={t("Remove")} onClick={() => removeFile(f.name)}>✕</button>
+                  <div key={f.name} className="pj-file-tile" title={f.name}>
+                    <span className="ft-name">{f.name}</span>
+                    <span className="ft-meta">{fmtSize(f.size)}</span>
+                    <button className="ft-del" title={t("Remove")} onClick={() => removeFile(f.name)}>✕</button>
                   </div>
                 ))}
-                {fileBusy && <div className="pj-file-row"><span className="pj-file-name">{t("Uploading…")}</span></div>}
+                {fileBusy && <div className="pj-file-tile"><span className="ft-name">{t("Uploading…")}</span></div>}
               </div>
             )}
           </div>

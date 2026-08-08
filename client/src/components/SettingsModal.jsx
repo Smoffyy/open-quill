@@ -4,7 +4,14 @@ import { applyPrefs, ACCENT_PRESETS, getUserFont, setUserFont } from '../prefs.j
 import { Sun, Moon, Gear, Sliders, Info, Chevron, Clock, Download, Upload, Shield, Trash, Brain, Refresh, Keyboard } from './icons.jsx';
 import Markdown from './Markdown.jsx';
 import KeybindsPanel from './KeybindsPanel.jsx';
-import { t, useI18n } from '../i18n.jsx';
+import { t, tk, useI18n } from '../i18n.jsx';
+
+const REVEAL_STOPS = [
+  { v: 0, label: tk('Instant') },
+  { v: 15, label: tk('Fast') },
+  { v: 40, label: tk('Normal') },
+  { v: 70, label: tk('Relaxed') },
+];
 
 function Toggle({ prefs, setPref, k, label, desc }) {
   return (
@@ -42,10 +49,10 @@ function parseVersion(v) {
 
 function presetDefaults(isOpenai, fallbackTheme) {
   return {
-    animations: true, typewriter: true, autoscroll: true, theme: fallbackTheme || 'system', accent: '', density: 'comfortable',
-    messageEntrance: true, streamCursor: isOpenai, cursorStyle: isOpenai ? 'circle' : 'block',
+    typewriter: true, autoscroll: true, theme: fallbackTheme || 'system', accent: '', density: 'comfortable',
+    streamCursor: isOpenai, cursorStyle: isOpenai ? 'circle' : 'block',
     cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40, chatStagger: true, themeFade: true,
-    microFx: true, composerFx: true, iconGlow: false, focusGlow: false, oledShift: false,
+    oledShift: false, minimalAnims: false,
     threadRail: true, threadFind: true, branchMap: true, msgKeys: true, keybinds: {}
   };
 }
@@ -53,7 +60,6 @@ function presetDefaults(isOpenai, fallbackTheme) {
 export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdated, onDeleted, onExportChats, onImportChats }) {
   const [tab, setTab] = useState(initialTab || 'general');
   const { lang: i18nLang, setLang: setAppLang, langs } = useI18n();
-  const [chatSec, setChatSec] = useState('streaming');
   const [name, setName] = useState(user.displayName);
   const [instructions, setInstructions] = useState(user.instructions || '');
   const instrRef = useRef(user.instructions || '');
@@ -95,7 +101,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
     setSessionErr('');
     api.get('/api/me/sessions').then(d => setSessions(d.sessions || [])).catch(() => setSessionErr(t('Could not load sessions.')));
   }
-  useEffect(() => { if (tab === 'sessions') loadSessions(); }, [tab]);
+  useEffect(() => { if (tab === 'security') loadSessions(); }, [tab]);
   const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
   const [pwMsg, setPwMsg] = useState('');
   const [pwErr, setPwErr] = useState('');
@@ -132,7 +138,6 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
     try { const r = await api.post('/api/me/2fa/recovery', { password: disablePw }); setDisablePw(''); setRecovery(r.recoveryCodes); }
     catch (e) { setSecErr(e?.message || t('Could not regenerate codes.')); }
   }
-  const _securityAnchor = null;
   async function revokeSession(id) {
     try { await api.del('/api/me/sessions/' + id); setSessions(s => (s || []).filter(x => x.id !== id)); }
     catch { setSessionErr(t('Could not revoke that session.')); }
@@ -216,7 +221,6 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
           <div className="ms-group">{t("Account")}</div>
           <button className={'modal-tab' + (tab === 'general' ? ' active' : '')} onClick={() => setTab('general')}><Gear /> {t("General")}</button>
           <button className={'modal-tab' + (tab === 'security' ? ' active' : '')} onClick={() => setTab('security')}><Shield /> {t("Security")}</button>
-          <button className={'modal-tab' + (tab === 'sessions' ? ' active' : '')} onClick={() => setTab('sessions')}><Clock /> {t("Sessions")}</button>
           <div className="ms-group">{t("Interface")}</div>
           <button className={'modal-tab' + (tab === 'appearance' ? ' active' : '')} onClick={() => setTab('appearance')}><Sun /> {t('Appearance')}</button>
           <button className={'modal-tab' + (tab === 'chat' ? ' active' : '')} onClick={() => setTab('chat')}><Sliders /> {t('Chat')}</button>
@@ -232,10 +236,12 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
             <>
               <h2>{t("General")}</h2>
               <div className="hint">{t("Your account basics.")}</div>
+              <div className="me-section-h">{t("Profile")}</div>
               <div className="field">
                 <label>{t("What should we call you?")}</label>
                 <input value={name} onChange={(e) => changeName(e.target.value)} />
               </div>
+              <div className="me-section-h">{t("Preferences")}</div>
               <div className="field">
                 <label>{t("Language")}</label>
                 <div className="muted-note" style={{ marginBottom: 10 }}>{t("Changes the language of the entire interface, on this device. Chats and model replies are not translated.")}</div>
@@ -251,6 +257,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                   onChange={(e) => changeInstructions(e.target.value)} />
                 <div className="muted-note" style={{ textAlign: 'right' }}>{instructions.length}/8000</div>
               </div>
+              <div className="me-section-h">{t("Your data")}</div>
               <div className="field row">
                 <div><label>{t("Export everything")}</label><div className="muted-note">{t("Download all your data, chats, folders, custom styles, personas, saved prompts, memory, instructions, and preferences, as one JSON file.")}</div></div>
                 <button className="btn ghost" onClick={onExportChats}><Download style={{ width: 14, verticalAlign: '-2px' }} /> {t("Export")}</button>
@@ -408,20 +415,30 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                   {prefs.accent && <button className="btn ghost accent-reset" onClick={() => setPref('accent', '')}>{t("Reset")}</button>}
                 </div>
               </div>
-              <div className="field row">
-                <div><label>{t("Message density")}</label><div className="muted-note">{t("Vertical spacing between messages.")}</div></div>
-                <Seg value={prefs.density || 'comfortable'} onPick={(v) => setPref('density', v)}
-                  options={[{ v: 'comfortable', label: 'Comfortable' }, { v: 'compact', label: 'Compact' }]} />
-              </div>
+              <div className="me-section-h">{t("Text")}</div>
               <div className="field row">
                 <div><label>{t("Font")}</label><div className="muted-note">{t("Overrides the theme's default font, on this device only.")}</div></div>
                 <Seg value={userFont} onPick={(v) => { setUserFontState(v); setUserFont(v); }}
                   options={[{ v: 'default', label: 'Default' }, { v: 'sans', label: 'Open Sans' }, { v: 'serif', label: 'Source Serif' }]} />
               </div>
               <div className="field row">
+                <div><label>{t("Message density")}</label><div className="muted-note">{t("Vertical spacing between messages.")}</div></div>
+                <Seg value={prefs.density || 'comfortable'} onPick={(v) => setPref('density', v)}
+                  options={[{ v: 'comfortable', label: 'Comfortable' }, { v: 'compact', label: 'Compact' }]} />
+              </div>
+              <div className="me-section-h">{t("Display")}</div>
+              <div className="field row">
                 <div><label>{t("OLED screen protection")}</label><div className="muted-note">{t("Periodically nudges the interface a few pixels and eases peak brightness to limit burn-in on OLED displays.")}</div></div>
                 <div className={'switch' + (prefs.oledShift ? ' on' : '')} onClick={() => setPref('oledShift', !prefs.oledShift)} />
               </div>
+              <div className="me-section-h">{t("Motion")}</div>
+              <div className="sec-note">{t("How the interface itself moves. Reading motion, meaning the streaming cursor, the reasoning panel and the sidebar collapse, is kept whatever you turn off here.")}</div>
+              <div className="field row">
+                <div><label>{t("Minimal animations")}</label><div className="muted-note">{t("Strip the interface back to instant. Menus, modals, panels, toasts, message entrances and hover feedback all appear without motion.")}</div></div>
+                <div className={'switch' + (prefs.minimalAnims ? ' on' : '')} onClick={() => setPref('minimalAnims', !prefs.minimalAnims)} />
+              </div>
+              <Toggle prefs={prefs} setPref={setPref} k="chatStagger" label={t("Staggered open")}
+                desc={t("When opening a chat, messages assemble into view one after another.")} />
             </>
           )}
           {tab === 'keybinds' && <KeybindsPanel prefs={prefs} setPref={setPref} />}
@@ -433,29 +450,26 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
               <>
                 <h2>{t("Chat")}</h2>
                 <div className="hint">{t("How responses look, move, and feel.")}</div>
-                <div className="me-sections" style={{ marginBottom: 14 }}>
-                  {[['streaming', t('Streaming')], ['tools', t('Tools & context')], ['navigation', t('Navigation')], ['motion', t('Motion')], ['effects', t('Effects')]].map(([k, label]) => (
-                    <button key={k} className={'me-sec' + (chatSec === k ? ' on' : '')} onClick={() => setChatSec(k)}>{label}</button>
-                  ))}
-                </div>
-                {chatSec === 'streaming' && <>
-                  <Toggle prefs={prefs} setPref={setPref} k="animations" label={t("Motion")}
-                    desc={t("Animate transitions, expanding panels, and hover effects.")} />
+                <div className="me-section-h">{t("Streaming")}</div>
+                <>
                   {!noReveal && (
                     <Toggle prefs={prefs} setPref={setPref} k="typewriter" label={t("Typewriter reveal")}
                       desc={t("Reveal each response gradually as it generates, instead of all at once.")} />
                   )}
                   {typewriterOn && !noReveal && (
-                    <div className="field">
-                      <label>{t("Reveal speed")}</label>
-                      <div className="reveal-row">
-                        <input type="range" min="0" max="100" step="5" value={rv} onChange={(e) => setPref('revealMs', parseInt(e.target.value))} />
-                        <span className="reveal-val">{rv === 0 ? 'Instant' : rv + ' ms'}</span>
+                    <div className="field row">
+                      <div>
+                        <label>{t("Reveal speed")}</label>
+                        <div className="muted-note">{t("How quickly text appears once it has arrived. This only changes the animation, never how fast the model replies.")}</div>
                       </div>
-                      <div className="muted-note">{t("Delay between reveal steps. Lower is faster; 0 shows responses instantly. Default 40 ms.")}</div>
+                      <Seg value={REVEAL_STOPS.some(o => o.v === rv) ? rv : -1} onPick={(v) => setPref('revealMs', v)}
+                        options={REVEAL_STOPS.map(o => ({ v: o.v, label: t(o.label) })).concat(REVEAL_STOPS.some(o => o.v === rv) ? [] : [{ v: -1, label: rv + ' ms' }])} />
                     </div>
                   )}
                   <Toggle prefs={prefs} setPref={setPref} k="autoscroll" label={t("Auto-scroll")} desc={t("Keep the latest text in view unless you scroll up.")} />
+                </>
+                <div className="me-section-h">{t("Cursor")}</div>
+                <>
                   <div className="field row">
                     <div><label>{t("Streaming cursor")}</label><div className="muted-note">{t("Show a soft cursor at the write position as text streams in.")}</div></div>
                     <div className={'switch' + (prefs.streamCursor ? ' on' : '')} onClick={() => setPref('streamCursor', !prefs.streamCursor)} />
@@ -495,9 +509,10 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                       </div>
                     );
                   })()}
-                </>}
-                {chatSec === 'navigation' && <>
-                  <div className="hint" style={{ marginTop: -4 }}>{t("Tools for moving around a long conversation. Turn any of them off to keep the chat view bare.")}</div>
+                </>
+                <div className="me-section-h">{t("Navigation")}</div>
+                <>
+                  <div className="sec-note">{t("Tools for moving around a long conversation. Turn any of them off to keep the chat view bare.")}</div>
                   <div className="field row">
                     <div><label>{t("Conversation map")}</label><div className="muted-note">{t("A slim rail down the right edge with one mark per turn, showing where you are and marking tool calls, branch points, and search hits. Click a mark to jump.")}</div></div>
                     <div className={'switch' + (prefs.threadRail !== false ? ' on' : '')} onClick={() => setPref('threadRail', prefs.threadRail === false)} />
@@ -514,29 +529,9 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                     <div><label>{t("Message shortcuts")}</label><div className="muted-note">{t("Single keys act on the conversation when you are not typing: J and K move between messages, then C copies, E edits, R retries, and Y branches.")}</div></div>
                     <div className={'switch' + (prefs.msgKeys !== false ? ' on' : '')} onClick={() => setPref('msgKeys', prefs.msgKeys === false)} />
                   </div>
-                </>}
-                {chatSec === 'motion' && <>
-                  <div className="field row">
-                    <div><label>{t("Message entrance")}</label><div className="muted-note">{t("Slide new messages into view, yours from the right, replies from the left.")}</div></div>
-                    <div className={'switch' + (prefs.messageEntrance !== false ? ' on' : '')} onClick={() => setPref('messageEntrance', prefs.messageEntrance === false)} />
-                  </div>
-                  {prefs.messageEntrance !== false && (
-                    <Toggle prefs={prefs} setPref={setPref} k="chatStagger" label={t("Staggered open")} desc={t("When opening a chat, messages assemble into view one after another.")} />
-                  )}
-                </>}
-                {chatSec === 'effects' && <>
-                  <Toggle prefs={prefs} setPref={setPref} k="microFx" label={t("Micro-interactions")} desc={t("Subtle feedback on hover, copy, and button presses.")} />
-                  <div className="field row">
-                    <div><label>{t("Model logo glow")}</label><div className="muted-note">{t("Soft glow on the model's logo while it generates or thinks, tinted to match.")}</div></div>
-                    <div className={'switch' + (prefs.iconGlow ? ' on' : '')} onClick={() => setPref('iconGlow', !prefs.iconGlow)} />
-                  </div>
-                  <Toggle prefs={prefs} setPref={setPref} k="composerFx" label={t("Input bar effects")} desc={t("Attachment animations and press feedback in the message bar.")} />
-                  <div className="field row">
-                    <div><label>{t("Input focus ring")}</label><div className="muted-note">{t("Soft accent ring around the message bar while it's focused.")}</div></div>
-                    <div className={'switch' + (prefs.focusGlow ? ' on' : '')} onClick={() => setPref('focusGlow', !prefs.focusGlow)} />
-                  </div>
-                </>}
-                {chatSec === 'tools' && <>
+                </>
+                <div className="me-section-h">{t("Tools and context")}</div>
+                <>
                   {cfg?.webSearchAvailable && (
                     <div className="field row">
                       <div><label>{t("Web search on by default")}</label><div className="muted-note">{t("Start every new chat with web search enabled, when the model allows it.")}</div></div>
@@ -563,7 +558,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                     <div><label>{t("Mid-stream steering")}</label><div className="muted-note">{t("Adds a Steer option while a reply is generating. Correcting a reply restarts it from the cut point and adds your correction to the conversation the model sees, which costs an extra request.")}</div></div>
                     <div className={'switch' + (prefs.steering ? ' on' : '')} onClick={() => setPref('steering', !prefs.steering)} />
                   </div>
-                </>}
+                </>
               </>
             );
           })()}
@@ -580,70 +575,41 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
               {!usageData && !usageErr && <div className="muted-note">{t("Loading…")}</div>}
               {usageData && (
                 <>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 18 }}>
-                    {[[t('Total tokens'), fmtN(usageData.totals.total)], [t('Input'), fmtN(usageData.totals.prompt)], [t('Output'), fmtN(usageData.totals.completion)], [t('Est. cost'), usageData.totals.cost ? fmtUsd(usageData.totals.cost) : (usageData.totals.costKnown ? '$0.00' : ', ')]].map(([lbl, val]) => (
-                      <div key={lbl} style={{ border: '1px solid rgba(128,128,128,0.22)', borderRadius: 10, padding: '12px 14px' }}>
-                        <div style={{ fontSize: 20, fontWeight: 600 }}>{val}</div>
-                        <div className="muted-note" style={{ marginTop: 2 }}>{lbl}</div>
+                  <div className="usage-tiles">
+                    {[[t('Total tokens'), fmtN(usageData.totals.total)], [t('Input'), fmtN(usageData.totals.prompt)], [t('Output'), fmtN(usageData.totals.completion)], [t('Est. cost'), usageData.totals.cost ? fmtUsd(usageData.totals.cost) : (usageData.totals.costKnown ? '$0.00' : '—')]].map(([lbl, val]) => (
+                      <div key={lbl} className="usage-tile">
+                        <div className="ut-val">{val}</div>
+                        <div className="ut-lbl">{lbl}</div>
                       </div>
                     ))}
                   </div>
-                  <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 6 }}>{usageData.totals.generations === 1 ? t('{n} generation in this window.', { n: fmtN(usageData.totals.generations) }) : t('{n} generations in this window.', { n: fmtN(usageData.totals.generations) })}</div>
+                  <div className="usage-count">{usageData.totals.generations === 1 ? t('{n} generation in this window.', { n: fmtN(usageData.totals.generations) }) : t('{n} generations in this window.', { n: fmtN(usageData.totals.generations) })}</div>
                   {usageData.models.length === 0 ? (
                     <div className="muted-note">{t("No usage recorded yet. Token counts appear here after you chat with a model whose backend reports usage.")}</div>
-                  ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                  ) : (<>
+                    <div className="me-section-h">{t("By model")}</div>
+                    <table className="usage-table">
                       <thead>
-                        <tr style={{ textAlign: 'left', color: 'inherit', opacity: 0.6 }}>
-                          <th style={{ padding: '6px 8px' }}>{t('Model')}</th>
-                          <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('Input')}</th>
-                          <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('Output')}</th>
-                          <th style={{ padding: '6px 8px', textAlign: 'right' }}>{t('Cost')}</th>
+                        <tr>
+                          <th>{t('Model')}</th>
+                          <th className="num">{t('Input')}</th>
+                          <th className="num">{t('Output')}</th>
+                          <th className="num">{t('Cost')}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {usageData.models.map((m, i) => (
-                          <tr key={i} style={{ borderTop: '1px solid rgba(128,128,128,0.18)' }}>
-                            <td style={{ padding: '8px' }}>{m.modelName}</td>
-                            <td style={{ padding: '8px', textAlign: 'right' }}>{fmtN(m.prompt)}</td>
-                            <td style={{ padding: '8px', textAlign: 'right' }}>{fmtN(m.completion)}</td>
-                            <td style={{ padding: '8px', textAlign: 'right' }}>{m.priced ? fmtUsd(m.cost) : <span className="muted-note">{t('no price')}</span>}</td>
+                          <tr key={i}>
+                            <td>{m.modelName}</td>
+                            <td className="num">{fmtN(m.prompt)}</td>
+                            <td className="num">{fmtN(m.completion)}</td>
+                            <td className="num">{m.priced ? fmtUsd(m.cost) : <span className="muted-note">{t('no price')}</span>}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                  )}
-                  <div className="muted-note" style={{ marginTop: 14 }}>{t('Cost is estimated from per-model prices set by your admin. Models marked no price are local or free, so no cost is counted. Token counts come from your model backend and may be unavailable for some providers.')}</div>
-                </>
-              )}
-            </>
-          )}
-          {tab === 'sessions' && (
-            <>
-              <h2>{t("Sessions")}</h2>
-              <div className="hint">{t("Devices currently signed in to your account. Sessions expire after 30 days of inactivity.")}</div>
-              {sessionErr && <div className="dz-err">{sessionErr}</div>}
-              {!sessions && !sessionErr && <div className="muted-note">{t("Loading…")}</div>}
-              {sessions && (
-                <>
-                  {sessions.map(s => (
-                    <div className="field row" key={s.id} style={{ alignItems: 'center' }}>
-                      <div>
-                        <label>{t("{device} on {os}", { device: deviceLabel(s.userAgent), os: osLabel(s.userAgent) })} {s.current && <span className="you-tag">{t("this device")}</span>}</label>
-                        <div className="muted-note">{s.ip ? s.ip + ' • ' : ''}active {fmtWhen(s.lastSeen)} • signed in {fmtWhen(s.createdAt)}</div>
-                      </div>
-                      {!s.current && <button className="btn danger" onClick={() => revokeSession(s.id)}>{t("Revoke")}</button>}
-                    </div>
-                  ))}
-                  {sessions.filter(s => !s.current).length > 0 && (
-                    <div className="danger-zone">
-                      <div className="dz-title">{t("Sign out everywhere else")}</div>
-                      <div className="field row">
-                        <div><label>{t("Revoke all other sessions")}</label><div className="muted-note">{t("Keeps this device signed in and ends every other session.")}</div></div>
-                        <button className="btn danger" onClick={revokeOthers}>{t("Revoke others")}</button>
-                      </div>
-                    </div>
-                  )}
+                  </>)}
+                  <div className="muted-note usage-foot">{t('Cost is estimated from per-model prices set by your admin. Models marked no price are local or free, so no cost is counted. Token counts come from your model backend and may be unavailable for some providers.')}</div>
                 </>
               )}
             </>
@@ -652,16 +618,17 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
             <>
               <h2>{t("Security")}</h2>
               <div className="hint">{t("Change your password and manage two-factor authentication.")}</div>
-              <div className="field"><label>{t("Change password")}</label>
-                <input type="password" placeholder={t("Current password")} value={pw.current} onChange={(e) => setPw(p => ({ ...p, current: e.target.value }))} style={{ marginBottom: 8 }} />
-                <input type="password" placeholder={t("New password")} value={pw.next} onChange={(e) => setPw(p => ({ ...p, next: e.target.value }))} style={{ marginBottom: 8 }} />
-                <input type="password" placeholder={t("Confirm new password")} value={pw.confirm} onChange={(e) => setPw(p => ({ ...p, confirm: e.target.value }))} style={{ marginBottom: 8 }} />
+              <div className="me-section-h">{t("Password")}</div>
+              <div className="field stack">
+                <input type="password" placeholder={t("Current password")} value={pw.current} onChange={(e) => setPw(p => ({ ...p, current: e.target.value }))} />
+                <input type="password" placeholder={t("New password")} value={pw.next} onChange={(e) => setPw(p => ({ ...p, next: e.target.value }))} />
+                <input type="password" placeholder={t("Confirm new password")} value={pw.confirm} onChange={(e) => setPw(p => ({ ...p, confirm: e.target.value }))} />
                 {pwErr && <div className="dz-err">{pwErr}</div>}
                 {pwMsg && <div className="muted-note" style={{ color: 'var(--accent)' }}>{pwMsg}</div>}
-                <button className="btn" onClick={changePassword} disabled={!pw.current || !pw.next}>{t("Update password")}</button>
+                <div><button className="btn" onClick={changePassword} disabled={!pw.current || !pw.next}>{t("Update password")}</button></div>
               </div>
-              <div className="danger-zone" style={{ borderColor: 'var(--border-soft)' }}>
-                <div className="dz-title" style={{ color: 'var(--text)' }}>Two-factor authentication {twoFa === 'on' && <span className="you-tag">enabled</span>}</div>
+              <div className="sec-block">
+                <div className="me-section-h">{t("Two-factor authentication")} {twoFa === 'on' && <span className="you-tag">{t("enabled")}</span>}</div>
                 {secErr && <div className="dz-err">{secErr}</div>}
                 {recovery && (
                   <div className="recovery-box">
@@ -698,13 +665,32 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                   </>
                 )}
               </div>
+              <div className="sec-block">
+                <div className="me-section-h">{t("Active sessions")}</div>
+                <div className="sec-note">{t("Devices currently signed in to your account. Sessions expire after 30 days of inactivity.")}</div>
+                {sessionErr && <div className="dz-err">{sessionErr}</div>}
+                {!sessions && !sessionErr && <div className="muted-note">{t("Loading…")}</div>}
+                {sessions && (
+                  <>
+                    {sessions.map(s => (
+                      <div className="field row" key={s.id}>
+                        <div>
+                          <label>{t("{device} on {os}", { device: deviceLabel(s.userAgent), os: osLabel(s.userAgent) })} {s.current && <span className="you-tag">{t("this device")}</span>}</label>
+                          <div className="muted-note">{s.ip ? s.ip + ' • ' : ''}active {fmtWhen(s.lastSeen)} • signed in {fmtWhen(s.createdAt)}</div>
+                        </div>
+                        {!s.current && <button className="btn danger" onClick={() => revokeSession(s.id)}>{t("Revoke")}</button>}
+                      </div>
+                    ))}
+                    {sessions.filter(s => !s.current).length > 0 && (
+                      <div className="field row">
+                        <div><label>{t("Revoke all other sessions")}</label><div className="muted-note">{t("Keeps this device signed in and ends every other session.")}</div></div>
+                        <button className="btn danger" onClick={revokeOthers}>{t("Revoke others")}</button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </>
-          )}
-          {tab !== 'version' && tab !== 'usage' && tab !== 'sessions' && tab !== 'security' && (
-            <div className="autosave-note">
-              <span className={'autosave-dot' + (saved ? ' flash' : '')} />
-              {saved ? t('Saved') : t('Changes save automatically')}
-            </div>
           )}
         </div>
       </div>
