@@ -315,6 +315,13 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .pj-field input { height: 32px; padding: 0 12px; }
 .pj-field textarea { min-height: 80px; padding: 8px 12px; resize: vertical; line-height: 20px; }
 .pj-field input:focus, .pj-field textarea:focus { background: color-mix(in srgb, var(--text) 9%, transparent); }
+.pj-create-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+.pj-btn { padding: 9px 16px; border-radius: 9px; font-size: 14px; font-weight: 500; font-family: var(--font-sans); transition: background var(--fx-t, .15s), opacity var(--fx-t, .15s); }
+.pj-btn.ghost { background: var(--surface-2); color: var(--text); }
+.pj-btn.ghost:hover { background: var(--surface-hover); }
+.pj-btn.solid { background: var(--text); color: var(--bg); font-weight: 600; }
+.pj-btn.solid:hover { opacity: .88; }
+.pj-btn.solid:disabled { opacity: .5; pointer-events: none; }
 
 .pj-detail { flex: 1; overflow: hidden auto; padding: 24px 0 60px; }
 .pj-back { color: var(--text-muted); font-size: 14px; line-height: 20px; padding: 6px 4px; margin: 0 0 16px 32px; transition: color var(--fx-t, .12s); }
