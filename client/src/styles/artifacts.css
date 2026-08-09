@@ -130,7 +130,7 @@
 .plus-menu .pm-shortcut { margin-left: auto; font-size: 13px; color: var(--pop-faint); font-family: var(--font-sans); }
 .plus-menu .pm-chev { width: 16px; height: 16px; margin-left: auto; color: var(--pop-faint); flex-shrink: 0; }
 .plus-menu .pm-check { width: 16px; height: 16px; margin-left: auto; color: var(--pop-blue); flex-shrink: 0; }
-.plus-menu .pm-divider { height: 1px; background: var(--pop-divider); margin: 5px -6px; }
+.plus-menu .pm-divider { height: 1px; background: var(--pop-divider); margin: 4px 10px; }
 .pm-subwrap { position: relative; }
 .pm-sub { position: absolute; left: calc(100% + 4px); top: -6px; min-width: 236px; max-height: 300px; overflow: hidden auto; background: var(--pop-bg); border: 1px solid var(--pop-border); border-radius: 12px; padding: 6px; box-shadow: var(--pop-shadow); z-index: 21; animation: pop var(--fx-a, .12s) ease; transform-origin: top left; }
 .pm-sub.left { left: auto; right: calc(100% + 4px); transform-origin: top right; }

@@ -443,7 +443,7 @@ export default function Composer({
         <div className="composer-left">
           <div className="plus-wrap" ref={plusRef}>
             <button className="plus" onClick={() => setPlusMenu(m => !m)} title={t("More")}>
-              <Plus style={{ width: 17, height: 17 }} />
+              <Plus style={{ width: 20, height: 20 }} />
               {enabledCount > 0 && <span className="plus-badge">{enabledCount}</span>}
             </button>
             {plusMenu && (
@@ -591,22 +591,22 @@ export default function Composer({
           {voiceMic && (
             <button className={'mic' + (dictating ? ' rec' : '') + (transcribing ? ' busy' : '')} onClick={toggleDictation}
               title={dictating ? t('Stop dictation') : transcribing ? t('Transcribing…') : t('Dictate')} disabled={transcribing}>
-              <Mic style={{ width: 18, height: 18 }} />
+              <Mic style={{ width: 20, height: 20 }} />
             </button>
           )}
           {steering && hasText && (
-            <button key="steer" className="send steer" onClick={doSend} title={t('Steer this reply')}><Steer style={{ width: 16, height: 16 }} /></button>
+            <button key="steer" className="send steer" onClick={doSend} title={t('Steer this reply')}><Steer style={{ width: 20, height: 20 }} /></button>
           )}
           {streaming ? (
-            <button key="stop" className="send stop" onClick={onStop} title={t('Stop generating')}><Stop style={{ width: 16, height: 16 }} /></button>
+            <button key="stop" className="send stop" onClick={onStop} title={t('Stop generating')}><Stop style={{ width: 20, height: 20 }} /></button>
           ) : safetyChecking ? (
-            <button key="send" className={'send' + (safetyVerbose ? ' checking' : ' quiet')} disabled title={safetyVerbose ? t('Safety check…') : undefined}><Up style={{ width: 17, height: 17 }} /></button>
+            <button key="send" className={'send' + (safetyVerbose ? ' checking' : ' quiet')} disabled title={safetyVerbose ? t('Safety check…') : undefined}><Up style={{ width: 20, height: 20 }} /></button>
           ) : canSend ? (
-            <button key="send" className="send" onClick={doSend} disabled={uploading}><Up style={{ width: 17, height: 17 }} /></button>
+            <button key="send" className="send" onClick={doSend} disabled={uploading}><Up style={{ width: 20, height: 20 }} /></button>
           ) : voiceCall ? (
             <button key="call" className="mic call" onClick={onStartCall} title={t("Start a voice call")}><Wave style={{ width: 20, height: 20 }} /></button>
           ) : (
-            <button key="send" className="send ghost" disabled><Up style={{ width: 17, height: 17 }} /></button>
+            <button key="send" className="send ghost" disabled><Up style={{ width: 20, height: 20 }} /></button>
           )}
         </div>
       </div>

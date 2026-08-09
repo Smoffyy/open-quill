@@ -312,3 +312,38 @@
 :root[data-preset="openai"][data-theme="light"] .pm-overlay,
 :root[data-preset="openai"][data-theme="light"] .preset-scrim,
 :root[data-preset="openai"][data-theme="light"] .mdoc-overlay { background: rgba(0, 0, 0, .32); }
+
+/* Pins. The base sheets were retuned to claude.ai's exact metrics for the
+   Anthropic skin; these hold the OpenAI skin at the values it was verified
+   against, since a base-sheet change flows into this preset by default. */
+[data-preset="openai"] .topbar { height: auto; padding: 14px 20px; }
+[data-preset="openai"] .topbar .chat-name { height: auto; padding: 5px 9px; border-radius: 9px; font-size: 15px; line-height: normal; color: var(--text-muted); }
+[data-preset="openai"] .topbar .icon-btn { width: 30px; height: 30px; border-radius: 8px; }
+[data-preset="openai"] .bubble-user { max-width: 100%; }
+[data-preset="openai"] .actions { gap: 4px; height: 28px; }
+[data-preset="openai"] .action-btn { width: 28px; height: 28px; border-radius: 7px; }
+[data-preset="openai"] .msg-time { font-size: 12px; line-height: normal; padding-left: 0; }
+[data-preset="openai"] .code-wrap { border-radius: 12px; }
+[data-preset="openai"] .code-bar { background: #1f1f1d; border-radius: 12px 12px 0 0; }
+[data-preset="openai"] .code-wrap pre { padding: 4px 16px 16px; }
+[data-preset="openai"] .code-wrap pre code { font-size: 13.5px; line-height: 1.6; }
+[data-preset="openai"] .assistant-body code:not(pre code) { border: 0; padding: 1px 6px; border-radius: 5px; }
+[data-preset="openai"] .cmdk, [data-preset="openai"] .search-modal { width: min(560px, 92vw); background: var(--menu-bg); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,.28); }
+[data-preset="openai"] .search-modal { width: min(620px, 92vw); border-radius: 16px; }
+[data-preset="openai"] .cmdk-input { padding: 16px 18px; font-size: 16px; line-height: normal; border-bottom-color: var(--border-soft); }
+[data-preset="openai"] .cmdk-item, [data-preset="openai"] .search-row { height: auto; padding: 10px 12px; border-radius: 9px; }
+[data-preset="openai"] .cmdk-item.active, [data-preset="openai"] .search-row:hover, [data-preset="openai"] .search-row.active { background: var(--surface-hover); }
+[data-preset="openai"] .cmdk-overlay, [data-preset="openai"] .search-overlay { background: rgba(0, 0, 0, .45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+[data-preset="openai"] .search-overlay { padding-top: 13vh; }
+[data-preset="openai"] .overlay,
+[data-preset="openai"] .confirm-overlay,
+[data-preset="openai"] .ctx-inspect-overlay,
+[data-preset="openai"] .bc-overlay,
+[data-preset="openai"] .pm-overlay,
+[data-preset="openai"] .mdoc-overlay { background: rgba(0, 0, 0, .45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+[data-preset="openai"] .sidebar.collapsed { width: 58px; }
+[data-preset="openai"] .sidebar.collapsed .chats { display: none; }
+[data-preset="openai"] .sidebar.collapsed .sidebar-head { padding: 16px 0 10px; }
+[data-preset="openai"] .sidebar.collapsed .nav-item { padding: 9px; width: auto; height: auto; }
+[data-preset="openai"] .field label { font-size: 13px; line-height: normal; color: var(--text-muted); }
+[data-preset="openai"] .greeting img { width: 30px; height: 30px; }

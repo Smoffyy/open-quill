@@ -13,6 +13,7 @@
   --accent: #d97757;
   --on-accent: #ffffff;
   --user-bubble: #2f2f2c;
+  --composer-bg: var(--surface);
   --menu-bg: #2a2a28;
   --modal-bg: #1f1e1d;
   --modal-side: #1a1918;
@@ -77,8 +78,8 @@
 
 :root[data-theme="anthropic"] {
   color-scheme: dark;
-  --bg: #1f1f1e;
-  --sidebar: #1d1d1c;
+  --bg: #1a1a19;
+  --sidebar: #1a1a19;
   --sidebar-hover: #131313;
   --surface: #2c2c2a;
   --surface-2: #333331;
@@ -90,7 +91,8 @@
   --text-faint: rgba(255,255,255,.4);
   --accent: #c6613f;
   --on-accent: #ffffff;
-  --user-bubble: #121212;
+  --user-bubble: #262624;
+  --composer-bg: #383835;
   --menu-bg: #313130;
   --modal-bg: #2c2c2a;
   --modal-side: #1a1a19;
@@ -105,7 +107,23 @@
   --sidebar-label: #898781;
   --sidebar-icon: #ffffff;
   --model-name: #fefefe;
+  --pop-shadow: inset 0 0 0 1px var(--pop-border), 0 8px 24px rgba(0, 0, 0, .32), 0 2px 6px rgba(0, 0, 0, .2);
+  --pop-border: rgba(255, 255, 255, .10);
+  --pop-ring: rgba(255, 255, 255, .20);
+  --pop-faint: #898781;
+  --pop-muted: #898781;
+  --cmdk-active: #0d0d0d;
+  --code-bg: rgba(56, 56, 53, .5);
+  --code-border: rgba(255, 255, 255, .10);
+  --code-text: #eaecf0;
+  --code-inline: #ec7e7e;
+  --code-label: var(--sidebar-label);
 }
+:root[data-theme="anthropic"] .cmdk,
+:root[data-theme="anthropic"] .search-modal { border-color: var(--pop-ring); }
+:root[data-theme="anthropic"] .plus-menu,
+:root[data-theme="anthropic"] .pm-sub,
+:root[data-theme="anthropic"] .slash-menu { border: 0; }
 
 :root[data-theme="oled"], :root[data-theme="openai"] {
   color-scheme: dark;
@@ -140,6 +158,16 @@
 :root[data-theme="oled"] .code-wrap, :root[data-theme="openai"] .code-wrap { background: #050505; }
 /* anthropic: sidebar saved-chat + label text */
 :root[data-theme="anthropic"] .section-label { color: var(--sidebar-label); }
+:root[data-theme="anthropic"] .sidebar { border-right-color: rgba(255, 255, 255, .1); }
+:root[data-theme="anthropic"] .rl-group { color: var(--sidebar-label); }
+:root[data-theme="anthropic"] .pj-tile-desc,
+:root[data-theme="anthropic"] .pj-name,
+:root[data-theme="anthropic"] .pj-desc,
+:root[data-theme="anthropic"] .pj-card-head { color: var(--sidebar-text); }
+:root[data-theme="anthropic"] .pj-tile-time,
+:root[data-theme="anthropic"] .pj-card-sub,
+:root[data-theme="anthropic"] .pj-cap,
+:root[data-theme="anthropic"] .pj-empty { color: var(--sidebar-label); }
 :root[data-theme="anthropic"] .chat-row,
 :root[data-theme="anthropic"] .folder-name,
 :root[data-theme="anthropic"] .folder-count,
@@ -161,7 +189,19 @@
 :root[data-theme="anthropic"] .nav-item:hover,
 :root[data-theme="anthropic"] .nav-item:active { background: var(--sidebar-hover); }
 :root[data-theme="anthropic"] .send { color: #fff; }
-:root[data-theme="anthropic"] .greeting { color: rgba(255,255,255,.8); }
+:root[data-theme="anthropic"] .composer .mic,
+:root[data-theme="anthropic"] .mdocs-btn { color: var(--text); }
+:root[data-theme="anthropic"] .greeting { color: var(--sidebar-text); font-weight: 370; }
+:root[data-theme="anthropic"] .composer { border-color: transparent; box-shadow: 0 4px 20px rgba(0, 0, 0, .035), 0 0 0 1px rgba(225, 224, 217, .15); }
+:root[data-theme="anthropic"] .composer:focus-within { border-color: transparent; box-shadow: 0 4px 20px rgba(0, 0, 0, .075), 0 0 0 1px rgba(225, 224, 217, .3); }
+:root[data-theme="anthropic"] .composer textarea::placeholder { color: var(--sidebar-label); }
+:root[data-theme="anthropic"] .disclaimer { color: var(--sidebar-label); }
+:root[data-theme="anthropic"] .action-btn,
+:root[data-theme="anthropic"] .msg-time { color: var(--sidebar-label); }
+:root[data-theme="anthropic"] .action-btn:hover { color: var(--text); }
+:root[data-theme="anthropic"] .profile-btn .name { color: var(--sidebar-text); }
+:root[data-theme="anthropic"] .profile-btn .plan { color: var(--sidebar-label); }
+:root[data-theme="anthropic"] .profile-btn .avatar { background: var(--sidebar-text); color: var(--sidebar); }
 :root[data-theme="anthropic"] ::selection { background: #3d3d3d; color: #fff; }
 :root[data-theme="anthropic"] ::-moz-selection { background: #3d3d3d; color: #fff; }
 /* anthropic: sidebar icons */

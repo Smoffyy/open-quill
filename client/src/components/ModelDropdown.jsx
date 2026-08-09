@@ -357,7 +357,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
         {chips.length
           ? chips.map((c, i) => <span key={c + i} className="ext ext-effort">{t(c)}</span>)
           : (extended && current?.hasReasoning && <span className="ext">{t("Extended")}</span>)}
-        <ChevDown style={{ width: 16, height: 16 }} />
+        <ChevDown style={{ width: 12, height: 12 }} />
       </button>
       {open && <div className="model-scrim" onClick={() => setOpen(false)} />}
       {open && (

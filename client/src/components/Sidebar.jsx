@@ -263,7 +263,7 @@ function Sidebar({
             <div className="section-label recents-label" ref={groupRef}>
               {t('Recents')}
               <button className="rl-group" title={t('Group by')} aria-label={t('Group by')} aria-haspopup="menu" aria-expanded={groupMenu}
-                onClick={() => setGroupMenu(o => !o)}><Sliders style={{ width: 16 }} /></button>
+                onClick={() => setGroupMenu(o => !o)}><Sliders style={{ width: 13, height: 13 }} /></button>
               {groupMenu && (
                 <div className="rl-menu" role="menu">
                   <div className="rl-menu-head">{t('Group by')}</div>

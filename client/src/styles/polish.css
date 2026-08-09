@@ -202,22 +202,21 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 
 /* ============ chats overview ============ */
 .chats-overview { position: fixed; inset: 0; z-index: 60; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(14px); display: flex; flex-direction: column; animation: ovIn var(--fx-a, .2s) ease both; }
-.co-head { display: flex; align-items: center; justify-content: space-between; padding: 22px 34px 10px; flex-shrink: 0; }
-.co-head h2 { margin: 0; font-family: var(--font-serif); font-size: 24px; font-weight: 500; }
+.co-head { display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 900px; margin: 0 auto; padding: 32px 34px 12px; flex-shrink: 0; }
+.co-head h2 { margin: 0; font-family: var(--font-serif); font-size: 24px; line-height: 32px; font-weight: 500; }
 .co-close { background: none; border: none; color: var(--text-muted); font-size: 17px; cursor: pointer; padding: 8px 10px; border-radius: 9px; transition: background var(--fx-t, .12s) ease, color var(--fx-t, .12s) ease; }
 .co-close:hover { background: var(--hover); color: var(--text); }
 .co-body { flex: 1; overflow: hidden auto; padding: 8px 34px 40px; }
-.co-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; max-width: 1040px; margin: 0 auto; }
-@media (max-width: 900px) { .co-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 560px) { .co-grid { grid-template-columns: 1fr; } }
-.co-card { position: relative; text-align: left; background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 15px 16px 30px; height: 158px; overflow: hidden; cursor: pointer; font-family: var(--font-sans); color: var(--text); display: flex; flex-direction: column; gap: 7px; animation: coIn var(--fx-a, .34s) var(--ease-out) backwards; transition: transform var(--fx-t, .18s) var(--ease-out), border-color var(--fx-t, .18s) ease, box-shadow var(--fx-t, .18s) ease; }
-.co-card:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); box-shadow: 0 10px 28px #00000030; }
+.co-grid { display: flex; flex-direction: column; max-width: 832px; margin: 0 auto; }
+.co-card { position: relative; text-align: left; background: transparent; border: 0; border-radius: 8px; padding: 0 12px; height: 48.8px; overflow: visible; cursor: pointer; font-family: var(--font-sans); color: var(--text); display: flex; flex-direction: row; align-items: center; gap: 12px; animation: coIn var(--fx-a, .34s) var(--ease-out) backwards; transition: background var(--fx-t, .14s) ease; }
+.co-card::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: .8px; background: var(--modal-line, var(--border-soft)); }
+.co-card:last-child::after { display: none; }
+.co-card:hover { background: var(--hover-soft); }
 
 @keyframes coIn { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: none; } }
-.co-title { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
-.co-preview { font-size: 13px; line-height: 1.55; color: var(--text-muted); opacity: .62; overflow: hidden; flex: 1; min-height: 0; word-break: break-word; }
-.co-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 58px; background: linear-gradient(to top, var(--card-bg) 28%, transparent); pointer-events: none; }
-.co-time { position: absolute; left: 16px; bottom: 11px; font-size: 11.5px; color: var(--text-faint); z-index: 1; }
+.co-title { font-size: 14px; line-height: 20px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+.co-preview, .co-fade { display: none; }
+.co-time { position: static; flex-shrink: 0; font-size: 13px; line-height: 17px; color: var(--sidebar-label, var(--text-faint)); }
 .co-loading { display: flex; justify-content: center; padding: 18px; }
 .co-end { text-align: center; color: var(--text-faint); font-size: 12.5px; padding: 18px; }
 
