@@ -295,6 +295,31 @@ test('profile input is validated rather than stored as sent', async () => {
   assert.deepEqual(ok.json.user.prefs, { theme: 'dark' });
 });
 
+// Express 5 leaves req.body undefined when nothing parsed one, and handlers read it directly.
+test('a write with no body is a clean no-op, not a 500', async () => {
+  const chat = await browser('POST', '/api/chats', { body: {} });
+  assert.equal(chat.status, 200);
+
+  const bodyless = [
+    ['PATCH', '/api/me'],
+    ['PUT', '/api/me/styles'],
+    ['PUT', '/api/me/personas'],
+    ['PUT', '/api/me/prompts'],
+    ['PATCH', `/api/chats/${chat.json.id}`],
+    ['POST', `/api/chats/${chat.json.id}/branch`],
+    ['DELETE', `/api/chats/${chat.json.id}/pins`],
+    ['PATCH', '/api/admin/settings'],
+    ['PATCH', '/api/admin/app-config']
+  ];
+  for (const [method, url] of bodyless) {
+    const res = await request(method, url, { origin: ORIGIN, secFetchSite: 'same-origin', cookie });
+    assert.ok(res.status < 500, `${method} ${url} answered ${res.status}: ${res.text.slice(0, 200)}`);
+  }
+
+  assert.ok((await browser('PATCH', '/api/me', { body: {} })).status < 500);
+  assert.equal((await browser('GET', '/api/me')).json.user.displayName, 'Integration');
+});
+
 test('admin settings and branding survive hostile input rather than 500', async () => {
   const hostile = await browser('PATCH', '/api/admin/settings', {
     body: {

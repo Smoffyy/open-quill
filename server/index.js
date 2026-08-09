@@ -47,6 +47,7 @@ app.use((req, res, next) => {
 // unless we check. SameSite=Lax already blocks the common case; this closes the rest.
 app.use(sameOriginGuard);
 app.use(express.json({ limit: '2mb' }));
+app.use((req, _res, next) => { if (req.body === undefined) req.body = {}; next(); });
 app.use(parseCookies);
 // 404 rather than 401 for a signed-out caller: whether a given upload exists is itself
 // something only a member should learn.

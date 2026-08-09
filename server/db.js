@@ -170,6 +170,8 @@ const MIRROR = {
 const bumps = new Map();
 function bumpTable(table) { bumps.set(table, (bumps.get(table) || 0) + 1); }
 
+const isKey = id => typeof id === 'string' || typeof id === 'number';
+
 function collection(table) {
   const cols = Object.keys(MIRROR[table]);
   const mirror = MIRROR[table];
@@ -210,12 +212,13 @@ function collection(table) {
     // Ids arrive from request bodies and params. better-sqlite3 throws on a bound object
     // or array, which turned "look up this thing" into a 500 in every route that did not
     // coerce first; a non-primitive id simply matches nothing.
-    byId: id => (typeof id === 'string' || typeof id === 'number' ? parse(getStmt.get(id)) : undefined),
+    byId: id => (isKey(id) ? parse(getStmt.get(id)) : undefined),
     where: (col, val) => (cols.includes(col) ? whereStmt(col).all(val ?? null).map(r => JSON.parse(r.data)) : api.filter(o => (o[col] ?? null) === (val ?? null))),
     countWhere: (col, val) => (cols.includes(col) ? countWhereStmt(col).get(val ?? null).n : api.filter(o => (o[col] ?? null) === (val ?? null)).length),
     removeWhere: (col, val) => { if (!cols.includes(col)) return api.remove(o => (o[col] ?? null) === (val ?? null)); delWhereStmt(col).run(val ?? null); bump(); },
     insert: obj => { insStmt.run(obj.id, ...rowVals(obj)); bump(); return obj; },
     update: (id, patch) => {
+      if (!isKey(id)) return undefined;
       const cur = parse(getStmt.get(id));
       if (!cur) return undefined;
       Object.assign(cur, patch);
@@ -223,9 +226,9 @@ function collection(table) {
       bump();
       return cur;
     },
-    removeById: id => { delStmt.run(id); bump(); },
+    removeById: id => { if (!isKey(id)) return; delStmt.run(id); bump(); },
     removeByIds: ids => {
-      const list = Array.isArray(ids) ? ids : [...ids];
+      const list = (Array.isArray(ids) ? ids : [...ids]).filter(isKey);
       if (!list.length) return;
       const tx = sdb.transaction(rows => { for (const id of rows) delStmt.run(id); });
       tx(list);

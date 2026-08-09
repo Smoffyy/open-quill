@@ -32,6 +32,7 @@ export function isIgnoredDir(name) {
   return name.endsWith('.egg-info') || name.endsWith('.xcodeproj') || name.endsWith('.xcworkspace') || /^cmake-build-/.test(name);
 }
 
+const GITIGNORE_CACHE_MAX = 32;
 const gitignoreCache = new Map();
 function gitignoreMatchers(chatId) {
   const gi = path.join(dirFor(chatId), '.gitignore');
@@ -55,7 +56,9 @@ function gitignoreMatchers(chatId) {
       if (neg) m.negNames.add(line); else m.names.add(line);
     }
   }
+  gitignoreCache.delete(chatId);
   gitignoreCache.set(chatId, { mtime, m });
+  if (gitignoreCache.size > GITIGNORE_CACHE_MAX) gitignoreCache.delete(gitignoreCache.keys().next().value);
   return m;
 }
 
