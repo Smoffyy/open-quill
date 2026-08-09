@@ -77,3 +77,6 @@ export const Plug = (p) => <I {...p}><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-6
 export const Feather = (p) => <I {...p}><path d="M20 4c-5 0-11 3-13 8l-3 8 8-3c5-2 8-8 8-13zM7 17l7-7"/></I>;
 export const Gauge = (p) => <I {...p}><path d="M12 14l4-4M4.5 19a9 9 0 1 1 15 0"/><circle cx="12" cy="14" r="1.4"/></I>;
 export const Steer = (p) => <I {...p}><path d="M12 3v6M12 15v6M3 12h6M15 12h6"/><circle cx="12" cy="12" r="3"/></I>;
+export const Eye = (p) => <I {...p}><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z" /><circle cx="12" cy="12" r="2.6" /></I>;
+export const EyeOff = (p) => <I {...p}><path d="M3 3l18 18M10 5.9A9.9 9.9 0 0 1 12 5.5c6.5 0 10 6.5 10 6.5a17 17 0 0 1-3.2 3.9M6.4 6.9A16 16 0 0 0 2 12s3.5 6.5 10 6.5a10 10 0 0 0 3.4-.6" /><path d="M9.9 10.2a2.6 2.6 0 0 0 3.6 3.7" /></I>;
+export const SortIcon = (p) => <I {...p}><path d="M4 7h11M4 12h7M4 17h4M17 15l3 3 3-3M20 18V8" /></I>;

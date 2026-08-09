@@ -1,43 +1,39 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../../api.js';
 import { Copy, Trash, Star } from '../icons.jsx';
-import { Toggle, Switch, IconSlot, SystemPromptEditor, StatusChips, CopyBtn, SegPick, bgPreviewStyle, BannerPicker } from './widgets.jsx';
+import { Toggle, Switch, IconSlot, SystemPromptEditor, PromptField, StatusChips, CopyBtn, SegPick, bgPreviewStyle, BannerPicker } from './widgets.jsx';
 import KwargsEditor from './KwargsEditor.jsx';
 import { t, tk } from '../../i18n.jsx';
 
 export const ME_SECTIONS = [
-  ['essentials', tk('Essentials')],
-  ['routing', tk('Routing')],
-  ['reasoning', tk('Reasoning')],
-  ['kwargs', tk('Kwargs')],
+  ['general', tk('General')],
+  ['behavior', tk('Behavior')],
   ['tools', tk('Tools')],
   ['appearance', tk('Appearance')],
-  ['advanced', tk('Advanced')],
-  ['docs', tk('Docs')]
+  ['advanced', tk('Advanced')]
 ];
 
 const FIELD_INDEX = [
-  { s: 'essentials', a: 'identity', label: tk('Name, model ID & provider'), k: tk('display name internal id backend connection rename') },
-  { s: 'essentials', a: 'description', label: tk('Description'), k: tk('tagline subtitle picker text') },
-  { s: 'essentials', a: 'sysprompt', label: tk('System prompt'), k: tk('instructions persona behavior prompt') },
-  { s: 'essentials', a: 'visibility', label: tk('Visibility & default'), k: tk('hidden default unavailable picker show hide') },
-  { s: 'essentials', a: 'sunset', label: tk('Retirement date'), k: tk('sunset retire going away deprecate schedule date countdown') },
-  { s: 'docs', a: 'docs-page', label: tk('Model docs page'), k: tk('docs documentation catalog page intelligence speed modalities cutoff frontier featured compare') },
-  { s: 'kwargs', a: 'kwargs-list', label: tk('Kwargs & thinking controls'), k: tk('kwarg kwargs effort reasoning slider toggle extended levels enable_thinking preserve_thinking chat_template_kwargs paired custom values default') },
-  { s: 'reasoning', a: 'prompt-token', label: tk('Extended thinking (prompt token)'), k: tk('think no_think token trigger mode') },
-  { s: 'reasoning', a: 'tags', label: tk('Reasoning tags'), k: tk('think open close delimiter stream') },
-  { s: 'reasoning', a: 'reveal', label: tk('Show reasoning to users'), k: tk('collapsible hide thinking status expand') },
-  { s: 'reasoning', a: 'summaries', label: tk('Long conversations & context'), k: tk('summarize compact context window num ctx headroom recent turns detect trim drop prompt cache warm reuse prefill') },
-  { s: 'tools', a: 'core-tools', label: tk('Core abilities'), k: tk('vision image input sandbox code files web search') },
-  { s: 'tools', a: 'extra-tools', label: tk('Assistant features'), k: tk('skills mcp connectors chat search end conversation long reminder') },
+  { s: 'general', a: 'identity', label: tk('Name, model ID & provider'), k: tk('display name internal id backend connection rename') },
+  { s: 'general', a: 'description', label: tk('Description'), k: tk('tagline subtitle picker text') },
+  { s: 'general', a: 'sysprompt', label: tk('System prompt'), k: tk('instructions persona behavior prompt variables date user') },
+  { s: 'general', a: 'visibility', label: tk('Visibility & availability'), k: tk('hidden default unavailable picker show hide') },
+  { s: 'general', a: 'sunset', label: tk('Retirement date'), k: tk('sunset retire going away deprecate schedule date countdown') },
+  { s: 'behavior', a: 'kwargs-list', label: tk('Request controls'), k: tk('kwarg kwargs effort reasoning slider toggle extended levels budget enable_thinking preserve_thinking chat_template_kwargs paired custom values default') },
+  { s: 'behavior', a: 'reasoning', label: tk('Reasoning'), k: tk('think no_think token trigger mode open close delimiter stream collapsible hide thinking status expand extended prompt token') },
+  { s: 'behavior', a: 'summaries', label: tk('Long conversations & context'), k: tk('summarize compact context window num ctx headroom recent turns detect trim drop prompt cache warm reuse prefill') },
+  { s: 'tools', a: 'core-tools', label: tk('Capabilities'), k: tk('vision image input sandbox code files web search') },
+  { s: 'tools', a: 'extra-tools', label: tk('Optional features'), k: tk('skills mcp connectors chat search end conversation long reminder') },
   { s: 'tools', a: 'tool-limit', label: tk('Tool-call limit'), k: tk('agent steps rounds maximum tools') },
-  { s: 'appearance', a: 'logo', label: tk('Logo & animations'), k: tk('icon static generating thinking upload starburst motion size') },
-  { s: 'appearance', a: 'in-chat', label: tk('In-chat display'), k: tk('picker logo show name position avatar left above below') },
-  { s: 'appearance', a: 'badges', label: tk('Picker badges'), k: tk('cap text vision reasoning compact labels') },
+  { s: 'appearance', a: 'logo', label: tk('Logo & motion'), k: tk('icon static generating thinking upload starburst motion size') },
+  { s: 'appearance', a: 'in-chat', label: tk('In conversation'), k: tk('picker logo show name position avatar left above below') },
+  { s: 'appearance', a: 'badges', label: tk('Badges'), k: tk('cap text vision reasoning compact labels') },
   { s: 'appearance', a: 'showcase', label: tk('Showcase background'), k: tk('backdrop image gradient css frosted glass') },
+  { s: 'appearance', a: 'docs-page', label: tk('Public docs page'), k: tk('docs documentation catalog page intelligence speed modalities cutoff frontier featured compare') },
   { s: 'advanced', a: 'sampling', label: tk('Sampling'), k: tk('temperature top p top k min p penalty seed max tokens stop sequence dry xtc mirostat repetition') },
   { s: 'advanced', a: 'pricing', label: tk('Pricing'), k: tk('cost price input output per million usage preset') },
-  { s: 'advanced', a: 'call-prompt', label: tk('Voice call prompt'), k: tk('call phone speech voice override') }
+  { s: 'advanced', a: 'call-prompt', label: tk('Voice call prompt'), k: tk('call phone speech voice override') },
+  { s: 'advanced', a: 'router', label: tk('Router'), k: tk('routing rules fallback matcher keyword regex model picker') }
 ];
 
 const EyeIcon = (p) => (
@@ -55,6 +51,10 @@ export function GroupLabel({ anchor, first, children }) {
   return <div className={'med-group' + (first ? ' first' : '')} data-anchor={anchor}>{children}</div>;
 }
 
+export function SubLabel({ children }) {
+  return <div className="med-subhead">{children}</div>;
+}
+
 const MATCHERS = [
   ['keyword', tk('Message contains any of these words')],
   ['regex', tk('Message matches this regular expression')],
@@ -66,6 +66,56 @@ const MATCHERS = [
   ['always', tk('Always (catch-all)')],
 ];
 const NEEDS_VALUE = new Set(['keyword', 'regex', 'shorterThan', 'longerThan']);
+
+const SAMPLER_GROUPS = [
+  [tk('Core'), tk('The ones you reach for most: how random the output is, and how long it runs.'), [
+    ['temperature', tk('Temperature'), '0.0 – 2.0'], ['top_p', tk('Top P'), '0.0 – 1.0'],
+    ['top_k', tk('Top K'), 'e.g. 40'], ['min_p', tk('Min P'), '0.0 – 1.0'],
+    ['max_tokens', tk('Max tokens'), 'e.g. 2048'], ['seed', tk('Seed'), 'integer']
+  ]],
+  [tk('Repetition control'), tk('Discourage the model from repeating itself. DRY is llama.cpp only.'), [
+    ['repetition_penalty', tk('Repetition penalty'), 'e.g. 1.1'], ['presence_penalty', tk('Presence penalty'), '-2.0 – 2.0'],
+    ['frequency_penalty', tk('Frequency penalty'), '-2.0 – 2.0'],
+    ['dry_multiplier', tk('DRY multiplier'), '0 = off, e.g. 0.8'], ['dry_base', tk('DRY base'), 'e.g. 1.75'],
+    ['dry_allowed_length', tk('DRY allowed length'), 'e.g. 2'], ['dry_penalty_last_n', tk('DRY range'), '-1 = whole context']
+  ]],
+  [tk('Experimental samplers'), tk('XTC and Mirostat change how tokens are picked. Leave them off unless you are tuning deliberately.'), [
+    ['xtc_probability', tk('XTC probability'), '0 = off, 0.0 – 1.0'], ['xtc_threshold', tk('XTC threshold'), 'e.g. 0.1'],
+    ['mirostat', tk('Mirostat'), '0 off, 1 or 2'], ['mirostat_tau', tk('Mirostat tau'), 'e.g. 5.0'], ['mirostat_eta', tk('Mirostat eta'), 'e.g. 0.1']
+  ]]
+];
+
+function SamplerGroup({ title, note, fields, m, set, collapsible }) {
+  const filled = fields.filter(([k]) => m[k] !== '' && m[k] !== null && m[k] !== undefined).length;
+  const [open, setOpen] = useState(!collapsible || filled > 0);
+  if (!fields.length) return null;
+  return (
+    <div className={'samp-group' + (open ? ' open' : '')}>
+      {collapsible ? (
+        <button type="button" className="samp-head" onClick={() => setOpen(o => !o)} aria-expanded={open}>
+          <span className="samp-caret">›</span>
+          <span className="samp-title">{t(title)}</span>
+          {filled > 0 && <span className="samp-badge">{filled}</span>}
+        </button>
+      ) : (
+        <div className="samp-head static"><span className="samp-title">{t(title)}</span></div>
+      )}
+      {open && (
+        <>
+          <div className="muted-note samp-note">{t(note)}</div>
+          <div className="sampling-grid">
+            {fields.map(([k, label, ph]) => (
+              <div className="samp-field" key={k}>
+                <label>{t(label)}</label>
+                <input type="number" step="any" placeholder={ph} value={m[k] ?? ''} onChange={(e) => set(k, e.target.value)} />
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function RoutingPane({ m, set, models }) {
   const rules = Array.isArray(m.router_rules) ? m.router_rules : [];
@@ -83,7 +133,7 @@ function RoutingPane({ m, set, models }) {
     set('router_rules', next);
   };
   return (
-    <div className="med-pane">
+    <>
       <div className="field row">
         <div>
           <label>{t("Use this model as a router")}</label>
@@ -133,17 +183,19 @@ function RoutingPane({ m, set, models }) {
           </div>
         </>
       )}
-    </div>
+    </>
   );
 }
 
-export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, providers = [], providerTypes = {}, models = [], section = 'essentials', onSection }) {
+export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, providers = [], providerTypes = {}, models = [], section = 'general', onSection }) {
   const [spOpen, setSpOpen] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [detectMsg, setDetectMsg] = useState('');
   const [preset, setPreset] = useState(null);
   const [renaming, setRenaming] = useState(false);
   const [findQ, setFindQ] = useState('');
+  const [outline, setOutline] = useState([]);
+  const [seen, setSeen] = useState('');
   const bgRef = useRef(null);
   const bodyRef = useRef(null);
   const nameRef = useRef(null);
@@ -161,6 +213,31 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
   }, [m.internal_name]);
 
   useEffect(() => { if (renaming) requestAnimationFrame(() => { nameRef.current?.focus(); nameRef.current?.select(); }); }, [renaming]);
+
+  useEffect(() => {
+    const body = bodyRef.current;
+    if (!body) return;
+    body.scrollTop = 0;
+    const marks = [...body.querySelectorAll('.med-group[data-anchor]')];
+    setOutline(marks.map(el => ({ a: el.dataset.anchor, label: el.textContent || '' })));
+    setSeen(marks[0]?.dataset.anchor || '');
+    if (!marks.length) return;
+    const atEnd = () => body.scrollTop + body.clientHeight >= body.scrollHeight - 4;
+    const io = new IntersectionObserver((entries) => {
+      if (atEnd()) { setSeen(marks[marks.length - 1].dataset.anchor); return; }
+      const hit = entries.filter(e => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (hit) setSeen(hit.target.dataset.anchor);
+    }, { root: body, rootMargin: '0px 0px -70% 0px', threshold: 0 });
+    marks.forEach(el => io.observe(el));
+    const onScroll = () => { if (atEnd()) setSeen(marks[marks.length - 1].dataset.anchor); };
+    body.addEventListener('scroll', onScroll, { passive: true });
+    return () => { io.disconnect(); body.removeEventListener('scroll', onScroll); };
+  }, [section, m.id, kwargCount, m.is_router, m.enable_summaries]);
+
+  function goTo(a) {
+    const el = bodyRef.current?.querySelector(`[data-anchor="${a}"]`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
   const applyPreset = () => preset && onChange({ ...m, cost_in: preset.in, cost_out: preset.out });
   const clearPrice = () => onChange({ ...m, cost_in: null, cost_out: null });
@@ -245,9 +322,17 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
         </div>
       </div>
 
+      <div className="med-main">
+      {outline.length > 1 && (
+        <nav className="med-outline" aria-label={t("Sections on this tab")}>
+          {outline.map(o => (
+            <button key={o.a} className={seen === o.a ? 'on' : ''} onClick={() => goTo(o.a)}>{o.label}</button>
+          ))}
+        </nav>
+      )}
+
       <div className="med-body" ref={bodyRef}>
-        {section === 'routing' && <RoutingPane m={m} set={set} models={models} />}
-        {section === 'essentials' && (
+        {section === 'general' && (
           <div className="med-pane">
             <GroupLabel anchor="identity" first>{t("Identity")}</GroupLabel>
             <div className="two-col">
@@ -267,18 +352,13 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
               <div className="muted-note">{t("Shown under the model's name in the picker.")}</div>
             </div>
 
-            <GroupLabel anchor="sysprompt">{t("Behavior")}</GroupLabel>
-            <div className="field"><label>{t("System prompt")}</label>
-              <button type="button" className="sp-preview" onClick={() => setSpOpen(true)}>
-                {(m.system_prompt || '').trim()
-                  ? <><div className="sp-preview-text">{m.system_prompt}</div><div className="sp-preview-fade" /></>
-                  : <div className="sp-preview-empty">{t("Click to write a system prompt…")}</div>}
-                <div className="sp-preview-hint">{t("Click to edit")}</div>
-              </button>
-            </div>
+            <GroupLabel anchor="sysprompt">{t("System prompt")}</GroupLabel>
+            <PromptField value={m.system_prompt || ''} onChange={(v) => set('system_prompt', v)}
+              onExpand={() => setSpOpen(true)} placeholder={t("You are a helpful assistant…")}
+              hint={t("Defines how this model behaves. The date and user chips insert variables that are filled in locally on each message.")} />
             {spOpen && <SystemPromptEditor value={m.system_prompt || ''} onChange={(v) => set('system_prompt', v)} onClose={() => setSpOpen(false)} />}
 
-            <GroupLabel anchor="visibility">{t("Visibility")}</GroupLabel>
+            <GroupLabel anchor="visibility">{t("Visibility & availability")}</GroupLabel>
             <div className="med-toggle-card">
               <Toggle m={m} set={set} k="is_default" label={t("Set as default")} note={t("Pre-selected for users on first login. Only one model can be the default.")} />
               <div className="field row">
@@ -313,35 +393,18 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
           </div>
         )}
 
-        {section === 'reasoning' && (
+        {section === 'behavior' && (
           <div className="med-pane">
-            <GroupLabel anchor="prompt-token" first>{t("Thinking")}</GroupLabel>
-            <div className="muted-note" style={{ marginBottom: 10 }}>
-              {t("Thinking controls that ride along with the request now live in the Kwargs tab, where you can add as many as you like and pair them together.")}
-              {' '}<button type="button" className="linklike" onClick={() => onSection && onSection('kwargs')}>{t("Open Kwargs")}</button>
-            </div>
-            {(hasKwargs || !!m.effort_enabled) && (
-              <div className="muted-note" style={{ marginBottom: 10 }}>
-                {hasKwargs
-                  ? t("This model sends {n} kwarg(s) with every request.", { n: kwargCount })
-                  : t("This model still uses the old thinking control. The Kwargs tab can convert it.")}
-              </div>
-            )}
-            <div className="med-toggle-card">
-              <Toggle m={m} set={set} k="has_reasoning" label={t("Extended thinking (prompt token)")} note={t("For models that switch modes via a token in the system prompt. Adds the Extended toggle for users.")} />
-            </div>
-            {!!m.has_reasoning && <>
-              <GroupLabel anchor="triggers">{t("Mode triggers")}</GroupLabel>
-              <div className="two-col">
-                <div className="field"><label>{t("Extended-mode trigger")}</label>
-                  <input value={m.reasoning_token || ''} onChange={(e) => set('reasoning_token', e.target.value)} placeholder={t("/think")} /></div>
-                <div className="field"><label>{t("Standard-mode trigger")}</label>
-                  <input value={m.non_reasoning_token || ''} onChange={(e) => set('non_reasoning_token', e.target.value)} placeholder={t("/no_think")} /></div>
-              </div>
-              <div className="muted-note">{t("Appended to the system prompt, on its own line, depending on whether the user has Extended turned on.")}</div>
-            </>}
+            <GroupLabel anchor="reasoning" first>{t("Reasoning")}</GroupLabel>
+            <div className="muted-note med-lede">{t("How this model thinks before it answers, and how much of that the user gets to see.")}</div>
 
-            <GroupLabel anchor="tags">{t("Reasoning tags")}</GroupLabel>
+            <SubLabel>{t("What users see")}</SubLabel>
+            <div className="med-toggle-card">
+              <Toggle m={m} set={set} k="reasoning_collapsible" inverted label={t("Show reasoning to users")} note={t("When on, users can expand and read the thought process. When off, they see only a 'Thinking…' status.")} />
+              {m.reasoning_collapsible === 0 && <Toggle m={m} set={set} k="hide_thinking" label={t('Hide the "Thinking…" status too')} note={t("No thinking indicator at all, the model just appears to be generating normally while it reasons.")} />}
+            </div>
+
+            <SubLabel>{t("Output tags")}</SubLabel>
             <div className="two-col">
               <div className="field"><label>{t("Reasoning start tag")}</label>
                 <input value={m.think_open || ''} onChange={(e) => set('think_open', e.target.value)} placeholder="<think>" /></div>
@@ -350,11 +413,22 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
             </div>
             <div className="muted-note">How the model delimits its reasoning in the output stream. Leave blank to use the default {'<think>…</think>'}.</div>
 
-            <GroupLabel anchor="reveal">{t("What users see")}</GroupLabel>
+            <SubLabel>{t("Prompt-token switching")}</SubLabel>
+            {!hasKwargs && !!m.effort_enabled && (
+              <div className="muted-note" style={{ marginBottom: 10 }}>{t("This model still uses the old thinking control. Convert it below.")}</div>
+            )}
             <div className="med-toggle-card">
-              <Toggle m={m} set={set} k="reasoning_collapsible" inverted label={t("Show reasoning to users")} note={t("When on, users can expand and read the thought process. When off, they see only a 'Thinking…' status.")} />
-              {m.reasoning_collapsible === 0 && <Toggle m={m} set={set} k="hide_thinking" label={t('Hide the "Thinking…" status too')} note={t("No thinking indicator at all, the model just appears to be generating normally while it reasons.")} />}
+              <Toggle m={m} set={set} k="has_reasoning" label={t("Switch modes with a prompt token")} note={t("For models that change thinking mode via a token in the system prompt. Adds the Extended toggle for users.")} />
             </div>
+            {!!m.has_reasoning && <>
+              <div className="two-col">
+                <div className="field"><label>{t("Extended-mode trigger")}</label>
+                  <input value={m.reasoning_token || ''} onChange={(e) => set('reasoning_token', e.target.value)} placeholder={t("/think")} /></div>
+                <div className="field"><label>{t("Standard-mode trigger")}</label>
+                  <input value={m.non_reasoning_token || ''} onChange={(e) => set('non_reasoning_token', e.target.value)} placeholder={t("/no_think")} /></div>
+              </div>
+              <div className="muted-note">{t("Appended to the system prompt, on its own line, depending on whether the user has Extended turned on.")}</div>
+            </>}
 
             <GroupLabel anchor="summaries">{t("Long conversations")}</GroupLabel>
             <div className="med-toggle-card">
@@ -382,12 +456,21 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
                 options={[['retain', tk('Keep as much history as possible')], ['cache', tk('Keep the prompt cache warm')]]} />
               <div className="muted-note">{t("Keeping history drops the least it can get away with, which means the prompt changes every turn and a local backend has to re-read the whole conversation each time. Keeping the cache warm drops further than needed, so the prompt stays identical for several turns and only the new message is processed. Much faster on long chats, at the cost of forgetting older turns sooner.")}</div>
             </div>
+
+            <GroupLabel anchor="kwargs-list">{t("Request controls")}</GroupLabel>
+            <div className="muted-note med-lede">
+              {hasKwargs
+                ? t("{n} extra value(s) are sent with every request to this model. Each one can appear in the model picker with your own wording, stay hidden, or follow another control so two values always move together.", { n: kwargCount })
+                : t("Extra values sent with every request to this model, such as thinking budgets and reasoning levels. Each one can appear in the model picker with your own wording, stay hidden, or follow another control so two values always move together.")}
+            </div>
+            <KwargsEditor m={m} onChange={onChange} />
           </div>
         )}
 
         {section === 'tools' && (
           <div className="med-pane">
-            <GroupLabel anchor="core-tools" first>{t("Core abilities")}</GroupLabel>
+            <GroupLabel anchor="core-tools" first>{t("Capabilities")}</GroupLabel>
+            <div className="muted-note med-lede">{t("What this model is allowed to do. Users can turn the optional ones on per chat.")}</div>
             <div className="med-toggle-card">
               <Toggle m={m} set={set} k="has_vision" label={t("Image input")} note={t("Let users attach images for the model to see. Off = non-image files only.")} />
               <Toggle m={m} set={set} k="sandbox_allowed" inverted label={t("Allow sandbox tools")} note={t("Lets users enable code and file tools for this model. Off means sandbox can't be turned on.")} />
@@ -396,7 +479,8 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
               {m.web_search_allowed !== 0 && <Toggle m={m} set={set} k="web_search_auto" label={t("Enable web search by default")} note={t("New chats with this model start with web search on.")} />}
             </div>
 
-            <GroupLabel anchor="extra-tools">{t("Assistant features, all off by default")}</GroupLabel>
+            <GroupLabel anchor="extra-tools">{t("Optional features")}</GroupLabel>
+            <div className="muted-note med-lede">{t("All off by default. Turn on only what this model handles well.")}</div>
             <div className="med-toggle-card">
               <Toggle m={m} set={set} k="skills_allowed" label={t("Skills")} note={t("Lets this model load admin-created skills from the Skills section.")} />
               <Toggle m={m} set={set} k="mcp_allowed" label={t("MCP connectors")} note={t("Exposes tools from enabled MCP servers to this model.")} />
@@ -419,7 +503,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
 
         {section === 'appearance' && (
           <div className="med-pane">
-            <GroupLabel anchor="logo" first>{t("Logo")}</GroupLabel>
+            <GroupLabel anchor="logo" first>{t("Logo & motion")}</GroupLabel>
             <div className="field">
               <div className="icon-grid">
                 <IconSlot label={t("Static")} value={m.static_icon} def="" onChange={(v) => set('static_icon', v)} />
@@ -451,7 +535,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
               <div className="muted-note">{t("Size of the model's icon shown beside its messages. Default is 40px. Legacy is 26px.")}</div>
             </div>
 
-            <GroupLabel anchor="in-chat">{t("In chat")}</GroupLabel>
+            <GroupLabel anchor="in-chat">{t("In conversation")}</GroupLabel>
             <div className="med-toggle-card">
               <Toggle m={m} set={set} k="dropdown_icon" inverted label={t("Show logo in picker")} note={t("Display this model's static logo next to its name in the model picker.")} />
               <Toggle m={m} set={set} k="show_name" label={t("Show model name")} note={t("Display this model's name next to its logo on assistant messages.")} />
@@ -462,7 +546,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
               <div className="muted-note">{t("Where the logo sits relative to the message it generates. \"Left of text\" places it as an avatar in a gutter beside the message.")}</div>
             </div>
 
-            <GroupLabel anchor="badges">{t("Picker badges")}</GroupLabel>
+            <GroupLabel anchor="badges">{t("Badges")}</GroupLabel>
             <div className="muted-note" style={{ marginBottom: 4 }}>{t("Cosmetic labels shown beside the model in the picker. They don't change behaviour.")}</div>
             <div className="med-toggle-card">
               <Toggle m={m} set={set} k="cap_text" label={t("Text-only badge")} note={t("Marks the model as accepting text input only.")} />
@@ -471,7 +555,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
               <Toggle m={m} set={set} k="cap_compact" label={t("Combine into a single badge")} note={t("Collapse the badges into one ⓘ that reveals them on hover.")} />
             </div>
 
-            <GroupLabel anchor="showcase">{t("Showcase")}</GroupLabel>
+            <GroupLabel anchor="showcase">{t("Showcase background")}</GroupLabel>
             <div className="med-toggle-card">
               <Toggle m={m} set={set} k="bg_enabled" label={t("Showcase background")} note={t("Show a custom backdrop behind the whole interface when this model is selected. UI panels turn to frosted glass to blend in.")} />
             </div>
@@ -490,13 +574,9 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
                 <div className="muted-note">{t("Paste an image URL, upload a file, or use a CSS gradient such as linear-gradient(120deg, #a0c4ff, #ffc6ff).")}</div>
               </div>
             )}
-          </div>
-        )}
 
-        {section === 'docs' && (
-          <div className="med-pane">
-            <GroupLabel anchor="docs-page" first>{t("Docs page")}</GroupLabel>
-            <div className="muted-note" style={{ marginBottom: 14 }}>{t("Everything here feeds the public model docs users open from the chat header. The name, logo, description, context window, and prices come from the other tabs; these fields add the rest.")}</div>
+            <GroupLabel anchor="docs-page">{t("Public docs page")}</GroupLabel>
+            <div className="muted-note" style={{ marginBottom: 14 }}>{t("Everything here feeds the public model docs users open from the chat header. The name, logo, description, context window, and prices come from other tabs; these fields add the rest.")}</div>
             <div className="med-toggle-card">
               <div className="field row">
                 <div><label>{t("Frontier model")}</label><div className="muted-note">{t("Featured in the showcase row at the top of the docs, with a banner image.")}</div></div>
@@ -508,14 +588,14 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
                   <div className="muted-note">{t("Upload a photo (cropped to the wide banner shape and stored locally) or use a CSS gradient. Shown above the model name in the Frontier models row; leave empty for a plain card.")}</div></div>
               )}
             </div>
-            <GroupLabel anchor="docs-logo">{t("Logo")}</GroupLabel>
+            <SubLabel>{t("Docs logo")}</SubLabel>
             <div className="field">
               <div className="muted-note" style={{ marginBottom: 8 }}>{t("Optional docs-only logo. The docs use the model's regular logo unless you set one here; it never affects the chat or picker.")}</div>
               <div className="icon-grid" style={{ gridTemplateColumns: '1fr' }}>
                 <IconSlot label={t("Docs logo")} value={m.docs_icon || ''} def="" anim="" onChange={(v) => set('docs_icon', v)} />
               </div>
             </div>
-            <GroupLabel anchor="docs-ratings">{t("Ratings")}</GroupLabel>
+            <SubLabel>{t("Ratings")}</SubLabel>
             <div className="two-col">
               <div className="field"><label>{t("Intelligence")} ({m.docs_intelligence || 0}/5)</label>
                 <input type="range" min="0" max="5" step="1" value={m.docs_intelligence || 0} onChange={(e) => set('docs_intelligence', e.target.value)} />
@@ -524,7 +604,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
                 <input type="range" min="0" max="5" step="1" value={m.docs_speed || 0} onChange={(e) => set('docs_speed', e.target.value)} />
                 <div className="muted-note">{t("0 hides the meter. Shown as lightning bolts.")}</div></div>
             </div>
-            <GroupLabel anchor="docs-modalities">{t("Modalities")}</GroupLabel>
+            <SubLabel>{t("Modalities")}</SubLabel>
             <div className="two-col">
               <div className="field"><label>{t("Input")}</label>
                 {[['docs_in_text', tk('Text')], ['docs_in_image', tk('Image')], ['docs_in_audio', tk('Audio')], ['docs_in_video', tk('Video')]].map(([k, l]) => (
@@ -545,29 +625,19 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
                 ))}
               </div>
             </div>
-            <GroupLabel anchor="docs-facts">{t("Facts")}</GroupLabel>
+            <SubLabel>{t("Facts")}</SubLabel>
             <div className="two-col">
               <div className="field"><label>{t("Max output tokens")}</label>
                 <input type="number" min="0" step="1" value={m.docs_max_output ?? ''} onChange={(e) => set('docs_max_output', e.target.value)} placeholder="128000" />
-                <div className="muted-note">{t("Blank hides the row. The context window comes from the Reasoning tab.")}</div></div>
+                <div className="muted-note">{t("Blank hides the row. The context window comes from the Behavior tab.")}</div></div>
               <div className="field"><label>{t("Knowledge cutoff")}</label>
                 <input value={m.docs_cutoff || ''} onChange={(e) => set('docs_cutoff', e.target.value)} placeholder={t("e.g. Feb 16, 2026")} />
                 <div className="muted-note">{t("Free text, shown as a fact row. Blank hides it.")}</div></div>
             </div>
-            <GroupLabel anchor="docs-body">{t("Long description")}</GroupLabel>
+            <SubLabel>{t("Long description")}</SubLabel>
             <div className="field">
               <textarea rows={6} value={m.docs_body || ''} onChange={(e) => set('docs_body', e.target.value)} placeholder={t("A few paragraphs about what this model is best at. Shown on its docs page under the header.")} />
             </div>
-          </div>
-        )}
-
-        {section === 'kwargs' && (
-          <div className="med-pane">
-            <GroupLabel anchor="kwargs-list" first>{t("Kwargs")}</GroupLabel>
-            <div className="muted-note" style={{ marginBottom: 14 }}>
-              {t("Extra values sent with every request to this model. Each one can show up in the model picker with your own wording, stay hidden, or follow another kwarg so two values always move together.")}
-            </div>
-            <KwargsEditor m={m} onChange={onChange} />
           </div>
         )}
 
@@ -575,24 +645,10 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
           <div className="med-pane">
             <GroupLabel anchor="sampling" first>{t("Sampling")}</GroupLabel>
             <div className="muted-note">Optional overrides sent with each request. Leave a field blank to use the provider's default. Only parameters supported by {curType?.label || 'this provider'} are shown.</div>
-            <div className="sampling-grid">
-              {[
-                ['temperature', tk('Temperature'), '0.0 \u2013 2.0'], ['top_p', tk('Top P'), '0.0 \u2013 1.0'],
-                ['top_k', tk('Top K'), 'e.g. 40'], ['min_p', tk('Min P'), '0.0 \u2013 1.0'],
-                ['repetition_penalty', tk('Repetition penalty'), 'e.g. 1.1'], ['presence_penalty', tk('Presence penalty'), '-2.0 \u2013 2.0'],
-                ['frequency_penalty', tk('Frequency penalty'), '-2.0 \u2013 2.0'], ['seed', tk('Seed'), 'integer'],
-                ['max_tokens', tk('Max tokens'), 'e.g. 2048'],
-                ['dry_multiplier', tk('DRY multiplier'), '0 = off, e.g. 0.8'], ['dry_base', tk('DRY base'), 'e.g. 1.75'],
-                ['dry_allowed_length', tk('DRY allowed length'), 'e.g. 2'], ['dry_penalty_last_n', tk('DRY range'), '-1 = whole context'],
-                ['xtc_probability', tk('XTC probability'), '0 = off, 0.0 \u2013 1.0'], ['xtc_threshold', tk('XTC threshold'), 'e.g. 0.1'],
-                ['mirostat', tk('Mirostat'), '0 off, 1 or 2'], ['mirostat_tau', tk('Mirostat tau'), 'e.g. 5.0'], ['mirostat_eta', tk('Mirostat eta'), 'e.g. 0.1']
-              ].filter(([k]) => allowedSamplers.includes(k)).map(([k, label, ph]) => (
-                <div className="samp-field" key={k}>
-                  <label>{t(label)}</label>
-                  <input type="number" step="any" placeholder={ph} value={m[k] ?? ''} onChange={(e) => set(k, e.target.value)} />
-                </div>
-              ))}
-            </div>
+            {SAMPLER_GROUPS.map(([title, note, fields], i) => (
+              <SamplerGroup key={title} title={title} note={note} m={m} set={set} collapsible={i > 0}
+                fields={fields.filter(([k]) => allowedSamplers.includes(k))} />
+            ))}
             {allowedSamplers.includes('stop') && (
               <div className="field"><label>{t("Stop sequences")}</label>
                 <textarea rows={3} value={m.stop ?? ''} onChange={(e) => set('stop', e.target.value)} placeholder={'</s>\n<|im_end|>'} />
@@ -628,8 +684,12 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
               <textarea rows={4} value={m.call_prompt || ''} onChange={(e) => set('call_prompt', e.target.value)} placeholder={t("You are on a voice call. Keep replies short and conversational, a couple of sentences. No markdown, no lists, no code.")} />
               <div className="muted-note">{t("Replaces the system prompt whenever a message comes in through a voice call. Leave empty to use the regular prompt during calls too.")}</div>
             </div>
+
+            <GroupLabel anchor="router">{t("Router")}</GroupLabel>
+            <RoutingPane m={m} set={set} models={models} />
           </div>
         )}
+      </div>
       </div>
 
       <div className="med-foot">

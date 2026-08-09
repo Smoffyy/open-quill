@@ -26,8 +26,10 @@ export function applySunsets() {
     if (Array.isArray(snap)) {
       const i = snap.findIndex(x => x.id === m.id);
       if (i >= 0) {
-        snap[i] = { ...snap[i], ...patch };
-        setSetting('published_models', snap);
+        const next = snap.slice();
+        next[i] = { ...next[i], ...patch };
+        setSetting('published_models', next);
+        invalidateModelShapes();
       }
     }
   }
@@ -84,7 +86,12 @@ export function publicModels() {
   return list;
 }
 
-export function invalidateModelShapes() { shapeCache.draft = null; shapeCache.published = null; }
+export function invalidateModelShapes() {
+  shapeCache.draft = null;
+  shapeCache.published = null;
+  snapIndex.snap = null;
+  snapIndex.byId = null;
+}
 
 // resolve the model used to RUN a completion: admins use live draft, clients use the published snapshot
 const snapIndex = { snap: null, byId: null };

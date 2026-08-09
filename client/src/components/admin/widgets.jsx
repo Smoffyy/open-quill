@@ -366,13 +366,58 @@ export function IconSlot({ label, value, def, anim, onChange }) {
   );
 }
 
-export function SystemPromptEditor({ value, onChange, onClose }) {
+const SP_VAR_RE = /(\{\{currentDateTime\}\}|\{\{currentUser\}\})/g;
+
+function SpHighlighted({ text }) {
+  const parts = (text || '').split(SP_VAR_RE);
+  if (parts.length === 1) return <>{text}</>;
+  return parts.map((p, i) => (p === '{{currentDateTime}}' || p === '{{currentUser}}')
+    ? <mark key={i} className="sp-var-hl">{p}</mark>
+    : <React.Fragment key={i}>{p}</React.Fragment>);
+}
+
+export function PromptField({ value, onChange, onExpand, label, hint, placeholder, rows = 9 }) {
   const taRef = useRef(null);
-  const dt = '{{currentDateTime}}';
-  const cu = '{{currentUser}}';
+  const v = value || '';
+  const chars = v.length;
   function insert(token) {
     const ta = taRef.current;
-    const v = value || '';
+    if (!ta) { onChange(v + token); return; }
+    const s = ta.selectionStart ?? v.length, e = ta.selectionEnd ?? v.length;
+    onChange(v.slice(0, s) + token + v.slice(e));
+    requestAnimationFrame(() => { ta.focus(); const p = s + token.length; ta.setSelectionRange(p, p); });
+  }
+  return (
+    <div className="pf">
+      <div className="pf-top">
+        {label ? <label>{label}</label> : <span />}
+        <div className="pf-tools">
+          <button type="button" className="pf-chip" title={t("Insert local date & time")} onClick={() => insert('{{currentDateTime}}')}><code>date</code></button>
+          <button type="button" className="pf-chip" title={t("Insert the user's name")} onClick={() => insert('{{currentUser}}')}><code>user</code></button>
+          <button type="button" className="pf-chip pf-expand" onClick={onExpand} title={t("Open the full editor")}>{t("Expand")}</button>
+        </div>
+      </div>
+      {hint && <div className="muted-note pf-hint">{hint}</div>}
+      <textarea ref={taRef} className="pf-text" rows={rows} value={v} placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)} />
+      <div className="pf-foot">
+        <span>{t('{n} characters', { n: chars.toLocaleString() })}</span>
+        <span>{t('~{n} tokens (estimate)', { n: Math.round(chars / 4).toLocaleString() })}</span>
+      </div>
+    </div>
+  );
+}
+
+export function SystemPromptEditor({ value, onChange, onClose }) {
+  const taRef = useRef(null);
+  const [preview, setPreview] = useState(false);
+  const dt = '{{currentDateTime}}';
+  const cu = '{{currentUser}}';
+  const v = value || '';
+  const chars = v.length;
+  const tokensEst = Math.round(chars / 4);
+  function insert(token) {
+    const ta = taRef.current;
     if (!ta) { onChange(v + token); return; }
     const s = ta.selectionStart ?? v.length, e = ta.selectionEnd ?? v.length;
     const next = v.slice(0, s) + token + v.slice(e);
@@ -383,23 +428,30 @@ export function SystemPromptEditor({ value, onChange, onClose }) {
     <div className="overlay sp-overlay" onMouseDown={(e) => e.target.classList.contains('sp-overlay') && onClose()}>
       <div className="sp-modal">
         <div className="sp-head">
-          <div>
-            <h3>{t("System prompt")}</h3>
-            <div className="muted-note">{t("Define how this model behaves. Variables below are filled in locally on each message.")}</div>
-          </div>
-          <button className="modal-close" style={{ position: 'static' }} onClick={onClose}>✕</button>
+          <h3>{t("System prompt")}</h3>
+          <button className="sp-x" onClick={onClose} title={t("Close")}>✕</button>
         </div>
-        <div className="sp-vars">
-          <button className="sp-chip" onClick={() => insert(dt)}><code>{dt}</code> {t("Insert local date &amp; time")}</button>
-          <button className="sp-chip" onClick={() => insert(cu)}><code>{cu}</code> {t("Insert the user's name")}</button>
+        <div className="sp-bar">
+          <span className="sp-bar-label">{t("Insert")}</span>
+          <button className="sp-chip" onClick={() => insert(dt)} title={t("Replaced with the current date and time from this device, in your local timezone.")}><code>{dt}</code></button>
+          <button className="sp-chip" onClick={() => insert(cu)} title={t("Replaced with the signed-in user name. Everything stays on your machine.")}><code>{cu}</code></button>
+          <span className="sp-bar-note">{t("Filled in on each message, on the user's own device.")}</span>
+          <button type="button" className={'sp-ghost' + (preview ? ' on' : '')} onClick={() => setPreview(p => !p)}>
+            {preview ? t("Back to editing") : t("Highlight variables")}
+          </button>
         </div>
-        <textarea ref={taRef} className="sp-text" value={value || ''} onChange={(e) => onChange(e.target.value)} placeholder={t("You are a helpful assistant…")} autoFocus />
-        <div className="sp-tips">
-          <div className="sp-tip"><b>{dt}</b> — {t("Replaced with the current date and time from this device, in your local timezone.")}</div>
-          <div className="sp-tip"><b>{cu}</b> — {t("Replaced with the signed-in user name. Everything stays on your machine.")}</div>
+        <div className="sp-surface">
+          {preview ? (
+            <div className="sp-text sp-render" onClick={() => setPreview(false)} title={t("Click to go back to editing")}>
+              {v ? <SpHighlighted text={v} /> : <span className="sp-preview-empty">{t("Click to write a system prompt…")}</span>}
+            </div>
+          ) : (
+            <textarea ref={taRef} className="sp-text" value={v} onChange={(e) => onChange(e.target.value)} placeholder={t("You are a helpful assistant…")} autoFocus />
+          )}
         </div>
         <div className="sp-foot">
-          <span className="muted-note">{t("Edits save to your draft automatically.")}</span>
+          <span className="sp-count">{t("{n} characters", { n: chars.toLocaleString() })} · {t("~{n} tokens (estimate)", { n: tokensEst.toLocaleString() })}</span>
+          <span className="sp-autosave-note">{t("Edits save to your draft automatically.")}</span>
           <button className="btn primary" onClick={onClose}>{t("Done")}</button>
         </div>
       </div>

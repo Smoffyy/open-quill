@@ -77,8 +77,8 @@ export function preferredChild(kids, onPath) {
 }
 
 export function leafUnder(chatId, messageId) {
-  const g = graphOf(chatId);
   const onPath = new Set(activePath(chatId).map(m => m.id));
+  const g = graphOf(chatId);
   let cur = g.byId.get(messageId) || db.messages.byId(messageId);
   const seen = new Set();
   while (cur && !seen.has(cur.id)) {

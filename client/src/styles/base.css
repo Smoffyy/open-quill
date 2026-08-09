@@ -92,8 +92,11 @@
   --on-accent: #ffffff;
   --user-bubble: #121212;
   --menu-bg: #313130;
-  --modal-bg: #1d1d1c;
+  --modal-bg: #2c2c2a;
   --modal-side: #1a1a19;
+  --modal-line: rgba(255,255,255,.05);
+  --modal-fill: rgba(255,255,255,.05);
+  --modal-active: rgba(255,255,255,.1);
   --input-bg: #2c2c2a;
   --card-bg: #1a1a19;
   --hover-soft: #ffffff10;

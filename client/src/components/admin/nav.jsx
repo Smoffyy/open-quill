@@ -35,7 +35,7 @@ export const NAV_GROUPS = [
   ] }
 ];
 
-export const SECTIONS = NAV_GROUPS.flatMap(g => g.items.map(it => ({ ...it, group: g.label })));
+export const SECTIONS = NAV_GROUPS.flatMap(g => g.items.map(it => ({ ...it, group: g.label, groupId: g.id })));
 
 export const LEGACY_SECTION_IDS = { overview: 'dashboard', branding: 'appearance', home: 'homescreen' };
 

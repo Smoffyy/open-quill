@@ -7,7 +7,7 @@ import { zipBuffer, unzipBuffer } from './zip.js';
 import { compileSearchPattern } from '../lib/sandboxguard.js';
 import { runRegexSearch } from './regexsearch.js';
 
-function walkFiles(chatId, { includeIgnored = false, under = '' } = {}) {
+function walkFiles(chatId, { includeIgnored = false, under = '', countHidden = false } = {}) {
   const root = dirFor(chatId);
   const start = under ? resolveSafe(chatId, under) : root;
   const out = [];
@@ -22,7 +22,7 @@ function walkFiles(chatId, { includeIgnored = false, under = '' } = {}) {
       const abs = path.join(dir, e.name);
       const rel = prefix ? prefix + '/' + e.name : e.name;
       if (e.isDirectory()) {
-        if (!includeIgnored && (isIgnoredDir(e.name) || isIgnoredRel(chatId, rel))) { hidden += countUnder(abs); continue; }
+        if (!includeIgnored && (isIgnoredDir(e.name) || isIgnoredRel(chatId, rel))) { if (countHidden) hidden += countUnder(abs); continue; }
         stack.push([abs, rel]);
       } else {
         if (!includeIgnored && isIgnoredRel(chatId, rel)) { hidden++; continue; }
@@ -48,7 +48,7 @@ function countUnder(dir) {
 export function list(chatId, opts = {}) {
   const includeIgnored = !!(opts.includeIgnored || opts.all);
   const meta = readMeta(chatId).files || {};
-  const { files, rels, hidden } = walkFiles(chatId, { includeIgnored, under: opts.under });
+  const { files, rels, hidden } = walkFiles(chatId, { includeIgnored, under: opts.under, countHidden: !!opts.withHidden });
   const out = new Array(files.length);
   for (let i = 0; i < files.length; i++) {
     const rel = rels[i];

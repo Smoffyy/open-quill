@@ -277,7 +277,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
                 onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit(); if (e.key === 'Escape') setEditing(false); }} />
               <div className="edit-actions">
                 <button className="btn ghost" onClick={() => setEditing(false)}>{t("Cancel")}</button>
-                <button className="btn primary" onClick={saveEdit}>{t("Save &amp; submit")}</button>
+                <button className="btn primary" onClick={saveEdit}>{t("Save & submit")}</button>
               </div>
             </div>
           ) : (

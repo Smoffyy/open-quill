@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AdminProvider, useAdmin } from './store.jsx';
 import { NAV_GROUPS, SECTIONS, sectionById } from './nav.jsx';
 import { ConfirmDialog } from './widgets.jsx';
-import { Chevron } from '../icons.jsx';
+import { Chevron, Search } from '../icons.jsx';
 import DashboardSection from './sections/DashboardSection.jsx';
 import ModelsSection from './sections/ModelsSection.jsx';
 import ProvidersSection from './sections/ProvidersSection.jsx';
@@ -101,9 +101,11 @@ function Shell() {
   }, []);
 
   const meta = sectionById(section);
+  const activeGroup = NAV_GROUPS.find(g => g.id === meta.groupId) || NAV_GROUPS[0];
   const nq = navQ.trim().toLowerCase();
   const sectionMatches = nq ? SECTIONS.filter(s => [s.label, s.group, s.keywords].filter(Boolean).map(v => v + ' ' + t(v)).join(' ').toLowerCase().includes(nq)) : null;
   const modelMatches = nq ? models.filter(m => (m.display_name || '').toLowerCase().includes(nq) || (m.internal_name || '').toLowerCase().includes(nq)).slice(0, 5) : [];
+  const jumpOpen = nq.length > 0;
 
   function pickSection(id) {
     setSection(id);
@@ -124,21 +126,31 @@ function Shell() {
 
   return (
     <div className="oqa">
-      <nav className="oqa-nav">
-        <div className="oqa-brand">
+      <header className="oqa-header">
+        <button className="oqa-back" onClick={onClose}><Chevron style={{ transform: 'rotate(90deg)', width: 16 }} /></button>
+        <button className="oqa-brand" onClick={() => setSection('dashboard')}>
           <img className="oqa-brand-icon" src={cfg.appIcon || '/starburst.svg'} alt="" />
           <div className="oqa-brand-text">
             <span className="oqa-brand-name">{cfg.appName || 'open-quill'}</span>
             <span className="oqa-brand-sub">{t("Control Center")}</span>
           </div>
-        </div>
+        </button>
+        <nav className="oqa-toptabs">
+          <button className={'oqa-toptab' + (section === 'dashboard' ? ' active' : '')} onClick={() => setSection('dashboard')}>
+            {t('Dashboard')}
+          </button>
+          {NAV_GROUPS.filter(g => g.label).map(g => (
+            <button key={g.id} className={'oqa-toptab' + (activeGroup.id === g.id ? ' active' : '')} onClick={() => setSection(g.items[0].id)}>
+              {t(g.label)}
+            </button>
+          ))}
+        </nav>
         <div className="oqa-jump">
+          <Search className="oqa-jump-icon" />
           <input ref={navRef} value={navQ} onChange={(e) => setNavQ(e.target.value)} placeholder={t("Jump to anything… (Ctrl K)")}
             onKeyDown={(e) => { if (e.key === 'Enter') pickFirst(); if (e.key === 'Escape') { setNavQ(''); e.target.blur(); } }} />
-        </div>
-        <div className="oqa-scroll">
-          {sectionMatches ? (
-            <div className="oqa-group">
+          {jumpOpen && (
+            <div className="oqa-jump-pop">
               <div className="oqa-group-label">{sectionMatches.length || modelMatches.length ? t('Matches') : t('No matches')}</div>
               {sectionMatches.map(({ id, label, Icon, group }) => (
                 <button key={id} className={'oqa-tab' + (section === id ? ' active' : '')} onClick={() => pickSection(id)}>
@@ -152,45 +164,44 @@ function Shell() {
                 </button>
               ))}
             </div>
-          ) : NAV_GROUPS.map((g) => (
-            <div className="oqa-group" key={g.id}>
-              {g.label && <div className="oqa-group-label">{t(g.label)}</div>}
-              {g.items.map(({ id, label, Icon }) => (
-                <button key={id} className={'oqa-tab' + (section === id ? ' active' : '')} onClick={() => setSection(id)}>
-                  <Icon /> <span>{t(label)}</span>
-                  {id === 'models' && models.length > 0 && <span className="oqa-tab-count">{models.length}</span>}
-                  {id === 'members' && users.length > 0 && <span className="oqa-tab-count">{users.length}</span>}
-                </button>
-              ))}
-            </div>
-          ))}
+          )}
         </div>
-        <button className="oqa-back" onClick={onClose}><Chevron style={{ transform: 'rotate(90deg)', width: 16 }} /> {t("Back to chat")}</button>
-      </nav>
-      <div className="oqa-main">
-        <header className="oqa-topbar">
-          <div className="oqa-title">
-            {meta.group && <span className="oqa-crumb">{t(meta.group)}</span>}
+        {showPublish && (
+          <div className="oqa-status">
+            {pubFlash
+              ? <span className="saved-flash">{t("Pushed to all clients")} ✓</span>
+              : pub.dirty
+                ? <span className="pub-note dirty">{t("Unpublished draft changes")}</span>
+                : <span className="pub-note">{pub.published ? t('Clients are up to date') : t('Nothing published yet')}</span>}
+          </div>
+        )}
+        {showPublish && (
+          <button className={'btn primary push-btn' + (pub.dirty ? ' dirty' : '')} onClick={A.publish} disabled={publishing || (!pub.dirty && pub.published)}>
+            {publishing ? t('Pushing…') : t('Push to all clients')}
+          </button>
+        )}
+      </header>
+      <div className="oqa-shell">
+        {activeGroup.items.length > 1 && (
+          <nav className="oqa-rail">
+            <div className="oqa-group-label">{t(activeGroup.label)}</div>
+            {activeGroup.items.map(({ id, label, Icon }) => (
+              <button key={id} className={'oqa-tab' + (section === id ? ' active' : '')} onClick={() => setSection(id)}>
+                <Icon /> <span>{t(label)}</span>
+                {id === 'models' && models.length > 0 && <span className="oqa-tab-count">{models.length}</span>}
+                {id === 'members' && users.length > 0 && <span className="oqa-tab-count">{users.length}</span>}
+              </button>
+            ))}
+          </nav>
+        )}
+        <div className="oqa-main">
+          <div className="oqa-pagehead">
             <h1>{t(meta.label)}</h1>
             <span className="oqa-desc">{t(meta.desc)}</span>
           </div>
-          {showPublish && (
-            <div className="oqa-status">
-              {pubFlash
-                ? <span className="saved-flash">{t("Pushed to all clients")} ✓</span>
-                : pub.dirty
-                  ? <span className="pub-note dirty">{t("Unpublished draft changes")}</span>
-                  : <span className="pub-note">{pub.published ? t('Clients are up to date') : t('Nothing published yet')}</span>}
-            </div>
-          )}
-          {showPublish && (
-            <button className={'btn primary push-btn' + (pub.dirty ? ' dirty' : '')} onClick={A.publish} disabled={publishing || (!pub.dirty && pub.published)}>
-              {publishing ? t('Pushing…') : t('Push to all clients')}
-            </button>
-          )}
-        </header>
-        <div className={'oqa-body' + (section === 'models' && models.length ? ' fill' : '')}>
-          <Section />
+          <div className={'oqa-body' + (section === 'models' && models.length ? ' fill' : '')}>
+            <Section />
+          </div>
         </div>
       </div>
       <DiscoverModal />
