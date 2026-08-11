@@ -42,6 +42,7 @@ import ThreadRail from './components/ThreadRail.jsx';
 import ThreadFind from './components/ThreadFind.jsx';
 import { railItems } from './lib/threadmeta.js';
 import { useDrafts } from './lib/drafts.js';
+import { statusDelaySecs } from './lib/status.js';
 import { CHORD_TIMEOUT, chordMenu, comboFromEvent, comboKeys, comboLabel, keybindIndex, resolveKeybinds } from './lib/keybinds.js';
 const BranchTree = React.lazy(() => import('./components/BranchTree.jsx'));
 import { toast } from './toast.js';
@@ -287,6 +288,7 @@ export default function App() {
   const staggerTimer = useRef(null);
   const showMsgSpeed = !!user?.prefs?.msgSpeed;
   const showCtxGauge = !!user?.prefs?.ctxGauge;
+  const statusDelay = statusDelaySecs(user?.prefs?.statusDelay);
 
   const activeIdRef = useRef(null);
   const currentIdRef = useRef(null);
@@ -1721,6 +1723,7 @@ export default function App() {
                       onToggleExclude={toggleExclude}
                       steers={msg._streaming ? liveSteers : (msg.steers || null)}
                       status={msg._streaming ? modelStatus : null}
+                      statusDelay={statusDelay}
                       streaming={!!msg._streaming} phase={msg._streaming ? ((modelById.get(currentId)?.hideThinking && phase === 'thinking') ? 'generating' : phase) : 'static'} liveCall={msg._streaming ? liveCall : null}
                       onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onDelete={streaming || queued ? null : deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
                       showSpeed={showMsgSpeed}

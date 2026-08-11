@@ -180,16 +180,38 @@
 }
 .tool-line.clickable + .tool-line.clickable::before { left: 14.5px; }
 
-/* an unfinished step shimmers its label rather than spinning an icon */
-.tool-line.pending .tl-verb {
+/* An unfinished step shimmers its label rather than spinning an icon, and the
+   shimmer covers the target too: the whole point is reading what is happening
+   right now, which is the file name or the command, not the verb alone. The
+   band is sized in px so a short verb and a long path sweep at the same rate
+   instead of the shorter one racing. */
+.tool-line.pending .tl-verb,
+.tool-line.pending .tl-name,
+.tool-bash.pending .tb-label,
+.tool-bash.pending .tb-peek {
   color: transparent; background-clip: text; -webkit-background-clip: text;
-  background-image: linear-gradient(to right, var(--text-muted) 30%, color-mix(in srgb, var(--text) 70%, transparent) 50%, var(--text-muted) 80%);
-  background-size: 400% 100%;
-  animation: shimmertext 2.25s ease infinite;
+  background-image: linear-gradient(to right, var(--text-muted) 0%, var(--text-muted) 30%, color-mix(in srgb, var(--text) 85%, transparent) 50%, var(--text-muted) 70%, var(--text-muted) 100%);
+  background-size: 260px 100%;
+  background-repeat: repeat-x;
+  animation: shimmertext 2.25s linear infinite;
 }
-@keyframes shimmertext { 0% { background-position: 100% 0; } 65%, 100% { background-position: 0 0; } }
+.tool-bash.pending .tb-peek { opacity: 1; }
+@keyframes shimmertext { from { background-position: 260px 0; } to { background-position: -260px 0; } }
+[data-animations="off"] .tool-line.pending .tl-verb,
+[data-animations="off"] .tool-line.pending .tl-name,
+[data-animations="off"] .tool-bash.pending .tb-label,
+[data-animations="off"] .tool-bash.pending .tb-peek,
+[data-microfx="off"] .tool-line.pending .tl-verb,
+[data-microfx="off"] .tool-line.pending .tl-name,
+[data-microfx="off"] .tool-bash.pending .tb-label,
+[data-microfx="off"] .tool-bash.pending .tb-peek {
+  animation: none; color: var(--text-muted); background-image: none;
+}
 @media (prefers-reduced-motion: reduce) {
-  .tool-line.pending .tl-verb { animation: none; color: var(--text); background-image: none; }
+  .tool-line.pending .tl-verb,
+  .tool-line.pending .tl-name,
+  .tool-bash.pending .tb-label,
+  .tool-bash.pending .tb-peek { animation: none; color: var(--text-muted); background-image: none; }
 }
 
 /* bash / terminal, collapsible */

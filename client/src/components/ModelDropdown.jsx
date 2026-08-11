@@ -221,7 +221,7 @@ function MoreGroup({ label, items, renderOpt, openKey, setOpenKey }) {
 export default function ModelDropdown({ models, currentId, onSelect, extended, onToggleExtended, up, modelHasBg, bgInChat, onToggleBgInChat, reasoningEffort, onSetEffort, kwargValues, onSetKwarg, isAdmin = false }) {
   const [open, setOpen] = useState(false);
   const [openSub, setOpenSub] = useState(null);
-  const [place, setPlace] = useState({ shift: 0, left: 0, maxH: 0, sheet: false, ready: false });
+  const [place, setPlace] = useState({ shift: 0, left: null, maxH: 0, sheet: false, ready: false });
   const [listMaxH, setListMaxH] = useState(0);
   const ref = useRef(null);
   const menuRef = useRef(null);
@@ -245,7 +245,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
   }, [open]);
   useLayoutEffect(() => {
     if (!open) {
-      setPlace(p => (p.ready ? { shift: 0, left: 0, maxH: 0, sheet: false, ready: false } : p));
+      setPlace(p => (p.ready ? { shift: 0, left: null, maxH: 0, sheet: false, ready: false } : p));
       return undefined;
     }
     const measure = () => {
@@ -266,12 +266,11 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
       else top = below >= above ? vp.h - EDGE - h : EDGE;
       top = Math.max(EDGE, Math.min(top, Math.max(EDGE, vp.h - EDGE - h)));
       const mw = menu.offsetWidth || 0;
-      let left = wr.width - mw;
-      const abs = wr.left + left;
-      if (abs < EDGE) left += EDGE - abs;
-      const maxLeft = vp.w - EDGE - mw - wr.left;
-      if (left > maxLeft) left = maxLeft;
-      const next = { shift: Math.round(top - wr.top), left: Math.round(left), maxH: nat > budget ? Math.round(budget) : 0, sheet: false, ready: true };
+      const restLeft = wr.right - mw;
+      let left = null;
+      if (restLeft < EDGE) left = Math.round(EDGE - wr.left);
+      else if (wr.right > vp.w - EDGE) left = Math.round(vp.w - EDGE - mw - wr.left);
+      const next = { shift: Math.round(top - wr.top), left, maxH: nat > budget ? Math.round(budget) : 0, sheet: false, ready: true };
       setPlace(p => (p.ready && !p.sheet && p.shift === next.shift && p.left === next.left && p.maxH === next.maxH) ? p : next);
     };
     measure();
@@ -350,9 +349,8 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
 
   const menuStyle = place.sheet ? undefined : {
     top: place.shift,
-    left: place.left,
-    right: 'auto',
     bottom: 'auto',
+    ...(place.left == null ? null : { left: place.left, right: 'auto' }),
     maxHeight: place.maxH || undefined,
     overflow: place.maxH ? 'hidden auto' : undefined,
     visibility: place.ready ? undefined : 'hidden'

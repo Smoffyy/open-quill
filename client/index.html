@@ -16,31 +16,37 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <script>
       (function () {
-        var BG = { light: '#f4f3ee', dark: '#1f1f1e', anthropic: '#1f1f1e', oled: '#000000', openai: '#000000' };
+        var BG = { light: '#f4f3ee', dark: '#1a1a19', anthropic: '#1a1a19', oled: '#000000', openai: '#000000' };
         try {
           var preset = localStorage.getItem('oq-preset');
           if (preset !== 'openai' && preset !== 'anthropic') preset = 'anthropic';
           document.documentElement.setAttribute('data-preset', preset);
           var t = localStorage.getItem('oq-theme');
+          var pal = localStorage.getItem('oq-palette');
           if (t === 'dark' || t === 'oled') t = preset === 'openai' ? 'openai' : 'anthropic';
           if (t === 'anthropic' && preset === 'openai') t = 'openai';
           if (t === 'openai' && preset === 'anthropic') t = 'anthropic';
+          var PAL_BG = { '2026q3': '#151515', legacy: '#1f1f1e' };
           if (t !== 'light' && t !== 'anthropic' && t !== 'openai') {
             t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : (preset === 'openai' ? 'openai' : 'anthropic');
+            if (t !== 'anthropic') pal = null;
           }
+          if (t !== 'anthropic' || !PAL_BG[pal]) pal = null;
           document.documentElement.setAttribute('data-theme', t);
-          document.documentElement.style.background = BG[t] || BG.anthropic;
+          if (pal) document.documentElement.setAttribute('data-palette', pal);
+          var bg = (pal && PAL_BG[pal]) || BG[t] || BG.anthropic;
+          document.documentElement.style.background = bg;
           var meta = document.querySelector('meta[name="theme-color"]:not([media])');
           if (!meta) { meta = document.createElement('meta'); meta.setAttribute('name', 'theme-color'); document.head.appendChild(meta); }
-          meta.setAttribute('content', BG[t] || BG.anthropic);
+          meta.setAttribute('content', bg);
         } catch (e) {
           document.documentElement.setAttribute('data-preset', 'anthropic');
           document.documentElement.setAttribute('data-theme', 'anthropic');
-          document.documentElement.style.background = '#1f1f1e';
+          document.documentElement.style.background = '#1a1a19';
         }
       })();
     </script>
-    <style>html{background:#1f1f1e}html[data-theme="light"]{background:#f4f3ee}html[data-theme="anthropic"]{background:#1f1f1e}html[data-theme="oled"]{background:#000}html[data-theme="openai"]{background:#000}</style>
+    <style>html{background:#1a1a19}html[data-theme="light"]{background:#f4f3ee}html[data-theme="anthropic"]{background:#1a1a19}html[data-theme="anthropic"][data-palette="2026q3"]{background:#151515}html[data-theme="anthropic"][data-palette="legacy"]{background:#1f1f1e}html[data-theme="oled"]{background:#000}html[data-theme="openai"]{background:#000}</style>
   </head>
   <body>
     <div id="root"></div>

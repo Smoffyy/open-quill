@@ -9,6 +9,8 @@ import { parseSteps, lastSentence, thoughtSeconds } from '../src/lib/reasoning.j
 import { hasMath, wrapMathEnvironments } from '../src/lib/mathjs.js';
 import { hasToolCall, previewOf, buildTree, collapseRuns } from '../src/lib/threadmeta.js';
 import { scanTools } from '../src/toolproto.js';
+import { STATUS_DELAY_DEFAULT, STATUS_DELAY_MAX, statusDelayMs, statusDelaySecs } from '../src/lib/status.js';
+import { paletteFor, palettesFor, themeValue } from '../src/lib/palettes.js';
 import {
   isRange, clampToRange, allNumeric, kwargPayload,
   controlOf as controlOfKwarg, defaultValueOf as defaultValueOfKwarg,
@@ -516,4 +518,64 @@ test('the thinking budget preset matches the shape llama.cpp expects', () => {
   const out = kwargPayload([p], resolveKwargs([p], { [p.id]: '5000' }, false));
   assert.equal(out.thinking_budget_tokens, 5120, 'snapped to the 1024 grid');
   assert.equal('extra_body' in out, false);
+});
+
+test('the progress-line delay clamps to a whole number of seconds in range', () => {
+  assert.equal(statusDelaySecs(undefined), STATUS_DELAY_DEFAULT);
+  assert.equal(statusDelaySecs(null), STATUS_DELAY_DEFAULT);
+  assert.equal(statusDelaySecs(''), STATUS_DELAY_DEFAULT);
+  assert.equal(statusDelaySecs('nonsense'), STATUS_DELAY_DEFAULT);
+  assert.equal(statusDelaySecs(0), 0, 'zero is instant, not absent');
+  assert.equal(statusDelaySecs('0'), 0);
+  assert.equal(statusDelaySecs(-4), 0);
+  assert.equal(statusDelaySecs(99), STATUS_DELAY_MAX);
+  assert.equal(statusDelaySecs(4.6), 5);
+  assert.equal(statusDelayMs(3), 3000);
+  assert.equal(statusDelayMs(0), 0);
+});
+
+test('a palette resolves to a theme plus an optional palette attribute', () => {
+  assert.equal(paletteFor('system', 'anthropic', true).id, 'anthropic-2026q3');
+  assert.equal(paletteFor('system', 'anthropic', false).id, 'anthropic-light');
+  assert.equal(paletteFor('system', 'openai', true).id, 'openai-2024q1');
+  assert.equal(paletteFor('anthropic-2026q3', 'anthropic').theme, 'anthropic');
+  assert.equal(paletteFor('anthropic-2026q3', 'anthropic').palette, '2026q3');
+  assert.equal(paletteFor('anthropic-2025q2', 'anthropic').palette, '', 'the older dark carries no palette attribute');
+});
+
+test('legacy theme values still land on the preset default', () => {
+  for (const legacy of ['dark', 'oled', 'anthropic', 'openai']) {
+    assert.equal(paletteFor(legacy, 'anthropic').id, 'anthropic-2026q3', legacy);
+    assert.equal(paletteFor(legacy, 'openai').id, 'openai-2024q1', legacy);
+  }
+  assert.equal(paletteFor('light', 'openai').id, 'openai-light');
+});
+
+test('a palette from the other preset falls back by darkness, never breaks', () => {
+  assert.equal(paletteFor('anthropic-2026q3', 'openai').id, 'openai-2024q1');
+  assert.equal(paletteFor('anthropic-light', 'openai').id, 'openai-light');
+  assert.equal(paletteFor('openai-2024q1', 'anthropic').id, 'anthropic-2026q3');
+  assert.equal(paletteFor('nonsense', 'anthropic', true).id, 'anthropic-2026q3');
+  assert.equal(paletteFor(null, 'anthropic', false).id, 'anthropic-light');
+});
+
+test('the theme picker only ever offers its own preset a value it can select', () => {
+  for (const preset of ['anthropic', 'openai']) {
+    const ids = palettesFor(preset).map(p => p.id).concat('system');
+    for (const stored of ['system', 'light', 'dark', 'oled', 'anthropic-2025q2', 'anthropic-legacy', 'openai-light', '', 'junk']) {
+      assert.ok(ids.includes(themeValue(stored, preset)), preset + ' / ' + stored);
+    }
+  }
+  assert.equal(palettesFor('anthropic').length, 4);
+  assert.equal(palettesFor('openai').length, 2);
+});
+
+test('the legacy palette is a distinct anthropic dark, not the default', () => {
+  const leg = paletteFor('anthropic-legacy', 'anthropic');
+  assert.equal(leg.theme, 'anthropic');
+  assert.equal(leg.palette, 'legacy');
+  assert.notEqual(paletteFor('dark', 'anthropic').id, 'anthropic-legacy', 'legacy is opt-in, never the default');
+  assert.equal(paletteFor('anthropic-legacy', 'openai').id, 'openai-2024q1', 'falls back by darkness under the other preset');
+  const ids = palettesFor('anthropic').map(p => p.id);
+  assert.deepEqual(ids, ['anthropic-light', 'anthropic-legacy', 'anthropic-2025q2', 'anthropic-2026q3']);
 });

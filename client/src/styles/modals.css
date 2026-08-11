@@ -72,12 +72,12 @@
 
 /* Settings rows read as a list: label and its note on the left, the control
    hard right, hairline between each. */
-.modal-main .field.row { padding: 13px 0; border-bottom: 1px solid var(--modal-line, var(--border-soft)); margin-bottom: 0; gap: 24px; align-items: center; }
+.modal-main .field.row { padding: 15px 0; border-bottom: 0.8px solid var(--modal-line, var(--border-soft)); margin-bottom: 0; gap: 24px; align-items: center; }
 .modal-main .field.row:last-of-type { border-bottom: 0; }
 .modal-main .field.row > div:first-child { min-width: 0; flex: 1; }
 .modal-main .field.row > label,
 .modal-main .field.row label { font-size: 14px; font-weight: 500; color: var(--text); }
-.modal-main .field.row .muted-note { font-size: 12.5px; line-height: 1.45; color: var(--text-muted); margin-top: 2px; }
+.modal-main .field.row .muted-note { font-size: 13px; line-height: 1.5; color: var(--text-faint); margin-top: 3px; }
 .modal-main .field.row > *:last-child { flex: none; }
 .modal-main .me-section-h { font-size: 15px; font-weight: 580; color: var(--text); margin: 30px 0 10px; padding-top: 0; border-top: 0; }
 .modal-main .me-section-h:first-child { margin-top: 0; }
@@ -98,7 +98,7 @@
 .usage-table td { padding: 9px 8px; border-top: 1px solid var(--border-soft); color: var(--text); }
 .usage-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .usage-foot { margin-top: 16px; }
-.sec-note { font-size: 12.5px; line-height: 1.5; color: var(--text-muted); margin: -4px 0 12px; }
+.sec-note { font-size: 13px; line-height: 1.55; color: var(--text-faint); margin: 2px 0 14px; }
 .modal-close { position: absolute; top: 18px; right: 20px; color: var(--text-muted); }
 .modal-close:hover { color: var(--text); }
 .modal h2 { font-family: var(--font-sans); font-size: 18px; font-weight: 600; margin: 0 0 3px; letter-spacing: -.01em; }
@@ -314,3 +314,80 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 .modal-main input[type="text"], .modal-main input[type="number"], .modal-main input[type="email"],
 .modal-main input:not([type]), .modal-main select { height: 32px; padding: 0 12px; font-size: 14px; }
 .modal-main textarea { padding: 10px 12px; font-size: 14px; }
+
+/* ---------- settings rows: label + control, claude's shape ---------- */
+.set-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 24px;
+  padding: 15px 0; border-bottom: 0.8px solid var(--modal-line, var(--border-soft));
+}
+.set-row-main { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.set-row-title { font-family: var(--font-sans); font-size: 14px; font-weight: 500; line-height: 20px; color: var(--text); }
+.set-row-desc { font-family: var(--font-sans); font-size: 13px; line-height: 1.5; color: var(--text-faint); }
+.set-row-ctrl { display: flex; flex-shrink: 0; align-items: center; }
+
+.segs {
+  position: relative; display: inline-flex; width: fit-content; flex-shrink: 0;
+  padding: 1px; border-radius: 8px; background: var(--seg-track, var(--hover-soft));
+}
+.segs-thumb {
+  position: absolute; left: 1px; top: 1px; bottom: 1px; border-radius: 7px;
+  background: var(--seg-thumb, var(--hover-mid));
+  box-shadow: inset 0 0 0 1px var(--seg-thumb-ring, var(--border-soft)), 0 1px 2px rgba(0, 0, 0, .05);
+  transition: transform var(--fx-t, .2s) cubic-bezier(.32, .72, 0, 1), width var(--fx-t, .2s) cubic-bezier(.32, .72, 0, 1);
+  pointer-events: none;
+}
+.segs-opt {
+  position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center;
+  height: 30px; padding: 0 12px; border-radius: 6px; white-space: nowrap;
+  font-family: var(--font-sans); font-size: 14px; font-weight: 400; color: var(--text-faint);
+  transition: color var(--fx-t, .12s) ease;
+}
+.segs-opt.on { color: var(--text); }
+.segs-opt:hover:not(.on) { color: var(--text-muted); }
+
+.set-select { position: relative; }
+.set-select-trigger {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px;
+  padding: 0 2px 0 8px; border-radius: 8px; white-space: nowrap;
+  font-family: var(--font-sans); font-size: 14px; color: var(--text);
+  transition: background var(--fx-t, .12s) ease;
+}
+.set-select-trigger:hover, .set-select.open .set-select-trigger { background: var(--hover-mid); }
+.set-select-trigger svg { flex-shrink: 0; opacity: .75; transform: rotate(90deg); }
+.set-select-menu {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 30; min-width: 224px;
+  padding: 4px; border-radius: 12px; background: var(--pop-bg, var(--menu-bg));
+  box-shadow: var(--pop-shadow); animation: setSelIn var(--fx-a, .12s) var(--ease-out) both;
+}
+@keyframes setSelIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.set-select-opt {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;
+  height: 32px; padding: 4px 12px; border-radius: 8px;
+  font-family: var(--font-sans); font-size: 14px; color: var(--pop-text, var(--text)); text-align: left;
+  transition: background var(--fx-t, .12s) ease;
+}
+.set-select-opt:hover { background: var(--pop-hover, var(--hover-mid)); }
+.set-select-opt svg { width: 14px; flex-shrink: 0; color: var(--pop-text, var(--text)); }
+[data-animations="off"] .segs-thumb { transition: none; }
+[data-animations="off"] .set-select-menu { animation: none; }
+:root[data-theme="light"] .segs-thumb { background: var(--seg-thumb, #ffffff); }
+.set-select-trigger .accent-dot,
+.set-select-opt .accent-dot {
+  width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18);
+}
+.set-select-opt .accent-name { flex: 1; min-width: 0; }
+.set-select-opt.accent-custom { position: relative; cursor: pointer; }
+.set-select-opt.accent-custom input[type="color"] {
+  position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0;
+}
+.set-row-ctrl .reveal-row { display: flex; align-items: center; gap: 10px; }
+.set-row-ctrl .reveal-row input[type="range"] { width: 150px; }
+.set-row-ctrl .reveal-val { font-size: 13px; color: var(--text-faint); font-variant-numeric: tabular-nums; min-width: 46px; text-align: right; }
+.set-row-ctrl .linklike { font-size: 13px; }
+.set-row .btn { flex-shrink: 0; }
+@media (max-width: 640px) {
+  .set-row { flex-direction: column; align-items: stretch; gap: 10px; }
+  .set-row-ctrl { justify-content: flex-start; }
+  .set-select-menu { right: auto; left: 0; }
+}

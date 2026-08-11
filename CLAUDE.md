@@ -16,6 +16,35 @@ plus the ordinary theme attribute:
 data-theme="light" | "anthropic" | "openai"   (oled is a legacy alias of the openai palette)
 ```
 
+and, for a *palette variant* of a theme, an optional third:
+
+```
+data-palette="2026q3"
+```
+
+### Palettes are token overrides, never a new theme value
+
+A palette is a colour scheme and nothing else. `client/src/lib/palettes.js` is the registry — pure and import-free, so it is unit-tested — and every entry maps an id to a `{ theme, palette }` pair:
+
+| Id | `data-theme` | `data-palette` |
+| --- | --- | --- |
+| `anthropic-light` | `light` | — |
+| `anthropic-legacy` | `anthropic` | `legacy` |
+| `anthropic-2025q2` | `anthropic` | — |
+| `anthropic-2026q3` | `anthropic` | `2026q3` |
+| `openai-light` | `light` | — |
+| `openai-2024q1` | `openai` | — |
+
+**A new palette must not introduce a new `data-theme` value.** Around forty rules across `base.css`, `chat.css` and `extras.css` are scoped `:root[data-theme="anthropic"] .foo` to give the Anthropic preset its shape; a palette that changed the theme attribute would silently drop every one of them. So `anthropic-2026q3` keeps `data-theme="anthropic"` and adds a single token-override block, `:root[data-theme="anthropic"][data-palette="2026q3"]`, plus the handful of rules that hardcode a colour the tokens cannot reach (the composer ring, the active chat row, the greeting weight).
+
+`anthropic-2026q3` is the default dark for the Anthropic preset and is measured 1:1 against claude.ai. Its surface ladder is `#151515` app and sidebar, `#1a1a19` cards and modals, `#20201f` composer and popovers, over `#0b0b0b`; text runs `#ffffff` / `#c3c2b7` / `#898781`; and — the thing that makes it read as one system — **every hover, active and selected state is a white overlay**, `rgba(255,255,255,.05)` for a field or a segmented track and `rgba(255,255,255,.1)` for a hover, a menu item or a pressed control. The one exception is the active chat row, which is a solid `#111111`. `anthropic-2025q2` is the older warmer scheme (`#1a1a19` / `#383835`) and `anthropic-legacy` is older still — the palette from before the first claude.ai matching pass, with a lighter `#1f1f1e` app over a separate `#1d1d1c` sidebar, a near-black `#121212` user bubble, a plain bordered composer with no ring glow, and the softer `rgba(255,255,255,.8)` greeting. All three are kept because each is a genuinely different look, not a deprecated one.
+
+Because a palette block is a *diff* on the theme block it extends, anything a palette does not restate is inherited from `:root[data-theme="anthropic"]`. That is what makes them cheap, and it is also the thing to watch: `legacy` has to restate `--pop-shadow` and `--pop-ring` explicitly, since 2025 Q2 introduced an inset hairline that never existed in the palette legacy is reproducing.
+
+`paletteFor(themePref, preset, prefersDark)` resolves the stored pref, and it must keep tolerating three things: `system`, the legacy `dark`/`oled`/`anthropic`/`openai` values written before palettes existed, and **an id belonging to the other preset** — switching the workspace preset must land on that preset's equivalent light or dark rather than leaving a dead value. `themeValue` is the inverse, guaranteeing the picker never shows a value it cannot select; there is a test asserting that for every preset and every legacy input.
+
+The pre-paint script in `index.html` reads `oq-palette` beside `oq-theme` and has to know the new background literal, or the first frame flashes the old one.
+
 Rules:
 
 1. **The Anthropic preset is the default codebase.** It must never require preset-specific CSS. If you write a rule for it, write it plain.
@@ -31,10 +60,30 @@ Rules:
 - First-run: when `uiPresetChosen === false`, admins see the chooser modal (`.preset-scrim` / `.preset-modal` in `App.jsx` + `modals.css`). Admins can change it later in Admin → Branding → Interface preset (`AdminPanel.jsx`).
 - Pre-React boot: `client/index.html` reads `localStorage 'oq-preset'` and `'oq-theme'` and sets both attributes before paint (no flash). `applyCfg`/`applyPrefs` keep localStorage in sync afterwards.
 
+## Settings rows
+
+The Appearance panel uses three primitives, all in `SettingsModal.jsx` and styled in `modals.css`, copied from claude.ai's settings because a row of labels with the control hard right reads far better than a wall of segmented groups:
+
+- **`SetRow`** — `flex; justify-content: space-between; padding: 15px 0` with a hairline under it. Title 14px, note 13px in `--text-faint`, control `flex-shrink: 0`.
+- **`SelectRow`** — the dropdown. A 32px transparent trigger that fills with `--hover-mid` on hover or while open, and a 224px menu on `--pop-bg` with 32px items. An option may carry a `font`, which is what renders each Chat font choice in the face it selects.
+- **`SegSlide`** — the segmented control with the sliding thumb (Motion, Message density, Reveal speed, Cursor style, the keybind preset, the usage window). The track is `--hover-soft` at `padding: 1px`, the thumb is an absolutely-positioned `--hover-mid` pill that animates `transform` **and** `width` over 200ms on `cubic-bezier(.32, .72, 0, 1)`.
+
+The thumb geometry is **measured, not computed from a fraction**: options have different widths, so the effect reads on `offsetLeft`/`offsetWidth` of the selected button through a `ResizeObserver`. A percentage-based thumb drifts the moment a label is translated, which is exactly the case that matters here. The old `Seg` is still used elsewhere (the usage window tabs) and is deliberately left alone.
+
+All four live in `components/settingsui.jsx` rather than inside `SettingsModal`, because `KeybindsPanel` is a separate lazy component and its preset picker needs the same control — a second copy is how the two drift. `SwitchRow` and `Toggle` both render through `SetRow`, so every switch in Settings is one row shape; `.field.row` in `modals.css` is styled to match it exactly, which is why the panels that still use it (Security's session list, the danger zone) are visually indistinguishable. Descriptions are one line — the longest was 189 characters before this pass and nothing should reach that again.
+
+## A menu that can leave its container must be portaled
+
+`client/src/lib/anchor.js` is the single implementation: `useAnchoredMenu(open, setOpen, btnRef, menuRef, opts)` returns `{ top, left, maxH }` in viewport coordinates and `menuStyleOf(pos)` turns that into the inline style. It flips above the anchor when there is more room there, clamps to an 8px margin on every edge, caps the height and turns on scrolling when even the better side is too short, and closes on scroll or resize rather than trying to follow.
+
+Use it for **any** menu whose anchor sits inside a scrolling or clipping ancestor. Three menus were clipped for exactly that reason and now share this: `MoreMenu` and the "Retry with another model" menu (inside `.thread`, which scrolls), and the settings dropdowns (inside `.modal-main`, which is `overflow: hidden auto` — the accent list is ten items and simply disappeared past the modal's bottom edge).
+
+**The related trap is the opposite one: writing `left` when you did not need to.** `.model-menu` is `position: absolute; right: 0`, so CSS already right-aligns it to its wrap. `ModelDropdown` used to compute `left = wrap.width - menuWidth` on every measure, which re-derives the same position from a width that *changes when the trigger's label changes* — and toggling Extended reasoning changes exactly that. Combined with a `ResizeObserver` on the wrap, each toggle produced a visible left/right jitter. Placement now leaves the horizontal position to CSS and writes `left` **only** when the menu would actually cross a viewport edge (`place.left` is `null` otherwise, and `right: auto` is only applied alongside it). If you add clamping to a popover, clamp conditionally — an unconditional inline `left` is a feedback loop waiting for its trigger to resize.
+
 ## Theme mapping (prefs.js → applyPrefs)
 
-- User theme prefs are only `system | light | dark` (stored `oled` reads as `dark`).
-- Under preset `anthropic`: dark → `data-theme="anthropic"`.
+- A user's theme pref is a palette id (or `system`); the pre-palette values `light | dark | oled` are still accepted and resolve to the active preset's default.
+- Under preset `anthropic`: dark → `data-theme="anthropic"` plus `data-palette="2026q3"` by default.
 - Under preset `openai`: dark → `data-theme="openai"` (the pitch-black palette).
 - Cursor: under preset `openai` the streaming cursor **defaults** to circle+on, under `anthropic` to block+off. These are defaults only — a user who has set `streamCursor`/`cursorStyle` keeps their choice in both presets, and the default is computed at apply time rather than written into their prefs.
 
@@ -64,6 +113,17 @@ When something animates in one preset and not the other, **check `document.docum
 - `Composer.jsx` — none. The `.ml` multiline class is preset-agnostic; only `openai.css` styles it.
 - `server/routes/models.js` — new-model defaults while `ui_preset === 'openai'`: `icon_size 28`, `show_name 1`, `icon_position 'left'`, `generating_anim/thinking_anim 'none'`, `dropdown_icon 0`.
 - The thread rail, find bar and branch map add **no** entries to this list. Every preset difference for them is CSS-only, scoped in `openai.css`. Keep it that way.
+
+## The live tool line shimmers what is happening, not just that something is
+
+A tool call with no result yet carries `.pending`, and the shimmer runs on the **verb and its target together** — `.tl-verb` plus `.tl-name` for a file step, `.tb-label` plus `.tb-peek` for the terminal. Only the verb used to shimmer, which told you something was happening but not what; the file name and the command are the part worth reading, and they stream in character by character from `livePreview`, so they are literally the live edge of the model's output.
+
+Two details are load-bearing:
+
+- **The gradient band is sized in px (`260px`), not in `%`.** With a percentage the band scales to each element, so a three-letter verb and a forty-character path sweep at wildly different speeds and read as two unrelated animations sitting next to each other. A fixed band makes one pace across the whole line.
+- **The shimmer is per element, not on `.tool-line` itself.** A single parent gradient would give one continuous sweep and is tempting, but `background-clip: text` on the parent would also clip `.tool-line.clickable:hover`'s background to the text — a pending file step *is* clickable, so its hover fill would vanish.
+
+`BashCard` and `WebSearchCard` set `pending` on `.tool-bash` themselves; `FileCard` and `ChipCard` already had it. The opt-out has to name all four selectors under both `[data-animations="off"]` and `[data-microfx="off"]`, since the base rule is two classes deep and a shorter opt-out loses on specificity.
 
 ## Thread performance: occlusion, not virtualization
 
@@ -269,7 +329,7 @@ Four separate surfaces report on the running model. They exist separately becaus
 Details that are load-bearing:
 
 - **`StreamStatus` also owns the `waiting` phase.** `turn.js` starts a `SILENT_MS` (2500ms) interval next to the opening `sendStatus({ phase: 'prefill' })` and cancels it on the first event of any kind from `streamCompletion`. In router mode a llama-server loads the model before answering, which is otherwise indistinguishable from a hang. The label must stay honest: the server knows only that nothing has come back, not why, so it says exactly that and shows elapsed seconds rather than claiming a model is loading.
-- **`StreamStatus` shows immediately when it has real numbers** and only waits 1.2s when it does not. It used to wait a flat 5 seconds, which is precisely the window you are staring at nothing during a long local prefill. It leads with cache reuse when there is any, because "94% reused" is the number that tells you the KV cache is working; the generic label does not.
+- **When `StreamStatus` appears is the `statusDelay` pref**, not a constant. `lib/status.js` owns the whole of it: `STATUS_DELAY_DEFAULT` (3s), `STATUS_DELAY_MAX` (10s) and `statusDelaySecs`/`statusDelayMs`, which clamp to a whole number of seconds in range and fall back to the default for anything unreadable. It is a pure, import-free module so `App.jsx`, `SettingsModal` and the block itself cannot disagree about the bounds, and so the clamp is unit-tested. `0` means instant, and it must stay distinguishable from absent — a nullish check, never a falsy one. The block fades in via `msFade` in `extras.css` whenever it lands. Earlier versions hard-coded this: a flat 5s, then 1.2s unless real numbers had arrived. Both were wrong for somebody, which is why it is a slider under **Settings > Chat > Tools and context**. The label still leads with cache reuse when there is any, because "94% reused" is the number that tells you the KV cache is working; the generic label does not.
 - **Speed is persisted on the message row** (`speed: { tps, promptTps, exact }`, written in `turn.js`, exposed by `routes/chats/messages.js`). It is recorded *before* the telemetry throttle, so the final tick of a turn is never the one that gets dropped. `exact` is false when the numbers were estimated from streamed text rather than reported by llama.cpp `timings`, and the UI marks that with a `~`.
 - **Only speed is exposed to the client, never the cost** that sits beside it in `m.usage`.
 - **`llamaEngine(provider)` is the provider-level sibling of `llamaInfo(model)`**, behind `GET /api/admin/providers/:id/engine` and folded into the existing Test connection button rather than polled. `/slots` returns 501 when the server ran with `--no-slots`; that is a normal configuration, so `slotsHidden` says so instead of the panel reporting a failure.
