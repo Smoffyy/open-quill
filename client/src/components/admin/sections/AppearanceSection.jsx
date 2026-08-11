@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAdmin } from '../store.jsx';
-import { Card, IconSlot, AutosaveNote, SegPick } from '../widgets.jsx';
+import { Card, IconSlot, AutosaveNote, SegPick, SettingRow } from '../widgets.jsx';
 import { t, tk } from '../../../i18n.jsx';
 
 export default function AppearanceSection() {
@@ -23,6 +23,12 @@ export default function AppearanceSection() {
             onChange={(v) => setCfg(c => ({ ...c, uiPreset: v, appFont: v === 'openai' ? 'sans' : 'serif' }))} />
           <div className="muted-note">{t("Anthropic keeps the classic open-quill layout. OpenAI restyles everything after ChatGPT: pitch-black palette, Open Sans, pill composer, the model picker in the top-left, persistent 28px model logos beside every reply, and no logo motion. New models created while OpenAI is active default to those icon settings.")}</div>
         </div>
+      </Card>
+      <Card title={t("Composer")} sub={t("Controls shown in the message box.")}>
+        <SettingRow label={t("Model docs button")}
+          note={t("Shows the book icon beside the plus button, opening a panel that compares every available model.")}
+          on={cfg.modelDocs !== false}
+          onToggle={() => setCfg(c => ({ ...c, modelDocs: !(c.modelDocs !== false) }))} last />
       </Card>
       <Card title={t("Typography & footer")} sub={t("The overall voice of the interface.")}>
         <div className="field"><label>{t("Interface font")}</label>

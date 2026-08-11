@@ -218,9 +218,10 @@ export async function llamaPromptTokens(model, messages, tools) {
     return cached + countImages(messages) * imageTokenCost(model);
   }
   const broken = templateBroken.get(ep.root + '|' + ep.name);
+  const hasUser = wire.some(m => m.role === 'user');
   let prompt = null;
   let pad = 0;
-  if (!broken || Date.now() - broken > CACHE_MS) {
+  if (hasUser && (!broken || Date.now() - broken > CACHE_MS)) {
     const body = { messages: wire, add_generation_prompt: true };
     if (Array.isArray(tools) && tools.length) { body.tools = tools; body.tool_choice = 'auto'; }
     const tpl = await postWithModel(ep, '/apply-template', body, 15000);

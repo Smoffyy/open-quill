@@ -313,9 +313,6 @@
 :root[data-preset="openai"][data-theme="light"] .preset-scrim,
 :root[data-preset="openai"][data-theme="light"] .mdoc-overlay { background: rgba(0, 0, 0, .32); }
 
-/* Pins. The base sheets were retuned to claude.ai's exact metrics for the
-   Anthropic skin; these hold the OpenAI skin at the values it was verified
-   against, since a base-sheet change flows into this preset by default. */
 [data-preset="openai"] .topbar { height: auto; padding: 14px 20px; }
 [data-preset="openai"] .topbar .chat-name { height: auto; padding: 5px 9px; border-radius: 9px; font-size: 15px; line-height: normal; color: var(--text-muted); }
 [data-preset="openai"] .topbar .icon-btn { width: 30px; height: 30px; border-radius: 8px; }
@@ -347,3 +344,47 @@
 [data-preset="openai"] .sidebar.collapsed .nav-item { padding: 9px; width: auto; height: auto; }
 [data-preset="openai"] .field label { font-size: 13px; line-height: normal; color: var(--text-muted); }
 [data-preset="openai"] .greeting img { width: 30px; height: 30px; }
+
+@media (max-width: 768px) {
+  [data-preset="openai"] .model-menu, [data-preset="openai"] .model-menu.up {
+    position: fixed !important; left: 0 !important; right: 0 !important; bottom: 0 !important; top: auto !important;
+    width: 100% !important; min-width: 0 !important; max-width: 100% !important; overflow: hidden auto;
+    border-radius: 20px 20px 0 0 !important; padding: 14px 12px calc(14px + env(safe-area-inset-bottom)) !important;
+    max-height: 78vh !important; animation: sheetUp var(--fx-a, .26s) var(--ease-out) both !important;
+  }
+  [data-preset="openai"] .overlay { padding: 0 !important; place-items: end stretch; }
+  [data-preset="openai"] .modal,
+  [data-preset="openai"] .search-modal,
+  [data-preset="openai"] .shortcuts-modal,
+  [data-preset="openai"] .cmdk,
+  [data-preset="openai"] .sp-modal,
+  [data-preset="openai"] .pj-create,
+  [data-preset="openai"] .summary-modal,
+  [data-preset="openai"] .confirm-box,
+  [data-preset="openai"] .chat-menu-pop {
+    width: 100% !important; max-width: 100% !important; border-radius: 22px 22px 0 0 !important;
+    animation: sheetUp var(--fx-a, .28s) var(--ease-out) both !important; margin: 0 !important;
+  }
+  [data-preset="openai"] .modal { height: 90vh !important; max-height: 90vh; }
+  [data-preset="openai"] .confirm-box { border-radius: 18px !important; margin: 0 12px 12px !important; width: auto !important; }
+  [data-preset="openai"] .chat-menu-pop { position: fixed !important; left: 0 !important; bottom: 0 !important; top: auto !important; }
+  [data-preset="openai"] .cmdk-overlay, [data-preset="openai"] .search-overlay { place-items: end stretch; padding-top: 0 !important; }
+  [data-preset="openai"] .model-scrim { display: block; position: fixed; inset: 0; z-index: 49; background: #00000070; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+  [data-preset="openai"] .drawer-backdrop { background: #00000080; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+  [data-preset="openai"] .sidebar, [data-preset="openai"] .sidebar.collapsed { width: min(86vw, 340px); max-width: 340px; box-shadow: 0 0 60px #00000080; }
+  [data-preset="openai"] .mobile-menu-btn { width: 42px; height: 42px; border-radius: 50%; background: var(--surface-2); }
+  [data-preset="openai"] .mobile-menu-btn svg { width: 20px; height: 20px; }
+  [data-preset="openai"] .mobile-menu-btn.empty-menu { top: calc(12px + env(safe-area-inset-top)); left: 12px; }
+  [data-preset="openai"] .home-topbar { left: 62px; top: calc(15px + env(safe-area-inset-top)); }
+  [data-preset="openai"] .topbar .mobile-menu-btn { order: -1; }
+  [data-preset="openai"] .topbar-model { flex: 0 1 auto; min-width: 0; max-width: 46%; margin-right: 0; overflow: hidden; }
+  [data-preset="openai"] .topbar-model .model-trigger { white-space: nowrap; min-width: 0; overflow: hidden; }
+  [data-preset="openai"] .topbar-model .model-trigger > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+  [data-preset="openai"] .topbar-model .model-trigger .ext { display: none; }
+  [data-preset="openai"] .topbar-actions { flex-shrink: 0; margin-left: auto; }
+  [data-preset="openai"] .topbar .chat-name-wrap { display: none; }
+  [data-preset="openai"] .center-wrap { padding: 16px; justify-content: center; }
+  [data-preset="openai"] .greeting { font-size: 22px; line-height: 1.22; margin-bottom: 18px; }
+  [data-preset="openai"] .assistant-body { font-size: 17px; }
+  [data-preset="openai"] .topbar { height: auto; padding: 10px 12px; padding-top: calc(10px + env(safe-area-inset-top)); }
+}

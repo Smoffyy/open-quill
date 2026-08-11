@@ -110,12 +110,12 @@ export default function App() {
   const onSearchCb = useCallback(() => setCmdkOpen(true), []);
   const onToggleSidebarCb = useCallback(() => setCollapsed(c => !c), []);
   const onMobileCloseCb = useCallback(() => setMobileDrawer(false), []);
-  const onSettingsCb = useCallback(() => { setSettingsTab('general'); setShowSettings(true); }, []);
-  const onAdminCb = useCallback(() => { history.pushState({}, '', '/admin'); setShowAdmin(true); }, []);
-  const onPlaygroundCb = useCallback(() => { history.pushState({}, '', '/playground'); setShowPlayground(true); }, []);
-  const onCreditsCb = useCallback(() => setShowCredits(true), []);
-  const onChangelogCb = useCallback(() => setShowChangelog(true), []);
-  const onLicenseCb = useCallback(() => setShowLicense(true), []);
+  const onSettingsCb = useCallback(() => { setMobileDrawer(false); setSettingsTab('general'); setShowSettings(true); }, []);
+  const onAdminCb = useCallback(() => { setMobileDrawer(false); history.pushState({}, '', '/admin'); setShowAdmin(true); }, []);
+  const onPlaygroundCb = useCallback(() => { setMobileDrawer(false); history.pushState({}, '', '/playground'); setShowPlayground(true); }, []);
+  const onCreditsCb = useCallback(() => { setMobileDrawer(false); setShowCredits(true); }, []);
+  const onChangelogCb = useCallback(() => { setMobileDrawer(false); setShowChangelog(true); }, []);
+  const onLicenseCb = useCallback(() => { setMobileDrawer(false); setShowLicense(true); }, []);
   const onChatsOverviewCb = useCallback(() => { setMobileDrawer(false); setChatsOverview(true); }, []);
   const onSpacesCb = useCallback(() => { setMobileDrawer(false); history.pushState({}, '', '/spaces'); setShowSpaces(true); }, []);
   const closeArtifacts = useCallback(() => setArtifactsOpen(false), []);
@@ -1425,7 +1425,7 @@ export default function App() {
     styles: user?.styles || [], styleId, onSelectStyle: setStyleId, onSaveStyles: saveStyles,
     conversationEnded: chatEnded, endedReason: chatEndedReason,
     removedModel: activeId ? chatRemovedModel : null,
-    onOpenDocs: () => setShowDocs(true),
+    onOpenDocs: cfg.modelDocs !== false ? () => setShowDocs(true) : undefined,
     hideModelPicker: cfg.uiPreset === 'openai',
     models, currentId, onSelect: pickModel, extended, onToggleExtended: () => setExtended(e => !e),
     reasoningEffort, onSetEffort: setReasoningEffort, kwargValues, onSetKwarg: setKwarg,

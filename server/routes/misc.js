@@ -60,6 +60,7 @@ export default function registerMiscRoutes(app) {
       logAudit(req, 'security.egressAllowlist', { meta: { count: list.length } });
       broadcastConfig();
     }
+    if ('modelDocs' in b) { setSetting('model_docs_enabled', b.modelDocs ? '1' : '0'); logAudit(req, 'branding.modelDocs', { meta: { on: !!b.modelDocs } }); broadcastConfig(); }
     if ('appIcon' in b) setSetting('app_icon', text(b.appIcon, 1024));
     if ('appFont' in b) setSetting('app_font', b.appFont === 'sans' ? 'sans' : 'serif');
     if ('uiPreset' in b) {

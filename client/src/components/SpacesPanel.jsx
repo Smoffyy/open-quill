@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import Markdown from './Markdown.jsx';
 import { Plus, Chevron, Users, Trash, Send, Gear, Check, Logout } from './icons.jsx';
 import { t } from '../i18n.jsx';
+import { focusUnlessTouch } from '../lib/touch.js';
 
 function timeAgo(ts) {
   const s = Math.floor((Date.now() - ts) / 1000);
@@ -216,7 +217,7 @@ function SpaceChat({ space, user, models, onChanged, onClose }) {
     const after = input.slice(mention.caret);
     const next = before + '@' + name + ' ' + after;
     setInput(next); setMention(null);
-    setTimeout(() => taRef.current?.focus(), 0);
+    setTimeout(() => focusUnlessTouch(taRef.current), 0);
   }
 
   async function send() {

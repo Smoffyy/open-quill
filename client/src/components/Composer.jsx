@@ -8,6 +8,7 @@ import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevro
 import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
 import { extLabel } from '../lib/files.js';
 import { t, fmtDate } from '../i18n.jsx';
+import { focusUnlessTouch } from '../lib/touch.js';
 
 const FILE_ACCEPT = '.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.py,.lua,.html,.css,.xml,.yml,.yaml,.pdf,.log';
 
@@ -168,7 +169,7 @@ export default function Composer({
       cancelAnimationFrame(fitRaf.current);
     };
   }, [fit]);
-  useEffect(() => { if (autoFocus || focusKey !== undefined) ta.current?.focus(); }, [autoFocus, focusKey]);
+  useEffect(() => { if (autoFocus || focusKey !== undefined) focusUnlessTouch(ta.current); }, [autoFocus, focusKey]);
   useEffect(() => {
     const h = () => fileInput.current?.click();
     window.addEventListener('oq-attach-files', h);
@@ -442,7 +443,7 @@ export default function Composer({
       <div className="composer-bar">
         <div className="composer-left">
           <div className="plus-wrap" ref={plusRef}>
-            <button className="plus" onClick={() => setPlusMenu(m => !m)} title={t("More")}>
+            <button className={'plus' + (plusMenu ? ' on' : '')} onClick={() => setPlusMenu(m => !m)} title={t("More")}>
               <Plus style={{ width: 20, height: 20 }} />
               {enabledCount > 0 && <span className="plus-badge">{enabledCount}</span>}
             </button>
@@ -577,6 +578,9 @@ export default function Composer({
               {onClearProject && <button className="cp-x" onClick={onClearProject} title={t("Remove from project")}><X style={{ width: 12 }} /></button>}
             </div>
           )}
+          {!hideModelPicker && onOpenDocs && (
+            <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={onOpenDocs}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>
+          )}
         </div>
         <div className="composer-right">
           {ctxGauge}
@@ -585,9 +589,6 @@ export default function Composer({
             reasoningEffort={reasoningEffort} onSetEffort={onSetEffort}
             kwargValues={kwargValues} onSetKwarg={onSetKwarg}
             modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />}
-          {!hideModelPicker && onOpenDocs && (
-            <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={onOpenDocs}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>
-          )}
           {voiceMic && (
             <button className={'mic' + (dictating ? ' rec' : '') + (transcribing ? ' busy' : '')} onClick={toggleDictation}
               title={dictating ? t('Stop dictation') : transcribing ? t('Transcribing…') : t('Dictate')} disabled={transcribing}>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { t } from '../i18n.jsx';
+import { isTouch } from '../lib/touch.js';
 
 export default function Login({ onLogin, cfg }) {
   const firstRun = !!cfg?.firstRun;
@@ -97,7 +98,7 @@ export default function Login({ onLogin, cfg }) {
                   : t('Sign in to continue.')}
               </div>
               {!!err && <div className="err">{err}</div>}
-              <input autoFocus type="email" autoComplete="email" placeholder={t('Email address')} value={email}
+              <input autoFocus={!isTouch()} type="email" autoComplete="email" placeholder={t('Email address')} value={email}
                 onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter} />
               <input type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
                 placeholder={t('Password')} value={pw}

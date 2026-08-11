@@ -14,6 +14,7 @@
   --on-accent: #ffffff;
   --user-bubble: #2f2f2c;
   --composer-bg: var(--surface);
+  --composer-hover: rgba(255, 255, 255, .08);
   --menu-bg: #2a2a28;
   --modal-bg: #1f1e1d;
   --modal-side: #1a1918;
@@ -73,6 +74,7 @@
   --pop-blue: #2a78d6;
   --pop-switch: rgba(0, 0, 0, .16);
   --pop-shadow: 0 4px 14px rgba(0, 0, 0, .1), 0 12px 32px rgba(0, 0, 0, .12);
+  --composer-hover: rgba(0, 0, 0, .06);
 }
 :root[data-theme="light"] .code-wrap { background: #1f1f1d; }
 
@@ -93,6 +95,7 @@
   --on-accent: #ffffff;
   --user-bubble: #262624;
   --composer-bg: #383835;
+  --composer-hover: rgba(255, 255, 255, .05);
   --menu-bg: #313130;
   --modal-bg: #2c2c2a;
   --modal-side: #1a1a19;

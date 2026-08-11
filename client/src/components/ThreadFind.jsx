@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Search, X, Up, Down } from './icons.jsx';
 import { t } from '../i18n.jsx';
+import { focusUnlessTouch } from '../lib/touch.js';
 
 const SKIP = 'trail,thread-find,actions,code-bar,msg-time,ctx-row,steer-chips,retry-menu,more-menu,msg-model-badge,pin-tag,model-status';
 const SKIP_SET = new Set(SKIP.split(','));
@@ -93,7 +94,7 @@ export default function ThreadFind({ scrollRef, revision, onMatches, onClose }) 
   const rafRef = useRef(0);
   const term = q.trim();
 
-  useEffect(() => { inputRef.current?.focus(); inputRef.current?.select(); }, []);
+  useEffect(() => { if (focusUnlessTouch(inputRef.current)) inputRef.current?.select(); }, []);
 
   const clearHighlights = useCallback(() => {
     if (!supportsHighlight()) return;

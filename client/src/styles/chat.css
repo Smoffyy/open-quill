@@ -26,7 +26,7 @@
 .composer-left, .composer-right { display: flex; align-items: center; gap: 8px; }
 .plus { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; color: var(--text); position: relative; }
 .plus-badge { position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--accent); color: #2a1a12; font-size: 11px; font-weight: 600; font-family: var(--font-sans); display: grid; place-items: center; line-height: 1; box-shadow: 0 0 0 2px var(--surface); }
-.plus:hover { background: var(--surface-hover); color: var(--text); }
+.plus:hover { background: var(--composer-hover, var(--surface-hover)); color: var(--text); }
 .send { width: 32px; height: 32px; border-radius: 8px; background: var(--accent); color: #2a1a12; display: grid; place-items: center; transition: opacity var(--fx-t, .15s), transform var(--fx-t, .1s); }
 .send:disabled { opacity: .35; cursor: default; }
 
@@ -71,12 +71,14 @@
 .style-save { padding: 7px 12px; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: var(--on-accent); background: var(--accent); }
 .style-save:disabled { opacity: .5; }
 .mic { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; color: var(--text-muted); }
-.mic:hover { background: var(--surface-hover); color: var(--text); }
+.mic:hover { background: var(--composer-hover, var(--surface-hover)); color: var(--text); }
 
 /* ---------- model dropdown ---------- */
 .model-select { position: relative; }
 .model-trigger { display: flex; align-items: center; gap: 4px; height: 32px; padding: 0 12px; border-radius: 8px; color: var(--text-muted); font-size: 14px; line-height: 20px; transition: background var(--fx-t, .15s); }
-.model-trigger:hover { background: var(--surface-hover); color: var(--text); }
+.model-trigger:hover { background: var(--composer-hover, var(--surface-hover)); color: var(--text); }
+.plus:active, .mic:active, .model-trigger:active, .mdocs-btn:active { background: var(--pop-hover, var(--hover-mid)); }
+.plus.on, .mic.on, .model-trigger.on { background: var(--pop-hover, var(--hover-mid)); color: var(--text); }
 .model-trigger .ext { color: var(--accent); margin-left: 4px; }
 .model-menu {
   position: absolute; bottom: 42px; right: 0; min-width: 269.6px; background: var(--pop-bg); border: 0;
@@ -181,13 +183,13 @@
 .thread-pad { height: 28px; }
 .msg { margin-bottom: 26px; }
 .msg.user { display: flex; justify-content: flex-end; margin-bottom: 6px; }
-.user-col { display: flex; flex-direction: column; align-items: flex-end; max-width: 75%; }
+.user-col { display: flex; flex-direction: column; align-items: flex-end; max-width: 85%; }
 .ct-crumb { height: 28px; padding: 0 10px; border-radius: 7px; font-family: var(--font-sans); font-size: 14px; font-weight: 400; color: var(--text); white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; transition: background var(--fx-t, .15s); }
 .ct-crumb:hover { background: var(--surface-hover); }
 .ct-sep { color: var(--text-muted); font-size: 14px; flex-shrink: 0; }
 
 .bubble-user {
-  background: var(--user-bubble); border-radius: 12px; padding: 12px 16px; max-width: 85%;
+  background: var(--user-bubble); border-radius: 12px; padding: 12px 16px; max-width: 100%;
   font-family: var(--font-sans); font-size: 15px; line-height: 20px; word-break: break-word;
   animation: fadeUp var(--fx-a, .3s) ease both;
 }
