@@ -9,6 +9,8 @@
 [![Latest Stable Release](https://img.shields.io/github/v/release/Smoffyy/open-quill?label=Latest%20Stable%20Release)](https://github.com/Smoffyy/open-quill/releases/latest)
 [![Latest Beta Release](https://img.shields.io/github/v/release/Smoffyy/open-quill?include_prereleases&label=Latest%20Beta%20Release)](https://github.com/Smoffyy/open-quill/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Follow on X](https://img.shields.io/badge/Follow-%40openquilldev-black?logo=x&logoColor=white)](https://x.com/openquilldev)
+
 
 </div>
 
@@ -203,6 +205,13 @@ Outbound network requests happen only when you explicitly configure or enable a 
 - **Web search**: off unless you enable it and point it at your own SearXNG instance. When a search runs, the server fetches result pages from the web, which is the point of the feature.  
 - **Connectors (MCP)**: only those you add. These run as local subprocesses, or reach an `http(s)` URL if you configure one.  
 - **Code sandbox**: runs code the model or you generate; that code has the same network access as the host, so a script it runs could make its own requests.
+
+## Community
+
+Release notes, previews, and development updates are posted on [X](https://x.com/openquilldev).
+
+For questions, setup help, and feature requests, use [GitHub Discussions](https://github.com/Smoffyy/open-quill/discussions). That is the best place to influence what gets built next.
+
 
 ## Updates / Version Information
 
