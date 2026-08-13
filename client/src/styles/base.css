@@ -218,7 +218,7 @@
   --code-inline: #ec7e7e;
   --code-label: #898781;
 }
-:root[data-theme="anthropic"][data-palette="2026q3"] .chat-row.active { background: #111111; }
+:root[data-theme="anthropic"][data-palette="2026q3"] .chat-row.active { background: #0b0b0b; }
 :root[data-theme="anthropic"][data-palette="2026q3"] .composer { box-shadow: 0 4px 20px rgba(0, 0, 0, .035), inset 0 0 0 1px rgba(255, 255, 255, .1); }
 :root[data-theme="anthropic"][data-palette="2026q3"] .composer:focus-within { box-shadow: 0 4px 20px rgba(0, 0, 0, .075), inset 0 0 0 1px rgba(255, 255, 255, .2); }
 :root[data-theme="anthropic"][data-palette="2026q3"] .greeting { font-weight: 300; color: #ffffff; }
