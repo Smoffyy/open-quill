@@ -175,7 +175,7 @@
 
 :root[data-theme="anthropic"][data-palette="2026q3"] {
   --bg: #151515;
-  --sidebar: #151515;
+  --sidebar: #111111;
   --sidebar-hover: rgba(255, 255, 255, .1);
   --surface: #1a1a19;
   --surface-2: #20201f;
