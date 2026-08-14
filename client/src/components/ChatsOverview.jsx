@@ -44,6 +44,22 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
 
   useEffect(() => { loadMore(); }, [loadMore]);
 
+  useEffect(() => {
+    if (!hasMore || loading) return;
+    const el = bodyRef.current; if (!el) return;
+    if (el.scrollHeight <= el.clientHeight + 320) loadMore();
+  }, [chats, hasMore, loading, selecting, loadMore]);
+
+  useEffect(() => {
+    const el = bodyRef.current; if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      if (!hasMore || busyRef.current) return;
+      if (el.scrollHeight <= el.clientHeight + 320) loadMore();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hasMore, loadMore]);
+
   function switchTab(t) {
     setTab(t); tabRef.current = t;
     setSelected(new Set()); setSelecting(false);

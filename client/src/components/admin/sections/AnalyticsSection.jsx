@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../../../api.js';
 import { useAdmin } from '../store.jsx';
-import { Card, fmtMoney } from '../widgets.jsx';
+import { Card, fmtMoney, SegPick } from '../widgets.jsx';
 import { Plus, Trash } from '../../icons.jsx';
 import { t, tk } from '../../../i18n.jsx';
 
@@ -112,11 +112,9 @@ export default function AnalyticsSection() {
 
   return (
     <>
-      <div className="seg" style={{ width: 'fit-content', marginBottom: 14 }}>
-        {[['7', '7 days'], ['30', '30 days'], ['90', '90 days']].map(([v, l]) => (
-          <button key={v} className={usageDays === v ? 'on' : ''} onClick={() => { setUsageDays(v); loadUsage(v); }}>{l}</button>
-        ))}
-      </div>
+      <SegPick value={usageDays} label={t('Usage window')} style={{ marginBottom: 14 }}
+        options={[['7', tk('7 days')], ['30', tk('30 days')], ['90', tk('90 days')]]}
+        onChange={(v) => { setUsageDays(v); loadUsage(v); }} />
       {!usage && <div className="muted-note">{t("Loading…")}</div>}
       {usage && (
         <>

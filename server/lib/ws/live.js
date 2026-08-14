@@ -19,6 +19,7 @@ export function beginTurn(userId, chatId, modelId) {
     live: null,
     steers: [],
     status: null,
+    promptTokens: 0,
     startedAt: Date.now()
   };
   turns.set(chatId, rec);
@@ -54,7 +55,8 @@ export function snapshotsFor(userId) {
       reasoning: rec.reasoning,
       live: rec.live,
       steers: rec.steers.slice(),
-      status: rec.status
+      status: rec.status,
+      promptTokens: rec.promptTokens
     });
   }
   return out;
@@ -76,6 +78,10 @@ export function record(m) {
       rec.live = null;
       rec.steers = [];
       rec.status = null;
+      rec.promptTokens = 0;
+      break;
+    case 'prompt_size':
+      rec.promptTokens = m.tokens || 0;
       break;
     case 'content':
       rec.content += m.text || '';

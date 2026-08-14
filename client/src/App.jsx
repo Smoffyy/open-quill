@@ -16,6 +16,7 @@ import ThreadSkeleton from './components/ThreadSkeleton.jsx';
 import SummaryModal from './components/SummaryModal.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
 import { computeActiveBg } from './lib/appbg.js';
+import Disclaimer from './components/Disclaimer.jsx';
 
 import Message from './components/Message.jsx';
 const SettingsModal = React.lazy(() => import('./components/SettingsModal.jsx'));
@@ -242,6 +243,7 @@ export default function App() {
   useEffect(() => { if (!msgKeysOn) setKbFocus(null); }, [msgKeysOn]);
 
   const [telemetry, setTelemetry] = useState(null);
+  const [livePrompt, setLivePrompt] = useState(0);
   const [modelStatus, setModelStatus] = useState(null);
   const [liveSteers, setLiveSteers] = useState([]);
   const [ledgerOpen, setLedgerOpen] = useState(false);
@@ -289,6 +291,9 @@ export default function App() {
   const showMsgSpeed = !!user?.prefs?.msgSpeed;
   const showCtxGauge = !!user?.prefs?.ctxGauge;
   const statusDelay = statusDelaySecs(user?.prefs?.statusDelay);
+  const liveExactTokens = !!(streaming && livePrompt > 0 && telemetry?.exact);
+  const liveLedgerTokens = liveExactTokens ? (telemetry.genTokens || 0) : 0;
+  const liveLedgerUsed = (ledgerOpen && liveExactTokens) ? livePrompt + liveLedgerTokens : 0;
 
   const activeIdRef = useRef(null);
   const currentIdRef = useRef(null);
@@ -605,6 +610,7 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!ledgerOpen || !activeId) return;
+    if (streamingRef.current && ledger) return;
     loadLedger();
   }, [ledgerOpen, activeId, currentId, messages.length, loadLedger]);
   const toggleExclude = useCallback(async (messageId, excluded) => {
@@ -640,8 +646,10 @@ export default function App() {
           model_id: t.modelId || currentIdRef.current,
           live: t.live || null,
           steers: Array.isArray(t.steers) ? t.steers : [],
-          status: t.status || null
+          status: t.status || null,
+          promptTokens: t.promptTokens || 0
         });
+        if (t.chatId === activeKey() && t.promptTokens > 0) setLivePrompt(t.promptTokens);
       }
       syncBusy();
       if (list.some(t => t && t.chatId === activeKey())) syncView();
@@ -727,6 +735,10 @@ export default function App() {
       if (m.chatId === activeKey()) setModelStatus(r.status);
       return;
     }
+    if (m.type === 'prompt_size') {
+      if (m.chatId === activeKey()) setLivePrompt(m.tokens || 0);
+      return;
+    }
     if (m.type === 'telemetry') {
       if (m.chatId === activeKey()) setTelemetry({ tps: m.tps, promptTps: m.promptTps, promptTokens: m.promptTokens, genTokens: m.genTokens, ctx: m.ctx, exact: !!m.exact });
       return;
@@ -743,7 +755,7 @@ export default function App() {
       const r = recFor(m.chatId);
       r.content = ''; r.reasoning = ''; r.phase = 'generating'; r.done = false; r.error = false; r.assistantId = m.messageId; r.live = null; r.steers = []; r.status = null;
       if (m.chatId === activeKey()) {
-        setTelemetry(null); setLiveSteers([]); setModelStatus(null);
+        setTelemetry(null); setLivePrompt(0); setLiveSteers([]); setModelStatus(null);
         refreshSeq.current++;
         setCompacting(false); setLiveFile(null); setLiveCall(null); liveRef.current = null;
         targetContent.current = ''; targetReason.current = ''; pendingDone.current = false;
@@ -1701,7 +1713,7 @@ export default function App() {
             <div className="scroll-area" id="oq-thread" ref={scrollRef} onScroll={onScroll} onWheel={onWheel} onTouchMove={onTouchMove}>
               <div className={'thread' + (threadStagger ? ' stagger' : '') + (ledgerOpen ? ' ledger-on' : '') + (messages.length > 24 ? ' virt' : '') + (findOpen ? ' finding' : '')}
                 role="log" aria-label={t('Conversation')} aria-live="polite" aria-relevant="additions text" aria-busy={streaming ? 'true' : 'false'}>
-                {ledgerOpen && <LedgerBar ledger={ledger} />}
+                {ledgerOpen && <LedgerBar ledger={ledger} liveUsed={liveLedgerUsed} live={streaming} />}
                 {threadLoading && messages.length === 0 && <ThreadSkeleton />}
                 {(() => {
                   const streamKey = assistantIdRef.current || '_stream';
@@ -1714,12 +1726,13 @@ export default function App() {
                   const ledgerLimit = (ledgerOpen && ledger && ledger.limit) || 0;
                   return renderList.map(msg => {
                     const li = ledgerOpen ? ledgerById.get(msg.id) : null;
+                    const liTokens = li ? li.tokens : (ledgerOpen && msg._streaming ? liveLedgerTokens : 0);
                     return (
                     <Message key={msg._k || msg.id} msg={msg} model={resolveMsgModel(msg, model)} models={models} currentId={currentId} chatId={activeId} pins={chatPins} chatEnded={chatEnded}
                       ledger={ledgerOpen}
-                      ledgerTokens={li ? li.tokens : 0}
-                      ledgerPct={li && ledgerLimit ? Math.min(100, Math.round((li.tokens / ledgerLimit) * 1000) / 10) : 0}
-                      ledgerState={li ? (li.excluded ? 'excluded' : li.summarized ? 'summarized' : 'active') : ''}
+                      ledgerTokens={liTokens}
+                      ledgerPct={liTokens && ledgerLimit ? Math.min(100, Math.round((liTokens / ledgerLimit) * 1000) / 10) : 0}
+                      ledgerState={li ? (li.excluded ? 'excluded' : li.summarized ? 'summarized' : 'active') : (msg._streaming ? 'active' : '')}
                       onToggleExclude={toggleExclude}
                       steers={msg._streaming ? liveSteers : (msg.steers || null)}
                       status={msg._streaming ? modelStatus : null}
@@ -1767,7 +1780,7 @@ export default function App() {
             <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')} style={{ maxWidth: cfg.uiPreset === 'openai' ? undefined : 792, margin: '0 auto', width: '100%', padding: '0 20px' }}>
               {user?.prefs?.engineStrip !== false && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
               <Composer {...composerProps} focusKey={focusTick} />
-              <div className="disclaimer">{t(cfg.disclaimer)}</div>
+              <Disclaimer text={cfg.disclaimer} />
             </div>
           </>
         )}

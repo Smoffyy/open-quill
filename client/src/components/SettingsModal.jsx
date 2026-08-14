@@ -2,14 +2,142 @@ import React, { useState, useRef, useEffect } from 'react';
 import { api } from '../api.js';
 import { applyPrefs, ACCENT_PRESETS, getUserFont, setUserFont, currentPreset } from '../prefs.js';
 import { palettesFor, themeValue } from '../lib/palettes.js';
-import { Sun, Moon, Gear, Sliders, Info, Chevron, Check, Clock, Download, Upload, Shield, Trash, Brain, Refresh, Keyboard } from './icons.jsx';
+import { Sun, Moon, Gear, Sliders, Info, Chevron, Check, Clock, Download, Upload, Shield, Trash, Brain, Refresh, Keyboard, Search } from './icons.jsx';
 import Markdown from './Markdown.jsx';
 import KeybindsPanel from './KeybindsPanel.jsx';
 import { t, tk, useI18n } from '../i18n.jsx';
 import { STATUS_DELAY_DEFAULT, STATUS_DELAY_MAX, statusDelaySecs } from '../lib/status.js';
-import { menuStyleOf } from '../lib/anchor.js';
+import { menuStyleOf, useAnchoredMenu } from '../lib/anchor.js';
 import { createPortal } from 'react-dom';
 import { SetRow, SwitchRow, SegSlide, SelectRow, useSelectMenu } from './settingsui.jsx';
+
+const NAV_GROUPS = [
+  { label: tk('Account'), items: [
+    { id: 'general', label: tk('General'), Icon: Gear },
+    { id: 'security', label: tk('Security'), Icon: Shield },
+  ] },
+  { label: tk('Interface'), items: [
+    { id: 'appearance', label: tk('Appearance'), Icon: Sun },
+    { id: 'chat', label: tk('Chat'), Icon: Sliders },
+    { id: 'keybinds', label: tk('Keybinds'), Icon: Keyboard },
+  ] },
+  { label: tk('Insights'), items: [
+    { id: 'memory', label: tk('Memory'), Icon: Brain, needs: 'memoryFeature' },
+    { id: 'usage', label: tk('Usage'), Icon: Clock },
+  ] },
+  { label: tk('About'), items: [
+    { id: 'version', label: tk('Version'), Icon: Info },
+  ] },
+];
+
+const SETTINGS_INDEX = {
+  __proto__: null,
+  general: [tk('What should we call you?'), tk('Language'), tk('Instructions for the Assistant'), tk('Export everything'), tk('Import')],
+  security: [tk('Password'), tk('Two-factor authentication'), tk('Active sessions')],
+  appearance: [tk('Theme'), tk('Motion'), tk('Chat font'), tk('Message density'), tk('Accent colour'), tk('OLED screen protection'), tk('Staggered open')],
+  chat: [
+    tk('Typewriter reveal'), tk('Reveal speed'), tk('Auto-scroll'), tk('Streaming cursor'), tk('Cursor style'),
+    tk('Blink speed'), tk('Pulse speed'), tk('Conversation map'), tk('Find in conversation'), tk('Branch map'),
+    tk('Message shortcuts'), tk('Web search on by default'), tk('Engine telemetry'), tk('Context gauge'),
+    tk('Speed on each reply'), tk('Progress line delay'), tk('Context ledger on open'), tk('Mid-stream steering'),
+  ],
+  memory: [tk('Use memory in chats'), tk('Update from recent chats'), tk('Forget everything')],
+  usage: [tk('Usage window'), tk('By model')],
+};
+
+function Marked({ text, needle }) {
+  if (!needle) return text;
+  const at = text.toLowerCase().indexOf(needle);
+  if (at === -1) return text;
+  return <>{text.slice(0, at)}<span className="ms-hit">{text.slice(at, at + needle.length)}</span>{text.slice(at + needle.length)}</>;
+}
+
+function searchSettings(needle, cfg) {
+  const out = [];
+  for (const g of NAV_GROUPS) {
+    for (const it of g.items) {
+      if (it.needs && !cfg?.[it.needs]) continue;
+      const page = t(it.label);
+      const pageHit = page.toLowerCase().includes(needle);
+      const hits = (SETTINGS_INDEX[it.id] || []).map(s => t(s)).filter(s => s.toLowerCase().includes(needle));
+      if (pageHit || hits.length) out.push({ ...it, page, pageHit, hits });
+    }
+  }
+  return out;
+}
+
+function SettingsNav({ tab, setTab, cfg }) {
+  const [q, setQ] = useState('');
+  const [cursor, setCursor] = useState(0);
+  const boxRef = useRef(null);
+  const menuRef = useRef(null);
+  const needle = q.trim().toLowerCase();
+  const results = needle ? searchSettings(needle, cfg) : [];
+  const open = !!needle;
+  const pos = useAnchoredMenu(open, () => setQ(''), boxRef, menuRef, { align: 'left', minWidth: 280, gap: 4 });
+
+  useEffect(() => { setCursor(0); }, [q]);
+
+  function pick(id) { setTab(id); setQ(''); }
+  function onKey(e) {
+    if (e.key === 'Escape' && q) { e.stopPropagation(); setQ(''); return; }
+    if (!results.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setCursor(c => (c + 1) % results.length); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setCursor(c => (c - 1 + results.length) % results.length); }
+    else if (e.key === 'Enter') { e.preventDefault(); pick(results[Math.min(cursor, results.length - 1)].id); }
+  }
+
+  return (
+    <div className="modal-side">
+      <h2 className="sr-only">{t('Settings')}</h2>
+      <div className="ms-searchbox" ref={boxRef}>
+        <div className="ms-search">
+          <Search />
+          <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey}
+            placeholder={t('Search')} aria-label={t('Search settings')} />
+        </div>
+        {open && createPortal(
+          <div className="ms-results" role="listbox" ref={menuRef}
+            style={menuStyleOf(pos, { width: 280, maxHeight: Math.min(320, (pos && pos.maxH) || 320), overflow: 'hidden auto' })}>
+            {!results.length && <div className="ms-empty">{t('No matching settings')}</div>}
+            {results.map((r, i) => (
+              <div key={r.id} className="ms-res">
+                <button className={'ms-res-page' + (i === cursor ? ' on' : '')} role="option" aria-selected={i === cursor}
+                  onMouseEnter={() => setCursor(i)} onClick={() => pick(r.id)}>
+                  <r.Icon />
+                  <span className="ms-res-name"><Marked text={r.page} needle={needle} /></span>
+                </button>
+                {!r.pageHit && r.hits.length === 1 && (
+                  <button className="ms-res-sub" onClick={() => pick(r.id)}><Marked text={r.hits[0]} needle={needle} /></button>
+                )}
+                {r.hits.length > 1 && r.hits.map(h => (
+                  <button key={h} className="ms-res-line" onClick={() => pick(r.id)}>
+                    <span className="ms-res-name"><Marked text={h} needle={needle} /></span>
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>, document.body)}
+      </div>
+      <div className="ms-nav">
+        {NAV_GROUPS.map(g => {
+          const items = g.items.filter(i => !i.needs || cfg?.[i.needs]);
+          if (!items.length) return null;
+          return (
+            <div className="ms-sec" key={g.label}>
+              <div className="ms-group">{t(g.label)}</div>
+              {items.map(({ id, label, Icon }) => (
+                <button key={id} className={'modal-tab' + (tab === id ? ' active' : '')} onClick={() => setTab(id)}>
+                  <Icon /> {t(label)}
+                </button>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 const REVEAL_STOPS = [
   { v: 0, label: tk('Instant') },
@@ -249,21 +377,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
     <div className="overlay" onMouseDown={(e) => e.target.classList.contains('overlay') && onClose()}>
       <div className="modal">
         <button className="modal-close" onClick={onClose}>✕</button>
-        <div className="modal-side">
-          <div className="ms-label">{t("Settings")}</div>
-          <div className="ms-group">{t("Account")}</div>
-          <button className={'modal-tab' + (tab === 'general' ? ' active' : '')} onClick={() => setTab('general')}><Gear /> {t("General")}</button>
-          <button className={'modal-tab' + (tab === 'security' ? ' active' : '')} onClick={() => setTab('security')}><Shield /> {t("Security")}</button>
-          <div className="ms-group">{t("Interface")}</div>
-          <button className={'modal-tab' + (tab === 'appearance' ? ' active' : '')} onClick={() => setTab('appearance')}><Sun /> {t('Appearance')}</button>
-          <button className={'modal-tab' + (tab === 'chat' ? ' active' : '')} onClick={() => setTab('chat')}><Sliders /> {t('Chat')}</button>
-          <button className={'modal-tab' + (tab === 'keybinds' ? ' active' : '')} onClick={() => setTab('keybinds')}><Keyboard /> {t('Keybinds')}</button>
-          <div className="ms-group">{t("Insights")}</div>
-          {cfg?.memoryFeature && <button className={'modal-tab' + (tab === 'memory' ? ' active' : '')} onClick={() => setTab('memory')}><Brain /> {t("Memory")}</button>}
-          <button className={'modal-tab' + (tab === 'usage' ? ' active' : '')} onClick={() => setTab('usage')}><Clock /> {t("Usage")}</button>
-          <div className="ms-group">{t("About")}</div>
-          <button className={'modal-tab' + (tab === 'version' ? ' active' : '')} onClick={() => setTab('version')}><Info /> {t("Version")}</button>
-        </div>
+        <SettingsNav tab={tab} setTab={setTab} cfg={cfg} />
         <div className="modal-main">
           {tab === 'general' && (
             <>

@@ -26,14 +26,67 @@
    by AdminPanel alone, so an ordinary user opening Settings got an unstyled
    nav: the group headings fell back to 16px with no padding and sat 37px left
    of the tab labels. Anything the settings modal needs belongs here. */
-.modal-side { width: 192px; background: var(--modal-side); padding: 12px 13px; border-right: 1px solid var(--border-soft); flex-shrink: 0; overflow: hidden auto; }
-.modal-side .ms-label,
-.modal-side .ms-group { font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--sidebar-label, var(--text-faint)); padding: 12px 8px 4px; font-family: var(--font-sans); }
-.modal-side .ms-label { padding-top: 4px; }
-.modal-tab { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; height: 32px; padding: 0 8px; margin: 1px 0; border-radius: 8px; font-size: 14px; font-weight: 400; color: var(--sidebar-text, var(--text-muted)); text-align: left; transition: background var(--fx-t, .12s), color var(--fx-t, .12s); }
+.modal-side {
+  width: 192px; background: var(--modal-side); padding: 12px 0 0;
+  border-right: 0.8px solid var(--modal-line, var(--border-soft));
+  flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; overflow: hidden;
+  font-family: var(--font-sans); font-size: 14px;
+}
+.modal-side .ms-searchbox { position: relative; flex-shrink: 0; margin: 0 12px; }
+.modal-side .ms-search {
+  display: flex; align-items: center; gap: 12px;
+  height: 32px; padding: 0 8px; border-radius: 8px;
+  background: var(--hover-soft);
+  box-shadow: inset 0 0 0 1px var(--field-ring, rgba(255, 255, 255, .1));
+  transition: box-shadow var(--fx-t, .12s) ease;
+}
+.modal-side .ms-search:hover:not(:focus-within) { box-shadow: inset 0 0 0 1px var(--field-ring-hover, rgba(255, 255, 255, .2)); }
+.modal-side .ms-search:has(:focus-visible) {
+  box-shadow: inset 0 0 0 1px var(--modal-side), 0 0 0 1px var(--pop-blue, #2a78d6), 0 0 6px 1px rgba(24, 79, 149, .6);
+}
+.modal-side .ms-search svg { width: 20px; height: 20px; flex: none; color: var(--text-faint); }
+.modal-side .ms-search input {
+  flex: 1; min-width: 0; height: 20px; padding: 0; border: 0; border-radius: 0;
+  background: transparent; font-family: var(--font-sans); font-size: 14px; color: var(--text);
+}
+.modal-side .ms-search input:focus, .modal-side .ms-search input:focus-visible { outline: none; border: 0; box-shadow: none; }
+.modal-side .ms-search input::placeholder { color: var(--text-faint); }
+
+.ms-results {
+  width: 280px; max-width: calc(100vw - 32px);
+  padding: 4px; border-radius: 12px; background: var(--pop-bg, var(--menu-bg));
+  box-shadow: var(--pop-shadow, 0 8px 24px rgba(0, 0, 0, .32));
+  font-family: var(--font-sans); font-size: 14px;
+  animation: setSelIn var(--fx-a, .12s) var(--ease-out) both;
+}
+.ms-res-page,
+.ms-res-line {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  height: 32px; padding: 0 4px; border-radius: 8px; text-align: left;
+  font-family: var(--font-sans); font-size: 14px; font-weight: 400; color: var(--pop-text, var(--text));
+  transition: background var(--fx-t, .12s) ease;
+}
+.ms-res-line { padding-left: 36px; }
+.ms-res-page svg { width: 20px; height: 20px; flex: none; }
+.ms-res-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-res-page.on,
+.ms-res-page:hover,
+.ms-res-line:hover { background: var(--pop-hover, var(--hover-mid)); }
+.ms-res-sub {
+  display: block; width: 100%; padding: 0 4px 4px 36px; text-align: left;
+  font-family: var(--font-sans); font-size: 13px; line-height: 17px; color: var(--text-faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ms-hit { color: var(--search-hit, #6da7ec); }
+[data-animations="off"] .ms-results { animation: none; }
+.modal-side .ms-nav { flex: 1; min-height: 0; overflow: hidden auto; display: flex; flex-direction: column; gap: 12px; padding: 0 12px 12px; }
+.modal-side .ms-sec { display: flex; flex-direction: column; gap: 1px; }
+.modal-side .ms-group { font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--sidebar-label, var(--text-faint)); padding: 12px 8px 0; margin-bottom: 11px; font-family: var(--font-sans); line-height: 17px; }
+.ms-empty { padding: 12px 8px; font-family: var(--font-sans); font-size: 13px; color: var(--text-faint); }
+.modal-tab { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; height: 32px; padding: 0 8px; border-radius: 8px; font-size: 14px; font-weight: 400; color: var(--sidebar-text, var(--text-muted)); text-align: left; transition: background var(--fx-t, .12s), color var(--fx-t, .12s); }
 .modal-tab:hover { background: var(--hover-soft); color: var(--text); }
 .modal-tab.active { background: var(--modal-active, var(--surface-hover)); color: var(--text); font-weight: 500; }
-.modal-tab svg { width: 16px; height: 16px; flex: none; }
+.modal-tab svg { width: 20px; height: 20px; flex: none; }
 .modal-tab.sub { padding-left: 36px; font-size: 13px; animation: subIn var(--fx-a, .2s) ease both; }
 .modal-tab.has-sub .tab-chev { margin-left: auto; opacity: .55; transition: transform var(--fx-t, .2s) cubic-bezier(.2,.7,.3,1); }
 .modal-tab.has-sub.open .tab-chev { transform: rotate(90deg); }
@@ -306,7 +359,7 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 
 /* Settings dialog controls, matched to claude.ai: a white-overlay fill, no border */
 .modal-main input[type="text"], .modal-main input[type="number"], .modal-main input[type="email"],
-.modal-main input:not([type]), .modal-main select, .modal-main textarea, .modal-side .ms-search input {
+.modal-main input:not([type]), .modal-main select, .modal-main textarea {
   background: var(--modal-fill, var(--input-bg));
   border: 1px solid var(--modal-line, var(--border-soft));
   border-radius: 8px;

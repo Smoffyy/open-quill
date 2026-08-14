@@ -14,7 +14,7 @@ import {
   compactStep, compactThreshold, promptVars, instrFor, exactTokens, trimInTurn
 } from '../convo.js';
 import { isContextOverflowError, parseOverflow, isLlamaCpp, learnImageCost, imageTokenCost, countImages } from '../llamacpp.js';
-import { contextBudget, slideToFit, noteRealCtx, shrinkByRatio } from '../ctxwindow.js';
+import { contextBudget, slideToFit, noteRealCtx, shrinkByRatio, countExact } from '../ctxwindow.js';
 import {
   sandboxPromptFor, cleanCall, resultPayload, formatToolResult, runChatSearchTool,
   formatChatSearchResult, chatSearchPayload, endChatPromptFor, longConvoReminderFor,
@@ -296,6 +296,10 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         }
       }
       const stepEstimate = estimateTokens(convo);
+      if (exactCtx) {
+        const promptSize = lastFitTokens || await countExact(model, convo, tools);
+        if (promptSize > 0) safeSend(JSON.stringify({ type: 'prompt_size', chatId: chat.id, tokens: promptSize, exact: true }));
+      }
       let stepPromptTokens = 0;
       let stepUsage = null;
       const controller = new AbortController();
@@ -375,10 +379,11 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
             }
             if (e.type === 'timings') {
               const tm = e.timings || {};
-              const gen = Number(tm.predicted_n) || 0;
+              const started = !!(genStart || reasonStart);
+              const gen = started ? (Number(tm.predicted_n) || 0) : 0;
               const pr = Number(tm.prompt_n) || 0;
               sendTelemetry({
-                tps: Number(tm.predicted_per_second) || 0,
+                tps: started ? (Number(tm.predicted_per_second) || 0) : 0,
                 promptTps: Number(tm.prompt_per_second) || 0,
                 promptTokens: pr,
                 genTokens: gen,

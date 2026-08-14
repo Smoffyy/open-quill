@@ -39,6 +39,9 @@
   --pop-blue: #2a78d6;
   --pop-switch: rgba(255, 255, 255, .2);
   --pop-shadow: 0 4px 14px rgba(0, 0, 0, .25), 0 12px 32px rgba(0, 0, 0, .3);
+  --field-ring: rgba(255, 255, 255, .1);
+  --field-ring-hover: rgba(255, 255, 255, .2);
+  --search-hit: #6da7ec;
 }
 
 :root[data-theme="light"] {
@@ -72,6 +75,9 @@
   --mo-desc: rgba(26, 25, 21, .58);
   --pop-faint: rgba(26, 25, 21, .5);
   --pop-blue: #2a78d6;
+  --field-ring: rgba(0, 0, 0, .1);
+  --field-ring-hover: rgba(0, 0, 0, .2);
+  --search-hit: #2a78d6;
   --pop-switch: rgba(0, 0, 0, .16);
   --pop-shadow: 0 4px 14px rgba(0, 0, 0, .1), 0 12px 32px rgba(0, 0, 0, .12);
   --composer-hover: rgba(0, 0, 0, .06);

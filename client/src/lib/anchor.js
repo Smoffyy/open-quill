@@ -6,6 +6,7 @@ export const MENU_GAP = 6;
 export function useAnchoredMenu(open, setOpen, btnRef, menuRef, opts) {
   const align = (opts && opts.align) || 'right';
   const minW = (opts && opts.minWidth) || 0;
+  const gap = (opts && typeof opts.gap === 'number') ? opts.gap : MENU_GAP;
   const [pos, setPos] = useState(null);
   useEffect(() => {
     if (!open) { setPos(null); return; }
@@ -32,11 +33,11 @@ export function useAnchoredMenu(open, setOpen, btnRef, menuRef, opts) {
     const nat = menu ? menu.scrollHeight + (menu.offsetHeight - menu.clientHeight) : 220;
     const vw = document.documentElement.clientWidth || window.innerWidth;
     const vh = document.documentElement.clientHeight || window.innerHeight;
-    const below = vh - r.bottom - MENU_GAP - MENU_EDGE;
-    const above = r.top - MENU_GAP - MENU_EDGE;
+    const below = vh - r.bottom - gap - MENU_EDGE;
+    const above = r.top - gap - MENU_EDGE;
     const up = nat > below && above > below;
     const maxH = Math.min(nat, Math.max(120, up ? above : below));
-    const top = up ? Math.max(MENU_EDGE, r.top - MENU_GAP - maxH) : Math.min(r.bottom + MENU_GAP, vh - MENU_EDGE - maxH);
+    const top = up ? Math.max(MENU_EDGE, r.top - gap - maxH) : Math.min(r.bottom + gap, vh - MENU_EDGE - maxH);
     const want = align === 'left' ? r.left : r.right - mw;
     const left = Math.min(Math.max(MENU_EDGE, want), Math.max(MENU_EDGE, vw - MENU_EDGE - mw));
     setPos({ top: Math.round(top), left: Math.round(left), maxH: nat > maxH ? Math.round(maxH) : 0, minW: mw });

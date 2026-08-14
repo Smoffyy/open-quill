@@ -3,6 +3,7 @@ import { api } from '../../api.js';
 import { Copy, Check } from '../icons.jsx';
 import { QP_ICON_LIST, QpIcon } from '../../qpIcons.jsx';
 import { t, tk } from '../../i18n.jsx';
+import { SegSlide } from '../settingsui.jsx';
 
 export function QpIconPicker({ value, onPick }) {
   const [open, setOpen] = useState(false);
@@ -482,12 +483,12 @@ export function SettingRow({ label, note, on, onToggle, last }) {
   );
 }
 
-export function SegPick({ value, options, onChange, style }) {
+export function SegPick({ value, options, onChange, style, label }) {
   return (
-    <div className="seg" style={{ width: 'fit-content', ...style }}>
-      {options.map(([v, l]) => (
-        <button key={v} type="button" className={value === v ? 'on' : ''} onClick={() => onChange(v)}>{typeof l === 'string' ? t(l) : l}</button>
-      ))}
+    <div style={{ width: 'fit-content', ...style }}>
+      <SegSlide value={value} label={label}
+        options={options.map(([v, l]) => ({ v, label: typeof l === 'string' ? t(l) : l }))}
+        onPick={onChange} />
     </div>
   );
 }

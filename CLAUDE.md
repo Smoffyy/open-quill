@@ -72,6 +72,26 @@ The thumb geometry is **measured, not computed from a fraction**: options have d
 
 All four live in `components/settingsui.jsx` rather than inside `SettingsModal`, because `KeybindsPanel` is a separate lazy component and its preset picker needs the same control — a second copy is how the two drift. `SwitchRow` and `Toggle` both render through `SetRow`, so every switch in Settings is one row shape; `.field.row` in `modals.css` is styled to match it exactly, which is why the panels that still use it (Security's session list, the danger zone) are visually indistinguishable. Descriptions are one line — the longest was 189 characters before this pass and nothing should reach that again.
 
+## The settings sidebar is measured against claude.ai, not approximated
+
+`.modal-side` is a 1:1 reproduction of claude.ai's settings nav, and the numbers below were read off the live DOM rather than eyeballed. Keep them if you touch it: **192px** wide on `--modal-side` with a **0.8px** right hairline; a 12px outer inset; rows **32px** tall, `padding: 0 8px`, `border-radius: 8px`, **14px** label, **20px** icon, **12px** icon-to-label gap, **1px** between rows, active `rgba(255,255,255,.1)` at weight 500 and inactive `--text-muted`; group labels **12px** in `--text-faint`, `padding: 12px 8px 0` and then a **12px** gap before the first row of the group (which is why `.ms-group` carries `margin-bottom: 11px` beside the list's 1px gap — the two add up to claude's 12).
+
+`NAV_GROUPS` is the single source of truth for the nav; the old hand-written JSX let a page exist in one place and not the other. There is no visible "Settings" heading — claude's is `sr-only` and ours matches, which is also what keeps the accessible name.
+
+### The search box and its results
+
+The field is `--hover-soft` with `box-shadow: inset 0 0 0 1px var(--field-ring)`, going to `--field-ring-hover` on hover **only when not focused within**, and to claude's focus ring — `inset 0 0 0 1px var(--modal-side), 0 0 0 1px var(--pop-blue), 0 0 6px 1px rgba(24,79,149,.6)` — on `:has(:focus-visible)`. `:focus-visible`, not `:focus`, is deliberate and is what claude does: clicking the field gives no blue ring, tabbing to it does.
+
+Results are a **280px popover portaled to `document.body`**, because `.modal-side` is `overflow: hidden` and clipped it. It uses `useAnchoredMenu` with `align: 'left'` and the new `gap: 4` option (claude's gap is 4; the shared `MENU_GAP` is 6, and every other menu keeps it).
+
+Three details that were wrong on the first pass and are easy to get wrong again:
+
+- **`--pop-ring` is a colour, not a shadow.** Writing `box-shadow: var(--pop-ring), …` makes the whole declaration invalid and the popover renders with no shadow at all. `--pop-shadow` is already exactly claude's popover shadow under the 2026q3 palette — use it.
+- **Rows are `padding: 0 4px`, not `0 8px`.** The panel's own 4px padding plus 4px puts the icon 8px from the panel edge and the label at the same x claude uses; 8px pushes everything 4px right.
+- **A flex row with `gap` splits a highlighted label into separate flex items**, inserting 12px around every matched substring. The label must be one child (`.ms-res-name`), not bare text plus a `<span>`.
+
+Result shapes follow claude exactly: a page whose own name matches is a single row; a page with one matching setting shows the page row plus a 13px `--text-faint` sub-line; a page with several shows the page row then one 14px row per setting, all indented to the label column. `SETTINGS_INDEX` holds the searchable setting names per page and must be kept in step with the panels — a renamed control that is not renamed here is silently unfindable.
+
 ## A menu that can leave its container must be portaled
 
 `client/src/lib/anchor.js` is the single implementation: `useAnchoredMenu(open, setOpen, btnRef, menuRef, opts)` returns `{ top, left, maxH }` in viewport coordinates and `menuStyleOf(pos)` turns that into the inline style. It flips above the anchor when there is more room there, clamps to an 8px margin on every edge, caps the height and turns on scrolling when even the better side is too short, and closes on scroll or resize rather than trying to follow.
@@ -334,6 +354,23 @@ Details that are load-bearing:
 - **Only speed is exposed to the client, never the cost** that sits beside it in `m.usage`.
 - **`llamaEngine(provider)` is the provider-level sibling of `llamaInfo(model)`**, behind `GET /api/admin/providers/:id/engine` and folded into the existing Test connection button rather than polled. `/slots` returns 501 when the server ran with `--no-slots`; that is a normal configuration, so `slotsHidden` says so instead of the panel reporting a failure.
 - Both `ctxGauge` and `msgSpeed` are **opt-in** prefs (default off) under **Settings > Chat > Tools**, next to `engineStrip`. They are extra numbers on screen that mostly matter when you are running the model yourself.
+
+## The context ledger counts live, and never estimates
+
+`LedgerBar` shows two different numbers depending on whether a turn is running, and **both are measurements** — there is no character heuristic anywhere in this path, deliberately. A ledger that guesses is worse than one that stands still.
+
+- **Between turns** it is `GET /api/chats/:id/ledger`, which counts through `countExact` → `/apply-template` + `/tokenize`. That call carries the model name, so it is correct in router mode.
+- **During a turn** it is `livePrompt + telemetry.genTokens`. `turn.js` emits a **`prompt_size`** event once per agentic step, immediately before `streamCompletion`, carrying `lastFitTokens` (already verified by the slider) or a fresh `countExact`. `genTokens` is llama.cpp's own `timings.predicted_n`, which arrives per token because the request sets `timings_per_token`. Nothing here is inferred from the streamed text.
+
+Three traps, each of which produced a visibly wrong number before it was fixed:
+
+- **`timings.prompt_n` is not the prompt size.** It is the count of tokens *evaluated* during prefill, so it ramps from a partial value and is reduced by KV cache reuse. Reading it made the ledger fall by thousands mid-stream. The prompt half must come from `prompt_size`.
+- **`usage` is synthesized from `timings` on every chunk**, not just the final one (`stream.js` falls back to `timings` when a chunk has no `usage`), so correcting `prompt_size` from `usage` re-introduced the same ramp. Do not send a per-chunk correction.
+- **`predicted_n` is stale during prefill**, carrying the previous request's value on that slot for the first few frames. `turn.js` reports `genTokens: 0` (and `tps: 0`) until `genStart || reasonStart`, so a new turn never opens with the last turn's output count.
+
+The live reading and the settled one differ by a handful of tokens at the moment a turn ends: the live figure is what is in the context window now, while the settled one re-measures the prompt the *next* turn will send, which adds the assistant message's closing tokens and the following generation-prompt header. That difference is **not** a constant — retokenizing the stored reply does not always agree with the tokens the model emitted — so do not try to cancel it with a learned offset. That was tried, and a learned offset is exactly the estimate this design refuses.
+
+The ledger is **not re-fetched while streaming** (the effect bails when `streamingRef.current` and a ledger is already loaded). Its tokenizer calls compete with the running generation and fall back to `calibratedTokens`, which is an estimate; the live path already covers that window. `live.js` keeps `promptTokens` on the turn record and ships it in the `resume` payload, so a mid-stream reload picks the live count straight back up.
 
 ## Client tests (`npm test` in `client/`, `npm run test:client` from the root)
 
@@ -653,6 +690,28 @@ Unsent composer text is kept in `localStorage` under `oq-draft-<chatId|new>`, de
 - Markdown math accepts `$…$`, `$$…$$`, and normalizes `\(…\)` / `\[…\]` (outside code) in `Markdown.jsx:normalizeMathDelims`; streaming holds unclosed math via `autoCloseMath`.
 - The thread rail is `position: absolute` inside `.main` (which is `position: relative`), as a sibling of `.scroll-area`, same as `.to-bottom`.
 - `client/index.html` carries the PWA metadata: `manifest.webmanifest`, the `starburst.svg` favicon, `icon-{180,192,512}.png` plus a maskable 512, and paired `theme-color` meta tags. The pre-paint boot script also writes a media-less `theme-color` so the installed shell matches the resolved theme rather than the OS preference.
+
+## The admin panel borrows the Settings controls, it does not reinvent them
+
+Admin is the part of the app most likely to drift, because it is edited section by section. The rule is that **the User Settings dialog is the reference for every shared control**, and admin matches its metrics rather than growing its own:
+
+- Text inputs, selects and textareas are **32px tall, 14px, 8px radius** — the same numbers `modals.css` gives `.modal-main input`. `admin.css` restates them for `.oqa` because admin is not inside a modal, but the values must stay in step.
+- `SegPick` in `admin/widgets.jsx` is a thin adapter over **`SegSlide`** from `components/settingsui.jsx`, so every segmented control in admin is the same sliding-thumb control as Motion or Message density in Settings. It keeps its own `[value, label]` tuple API purely so the ~six call sites did not have to change; do not fork a second segmented control for admin.
+- Buttons are `.btn` and its modifiers, including the ones that used to carry their own metrics (`.dash-action`). `.push-btn` only adds weight and `flex-shrink`, never a different shape.
+- **Colour is the only thing that separates a CTA from an ordinary button.** Publish — `Push now` and the header `Push to all clients` — stays `.btn.primary` and keeps the accent fill; it does not get a different height, font or radius to stand out. Under the OpenAI preset the light accent is `#0d0d0d`, which reads as a hard black slab at 600 weight, so `openai.css` softens *only* that fill to `#3d3d3d` under `[data-preset="openai"][data-theme="light"]`. Do not fix that by changing `--accent`; links and highlights use it too.
+- `.med-tabs` matches `.me-sec`: 9px 12px, 13.5px, an accent underline.
+
+`.seg` (the older bordered segmented control) is still used by the usage-window tabs and the chats overview and is deliberately left alone — it is a different, denser context.
+
+## The disclaimer is admin text, and may contain links
+
+`cfg.disclaimer` is rendered by `components/Disclaimer.jsx`, not by a bare `<div>`. It parses `[label](url)` into real anchors and passes everything else through as text — never `dangerouslySetInnerHTML`, since the string is admin input. `safeHref` allows only `http`, `https`, `mailto` and same-site absolute paths; anything else is left as the literal markdown so it is visibly wrong rather than silently dropped. An empty disclaimer renders nothing at all.
+
+Custom text goes through `t()` and therefore falls through untranslated, which is the honest outcome — the admin field says so.
+
+## The chats overview must fill its own viewport
+
+`ChatsOverview` pages 18 chats at a time and used to load more only from a `scroll` event. On a tall window 18 rows do not overflow `.co-body`, no scroll event ever fires, and the list is stuck at one page — which is why clicking **Select** appeared to reveal older chats: the bulk bar shortened the body enough to make it scrollable. Two effects now close that: one re-checks after every `chats` change and pulls another page while `scrollHeight <= clientHeight + 320`, and a `ResizeObserver` on `.co-body` does the same when the window or the bulk bar changes its height. Any other infinite list added here needs the same pair — a scroll handler alone is not enough.
 
 ## Adding a feature checklist
 

@@ -291,6 +291,8 @@
 :root[data-preset="openai"][data-theme="openai"] .login-tabs { background: #2b2b2b; }
 :root[data-preset="openai"][data-theme="openai"] .login-tabs button.on { background: #424242; }
 :root[data-preset="openai"][data-theme="openai"] .login input { background: #2b2b2b; border-color: #ffffff1a; }
+:root[data-preset="openai"][data-theme="light"] .btn.primary { background: #3d3d3d; }
+:root[data-preset="openai"][data-theme="light"] .btn.primary:hover:not(:disabled) { background: #4d4d4d; }
 :root[data-preset="openai"][data-theme="light"] .login-box { background: #fff; border-color: #0000001f; }
 :root[data-preset="openai"][data-theme="light"] .login-tabs { background: #f4f4f4; }
 :root[data-preset="openai"][data-theme="light"] .login-tabs button.on { background: #fff; }

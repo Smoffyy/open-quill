@@ -37,7 +37,8 @@ export default function AppearanceSection() {
           <div className="muted-note">{t("The display font used for headings, greetings, and assistant text across the entire UI. Open Sans gives a cleaner, sans-serif look everywhere.")}</div>
         </div>
         <div className="field"><label>{t("Bottom disclaimer")}</label>
-          <input value={cfg.disclaimer} onChange={(e) => setCfg(c => ({ ...c, disclaimer: e.target.value }))} placeholder={t("Assistants can make mistakes, double-check responses.")} /></div>
+          <input value={cfg.disclaimer} onChange={(e) => setCfg(c => ({ ...c, disclaimer: e.target.value }))} placeholder={t("Assistants can make mistakes, double-check responses.")} />
+          <div className="muted-note">{t("Shown under the composer. Add links with [label](https://example.com); http, https, mailto and same-site paths are allowed. Custom text is shown as written and is not translated.")}</div></div>
       </Card>
       <AutosaveNote status={settingsSave} />
     </>
