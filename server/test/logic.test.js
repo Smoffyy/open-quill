@@ -21,6 +21,7 @@ import { resolveToolName, makeToolResolver, nearestTool, SANDBOX_TOOLS } from '.
 import { isPrivateAddress, hostAllowed } from '../lib/egress.js';
 import { resolveRouted, ruleMatches, routerRules, modelLabel } from '../lib/router.js';
 import { preferredChild } from '../lib/tree.js';
+import { looksTextual, isZipOfficeDoc } from '../lib/extract.js';
 import { samplingParams, parseStop } from '../llm/sampling.js';
 import { PROVIDER_TYPES, isProviderType, providerSpec } from '../providers.js';
 import { slideWithCounter, trimMode } from '../lib/ctxwindow.js';
@@ -1523,4 +1524,25 @@ test('emitter: providers that only ever send structured reasoning are unaffected
   });
   assert.equal(r.reasoning, 'Let me think.');
   assert.equal(r.content, 'Here is the answer.');
+});
+
+// --- attachments: what the model can actually see -------------------------
+// These four branches had no coverage at all, which is how a hard-coded
+// extension list came to decide whether a file reached the model.
+
+test('looksTextual decides by bytes, not by extension', () => {
+  assert.equal(looksTextual(Buffer.from('[tool.poetry]\nname = "x"\n')), true, 'toml');
+  assert.equal(looksTextual(Buffer.from('fun main() { println("hi") }')), true, 'kotlin');
+  assert.equal(looksTextual(Buffer.from('héllo wörld — ok')), true, 'utf-8 accents');
+  assert.equal(looksTextual(Buffer.from('%PDF-1.7\n')), false, 'pdf magic');
+  assert.equal(looksTextual(Buffer.from([0x50, 0x4b, 0x03, 0x04, 0, 0, 0, 0])), false, 'zip/docx magic');
+  assert.equal(looksTextual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])), false, 'png');
+  assert.equal(looksTextual(Buffer.from([65, 66, 0, 67])), false, 'a NUL means binary');
+  assert.equal(looksTextual(Buffer.alloc(0)), false, 'empty');
+});
+
+test('isZipOfficeDoc recognises the zip-container office formats', () => {
+  assert.equal(isZipOfficeDoc('report.docx'), true);
+  assert.equal(isZipOfficeDoc('deck.pptx'), true);
+  assert.equal(isZipOfficeDoc('notes.txt'), false);
 });

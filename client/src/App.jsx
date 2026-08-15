@@ -51,6 +51,7 @@ import { copyText } from './clipboard.js';
 import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork } from './components/icons.jsx';
 
 const SKELETON_DELAY = 3000;
+const HEAVY_THREAD_CHARS = 40000;
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: tk('Assistants can make mistakes, double-check responses.'), greetings: [tk('How can I help you?')], appIcon: '', quickPrompts: [], version: '' };
 
 
@@ -231,6 +232,15 @@ export default function App() {
     for (const m of messages) n += m.content ? m.content.length : 0;
     return messages.length + ':' + n;
   }, [messages]);
+  const heavyThread = useMemo(() => {
+    if (messages.length > 24) return true;
+    let chars = 0;
+    for (const m of messages) {
+      chars += (m.content ? m.content.length : 0) + (m.reasoning ? m.reasoning.length : 0);
+      if (chars > HEAVY_THREAD_CHARS) return true;
+    }
+    return false;
+  }, [messages]);
   useEffect(() => {
     const prev = document.querySelectorAll('.msg.kb-focus');
     prev.forEach(el => el.classList.remove('kb-focus'));
@@ -253,6 +263,8 @@ export default function App() {
   const streamingRef = useRef(false);
   useEffect(() => { streamingRef.current = streaming; }, [streaming]);
   const [queued, setQueued] = useState(false);
+  const queuedRef = useRef(false);
+  useEffect(() => { queuedRef.current = queued; }, [queued]);
   const [chatErrors, setChatErrors] = useState({});
   const [dispContent, setDispContent] = useState('');
   const [dispReason, setDispReason] = useState('');
@@ -281,6 +293,9 @@ export default function App() {
   const stick = useRef(true);
   const lastTop = useRef(0);
   const programmatic = useRef(false);
+  const scrollRaf = useRef(0);
+  const jumpRef = useRef(false);
+  const touchDrag = useRef(false);
   const [showJump, setShowJump] = useState(false);
   const animate = cfg.uiPreset === 'openai' ? false : (user?.prefs?.typewriter ?? user?.prefs?.animations) !== false;
   const revealMs = (() => { const v = user?.prefs?.revealMs; return v == null || isNaN(parseInt(v)) ? 40 : Math.max(0, Math.min(100, parseInt(v))); })();
@@ -1068,21 +1083,28 @@ export default function App() {
     programmatic.current = true;
     el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
   }
-  function onScroll() {
+  function readScroll() {
+    scrollRaf.current = 0;
     const el = scrollRef.current; if (!el) return;
     const top = el.scrollTop;
     const dist = el.scrollHeight - top - el.clientHeight;
-    setShowJump(dist > 200);
+    const jump = dist > 200;
+    if (jump !== jumpRef.current) { jumpRef.current = jump; setShowJump(jump); }
+    if (touchDrag.current) { touchDrag.current = false; if (dist > 24) stick.current = false; }
     if (programmatic.current) { programmatic.current = false; lastTop.current = top; return; }
     if (top < lastTop.current - 1) stick.current = false;
     else if (dist < 24) stick.current = true;
     lastTop.current = top;
   }
+  function onScroll() {
+    if (scrollRaf.current) return;
+    scrollRaf.current = requestAnimationFrame(readScroll);
+  }
   function onWheel(e) { if (e.deltaY < -1) stick.current = false; }
-  function onTouchMove() { const el = scrollRef.current; if (el && el.scrollHeight - el.scrollTop - el.clientHeight > 24) stick.current = false; }
-  function jumpDown() { stick.current = true; setShowJump(false); scrollBottom(true); }
+  function onTouchMove() { touchDrag.current = true; onScroll(); }
+  function jumpDown() { stick.current = true; jumpRef.current = false; setShowJump(false); scrollBottom(true); }
   useEffect(() => {
-    const release = () => { stick.current = false; setShowJump(true); };
+    const release = () => { stick.current = false; jumpRef.current = true; setShowJump(true); };
     window.addEventListener('oq-release-scroll', release);
     return () => window.removeEventListener('oq-release-scroll', release);
   }, []);
@@ -1229,7 +1251,7 @@ export default function App() {
   }
   const deleteMessage = useCallback(async (messageId) => {
     const id = activeIdRef.current;
-    if (!id || streamingRef.current) return;
+    if (!id || streamingRef.current || queuedRef.current) return;
     setMessages(ms => ms.filter(m => m.id !== messageId));
     try { await api.del('/api/chats/' + id + '/messages/' + messageId); await refreshMessages(id); }
     catch { refreshMessages(id); }
@@ -1711,7 +1733,7 @@ export default function App() {
             </div>
             {findOpen && user?.prefs?.threadFind !== false && <ThreadFind scrollRef={scrollRef} revision={findRevision} onMatches={onFindMatches} onClose={closeFind} />}
             <div className="scroll-area" id="oq-thread" ref={scrollRef} onScroll={onScroll} onWheel={onWheel} onTouchMove={onTouchMove}>
-              <div className={'thread' + (threadStagger ? ' stagger' : '') + (ledgerOpen ? ' ledger-on' : '') + (messages.length > 24 ? ' virt' : '') + (findOpen ? ' finding' : '')}
+              <div className={'thread' + (threadStagger ? ' stagger' : '') + (ledgerOpen ? ' ledger-on' : '') + (heavyThread ? ' virt' : '') + (findOpen ? ' finding' : '')}
                 role="log" aria-label={t('Conversation')} aria-live="polite" aria-relevant="additions text" aria-busy={streaming ? 'true' : 'false'}>
                 {ledgerOpen && <LedgerBar ledger={ledger} liveUsed={liveLedgerUsed} live={streaming} />}
                 {threadLoading && messages.length === 0 && <ThreadSkeleton />}
@@ -1738,7 +1760,7 @@ export default function App() {
                       status={msg._streaming ? modelStatus : null}
                       statusDelay={statusDelay}
                       streaming={!!msg._streaming} phase={msg._streaming ? ((modelById.get(currentId)?.hideThinking && phase === 'thinking') ? 'generating' : phase) : 'static'} liveCall={msg._streaming ? liveCall : null}
-                      onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onDelete={streaming || queued ? null : deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
+                      onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onDelete={deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
                       showSpeed={showMsgSpeed}
                       showIcon={msg.role === 'assistant' && (cfg.uiPreset === 'openai' || (lastA && msg.id === lastA.id))}
                       preset={cfg.uiPreset === 'openai' ? 'openai' : 'anthropic'} />

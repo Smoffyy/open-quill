@@ -151,10 +151,40 @@ Long threads are kept cheap with `content-visibility: auto` rather than windowin
 
 Rules, all in `threadnav.css`:
 
-1. `App.jsx` adds `.virt` to `.thread` above 24 messages. Nothing else toggles it, so removing that one class disables the whole feature.
-2. Occlusion is applied to `.assistant-body` and `.bubble-user`, **never to `.msg`**. `content-visibility` implies paint containment, which would clip the negatively-positioned `.il-avatar` in the icon-left layout. `.msg.icon-left` is excluded from the assistant rule for the same reason.
+1. `App.jsx` adds `.virt` to `.thread` when `heavyThread` is true. Nothing else toggles it, so removing that one class disables the whole feature.
+2. Occlusion is applied to `.assistant-body`, `.bubble-user`, `.msg-attachments` and `.reasoning-collapse`, **never to `.msg`**. `content-visibility` implies paint containment, which would clip the negatively-positioned `.il-avatar` in the icon-left layout. `.msg.icon-left` is excluded from the assistant rule for the same reason.
 3. The last 8 siblings are excluded via `:not(:nth-last-child(-n+8))` so the streaming message and its neighbours are never skipped.
 4. `contain-intrinsic-size: auto <px>` lets the browser remember real sizes after first render; the literal is only the initial estimate. Browsers without support simply render everything as before.
+
+### The gate is content size, not message count
+
+`.virt` used to key on `messages.length > 24`, which measures the wrong thing. The worst real thread in the wild is **ten** messages: one of them is a pasted 3,464-line script and another a 4,541-line reply, and it rendered 14,085 nodes into a 235,293px-tall thread with **no occlusion at all** because ten is fewer than twenty-four. Scrolling it froze the renderer for over 45 seconds.
+
+`heavyThread` (`App.jsx`) is therefore `messages.length > 24 || total content+reasoning chars > HEAVY_THREAD_CHARS` (40,000), short-circuiting as soon as it crosses. Occlusion now also applies to `.code-wrap` **inside** `.virt`, because per-message occlusion can do nothing for a single 100,000px message while any part of it is on screen — each block has to carry its own containment.
+
+### Code blocks highlight lazily, off the render path
+
+`highlight()` used to run synchronously inside `CodeBlock`'s render, for every block in the thread whether or not it would ever be painted — occlusion skips layout and paint, never React work. That one script produced **557 blocks of which 551 had no language tag**, so all of them took `highlightAuto`, the most expensive path hljs has.
+
+`CodeBlock` (now memoized) renders escaped plain text immediately and upgrades to highlighted output only when an `IntersectionObserver` says the block is within 900px of the viewport. Three things make that safe:
+
+- **The escaped text is correct output**, not a placeholder — a block that never scrolls into view is still readable and copyable, just uncoloured.
+- **`scheduleHighlight` in `hljs.js` runs one job per idle slot** and stops as soon as `deadline.timeRemaining()` drops below 4ms. Without it a screenful of blocks arriving together was a single 189ms long task.
+- **`bump()` is debounced by 120ms and clears the result cache.** It fires once per lazily-registered `EXTRA` language, and every `CodeBlock` has the version in its dependencies, so an undebounced burst meant one full-thread re-highlight per language.
+
+`maxAuto` is 4,000 chars (was 12,000): beyond that `highlightAuto` costs more than the colour is worth.
+
+**`.code-bar` is `position: sticky`, so it has to be opaque.** It was `background: transparent`, which meant that the moment a code block was tall enough to scroll, the language label and the Copy button sat on top of moving code and became unreadable. Only the OpenAI preset looked right, because `openai.css` happened to give the bar a solid fill of its own. The catch is that `--code-bg` is a *translucent* overlay in most palettes (`rgba(195, 194, 183, .05)` under 2026q3), so painting it on the bar changes nothing — the bar reproduces the whole stack the wrap composites against: `background-color: var(--bg)` plus the overlay as a gradient layer, with an extra `--user-bubble` layer for a block inside a user bubble. Any palette that gives `.code-wrap` an opaque background of its own (light, oled, openai) must give `.code-bar` the same one. The copy flash animates an inset `box-shadow` rather than `background` for the same reason — animating the background to `transparent` punched a hole straight through the header.
+
+Measured on that thread, before → after: 14,085 → 6,205 DOM nodes, and a 36,000px programmatic scroll from a >45s renderer freeze to 138fps with zero long tasks.
+
+### Scroll handlers are rAF-coalesced
+
+`onScroll` read `scrollHeight` and called `setShowJump` on **every** scroll event. It now schedules one `readScroll` per frame and `setShowJump` fires only when the boolean actually flips (`jumpRef`), so the steady state costs nothing. `onTouchMove` sets a flag and goes through the same frame-coalesced read instead of forcing its own reflow per drag frame.
+
+`ThreadRail` is memoized and each tick is its own memoized `Tick`, so an IntersectionObserver callback re-renders only the ticks whose visibility changed rather than all N. Hover and click are delegated to the list, which keeps the per-tick props stable; the aria-labels are built once in a `useMemo` keyed on `items` rather than per tick per render.
+
+The stagger selector is `.msg:nth-last-child(-n+12)`, not `.msg`. Only the tail is on screen when a chat opens, and starting N concurrent animations was what made a long thread jank for the whole 700ms the class is applied.
 
 ## Navigation prefs
 
@@ -275,6 +305,19 @@ highlight.js loads in **three** stages, because the full build is roughly seven 
 
 Note that KaTeX is genuinely ~166 KB gzipped and does not tree-shake; `lib/katexbundle.js` exists to pull katex, mhchem and rehype-katex into **one** chunk rather than three, which saves round trips, not bytes. Do not split it back apart expecting a size win.
 
+### The four ways math used to fail to typeset
+
+The preprocessing order is `transformTools` → `normalizeMathDelims` → `wrapMathEnvironments` → `isolateDisplayMath` → (`neutralizeOpenMath` while streaming) → `blockify`. Each of the four fixes below sits at a different stage, and all four are pinned by tests in `client/test/logic.test.js`.
+
+- **`\\[4pt]` is row spacing, not a display delimiter.** `normalizeMathDelims` matched `/\\\[/g`, which also matches the *second* backslash of `\\[`, so every `align`/`cases`/`pmatrix` using LaTeX row spacing had its formula cut in half. The replacement alternation now consumes `\\\\` **first** and returns it untouched. A lookbehind would have been the obvious fix and is forbidden here — it is a parse-time error on Safari below 16.4 and would take down the whole bundle.
+- **A lone `$` is not an open math delimiter.** `wrapMathEnvironments` tracked depth with a latch, so one price or `$PATH` set it to 1 for the rest of the segment and every later `\begin{align}` went unwrapped. It now enters math only when a matching closer actually exists ahead.
+- **A blank line inside display math is not a paragraph break.** `blockify` splits on blank lines and ran *after* wrapping, handing remark-math two halves with an unbalanced `$$`. `wrapMathEnvironments` now collapses blank lines inside the body it wraps, and `blockify` tracks `inMath` and refuses to split inside a `$$` block, exactly as it already refused inside a fence.
+- **`$$x$$` on one line is inline math to remark-math**, which is why KaTeX answered `align` with "can be used only in display mode" — the environment was being typeset in inline mode. `isolateDisplayMath` gives a standalone display block its own blank lines *and* breaks it over three lines, which is what makes it flow math. `remarkBreaks` is why the blank lines are needed: single newlines keep the block inside a paragraph.
+
+`splitCode` and `normalizeMathDelims` share `CODE_SPLIT`, which knows ``` fences, `~~~` fences, double-backtick spans and single-backtick spans. `isFenceLine` already accepted `~~~`, so LaTeX inside one used to be rewritten and typeset instead of shown as code.
+
+`.katex-error` had no stylesheet rule at all, so a formula KaTeX rejected was indistinguishable from red prose. It now renders as a bordered monospace chip that scrolls rather than overflowing the bubble. `--danger` is never defined anywhere in the codebase, which is why every use is `var(--danger, #e5635b)`.
+
 ## Locales are per-language chunks
 
 `i18n.jsx` eagerly imports only each pack's `_meta` (via `import.meta.glob(..., { import: '_meta' })`) so the language menu can be built without loading any translations, plus `en.json` in full because it is 65 bytes and contains no translations anyway, which lets `loadLang('en')` resolve without a request. Everything else is fetched on demand by `loadLang`, and `main.jsx` awaits it before the first render so a non-English user never sees a flash of English.
@@ -354,6 +397,7 @@ Details that are load-bearing:
 - **Only speed is exposed to the client, never the cost** that sits beside it in `m.usage`.
 - **`llamaEngine(provider)` is the provider-level sibling of `llamaInfo(model)`**, behind `GET /api/admin/providers/:id/engine` and folded into the existing Test connection button rather than polled. `/slots` returns 501 when the server ran with `--no-slots`; that is a normal configuration, so `slotsHidden` says so instead of the panel reporting a failure.
 - Both `ctxGauge` and `msgSpeed` are **opt-in** prefs (default off) under **Settings > Chat > Tools**, next to `engineStrip`. They are extra numbers on screen that mostly matter when you are running the model yourself.
+- **`EngineStrip` must never change the height of anything.** It used to `return null` when idle, and because it is an ordinary in-flow block inside `.composer-wrap` — which sits above a `flex: 1` `.scroll-area` — removing its ~35px resized the thread viewport in a single frame and jumped the whole conversation. That happened twice per turn, plus instantly whenever `telemetry` went null on a chat switch. The `.es-slot` wrapper now stays mounted and eases its own `grid-template-rows` between `0fr` and `1fr`, the same grid collapse the reasoning panel uses, so the space is reclaimed smoothly instead of vanishing. The component keeps the last telemetry in state purely so the strip still has content to show while it collapses. Reserving a fixed height instead would have pushed the composer down for everyone who never sees telemetry at all. Measured layout-shift score across a full turn is 0.0003.
 
 ## The context ledger counts live, and never estimates
 
@@ -644,6 +688,23 @@ The stored filename is a fresh uuid plus a normalized extension (`safeExt`: a sh
 What this does *not* do is check which user an upload belongs to: any signed-in member who has the URL can fetch it. Closing that needs a per-request lookup from URL to owning chat on every image in a thread, and the exposure it removes is small next to what the session gate already closed.
 
 Deleting a chat's uploads is deliberately two-phase (`attachmentUrlsOf` → delete the rows → `purgeUnreferencedUploads`). Fork and cherry-pick copy a message verbatim, attachments included, so one `/uploads` file can be referenced from several chats; unlinking everything the deleted chat pointed at silently broke the images in the copy.
+
+### What the model can actually read is decided by the bytes, not the extension
+
+Attachments were never sandbox-gated, which is what made the symptom confusing: with the sandbox **on** the same file was *also* copied into the workspace (`connection.js`), so tools could reach it, and it looked as though attachments only worked there. The real gate was `isTextLike`, a hard-coded list of 28 extensions in `uploads.js`. Anything outside it — `.toml`, `.kt`, `.swift`, `.vue`, `.env`, and every PDF, despite `.pdf` being advertised in the composer's `accept` — reached the model as the bare string `[Attached file: x]` and nothing else.
+
+`historyMessage` in `convo.js` has four branches now, and the fallbacks are written for a model that would otherwise invent the contents:
+
+1. image + `has_vision` → `readImageDataUri`
+2. image without vision → a note saying the model cannot see it, so it says so instead of guessing
+3. `isTextLike` → inlined, capped at 20,000 chars
+4. anything else → a note naming the format and stating plainly that the contents are unavailable
+
+`isTextLike` keeps the extension list as a fast path and otherwise **sniffs the first 4KB** (`looksTextual` in `lib/extract.js`): PDF and ZIP magic numbers, any NUL byte, more than 5% control characters, or a failed strict UTF-8 decode all mean binary. That is what makes a format nobody listed work without anyone maintaining a list.
+
+PDFs are the exception that shaped the design. `readUploadText` is synchronous and the whole `chatHistory` → `buildMessages` chain above it is synchronous, so extraction cannot happen there. `POST /api/upload` extracts once, at upload time, into a `<file>.txt` sidecar that `readUploadText` prefers. `extractPdf` lived in **two byte-identical copies** (`projectfiles.js` and `membank.js`); it is now one implementation in `lib/extract.js` that all three import.
+
+The edit path in `connection.js` also used to reuse `orig.attachments` verbatim, silently discarding anything newly attached while editing; it now merges by url and re-caps at `MAX_ATTACHMENTS`.
 
 ## Authentication and the sign-in screen
 

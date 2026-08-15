@@ -1,15 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { dataPath } from './lib/dataroot.js';
-
-import { createRequire } from 'module';
-
-const pdfAssets = (() => {
-  try {
-    const root = path.dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'));
-    return { cMapUrl: path.join(root, 'cmaps') + path.sep, cMapPacked: true, standardFontDataUrl: path.join(root, 'standard_fonts') + path.sep };
-  } catch { return {}; }
-})();
+import { extractPdf } from './lib/extract.js';
 
 const ROOT = dataPath('projectfiles');
 
@@ -17,26 +9,6 @@ const TEXT_EXT = new Set(['txt', 'md', 'markdown', 'csv', 'tsv', 'json', 'js', '
 const MAX_FILE = 25 * 1024 * 1024;
 const MAX_FILES = 40;
 
-let _pdfjs = null;
-async function loadPdfjs() {
-  if (!_pdfjs) _pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-  return _pdfjs;
-}
-async function extractPdf(buffer) {
-  const { getDocument } = await loadPdfjs();
-  const doc = await getDocument({ data: new Uint8Array(buffer), isEvalSupported: false, useSystemFonts: true, disableFontFace: true, ...pdfAssets }).promise;
-  const pages = [];
-  for (let i = 1; i <= doc.numPages; i++) {
-    const page = await doc.getPage(i);
-    const tc = await page.getTextContent();
-    let buf = '';
-    for (const it of tc.items) { buf += it.str || ''; buf += it.hasEOL ? '\n' : ' '; }
-    pages.push(buf.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim());
-    try { page.cleanup(); } catch {}
-  }
-  try { await doc.destroy(); } catch {}
-  return pages.join('\n\n');
-}
 
 function dirFor(projectId) {
   const safe = String(projectId || '').replace(/[^a-zA-Z0-9-]/g, '');

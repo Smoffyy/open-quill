@@ -2,7 +2,7 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
-import { BASE_MACROS, KATEX_OPTIONS, ensureKatex, hasMath, katexPlugin, katexVersion, subscribeKatex, wrapMathEnvironments } from '../lib/mathjs.js';
+import { BASE_MACROS, CODE_SPLIT, KATEX_OPTIONS, ensureKatex, hasMath, isolateDisplayMath, katexPlugin, katexVersion, subscribeKatex, wrapMathEnvironments } from '../lib/mathjs.js';
 import CodeBlock from './CodeBlock.jsx';
 import ToolCard from './ToolCard.jsx';
 import ReasoningBlock from './ReasoningBlock.jsx';
@@ -146,6 +146,7 @@ function blockify(text) {
   let count = 0;
   let inFence = false;
   let hasContent = false;
+  let inMath = false;
   let pos = 0;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -162,10 +163,17 @@ function blockify(text) {
       pos = next;
       continue;
     }
-    if (!inFence && line.trim() === '' && hasContent) {
+    // A display block is as unsplittable as a fence: cutting it on a blank line
+    // hands remark-math two halves with an unbalanced $$ and both render as
+    // literal text with stray dollars.
+    if (!inFence) {
+      const dollars = (line.match(/\$\$/g) || []).length;
+      if (dollars % 2) inMath = !inMath;
+    }
+    if (!inFence && !inMath && line.trim() === '' && hasContent) {
       blocks.push(text.slice(start, end));
       start = next; count = 0; hasContent = false;
-    } else if (!inFence && count >= BLOCK_HARD_LINES) {
+    } else if (!inFence && !inMath && count >= BLOCK_HARD_LINES) {
       blocks.push(text.slice(start, end));
       start = next; count = 0; hasContent = false;
     } else if (line.trim() !== '') hasContent = true;
@@ -238,6 +246,9 @@ function guardDollars(s) {
   if (!singles.length) return s;
   const esc = new Set();
   for (const i of singles) {
+    // `$PATH`, `$JAVA_HOME` — shell variables, never math. Two of them in one
+    // paragraph used to pair up and get typeset.
+    if (/^[A-Z][A-Z0-9_]{1,}\b/.test(s.slice(i + 1, i + 24))) { esc.add(i); continue; }
     const m = /^\d[\d,]*(?:\.\d+)?/.exec(s.slice(i + 1, i + 24));
     if (!m) continue;
     const after = s[i + 1 + m[0].length] || '';
@@ -346,15 +357,19 @@ function neutralizeOpenMath(text) {
 
 function normalizeMathDelims(text) {
   if (!text || (text.indexOf('\\[') === -1 && text.indexOf('\\(') === -1)) return text;
-  const parts = text.split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`)/);
+  const parts = text.split(CODE_SPLIT);
   for (let i = 0; i < parts.length; i++) {
     const p = parts[i];
-    if (!p || p.startsWith('`')) continue;
-    parts[i] = p
-      .replace(/\\\[/g, () => SENT + '$$')
-      .replace(/\\\]/g, () => '$$' + SENT)
-      .replace(/\\\(/g, () => SENT + '$')
-      .replace(/\\\)/g, () => '$' + SENT);
+    if (!p || p.startsWith('`') || p.startsWith('~~~')) continue;
+    // `\\` is consumed first and returned untouched, so the row-spacing form
+    // `\\[4pt]` inside align/cases/pmatrix keeps its bracket instead of having
+    // the second backslash read as the opener of a display-math delimiter.
+    parts[i] = p.replace(/\\\\|\\\[|\\\]|\\\(|\\\)/g, (m) => (
+      m === '\\\\' ? m
+        : m === '\\[' ? SENT + '$$'
+          : m === '\\]' ? '$$' + SENT
+            : m === '\\(' ? SENT + '$' : '$' + SENT
+    ));
   }
   return parts.join('');
 }
@@ -394,7 +409,7 @@ function Markdown({ children, streaming }) {
   if (typeof children !== 'string') {
     return <MarkdownBlock text={children} />;
   }
-  let text = wrapMathEnvironments(normalizeMathDelims(transformTools(children)));
+  let text = isolateDisplayMath(wrapMathEnvironments(normalizeMathDelims(transformTools(children))));
   if (streaming) text = neutralizeOpenMath(text);
   const blocks = blockify(text);
   if (!streaming && (text.length > PROGRESSIVE_SIZE_TRIGGER || blocks.length > PROGRESSIVE_BLOCK_TRIGGER)) {

@@ -83,6 +83,9 @@
   --composer-hover: rgba(0, 0, 0, .06);
 }
 :root[data-theme="light"] .code-wrap { background: #1f1f1d; }
+/* Wherever the wrap takes an opaque background of its own, the sticky bar has to
+   take the same one, or it goes back to being see-through. */
+:root[data-theme="light"] .code-bar { background: #1f1f1d; }
 
 :root[data-theme="anthropic"] {
   color-scheme: dark;
@@ -270,6 +273,7 @@
   --pop-divider: rgba(255, 255, 255, .10);
 }
 :root[data-theme="oled"] .code-wrap, :root[data-theme="openai"] .code-wrap { background: #050505; }
+:root[data-theme="oled"] .code-bar, :root[data-theme="openai"] .code-bar { background: #050505; }
 /* anthropic: sidebar saved-chat + label text */
 :root[data-theme="anthropic"] .section-label { color: var(--sidebar-label); }
 :root[data-theme="anthropic"] .sidebar { border-right-color: rgba(255, 255, 255, .1); }

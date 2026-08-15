@@ -68,7 +68,7 @@ function Attachments({ items, pins, onTogglePinFile }) {
   return (
     <div className="msg-attachments">
       {items.map((a, i) => a.type && a.type.startsWith('image/') ? (
-        <button key={i} className="att image" onClick={() => openLightbox(a.url, a.name)} aria-label={t('Open image {name}', { name: a.name })}><img src={a.url} alt={a.name} /></button>
+        <button key={i} className="att image" onClick={() => openLightbox(a.url, a.name)} aria-label={t('Open image {name}', { name: a.name })}><img src={a.url} alt={a.name} loading="lazy" decoding="async" /></button>
       ) : (
         <div key={i} className={'att file' + (pinnedUrls.has(a.url) ? ' pinned-file' : '')}>
           <a className="att-link" href={a.url} target="_blank" rel="noreferrer" title={a.name}>
@@ -296,9 +296,11 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
 
   const segs = Array.isArray(msg.reasoningSegs) ? msg.reasoningSegs : null;
   const tailIsMarker = segs && /\[\[OQT:\d+\]\]\s*$/.test(msg.content || '');
+  const segMs = Array.isArray(msg.reasoningSegMs) ? msg.reasoningSegMs : null;
+  const segMsKey = segMs ? segMs.join(',') : '';
   const segCtx = useMemo(
-    () => (segs ? { segs, segMs: Array.isArray(msg.reasoningSegMs) ? msg.reasoningSegMs : null, live: !!(streaming && tailIsMarker), preset, collapsible: model?.reasoningCollapsible !== false } : null),
-    [segs, msg.reasoningSegMs, streaming, tailIsMarker, preset, model]
+    () => (segs ? { segs, segMs, live: !!(streaming && tailIsMarker), preset, collapsible: model?.reasoningCollapsible !== false } : null),
+    [segs, segMsKey, streaming, tailIsMarker, preset, model]
   );
 
   const inner = (

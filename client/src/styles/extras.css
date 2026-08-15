@@ -940,16 +940,29 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 }
 
 /* ---------- engine telemetry strip ---------- */
+/* The slot never unmounts; it eases its own height between 0fr and 1fr, the same
+   grid collapse the reasoning panel uses. Unmounting the strip took ~35px out of
+   the composer in a single frame, which resized the flex scroll area and jumped
+   the conversation on every turn. */
+.es-slot {
+  display: grid; grid-template-rows: 0fr;
+  transition: grid-template-rows var(--fx-t, .28s) var(--ease-out);
+}
+.es-slot > * { overflow: hidden; min-height: 0; }
+.es-slot.open { grid-template-rows: 1fr; }
 .engine-strip {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   margin: 0 auto 6px; padding: 5px 11px; width: fit-content; max-width: 100%;
   background: var(--input-bg); border: 1px solid var(--border-soft); border-radius: 999px;
   font-family: var(--font-sans); font-size: 11px; color: var(--text-muted);
-  font-variant-numeric: tabular-nums; animation: esIn var(--fx-a, .22s) var(--ease-out) backwards;
-  transition: opacity var(--fx-t, .5s) ease;
+  font-variant-numeric: tabular-nums;
+  opacity: 0; transform: translateY(4px);
+  transition: opacity var(--fx-t, .24s) ease, transform var(--fx-t, .24s) var(--ease-out);
 }
-.engine-strip.final { opacity: .55; }
-@keyframes esIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.es-slot.open .engine-strip { opacity: 1; transform: none; }
+.es-slot.open .engine-strip.final { opacity: .55; }
+[data-animations="off"] .es-slot,
+[data-animations="off"] .es-slot .engine-strip { transition: none; }
 .engine-strip .es-icon { display: flex; color: var(--accent); }
 .engine-strip .es-stat { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
 .engine-strip .es-tps strong { color: var(--text); font-weight: 600; font-size: 11.5px; }
@@ -960,7 +973,7 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .engine-strip .es-ctx.warn .es-fill { background: #e2a336; }
 .engine-strip .es-ctx.danger .es-fill { background: #e5484d; }
 .engine-strip .es-ctx.danger { color: #e5484d; }
-[data-microfx="off"] .engine-strip { animation: none; }
+[data-microfx="off"] .es-slot, [data-microfx="off"] .es-slot .engine-strip { transition: none; }
 
 /* ---------- context ledger ---------- */
 .ledger-sentinel { height: 1px; margin-bottom: -1px; pointer-events: none; }

@@ -196,7 +196,10 @@ export function initWs(server) {
           const orig = messageId ? db.messages.byId(messageId) : null;
           if (!orig || orig.chat_id !== chat.id) { safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: 'Message not found.' })); return; }
           const umid = uid();
-          db.messages.insert({ id: umid, chat_id: chat.id, role: 'user', content, reasoning: '', model_id: null, attachments: orig.attachments || [], parent_id: orig.parent_id ?? null, created_at: now() });
+          const kept = orig.attachments || [];
+          const seen = new Set(kept.map(a => a.url));
+          const merged = kept.concat(attachments.filter(a => !seen.has(a.url))).slice(0, MAX_ATTACHMENTS);
+          db.messages.insert({ id: umid, chat_id: chat.id, role: 'user', content, reasoning: '', model_id: null, attachments: merged, parent_id: orig.parent_id ?? null, created_at: now() });
           db.chats.update(chat.id, { active_leaf: umid });
         } else {
           const parent = (db.chats.byId(chat.id) || {}).active_leaf || null;

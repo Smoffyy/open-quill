@@ -320,6 +320,16 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 /* ---------- math ---------- */
 .katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; margin: .6em 0; }
 .assistant-body .katex { font-size: 1.04em; }
+/* A formula KaTeX cannot parse renders as its own source. Give it a shape that
+   reads as "this did not typeset" and let a long one scroll instead of
+   overflowing the bubble. */
+.katex-error {
+  display: inline-block; max-width: 100%; overflow-x: auto; vertical-align: bottom;
+  padding: 1px 5px; border-radius: 5px;
+  font-family: var(--font-mono, ui-monospace, monospace); font-size: .92em;
+  background: color-mix(in srgb, #e5635b 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #e5635b 32%, transparent);
+}
 
 /* ---------- composer drag / glow ---------- */
 .composer { position: relative; }

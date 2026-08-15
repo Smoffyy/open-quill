@@ -51,8 +51,13 @@ function historyMessage(m, model) {
     for (const a of atts) {
       const isImage = a.type && a.type.startsWith('image/');
       if (isImage && model.has_vision) { const uri = readImageDataUri(a); if (uri) images.push(uri); }
-      else if (isTextLike(a)) notes.push(`--- Attached file: ${a.name} ---\n${readUploadText(a.url)}`);
-      else notes.push(`[Attached ${isImage ? 'image' : 'file'}: ${a.name}]`);
+      else if (isImage) notes.push(`[Attached image: ${a.name} — this model cannot see images, so tell the user you cannot view it.]`);
+      else if (isTextLike(a)) {
+        const body = readUploadText(a.url);
+        notes.push(body
+          ? `--- Attached file: ${a.name} ---\n${body}`
+          : `[Attached file: ${a.name} — the file is empty or could not be read.]`);
+      } else notes.push(`[Attached file: ${a.name} — this is a binary format the server cannot read as text, so its contents are not available to you. Say so rather than guessing what it contains.]`);
     }
     if (notes.length) text = (text ? text + '\n\n' : '') + notes.join('\n\n');
   }

@@ -348,7 +348,22 @@
 
 /* ---------- code blocks ---------- */
 .code-wrap { position: relative; margin: 0 0 16px; border: 1px solid var(--code-border, var(--border-soft)); border-radius: 8px; background: var(--code-bg, #1f1f1d); }
-.code-bar { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; font-family: var(--font-sans); font-size: 12.5px; color: var(--code-label, #9b9a90); background: transparent; border-radius: 8px 8px 0 0; }
+/* The bar is sticky, so it must be opaque or the code scrolls straight through the
+   language label and the Copy button. `--code-bg` is a translucent overlay in most
+   palettes, so painting it alone is not enough: the bar reproduces the same stack
+   the wrap composites against — the app background, then that overlay. */
+.code-bar {
+  position: sticky; top: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px; font-family: var(--font-sans); font-size: 12.5px; color: var(--code-label, #9b9a90);
+  border-radius: 8px 8px 0 0;
+  background-color: var(--bg);
+  background-image: linear-gradient(var(--code-bg, #1f1f1d), var(--code-bg, #1f1f1d));
+}
+.bubble-user .code-bar {
+  background-image:
+    linear-gradient(var(--code-bg, #1f1f1d), var(--code-bg, #1f1f1d)),
+    linear-gradient(var(--user-bubble), var(--user-bubble));
+}
 .code-copy { opacity: .7; display: inline-flex; align-items: center; gap: 5px; color: #c9c8c0; background: #2c2c2a; font-family: var(--font-sans); font-size: 12px; padding: 4px 8px; border-radius: 6px; transition: opacity var(--fx-t, .15s), background var(--fx-t, .15s), color var(--fx-t, .15s), transform var(--fx-t, .12s); }
 .code-wrap:hover .code-copy { opacity: 1; }
 .code-copy:hover { background: #3a3a37; color: #f3f2ec; }

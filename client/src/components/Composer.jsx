@@ -10,7 +10,10 @@ import { extLabel } from '../lib/files.js';
 import { t, fmtDate } from '../i18n.jsx';
 import { focusUnlessTouch } from '../lib/touch.js';
 
-const FILE_ACCEPT = '.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.py,.lua,.html,.css,.xml,.yml,.yaml,.pdf,.log';
+// The picker no longer advertises a list. The server decides what it can read by
+// sniffing the bytes, so any format is accepted here and one that turns out to be
+// unreadable is reported to the model as such rather than silently dropped.
+const FILE_ACCEPT = '';
 
 function PmSub({ className = '', children, onMouseEnter, onMouseLeave }) {
   const ref = useRef(null);
@@ -425,7 +428,7 @@ export default function Composer({
         id="oq-composer" aria-label={t('Message input')}
         onChange={(e) => onChange(e.target.value)} onKeyDown={key} onPaste={onPaste} />
       <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}
-        accept={(visionSupported ? 'image/*,' : '') + FILE_ACCEPT} />
+        {...(FILE_ACCEPT ? { accept: (visionSupported ? 'image/*,' : '') + FILE_ACCEPT } : {})} />
       {safetyChecking && safetyVerbose && <div className="safety-checking">{t("Safety check…")}</div>}
       {improving && <div className="safety-checking">{t("Improving prompt…")}</div>}
       {canContinue && !streaming && !conversationEnded && (
