@@ -266,8 +266,9 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
               {(() => { const t = fmtTime(msg.created_at); return t ? <span className="msg-time" data-full={t.full}>{t.short}</span> : null; })()}
               <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
               {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")} aria-label={t("Compare versions")}><Columns style={{ width: 18 }} /></button>}
-              <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
+              {onRegenerate && <button className="action-btn" onClick={() => onRegenerate(msg.id)} title={t("Retry")} aria-label={t("Retry")}><Retry /></button>}
               {onEdit && <button className="action-btn" onClick={startEdit} title={t("Edit")} aria-label={t("Edit")}><Pencil style={{ width: 18 }} /></button>}
+              <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
               <MoreMenu items={[
                 onFork && { label: t('Branch into a new chat'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
                 onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin (keep in context)'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
@@ -330,8 +331,12 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
       {!streaming && msg.content && (
         <div className="actions">
           <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
-          <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
-          {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")} aria-label={t("Compare versions")}><Columns style={{ width: 18 }} /></button>}
+          {chatId && !String(msg.id).startsWith('inc-') && (
+            <button className={'action-btn' + (fb === 1 ? ' on' : '')} onClick={() => rate(1)} title={t("Good response")} aria-label={t("Good response")} aria-pressed={fb === 1}><ThumbUp style={{ width: 16 }} /></button>
+          )}
+          {chatId && !String(msg.id).startsWith('inc-') && (
+            <button className={'action-btn' + (fb === -1 ? ' on' : '')} onClick={() => rate(-1)} title={t("Bad response")} aria-label={t("Bad response")} aria-pressed={fb === -1}><ThumbDown style={{ width: 16 }} /></button>
+          )}
           <span className="retry-wrap">
             {onRegenerate && <button className="action-btn" title={t("Retry")} aria-label={t("Retry")} onClick={() => onRegenerate(msg.id)}><Retry /></button>}
             {onRegenerateWith && models && models.length > 1 && (
@@ -347,9 +352,9 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
                 ))}
               </div>, document.body)}
           </span>
+          <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
+          {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")} aria-label={t("Compare versions")}><Columns style={{ width: 18 }} /></button>}
           <MoreMenu items={[
-            chatId && !String(msg.id).startsWith('inc-') && { label: t('Good response'), icon: <ThumbUp style={{ width: 15 }} />, on: fb === 1, run: () => rate(1) },
-            chatId && !String(msg.id).startsWith('inc-') && { label: t('Bad response'), icon: <ThumbDown style={{ width: 15 }} />, on: fb === -1, run: () => rate(-1) },
             onFork && { label: t('Branch into a new chat'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
             onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin (keep in context)'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
             onDelete && chatId && !String(msg.id).startsWith('inc-') && { label: t('Delete message'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }

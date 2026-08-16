@@ -1384,7 +1384,11 @@ export default function App() {
     dismissError();
     if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, messageId, ...genOptsRef.current })) return;
     queueRec(activeId, currentId);
-    setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
+    setMessages(ms => {
+      const idx = ms.findIndex(m => m.id === messageId);
+      if (idx === -1) return ms;
+      return ms.slice(0, ms[idx].role === 'user' ? idx + 1 : idx);
+    });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
   }, [streaming, activeId, currentId]);
 
@@ -1400,7 +1404,11 @@ export default function App() {
     setCurrentId(modelId);
     if (!wsSend({ type: 'regenerate', chatId: activeId, modelId, messageId, ...genOptsRef.current })) return;
     queueRec(activeId, modelId);
-    setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
+    setMessages(ms => {
+      const idx = ms.findIndex(m => m.id === messageId);
+      if (idx === -1) return ms;
+      return ms.slice(0, ms[idx].role === 'user' ? idx + 1 : idx);
+    });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
     const mm = models.find(m => m.id === modelId);
     if (mm) toast(t('Retrying with {model}', { model: mm.displayName }), { icon: 'check' });
