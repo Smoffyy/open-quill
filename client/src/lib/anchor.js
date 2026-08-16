@@ -3,6 +3,17 @@ import { useState, useEffect, useLayoutEffect } from 'react';
 export const MENU_EDGE = 8;
 export const MENU_GAP = 6;
 
+// A scroll anywhere else means the anchor has moved, so the menu closes rather than trying
+// to follow it. A scroll *inside* the menu is the opposite: once the height is capped the
+// menu is its own scroll container, and closing on that made the cap unusable — the list
+// vanished the moment you tried to reach the items it had scrolled out of view. The scroll
+// listener is capture-phase on window, so it sees those inner scrolls too and must skip them.
+export function scrollInsideMenu(menu, target) {
+  if (!menu || !target) return false;
+  if (menu === target) return true;
+  return typeof menu.contains === 'function' && menu.contains(target);
+}
+
 export function useAnchoredMenu(open, setOpen, btnRef, menuRef, opts) {
   const align = (opts && opts.align) || 'right';
   const minW = (opts && opts.minWidth) || 0;
@@ -16,13 +27,14 @@ export function useAnchoredMenu(open, setOpen, btnRef, menuRef, opts) {
       setOpen(false);
     };
     const close = () => setOpen(false);
+    const onScroll = (e) => { if (!scrollInsideMenu(menuRef.current, e.target)) setOpen(false); };
     document.addEventListener('mousedown', away);
     window.addEventListener('resize', close);
-    window.addEventListener('scroll', close, true);
+    window.addEventListener('scroll', onScroll, true);
     return () => {
       document.removeEventListener('mousedown', away);
       window.removeEventListener('resize', close);
-      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('scroll', onScroll, true);
     };
   }, [open]);
   useLayoutEffect(() => {

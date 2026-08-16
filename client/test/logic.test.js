@@ -10,7 +10,8 @@ import { hasMath, isolateDisplayMath, wrapMathEnvironments } from '../src/lib/ma
 import { hasToolCall, previewOf, buildTree, collapseRuns } from '../src/lib/threadmeta.js';
 import { scanTools } from '../src/toolproto.js';
 import { STATUS_DELAY_DEFAULT, STATUS_DELAY_MAX, statusDelayMs, statusDelaySecs } from '../src/lib/status.js';
-import { paletteFor, palettesFor, themeValue } from '../src/lib/palettes.js';
+import { paletteFor, palettesFor, themeValue, paletteById, DEFAULT_DARK, DEFAULT_LIGHT, presetOf } from '../src/lib/palettes.js';
+import { scrollInsideMenu } from '../src/lib/anchor.js';
 import {
   isRange, clampToRange, allNumeric, kwargPayload,
   controlOf as controlOfKwarg, defaultValueOf as defaultValueOfKwarg,
@@ -642,4 +643,49 @@ test('the legacy palette is a distinct anthropic dark, not the default', () => {
   assert.equal(paletteFor('anthropic-legacy', 'openai').id, 'openai-2024q1', 'falls back by darkness under the other preset');
   const ids = palettesFor('anthropic').map(p => p.id);
   assert.deepEqual(ids, ['anthropic-light', 'anthropic-legacy', 'anthropic-2025q2', 'anthropic-2026q3']);
+});
+
+test('a scroll inside an anchored menu does not count as a scroll away from it', () => {
+  const item = { tag: 'item' };
+  const menu = { contains: (n) => n === item };
+  assert.equal(scrollInsideMenu(menu, item), true, 'a scroll on a menu row stays open');
+  assert.equal(scrollInsideMenu(menu, menu), true, 'the menu scrolling itself stays open');
+  assert.equal(scrollInsideMenu(menu, { tag: 'thread' }), false, 'an outside scroll still closes');
+  assert.equal(scrollInsideMenu(null, item), false, 'no menu yet, nothing to protect');
+  assert.equal(scrollInsideMenu(menu, null), false);
+  assert.equal(scrollInsideMenu({ contains: () => false }, { self: true }), false);
+});
+
+test('every dark palette round-trips, so toggling to light and back can restore it', () => {
+  for (const preset of ['anthropic', 'openai']) {
+    const p = presetOf(preset);
+    const light = paletteById(DEFAULT_LIGHT[p]);
+    assert.ok(light && !light.dark && light.preset === p, p + ' has a light default');
+    for (const pal of palettesFor(p).filter(x => x.dark)) {
+      assert.equal(paletteFor(pal.id, p).id, pal.id, pal.id + ' survives a round trip');
+    }
+    assert.equal(paletteFor(DEFAULT_LIGHT[p], p).id, DEFAULT_LIGHT[p]);
+    assert.ok(paletteById(DEFAULT_DARK[p]).dark, p + ' dark default is dark');
+  }
+  assert.equal(paletteFor('dark', 'anthropic').id, 'anthropic-2026q3');
+  assert.notEqual(paletteFor('dark', 'anthropic').id, 'anthropic-legacy');
+});
+
+test('highlighting is identical with the cache bypassed, so the streaming path cannot change output', async () => {
+  const { ensureCommon, highlight } = await import('../src/lib/hljs.js');
+  const hl = await ensureCommon();
+  assert.ok(hl, 'highlight.js common bundle loaded');
+  const code = 'function add(a, b) {\n  return a + b;\n}\n';
+  const viaCache = highlight(code, 'javascript');
+  const viaBypass = highlight(code, 'javascript', { cache: false });
+  assert.equal(viaBypass, viaCache);
+  assert.match(viaCache, /<span class="hljs-/, 'really highlighted, not escaped plain text');
+  let prev = '';
+  for (const n of [10, 20, 30]) {
+    const partial = code.slice(0, n);
+    const out = highlight(partial, 'javascript', { cache: false });
+    assert.notEqual(out, prev);
+    assert.equal(out, highlight(partial, 'javascript', { cache: false }));
+    prev = out;
+  }
 });

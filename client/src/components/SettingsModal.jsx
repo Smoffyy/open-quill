@@ -389,13 +389,15 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                 <input value={name} onChange={(e) => changeName(e.target.value)} />
               </div>
               <div className="me-section-h">{t("Preferences")}</div>
-              <div className="field">
-                <label>{t("Language")}</label>
-                <div className="muted-note" style={{ marginBottom: 10 }}>{t("The interface language on this device. Chats and replies are not translated.")}</div>
-                <select value={i18nLang} onChange={(e) => setAppLang(e.target.value)} style={{ maxWidth: 260 }}>
-                  {langs.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}
-                </select>
-              </div>
+              {/* This was the one native <select> left in Settings. The modal opens on a
+                  transform animation, and browsers composite an OS-drawn select separately,
+                  so it painted clipped until a click forced a repaint. SelectRow is what
+                  every other dropdown here already uses. */}
+              <SetRow label={t("Language")} desc={t("The interface language on this device. Chats and replies are not translated.")}>
+                <SelectRow label={t("Language")} value={i18nLang}
+                  options={langs.map(l => ({ v: l.code, label: l.name }))}
+                  onPick={setAppLang} />
+              </SetRow>
               <div className="field">
                 <label>{t("Instructions for the Assistant")}</label>
                 <div className="muted-note" style={{ marginBottom: 10 }}>{t("Added to the system prompt of every chat. Leave empty for none.")}</div>

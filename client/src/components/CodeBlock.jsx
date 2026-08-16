@@ -12,14 +12,19 @@ function CodeBlock({ lang, code }) {
   const hlVersion = useSyncExternalStore(subscribeHljs, hljsVersion, hljsVersion);
   const [html, setHtml] = useState(() => escHtml(code));
   const preRef = useRef(null);
+  const lit = useRef(null);
 
   useEffect(() => {
+    if (lit.current && lit.current.v === hlVersion && lit.current.lang === lang) {
+      setHtml(highlight(code, lang, { cache: false }));
+      return;
+    }
     setHtml(escHtml(code));
     const el = preRef.current;
     if (!el) return;
     let done = false;
     let alive = true;
-    const job = () => { if (alive) setHtml(highlight(code, lang)); };
+    const job = () => { if (!alive) return; lit.current = { v: hlVersion, lang }; setHtml(highlight(code, lang)); };
     const paint = () => {
       if (done) return;
       done = true;

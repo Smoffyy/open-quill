@@ -226,6 +226,9 @@
 [data-preset="openai"][data-animations="off"] .rb-peek.shown { transition: none; }
 [data-preset="openai"] .actions .action-btn { border-radius: 8px; }
 
+[data-preset="openai"] .incognito-bar { padding: 10px 18px 10px 14px; }
+[data-preset="openai"] .incog-left { gap: 12px; }
+[data-preset="openai"] .incognito-close { width: 34px; height: 34px; border-radius: 9px; }
 [data-preset="openai"] .incognito-title { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); }
 [data-preset="openai"] .greeting .incog-title { font-size: 24px; font-weight: 600; }
 [data-preset="openai"] .greeting svg { width: 26px; height: 26px; }

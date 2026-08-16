@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { api } from './api.js';
 import { t, tk } from './i18n.jsx';
-import { applyPrefs } from './prefs.js';
+import { applyPrefs, prefersDark } from './prefs.js';
 import { kwargValuesArr, defaultValueOf } from './kwargs.js';
 import Login from './components/Login.jsx';
 import Sidebar from './components/Sidebar.jsx';
@@ -16,6 +16,7 @@ import ThreadSkeleton from './components/ThreadSkeleton.jsx';
 import SummaryModal from './components/SummaryModal.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
 import { computeActiveBg } from './lib/appbg.js';
+import { DEFAULT_DARK, DEFAULT_LIGHT, paletteById, paletteFor, presetOf } from './lib/palettes.js';
 import Disclaimer from './components/Disclaimer.jsx';
 
 import Message from './components/Message.jsx';
@@ -221,6 +222,7 @@ export default function App() {
   const [findMatches, setFindMatches] = useState(null);
   const [treeOpen, setTreeOpen] = useState(false);
   const [kbFocus, setKbFocus] = useState(null);
+  const lastDarkPalette = useRef('');
   const kbFocusRef = useRef(null);
   useEffect(() => { kbFocusRef.current = kbFocus; }, [kbFocus]);
   const onFindMatches = useCallback((ids) => setFindMatches(ids), []);
@@ -538,8 +540,8 @@ export default function App() {
       const json = JSON.parse(await file.text());
       const r = await api.post('/api/chats/import', json);
       await loadChats();
-      alert(`Imported ${r.imported} chat(s).`);
-    } catch (e) { alert(e.message || t('Could not import that file.')); }
+      toast(t('Imported {n} chat(s)', { n: r.imported }), { icon: 'check' });
+    } catch (e) { toast(e.message || t('Could not import that file.'), { icon: 'info', kind: 'warn' }); }
   }
   function applyCfg(c) {
     setCfg(c);
@@ -726,7 +728,7 @@ export default function App() {
     if (m.type === 'compacting') { if (m.chatId === activeKey()) setCompacting(true); return; }
     if (m.type === 'compacted') { if (m.chatId === activeKey()) { setCompacting(false); setHasSummary(true); } return; }
     if (m.type === 'ctx_rolling') {
-      if (m.chatId === activeKey()) toast(`Context limit reached (${(m.limit || 0).toLocaleString()} tokens), trimming older messages so the chat can continue`, { icon: 'info', kind: 'warn', duration: 6000 });
+      if (m.chatId === activeKey()) toast(t('Context limit reached ({limit} tokens), trimming older messages so the chat can continue', { limit: (m.limit || 0).toLocaleString() }), { icon: 'info', kind: 'warn', duration: 6000 });
       return;
     }
     if (m.type === 'title') { setChats(cs => cs.map(c => c.id === m.chatId ? { ...c, title: m.title } : c)); return; }
@@ -922,8 +924,7 @@ export default function App() {
     if (cmp && cmp.chatId === activeIdRef.current) {
       const nextId = cmp.remaining.shift();
       if (nextId && cmp.messageId) {
-        const g = genOptsRef.current;
-        setTimeout(() => wsSend({ type: 'regenerate', chatId: cmp.chatId, modelId: nextId, extended: g.extended, reasoningEffort: g.reasoningEffort, kwargValues: g.kwargValues, messageId: cmp.messageId, sandbox: g.sandbox, webSearch: g.webSearch, styleId: g.styleId }), 150);
+        setTimeout(() => wsSend({ type: 'regenerate', chatId: cmp.chatId, modelId: nextId, messageId: cmp.messageId, ...genOptsRef.current }), 150);
         return;
       }
       compareRef.current = null;
@@ -1056,7 +1057,7 @@ export default function App() {
     if (activeId) {
       try { await api.patch('/api/chats/' + activeId, { instructions: p.instructions || '' }); } catch {}
     }
-    toast(t('Applied persona: ') + p.name, { icon: 'star' });
+    toast(t('Applied persona: {name}', { name: p.name }), { icon: 'star' });
   }
   function commitRename() {
     const t = renameVal.trim();
@@ -1381,11 +1382,11 @@ export default function App() {
   const regenerate = useCallback((messageId) => {
     if (streaming || !activeId || !currentId) return;
     dismissError();
-    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, extended, reasoningEffort, kwargValues, messageId, sandbox, webSearch, styleId })) return;
+    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId: currentId, messageId, ...genOptsRef.current })) return;
     queueRec(activeId, currentId);
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
-  }, [streaming, activeId, currentId, extended, reasoningEffort, kwargValues, sandbox, webSearch]);
+  }, [streaming, activeId, currentId]);
 
   useEffect(() => {
     msgActions.current.regenerate = regenerate;
@@ -1397,21 +1398,21 @@ export default function App() {
     dismissError();
     setChatRemovedModel(null);
     setCurrentId(modelId);
-    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId, extended, reasoningEffort, kwargValues, messageId, sandbox, webSearch, styleId })) return;
+    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId, messageId, ...genOptsRef.current })) return;
     queueRec(activeId, modelId);
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); return idx === -1 ? ms : ms.slice(0, idx); });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
     const mm = models.find(m => m.id === modelId);
-    if (mm) toast(t('Retrying with ') + mm.displayName, { icon: 'check' });
-  }, [streaming, activeId, extended, reasoningEffort, kwargValues, sandbox, webSearch, models]);
+    if (mm) toast(t('Retrying with {model}', { model: mm.displayName }), { icon: 'check' });
+  }, [streaming, activeId, models]);
 
   const editMessage = useCallback((messageId, newContent) => {
     if (streaming || !activeId || !currentId) return;
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); if (idx === -1) return ms; const copy = ms.slice(0, idx + 1); copy[idx] = { ...copy[idx], content: newContent }; return copy; });
     stick.current = true; setTimeout(() => scrollBottom(true), 20);
-    if (!wsSend({ type: 'edit', chatId: activeId, modelId: currentId, extended, reasoningEffort, kwargValues, messageId, content: newContent, sandbox, webSearch, styleId })) return;
+    if (!wsSend({ type: 'edit', chatId: activeId, modelId: currentId, messageId, content: newContent, ...genOptsRef.current })) return;
     queueRec(activeId, currentId);
-  }, [streaming, activeId, currentId, extended, reasoningEffort, kwargValues, sandbox, webSearch]);
+  }, [streaming, activeId, currentId]);
 
   function stop() { const key = activeKey(); try { ws.current?.readyState === 1 && ws.current.send(JSON.stringify({ type: 'stop', chatId: key })); } catch {} pendingDone.current = true; setQueued(false); }
   const stopChat = useCallback((chatId) => {
@@ -1500,8 +1501,15 @@ export default function App() {
     openSettings: () => { setSettingsTab('general'); setShowSettings(true); },
     toggleIncognito: () => { toggleIncognito(); },
     toggleTheme: () => {
-      const applied = document.documentElement.getAttribute('data-theme');
-      updatePref('theme', applied === 'light' ? 'dark' : 'light');
+      const preset = presetOf(cfg.uiPreset);
+      const current = paletteFor(user?.prefs?.theme, preset, prefersDark());
+      if (current && current.dark) {
+        lastDarkPalette.current = current.id;
+        updatePref('theme', DEFAULT_LIGHT[preset]);
+      } else {
+        const back = paletteById(lastDarkPalette.current);
+        updatePref('theme', (back && back.preset === preset) ? back.id : DEFAULT_DARK[preset]);
+      }
     },
     focusComposer: () => { setFocusTick(x => x + 1); },
     attachFiles: () => { window.dispatchEvent(new CustomEvent('oq-attach-files')); },
@@ -1597,8 +1605,11 @@ export default function App() {
         <Toaster />
         {incognito && (
           <div className="incognito-bar">
-            <div className="incognito-title"><Ghost style={{ width: 18 }} /> {t("Incognito chat")}</div>
-            <button className="incognito-close" onClick={toggleIncognito} title={t("Exit incognito")} disabled={streaming || queued}>✕</button>
+            <div className="incog-left">
+              {empty && cfg.uiPreset === 'openai' && modelPicker}
+              <div className="incognito-title"><Ghost style={{ width: 18 }} /> {t("Incognito chat")}</div>
+            </div>
+            <button className="incognito-close" onClick={toggleIncognito} title={t("Exit incognito")} aria-label={t("Exit incognito")} disabled={streaming || queued}><X style={{ width: 16 }} /></button>
           </div>
         )}
         {empty && (
