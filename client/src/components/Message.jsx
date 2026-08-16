@@ -87,7 +87,7 @@ function Attachments({ items, pins, onTogglePinFile }) {
   );
 }
 
-function ModelIcon({ model, phase, below, name }) {
+const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name, streamIn }, ref) {
   const base = model?.staticIcon || '';
   const map = {
     static: base,
@@ -100,12 +100,12 @@ function ModelIcon({ model, phase, below, name }) {
   const cls = anim === 'none' ? '' : anim;
   const sz = model?.iconSize > 0 ? model.iconSize : 40;
   return (
-    <div className={'msg-icon' + (below ? ' below' : '') + (name ? ' with-name' : '')}>
+    <div ref={ref} className={'msg-icon' + (below ? ' below' : '') + (name ? ' with-name' : '') + (streamIn ? ' stream-in' : '')}>
       {base && <img src={src} className={cls} style={{ width: sz, height: sz }} alt="" />}
       {name && <span className="msg-icon-name">{name}</span>}
     </div>
   );
-}
+});
 
 const compact = (n) => (n >= 10000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : Number(n).toLocaleString());
 
@@ -225,10 +225,6 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
   const retryRef = useRef(null);
   const retryMenuRef = useRef(null);
   const retryPos = useAnchoredMenu(retryMenu, setRetryMenu, retryRef, retryMenuRef);
-  const taRef = useRef(null);
-  useEffect(() => {
-    if (editing && taRef.current) { const el = taRef.current; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight + 2, 460) + 'px'; }
-  }, [editing, draft]);
   async function doCopy() {
     const clean = (msg.content || '').replace(/\[\[OQ(?:R:[A-Za-z0-9+/=]+|T:\d+)\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
     if (!(await copyText(clean))) return;
@@ -250,14 +246,16 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
           {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> {t("Pinned")}</div>}
           <Attachments items={msg.attachments} pins={pins} onTogglePinFile={onTogglePinFile} />
           {editing ? (
-            <div className="edit-box">
-              <textarea ref={taRef} value={draft} autoFocus onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit(); if (e.key === 'Escape') setEditing(false); }} />
+            <>
+              <div className="edit-box" data-value={draft + ' '}>
+                <textarea value={draft} autoFocus rows={1} cols={1} onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit(); if (e.key === 'Escape') setEditing(false); }} />
+              </div>
               <div className="edit-actions">
                 <button className="btn ghost" onClick={() => setEditing(false)}>{t("Cancel")}</button>
                 <button className="btn primary" onClick={saveEdit}>{t("Save & submit")}</button>
               </div>
-            </div>
+            </>
           ) : (
             msg.content && <div className="bubble-user"><Markdown>{msg.content}</Markdown></div>
           )}
@@ -285,7 +283,38 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
   const iconPhase = streaming ? phase : 'static';
   const showIt = showIcon || streaming;
   const showName = !!model?.showName && !!model?.displayName;
-  const icon = showIt ? <ModelIcon model={model} phase={iconPhase} below={pos === 'below'} name={pos === 'left' ? null : (showName ? model.displayName : null)} /> : null;
+  const iconStreamIn = streaming && !!msg.content;
+  const iconRef = useRef(null);
+  const iconPrevTop = useRef(null);
+  const iconSuspendUntil = useRef(0);
+  useEffect(() => {
+    const el = iconRef.current;
+    const container = el && el.closest('.msg');
+    if (pos !== 'below' || !el || !container) return;
+    const settle = () => { el.style.transition = ''; el.style.transform = ''; };
+    const onToggleStart = (e) => {
+      if (!e.target.closest('.reasoning-head')) return;
+      settle();
+      iconSuspendUntil.current = performance.now() + 500;
+    };
+    container.addEventListener('click', onToggleStart);
+    const ro = new ResizeObserver(() => {
+      const top = el.getBoundingClientRect().top;
+      const suspended = performance.now() < iconSuspendUntil.current;
+      if (iconPrevTop.current !== null && !suspended) {
+        const delta = iconPrevTop.current - top;
+        if (Math.abs(delta) > 0.5) {
+          el.style.transition = 'none';
+          el.style.transform = `translateY(${delta}px)`;
+          requestAnimationFrame(() => requestAnimationFrame(settle));
+        }
+      }
+      iconPrevTop.current = top;
+    });
+    ro.observe(container);
+    return () => { container.removeEventListener('click', onToggleStart); ro.disconnect(); settle(); };
+  }, [pos]);
+  const icon = showIt ? <ModelIcon ref={iconRef} model={model} phase={iconPhase} below={pos === 'below'} name={pos === 'left' ? null : (showName ? model.displayName : null)} streamIn={iconStreamIn} /> : null;
 
   const [fb, setFb] = useState(msg.feedback || 0);
   useEffect(() => { setFb(msg.feedback || 0); }, [msg.id]);

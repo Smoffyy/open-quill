@@ -211,9 +211,9 @@
 .assistant-body a { color: var(--accent); }
 
 .msg-icon { display: inline-flex; align-items: center; gap: 9px; margin-bottom: 8px; }
-.msg-icon.below { margin-bottom: 0; margin-top: 12px; transition: transform .22s cubic-bezier(.2,.7,.3,1); }
-.msg.assistant.has-actions .msg-icon.below { transform: translateY(-34px); }
-.msg.assistant.has-actions:hover .msg-icon.below { transform: translateY(0); }
+.msg-icon.below { margin-bottom: 0; margin-top: 12px; transition: transform .32s cubic-bezier(.16,1,.3,1); }
+.msg-icon.below.stream-in { animation: iconStreamIn .38s cubic-bezier(.16,1,.3,1) both; }
+@keyframes iconStreamIn { from { opacity: 0; transform: translateY(-34px); } to { opacity: 1; transform: translateY(0); } }
 .msg-icon img { display: block; }
 .msg-icon-name { font-family: var(--font-sans); font-size: 14px; font-weight: 500; color: var(--text-muted); white-space: nowrap; }
 
