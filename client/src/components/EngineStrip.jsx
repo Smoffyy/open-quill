@@ -41,9 +41,6 @@ export default function EngineStrip({ telemetry, streaming, route }) {
     return () => clearTimeout(timer);
   }, [streaming, telemetry]);
 
-  // The slot stays mounted and collapses its own height instead of unmounting.
-  // Unmounting removed ~35px from the composer in one frame, which resized the
-  // flex scroll area and jumped the whole conversation.
   const shown = show && !!telemetry;
   const data = telemetry || last;
   if (!data) return <div className="es-slot" aria-hidden="true" />;
