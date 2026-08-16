@@ -10,8 +10,18 @@ export function parseSteps(text) {
     .filter(lines => lines.length);
 }
 
+export function stripMdDecoration(text) {
+  return String(text || '')
+    .replace(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/gm, '')
+    .replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, '')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/(^|[\s(])\*([^\s*][^*]*?)\*(?=[\s.,:;!?)]|$)/gm, '$1$2');
+}
+
 export function lastSentence(text) {
-  const raw = String(text || '').replace(/\s+/g, ' ').trim();
+  const raw = stripMdDecoration(text).replace(/\s+/g, ' ').trim();
   if (!raw) return '';
   const found = raw.match(SENTENCE_RE);
   if (!found) return '';

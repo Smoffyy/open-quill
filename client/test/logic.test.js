@@ -208,6 +208,14 @@ test('lastSentence skips fragments too short to read', () => {
   assert.equal(lastSentence('A. B. This is the real one.'), 'This is the real one.');
 });
 
+test('lastSentence strips markdown decoration so the header reads as plain prose', () => {
+  assert.equal(lastSentence('* *Constraint Check:* No lists/bullets in the explanation.'), 'Constraint Check: No lists/bullets in the explanation.');
+  assert.equal(lastSentence('**Constraint Check:** No lists/bullets in the explanation.'), 'Constraint Check: No lists/bullets in the explanation.');
+  assert.equal(lastSentence('### Step 1: check the constraint.'), 'Step 1: check the constraint.');
+  assert.equal(lastSentence('Run `pytest -k foo` to check.'), 'Run pytest -k foo to check.');
+  assert.equal(lastSentence('- First check a*b is not italic.'), 'First check a*b is not italic.');
+});
+
 test('lastSentence truncates a very long sentence rather than overflowing the header', () => {
   const long = 'x'.repeat(400) + '.';
   const out = lastSentence(long);
