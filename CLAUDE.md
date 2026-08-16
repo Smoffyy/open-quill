@@ -109,24 +109,34 @@ Use it for **any** menu whose anchor sits inside a scrolling or clipping ancesto
 
 **No preset may make a user pref inert.** `applyPrefs` writes every pref to a `data-*` attribute on `<html>` regardless of preset, and `openai.css` must not override those attribute-driven rules. A preset may change a pref's *default* (as the cursor does) but never its effect — a settings toggle that visibly does nothing in one skin is a bug, not a style choice.
 
-### Motion and the typewriter reveal are two separate prefs
+### Motion and the text reveal are two separate prefs
 
 They used to be one key, and conflating them caused a genuinely expensive bug: `animations` defaulted off under `openai`, which silently disabled every CSS transition in that skin. The reasoning open/close animation was written, shipped, and appeared completely dead for exactly that reason, with nothing wrong in the CSS. They are now split:
 
 | Pref | Drives | Default |
 | --- | --- | --- |
 | `animations` | `data-animations` on `<html>`, which every CSS transition and keyframe opt-out keys off | on in both presets |
-| `typewriter` | the reveal loop (`animate` in `App.jsx`) | on under `anthropic`, **forced off under `openai`** |
+| `revealStyle` | how a reply appears — `instant` or `typewriter` | `typewriter` under `anthropic`, **forced `instant` under `openai`** |
+| `revealMs` | the reveal loop's interval between slices | 40 |
 
-`animate` is hard-coded false for `openai`, so `App.jsx` writes each chunk straight to state as it arrives and `finalize()` runs the moment `done` lands — tokens render exactly as the server sends them, matching chatgpt.com. That is the one place a preset overrides a pref rather than its default, so `SettingsModal` hides the "Typewriter reveal" toggle and the "Reveal speed" slider entirely under `openai` rather than leaving controls that visibly do nothing.
+**`client/src/lib/reveal.js` is the only place the resolution lives.** It is pure and import-free, so `App.jsx` and `SettingsModal` cannot disagree and so it is unit-tested. Everything reads `resolveReveal(prefs, preset)`; nothing reads `prefs.revealStyle` directly, and nothing should go back to reading the raw booleans.
 
-Reading `typewriter` always goes through `(prefs.typewriter ?? prefs.animations) !== false`, and `SettingsModal` seeds `typewriter` from a pre-split `animations` value on first open. Without that, anyone who had turned animations off would have the reveal switch itself back on the next time they touched any setting.
+`revealStyle` is a named string rather than a boolean for one reason: it makes the set of reveals **open**. Two rules keep it that way, and both are pinned by tests:
+
+- **Adding a style** is one entry in `REVEAL_STYLES` plus one in `REVEAL_STYLE_OPTS` (`SettingsModal.jsx`) plus one branch wherever it is consumed. Nothing else needs a migration, because a value that is not yet known already resolves safely.
+- **Removing one is safe on its own.** `resolveReveal` falls anything unrecognised through to the legacy read, so a pref still holding a retired style resolves to the *default reveal* rather than silently to `instant`. Three word-based styles (`fade`, `glide`, `blur`) shipped briefly and were removed for being more maintenance than they were worth; a user left holding one of those values sees the typewriter, not a dead setting. There is a test naming them.
+
+`resolveReveal` must also keep tolerating the pre-split booleans: `typewriter` (and before it `animations`) was a boolean, so `false` resolves to `instant`. `SettingsModal` seeds `revealStyle` from that on first open, or anyone who had the typewriter off would have it switch itself back on the next time they touched any setting.
+
+The typewriter itself is the JS reveal loop in `App.jsx` (`animate`), which holds back arrived text and releases it a slice at a time; `instant` writes each chunk straight to state as it arrives and `finalize()` runs the moment `done` lands. `instant` under `openai` is the one place a preset overrides a pref rather than its default, so `SettingsModal` hides the Text reveal row and the Reveal speed control entirely there rather than leaving controls that visibly do nothing.
+
+**Reveal speed has no zero stop.** "No reveal at all" is the `instant` *style*, so offering it as a speed too would be one state reachable two ways. A pref already stored as `0` still works — the loop treats `<= 0` as instant — and the control surfaces it as its own chip rather than pretending it is off-grid.
 
 When something animates in one preset and not the other, **check `document.documentElement.dataset.animations` before touching a single CSS rule.**
 
 ## The complete JS branch list (`cfg.uiPreset === 'openai'` or data-preset reads)
 
-- `App.jsx` — chat topbar ModelDropdown; home-screen `.home-topbar` ModelDropdown; `hideModelPicker` for the composer, and `CtxGauge` moves into the topbar `modelPicker` block with it (the gauge belongs beside the picker, and the OpenAI composer pill reserves only 96px on the right for the mic and send button, so anything left there is squeezed out of sight); persistent per-message assistant icons (`showIcon`); floating chat composer wrapper class + 808px max width; incognito hero renders "Temporary Chat" + note; `animate` is forced false so the reveal loop never runs and tokens render as they stream, with `SettingsModal` adapting the Animations control to match (see "`animations` gates two different things"); `QuickPrompts` keeps layout space when hidden (`qp-ghost`).
+- `App.jsx` — chat topbar ModelDropdown; home-screen `.home-topbar` ModelDropdown; `hideModelPicker` for the composer, and `CtxGauge` moves into the topbar `modelPicker` block with it (the gauge belongs beside the picker, and the OpenAI composer pill reserves only 96px on the right for the mic and send button, so anything left there is squeezed out of sight); persistent per-message assistant icons (`showIcon`); floating chat composer wrapper class + 808px max width; incognito hero renders "Temporary Chat" + note; `revealStyle` resolves to `instant` so neither the reveal loop nor the word spans ever run and tokens render as they stream, with `SettingsModal` hiding the Text reveal controls to match (see "Motion and the text reveal are two separate prefs"); `QuickPrompts` keeps layout space when hidden (`qp-ghost`).
 - `App.jsx` → `Message` → `ReasoningBlock` — a `preset` prop, because the two skins show reasoning differently (see "The reasoning block").
 - `prefs.js` — theme mapping and forced circle cursor described above.
 - `SettingsModal.jsx` — preset-aware cursor defaults when seeding the prefs object.
@@ -418,7 +428,7 @@ The ledger is **not re-fetched while streaming** (the effect bails when `streami
 
 ## Client tests (`npm test` in `client/`, `npm run test:client` from the root)
 
-`client/test/logic.test.js` runs on `node --test` with no extra dependencies, mirroring the server suite, and runs in CI as **Client logic tests**. It covers the pure logic that build tooling cannot check: the keybind model (`comboFromEvent` including the macOS Option-symbol and dead-key paths, combo validation, sanitize/resolve/index, chords, presets, import/export), reasoning parsing (`lastSentence`, `parseSteps`), `hasMath`/`wrapMathEnvironments`, `previewOf`/`buildTree`/`collapseRuns`, `scanTools`, and the artifacts panel's diff and highlight logic (`diffLines`, `stableLineDiff`, `collapseRuns`, `splitHighlightedLines`, `markLine`, `findMatches`, `buildTree`).
+`client/test/logic.test.js` runs on `node --test` with no extra dependencies, mirroring the server suite, and runs in CI as **Client logic tests**. It covers the pure logic that build tooling cannot check: the keybind model (`comboFromEvent` including the macOS Option-symbol and dead-key paths, combo validation, sanitize/resolve/index, chords, presets, import/export), reasoning parsing (`lastSentence`, `parseSteps`), reveal-style resolution (`resolveReveal` including the legacy booleans, the OpenAI override and the retired-style fallback, plus `revealSpeedMs`), `hasMath`/`wrapMathEnvironments`, `previewOf`/`buildTree`/`collapseRuns`, `scanTools`, and the artifacts panel's diff and highlight logic (`diffLines`, `stableLineDiff`, `collapseRuns`, `splitHighlightedLines`, `markLine`, `findMatches`, `buildTree`).
 
 Two rules make this possible and are worth preserving. **Only modules with no imports are testable** — `node --test` cannot parse JSX, so anything importing a `.jsx` file is off limits. That is why `lastSentence`/`parseSteps` live in `lib/reasoning.js` rather than inside `ReasoningBlock.jsx`; pull pure logic out of components rather than reaching for a JSX-aware runner. And there is a test asserting `lib/reasoning.js` contains **no regex lookbehind**, because that is a parse-time error on Safari below 16.4 and would take down the whole bundle rather than one component.
 
@@ -918,6 +928,7 @@ Vite + React. `vite.config.js` proxies `/api`, `/uploads`, and the websocket to 
 - `src/lib/keybinds.js`: the keybind model (`KEYBIND_ACTIONS`, `comboFromEvent`, `resolveKeybinds`, `keybindIndex`, `comboKeys`, `keybindConflicts`, presets, import/export). See "Keyboard model" above.
 - `src/lib/mathjs.js`: everything KaTeX. `hasMath` (cheap pre-check), `wrapMathEnvironments`, `BASE_MACROS`, `KATEX_OPTIONS`, and the lazy loader (`ensureKatex`, `katexPlugin`, `subscribeKatex`, `katexVersion`). See "Maths and code rendering" below.
 - `src/lib/hljs.js`: the syntax-highlighting facade and its two-stage lazy loader (`ensureCommon`, `ensureFull`, `ensureLanguage`, `highlight`, `rawHighlight`, `subscribeHljs`, `hljsVersion`).
+- `src/lib/reveal.js`: how a streaming reply appears. `REVEAL_STYLES`, `resolveReveal`, `legacyRevealStyle`, `revealSpeedMs`. Pure and import-free, so it is unit-tested and no consumer can disagree about the rules. See "Motion and the text reveal are two separate prefs".
 - `src/lib/threadmeta.js`: `railItems` (rail model derived from the message list), `previewOf`, `hasToolCall`, plus `buildTree`/`collapseRuns` shared by the branch map. Note `lib/artifacts.js` exports its own `buildTree` and `collapseRuns` for files and diff rows — same names, unrelated shapes; do not merge them.
 - `src/lib/drafts.js`: `useDrafts(skipRef)`, the unsent-composer-text persistence described under "Composer drafts". The ref is what suppresses writes in incognito, and it is passed rather than read so the hook has no knowledge of chat state.
 - `src/styles/` — `app.css` imports everything; `openai.css` is the OpenAI preset (always last). Others: `base`, `layout`, `chrome`, `chat`, `composer` styles live across `polish`, `extras`, `modals`, `admin`, `artifacts`, `fonts`, `threadnav`.

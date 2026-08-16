@@ -10,6 +10,7 @@ import { STATUS_DELAY_DEFAULT, STATUS_DELAY_MAX, statusDelaySecs } from '../lib/
 import { menuStyleOf, useAnchoredMenu } from '../lib/anchor.js';
 import { createPortal } from 'react-dom';
 import { SetRow, SwitchRow, SegSlide, SelectRow, useSelectMenu } from './settingsui.jsx';
+import { legacyRevealStyle, resolveReveal, revealSpeedMs } from '../lib/reveal.js';
 
 const NAV_GROUPS = [
   { label: tk('Account'), items: [
@@ -36,7 +37,7 @@ const SETTINGS_INDEX = {
   security: [tk('Password'), tk('Two-factor authentication'), tk('Active sessions')],
   appearance: [tk('Theme'), tk('Motion'), tk('Chat font'), tk('Message density'), tk('Accent colour'), tk('OLED screen protection'), tk('Staggered open')],
   chat: [
-    tk('Typewriter reveal'), tk('Reveal speed'), tk('Auto-scroll'), tk('Streaming cursor'), tk('Cursor style'),
+    tk('Text reveal'), tk('Reveal speed'), tk('Auto-scroll'), tk('Streaming cursor'), tk('Cursor style'),
     tk('Blink speed'), tk('Pulse speed'), tk('Conversation map'), tk('Find in conversation'), tk('Branch map'),
     tk('Message shortcuts'), tk('Web search on by default'), tk('Engine telemetry'), tk('Context gauge'),
     tk('Speed on each reply'), tk('Progress line delay'), tk('Context ledger on open'), tk('Mid-stream steering'),
@@ -139,11 +140,20 @@ function SettingsNav({ tab, setTab, cfg }) {
   );
 }
 
+// No zero stop: "no reveal at all" is the Instant *style*, so offering it here
+// too would be the same state reachable two ways. A pref already stored as 0
+// still works and surfaces as its own chip below.
 const REVEAL_STOPS = [
-  { v: 0, label: tk('Instant') },
   { v: 15, label: tk('Fast') },
   { v: 40, label: tk('Normal') },
   { v: 70, label: tk('Relaxed') },
+];
+
+// Adding a style is one entry here plus one in REVEAL_STYLES; removing one is
+// safe on its own, since resolveReveal falls a retired value back to the default.
+const REVEAL_STYLE_OPTS = [
+  { v: 'instant', label: tk('Instant'), note: tk('Text appears the moment it arrives.') },
+  { v: 'typewriter', label: tk('Typewriter'), note: tk('Letters type out one after another.') },
 ];
 
 function Toggle({ prefs, setPref, k, label, desc }) {
@@ -209,7 +219,7 @@ function parseVersion(v) {
 
 function presetDefaults(isOpenai, fallbackTheme) {
   return {
-    typewriter: true, autoscroll: true, theme: fallbackTheme || 'system', accent: '', density: 'comfortable',
+    revealStyle: 'typewriter', autoscroll: true, theme: fallbackTheme || 'system', accent: '', density: 'comfortable',
     streamCursor: isOpenai, cursorStyle: isOpenai ? 'circle' : 'block',
     cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40, chatStagger: true, themeFade: true,
     oledShift: false, minimalAnims: false,
@@ -229,9 +239,11 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
     const fallbackTheme = (applied === 'anthropic' || applied === 'openai' || applied === 'oled') ? 'dark' : (applied || 'system');
     const isOpenai = document.documentElement.getAttribute('data-preset') === 'openai';
     const merged = { ...presetDefaults(isOpenai, fallbackTheme), ...user.prefs };
-    if (user.prefs && user.prefs.typewriter == null && user.prefs.animations != null) {
-      merged.typewriter = user.prefs.animations !== false;
-    }
+    // Seed the named style from the pre-split booleans (`typewriter`, and before
+    // it `animations`), or someone who had the typewriter off gets it switched
+    // back on the next time they open Settings. Nothing writes those keys any
+    // more — this read is the only thing that still knows they existed.
+    if (user.prefs && user.prefs.revealStyle == null) merged.revealStyle = legacyRevealStyle(user.prefs);
     if (!user.prefs || user.prefs.theme == null) merged.theme = fallbackTheme;
     if (merged.theme === 'oled') merged.theme = 'dark';
     return merged;
@@ -574,9 +586,10 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
           )}
           {tab === 'keybinds' && <KeybindsPanel prefs={prefs} setPref={setPref} />}
           {tab === 'chat' && (() => {
-            const rv = prefs.revealMs == null || isNaN(parseInt(prefs.revealMs)) ? 40 : Math.max(0, Math.min(100, parseInt(prefs.revealMs)));
+            const rv = revealSpeedMs(prefs.revealMs);
             const noReveal = cfg?.uiPreset === 'openai';
-            const typewriterOn = (prefs.typewriter ?? prefs.animations) !== false;
+            const style = resolveReveal(prefs, 'anthropic');
+            const styleOpt = REVEAL_STYLE_OPTS.find(o => o.v === style) || REVEAL_STYLE_OPTS[0];
             return (
               <>
                 <h2>{t("Chat")}</h2>
@@ -584,10 +597,12 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                 <div className="me-section-h">{t("Streaming")}</div>
                 <>
                   {!noReveal && (
-                    <Toggle prefs={prefs} setPref={setPref} k="typewriter" label={t("Typewriter reveal")}
-                      desc={t("Reveal each response gradually as it generates, instead of all at once.")} />
+                    <SetRow label={t("Text reveal")} desc={t(styleOpt.note)}>
+                      <SegSlide label={t("Text reveal")} value={style} onPick={(v) => setPref('revealStyle', v)}
+                        options={REVEAL_STYLE_OPTS.map(o => ({ v: o.v, label: t(o.label) }))} />
+                    </SetRow>
                   )}
-                  {typewriterOn && !noReveal && (
+                  {style === 'typewriter' && !noReveal && (
                     <SetRow label={t("Reveal speed")} desc={t("How quickly text appears once it has arrived, not how fast the model replies.")}>
                       <SegSlide label={t("Reveal speed")} value={REVEAL_STOPS.some(o => o.v === rv) ? rv : -1} onPick={(v) => setPref('revealMs', v)}
                         options={REVEAL_STOPS.map(o => ({ v: o.v, label: t(o.label) })).concat(REVEAL_STOPS.some(o => o.v === rv) ? [] : [{ v: -1, label: rv + ' ms' }])} />

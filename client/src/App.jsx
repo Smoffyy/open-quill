@@ -45,6 +45,7 @@ import ThreadFind from './components/ThreadFind.jsx';
 import { railItems } from './lib/threadmeta.js';
 import { useDrafts } from './lib/drafts.js';
 import { statusDelaySecs } from './lib/status.js';
+import { resolveReveal, revealSpeedMs } from './lib/reveal.js';
 import { CHORD_TIMEOUT, chordMenu, comboFromEvent, comboKeys, comboLabel, keybindIndex, resolveKeybinds } from './lib/keybinds.js';
 const BranchTree = React.lazy(() => import('./components/BranchTree.jsx'));
 import { toast } from './toast.js';
@@ -299,8 +300,8 @@ export default function App() {
   const jumpRef = useRef(false);
   const touchDrag = useRef(false);
   const [showJump, setShowJump] = useState(false);
-  const animate = cfg.uiPreset === 'openai' ? false : (user?.prefs?.typewriter ?? user?.prefs?.animations) !== false;
-  const revealMs = (() => { const v = user?.prefs?.revealMs; return v == null || isNaN(parseInt(v)) ? 40 : Math.max(0, Math.min(100, parseInt(v))); })();
+  const animate = resolveReveal(user?.prefs, cfg.uiPreset === 'openai' ? 'openai' : 'anthropic') === 'typewriter';
+  const revealMs = revealSpeedMs(user?.prefs?.revealMs);
   const [threadStagger, setThreadStagger] = useState(false);
   const [threadLoading, setThreadLoading] = useState(false);
   const skelTimer = useRef(null);
