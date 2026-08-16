@@ -2,7 +2,7 @@
 
 # Open Quill
 
-<img src="assets/v27/icon.svg" alt="Starburst Logo" width="200"/>
+<img src="client/public/starburst.svg" alt="Starburst Logo" width="200"/>
 
 *A fully open-source chat interface featuring Anthropic inspired theming.*
 
