@@ -465,20 +465,31 @@ export function Toggle({ m, set, k, label, note, inverted }) {
   return (
     <div className="field row">
       <div><label>{label}</label>{note && <div className="muted-note">{note}</div>}</div>
-      <div className={'switch' + (on ? ' on' : '')} onClick={() => set(k, on ? 0 : 1)} />
+      <Switch on={on} label={label} onToggle={() => set(k, on ? 0 : 1)} />
     </div>
   );
 }
 
-export function Switch({ on, onToggle }) {
-  return <div className={'switch' + (on ? ' on' : '')} onClick={onToggle} />;
+export function Switch({ on, onToggle, label, title }) {
+  return (
+    <div
+      className={'switch' + (on ? ' on' : '')}
+      role="switch"
+      aria-checked={!!on}
+      aria-label={label}
+      title={title}
+      tabIndex={0}
+      onClick={onToggle}
+      onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); onToggle(e); } }}
+    />
+  );
 }
 
 export function SettingRow({ label, note, on, onToggle, last }) {
   return (
     <div className="field row" style={last ? { borderBottom: 0, marginBottom: 0 } : undefined}>
       <div><label>{label}</label>{note && <div className="muted-note">{note}</div>}</div>
-      <Switch on={on} onToggle={onToggle} />
+      <Switch on={on} label={label} onToggle={onToggle} />
     </div>
   );
 }

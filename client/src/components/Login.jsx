@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { t } from '../i18n.jsx';
 import { isTouch } from '../lib/touch.js';

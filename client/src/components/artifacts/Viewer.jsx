@@ -304,7 +304,7 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
           {!isLive && data?.text != null && (
             <div className="art-copy-wrap">
               <button className="art-btn copy" onClick={copy}>{copied ? <Check style={{ width: 14 }} /> : null} {copied ? t('Copied') : t('Copy')}</button>
-              <button className="art-btn caret" onClick={() => setMenu(m => !m)}><ChevDown style={{ width: 13 }} /></button>
+              <button className="art-btn caret" aria-label={t('More actions')} aria-expanded={menu} aria-haspopup="menu" onClick={() => setMenu(m => !m)}><ChevDown style={{ width: 13 }} /></button>
               {menu && (
                 <div className="art-menu" onMouseLeave={() => setMenu(false)}>
                   <a className="art-menu-item" href={`/api/chats/${chatId}/download?path=${encodeURIComponent(path)}${stale ? '&v=' + viewing : ''}`}>Download as {ext.toUpperCase()}</a>

@@ -1,5 +1,5 @@
 import { db, getSetting, setSetting } from '../db.js';
-import { getProviders, resolveProvider, providerSpec } from '../providers.js';
+import { resolveProvider, providerSpec } from '../providers.js';
 import { publicKwargDefs } from './kwargs.js';
 import { llamaContext } from './llamacpp.js';
 
@@ -196,8 +196,4 @@ export async function modelCtx(model) {
   ctxDetectCache.set(cacheKey, { ctx, at: Date.now() });
   if (ctxDetectCache.size > CTX_CACHE_MAX) ctxDetectCache.delete(ctxDetectCache.keys().next().value);
   return ctx;
-}
-
-export function defaultProviderId() {
-  return getProviders()[0]?.id || null;
 }

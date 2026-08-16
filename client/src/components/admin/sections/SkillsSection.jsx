@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../../../api.js';
 import { Plus, Trash, Pencil, Bulb } from '../../icons.jsx';
+import { Switch } from '../widgets.jsx';
 import { t } from '../../../i18n.jsx';
 
 export default function SkillsSection() {
@@ -42,7 +43,7 @@ export default function SkillsSection() {
             <div className="muted-note">{t("Markdown works well. The full content is returned to the model when it loads the skill.")}</div>
           </div>
           <div className="med-toggle-card">
-            <label className="inline-toggle"><span>{t("Enabled")}</span><div className={'switch' + (edit.enabled ? ' on' : '')} onClick={() => setEdit(x => ({ ...x, enabled: !x.enabled }))} /></label>
+            <label className="inline-toggle"><span>{t("Enabled")}</span><Switch on={edit.enabled} label={t("Enabled")} onToggle={() => setEdit(x => ({ ...x, enabled: !x.enabled }))} /></label>
           </div>
           <div className="editor-actions">
             <button className="btn" onClick={() => setEdit(null)}>{t("Cancel")}</button>
@@ -59,9 +60,9 @@ export default function SkillsSection() {
               <div className="fn-card-desc">{sk.description || t('No description.')}</div>
             </div>
             <div className="fn-card-actions">
-              <div className={'switch' + (sk.enabled ? ' on' : '')} title={t("Enabled")} onClick={() => toggle(sk)} />
-              <button className="icon-btn" onClick={() => setEdit({ ...sk })}><Pencil style={{ width: 15 }} /></button>
-              <button className="icon-btn" onClick={() => remove(sk.id)}><Trash style={{ width: 15 }} /></button>
+              <Switch on={sk.enabled} label={t("Enabled")} title={t("Enabled")} onToggle={() => toggle(sk)} />
+              <button className="icon-btn" title={t("Edit")} aria-label={t("Edit")} onClick={() => setEdit({ ...sk })}><Pencil style={{ width: 15 }} /></button>
+              <button className="icon-btn" title={t("Delete")} aria-label={t("Delete")} onClick={() => remove(sk.id)}><Trash style={{ width: 15 }} /></button>
             </div>
           </div>
         ))}

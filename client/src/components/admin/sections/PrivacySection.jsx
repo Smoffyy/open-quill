@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../../../api.js';
 import { useAdmin } from '../store.jsx';
 import { Card } from '../widgets.jsx';

@@ -1,4 +1,3 @@
-import React from 'react';
 const I = (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...p} />;
 export const Plus = (p) => <I {...p}><path d="M12 5v14M5 12h14" /></I>;
 export const Chat = (p) => <I {...p}>
@@ -56,7 +55,6 @@ export const Pencil = (p) => (<svg viewBox="0 0 24 24" fill="none" stroke="curre
 export const Compact = (p) => <I {...p}><path d="M4 7h16M7 12h10M10 17h4"/></I>;
 export const Ghost = (p) => <I {...p}><path d="M5 20v-9a7 7 0 0 1 14 0v9l-2.5-1.8L14 20l-2-1.6L10 20l-2.5-1.8L5 20z"/><circle cx="9.5" cy="10" r="1" fill="currentColor" stroke="none"/><circle cx="14.5" cy="10" r="1" fill="currentColor" stroke="none"/></I>;
 export const ImageIcon = (p) => <I {...p}><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5-5L5 20"/></I>;
-export const Vison = (p) => <I {...p}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></I>;
 export const Brain = (p) => <I {...p}><path d="M9.5 4a2.5 2.5 0 0 0-2.5 2.5 2.5 2.5 0 0 0-1.5 4.5A2.5 2.5 0 0 0 6 15.5 2.5 2.5 0 0 0 9.5 18a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M14.5 4A2.5 2.5 0 0 1 17 6.5a2.5 2.5 0 0 1 1.5 4.5 2.5 2.5 0 0 1-.5 4.5A2.5 2.5 0 0 1 14.5 18a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></I>;
 export const Info = (p) => <I {...p}><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="7.7" r=".6" fill="currentColor" stroke="none"/></I>;
 export const TextIcon = (p) => <I {...p}><path d="M5 6h14M5 6V5h14v1M12 6v13M9.5 19h5"/></I>;
@@ -76,7 +74,6 @@ export const Box = (p) => <I {...p}>
 export const X = (p) => <I {...p}><path d="M18 6 6 18M6 6l12 12"/></I>;
 export const Wand = (p) => <I {...p}><path d="M15 4V2M15 10V8M11.5 6h2M17.5 6h2M6 20 16 10l-2-2L4 18l2 2zM20 15l1 1M19 20l1-1"/></I>;
 export const Plug = (p) => <I {...p}><path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-6 6 6 6 0 0 1-6-6zM12 17v4"/></I>;
-export const Feather = (p) => <I {...p}><path d="M20 4c-5 0-11 3-13 8l-3 8 8-3c5-2 8-8 8-13zM7 17l7-7"/></I>;
 export const Gauge = (p) => <I {...p}><path d="M12 14l4-4M4.5 19a9 9 0 1 1 15 0"/><circle cx="12" cy="14" r="1.4"/></I>;
 export const Steer = (p) => <I {...p}><path d="M12 3v6M12 15v6M3 12h6M15 12h6"/><circle cx="12" cy="12" r="3"/></I>;
 export const Eye = (p) => <I {...p}><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z" /><circle cx="12" cy="12" r="2.6" /></I>;

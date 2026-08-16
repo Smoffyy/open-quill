@@ -7,7 +7,7 @@ const styles = path.join(root, 'styles');
 // Classes emitted by libraries or by the pre-paint boot script never appear in our
 // source, so they would otherwise be reported forever.
 const EXTERNAL = new Set([
-  'katex-display', 'katex', 'hljs', 'sr-only'
+  'katex-display', 'katex', 'katex-error', 'hljs', 'sr-only'
 ]);
 
 function walk(dir, out = []) {

@@ -1,4 +1,3 @@
-import React from 'react';
 import { useAdmin } from '../store.jsx';
 import { Card, AutosaveNote, SettingRow } from '../widgets.jsx';
 import { t } from '../../../i18n.jsx';

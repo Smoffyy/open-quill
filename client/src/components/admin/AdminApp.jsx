@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AdminProvider, useAdmin } from './store.jsx';
 import { NAV_GROUPS, SECTIONS, sectionById } from './nav.jsx';
 import { ConfirmDialog } from './widgets.jsx';
@@ -58,7 +58,7 @@ function DiscoverModal() {
             <h3>{t("Discover models")}</h3>
             <div className="muted-note">{t("Models your backend currently exposes. Add the ones you want, added models can be hidden or deleted like any other.")}</div>
           </div>
-          <button className="modal-close" style={{ position: 'static' }} onClick={() => setDiscover(null)}>✕</button>
+          <button className="modal-close" style={{ position: 'static' }} onClick={() => setDiscover(null)} aria-label={t('Close')}>✕</button>
         </div>
         <div className="discover-list">
           {discover.loading && <div className="muted-note" style={{ padding: 14 }}>{t('Reaching the backend…')}</div>}

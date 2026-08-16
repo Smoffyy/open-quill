@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { buildTree, collapseRuns } from '../lib/threadmeta.js';
 import { useFocusTrap } from '../lib/focus.js';

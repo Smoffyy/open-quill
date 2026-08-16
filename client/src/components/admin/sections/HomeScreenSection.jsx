@@ -1,4 +1,3 @@
-import React from 'react';
 import { useAdmin } from '../store.jsx';
 import { Card, AutosaveNote, QpIconPicker } from '../widgets.jsx';
 import { Plus, Trash } from '../../icons.jsx';

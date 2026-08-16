@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../api.js';
 import { SECTIONS, LEGACY_SECTION_IDS } from './nav.jsx';
 import { t } from '../../i18n.jsx';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { t } from '../i18n.jsx';
 
 const EMPTY = { id: '', name: '', modelId: null, instructions: '' };

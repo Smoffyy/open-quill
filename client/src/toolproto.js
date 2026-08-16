@@ -2,8 +2,6 @@ const KV_MAP = { command: 'cmd', to: 'new_path', newpath: 'new_path', destinatio
 const SECTION_FIELD = { CONTENT: 'content', OLD: 'old_str', NEW: 'new_str', CMD: 'cmd', PATHS: 'paths' };
 const INT_KEYS = new Set(['start', 'end', 'count']);
 
-export const READ_TOOLS = new Set(['view', 'read_file', 'cat', 'list_files', 'ls', 'tree', 'search', 'grep', 'find', 'glob', 'bash', 'run', 'shell', 'web_search', 'mb_view', 'mb_search']);
-export const TOOL_NAMES = new Set(['web_search', 'bash', 'run', 'shell', 'create_file', 'write_file', 'str_replace', 'edit_file', 'insert_lines', 'view', 'read_file', 'cat', 'list_files', 'ls', 'tree', 'find', 'glob', 'delete_file', 'rm', 'clear_sandbox', 'delete_all', 'reset', 'rename_file', 'move_file', 'mv', 'copy_file', 'cp', 'make_dir', 'mkdir', 'search', 'grep', 'extract_zip', 'unzip', 'bundle_zip', 'zip', 'mb_view', 'mb_search']);
 
 function deco(s) { return /[|<>/\[\]]/.test(s); }
 function isClose(t) { const s = t.trim(); return /^[<\[(|\s]*\/\s*\|?\s*tool\s*[|>\])/\s]*$/i.test(s); }
@@ -95,5 +93,3 @@ export function scanTools(text, opts) {
   return { calls, live };
 }
 
-export function parseToolCalls(text) { return scanTools(text).calls.map(c => c.call).filter(c => c && c.tool); }
-export function parseLiveCall(text) { return scanTools(text).live; }

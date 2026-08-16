@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useLayoutEffect, useCallback } from 'react';
+import { useRef, useEffect, useState, useLayoutEffect, useCallback } from 'react';
 import ModelDropdown from './ModelDropdown.jsx';
 import { api } from '../api.js';
 import { toast } from '../toast.js';

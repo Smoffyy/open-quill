@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { SANDBOX_ROOT, safeId, dirFor, resolveSafe, relOf, META_DIR } from './paths.js';
+import { dirFor, resolveSafe, relOf } from './paths.js';
 import { readMeta, versionOf, bumpVersion, dropVersion, moveVersion, saveSnapshot, forgetMeta, histRoot, metaPath } from './meta.js';
 import { extOf, isText, isIgnoredDir, isIgnoredRel, globToRe, gitignoreCacheDrop } from './ignore.js';
 import { zipBuffer, unzipBuffer } from './zip.js';

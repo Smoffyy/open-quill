@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
 import Composer from './Composer.jsx';
@@ -254,7 +254,7 @@ export default function ProjectsPanel({ openId, composerProps, onClose, onOpenCh
                 <button className="pj-sort-toggle" onClick={() => setSort(s => s === 'name' ? 'updated' : 'name')}><ChevDown style={{ width: 15 }} /></button>
               </div>
               <button className="pj-new" onClick={() => setCreating(true)}>{t("New project")}</button>
-              <button className="co-close" onClick={onClose}>✕</button>
+              <button className="co-close" onClick={onClose} aria-label={t('Close')}>✕</button>
             </div>
           </div>
           <div className="co-body">

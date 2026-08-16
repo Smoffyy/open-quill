@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Chevron, Bulb, Copy, Check, CheckCircle, Clock } from './icons.jsx';
 import { copyText } from '../clipboard.js';
 import { t } from '../i18n.jsx';

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Chevron, Check } from './icons.jsx';
 import { useAnchoredMenu, menuStyleOf } from '../lib/anchor.js';
@@ -18,7 +18,15 @@ export function SetRow({ label, desc, children }) {
 export function SwitchRow({ label, desc, on, onToggle }) {
   return (
     <SetRow label={label} desc={desc}>
-      <div className={'switch' + (on ? ' on' : '')} role="switch" aria-checked={!!on} aria-label={label} onClick={onToggle} />
+      <div
+        className={'switch' + (on ? ' on' : '')}
+        role="switch"
+        aria-checked={!!on}
+        aria-label={label}
+        tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); onToggle(e); } }}
+      />
     </SetRow>
   );
 }

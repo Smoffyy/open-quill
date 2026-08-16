@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAdmin } from '../store.jsx';
 import { Trash } from '../../icons.jsx';
+import { Switch } from '../widgets.jsx';
 import { t } from '../../../i18n.jsx';
 
 export default function MembersSection() {
@@ -24,7 +25,7 @@ export default function MembersSection() {
           <label>{t("Allow new accounts")}</label>
           <div className="muted-note">{t("When off, the sign-in screen stops offering account creation and the server refuses new registrations. Existing members are unaffected.")}</div>
         </div>
-        <div className={'switch' + (A.cfg.allowSignups !== false ? ' on' : '')} onClick={() => A.setCfg(c => ({ ...c, allowSignups: c.allowSignups === false }))} />
+        <Switch on={A.cfg.allowSignups !== false} label={t("Allow new accounts")} onToggle={() => A.setCfg(c => ({ ...c, allowSignups: c.allowSignups === false }))} />
       </div>
       <div className="mem-toolbar">
         <input className="mem-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search by name or email…")} />

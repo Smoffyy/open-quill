@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
 import { Check, Trash, Sparkles } from './icons.jsx';

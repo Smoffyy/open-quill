@@ -46,7 +46,8 @@ import { railItems } from './lib/threadmeta.js';
 import { useDrafts } from './lib/drafts.js';
 import { statusDelaySecs } from './lib/status.js';
 import { resolveReveal, revealSpeedMs } from './lib/reveal.js';
-import { CHORD_TIMEOUT, chordMenu, comboFromEvent, comboKeys, comboLabel, keybindIndex, resolveKeybinds } from './lib/keybinds.js';
+import { comboKeys, comboLabel, resolveKeybinds } from './lib/keybinds.js';
+import { useKeybinds } from './lib/keyboard.js';
 const BranchTree = React.lazy(() => import('./components/BranchTree.jsx'));
 import { toast } from './toast.js';
 import { copyText } from './clipboard.js';
@@ -441,47 +442,7 @@ export default function App() {
     window.addEventListener('oq-open-file', h);
     return () => window.removeEventListener('oq-open-file', h);
   }, []);
-  useEffect(() => {
-    if (!user) return;
-    const nav = user.prefs || {};
-    const binds = resolveKeybinds(nav);
-    const index = keybindIndex(binds);
-    let pending = null;
-    let pendingTimer = null;
-    const clearPending = () => { pending = null; clearTimeout(pendingTimer); setChordHint(null); };
-    const onKey = (e) => {
-      const combo = comboFromEvent(e);
-      if (!combo) return;
-      const typingNow = (() => { const el = document.activeElement; return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable); })();
-      if (pending) {
-        const act2 = index.chords.get(pending)?.get(combo);
-        clearPending();
-        if (act2 && !(act2.pref && nav[act2.pref] === false)) {
-          e.preventDefault();
-          if (kbHandlers.current[act2.id]?.() === false) { /* inert */ }
-          return;
-        }
-        if (combo === 'Escape') { e.preventDefault(); return; }
-      }
-      if (!typingNow && index.chords.has(combo) && !document.querySelector('.overlay')) {
-        e.preventDefault();
-        pending = combo;
-        setChordHint({ head: combo, items: chordMenu(binds, combo) });
-        clearTimeout(pendingTimer);
-        pendingTimer = setTimeout(clearPending, CHORD_TIMEOUT);
-        return;
-      }
-      const act = index.get(combo);
-      if (!act) return;
-      if (act.pref && nav[act.pref] === false) return;
-      const el = document.activeElement;
-      if (!act.typing && el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
-      if (!act.overlay && document.querySelector('.overlay')) return;
-      if (kbHandlers.current[act.id]?.() !== false) e.preventDefault();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [user]);
+  useKeybinds(user, kbHandlers, setChordHint);
   useEffect(() => {
     const m = models.find(x => x.id === currentId);
     if (m && m.sandboxAllowed === false) setSandbox(false);

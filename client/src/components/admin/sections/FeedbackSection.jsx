@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../../api.js';
 import { ThumbUp, ThumbDown } from '../../icons.jsx';
 import { t } from '../../../i18n.jsx';

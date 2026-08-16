@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { t } from '../i18n.jsx';
 import { Chevron } from './icons.jsx';
@@ -183,7 +183,7 @@ export default function ModelDocs({ models, currentId, onTry, onClose }) {
   return createPortal(
     <div className="mdoc-overlay" onMouseDown={(e) => e.target.classList.contains('mdoc-overlay') && onClose()}>
       <div className="mdoc">
-        <button className="modal-close" onClick={onClose}>✕</button>
+        <button className="modal-close" onClick={onClose} aria-label={t('Close')}>✕</button>
         {selModel ? (
           <Detail m={selModel} models={pub} onBack={() => setSel(null)} onTry={onTry} />
         ) : (

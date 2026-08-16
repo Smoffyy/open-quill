@@ -1,4 +1,3 @@
-import React from 'react';
 
 const WINDOW = 36; // only the trailing chars animate
 

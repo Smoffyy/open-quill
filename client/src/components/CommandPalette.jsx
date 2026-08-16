@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useFocusTrap } from '../lib/focus.js';
 import { t } from '../i18n.jsx';
 

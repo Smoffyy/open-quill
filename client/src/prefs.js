@@ -3,10 +3,6 @@ import { paletteFor } from './lib/palettes.js';
 export function prefersDark() {
   return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
 }
-export function resolveTheme(t) {
-  if (!t || t === 'system') return prefersDark() ? 'dark' : 'light';
-  return t;
-}
 export function currentPreset() {
   const attr = document.documentElement.getAttribute('data-preset');
   if (attr === 'openai' || attr === 'anthropic') return attr;
