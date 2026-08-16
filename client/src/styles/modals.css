@@ -9,9 +9,14 @@
 .pm-overlay,
 .preset-scrim,
 .mdoc-overlay {
-  background: rgba(0, 0, 0, .45);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, .5);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.cmdk-overlay, .search-overlay {
+  background: rgba(0, 0, 0, .05);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 .overlay { position: fixed; inset: 0; display: grid; place-items: center; z-index: 100; animation: fade var(--fx-a, .16s) ease; }
 .overlay { padding-left: 0; }
@@ -21,14 +26,67 @@
    by AdminPanel alone, so an ordinary user opening Settings got an unstyled
    nav: the group headings fell back to 16px with no padding and sat 37px left
    of the tab labels. Anything the settings modal needs belongs here. */
-.modal-side { width: 192px; background: var(--modal-side); padding: 12px 13px; border-right: 1px solid var(--border-soft); flex-shrink: 0; overflow: hidden auto; }
-.modal-side .ms-label,
-.modal-side .ms-group { font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--sidebar-label, var(--text-faint)); padding: 12px 8px 4px; font-family: var(--font-sans); }
-.modal-side .ms-label { padding-top: 4px; }
-.modal-tab { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; height: 32px; padding: 0 8px; margin: 1px 0; border-radius: 8px; font-size: 14px; font-weight: 400; color: var(--sidebar-text, var(--text-muted)); text-align: left; transition: background var(--fx-t, .12s), color var(--fx-t, .12s); }
+.modal-side {
+  width: 192px; background: var(--modal-side); padding: 12px 0 0;
+  border-right: 0.8px solid var(--modal-line, var(--border-soft));
+  flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; overflow: hidden;
+  font-family: var(--font-sans); font-size: 14px;
+}
+.modal-side .ms-searchbox { position: relative; flex-shrink: 0; margin: 0 12px; }
+.modal-side .ms-search {
+  display: flex; align-items: center; gap: 12px;
+  height: 32px; padding: 0 8px; border-radius: 8px;
+  background: var(--hover-soft);
+  box-shadow: inset 0 0 0 1px var(--field-ring, rgba(255, 255, 255, .1));
+  transition: box-shadow var(--fx-t, .12s) ease;
+}
+.modal-side .ms-search:hover:not(:focus-within) { box-shadow: inset 0 0 0 1px var(--field-ring-hover, rgba(255, 255, 255, .2)); }
+.modal-side .ms-search:has(:focus-visible) {
+  box-shadow: inset 0 0 0 1px var(--modal-side), 0 0 0 1px var(--pop-blue, #2a78d6), 0 0 6px 1px rgba(24, 79, 149, .6);
+}
+.modal-side .ms-search svg { width: 20px; height: 20px; flex: none; color: var(--text-faint); }
+.modal-side .ms-search input {
+  flex: 1; min-width: 0; height: 20px; padding: 0; border: 0; border-radius: 0;
+  background: transparent; font-family: var(--font-sans); font-size: 14px; color: var(--text);
+}
+.modal-side .ms-search input:focus, .modal-side .ms-search input:focus-visible { outline: none; border: 0; box-shadow: none; }
+.modal-side .ms-search input::placeholder { color: var(--text-faint); }
+
+.ms-results {
+  width: 280px; max-width: calc(100vw - 32px);
+  padding: 4px; border-radius: 12px; background: var(--pop-bg, var(--menu-bg));
+  box-shadow: var(--pop-shadow, 0 8px 24px rgba(0, 0, 0, .32));
+  font-family: var(--font-sans); font-size: 14px;
+  animation: setSelIn var(--fx-a, .12s) var(--ease-out) both;
+}
+.ms-res-page,
+.ms-res-line {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  height: 32px; padding: 0 4px; border-radius: 8px; text-align: left;
+  font-family: var(--font-sans); font-size: 14px; font-weight: 400; color: var(--pop-text, var(--text));
+  transition: background var(--fx-t, .12s) ease;
+}
+.ms-res-line { padding-left: 36px; }
+.ms-res-page svg { width: 20px; height: 20px; flex: none; }
+.ms-res-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-res-page.on,
+.ms-res-page:hover,
+.ms-res-line:hover { background: var(--pop-hover, var(--hover-mid)); }
+.ms-res-sub {
+  display: block; width: 100%; padding: 0 4px 4px 36px; text-align: left;
+  font-family: var(--font-sans); font-size: 13px; line-height: 17px; color: var(--text-faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ms-hit { color: var(--search-hit, #6da7ec); }
+[data-animations="off"] .ms-results { animation: none; }
+.modal-side .ms-nav { flex: 1; min-height: 0; overflow: hidden auto; display: flex; flex-direction: column; gap: 12px; padding: 0 12px 12px; }
+.modal-side .ms-sec { display: flex; flex-direction: column; gap: 1px; }
+.modal-side .ms-group { font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--sidebar-label, var(--text-faint)); padding: 12px 8px 0; margin-bottom: 11px; font-family: var(--font-sans); line-height: 17px; }
+.ms-empty { padding: 12px 8px; font-family: var(--font-sans); font-size: 13px; color: var(--text-faint); }
+.modal-tab { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; height: 32px; padding: 0 8px; border-radius: 8px; font-size: 14px; font-weight: 400; color: var(--sidebar-text, var(--text-muted)); text-align: left; transition: background var(--fx-t, .12s), color var(--fx-t, .12s); }
 .modal-tab:hover { background: var(--hover-soft); color: var(--text); }
 .modal-tab.active { background: var(--modal-active, var(--surface-hover)); color: var(--text); font-weight: 500; }
-.modal-tab svg { width: 16px; height: 16px; flex: none; }
+.modal-tab svg { width: 20px; height: 20px; flex: none; }
 .modal-tab.sub { padding-left: 36px; font-size: 13px; animation: subIn var(--fx-a, .2s) ease both; }
 .modal-tab.has-sub .tab-chev { margin-left: auto; opacity: .55; transition: transform var(--fx-t, .2s) cubic-bezier(.2,.7,.3,1); }
 .modal-tab.has-sub.open .tab-chev { transform: rotate(90deg); }
@@ -65,19 +123,18 @@
 .version-admin code { background: var(--surface-hover); padding: 1px 5px; border-radius: 5px; font-size: 12px; }
 .modal-main { flex: 1; overflow: hidden auto; padding: 26px 24px 34px; }
 
-/* Settings rows read as a list: label and its note on the left, the control
-   hard right, hairline between each. */
-.modal-main .field.row { padding: 13px 0; border-bottom: 1px solid var(--modal-line, var(--border-soft)); margin-bottom: 0; gap: 24px; align-items: center; }
-.modal-main .field.row:last-of-type { border-bottom: 0; }
+.modal-main .field { margin-bottom: 0; padding: 15px 0; }
+.modal-main .field.row { gap: 24px; align-items: center; }
+.modal-main :is(.set-row, .field) + :is(.set-row, .field) {
+  border-top: 0.8px solid var(--modal-line, var(--border-soft));
+}
 .modal-main .field.row > div:first-child { min-width: 0; flex: 1; }
 .modal-main .field.row > label,
 .modal-main .field.row label { font-size: 14px; font-weight: 500; color: var(--text); }
-.modal-main .field.row .muted-note { font-size: 12.5px; line-height: 1.45; color: var(--text-muted); margin-top: 2px; }
+.modal-main .field.row .muted-note { font-size: 13px; line-height: 1.5; color: var(--text-faint); margin-top: 3px; }
 .modal-main .field.row > *:last-child { flex: none; }
-.modal-main .me-section-h { font-size: 15px; font-weight: 580; color: var(--text); margin: 30px 0 10px; padding-top: 0; border-top: 0; }
+.modal-main .me-section-h { font-size: 15px; font-weight: 580; color: var(--text); margin: 22px 0 10px; padding-top: 0; border-top: 0; }
 .modal-main .me-section-h:first-child { margin-top: 0; }
-.modal-main .me-section-h + .field { margin-top: 0; }
-.modal-main .me-section-h + .field.row { padding-top: 0; }
 .modal-main .me-section-h .you-tag { margin-left: 8px; font-weight: 400; }
 .field.stack { display: flex; flex-direction: column; gap: 8px; max-width: 340px; }
 .field.stack input { width: 100%; }
@@ -93,7 +150,7 @@
 .usage-table td { padding: 9px 8px; border-top: 1px solid var(--border-soft); color: var(--text); }
 .usage-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .usage-foot { margin-top: 16px; }
-.sec-note { font-size: 12.5px; line-height: 1.5; color: var(--text-muted); margin: -4px 0 12px; }
+.sec-note { font-size: 13px; line-height: 1.55; color: var(--text-faint); margin: 2px 0 14px; }
 .modal-close { position: absolute; top: 18px; right: 20px; color: var(--text-muted); }
 .modal-close:hover { color: var(--text); }
 .modal h2 { font-family: var(--font-sans); font-size: 18px; font-weight: 600; margin: 0 0 3px; letter-spacing: -.01em; }
@@ -128,7 +185,7 @@
 @media (max-width: 720px) { .admin-rail { width: 100%; flex-direction: row; flex-wrap: wrap; padding: 12px; } .ar-brand { width: 100%; padding-bottom: 8px; } .admin-page { flex-direction: column; } }
 
 .field { margin-bottom: 16px; }
-.field label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; font-family: var(--font-sans); }
+.field label { display: block; font-size: 14px; line-height: 20px; color: var(--text); margin-bottom: 6px; font-family: var(--font-sans); }
 .field input, .field textarea, .field select {
   width: 100%; padding: 10px 12px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 9px;
   font-size: 14px; outline: none; font-family: var(--font-sans); color: var(--text);
@@ -262,6 +319,16 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 /* ---------- math ---------- */
 .katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; margin: .6em 0; }
 .assistant-body .katex { font-size: 1.04em; }
+/* A formula KaTeX cannot parse renders as its own source. Give it a shape that
+   reads as "this did not typeset" and let a long one scroll instead of
+   overflowing the bubble. */
+.katex-error {
+  display: inline-block; max-width: 100%; overflow-x: auto; vertical-align: bottom;
+  padding: 1px 5px; border-radius: 5px;
+  font-family: var(--font-mono, ui-monospace, monospace); font-size: .92em;
+  background: color-mix(in srgb, #e5635b 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #e5635b 32%, transparent);
+}
 
 /* ---------- composer drag / glow ---------- */
 .composer { position: relative; }
@@ -301,7 +368,7 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 
 /* Settings dialog controls, matched to claude.ai: a white-overlay fill, no border */
 .modal-main input[type="text"], .modal-main input[type="number"], .modal-main input[type="email"],
-.modal-main input:not([type]), .modal-main select, .modal-main textarea, .modal-side .ms-search input {
+.modal-main input:not([type]), .modal-main select, .modal-main textarea {
   background: var(--modal-fill, var(--input-bg));
   border: 1px solid var(--modal-line, var(--border-soft));
   border-radius: 8px;
@@ -309,3 +376,80 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 .modal-main input[type="text"], .modal-main input[type="number"], .modal-main input[type="email"],
 .modal-main input:not([type]), .modal-main select { height: 32px; padding: 0 12px; font-size: 14px; }
 .modal-main textarea { padding: 10px 12px; font-size: 14px; }
+
+/* ---------- settings rows: label + control, claude's shape ---------- */
+.set-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 24px;
+  padding: 15px 0;
+}
+.set-row-main { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.set-row-title { font-family: var(--font-sans); font-size: 14px; font-weight: 500; line-height: 20px; color: var(--text); }
+.set-row-desc { font-family: var(--font-sans); font-size: 13px; line-height: 1.5; color: var(--text-faint); }
+.set-row-ctrl { display: flex; flex-shrink: 0; align-items: center; }
+
+.segs {
+  position: relative; display: inline-flex; width: fit-content; flex-shrink: 0;
+  padding: 1px; border-radius: 8px; background: var(--seg-track, var(--hover-soft));
+}
+.segs-thumb {
+  position: absolute; left: 1px; top: 1px; bottom: 1px; border-radius: 7px;
+  background: var(--seg-thumb, var(--hover-mid));
+  box-shadow: inset 0 0 0 1px var(--seg-thumb-ring, var(--border-soft)), 0 1px 2px rgba(0, 0, 0, .05);
+  transition: transform var(--fx-t, .2s) cubic-bezier(.32, .72, 0, 1), width var(--fx-t, .2s) cubic-bezier(.32, .72, 0, 1);
+  pointer-events: none;
+}
+.segs-opt {
+  position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center;
+  height: 30px; padding: 0 12px; border-radius: 6px; white-space: nowrap;
+  font-family: var(--font-sans); font-size: 14px; font-weight: 400; color: var(--text-faint);
+  transition: color var(--fx-t, .12s) ease;
+}
+.segs-opt.on { color: var(--text); }
+.segs-opt:hover:not(.on) { color: var(--text-muted); }
+
+.set-select { position: relative; }
+.set-select-trigger {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px;
+  padding: 0 2px 0 8px; border-radius: 8px; white-space: nowrap;
+  font-family: var(--font-sans); font-size: 14px; color: var(--text);
+  transition: background var(--fx-t, .12s) ease;
+}
+.set-select-trigger:hover, .set-select.open .set-select-trigger { background: var(--hover-mid); }
+.set-select-trigger svg { flex-shrink: 0; opacity: .75; transform: rotate(90deg); }
+.set-select-menu {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 30; min-width: 224px;
+  padding: 4px; border-radius: 12px; background: var(--pop-bg, var(--menu-bg));
+  box-shadow: var(--pop-shadow); animation: setSelIn var(--fx-a, .12s) var(--ease-out) both;
+}
+@keyframes setSelIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.set-select-opt {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;
+  height: 32px; padding: 4px 12px; border-radius: 8px;
+  font-family: var(--font-sans); font-size: 14px; color: var(--pop-text, var(--text)); text-align: left;
+  transition: background var(--fx-t, .12s) ease;
+}
+.set-select-opt:hover { background: var(--pop-hover, var(--hover-mid)); }
+.set-select-opt svg { width: 14px; flex-shrink: 0; color: var(--pop-text, var(--text)); }
+[data-animations="off"] .segs-thumb { transition: none; }
+[data-animations="off"] .set-select-menu { animation: none; }
+:root[data-theme="light"] .segs-thumb { background: var(--seg-thumb, #ffffff); }
+.set-select-trigger .accent-dot,
+.set-select-opt .accent-dot {
+  width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18);
+}
+.set-select-opt .accent-name { flex: 1; min-width: 0; }
+.set-select-opt.accent-custom { position: relative; cursor: pointer; }
+.set-select-opt.accent-custom input[type="color"] {
+  position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0;
+}
+.set-row-ctrl .reveal-row { display: flex; align-items: center; gap: 10px; }
+.set-row-ctrl .reveal-row input[type="range"] { width: 150px; }
+.set-row-ctrl .reveal-val { font-size: 13px; color: var(--text-faint); font-variant-numeric: tabular-nums; min-width: 46px; text-align: right; }
+.set-row-ctrl .linklike { font-size: 13px; }
+.set-row .btn { flex-shrink: 0; }
+@media (max-width: 640px) {
+  .set-row { flex-direction: column; align-items: stretch; gap: 10px; }
+  .set-row-ctrl { justify-content: flex-start; }
+  .set-select-menu { right: auto; left: 0; }
+}

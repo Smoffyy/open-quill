@@ -17,7 +17,7 @@ export const DEFAULT_SETTINGS = {
   memoryEnabled: false, memoryPrompt: '', chatSearchEnabled: false
 };
 
-export const DEFAULT_CFG = { appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [], appFont: 'serif', uiPreset: 'anthropic', allowSignups: true, localOnly: true, egressLocalOnly: true, egressAllowWebSearch: true, egressAllowlist: [] };
+export const DEFAULT_CFG = { appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [], appFont: 'serif', uiPreset: 'anthropic', modelDocs: true, allowSignups: true, localOnly: true, egressLocalOnly: true, egressAllowWebSearch: true, egressAllowlist: [] };
 
 function initialSection() {
   try {
@@ -92,7 +92,8 @@ export function AdminProvider({ user, onClose, children, modelId = null }) {
         greetings: c.greetings?.length ? c.greetings : [''], appIcon: c.appIcon || '',
         quickPrompts: Array.isArray(c.quickPrompts) ? c.quickPrompts : [],
         appFont: c.appFont === 'sans' ? 'sans' : 'serif',
-        uiPreset: c.uiPreset === 'openai' ? 'openai' : 'anthropic'
+        uiPreset: c.uiPreset === 'openai' ? 'openai' : 'anthropic',
+        modelDocs: c.modelDocs !== false
       });
     } catch {}
     loadUsers();

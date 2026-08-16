@@ -1,11 +1,24 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { t } from '../i18n.jsx';
 
 const TICK = 5;
 const GAP_MAX = 6;
 const GAP_MIN = 1;
 
-export default function ThreadRail({ items, scrollRef, matches, onJump }) {
+const Tick = React.memo(function Tick({ index, cls, label, on }) {
+  return (
+    <button
+      type="button"
+      data-i={index}
+      className={cls}
+      style={{ height: TICK }}
+      aria-label={label}
+      aria-current={on ? 'true' : undefined}
+    />
+  );
+});
+
+function ThreadRail({ items, scrollRef, matches, onJump }) {
   const railRef = useRef(null);
   const listRef = useRef(null);
   const [visible, setVisible] = useState(() => new Set());
@@ -63,20 +76,28 @@ export default function ThreadRail({ items, scrollRef, matches, onJump }) {
     if (el && list.scrollHeight > list.clientHeight + 2) el.scrollIntoView({ block: 'nearest' });
   }, [firstVisible]);
 
-  if (count < 4) return null;
-
-  const label = (it) => {
-    const who = it.role === 'user' ? t('You') : t('Assistant');
-    const parts = [who];
+  const labels = useMemo(() => items.map(it => {
+    const parts = [it.role === 'user' ? t('You') : t('Assistant')];
     if (it.branchCount > 1) parts.push(t('version {n} of {total}', { n: it.branchIndex + 1, total: it.branchCount }));
     if (it.tool) parts.push(t('used a tool'));
     if (it.pinned) parts.push(t('pinned'));
     return parts.join(', ') + (it.preview ? ': ' + it.preview : '');
+  }), [items]);
+
+  const idxOf = (e) => {
+    const el = e.target.closest('[data-i]');
+    return el ? Number(el.getAttribute('data-i')) : null;
   };
+  const onOver = useCallback((e) => { const i = idxOf(e); if (i !== null) setHover(i); }, []);
+  const onOut = useCallback((e) => { const i = idxOf(e); if (i !== null) setHover(h => (h === i ? null : h)); }, []);
+  const onClick = useCallback((e) => { const i = idxOf(e); if (i !== null && items[i]) onJump(items[i].id); }, [items, onJump]);
+
+  if (count < 4) return null;
 
   return (
     <nav className="trail" ref={railRef} aria-label={t('Conversation map')}>
-      <div className="trail-list" ref={listRef} style={{ gap: gap + 'px' }}>
+      <div className="trail-list" ref={listRef} style={{ gap: gap + 'px' }}
+        onMouseOver={onOver} onMouseOut={onOut} onFocus={onOver} onBlur={onOut} onClick={onClick}>
         {items.map((it, i) => {
           const on = visible.has(it.id);
           const cls = ['trail-tick', 'r-' + it.role];
@@ -86,21 +107,7 @@ export default function ThreadRail({ items, scrollRef, matches, onJump }) {
           if (it.pinned) cls.push('is-pinned');
           if (it.excluded) cls.push('is-out');
           if (matches && matches.has(it.id)) cls.push('is-match');
-          return (
-            <button
-              key={it.id}
-              type="button"
-              className={cls.join(' ')}
-              style={{ height: TICK }}
-              aria-label={label(it)}
-              aria-current={on ? 'true' : undefined}
-              onMouseEnter={() => setHover(i)}
-              onMouseLeave={() => setHover(h => (h === i ? null : h))}
-              onFocus={() => setHover(i)}
-              onBlur={() => setHover(h => (h === i ? null : h))}
-              onClick={() => onJump(it.id)}
-            />
-          );
+          return <Tick key={it.id} index={i} cls={cls.join(' ')} label={labels[i]} on={on} />;
         })}
       </div>
       {hover !== null && items[hover] && (
@@ -120,3 +127,5 @@ function tipTop(list, index) {
   const mid = el.offsetTop - list.scrollTop + el.offsetHeight / 2;
   return Math.max(10, Math.min(mid, list.clientHeight - 10));
 }
+
+export default React.memo(ThreadRail);

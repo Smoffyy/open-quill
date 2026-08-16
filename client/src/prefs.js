@@ -1,5 +1,10 @@
+import { paletteFor } from './lib/palettes.js';
+
+export function prefersDark() {
+  return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+}
 export function resolveTheme(t) {
-  if (!t || t === 'system') return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  if (!t || t === 'system') return prefersDark() ? 'dark' : 'light';
   return t;
 }
 export function currentPreset() {
@@ -13,14 +18,15 @@ export function applyPrefs(prefs, preset) {
   const p = preset === 'openai' || preset === 'anthropic' ? preset : currentPreset();
   root.setAttribute('data-preset', p);
   try { localStorage.setItem('oq-preset', p); } catch {}
-  let t = prefs?.theme;
-  if (t === 'oled') t = 'dark';
-  let nextTheme = resolveTheme(t);
-  if (nextTheme === 'dark' || nextTheme === 'anthropic' || nextTheme === 'oled' || nextTheme === 'openai') {
-    nextTheme = p === 'openai' ? 'openai' : 'anthropic';
-  }
-  root.setAttribute('data-theme', nextTheme);
-  try { localStorage.setItem('oq-theme', nextTheme); } catch {}
+  const pal = paletteFor(prefs?.theme, p, prefersDark());
+  root.setAttribute('data-theme', pal.theme);
+  if (pal.palette) root.setAttribute('data-palette', pal.palette);
+  else root.removeAttribute('data-palette');
+  try {
+    localStorage.setItem('oq-theme', pal.theme);
+    if (pal.palette) localStorage.setItem('oq-palette', pal.palette);
+    else localStorage.removeItem('oq-palette');
+  } catch {}
   root.setAttribute('data-density', prefs?.density === 'compact' ? 'compact' : 'comfortable');
   const minimal = !!prefs?.minimalAnims;
   root.setAttribute('data-entrance', minimal ? 'off' : 'on');

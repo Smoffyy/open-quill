@@ -12,13 +12,6 @@ const CAP_ICONS = [
 
 const EDGE = 10;
 const GAP = 6;
-const SHEET_MQ = '(max-width: 768px)';
-
-function sheetMode() {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
-  try { return window.matchMedia(SHEET_MQ).matches; } catch { return false; }
-}
-
 function fullHeight(el) {
   if (!el) return 0;
   const s = el.style;
@@ -36,7 +29,11 @@ function heightBudget(vh) {
 }
 
 function viewport() {
-  return { w: window.innerWidth || 0, h: window.innerHeight || 0 };
+  const d = document.documentElement;
+  return {
+    w: (d && d.clientWidth) || window.innerWidth || 0,
+    h: (d && d.clientHeight) || window.innerHeight || 0
+  };
 }
 
 function CapRow({ m }) {
@@ -224,7 +221,7 @@ function MoreGroup({ label, items, renderOpt, openKey, setOpenKey }) {
 export default function ModelDropdown({ models, currentId, onSelect, extended, onToggleExtended, up, modelHasBg, bgInChat, onToggleBgInChat, reasoningEffort, onSetEffort, kwargValues, onSetKwarg, isAdmin = false }) {
   const [open, setOpen] = useState(false);
   const [openSub, setOpenSub] = useState(null);
-  const [place, setPlace] = useState({ shift: 0, maxH: 0, sheet: false, ready: false });
+  const [place, setPlace] = useState({ shift: 0, left: null, maxH: 0, sheet: false, ready: false });
   const [listMaxH, setListMaxH] = useState(0);
   const ref = useRef(null);
   const menuRef = useRef(null);
@@ -248,13 +245,12 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
   }, [open]);
   useLayoutEffect(() => {
     if (!open) {
-      setPlace(p => (p.ready ? { shift: 0, maxH: 0, sheet: false, ready: false } : p));
+      setPlace(p => (p.ready ? { shift: 0, left: null, maxH: 0, sheet: false, ready: false } : p));
       return undefined;
     }
     const measure = () => {
       const wrap = ref.current, menu = menuRef.current;
       if (!wrap || !menu) return;
-      if (sheetMode()) { setPlace(p => (p.sheet && p.ready ? p : { shift: 0, maxH: 0, sheet: true, ready: true })); return; }
       const trig = wrap.querySelector('.model-trigger') || wrap;
       const r = trig.getBoundingClientRect();
       const wr = wrap.getBoundingClientRect();
@@ -269,12 +265,21 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
       else if (h <= above) top = r.top - GAP - h;
       else top = below >= above ? vp.h - EDGE - h : EDGE;
       top = Math.max(EDGE, Math.min(top, Math.max(EDGE, vp.h - EDGE - h)));
-      const next = { shift: Math.round(top - wr.top), maxH: nat > budget ? Math.round(budget) : 0, sheet: false, ready: true };
-      setPlace(p => (p.ready && !p.sheet && p.shift === next.shift && p.maxH === next.maxH) ? p : next);
+      const mw = menu.offsetWidth || 0;
+      const restLeft = wr.right - mw;
+      let left = null;
+      if (restLeft < EDGE) left = Math.round(EDGE - wr.left);
+      else if (wr.right > vp.w - EDGE) left = Math.round(vp.w - EDGE - mw - wr.left);
+      const next = { shift: Math.round(top - wr.top), left, maxH: nat > budget ? Math.round(budget) : 0, sheet: false, ready: true };
+      setPlace(p => (p.ready && !p.sheet && p.shift === next.shift && p.left === next.left && p.maxH === next.maxH) ? p : next);
     };
     measure();
     let ro = null;
-    if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(measure); if (menuRef.current) ro.observe(menuRef.current); }
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(measure);
+      if (menuRef.current) ro.observe(menuRef.current);
+      if (ref.current) ro.observe(ref.current);
+    }
     window.addEventListener('resize', measure);
     window.addEventListener('scroll', measure, true);
     return () => {
@@ -282,7 +287,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
       window.removeEventListener('resize', measure);
       window.removeEventListener('scroll', measure, true);
     };
-  }, [open, listMaxH]);
+  }, [open, listMaxH, extended]);
   useLayoutEffect(() => {
     if (!open) { setListMaxH(0); return; }
     const list = listRef.current;
@@ -345,6 +350,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
   const menuStyle = place.sheet ? undefined : {
     top: place.shift,
     bottom: 'auto',
+    ...(place.left == null ? null : { left: place.left, right: 'auto' }),
     maxHeight: place.maxH || undefined,
     overflow: place.maxH ? 'hidden auto' : undefined,
     visibility: place.ready ? undefined : 'hidden'
@@ -352,12 +358,12 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
 
   return (
     <div className="model-select" ref={ref}>
-      <button type="button" className="model-trigger" onClick={() => setOpen(o => !o)}>
+      <button type="button" className={'model-trigger' + (open ? ' on' : '')} onClick={() => setOpen(o => !o)}>
         {current?.displayName || 'Model'}
         {chips.length
           ? chips.map((c, i) => <span key={c + i} className="ext ext-effort">{t(c)}</span>)
           : (extended && current?.hasReasoning && <span className="ext">{t("Extended")}</span>)}
-        <ChevDown style={{ width: 16, height: 16 }} />
+        <ChevDown style={{ width: 12, height: 12 }} />
       </button>
       {open && <div className="model-scrim" onClick={() => setOpen(false)} />}
       {open && (

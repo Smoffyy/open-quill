@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { t } from '../i18n.jsx';
+import { SetRow, SegSlide } from './settingsui.jsx';
 import { Download, Upload } from './icons.jsx';
 import {
   KEYBIND_ACTIONS, KEYBIND_GROUPS, KEYBIND_PREF, KEYBIND_PRESETS,
@@ -84,16 +85,11 @@ export default function KeybindsPanel({ prefs, setPref }) {
     <>
       <h2>{t('Keybinds')}</h2>
       <div className="hint">{t('Override any shortcut. Click Change, then press the combination you want. Press Esc to cancel.')}</div>
-      <div className="field">
-        <label>{t('Preset')}</label>
-        <div className="seg">
-          {KEYBIND_PRESETS.map(p => (
-            <button key={p.id} className={preset === p.id ? 'on' : ''} onClick={() => setPref(KEYBIND_PREF, presetBinds(p.id))}>{t(p.label)}</button>
-          ))}
-          {!preset && <button className="on">{t('Custom')}</button>}
-        </div>
-        <div className="muted-note">{t('A preset replaces every override at once. You can still change individual keys afterwards.')}</div>
-      </div>
+      <SetRow label={t('Preset')} desc={t('Replaces every override at once. Individual keys stay editable.')}>
+        <SegSlide label={t('Preset')} value={preset || 'custom'}
+          onPick={(v) => { if (v !== 'custom') setPref(KEYBIND_PREF, presetBinds(v)); }}
+          options={KEYBIND_PRESETS.map(p => ({ v: p.id, label: t(p.label) })).concat(preset ? [] : [{ v: 'custom', label: t('Custom') }])} />
+      </SetRow>
       <div className="kb-panel">
         {KEYBIND_GROUPS.map(group => {
           const rows = KEYBIND_ACTIONS.filter(a => a.group === group);

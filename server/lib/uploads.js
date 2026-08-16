@@ -3,6 +3,7 @@ import path from 'path';
 import multer from 'multer';
 import { db, uid, getSetting } from '../db.js';
 import { dataPath } from './dataroot.js';
+import { looksTextual } from './extract.js';
 
 export const UPLOADS = dataPath('uploads');
 fs.mkdirSync(UPLOADS, { recursive: true });
@@ -54,9 +55,51 @@ export function uploadHeaders(req, res, next) {
   next();
 }
 
+// The extension list is a fast path, not the rule. Anything not on it is decided by
+// looking at the bytes, so a .toml/.kt/.vue/.env the list never heard of still reaches
+// the model instead of arriving as a bare "[Attached file: x]" placeholder.
 export function isTextLike(a) {
   if (a?.type && (a.type.startsWith('text/') || a.type === 'application/json')) return true;
-  return TEXT_EXT.has(path.extname(a?.name || '').toLowerCase());
+  const ext = path.extname(a?.name || '').toLowerCase();
+  if (TEXT_EXT.has(ext)) return true;
+  if (ext === '.pdf') return hasSidecar(a?.url);
+  if (a?.type && a.type.startsWith('image/')) return false;
+  return sniffUpload(a?.url);
+}
+
+function uploadPath(url) {
+  const p = path.join(UPLOADS, path.basename(url || ''));
+  return p.startsWith(UPLOADS_PREFIX) ? p : null;
+}
+
+export function sidecarPath(url) {
+  const p = uploadPath(url);
+  return p ? p + '.txt' : null;
+}
+
+function hasSidecar(url) {
+  const s = sidecarPath(url);
+  try { return !!s && fs.statSync(s).size > 0; } catch { return false; }
+}
+
+const sniffCache = new Map();
+
+function sniffUpload(url) {
+  const p = uploadPath(url);
+  if (!p) return false;
+  try {
+    const st = fs.statSync(p);
+    const key = p + ':' + st.mtimeMs + ':' + st.size;
+    const hit = sniffCache.get(key);
+    if (hit !== undefined) return hit;
+    const fd = fs.openSync(p, 'r');
+    const buf = Buffer.alloc(Math.min(4096, st.size));
+    try { fs.readSync(fd, buf, 0, buf.length, 0); } finally { fs.closeSync(fd); }
+    const ok = looksTextual(buf);
+    sniffCache.set(key, ok);
+    if (sniffCache.size > 256) sniffCache.delete(sniffCache.keys().next().value);
+    return ok;
+  } catch { return false; }
 }
 
 const READ_CACHE_MAX = 64;
@@ -81,8 +124,13 @@ const UPLOADS_PREFIX = UPLOADS + path.sep;
 
 export function readUploadText(url) {
   try {
-    const p = path.join(UPLOADS, path.basename(url || ''));
-    if (!p.startsWith(UPLOADS_PREFIX)) return '';
+    const direct = path.join(UPLOADS, path.basename(url || ''));
+    if (!direct.startsWith(UPLOADS_PREFIX)) return '';
+    // A format we cannot read raw (PDF today) is extracted once at upload time into a
+    // sidecar; preferring it here keeps this reader synchronous, which the whole
+    // chatHistory -> buildMessages chain depends on.
+    const side = direct + '.txt';
+    const p = fs.existsSync(side) ? side : direct;
     const st = fs.statSync(p);
     const cached = cacheGet(textCache, p, st.mtimeMs, st.size);
     if (cached !== undefined) return cached;

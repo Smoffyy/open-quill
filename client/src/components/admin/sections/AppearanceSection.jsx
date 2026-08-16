@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAdmin } from '../store.jsx';
-import { Card, IconSlot, AutosaveNote, SegPick } from '../widgets.jsx';
+import { Card, IconSlot, AutosaveNote, SegPick, SettingRow } from '../widgets.jsx';
 import { t, tk } from '../../../i18n.jsx';
 
 export default function AppearanceSection() {
@@ -24,6 +24,12 @@ export default function AppearanceSection() {
           <div className="muted-note">{t("Anthropic keeps the classic open-quill layout. OpenAI restyles everything after ChatGPT: pitch-black palette, Open Sans, pill composer, the model picker in the top-left, persistent 28px model logos beside every reply, and no logo motion. New models created while OpenAI is active default to those icon settings.")}</div>
         </div>
       </Card>
+      <Card title={t("Composer")} sub={t("Controls shown in the message box.")}>
+        <SettingRow label={t("Model docs button")}
+          note={t("Shows the book icon beside the plus button, opening a panel that compares every available model.")}
+          on={cfg.modelDocs !== false}
+          onToggle={() => setCfg(c => ({ ...c, modelDocs: !(c.modelDocs !== false) }))} last />
+      </Card>
       <Card title={t("Typography & footer")} sub={t("The overall voice of the interface.")}>
         <div className="field"><label>{t("Interface font")}</label>
           <SegPick value={cfg.appFont || 'serif'} options={[['serif', tk('Source Serif (default)')], ['sans', tk('Open Sans')]]}
@@ -31,7 +37,8 @@ export default function AppearanceSection() {
           <div className="muted-note">{t("The display font used for headings, greetings, and assistant text across the entire UI. Open Sans gives a cleaner, sans-serif look everywhere.")}</div>
         </div>
         <div className="field"><label>{t("Bottom disclaimer")}</label>
-          <input value={cfg.disclaimer} onChange={(e) => setCfg(c => ({ ...c, disclaimer: e.target.value }))} placeholder={t("Assistants can make mistakes, double-check responses.")} /></div>
+          <input value={cfg.disclaimer} onChange={(e) => setCfg(c => ({ ...c, disclaimer: e.target.value }))} placeholder={t("Assistants can make mistakes, double-check responses.")} />
+          <div className="muted-note">{t("Shown under the composer. Add links with [label](https://example.com); http, https, mailto and same-site paths are allowed. Custom text is shown as written and is not translated.")}</div></div>
       </Card>
       <AutosaveNote status={settingsSave} />
     </>

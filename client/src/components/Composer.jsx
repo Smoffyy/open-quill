@@ -8,8 +8,12 @@ import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevro
 import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
 import { extLabel } from '../lib/files.js';
 import { t, fmtDate } from '../i18n.jsx';
+import { focusUnlessTouch } from '../lib/touch.js';
 
-const FILE_ACCEPT = '.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.py,.lua,.html,.css,.xml,.yml,.yaml,.pdf,.log';
+// The picker no longer advertises a list. The server decides what it can read by
+// sniffing the bytes, so any format is accepted here and one that turns out to be
+// unreadable is reported to the model as such rather than silently dropped.
+const FILE_ACCEPT = '';
 
 function PmSub({ className = '', children, onMouseEnter, onMouseLeave }) {
   const ref = useRef(null);
@@ -168,7 +172,7 @@ export default function Composer({
       cancelAnimationFrame(fitRaf.current);
     };
   }, [fit]);
-  useEffect(() => { if (autoFocus || focusKey !== undefined) ta.current?.focus(); }, [autoFocus, focusKey]);
+  useEffect(() => { if (autoFocus || focusKey !== undefined) focusUnlessTouch(ta.current); }, [autoFocus, focusKey]);
   useEffect(() => {
     const h = () => fileInput.current?.click();
     window.addEventListener('oq-attach-files', h);
@@ -424,7 +428,7 @@ export default function Composer({
         id="oq-composer" aria-label={t('Message input')}
         onChange={(e) => onChange(e.target.value)} onKeyDown={key} onPaste={onPaste} />
       <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}
-        accept={(visionSupported ? 'image/*,' : '') + FILE_ACCEPT} />
+        {...(FILE_ACCEPT ? { accept: (visionSupported ? 'image/*,' : '') + FILE_ACCEPT } : {})} />
       {safetyChecking && safetyVerbose && <div className="safety-checking">{t("Safety check…")}</div>}
       {improving && <div className="safety-checking">{t("Improving prompt…")}</div>}
       {canContinue && !streaming && !conversationEnded && (
@@ -442,8 +446,8 @@ export default function Composer({
       <div className="composer-bar">
         <div className="composer-left">
           <div className="plus-wrap" ref={plusRef}>
-            <button className="plus" onClick={() => setPlusMenu(m => !m)} title={t("More")}>
-              <Plus style={{ width: 17, height: 17 }} />
+            <button className={'plus' + (plusMenu ? ' on' : '')} onClick={() => setPlusMenu(m => !m)} title={t("More")}>
+              <Plus style={{ width: 20, height: 20 }} />
               {enabledCount > 0 && <span className="plus-badge">{enabledCount}</span>}
             </button>
             {plusMenu && (
@@ -577,6 +581,9 @@ export default function Composer({
               {onClearProject && <button className="cp-x" onClick={onClearProject} title={t("Remove from project")}><X style={{ width: 12 }} /></button>}
             </div>
           )}
+          {!hideModelPicker && onOpenDocs && (
+            <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={onOpenDocs}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>
+          )}
         </div>
         <div className="composer-right">
           {ctxGauge}
@@ -585,28 +592,25 @@ export default function Composer({
             reasoningEffort={reasoningEffort} onSetEffort={onSetEffort}
             kwargValues={kwargValues} onSetKwarg={onSetKwarg}
             modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />}
-          {!hideModelPicker && onOpenDocs && (
-            <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={onOpenDocs}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>
-          )}
           {voiceMic && (
             <button className={'mic' + (dictating ? ' rec' : '') + (transcribing ? ' busy' : '')} onClick={toggleDictation}
               title={dictating ? t('Stop dictation') : transcribing ? t('Transcribing…') : t('Dictate')} disabled={transcribing}>
-              <Mic style={{ width: 18, height: 18 }} />
+              <Mic style={{ width: 20, height: 20 }} />
             </button>
           )}
           {steering && hasText && (
-            <button key="steer" className="send steer" onClick={doSend} title={t('Steer this reply')}><Steer style={{ width: 16, height: 16 }} /></button>
+            <button key="steer" className="send steer" onClick={doSend} title={t('Steer this reply')}><Steer style={{ width: 20, height: 20 }} /></button>
           )}
           {streaming ? (
-            <button key="stop" className="send stop" onClick={onStop} title={t('Stop generating')}><Stop style={{ width: 16, height: 16 }} /></button>
+            <button key="stop" className="send stop" onClick={onStop} title={t('Stop generating')}><Stop style={{ width: 20, height: 20 }} /></button>
           ) : safetyChecking ? (
-            <button key="send" className={'send' + (safetyVerbose ? ' checking' : ' quiet')} disabled title={safetyVerbose ? t('Safety check…') : undefined}><Up style={{ width: 17, height: 17 }} /></button>
+            <button key="send" className={'send' + (safetyVerbose ? ' checking' : ' quiet')} disabled title={safetyVerbose ? t('Safety check…') : undefined}><Up style={{ width: 20, height: 20 }} /></button>
           ) : canSend ? (
-            <button key="send" className="send" onClick={doSend} disabled={uploading}><Up style={{ width: 17, height: 17 }} /></button>
+            <button key="send" className="send" onClick={doSend} disabled={uploading}><Up style={{ width: 20, height: 20 }} /></button>
           ) : voiceCall ? (
             <button key="call" className="mic call" onClick={onStartCall} title={t("Start a voice call")}><Wave style={{ width: 20, height: 20 }} /></button>
           ) : (
-            <button key="send" className="send ghost" disabled><Up style={{ width: 17, height: 17 }} /></button>
+            <button key="send" className="send ghost" disabled><Up style={{ width: 20, height: 20 }} /></button>
           )}
         </div>
       </div>

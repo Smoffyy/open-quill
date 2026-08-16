@@ -44,7 +44,7 @@ export function shapePublic(m) {
     effortEnabled: !!m.effort_enabled, effortLevels: (Array.isArray(m.effort_levels) && m.effort_levels.length) ? m.effort_levels : ['low', 'medium', 'high'], effortDefault: m.effort_default || '', effortAdminOnly: !!m.effort_admin_only,
     kwargs: publicKwargDefs(m),
     reasoningCollapsible: m.reasoning_collapsible !== 0, hideThinking: !!m.hide_thinking,
-    staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon, generatingAnim: m.generating_anim || 'spin', thinkingAnim: m.thinking_anim || 'pulse',
+    staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon, generatingAnim: m.generating_anim || 'none', thinkingAnim: m.thinking_anim || 'none',
     iconPosition: m.icon_position || 'below', hasVision: !!m.has_vision, iconSize: m.icon_size || 0, showName: !!m.show_name,
     sandboxAuto: !!m.sandbox_auto, sandboxAllowed: m.sandbox_allowed !== 0, dropdownIcon: m.dropdown_icon !== 0, isDefault: !!m.is_default, agentSteps: m.agent_steps || 0,
     webSearchAuto: !!m.web_search_auto, webSearchAllowed: m.web_search_allowed !== 0,

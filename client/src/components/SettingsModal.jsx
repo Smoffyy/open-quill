@@ -1,33 +1,203 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { api } from '../api.js';
-import { applyPrefs, ACCENT_PRESETS, getUserFont, setUserFont } from '../prefs.js';
-import { Sun, Moon, Gear, Sliders, Info, Chevron, Clock, Download, Upload, Shield, Trash, Brain, Refresh, Keyboard } from './icons.jsx';
+import { applyPrefs, ACCENT_PRESETS, getUserFont, setUserFont, currentPreset } from '../prefs.js';
+import { palettesFor, themeValue } from '../lib/palettes.js';
+import { Sun, Moon, Gear, Sliders, Info, Chevron, Check, Clock, Download, Upload, Shield, Trash, Brain, Refresh, Keyboard, Search } from './icons.jsx';
 import Markdown from './Markdown.jsx';
 import KeybindsPanel from './KeybindsPanel.jsx';
 import { t, tk, useI18n } from '../i18n.jsx';
+import { STATUS_DELAY_DEFAULT, STATUS_DELAY_MAX, statusDelaySecs } from '../lib/status.js';
+import { menuStyleOf, useAnchoredMenu } from '../lib/anchor.js';
+import { createPortal } from 'react-dom';
+import { SetRow, SwitchRow, SegSlide, SelectRow, useSelectMenu } from './settingsui.jsx';
+import { legacyRevealStyle, resolveReveal, revealSpeedMs } from '../lib/reveal.js';
 
+const NAV_GROUPS = [
+  { label: tk('Account'), items: [
+    { id: 'general', label: tk('General'), Icon: Gear },
+    { id: 'security', label: tk('Security'), Icon: Shield },
+  ] },
+  { label: tk('Interface'), items: [
+    { id: 'appearance', label: tk('Appearance'), Icon: Sun },
+    { id: 'chat', label: tk('Chat'), Icon: Sliders },
+    { id: 'keybinds', label: tk('Keybinds'), Icon: Keyboard },
+  ] },
+  { label: tk('Insights'), items: [
+    { id: 'memory', label: tk('Memory'), Icon: Brain, needs: 'memoryFeature' },
+    { id: 'usage', label: tk('Usage'), Icon: Clock },
+  ] },
+  { label: tk('About'), items: [
+    { id: 'version', label: tk('Version'), Icon: Info },
+  ] },
+];
+
+const SETTINGS_INDEX = {
+  __proto__: null,
+  general: [tk('What should we call you?'), tk('Language'), tk('Instructions for the Assistant'), tk('Export everything'), tk('Import')],
+  security: [tk('Password'), tk('Two-factor authentication'), tk('Active sessions')],
+  appearance: [tk('Theme'), tk('Motion'), tk('Chat font'), tk('Message density'), tk('Accent colour'), tk('OLED screen protection'), tk('Staggered open')],
+  chat: [
+    tk('Text reveal'), tk('Reveal speed'), tk('Auto-scroll'), tk('Streaming cursor'), tk('Cursor style'),
+    tk('Blink speed'), tk('Pulse speed'), tk('Conversation map'), tk('Find in conversation'), tk('Branch map'),
+    tk('Message shortcuts'), tk('Web search on by default'), tk('Engine telemetry'), tk('Context gauge'),
+    tk('Speed on each reply'), tk('Progress line delay'), tk('Context ledger on open'), tk('Mid-stream steering'),
+  ],
+  memory: [tk('Use memory in chats'), tk('Update from recent chats'), tk('Forget everything')],
+  usage: [tk('Usage window'), tk('By model')],
+};
+
+function Marked({ text, needle }) {
+  if (!needle) return text;
+  const at = text.toLowerCase().indexOf(needle);
+  if (at === -1) return text;
+  return <>{text.slice(0, at)}<span className="ms-hit">{text.slice(at, at + needle.length)}</span>{text.slice(at + needle.length)}</>;
+}
+
+function searchSettings(needle, cfg) {
+  const out = [];
+  for (const g of NAV_GROUPS) {
+    for (const it of g.items) {
+      if (it.needs && !cfg?.[it.needs]) continue;
+      const page = t(it.label);
+      const pageHit = page.toLowerCase().includes(needle);
+      const hits = (SETTINGS_INDEX[it.id] || []).map(s => t(s)).filter(s => s.toLowerCase().includes(needle));
+      if (pageHit || hits.length) out.push({ ...it, page, pageHit, hits });
+    }
+  }
+  return out;
+}
+
+function SettingsNav({ tab, setTab, cfg }) {
+  const [q, setQ] = useState('');
+  const [cursor, setCursor] = useState(0);
+  const boxRef = useRef(null);
+  const menuRef = useRef(null);
+  const needle = q.trim().toLowerCase();
+  const results = needle ? searchSettings(needle, cfg) : [];
+  const open = !!needle;
+  const pos = useAnchoredMenu(open, () => setQ(''), boxRef, menuRef, { align: 'left', minWidth: 280, gap: 4 });
+
+  useEffect(() => { setCursor(0); }, [q]);
+
+  function pick(id) { setTab(id); setQ(''); }
+  function onKey(e) {
+    if (e.key === 'Escape' && q) { e.stopPropagation(); setQ(''); return; }
+    if (!results.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setCursor(c => (c + 1) % results.length); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setCursor(c => (c - 1 + results.length) % results.length); }
+    else if (e.key === 'Enter') { e.preventDefault(); pick(results[Math.min(cursor, results.length - 1)].id); }
+  }
+
+  return (
+    <div className="modal-side">
+      <h2 className="sr-only">{t('Settings')}</h2>
+      <div className="ms-searchbox" ref={boxRef}>
+        <div className="ms-search">
+          <Search />
+          <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey}
+            placeholder={t('Search')} aria-label={t('Search settings')} />
+        </div>
+        {open && createPortal(
+          <div className="ms-results" role="listbox" ref={menuRef}
+            style={menuStyleOf(pos, { width: 280, maxHeight: Math.min(320, (pos && pos.maxH) || 320), overflow: 'hidden auto' })}>
+            {!results.length && <div className="ms-empty">{t('No matching settings')}</div>}
+            {results.map((r, i) => (
+              <div key={r.id} className="ms-res">
+                <button className={'ms-res-page' + (i === cursor ? ' on' : '')} role="option" aria-selected={i === cursor}
+                  onMouseEnter={() => setCursor(i)} onClick={() => pick(r.id)}>
+                  <r.Icon />
+                  <span className="ms-res-name"><Marked text={r.page} needle={needle} /></span>
+                </button>
+                {!r.pageHit && r.hits.length === 1 && (
+                  <button className="ms-res-sub" onClick={() => pick(r.id)}><Marked text={r.hits[0]} needle={needle} /></button>
+                )}
+                {r.hits.length > 1 && r.hits.map(h => (
+                  <button key={h} className="ms-res-line" onClick={() => pick(r.id)}>
+                    <span className="ms-res-name"><Marked text={h} needle={needle} /></span>
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>, document.body)}
+      </div>
+      <div className="ms-nav">
+        {NAV_GROUPS.map(g => {
+          const items = g.items.filter(i => !i.needs || cfg?.[i.needs]);
+          if (!items.length) return null;
+          return (
+            <div className="ms-sec" key={g.label}>
+              <div className="ms-group">{t(g.label)}</div>
+              {items.map(({ id, label, Icon }) => (
+                <button key={id} className={'modal-tab' + (tab === id ? ' active' : '')} onClick={() => setTab(id)}>
+                  <Icon /> {t(label)}
+                </button>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// No zero stop: "no reveal at all" is the Instant *style*, so offering it here
+// too would be the same state reachable two ways. A pref already stored as 0
+// still works and surfaces as its own chip below.
 const REVEAL_STOPS = [
-  { v: 0, label: tk('Instant') },
   { v: 15, label: tk('Fast') },
   { v: 40, label: tk('Normal') },
   { v: 70, label: tk('Relaxed') },
 ];
 
+// Adding a style is one entry here plus one in REVEAL_STYLES; removing one is
+// safe on its own, since resolveReveal falls a retired value back to the default.
+const REVEAL_STYLE_OPTS = [
+  { v: 'instant', label: tk('Instant'), note: tk('Text appears the moment it arrives.') },
+  { v: 'typewriter', label: tk('Typewriter'), note: tk('Letters type out one after another.') },
+];
+
 function Toggle({ prefs, setPref, k, label, desc }) {
-  return (
-    <div className="field row">
-      <div><label>{label}</label><div className="muted-note">{desc}</div></div>
-      <div className={'switch' + (prefs[k] ? ' on' : '')} onClick={() => setPref(k, !prefs[k])} />
-    </div>
-  );
+  return <SwitchRow label={label} desc={desc} on={!!prefs[k]} onToggle={() => setPref(k, !prefs[k])} />;
 }
 
-function Seg({ value, options, onPick }) {
+const ACCENT_NAMES = [tk('Clay'), tk('Blue'), tk('Green'), tk('Violet'), tk('Pink'), tk('Amber'), tk('Teal'), tk('Slate')];
+
+function AccentSelect({ value, onPick }) {
+  const { open, setOpen, btnRef, menuRef, pos } = useSelectMenu();
+  const opts = ACCENT_PRESETS.map((c, i) => ({ v: c, label: t(ACCENT_NAMES[i] || c) }));
+  const hit = opts.find(o => o.v === value);
+  const swatch = value || 'var(--accent)';
   return (
-    <div className="seg">
-      {options.map(o => (
-        <button key={o.v} className={value === o.v ? 'on' : ''} onClick={() => onPick(o.v)}>{o.label}</button>
-      ))}
+    <div className={'set-select' + (open ? ' open' : '')}>
+      <button ref={btnRef} type="button" className="set-select-trigger" aria-haspopup="listbox" aria-expanded={open}
+        aria-label={t('Accent colour')} onClick={() => setOpen(o => !o)}>
+        <span className="accent-dot" style={{ background: swatch }} />
+        <span>{hit ? hit.label : (value ? t('Custom') : t('Theme default'))}</span>
+        <Chevron style={{ width: 14 }} />
+      </button>
+      {open && createPortal(
+        <div ref={menuRef} className="set-select-menu portal" role="listbox" style={menuStyleOf(pos, { minWidth: 224 })}>
+          <button type="button" role="option" aria-selected={!value}
+            className={'set-select-opt' + (!value ? ' on' : '')} onClick={() => { onPick(''); setOpen(false); }}>
+            <span className="accent-dot" style={{ background: 'var(--accent)' }} />
+            <span className="accent-name">{t('Theme default')}</span>
+            {!value && <Check />}
+          </button>
+          {opts.map(o => (
+            <button key={o.v} type="button" role="option" aria-selected={o.v === value}
+              className={'set-select-opt' + (o.v === value ? ' on' : '')} onClick={() => { onPick(o.v); setOpen(false); }}>
+              <span className="accent-dot" style={{ background: o.v }} />
+              <span className="accent-name">{o.label}</span>
+              {o.v === value && <Check />}
+            </button>
+          ))}
+          <label className="set-select-opt accent-custom">
+            <span className="accent-dot" style={{ background: hit || !value ? 'conic-gradient(from 180deg, #d97757, #4f8ff7, #46b07a, #e0a93c, #d97757)' : value }} />
+            <span className="accent-name">{t('Custom…')}</span>
+            <input type="color" value={value || '#d97757'}
+              onChange={(e) => onPick(e.target.value)} />
+          </label>
+        </div>, document.body)}
     </div>
   );
 }
@@ -49,7 +219,7 @@ function parseVersion(v) {
 
 function presetDefaults(isOpenai, fallbackTheme) {
   return {
-    typewriter: true, autoscroll: true, theme: fallbackTheme || 'system', accent: '', density: 'comfortable',
+    revealStyle: 'typewriter', autoscroll: true, theme: fallbackTheme || 'system', accent: '', density: 'comfortable',
     streamCursor: isOpenai, cursorStyle: isOpenai ? 'circle' : 'block',
     cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40, chatStagger: true, themeFade: true,
     oledShift: false, minimalAnims: false,
@@ -69,14 +239,17 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
     const fallbackTheme = (applied === 'anthropic' || applied === 'openai' || applied === 'oled') ? 'dark' : (applied || 'system');
     const isOpenai = document.documentElement.getAttribute('data-preset') === 'openai';
     const merged = { ...presetDefaults(isOpenai, fallbackTheme), ...user.prefs };
-    if (user.prefs && user.prefs.typewriter == null && user.prefs.animations != null) {
-      merged.typewriter = user.prefs.animations !== false;
-    }
+    // Seed the named style from the pre-split booleans (`typewriter`, and before
+    // it `animations`), or someone who had the typewriter off gets it switched
+    // back on the next time they open Settings. Nothing writes those keys any
+    // more — this read is the only thing that still knows they existed.
+    if (user.prefs && user.prefs.revealStyle == null) merged.revealStyle = legacyRevealStyle(user.prefs);
     if (!user.prefs || user.prefs.theme == null) merged.theme = fallbackTheme;
     if (merged.theme === 'oled') merged.theme = 'dark';
     return merged;
   });
   const [saved, setSaved] = useState(false);
+  const activePreset = currentPreset();
   const [userFont, setUserFontState] = useState(getUserFont());
   const [confirmDel, setConfirmDel] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -216,21 +389,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
     <div className="overlay" onMouseDown={(e) => e.target.classList.contains('overlay') && onClose()}>
       <div className="modal">
         <button className="modal-close" onClick={onClose}>✕</button>
-        <div className="modal-side">
-          <div className="ms-label">{t("Settings")}</div>
-          <div className="ms-group">{t("Account")}</div>
-          <button className={'modal-tab' + (tab === 'general' ? ' active' : '')} onClick={() => setTab('general')}><Gear /> {t("General")}</button>
-          <button className={'modal-tab' + (tab === 'security' ? ' active' : '')} onClick={() => setTab('security')}><Shield /> {t("Security")}</button>
-          <div className="ms-group">{t("Interface")}</div>
-          <button className={'modal-tab' + (tab === 'appearance' ? ' active' : '')} onClick={() => setTab('appearance')}><Sun /> {t('Appearance')}</button>
-          <button className={'modal-tab' + (tab === 'chat' ? ' active' : '')} onClick={() => setTab('chat')}><Sliders /> {t('Chat')}</button>
-          <button className={'modal-tab' + (tab === 'keybinds' ? ' active' : '')} onClick={() => setTab('keybinds')}><Keyboard /> {t('Keybinds')}</button>
-          <div className="ms-group">{t("Insights")}</div>
-          {cfg?.memoryFeature && <button className={'modal-tab' + (tab === 'memory' ? ' active' : '')} onClick={() => setTab('memory')}><Brain /> {t("Memory")}</button>}
-          <button className={'modal-tab' + (tab === 'usage' ? ' active' : '')} onClick={() => setTab('usage')}><Clock /> {t("Usage")}</button>
-          <div className="ms-group">{t("About")}</div>
-          <button className={'modal-tab' + (tab === 'version' ? ' active' : '')} onClick={() => setTab('version')}><Info /> {t("Version")}</button>
-        </div>
+        <SettingsNav tab={tab} setTab={setTab} cfg={cfg} />
         <div className="modal-main">
           {tab === 'general' && (
             <>
@@ -242,32 +401,32 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                 <input value={name} onChange={(e) => changeName(e.target.value)} />
               </div>
               <div className="me-section-h">{t("Preferences")}</div>
-              <div className="field">
-                <label>{t("Language")}</label>
-                <div className="muted-note" style={{ marginBottom: 10 }}>{t("Changes the language of the entire interface, on this device. Chats and model replies are not translated.")}</div>
-                <select value={i18nLang} onChange={(e) => setAppLang(e.target.value)} style={{ maxWidth: 260 }}>
-                  {langs.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}
-                </select>
-              </div>
+              {/* This was the one native <select> left in Settings. The modal opens on a
+                  transform animation, and browsers composite an OS-drawn select separately,
+                  so it painted clipped until a click forced a repaint. SelectRow is what
+                  every other dropdown here already uses. */}
+              <SetRow label={t("Language")} desc={t("The interface language on this device. Chats and replies are not translated.")}>
+                <SelectRow label={t("Language")} value={i18nLang}
+                  options={langs.map(l => ({ v: l.code, label: l.name }))}
+                  onPick={setAppLang} />
+              </SetRow>
               <div className="field">
                 <label>{t("Instructions for the Assistant")}</label>
-                <div className="muted-note" style={{ marginBottom: 10 }}>{t("Added to the system prompt for every chat. Use it for things to remember about you or how you'd like responses. Leave empty for none.")}</div>
+                <div className="muted-note" style={{ marginBottom: 10 }}>{t("Added to the system prompt of every chat. Leave empty for none.")}</div>
                 <textarea className="instr-area" value={instructions} maxLength={8000} rows={5}
                   placeholder={t("e.g. I'm a backend developer. Keep answers concise and skip the preamble.")}
                   onChange={(e) => changeInstructions(e.target.value)} />
                 <div className="muted-note" style={{ textAlign: 'right' }}>{instructions.length}/8000</div>
               </div>
               <div className="me-section-h">{t("Your data")}</div>
-              <div className="field row">
-                <div><label>{t("Export everything")}</label><div className="muted-note">{t("Download all your data, chats, folders, custom styles, personas, saved prompts, memory, instructions, and preferences, as one JSON file.")}</div></div>
+              <SetRow label={t("Export everything")} desc={t("Download everything — chats, styles, personas, prompts, memory — as one JSON file.")}>
                 <button className="btn ghost" onClick={onExportChats}><Download style={{ width: 14, verticalAlign: '-2px' }} /> {t("Export")}</button>
-              </div>
-              <div className="field row">
-                <div><label>{t("Import")}</label><div className="muted-note">{t("Restore from an exported file. Chats are added, and profile data (styles, personas, prompts, memory) is merged without overwriting what you have.")}</div></div>
+              </SetRow>
+              <SetRow label={t("Import")} desc={t("Restore from an exported file. Chats are added and profile data is merged.")}>
                 <button className="btn ghost" onClick={() => importRef.current?.click()}><Upload style={{ width: 14, verticalAlign: '-2px' }} /> {t("Import")}</button>
                 <input ref={importRef} type="file" accept="application/json" hidden
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) onImportChats(f); e.target.value = ''; }} />
-              </div>
+              </SetRow>
               <div className="danger-zone">
                   <div className="dz-title">{t("Danger zone")}</div>
                   {!confirmClear ? (
@@ -287,7 +446,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                   {clearMsg && <div className="muted-note" style={{ marginTop: 8 }}>{clearMsg}</div>}
                   {!confirmReset ? (
                     <div className="field row" style={{ marginTop: 14 }}>
-                      <div><label>{t("Reset all settings")}</label><div className="muted-note">{t("Puts every appearance and behaviour setting back to the defaults for the current theme. Your chats and account are untouched.")}</div></div>
+                      <div><label>{t("Reset all settings")}</label><div className="muted-note">{t("Back to defaults for this theme. Chats and account are untouched.")}</div></div>
                       <button className="btn ghost" onClick={() => setConfirmReset(true)}>{t("Reset all settings")}</button>
                     </div>
                   ) : (
@@ -320,11 +479,9 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
           {tab === 'memory' && (
             <>
               <h2>{t("Memory")}</h2>
-              <div className="hint">{t("The assistant keeps a short, editable memory about you, built from your recent chats. It is stored locally and only used when memory is on.")}</div>
-              <div className="field row">
-                <div><label>{t("Use memory in chats")}</label><div className="muted-note">{t("When on, the memory below is added to the system prompt of every conversation and refreshed periodically in the background.")}</div></div>
-                <div className={'switch' + (prefs.memoryEnabled !== false ? ' on' : '')} onClick={() => setPref('memoryEnabled', prefs.memoryEnabled === false)} />
-              </div>
+              <div className="hint">{t("A short, editable memory built from your recent chats. Stored locally.")}</div>
+              <SwitchRow label={t("Use memory in chats")} desc={t("Adds the memory below to every conversation, refreshed in the background.")}
+                on={prefs.memoryEnabled !== false} onToggle={() => setPref('memoryEnabled', prefs.memoryEnabled === false)} />
               <div className="field">
                 <label>{t("What the assistant remembers")}</label>
                 <textarea className="instr-area" value={memory} maxLength={6000} rows={9}
@@ -332,14 +489,12 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                   onChange={(e) => changeMemory(e.target.value)} />
                 <div className="muted-note" style={{ textAlign: 'right' }}>{memory.length}/6000</div>
               </div>
-              <div className="field row">
-                <div><label>{t("Update from recent chats")}</label><div className="muted-note">{t("Asks the current model to refresh this memory from your latest conversations.")}</div></div>
+              <SetRow label={t("Update from recent chats")} desc={t("Asks the current model to refresh this memory from your latest conversations.")}>
                 <button className="btn ghost" disabled={memBusy} onClick={refreshMemory}><Refresh style={{ width: 14, verticalAlign: '-2px' }} /> {memBusy ? t('Updating…') : t('Update now')}</button>
-              </div>
-              <div className="field row">
-                <div><label>{t("Forget everything")}</label><div className="muted-note">{t("Clears the memory. It may be rebuilt from future chats while memory is on.")}</div></div>
+              </SetRow>
+              <SetRow label={t("Forget everything")} desc={t("Clears the memory. It may be rebuilt from future chats while memory is on.")}>
                 <button className="btn ghost danger" onClick={clearMemory}><Trash style={{ width: 14, verticalAlign: '-2px' }} /> {t("Clear")}</button>
-              </div>
+              </SetRow>
             </>
           )}
           {tab === 'version' && (() => {
@@ -396,56 +551,45 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
             <>
               <h2>{t("Appearance")}</h2>
               <div className="hint">{t("Choose how open-quill looks.")}</div>
-              <div className="field row">
-                <div><label>{t("Theme")}</label><div className="muted-note">{t("Follow your system, or pick one.")}</div></div>
-                <Seg value={prefs.theme || 'system'} onPick={(v) => setPref('theme', v)}
-                  options={[{ v: 'system', label: 'System' }, { v: 'light', label: 'Light' }, { v: 'dark', label: 'Dark' }]} />
-              </div>
-              <div className="field">
-                <label>{t("Accent color")}</label>
-                <div className="muted-note">{t("Tints buttons, links, and highlights throughout the app.")}</div>
-                <div className="accent-row">
-                  {ACCENT_PRESETS.map(c => (
-                    <button key={c} className={'accent-swatch' + (prefs.accent === c ? ' on' : '')} style={{ background: c }} onClick={() => setPref('accent', c)} title={c} />
-                  ))}
-                  <label className="accent-swatch custom" title={t("Custom color")}>
-                    <input type="color" value={prefs.accent || '#d97757'} onChange={(e) => setPref('accent', e.target.value)} />
-                    <span>+</span>
-                  </label>
-                  {prefs.accent && <button className="btn ghost accent-reset" onClick={() => setPref('accent', '')}>{t("Reset")}</button>}
-                </div>
-              </div>
-              <div className="me-section-h">{t("Text")}</div>
-              <div className="field row">
-                <div><label>{t("Font")}</label><div className="muted-note">{t("Overrides the theme's default font, on this device only.")}</div></div>
-                <Seg value={userFont} onPick={(v) => { setUserFontState(v); setUserFont(v); }}
-                  options={[{ v: 'default', label: 'Default' }, { v: 'sans', label: 'Open Sans' }, { v: 'serif', label: 'Source Serif' }]} />
-              </div>
-              <div className="field row">
-                <div><label>{t("Message density")}</label><div className="muted-note">{t("Vertical spacing between messages.")}</div></div>
-                <Seg value={prefs.density || 'comfortable'} onPick={(v) => setPref('density', v)}
-                  options={[{ v: 'comfortable', label: 'Comfortable' }, { v: 'compact', label: 'Compact' }]} />
-              </div>
+              <SetRow label={t("Theme")} desc={t("Follow your system, or pick a palette. Colours only — the layout never changes.")}>
+                <SelectRow label={t("Theme")} value={themeValue(prefs.theme, activePreset)}
+                  onPick={(v) => setPref('theme', v)}
+                  options={[{ v: 'system', label: t('System') }].concat(palettesFor(activePreset).map(p => ({ v: p.id, label: p.label })))} />
+              </SetRow>
+              <SetRow label={t("Motion")} desc={t("Reduce animation in streaming responses and other interface elements.")}>
+                <SegSlide label={t("Motion")} value={prefs.minimalAnims ? 'reduced' : 'system'}
+                  onPick={(v) => setPref('minimalAnims', v === 'reduced')}
+                  options={[{ v: 'system', label: t('System') }, { v: 'reduced', label: t('Reduced') }]} />
+              </SetRow>
+              <SetRow label={t("Chat font")} desc={t("Overrides the theme's default font, on this device only.")}>
+                <SelectRow label={t("Chat font")} value={userFont}
+                  onPick={(v) => { setUserFontState(v); setUserFont(v); }}
+                  options={[
+                    { v: 'default', label: t('Theme default') },
+                    { v: 'serif', label: 'Source Serif', font: "'Source Serif 4 Variable', serif" },
+                    { v: 'sans', label: 'Open Sans', font: "'Open Sans', sans-serif" }
+                  ]} />
+              </SetRow>
+              <SetRow label={t("Message density")} desc={t("Vertical spacing between messages.")}>
+                <SegSlide label={t("Message density")} value={prefs.density || 'comfortable'} onPick={(v) => setPref('density', v)}
+                  options={[{ v: 'comfortable', label: t('Comfortable') }, { v: 'compact', label: t('Compact') }]} />
+              </SetRow>
+              <SetRow label={t("Accent colour")} desc={t("Tints buttons, links and highlights.")}>
+                <AccentSelect value={prefs.accent || ''} onPick={(v) => setPref('accent', v)} />
+              </SetRow>
               <div className="me-section-h">{t("Display")}</div>
-              <div className="field row">
-                <div><label>{t("OLED screen protection")}</label><div className="muted-note">{t("Periodically nudges the interface a few pixels and eases peak brightness to limit burn-in on OLED displays.")}</div></div>
-                <div className={'switch' + (prefs.oledShift ? ' on' : '')} onClick={() => setPref('oledShift', !prefs.oledShift)} />
-              </div>
-              <div className="me-section-h">{t("Motion")}</div>
-              <div className="sec-note">{t("How the interface itself moves. Reading motion, meaning the streaming cursor, the reasoning panel and the sidebar collapse, is kept whatever you turn off here.")}</div>
-              <div className="field row">
-                <div><label>{t("Minimal animations")}</label><div className="muted-note">{t("Strip the interface back to instant. Menus, modals, panels, toasts, message entrances and hover feedback all appear without motion.")}</div></div>
-                <div className={'switch' + (prefs.minimalAnims ? ' on' : '')} onClick={() => setPref('minimalAnims', !prefs.minimalAnims)} />
-              </div>
+              <SwitchRow label={t("OLED screen protection")} desc={t("Nudges the interface a few pixels and eases brightness to limit burn-in.")}
+                on={prefs.oledShift} onToggle={() => setPref('oledShift', !prefs.oledShift)} />
               <Toggle prefs={prefs} setPref={setPref} k="chatStagger" label={t("Staggered open")}
                 desc={t("When opening a chat, messages assemble into view one after another.")} />
             </>
           )}
           {tab === 'keybinds' && <KeybindsPanel prefs={prefs} setPref={setPref} />}
           {tab === 'chat' && (() => {
-            const rv = prefs.revealMs == null || isNaN(parseInt(prefs.revealMs)) ? 40 : Math.max(0, Math.min(100, parseInt(prefs.revealMs)));
+            const rv = revealSpeedMs(prefs.revealMs);
             const noReveal = cfg?.uiPreset === 'openai';
-            const typewriterOn = (prefs.typewriter ?? prefs.animations) !== false;
+            const style = resolveReveal(prefs, 'anthropic');
+            const styleOpt = REVEAL_STYLE_OPTS.find(o => o.v === style) || REVEAL_STYLE_OPTS[0];
             return (
               <>
                 <h2>{t("Chat")}</h2>
@@ -453,111 +597,94 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                 <div className="me-section-h">{t("Streaming")}</div>
                 <>
                   {!noReveal && (
-                    <Toggle prefs={prefs} setPref={setPref} k="typewriter" label={t("Typewriter reveal")}
-                      desc={t("Reveal each response gradually as it generates, instead of all at once.")} />
+                    <SetRow label={t("Text reveal")} desc={t(styleOpt.note)}>
+                      <SegSlide label={t("Text reveal")} value={style} onPick={(v) => setPref('revealStyle', v)}
+                        options={REVEAL_STYLE_OPTS.map(o => ({ v: o.v, label: t(o.label) }))} />
+                    </SetRow>
                   )}
-                  {typewriterOn && !noReveal && (
-                    <div className="field row">
-                      <div>
-                        <label>{t("Reveal speed")}</label>
-                        <div className="muted-note">{t("How quickly text appears once it has arrived. This only changes the animation, never how fast the model replies.")}</div>
-                      </div>
-                      <Seg value={REVEAL_STOPS.some(o => o.v === rv) ? rv : -1} onPick={(v) => setPref('revealMs', v)}
+                  {style === 'typewriter' && !noReveal && (
+                    <SetRow label={t("Reveal speed")} desc={t("How quickly text appears once it has arrived, not how fast the model replies.")}>
+                      <SegSlide label={t("Reveal speed")} value={REVEAL_STOPS.some(o => o.v === rv) ? rv : -1} onPick={(v) => setPref('revealMs', v)}
                         options={REVEAL_STOPS.map(o => ({ v: o.v, label: t(o.label) })).concat(REVEAL_STOPS.some(o => o.v === rv) ? [] : [{ v: -1, label: rv + ' ms' }])} />
-                    </div>
+                    </SetRow>
                   )}
                   <Toggle prefs={prefs} setPref={setPref} k="autoscroll" label={t("Auto-scroll")} desc={t("Keep the latest text in view unless you scroll up.")} />
                 </>
                 <div className="me-section-h">{t("Cursor")}</div>
                 <>
-                  <div className="field row">
-                    <div><label>{t("Streaming cursor")}</label><div className="muted-note">{t("Show a soft cursor at the write position as text streams in.")}</div></div>
-                    <div className={'switch' + (prefs.streamCursor ? ' on' : '')} onClick={() => setPref('streamCursor', !prefs.streamCursor)} />
-                  </div>
+                  <SwitchRow label={t("Streaming cursor")} desc={t("Show a soft cursor at the write position as text streams in.")}
+                    on={prefs.streamCursor} onToggle={() => setPref('streamCursor', !prefs.streamCursor)} />
                   {!!prefs.streamCursor && (
-                    <div className="field">
-                      <label>{t("Cursor style")}</label>
-                      <div className="seg">
-                        <button className={(prefs.cursorStyle || 'block') === 'block' ? 'on' : ''} onClick={() => setPref('cursorStyle', 'block')}>{t("Block")}</button>
-                        <button className={prefs.cursorStyle === 'circle' ? 'on' : ''} onClick={() => setPref('cursorStyle', 'circle')}>{t("Circle")}</button>
-                      </div>
-                    </div>
+                    <SetRow label={t("Cursor style")}>
+                      <SegSlide label={t("Cursor style")} value={prefs.cursorStyle === 'circle' ? 'circle' : 'block'} onPick={(v) => setPref('cursorStyle', v)}
+                        options={[{ v: 'block', label: t('Block') }, { v: 'circle', label: t('Circle') }]} />
+                    </SetRow>
                   )}
                   {!!prefs.streamCursor && (prefs.cursorStyle || 'block') === 'block' && (() => {
                     const bv = Math.max(150, Math.min(2000, parseInt(prefs.cursorBlinkMs) || 500));
                     return (
-                      <div className="field">
-                        <label>{t("Blink speed")}</label>
+                      <SetRow label={t("Blink speed")} desc={t("Idle blink rate. It stays solid while text streams, like a terminal.")}>
                         <div className="reveal-row">
                           <input type="range" min="150" max="2000" step="50" value={bv} onChange={(e) => setPref('cursorBlinkMs', parseInt(e.target.value))} />
                           <span className="reveal-val">{bv} ms</span>
+                          {bv !== 500 && <button className="linklike" onClick={() => setPref('cursorBlinkMs', 500)}>{t("Reset")}</button>}
                         </div>
-                        <div className="muted-note">How often the block cursor blinks while idle. It stays solid while text is actively streaming, like a terminal. Default 500 ms{bv !== 500 ? <>, <button className="linklike" onClick={() => setPref('cursorBlinkMs', 500)}>reset</button></> : ''}.</div>
-                      </div>
+                      </SetRow>
                     );
                   })()}
                   {!!prefs.streamCursor && prefs.cursorStyle === 'circle' && (() => {
                     const pv = Math.max(300, Math.min(4000, parseInt(prefs.cursorPulseMs) || 1000));
                     return (
-                      <div className="field">
-                        <label>{t("Pulse speed")}</label>
+                      <SetRow label={t("Pulse speed")} desc={t("How quickly the circle grows and shrinks.")}>
                         <div className="reveal-row">
                           <input type="range" min="300" max="4000" step="100" value={pv} onChange={(e) => setPref('cursorPulseMs', parseInt(e.target.value))} />
                           <span className="reveal-val">{pv} ms</span>
+                          {pv !== 1000 && <button className="linklike" onClick={() => setPref('cursorPulseMs', 1000)}>{t("Reset")}</button>}
                         </div>
-                        <div className="muted-note">How quickly the circle grows and shrinks. Default 1000 ms{pv !== 1000 ? <>, <button className="linklike" onClick={() => setPref('cursorPulseMs', 1000)}>reset</button></> : ''}.</div>
-                      </div>
+                      </SetRow>
                     );
                   })()}
                 </>
                 <div className="me-section-h">{t("Navigation")}</div>
                 <>
-                  <div className="sec-note">{t("Tools for moving around a long conversation. Turn any of them off to keep the chat view bare.")}</div>
-                  <div className="field row">
-                    <div><label>{t("Conversation map")}</label><div className="muted-note">{t("A slim rail down the right edge with one mark per turn, showing where you are and marking tool calls, branch points, and search hits. Click a mark to jump.")}</div></div>
-                    <div className={'switch' + (prefs.threadRail !== false ? ' on' : '')} onClick={() => setPref('threadRail', prefs.threadRail === false)} />
-                  </div>
-                  <div className="field row">
-                    <div><label>{t("Find in conversation")}</label><div className="muted-note">{t("Adds a search button to the chat header and takes over Ctrl+F to search the open conversation. Turn it off to give Ctrl+F back to your browser.")}</div></div>
-                    <div className={'switch' + (prefs.threadFind !== false ? ' on' : '')} onClick={() => setPref('threadFind', prefs.threadFind === false)} />
-                  </div>
-                  <div className="field row">
-                    <div><label>{t("Branch map")}</label><div className="muted-note">{t("Adds a button to the chat header that opens the full shape of the conversation, including every branch you have created by editing or retrying.")}</div></div>
-                    <div className={'switch' + (prefs.branchMap !== false ? ' on' : '')} onClick={() => setPref('branchMap', prefs.branchMap === false)} />
-                  </div>
-                  <div className="field row">
-                    <div><label>{t("Message shortcuts")}</label><div className="muted-note">{t("Single keys act on the conversation when you are not typing: J and K move between messages, then C copies, E edits, R retries, and Y branches.")}</div></div>
-                    <div className={'switch' + (prefs.msgKeys !== false ? ' on' : '')} onClick={() => setPref('msgKeys', prefs.msgKeys === false)} />
-                  </div>
+                  <div className="sec-note">{t("Tools for moving around a long conversation. Turn any off for a bare view.")}</div>
+                  <SwitchRow label={t("Conversation map")} desc={t("A rail down the right edge with one mark per turn. Click a mark to jump.")}
+                    on={prefs.threadRail !== false} onToggle={() => setPref('threadRail', prefs.threadRail === false)} />
+                  <SwitchRow label={t("Find in conversation")} desc={t("Search the open chat from the header. Off gives Ctrl+F back to the browser.")}
+                    on={prefs.threadFind !== false} onToggle={() => setPref('threadFind', prefs.threadFind === false)} />
+                  <SwitchRow label={t("Branch map")} desc={t("A header button showing the whole conversation, every branch included.")}
+                    on={prefs.branchMap !== false} onToggle={() => setPref('branchMap', prefs.branchMap === false)} />
+                  <SwitchRow label={t("Message shortcuts")} desc={t("J and K move between messages; C copies, E edits, R retries, Y branches.")}
+                    on={prefs.msgKeys !== false} onToggle={() => setPref('msgKeys', prefs.msgKeys === false)} />
                 </>
                 <div className="me-section-h">{t("Tools and context")}</div>
                 <>
                   {cfg?.webSearchAvailable && (
-                    <div className="field row">
-                      <div><label>{t("Web search on by default")}</label><div className="muted-note">{t("Start every new chat with web search enabled, when the model allows it.")}</div></div>
-                      <div className={'switch' + (prefs.webSearchDefault ? ' on' : '')} onClick={() => setPref('webSearchDefault', !prefs.webSearchDefault)} />
-                    </div>
+                    <SwitchRow label={t("Web search on by default")} desc={t("Start every new chat with web search enabled, when the model allows it.")}
+                    on={prefs.webSearchDefault} onToggle={() => setPref('webSearchDefault', !prefs.webSearchDefault)} />
                   )}
-                  <div className="field row">
-                    <div><label>{t("Engine telemetry")}</label><div className="muted-note">{t("Show live generation speed and context fill above the message bar while a reply streams.")}</div></div>
-                    <div className={'switch' + (prefs.engineStrip !== false ? ' on' : '')} onClick={() => setPref('engineStrip', prefs.engineStrip === false)} />
-                  </div>
-                  <div className="field row">
-                    <div><label>{t("Context gauge")}</label><div className="muted-note">{t("A small how-full-is-the-window meter beside the model picker, updated after every message rather than only while a reply streams.")}</div></div>
-                    <div className={'switch' + (prefs.ctxGauge ? ' on' : '')} onClick={() => setPref('ctxGauge', !prefs.ctxGauge)} />
-                  </div>
-                  <div className="field row">
-                    <div><label>{t("Speed on each reply")}</label><div className="muted-note">{t("Keep the tokens per second a reply was generated at next to it, so models and quantisations stay comparable after the fact.")}</div></div>
-                    <div className={'switch' + (prefs.msgSpeed ? ' on' : '')} onClick={() => setPref('msgSpeed', !prefs.msgSpeed)} />
-                  </div>
-                  <div className="field row">
-                    <div><label>{t("Context ledger on open")}</label><div className="muted-note">{t("Open chats with the per-message token ledger already showing.")}</div></div>
-                    <div className={'switch' + (prefs.ledgerDefault ? ' on' : '')} onClick={() => setPref('ledgerDefault', !prefs.ledgerDefault)} />
-                  </div>
-                  <div className="field row">
-                    <div><label>{t("Mid-stream steering")}</label><div className="muted-note">{t("Adds a Steer option while a reply is generating. Correcting a reply restarts it from the cut point and adds your correction to the conversation the model sees, which costs an extra request.")}</div></div>
-                    <div className={'switch' + (prefs.steering ? ' on' : '')} onClick={() => setPref('steering', !prefs.steering)} />
-                  </div>
+                  <SwitchRow label={t("Engine telemetry")} desc={t("Live speed and context fill above the message bar while a reply streams.")}
+                    on={prefs.engineStrip !== false} onToggle={() => setPref('engineStrip', prefs.engineStrip === false)} />
+                  <SwitchRow label={t("Context gauge")} desc={t("A how-full-is-the-window meter beside the model picker, updated every message.")}
+                    on={prefs.ctxGauge} onToggle={() => setPref('ctxGauge', !prefs.ctxGauge)} />
+                  <SwitchRow label={t("Speed on each reply")} desc={t("Keep the tokens per second beside each reply, so models stay comparable.")}
+                    on={prefs.msgSpeed} onToggle={() => setPref('msgSpeed', !prefs.msgSpeed)} />
+                  {(() => {
+                    const sv = statusDelaySecs(prefs.statusDelay);
+                    return (
+                      <SetRow label={t("Progress line delay")} desc={t("How long a reply may take before the progress line fades in. Default 3s")}>
+                        <div className="reveal-row">
+                          <input type="range" min="0" max={STATUS_DELAY_MAX} step="1" value={sv} onChange={(e) => setPref('statusDelay', parseInt(e.target.value))} />
+                          <span className="reveal-val">{sv === 0 ? t("Instant") : sv + 's'}</span>
+                          {sv !== STATUS_DELAY_DEFAULT && <button className="linklike" onClick={() => setPref('statusDelay', STATUS_DELAY_DEFAULT)}>{t("Reset")}</button>}
+                        </div>
+                      </SetRow>
+                    );
+                  })()}
+                  <SwitchRow label={t("Context ledger on open")} desc={t("Open chats with the per-message token ledger already showing.")}
+                    on={prefs.ledgerDefault} onToggle={() => setPref('ledgerDefault', !prefs.ledgerDefault)} />
+                  <SwitchRow label={t("Mid-stream steering")} desc={t("Correct a reply mid-stream. Restarts from the cut point and costs an extra request.")}
+                    on={prefs.steering} onToggle={() => setPref('steering', !prefs.steering)} />
                 </>
               </>
             );
@@ -566,10 +693,9 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
             <>
               <h2>{t("Usage")}</h2>
               <div className="hint">{t("Tokens and estimated cost for your account, across every chat.")}</div>
-              <div className="seg" style={{ marginBottom: 14, width: 'fit-content' }}>
-                {[['7', t('7 days')], ['30', t('30 days')], ['90', t('90 days')], ['all', t('All time')]].map(([v, l]) => (
-                  <button key={v} className={usageWindow === v ? 'on' : ''} onClick={() => setUsageWindow(v)}>{l}</button>
-                ))}
+              <div style={{ marginBottom: 16 }}>
+                <SegSlide label={t("Usage window")} value={usageWindow} onPick={setUsageWindow}
+                  options={[{ v: '7', label: t('7 days') }, { v: '30', label: t('30 days') }, { v: '90', label: t('90 days') }, { v: 'all', label: t('All time') }]} />
               </div>
               {usageErr && <div className="dz-err">{usageErr}</div>}
               {!usageData && !usageErr && <div className="muted-note">{t("Loading…")}</div>}
@@ -638,7 +764,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                 )}
                 {twoFa === 'off' && !setup && (
                   <>
-                    <div className="muted-note" style={{ marginBottom: 8 }}>{t("Add a time-based one-time code from an authenticator app (Aegis, Google Authenticator, 1Password, and so on) as a second step at login.")}</div>
+                    <div className="muted-note" style={{ marginBottom: 8 }}>{t("Require a code from an authenticator app as a second step at login.")}</div>
                     <button className="btn" onClick={start2fa}>{t("Set up two-factor")}</button>
                   </>
                 )}
@@ -667,7 +793,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
               </div>
               <div className="sec-block">
                 <div className="me-section-h">{t("Active sessions")}</div>
-                <div className="sec-note">{t("Devices currently signed in to your account. Sessions expire after 30 days of inactivity.")}</div>
+                <div className="sec-note">{t("Devices signed in to your account. Sessions expire after 30 days idle.")}</div>
                 {sessionErr && <div className="dz-err">{sessionErr}</div>}
                 {!sessions && !sessionErr && <div className="muted-note">{t("Loading…")}</div>}
                 {sessions && (

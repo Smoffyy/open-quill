@@ -9,6 +9,8 @@ import ToolCard from './ToolCard.jsx';
 import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash, Dots, Steer } from './icons.jsx';
 import { api } from '../api.js';
 import { extLabel } from '../lib/files.js';
+import { STATUS_DELAY_DEFAULT, statusDelayMs } from '../lib/status.js';
+import { useAnchoredMenu, menuStyleOf } from '../lib/anchor.js';
 import { t } from '../i18n.jsx';
 
 function Columns(props) {
@@ -27,38 +29,16 @@ function fmtTime(ts) {
 
 function MoreMenu({ items }) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState(null);
   const btnRef = useRef(null);
   const menuRef = useRef(null);
-  useEffect(() => {
-    if (!open) return;
-    const h = (e) => { if (menuRef.current && !menuRef.current.contains(e.target) && btnRef.current && !btnRef.current.contains(e.target)) setOpen(false); };
-    const close = () => setOpen(false);
-    document.addEventListener('mousedown', h);
-    window.addEventListener('resize', close);
-    window.addEventListener('scroll', close, true);
-    return () => { document.removeEventListener('mousedown', h); window.removeEventListener('resize', close); window.removeEventListener('scroll', close, true); };
-  }, [open]);
-  useLayoutEffect(() => {
-    if (!open || !btnRef.current) return;
-    const r = btnRef.current.getBoundingClientRect();
-    const menu = menuRef.current;
-    const mh = menu ? menu.offsetHeight : 220;
-    const mw = menu ? menu.offsetWidth : 200;
-    const below = window.innerHeight - r.bottom;
-    const up = below < mh + 12 && r.top > below;
-    const top = up ? Math.max(8, r.top - mh - 6) : r.bottom + 6;
-    const left = Math.min(Math.max(8, r.right - mw), window.innerWidth - mw - 8);
-    setPos({ top, left });
-  }, [open]);
+  const pos = useAnchoredMenu(open, setOpen, btnRef, menuRef);
   const list = items.filter(Boolean);
   if (!list.length) return null;
   return (
     <span className="retry-wrap">
       <button ref={btnRef} className={'action-btn' + (open ? ' on' : '')} title={t("More actions")} aria-label={t("More actions")} aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(o => !o)}><Dots style={{ width: 18 }} /></button>
       {open && createPortal(
-        <div ref={menuRef} className="retry-menu more-menu portal" role="menu" aria-label={t("More actions")}
-          style={{ position: 'fixed', top: pos ? pos.top : -9999, left: pos ? pos.left : -9999, right: 'auto', bottom: 'auto', visibility: pos ? 'visible' : 'hidden', zIndex: 200 }}>
+        <div ref={menuRef} className="retry-menu more-menu portal" role="menu" aria-label={t("More actions")} style={menuStyleOf(pos)}>
           {list.map((it, i) => (
             <button key={i} role="menuitem" aria-checked={it.on ? 'true' : undefined} className={(it.on ? 'on' : '') + (it.danger ? ' danger' : '')} onClick={() => { setOpen(false); it.run(); }}>
               {it.icon}{it.label}
@@ -88,7 +68,7 @@ function Attachments({ items, pins, onTogglePinFile }) {
   return (
     <div className="msg-attachments">
       {items.map((a, i) => a.type && a.type.startsWith('image/') ? (
-        <button key={i} className="att image" onClick={() => openLightbox(a.url, a.name)} aria-label={t('Open image {name}', { name: a.name })}><img src={a.url} alt={a.name} /></button>
+        <button key={i} className="att image" onClick={() => openLightbox(a.url, a.name)} aria-label={t('Open image {name}', { name: a.name })}><img src={a.url} alt={a.name} loading="lazy" decoding="async" /></button>
       ) : (
         <div key={i} className={'att file' + (pinnedUrls.has(a.url) ? ' pinned-file' : '')}>
           <a className="att-link" href={a.url} target="_blank" rel="noreferrer" title={a.name}>
@@ -107,7 +87,7 @@ function Attachments({ items, pins, onTogglePinFile }) {
   );
 }
 
-function ModelIcon({ model, phase, below, name }) {
+const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name, streamIn }, ref) {
   const base = model?.staticIcon || '';
   const map = {
     static: base,
@@ -116,29 +96,31 @@ function ModelIcon({ model, phase, below, name }) {
   };
   const src = map[phase] || base;
   if (!base && !name) return null;
-  const anim = phase === 'generating' ? (model?.generatingAnim || 'spin') : phase === 'thinking' ? (model?.thinkingAnim || 'pulse') : '';
+  const anim = phase === 'generating' ? (model?.generatingAnim || 'none') : phase === 'thinking' ? (model?.thinkingAnim || 'none') : '';
   const cls = anim === 'none' ? '' : anim;
   const sz = model?.iconSize > 0 ? model.iconSize : 40;
   return (
-    <div className={'msg-icon' + (below ? ' below' : '') + (name ? ' with-name' : '')}>
+    <div ref={ref} className={'msg-icon' + (below ? ' below' : '') + (name ? ' with-name' : '') + (streamIn ? ' stream-in' : '')}>
       {base && <img src={src} className={cls} style={{ width: sz, height: sz }} alt="" />}
       {name && <span className="msg-icon-name">{name}</span>}
     </div>
   );
-}
+});
 
 const compact = (n) => (n >= 10000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : Number(n).toLocaleString());
 
-function StreamStatus({ status }) {
+function StreamStatus({ status, delay = STATUS_DELAY_DEFAULT }) {
   const total = status && status.total ? status.total : 0;
   const hasProgress = total > 0;
   const waiting = !!(status && status.phase === 'waiting');
-  const [show, setShow] = useState(false);
+  const wait = statusDelayMs(delay);
+  const [show, setShow] = useState(wait === 0);
   useEffect(() => {
-    if (hasProgress || waiting) { setShow(true); return; }
-    const timer = setTimeout(() => setShow(true), 1200);
+    if (wait === 0) { setShow(true); return; }
+    setShow(false);
+    const timer = setTimeout(() => setShow(true), wait);
     return () => clearTimeout(timer);
-  }, [hasProgress, waiting]);
+  }, [wait]);
   if (!show) return null;
 
   if (waiting) {
@@ -222,7 +204,7 @@ function SteerChips({ notes }) {
   );
 }
 
-function Message({ msg, model, models, currentId, streaming, phase, liveCall, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, showSpeed = false, preset = 'anthropic' }) {
+function Message({ msg, model, models, currentId, streaming, phase, liveCall, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, statusDelay = STATUS_DELAY_DEFAULT, showSpeed = false, preset = 'anthropic' }) {
   if (chatEnded) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onFork = null; onDelete = null; }
   if (!chatId) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onFork = null; onTogglePin = null; }
   const [typing, setTyping] = useState(false);
@@ -241,16 +223,8 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
   const [retryMenu, setRetryMenu] = useState(false);
   const [compare, setCompare] = useState(false);
   const retryRef = useRef(null);
-  const taRef = useRef(null);
-  useEffect(() => {
-    if (!retryMenu) return;
-    const h = (e) => { if (retryRef.current && !retryRef.current.contains(e.target)) setRetryMenu(false); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [retryMenu]);
-  useEffect(() => {
-    if (editing && taRef.current) { const el = taRef.current; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight + 2, 460) + 'px'; }
-  }, [editing, draft]);
+  const retryMenuRef = useRef(null);
+  const retryPos = useAnchoredMenu(retryMenu, setRetryMenu, retryRef, retryMenuRef);
   async function doCopy() {
     const clean = (msg.content || '').replace(/\[\[OQ(?:R:[A-Za-z0-9+/=]+|T:\d+)\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
     if (!(await copyText(clean))) return;
@@ -272,14 +246,16 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
           {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> {t("Pinned")}</div>}
           <Attachments items={msg.attachments} pins={pins} onTogglePinFile={onTogglePinFile} />
           {editing ? (
-            <div className="edit-box">
-              <textarea ref={taRef} value={draft} autoFocus onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit(); if (e.key === 'Escape') setEditing(false); }} />
+            <>
+              <div className="edit-box" data-value={draft + ' '}>
+                <textarea value={draft} autoFocus rows={1} cols={1} onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit(); if (e.key === 'Escape') setEditing(false); }} />
+              </div>
               <div className="edit-actions">
                 <button className="btn ghost" onClick={() => setEditing(false)}>{t("Cancel")}</button>
                 <button className="btn primary" onClick={saveEdit}>{t("Save & submit")}</button>
               </div>
-            </div>
+            </>
           ) : (
             msg.content && <div className="bubble-user"><Markdown>{msg.content}</Markdown></div>
           )}
@@ -288,8 +264,9 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
               {(() => { const t = fmtTime(msg.created_at); return t ? <span className="msg-time" data-full={t.full}>{t.short}</span> : null; })()}
               <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
               {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")} aria-label={t("Compare versions")}><Columns style={{ width: 18 }} /></button>}
-              <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
+              {onRegenerate && <button className="action-btn" onClick={() => onRegenerate(msg.id)} title={t("Retry")} aria-label={t("Retry")}><Retry /></button>}
               {onEdit && <button className="action-btn" onClick={startEdit} title={t("Edit")} aria-label={t("Edit")}><Pencil style={{ width: 18 }} /></button>}
+              <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
               <MoreMenu items={[
                 onFork && { label: t('Branch into a new chat'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
                 onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin (keep in context)'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
@@ -306,7 +283,38 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
   const iconPhase = streaming ? phase : 'static';
   const showIt = showIcon || streaming;
   const showName = !!model?.showName && !!model?.displayName;
-  const icon = showIt ? <ModelIcon model={model} phase={iconPhase} below={pos === 'below'} name={pos === 'left' ? null : (showName ? model.displayName : null)} /> : null;
+  const iconStreamIn = streaming && !!msg.content;
+  const iconRef = useRef(null);
+  const iconPrevTop = useRef(null);
+  const iconSuspendUntil = useRef(0);
+  useEffect(() => {
+    const el = iconRef.current;
+    const container = el && el.closest('.msg');
+    if (pos !== 'below' || !el || !container) return;
+    const settle = () => { el.style.transition = ''; el.style.transform = ''; };
+    const onToggleStart = (e) => {
+      if (!e.target.closest('.reasoning-head')) return;
+      settle();
+      iconSuspendUntil.current = performance.now() + 500;
+    };
+    container.addEventListener('click', onToggleStart);
+    const ro = new ResizeObserver(() => {
+      const top = el.getBoundingClientRect().top;
+      const suspended = performance.now() < iconSuspendUntil.current;
+      if (iconPrevTop.current !== null && !suspended) {
+        const delta = iconPrevTop.current - top;
+        if (Math.abs(delta) > 0.5) {
+          el.style.transition = 'none';
+          el.style.transform = `translateY(${delta}px)`;
+          requestAnimationFrame(() => requestAnimationFrame(settle));
+        }
+      }
+      iconPrevTop.current = top;
+    });
+    ro.observe(container);
+    return () => { container.removeEventListener('click', onToggleStart); ro.disconnect(); settle(); };
+  }, [pos]);
+  const icon = showIt ? <ModelIcon ref={iconRef} model={model} phase={iconPhase} below={pos === 'below'} name={pos === 'left' ? null : (showName ? model.displayName : null)} streamIn={iconStreamIn} /> : null;
 
   const [fb, setFb] = useState(msg.feedback || 0);
   useEffect(() => { setFb(msg.feedback || 0); }, [msg.id]);
@@ -318,9 +326,11 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
 
   const segs = Array.isArray(msg.reasoningSegs) ? msg.reasoningSegs : null;
   const tailIsMarker = segs && /\[\[OQT:\d+\]\]\s*$/.test(msg.content || '');
+  const segMs = Array.isArray(msg.reasoningSegMs) ? msg.reasoningSegMs : null;
+  const segMsKey = segMs ? segMs.join(',') : '';
   const segCtx = useMemo(
-    () => (segs ? { segs, segMs: Array.isArray(msg.reasoningSegMs) ? msg.reasoningSegMs : null, live: !!(streaming && tailIsMarker), preset, collapsible: model?.reasoningCollapsible !== false } : null),
-    [segs, msg.reasoningSegMs, streaming, tailIsMarker, preset, model]
+    () => (segs ? { segs, segMs, live: !!(streaming && tailIsMarker), preset, collapsible: model?.reasoningCollapsible !== false } : null),
+    [segs, segMsKey, streaming, tailIsMarker, preset, model]
   );
 
   const inner = (
@@ -338,7 +348,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
           {streaming && liveCall && liveCall.tool && (
             <div className="tool-live"><ToolCard call={liveCall} result={null} /></div>
           )}
-          {streaming && !msg.content && !msg.reasoning && !liveCall && <StreamStatus status={status} />}
+          {streaming && !msg.content && !msg.reasoning && !liveCall && <StreamStatus status={status} delay={statusDelay} />}
           {streaming && !msg.content && !liveCall && <p className="stream-wait" aria-hidden="true"></p>}
         </div>
       )}
@@ -350,27 +360,30 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
       {!streaming && msg.content && (
         <div className="actions">
           <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
-          <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
-          {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")} aria-label={t("Compare versions")}><Columns style={{ width: 18 }} /></button>}
-          <span className="retry-wrap" ref={retryRef}>
+          {chatId && !String(msg.id).startsWith('inc-') && (
+            <button className={'action-btn' + (fb === 1 ? ' on' : '')} onClick={() => rate(1)} title={t("Good response")} aria-label={t("Good response")} aria-pressed={fb === 1}><ThumbUp style={{ width: 16 }} /></button>
+          )}
+          {chatId && !String(msg.id).startsWith('inc-') && (
+            <button className={'action-btn' + (fb === -1 ? ' on' : '')} onClick={() => rate(-1)} title={t("Bad response")} aria-label={t("Bad response")} aria-pressed={fb === -1}><ThumbDown style={{ width: 16 }} /></button>
+          )}
+          <span className="retry-wrap">
             {onRegenerate && <button className="action-btn" title={t("Retry")} aria-label={t("Retry")} onClick={() => onRegenerate(msg.id)}><Retry /></button>}
             {onRegenerateWith && models && models.length > 1 && (
-              <button className="action-caret" title={t("Retry with another model")} aria-label={t("Retry with another model")} aria-expanded={retryMenu} aria-haspopup="menu" onClick={() => setRetryMenu(o => !o)}>▾</button>
+              <button ref={retryRef} className={'action-caret' + (retryMenu ? ' on' : '')} title={t("Retry with another model")} aria-label={t("Retry with another model")} aria-expanded={retryMenu} aria-haspopup="menu" onClick={() => setRetryMenu(o => !o)}>▾</button>
             )}
-            {retryMenu && (
-              <div className="retry-menu" role="menu" aria-label={t("Retry with another model")}>
+            {retryMenu && createPortal(
+              <div ref={retryMenuRef} className="retry-menu portal" role="menu" aria-label={t("Retry with another model")} style={menuStyleOf(retryPos)}>
                 <div className="retry-menu-label">{t("Retry with")}</div>
                 {models.map(mm => (
                   <button key={mm.id} role="menuitem" className={mm.id === currentId ? 'on' : ''} onClick={() => { setRetryMenu(false); onRegenerateWith(msg.id, mm.id); }}>
                     {mm.staticIcon && <img src={mm.staticIcon} alt="" />}{mm.displayName}{mm.id === currentId && <Check style={{ width: 13, marginLeft: 'auto' }} />}
                   </button>
                 ))}
-              </div>
-            )}
+              </div>, document.body)}
           </span>
+          <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
+          {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")} aria-label={t("Compare versions")}><Columns style={{ width: 18 }} /></button>}
           <MoreMenu items={[
-            chatId && !String(msg.id).startsWith('inc-') && { label: t('Good response'), icon: <ThumbUp style={{ width: 15 }} />, on: fb === 1, run: () => rate(1) },
-            chatId && !String(msg.id).startsWith('inc-') && { label: t('Bad response'), icon: <ThumbDown style={{ width: 15 }} />, on: fb === -1, run: () => rate(-1) },
             onFork && { label: t('Branch into a new chat'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
             onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin (keep in context)'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
             onDelete && chatId && !String(msg.id).startsWith('inc-') && { label: t('Delete message'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }

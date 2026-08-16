@@ -6,9 +6,12 @@ import {
   exportKeybinds, importKeybinds, KEYBIND_ACTIONS, KEYBIND_BY_ID, DEFAULT_LEADER
 } from '../src/lib/keybinds.js';
 import { parseSteps, lastSentence, thoughtSeconds } from '../src/lib/reasoning.js';
-import { hasMath, wrapMathEnvironments } from '../src/lib/mathjs.js';
+import { hasMath, isolateDisplayMath, wrapMathEnvironments } from '../src/lib/mathjs.js';
 import { hasToolCall, previewOf, buildTree, collapseRuns } from '../src/lib/threadmeta.js';
 import { scanTools } from '../src/toolproto.js';
+import { STATUS_DELAY_DEFAULT, STATUS_DELAY_MAX, statusDelayMs, statusDelaySecs } from '../src/lib/status.js';
+import { paletteFor, palettesFor, themeValue, paletteById, DEFAULT_DARK, DEFAULT_LIGHT, presetOf } from '../src/lib/palettes.js';
+import { scrollInsideMenu } from '../src/lib/anchor.js';
 import {
   isRange, clampToRange, allNumeric, kwargPayload,
   controlOf as controlOfKwarg, defaultValueOf as defaultValueOfKwarg,
@@ -205,6 +208,14 @@ test('lastSentence skips fragments too short to read', () => {
   assert.equal(lastSentence('A. B. This is the real one.'), 'This is the real one.');
 });
 
+test('lastSentence strips markdown decoration so the header reads as plain prose', () => {
+  assert.equal(lastSentence('* *Constraint Check:* No lists/bullets in the explanation.'), 'Constraint Check: No lists/bullets in the explanation.');
+  assert.equal(lastSentence('**Constraint Check:** No lists/bullets in the explanation.'), 'Constraint Check: No lists/bullets in the explanation.');
+  assert.equal(lastSentence('### Step 1: check the constraint.'), 'Step 1: check the constraint.');
+  assert.equal(lastSentence('Run `pytest -k foo` to check.'), 'Run pytest -k foo to check.');
+  assert.equal(lastSentence('- First check a*b is not italic.'), 'First check a*b is not italic.');
+});
+
 test('lastSentence truncates a very long sentence rather than overflowing the header', () => {
   const long = 'x'.repeat(400) + '.';
   const out = lastSentence(long);
@@ -252,6 +263,70 @@ test('wrapMathEnvironments leaves fenced code alone', () => {
 test('wrapMathEnvironments does not double-wrap something already inside math', () => {
   const src = '$$\\begin{align}x\\end{align}$$';
   assert.equal(wrapMathEnvironments(src), src);
+});
+
+test('wrapMathEnvironments leaves tilde-fenced code alone', () => {
+  const src = '~~~\n\\begin{align}x\\end{align}\n~~~';
+  assert.equal(wrapMathEnvironments(src), src);
+});
+
+// A price is a lone dollar with no partner. It used to latch the math depth open
+// for the rest of the segment, so every later environment went unwrapped.
+test('an unpaired dollar does not stop a later environment being wrapped', () => {
+  const out = wrapMathEnvironments('The plan costs $5 total.\n\n\\begin{align}\nE = mc^2\n\\end{align}');
+  assert.ok(out.includes('$$'), 'environment should be wrapped');
+  assert.ok(out.includes('\\begin{align}'));
+});
+
+test('a genuinely paired dollar still suppresses wrapping inside it', () => {
+  const src = '$\\begin{align}x\\end{align}$';
+  assert.equal(wrapMathEnvironments(src), src);
+});
+
+// blockify splits on blank lines, so a wrapped body containing one would be torn
+// in half and both sides would render as literal text with a stray $$.
+test('wrapMathEnvironments collapses blank lines inside the body it wraps', () => {
+  const out = wrapMathEnvironments('\\begin{align}\na &= b\n\n c &= d\n\\end{align}');
+  const body = out.slice(out.indexOf('$$') + 2, out.lastIndexOf('$$'));
+  assert.ok(!/\n[ \t]*\n/.test(body), 'no blank line may survive inside the wrapped body');
+});
+
+test('newly supported environments are wrapped', () => {
+  for (const env of ['subequations', 'multlined', 'cases*']) {
+    const out = wrapMathEnvironments(`\\begin{${env}}\na=b\n\\end{${env}}`);
+    assert.ok(out.includes('$$'), env + ' should be wrapped');
+  }
+});
+
+test('eqnarray is deliberately not wrapped, KaTeX cannot typeset it', () => {
+  const src = '\\begin{eqnarray}a&=&b\\end{eqnarray}';
+  assert.equal(wrapMathEnvironments(src), src);
+});
+
+// remarkBreaks keeps single newlines in one paragraph, so a $$ block on its own
+// line was still parsed as INLINE math and KaTeX refused align with
+// "can be used only in display mode".
+test('isolateDisplayMath gives a display block its own paragraph', () => {
+  assert.equal(
+    isolateDisplayMath('$$\\begin{align}a &= b\\end{align}$$\nCosts 5.'),
+    '$$\n\\begin{align}a &= b\\end{align}\n$$\n\nCosts 5.'
+  );
+  assert.equal(isolateDisplayMath('Here:\n$$x^2$$\nDone.'), 'Here:\n\n$$\nx^2\n$$\n\nDone.');
+});
+
+test('isolateDisplayMath handles a multi-line display block', () => {
+  assert.equal(
+    isolateDisplayMath('Intro:\n$$\n\\begin{align}\na &= b\n\\end{align}\n$$\nOutro.'),
+    'Intro:\n\n$$\n\\begin{align}\na &= b\n\\end{align}\n$$\n\nOutro.'
+  );
+});
+
+test('isolateDisplayMath leaves inline math and fenced code alone', () => {
+  const inline = 'The value $x$ and $y$ are inline.';
+  assert.equal(isolateDisplayMath(inline), inline);
+  const fenced = '```\n$$x^2$$\ntext\n```';
+  assert.equal(isolateDisplayMath(fenced), fenced);
+  assert.equal(isolateDisplayMath('Intro:\n\n$$x^2$$\n\nOutro.'), 'Intro:\n\n$$\nx^2\n$$\n\nOutro.');
 });
 
 test('hasToolCall detects the stored tool marker', () => {
@@ -516,4 +591,149 @@ test('the thinking budget preset matches the shape llama.cpp expects', () => {
   const out = kwargPayload([p], resolveKwargs([p], { [p.id]: '5000' }, false));
   assert.equal(out.thinking_budget_tokens, 5120, 'snapped to the 1024 grid');
   assert.equal('extra_body' in out, false);
+});
+
+test('the progress-line delay clamps to a whole number of seconds in range', () => {
+  assert.equal(statusDelaySecs(undefined), STATUS_DELAY_DEFAULT);
+  assert.equal(statusDelaySecs(null), STATUS_DELAY_DEFAULT);
+  assert.equal(statusDelaySecs(''), STATUS_DELAY_DEFAULT);
+  assert.equal(statusDelaySecs('nonsense'), STATUS_DELAY_DEFAULT);
+  assert.equal(statusDelaySecs(0), 0, 'zero is instant, not absent');
+  assert.equal(statusDelaySecs('0'), 0);
+  assert.equal(statusDelaySecs(-4), 0);
+  assert.equal(statusDelaySecs(99), STATUS_DELAY_MAX);
+  assert.equal(statusDelaySecs(4.6), 5);
+  assert.equal(statusDelayMs(3), 3000);
+  assert.equal(statusDelayMs(0), 0);
+});
+
+test('a palette resolves to a theme plus an optional palette attribute', () => {
+  assert.equal(paletteFor('system', 'anthropic', true).id, 'anthropic-2026q3');
+  assert.equal(paletteFor('system', 'anthropic', false).id, 'anthropic-light');
+  assert.equal(paletteFor('system', 'openai', true).id, 'openai-2024q1');
+  assert.equal(paletteFor('anthropic-2026q3', 'anthropic').theme, 'anthropic');
+  assert.equal(paletteFor('anthropic-2026q3', 'anthropic').palette, '2026q3');
+  assert.equal(paletteFor('anthropic-2025q2', 'anthropic').palette, '', 'the older dark carries no palette attribute');
+});
+
+test('legacy theme values still land on the preset default', () => {
+  for (const legacy of ['dark', 'oled', 'anthropic', 'openai']) {
+    assert.equal(paletteFor(legacy, 'anthropic').id, 'anthropic-2026q3', legacy);
+    assert.equal(paletteFor(legacy, 'openai').id, 'openai-2024q1', legacy);
+  }
+  assert.equal(paletteFor('light', 'openai').id, 'openai-light');
+});
+
+test('a palette from the other preset falls back by darkness, never breaks', () => {
+  assert.equal(paletteFor('anthropic-2026q3', 'openai').id, 'openai-2024q1');
+  assert.equal(paletteFor('anthropic-light', 'openai').id, 'openai-light');
+  assert.equal(paletteFor('openai-2024q1', 'anthropic').id, 'anthropic-2026q3');
+  assert.equal(paletteFor('nonsense', 'anthropic', true).id, 'anthropic-2026q3');
+  assert.equal(paletteFor(null, 'anthropic', false).id, 'anthropic-light');
+});
+
+test('the theme picker only ever offers its own preset a value it can select', () => {
+  for (const preset of ['anthropic', 'openai']) {
+    const ids = palettesFor(preset).map(p => p.id).concat('system');
+    for (const stored of ['system', 'light', 'dark', 'oled', 'anthropic-2025q2', 'anthropic-legacy', 'openai-light', '', 'junk']) {
+      assert.ok(ids.includes(themeValue(stored, preset)), preset + ' / ' + stored);
+    }
+  }
+  assert.equal(palettesFor('anthropic').length, 4);
+  assert.equal(palettesFor('openai').length, 2);
+});
+
+test('the legacy palette is a distinct anthropic dark, not the default', () => {
+  const leg = paletteFor('anthropic-legacy', 'anthropic');
+  assert.equal(leg.theme, 'anthropic');
+  assert.equal(leg.palette, 'legacy');
+  assert.notEqual(paletteFor('dark', 'anthropic').id, 'anthropic-legacy', 'legacy is opt-in, never the default');
+  assert.equal(paletteFor('anthropic-legacy', 'openai').id, 'openai-2024q1', 'falls back by darkness under the other preset');
+  const ids = palettesFor('anthropic').map(p => p.id);
+  assert.deepEqual(ids, ['anthropic-light', 'anthropic-legacy', 'anthropic-2025q2', 'anthropic-2026q3']);
+});
+
+test('a scroll inside an anchored menu does not count as a scroll away from it', () => {
+  const item = { tag: 'item' };
+  const menu = { contains: (n) => n === item };
+  assert.equal(scrollInsideMenu(menu, item), true, 'a scroll on a menu row stays open');
+  assert.equal(scrollInsideMenu(menu, menu), true, 'the menu scrolling itself stays open');
+  assert.equal(scrollInsideMenu(menu, { tag: 'thread' }), false, 'an outside scroll still closes');
+  assert.equal(scrollInsideMenu(null, item), false, 'no menu yet, nothing to protect');
+  assert.equal(scrollInsideMenu(menu, null), false);
+  assert.equal(scrollInsideMenu({ contains: () => false }, { self: true }), false);
+});
+
+test('every dark palette round-trips, so toggling to light and back can restore it', () => {
+  for (const preset of ['anthropic', 'openai']) {
+    const p = presetOf(preset);
+    const light = paletteById(DEFAULT_LIGHT[p]);
+    assert.ok(light && !light.dark && light.preset === p, p + ' has a light default');
+    for (const pal of palettesFor(p).filter(x => x.dark)) {
+      assert.equal(paletteFor(pal.id, p).id, pal.id, pal.id + ' survives a round trip');
+    }
+    assert.equal(paletteFor(DEFAULT_LIGHT[p], p).id, DEFAULT_LIGHT[p]);
+    assert.ok(paletteById(DEFAULT_DARK[p]).dark, p + ' dark default is dark');
+  }
+  assert.equal(paletteFor('dark', 'anthropic').id, 'anthropic-2026q3');
+  assert.notEqual(paletteFor('dark', 'anthropic').id, 'anthropic-legacy');
+});
+
+test('highlighting is identical with the cache bypassed, so the streaming path cannot change output', async () => {
+  const { ensureCommon, highlight } = await import('../src/lib/hljs.js');
+  const hl = await ensureCommon();
+  assert.ok(hl, 'highlight.js common bundle loaded');
+  const code = 'function add(a, b) {\n  return a + b;\n}\n';
+  const viaCache = highlight(code, 'javascript');
+  const viaBypass = highlight(code, 'javascript', { cache: false });
+  assert.equal(viaBypass, viaCache);
+  assert.match(viaCache, /<span class="hljs-/, 'really highlighted, not escaped plain text');
+  let prev = '';
+  for (const n of [10, 20, 30]) {
+    const partial = code.slice(0, n);
+    const out = highlight(partial, 'javascript', { cache: false });
+    assert.notEqual(out, prev);
+    assert.equal(out, highlight(partial, 'javascript', { cache: false }));
+    prev = out;
+  }
+});
+
+// ---- reveal styles --------------------------------------------------------
+
+test('resolveReveal prefers the named style and falls back to the legacy booleans', async () => {
+  const { resolveReveal } = await import('../src/lib/reveal.js');
+  assert.equal(resolveReveal({ revealStyle: 'instant' }, 'anthropic'), 'instant');
+  assert.equal(resolveReveal({ revealStyle: 'typewriter' }, 'anthropic'), 'typewriter');
+  assert.equal(resolveReveal({}, 'anthropic'), 'typewriter');
+  assert.equal(resolveReveal(null, 'anthropic'), 'typewriter');
+  assert.equal(resolveReveal({ typewriter: false }, 'anthropic'), 'instant');
+  assert.equal(resolveReveal({ animations: false }, 'anthropic'), 'instant');
+  // The named style wins over a stale pre-split boolean sitting beside it.
+  assert.equal(resolveReveal({ typewriter: false, revealStyle: 'typewriter' }, 'anthropic'), 'typewriter');
+});
+
+test('a retired or unknown style resolves to the default reveal, never to nothing', async () => {
+  const { resolveReveal } = await import('../src/lib/reveal.js');
+  // 'fade' shipped briefly and was removed; a pref still holding it must keep
+  // revealing rather than silently degrade to instant.
+  for (const v of ['fade', 'glide', 'blur', 'sparkle', '', 0, {}]) {
+    assert.equal(resolveReveal({ revealStyle: v }, 'anthropic'), 'typewriter', String(v));
+  }
+  // ...unless the legacy boolean genuinely said off.
+  assert.equal(resolveReveal({ revealStyle: 'fade', typewriter: false }, 'anthropic'), 'instant');
+});
+
+test('the OpenAI preset has no reveal, whatever the pref says', async () => {
+  const { resolveReveal, REVEAL_STYLES } = await import('../src/lib/reveal.js');
+  for (const s of REVEAL_STYLES) assert.equal(resolveReveal({ revealStyle: s }, 'openai'), 'instant');
+});
+
+test('revealSpeedMs clamps anything unreadable to the default interval', async () => {
+  const { revealSpeedMs } = await import('../src/lib/reveal.js');
+  assert.equal(revealSpeedMs(40), 40);
+  assert.equal(revealSpeedMs('70'), 70);
+  assert.equal(revealSpeedMs(0), 0);
+  for (const v of [null, undefined, 'x', {}]) assert.equal(revealSpeedMs(v), 40, String(v));
+  assert.equal(revealSpeedMs(-50), 0);
+  assert.equal(revealSpeedMs(9999), 100);
 });

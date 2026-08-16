@@ -1,13 +1,45 @@
-import React, { useMemo, useState, useSyncExternalStore } from 'react';
+import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { copyText } from '../clipboard.js';
-import { highlight, hljsVersion, subscribeHljs } from '../lib/hljs.js';
+import { cancelHighlight, highlight, hljsVersion, scheduleHighlight, subscribeHljs } from '../lib/hljs.js';
+import { escHtml } from '../lib/artifacts.js';
 import { Copy, Check } from './icons.jsx';
 import { t } from '../i18n.jsx';
 
-export default function CodeBlock({ lang, code }) {
+const NEAR_VIEWPORT = '900px';
+
+function CodeBlock({ lang, code }) {
   const [copied, setCopied] = useState(false);
   const hlVersion = useSyncExternalStore(subscribeHljs, hljsVersion, hljsVersion);
-  const html = useMemo(() => highlight(code, lang), [code, lang, hlVersion]);
+  const [html, setHtml] = useState(() => escHtml(code));
+  const preRef = useRef(null);
+  const lit = useRef(null);
+
+  useEffect(() => {
+    if (lit.current && lit.current.v === hlVersion && lit.current.lang === lang) {
+      setHtml(highlight(code, lang, { cache: false }));
+      return;
+    }
+    setHtml(escHtml(code));
+    const el = preRef.current;
+    if (!el) return;
+    let done = false;
+    let alive = true;
+    const job = () => { if (!alive) return; lit.current = { v: hlVersion, lang }; setHtml(highlight(code, lang)); };
+    const paint = () => {
+      if (done) return;
+      done = true;
+      scheduleHighlight(job);
+    };
+    if (typeof IntersectionObserver === 'undefined') { paint(); return () => { alive = false; cancelHighlight(job); }; }
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { io.disconnect(); paint(); } }, { rootMargin: NEAR_VIEWPORT });
+    io.observe(el);
+    return () => {
+      alive = false;
+      io.disconnect();
+      cancelHighlight(job);
+    };
+  }, [code, lang, hlVersion]);
+
   async function copy() {
     if (await copyText(code)) {
       setCopied(true);
@@ -22,7 +54,9 @@ export default function CodeBlock({ lang, code }) {
           {copied ? <Check key="c" className="copy-pop" /> : <Copy key="o" />} {copied ? t('Copied') : t('Copy')}
         </button>
       </div>
-      <pre><code className={'hljs' + (lang ? ` language-${lang}` : '')} dangerouslySetInnerHTML={{ __html: html }} /></pre>
+      <pre ref={preRef}><code className={'hljs' + (lang ? ` language-${lang}` : '')} dangerouslySetInnerHTML={{ __html: html }} /></pre>
     </div>
   );
 }
+
+export default React.memo(CodeBlock);

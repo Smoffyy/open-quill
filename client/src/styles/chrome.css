@@ -1,9 +1,12 @@
 /* ---------- top bar ---------- */
-.topbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; flex-shrink: 0; }
-.topbar .chat-name { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 15px; }
-.share-btn { padding: 6px 14px; border-radius: 9px; background: var(--surface); font-size: 14px; font-family: var(--font-sans); }
+.topbar { display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0 12px; flex-shrink: 0; }
+.topbar .chat-name { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 14px; line-height: 20px; }
+.topbar .icon-btn { width: 28px; height: 28px; border-radius: 7px; }
+.share-btn { height: 28px; padding: 0 10px; border-radius: 7px; background: var(--surface); font-size: 14px; line-height: 20px; font-family: var(--font-sans); }
 .share-btn:hover { background: var(--surface-hover); }
-.disclaimer { text-align: center; font-size: 12px; color: var(--text-faint); font-family: var(--font-sans); padding: 8px 0 10px; }
+.disclaimer { text-align: center; font-size: 12px; line-height: 16px; color: var(--text-faint); font-family: var(--font-sans); padding: 8px 0; }
+.disclaimer a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.disclaimer a:hover { color: var(--text-muted); }
 
 /* ---------- scroll-to-bottom ---------- */
 .to-bottom { position: absolute; left: 50%; transform: translateX(-50%); bottom: 190px; width: 34px; height: 34px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); display: grid; place-items: center; color: var(--text); box-shadow: 0 4px 14px #0000004d; animation: pop var(--fx-a, .18s) ease; z-index: 5; }

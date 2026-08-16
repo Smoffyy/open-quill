@@ -507,15 +507,15 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
             <div className="field">
               <div className="icon-grid">
                 <IconSlot label={t("Static")} value={m.static_icon} def="" onChange={(v) => set('static_icon', v)} />
-                <IconSlot label={t("Generating")} value={m.generating_icon} def={m.static_icon || ''} anim={(m.generating_anim || 'spin') === 'none' ? '' : (m.generating_anim || 'spin')} onChange={(v) => set('generating_icon', v)} />
-                <IconSlot label={t("Thinking")} value={m.thinking_icon} def={m.static_icon || ''} anim={(m.thinking_anim || 'pulse') === 'none' ? '' : (m.thinking_anim || 'pulse')} onChange={(v) => set('thinking_icon', v)} />
+                <IconSlot label={t("Generating")} value={m.generating_icon} def={m.static_icon || ''} anim={(m.generating_anim || 'none') === 'none' ? '' : (m.generating_anim || 'none')} onChange={(v) => set('generating_icon', v)} />
+                <IconSlot label={t("Thinking")} value={m.thinking_icon} def={m.static_icon || ''} anim={(m.thinking_anim || 'none') === 'none' ? '' : (m.thinking_anim || 'none')} onChange={(v) => set('thinking_icon', v)} />
               </div>
               <div className="icon-grid anim-row">
                 <div />
-                <select className="anim-sel" value={m.generating_anim || 'spin'} onChange={(e) => set('generating_anim', e.target.value)}>
+                <select className="anim-sel" value={m.generating_anim || 'none'} onChange={(e) => set('generating_anim', e.target.value)}>
                   <option value="spin">{t("Spin")}</option><option value="pulse">{t("Breathe")}</option><option value="bounce">{t("Bounce")}</option><option value="wobble">{t("Wobble")}</option><option value="fade">{t("Fade")}</option><option value="none">{t("No motion")}</option>
                 </select>
-                <select className="anim-sel" value={m.thinking_anim || 'pulse'} onChange={(e) => set('thinking_anim', e.target.value)}>
+                <select className="anim-sel" value={m.thinking_anim || 'none'} onChange={(e) => set('thinking_anim', e.target.value)}>
                   <option value="pulse">{t("Breathe")}</option><option value="spin">{t("Spin")}</option><option value="bounce">{t("Bounce")}</option><option value="wobble">{t("Wobble")}</option><option value="fade">{t("Fade")}</option><option value="none">{t("No motion")}</option>
                 </select>
               </div>

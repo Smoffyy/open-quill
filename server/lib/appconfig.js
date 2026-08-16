@@ -56,6 +56,7 @@ export function appConfig() {
     version: APP_VERSION,
     uiVersion: APP_VERSION,
     webSearchAvailable: websearch.webSearchAvailable(),
+    modelDocs: getSetting('model_docs_enabled', '1') === '1',
     voiceMic: getSetting('voice_mic_enabled', '0') === '1',
     voiceCall: getSetting('voice_call_enabled', '0') === '1',
     safetyCheckEnabled: getSetting('safety_enabled', '0') === '1',

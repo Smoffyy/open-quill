@@ -2,9 +2,11 @@ import React from 'react';
 const I = (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...p} />;
 export const Plus = (p) => <I {...p}><path d="M12 5v14M5 12h14" /></I>;
 export const Chat = (p) => <I {...p}>
-  <g transform="translate(12 12) scale(.985) translate(-12 -12)" strokeWidth="1.726">
+  <g transform="translate(12 12) scale(.9) translate(-12 -12)" strokeWidth="1.726">
     <path className="ic-b1" d="M3.37 13.98A7.7 7.7 0 1 1 7.91 17.34L2.2 17.6Z" />
-    <path className="ic-b2" d="M17.17 7.35A7.7 7.7 0 0 1 12.31 21.94L6.6 22.2 7.77 18.58A7.7 7.7 0 0 1 7.03 17.05" />
+    <g transform="translate(1.3 .7)">
+      <path className="ic-b2" d="M17.17 7.35A7.7 7.7 0 0 1 12.31 21.94L6.6 22.2 7.77 18.58A7.7 7.7 0 0 1 7.03 17.05" />
+    </g>
   </g>
 </I>;
 export const NewChatIcon = Plus;

@@ -110,7 +110,7 @@ function BashCard({ call, result }) {
   const oneLine = cmd.split('\n')[0];
   async function copy(e) { e.stopPropagation(); if (await copyText(cmd)) { setCopied(true); setTimeout(() => setCopied(false), 1400); } }
   return (
-    <div className={'tool-bash' + (failed ? ' err' : '') + (open ? ' open' : '')}>
+    <div className={'tool-bash' + (result ? '' : ' pending') + (failed ? ' err' : '') + (open ? ' open' : '')}>
       <button className="tb-head" onClick={() => setOpen(o => !o)}>
         <Terminal style={{ width: 14 }} />
         <span className="tb-label">{result ? t('Terminal') : t('Running')}</span>
@@ -227,7 +227,7 @@ function WebSearchCard({ call, result }) {
   const failed = result && !result.ok;
   const results = (result && result.results) || [];
   return (
-    <div className={'tool-bash ws' + (failed ? ' err' : '') + (open ? ' open' : '')}>
+    <div className={'tool-bash ws' + (pending ? ' pending' : '') + (failed ? ' err' : '') + (open ? ' open' : '')}>
       <button className="tb-head" onClick={() => setOpen(o => !o)}>
         <Search style={{ width: 14 }} />
         <span className="tb-label">{pending ? t('Searching the web') : t('Web search')}</span>

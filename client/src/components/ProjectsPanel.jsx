@@ -4,6 +4,7 @@ import { toast } from '../toast.js';
 import Composer from './Composer.jsx';
 import { Box, Search, Plus, ChevDown, Star, Dots, Trash, Pencil, X, FileText } from './icons.jsx';
 import { t } from '../i18n.jsx';
+import { focusUnlessTouch } from '../lib/touch.js';
 
 function updatedLabel(ts) {
   const d = new Date(ts);
@@ -22,7 +23,7 @@ function CreateModal({ onClose, onCreate }) {
   const [desc, setDesc] = useState('');
   const [busy, setBusy] = useState(false);
   const ref = useRef(null);
-  useEffect(() => { ref.current?.focus(); }, []);
+  useEffect(() => { focusUnlessTouch(ref.current); }, []);
   async function submit() {
     if (busy) return;
     setBusy(true);

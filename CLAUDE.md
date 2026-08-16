@@ -16,6 +16,35 @@ plus the ordinary theme attribute:
 data-theme="light" | "anthropic" | "openai"   (oled is a legacy alias of the openai palette)
 ```
 
+and, for a *palette variant* of a theme, an optional third:
+
+```
+data-palette="2026q3"
+```
+
+### Palettes are token overrides, never a new theme value
+
+A palette is a colour scheme and nothing else. `client/src/lib/palettes.js` is the registry — pure and import-free, so it is unit-tested — and every entry maps an id to a `{ theme, palette }` pair:
+
+| Id | `data-theme` | `data-palette` |
+| --- | --- | --- |
+| `anthropic-light` | `light` | — |
+| `anthropic-legacy` | `anthropic` | `legacy` |
+| `anthropic-2025q2` | `anthropic` | — |
+| `anthropic-2026q3` | `anthropic` | `2026q3` |
+| `openai-light` | `light` | — |
+| `openai-2024q1` | `openai` | — |
+
+**A new palette must not introduce a new `data-theme` value.** Around forty rules across `base.css`, `chat.css` and `extras.css` are scoped `:root[data-theme="anthropic"] .foo` to give the Anthropic preset its shape; a palette that changed the theme attribute would silently drop every one of them. So `anthropic-2026q3` keeps `data-theme="anthropic"` and adds a single token-override block, `:root[data-theme="anthropic"][data-palette="2026q3"]`, plus the handful of rules that hardcode a colour the tokens cannot reach (the composer ring, the active chat row, the greeting weight).
+
+`anthropic-2026q3` is the default dark for the Anthropic preset and is measured 1:1 against claude.ai. Its surface ladder is `#151515` app and sidebar, `#1a1a19` cards and modals, `#20201f` composer and popovers, over `#0b0b0b`; text runs `#ffffff` / `#c3c2b7` / `#898781`; and — the thing that makes it read as one system — **every hover, active and selected state is a white overlay**, `rgba(255,255,255,.05)` for a field or a segmented track and `rgba(255,255,255,.1)` for a hover, a menu item or a pressed control. The one exception is the active chat row, which is a solid `#111111`. `anthropic-2025q2` is the older warmer scheme (`#1a1a19` / `#383835`) and `anthropic-legacy` is older still — the palette from before the first claude.ai matching pass, with a lighter `#1f1f1e` app over a separate `#1d1d1c` sidebar, a near-black `#121212` user bubble, a plain bordered composer with no ring glow, and the softer `rgba(255,255,255,.8)` greeting. All three are kept because each is a genuinely different look, not a deprecated one.
+
+Because a palette block is a *diff* on the theme block it extends, anything a palette does not restate is inherited from `:root[data-theme="anthropic"]`. That is what makes them cheap, and it is also the thing to watch: `legacy` has to restate `--pop-shadow` and `--pop-ring` explicitly, since 2025 Q2 introduced an inset hairline that never existed in the palette legacy is reproducing.
+
+`paletteFor(themePref, preset, prefersDark)` resolves the stored pref, and it must keep tolerating three things: `system`, the legacy `dark`/`oled`/`anthropic`/`openai` values written before palettes existed, and **an id belonging to the other preset** — switching the workspace preset must land on that preset's equivalent light or dark rather than leaving a dead value. `themeValue` is the inverse, guaranteeing the picker never shows a value it cannot select; there is a test asserting that for every preset and every legacy input.
+
+The pre-paint script in `index.html` reads `oq-palette` beside `oq-theme` and has to know the new background literal, or the first frame flashes the old one.
+
 Rules:
 
 1. **The Anthropic preset is the default codebase.** It must never require preset-specific CSS. If you write a rule for it, write it plain.
@@ -31,39 +60,100 @@ Rules:
 - First-run: when `uiPresetChosen === false`, admins see the chooser modal (`.preset-scrim` / `.preset-modal` in `App.jsx` + `modals.css`). Admins can change it later in Admin → Branding → Interface preset (`AdminPanel.jsx`).
 - Pre-React boot: `client/index.html` reads `localStorage 'oq-preset'` and `'oq-theme'` and sets both attributes before paint (no flash). `applyCfg`/`applyPrefs` keep localStorage in sync afterwards.
 
+## Settings rows
+
+The Appearance panel uses three primitives, all in `SettingsModal.jsx` and styled in `modals.css`, copied from claude.ai's settings because a row of labels with the control hard right reads far better than a wall of segmented groups:
+
+- **`SetRow`** — `flex; justify-content: space-between; padding: 15px 0` with a hairline under it. Title 14px, note 13px in `--text-faint`, control `flex-shrink: 0`.
+- **`SelectRow`** — the dropdown. A 32px transparent trigger that fills with `--hover-mid` on hover or while open, and a 224px menu on `--pop-bg` with 32px items. An option may carry a `font`, which is what renders each Chat font choice in the face it selects.
+- **`SegSlide`** — the segmented control with the sliding thumb (Motion, Message density, Reveal speed, Cursor style, the keybind preset, the usage window). The track is `--hover-soft` at `padding: 1px`, the thumb is an absolutely-positioned `--hover-mid` pill that animates `transform` **and** `width` over 200ms on `cubic-bezier(.32, .72, 0, 1)`.
+
+The thumb geometry is **measured, not computed from a fraction**: options have different widths, so the effect reads on `offsetLeft`/`offsetWidth` of the selected button through a `ResizeObserver`. A percentage-based thumb drifts the moment a label is translated, which is exactly the case that matters here. The old `Seg` is still used elsewhere (the usage window tabs) and is deliberately left alone.
+
+All four live in `components/settingsui.jsx` rather than inside `SettingsModal`, because `KeybindsPanel` is a separate lazy component and its preset picker needs the same control — a second copy is how the two drift. `SwitchRow` and `Toggle` both render through `SetRow`, so every switch in Settings is one row shape; `.field.row` in `modals.css` is styled to match it exactly, which is why the panels that still use it (Security's session list, the danger zone) are visually indistinguishable. Descriptions are one line — the longest was 189 characters before this pass and nothing should reach that again.
+
+## The settings sidebar is measured against claude.ai, not approximated
+
+`.modal-side` is a 1:1 reproduction of claude.ai's settings nav, and the numbers below were read off the live DOM rather than eyeballed. Keep them if you touch it: **192px** wide on `--modal-side` with a **0.8px** right hairline; a 12px outer inset; rows **32px** tall, `padding: 0 8px`, `border-radius: 8px`, **14px** label, **20px** icon, **12px** icon-to-label gap, **1px** between rows, active `rgba(255,255,255,.1)` at weight 500 and inactive `--text-muted`; group labels **12px** in `--text-faint`, `padding: 12px 8px 0` and then a **12px** gap before the first row of the group (which is why `.ms-group` carries `margin-bottom: 11px` beside the list's 1px gap — the two add up to claude's 12).
+
+`NAV_GROUPS` is the single source of truth for the nav; the old hand-written JSX let a page exist in one place and not the other. There is no visible "Settings" heading — claude's is `sr-only` and ours matches, which is also what keeps the accessible name.
+
+### The search box and its results
+
+The field is `--hover-soft` with `box-shadow: inset 0 0 0 1px var(--field-ring)`, going to `--field-ring-hover` on hover **only when not focused within**, and to claude's focus ring — `inset 0 0 0 1px var(--modal-side), 0 0 0 1px var(--pop-blue), 0 0 6px 1px rgba(24,79,149,.6)` — on `:has(:focus-visible)`. `:focus-visible`, not `:focus`, is deliberate and is what claude does: clicking the field gives no blue ring, tabbing to it does.
+
+Results are a **280px popover portaled to `document.body`**, because `.modal-side` is `overflow: hidden` and clipped it. It uses `useAnchoredMenu` with `align: 'left'` and the new `gap: 4` option (claude's gap is 4; the shared `MENU_GAP` is 6, and every other menu keeps it).
+
+Three details that were wrong on the first pass and are easy to get wrong again:
+
+- **`--pop-ring` is a colour, not a shadow.** Writing `box-shadow: var(--pop-ring), …` makes the whole declaration invalid and the popover renders with no shadow at all. `--pop-shadow` is already exactly claude's popover shadow under the 2026q3 palette — use it.
+- **Rows are `padding: 0 4px`, not `0 8px`.** The panel's own 4px padding plus 4px puts the icon 8px from the panel edge and the label at the same x claude uses; 8px pushes everything 4px right.
+- **A flex row with `gap` splits a highlighted label into separate flex items**, inserting 12px around every matched substring. The label must be one child (`.ms-res-name`), not bare text plus a `<span>`.
+
+Result shapes follow claude exactly: a page whose own name matches is a single row; a page with one matching setting shows the page row plus a 13px `--text-faint` sub-line; a page with several shows the page row then one 14px row per setting, all indented to the label column. `SETTINGS_INDEX` holds the searchable setting names per page and must be kept in step with the panels — a renamed control that is not renamed here is silently unfindable.
+
+## A menu that can leave its container must be portaled
+
+`client/src/lib/anchor.js` is the single implementation: `useAnchoredMenu(open, setOpen, btnRef, menuRef, opts)` returns `{ top, left, maxH }` in viewport coordinates and `menuStyleOf(pos)` turns that into the inline style. It flips above the anchor when there is more room there, clamps to an 8px margin on every edge, caps the height and turns on scrolling when even the better side is too short, and closes on scroll or resize rather than trying to follow.
+
+Use it for **any** menu whose anchor sits inside a scrolling or clipping ancestor. Three menus were clipped for exactly that reason and now share this: `MoreMenu` and the "Retry with another model" menu (inside `.thread`, which scrolls), and the settings dropdowns (inside `.modal-main`, which is `overflow: hidden auto` — the accent list is ten items and simply disappeared past the modal's bottom edge).
+
+**The related trap is the opposite one: writing `left` when you did not need to.** `.model-menu` is `position: absolute; right: 0`, so CSS already right-aligns it to its wrap. `ModelDropdown` used to compute `left = wrap.width - menuWidth` on every measure, which re-derives the same position from a width that *changes when the trigger's label changes* — and toggling Extended reasoning changes exactly that. Combined with a `ResizeObserver` on the wrap, each toggle produced a visible left/right jitter. Placement now leaves the horizontal position to CSS and writes `left` **only** when the menu would actually cross a viewport edge (`place.left` is `null` otherwise, and `right: auto` is only applied alongside it). If you add clamping to a popover, clamp conditionally — an unconditional inline `left` is a feedback loop waiting for its trigger to resize.
+
 ## Theme mapping (prefs.js → applyPrefs)
 
-- User theme prefs are only `system | light | dark` (stored `oled` reads as `dark`).
-- Under preset `anthropic`: dark → `data-theme="anthropic"`.
+- A user's theme pref is a palette id (or `system`); the pre-palette values `light | dark | oled` are still accepted and resolve to the active preset's default.
+- Under preset `anthropic`: dark → `data-theme="anthropic"` plus `data-palette="2026q3"` by default.
 - Under preset `openai`: dark → `data-theme="openai"` (the pitch-black palette).
 - Cursor: under preset `openai` the streaming cursor **defaults** to circle+on, under `anthropic` to block+off. These are defaults only — a user who has set `streamCursor`/`cursorStyle` keeps their choice in both presets, and the default is computed at apply time rather than written into their prefs.
 
 **No preset may make a user pref inert.** `applyPrefs` writes every pref to a `data-*` attribute on `<html>` regardless of preset, and `openai.css` must not override those attribute-driven rules. A preset may change a pref's *default* (as the cursor does) but never its effect — a settings toggle that visibly does nothing in one skin is a bug, not a style choice.
 
-### Motion and the typewriter reveal are two separate prefs
+### Motion and the text reveal are two separate prefs
 
 They used to be one key, and conflating them caused a genuinely expensive bug: `animations` defaulted off under `openai`, which silently disabled every CSS transition in that skin. The reasoning open/close animation was written, shipped, and appeared completely dead for exactly that reason, with nothing wrong in the CSS. They are now split:
 
 | Pref | Drives | Default |
 | --- | --- | --- |
 | `animations` | `data-animations` on `<html>`, which every CSS transition and keyframe opt-out keys off | on in both presets |
-| `typewriter` | the reveal loop (`animate` in `App.jsx`) | on under `anthropic`, **forced off under `openai`** |
+| `revealStyle` | how a reply appears — `instant` or `typewriter` | `typewriter` under `anthropic`, **forced `instant` under `openai`** |
+| `revealMs` | the reveal loop's interval between slices | 40 |
 
-`animate` is hard-coded false for `openai`, so `App.jsx` writes each chunk straight to state as it arrives and `finalize()` runs the moment `done` lands — tokens render exactly as the server sends them, matching chatgpt.com. That is the one place a preset overrides a pref rather than its default, so `SettingsModal` hides the "Typewriter reveal" toggle and the "Reveal speed" slider entirely under `openai` rather than leaving controls that visibly do nothing.
+**`client/src/lib/reveal.js` is the only place the resolution lives.** It is pure and import-free, so `App.jsx` and `SettingsModal` cannot disagree and so it is unit-tested. Everything reads `resolveReveal(prefs, preset)`; nothing reads `prefs.revealStyle` directly, and nothing should go back to reading the raw booleans.
 
-Reading `typewriter` always goes through `(prefs.typewriter ?? prefs.animations) !== false`, and `SettingsModal` seeds `typewriter` from a pre-split `animations` value on first open. Without that, anyone who had turned animations off would have the reveal switch itself back on the next time they touched any setting.
+`revealStyle` is a named string rather than a boolean for one reason: it makes the set of reveals **open**. Two rules keep it that way, and both are pinned by tests:
+
+- **Adding a style** is one entry in `REVEAL_STYLES` plus one in `REVEAL_STYLE_OPTS` (`SettingsModal.jsx`) plus one branch wherever it is consumed. Nothing else needs a migration, because a value that is not yet known already resolves safely.
+- **Removing one is safe on its own.** `resolveReveal` falls anything unrecognised through to the legacy read, so a pref still holding a retired style resolves to the *default reveal* rather than silently to `instant`. Three word-based styles (`fade`, `glide`, `blur`) shipped briefly and were removed for being more maintenance than they were worth; a user left holding one of those values sees the typewriter, not a dead setting. There is a test naming them.
+
+`resolveReveal` must also keep tolerating the pre-split booleans: `typewriter` (and before it `animations`) was a boolean, so `false` resolves to `instant`. `SettingsModal` seeds `revealStyle` from that on first open, or anyone who had the typewriter off would have it switch itself back on the next time they touched any setting.
+
+The typewriter itself is the JS reveal loop in `App.jsx` (`animate`), which holds back arrived text and releases it a slice at a time; `instant` writes each chunk straight to state as it arrives and `finalize()` runs the moment `done` lands. `instant` under `openai` is the one place a preset overrides a pref rather than its default, so `SettingsModal` hides the Text reveal row and the Reveal speed control entirely there rather than leaving controls that visibly do nothing.
+
+**Reveal speed has no zero stop.** "No reveal at all" is the `instant` *style*, so offering it as a speed too would be one state reachable two ways. A pref already stored as `0` still works — the loop treats `<= 0` as instant — and the control surfaces it as its own chip rather than pretending it is off-grid.
 
 When something animates in one preset and not the other, **check `document.documentElement.dataset.animations` before touching a single CSS rule.**
 
 ## The complete JS branch list (`cfg.uiPreset === 'openai'` or data-preset reads)
 
-- `App.jsx` — chat topbar ModelDropdown; home-screen `.home-topbar` ModelDropdown; `hideModelPicker` for the composer, and `CtxGauge` moves into the topbar `modelPicker` block with it (the gauge belongs beside the picker, and the OpenAI composer pill reserves only 96px on the right for the mic and send button, so anything left there is squeezed out of sight); persistent per-message assistant icons (`showIcon`); floating chat composer wrapper class + 808px max width; incognito hero renders "Temporary Chat" + note; `animate` is forced false so the reveal loop never runs and tokens render as they stream, with `SettingsModal` adapting the Animations control to match (see "`animations` gates two different things"); `QuickPrompts` keeps layout space when hidden (`qp-ghost`).
+- `App.jsx` — chat topbar ModelDropdown; home-screen `.home-topbar` ModelDropdown; `hideModelPicker` for the composer, and `CtxGauge` moves into the topbar `modelPicker` block with it (the gauge belongs beside the picker, and the OpenAI composer pill reserves only 96px on the right for the mic and send button, so anything left there is squeezed out of sight); persistent per-message assistant icons (`showIcon`); floating chat composer wrapper class + 808px max width; incognito hero renders "Temporary Chat" + note; `revealStyle` resolves to `instant` so neither the reveal loop nor the word spans ever run and tokens render as they stream, with `SettingsModal` hiding the Text reveal controls to match (see "Motion and the text reveal are two separate prefs"); `QuickPrompts` keeps layout space when hidden (`qp-ghost`).
 - `App.jsx` → `Message` → `ReasoningBlock` — a `preset` prop, because the two skins show reasoning differently (see "The reasoning block").
 - `prefs.js` — theme mapping and forced circle cursor described above.
 - `SettingsModal.jsx` — preset-aware cursor defaults when seeding the prefs object.
 - `Composer.jsx` — none. The `.ml` multiline class is preset-agnostic; only `openai.css` styles it.
-- `server/routes/models.js` — new-model defaults while `ui_preset === 'openai'`: `icon_size 28`, `show_name 1`, `icon_position 'left'`, `generating_anim/thinking_anim 'none'`, `dropdown_icon 0`.
+- `server/routes/models.js` — new-model defaults while `ui_preset === 'openai'`: `icon_size 28`, `show_name 1`, `icon_position 'left'`, `dropdown_icon 0`. `generating_anim`/`thinking_anim` default to `'none'` regardless of preset — the starburst icon set is self-animating (SMIL inside the SVGs), so the CSS `spin`/`pulse` classes would double up on it.
 - The thread rail, find bar and branch map add **no** entries to this list. Every preset difference for them is CSS-only, scoped in `openai.css`. Keep it that way.
+
+## The live tool line shimmers what is happening, not just that something is
+
+A tool call with no result yet carries `.pending`, and the shimmer runs on the **verb and its target together** — `.tl-verb` plus `.tl-name` for a file step, `.tb-label` plus `.tb-peek` for the terminal. Only the verb used to shimmer, which told you something was happening but not what; the file name and the command are the part worth reading, and they stream in character by character from `livePreview`, so they are literally the live edge of the model's output.
+
+Two details are load-bearing:
+
+- **The gradient band is sized in px (`260px`), not in `%`.** With a percentage the band scales to each element, so a three-letter verb and a forty-character path sweep at wildly different speeds and read as two unrelated animations sitting next to each other. A fixed band makes one pace across the whole line.
+- **The shimmer is per element, not on `.tool-line` itself.** A single parent gradient would give one continuous sweep and is tempting, but `background-clip: text` on the parent would also clip `.tool-line.clickable:hover`'s background to the text — a pending file step *is* clickable, so its hover fill would vanish.
+
+`BashCard` and `WebSearchCard` set `pending` on `.tool-bash` themselves; `FileCard` and `ChipCard` already had it. The opt-out has to name all four selectors under both `[data-animations="off"]` and `[data-microfx="off"]`, since the base rule is two classes deep and a shorter opt-out loses on specificity.
 
 ## Thread performance: occlusion, not virtualization
 
@@ -71,10 +161,40 @@ Long threads are kept cheap with `content-visibility: auto` rather than windowin
 
 Rules, all in `threadnav.css`:
 
-1. `App.jsx` adds `.virt` to `.thread` above 24 messages. Nothing else toggles it, so removing that one class disables the whole feature.
-2. Occlusion is applied to `.assistant-body` and `.bubble-user`, **never to `.msg`**. `content-visibility` implies paint containment, which would clip the negatively-positioned `.il-avatar` in the icon-left layout. `.msg.icon-left` is excluded from the assistant rule for the same reason.
+1. `App.jsx` adds `.virt` to `.thread` when `heavyThread` is true. Nothing else toggles it, so removing that one class disables the whole feature.
+2. Occlusion is applied to `.assistant-body`, `.bubble-user`, `.msg-attachments` and `.reasoning-collapse`, **never to `.msg`**. `content-visibility` implies paint containment, which would clip the negatively-positioned `.il-avatar` in the icon-left layout. `.msg.icon-left` is excluded from the assistant rule for the same reason.
 3. The last 8 siblings are excluded via `:not(:nth-last-child(-n+8))` so the streaming message and its neighbours are never skipped.
 4. `contain-intrinsic-size: auto <px>` lets the browser remember real sizes after first render; the literal is only the initial estimate. Browsers without support simply render everything as before.
+
+### The gate is content size, not message count
+
+`.virt` used to key on `messages.length > 24`, which measures the wrong thing. The worst real thread in the wild is **ten** messages: one of them is a pasted 3,464-line script and another a 4,541-line reply, and it rendered 14,085 nodes into a 235,293px-tall thread with **no occlusion at all** because ten is fewer than twenty-four. Scrolling it froze the renderer for over 45 seconds.
+
+`heavyThread` (`App.jsx`) is therefore `messages.length > 24 || total content+reasoning chars > HEAVY_THREAD_CHARS` (40,000), short-circuiting as soon as it crosses. Occlusion now also applies to `.code-wrap` **inside** `.virt`, because per-message occlusion can do nothing for a single 100,000px message while any part of it is on screen — each block has to carry its own containment.
+
+### Code blocks highlight lazily, off the render path
+
+`highlight()` used to run synchronously inside `CodeBlock`'s render, for every block in the thread whether or not it would ever be painted — occlusion skips layout and paint, never React work. That one script produced **557 blocks of which 551 had no language tag**, so all of them took `highlightAuto`, the most expensive path hljs has.
+
+`CodeBlock` (now memoized) renders escaped plain text immediately and upgrades to highlighted output only when an `IntersectionObserver` says the block is within 900px of the viewport. Three things make that safe:
+
+- **The escaped text is correct output**, not a placeholder — a block that never scrolls into view is still readable and copyable, just uncoloured.
+- **`scheduleHighlight` in `hljs.js` runs one job per idle slot** and stops as soon as `deadline.timeRemaining()` drops below 4ms. Without it a screenful of blocks arriving together was a single 189ms long task.
+- **`bump()` is debounced by 120ms and clears the result cache.** It fires once per lazily-registered `EXTRA` language, and every `CodeBlock` has the version in its dependencies, so an undebounced burst meant one full-thread re-highlight per language.
+
+`maxAuto` is 4,000 chars (was 12,000): beyond that `highlightAuto` costs more than the colour is worth.
+
+**`.code-bar` is `position: sticky`, so it has to be opaque.** It was `background: transparent`, which meant that the moment a code block was tall enough to scroll, the language label and the Copy button sat on top of moving code and became unreadable. Only the OpenAI preset looked right, because `openai.css` happened to give the bar a solid fill of its own. The catch is that `--code-bg` is a *translucent* overlay in most palettes (`rgba(195, 194, 183, .05)` under 2026q3), so painting it on the bar changes nothing — the bar reproduces the whole stack the wrap composites against: `background-color: var(--bg)` plus the overlay as a gradient layer, with an extra `--user-bubble` layer for a block inside a user bubble. Any palette that gives `.code-wrap` an opaque background of its own (light, oled, openai) must give `.code-bar` the same one. The copy flash animates an inset `box-shadow` rather than `background` for the same reason — animating the background to `transparent` punched a hole straight through the header.
+
+Measured on that thread, before → after: 14,085 → 6,205 DOM nodes, and a 36,000px programmatic scroll from a >45s renderer freeze to 138fps with zero long tasks.
+
+### Scroll handlers are rAF-coalesced
+
+`onScroll` read `scrollHeight` and called `setShowJump` on **every** scroll event. It now schedules one `readScroll` per frame and `setShowJump` fires only when the boolean actually flips (`jumpRef`), so the steady state costs nothing. `onTouchMove` sets a flag and goes through the same frame-coalesced read instead of forcing its own reflow per drag frame.
+
+`ThreadRail` is memoized and each tick is its own memoized `Tick`, so an IntersectionObserver callback re-renders only the ticks whose visibility changed rather than all N. Hover and click are delegated to the list, which keeps the per-tick props stable; the aria-labels are built once in a `useMemo` keyed on `items` rather than per tick per render.
+
+The stagger selector is `.msg:nth-last-child(-n+12)`, not `.msg`. Only the tail is on screen when a chat opens, and starting N concurrent animations was what made a long thread jank for the whole 700ms the class is applied.
 
 ## Navigation prefs
 
@@ -195,6 +315,19 @@ highlight.js loads in **three** stages, because the full build is roughly seven 
 
 Note that KaTeX is genuinely ~166 KB gzipped and does not tree-shake; `lib/katexbundle.js` exists to pull katex, mhchem and rehype-katex into **one** chunk rather than three, which saves round trips, not bytes. Do not split it back apart expecting a size win.
 
+### The four ways math used to fail to typeset
+
+The preprocessing order is `transformTools` → `normalizeMathDelims` → `wrapMathEnvironments` → `isolateDisplayMath` → (`neutralizeOpenMath` while streaming) → `blockify`. Each of the four fixes below sits at a different stage, and all four are pinned by tests in `client/test/logic.test.js`.
+
+- **`\\[4pt]` is row spacing, not a display delimiter.** `normalizeMathDelims` matched `/\\\[/g`, which also matches the *second* backslash of `\\[`, so every `align`/`cases`/`pmatrix` using LaTeX row spacing had its formula cut in half. The replacement alternation now consumes `\\\\` **first** and returns it untouched. A lookbehind would have been the obvious fix and is forbidden here — it is a parse-time error on Safari below 16.4 and would take down the whole bundle.
+- **A lone `$` is not an open math delimiter.** `wrapMathEnvironments` tracked depth with a latch, so one price or `$PATH` set it to 1 for the rest of the segment and every later `\begin{align}` went unwrapped. It now enters math only when a matching closer actually exists ahead.
+- **A blank line inside display math is not a paragraph break.** `blockify` splits on blank lines and ran *after* wrapping, handing remark-math two halves with an unbalanced `$$`. `wrapMathEnvironments` now collapses blank lines inside the body it wraps, and `blockify` tracks `inMath` and refuses to split inside a `$$` block, exactly as it already refused inside a fence.
+- **`$$x$$` on one line is inline math to remark-math**, which is why KaTeX answered `align` with "can be used only in display mode" — the environment was being typeset in inline mode. `isolateDisplayMath` gives a standalone display block its own blank lines *and* breaks it over three lines, which is what makes it flow math. `remarkBreaks` is why the blank lines are needed: single newlines keep the block inside a paragraph.
+
+`splitCode` and `normalizeMathDelims` share `CODE_SPLIT`, which knows ``` fences, `~~~` fences, double-backtick spans and single-backtick spans. `isFenceLine` already accepted `~~~`, so LaTeX inside one used to be rewritten and typeset instead of shown as code.
+
+`.katex-error` had no stylesheet rule at all, so a formula KaTeX rejected was indistinguishable from red prose. It now renders as a bordered monospace chip that scrolls rather than overflowing the bubble. `--danger` is never defined anywhere in the codebase, which is why every use is `var(--danger, #e5635b)`.
+
 ## Locales are per-language chunks
 
 `i18n.jsx` eagerly imports only each pack's `_meta` (via `import.meta.glob(..., { import: '_meta' })`) so the language menu can be built without loading any translations, plus `en.json` in full because it is 65 bytes and contains no translations anyway, which lets `loadLang('en')` resolve without a request. Everything else is fetched on demand by `loadLang`, and `main.jsx` awaits it before the first render so a non-English user never sees a flash of English.
@@ -269,15 +402,33 @@ Four separate surfaces report on the running model. They exist separately becaus
 Details that are load-bearing:
 
 - **`StreamStatus` also owns the `waiting` phase.** `turn.js` starts a `SILENT_MS` (2500ms) interval next to the opening `sendStatus({ phase: 'prefill' })` and cancels it on the first event of any kind from `streamCompletion`. In router mode a llama-server loads the model before answering, which is otherwise indistinguishable from a hang. The label must stay honest: the server knows only that nothing has come back, not why, so it says exactly that and shows elapsed seconds rather than claiming a model is loading.
-- **`StreamStatus` shows immediately when it has real numbers** and only waits 1.2s when it does not. It used to wait a flat 5 seconds, which is precisely the window you are staring at nothing during a long local prefill. It leads with cache reuse when there is any, because "94% reused" is the number that tells you the KV cache is working; the generic label does not.
+- **When `StreamStatus` appears is the `statusDelay` pref**, not a constant. `lib/status.js` owns the whole of it: `STATUS_DELAY_DEFAULT` (3s), `STATUS_DELAY_MAX` (10s) and `statusDelaySecs`/`statusDelayMs`, which clamp to a whole number of seconds in range and fall back to the default for anything unreadable. It is a pure, import-free module so `App.jsx`, `SettingsModal` and the block itself cannot disagree about the bounds, and so the clamp is unit-tested. `0` means instant, and it must stay distinguishable from absent — a nullish check, never a falsy one. The block fades in via `msFade` in `extras.css` whenever it lands. Earlier versions hard-coded this: a flat 5s, then 1.2s unless real numbers had arrived. Both were wrong for somebody, which is why it is a slider under **Settings > Chat > Tools and context**. The label still leads with cache reuse when there is any, because "94% reused" is the number that tells you the KV cache is working; the generic label does not.
 - **Speed is persisted on the message row** (`speed: { tps, promptTps, exact }`, written in `turn.js`, exposed by `routes/chats/messages.js`). It is recorded *before* the telemetry throttle, so the final tick of a turn is never the one that gets dropped. `exact` is false when the numbers were estimated from streamed text rather than reported by llama.cpp `timings`, and the UI marks that with a `~`.
 - **Only speed is exposed to the client, never the cost** that sits beside it in `m.usage`.
 - **`llamaEngine(provider)` is the provider-level sibling of `llamaInfo(model)`**, behind `GET /api/admin/providers/:id/engine` and folded into the existing Test connection button rather than polled. `/slots` returns 501 when the server ran with `--no-slots`; that is a normal configuration, so `slotsHidden` says so instead of the panel reporting a failure.
 - Both `ctxGauge` and `msgSpeed` are **opt-in** prefs (default off) under **Settings > Chat > Tools**, next to `engineStrip`. They are extra numbers on screen that mostly matter when you are running the model yourself.
+- **`EngineStrip` must never change the height of anything.** It used to `return null` when idle, and because it is an ordinary in-flow block inside `.composer-wrap` — which sits above a `flex: 1` `.scroll-area` — removing its ~35px resized the thread viewport in a single frame and jumped the whole conversation. That happened twice per turn, plus instantly whenever `telemetry` went null on a chat switch. The `.es-slot` wrapper now stays mounted and eases its own `grid-template-rows` between `0fr` and `1fr`, the same grid collapse the reasoning panel uses, so the space is reclaimed smoothly instead of vanishing. The component keeps the last telemetry in state purely so the strip still has content to show while it collapses. Reserving a fixed height instead would have pushed the composer down for everyone who never sees telemetry at all. Measured layout-shift score across a full turn is 0.0003.
+
+## The context ledger counts live, and never estimates
+
+`LedgerBar` shows two different numbers depending on whether a turn is running, and **both are measurements** — there is no character heuristic anywhere in this path, deliberately. A ledger that guesses is worse than one that stands still.
+
+- **Between turns** it is `GET /api/chats/:id/ledger`, which counts through `countExact` → `/apply-template` + `/tokenize`. That call carries the model name, so it is correct in router mode.
+- **During a turn** it is `livePrompt + telemetry.genTokens`. `turn.js` emits a **`prompt_size`** event once per agentic step, immediately before `streamCompletion`, carrying `lastFitTokens` (already verified by the slider) or a fresh `countExact`. `genTokens` is llama.cpp's own `timings.predicted_n`, which arrives per token because the request sets `timings_per_token`. Nothing here is inferred from the streamed text.
+
+Three traps, each of which produced a visibly wrong number before it was fixed:
+
+- **`timings.prompt_n` is not the prompt size.** It is the count of tokens *evaluated* during prefill, so it ramps from a partial value and is reduced by KV cache reuse. Reading it made the ledger fall by thousands mid-stream. The prompt half must come from `prompt_size`.
+- **`usage` is synthesized from `timings` on every chunk**, not just the final one (`stream.js` falls back to `timings` when a chunk has no `usage`), so correcting `prompt_size` from `usage` re-introduced the same ramp. Do not send a per-chunk correction.
+- **`predicted_n` is stale during prefill**, carrying the previous request's value on that slot for the first few frames. `turn.js` reports `genTokens: 0` (and `tps: 0`) until `genStart || reasonStart`, so a new turn never opens with the last turn's output count.
+
+The live reading and the settled one differ by a handful of tokens at the moment a turn ends: the live figure is what is in the context window now, while the settled one re-measures the prompt the *next* turn will send, which adds the assistant message's closing tokens and the following generation-prompt header. That difference is **not** a constant — retokenizing the stored reply does not always agree with the tokens the model emitted — so do not try to cancel it with a learned offset. That was tried, and a learned offset is exactly the estimate this design refuses.
+
+The ledger is **not re-fetched while streaming** (the effect bails when `streamingRef.current` and a ledger is already loaded). Its tokenizer calls compete with the running generation and fall back to `calibratedTokens`, which is an estimate; the live path already covers that window. `live.js` keeps `promptTokens` on the turn record and ships it in the `resume` payload, so a mid-stream reload picks the live count straight back up.
 
 ## Client tests (`npm test` in `client/`, `npm run test:client` from the root)
 
-`client/test/logic.test.js` runs on `node --test` with no extra dependencies, mirroring the server suite, and runs in CI as **Client logic tests**. It covers the pure logic that build tooling cannot check: the keybind model (`comboFromEvent` including the macOS Option-symbol and dead-key paths, combo validation, sanitize/resolve/index, chords, presets, import/export), reasoning parsing (`lastSentence`, `parseSteps`), `hasMath`/`wrapMathEnvironments`, `previewOf`/`buildTree`/`collapseRuns`, `scanTools`, and the artifacts panel's diff and highlight logic (`diffLines`, `stableLineDiff`, `collapseRuns`, `splitHighlightedLines`, `markLine`, `findMatches`, `buildTree`).
+`client/test/logic.test.js` runs on `node --test` with no extra dependencies, mirroring the server suite, and runs in CI as **Client logic tests**. It covers the pure logic that build tooling cannot check: the keybind model (`comboFromEvent` including the macOS Option-symbol and dead-key paths, combo validation, sanitize/resolve/index, chords, presets, import/export), reasoning parsing (`lastSentence`, `parseSteps`), reveal-style resolution (`resolveReveal` including the legacy booleans, the OpenAI override and the retired-style fallback, plus `revealSpeedMs`), `hasMath`/`wrapMathEnvironments`, `previewOf`/`buildTree`/`collapseRuns`, `scanTools`, and the artifacts panel's diff and highlight logic (`diffLines`, `stableLineDiff`, `collapseRuns`, `splitHighlightedLines`, `markLine`, `findMatches`, `buildTree`).
 
 Two rules make this possible and are worth preserving. **Only modules with no imports are testable** — `node --test` cannot parse JSX, so anything importing a `.jsx` file is off limits. That is why `lastSentence`/`parseSteps` live in `lib/reasoning.js` rather than inside `ReasoningBlock.jsx`; pull pure logic out of components rather than reaching for a JSX-aware runner. And there is a test asserting `lib/reasoning.js` contains **no regex lookbehind**, because that is a parse-time error on Safari below 16.4 and would take down the whole bundle rather than one component.
 
@@ -548,6 +699,23 @@ What this does *not* do is check which user an upload belongs to: any signed-in 
 
 Deleting a chat's uploads is deliberately two-phase (`attachmentUrlsOf` → delete the rows → `purgeUnreferencedUploads`). Fork and cherry-pick copy a message verbatim, attachments included, so one `/uploads` file can be referenced from several chats; unlinking everything the deleted chat pointed at silently broke the images in the copy.
 
+### What the model can actually read is decided by the bytes, not the extension
+
+Attachments were never sandbox-gated, which is what made the symptom confusing: with the sandbox **on** the same file was *also* copied into the workspace (`connection.js`), so tools could reach it, and it looked as though attachments only worked there. The real gate was `isTextLike`, a hard-coded list of 28 extensions in `uploads.js`. Anything outside it — `.toml`, `.kt`, `.swift`, `.vue`, `.env`, and every PDF, despite `.pdf` being advertised in the composer's `accept` — reached the model as the bare string `[Attached file: x]` and nothing else.
+
+`historyMessage` in `convo.js` has four branches now, and the fallbacks are written for a model that would otherwise invent the contents:
+
+1. image + `has_vision` → `readImageDataUri`
+2. image without vision → a note saying the model cannot see it, so it says so instead of guessing
+3. `isTextLike` → inlined, capped at 20,000 chars
+4. anything else → a note naming the format and stating plainly that the contents are unavailable
+
+`isTextLike` keeps the extension list as a fast path and otherwise **sniffs the first 4KB** (`looksTextual` in `lib/extract.js`): PDF and ZIP magic numbers, any NUL byte, more than 5% control characters, or a failed strict UTF-8 decode all mean binary. That is what makes a format nobody listed work without anyone maintaining a list.
+
+PDFs are the exception that shaped the design. `readUploadText` is synchronous and the whole `chatHistory` → `buildMessages` chain above it is synchronous, so extraction cannot happen there. `POST /api/upload` extracts once, at upload time, into a `<file>.txt` sidecar that `readUploadText` prefers. `extractPdf` lived in **two byte-identical copies** (`projectfiles.js` and `membank.js`); it is now one implementation in `lib/extract.js` that all three import.
+
+The edit path in `connection.js` also used to reuse `orig.attachments` verbatim, silently discarding anything newly attached while editing; it now merges by url and re-caps at `MAX_ATTACHMENTS`.
+
 ## Authentication and the sign-in screen
 
 Three endpoints, and the split between the first two is the important part:
@@ -593,6 +761,28 @@ Unsent composer text is kept in `localStorage` under `oq-draft-<chatId|new>`, de
 - Markdown math accepts `$…$`, `$$…$$`, and normalizes `\(…\)` / `\[…\]` (outside code) in `Markdown.jsx:normalizeMathDelims`; streaming holds unclosed math via `autoCloseMath`.
 - The thread rail is `position: absolute` inside `.main` (which is `position: relative`), as a sibling of `.scroll-area`, same as `.to-bottom`.
 - `client/index.html` carries the PWA metadata: `manifest.webmanifest`, the `starburst.svg` favicon, `icon-{180,192,512}.png` plus a maskable 512, and paired `theme-color` meta tags. The pre-paint boot script also writes a media-less `theme-color` so the installed shell matches the resolved theme rather than the OS preference.
+
+## The admin panel borrows the Settings controls, it does not reinvent them
+
+Admin is the part of the app most likely to drift, because it is edited section by section. The rule is that **the User Settings dialog is the reference for every shared control**, and admin matches its metrics rather than growing its own:
+
+- Text inputs, selects and textareas are **32px tall, 14px, 8px radius** — the same numbers `modals.css` gives `.modal-main input`. `admin.css` restates them for `.oqa` because admin is not inside a modal, but the values must stay in step.
+- `SegPick` in `admin/widgets.jsx` is a thin adapter over **`SegSlide`** from `components/settingsui.jsx`, so every segmented control in admin is the same sliding-thumb control as Motion or Message density in Settings. It keeps its own `[value, label]` tuple API purely so the ~six call sites did not have to change; do not fork a second segmented control for admin.
+- Buttons are `.btn` and its modifiers, including the ones that used to carry their own metrics (`.dash-action`). `.push-btn` only adds weight and `flex-shrink`, never a different shape.
+- **Colour is the only thing that separates a CTA from an ordinary button.** Publish — `Push now` and the header `Push to all clients` — stays `.btn.primary` and keeps the accent fill; it does not get a different height, font or radius to stand out. Under the OpenAI preset the light accent is `#0d0d0d`, which reads as a hard black slab at 600 weight, so `openai.css` softens *only* that fill to `#3d3d3d` under `[data-preset="openai"][data-theme="light"]`. Do not fix that by changing `--accent`; links and highlights use it too.
+- `.med-tabs` matches `.me-sec`: 9px 12px, 13.5px, an accent underline.
+
+`.seg` (the older bordered segmented control) is still used by the usage-window tabs and the chats overview and is deliberately left alone — it is a different, denser context.
+
+## The disclaimer is admin text, and may contain links
+
+`cfg.disclaimer` is rendered by `components/Disclaimer.jsx`, not by a bare `<div>`. It parses `[label](url)` into real anchors and passes everything else through as text — never `dangerouslySetInnerHTML`, since the string is admin input. `safeHref` allows only `http`, `https`, `mailto` and same-site absolute paths; anything else is left as the literal markdown so it is visibly wrong rather than silently dropped. An empty disclaimer renders nothing at all.
+
+Custom text goes through `t()` and therefore falls through untranslated, which is the honest outcome — the admin field says so.
+
+## The chats overview must fill its own viewport
+
+`ChatsOverview` pages 18 chats at a time and used to load more only from a `scroll` event. On a tall window 18 rows do not overflow `.co-body`, no scroll event ever fires, and the list is stuck at one page — which is why clicking **Select** appeared to reveal older chats: the bulk bar shortened the body enough to make it scrollable. Two effects now close that: one re-checks after every `chats` change and pulls another page while `scrollHeight <= clientHeight + 320`, and a `ResizeObserver` on `.co-body` does the same when the window or the bulk bar changes its height. Any other infinite list added here needs the same pair — a scroll handler alone is not enough.
 
 ## Adding a feature checklist
 
@@ -738,6 +928,7 @@ Vite + React. `vite.config.js` proxies `/api`, `/uploads`, and the websocket to 
 - `src/lib/keybinds.js`: the keybind model (`KEYBIND_ACTIONS`, `comboFromEvent`, `resolveKeybinds`, `keybindIndex`, `comboKeys`, `keybindConflicts`, presets, import/export). See "Keyboard model" above.
 - `src/lib/mathjs.js`: everything KaTeX. `hasMath` (cheap pre-check), `wrapMathEnvironments`, `BASE_MACROS`, `KATEX_OPTIONS`, and the lazy loader (`ensureKatex`, `katexPlugin`, `subscribeKatex`, `katexVersion`). See "Maths and code rendering" below.
 - `src/lib/hljs.js`: the syntax-highlighting facade and its two-stage lazy loader (`ensureCommon`, `ensureFull`, `ensureLanguage`, `highlight`, `rawHighlight`, `subscribeHljs`, `hljsVersion`).
+- `src/lib/reveal.js`: how a streaming reply appears. `REVEAL_STYLES`, `resolveReveal`, `legacyRevealStyle`, `revealSpeedMs`. Pure and import-free, so it is unit-tested and no consumer can disagree about the rules. See "Motion and the text reveal are two separate prefs".
 - `src/lib/threadmeta.js`: `railItems` (rail model derived from the message list), `previewOf`, `hasToolCall`, plus `buildTree`/`collapseRuns` shared by the branch map. Note `lib/artifacts.js` exports its own `buildTree` and `collapseRuns` for files and diff rows — same names, unrelated shapes; do not merge them.
 - `src/lib/drafts.js`: `useDrafts(skipRef)`, the unsent-composer-text persistence described under "Composer drafts". The ref is what suppresses writes in incognito, and it is passed rather than read so the hook has no knowledge of chat state.
 - `src/styles/` — `app.css` imports everything; `openai.css` is the OpenAI preset (always last). Others: `base`, `layout`, `chrome`, `chat`, `composer` styles live across `polish`, `extras`, `modals`, `admin`, `artifacts`, `fonts`, `threadnav`.
