@@ -96,7 +96,7 @@ function ModelIcon({ model, phase, below, name }) {
   };
   const src = map[phase] || base;
   if (!base && !name) return null;
-  const anim = phase === 'generating' ? (model?.generatingAnim || 'spin') : phase === 'thinking' ? (model?.thinkingAnim || 'pulse') : '';
+  const anim = phase === 'generating' ? (model?.generatingAnim || 'none') : phase === 'thinking' ? (model?.thinkingAnim || 'none') : '';
   const cls = anim === 'none' ? '' : anim;
   const sz = model?.iconSize > 0 ? model.iconSize : 40;
   return (

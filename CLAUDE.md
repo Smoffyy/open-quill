@@ -131,7 +131,7 @@ When something animates in one preset and not the other, **check `document.docum
 - `prefs.js` — theme mapping and forced circle cursor described above.
 - `SettingsModal.jsx` — preset-aware cursor defaults when seeding the prefs object.
 - `Composer.jsx` — none. The `.ml` multiline class is preset-agnostic; only `openai.css` styles it.
-- `server/routes/models.js` — new-model defaults while `ui_preset === 'openai'`: `icon_size 28`, `show_name 1`, `icon_position 'left'`, `generating_anim/thinking_anim 'none'`, `dropdown_icon 0`.
+- `server/routes/models.js` — new-model defaults while `ui_preset === 'openai'`: `icon_size 28`, `show_name 1`, `icon_position 'left'`, `dropdown_icon 0`. `generating_anim`/`thinking_anim` default to `'none'` regardless of preset — the starburst icon set is self-animating (SMIL inside the SVGs), so the CSS `spin`/`pulse` classes would double up on it.
 - The thread rail, find bar and branch map add **no** entries to this list. Every preset difference for them is CSS-only, scoped in `openai.css`. Keep it that way.
 
 ## The live tool line shimmers what is happening, not just that something is

@@ -1643,7 +1643,7 @@ export default function App() {
                     const nm = (user?.displayName || '').split(' ')[0];
                     const line = nm ? part + ', ' + nm : part;
                     return model?.staticIcon
-                      ? <><img src={model.staticIcon} alt="" style={{ width: 32, height: 32, objectFit: 'contain' }} /> {line}</>
+                      ? <><img src={model.staticIcon} alt="" style={{ width: 42, height: 42, objectFit: 'contain' }} /> {line}</>
                       : line;
                   })()}
             </div>
