@@ -9,7 +9,6 @@ function clampW(w) { return Math.max(320, Math.min(w, Math.round(window.innerWid
 const MemoViewer = React.memo(Viewer);
 
 export default function ArtifactsPanel({ chatId, files, live, pending = {}, focus = null, onClose }) {
-  const [tabs, setTabs] = useState([]);
   const [active, setActive] = useState(null);
   const [split, setSplit] = useState(null);
   const [focusedPane, setFocusedPane] = useState('left');
@@ -25,17 +24,15 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
 
   const openFile = useCallback((path) => {
     const toRight = focusedPane === 'right' && split != null;
-    setTabs(ts => ts.includes(path) ? ts : [...ts, path]);
     if (toRight) setSplit(path); else setActive(path);
   }, [focusedPane, split]);
 
   const goOverview = useCallback(() => { setActive(null); setSplit(null); setFocusedPane('left'); }, []);
 
-  useEffect(() => { setTabs([]); setActive(null); setSplit(null); }, [chatId]);
-  useEffect(() => { if (focus && focus.path) { setTabs(ts => ts.includes(focus.path) ? ts : [...ts, focus.path]); setActive(focus.path); setFocusedPane('left'); } }, [focus]);
+  useEffect(() => { setActive(null); setSplit(null); }, [chatId]);
+  useEffect(() => { if (focus && focus.path) { setActive(focus.path); setFocusedPane('left'); } }, [focus]);
   useEffect(() => {
     const exists = (p) => p && byPath.has(p);
-    setTabs(ts => ts.every(exists) ? ts : ts.filter(exists));
     setActive(a => exists(a) ? a : null);
     setSplit(s => exists(s) ? s : null);
   }, [files, live, pending]);

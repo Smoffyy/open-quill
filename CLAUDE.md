@@ -15,6 +15,7 @@ Run from the repo root:
 | `npm start` | Production server on `:3001`, serving `client/dist` |
 | `npm run build` | Build the client, then verify nothing remote crept in |
 | `npm run test:client` | Client logic tests |
+| `npm run lint` / `lint:fix` | ESLint over client and server (flat config at the root) |
 | `npm run smoke` | Server-render every admin section and modal |
 | `npm run i18n:check` | Report missing/orphan translation keys |
 | `npm run check:local` | Off-origin check on its own |
@@ -56,7 +57,7 @@ client/src/
 
 Key `server/lib/` modules: `appconfig`, `audit`, `origin` (same-origin guard), `budget`, `convo` (conversation assembly), `history`, `memory`, `models`, `prompts`, `sandboxguard` (path + command screening), `purge`, `queue`, `safety`, `spaces`, `tree` (message branching), `llamacpp`, `ctxwindow` (prompt fitting), `kwargs`, `router`, `toolstats`, `uploads`, `egress`, `localonly`.
 
-Key `client/src/lib/` modules: `keybinds` + `keyboard` (shortcut model and listener), `focus`, `anchor` (portaled menu placement), `mathjs`, `hljs`, `reveal`, `reasoning`, `threadmeta`, `artifacts`, `drafts`, `attachments`, `dictation`, `palettes`, `status`.
+Key `client/src/lib/` modules: `keybinds` + `keyboard` (shortcut model and listener), `threadscroll` + `genmirror` (see below), `submenu`, `focus`, `anchor` (portaled menu placement), `mathjs`, `hljs`, `reveal`, `reasoning`, `threadmeta`, `artifacts`, `drafts`, `attachments`, `dictation`, `palettes`, `status`.
 
 **Dependency direction is routes → lib.** `lib/ws/` must never import from `routes/`.
 
@@ -107,7 +108,9 @@ The preset comes from the `ui_preset` setting, is exposed by `GET /api/app-confi
 - **A turn belongs to the chat, not the socket** (`lib/ws/live.js`). Reloading mid-reply resumes; only incognito turns abort on socket close. One turn per chat, with `beginTurn`/`endTurn` paired in a `finally`.
 - **`done` and `endTurn` must land in the same tick** server-side — nothing async may separate them, or the client's queued send is rejected.
 - **Nothing may be appended to `messages` between `done` arriving and `finalize()` committing** client-side. `startNextTurn` is the single place a queued send is dispatched, and it runs after `finalize()`'s `setMessages`.
-- The client mirror of in-flight turns is a **ref** (`gen`), mutated only through `queueRec`/`dropRec`/`recFor`.
+- The client mirror of in-flight turns lives in **`lib/genmirror.js`** (`useGenMirror`). It holds the `Map` in a ref so a token never re-renders the tree, and derives `busyChats` only when membership actually changes. `App.jsx` never touches the Map: it goes through `queueRec`/`dropRec`/`recFor`/`resumeRec`/`peek`, which is what keeps the mirror from drifting. Adding a field to a turn record means editing `blankRecord` there, not spreading a literal at a call site.
+
+**Thread scrolling is `lib/threadscroll.js`** (`useThreadScroll`), which owns every scroll ref and both loops: the rAF-coalesced `onScroll` read and the streaming autoscroll (`startFollow`/`stopFollow`). Two things to preserve. `stick` is the whole model — it means "the user is at the bottom and wants to stay there" — and is cleared by wheel-up, an upward drag, or the `oq-release-scroll` event the reasoning block dispatches. And `pinToBottom(smooth, delay)` replaces the `stick.current = true; setTimeout(scrollBottom, N)` idiom that was written out at seven call sites; use it rather than reaching for the refs.
 
 ### Context window
 
@@ -153,6 +156,7 @@ Four checks find dead weight, and all four should stay at zero:
 
 | Check | Finds |
 | --- | --- |
+| `npm run lint` | unused vars and imports, hook-rule violations, unreachable code |
 | `npm run dead:css` | class names in `styles/` no `.js`/`.jsx`/`.html` references |
 | `npm run i18n:check` | missing **and** orphaned translation keys |
 | `npm run smoke` | components that crash when rendered |
@@ -161,6 +165,14 @@ Four checks find dead weight, and all four should stay at zero:
 Two traps when acting on them. **`dead:css` is advisory** — a zero-hit class can still be emitted by a library (`katex-error`, `hljs`), which is what `EXTERNAL` at the top of the script is for; verify before deleting. And **`i18n:check` force-adds keys its scanner cannot see** (the `extra` array), mostly the quick-prompt defaults that live in `server/lib/appconfig.js` rather than in client source. An entry there suppresses orphan detection for that key, so when you delete a string, check that array too or its translations quietly survive forever.
 
 `import React` is not needed — the JSX transform is automatic. Components import only the hooks they use.
+
+**ESLint runs in CI and must stay at zero errors.** `eslint.config.js` is flat config at the repo root covering both workspaces. Two calibration decisions to know before "fixing" the config: `react-hooks/exhaustive-deps` is a **warning**, because several deps arrays here deliberately omit values, and the React Compiler rules that ship in `eslint-plugin-react-hooks` 7 (`set-state-in-effect`, `immutability`, `purity`, `refs`, `static-components`) are **off**, because this codebase does not opt into the compiler and they flag ~90 working patterns. Turn them on only alongside actually adopting it.
+
+**Hooks must never sit below an early return.** `Message.jsx` renders user and assistant messages from one component and returns early for `msg.role === 'user'`; every hook belongs above that branch, even the ones only the assistant path uses.
+
+## Menus
+
+`client/src/lib/submenu.js` (`useSubmenus`) owns every hover-opened submenu in a menu. It holds **one** `open` id rather than a boolean per submenu, which is what makes "only one open at a time" structural instead of something each handler has to remember — the previous four-boolean version had each opener closing only some of its siblings, so they overlapped. Opening is immediate; only closing is delayed, by `SUBMENU_CLOSE_DELAY` (160ms), and that delay is load-bearing — the pointer leaves the parent row before it reaches the submenu panel, so closing on `mouseleave` with no grace period makes a submenu impossible to move into. Use this hook for any new submenu rather than adding another timer.
 
 ## Adding a feature
 

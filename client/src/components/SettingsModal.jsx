@@ -248,7 +248,6 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
     if (merged.theme === 'oled') merged.theme = 'dark';
     return merged;
   });
-  const [saved, setSaved] = useState(false);
   const activePreset = currentPreset();
   const [userFont, setUserFontState] = useState(getUserFont());
   const [confirmDel, setConfirmDel] = useState(false);
@@ -331,7 +330,6 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
       try {
         const { user: u } = await api.patch('/api/me', { displayName: nextName, prefs: nextPrefs, instructions: instrRef.current });
         onUpdated(u);
-        setSaved(true); setTimeout(() => setSaved(false), 1300);
       } catch {}
     }, 450);
   }

@@ -159,9 +159,9 @@ before(async () => {
 
 after(async () => {
   if (child && child.exitCode === null) {
-    const gone = new Promise(r => child.once('exit', r));
+    const gone = new Promise(r => { child.once('exit', r); });
     try { child.kill(); } catch {}
-    await Promise.race([gone, new Promise(r => setTimeout(r, 5000))]);
+    await Promise.race([gone, new Promise(r => { setTimeout(r, 5000); })]);
   }
   removeDb();
 });

@@ -181,8 +181,8 @@ export function execTool(call) {
     const text = readableTextSync(call.path);
     if (text == null) return { ok: false, error: `Could not read "${call.path}". It may still be indexing, try again.` };
     const lines = text.split('\n');
-    let start = Number.isInteger(call.start) ? call.start : null;
-    let end = Number.isInteger(call.end) ? call.end : null;
+    const start = Number.isInteger(call.start) ? call.start : null;
+    const end = Number.isInteger(call.end) ? call.end : null;
     let body, from = 1;
     if (start != null || end != null) {
       const sN = Math.max(1, start || 1);

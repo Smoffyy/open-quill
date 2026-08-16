@@ -29,6 +29,9 @@ jobs:
           cd server
           find . -name node_modules -prune -o -name '*.js' -print0 | xargs -0 -n1 node --check
 
+      - name: Lint
+        run: npm run lint
+
       - name: Build client
         run: npm run build
 

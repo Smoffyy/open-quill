@@ -3,15 +3,15 @@ const SECTION_FIELD = { CONTENT: 'content', OLD: 'old_str', NEW: 'new_str', CMD:
 const INT_KEYS = new Set(['start', 'end', 'count']);
 
 
-function deco(s) { return /[|<>/\[\]]/.test(s); }
-function isClose(t) { const s = t.trim(); return /^[<\[(|\s]*\/\s*\|?\s*tool\s*[|>\])/\s]*$/i.test(s); }
-function isOpen(t) { const s = t.trim(); if (isClose(s)) return false; return /^[<\[(|]\s*[|]?\s*tool\b/i.test(s); }
-function sectionOf(t) { const s = t.trim(); if (!deco(s)) return null; const m = s.match(/^[<\[(|/\s]*?(content|old|new|cmd|paths)[|>\])/\s]*$/i); return m ? m[1].toUpperCase() : null; }
+function deco(s) { return /[|<>/[\]]/.test(s); }
+function isClose(t) { const s = t.trim(); return /^[<[(|\s]*\/\s*\|?\s*tool\s*[|>\])/\s]*$/i.test(s); }
+function isOpen(t) { const s = t.trim(); if (isClose(s)) return false; return /^[<[(|]\s*[|]?\s*tool\b/i.test(s); }
+function sectionOf(t) { const s = t.trim(); if (!deco(s)) return null; const m = s.match(/^[<[(|/\s]*?(content|old|new|cmd|paths)[|>\])/\s]*$/i); return m ? m[1].toUpperCase() : null; }
 
 function applyKv(call, key, val) {
   let k = key.toLowerCase();
   k = KV_MAP[k] || k;
-  let v = val.trim().replace(/^["']|["']$/g, '');
+  const v = val.trim().replace(/^["']|["']$/g, '');
   if (INT_KEYS.has(k)) { const n = parseInt(v, 10); if (!isNaN(n)) call[k] = n; return; }
   call[k] = v;
 }
@@ -55,7 +55,7 @@ export function scanTools(text, opts) {
     const t = lines[i].trim();
     if (!isOpen(t)) { i++; continue; }
     const start = offsets[i];
-    const name = t.replace(/^[<\[(|]*\s*[|]?\s*tool\s*[|]?\s*/i, '').trim().toLowerCase().replace(/[^a-z_]/g, '');
+    const name = t.replace(/^[<[(|]*\s*[|]?\s*tool\s*[|]?\s*/i, '').trim().toLowerCase().replace(/[^a-z_]/g, '');
     const call = { tool: name || null };
     let field = null, body = [], closed = false, endIdx = -1, j = i + 1;
     for (; j < lines.length; j++) {

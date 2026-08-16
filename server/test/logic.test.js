@@ -1245,7 +1245,7 @@ test('sandbox: str_replace tolerates indentation but not ambiguity', async () =>
   assert.equal(fixed.ok, true, 'a snippet retyped without its indentation still matches');
   assert.match(fixed.note, /indentation/i);
   const body = (await sbox({ tool: 'view', path: 'App.java' })).content;
-  assert.match(body, /    void run\(\) \{/, "the file's own indentation is preserved");
+  assert.match(body, / {4}void run\(\) \{/, "the file's own indentation is preserved");
   assert.match(body, /int x = 2;/);
 
   await sbox({ tool: 'create_file', path: 'two.txt', content: '  a\n\ta\n' });
@@ -1428,7 +1428,7 @@ test('sandbox: hostEnvInfo reports a usable shape without leaking host paths', a
   assert.ok(Array.isArray(env.interpreters));
   assert.ok(Array.isArray(env.missingUtils));
   for (const i of env.interpreters) {
-    assert.equal(/[\/]/.test(i.version), false, `${i.name} version must not contain a path: ${i.version}`);
+    assert.equal(/[/]/.test(i.version), false, `${i.name} version must not contain a path: ${i.version}`);
   }
 });
 
