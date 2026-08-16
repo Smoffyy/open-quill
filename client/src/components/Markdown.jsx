@@ -116,6 +116,19 @@ function isFenceLine(line) {
   return /^\s*(`{3,}|~{3,})/.test(line);
 }
 
+function splitBreaks(value) {
+  const parts = value.split('\n');
+  const out = [];
+  for (let i = 0; i < parts.length; i++) {
+    if (i) out.push({ type: 'break' });
+    const piece = i === 0 ? parts[i].replace(/[ \t]+$/, '')
+      : i === parts.length - 1 ? parts[i].replace(/^[ \t]+/, '')
+        : parts[i].replace(/^[ \t]+|[ \t]+$/g, '');
+    if (piece) out.push({ type: 'text', value: piece });
+  }
+  return out;
+}
+
 function remarkBreaks() {
   return (tree) => {
     const walk = (node) => {
@@ -125,6 +138,8 @@ function remarkBreaks() {
         if (child.type === 'html' && typeof child.value === 'string' && /^(?:\s*<br\s*\/?>\s*)+$/i.test(child.value)) {
           const count = (child.value.match(/<br\s*\/?>/gi) || []).length || 1;
           for (let i = 0; i < count; i++) out.push({ type: 'break' });
+        } else if (child.type === 'text' && typeof child.value === 'string' && child.value.indexOf('\n') !== -1) {
+          for (const part of splitBreaks(child.value)) out.push(part);
         } else {
           walk(child);
           out.push(child);
