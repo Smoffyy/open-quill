@@ -252,7 +252,7 @@
   color: var(--text-muted); cursor: pointer;
   transition: color .15s, background .15s;
 }
-.reasoning-head:hover { color: var(--text); background: var(--hover-soft); }
+.reasoning-head:hover { color: var(--text); }
 .reasoning-head .rb-icon { width: 17px; height: 17px; opacity: .8; flex-shrink: 0; }
 .reasoning-head .chev { width: 15px; height: 15px; opacity: .6; transition: transform .38s cubic-bezier(.16, 1, .3, 1), opacity .15s ease; }
 .reasoning-head.open .chev { transform: rotate(90deg); }
