@@ -12,15 +12,13 @@ const check = process.argv.includes('--check');
 
 const run = (cmd, cwd) => {
   try {
-    return execSync(cmd, {
-      cwd,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    return { ok: true, out: execSync(cmd, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) };
   } catch (e) {
-    return (e.stdout || '') + (e.stderr || '');
+    return { ok: false, out: (e.stdout || '') + (e.stderr || '') };
   }
 };
+
+let failed = false;
 
 for (const f of folders) {
   const dir = path.join(root, f);
@@ -29,34 +27,35 @@ for (const f of folders) {
   const label = f === '.' ? 'root' : f;
   console.log(`\n=== ${label} ===`);
 
-  // show outdated packages first
-  const outdated = run('npm outdated', dir).trim();
-  if (!outdated) {
-    console.log('already up to date');
+  const report = run(`npx npm-check-updates --peer${check ? '' : ' -u'}`, dir);
+  const out = report.out.trim();
+
+  if (!report.ok) {
+    console.error(out || 'npm-check-updates failed');
+    console.error(`\n${label}: could not check for updates.`);
+    failed = true;
     continue;
   }
 
-  console.log(outdated);
+  console.log(out || 'already up to date');
 
   if (check) continue;
+  if (!/[─→]/.test(out)) continue;
 
-  console.log(`updating ${label} to latest majors...`);
+  const install = run('npm install', dir);
+  console.log(install.out.trim() || 'done');
 
-  // update package.json dependency ranges to latest
-  console.log(
-    run('npx npm-check-updates -u', dir).trim() ||
-      'package.json updated'
-  );
-
-  // install the new versions
-  console.log(
-    run('npm install', dir).trim() ||
-      'done'
-  );
+  if (!install.ok) {
+    console.error(`\n${label}: npm install rejected these versions. package.json was changed — revert it with "git checkout ${f === '.' ? 'package.json' : f + '/package.json'}".`);
+    failed = true;
+  }
 }
 
-if (check) {
-  console.log('\n(check only, nothing was changed)');
-} else {
-  console.log('\nAll folders updated to latest versions (including majors).');
+if (failed) {
+  console.error('\nFAILED, see above. Nothing below this point was verified.');
+  process.exit(1);
 }
+
+console.log(check
+  ? '\n(check only, nothing was changed)'
+  : '\nAll folders updated to the latest versions their peers allow.');

@@ -159,7 +159,9 @@ The preset comes from the `ui_preset` setting, is exposed by `GET /api/app-confi
 
 Two branches: **`dev`** is where work lands, **`stable`** is what is released. Channels live in the version string, not in branch names.
 
-`dev` carries a prerelease tail (`27.2.0-beta.3`) and tagging it publishes a GitHub pre-release. Dropping the tail and merging to `stable` is what makes something a release — tag `v27.2.0` and `release.yml` marks it latest. The last commit before a release PR is the bump to the final version, and the first commit after merging opens the next cycle (`27.3.0-beta.1`), so `dev` is never equal to `stable`.
+**A tag is the version string exactly** — `27.2.0-beta.3`, no `v` prefix. `.npmrc` sets `tag-version-prefix=` so `npm version` agrees, and both release workflows match the bare form.
+
+`dev` carries a prerelease tail (`27.2.0-beta.3`) and tagging it publishes a GitHub pre-release. Dropping the tail and merging to `stable` is what makes something a release — tag `27.2.0` and `release.yml` marks it latest. The last commit before a release PR is the bump to the final version, and the first commit after merging opens the next cycle (`27.3.0-beta.1`), so `dev` is never equal to `stable`.
 
 `ci.yml` runs on push/PR to both branches. `version-guard.yml` blocks a PR into `stable` that does not raise the version, comparing with `check-version-bump.mjs` — **`sort -V` is not usable here**, as it ranks `27.2.0-beta.5` above `27.2.0` and would reject the exact PR that ships a release.
 
