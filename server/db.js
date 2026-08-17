@@ -42,7 +42,7 @@ sdb.pragma(keyPragma(KEY));
 try {
   sdb.prepare('SELECT count(*) FROM sqlite_master').get();
 } catch (e) {
-  throw new Error(`[db] Cannot open encrypted database (${e.message}). The encryption key does not match this data.db. Set DB_ENCRYPTION_KEY or restore the original server/.dbkey.`);
+  throw new Error(`[db] Cannot open encrypted database (${e.message}). The encryption key does not match this data.db. Set DB_ENCRYPTION_KEY or restore the original server/.dbkey.`, { cause: e });
 }
 
 sdb.pragma('journal_mode = WAL');

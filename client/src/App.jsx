@@ -416,7 +416,7 @@ export default function App() {
     const down = (e) => { if (scrollRef.current && scrollRef.current.contains(e.target)) selectingRef.current = true; };
     const up = () => { selectingRef.current = false; };
     const selChange = () => {
-      let has = false;
+      let has;
       try {
         const sel = window.getSelection();
         has = !!(sel && !sel.isCollapsed && sel.rangeCount && scrollRef.current && scrollRef.current.contains(sel.getRangeAt(0).commonAncestorContainer));

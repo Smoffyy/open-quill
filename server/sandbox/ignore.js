@@ -35,7 +35,7 @@ const GITIGNORE_CACHE_MAX = 32;
 const gitignoreCache = new Map();
 function gitignoreMatchers(chatId) {
   const gi = path.join(dirFor(chatId), '.gitignore');
-  let mtime = 0;
+  let mtime;
   try { mtime = fs.statSync(gi).mtimeMs; } catch { mtime = 0; }
   const cached = gitignoreCache.get(chatId);
   if (cached && cached.mtime === mtime) return cached.m;

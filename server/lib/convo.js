@@ -360,7 +360,7 @@ export function combinedInstructions(chat) {
 
 export function instrFor(chat) {
   const base = combinedInstructions(chat);
-  let pinned = '';
+  let pinned;
   try { pinned = pinnedFilesPrompt(chat); } catch { pinned = ''; }
   return pinned ? (base ? base + '\n\n' + pinned : pinned) : base;
 }

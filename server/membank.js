@@ -64,7 +64,7 @@ function countLines(base) {
   const s = safe(base);
   if (!s) return 0;
   const src = isPdf(base) ? cachePathFor(s.base) : s.p;
-  let stamp = '';
+  let stamp;
   try { const st = fs.statSync(src); stamp = st.mtimeMs + ':' + st.size; } catch { return 0; }
   const hit = lineCache.get(src);
   if (hit && hit.stamp === stamp) return hit.lines;
@@ -76,7 +76,7 @@ function countLines(base) {
 }
 
 function rawList() {
-  let names = [];
+  let names;
   try { names = fs.readdirSync(MEMBANK_ROOT); } catch { return []; }
   const out = [];
   for (const n of names) {

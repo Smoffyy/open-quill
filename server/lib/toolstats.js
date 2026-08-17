@@ -61,7 +61,7 @@ export function noteToolCall(model, tool, ok, error) {
 }
 
 export function toolStatsReport() {
-  let rows = [];
+  let rows;
   try { rows = db.toolStats.all(); } catch { return { rows: [], totals: { calls: 0, fail: 0 } }; }
   const out = rows.map(r => {
     const ok = Number(r.ok) || 0;

@@ -115,7 +115,7 @@ export function record(m) {
 }
 
 export function sendLive(userId, raw) {
-  let m = null;
+  let m;
   try { m = JSON.parse(raw); } catch { m = null; }
   if (m) record(m);
   for (const [sock, st] of clients.entries()) {

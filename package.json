@@ -21,13 +21,17 @@
     "check:deps": "node update-deps.mjs --check"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "concurrently": "^10.0.5",
-    "eslint": "^9.39.5",
+    "eslint": "^10.8.1",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.11.0"
   },
   "overrides": {
-    "shell-quote": ">=1.10.0"
+    "shell-quote": ">=1.10.0",
+    "eslint-plugin-react": {
+      "eslint": "$eslint"
+    }
   }
 }

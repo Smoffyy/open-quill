@@ -62,7 +62,7 @@ export function parseArgs(argsText) {
 }
 
 export function toCall(name, argsText) {
-  let args = {};
+  let args;
   try { args = parseArgs(argsText); } catch { args = {}; }
   return { ...args, tool: String(name || '').trim() };
 }

@@ -110,7 +110,7 @@ export function dataPath(...segments) {
 }
 
 export function pendingDbName() {
-  let text = '';
+  let text;
   try { text = fs.readFileSync(ENV_FILE, 'utf8'); } catch { return DB_NAME; }
   const parsed = parseEnv(text);
   const raw = parsed.OPEN_QUILL_DB ?? parsed.DB_NAME;
@@ -177,7 +177,7 @@ export function setPendingDatabase(name) {
     if (!v.ok) return { ok: false, error: v.error };
     if (!fs.existsSync(path.join(DATABASES_DIR, n))) return { ok: false, error: 'That database does not exist yet.' };
   }
-  let text = '';
+  let text;
   try { text = fs.readFileSync(ENV_FILE, 'utf8'); } catch { text = envTemplate(); }
   const lines = text.split(/\r?\n/);
   let replaced = false;

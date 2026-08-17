@@ -43,7 +43,7 @@ export default [
       globals: { ...globals.browser, ...globals.node },
       parserOptions: { ecmaFeatures: { jsx: true } }
     },
-    settings: { react: { version: 'detect' } },
+    settings: { react: { version: '19.2' } },
     plugins: { react, 'react-hooks': reactHooks },
     rules: {
       ...SHARED_RULES,
