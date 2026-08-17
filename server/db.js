@@ -2,6 +2,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import Database from 'better-sqlite3-multiple-ciphers';
 import { DATA_ROOT, dataPath } from './lib/dataroot.js';
+import { BRAND_ICON, BRAND_GENERATING, BRAND_THINKING, BRAND_ICON_FIELDS, remapBrandPath } from './lib/brand.js';
 
 const DATA_DIR = DATA_ROOT;
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -438,9 +439,23 @@ if (!getSetting('seeded')) {
     internal_name: 'local-model', system_prompt: 'You are a helpful assistant.', provider_id: pid,
     has_reasoning: 0, reasoning_token: '', non_reasoning_token: '',
     in_more_models: 0, more_models_label: 'More models',
-    static_icon: '/starburst.svg', generating_icon: '/starburst-generating.svg', thinking_icon: '/starburst-thinking.svg', icon_position: 'below', sort_order: 0, enabled: 1
+    static_icon: BRAND_ICON, generating_icon: BRAND_GENERATING, thinking_icon: BRAND_THINKING, icon_position: 'below', sort_order: 0, enabled: 1
   });
   setSetting('seeded', '1');
+}
+
+if (!getSetting('brand_paths_v2')) {
+  for (const m of db.models.all()) {
+    const patch = {};
+    for (const f of BRAND_ICON_FIELDS) {
+      const next = remapBrandPath(m[f]);
+      if (next !== m[f]) patch[f] = next;
+    }
+    if (Object.keys(patch).length) db.models.update(m.id, patch);
+  }
+  const icon = getSetting('app_icon', '');
+  if (icon && remapBrandPath(icon) !== icon) setSetting('app_icon', remapBrandPath(icon));
+  setSetting('brand_paths_v2', '1');
 }
 
 export default db;

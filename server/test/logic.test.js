@@ -23,6 +23,7 @@ import { resolveRouted, ruleMatches, routerRules, modelLabel } from '../lib/rout
 import { preferredChild } from '../lib/tree.js';
 import { looksTextual, isZipOfficeDoc } from '../lib/extract.js';
 import { releaseCandidates, parseManifest } from '../lib/release.js';
+import { remapBrandPath } from '../lib/brand.js';
 import { samplingParams, parseStop } from '../llm/sampling.js';
 import { PROVIDER_TYPES, isProviderType, providerSpec } from '../providers.js';
 import { slideWithCounter, trimMode } from '../lib/ctxwindow.js';
@@ -1601,4 +1602,17 @@ test('parseManifest survives a file that is not JSON at all', () => {
   assert.equal(parseManifest('# not json', (w) => warns.push(w)), null);
   assert.equal(parseManifest('[1,2]', () => {}), null, 'an array is not a manifest');
   assert.equal(warns.length, 1);
+});
+
+test('remapBrandPath moves the seeded logo paths and nothing else', () => {
+  assert.equal(remapBrandPath('/starburst.svg'), '/brand/starburst.svg');
+  assert.equal(remapBrandPath('/starburst-generating.svg'), '/brand/starburst-generating.svg');
+  assert.equal(remapBrandPath('/starburst-thinking.svg'), '/brand/starburst-thinking.svg');
+});
+
+test('remapBrandPath leaves an operator upload alone', () => {
+  for (const v of ['/uploads/mine.png', '/brand/starburst.svg', 'starburst.svg', '/starburst.svg?v=2', '', null, undefined, 42, {}]) {
+    assert.equal(remapBrandPath(v), v, String(v));
+  }
+  assert.equal(remapBrandPath('constructor'), 'constructor', 'the table is null-prototyped');
 });

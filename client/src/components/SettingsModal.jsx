@@ -11,6 +11,7 @@ import { menuStyleOf, useAnchoredMenu } from '../lib/anchor.js';
 import { createPortal } from 'react-dom';
 import { SetRow, SwitchRow, SegSlide, SelectRow, useSelectMenu } from './settingsui.jsx';
 import { legacyRevealStyle, resolveReveal, revealSpeedMs } from '../lib/reveal.js';
+import { BRAND_ICON } from '../lib/brand.js';
 
 const NAV_GROUPS = [
   { label: tk('Account'), items: [
@@ -521,7 +522,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
               <div className="vh">
                 <div className="vh-top">
                   <div className="vh-badge">
-                    {icon ? <img src={icon} alt="" /> : <img className="vh-badge-fallback" src="/starburst.svg" alt="" />}
+                    {icon ? <img src={icon} alt="" /> : <img className="vh-badge-fallback" src={BRAND_ICON} alt="" />}
                   </div>
                   <div className="vh-id">
                     <div className="vh-name">{cfg?.appName || 'open-quill'}</div>

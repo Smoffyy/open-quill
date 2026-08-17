@@ -23,6 +23,7 @@ import AnalyticsSection from './sections/AnalyticsSection.jsx';
 import DatabasesSection from './sections/DatabasesSection.jsx';
 import PrivacySection from './sections/PrivacySection.jsx';
 import { t } from '../../i18n.jsx';
+import { BRAND_ICON } from '../../lib/brand.js';
 
 const SECTION_COMPONENTS = {
   dashboard: DashboardSection,
@@ -129,7 +130,7 @@ function Shell() {
       <header className="oqa-header">
         <button className="oqa-back" onClick={onClose}><Chevron style={{ transform: 'rotate(90deg)', width: 16 }} /></button>
         <button className="oqa-brand" onClick={() => setSection('dashboard')}>
-          <img className="oqa-brand-icon" src={cfg.appIcon || '/starburst.svg'} alt="" />
+          <img className="oqa-brand-icon" src={cfg.appIcon || BRAND_ICON} alt="" />
           <div className="oqa-brand-text">
             <span className="oqa-brand-name">{cfg.appName || 'open-quill'}</span>
             <span className="oqa-brand-sub">{t("Control Center")}</span>

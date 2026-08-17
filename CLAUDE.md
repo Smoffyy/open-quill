@@ -53,7 +53,14 @@ client/src/
   styles/             app.css imports all; openai.css always last
   locales/            one JSON per language
   scripts/            check-local, i18n-check, dead-css, smoke
+
+client/public/
+  brand/              the starburst logo, referenced at runtime
+  pwa/                install icons, referenced only by index.html and the manifest
+  fonts/              woff2, loaded by styles/fonts.css
 ```
+
+**The logo is `lib/brand.js`, not a string.** `BRAND_ICON` and its two motion variants have a client copy and a server copy (`server/lib/brand.js`, which seeds them into new model rows); the two must agree and neither imports the other. Model rows *store* these paths, so moving the files means adding to `LEGACY` in the server copy — the boot migration in `db.js` rewrites exact matches once and leaves operator uploads alone.
 
 Key `server/lib/` modules: `appconfig`, `audit`, `origin` (same-origin guard), `budget`, `convo` (conversation assembly), `history`, `memory`, `models`, `prompts`, `release` (Settings → Version content), `sandboxguard` (path + command screening), `purge`, `queue`, `safety`, `spaces`, `tree` (message branching), `llamacpp`, `ctxwindow` (prompt fitting), `kwargs`, `router`, `toolstats`, `uploads`, `egress`, `localonly`.
 

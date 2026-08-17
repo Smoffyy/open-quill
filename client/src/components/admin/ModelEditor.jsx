@@ -4,6 +4,7 @@ import { Copy, Trash, Star } from '../icons.jsx';
 import { Toggle, Switch, IconSlot, SystemPromptEditor, PromptField, StatusChips, CopyBtn, SegPick, bgPreviewStyle, BannerPicker } from './widgets.jsx';
 import KwargsEditor from './KwargsEditor.jsx';
 import { t, tk } from '../../i18n.jsx';
+import { BRAND_ICON, BRAND_GENERATING, BRAND_THINKING } from '../../lib/brand.js';
 
 export const ME_SECTIONS = [
   ['general', tk('General')],
@@ -521,7 +522,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
               </div>
               <div className="icon-actions">
                 {!m.static_icon
-                  ? <button type="button" className="btn ghost" onClick={() => onChange({ ...m, static_icon: '/starburst.svg', generating_icon: '/starburst-generating.svg', thinking_icon: '/starburst-thinking.svg' })}>{t("Use starburst icon")}</button>
+                  ? <button type="button" className="btn ghost" onClick={() => onChange({ ...m, static_icon: BRAND_ICON, generating_icon: BRAND_GENERATING, thinking_icon: BRAND_THINKING })}>{t("Use starburst icon")}</button>
                   : <button type="button" className="btn ghost" onClick={() => onChange({ ...m, static_icon: '', generating_icon: '', thinking_icon: '' })}>{t("Remove icon")}</button>}
               </div>
               <div className="muted-note">{t("With no icon set the model shows no logo in chat or the picker. Click a slot to upload a png, svg, jpeg, or gif, or use the starburst. Generating and Thinking fall back to the static logo when left empty.")}</div>

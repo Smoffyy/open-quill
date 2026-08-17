@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { t } from '../i18n.jsx';
 import { isTouch } from '../lib/touch.js';
+import { BRAND_ICON } from '../lib/brand.js';
 
 export default function Login({ onLogin, cfg }) {
   const firstRun = !!cfg?.firstRun;
@@ -65,7 +66,7 @@ export default function Login({ onLogin, cfg }) {
   return (
     <div className="login">
       <div className="login-card">
-        <div className="login-logo"><img src={cfg?.appIcon || '/starburst.svg'} alt="" /> {appName}</div>
+        <div className="login-logo"><img src={cfg?.appIcon || BRAND_ICON} alt="" /> {appName}</div>
         <h1>{(() => {
           const parts = t('Do your best work with {app}', { app: '\u0000' }).split('\u0000');
           return <>{parts[0]}<b>{appName}</b>{parts[1] || ''}</>;
