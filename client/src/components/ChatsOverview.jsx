@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
 import { t } from '../i18n.jsx';
@@ -130,7 +130,7 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
           </div>
           <button className={'co-select-btn' + (selecting ? ' on' : '')} onClick={() => { setSelecting(v => !v); setSelected(new Set()); }}>{selecting ? t('Done') : t('Select')}</button>
         </div>
-        <button className="co-close" onClick={onClose}>✕</button>
+        <button className="co-close" onClick={onClose} aria-label={t('Close')}>✕</button>
       </div>
       {selecting && (
         <div className="co-bulkbar">

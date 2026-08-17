@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
 import { X } from './icons.jsx';
 import { t } from '../i18n.jsx';

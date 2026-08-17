@@ -1,15 +1,18 @@
 {
   "name": "open-quill",
-  "version": "27.1.0-developer.20",
+  "version": "27.1.0-beta.2",
   "private": true,
   "description": "Local Anthropic-style chat UI for OpenAI-compatible servers",
   "scripts": {
     "install:all": "npm install && cd server && npm install && cd ../client && npm install",
     "build": "cd client && npm run build",
     "smoke": "cd client && npm run smoke",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "test:client": "cd client && npm test",
     "i18n:check": "cd client && npm run i18n:check",
     "check:local": "cd client && npm run check:local",
+    "check:release": "node check-release.mjs",
     "dev": "concurrently -n server,client -c blue,magenta \"npm:dev:server\" \"npm:dev:client\"",
     "dev:server": "cd server && npm run dev",
     "dev:client": "cd client && npm run dev",
@@ -18,7 +21,11 @@
     "check:deps": "node update-deps.mjs --check"
   },
   "devDependencies": {
-    "concurrently": "^10.0.5"
+    "concurrently": "^10.0.5",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.11.0"
   },
   "overrides": {
     "shell-quote": ">=1.10.0"

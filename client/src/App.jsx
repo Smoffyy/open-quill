@@ -46,11 +46,16 @@ import { railItems } from './lib/threadmeta.js';
 import { useDrafts } from './lib/drafts.js';
 import { statusDelaySecs } from './lib/status.js';
 import { resolveReveal, revealSpeedMs } from './lib/reveal.js';
-import { CHORD_TIMEOUT, chordMenu, comboFromEvent, comboKeys, comboLabel, keybindIndex, resolveKeybinds } from './lib/keybinds.js';
+import { comboKeys, comboLabel, resolveKeybinds } from './lib/keybinds.js';
+import { useKeybinds } from './lib/keyboard.js';
+import { useThreadScroll } from './lib/threadscroll.js';
+import { useGenMirror } from './lib/genmirror.js';
+import { useSocket } from './lib/socket.js';
 const BranchTree = React.lazy(() => import('./components/BranchTree.jsx'));
 import { toast } from './toast.js';
 import { copyText } from './clipboard.js';
 import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork } from './components/icons.jsx';
+import { BRAND_ICON } from './lib/brand.js';
 
 const SKELETON_DELAY = 3000;
 const HEAVY_THREAD_CHARS = 40000;
@@ -274,11 +279,13 @@ export default function App() {
   const [dispSegs, setDispSegs] = useState(null);
   const [phase, setPhase] = useState('static');
 
-  const ws = useRef(null);
-  const wsRetry = useRef(0);
-  const wsTimer = useRef(null);
-  const gen = useRef(new Map());
-  const [busyChats, setBusyChats] = useState([]);
+  const handleWsRef = useRef(null);
+  const onWsMessage = useCallback((m) => handleWsRef.current?.(m), []);
+  const shouldReconnect = useCallback(() => !!userRef.current, []);
+  const socket = useSocket({ onMessage: onWsMessage, shouldReconnect });
+  const { connect, send: socketSend } = socket;
+  const getCurrentModelId = useCallback(() => currentIdRef.current, []);
+  const { busyChats, syncBusy, peek, queueRec, dropRec, recFor, resumeRec } = useGenMirror(getCurrentModelId);
   const targetContent = useRef('');
   const targetReason = useRef('');
   const pendingDone = useRef(false);
@@ -289,17 +296,13 @@ export default function App() {
   const assistantIdRef = useRef(null);
   const streamModelRef = useRef(null);
   const revealTimer = useRef(null);
-  const followRaf = useRef(0);
-  const followTs = useRef(0);
   const dispLen = useRef(0);
-  const scrollRef = useRef(null);
-  const stick = useRef(true);
-  const lastTop = useRef(0);
-  const programmatic = useRef(false);
-  const scrollRaf = useRef(0);
-  const jumpRef = useRef(false);
-  const touchDrag = useRef(false);
-  const [showJump, setShowJump] = useState(false);
+  const canFollow = useCallback(() => !selectingRef.current && !hasSelectionRef.current, []);
+  const {
+    scrollRef, stick, showJump,
+    scrollBottom, pinToBottom, onScroll, onWheel, onTouchMove, jumpDown,
+    startFollow, stopFollow
+  } = useThreadScroll({ canFollow });
   const animate = resolveReveal(user?.prefs, cfg.uiPreset === 'openai' ? 'openai' : 'anthropic') === 'typewriter';
   const revealMs = revealSpeedMs(user?.prefs?.revealMs);
   const [threadStagger, setThreadStagger] = useState(false);
@@ -368,8 +371,6 @@ export default function App() {
     stopLoops();
     clearTimeout(skelTimer.current);
     clearTimeout(staggerTimer.current);
-    clearTimeout(wsTimer.current);
-    try { ws.current?.close(); } catch {}
   }, []);
 
   useEffect(() => {
@@ -441,47 +442,7 @@ export default function App() {
     window.addEventListener('oq-open-file', h);
     return () => window.removeEventListener('oq-open-file', h);
   }, []);
-  useEffect(() => {
-    if (!user) return;
-    const nav = user.prefs || {};
-    const binds = resolveKeybinds(nav);
-    const index = keybindIndex(binds);
-    let pending = null;
-    let pendingTimer = null;
-    const clearPending = () => { pending = null; clearTimeout(pendingTimer); setChordHint(null); };
-    const onKey = (e) => {
-      const combo = comboFromEvent(e);
-      if (!combo) return;
-      const typingNow = (() => { const el = document.activeElement; return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable); })();
-      if (pending) {
-        const act2 = index.chords.get(pending)?.get(combo);
-        clearPending();
-        if (act2 && !(act2.pref && nav[act2.pref] === false)) {
-          e.preventDefault();
-          if (kbHandlers.current[act2.id]?.() === false) { /* inert */ }
-          return;
-        }
-        if (combo === 'Escape') { e.preventDefault(); return; }
-      }
-      if (!typingNow && index.chords.has(combo) && !document.querySelector('.overlay')) {
-        e.preventDefault();
-        pending = combo;
-        setChordHint({ head: combo, items: chordMenu(binds, combo) });
-        clearTimeout(pendingTimer);
-        pendingTimer = setTimeout(clearPending, CHORD_TIMEOUT);
-        return;
-      }
-      const act = index.get(combo);
-      if (!act) return;
-      if (act.pref && nav[act.pref] === false) return;
-      const el = document.activeElement;
-      if (!act.typing && el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
-      if (!act.overlay && document.querySelector('.overlay')) return;
-      if (kbHandlers.current[act.id]?.() !== false) e.preventDefault();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [user]);
+  useKeybinds(user, kbHandlers, setChordHint);
   useEffect(() => {
     const m = models.find(x => x.id === currentId);
     if (m && m.sandboxAllowed === false) setSandbox(false);
@@ -555,36 +516,13 @@ export default function App() {
     document.documentElement.setAttribute('data-font', c.appFont === 'sans' ? 'sans' : 'serif');
     let link = document.querySelector('link[rel="icon"]');
     if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
-    link.href = c.appIcon || '/starburst.svg';
-  }
-
-  function connect() {
-    const existing = ws.current;
-    if (existing && (existing.readyState === 0 || existing.readyState === 1)) return;
-    clearTimeout(wsTimer.current);
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const sock = new WebSocket(`${proto}://${location.host}/ws`);
-    ws.current = sock;
-    sock.onopen = () => { wsRetry.current = 0; };
-    sock.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch { return; } handleWs(m); };
-    sock.onerror = () => { try { sock.close(); } catch {} };
-    sock.onclose = () => {
-      if (ws.current === sock) ws.current = null;
-      const wait = Math.min(15000, 1500 * Math.pow(2, wsRetry.current++));
-      clearTimeout(wsTimer.current);
-      wsTimer.current = setTimeout(() => { if (userRef.current) connect(); }, wait);
-    };
+    link.href = c.appIcon || BRAND_ICON;
   }
 
   function wsSend(obj) {
-    const sock = ws.current;
-    if (!sock || sock.readyState !== 1) {
-      if (!sock || sock.readyState >= 2) connect();
-      setChatErrors(prev => ({ ...prev, [activeKey()]: t('Connection lost, reconnecting. Try again in a moment.') }));
-      return false;
-    }
-    try { sock.send(JSON.stringify(obj)); return true; }
-    catch { return false; }
+    if (socketSend(obj)) return true;
+    setChatErrors(prev => ({ ...prev, [activeKey()]: t('Connection lost, reconnecting. Try again in a moment.') }));
+    return false;
   }
 
   function activeKey() { return incognitoRef.current ? 'incognito' : activeIdRef.current; }
@@ -592,27 +530,6 @@ export default function App() {
     const k = key || activeKey();
     setChatErrors(prev => { if (!(k in prev)) return prev; const n = { ...prev }; delete n[k]; return n; });
   }
-  function syncBusy() {
-    const next = [];
-    for (const [id, r] of gen.current.entries()) if (id && id !== 'incognito' && !r.done) next.push(id);
-    next.sort();
-    setBusyChats(prev => (prev.length === next.length && prev.every((v, i) => v === next[i])) ? prev : next);
-  }
-  function queueRec(key, modelId) {
-    gen.current.set(key, { content: '', reasoning: '', phase: 'queued', done: false, assistantId: null, model_id: modelId, live: null });
-    syncBusy();
-  }
-  function dropRec(key) { gen.current.delete(key); syncBusy(); }
-  function recFor(key) {
-    let r = gen.current.get(key);
-    if (!r) {
-      r = { content: '', reasoning: '', phase: 'generating', done: false, assistantId: null, model_id: currentIdRef.current, live: null, steers: [], status: null };
-      gen.current.set(key, r);
-      syncBusy();
-    }
-    return r;
-  }
-
   const ledgerOpenRef = useRef(false);
   useEffect(() => { ledgerOpenRef.current = ledgerOpen; }, [ledgerOpen]);
   useEffect(() => {
@@ -655,11 +572,10 @@ export default function App() {
       const list = Array.isArray(m.turns) ? m.turns : [];
       for (const t of list) {
         if (!t || !t.chatId) continue;
-        gen.current.set(t.chatId, {
+        resumeRec(t.chatId, {
           content: t.content || '',
           reasoning: t.reasoning || '',
           phase: t.phase === 'queued' ? 'queued' : (t.phase === 'thinking' ? 'thinking' : 'generating'),
-          done: false,
           assistantId: t.messageId || null,
           model_id: t.modelId || currentIdRef.current,
           live: t.live || null,
@@ -814,7 +730,7 @@ export default function App() {
     }
     if (m.type === 'error') {
       voiceEmit({ type: 'error', chatId: m.chatId });
-      const r = gen.current.get(m.chatId);
+      const r = peek(m.chatId);
       const hadContent = !!(r && r.content);
       if (m.chatId === activeKey()) {
         if (hadContent) { pendingDone.current = true; finalize(); }
@@ -853,16 +769,17 @@ export default function App() {
     }
   }
 
+  handleWsRef.current = handleWs;
+
   function stopLoops() {
     clearInterval(revealTimer.current);
     revealTimer.current = null;
-    cancelAnimationFrame(followRaf.current);
-    followRaf.current = 0;
+    stopFollow();
   }
 
   function startStream() {
     stopLoops();
-    follow();
+    startFollow();
     const period = Math.max(8, Math.min(100, revealRef.current || 0)) ;
     revealTimer.current = setInterval(() => {
       const target = targetContent.current;
@@ -881,26 +798,9 @@ export default function App() {
     }, period);
   }
 
-  function follow() {
-    const el = scrollRef.current;
-    const now = performance.now();
-    const dt = Math.min(80, now - (followTs.current || now));
-    followTs.current = now;
-    if (el && stick.current && !selectingRef.current && !hasSelectionRef.current) {
-      const target = el.scrollHeight - el.clientHeight;
-      const diff = target - el.scrollTop;
-      if (diff > 0.5) {
-        programmatic.current = true;
-        const k = 1 - Math.exp(-dt / 85);
-        el.scrollTop = el.scrollTop + Math.max(1, diff * k);
-      }
-    }
-    followRaf.current = requestAnimationFrame(follow);
-  }
-
   function finalize() {
     const key = activeKey();
-    const r = gen.current.get(key);
+    const r = peek(key);
     if (!r && !streaming) return;
     stopLoops();
     const content = targetContent.current;
@@ -945,7 +845,7 @@ export default function App() {
   function syncView() {
     stopLoops();
     const key = activeKey();
-    const r = gen.current.get(key);
+    const r = peek(key);
     if (r && !r.done) {
       refreshSeq.current++;
       targetContent.current = r.content; targetReason.current = r.reasoning;
@@ -1080,37 +980,6 @@ export default function App() {
     return true;
   }
 
-  function scrollBottom(smooth) {
-    const el = scrollRef.current; if (!el) return;
-    programmatic.current = true;
-    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
-  }
-  function readScroll() {
-    scrollRaf.current = 0;
-    const el = scrollRef.current; if (!el) return;
-    const top = el.scrollTop;
-    const dist = el.scrollHeight - top - el.clientHeight;
-    const jump = dist > 200;
-    if (jump !== jumpRef.current) { jumpRef.current = jump; setShowJump(jump); }
-    if (touchDrag.current) { touchDrag.current = false; if (dist > 24) stick.current = false; }
-    if (programmatic.current) { programmatic.current = false; lastTop.current = top; return; }
-    if (top < lastTop.current - 1) stick.current = false;
-    else if (dist < 24) stick.current = true;
-    lastTop.current = top;
-  }
-  function onScroll() {
-    if (scrollRaf.current) return;
-    scrollRaf.current = requestAnimationFrame(readScroll);
-  }
-  function onWheel(e) { if (e.deltaY < -1) stick.current = false; }
-  function onTouchMove() { touchDrag.current = true; onScroll(); }
-  function jumpDown() { stick.current = true; jumpRef.current = false; setShowJump(false); scrollBottom(true); }
-  useEffect(() => {
-    const release = () => { stick.current = false; jumpRef.current = true; setShowJump(true); };
-    window.addEventListener('oq-release-scroll', release);
-    return () => window.removeEventListener('oq-release-scroll', release);
-  }, []);
-
   const openSeq = useRef(0);
   function applyChatMeta(chat) {
     setCurrentProject(chat.projectId ? (projects.find(p => p.id === chat.projectId) || { id: chat.projectId, name: 'Project' }) : null);
@@ -1175,7 +1044,7 @@ export default function App() {
     setChatMenuOpen(false);
     if (push) history.pushState({}, '', '/chat/' + id);
     else history.replaceState({}, '', '/chat/' + id);
-    stick.current = true; setTimeout(() => scrollBottom(false), 30);
+    pinToBottom(false, 30);
     try {
       const { chat, messages } = await api.get('/api/chats/' + id);
       if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { chat, messages }); return; }
@@ -1194,7 +1063,7 @@ export default function App() {
       }
       try { const f = await api.get('/api/chats/' + id + '/files'); if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { files: f.files || [] }); return; } setFiles(f.files || []); setArtifactsOpen((f.files || []).length > 0 && artifactsOpenRef.current); cacheChat(id, { files: f.files || [] }); }
       catch { if (seq === openSeq.current && activeIdRef.current === id && !cached) setFiles([]); }
-      if (!cached) { stick.current = true; setTimeout(() => scrollBottom(false), 30); }
+      if (!cached) { pinToBottom(false, 30); }
     } catch { if (seq === openSeq.current) { armSkeleton(false); if (!cached) { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); } } }
   }
   function newChat(fromPop) {
@@ -1321,7 +1190,7 @@ export default function App() {
       queueRec('incognito', currentId);
       setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments: [], _enter: true }]);
       setInput('');
-      stick.current = true; setTimeout(() => scrollBottom(true), 20);
+      pinToBottom(true, 20);
       return;
     }
 
@@ -1341,7 +1210,7 @@ export default function App() {
     queueRec(chatId, currentId);
     setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     if (!opts.call) setInput('');
-    stick.current = true; setTimeout(() => scrollBottom(true), 20);
+    pinToBottom(true, 20);
   }
 
   async function startProjectChat(project, rawText, attachments = []) {
@@ -1358,7 +1227,7 @@ export default function App() {
     if (!wsSend({ type: 'chat', chatId: c.id, modelId: currentId, extended, reasoningEffort, kwargValues, content: text, attachments, sandbox, webSearch, styleId })) return;
     queueRec(c.id, currentId);
     setMessages([{ id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
-    stick.current = true; setTimeout(() => scrollBottom(true), 20);
+    pinToBottom(true, 20);
   }
   function openProjectChat(chatId, project) {
     setShowProjects(false); setProjectOpenId(null);
@@ -1390,7 +1259,7 @@ export default function App() {
       if (idx === -1) return ms;
       return ms.slice(0, ms[idx].role === 'user' ? idx + 1 : idx);
     });
-    stick.current = true; setTimeout(() => scrollBottom(true), 20);
+    pinToBottom(true, 20);
   }, [streaming, activeId, currentId]);
 
   useEffect(() => {
@@ -1410,7 +1279,7 @@ export default function App() {
       if (idx === -1) return ms;
       return ms.slice(0, ms[idx].role === 'user' ? idx + 1 : idx);
     });
-    stick.current = true; setTimeout(() => scrollBottom(true), 20);
+    pinToBottom(true, 20);
     const mm = models.find(m => m.id === modelId);
     if (mm) toast(t('Retrying with {model}', { model: mm.displayName }), { icon: 'check' });
   }, [streaming, activeId, models]);
@@ -1418,12 +1287,12 @@ export default function App() {
   const editMessage = useCallback((messageId, newContent) => {
     if (streaming || !activeId || !currentId) return;
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); if (idx === -1) return ms; const copy = ms.slice(0, idx + 1); copy[idx] = { ...copy[idx], content: newContent }; return copy; });
-    stick.current = true; setTimeout(() => scrollBottom(true), 20);
+    pinToBottom(true, 20);
     if (!wsSend({ type: 'edit', chatId: activeId, modelId: currentId, messageId, content: newContent, ...genOptsRef.current })) return;
     queueRec(activeId, currentId);
   }, [streaming, activeId, currentId]);
 
-  function stop() { const key = activeKey(); try { ws.current?.readyState === 1 && ws.current.send(JSON.stringify({ type: 'stop', chatId: key })); } catch {} pendingDone.current = true; setQueued(false); }
+  function stop() { socketSend({ type: 'stop', chatId: activeKey() }); pendingDone.current = true; setQueued(false); }
   const stopChat = useCallback((chatId) => {
     if (!chatId) return;
     if (chatId === activeKey()) { stop(); return; }
@@ -1525,7 +1394,7 @@ export default function App() {
     toggleWebSearch: () => { if (!webSearchAvailable) return false; setWebSearch(v => !v); },
     toggleSandbox: () => { if (!sandboxAllowed) return false; setSandbox(v => !v); },
     stopGeneration: () => { if (!streaming && !queued) return false; stop(); },
-    scrollBottom: () => { scrollBottom(true); stick.current = true; },
+    scrollBottom: () => pinToBottom(true),
     toggleLedger: () => setLedgerOpen(o => !o),
     promptLedger: () => { if (!activeIdRef.current) return false; setLedgerPrompt(true); },
     toggleArtifacts: () => { if (!showArtifactsBtn) return false; setCallOpen(false); setArtifactsOpen(o => !o); },
@@ -1647,10 +1516,14 @@ export default function App() {
                     ? <span className="incog-title">{t("Temporary Chat")}</span>
                     : <><Ghost style={{ width: 44 }} /> {t(incognitoGreeting)}</>)
                 : (() => {
-                    const h = new Date().getHours();
-                    const part = h < 5 ? t('Working late') : h < 12 ? t('Good morning') : h < 17 ? t('Good afternoon') : h < 22 ? t('Good evening') : t('Burning the midnight oil');
-                    const nm = (user?.displayName || '').split(' ')[0];
-                    const line = nm ? part + ', ' + nm : part;
+                    let line;
+                    if (cfg.greetingsChosen && greeting) line = t(greeting);
+                    else {
+                      const h = new Date().getHours();
+                      const part = h < 5 ? t('Working late') : h < 12 ? t('Good morning') : h < 17 ? t('Good afternoon') : h < 22 ? t('Good evening') : t('Burning the midnight oil');
+                      const nm = (user?.displayName || '').split(' ')[0];
+                      line = nm ? part + ', ' + nm : part;
+                    }
                     return model?.staticIcon
                       ? <><img src={model.staticIcon} alt="" style={{ width: 42, height: 42, objectFit: 'contain' }} /> {line}</>
                       : line;
@@ -1811,7 +1684,7 @@ export default function App() {
                   </div>
                 ))}
                 {queued && !streaming && (
-                  <div className="msg assistant"><div className="queue-wait"><img src="/starburst.svg" className="pulse think-dot" alt="" /> {t("Waiting for queue…")}</div></div>
+                  <div className="msg assistant"><div className="queue-wait"><img src={BRAND_ICON} className="pulse think-dot" alt="" /> {t("Waiting for queue…")}</div></div>
                 )}
                 {compacting && <CompactingBar />}
                 <div className="thread-pad" />

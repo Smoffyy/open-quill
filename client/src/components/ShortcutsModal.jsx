@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { useFocusTrap } from '../lib/focus.js';
 import { t } from '../i18n.jsx';
 import { KEYBIND_ACTIONS, comboKeys, resolveKeybinds } from '../lib/keybinds.js';

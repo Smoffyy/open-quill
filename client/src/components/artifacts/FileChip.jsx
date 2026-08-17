@@ -1,4 +1,3 @@
-import React from 'react';
 import { EXT_COLOR } from '../../lib/artifacts.js';
 
 export default function FileChip({ ext, size = 'sm' }) {

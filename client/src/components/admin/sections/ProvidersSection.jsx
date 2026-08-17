@@ -1,4 +1,3 @@
-import React from 'react';
 import { useAdmin } from '../store.jsx';
 import { Card } from '../widgets.jsx';
 import { Cube, Plus, Trash } from '../../icons.jsx';

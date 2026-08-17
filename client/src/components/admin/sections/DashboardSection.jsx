@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useAdmin } from '../store.jsx';
 import { Card, fmtWhen } from '../widgets.jsx';
 import { Cube, Sliders, Users, Wave, Plus, Sparkles, Clock, Gear } from '../../icons.jsx';

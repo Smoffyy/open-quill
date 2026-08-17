@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import FileChip from './FileChip.jsx';
 import { Download, ChevDown, Folder } from '../icons.jsx';
 import { t } from '../../i18n.jsx';

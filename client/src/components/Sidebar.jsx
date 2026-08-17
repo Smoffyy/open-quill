@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Chat, Search, Panel, Gear, Shield, Flask, Logout, Dots, DotsV, Trash, Heart, FileText, Star, Download, Chevron, Users, Box, Compact, Stop, Sliders, Check } from './icons.jsx';
+import { Plus, Chat, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, FileText, Star, Download, Chevron, Users, Box, Compact, Stop, Sliders, Check } from './icons.jsx';
 import { t } from '../i18n.jsx';
 import { resolveKeybinds, comboKeys } from '../lib/keybinds.js';
 
@@ -148,7 +148,6 @@ function Sidebar({
   const [menu, setMenu] = useState(false);
   const [shiftHeld, setShiftHeld] = useState(false);
   const [hover, setHover] = useState(false);
-  const [dragChatId, setDragChatId] = useState(null);
   const chatsRef = useRef(null);
   const [scrolled, setScrolled] = useState(false);
   const profileBtnRef = useRef(null);
@@ -209,7 +208,7 @@ function Sidebar({
     }
     return g;
   })();
-  const rowProps = { onOpen, onDelete, onToggleStar, onDragChat: setDragChatId, busyIds, onStopChat, projects, onMoveToProject };
+  const rowProps = { onOpen, onDelete, onToggleStar, busyIds, onStopChat, projects, onMoveToProject };
   const row = (c) => <ChatRow key={c.id} c={c} active={c.id === activeId} showTrash={showTrash} {...rowProps} />;
 
   return (

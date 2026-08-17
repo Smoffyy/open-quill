@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
 import { Search, Star } from './icons.jsx';
 import { useFocusTrap } from '../lib/focus.js';

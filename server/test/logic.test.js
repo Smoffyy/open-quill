@@ -22,6 +22,9 @@ import { isPrivateAddress, hostAllowed } from '../lib/egress.js';
 import { resolveRouted, ruleMatches, routerRules, modelLabel } from '../lib/router.js';
 import { preferredChild } from '../lib/tree.js';
 import { looksTextual, isZipOfficeDoc } from '../lib/extract.js';
+import { releaseCandidates, parseManifest } from '../lib/release.js';
+import { remapBrandPath } from '../lib/brand.js';
+import { compareVersions } from '../../check-version-bump.mjs';
 import { samplingParams, parseStop } from '../llm/sampling.js';
 import { PROVIDER_TYPES, isProviderType, providerSpec } from '../providers.js';
 import { slideWithCounter, trimMode } from '../lib/ctxwindow.js';
@@ -1245,7 +1248,7 @@ test('sandbox: str_replace tolerates indentation but not ambiguity', async () =>
   assert.equal(fixed.ok, true, 'a snippet retyped without its indentation still matches');
   assert.match(fixed.note, /indentation/i);
   const body = (await sbox({ tool: 'view', path: 'App.java' })).content;
-  assert.match(body, /    void run\(\) \{/, "the file's own indentation is preserved");
+  assert.match(body, / {4}void run\(\) \{/, "the file's own indentation is preserved");
   assert.match(body, /int x = 2;/);
 
   await sbox({ tool: 'create_file', path: 'two.txt', content: '  a\n\ta\n' });
@@ -1428,7 +1431,7 @@ test('sandbox: hostEnvInfo reports a usable shape without leaking host paths', a
   assert.ok(Array.isArray(env.interpreters));
   assert.ok(Array.isArray(env.missingUtils));
   for (const i of env.interpreters) {
-    assert.equal(/[\/]/.test(i.version), false, `${i.name} version must not contain a path: ${i.version}`);
+    assert.equal(/[/]/.test(i.version), false, `${i.name} version must not contain a path: ${i.version}`);
   }
 });
 
@@ -1545,4 +1548,91 @@ test('isZipOfficeDoc recognises the zip-container office formats', () => {
   assert.equal(isZipOfficeDoc('report.docx'), true);
   assert.equal(isZipOfficeDoc('deck.pptx'), true);
   assert.equal(isZipOfficeDoc('notes.txt'), false);
+});
+
+// --- release metadata -----------------------------------------------------
+// The version panel used to find its content by running a regex over a static asset
+// directory, so which file won depended on readdir order. Resolution is explicit now,
+// and these are the two pure halves of it.
+
+test('releaseCandidates walks from the exact version down to the major line', () => {
+  assert.deepEqual(releaseCandidates('27.1.0-developer.20'), ['27.1.0', '27.1', '27']);
+  assert.deepEqual(releaseCandidates('27.1.0'), ['27.1.0', '27.1', '27']);
+  assert.deepEqual(releaseCandidates('27'), ['27']);
+  assert.deepEqual(releaseCandidates('0.0.0'), ['0.0.0', '0.0', '0']);
+});
+
+test('releaseCandidates refuses anything that is not a dotted number', () => {
+  for (const bad of ['', null, undefined, 'latest', '../etc', '27.x', 'v27.1.0']) {
+    assert.deepEqual(releaseCandidates(bad), [], String(bad));
+  }
+});
+
+test('parseManifest keeps the known fields and warns about the rest', () => {
+  const warns = [];
+  const m = parseManifest('{"codename":"Cascade","released":"2026-08-16","icon":"icon.png"}', (w) => warns.push(w));
+  assert.deepEqual(m, { codename: 'Cascade', released: '2026-08-16', icon: 'icon.png' });
+  assert.deepEqual(warns, []);
+});
+
+test('parseManifest names a misspelled field instead of rendering a blank panel', () => {
+  const warns = [];
+  parseManifest('{"codeName":"Cascade"}', (w) => warns.push(w));
+  assert.equal(warns.length, 1);
+  assert.match(warns[0], /codeName/);
+});
+
+test('parseManifest drops a malformed date rather than showing it raw', () => {
+  const warns = [];
+  const m = parseManifest('{"released":"16/08/2026"}', (w) => warns.push(w));
+  assert.equal(m.released, '');
+  assert.match(warns[0], /YYYY-MM-DD/);
+});
+
+test('parseManifest refuses an icon that tries to leave the release folder', () => {
+  for (const icon of ['../../../etc/passwd', '/etc/hosts', 'sub/dir/icon.png', 'icon.exe', 'icon']) {
+    const warns = [];
+    const m = parseManifest(JSON.stringify({ icon }), (w) => warns.push(w));
+    assert.equal(m.icon, '', icon);
+    assert.equal(warns.length, 1, icon);
+  }
+});
+
+test('parseManifest survives a file that is not JSON at all', () => {
+  const warns = [];
+  assert.equal(parseManifest('# not json', (w) => warns.push(w)), null);
+  assert.equal(parseManifest('[1,2]', () => {}), null, 'an array is not a manifest');
+  assert.equal(warns.length, 1);
+});
+
+test('remapBrandPath moves the seeded logo paths and nothing else', () => {
+  assert.equal(remapBrandPath('/starburst.svg'), '/brand/starburst.svg');
+  assert.equal(remapBrandPath('/starburst-generating.svg'), '/brand/starburst-generating.svg');
+  assert.equal(remapBrandPath('/starburst-thinking.svg'), '/brand/starburst-thinking.svg');
+});
+
+test('remapBrandPath leaves an operator upload alone', () => {
+  for (const v of ['/uploads/mine.png', '/brand/starburst.svg', 'starburst.svg', '/starburst.svg?v=2', '', null, undefined, 42, {}]) {
+    assert.equal(remapBrandPath(v), v, String(v));
+  }
+  assert.equal(remapBrandPath('constructor'), 'constructor', 'the table is null-prototyped');
+});
+
+test('compareVersions orders a release above its own prerelease', () => {
+  assert.equal(compareVersions('27.2.0', '27.2.0-beta.5'), 1, 'sort -V gets this backwards');
+  assert.equal(compareVersions('27.2.0-beta.5', '27.2.0'), -1);
+  assert.equal(compareVersions('27.2.0-rc.1', '27.2.0-beta.9'), 1);
+  assert.equal(compareVersions('27.2.0-beta.10', '27.2.0-beta.5'), 1, 'numeric, not lexical');
+  assert.equal(compareVersions('27.2.0-beta.5', '27.2.0-beta.5'), 0);
+});
+
+test('compareVersions orders release numbers before prerelease tails', () => {
+  assert.equal(compareVersions('27.2.0', '27.1.0'), 1);
+  assert.equal(compareVersions('27.1.0', '27.2.0'), -1);
+  assert.equal(compareVersions('28.0.0-beta.1', '27.9.9'), 1);
+});
+
+test('compareVersions ranks prerelease tails alphabetically on the same base', () => {
+  assert.equal(compareVersions('27.1.0-beta.1', '27.1.0-developer.20'), -1, 'beta sorts under developer, so the rename is not a bump');
+  assert.equal(compareVersions('27.1.0-beta.1', '27.0.0'), 1, 'but it still beats the last stable, which is what the guard compares');
 });

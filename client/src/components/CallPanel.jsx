@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { voiceSubscribe, setVoiceActive, transcribeBlob, fetchSpeech, cleanForSpeech, extractSentences } from '../voice.js';
 import { Mic, X } from './icons.jsx';
 import { t } from '../i18n.jsx';

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { t } from '../i18n.jsx';
 import { SetRow, SegSlide } from './settingsui.jsx';
 import { Download, Upload } from './icons.jsx';

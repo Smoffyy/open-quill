@@ -1,4 +1,3 @@
-import React from 'react';
 
 const LINES = [98, 89, 98, 72, 89, 98, 66, 89, 82, 38];
 

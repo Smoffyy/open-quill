@@ -46,7 +46,7 @@
 
 [data-preset="openai"] .sidebar { background: var(--sidebar); border-right: 1px solid var(--border-soft); font-family: var(--font-sans); }
 @media (min-width: 721px) { [data-preset="openai"] .sidebar:not(.collapsed) { width: 260px; } }
-[data-preset="openai"] .sidebar .brand, [data-preset="openai"] .side-title { font-family: var(--font-sans); font-size: 16px; font-weight: 600; letter-spacing: 0; }
+[data-preset="openai"] .sidebar .brand { font-family: var(--font-sans); font-size: 16px; font-weight: 600; letter-spacing: 0; }
 [data-preset="openai"] .nav-item { border-radius: 10px; padding: 7px 10px; font-size: 14px; line-height: normal; font-weight: 500; gap: 11px; }
 [data-preset="openai"] .nav-item svg { width: 17px; height: 17px; }
 [data-preset="openai"] .section-label { padding: 12px 14px 5px; line-height: normal; }
@@ -343,6 +343,7 @@
 [data-preset="openai"] .bc-overlay,
 [data-preset="openai"] .pm-overlay,
 [data-preset="openai"] .mdoc-overlay { background: rgba(0, 0, 0, .45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+[data-preset="openai"] .mdoc { border-radius: 26px; }
 [data-preset="openai"] .sidebar.collapsed { width: 58px; }
 [data-preset="openai"] .sidebar.collapsed .chats { display: none; }
 [data-preset="openai"] .sidebar.collapsed .sidebar-head { padding: 16px 0 10px; }

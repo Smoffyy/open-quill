@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../api.js';
 import Markdown from './Markdown.jsx';
 import { Plus, Chevron, Users, Trash, Send, Gear, Check, Logout } from './icons.jsx';

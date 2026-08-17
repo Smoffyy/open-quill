@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../../api.js';
 import { Copy, Trash, Star } from '../icons.jsx';
 import { Toggle, Switch, IconSlot, SystemPromptEditor, PromptField, StatusChips, CopyBtn, SegPick, bgPreviewStyle, BannerPicker } from './widgets.jsx';
 import KwargsEditor from './KwargsEditor.jsx';
 import { t, tk } from '../../i18n.jsx';
+import { BRAND_ICON, BRAND_GENERATING, BRAND_THINKING } from '../../lib/brand.js';
 
 export const ME_SECTIONS = [
   ['general', tk('General')],
@@ -139,7 +140,7 @@ function RoutingPane({ m, set, models }) {
           <label>{t("Use this model as a router")}</label>
           <div className="muted-note">{t("A router does not talk to a backend itself. It sits in the model picker like any other model, and when someone sends a message it hands the turn to whichever model matches first.")}</div>
         </div>
-        <Switch on={m.kind === 'router'} onToggle={() => set('kind', m.kind === 'router' ? 'model' : 'router')} />
+        <Switch on={m.kind === 'router'} label={t("Use this model as a router")} onToggle={() => set('kind', m.kind === 'router' ? 'model' : 'router')} />
       </div>
       {m.kind === 'router' && (
         <>
@@ -363,7 +364,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
               <Toggle m={m} set={set} k="is_default" label={t("Set as default")} note={t("Pre-selected for users on first login. Only one model can be the default.")} />
               <div className="field row">
                 <div><label>{t("Hidden")}</label><div className="muted-note">{t("Stays in your admin list but is removed from every user's model picker.")}</div></div>
-                <div className={'switch' + (!m.enabled ? ' on' : '')} onClick={() => set('enabled', m.enabled ? 0 : 1)} />
+                <Switch on={!m.enabled} label={t("Hidden")} onToggle={() => set('enabled', m.enabled ? 0 : 1)} />
               </div>
               <Toggle m={m} set={set} k="unavailable" label={t("Temporarily unavailable")} note={t("Stays visible in the picker but users can't select it, and a banner explains why. Admins can still use it for testing.")} />
               {!!m.unavailable && (
@@ -521,7 +522,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
               </div>
               <div className="icon-actions">
                 {!m.static_icon
-                  ? <button type="button" className="btn ghost" onClick={() => onChange({ ...m, static_icon: '/starburst.svg', generating_icon: '/starburst-generating.svg', thinking_icon: '/starburst-thinking.svg' })}>{t("Use starburst icon")}</button>
+                  ? <button type="button" className="btn ghost" onClick={() => onChange({ ...m, static_icon: BRAND_ICON, generating_icon: BRAND_GENERATING, thinking_icon: BRAND_THINKING })}>{t("Use starburst icon")}</button>
                   : <button type="button" className="btn ghost" onClick={() => onChange({ ...m, static_icon: '', generating_icon: '', thinking_icon: '' })}>{t("Remove icon")}</button>}
               </div>
               <div className="muted-note">{t("With no icon set the model shows no logo in chat or the picker. Click a slot to upload a png, svg, jpeg, or gif, or use the starburst. Generating and Thinking fall back to the static logo when left empty.")}</div>
@@ -580,7 +581,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
             <div className="med-toggle-card">
               <div className="field row">
                 <div><label>{t("Frontier model")}</label><div className="muted-note">{t("Featured in the showcase row at the top of the docs, with a banner image.")}</div></div>
-                <div className={'switch' + (m.docs_featured ? ' on' : '')} onClick={() => set('docs_featured', m.docs_featured ? 0 : 1)} />
+                <Switch on={!!m.docs_featured} label={t("Frontier model")} onToggle={() => set('docs_featured', m.docs_featured ? 0 : 1)} />
               </div>
               {!!m.docs_featured && (
                 <div className="field"><label>{t("Showcase banner")}</label>
@@ -610,8 +611,10 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
                 {[['docs_in_text', tk('Text')], ['docs_in_image', tk('Image')], ['docs_in_audio', tk('Audio')], ['docs_in_video', tk('Video')]].map(([k, l]) => (
                   <label key={k} className="inline-toggle" style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0' }}>
                     <span>{t(l)}</span>
-                    <div className={'switch' + ((k === 'docs_in_text' ? m[k] !== 0 : (k === 'docs_in_image' ? (!!m[k] || !!m.has_vision) : !!m[k])) ? ' on' : '')}
-                      onClick={() => set(k, (k === 'docs_in_text' ? m[k] !== 0 : !!m[k]) ? 0 : 1)} />
+                    <Switch
+                      on={k === 'docs_in_text' ? m[k] !== 0 : (k === 'docs_in_image' ? (!!m[k] || !!m.has_vision) : !!m[k])}
+                      label={t(l)}
+                      onToggle={() => set(k, (k === 'docs_in_text' ? m[k] !== 0 : !!m[k]) ? 0 : 1)} />
                   </label>
                 ))}
               </div>
@@ -619,8 +622,10 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
                 {[['docs_out_text', tk('Text')], ['docs_out_image', tk('Image')], ['docs_out_audio', tk('Audio')], ['docs_out_video', tk('Video')]].map(([k, l]) => (
                   <label key={k} className="inline-toggle" style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0' }}>
                     <span>{t(l)}</span>
-                    <div className={'switch' + ((k === 'docs_out_text' ? m[k] !== 0 : !!m[k]) ? ' on' : '')}
-                      onClick={() => set(k, (k === 'docs_out_text' ? m[k] !== 0 : !!m[k]) ? 0 : 1)} />
+                    <Switch
+                      on={k === 'docs_out_text' ? m[k] !== 0 : !!m[k]}
+                      label={t(l)}
+                      onToggle={() => set(k, (k === 'docs_out_text' ? m[k] !== 0 : !!m[k]) ? 0 : 1)} />
                   </label>
                 ))}
               </div>

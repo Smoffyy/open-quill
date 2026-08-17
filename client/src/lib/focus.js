@@ -68,25 +68,3 @@ export function useFocusTrap(ref, onClose, options) {
     };
   }, [ref, opts.autoFocus, opts.escape, opts.initial]);
 }
-
-export function useRovingFocus(ref, enabled) {
-  useEffect(() => {
-    const root = ref.current;
-    if (!root || enabled === false) return;
-    const onKey = (e) => {
-      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') return;
-      const list = focusablesIn(root);
-      if (!list.length) return;
-      e.preventDefault();
-      const at = list.indexOf(document.activeElement);
-      let next = 0;
-      if (e.key === 'Home') next = 0;
-      else if (e.key === 'End') next = list.length - 1;
-      else if (e.key === 'ArrowDown') next = at < 0 ? 0 : (at + 1) % list.length;
-      else next = at < 0 ? list.length - 1 : (at - 1 + list.length) % list.length;
-      list[next].focus({ preventScroll: true });
-    };
-    root.addEventListener('keydown', onKey);
-    return () => root.removeEventListener('keydown', onKey);
-  }, [ref, enabled]);
-}

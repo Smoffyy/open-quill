@@ -1,6 +1,5 @@
 import { db, uid, now, tx } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
-import * as sandbox from '../../sandbox.js';
 import { stripToolSyntax } from '../../lib/history.js';
 import { ensureChain, childrenOf, activePath, leafUnder, sortedMsgs } from '../../lib/tree.js';
 
@@ -113,7 +112,7 @@ export default function registerMessageRoutes(app) {
     const path = activePath(c.id);
     if (!path.length) return res.status(400).json({ error: 'empty chat' });
     const cutId = req.body.messageId;
-    let cut = cutId ? path.findIndex(m => m.id === cutId) : path.length - 1;
+    const cut = cutId ? path.findIndex(m => m.id === cutId) : path.length - 1;
     if (cut < 0) return res.status(404).json({ error: 'message not found' });
     const slice = path.slice(0, cut + 1);
     const t = now();

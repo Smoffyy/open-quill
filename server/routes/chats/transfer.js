@@ -1,6 +1,5 @@
 import { db, uid, now, tx } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
-import * as sandbox from '../../sandbox.js';
 import { activePath } from '../../lib/tree.js';
 
 export default function registerTransferRoutes(app) {

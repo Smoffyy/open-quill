@@ -159,9 +159,9 @@ before(async () => {
 
 after(async () => {
   if (child && child.exitCode === null) {
-    const gone = new Promise(r => child.once('exit', r));
+    const gone = new Promise(r => { child.once('exit', r); });
     try { child.kill(); } catch {}
-    await Promise.race([gone, new Promise(r => setTimeout(r, 5000))]);
+    await Promise.race([gone, new Promise(r => { setTimeout(r, 5000); })]);
   }
   removeDb();
 });
@@ -406,4 +406,29 @@ test('unknown routes answer in the right language', async () => {
   const spa = await request('GET', '/some/client/route');
   assert.equal(spa.status, 200);
   assert.match(spa.headers['content-type'] || '', /html/, 'client routes still reach the app');
+});
+
+test('release metadata is served to members only', async () => {
+  assert.equal((await request('GET', '/api/release')).status, 401, 'no session, no release info');
+  assert.equal((await request('GET', '/api/release/icon')).status, 401);
+
+  const rel = await browser('GET', '/api/release');
+  assert.equal(rel.status, 200);
+  assert.equal(typeof rel.json.version, 'string');
+  assert.equal(typeof rel.json.codename, 'string');
+  assert.equal(typeof rel.json.notes, 'string');
+  assert.equal(typeof rel.json.hasIcon, 'boolean');
+
+  // the notes are the reason this moved off /api/app-config, which every page load fetches
+  const cfg = await browser('GET', '/api/app-config');
+  assert.equal(cfg.status, 200);
+  assert.ok(!('uiVersionDesc' in cfg.json), 'release notes no longer ride along on every config fetch');
+  assert.ok(!('uiVersionIcon' in cfg.json), 'nor does the icon path');
+
+  const icon = await browser('GET', '/api/release/icon');
+  assert.equal(icon.status, rel.json.hasIcon ? 200 : 404);
+  if (rel.json.hasIcon) {
+    assert.match(icon.headers['content-type'] || '', /^image\//, 'served as an image');
+    assert.equal(icon.headers['x-content-type-options'], 'nosniff');
+  }
 });

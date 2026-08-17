@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import Markdown, { ReasonSegs } from './Markdown.jsx';
 import { copyText } from '../clipboard.js';
@@ -238,6 +238,51 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
     return () => window.removeEventListener('oq-msg-edit', h);
   }, [onEdit, msg.id, msg.content]);
   function saveEdit() { const v = draft.trim(); setEditing(false); if (v && v !== msg.content) onEdit?.(msg.id, v); }
+
+  const pos = model?.iconPosition || 'below';
+  const iconRef = useRef(null);
+  const iconPrevTop = useRef(null);
+  const iconSuspendUntil = useRef(0);
+  useEffect(() => {
+    const el = iconRef.current;
+    const container = el && el.closest('.msg');
+    if (pos !== 'below' || !el || !container) return;
+    const settle = () => { el.style.transition = ''; el.style.transform = ''; };
+    const onToggleStart = (e) => {
+      if (!e.target.closest('.reasoning-head')) return;
+      settle();
+      iconSuspendUntil.current = performance.now() + 500;
+    };
+    container.addEventListener('click', onToggleStart);
+    const ro = new ResizeObserver(() => {
+      const top = el.getBoundingClientRect().top;
+      const suspended = performance.now() < iconSuspendUntil.current;
+      if (iconPrevTop.current !== null && !suspended) {
+        const delta = iconPrevTop.current - top;
+        if (Math.abs(delta) > 0.5) {
+          el.style.transition = 'none';
+          el.style.transform = `translateY(${delta}px)`;
+          requestAnimationFrame(() => requestAnimationFrame(settle));
+        }
+      }
+      iconPrevTop.current = top;
+    });
+    ro.observe(container);
+    return () => { container.removeEventListener('click', onToggleStart); ro.disconnect(); settle(); };
+  }, [pos]);
+
+  const [fb, setFb] = useState(msg.feedback || 0);
+  useEffect(() => { setFb(msg.feedback || 0); }, [msg.id]);
+
+  const segs = Array.isArray(msg.reasoningSegs) ? msg.reasoningSegs : null;
+  const tailIsMarker = segs && /\[\[OQT:\d+\]\]\s*$/.test(msg.content || '');
+  const segMs = Array.isArray(msg.reasoningSegMs) ? msg.reasoningSegMs : null;
+  const segMsKey = segMs ? segMs.join(',') : '';
+  const segCtx = useMemo(
+    () => (segs ? { segs, segMs, live: !!(streaming && tailIsMarker), preset, collapsible: model?.reasoningCollapsible !== false } : null),
+    [segs, segMsKey, streaming, tailIsMarker, preset, model]
+  );
+
   if (msg.role === 'user') {
     return (
       <div role="article" aria-label={t('Your message')} className={'msg user' + (msg._enter ? ' enter' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
@@ -279,59 +324,17 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
       </div>
     );
   }
-  const pos = model?.iconPosition || 'below';
   const iconPhase = streaming ? phase : 'static';
   const showIt = showIcon || streaming;
   const showName = !!model?.showName && !!model?.displayName;
   const iconStreamIn = streaming && !!msg.content;
-  const iconRef = useRef(null);
-  const iconPrevTop = useRef(null);
-  const iconSuspendUntil = useRef(0);
-  useEffect(() => {
-    const el = iconRef.current;
-    const container = el && el.closest('.msg');
-    if (pos !== 'below' || !el || !container) return;
-    const settle = () => { el.style.transition = ''; el.style.transform = ''; };
-    const onToggleStart = (e) => {
-      if (!e.target.closest('.reasoning-head')) return;
-      settle();
-      iconSuspendUntil.current = performance.now() + 500;
-    };
-    container.addEventListener('click', onToggleStart);
-    const ro = new ResizeObserver(() => {
-      const top = el.getBoundingClientRect().top;
-      const suspended = performance.now() < iconSuspendUntil.current;
-      if (iconPrevTop.current !== null && !suspended) {
-        const delta = iconPrevTop.current - top;
-        if (Math.abs(delta) > 0.5) {
-          el.style.transition = 'none';
-          el.style.transform = `translateY(${delta}px)`;
-          requestAnimationFrame(() => requestAnimationFrame(settle));
-        }
-      }
-      iconPrevTop.current = top;
-    });
-    ro.observe(container);
-    return () => { container.removeEventListener('click', onToggleStart); ro.disconnect(); settle(); };
-  }, [pos]);
   const icon = showIt ? <ModelIcon ref={iconRef} model={model} phase={iconPhase} below={pos === 'below'} name={pos === 'left' ? null : (showName ? model.displayName : null)} streamIn={iconStreamIn} /> : null;
 
-  const [fb, setFb] = useState(msg.feedback || 0);
-  useEffect(() => { setFb(msg.feedback || 0); }, [msg.id]);
   async function rate(r) {
     const next = fb === r ? 0 : r;
     setFb(next);
     try { await api.post(`/api/messages/${msg.id}/feedback`, { rating: next }); } catch { setFb(fb); }
   }
-
-  const segs = Array.isArray(msg.reasoningSegs) ? msg.reasoningSegs : null;
-  const tailIsMarker = segs && /\[\[OQT:\d+\]\]\s*$/.test(msg.content || '');
-  const segMs = Array.isArray(msg.reasoningSegMs) ? msg.reasoningSegMs : null;
-  const segMsKey = segMs ? segMs.join(',') : '';
-  const segCtx = useMemo(
-    () => (segs ? { segs, segMs, live: !!(streaming && tailIsMarker), preset, collapsible: model?.reasoningCollapsible !== false } : null),
-    [segs, segMsKey, streaming, tailIsMarker, preset, model]
-  );
 
   const inner = (
     <>

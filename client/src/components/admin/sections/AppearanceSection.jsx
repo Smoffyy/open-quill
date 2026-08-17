@@ -1,7 +1,7 @@
-import React from 'react';
 import { useAdmin } from '../store.jsx';
 import { Card, IconSlot, AutosaveNote, SegPick, SettingRow } from '../widgets.jsx';
 import { t, tk } from '../../../i18n.jsx';
+import { BRAND_ICON } from '../../../lib/brand.js';
 
 export default function AppearanceSection() {
   const A = useAdmin();
@@ -13,7 +13,7 @@ export default function AppearanceSection() {
           <input value={cfg.appName} onChange={(e) => setCfg(c => ({ ...c, appName: e.target.value }))} placeholder={t("open-quill")} /></div>
         <div className="field"><label>{t("App icon")} <span className="muted-note" style={{ display: 'inline' }}>{t("(browser tab + greeting)")}</span></label>
           <div className="icon-grid" style={{ gridTemplateColumns: '1fr' }}>
-            <IconSlot label={t("Click to upload (png, svg, jpeg, gif)")} value={cfg.appIcon} def="/starburst.svg" anim="" onChange={(v) => setCfg(c => ({ ...c, appIcon: v }))} />
+            <IconSlot label={t("Click to upload (png, svg, jpeg, gif)")} value={cfg.appIcon} def={BRAND_ICON} anim="" onChange={(v) => setCfg(c => ({ ...c, appIcon: v }))} />
           </div>
         </div>
       </Card>

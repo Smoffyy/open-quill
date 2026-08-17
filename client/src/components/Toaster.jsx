@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { subscribe } from '../toast.js';
 import { Check, Pin, Fork, Star, Copy, Sliders, Info } from './icons.jsx';
 

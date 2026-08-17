@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevDown, Chevron, ImageIcon, Brain, Info, TextIcon } from './icons.jsx';
 import { t, tk } from '../i18n.jsx';
@@ -328,7 +328,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
     }
   }
 
-  const Opt = (m) => (
+  const renderOpt = (m) => (
     <button key={m.id} type="button" className={'model-opt' + (m.unavailable ? ' unavail' : '')} onClick={() => { onSelect(m.id); setOpenSub(null); setOpen(false); }}
       title={m.unavailable ? (m.displayName + ' is currently unavailable.') : undefined}>
       {m.dropdownIcon !== false && m.staticIcon && <img className="mo-icon" src={m.staticIcon} alt="" />}
@@ -369,7 +369,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
       {open && (
         <div ref={menuRef} className={'model-menu' + (place.sheet ? '' : ' up')} style={menuStyle}>
           <div className="model-main-list" ref={listRef} style={listMaxH ? { maxHeight: listMaxH, overflow: 'hidden auto' } : undefined}>
-            {main.map(Opt)}
+            {main.map(renderOpt)}
           </div>
           {shownKwargs.length ? (
             <>
@@ -405,7 +405,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
           {groups.length > 0 && (
             <>
               <hr />
-              {groups.map(g => <MoreGroup key={g.label} label={g.label} items={g.items} renderOpt={Opt} openKey={openSub} setOpenKey={setOpenSub} />)}
+              {groups.map(g => <MoreGroup key={g.label} label={g.label} items={g.items} renderOpt={renderOpt} openKey={openSub} setOpenKey={setOpenSub} />)}
             </>
           )}
         </div>

@@ -41,11 +41,6 @@ export function argBody(call, keys, salvageExcept = null) {
   return { text: null, key: null };
 }
 
-export function argRaw(call, ...keys) {
-  const v = first(call, keys);
-  return v == null ? null : v;
-}
-
 export function argBool(call, ...keys) {
   const v = first(call, keys);
   return v === true || v === 'true' || v === 1 || v === '1' || v === 'yes';

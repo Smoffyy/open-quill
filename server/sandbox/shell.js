@@ -192,7 +192,7 @@ export function bash(chatId, cmd, timeoutMs = 60000, workdir) {
     try {
       if (win) child = spawn(shell, ['/d', '/s', '/v:on', '/c', `"${wrapped}"`], { cwd: base, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, windowsVerbatimArguments: true });
       else child = spawn(shell, ['-c', wrapped], { cwd: base, stdio: ['ignore', 'pipe', 'pipe'] });
-    } catch (e) { return resolve({ ok: false, output: '', error: String(e.message || e), exit: null }); }
+    } catch (e) { resolve({ ok: false, output: '', error: String(e.message || e), exit: null }); return; }
 
     const MAX = 12 * 1024 * 1024;
     const HEAD_KEEP = OUT_CAP + 2000;

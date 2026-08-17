@@ -3,7 +3,6 @@ import fs from 'fs';
 import { dirFor } from './paths.js';
 
 const TEXT_EXT = new Set(['txt', 'text', 'md', 'markdown', 'rst', 'csv', 'tsv', 'json', 'json5', 'jsonc', 'ndjson', 'js', 'cjs', 'mjs', 'jsx', 'ts', 'cts', 'mts', 'tsx', 'py', 'pyi', 'pyw', 'rb', 'lua', 'html', 'htm', 'xhtml', 'css', 'scss', 'sass', 'less', 'styl', 'xml', 'yml', 'yaml', 'sh', 'bash', 'zsh', 'fish', 'ps1', 'bat', 'cmd', 'c', 'cc', 'cpp', 'cxx', 'h', 'hpp', 'hh', 'java', 'kt', 'kts', 'go', 'rs', 'php', 'sql', 'ini', 'cfg', 'conf', 'toml', 'properties', 'log', 'glsl', 'vert', 'frag', 'comp', 'wgsl', 'svg', 'gitignore', 'dockerignore', 'npmignore', 'editorconfig', 'env', 'swift', 'dart', 'r', 'jl', 'ex', 'exs', 'erl', 'hs', 'elm', 'clj', 'cljs', 'scala', 'groovy', 'gradle', 'vue', 'svelte', 'astro', 'graphql', 'gql', 'proto', 'tf', 'tfvars', 'hcl', 'ipynb', 'm', 'mm', 'nim', 'zig', 'v', 'sol', 'cmake', 'lock', 'diff', 'patch']);
-const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp', ico: 'image/x-icon', svg: 'image/svg+xml' };
 
 export function extOf(name) { return path.extname(name || '').slice(1).toLowerCase(); }
 function baseLower(name) { return path.basename(String(name || '')).toLowerCase(); }
@@ -44,7 +43,7 @@ function gitignoreMatchers(chatId) {
   if (mtime) {
     let lines = [];
     try { lines = fs.readFileSync(gi, 'utf8').split(/\r?\n/); } catch {}
-    for (let raw of lines) {
+    for (const raw of lines) {
       let line = raw.trim();
       if (!line || line.startsWith('#')) continue;
       const neg = line.startsWith('!');

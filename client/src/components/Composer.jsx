@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useLayoutEffect, useCallback } from 'react';
+import { useRef, useEffect, useState, useLayoutEffect, useCallback } from 'react';
 import ModelDropdown from './ModelDropdown.jsx';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
@@ -9,6 +9,7 @@ import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
 import { extLabel } from '../lib/files.js';
 import { t, fmtDate } from '../i18n.jsx';
 import { focusUnlessTouch } from '../lib/touch.js';
+import { useSubmenus } from '../lib/submenu.js';
 
 // The picker no longer advertises a list. The server decides what it can read by
 // sniffing the bytes, so any format is accepted here and one that turns out to be
@@ -77,41 +78,14 @@ export default function Composer({
 
   const [plusMenu, setPlusMenu] = useState(false);
   const [plusDown, setPlusDown] = useState(false);
-  const [promptsOpen, setPromptsOpen] = useState(false);
-  const promptsTimer = useRef(null);
-  const openPrompts = () => { clearTimeout(promptsTimer.current); setPromptsOpen(true); setStylesOpen(false); };
-  const closePrompts = (now) => {
-    clearTimeout(promptsTimer.current);
-    if (now === true) { setPromptsOpen(false); return; }
-    promptsTimer.current = setTimeout(() => setPromptsOpen(false), 160);
-  };
-  const [stylesOpen, setStylesOpen] = useState(false);
-  const stylesTimer = useRef(null);
-  const openStyles = () => { clearTimeout(stylesTimer.current); setStylesOpen(true); setPromptsOpen(false); };
-  const closeStyles = (now) => {
-    clearTimeout(stylesTimer.current);
-    if (now === true) { setStylesOpen(false); return; }
-    stylesTimer.current = setTimeout(() => setStylesOpen(false), 160);
-  };
-  useEffect(() => () => clearTimeout(stylesTimer.current), []);
-  useEffect(() => { if (!plusMenu) setStylesOpen(false); }, [plusMenu]);
-  const [compareOpen, setCompareOpen] = useState(false);
-  const [projOpen, setProjOpen] = useState(false);
-  const compareTimer = useRef(null);
-  const openCompare = () => { clearTimeout(compareTimer.current); setCompareOpen(true); setPromptsOpen(false); setStylesOpen(false); };
-  const closeCompare = (now) => {
-    clearTimeout(compareTimer.current);
-    if (now === true) { setCompareOpen(false); return; }
-    compareTimer.current = setTimeout(() => setCompareOpen(false), 160);
-  };
-  useEffect(() => () => clearTimeout(compareTimer.current), []);
-  useEffect(() => { if (!plusMenu) setCompareOpen(false); }, [plusMenu]);
-  useEffect(() => () => clearTimeout(promptsTimer.current), []);
+  const sub = useSubmenus();
+  const { closeAll: closeSubs } = sub;
+  useEffect(() => { if (!plusMenu) closeSubs(); }, [plusMenu, closeSubs]);
   const [showReason, setShowReason] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
 
   useLayoutEffect(() => {
-    if (!plusMenu) { setPromptsOpen(false); return; }
+    if (!plusMenu) return;
     const btn = plusRef.current && plusRef.current.querySelector('.plus');
     if (btn) {
       const r = btn.getBoundingClientRect();
@@ -458,24 +432,24 @@ export default function Composer({
                   <span className="pm-shortcut">{/mac/i.test(navigator.platform) ? '⌘U' : t('Ctrl+U')}</span>
                 </button>
                 {onSetProject && (
-                  <div className="pm-subwrap" onMouseEnter={() => setProjOpen(true)} onMouseLeave={() => setProjOpen(false)}>
-                    <button className={'pm-item' + (projOpen ? ' active' : '')} onClick={() => setProjOpen(o => !o)}>
+                  <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('project')} onMouseLeave={sub.hoverClose}>
+                    <button className={'pm-item' + (sub.isOpen('project') ? ' active' : '')} onClick={() => sub.toggle('project')}>
                       <Box />
                       <span className="pm-label">{t('Add to project')}</span>
                       <Chevron className="pm-chev" />
                     </button>
-                    {projOpen && (
-                      <PmSub onMouseEnter={() => setProjOpen(true)} onMouseLeave={() => setProjOpen(false)}>
+                    {sub.isOpen('project') && (
+                      <PmSub onMouseEnter={() => sub.hoverOpen('project')} onMouseLeave={sub.hoverClose}>
                         {projects.length === 0 && <div className="pm-empty">{t('No projects yet')}</div>}
                         {projects.map(p => (
                           <button key={p.id} className={'pm-item' + (project && p.id === project.id ? ' active' : '')}
-                            onClick={() => { onSetProject(p); setProjOpen(false); setPlusMenu(false); }}>
+                            onClick={() => { onSetProject(p); sub.closeAll(); setPlusMenu(false); }}>
                             <Box />
                             <span className="pm-label">{p.name}</span>
                           </button>
                         ))}
                         {project && onClearProject && (
-                          <button className="pm-item" onClick={() => { onClearProject(); setProjOpen(false); setPlusMenu(false); }}>
+                          <button className="pm-item" onClick={() => { onClearProject(); sub.closeAll(); setPlusMenu(false); }}>
                             <span className="pm-label">{t('Remove from project')}</span>
                           </button>
                         )}
@@ -484,14 +458,14 @@ export default function Composer({
                   </div>
                 )}
                 <div className="pm-divider" />
-                <div className="pm-subwrap" onMouseEnter={openPrompts} onMouseLeave={closePrompts}>
-                  <button className={'pm-item' + (promptsOpen ? ' active' : '')} onClick={() => (promptsOpen ? closePrompts(true) : openPrompts())}>
+                <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('prompts')} onMouseLeave={sub.hoverClose}>
+                  <button className={'pm-item' + (sub.isOpen('prompts') ? ' active' : '')} onClick={() => sub.toggle('prompts')}>
                     <TextIcon />
                     <span className="pm-label">{t("Saved prompts")}</span>
                     <Chevron className="pm-chev" />
                   </button>
-                  {promptsOpen && (
-                    <PmSub onMouseEnter={openPrompts} onMouseLeave={closePrompts}>
+                  {sub.isOpen('prompts') && (
+                    <PmSub onMouseEnter={() => sub.hoverOpen('prompts')} onMouseLeave={sub.hoverClose}>
                       {(savedPrompts || []).length === 0 && <div className="pm-empty">{t("No saved prompts yet.")}</div>}
                       {(savedPrompts || []).map(p => (
                         <div key={p.id} className="pm-prompt">
@@ -502,7 +476,7 @@ export default function Composer({
                         </div>
                       ))}
                       {onSavePrompt && hasText && (
-                        <button className="pm-save-prompt" onClick={() => { onSavePrompt(); setPromptsOpen(false); }}>
+                        <button className="pm-save-prompt" onClick={() => { onSavePrompt(); sub.closeAll(); }}>
                           <Plus style={{ width: 13 }} /> Save current text as prompt
                         </button>
                       )}
@@ -510,15 +484,15 @@ export default function Composer({
                   )}
                 </div>
                 {onSelectStyle && (
-                  <div className="pm-subwrap" onMouseEnter={openStyles} onMouseLeave={closeStyles}>
-                    <button className={'pm-item' + (stylesOpen ? ' active' : '')} onClick={() => (stylesOpen ? closeStyles(true) : openStyles())}>
+                  <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('styles')} onMouseLeave={sub.hoverClose}>
+                    <button className={'pm-item' + (sub.isOpen('styles') ? ' active' : '')} onClick={() => sub.toggle('styles')}>
                       <Sliders />
                       <span className="pm-label">{t("Response style")}</span>
                       <span className="pm-note">{styleNameFor(styleId, styles)}</span>
                       <Chevron className="pm-chev" />
                     </button>
-                    {stylesOpen && (
-                      <PmSub className="styles" onMouseEnter={openStyles} onMouseLeave={closeStyles}>
+                    {sub.isOpen('styles') && (
+                      <PmSub className="styles" onMouseEnter={() => sub.hoverOpen('styles')} onMouseLeave={sub.hoverClose}>
                         <StyleSubmenu styles={styles} styleId={styleId} currentId={currentId} onSaveStyles={onSaveStyles}
                           onSelect={(id) => { onSelectStyle && onSelectStyle(id); }} />
                       </PmSub>
@@ -531,15 +505,15 @@ export default function Composer({
                   <span className="pm-label">{improvedNow ? t('Restore original prompt') : t('Improve prompt')}</span>
                 </button>
                 {onSetCompare && models && models.length > 1 && (
-                  <div className="pm-subwrap" onMouseEnter={openCompare} onMouseLeave={closeCompare}>
-                    <button className={'pm-item' + (compareOpen ? ' active' : '')} onClick={() => (compareOpen ? closeCompare(true) : openCompare())}>
+                  <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('compare')} onMouseLeave={sub.hoverClose}>
+                    <button className={'pm-item' + (sub.isOpen('compare') ? ' active' : '')} onClick={() => sub.toggle('compare')}>
                       <Cube />
                       <span className="pm-label">{t("Compare models")}</span>
                       {compareIds.length > 0 && <span className="pm-note">+{compareIds.length}</span>}
                       <Chevron className="pm-chev" />
                     </button>
-                    {compareOpen && (
-                      <PmSub className="styles" onMouseEnter={openCompare} onMouseLeave={closeCompare}>
+                    {sub.isOpen('compare') && (
+                      <PmSub className="styles" onMouseEnter={() => sub.hoverOpen('compare')} onMouseLeave={sub.hoverClose}>
                         <div className="style-menu-label">{t("Also answer with")}</div>
                         {models.filter(m => m.id !== currentId).map(m => {
                           const on = compareIds.includes(m.id);

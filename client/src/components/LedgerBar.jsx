@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Gauge } from './icons.jsx';
 import { t } from '../i18n.jsx';
 

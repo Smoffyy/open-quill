@@ -1,8 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { api } from '../api.js';
 import { applyPrefs, ACCENT_PRESETS, getUserFont, setUserFont, currentPreset } from '../prefs.js';
 import { palettesFor, themeValue } from '../lib/palettes.js';
-import { Sun, Moon, Gear, Sliders, Info, Chevron, Check, Clock, Download, Upload, Shield, Trash, Brain, Refresh, Keyboard, Search } from './icons.jsx';
+import { Sun, Gear, Sliders, Info, Chevron, Check, Clock, Download, Upload, Shield, Trash, Brain, Refresh, Keyboard, Search } from './icons.jsx';
 import Markdown from './Markdown.jsx';
 import KeybindsPanel from './KeybindsPanel.jsx';
 import { t, tk, useI18n } from '../i18n.jsx';
@@ -11,6 +11,7 @@ import { menuStyleOf, useAnchoredMenu } from '../lib/anchor.js';
 import { createPortal } from 'react-dom';
 import { SetRow, SwitchRow, SegSlide, SelectRow, useSelectMenu } from './settingsui.jsx';
 import { legacyRevealStyle, resolveReveal, revealSpeedMs } from '../lib/reveal.js';
+import { BRAND_ICON } from '../lib/brand.js';
 
 const NAV_GROUPS = [
   { label: tk('Account'), items: [
@@ -217,6 +218,24 @@ function parseVersion(v) {
   return { full: s, base, channel, build, year };
 }
 
+const CHANNEL_LABELS = { __proto__: null, rc: tk('Release candidate'), beta: tk('Beta'), alpha: tk('Alpha'), dev: tk('Development') };
+
+function channelLabel(channel) {
+  if (!channel) return '';
+  const known = CHANNEL_LABELS[channel.toLowerCase()];
+  return known ? t(known) : channel[0].toUpperCase() + channel.slice(1);
+}
+
+// The server hands back a plain YYYY-MM-DD. Splitting it by hand rather than passing it to
+// Date() keeps it off the UTC-parsing path, which would render the day before east of Greenwich.
+function formatReleased(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
+  if (!m) return '';
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
 function presetDefaults(isOpenai, fallbackTheme) {
   return {
     revealStyle: 'typewriter', autoscroll: true, theme: fallbackTheme || 'system', accent: '', density: 'comfortable',
@@ -248,7 +267,6 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
     if (merged.theme === 'oled') merged.theme = 'dark';
     return merged;
   });
-  const [saved, setSaved] = useState(false);
   const activePreset = currentPreset();
   const [userFont, setUserFontState] = useState(getUserFont());
   const [confirmDel, setConfirmDel] = useState(false);
@@ -275,6 +293,13 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
     api.get('/api/me/sessions').then(d => setSessions(d.sessions || [])).catch(() => setSessionErr(t('Could not load sessions.')));
   }
   useEffect(() => { if (tab === 'security') loadSessions(); }, [tab]);
+  const [release, setRelease] = useState(null);
+  useEffect(() => {
+    if (tab !== 'version' || release) return;
+    let alive = true;
+    api.get('/api/release').then(d => { if (alive) setRelease(d); }).catch(() => { if (alive) setRelease({}); });
+    return () => { alive = false; };
+  }, [tab, release]);
   const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
   const [pwMsg, setPwMsg] = useState('');
   const [pwErr, setPwErr] = useState('');
@@ -331,7 +356,6 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
       try {
         const { user: u } = await api.patch('/api/me', { displayName: nextName, prefs: nextPrefs, instructions: instrRef.current });
         onUpdated(u);
-        setSaved(true); setTimeout(() => setSaved(false), 1300);
       } catch {}
     }, 450);
   }
@@ -388,7 +412,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
   return (
     <div className="overlay" onMouseDown={(e) => e.target.classList.contains('overlay') && onClose()}>
       <div className="modal">
-        <button className="modal-close" onClick={onClose}>✕</button>
+        <button className="modal-close" onClick={onClose} aria-label={t('Close')}>✕</button>
         <SettingsNav tab={tab} setTab={setTab} cfg={cfg} />
         <div className="modal-main">
           {tab === 'general' && (
@@ -498,15 +522,15 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
             </>
           )}
           {tab === 'version' && (() => {
-            const vp = parseVersion(cfg?.uiVersion || cfg?.version || '');
-            const icon = cfg?.uiVersionIcon || cfg?.appIcon || '';
-            const notes = (cfg?.uiVersionDesc || '').trim();
-            const channel = vp?.channel ? vp.channel[0].toUpperCase() + vp.channel.slice(1) : '';
+            const vp = parseVersion(release?.version || cfg?.version || '');
+            const icon = release?.hasIcon ? '/api/release/icon' : (cfg?.appIcon || '');
+            const notes = (release?.notes || '').trim();
+            const channel = channelLabel(vp?.channel);
             return (
               <div className="vh">
                 <div className="vh-top">
                   <div className="vh-badge">
-                    {icon ? <img src={icon} alt="" /> : <img className="vh-badge-fallback" src="/starburst.svg" alt="" />}
+                    {icon ? <img src={icon} alt="" /> : <img className="vh-badge-fallback" src={BRAND_ICON} alt="" />}
                   </div>
                   <div className="vh-id">
                     <div className="vh-name">{cfg?.appName || 'open-quill'}</div>
@@ -520,26 +544,40 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                       <span className="vh-li-k">{t("Release")}</span>
                       <span className="vh-li-v">{vp.base || ', '}</span>
                     </div>
-                                
+
+                    {release?.codename && (
+                      <div className="vh-li">
+                        <span className="vh-li-k">{t("Codename")}</span>
+                        <span className="vh-li-v">{release.codename}</span>
+                      </div>
+                    )}
+
                     <div className="vh-li">
                       <span className="vh-li-k">{t("Channel")}</span>
                       <span className="vh-li-v">{channel || 'Stable'}</span>
                     </div>
-                                
+
                     {vp.build && (
                       <div className="vh-li">
                         <span className="vh-li-k">{t("Build")}</span>
                         <span className="vh-li-v">{vp.build}</span>
                       </div>
                     )}
-                
+
+                    {release?.released && (
+                      <div className="vh-li">
+                        <span className="vh-li-k">{t("Released")}</span>
+                        <span className="vh-li-v">{formatReleased(release.released)}</span>
+                      </div>
+                    )}
+
                     {notes && (
                       <div className="version-desc" style={{ marginTop: 14 }}>
                         <Markdown>{notes}</Markdown>
                       </div>
                     )}
-                
-                    {!notes && (
+
+                    {release && !notes && (
                       <div className="vh-empty">{t("No release notes for this build.")}</div>
                     )}
                   </div>

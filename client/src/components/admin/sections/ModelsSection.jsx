@@ -160,7 +160,8 @@ export default function ModelsSection() {
   function rowClick(e, m) {
     if (e.shiftKey && selAnchor.current) {
       const order = displaySeq.map(x => x.id);
-      let a = order.indexOf(selAnchor.current), b = order.indexOf(m.id);
+      let a = order.indexOf(selAnchor.current);
+      const b = order.indexOf(m.id);
       if (a < 0) a = b;
       const [lo, hi] = a < b ? [a, b] : [b, a];
       setMultiSel(new Set(order.slice(lo, hi + 1)));

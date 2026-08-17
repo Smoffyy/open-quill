@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import Markdown from './Markdown.jsx';
 import { t } from '../i18n.jsx';
