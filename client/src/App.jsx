@@ -50,6 +50,7 @@ import { comboKeys, comboLabel, resolveKeybinds } from './lib/keybinds.js';
 import { useKeybinds } from './lib/keyboard.js';
 import { useThreadScroll } from './lib/threadscroll.js';
 import { useGenMirror } from './lib/genmirror.js';
+import { useSocket } from './lib/socket.js';
 const BranchTree = React.lazy(() => import('./components/BranchTree.jsx'));
 import { toast } from './toast.js';
 import { copyText } from './clipboard.js';
@@ -277,9 +278,11 @@ export default function App() {
   const [dispSegs, setDispSegs] = useState(null);
   const [phase, setPhase] = useState('static');
 
-  const ws = useRef(null);
-  const wsRetry = useRef(0);
-  const wsTimer = useRef(null);
+  const handleWsRef = useRef(null);
+  const onWsMessage = useCallback((m) => handleWsRef.current?.(m), []);
+  const shouldReconnect = useCallback(() => !!userRef.current, []);
+  const socket = useSocket({ onMessage: onWsMessage, shouldReconnect });
+  const { connect, send: socketSend } = socket;
   const getCurrentModelId = useCallback(() => currentIdRef.current, []);
   const { busyChats, syncBusy, peek, queueRec, dropRec, recFor, resumeRec } = useGenMirror(getCurrentModelId);
   const targetContent = useRef('');
@@ -367,8 +370,6 @@ export default function App() {
     stopLoops();
     clearTimeout(skelTimer.current);
     clearTimeout(staggerTimer.current);
-    clearTimeout(wsTimer.current);
-    try { ws.current?.close(); } catch {}
   }, []);
 
   useEffect(() => {
@@ -517,33 +518,10 @@ export default function App() {
     link.href = c.appIcon || '/starburst.svg';
   }
 
-  function connect() {
-    const existing = ws.current;
-    if (existing && (existing.readyState === 0 || existing.readyState === 1)) return;
-    clearTimeout(wsTimer.current);
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const sock = new WebSocket(`${proto}://${location.host}/ws`);
-    ws.current = sock;
-    sock.onopen = () => { wsRetry.current = 0; };
-    sock.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch { return; } handleWs(m); };
-    sock.onerror = () => { try { sock.close(); } catch {} };
-    sock.onclose = () => {
-      if (ws.current === sock) ws.current = null;
-      const wait = Math.min(15000, 1500 * Math.pow(2, wsRetry.current++));
-      clearTimeout(wsTimer.current);
-      wsTimer.current = setTimeout(() => { if (userRef.current) connect(); }, wait);
-    };
-  }
-
   function wsSend(obj) {
-    const sock = ws.current;
-    if (!sock || sock.readyState !== 1) {
-      if (!sock || sock.readyState >= 2) connect();
-      setChatErrors(prev => ({ ...prev, [activeKey()]: t('Connection lost, reconnecting. Try again in a moment.') }));
-      return false;
-    }
-    try { sock.send(JSON.stringify(obj)); return true; }
-    catch { return false; }
+    if (socketSend(obj)) return true;
+    setChatErrors(prev => ({ ...prev, [activeKey()]: t('Connection lost, reconnecting. Try again in a moment.') }));
+    return false;
   }
 
   function activeKey() { return incognitoRef.current ? 'incognito' : activeIdRef.current; }
@@ -789,6 +767,8 @@ export default function App() {
       return;
     }
   }
+
+  handleWsRef.current = handleWs;
 
   function stopLoops() {
     clearInterval(revealTimer.current);
@@ -1311,7 +1291,7 @@ export default function App() {
     queueRec(activeId, currentId);
   }, [streaming, activeId, currentId]);
 
-  function stop() { const key = activeKey(); try { ws.current?.readyState === 1 && ws.current.send(JSON.stringify({ type: 'stop', chatId: key })); } catch {} pendingDone.current = true; setQueued(false); }
+  function stop() { socketSend({ type: 'stop', chatId: activeKey() }); pendingDone.current = true; setQueued(false); }
   const stopChat = useCallback((chatId) => {
     if (!chatId) return;
     if (chatId === activeKey()) { stop(); return; }
