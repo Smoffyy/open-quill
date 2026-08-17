@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [dev, beta, stable]
+    branches: [dev, stable]
   pull_request:
-    branches: [dev, beta, stable]
+    branches: [dev, stable]
 
 jobs:
   build-and-smoke:
@@ -40,6 +40,9 @@ jobs:
 
       - name: Components render without crashing
         run: npm run smoke
+
+      - name: Release metadata is present and shippable
+        run: npm run check:release
 
       - name: Client logic tests
         run: npm run test:client

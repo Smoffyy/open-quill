@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { APP_VERSION } from './appconfig.js';
+import { APP_VERSION } from './appversion.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RELEASE_DIR = path.join(__dirname, '..', '..', 'release');

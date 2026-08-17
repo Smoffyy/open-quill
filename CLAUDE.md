@@ -19,12 +19,13 @@ Run from the repo root:
 | `npm run smoke` | Server-render every admin section and modal |
 | `npm run i18n:check` | Report missing/orphan translation keys |
 | `npm run check:local` | Off-origin check on its own |
+| `npm run check:release` | Verify this version has a release folder, notes and a changelog entry |
 | `npm run check:deps` / `update:deps` | Dependency report / update |
 
 In `server/`: `npm test` (`node --test`, discovers every `*.test.js`).
 In `client/`: `npm run dead:css` (advisory unused-class report — verify before deleting; a zero-hit class can still be emitted by a library).
 
-The root `package.json` version is the **single source of truth** for the app version; `server/lib/appconfig.js` reads it and the release workflows check tags against it.
+The root `package.json` version is the **single source of truth** for the app version; `server/lib/appversion.js` reads it and the release workflows check tags against it. That module is deliberately dependency-free so `check-release.mjs` can import the release logic without booting the database.
 
 ## Layout
 
@@ -156,7 +157,11 @@ The preset comes from the `ui_preset` setting, is exposed by `GET /api/app-confi
 
 ## Branching and releases
 
-`dev` → `beta` → `stable`; versions live in tags, not branch names. Tag `vX.Y.Z-beta.N` for a pre-release, `vX.Y.Z` for a stable release. `ci.yml` runs build and tests on every push/PR to the three branches; `version-guard.yml` blocks PRs into `beta`/`stable` without a version bump. Releases fire only on tags.
+Two branches: **`dev`** is where work lands, **`stable`** is what is released. Channels live in the version string, not in branch names.
+
+`dev` carries a prerelease tail (`27.2.0-beta.3`) and tagging it publishes a GitHub pre-release. Dropping the tail and merging to `stable` is what makes something a release — tag `v27.2.0` and `release.yml` marks it latest. The last commit before a release PR is the bump to the final version, and the first commit after merging opens the next cycle (`27.3.0-beta.1`), so `dev` is never equal to `stable`.
+
+`ci.yml` runs on push/PR to both branches. `version-guard.yml` blocks a PR into `stable` that does not raise the version, comparing with `check-version-bump.mjs` — **`sort -V` is not usable here**, as it ranks `27.2.0-beta.5` above `27.2.0` and would reject the exact PR that ships a release.
 
 ### What Settings → Version shows
 
@@ -175,7 +180,7 @@ and every `broadcastConfig()`.
 
 ## Keeping the tree clean
 
-Four checks find dead weight, and all four should stay at zero:
+These checks find dead weight, and all should stay at zero:
 
 | Check | Finds |
 | --- | --- |
@@ -184,6 +189,7 @@ Four checks find dead weight, and all four should stay at zero:
 | `npm run i18n:check` | missing **and** orphaned translation keys |
 | `npm run smoke` | components that crash when rendered |
 | `npm run build` | anything that would fetch off-origin |
+| `npm run check:release` | a version bump with no release folder, notes or changelog entry |
 
 Two traps when acting on them. **`dead:css` is advisory** — a zero-hit class can still be emitted by a library (`katex-error`, `hljs`), which is what `EXTERNAL` at the top of the script is for; verify before deleting. And **`i18n:check` force-adds keys its scanner cannot see** (the `extra` array), mostly the quick-prompt defaults that live in `server/lib/appconfig.js` rather than in client source. An entry there suppresses orphan detection for that key, so when you delete a string, check that array too or its translations quietly survive forever.
 

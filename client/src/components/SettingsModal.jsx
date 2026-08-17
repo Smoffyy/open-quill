@@ -218,6 +218,14 @@ function parseVersion(v) {
   return { full: s, base, channel, build, year };
 }
 
+const CHANNEL_LABELS = { __proto__: null, rc: tk('Release candidate'), beta: tk('Beta'), alpha: tk('Alpha'), dev: tk('Development') };
+
+function channelLabel(channel) {
+  if (!channel) return '';
+  const known = CHANNEL_LABELS[channel.toLowerCase()];
+  return known ? t(known) : channel[0].toUpperCase() + channel.slice(1);
+}
+
 // The server hands back a plain YYYY-MM-DD. Splitting it by hand rather than passing it to
 // Date() keeps it off the UTC-parsing path, which would render the day before east of Greenwich.
 function formatReleased(s) {
@@ -517,7 +525,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
             const vp = parseVersion(release?.version || cfg?.version || '');
             const icon = release?.hasIcon ? '/api/release/icon' : (cfg?.appIcon || '');
             const notes = (release?.notes || '').trim();
-            const channel = vp?.channel ? vp.channel[0].toUpperCase() + vp.channel.slice(1) : '';
+            const channel = channelLabel(vp?.channel);
             return (
               <div className="vh">
                 <div className="vh-top">
