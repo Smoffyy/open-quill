@@ -22,6 +22,7 @@ import { isPrivateAddress, hostAllowed } from '../lib/egress.js';
 import { resolveRouted, ruleMatches, routerRules, modelLabel } from '../lib/router.js';
 import { preferredChild } from '../lib/tree.js';
 import { looksTextual, isZipOfficeDoc } from '../lib/extract.js';
+import { releaseCandidates, parseManifest } from '../lib/release.js';
 import { samplingParams, parseStop } from '../llm/sampling.js';
 import { PROVIDER_TYPES, isProviderType, providerSpec } from '../providers.js';
 import { slideWithCounter, trimMode } from '../lib/ctxwindow.js';
@@ -1545,4 +1546,59 @@ test('isZipOfficeDoc recognises the zip-container office formats', () => {
   assert.equal(isZipOfficeDoc('report.docx'), true);
   assert.equal(isZipOfficeDoc('deck.pptx'), true);
   assert.equal(isZipOfficeDoc('notes.txt'), false);
+});
+
+// --- release metadata -----------------------------------------------------
+// The version panel used to find its content by running a regex over a static asset
+// directory, so which file won depended on readdir order. Resolution is explicit now,
+// and these are the two pure halves of it.
+
+test('releaseCandidates walks from the exact version down to the major line', () => {
+  assert.deepEqual(releaseCandidates('27.1.0-developer.20'), ['27.1.0', '27.1', '27']);
+  assert.deepEqual(releaseCandidates('27.1.0'), ['27.1.0', '27.1', '27']);
+  assert.deepEqual(releaseCandidates('27'), ['27']);
+  assert.deepEqual(releaseCandidates('0.0.0'), ['0.0.0', '0.0', '0']);
+});
+
+test('releaseCandidates refuses anything that is not a dotted number', () => {
+  for (const bad of ['', null, undefined, 'latest', '../etc', '27.x', 'v27.1.0']) {
+    assert.deepEqual(releaseCandidates(bad), [], String(bad));
+  }
+});
+
+test('parseManifest keeps the known fields and warns about the rest', () => {
+  const warns = [];
+  const m = parseManifest('{"codename":"Cascade","released":"2026-08-16","icon":"icon.png"}', (w) => warns.push(w));
+  assert.deepEqual(m, { codename: 'Cascade', released: '2026-08-16', icon: 'icon.png' });
+  assert.deepEqual(warns, []);
+});
+
+test('parseManifest names a misspelled field instead of rendering a blank panel', () => {
+  const warns = [];
+  parseManifest('{"codeName":"Cascade"}', (w) => warns.push(w));
+  assert.equal(warns.length, 1);
+  assert.match(warns[0], /codeName/);
+});
+
+test('parseManifest drops a malformed date rather than showing it raw', () => {
+  const warns = [];
+  const m = parseManifest('{"released":"16/08/2026"}', (w) => warns.push(w));
+  assert.equal(m.released, '');
+  assert.match(warns[0], /YYYY-MM-DD/);
+});
+
+test('parseManifest refuses an icon that tries to leave the release folder', () => {
+  for (const icon of ['../../../etc/passwd', '/etc/hosts', 'sub/dir/icon.png', 'icon.exe', 'icon']) {
+    const warns = [];
+    const m = parseManifest(JSON.stringify({ icon }), (w) => warns.push(w));
+    assert.equal(m.icon, '', icon);
+    assert.equal(warns.length, 1, icon);
+  }
+});
+
+test('parseManifest survives a file that is not JSON at all', () => {
+  const warns = [];
+  assert.equal(parseManifest('# not json', (w) => warns.push(w)), null);
+  assert.equal(parseManifest('[1,2]', () => {}), null, 'an array is not a manifest');
+  assert.equal(warns.length, 1);
 });

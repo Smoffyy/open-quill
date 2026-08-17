@@ -7,9 +7,11 @@ import { logAudit } from '../lib/audit.js';
 import { appConfig } from '../lib/appconfig.js';
 import { broadcastConfig } from '../lib/ws/index.js';
 import { egressLog, clearEgressLog } from '../lib/egress.js';
+import { releaseInfo, releaseIconPath } from '../lib/release.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DOCS = { __proto__: null, credits: 'CREDITS.md', changelog: 'CHANGELOG.md', license: 'LICENSE' };
+const ICON_TYPES = { __proto__: null, '.png': 'image/png', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
 
 const text = (v, cap) => String(v ?? '').slice(0, cap);
 
@@ -76,6 +78,16 @@ export default function registerMiscRoutes(app) {
 
   app.get('/api/admin/egress-log', authMiddleware, adminOnly, (req, res) => res.json(egressLog()));
   app.delete('/api/admin/egress-log', authMiddleware, adminOnly, (req, res) => { clearEgressLog(); res.json({ ok: true }); });
+
+  app.get('/api/release', authMiddleware, (req, res) => res.json(releaseInfo()));
+
+  app.get('/api/release/icon', authMiddleware, (req, res) => {
+    const file = releaseIconPath();
+    if (!file) return res.status(404).json({ error: 'not found' });
+    res.setHeader('Content-Type', ICON_TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.sendFile(file);
+  });
 
   app.get('/api/docs/:name', authMiddleware, (req, res) => {
     const file = DOCS[req.params.name];

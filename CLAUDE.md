@@ -55,7 +55,7 @@ client/src/
   scripts/            check-local, i18n-check, dead-css, smoke
 ```
 
-Key `server/lib/` modules: `appconfig`, `audit`, `origin` (same-origin guard), `budget`, `convo` (conversation assembly), `history`, `memory`, `models`, `prompts`, `sandboxguard` (path + command screening), `purge`, `queue`, `safety`, `spaces`, `tree` (message branching), `llamacpp`, `ctxwindow` (prompt fitting), `kwargs`, `router`, `toolstats`, `uploads`, `egress`, `localonly`.
+Key `server/lib/` modules: `appconfig`, `audit`, `origin` (same-origin guard), `budget`, `convo` (conversation assembly), `history`, `memory`, `models`, `prompts`, `release` (Settings → Version content), `sandboxguard` (path + command screening), `purge`, `queue`, `safety`, `spaces`, `tree` (message branching), `llamacpp`, `ctxwindow` (prompt fitting), `kwargs`, `router`, `toolstats`, `uploads`, `egress`, `localonly`.
 
 Key `client/src/lib/` modules: `keybinds` + `keyboard` (shortcut model and listener), `threadscroll` + `genmirror` (see below), `submenu`, `focus`, `anchor` (portaled menu placement), `mathjs`, `hljs`, `reveal`, `reasoning`, `threadmeta`, `artifacts`, `drafts`, `attachments`, `dictation`, `palettes`, `status`.
 
@@ -150,6 +150,21 @@ The preset comes from the `ui_preset` setting, is exposed by `GET /api/app-confi
 ## Branching and releases
 
 `dev` → `beta` → `stable`; versions live in tags, not branch names. Tag `vX.Y.Z-beta.N` for a pre-release, `vX.Y.Z` for a stable release. `ci.yml` runs build and tests on every push/PR to the three branches; `version-guard.yml` blocks PRs into `beta`/`stable` without a version bump. Releases fire only on tags.
+
+### What Settings → Version shows
+
+`release/<line>/` holds it — `release.json` (codename, released, icon),
+`notes.md`, and the badge. Cutting a release is a new folder plus a version bump.
+
+`server/lib/release.js` picks the folder from the root `package.json` version,
+most specific first: `27.1.0`, then `27.1`, then `27` — so one folder per major
+line is normal, and per-patch detail stays in `CHANGELOG.md`. A missing folder is
+legitimate and degrades quietly, which is why a bump with no folder looks blank.
+
+**Release notes must not go back into `/api/app-config`.** They are fetched
+lazily from `GET /api/release` because that config payload rides every page load
+and every `broadcastConfig()`.
+
 
 ## Keeping the tree clean
 
