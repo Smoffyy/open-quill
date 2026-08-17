@@ -105,6 +105,8 @@ This project is licensed under the [MIT License](LICENSE); by downloading, using
 
 The [`docs/`](docs/README.md) folder has an in-depth guide to using the interface: chatting and branching, the composer, models and reasoning, personas/styles/prompts, organizing chats (folders, projects, spaces), artifacts and the sandbox, settings, keyboard shortcuts, privacy and security, and a full admin panel reference. Start at [docs/README.md](docs/README.md).
 
+Those docs are for using the app. If you are working *on* it, [CLAUDE.md](CLAUDE.md) covers the architecture and [RELEASING.md](RELEASING.md) covers versioning, tagging and cutting a release.
+
 ## Why was this project made?
 
 This project was made mainly because I was fascinated by the Anthropic interface and colors. There are many other apps that have recreated similar styles of other interfaces, and I wanted to contribute openly for others to build upon what I've created. This entire project will **FOREVER** be listed under the MIT License. The front end aims to keep a balance between useful functionality and a clean, aesthetically pleasing experience.
@@ -217,6 +219,14 @@ For questions, setup help, and feature requests, use [GitHub Discussions](https:
 
 Beginning with **Open Quill 27**, the project will adopt a year based versioning system. Major releases will increment annually, starting with version **27** and continuing forward with each new release cycle.
 
-If you'd like to try upcoming features on a **semi-stable** build, check out the [beta](https://github.com/Smoffyy/open-quill/tree/beta) branch. For users who prefer a packaged release without automatic updates, you can find available builds on the [releases](https://github.com/Smoffyy/open-quill/releases) page. *Please note that beta builds are considered semi-stable and may contain bugs or unfinished features.* 
+There are three ways to run it, in order of how settled they are.
 
-For developers and advanced users who want access to the **bleeding-edge** changes, the [dev](https://github.com/Smoffyy/open-quill/tree/dev) branch contains the latest in-development updates.
+**Stable** - the [releases](https://github.com/Smoffyy/open-quill/releases) page. Builds marked *Latest* are the released versions, packaged with the client already built. This is what most people want.
+
+**Beta** - also on the releases page, marked *Pre-release*. These are cut from `dev` as features land, and their version carries a tail, like `27.1.0-beta.3`. Semi-stable: expect the occasional bug or unfinished feature.
+
+**Bleeding edge** - the [dev](https://github.com/Smoffyy/open-quill/tree/dev) branch. The latest in-development work, built from source. Expect breakage, and report issues with a commit hash rather than a version number, since the version only changes when a beta is published.
+
+You can tell which you are on from **Settings → Version**: a bare version like `27.1.0` is a release, anything with a tail is not.
+
+If you maintain a fork or cut your own builds, [RELEASING.md](RELEASING.md) documents the whole process.

@@ -157,6 +157,8 @@ The preset comes from the `ui_preset` setting, is exposed by `GET /api/app-confi
 
 ## Branching and releases
 
+Step-by-step commands live in [RELEASING.md](RELEASING.md); this section is the shape of it.
+
 Two branches: **`dev`** is where work lands, **`stable`** is what is released. Channels live in the version string, not in branch names.
 
 **A tag is the version string exactly** — `27.2.0-beta.3`, no `v` prefix. `.npmrc` sets `tag-version-prefix=` so `npm version` agrees, and both release workflows match the bare form.
