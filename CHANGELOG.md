@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [27.1.0] — TBD
+## [27.1.0] — 2026-08-21
 
 ### Added
 - **Router models** - a router is a model you add like any other, except it does not talk to a backend itself. It sits in the picker, and when you send a message it hands the turn to whichever of your real models matches first. Rules are ordered and match on keywords, a regular expression, whether there is an image or an attachment, whether the message looks like code, or how long it is, with a catch-all fallback. So a small fast model can answer one-liners while anything with a code fence goes to your coding model, without you choosing every time. Routers can point at other routers; loops are detected and refused rather than left to spin, and a router with no fallback declines the turn instead of silently guessing. Set it up under the new **Routing** tab on any model. While a reply generates, the strip above the message bar shows which model was picked and why.
