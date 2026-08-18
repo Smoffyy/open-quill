@@ -1,6 +1,7 @@
 import { db, uid, now, getSetting } from '../../db.js';
 import { buildMessages, streamCompletion, generateTitle, stripThink } from '../../llm/index.js';
 import { buildTools, toCall, cutOffOf, livePreview, resolveToolName, SANDBOX_READONLY } from '../../tools/index.js';
+import { announcedMoreWork, MAX_CONTINUES, CONTINUE_INSTRUCTION } from '../continuation.js';
 import * as websearch from '../../websearch.js';
 import * as sandbox from '../../sandbox.js';
 import * as membank from '../../membank.js';
@@ -236,6 +237,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   let prevStepSig = '';
   let prevFailShape = '';
   let noProgress = 0;
+  let continues = 0;
   let lastFinish = '';
   const steerNotes = [];
   let steerBudget = MAX_STEERS;
@@ -429,12 +431,12 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
                 if (key !== liveState.key) {
                   liveState = { key, len: (live.content || '').length, lastAt: Date.now() };
                   liveSent = true;
-                  safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live }));
+                  safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live, index: e.index }));
                 } else if ((live.content || '').length > liveState.len) {
                   const text = live.content.slice(liveState.len);
                   liveState.len = live.content.length;
                   liveSent = true;
-                  safeSend(JSON.stringify({ type: 'tool_live_delta', chatId: chat.id, text }));
+                  safeSend(JSON.stringify({ type: 'tool_live_delta', chatId: chat.id, text, index: e.index }));
                 }
               } else {
                 const key = e.index + ':' + JSON.stringify(live);
@@ -442,7 +444,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
                 if (key !== liveState.key && t - liveState.lastAt > 120) {
                   liveState = { key, len: 0, lastAt: t };
                   liveSent = true;
-                  safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live }));
+                  safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live, index: e.index }));
                 }
               }
               return;
@@ -535,6 +537,17 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       if (stepFinish) lastFinish = stepFinish;
       if (aborted || !toolsOn || !toolCalls.length) {
         if (liveSent) safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live: null }));
+        // The model announced the next step and then stopped without taking it.
+        // Nudge it once or twice rather than making the user type "keep going".
+        // No maxSteps bump: this spends the operator's existing step budget.
+        if (!aborted && toolsOn && continues < MAX_CONTINUES && step + 1 < maxSteps && announcedMoreWork(stepText)) {
+          continues++;
+          const written = stripThink(model, stepText);
+          const seam = seamFor(content);
+          if (seam) { content += seam; safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: seam })); }
+          inTurn = [...inTurn, { role: 'assistant', content: written }, { role: 'user', content: CONTINUE_INSTRUCTION }];
+          continue;
+        }
         break;
       }
       const toolMsgs = [];

@@ -11,6 +11,11 @@ function blankRecord(modelId, phase) {
     assistantId: null,
     model_id: modelId,
     live: null,
+    // `live` is the one file currently being written (the artifacts preview needs
+    // exactly that). `liveCalls` is every tool call in the step the model is
+    // spelling out right now, ordered by its index, so a turn that writes six
+    // files shows six lines rather than replacing one line six times.
+    liveCalls: [],
     steers: [],
     status: null
   };

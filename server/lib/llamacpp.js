@@ -1,4 +1,5 @@
 import { resolveProvider, providerSpec } from '../providers.js';
+import { wireToolCalls } from '../llm/wire.js';
 
 const CACHE_MS = 5 * 60 * 1000;
 const infoCache = new Map();
@@ -179,7 +180,11 @@ export function learnImageCost(model, images, measured) {
 function wireFor(messages) {
   return messages.map(m => {
     const out = { role: m.role, content: textOf(m.content) };
-    if (Array.isArray(m.tool_calls) && m.tool_calls.length) out.tool_calls = m.tool_calls;
+    // The same OpenAI shape the completion request uses. Handing /apply-template
+    // the raw internal call makes it 500 with "Missing tool call type", and the
+    // fallback is an estimated prompt size on exactly the turns that need an
+    // exact one.
+    if (Array.isArray(m.tool_calls) && m.tool_calls.length) out.tool_calls = wireToolCalls('openai', m.tool_calls);
     if (m.tool_call_id) out.tool_call_id = m.tool_call_id;
     if (m.name) out.name = m.name;
     return out;

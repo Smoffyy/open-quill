@@ -5,8 +5,17 @@ export const IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'i
 export const EXT_LANG = { __proto__: null, rs: 'rust', py: 'python', js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript', html: 'xml', htm: 'xml', css: 'css', scss: 'scss', json: 'json', md: 'markdown', markdown: 'markdown', sh: 'bash', bash: 'bash', c: 'c', cpp: 'cpp', h: 'cpp', java: 'java', rb: 'ruby', go: 'go', php: 'php', sql: 'sql', yml: 'yaml', yaml: 'yaml', toml: 'ini', ini: 'ini', lua: 'lua', glsl: 'glsl', vert: 'glsl', frag: 'glsl', xml: 'xml', svg: 'xml', kt: 'kotlin', swift: 'swift', vue: 'xml' };
 export const EXT_COLOR = { __proto__: null, py: '#4b8bf4', js: '#e6b73a', jsx: '#e6b73a', mjs: '#e6b73a', ts: '#3a8ddb', tsx: '#3a8ddb', html: '#e3683c', htm: '#e3683c', css: '#3f7ff0', scss: '#cd6799', json: '#9aa0a6', md: '#8a93a0', markdown: '#8a93a0', sh: '#5bbd6a', bash: '#5bbd6a', rs: '#d6a07a', c: '#6b78c4', cpp: '#6b78c4', h: '#6b78c4', java: '#c0824a', rb: '#c5413b', go: '#39c0d4', php: '#8a8fd0', sql: '#d99440', yml: '#cb4b3e', yaml: '#cb4b3e', toml: '#b08b54', lua: '#5b8df0', svg: '#e3683c', xml: '#e3683c', txt: '#9aa0a6', csv: '#5bbd6a', zip: '#b48ad6' };
 
-export function baseName(p) { return p.split('/').pop(); }
-export function extOf(p) { return (p.split('.').pop() || '').toLowerCase(); }
+export function baseName(p) { return String(p == null ? '' : p).split('/').pop(); }
+
+// A name with no dot has no extension. Splitting on '.' and taking the last part
+// turns `Makefile` into the extension "makefile", which then renders as a MAKE
+// file type and colours the icon by a language that does not exist. A leading
+// dot is part of the name too, so `.gitignore` has no extension either.
+export function extOf(p) {
+  const b = baseName(p);
+  const i = b.lastIndexOf('.');
+  return i > 0 ? b.slice(i + 1).toLowerCase() : '';
+}
 
 export function fmtSize(n) {
   if (n == null) return '';
@@ -108,15 +117,69 @@ export function markLine(text, matches, activeGid) {
   return out;
 }
 
-export function buildTree(files) {
-  const root = { dirs: {}, files: [] };
+// Folder nodes are keyed by a path segment that comes from the model, so the
+// children live in a Map rather than an object — a directory literally named
+// "constructor" or "__proto__" is a legal sandbox path.
+function dirNode(name, path) { return { name, path, dirs: new Map(), files: [] }; }
+
+function sortNode(node) {
+  node.files.sort((a, b) => baseName(a.path).localeCompare(baseName(b.path)));
+  node.dirs = new Map([...node.dirs.entries()].sort((a, b) => a[0].localeCompare(b[0])));
+  for (const d of node.dirs.values()) sortNode(d);
+  return node;
+}
+
+// A directory that only ever holds one directory is rendered as one row
+// ("src/utils/text") instead of three. Deep scaffolding is common in generated
+// projects and three chevrons to reach one file is all cost and no information.
+function compactNode(node) {
+  for (const [key, child] of [...node.dirs.entries()]) {
+    let merged = compactNode(child);
+    while (merged.files.length === 0 && merged.dirs.size === 1) {
+      const only = [...merged.dirs.values()][0];
+      merged = { name: merged.name + '/' + only.name, path: only.path, dirs: only.dirs, files: only.files };
+    }
+    node.dirs.set(key, merged);
+  }
+  return node;
+}
+
+export function buildTree(files, { compact = true } = {}) {
+  const root = dirNode('', '');
   for (const f of files) {
-    const parts = f.path.split('/');
+    const parts = String(f.path || '').split('/').filter(Boolean);
     let node = root;
-    for (let i = 0; i < parts.length - 1; i++) { node.dirs[parts[i]] ||= { dirs: {}, files: [] }; node = node.dirs[parts[i]]; }
+    for (let i = 0; i < parts.length - 1; i++) {
+      let next = node.dirs.get(parts[i]);
+      if (!next) { next = dirNode(parts[i], node.path ? node.path + '/' + parts[i] : parts[i]); node.dirs.set(parts[i], next); }
+      node = next;
+    }
     node.files.push(f);
   }
-  return root;
+  sortNode(root);
+  return compact ? compactNode(root) : root;
+}
+
+export function countFiles(node) {
+  let n = node.files.length;
+  for (const d of node.dirs.values()) n += countFiles(d);
+  return n;
+}
+
+// Every folder path in a tree, so a caller can expand or collapse all of them
+// without walking the structure itself.
+export function allDirPaths(node, out = []) {
+  for (const d of node.dirs.values()) { out.push(d.path); allDirPaths(d, out); }
+  return out;
+}
+
+// The folder paths that must be open for `path` to be on screen. Used to reveal
+// the file the assistant is writing without disturbing the rest of the tree.
+export function ancestorDirs(path) {
+  const parts = String(path || '').split('/').filter(Boolean);
+  const out = [];
+  for (let i = 0; i < parts.length - 1; i++) out.push(parts.slice(0, i + 1).join('/'));
+  return out;
 }
 
 export function findMatches(lines, query) {

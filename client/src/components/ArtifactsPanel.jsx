@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { FileText, Download, Search, X, Panel } from './icons.jsx';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { FileText, Download, Search, X, Panel, Folder, Menu, Chevron, ChevDown } from './icons.jsx';
 import { t } from '../i18n.jsx';
 import Viewer from './artifacts/Viewer.jsx';
-import { baseName, extOf } from '../lib/artifacts.js';
+import FileTree, { FileCard } from './artifacts/FileTree.jsx';
+import { extOf, buildTree, allDirPaths, ancestorDirs } from '../lib/artifacts.js';
+import { dirOf } from '../lib/files.js';
 
 function clampW(w) { return Math.max(320, Math.min(w, Math.round(window.innerWidth * 0.85))); }
 
@@ -13,6 +15,8 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
   const [split, setSplit] = useState(null);
   const [focusedPane, setFocusedPane] = useState('left');
   const [filter, setFilter] = useState('');
+  const [tree, setTree] = useState(() => localStorage.getItem('oq-art-flat') !== '1');
+  const [closed, setClosed] = useState(() => new Set());
   const [width, setWidth] = useState(() => { const s = parseInt(localStorage.getItem('oq-art-w')); return s ? clampW(s) : Math.min(480, Math.round(window.innerWidth * 0.42)); });
   const [resizing, setResizing] = useState(false);
   const dragRef = useRef(null);
@@ -29,13 +33,27 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
 
   const goOverview = useCallback(() => { setActive(null); setSplit(null); setFocusedPane('left'); }, []);
 
-  useEffect(() => { setActive(null); setSplit(null); }, [chatId]);
+  useEffect(() => { setActive(null); setSplit(null); setClosed(new Set()); }, [chatId]);
   useEffect(() => { if (focus && focus.path) { setActive(focus.path); setFocusedPane('left'); } }, [focus]);
   useEffect(() => {
     const exists = (p) => p && byPath.has(p);
     setActive(a => exists(a) ? a : null);
     setSplit(s => exists(s) ? s : null);
   }, [files, live, pending]);
+
+  // A file being written must be visible, so its folders reopen themselves. Only
+  // the ancestors are touched: a folder the user closed elsewhere stays closed.
+  const livePath = live && live.path;
+  useEffect(() => {
+    if (!livePath) return;
+    setClosed(c => {
+      const anc = ancestorDirs(livePath).filter(d => c.has(d));
+      if (!anc.length) return c;
+      const next = new Set(c);
+      for (const d of anc) next.delete(d);
+      return next;
+    });
+  }, [livePath]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -78,7 +96,25 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
     pendingText: p in pending ? pending[p] : null,
   });
 
-  const filtered = filter.trim() ? treeFiles.filter(f => f.path.toLowerCase().includes(filter.trim().toLowerCase())) : treeFiles;
+  const q = filter.trim().toLowerCase();
+  const filtered = q ? treeFiles.filter(f => f.path.toLowerCase().includes(q)) : treeFiles;
+  // Searching is a flat question — "where is X" — so a matching file is shown with
+  // its full path rather than buried under folders that may hold nothing else.
+  const asTree = tree && !q;
+  // Rebuilt only when the set of paths actually changes: `filtered` is a fresh
+  // array on every render, and a token arriving mid-write must not re-key the
+  // whole tree and drop every open/closed folder with it.
+  const pathKey = filtered.map(f => f.path).join('\n');
+  const root = useMemo(() => buildTree(filtered), [pathKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const hasFolders = root.dirs.size > 0;
+  const allClosed = hasFolders && allDirPaths(root).every(p => closed.has(p));
+
+  const toggleDir = useCallback((path) => {
+    setClosed(c => { const n = new Set(c); if (n.has(path)) n.delete(path); else n.add(path); return n; });
+  }, []);
+  const toggleAll = useCallback(() => {
+    setClosed(c => (allDirPaths(root).every(p => c.has(p)) ? new Set() : new Set(allDirPaths(root))));
+  }, [root]);
 
   const splitBtn = <button className="art-btn icon" onClick={() => { setSplit(active); setFocusedPane('right'); }} title={t("Split view")}><Panel style={{ width: 15 }} /></button>;
   const closeSplitBtn = <button className="art-btn icon" onClick={() => { setSplit(null); setFocusedPane('left'); }} title={t("Close split")}><X style={{ width: 14 }} /></button>;
@@ -110,11 +146,25 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
               <button className="art-btn icon" onClick={onClose} title={t("Close panel")}><X style={{ width: 15 }} /></button>
             </div>
           </div>
-          {treeFiles.length > 3 && (
-            <div className="art-filter">
-              <Search style={{ width: 14, opacity: .55, flexShrink: 0 }} />
-              <input value={filter} onChange={e => setFilter(e.target.value)} placeholder={t('Filter files')} spellCheck={false} />
-              {filter && <button className="art-btn icon" onClick={() => setFilter('')} title={t("Clear")}><X style={{ width: 13 }} /></button>}
+          {treeFiles.length > 0 && (
+            <div className="art-toolbar">
+              <div className="art-filter">
+                <Search style={{ width: 14, opacity: .55, flexShrink: 0 }} />
+                <input value={filter} onChange={e => setFilter(e.target.value)} placeholder={t('Filter files')} spellCheck={false} />
+                {filter && <button className="art-btn icon" onClick={() => setFilter('')} title={t("Clear")}><X style={{ width: 13 }} /></button>}
+              </div>
+              {asTree && hasFolders && (
+                <button className="art-btn icon" onClick={toggleAll} title={allClosed ? t("Expand all folders") : t("Collapse all folders")}>
+                  {allClosed ? <Chevron style={{ width: 15 }} /> : <ChevDown style={{ width: 15 }} />}
+                </button>
+              )}
+              {/* The icon shows what pressing it switches to, so the button never
+                  needs an active state shouting at the user from the default view. */}
+              <button className="art-btn icon"
+                onClick={() => { const n = !tree; setTree(n); localStorage.setItem('oq-art-flat', n ? '0' : '1'); }}
+                title={tree ? t("Show as a flat list") : t("Show folder structure")}>
+                {tree ? <Menu style={{ width: 15 }} /> : <Folder style={{ width: 15 }} />}
+              </button>
             </div>
           )}
           {filtered.length === 0 && (
@@ -125,26 +175,23 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
                   <div className="art-empty-title">{t("No files yet")}</div>
                   <div>{t("When the assistant creates or edits files, they'll show up here, ready to view, diff, and download.")}</div>
                 </div>
-              ) : <div className="art-empty">No files match “{filter}”.</div>}
+              ) : <div className="art-empty">{t('No files match “{q}”.', { q: filter })}</div>}
             </div>
           )}
           {filtered.length > 0 && (
             <div className="art-cards">
-              {filtered.map(f => {
-                const dir = f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : '';
-                const writing = live && live.path === f.path;
-                return (
-                  <div key={f.path} className={'art-card' + (writing ? ' writing' : '')} onClick={() => openFile(f.path)} title={f.path}>
-                    <div className="art-thumbcol"><div className="art-thumb"><FileText /></div></div>
-                    <div className="art-card-body">
-                      <div className="art-card-title">{baseName(f.path)}</div>
-                      <div className="art-card-sub">{writing ? t('Writing…') : [extOf(f.path).toUpperCase(), dir].filter(Boolean).join(' · ')}</div>
-                    </div>
-                    <a className="art-card-dl" href={`/api/chats/${chatId}/file?path=${encodeURIComponent(f.path)}&download=1`}
-                      onClick={e => e.stopPropagation()} title={t("Download")}><Download style={{ width: 16 }} /></a>
-                  </div>
-                );
-              })}
+              {asTree ? (
+                <FileTree tree={root} chatId={chatId} closed={closed} onToggle={toggleDir}
+                  onOpen={openFile} sel={active} live={live} pending={pending} />
+              ) : (
+                filtered.map(f => (
+                  <FileCard key={f.path} f={f} chatId={chatId}
+                    sub={[extOf(f.path).toUpperCase() || 'FILE', dirOf(f.path)].filter(Boolean).join(' · ')}
+                    writing={!!live && live.path === f.path}
+                    pending={f.path in pending}
+                    active={active === f.path} onOpen={openFile} />
+                ))
+              )}
             </div>
           )}
         </>

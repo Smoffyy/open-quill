@@ -11,7 +11,7 @@ export { SANDBOX_ROOT, dirFor } from './sandbox/paths.js';
 export { versionOf, listVersions, readVersion } from './sandbox/meta.js';
 export { extOf, isText, IGNORED_DIRS, isIgnoredDir, isIgnoredRel, isIgnoredPath } from './sandbox/ignore.js';
 export {
-  list, dirSize, remove, clearAll, readText, readBuffer, createFile, strReplace,
+  list, dirSize, remove, clearAll, readText, readBuffer, isViewableText, createFile, strReplace,
   insertLines, view, deleteFile, renameFile, copyFile, makeDir, search, findFiles,
   bundleZip, zipAll, extractZip, importBuffer
 } from './sandbox/files.js';

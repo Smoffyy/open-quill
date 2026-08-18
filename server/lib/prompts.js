@@ -63,7 +63,8 @@ export function sandboxPromptFor(chatId) {
   let p = SKILLS_CACHE;
   p += '\n\n' + hostEnvSection();
   p += '\n\n' + BOUNDARY_SECTION;
-  p += '\n\n## History markers are NOT a syntax\nEarlier tool activity may appear in this conversation as compact bracketed summaries like `[used bash: ...]` or `[used view: ...]`. The platform writes those AFTER a real tool call, purely to save space. Writing `[used view: file.txt]` yourself does NOTHING: no tool runs, nothing is read, and it looks broken to the user. The ONLY way to use a tool is a real tool call with JSON arguments. Never write `[used`, `[tool`, or any imitation tool-call text in a reply.';
+  // Rule 3 of the skill already covers imitation tool text; this is not repeated
+  // here. Everything below is state the skill cannot know: what is on disk now.
   const { files, hidden } = sandbox.list(chatId, { withHidden: true });
   if (!files.length && !hidden) return p + '\n\n## Current workspace\nThe workspace is empty. Create what you need with `create_file`. There is nothing to read yet, so do not call `view` on files that do not exist.';
   const LIST_CAP = 200, INLINE_CAP = 12;
@@ -84,7 +85,9 @@ export function sandboxPromptFor(chatId) {
     p += `\n### ${f.path} (v${f.v})\n\`\`\`${f.ext || ''}\n${txt}\n\`\`\`\n`;
     budget -= txt.length; inlined++;
   }
-  p += '\n---\nREMINDER: the workspace is ON and the files above are the current truth. Change existing files with `str_replace`, never by rewriting them from scratch. Use the file tools (`copy_file`, `move_file`, `make_dir`, `delete_file`, `find`, `search`, `bundle_zip`, `extract_zip`) for file work, with relative paths only. Keep calling tools until the task is genuinely finished: do not stop to ask permission, never paste whole files or fake terminal output into the chat, and when a tool fails read the error and change approach instead of repeating the same call. Never write imitation tool text like `[used bash: ...]`; make real tool calls.';
+  // Last thing before the user's turn, so it is the most recent instruction a
+  // small model sees. Short on purpose: the rules are stated once, above.
+  p += '\n---\nREMINDER: the files above are the current truth — edit those, with `str_replace`, using relative paths. Real tool calls only: no pasted files, no invented output. Keep going until the task is done.';
   return p;
 }
 

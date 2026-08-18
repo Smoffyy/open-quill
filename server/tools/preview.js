@@ -9,16 +9,22 @@ export function livePreview(name, argsText) {
   const tool = resolveToolName(raw, false) || raw;
   const p = extractPartial(String(argsText || ''));
   const get = (k) => (p[k] ? p[k].value : undefined);
+  // A path that is still being streamed is reported as `partialPath`, never as
+  // `path`: the UI can show what has arrived so far instead of a verb with no
+  // object, while nothing downstream mistakes half a path for a real one.
+  const partial = (v) => (v ? { partialPath: String(v).slice(0, 300) } : {});
   if (!PREVIEW_TOOLS.has(tool)) {
     const live = { tool };
-    const path = get('path'); if (p.path && p.path.closed && path) live.path = String(path).slice(0, 300);
+    const path = get('path');
+    if (p.path && p.path.closed && path) live.path = String(path).slice(0, 300);
+    else Object.assign(live, partial(path));
     const query = get('query'); if (p.query && p.query.closed && query) live.query = String(query).slice(0, 300);
     const cmd = get('cmd'); if (cmd != null) live.cmd = String(cmd).slice(0, 300);
     const nm = get('name'); if (p.name && p.name.closed && nm) live.name = String(nm).slice(0, 120);
     return live;
   }
   const path = get('path');
-  if (!p.path || !p.path.closed || !path) return { tool };
+  if (!p.path || !p.path.closed || !path) return { tool, ...partial(path) };
   if (tool === 'create_file') return { tool, path: String(path), content: String(get('content') ?? ''), oldStr: null };
   return { tool, path: String(path), content: String(get('new_str') ?? ''), oldStr: p.old_str && p.old_str.closed ? String(get('old_str')) : null };
 }

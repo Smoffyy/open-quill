@@ -20,8 +20,9 @@ import {
 import {
   baseName, extOf, fmtSize, escHtml, diffLines, stableLineDiff,
   collapseRuns as collapseDiffRuns, splitHighlightedLines, markLine,
-  buildTree as buildFileTree, findMatches
+  buildTree as buildFileTree, findMatches, countFiles, allDirPaths, ancestorDirs
 } from '../src/lib/artifacts.js';
+import { dirOf, baseName as fileBaseName } from '../src/lib/files.js';
 
 const ev = (o) => ({ key: '', code: '', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...o });
 
@@ -396,7 +397,9 @@ test('artifact paths split into a name and an extension', () => {
   assert.equal(baseName('src/main/java/App.java'), 'App.java');
   assert.equal(baseName('README.md'), 'README.md');
   assert.equal(extOf('src/App.JAVA'), 'java');
-  assert.equal(extOf('Makefile'), 'makefile');
+  // Previously 'makefile': the bare name was read as its own extension, which
+  // showed up as a MAKE file type in the panel. See the extension test below.
+  assert.equal(extOf('Makefile'), '');
 });
 
 test('file sizes render at a sensible precision', () => {
@@ -486,6 +489,21 @@ test('findMatches reports every occurrence on a line, case-insensitively', () =>
   assert.equal(findMatches(['anything'], '').length, 0);
 });
 
+// A file with no dot has no extension. Reading one off the bare name turns
+// `Makefile` into a MAKE file type, colours its icon by a language that does not
+// exist, and labels it that way in the artifacts panel.
+test('extOf only reports a real extension', () => {
+  assert.equal(extOf('src/app.py'), 'py');
+  assert.equal(extOf('notes.markdown'), 'markdown', 'a long extension is still an extension');
+  assert.equal(extOf('archive.tar.gz'), 'gz');
+  assert.equal(extOf('Makefile'), '');
+  assert.equal(extOf('Procfile'), '');
+  assert.equal(extOf('notes'), '');
+  assert.equal(extOf('.gitignore'), '', 'a leading dot is part of the name');
+  assert.equal(extOf('src/cmd/run'), '');
+});
+
+
 test('buildFileTree nests paths into folders', () => {
   const root = buildFileTree([
     { path: 'README.md' },
@@ -493,9 +511,67 @@ test('buildFileTree nests paths into folders', () => {
     { path: 'src/util/fmt.js' }
   ]);
   assert.deepEqual(root.files.map(f => f.path), ['README.md']);
-  assert.deepEqual(Object.keys(root.dirs), ['src']);
-  assert.deepEqual(root.dirs.src.files.map(f => f.path), ['src/main.js']);
-  assert.deepEqual(root.dirs.src.dirs.util.files.map(f => f.path), ['src/util/fmt.js']);
+  assert.deepEqual([...root.dirs.keys()], ['src']);
+  const src = root.dirs.get('src');
+  assert.deepEqual(src.files.map(f => f.path), ['src/main.js']);
+  assert.deepEqual(src.dirs.get('util').files.map(f => f.path), ['src/util/fmt.js']);
+  // The node carries the path it stands for, which is what the collapse state keys on.
+  assert.equal(src.dirs.get('util').path, 'src/util');
+});
+
+// Folder names come straight from the model, so the child table must not be a
+// plain object: a directory called "constructor" would otherwise resolve to
+// Object's own property and be treated as an existing node.
+test('buildFileTree survives folder names that collide with Object prototype keys', () => {
+  const root = buildFileTree([
+    { path: 'constructor/a.js' },
+    { path: '__proto__/b.js' },
+    { path: 'toString/c.js' }
+  ]);
+  assert.deepEqual([...root.dirs.keys()].sort(), ['__proto__', 'constructor', 'toString']);
+  assert.deepEqual(root.dirs.get('constructor').files.map(f => f.path), ['constructor/a.js']);
+  assert.deepEqual(root.dirs.get('__proto__').files.map(f => f.path), ['__proto__/b.js']);
+});
+
+test('buildFileTree compacts a chain of single-child folders into one row', () => {
+  const root = buildFileTree([{ path: 'src/utils/text/case.py' }]);
+  assert.deepEqual([...root.dirs.keys()], ['src']);
+  const only = root.dirs.get('src');
+  assert.equal(only.name, 'src/utils/text');
+  assert.equal(only.path, 'src/utils/text');
+  assert.deepEqual(only.files.map(f => f.path), ['src/utils/text/case.py']);
+  // A folder that holds a file of its own is a real stop and is not merged away.
+  const kept = buildFileTree([{ path: 'src/app.py' }, { path: 'src/utils/text/case.py' }]);
+  assert.equal(kept.dirs.get('src').name, 'src');
+  assert.equal([...kept.dirs.get('src').dirs.values()][0].name, 'utils/text');
+});
+
+test('buildFileTree sorts folders and files, and counts nested files', () => {
+  const root = buildFileTree([
+    { path: 'src/zeta.js' }, { path: 'src/alpha.js' },
+    { path: 'tests/t.js' }, { path: 'config/c.json' }, { path: 'README.md' }
+  ]);
+  assert.deepEqual([...root.dirs.keys()], ['config', 'src', 'tests']);
+  assert.deepEqual(root.dirs.get('src').files.map(f => f.path), ['src/alpha.js', 'src/zeta.js']);
+  assert.equal(countFiles(root), 5);
+  assert.equal(countFiles(root.dirs.get('src')), 2);
+  assert.deepEqual(allDirPaths(root).sort(), ['config', 'src', 'tests']);
+});
+
+test('ancestorDirs names every folder that must be open to reveal a path', () => {
+  assert.deepEqual(ancestorDirs('src/utils/text/case.py'), ['src', 'src/utils', 'src/utils/text']);
+  assert.deepEqual(ancestorDirs('README.md'), []);
+  assert.deepEqual(ancestorDirs(''), []);
+});
+
+// The tool line splits a path into a dim folder and a readable name; getting the
+// split wrong is what made two different __init__.py steps render identically.
+test('dirOf splits a path and copes with the shapes the sandbox produces', () => {
+  assert.equal(dirOf('src/utils/__init__.py'), 'src/utils');
+  assert.equal(dirOf('README.md'), '');
+  assert.equal(dirOf('src\\utils\\a.py'), 'src/utils');
+  assert.equal(dirOf(null), '');
+  assert.equal(fileBaseName('src/utils/__init__.py'), '__init__.py');
 });
 
 // --- kwarg number ranges ---------------------------------------------------

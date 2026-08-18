@@ -53,7 +53,7 @@ function PmSub({ className = '', children, onMouseEnter, onMouseLeave }) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, models,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, projects = [], onSetProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, onOpenProject, projects = [], onSetProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
   voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall,
   safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
@@ -549,9 +549,18 @@ export default function Composer({
             )}
           </div>
           {project && (
-            <div className="composer-project" title={t('In project: {name}', { name: project.name })}>
-              <Box style={{ width: 14 }} />
-              <span className="cp-name">{project.name}</span>
+            <div className="composer-project">
+              {onOpenProject ? (
+                <button type="button" className="cp-open" onClick={() => onOpenProject(project.id)} title={t('Open project {name}', { name: project.name })}>
+                  <Box style={{ width: 14 }} />
+                  <span className="cp-name">{project.name}</span>
+                </button>
+              ) : (
+                <span className="cp-open" title={t('In project: {name}', { name: project.name })}>
+                  <Box style={{ width: 14 }} />
+                  <span className="cp-name">{project.name}</span>
+                </span>
+              )}
               {onClearProject && <button className="cp-x" onClick={onClearProject} title={t("Remove from project")}><X style={{ width: 12 }} /></button>}
             </div>
           )}

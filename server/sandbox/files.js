@@ -6,6 +6,7 @@ import { extOf, isText, isIgnoredDir, isIgnoredRel, globToRe, gitignoreCacheDrop
 import { zipBuffer, unzipBuffer } from './zip.js';
 import { compileSearchPattern } from '../lib/sandboxguard.js';
 import { runRegexSearch } from './regexsearch.js';
+import { looksTextual } from '../lib/extract.js';
 
 function walkFiles(chatId, { includeIgnored = false, under = '', countHidden = false } = {}) {
   const root = dirFor(chatId);
@@ -103,6 +104,23 @@ export function readText(chatId, rel) {
   return fs.readFileSync(p, 'utf8');
 }
 export function readBuffer(chatId, rel) { return fs.readFileSync(resolveSafe(chatId, rel)); }
+
+// Can the viewer show this as text? True for anything the extension list knows,
+// and for anything else whose bytes read as text. Kept separate from `isText`
+// so sniffing never changes what gets versioned, snapshotted or diffed.
+const VIEW_SNIFF_MAX = 8 * 1024 * 1024;
+export function isViewableText(chatId, rel) {
+  if (isText(rel)) return true;
+  try {
+    const p = resolveSafe(chatId, rel);
+    const st = fs.statSync(p);
+    if (!st.isFile() || st.size > VIEW_SNIFF_MAX) return false;
+    // looksTextual answers "is there text in here", so it says no to an empty
+    // buffer. An empty file has nothing binary about it and should open.
+    if (st.size === 0) return true;
+    return looksTextual(fs.readFileSync(p));
+  } catch { return false; }
+}
 
 export function createFile(chatId, rel, content) {
   const p = resolveSafe(chatId, rel);

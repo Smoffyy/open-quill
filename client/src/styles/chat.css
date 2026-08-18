@@ -428,9 +428,6 @@
 .continue-row { display: flex; justify-content: center; padding: 0 0 10px; }
 .continue-btn { padding: 7px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); }
 .continue-btn:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
-.tc-preview { margin-top: 6px; max-height: 300px; overflow: auto; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--bg); padding: 10px 12px; font-family: var(--font-mono, monospace); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
-.tc-preview-btn { margin-left: 8px; font-size: 11.5px; font-weight: 600; color: var(--text-muted); padding: 2px 8px; border-radius: 6px; }
-.tc-preview-btn:hover { color: var(--text); background: var(--hover); }
 
 .co-tools { display: flex; align-items: center; gap: 4px; margin-left: auto; margin-right: 14px; }
 .co-seg { border: 0; border-radius: 0; overflow: visible; gap: 0; }

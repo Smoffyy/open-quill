@@ -30,6 +30,9 @@ import { PROVIDER_TYPES, isProviderType, providerSpec } from '../providers.js';
 import { slideWithCounter, trimMode } from '../lib/ctxwindow.js';
 import { sameOrigin, sameOriginGuard, requestHost } from '../lib/origin.js';
 import { SETTING_FIELDS, coerceSetting } from '../routes/settings.js';
+import { isText } from '../sandbox/ignore.js';
+import { announcedMoreWork } from '../lib/continuation.js';
+import { wireToolCalls, normalizeMessages } from '../llm/wire.js';
 import { unzipBuffer, zipBuffer } from '../sandbox/zip.js';
 
 const asReq = (headers = {}, method = 'POST', localAddress = '10.0.0.5') =>
@@ -1636,3 +1639,86 @@ test('compareVersions ranks prerelease tails alphabetically on the same base', (
   assert.equal(compareVersions('27.1.0-beta.1', '27.1.0-developer.20'), -1, 'beta sorts under developer, so the rename is not a bump');
   assert.equal(compareVersions('27.1.0-beta.1', '27.0.0'), 1, 'but it still beats the last stable, which is what the guard compares');
 });
+
+// --- continuing a turn the model ended too early -------------------------
+// A step with no tool call ends the turn. When the model announced the next
+// step and then stopped without taking it, that is a stall, not an answer.
+// The detector must be narrow: stopping is always safe, continuing is not.
+
+test('announcedMoreWork spots a turn that stopped mid-plan', () => {
+  assert.equal(announcedMoreWork("I'll create the remaining files now."), true);
+  assert.equal(announcedMoreWork("Now I'll create all the files with real content."), true);
+  assert.equal(announcedMoreWork('Let me view the test file and show the tree.'), true);
+  assert.equal(announcedMoreWork("Created Cargo.toml.\n\nNext I'll add the source files."), true);
+  assert.equal(announcedMoreWork("I'm going to run the tests."), true);
+});
+
+test('announcedMoreWork leaves a finished or hand-back turn alone', () => {
+  assert.equal(announcedMoreWork('All the files are created. Let me know if you want anything else.'), false);
+  assert.equal(announcedMoreWork('Would you like me to add tests?'), false);
+  assert.equal(announcedMoreWork("That's everything you asked for."), false);
+  assert.equal(announcedMoreWork('Done.'), false);
+  assert.equal(announcedMoreWork('The script sums the integers in a file.'), false);
+  assert.equal(announcedMoreWork(''), false);
+  assert.equal(announcedMoreWork(null), false);
+});
+
+test('announcedMoreWork ignores an intent that was already carried out', () => {
+  // Stated up front, then done — the tail is what decides, not the opening line.
+  const s = "I'll create the config file.\n\nAll three files are created and the tests pass.";
+  assert.equal(announcedMoreWork(s), false);
+});
+
+test('announcedMoreWork treats a trailing question as a hand-back whatever precedes it', () => {
+  assert.equal(announcedMoreWork("I'll add the parser next. Should I also wire up the CLI?"), false);
+});
+
+
+// --- tool calls on the wire ----------------------------------------------
+// llama.cpp's /apply-template rejects a tool call without `type` and
+// `function` ("Missing tool call type"), and the token counter posts the same
+// conversation there. A 500 makes it fall back to an estimated prompt size on
+// exactly the turns that carry tool calls, so both paths share one conversion.
+
+test('wireToolCalls emits the OpenAI shape, not the internal one', () => {
+  const [c] = wireToolCalls('openai', [{ id: 'abc', name: 'create_file', argsText: '{"path":"a.txt"}' }]);
+  assert.equal(c.type, 'function', 'llama.cpp rejects a call with no type');
+  assert.equal(c.function.name, 'create_file');
+  assert.equal(c.function.arguments, '{"path":"a.txt"}', 'openai wants arguments as a string');
+  assert.equal(c.id, 'abc');
+  assert.equal('argsText' in c, false, 'the internal field must not reach the wire');
+  assert.equal('name' in c, false);
+});
+
+test('wireToolCalls gives ollama parsed arguments and fills a missing id', () => {
+  const [c] = wireToolCalls('ollama', [{ name: 'view', argsText: '{"path":"a.txt"}' }]);
+  assert.deepEqual(c.function.arguments, { path: 'a.txt' }, 'ollama wants an object');
+  assert.equal(typeof c.id, 'string');
+  assert.ok(c.id.length > 0, 'an id is invented rather than sent empty');
+});
+
+test('normalizeMessages routes assistant tool calls through the same conversion', () => {
+  const out = normalizeMessages('openai', [
+    { role: 'assistant', content: '', tool_calls: [{ id: 'x', name: 'bash', argsText: '{"cmd":"ls"}' }] },
+    { role: 'tool', tool_call_id: 'x', name: 'bash', content: 'ok' }
+  ]);
+  assert.equal(out[0].tool_calls[0].type, 'function');
+  assert.equal(out[0].content, null, 'an empty assistant turn sends null, not ""');
+  assert.equal(out[1].tool_call_id, 'x');
+});
+
+
+// --- viewing unknown file types ------------------------------------------
+// The extension allowlist decides what gets versioned and diffed. Viewing asks a
+// looser question, so a file the list has never heard of still opens rather than
+// being a download-only dead end.
+
+test('a file the extension list rejects is still recognised as text by its bytes', () => {
+  for (const name of ['config.abc', 'Procfile', 'notes', 'data.custom']) {
+    assert.equal(isText(name), false, name + ' is not on the extension list');
+  }
+  assert.equal(looksTextual(Buffer.from('key = value\nother = 2\n')), true);
+  assert.equal(looksTextual(Buffer.from('web: node app.js\n')), true);
+});
+
+

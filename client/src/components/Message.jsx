@@ -204,7 +204,7 @@ function SteerChips({ notes }) {
   );
 }
 
-function Message({ msg, model, models, currentId, streaming, phase, liveCall, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, statusDelay = STATUS_DELAY_DEFAULT, showSpeed = false, preset = 'anthropic' }) {
+function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, statusDelay = STATUS_DELAY_DEFAULT, showSpeed = false, preset = 'anthropic' }) {
   if (chatEnded) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onFork = null; onDelete = null; }
   if (!chatId) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onFork = null; onTogglePin = null; }
   const [typing, setTyping] = useState(false);
@@ -336,6 +336,13 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
     try { await api.post(`/api/messages/${msg.id}/feedback`, { rating: next }); } catch { setFb(fb); }
   }
 
+  // Every call the model is currently spelling out, so a step that writes six
+  // files shows six rows instead of one that keeps being overwritten. Falls back
+  // to the single call for any caller that has not been updated.
+  const liveRows = (liveCalls && liveCalls.length)
+    ? liveCalls
+    : (liveCall && liveCall.tool ? [{ index: 0, call: liveCall }] : []);
+
   const inner = (
     <>
       {ledger && ledgerState && <LedgerRow tokens={ledgerTokens} pct={ledgerPct} state={ledgerState} id={msg.id} onToggleExclude={onToggleExclude} />}
@@ -348,11 +355,13 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, ch
               <Markdown streaming={streaming}>{msg.content}</Markdown>
             </ReasonSegs.Provider>
           ) : null}
-          {streaming && liveCall && liveCall.tool && (
-            <div className="tool-live"><ToolCard call={liveCall} result={null} /></div>
+          {streaming && liveRows.length > 0 && (
+            <div className="tool-live">
+              {liveRows.map(r => <ToolCard key={r.index} call={r.call} result={null} />)}
+            </div>
           )}
-          {streaming && !msg.content && !msg.reasoning && !liveCall && <StreamStatus status={status} delay={statusDelay} />}
-          {streaming && !msg.content && !liveCall && <p className="stream-wait" aria-hidden="true"></p>}
+          {streaming && !msg.content && !msg.reasoning && !liveRows.length && <StreamStatus status={status} delay={statusDelay} />}
+          {streaming && !msg.content && !liveRows.length && <p className="stream-wait" aria-hidden="true"></p>}
         </div>
       )}
       {streaming && msg.content && (

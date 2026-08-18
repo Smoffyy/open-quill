@@ -248,8 +248,11 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .chat-row .row-project { flex-shrink: 0; color: var(--text-faint); margin-right: -1px; }
 .chat-row:hover .row-project, .chat-row.active .row-project { color: var(--text-muted); }
 .chat-row.project-row .title { flex: 1; }
-.composer-project { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 6px 0 9px; border-radius: 9px; background: var(--surface-hover); border: 1px solid var(--border-soft); color: var(--text-muted); font-family: var(--font-sans); font-size: 12.5px; max-width: 220px; }
+.composer-project { display: inline-flex; align-items: center; height: 30px; padding: 0 6px 0 0; border-radius: 9px; background: var(--surface-hover); border: 1px solid var(--border-soft); color: var(--text-muted); font-family: var(--font-sans); font-size: 12.5px; max-width: 220px; }
 .composer-project svg { flex-shrink: 0; opacity: .9; }
+.composer-project .cp-open { display: inline-flex; align-items: center; gap: 6px; min-width: 0; height: 100%; padding: 0 5px 0 9px; border-radius: 8px 0 0 8px; color: inherit; font: inherit; }
+.composer-project button.cp-open { transition: color var(--fx-t, .12s), background var(--fx-t, .12s); }
+.composer-project button.cp-open:hover { color: var(--text); background: var(--hover-mid); }
 .composer-project .cp-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .composer-project .cp-x { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 6px; color: var(--text-faint); flex-shrink: 0; transition: background var(--fx-t, .12s), color var(--fx-t, .12s); }
 .composer-project .cp-x:hover { background: var(--hover-mid); color: var(--text); }

@@ -58,6 +58,9 @@ import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge,
 import { BRAND_ICON } from './lib/brand.js';
 
 const SKELETON_DELAY = 3000;
+// One frozen empty array, so clearing the live tool rows never hands React a new
+// identity and re-renders the whole thread for nothing.
+const EMPTY_CALLS = Object.freeze([]);
 const HEAVY_THREAD_CHARS = 40000;
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: tk('Assistants can make mistakes, double-check responses.'), greetings: [tk('How can I help you?')], appIcon: '', quickPrompts: [], version: '' };
 
@@ -198,6 +201,7 @@ export default function App() {
   const [pendingFiles, setPendingFiles] = useState({});
   const [liveFile, setLiveFile] = useState(null);
   const [liveCall, setLiveCall] = useState(null);
+  const [liveCalls, setLiveCalls] = useState(EMPTY_CALLS);
   const [compacting, setCompacting] = useState(false);
   const [hasSummary, setHasSummary] = useState(false);
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
@@ -611,7 +615,14 @@ export default function App() {
     }
     if (m.type === 'tool_live') {
       const r = recFor(m.chatId); r.live = m.live || null;
+      // A step can stream several calls at once. Each carries its index, so a
+      // later one updates its own row instead of overwriting the row before it;
+      // a null clears the whole step (the model stopped emitting calls).
+      r.liveCalls = m.live && Number.isFinite(m.index)
+        ? [...(r.liveCalls || []).filter(x => x.index !== m.index), { index: m.index, call: m.live }].sort((a, b) => a.index - b.index)
+        : [];
       if (m.chatId !== activeKey()) return;
+      setLiveCalls(r.liveCalls);
       const live = m.live;
       const prev = liveRef.current;
       if (prev && prev.path && prev.tool === 'create_file' && (!live || live.path !== prev.path)) {
@@ -636,8 +647,12 @@ export default function App() {
       return;
     }
     if (m.type === 'tool_exec') {
+      // Execution is sequential and the finished calls are already committed to
+      // the transcript, so exactly one row is in flight here.
       const r = recFor(m.chatId); r.live = m.call || null;
+      r.liveCalls = m.call && m.call.tool ? [{ index: 0, call: m.call }] : [];
       if (m.chatId !== activeKey()) return;
+      setLiveCalls(r.liveCalls);
       if (m.call && m.call.tool) setLiveCall(m.call);
       return;
     }
@@ -691,7 +706,7 @@ export default function App() {
       if (m.chatId === activeKey()) {
         setTelemetry(null); setLivePrompt(0); setLiveSteers([]); setModelStatus(null);
         refreshSeq.current++;
-        setCompacting(false); setLiveFile(null); setLiveCall(null); liveRef.current = null;
+        setCompacting(false); setLiveFile(null); setLiveCall(null); setLiveCalls(EMPTY_CALLS); liveRef.current = null;
         targetContent.current = ''; targetReason.current = ''; pendingDone.current = false;
         assistantIdRef.current = m.messageId; dispLen.current = 0;
         streamModelRef.current = r.model_id || currentIdRef.current;
@@ -723,7 +738,7 @@ export default function App() {
       if (m.chatId === activeKey()) {
         targetContent.current = r.content;
         setPhase('generating');
-        if (m.text.indexOf('[[OQR:') !== -1 || m.text.indexOf('[[OQT:') !== -1) { dispLen.current = r.content.length; setDispContent(r.content); setLiveCall(null); }
+        if (m.text.indexOf('[[OQR:') !== -1 || m.text.indexOf('[[OQT:') !== -1) { dispLen.current = r.content.length; setDispContent(r.content); setLiveCall(null); setLiveCalls(EMPTY_CALLS); }
         else if (!animateRef.current) { setDispContent(r.content); dispLen.current = r.content.length; }
       }
       return;
@@ -739,7 +754,7 @@ export default function App() {
           dropRec(m.chatId);
           targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
           setDispContent(''); setDispReason(''); setDispSegs(null);
-          setLiveFile(null); setLiveCall(null); liveRef.current = null;
+          setLiveFile(null); setLiveCall(null); setLiveCalls(EMPTY_CALLS); liveRef.current = null;
           setQueued(false); setStreaming(false); setPhase('static');
         }
       } else if (hadContent) {
@@ -811,7 +826,7 @@ export default function App() {
     setStreaming(false); setPhase('static'); setQueued(false);
     if (content || reasoning) setMessages(ms => ms.some(m => m.id === id) ? ms : [...ms, { id, role: 'assistant', content, reasoning, model_id: mid }]);
     setDispContent(''); setDispReason(''); setDispSegs(null);
-    setLiveFile(null); setLiveCall(null); liveRef.current = null;
+    setLiveFile(null); setLiveCall(null); setLiveCalls(EMPTY_CALLS); liveRef.current = null;
     targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
     if (stick.current && !selectingRef.current && !hasSelectionRef.current) setTimeout(() => scrollBottom(false), 0);
     if (key !== 'incognito') { loadChats(); if (key) refreshMessages(key); }
@@ -859,6 +874,7 @@ export default function App() {
         liveRef.current = lf; setLiveFile(lf);
       } else { liveRef.current = null; setLiveFile(null); }
       setLiveCall(live && live.tool ? { ...live } : null);
+      setLiveCalls(Array.isArray(r.liveCalls) && r.liveCalls.length ? r.liveCalls : EMPTY_CALLS);
       setLiveSteers(Array.isArray(r.steers) ? r.steers : []);
       setModelStatus(r.status || null);
       setPhase(r.phase === 'thinking' ? 'thinking' : 'generating');
@@ -869,7 +885,7 @@ export default function App() {
       targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
       setStreaming(false); setQueued(false); setPhase('static');
       setDispContent(''); setDispReason(''); setDispSegs(null);
-      setLiveCall(null);
+      setLiveCall(null); setLiveCalls(EMPTY_CALLS);
     }
   }
   async function refreshMessages(id) {
@@ -1020,7 +1036,7 @@ export default function App() {
     setMobileDrawer(false);
     if (incognito) setIncognito(false);
     setShowProjects(false);
-    if (id !== activeIdRef.current) { setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null); setTelemetry(null); setLiveSteers([]); setLedger(null); setModelStatus(null); }
+    if (id !== activeIdRef.current) { setLiveFile(null); setLiveCall(null); setLiveCalls(EMPTY_CALLS); liveRef.current = null; setArtifactFocus(null); setTelemetry(null); setLiveSteers([]); setLedger(null); setModelStatus(null); }
     setActiveId(id);
     const seq = ++openSeq.current;
     const cached = chatCache.current.get(id);
@@ -1073,7 +1089,7 @@ export default function App() {
     setCurrentProject(null);
     armSkeleton(false);
     setActiveId(null); setMessages([]); setInput('');
-    setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
+    setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); setLiveCalls(EMPTY_CALLS); liveRef.current = null; setArtifactFocus(null);
     setTelemetry(null); setLiveSteers([]); setLedger(null); setModelStatus(null);
     setChatEnded(false); setChatEndedReason('');
     setChatRemovedModel(null);
@@ -1105,7 +1121,7 @@ export default function App() {
       flushDraft();
       setActiveId(null); setMessages([]); setInput('');
       incognitoRef.current = true;
-      setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
+      setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); setLiveCalls(EMPTY_CALLS); liveRef.current = null; setArtifactFocus(null);
       setSandbox(false);
       const gs = [tk('Greetings, whoever you are'), tk('No names, no traces'), tk('This one stays between us'), tk('Off the record')];
       setIncognitoGreeting(gs[Math.floor(Math.random() * gs.length)]);
@@ -1222,13 +1238,21 @@ export default function App() {
     setShowProjects(false); setProjectOpenId(null);
     setCurrentProject(project);
     setActiveId(c.id); setMessages([]); setInput('');
-    setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); liveRef.current = null; setArtifactFocus(null);
+    setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); setLiveCalls(EMPTY_CALLS); liveRef.current = null; setArtifactFocus(null);
     history.pushState({}, '', '/chat/' + c.id);
     if (!wsSend({ type: 'chat', chatId: c.id, modelId: currentId, extended, reasoningEffort, kwargValues, content: text, attachments, sandbox, webSearch, styleId })) return;
     queueRec(c.id, currentId);
     setMessages([{ id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     pinToBottom(true, 20);
   }
+  // Opening a chat before the project list has loaded leaves a placeholder named
+  // "Project"; fill in the real one once the list arrives.
+  useEffect(() => {
+    if (!currentProject || !projects.length) return;
+    const full = projects.find(p => p.id === currentProject.id);
+    if (full && full.name !== currentProject.name) setCurrentProject(full);
+  }, [projects, currentProject]);
+
   function openProjectChat(chatId, project) {
     setShowProjects(false); setProjectOpenId(null);
     if (project) setCurrentProject(project);
@@ -1348,7 +1372,7 @@ export default function App() {
     modelHasBg, bgInChat, onToggleBgInChat: () => updatePref('modelBgInChat', !bgInChat),
     sandbox: sandboxOn, sandboxAllowed, onToggleSandbox: () => { if (sandboxAllowed) setSandbox(s => !s); },
     webSearch: webSearchOn, webSearchAvailable, onToggleWebSearch: () => { if (webSearchAvailable) setWebSearch(s => !s); },
-    project: currentProject, onClearProject: clearChatProject,
+    project: currentProject, onClearProject: clearChatProject, onOpenProject: openProjects,
     savedPrompts: user?.savedPrompts || [], onUsePrompt: (t) => { setInput(t); setFocusTick(x => x + 1); }, onSavePrompt: savePromptFromInput, onDeletePrompt: deleteSavedPrompt,
     onNewChat: () => newChat(), onShortcuts: () => setShowShortcuts(true),
     voiceMic: !!cfg.voiceMic, voiceCall: !!cfg.voiceCall && !incognito, sttEngine: cfg.voiceStt || 'browser',
@@ -1652,7 +1676,7 @@ export default function App() {
                       steers={msg._streaming ? liveSteers : (msg.steers || null)}
                       status={msg._streaming ? modelStatus : null}
                       statusDelay={statusDelay}
-                      streaming={!!msg._streaming} phase={msg._streaming ? ((modelById.get(currentId)?.hideThinking && phase === 'thinking') ? 'generating' : phase) : 'static'} liveCall={msg._streaming ? liveCall : null}
+                      streaming={!!msg._streaming} phase={msg._streaming ? ((modelById.get(currentId)?.hideThinking && phase === 'thinking') ? 'generating' : phase) : 'static'} liveCall={msg._streaming ? liveCall : null} liveCalls={msg._streaming ? liveCalls : EMPTY_CALLS}
                       onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onDelete={deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
                       showSpeed={showMsgSpeed}
                       showIcon={msg.role === 'assistant' && (cfg.uiPreset === 'openai' || (lastA && msg.id === lastA.id))}

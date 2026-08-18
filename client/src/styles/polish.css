@@ -324,8 +324,10 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .reveal-row input[type="range"] { flex: 1; accent-color: var(--accent); }
 .reveal-val { font-size: 13px; color: var(--text-muted); min-width: 58px; text-align: right; }
 
-/* fixes: no chip replay during stream re-renders; focus glow opt-in */
-.assistant-body.streaming .tool-chip, .assistant-body.streaming .tool-line, .assistant-body.streaming .tool-bash { animation: none; }
+/* Replay is prevented by scoping the entrance to .tool-live rather than by
+   muting it mid-stream: muting here fired every row at once the moment the
+   .streaming class came off. */
+.assistant-body.streaming .tool-chip { animation: none; }
 .composer:focus-within { border-color: var(--border); box-shadow: none; }
 
 /* ============ icon animation styles ============ */

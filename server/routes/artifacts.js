@@ -21,7 +21,11 @@ export default function registerArtifactRoutes(app) {
     const rel = req.query.path || '';
     const files = sandbox.list(c.id);
     if (!files.find(f => f.path === rel)) return res.status(404).json({ error: 'not found' });
-    if (sandbox.isText(rel)) {
+    // Viewing sniffs the bytes as well as the extension, so a file with an
+    // unknown or missing extension still opens instead of being a download-only
+    // dead end. Versioning still keys off the extension list, so `versions` is
+    // simply empty for those and the viewer shows the current text.
+    if (sandbox.isViewableText(c.id, rel)) {
       const versions = sandbox.listVersions(c.id, rel);
       const current = sandbox.versionOf(c.id, rel);
       const vq = parseInt(req.query.v);

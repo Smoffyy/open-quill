@@ -1,45 +1,88 @@
-import { useState } from 'react';
-import FileChip from './FileChip.jsx';
-import { Download, ChevDown, Folder } from '../icons.jsx';
+import { FileText, Download, ChevDown, Folder } from '../icons.jsx';
 import { t } from '../../i18n.jsx';
-import { baseName, fmtSize } from '../../lib/artifacts.js';
+import { baseName, extOf, fmtSize, countFiles, EXT_COLOR } from '../../lib/artifacts.js';
 
-function FileRow({ f, chatId, depth, onOpen, sel, live }) {
-  const active = sel === f.path;
-  const writing = live && live.path === f.path;
+// One card per file, the same paper-thumbnail shape the panel has always used.
+// `sub` is passed in rather than computed here because the tree already spends a
+// row on the folder and repeating it under every file is noise, while the flat
+// and filtered lists have no other place to put it.
+export function FileCard({ f, chatId, sub, writing, pending, active, onOpen }) {
+  const ext = extOf(f.path);
+  const tint = EXT_COLOR[ext] || null;
+  const state = writing ? t('Writing…') : pending ? t('Saving…') : null;
   return (
-    <div className={'art-row tree' + (active ? ' active' : '')} style={{ paddingLeft: 10 + depth * 14 }} onClick={() => onOpen(f.path)}>
-      <FileChip ext={f.ext} />
-      <div className="art-rmeta">
-        <div className="art-rname">{baseName(f.path)}</div>
-        <div className="art-rext">{writing ? <span className="row-writing">{t("writing…")}</span> : <>{(f.ext || 'file').toUpperCase()}{f.v ? ' · v' + f.v : ''}{f.size != null ? ' · ' + fmtSize(f.size) : ''}</>}</div>
+    <div className={'art-card' + (writing || pending ? ' writing' : '') + (active ? ' on' : '')}
+      role="button" tabIndex={0}
+      onClick={() => onOpen(f.path)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(f.path); } }}
+      title={f.path}>
+      <div className="art-thumbcol">
+        <div className="art-thumb" style={tint ? { color: tint } : undefined}>
+          <FileText />
+          <span className="art-thumb-ext">{(ext || 'file').toUpperCase().slice(0, 4)}</span>
+        </div>
       </div>
-      {!writing && !!f.v && <a className="art-btn icon dl" href={`/api/chats/${chatId}/download?path=${encodeURIComponent(f.path)}`} onClick={(e) => e.stopPropagation()} title={t("Download")}><Download style={{ width: 15 }} /></a>}
+      <div className="art-card-body">
+        <div className="art-card-title">{baseName(f.path)}</div>
+        <div className="art-card-sub">{state || sub}</div>
+      </div>
+      {!writing && !pending && (
+        <a className="art-card-dl" href={`/api/chats/${chatId}/file?path=${encodeURIComponent(f.path)}&download=1`}
+          onClick={e => e.stopPropagation()} title={t("Download")}><Download style={{ width: 16 }} /></a>
+      )}
     </div>
   );
 }
 
-function TreeFolder({ name, node, depth, chatId, onOpen, sel, live, forceOpen }) {
-  const [open, setOpen] = useState(true);
-  const isOpen = forceOpen || open;
+function metaSub(f) {
+  return [extOf(f.path).toUpperCase() || 'FILE', f.size != null ? fmtSize(f.size) : '', f.v > 1 ? 'v' + f.v : '']
+    .filter(Boolean).join(' · ');
+}
+
+function FolderRow({ node, open, onToggle }) {
+  const n = countFiles(node);
+  return (
+    <button className={'art-folder' + (open ? ' open' : '')} onClick={() => onToggle(node.path)} aria-expanded={open} title={node.path}>
+      <ChevDown className={'af-chev' + (open ? ' open' : '')} style={{ width: 14 }} />
+      <Folder style={{ width: 16 }} className="af-icon" />
+      <span className="af-name">{node.name}</span>
+      <span className="af-count">{n}</span>
+    </button>
+  );
+}
+
+function Node({ node, chatId, closed, onToggle, onOpen, sel, live, pending }) {
   return (
     <>
-      <div className="art-tree-folder" style={{ paddingLeft: 10 + depth * 14 }} onClick={() => setOpen(o => !o)}>
-        <ChevDown className={'tf-chev' + (isOpen ? ' open' : '')} style={{ width: 13 }} />
-        <Folder style={{ width: 15 }} /><span className="tf-name">{name}</span>
-      </div>
-      {isOpen && <TreeChildren node={node} depth={depth + 1} chatId={chatId} onOpen={onOpen} sel={sel} live={live} forceOpen={forceOpen} />}
+      {[...node.dirs.values()].map(d => {
+        const open = !closed.has(d.path);
+        return (
+          <div className="art-tree-group" key={d.path}>
+            <FolderRow node={d} open={open} onToggle={onToggle} />
+            {open && (
+              <div className="art-tree-kids">
+                <Node node={d} chatId={chatId} closed={closed} onToggle={onToggle} onOpen={onOpen}
+                  sel={sel} live={live} pending={pending} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {node.files.map(f => (
+        <FileCard key={f.path} f={f} chatId={chatId} sub={metaSub(f)}
+          writing={!!live && live.path === f.path}
+          pending={!!pending && f.path in pending}
+          active={sel === f.path} onOpen={onOpen} />
+      ))}
     </>
   );
 }
 
-export default function TreeChildren({ node, depth, chatId, onOpen, sel, live, forceOpen }) {
-  const dirs = Object.keys(node.dirs).sort();
-  const files = node.files.slice().sort((a, b) => a.path.localeCompare(b.path));
+export default function FileTree({ tree, chatId, closed, onToggle, onOpen, sel, live, pending }) {
   return (
-    <>
-      {dirs.map(d => <TreeFolder key={d} name={d} node={node.dirs[d]} depth={depth} chatId={chatId} onOpen={onOpen} sel={sel} live={live} forceOpen={forceOpen} />)}
-      {files.map(f => <FileRow key={f.path} f={f} chatId={chatId} depth={depth} onOpen={onOpen} sel={sel} live={live} />)}
-    </>
+    <div className="art-tree">
+      <Node node={tree} chatId={chatId} closed={closed} onToggle={onToggle} onOpen={onOpen}
+        sel={sel} live={live} pending={pending} />
+    </div>
   );
 }
