@@ -217,7 +217,8 @@
   --sidebar-text: #c3c2b7;
   --sidebar-label: #898781;
   --sidebar-icon: #ffffff;
-  --model-name: #ffffff;
+  --model-name: #f0efec;
+  --pop-text: #f0efec;
   --pop-bg: #20201f;
   --pop-border: rgba(255, 255, 255, .1);
   --pop-ring: rgba(255, 255, 255, .2);
@@ -336,7 +337,7 @@
 /* anthropic: model name + description in the dropdown */
 :root[data-theme="anthropic"] .model-trigger { color: var(--model-name); }
 :root[data-theme="anthropic"] .mo-desc { color: var(--mo-desc); opacity: 1; }
-:root[data-theme="anthropic"] .model-trigger .ext { color: rgba(255,255,255,.5); }
+:root[data-theme="anthropic"] .model-trigger .ext { color: var(--sidebar-label); }
 :root[data-theme="anthropic"] .quick-prompt { background: #313130; }
 :root[data-theme="anthropic"] .quick-prompt:hover,
 :root[data-theme="anthropic"] .quick-prompt:focus-visible { background: var(--surface-hover); }

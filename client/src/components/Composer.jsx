@@ -362,7 +362,6 @@ export default function Composer({
                   <div className="attach-file" title={f.name}>
                     <div className="attach-name">{f.name}</div>
                     <div className="attach-foot">
-                      <FileText style={{ width: 13 }} />
                       <span className="attach-type">{extLabel(f.name)}</span>
                     </div>
                   </div>

@@ -269,15 +269,16 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 .greeting-row .btn.danger { padding: 9px 11px; flex-shrink: 0; }
 
 /* ---------- attachments ---------- */
-.attach-row { display: flex; flex-wrap: wrap; gap: 8px; padding: 0px 0 2px; }
+.composer .attach-row { --attach-size: 120px; --attach-radius: 8px; }
+.attach-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: -6px; padding: 0 0 30px; }
 .attach-chip { position: relative; width: var(--attach-size); height: var(--attach-size); flex: 0 0 auto; animation: pop var(--fx-a, .14s) ease; }
-.attach-chip.image img { width: 100%; height: 100%; object-fit: cover; border-radius: var(--attach-radius); border: 1px solid var(--border); display: block; }
-.attach-file { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; background: var(--input-bg); border: 1px solid var(--border); border-radius: var(--attach-radius); padding: 9px 10px; overflow: hidden; }
+.attach-chip.image img { width: 100%; height: 100%; object-fit: contain; background: var(--composer-bg); border-radius: var(--attach-radius); border: 0.8px solid var(--pop-ring, var(--border)); display: block; }
+.attach-file { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; background: var(--composer-bg); border: 0.8px solid var(--pop-ring, var(--border)); border-radius: var(--attach-radius); padding: 8px 10px; overflow: hidden; }
 .attach-file svg { color: var(--text-muted); flex-shrink: 0; }
-.attach-name { font-size: 11.5px; line-height: 1.28; color: var(--text); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; }
+.attach-name { font-size: 12px; line-height: 18px; letter-spacing: -.01em; color: var(--text); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; overflow-wrap: break-word; }
 .attach-foot { display: flex; align-items: center; gap: 5px; min-width: 0; }
-.attach-type { font-size: 10px; font-weight: 600; color: var(--text-faint); letter-spacing: .05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.attach-x { position: absolute; top: -7px; right: -7px; width: 19px; height: 19px; border-radius: 50%; background: var(--menu-bg); border: 1px solid var(--border); color: var(--text-muted); display: grid; place-items: center; font-size: 10px; opacity: 0; transition: opacity var(--fx-t, .12s), color var(--fx-t, .12s), transform var(--fx-t, .12s); }
+.attach-type { display: inline-flex; align-items: center; height: 18px; padding: 0 4px; border-radius: 4px; background: color-mix(in srgb, var(--surface-2) 70%, transparent); border: 0.8px solid var(--pop-ring, var(--border)); font-size: 11px; line-height: 13px; font-weight: 500; color: var(--sidebar-text, var(--text-muted)); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.attach-x { position: absolute; top: -8px; left: -8px; width: 20px; height: 20px; border-radius: 50%; background: color-mix(in srgb, var(--surface-2) 90%, transparent); border: 0.8px solid var(--pop-ring, var(--border)); color: var(--text-muted); display: grid; place-items: center; font-size: 10px; opacity: 0; transition: opacity var(--fx-t, .12s), color var(--fx-t, .12s), transform var(--fx-t, .12s); }
 .attach-chip:hover .attach-x, .attach-x:focus-visible { opacity: 1; }
 .attach-x:hover { color: var(--accent); }
 
