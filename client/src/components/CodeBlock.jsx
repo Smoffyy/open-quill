@@ -48,12 +48,14 @@ function CodeBlock({ lang, code }) {
   }
   return (
     <div className="code-wrap">
-      <div className={'code-bar' + (copied ? ' flash' : '')}>
-        <span>{lang || 'text'}</span>
-        <button className="code-copy" onPointerDown={(e) => { e.preventDefault(); copy(); }}>
-          {copied ? <Check key="c" className="copy-pop" /> : <Copy key="o" />} {copied ? t('Copied') : t('Copy')}
+      <div className="code-copy-anchor">
+        <button className="code-copy" title={copied ? t('Copied') : t('Copy')} aria-label={copied ? t('Copied') : t('Copy')}
+          onPointerDown={(e) => { e.preventDefault(); copy(); }}>
+          {copied ? <Check key="c" className="copy-pop" /> : <Copy key="o" />}
+          <span className="code-copy-label">{copied ? t('Copied') : t('Copy')}</span>
         </button>
       </div>
+      <div className={'code-bar' + (copied ? ' flash' : '')}>{lang || 'text'}</div>
       <pre ref={preRef}><code className={'hljs' + (lang ? ` language-${lang}` : '')} dangerouslySetInnerHTML={{ __html: html }} /></pre>
     </div>
   );

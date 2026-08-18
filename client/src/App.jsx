@@ -1564,7 +1564,7 @@ export default function App() {
                       line = nm ? part + ', ' + nm : part;
                     }
                     return model?.staticIcon
-                      ? <><img src={model.staticIcon} alt="" style={{ width: 42, height: 42, objectFit: 'contain' }} /> {line}</>
+                      ? <><img src={model.staticIcon} alt="" style={{ objectFit: 'contain' }} /> {line}</>
                       : line;
                   })()}
             </div>
@@ -1733,7 +1733,7 @@ export default function App() {
             </div>
             {user?.prefs?.threadRail !== false && <ThreadRail items={railList} scrollRef={scrollRef} matches={findMatches} onJump={railJump} />}
             {showJump && <button className="to-bottom" onClick={jumpDown} title={t('Jump to latest')} aria-label={t('Jump to latest')}><Down style={{ width: 17 }} /></button>}
-            <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')} style={{ maxWidth: cfg.uiPreset === 'openai' ? undefined : 792, margin: '0 auto', width: '100%', padding: '0 20px' }}>
+            <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')} style={{ maxWidth: cfg.uiPreset === 'openai' ? undefined : 808, margin: '0 auto', width: '100%', padding: '0 20px' }}>
               {user?.prefs?.engineStrip !== false && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
               <Composer {...composerProps} focusKey={focusTick} />
               <Disclaimer text={cfg.disclaimer} />

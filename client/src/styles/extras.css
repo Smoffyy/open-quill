@@ -987,7 +987,7 @@ body:has(.app.has-bg) > .model-submenu.pinned {
   border-top-color: transparent; border-radius: 0 0 12px 12px;
   box-shadow: 0 8px 20px -10px #00000066;
 }
-.thread.ledger-on .code-bar { top: calc(var(--ledger-h, 0px) + 4px); }
+.thread.ledger-on .code-copy-anchor { top: calc(var(--ledger-h, 0px) + 8px); }
 .ledger-head .lh-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .ledger-head .lh-title { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text); }
 .ledger-head .lh-title svg { color: var(--accent); }

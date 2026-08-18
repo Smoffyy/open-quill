@@ -25,6 +25,12 @@
   --hover: var(--hover-soft);
   --font-serif: 'Source Serif 4 Variable';
   --font-sans: 'Open Sans';
+  /* Source Serif 4 is variable and lighter than the serif claude.ai ships, so
+     reading text takes the weight that matches its ink rather than the nominal
+     one. Anything that swaps --font-serif for the static Open Sans must put
+     400/600 back, or 465 snaps to 500. */
+  --prose-weight: 465;
+  --prose-strong: 680;
   --radius: 14px;
   --attach-size: 104px;
   --attach-radius: 12px;
@@ -85,7 +91,6 @@
 :root[data-theme="light"] .code-wrap { background: #1f1f1d; }
 /* Wherever the wrap takes an opaque background of its own, the sticky bar has to
    take the same one, or it goes back to being see-through. */
-:root[data-theme="light"] .code-bar { background: #1f1f1d; }
 
 :root[data-theme="anthropic"] {
   color-scheme: dark;
@@ -189,15 +194,16 @@
   --surface: #1a1a19;
   --surface-2: #20201f;
   --surface-hover: #262625;
+  --ghost-hover: rgba(255, 255, 255, .075);
   --border: rgba(255, 255, 255, .1);
   --border-soft: rgba(255, 255, 255, .08);
-  --text: #ffffff;
+  --text: #f0efec;
   --text-muted: #c3c2b7;
   --text-faint: #898781;
   --accent: #c6613f;
   --user-bubble: rgba(255, 255, 255, .05);
   --composer-bg: #20201f;
-  --composer-hover: rgba(255, 255, 255, .1);
+  --composer-hover: rgba(255, 255, 255, .075);
   --menu-bg: #20201f;
   --modal-bg: #1a1a19;
   --modal-side: #151515;
@@ -230,7 +236,7 @@
 :root[data-theme="anthropic"][data-palette="2026q3"] .chat-row.active { background: #0b0b0b; }
 :root[data-theme="anthropic"][data-palette="2026q3"] .composer { box-shadow: 0 4px 20px rgba(0, 0, 0, .035), inset 0 0 0 1px rgba(255, 255, 255, .1); }
 :root[data-theme="anthropic"][data-palette="2026q3"] .composer:focus-within { box-shadow: 0 4px 20px rgba(0, 0, 0, .075), inset 0 0 0 1px rgba(255, 255, 255, .2); }
-:root[data-theme="anthropic"][data-palette="2026q3"] .greeting { font-weight: 300; color: #ffffff; }
+:root[data-theme="anthropic"][data-palette="2026q3"] .greeting { font-weight: 300; color: var(--text); }
 :root[data-theme="anthropic"][data-palette="2026q3"] .quick-prompt { background: #20201f; }
 :root[data-theme="anthropic"][data-palette="2026q3"] .quick-prompt:hover,
 :root[data-theme="anthropic"][data-palette="2026q3"] .quick-prompt:focus-visible { background: #262625; }
@@ -273,7 +279,6 @@
   --pop-divider: rgba(255, 255, 255, .10);
 }
 :root[data-theme="oled"] .code-wrap, :root[data-theme="openai"] .code-wrap { background: #050505; }
-:root[data-theme="oled"] .code-bar, :root[data-theme="openai"] .code-bar { background: #050505; }
 /* anthropic: sidebar saved-chat + label text */
 :root[data-theme="anthropic"] .section-label { color: var(--sidebar-label); }
 :root[data-theme="anthropic"] .sidebar { border-right-color: rgba(255, 255, 255, .1); }
