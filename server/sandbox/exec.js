@@ -25,10 +25,10 @@ export function unknownToolError(name) {
 // One entry per canonical tool. Each handler receives the already-normalized
 // relative path, so no handler re-parses or re-validates a path itself.
 const HANDLERS = {
-  async bash(chatId, call) {
+  async bash(chatId, call, { signal } = {}) {
     const t = argInt(call, 'timeout_s', 'timeout');
     const ms = Number.isFinite(t) && t > 0 ? Math.min(t, 600) * 1000 : 60000;
-    return bash(chatId, argText(call, 'cmd', 'command', 'script'), ms, argText(call, 'workdir', 'cwd'));
+    return bash(chatId, argText(call, 'cmd', 'command', 'script'), ms, argText(call, 'workdir', 'cwd'), signal);
   },
 
   create_file(chatId, call, { rel, missing, maxBytes }) {
@@ -122,14 +122,14 @@ const HANDLERS = {
   }
 };
 
-export async function execTool(chatId, call, maxBytes = 0) {
+export async function execTool(chatId, call, maxBytes = 0, signal = null) {
   try {
     const tool = resolveToolName(call.tool, true);
     const handler = tool && HANDLERS[tool];
     if (!handler) return unknownToolError(call.tool);
     const p = argPath(call);
     if (!p.ok) return { ok: false, error: p.error };
-    return await handler(chatId, call, { rel: p.rel, missing: p.missing, maxBytes });
+    return await handler(chatId, call, { rel: p.rel, missing: p.missing, maxBytes, signal });
   } catch (e) {
     return { ok: false, error: String(e.message || e) };
   }

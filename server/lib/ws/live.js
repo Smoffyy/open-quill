@@ -5,6 +5,12 @@ const STALE_MS = 45 * 60 * 1000;
 const turns = new Map();
 export const aborts = new Map();
 export const steers = new Map();
+// A turn registers a fresh AbortController for every step, so aborting the one
+// that happens to be current only cancels that step — a stop that lands while a
+// tool is running hits an already-finished controller and the loop carries on to
+// the next step. This set is the durable answer to "the user asked me to stop",
+// and the agentic loop checks it at every point it could otherwise continue.
+export const stops = new Set();
 
 export function beginTurn(userId, chatId, modelId) {
   if (!chatId) return null;
@@ -31,6 +37,7 @@ export function endTurn(chatId) {
   turns.delete(chatId);
   aborts.delete(chatId);
   steers.delete(chatId);
+  stops.delete(chatId);
 }
 
 export function activeTurn(chatId) {

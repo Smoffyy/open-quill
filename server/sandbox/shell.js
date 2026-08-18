@@ -160,7 +160,21 @@ function staleCdError(chatId, cmd, baseRel) {
   return null;
 }
 
-export function bash(chatId, cmd, timeoutMs = 60000, workdir) {
+// Killing the shell is not enough. `cmd.exe /c npm test` spawns a grandchild, and
+// killing only cmd.exe leaves it running with the pipes still open, so 'close'
+// never fires and the caller waits out the full timeout anyway. taskkill /T ends
+// the whole tree; POSIX shells forward the signal to their child themselves.
+function killTree(child) {
+  if (!child || child.pid == null) return;
+  if (process.platform === 'win32') {
+    try { spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }); }
+    catch { try { child.kill('SIGKILL'); } catch {} }
+    return;
+  }
+  try { child.kill('SIGKILL'); } catch {}
+}
+
+export function bash(chatId, cmd, timeoutMs = 60000, workdir, signal = null) {
   if (!cmd || !String(cmd).trim()) {
     return Promise.resolve({ ok: false, error: 'cmd is required. Pass the command line to run, for example {"cmd": "node app.js"}.', output: '' });
   }
@@ -212,12 +226,22 @@ export function bash(chatId, cmd, timeoutMs = 60000, workdir) {
         if (head.length < HEAD_KEEP) head += s.slice(0, HEAD_KEEP - head.length);
         tail = tail.length + s.length > TAIL_KEEP ? (tail + s).slice(-TAIL_KEEP) : tail + s;
       }
-      if (size > MAX) { killed = true; try { child.kill('SIGKILL'); } catch {} }
+      if (size > MAX) { killed = true; killTree(child); }
     };
     const transcript = () => (chars <= HEAD_KEEP ? head : head + tail);
     child.stdout.on('data', grab('out'));
     child.stderr.on('data', grab('err'));
-    const timer = setTimeout(() => { timedOut = true; try { child.kill('SIGKILL'); } catch {} }, timeoutMs);
+    const timer = setTimeout(() => { timedOut = true; killTree(child); }, timeoutMs);
+
+    // Pressing stop should not leave a build or a test run grinding away for the
+    // rest of its timeout. The child is killed the same way the timeout kills it,
+    // and whatever it printed before dying is still returned and saved.
+    let stoppedByUser = false;
+    const onAbort = () => { stoppedByUser = true; killTree(child); };
+    if (signal) {
+      if (signal.aborted) onAbort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+    }
 
     const parseTail = (raw) => {
       let text = raw;
@@ -240,10 +264,17 @@ export function bash(chatId, cmd, timeoutMs = 60000, workdir) {
       return { text, nextCwd };
     };
 
-    const done = (r) => { if (settled) return; settled = true; clearTimeout(timer); resolve(r); };
+    const done = (r) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (signal) { try { signal.removeEventListener('abort', onAbort); } catch {} }
+      resolve(r);
+    };
     child.on('error', (e) => done({ ok: false, output: capOut(parseTail(transcript()).text), error: String(e.message || e), exit: null, cwd: getCwd(chatId) }));
     child.on('close', (code) => {
       const { text, nextCwd } = parseTail(transcript());
+      if (stoppedByUser) return done({ ok: false, output: capOut(text), error: 'Stopped by the user.', exit: null, cwd: getCwd(chatId) });
       if (timedOut) return done({ ok: false, output: capOut(text), error: `Timed out after ${Math.round(timeoutMs / 1000)}s`, exit: null, cwd: getCwd(chatId) });
       if (killed) return done({ ok: false, output: capOut(text), error: `Output exceeded ${Math.round(MAX / 1048576)} MB; process killed.`, exit: null, cwd: getCwd(chatId) });
       const exit = typeof code === 'number' ? code : 1;

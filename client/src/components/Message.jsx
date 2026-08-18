@@ -204,7 +204,7 @@ function SteerChips({ notes }) {
   );
 }
 
-function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, statusDelay = STATUS_DELAY_DEFAULT, showSpeed = false, preset = 'anthropic' }) {
+function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, statusDelay = STATUS_DELAY_DEFAULT, showSpeed = false, preset = 'anthropic' }) {
   if (chatEnded) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onFork = null; onDelete = null; }
   if (!chatId) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onFork = null; onTogglePin = null; }
   const [typing, setTyping] = useState(false);
@@ -402,6 +402,11 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
           ]} />
           {showSpeed && <SpeedChip speed={msg.speed} />}
           {model?.displayName && <span className="msg-model-badge">{model.displayName}</span>}
+          {canContinue && onContinue && (
+            <button className="action-btn continue-act" onClick={onContinue} title={t("Pick up where this reply stopped")}>
+              <Retry style={{ width: 14 }} /> {t("Continue")}
+            </button>
+          )}
         </div>
       )}
       <SteerChips notes={steers} />

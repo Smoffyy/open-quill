@@ -120,6 +120,7 @@ export default function App() {
   const sbMoveToProject = useCallback((...a) => sidebarFns.current.moveChatToProject(...a), []);
   const sbProjects = useCallback(() => sidebarFns.current.openProjects(null), []);
   const sbOpenProject = useCallback((id) => sidebarFns.current.openProjects(id), []);
+  const sbNewProject = useCallback(() => sidebarFns.current.newProject(), []);
   const onSearchCb = useCallback(() => setCmdkOpen(true), []);
   const onToggleSidebarCb = useCallback(() => setCollapsed(c => !c), []);
   const onMobileCloseCb = useCallback(() => setMobileDrawer(false), []);
@@ -202,6 +203,7 @@ export default function App() {
   const [liveFile, setLiveFile] = useState(null);
   const [liveCall, setLiveCall] = useState(null);
   const [liveCalls, setLiveCalls] = useState(EMPTY_CALLS);
+  const [stopping, setStopping] = useState(false);
   const [compacting, setCompacting] = useState(false);
   const [hasSummary, setHasSummary] = useState(false);
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
@@ -226,6 +228,7 @@ export default function App() {
   const [projects, setProjects] = useState([]);
   const [showProjects, setShowProjects] = useState(false);
   const [projectOpenId, setProjectOpenId] = useState(null);
+  const [projectCreate, setProjectCreate] = useState(false);
   const [currentProject, setCurrentProject] = useState(null);
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const [findOpen, setFindOpen] = useState(false);
@@ -823,7 +826,7 @@ export default function App() {
     const id = assistantIdRef.current || (r && r.assistantId) || ('a' + Date.now());
     const mid = streamModelRef.current || (r ? r.model_id : currentIdRef.current);
     if (r && r.done) dropRec(key);
-    setStreaming(false); setPhase('static'); setQueued(false);
+    setStreaming(false); setPhase('static'); setQueued(false); setStopping(false);
     if (content || reasoning) setMessages(ms => ms.some(m => m.id === id) ? ms : [...ms, { id, role: 'assistant', content, reasoning, model_id: mid }]);
     setDispContent(''); setDispReason(''); setDispSegs(null);
     setLiveFile(null); setLiveCall(null); setLiveCalls(EMPTY_CALLS); liveRef.current = null;
@@ -1316,7 +1319,20 @@ export default function App() {
     queueRec(activeId, currentId);
   }, [streaming, activeId, currentId]);
 
-  function stop() { socketSend({ type: 'stop', chatId: activeKey() }); pendingDone.current = true; setQueued(false); }
+  // Deliberately does NOT finalize. finalize() refetches the thread, and the
+  // server only writes the assistant row once it has unwound the turn — going
+  // early replaced the in-progress message with a thread that does not contain
+  // it yet, losing every tool result the user had just watched happen. The
+  // server's `done` arrives after the write and drives finalize as usual.
+  function stop() { socketSend({ type: 'stop', chatId: activeKey() }); setQueued(false); setStopping(true); }
+  // Message is memoized, so onContinue has to keep a stable identity — but a
+  // useCallback closing over `send` freezes the first render's copy, where
+  // currentId is still null and send returns immediately. sendRef is kept
+  // current during render, so the click always reaches the live send.
+  const continueReply = useCallback(() => {
+    setCanContinue(false);
+    sendRef.current([], t('Carry on from exactly where your previous reply stopped. Do not repeat or summarise what you already did — it is already saved. If work is still unfinished, make the tool calls to finish it now.'));
+  }, []);
   const stopChat = useCallback((chatId) => {
     if (!chatId) return;
     if (chatId === activeKey()) { stop(); return; }
@@ -1354,11 +1370,10 @@ export default function App() {
     placeholder: activeId && !incognito ? t('Write a message...') : undefined,
     projects,
     onSetProject: activeId ? (p) => moveChatToProject(activeId, p.id) : null,
-    value: input, onChange: (v) => { if (safetyFlagged) { setSafetyFlagged(false); setSafetyReason(''); } setInput(v); saveDraft(activeId, v); }, onSend: send, onStop: stop, streaming: streaming || queued,
+    value: input, onChange: (v) => { if (safetyFlagged) { setSafetyFlagged(false); setSafetyReason(''); } setInput(v); saveDraft(activeId, v); }, onSend: send, onStop: stop, streaming: streaming || queued, stopping,
     queueCount: queuedList.length,
     onQueue: (t, atts) => setQueue(l => [...l, { id: 'q' + Date.now() + Math.random().toString(36).slice(2, 7), text: t, attachments: atts || [] }]),
     onSteer: steer, canSteer: streaming && !!activeId && !incognito && user?.prefs?.steering === true,
-    canContinue, onContinue: () => { setCanContinue(false); send([], t('Continue exactly where your previous reply stopped, without repeating any content.')); },
     compareIds, onSetCompare: setCompareIds,
     safetyFlagged, safetyChecking, safetyReason, safetyVerbose: !!cfg.safetyCheckVerbose,
     styles: user?.styles || [], styleId, onSelectStyle: setStyleId, onSaveStyles: saveStyles,
@@ -1483,7 +1498,7 @@ export default function App() {
     </div>
   );
 
-  sidebarFns.current = { newChat, openChat, deleteChat, toggleStar, logout, openProjects, moveChatToProject };
+  sidebarFns.current = { newChat, openChat, deleteChat, toggleStar, logout, openProjects, moveChatToProject, newProject: () => { openProjects(null); setProjectCreate(true); } };
 
   return (
     <div className={'app' + (incognito ? ' app-incognito' : '') + (intro ? ' intro' : '') + (bgVisible ? ' has-bg' : '') + (collapsed ? ' sb-collapsed' : '')}>
@@ -1498,7 +1513,7 @@ export default function App() {
         onCredits={onCreditsCb} onChangelog={onChangelogCb} onLicense={onLicenseCb} onLogout={sbLogout} version={cfg.version}
         onChatsOverview={onChatsOverviewCb}
         onSpaces={onSpacesCb} spacesPending={spacesPending}
-        projects={projects} onProjects={sbProjects} onOpenProject={sbOpenProject} onMoveToProject={sbMoveToProject}
+        projects={projects} onProjects={sbProjects} onOpenProject={sbOpenProject} onNewProject={sbNewProject} onMoveToProject={sbMoveToProject}
         busyChats={busyChats} onStopChat={stopChat} />
 
       {mobileDrawer && <div className="drawer-backdrop" onClick={() => setMobileDrawer(false)} />}
@@ -1668,6 +1683,8 @@ export default function App() {
                     const liTokens = li ? li.tokens : (ledgerOpen && msg._streaming ? liveLedgerTokens : 0);
                     return (
                     <Message key={msg._k || msg.id} msg={msg} model={resolveMsgModel(msg, model)} models={models} currentId={currentId} chatId={activeId} pins={chatPins} chatEnded={chatEnded}
+                      canContinue={(canContinue || !!msg.truncated) && !streaming && !chatEnded && msg === lastA && !msg._streaming}
+                      onContinue={continueReply}
                       ledger={ledgerOpen}
                       ledgerTokens={liTokens}
                       ledgerPct={liTokens && ledgerLimit ? Math.min(100, Math.round((liTokens / ledgerLimit) * 1000) / 10) : 0}
@@ -1791,6 +1808,7 @@ export default function App() {
       {showPlayground && <React.Suspense fallback={null}><Playground onClose={() => { setShowPlayground(false); if (/^\/playground(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
       {showSpaces && <SpacesPanel user={user} onClose={() => { setShowSpaces(false); refreshSpacesPending(); if (/^\/spaces(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} />}
       {showProjects && <ProjectsPanel openId={projectOpenId} composerProps={composerProps}
+        startCreate={projectCreate} onCreateHandled={() => setProjectCreate(false)}
         onClose={() => { setShowProjects(false); setProjectOpenId(null); if (/^\/projects?(\/|$)/.test(location.pathname) || /^\/project\//.test(location.pathname)) history.pushState({}, '', '/'); }}
         onOpenChat={openProjectChat} onStartChat={startProjectChat}
         onOpenProject={(id) => { setProjectOpenId(id); history.replaceState({}, '', id ? '/project/' + id : '/projects'); loadProjects(); }} />}

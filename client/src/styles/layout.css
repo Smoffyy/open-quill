@@ -47,9 +47,17 @@
 .nav-item:hover svg .ic-b1 { transform: translateX(-1.6px); }
 .nav-item:hover svg .ic-b2 { transform: translateX(1.6px); }
 .nav-item:hover svg .ic-lid { transform: translateY(-1.4px) rotate(-9deg); }
-.section-label { padding: 20px 14px 8px 8px; font-size: 12px; line-height: 16px; color: var(--text-faint); font-family: var(--font-sans); }
+/* Group headings carry almost all their space ABOVE them, not below. A label
+   sitting midway between two runs of rows belongs to neither; pushed down onto
+   the list it introduces, it reads as that list's heading and the eye gets a
+   clean break between groups. 24px block, 27px above, 5px below. */
+.section-label {
+  box-sizing: content-box; height: 16px; padding: 4px 14px 4px 6px; margin: 27px 0 5px;
+  font-size: 13px; line-height: 16px; color: var(--text-faint); font-family: var(--font-sans);
+}
 .recents-label { position: relative; display: flex; align-items: center; gap: 5px; user-select: none; padding-right: 8px; }
-.rl-group { margin-left: auto; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; color: var(--text-faint); flex-shrink: 0; transition: background var(--fx-t, .12s), color var(--fx-t, .12s); }
+/* Pulled back into the 16px line so a 24px control cannot grow the heading. */
+.rl-group { margin: -4px 0 -4px auto; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; color: var(--text-faint); flex-shrink: 0; transition: background var(--fx-t, .12s), color var(--fx-t, .12s); }
 .rl-group:hover { background: var(--surface-hover); color: var(--text-muted); }
 .rl-menu {
   position: absolute; top: 28px; right: 4px; z-index: 60; min-width: 128px; padding: 4px;
@@ -69,7 +77,7 @@
 :root[data-theme="light"] .chats { scrollbar-color: rgba(60, 58, 52, .3) transparent; }
 .chat-row {
   display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 24px 6px 8px; margin-bottom: 1px;
-  border-radius: 9px; color: var(--text-muted); font-size: 14px; line-height: 20px; cursor: pointer;
+  border-radius: 8px; color: var(--text-muted); font-size: 14px; line-height: 20px; cursor: pointer;
   transition: background var(--fx-t, .3s) cubic-bezier(.165, .85, .45, 1), color var(--fx-t, .3s) cubic-bezier(.165, .85, .45, 1);
 }
 .chat-row:hover { background: var(--surface-hover); color: var(--text); }

@@ -220,7 +220,7 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
   );
 }
 
-export default function ProjectsPanel({ openId, composerProps, onClose, onOpenChat, onStartChat, onOpenProject }) {
+export default function ProjectsPanel({ openId, composerProps, onClose, onOpenChat, onStartChat, onOpenProject, startCreate = false, onCreateHandled }) {
   const [projects, setProjects] = useState(null);
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('updated');
@@ -230,6 +230,8 @@ export default function ProjectsPanel({ openId, composerProps, onClose, onOpenCh
   const load = useCallback(async () => { try { setProjects(await api.get('/api/projects')); } catch { setProjects([]); } }, []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setDetailId(openId || null); }, [openId]);
+  // The sidebar's + opens this panel and asks for the create dialog in one go.
+  useEffect(() => { if (!startCreate) return; setDetailId(null); setCreating(true); onCreateHandled && onCreateHandled(); }, [startCreate, onCreateHandled]);
 
   function openDetail(id) { setDetailId(id); onOpenProject?.(id); }
 

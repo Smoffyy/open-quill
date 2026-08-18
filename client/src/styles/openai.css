@@ -49,7 +49,10 @@
 [data-preset="openai"] .sidebar .brand { font-family: var(--font-sans); font-size: 16px; font-weight: 600; letter-spacing: 0; }
 [data-preset="openai"] .nav-item { border-radius: 10px; padding: 7px 10px; font-size: 14px; line-height: normal; font-weight: 500; gap: 11px; }
 [data-preset="openai"] .nav-item svg { width: 17px; height: 17px; }
-[data-preset="openai"] .section-label { padding: 12px 14px 5px; line-height: normal; }
+/* This skin sets its own heading rhythm, so the Anthropic block height and the
+   27px/5px group spacing are cleared rather than inherited. */
+[data-preset="openai"] .section-label { padding: 12px 14px 5px; line-height: normal; height: auto; margin: 0; }
+[data-preset="openai"] .rl-group { margin-top: 0; margin-bottom: 0; }
 [data-preset="openai"] .chat-row .row-ctrl { position: static; width: 20px; height: 20px; }
 [data-preset="openai"] .chat-menu { padding: 5px; background: var(--menu-bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 32px #00000055; }
 [data-preset="openai"] .chat-menu button { gap: 9px; padding: 8px 9px; border-radius: 7px; font-size: 13.5px; line-height: normal; color: var(--text); }

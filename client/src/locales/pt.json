@@ -278,8 +278,6 @@
   "Context per slot": "Contexto por slot",
   "Context used of the loaded window": "Contexto usado da janela carregada",
   "Context window": "Janela de contexto",
-  "Continue exactly where your previous reply stopped, without repeating any content.": "Continue exatamente de onde sua resposta anterior parou, sem repetir nenhum conteúdo.",
-  "Continue generating →": "Continuar gerando →",
   "Control": "Controle",
   "Control Center": "Central de controle",
   "Controls shown in the message box.": "Controles exibidos na caixa de mensagem.",
@@ -1753,5 +1751,9 @@
   "reading arguments": "lendo argumentos",
   "unchanged": "sem alterações",
   "{n} chars read": "{n} caracteres lidos",
-  "Open project {name}": "Abrir o projeto {name}"
+  "Open project {name}": "Abrir o projeto {name}",
+  "Stopping — finishing the step in progress": "Parando: concluindo a etapa em andamento",
+  "Continue": "Continuar",
+  "Pick up where this reply stopped": "Retomar de onde esta resposta parou",
+  "Carry on from exactly where your previous reply stopped. Do not repeat or summarise what you already did — it is already saved. If work is still unfinished, make the tool calls to finish it now.": "Continue exatamente de onde sua resposta anterior parou. Não repita nem resuma o que você já fez: já está salvo. Se ainda houver trabalho pendente, faça agora as chamadas de ferramenta para concluí-lo."
 }

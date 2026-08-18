@@ -193,7 +193,11 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       return { payload: membank.resultPayload(call, r), formatted: membank.formatResult(call, r), hide: membankHideTools };
     }
     if (!sandboxOn || !resolveToolName(call.tool, true)) return null;
-    const r = await sandbox.execTool(chat.id, call, sandboxCap);
+    // The step's own controller: the stop handler aborts whatever is registered
+    // for this chat, which during tool execution is this one. Handing its signal
+    // to the sandbox is what lets a stop kill a running command instead of
+    // waiting out its timeout.
+    const r = await sandbox.execTool(chat.id, call, sandboxCap, stepController ? stepController.signal : null);
     return { payload: resultPayload(call, r), formatted: formatToolResult(call, r), hide: false };
   };
 
@@ -231,6 +235,11 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     windowNotified = total;
     safeSend(JSON.stringify({ type: 'ctx_rolling', chatId: chat.id, dropped: dropped || 0, trimmed: !!trimmed, limit: budget }));
   };
+  // A stop that lands just after a turn ended has nothing to cancel and would
+  // otherwise sit in the set and kill this turn before its first step. Every
+  // turn starts from a clean slate; stops arriving from here on are this turn's.
+  if (state.stops) state.stops.delete(chat.id);
+  const stopRequested = () => !!(state.stops && state.stops.has(chat.id));
   const stepCap = (model.agent_steps && model.agent_steps > 0) ? model.agent_steps : 1000;
   let maxSteps = toolsOn ? stepCap : 1;
   const callFails = new Map();
@@ -238,6 +247,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   let prevFailShape = '';
   let noProgress = 0;
   let continues = 0;
+  let stepController = null;
   let lastFinish = '';
   const steerNotes = [];
   let steerBudget = MAX_STEERS;
@@ -304,7 +314,9 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       }
       let stepPromptTokens = 0;
       let stepUsage = null;
+      if (stopRequested()) break;
       const controller = new AbortController();
+      stepController = controller;
       state.aborts.set(chat.id, controller);
       let stepText = '';
       const genTokens = makeTokenCounter();
@@ -540,7 +552,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         // The model announced the next step and then stopped without taking it.
         // Nudge it once or twice rather than making the user type "keep going".
         // No maxSteps bump: this spends the operator's existing step budget.
-        if (!aborted && toolsOn && continues < MAX_CONTINUES && step + 1 < maxSteps && announcedMoreWork(stepText)) {
+        if (!aborted && !stopRequested() && toolsOn && continues < MAX_CONTINUES && step + 1 < maxSteps && announcedMoreWork(stepText)) {
           continues++;
           const written = stripThink(model, stepText);
           const seam = seamFor(content);
@@ -554,6 +566,13 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       let stepOk = 0, stepFailed = 0;
       const stepFailKinds = new Set();
       for (const tc of toolCalls) {
+        // A stop during a chain of calls must not run the ones still queued.
+        // Each is reported back as refused so the saved transcript stays honest
+        // about what did and did not happen.
+        if (stopRequested()) {
+          toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: tc.name, content: `${tc.name} → ERROR: stopped by the user before this call ran.` });
+          continue;
+        }
         const call = canonicalize(toCall(tc.name, tc.argsText));
         const cut = cutOffOf(call);
         if (cut) {
@@ -600,6 +619,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: formatted });
       }
       if (liveSent) safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live: null }));
+      if (stopRequested()) break;
       if (conversationEnded) {
         const endedChat = db.chats.byId(chat.id);
         safeSend(JSON.stringify({ type: 'chat_ended', chatId: chat.id, reason: (endedChat && endedChat.ended_reason) || '' }));
@@ -632,8 +652,10 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: String(err.message || err) }));
   }
   closeReasoning();
+  const wasStopped = stopRequested();
   state.aborts.delete(chat.id);
   if (state.steers) state.steers.delete(chat.id);
+  if (state.stops) state.stops.delete(chat.id);
 
   let usageRec = null;
   if (usage && (usage.prompt || usage.completion)) {
@@ -641,16 +663,19 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     usageRec = { prompt: usage.prompt, completion: usage.completion, total: usage.total || (usage.prompt + usage.completion), cost };
     db.usage.insert({ id: uid(), user_id: chat.user_id, model_id: model.id, model_name: model.display_name || '', prompt: usageRec.prompt, completion: usageRec.completion, total: usageRec.total, cost, cost_in: Number(model.cost_in) || 0, cost_out: Number(model.cost_out) || 0, created_at: now() });
   }
+  // Computed before the insert so it can be stored on the row: without it the
+  // "Continue" affordance lived only in the `done` frame and vanished on reload,
+  // stranding a stopped turn the user meant to pick up later.
+  const outCap = Number(model.max_tokens) || 0;
+  const hitCap = outCap > 0 && lastStepCompletion >= outCap - 2;
+  const truncated = (lastFinish === 'length' || hitCap || wasStopped) && !conversationEnded;
   const hasOutput = !!(content.trim() || reasoning.trim());
   if (hasOutput || usageRec) {
-    db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, reasoning_segs: reasonSegs.length ? reasonSegs : null, reasoning_seg_ms: reasonSegs.length ? segMs : null, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: usageRec, speed, reasoning_ms: reasonMs || null, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, kwarg_values: model.kwarg_values || null, steers: steerNotes.length ? steerNotes.slice(0, MAX_STEERS) : null, created_at: now() });
+    db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, reasoning_segs: reasonSegs.length ? reasonSegs : null, reasoning_seg_ms: reasonSegs.length ? segMs : null, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: usageRec, speed, reasoning_ms: reasonMs || null, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, kwarg_values: model.kwarg_values || null, steers: steerNotes.length ? steerNotes.slice(0, MAX_STEERS) : null, truncated: truncated || null, created_at: now() });
     db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
   } else {
     db.chats.update(chat.id, { updated_at: now() });
   }
-  const outCap = Number(model.max_tokens) || 0;
-  const hitCap = outCap > 0 && lastStepCompletion >= outCap - 2;
-  const truncated = (lastFinish === 'length' || hitCap) && !conversationEnded;
   safeSend(JSON.stringify({ type: 'done', chatId: chat.id, messageId: (hasOutput || usageRec) ? assistantId : null, truncated }));
 
   const fresh = db.chats.byId(chat.id);

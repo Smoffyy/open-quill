@@ -137,7 +137,7 @@ function ChatRow({ c, active, showTrash, projects = [], onMoveToProject, onOpen,
 function Sidebar({
   user, chats, onSearch, chatsLoaded = true, activeId, appName, onNew, onOpen, onDelete, onToggleStar,
   collapsed, onToggle, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview,
-  onSpaces, spacesPending = 0, projects = [], onProjects, onOpenProject, onMoveToProject, mobileOpen = false, onMobileClose,
+  onSpaces, spacesPending = 0, projects = [], onProjects, onOpenProject, onNewProject, onMoveToProject, mobileOpen = false, onMobileClose,
   busyChats = [], onStopChat
 }) {
   const busyIds = React.useMemo(() => new Set(busyChats), [busyChats]);
@@ -179,6 +179,7 @@ function Sidebar({
   const nowMs = Date.now();
   const DAY = 86400000;
   const SIDEBAR_CHAT_LIMIT = 40;
+  const SIDEBAR_PROJECT_LIMIT = 5;
   const capped = others.slice(0, SIDEBAR_CHAT_LIMIT);
   const overflow = others.length > SIDEBAR_CHAT_LIMIT;
   const recentGroups = (() => {
@@ -248,6 +249,20 @@ function Sidebar({
           </>
         ) : (
           <>
+            {projects.length > 0 && <>
+              <div className="section-label recents-label">
+                {t('Projects')}
+                {onNewProject && <button className="rl-group" title={t('New project')} aria-label={t('New project')}
+                  onClick={onNewProject}><Plus style={{ width: 14, height: 14 }} /></button>}
+              </div>
+              {projects.slice(0, SIDEBAR_PROJECT_LIMIT).map(p => (
+                <div key={p.id} className="chat-row project-row" onClick={() => onOpenProject && onOpenProject(p.id)}>
+                  <Box style={{ width: 20, flexShrink: 0, opacity: .85 }} />
+                  <span className="title">{p.name}</span>
+                </div>
+              ))}
+            </>}
+
             {(starred.length > 0 || starredProjects.length > 0) && <>
               <div className="section-label">{t("Starred")}</div>
               {starredProjects.map(p => (

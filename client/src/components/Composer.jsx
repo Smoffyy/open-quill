@@ -52,14 +52,14 @@ function PmSub({ className = '', children, onMouseEnter, onMouseLeave }) {
 }
 
 export default function Composer({
-  value, onChange, onSend, onStop, streaming, models,
+  value, onChange, onSend, onStop, streaming, stopping = false, models,
   currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, onOpenProject, projects = [], onSetProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
   voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall,
   safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
   conversationEnded = false, endedReason = '',
   removedModel = null, onOpenDocs = null,
-  queueCount = 0, onQueue, canContinue = false, onContinue, onSteer, canSteer = false,
+  queueCount = 0, onQueue, onSteer, canSteer = false,
   compareIds = [], onSetCompare, hideModelPicker = false, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
   ctxGauge = null
 }) {
@@ -405,11 +405,6 @@ export default function Composer({
         {...(FILE_ACCEPT ? { accept: (visionSupported ? 'image/*,' : '') + FILE_ACCEPT } : {})} />
       {safetyChecking && safetyVerbose && <div className="safety-checking">{t("Safety check…")}</div>}
       {improving && <div className="safety-checking">{t("Improving prompt…")}</div>}
-      {canContinue && !streaming && !conversationEnded && (
-        <div className="continue-row">
-          <button className="continue-btn" onClick={() => onContinue?.()}>{t("Continue generating →")}</button>
-        </div>
-      )}
       {compareIds.length > 0 && (
         <div className="queued-chip compare-chip">
           <span className="queued-label">{t("Compare:")}</span>
@@ -585,7 +580,8 @@ export default function Composer({
             <button key="steer" className="send steer" onClick={doSend} title={t('Steer this reply')}><Steer style={{ width: 20, height: 20 }} /></button>
           )}
           {streaming ? (
-            <button key="stop" className="send stop" onClick={onStop} title={t('Stop generating')}><Stop style={{ width: 20, height: 20 }} /></button>
+            <button key="stop" className={'send stop' + (stopping ? ' stopping' : '')} onClick={onStop} disabled={stopping}
+              title={stopping ? t('Stopping — finishing the step in progress') : t('Stop generating')}><Stop style={{ width: 20, height: 20 }} /></button>
           ) : safetyChecking ? (
             <button key="send" className={'send' + (safetyVerbose ? ' checking' : ' quiet')} disabled title={safetyVerbose ? t('Safety check…') : undefined}><Up style={{ width: 20, height: 20 }} /></button>
           ) : canSend ? (

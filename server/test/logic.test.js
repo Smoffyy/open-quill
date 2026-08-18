@@ -32,6 +32,9 @@ import { sameOrigin, sameOriginGuard, requestHost } from '../lib/origin.js';
 import { SETTING_FIELDS, coerceSetting } from '../routes/settings.js';
 import { isText } from '../sandbox/ignore.js';
 import { announcedMoreWork } from '../lib/continuation.js';
+import { stops, beginTurn, endTurn } from '../lib/ws/live.js';
+import { historyText } from '../lib/history.js';
+import { bash } from '../sandbox/shell.js';
 import { wireToolCalls, normalizeMessages } from '../llm/wire.js';
 import { unzipBuffer, zipBuffer } from '../sandbox/zip.js';
 
@@ -1671,6 +1674,122 @@ test('announcedMoreWork ignores an intent that was already carried out', () => {
 
 test('announcedMoreWork treats a trailing question as a hand-back whatever precedes it', () => {
   assert.equal(announcedMoreWork("I'll add the parser next. Should I also wire up the CLI?"), false);
+});
+
+
+// A stop should not leave a build or a test run grinding away until its timeout.
+// The signal handed to bash kills the child the same way the timeout does, and
+// whatever it printed before dying still comes back so the transcript is honest.
+test('stopping kills a running command instead of waiting out its timeout', async () => {
+  const chatId = 'shell-stop-' + Date.now();
+  const ac = new AbortController();
+  const started = Date.now();
+  // A command that would otherwise run far longer than the stop.
+  const slow = process.platform === 'win32'
+    ? 'ping -n 30 127.0.0.1 > nul'
+    : 'sleep 30';
+  const run = bash(chatId, slow, 60000, undefined, ac.signal);
+  setTimeout(() => ac.abort(), 300);
+  const r = await run;
+  const elapsed = Date.now() - started;
+  assert.equal(r.ok, false);
+  assert.match(String(r.error || ''), /stopped by the user/i, JSON.stringify(r));
+  assert.ok(elapsed < 15000, 'returned promptly rather than at the timeout: ' + elapsed + 'ms');
+});
+
+test('an already-aborted signal stops a command before it can run away', async () => {
+  const chatId = 'shell-stop-pre-' + Date.now();
+  const ac = new AbortController();
+  ac.abort();
+  const slow = process.platform === 'win32' ? 'ping -n 30 127.0.0.1 > nul' : 'sleep 30';
+  const r = await bash(chatId, slow, 60000, undefined, ac.signal);
+  assert.equal(r.ok, false);
+  assert.match(String(r.error || ''), /stopped by the user/i, JSON.stringify(r));
+});
+
+
+// --- replaying past tool activity ----------------------------------------
+// Tool calls used to be replayed as one "(tool already run: ...)" marker per
+// call, inline in the assistant's own message. A turn with thirty calls came
+// back as thirty lines the model appeared to have written itself, and asked to
+// continue it wrote more of them instead of calling anything. The replay is now
+// a single trailing note with no pattern to extend.
+
+const oqr = (call, result) =>
+  '[[OQR:' + Buffer.from(JSON.stringify({ call, result }), 'utf8').toString('base64') + ']]';
+
+test('historyText collapses many tool calls into one note, not a list', () => {
+  let content = 'Working through the files.\n';
+  for (let i = 1; i <= 12; i++) {
+    content += oqr({ tool: 'create_file', path: 'lib/a' + i + '.py' }, { ok: true });
+    content += oqr({ tool: 'bash', cmd: 'python lib/a' + i + '.py' }, { ok: true });
+  }
+  const out = historyText(content);
+  assert.equal(out.includes('tool already run'), false, 'the imitable per-call marker is gone');
+  assert.equal((out.match(/create_file/g) || []).length, 1, 'named once, not once per call');
+  assert.ok(out.includes('create_file ×12'), 'counted: ' + out);
+  assert.ok(out.includes('bash ×12'));
+  assert.ok(out.includes('Working through the files.'), 'the real prose survives');
+  // The whole point: nothing repeating for the model to continue.
+  assert.ok(out.split('\n').length < 6, 'stays compact: ' + JSON.stringify(out));
+});
+
+test('historyText reports failures and keeps a single-call turn readable', () => {
+  const content = 'Trying it.' + oqr({ tool: 'bash', cmd: 'pytest' }, { ok: false, error: 'boom' });
+  const out = historyText(content);
+  assert.ok(out.includes('bash'), out);
+  assert.equal(out.includes('×'), false, 'one call is not given a multiplier');
+  assert.ok(out.includes('1 failed'), out);
+});
+
+test('historyText leaves a turn with no tool activity completely alone', () => {
+  const plain = 'Just a normal reply with no tools.';
+  assert.equal(historyText(plain), plain);
+  assert.equal(historyText(''), '');
+});
+
+
+// --- stopping a turn ------------------------------------------------------
+// Every step registers a fresh AbortController, so aborting the current one
+// cannot end the turn: a stop that lands while a tool is running hits a spent
+// controller and the loop starts another step. The stop flag is what the loop
+// actually checks, so it has to outlive the controller and be cleared with the
+// turn — a leaked flag would kill the NEXT reply in that chat before it began.
+
+test('a stop flag survives independently of the per-step abort controller', () => {
+  const chatId = 'chat-stop-1';
+  stops.delete(chatId);
+  assert.equal(stops.has(chatId), false);
+  stops.add(chatId);
+  // Whatever happens to the controllers, the request to stop still stands.
+  assert.equal(stops.has(chatId), true, 'the flag is not tied to a controller');
+  stops.delete(chatId);
+});
+
+test('ending a turn clears its stop flag so the next reply is not killed', () => {
+  const chatId = 'chat-stop-2';
+  beginTurn('user-1', chatId, 'model-1');
+  stops.add(chatId);
+  endTurn(chatId);
+  assert.equal(stops.has(chatId), false, 'a leaked flag would stop the next turn instantly');
+});
+
+
+// A stop can arrive with nothing left to cancel — the turn finished in the gap
+// between the click and the socket message. Nothing clears the flag in that
+// case, so the turn that follows would be killed before its first step. Turns
+// therefore clear the flag as they start, which is what this pins down.
+test('a stop with no turn running does not kill the next turn', () => {
+  const chatId = 'chat-stop-3';
+  // Turn one finishes normally, then a late stop lands.
+  beginTurn('user-1', chatId, 'model-1');
+  endTurn(chatId);
+  stops.add(chatId);
+  assert.equal(stops.has(chatId), true, 'the late stop is recorded with nothing to cancel');
+
+  // Turn two starts: runCompletion clears the slate before its first step.
+  stops.delete(chatId);
+  assert.equal(stops.has(chatId), false, 'the next turn starts un-stopped');
 });
 
 

@@ -75,10 +75,10 @@ export function initWs(server) {
     if (!u) { ws.close(); return; }
     ws.isAlive = true;
     ws.on('pong', () => { ws.isAlive = true; });
-    clients.set(ws, { userId: u.id, sessionId: r.sessionId || null, isAdmin: !!u.is_admin, aborts: new Map(), steers: new Map() });
+    clients.set(ws, { userId: u.id, sessionId: r.sessionId || null, isAdmin: !!u.is_admin, aborts: new Map(), steers: new Map(), stops: new Set() });
     const safeSend = (s) => { if (ws.readyState === 1) { try { ws.send(s); } catch {} } };
     const liveSend = (s) => live.sendLive(u.id, s);
-    const liveState = { aborts: live.aborts, steers: live.steers };
+    const liveState = { aborts: live.aborts, steers: live.steers, stops: live.stops };
     const liveWs = { readyState: 1, send: liveSend };
     {
       const pending = live.snapshotsFor(u.id);
@@ -99,6 +99,9 @@ export function initWs(server) {
         const own = msg.chatId === 'incognito' ? state : (ownsChat(msg.chatId) ? liveState : null);
         if (!own) return;
         own.steers.delete(msg.chatId);
+        // Recorded before aborting: the controller may already be spent (a stop
+        // during tool execution), and the flag is what actually ends the loop.
+        if (own.stops) own.stops.add(msg.chatId);
         const c = own.aborts.get(msg.chatId);
         if (c) { c.abort(); own.aborts.delete(msg.chatId); }
         return;
