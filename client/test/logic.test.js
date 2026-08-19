@@ -15,7 +15,7 @@ import { scrollInsideMenu } from '../src/lib/anchor.js';
 import {
   isRange, clampToRange, allNumeric, kwargPayload,
   controlOf as controlOfKwarg, defaultValueOf as defaultValueOfKwarg,
-  resolveKwargValues as resolveKwargs, gateOpen, kwargVisible, KWARG_PRESETS
+  resolveKwargValues as resolveKwargs, gateOpen, kwargVisible, gateSourceIds, KWARG_PRESETS
 } from '../src/kwargs.js';
 import {
   baseName, extOf, fmtSize, escHtml, diffLines, stableLineDiff,
@@ -648,6 +648,29 @@ test('a closed gate drops the value only when sendWhenHidden is off', () => {
   assert.equal(kwargPayload(kept, resolveKwargs(kept, {}, false)).thinking_budget_tokens, 1024);
   const dropped = mk(false);
   assert.equal('thinking_budget_tokens' in kwargPayload(dropped, resolveKwargs(dropped, {}, false)), false);
+});
+
+test('the kwarg behind an open gate takes over the trigger chip', () => {
+  const defs = [
+    { id: 'think', name: 'enable_thinking', chip: 'Extended', values: ['false', 'true'], default: 'false' },
+    { id: 'effort', name: 'reasoning_effort', values: ['low', 'medium', 'xhigh'], default: 'low',
+      showIf: { id: 'think', value: 'true' } }
+  ];
+  const off = resolveKwargs(defs, {}, false);
+  assert.equal(gateSourceIds(defs, off).has('think'), false);
+
+  const on = resolveKwargs(defs, { think: 'true' }, false);
+  assert.equal(gateSourceIds(defs, on).has('think'), true);
+  assert.equal(gateSourceIds(defs, on).has('effort'), false);
+});
+
+test('an admin-hidden gated kwarg leaves its source chip alone', () => {
+  const defs = [
+    { id: 'think', name: 'enable_thinking', chip: 'Extended', values: ['false', 'true'], default: 'false' },
+    { id: 'effort', name: 'reasoning_effort', values: ['low', 'high'], default: 'low',
+      visible: false, showIf: { id: 'think', value: 'true' } }
+  ];
+  assert.equal(gateSourceIds(defs, resolveKwargs(defs, { think: 'true' }, false)).has('think'), false);
 });
 
 test('an unresolvable or absent gate leaves the kwarg visible', () => {

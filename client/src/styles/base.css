@@ -44,6 +44,8 @@
   --pop-faint: rgba(255, 255, 255, .45);
   --pop-blue: #2a78d6;
   --pop-switch: rgba(255, 255, 255, .2);
+  --effort-track: rgba(0, 0, 0, .2);
+  --effort-thumb: #a5a49a;
   --pop-shadow: 0 4px 14px rgba(0, 0, 0, .25), 0 12px 32px rgba(0, 0, 0, .3);
   --field-ring: rgba(255, 255, 255, .1);
   --field-ring-hover: rgba(255, 255, 255, .2);
@@ -85,6 +87,8 @@
   --field-ring-hover: rgba(0, 0, 0, .2);
   --search-hit: #2a78d6;
   --pop-switch: rgba(0, 0, 0, .16);
+  --effort-track: rgba(0, 0, 0, .07);
+  --effort-thumb: #7c7b73;
   --pop-shadow: 0 4px 14px rgba(0, 0, 0, .1), 0 12px 32px rgba(0, 0, 0, .12);
   --composer-hover: rgba(0, 0, 0, .06);
 }

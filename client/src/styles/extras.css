@@ -824,7 +824,7 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .search-overlay { padding-top: 25vh; }
 
 /* ============ locked thinking control ============ */
-.effort-row.locked .effort-seg, .toggle-row.locked .switch { opacity: .45; pointer-events: none; filter: grayscale(1); }
+.effort-row.locked .effort-slider, .toggle-row.locked .switch { opacity: .45; pointer-events: none; filter: grayscale(1); }
 .effort-row.locked .effort-head .effort-cur { color: var(--text-faint); }
 .toggle-row.locked { cursor: default; }
 .effort-perm-seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--border-soft); flex-shrink: 0; }

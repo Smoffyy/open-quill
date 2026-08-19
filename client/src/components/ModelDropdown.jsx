@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevDown, Chevron, ImageIcon, Brain, Info, TextIcon } from './icons.jsx';
 import { t, tk } from '../i18n.jsx';
-import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues, isRange, clampToRange, rangeStep, kwargVisible } from '../kwargs.js';
+import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues, isRange, clampToRange, rangeStep, kwargVisible, gateSourceIds } from '../kwargs.js';
 
 const CAP_ICONS = [
   { key: 'capText', label: tk('Text-Only'), Icon: TextIcon },
@@ -138,18 +138,81 @@ export function KwargControl({ def, value, isAdmin, onSet }) {
   }
   const idx = Math.max(0, values.indexOf(active));
   return (
-    <div className={'effort-row' + (locked ? ' locked' : '')}>
+    <EffortSlider label={label} note={note} values={values} idx={idx} locked={locked}
+      onPick={(v) => onSet(def.id, v)} />
+  );
+}
+
+const THUMB = 16;
+const glowAt = (fill) => Math.max(0, (fill - 0.25) * 0.86);
+function EffortSlider({ label, note, values, idx, locked, onPick }) {
+  const railRef = useRef(null);
+  const inputRef = useRef(null);
+  const dragging = useRef(false);
+  const [free, setFree] = useState(null);
+  const last = values.length - 1;
+  const span = Math.max(1, last);
+
+  const at = (clientX) => {
+    const rail = railRef.current;
+    if (!rail) return null;
+    const r = rail.getBoundingClientRect();
+    if (!r.width) return null;
+    const centre = Math.min(r.width, Math.max(0, clientX - r.left));
+    const travel = Math.max(1, r.width - THUMB);
+    return {
+      pos: Math.min(1, Math.max(0, (centre - THUMB / 2) / travel)),
+      fill: centre / r.width,
+      i: Math.min(last, Math.max(0, Math.round((centre / r.width) * span)))
+    };
+  };
+
+  const track = (e) => {
+    const hit = at(e.clientX);
+    if (!hit) return;
+    setFree({ pos: hit.pos, fill: hit.fill });
+    if (hit.i !== idx) onPick(values[hit.i]);
+  };
+
+  const onDown = (e) => {
+    if (locked || e.button !== 0) return;
+    e.preventDefault();
+    dragging.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    if (inputRef.current) inputRef.current.focus();
+    track(e);
+  };
+  const onMove = (e) => { if (dragging.current) track(e); };
+  const stop = () => { dragging.current = false; setFree(null); };
+
+  const cur = capLevel(values[idx]);
+  const pos = free ? free.pos : idx / span;
+  const fill = free ? free.fill : idx / span;
+
+  return (
+    <div className={'effort-row' + (locked ? ' locked' : '') + (idx === last ? ' at-max' : '')}>
       <div className="effort-head">
         <span className="mo-name">{label}</span>
-        <span className="effort-cur">{locked ? capLevel(active) + ' \u00b7 ' + t('admin set') : capLevel(active)}</span>
+        <span className="effort-cur">{locked ? cur + ' · ' + t('admin set') : cur}</span>
       </div>
-      {note && <div className="mo-desc" style={{ marginBottom: 8, marginTop: -4 }}>{note}</div>}
-      <div className="effort-seg" style={{ '--n': values.length, '--i': idx }}>
-        <span className="effort-seg-thumb" />
-        {values.map((v, i) => (
-          <button key={v} type="button" disabled={locked} className={'effort-seg-btn' + (i === idx ? ' on' : '')}
-            onClick={() => { if (!locked) onSet(def.id, v); }}>{capLevel(v)}</button>
-        ))}
+      {note && <div className="mo-desc" style={{ marginBottom: 10, marginTop: -8 }}>{note}</div>}
+      <div className="effort-ends"><span>{capLevel(values[0])}</span><span>{capLevel(values[last])}</span></div>
+      <div className={'effort-slider' + (free ? ' dragging' : '')}
+        style={{ '--pos': pos, '--fill': fill, '--glow': glowAt(fill) }}
+        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop}>
+        <span className="effort-rail" ref={railRef}>
+          <span className="effort-fill" />
+          <span className="effort-glow" />
+        </span>
+        <span className="effort-dots">
+          {values.map((v, i) => (
+            <span key={v} className={'effort-dot' + (i === last ? ' top' : '')} style={{ '--i': i, '--n1': span }} />
+          ))}
+        </span>
+        <input ref={inputRef} type="range" className="effort-input" min={0} max={span} step={1}
+          value={idx} disabled={locked} aria-label={label} aria-valuetext={cur}
+          onChange={(e) => { if (!locked) onPick(values[Math.min(last, Number(e.target.value))]); }} />
+        <span className="effort-thumb" />
       </div>
     </div>
   );
@@ -311,8 +374,9 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
   };
   const ownKwargs = kwDefs.filter(d => !d.parentId);
   const shownKwargs = kwDefs.filter(d => kwargVisible(kwDefs, kwActive, d));
+  const gates = gateSourceIds(kwDefs, kwActive);
   const chips = ownKwargs
-    .filter(d => kwargVisible(kwDefs, kwActive, d))
+    .filter(d => kwargVisible(kwDefs, kwActive, d) && !gates.has(d.id))
     .map(d => kwargChip(d, kwActive[d.id]))
     .filter(Boolean)
     .slice(0, 2);

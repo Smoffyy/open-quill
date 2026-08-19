@@ -170,8 +170,7 @@
 [data-preset="openai"] .model-opt .mo-name, [data-preset="openai"] .submenu-row { font-weight: 500; }
 [data-preset="openai"] .toggle-row { padding: 7px 8px; }
 [data-preset="openai"] .model-opt, [data-preset="openai"] .submenu-row, [data-preset="openai"] .toggle-row { border-radius: 10px; }
-[data-preset="openai"] .effort-seg { border-radius: 11px; }
-[data-preset="openai"] .effort-seg-thumb, [data-preset="openai"] .effort-seg-btn { border-radius: 9px; }
+[data-preset="openai"] .effort-rail, [data-preset="openai"] .effort-thumb { border-radius: 999px; }
 [data-preset="openai"] .model-opt .check, [data-preset="openai"] .plus-menu .pm-check { color: var(--text); }
 
 [data-preset="openai"] .quick-prompts { position: relative; z-index: 1; flex-direction: column; align-items: flex-start; width: 100%; max-width: 768px; margin: 18px auto 0; gap: 2px; }
