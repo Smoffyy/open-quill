@@ -186,7 +186,7 @@
 
 /* tool line, understated grey status for file ops & misc tools */
 .tool-line {
-  position: relative; display: flex; align-items: center; gap: 10px; max-width: 100%; margin: 20px 0;
+  position: relative; display: flex; align-items: center; gap: 10px; max-width: 100%; margin: 20px 0 20px 8px;
   font-family: var(--font-sans); font-size: 14px; line-height: 20px; color: var(--text-muted);
 }
 
@@ -219,7 +219,7 @@
 .tl-diff .del { color: var(--diff-del, #ec7e7e); }
 .tl-note { color: var(--text-muted); font-size: 12px; opacity: .85; }
 .tl-err { color: var(--danger, #e5635b); font-size: 12px; }
-.tool-line.clickable { cursor: pointer; border-radius: 7px; padding: 2px 5px; margin: 18px -5px; transition: background var(--fx-t, .14s); }
+.tool-line.clickable { cursor: pointer; border-radius: 7px; padding: 2px 5px; margin: 18px -5px 18px 3px; transition: background var(--fx-t, .14s); }
 .tool-line.clickable:hover { background: var(--surface-2); }
 .tool-line.clickable:hover .tl-name { color: var(--text); }
 
@@ -278,7 +278,7 @@
 }
 
 /* bash / terminal, collapsible */
-.tool-bash { margin: 6px 0; }
+.tool-bash { margin: 6px 0; padding-left: 8px; }
 .tb-head { display: flex; align-items: center; gap: 8px; width: 100%; max-width: 100%; padding: 4px 0; background: none; border: none; cursor: pointer; font-family: var(--font-sans); font-size: 13.5px; color: var(--text-muted); transition: color var(--fx-t, .15s); text-align: left; }
 .tb-head:hover { color: var(--text); }
 .tb-head > svg:first-child { color: var(--text-muted); opacity: .85; flex-shrink: 0; }

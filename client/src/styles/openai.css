@@ -263,6 +263,9 @@
 [data-preset="openai"] .model-trigger { gap: 4px; font-weight: 400; line-height: 20px; }
 [data-preset="openai"] .model-trigger .ext { color: var(--text-faint); font-weight: 400; font-size: 14px; }
 
+[data-preset="openai"] .tool-line { margin-left: 0; }
+[data-preset="openai"] .tool-line.clickable { margin-left: -5px; }
+[data-preset="openai"] .tool-bash { padding-left: 0; }
 [data-preset="openai"] .tool-bash.ws.open .tb-inner { border-radius: 14px; }
 [data-preset="openai"] .ws-results { padding: 6px; }
 [data-preset="openai"] .ws-results a.ws-result { border-radius: 11px; padding: 8px 10px; gap: 11px; }
