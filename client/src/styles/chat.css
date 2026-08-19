@@ -105,9 +105,18 @@
    --pos (thumb) and --fill (track) are pixel fractions while the pointer is down
    and snap back to idx/last on release; .dragging is what drops the transition. */
 .effort-row { padding: 8px 10px 12px; }
+.model-menu .gated { interpolate-size: allow-keywords; margin: 0 4px 2px; border-radius: 10px; background: var(--hover-soft); overflow: hidden; animation: kw-reveal .3s cubic-bezier(.4, 0, .2, 1); }
+@keyframes kw-reveal { from { opacity: 0; height: 0; transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) { .model-menu .gated { animation: none; } }
 .effort-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .effort-head .mo-name { font-size: 13px; font-weight: 400; line-height: 19px; color: var(--pop-muted); }
 .effort-cur { font-size: 13px; font-weight: 400; line-height: 19px; font-family: var(--font-sans); color: color-mix(in srgb, var(--pop-text) 70%, transparent); transition: color .3s cubic-bezier(.4, 0, .2, 1); }
+.effort-val { display: inline-block; animation: effort-rise .24s cubic-bezier(.22, 1, .36, 1); }
+.effort-val.down { animation-name: effort-fall; }
+@keyframes effort-rise { from { opacity: 0; transform: translateY(6px); } }
+@keyframes effort-fall { from { opacity: 0; transform: translateY(-6px); } }
+.ext-effort { display: inline-block; animation: effort-rise .24s cubic-bezier(.22, 1, .36, 1); }
+@media (prefers-reduced-motion: reduce) { .effort-val, .ext-effort { animation: none; } }
 .effort-row.at-max .effort-cur { color: color-mix(in srgb, var(--accent) 76%, var(--pop-text)); }
 .effort-ends { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-size: 12px; line-height: 15px; font-family: var(--font-sans); color: var(--pop-muted); }
 .effort-slider { position: relative; height: 24px; cursor: ew-resize; touch-action: none; }

@@ -67,16 +67,17 @@ function CapInfo({ m }) {
 
 const capLevel = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
-export function KwargControl({ def, value, isAdmin, onSet }) {
+export function KwargControl({ def, value, isAdmin, onSet, gated }) {
   const values = kwargValuesArr(def);
   const locked = (!!def.adminOnly && !isAdmin) || !!def.parentId;
+  const tie = gated ? ' gated' : '';
   const label = def.label || def.name || t('Option');
   const note = def.parentId
     ? (value == null ? t('Follows the setting above, not sent right now') : t('Follows the setting above'))
     : (locked ? t('Set by your administrator') : def.description);
   if (def.parentId) {
     return (
-      <div className="kw-static">
+      <div className={'kw-static' + tie}>
         <div className="tr-main">
           <div className="mo-name">{label}</div>
           {note && <div className="mo-desc">{note}</div>}
@@ -91,7 +92,7 @@ export function KwargControl({ def, value, isAdmin, onSet }) {
     const min = Number(def.min), max = Number(def.max), step = rangeStep(def);
     const pct = max > min ? ((at - min) / (max - min)) * 100 : 0;
     return (
-      <div className={'kw-range' + (locked ? ' locked' : '')}>
+      <div className={'kw-range' + (locked ? ' locked' : '') + tie}>
         <div className="kw-head">
           <span className="mo-name">{label}</span>
           <span className="kw-cur">{at}{locked ? ' · ' + t('admin set') : ''}</span>
@@ -111,7 +112,7 @@ export function KwargControl({ def, value, isAdmin, onSet }) {
   if (control === 'toggle') {
     const on = /^true$/i.test(active);
     return (
-      <div className={'toggle-row' + (locked ? ' locked' : '')}
+      <div className={'toggle-row' + (locked ? ' locked' : '') + tie}
         onClick={() => { if (!locked) onSet(def.id, on ? falseValueOf(def) : trueValueOf(def)); }}>
         <div className="tr-main">
           <div className="mo-name">{label}</div>
@@ -123,7 +124,7 @@ export function KwargControl({ def, value, isAdmin, onSet }) {
   }
   if (control === 'select') {
     return (
-      <div className="kw-row">
+      <div className={'kw-row' + tie}>
         <div className="kw-head">
           <span className="mo-name">{label}</span>
           {locked && <span className="kw-cur">{t('admin set')}</span>}
@@ -138,15 +139,16 @@ export function KwargControl({ def, value, isAdmin, onSet }) {
   }
   const idx = Math.max(0, values.indexOf(active));
   return (
-    <EffortSlider label={label} note={note} values={values} idx={idx} locked={locked}
+    <EffortSlider label={label} note={note} values={values} idx={idx} locked={locked} gated={gated}
       onPick={(v) => onSet(def.id, v)} />
   );
 }
 
 const THUMB = 16;
 const glowAt = (fill) => Math.max(0, (fill - 0.25) * 0.86);
-function EffortSlider({ label, note, values, idx, locked, onPick }) {
+function EffortSlider({ label, note, values, idx, locked, gated, onPick }) {
   const railRef = useRef(null);
+  const seen = useRef(idx);
   const inputRef = useRef(null);
   const dragging = useRef(false);
   const [free, setFree] = useState(null);
@@ -186,14 +188,19 @@ function EffortSlider({ label, note, values, idx, locked, onPick }) {
   const stop = () => { dragging.current = false; setFree(null); };
 
   const cur = capLevel(values[idx]);
+  const rising = idx >= seen.current;
+  seen.current = idx;
   const pos = free ? free.pos : idx / span;
   const fill = free ? free.fill : idx / span;
 
   return (
-    <div className={'effort-row' + (locked ? ' locked' : '') + (idx === last ? ' at-max' : '')}>
+    <div className={'effort-row' + (locked ? ' locked' : '') + (idx === last ? ' at-max' : '') + (gated ? ' gated' : '')}>
       <div className="effort-head">
         <span className="mo-name">{label}</span>
-        <span className="effort-cur">{locked ? cur + ' · ' + t('admin set') : cur}</span>
+        <span className="effort-cur">
+          <span key={cur} className={'effort-val' + (rising ? '' : ' down')}>{cur}</span>
+          {locked ? ' · ' + t('admin set') : null}
+        </span>
       </div>
       {note && <div className="mo-desc" style={{ marginBottom: 10, marginTop: -8 }}>{note}</div>}
       <div className="effort-ends"><span>{capLevel(values[0])}</span><span>{capLevel(values[last])}</span></div>
@@ -374,6 +381,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
   };
   const ownKwargs = kwDefs.filter(d => !d.parentId);
   const shownKwargs = kwDefs.filter(d => kwargVisible(kwDefs, kwActive, d));
+  const shownIds = new Set(shownKwargs.map(d => d.id));
   const gates = gateSourceIds(kwDefs, kwActive);
   const chips = ownKwargs
     .filter(d => kwargVisible(kwDefs, kwActive, d) && !gates.has(d.id))
@@ -439,7 +447,8 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
             <>
               <hr />
               {shownKwargs.map(d => (
-                <KwargControl key={d.id} def={d} value={kwActive[d.id]} isAdmin={isAdmin} onSet={setKwarg} />
+                <KwargControl key={d.id} def={d} value={kwActive[d.id]} isAdmin={isAdmin} onSet={setKwarg}
+                  gated={!!(d.showIf && d.showIf.id && shownIds.has(d.showIf.id))} />
               ))}
             </>
           ) : current?.hasReasoning ? (
