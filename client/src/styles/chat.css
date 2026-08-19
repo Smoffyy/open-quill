@@ -83,7 +83,7 @@
 .model-trigger:hover { background: var(--composer-hover, var(--surface-hover)); color: var(--text); }
 .plus:active, .mic:active, .model-trigger:active, .mdocs-btn:active { background: var(--pop-hover, var(--hover-mid)); }
 .plus.on, .mic.on, .model-trigger.on { background: var(--pop-hover, var(--hover-mid)); color: var(--text); }
-.model-trigger .ext { color: var(--accent); margin-left: 4px; }
+.model-trigger .ext { color: var(--accent); margin-left: 6px; }
 .model-menu {
   position: absolute; bottom: 42px; right: 0; min-width: 269.6px; background: var(--pop-bg); border: 0;
   border-radius: 12px; padding: 4px; z-index: 50; animation: pop var(--fx-a, .14s) ease; transform-origin: bottom right;
