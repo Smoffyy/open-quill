@@ -1755,5 +1755,6 @@
   "Stopping — finishing the step in progress": "Arrêt en cours : fin de l’étape en cours",
   "Continue": "Continuer",
   "Pick up where this reply stopped": "Reprendre là où cette réponse s’est arrêtée",
-  "Carry on from exactly where your previous reply stopped. Do not repeat or summarise what you already did — it is already saved. If work is still unfinished, make the tool calls to finish it now.": "Reprends exactement là où ta réponse précédente s’est arrêtée. Ne répète pas et ne résume pas ce que tu as déjà fait : c’est déjà enregistré. S’il reste du travail, fais maintenant les appels d’outils pour le terminer."
+  "Carry on from exactly where your previous reply stopped. Do not repeat or summarise what you already did — it is already saved. If work is still unfinished, make the tool calls to finish it now.": "Reprends exactement là où ta réponse précédente s’est arrêtée. Ne répète pas et ne résume pas ce que tu as déjà fait : c’est déjà enregistré. S’il reste du travail, fais maintenant les appels d’outils pour le terminer.",
+  "About {name}": "À propos de {name}"
 }

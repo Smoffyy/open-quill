@@ -196,14 +196,22 @@ function EffortSlider({ label, note, values, idx, locked, gated, onPick }) {
   return (
     <div className={'effort-row' + (locked ? ' locked' : '') + (idx === last ? ' at-max' : '') + (gated ? ' gated' : '')}>
       <div className="effort-head">
-        <span className="mo-name">{label}</span>
-        <span className="effort-cur">
-          <span key={cur} className={'effort-val' + (rising ? '' : ' down')}>{cur}</span>
-          {locked ? ' · ' + t('admin set') : null}
+        <span className="effort-title">
+          <span className="mo-name">{label}</span>
+          <span className="effort-cur">
+            <span key={cur} className={'effort-val' + (rising ? '' : ' down')}>{cur}</span>
+            {locked ? ' · ' + t('admin set') : null}
+          </span>
         </span>
+        {note && (
+          <span className="effort-info">
+            <button type="button" aria-label={t('About {name}', { name: label })}>
+              <Info style={{ width: 16, height: 16 }} />
+            </button>
+            <span className="effort-tip" role="tooltip">{note}</span>
+          </span>
+        )}
       </div>
-      {note && <div className="mo-desc" style={{ marginBottom: 10, marginTop: -8 }}>{note}</div>}
-      <div className="effort-ends"><span>{capLevel(values[0])}</span><span>{capLevel(values[last])}</span></div>
       <div className={'effort-slider' + (free ? ' dragging' : '')}
         style={{ '--pos': pos, '--fill': fill, '--glow': glowAt(fill) }}
         onPointerDown={onDown} onPointerMove={onMove} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop}>

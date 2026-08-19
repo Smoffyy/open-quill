@@ -1755,5 +1755,6 @@
   "Stopping — finishing the step in progress": "正在停止 — 正在结束当前步骤",
   "Continue": "继续",
   "Pick up where this reply stopped": "从这条回复停下的地方继续",
-  "Carry on from exactly where your previous reply stopped. Do not repeat or summarise what you already did — it is already saved. If work is still unfinished, make the tool calls to finish it now.": "从你上一条回复停下的地方继续。不要重复或总结你已经做过的事——那些已经保存了。如果还有未完成的工作，现在就发起工具调用来完成它。"
+  "Carry on from exactly where your previous reply stopped. Do not repeat or summarise what you already did — it is already saved. If work is still unfinished, make the tool calls to finish it now.": "从你上一条回复停下的地方继续。不要重复或总结你已经做过的事——那些已经保存了。如果还有未完成的工作，现在就发起工具调用来完成它。",
+  "About {name}": "关于{name}"
 }
