@@ -439,10 +439,12 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
   return (
     <div className="model-select" ref={ref}>
       <button type="button" className={'model-trigger' + (open ? ' on' : '')} onClick={() => setOpen(o => !o)}>
-        {current?.displayName || 'Model'}
-        {chips.length
-          ? chips.map((c, i) => <span key={c + i} className="ext ext-effort">{t(c)}</span>)
-          : (extended && current?.hasReasoning && <span className="ext">{t("Extended")}</span>)}
+        <span className="mt-label">
+          {current?.displayName || 'Model'}
+          {chips.length
+            ? chips.map((c, i) => <span key={c + i} className="ext ext-effort">{t(c)}</span>)
+            : (extended && current?.hasReasoning && <span className="ext">{t("Extended")}</span>)}
+        </span>
         <ChevDown style={{ width: 12, height: 12 }} />
       </button>
       {open && <div className="model-scrim" onClick={() => setOpen(false)} />}
