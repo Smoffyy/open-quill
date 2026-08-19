@@ -101,8 +101,8 @@
 .model-opt .mo-side { display: flex; align-items: center; gap: 6px; align-self: center; flex-shrink: 0; margin-left: auto; }
 .model-menu hr { border: none; border-top: 1px solid var(--pop-divider); margin: 4px 10px; }
 .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
-.effort-row { padding: 10px 6px; }
-.model-menu .gated { interpolate-size: allow-keywords; margin: 2px 4px; border-radius: 10px; background: var(--hover-soft); animation: kw-reveal .3s cubic-bezier(.4, 0, .2, 1); }
+.effort-row { padding: 10px; }
+.model-menu .gated { interpolate-size: allow-keywords; animation: kw-reveal .3s cubic-bezier(.4, 0, .2, 1); }
 @keyframes kw-reveal { from { opacity: 0; height: 0; clip-path: inset(0 0 100% 0); transform: translateY(-6px); } to { clip-path: inset(0 0 0 0); } }
 @media (prefers-reduced-motion: reduce) { .model-menu .gated { animation: none; } }
 .effort-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 19px; margin-bottom: 14px; }
