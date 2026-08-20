@@ -658,7 +658,8 @@ body:has(.app.has-bg) > .model-submenu.pinned {
   /* ---- empty state / greeting ---- */
   .center-wrap { padding: calc(18vh + 1px) 12px 24px; }
   .greeting { font-size: 30px; line-height: 38px; text-align: center; text-wrap: balance; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 32px; }
-  .greeting img, .greeting svg { width: 34px !important; height: 34px !important; }
+  .greeting img { width: 44px !important; height: 44px !important; }
+  .greeting svg { width: 34px !important; height: 34px !important; }
   .greeting-sub { font-size: 14px; }
   .incognito-fab { top: 12px; right: 12px; }
 
@@ -750,7 +751,8 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 
   .center-wrap { padding: calc(18vh + 1px) 12px 24px; justify-content: flex-start; overflow: hidden auto; }
   .greeting { font-size: 30px; line-height: 38px; text-wrap: balance; margin-bottom: 32px; }
-  .greeting img, .greeting svg { width: 34px !important; height: 34px !important; }
+  .greeting img { width: 44px !important; height: 44px !important; }
+  .greeting svg { width: 34px !important; height: 34px !important; }
 
   /* composer + bottom safe area */
   .active-composer { padding-bottom: calc(8px + env(safe-area-inset-bottom)) !important; }

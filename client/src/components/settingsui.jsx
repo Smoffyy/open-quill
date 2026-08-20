@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Chevron, Check } from './icons.jsx';
 import { useAnchoredMenu, menuStyleOf } from '../lib/anchor.js';
-import { usePointerDrag, knobAt, nearestIndex, measureStops, clampPx } from '../lib/dragsteps.js';
+import { usePointerDrag, knobRaw, knobTravel, overshoot, stretchFor, squashFor, stretchOrigin, nearestIndex, measureStops, clampPx } from '../lib/dragsteps.js';
 
 export function SetRow({ label, desc, children }) {
   return (
@@ -22,13 +22,18 @@ const SWITCH_KNOB = 16;
 export function Switch({ on, onToggle, label, title, disabled }) {
   const ref = useRef(null);
   const [drag, setDrag] = useState(null);
+  const [origin, setOrigin] = useState('center');
 
   const track = (e) => {
     const el = ref.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    const travel = Math.max(0, r.width - SWITCH_INSET * 2 - SWITCH_KNOB);
-    setDrag({ px: knobAt(e.clientX, r, SWITCH_INSET, SWITCH_KNOB), mid: travel / 2 });
+    const travel = knobTravel(r, SWITCH_INSET, SWITCH_KNOB);
+    const raw = knobRaw(e.clientX, r, SWITCH_INSET, SWITCH_KNOB);
+    const over = overshoot(raw, 0, travel);
+    if (over) setOrigin(stretchOrigin(over));
+    const stretch = stretchFor(over, SWITCH_KNOB);
+    setDrag({ px: clampPx(raw, 0, travel), mid: travel / 2, stretch, squash: squashFor(stretch) });
   };
 
   const { bind } = usePointerDrag({
@@ -46,7 +51,7 @@ export function Switch({ on, onToggle, label, title, disabled }) {
     <div
       ref={ref}
       className={'switch' + (shown ? ' on' : '') + (drag ? ' dragging' : '')}
-      style={drag ? { '--knob': drag.px + 'px' } : undefined}
+      style={{ '--knob-origin': origin, ...(drag ? { '--knob': drag.px + 'px', '--stretch': drag.stretch, '--squash': drag.squash } : null) }}
       role="switch"
       aria-checked={!!on}
       aria-label={label}
@@ -84,6 +89,7 @@ export function SegSlide({ value, options, onPick, label }) {
     return () => { if (ro) ro.disconnect(); };
   }, [idx, options.length]);
   const [live, setLive] = useState(null);
+  const [origin, setOrigin] = useState('center');
   const track = (e) => {
     const el = wrap.current;
     if (!el) return;
@@ -93,14 +99,21 @@ export function SegSlide({ value, options, onPick, label }) {
     const i = nearestIndex(stops, x);
     const seat = stops[i];
     const last = stops[stops.length - 1];
-    setLive({ x: clampPx(x - seat.w / 2, stops[0].x, last.x + last.w - seat.w), w: seat.w });
+    const raw = x - seat.w / 2;
+    const min = stops[0].x;
+    const max = last.x + last.w - seat.w;
+    const over = overshoot(raw, min, max);
+    if (over) setOrigin(stretchOrigin(over));
+    const stretch = stretchFor(over, seat.w);
+    setLive({ x: clampPx(raw, min, max), w: seat.w, stretch, squash: squashFor(stretch) });
     if (options[i] && options[i].v !== value) onPick(options[i].v);
   };
   const { dragging, bind } = usePointerDrag({ onTrack: track, onEnd: () => setLive(null) });
   const at = live || box;
   return (
     <div className="segs" ref={wrap} role="radiogroup" aria-label={label} {...bind}>
-      {at && <span className={'segs-thumb' + (dragging ? ' dragging' : '')} style={{ transform: `translateX(${at.x}px)`, width: at.w }} />}
+      {at && <span className={'segs-thumb' + (dragging ? ' dragging' : '')}
+        style={{ transform: `translateX(${at.x}px) scaleX(${at.stretch || 1}) scaleY(${at.squash || 1})`, width: at.w, transformOrigin: origin }} />}
       {options.map(o => (
         <button key={o.v} type="button" role="radio" aria-checked={value === o.v}
           className={'segs-opt' + (value === o.v ? ' on' : '')} onClick={() => onPick(o.v)}>{o.label}</button>

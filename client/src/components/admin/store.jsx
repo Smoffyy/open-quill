@@ -48,6 +48,25 @@ export function AdminProvider({ user, onClose, children, modelId = null }) {
   const [ask, setAsk] = useState(null);
   const [discover, setDiscover] = useState(null);
   const [provTest, setProvTest] = useState({});
+  const [openKwargs, setOpenKwargs] = useState(() => new Set());
+  const scrollMem = useRef(new Map());
+
+  const toggleKwarg = useCallback((key) => setOpenKwargs(s => {
+    const n = new Set(s);
+    if (n.has(key)) n.delete(key); else n.add(key);
+    return n;
+  }), []);
+  const openKwarg = useCallback((key) => setOpenKwargs(s => (s.has(key) ? s : new Set(s).add(key))), []);
+
+  const keepScroll = useCallback((key, el) => {
+    if (!el || !key) return undefined;
+    let settling = true;
+    el.scrollTop = scrollMem.current.get(key) || 0;
+    requestAnimationFrame(() => { settling = false; });
+    const onScroll = () => { if (!settling) scrollMem.current.set(key, el.scrollTop); };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
 
   const saveTimers = useRef({});
   const pendingIds = useRef(new Set());
@@ -345,7 +364,8 @@ export function AdminProvider({ user, onClose, children, modelId = null }) {
     usage, usageDays, setUsageDays, loadUsage,
     recentAudit, loadRecentAudit,
     changeModel, addModel, duplicateModel, duplicateModels, setModelsEnabled, setModelsProvider, setModelsGroup, renameModelGroup, deleteModels, commitModelOrder,
-    setRole, saveBudget, removeUser, loadUsers, loadAll
+    setRole, saveBudget, removeUser, loadUsers, loadAll,
+    openKwargs, toggleKwarg, openKwarg, keepScroll
   };
 
   return <AdminCtx.Provider value={value}>{children}</AdminCtx.Provider>;

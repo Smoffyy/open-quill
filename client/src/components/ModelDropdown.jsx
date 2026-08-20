@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Check, ChevDown, Chevron, ImageIcon, Brain, Info, TextIcon } from './icons.jsx';
 import { t, tk } from '../i18n.jsx';
 import { Switch } from './settingsui.jsx';
+import { clampPx, overshoot, stretchFor, squashFor, stretchOrigin } from '../lib/dragsteps.js';
 import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues, isRange, clampToRange, rangeStep, kwargVisible, gateSourceIds } from '../kwargs.js';
 
 const CAP_ICONS = [
@@ -154,6 +155,7 @@ function EffortSlider({ label, note, values, idx, locked, gated, onPick }) {
   const inputRef = useRef(null);
   const dragging = useRef(false);
   const [free, setFree] = useState(null);
+  const [grip, setGrip] = useState('center');
   const last = values.length - 1;
   const span = Math.max(1, last);
 
@@ -162,19 +164,27 @@ function EffortSlider({ label, note, values, idx, locked, gated, onPick }) {
     if (!rail) return null;
     const r = rail.getBoundingClientRect();
     if (!r.width) return null;
-    const centre = Math.min(r.width, Math.max(0, clientX - r.left));
+    const local = clientX - r.left;
+    const centre = clampPx(local, 0, r.width);
     const travel = Math.max(1, r.width - THUMB);
+    const raw = local - THUMB / 2;
+    const over = overshoot(raw, 0, travel);
+    const stretch = stretchFor(over, THUMB);
     return {
-      pos: Math.min(1, Math.max(0, (centre - THUMB / 2) / travel)),
+      pos: clampPx(raw, 0, travel) / travel,
       fill: centre / r.width,
-      i: Math.min(last, Math.max(0, Math.round((centre / r.width) * span)))
+      i: Math.min(last, Math.max(0, Math.round((centre / r.width) * span))),
+      stretch,
+      squash: squashFor(stretch),
+      origin: stretchOrigin(over)
     };
   };
 
   const track = (e) => {
     const hit = at(e.clientX);
     if (!hit) return;
-    setFree({ pos: hit.pos, fill: hit.fill });
+    if (hit.origin && (hit.stretch > 1)) setGrip(hit.origin);
+    setFree({ pos: hit.pos, fill: hit.fill, stretch: hit.stretch, squash: hit.squash });
     if (hit.i !== idx) onPick(values[hit.i]);
   };
 
@@ -215,7 +225,7 @@ function EffortSlider({ label, note, values, idx, locked, gated, onPick }) {
         )}
       </div>
       <div className={'effort-slider' + (free ? ' dragging' : '')}
-        style={{ '--pos': pos, '--fill': fill, '--glow': glowAt(fill) }}
+        style={{ '--pos': pos, '--fill': fill, '--glow': glowAt(fill), '--grip': grip, '--stretch': free ? free.stretch : 1, '--squash': free ? free.squash : 1 }}
         onPointerDown={onDown} onPointerMove={onMove} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop}>
         <span className="effort-rail" ref={railRef}>
           <span className="effort-fill" />

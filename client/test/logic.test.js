@@ -12,7 +12,7 @@ import { scanTools } from '../src/toolproto.js';
 import { STATUS_DELAY_DEFAULT, STATUS_DELAY_MAX, statusDelayMs, statusDelaySecs } from '../src/lib/status.js';
 import { paletteFor, palettesFor, themeValue, paletteById, DEFAULT_DARK, DEFAULT_LIGHT, presetOf } from '../src/lib/palettes.js';
 import { scrollInsideMenu } from '../src/lib/anchor.js';
-import { clampPx, knobAt, nearestIndex, DRAG_SLOP } from '../src/lib/dragsteps.js';
+import { clampPx, knobAt, knobRaw, knobTravel, overshoot, stretchFor, squashFor, stretchOrigin, nearestIndex, DRAG_SLOP, STRETCH_PX } from '../src/lib/dragsteps.js';
 import {
   isRange, clampToRange, allNumeric, kwargPayload,
   controlOf as controlOfKwarg, defaultValueOf as defaultValueOfKwarg,
@@ -698,6 +698,50 @@ test('a segmented control picks the nearest segment centre, uneven widths includ
   assert.equal(nearestIndex(stops, 999), 1);
   assert.equal(nearestIndex([], 5), 0);
   assert.equal(nearestIndex(null, 5), 0);
+});
+
+test('overshoot is zero inside the track and signed outside it', () => {
+  assert.equal(overshoot(8, 0, 16), 0);
+  assert.equal(overshoot(0, 0, 16), 0);
+  assert.equal(overshoot(16, 0, 16), 0);
+  assert.equal(overshoot(-9, 0, 16), -9);
+  assert.equal(overshoot(20, 0, 16), 4);
+});
+
+test('the stretch saturates instead of growing without bound', () => {
+  assert.equal(stretchFor(0, 16), 1);
+  const near = stretchFor(10, 16);
+  const far = stretchFor(400, 16);
+  assert.ok(near > 1 && near < far);
+  assert.ok(far <= 1 + STRETCH_PX / 16 + 1e-9);
+  assert.equal(stretchFor(-10, 16), near);
+});
+
+test('the stretch is a constant pixel pull, so wide thumbs do not balloon', () => {
+  const knob = stretchFor(400, 16) - 1;
+  const wide = stretchFor(400, 80) - 1;
+  assert.ok(Math.abs(knob * 16 - wide * 80) < 1e-9);
+});
+
+test('a stretched thumb thins out, and an unstretched one is left alone', () => {
+  assert.equal(squashFor(1), 1);
+  assert.equal(squashFor(0.5), 1);
+  const sq = squashFor(1.3);
+  assert.ok(sq < 1 && sq > 0.8);
+});
+
+test('the pinned edge is the one being pulled away from', () => {
+  assert.equal(stretchOrigin(5), 'right center');
+  assert.equal(stretchOrigin(-5), 'left center');
+});
+
+test('knobRaw keeps the overshoot that knobAt clamps away', () => {
+  const r = { left: 0, width: 36 };
+  assert.equal(knobTravel(r, 2, 16), 16);
+  assert.equal(knobRaw(60, r, 2, 16), 50);
+  assert.equal(knobAt(60, r, 2, 16), 16);
+  assert.equal(knobRaw(-20, r, 2, 16), -30);
+  assert.equal(knobAt(-20, r, 2, 16), 0);
 });
 
 test('the drag slop stays small enough that a tap is never read as a drag', () => {

@@ -379,7 +379,7 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
   position: absolute; left: 1px; top: 1px; bottom: 1px; border-radius: 7px;
   background: var(--seg-thumb, var(--hover-mid));
   box-shadow: inset 0 0 0 1px var(--seg-thumb-ring, var(--border-soft)), 0 1px 2px rgba(0, 0, 0, .05);
-  transition: transform var(--fx-t, .2s) cubic-bezier(.32, .72, 0, 1), width var(--fx-t, .2s) cubic-bezier(.32, .72, 0, 1);
+  transition: transform var(--fx-t, .28s) cubic-bezier(.34, 1.5, .5, 1), width var(--fx-t, .2s) cubic-bezier(.32, .72, 0, 1);
   pointer-events: none;
 }
 .segs-opt {

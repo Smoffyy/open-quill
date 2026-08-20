@@ -85,9 +85,10 @@ function DiscoverModal() {
 
 function Shell() {
   const A = useAdmin();
-  const { section, setSection, models, users, cfg, pub, publishing, pubFlash, ask, setAsk, onClose } = A;
+  const { section, setSection, models, users, cfg, pub, publishing, pubFlash, ask, setAsk, onClose, keepScroll } = A;
   const [navQ, setNavQ] = useState('');
   const navRef = useRef(null);
+  const bodyRef = useRef(null);
 
   useEffect(() => {
     function onKey(e) {
@@ -100,6 +101,8 @@ function Shell() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  useEffect(() => keepScroll('section:' + section, bodyRef.current), [section, keepScroll]);
 
   const meta = sectionById(section);
   const activeGroup = NAV_GROUPS.find(g => g.id === meta.groupId) || NAV_GROUPS[0];
@@ -200,7 +203,7 @@ function Shell() {
             <h1>{t(meta.label)}</h1>
             <span className="oqa-desc">{t(meta.desc)}</span>
           </div>
-          <div className={'oqa-body' + (section === 'models' && models.length ? ' fill' : '')}>
+          <div ref={bodyRef} className={'oqa-body' + (section === 'models' && models.length ? ' fill' : '')}>
             <Section />
           </div>
         </div>

@@ -1,15 +1,46 @@
 import { useRef, useState } from 'react';
 
 export const DRAG_SLOP = 3;
+export const STRETCH_PX = 5;
+export const STRETCH_PULL = 26;
+export const SQUASH_GIVE = 0.45;
 
 export function clampPx(x, min, max) {
   if (!(max > min)) return min;
   return Math.min(max, Math.max(min, x));
 }
 
+export function knobRaw(clientX, rect, inset, knob) {
+  return clientX - rect.left - inset - knob / 2;
+}
+
+export function knobTravel(rect, inset, knob) {
+  return Math.max(0, rect.width - inset * 2 - knob);
+}
+
 export function knobAt(clientX, rect, inset, knob) {
-  const travel = Math.max(0, rect.width - inset * 2 - knob);
-  return clampPx(clientX - rect.left - inset - knob / 2, 0, travel);
+  return clampPx(knobRaw(clientX, rect, inset, knob), 0, knobTravel(rect, inset, knob));
+}
+
+export function overshoot(raw, min, max) {
+  if (raw < min) return raw - min;
+  if (raw > max) return raw - max;
+  return 0;
+}
+
+export function stretchFor(over, width, maxPx = STRETCH_PX, pull = STRETCH_PULL) {
+  const d = Math.abs(over);
+  if (!(d > 0) || !(width > 0)) return 1;
+  return 1 + (maxPx / width) * (1 - Math.exp(-d / pull));
+}
+
+export function stretchOrigin(over) {
+  return over > 0 ? 'right center' : 'left center';
+}
+
+export function squashFor(stretch, give = SQUASH_GIVE) {
+  if (!(stretch > 1)) return 1;
+  return 1 / Math.pow(stretch, give);
 }
 
 export function nearestIndex(stops, x) {
