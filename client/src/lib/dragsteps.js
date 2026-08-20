@@ -4,6 +4,8 @@ export const DRAG_SLOP = 3;
 export const STRETCH_PX = 5;
 export const STRETCH_PULL = 26;
 export const SQUASH_GIVE = 0.45;
+export const SLIDE_BASE = 160;
+export const SLIDE_SPAN = 240;
 
 export function clampPx(x, min, max) {
   if (!(max > min)) return min;
@@ -36,6 +38,11 @@ export function stretchFor(over, width, maxPx = STRETCH_PX, pull = STRETCH_PULL)
 
 export function stretchOrigin(over) {
   return over > 0 ? 'right center' : 'left center';
+}
+
+export function slideFor(distance, base = SLIDE_BASE, span = SLIDE_SPAN) {
+  const d = Number.isFinite(distance) ? Math.min(1, Math.abs(distance)) : 0;
+  return Math.round(base + span * Math.sqrt(d));
 }
 
 export function squashFor(stretch, give = SQUASH_GIVE) {

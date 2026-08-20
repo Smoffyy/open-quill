@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { Check, ChevDown, Chevron, ImageIcon, Brain, Info, TextIcon } from './icons.jsx';
 import { t, tk } from '../i18n.jsx';
 import { Switch } from './settingsui.jsx';
-import { clampPx, overshoot, stretchFor, squashFor, stretchOrigin } from '../lib/dragsteps.js';
+import { clampPx, overshoot, stretchFor, squashFor, stretchOrigin, slideFor, DRAG_SLOP } from '../lib/dragsteps.js';
+import { paintCells, fadeTrail, stampTrail, headColumn, CELL, CELL_FPS, CELL_SPEED } from '../lib/cellfield.js';
 import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues, isRange, clampToRange, rangeStep, kwargVisible, gateSourceIds } from '../kwargs.js';
 
 const CAP_ICONS = [
@@ -147,14 +148,75 @@ export function KwargControl({ def, value, isAdmin, onSet, gated }) {
   );
 }
 
+function CellField({ fillRef }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const cv = ref.current;
+    const ctx = cv && cv.getContext ? cv.getContext('2d') : null;
+    if (!ctx) return undefined;
+    const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const css = getComputedStyle(cv);
+    const colour = css.color;
+    const hot = css.getPropertyValue('--effort-hot');
+    let box = { w: 1, h: 1, dpr: 1 };
+    let heat = new Float32Array(0);
+    let head = -1;
+    let raf = 0;
+    let last = -Infinity;
+
+    const measure = () => {
+      const r = cv.getBoundingClientRect();
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      box = { w: Math.max(1, Math.round(r.width)), h: Math.max(1, Math.round(r.height)), dpr };
+      const px = Math.round(box.w * dpr);
+      const py = Math.round(box.h * dpr);
+      if (cv.width !== px || cv.height !== py) { cv.width = px; cv.height = py; }
+      const cols = Math.ceil(box.w / CELL);
+      if (heat.length !== cols) heat = new Float32Array(cols);
+    };
+
+    const frame = (ts) => {
+      if (ts - last >= 1000 / CELL_FPS) {
+        last = ts;
+        const lit = fillRef.current ? fillRef.current.getBoundingClientRect().width : 0;
+        const now = headColumn(box.w ? lit / box.w : 0, box.w);
+        fadeTrail(heat);
+        stampTrail(heat, head < 0 ? now : head, now);
+        head = now;
+        paintCells(ctx, box.w, box.h, box.dpr, colour, ts / CELL_SPEED, heat, hot);
+      }
+      raf = requestAnimationFrame(frame);
+    };
+
+    measure();
+    if (still) {
+      paintCells(ctx, box.w, box.h, box.dpr, colour, 0, null, hot);
+    } else {
+      raf = requestAnimationFrame(frame);
+    }
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => {
+      measure();
+      if (still) paintCells(ctx, box.w, box.h, box.dpr, colour, 0, null, hot);
+    }) : null;
+    if (ro) ro.observe(cv);
+    return () => { cancelAnimationFrame(raf); if (ro) ro.disconnect(); };
+  }, [fillRef]);
+
+  return <canvas ref={ref} className="effort-cells" aria-hidden="true" />;
+}
+
 const THUMB = 16;
 const glowAt = (fill) => Math.max(0, (fill - 0.25) * 0.86);
 function EffortSlider({ label, note, values, idx, locked, gated, onPick }) {
   const railRef = useRef(null);
+  const fillRef = useRef(null);
   const seen = useRef(idx);
   const inputRef = useRef(null);
   const dragging = useRef(false);
+  const from = useRef(0);
   const [free, setFree] = useState(null);
+  const [slide, setSlide] = useState(null);
   const [grip, setGrip] = useState('center');
   const last = values.length - 1;
   const span = Math.max(1, last);
@@ -184,6 +246,7 @@ function EffortSlider({ label, note, values, idx, locked, gated, onPick }) {
     const hit = at(e.clientX);
     if (!hit) return;
     if (hit.origin && (hit.stretch > 1)) setGrip(hit.origin);
+    setSlide(null);
     setFree({ pos: hit.pos, fill: hit.fill, stretch: hit.stretch, squash: hit.squash });
     if (hit.i !== idx) onPick(values[hit.i]);
   };
@@ -192,11 +255,19 @@ function EffortSlider({ label, note, values, idx, locked, gated, onPick }) {
     if (locked || e.button !== 0) return;
     e.preventDefault();
     dragging.current = true;
+    from.current = e.clientX;
     e.currentTarget.setPointerCapture(e.pointerId);
     if (inputRef.current) inputRef.current.focus();
+    const hit = at(e.clientX);
+    if (!hit || hit.i === idx) return;
+    setSlide(slideFor((hit.i - idx) / span));
+    onPick(values[hit.i]);
+  };
+  const onMove = (e) => {
+    if (!dragging.current) return;
+    if (!free && Math.abs(e.clientX - from.current) <= DRAG_SLOP) return;
     track(e);
   };
-  const onMove = (e) => { if (dragging.current) track(e); };
   const stop = () => { dragging.current = false; setFree(null); };
 
   const cur = capLevel(values[idx]);
@@ -225,11 +296,11 @@ function EffortSlider({ label, note, values, idx, locked, gated, onPick }) {
         )}
       </div>
       <div className={'effort-slider' + (free ? ' dragging' : '')}
-        style={{ '--pos': pos, '--fill': fill, '--glow': glowAt(fill), '--grip': grip, '--stretch': free ? free.stretch : 1, '--squash': free ? free.squash : 1 }}
+        style={{ '--pos': pos, '--fill': fill, '--glow': glowAt(fill), '--grip': grip, '--stretch': free ? free.stretch : 1, '--squash': free ? free.squash : 1, ...(slide ? { '--slide': slide + 'ms' } : null) }}
         onPointerDown={onDown} onPointerMove={onMove} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop}>
         <span className="effort-rail" ref={railRef}>
-          <span className="effort-fill" />
-          <span className="effort-glow" />
+          <span className="effort-fill" ref={fillRef} />
+          <span className="effort-glow"><CellField fillRef={fillRef} /></span>
         </span>
         <span className="effort-dots">
           {values.map((v, i) => (
