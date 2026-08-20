@@ -442,7 +442,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
         <span className="mt-label">
           {current?.displayName || 'Model'}
           {chips.length
-            ? chips.map((c, i) => <span key={c + i} className="ext ext-effort">{t(c)}</span>)
+            ? chips.map((c, i) => <span key={c + i} className="ext">{t(c)}</span>)
             : (extended && current?.hasReasoning && <span className="ext">{t("Extended")}</span>)}
         </span>
         <ChevDown style={{ width: 12, height: 12 }} />
