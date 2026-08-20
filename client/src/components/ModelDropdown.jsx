@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevDown, Chevron, ImageIcon, Brain, Info, TextIcon } from './icons.jsx';
 import { t, tk } from '../i18n.jsx';
+import { Switch } from './settingsui.jsx';
 import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues, isRange, clampToRange, rangeStep, kwargVisible, gateSourceIds } from '../kwargs.js';
 
 const CAP_ICONS = [
@@ -118,7 +119,8 @@ export function KwargControl({ def, value, isAdmin, onSet, gated }) {
           <div className="mo-name">{label}</div>
           {note && <div className="mo-desc">{note}</div>}
         </div>
-        <div className={'switch' + (on ? ' on' : '')} />
+        <Switch on={on} label={label} disabled={locked}
+          onToggle={() => { if (!locked) onSet(def.id, on ? falseValueOf(def) : trueValueOf(def)); }} />
       </div>
     );
   }
@@ -469,7 +471,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
                   <div className="mo-name">{t("Extended")}</div>
                   <div className="mo-desc">{t("Always uses deep reasoning")}</div>
                 </div>
-                <div className={'switch' + (extended ? ' on' : '')} />
+                <Switch on={extended} label={t("Extended")} onToggle={onToggleExtended} />
               </div>
             </>
           ) : null}
@@ -481,7 +483,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
                   <div className="mo-name">{t("Background in chat")}</div>
                   <div className="mo-desc">{t("Keep this model's backdrop during conversations")}</div>
                 </div>
-                <div className={'switch' + (bgInChat ? ' on' : '')} />
+                <Switch on={bgInChat} label={t("Background in chat")} onToggle={onToggleBgInChat} />
               </div>
             </>
           )}

@@ -12,6 +12,7 @@ import { scanTools } from '../src/toolproto.js';
 import { STATUS_DELAY_DEFAULT, STATUS_DELAY_MAX, statusDelayMs, statusDelaySecs } from '../src/lib/status.js';
 import { paletteFor, palettesFor, themeValue, paletteById, DEFAULT_DARK, DEFAULT_LIGHT, presetOf } from '../src/lib/palettes.js';
 import { scrollInsideMenu } from '../src/lib/anchor.js';
+import { clampPx, knobAt, nearestIndex, DRAG_SLOP } from '../src/lib/dragsteps.js';
 import {
   isRange, clampToRange, allNumeric, kwargPayload,
   controlOf as controlOfKwarg, defaultValueOf as defaultValueOfKwarg,
@@ -671,6 +672,36 @@ test('an admin-hidden gated kwarg leaves its source chip alone', () => {
       visible: false, showIf: { id: 'think', value: 'true' } }
   ];
   assert.equal(gateSourceIds(defs, resolveKwargs(defs, { think: 'true' }, false)).has('think'), false);
+});
+
+test('the switch knob centres on the pointer and stops at both ends', () => {
+  const r = { left: 100, width: 36 };
+  assert.equal(knobAt(110, r, 2, 16), 0);
+  assert.equal(knobAt(100, r, 2, 16), 0);
+  assert.equal(knobAt(0, r, 2, 16), 0);
+  assert.equal(knobAt(136, r, 2, 16), 16);
+  assert.equal(knobAt(999, r, 2, 16), 16);
+  assert.equal(knobAt(118, r, 2, 16), 8);
+});
+
+test('a switch too narrow for its knob still reports a position', () => {
+  assert.equal(knobAt(50, { left: 0, width: 12 }, 2, 16), 0);
+  assert.equal(clampPx(5, 10, 10), 10);
+  assert.equal(clampPx(5, 10, 2), 10);
+});
+
+test('a segmented control picks the nearest segment centre, uneven widths included', () => {
+  const stops = [{ x: 1, w: 60 }, { x: 61, w: 90 }];
+  assert.equal(nearestIndex(stops, 0), 0);
+  assert.equal(nearestIndex(stops, 31), 0);
+  assert.equal(nearestIndex(stops, 106), 1);
+  assert.equal(nearestIndex(stops, 999), 1);
+  assert.equal(nearestIndex([], 5), 0);
+  assert.equal(nearestIndex(null, 5), 0);
+});
+
+test('the drag slop stays small enough that a tap is never read as a drag', () => {
+  assert.ok(DRAG_SLOP > 0 && DRAG_SLOP <= 4);
 });
 
 test('an unresolvable or absent gate leaves the kwarg visible', () => {

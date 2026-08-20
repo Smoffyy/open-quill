@@ -373,7 +373,7 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 
 .segs {
   position: relative; display: inline-flex; width: fit-content; flex-shrink: 0;
-  padding: 1px; border-radius: 8px; background: var(--seg-track, var(--hover-soft));
+  padding: 1px; border-radius: 8px; background: var(--seg-track, var(--hover-soft)); touch-action: none;
 }
 .segs-thumb {
   position: absolute; left: 1px; top: 1px; bottom: 1px; border-radius: 7px;
@@ -414,7 +414,7 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 }
 .set-select-opt:hover { background: var(--pop-hover, var(--hover-mid)); }
 .set-select-opt svg { width: 14px; flex-shrink: 0; color: var(--pop-text, var(--text)); }
-[data-animations="off"] .segs-thumb { transition: none; }
+[data-animations="off"] .segs-thumb, .segs-thumb.dragging { transition: none; }
 [data-animations="off"] .set-select-menu { animation: none; }
 :root[data-theme="light"] .segs-thumb { background: var(--seg-thumb, #ffffff); }
 .set-select-trigger .accent-dot,
