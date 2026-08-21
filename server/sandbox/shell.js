@@ -171,7 +171,8 @@ function killTree(child) {
     catch { try { child.kill('SIGKILL'); } catch {} }
     return;
   }
-  try { child.kill('SIGKILL'); } catch {}
+  try { process.kill(-child.pid, 'SIGKILL'); }
+  catch { try { child.kill('SIGKILL'); } catch {} }
 }
 
 export function bash(chatId, cmd, timeoutMs = 60000, workdir, signal = null) {
@@ -205,7 +206,7 @@ export function bash(chatId, cmd, timeoutMs = 60000, workdir, signal = null) {
     let child;
     try {
       if (win) child = spawn(shell, ['/d', '/s', '/v:on', '/c', `"${wrapped}"`], { cwd: base, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, windowsVerbatimArguments: true });
-      else child = spawn(shell, ['-c', wrapped], { cwd: base, stdio: ['ignore', 'pipe', 'pipe'] });
+      else child = spawn(shell, ['-c', wrapped], { cwd: base, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
     } catch (e) { resolve({ ok: false, output: '', error: String(e.message || e), exit: null }); return; }
 
     const MAX = 12 * 1024 * 1024;
