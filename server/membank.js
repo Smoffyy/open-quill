@@ -2,15 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { getSetting, setSetting } from './db.js';
 import { dataPath } from './lib/dataroot.js';
+import { extractPdf } from './lib/extract.js';
 
-import { createRequire } from 'module';
-
-const pdfAssets = (() => {
-  try {
-    const root = path.dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'));
-    return { cMapUrl: path.join(root, 'cmaps') + path.sep, cMapPacked: true, standardFontDataUrl: path.join(root, 'standard_fonts') + path.sep };
-  } catch { return {}; }
-})();
 
 export const MEMBANK_ROOT = dataPath('membank');
 const CACHE_DIR = path.join(MEMBANK_ROOT, '.cache');
@@ -33,26 +26,6 @@ function isPdf(name) { return ext(name) === '.pdf'; }
 function isReadable(name) { return isPdf(name) || TEXT_EXT.has(ext(name)); }
 function cachePathFor(base) { return path.join(CACHE_DIR, base + '.txt'); }
 
-let _pdfjs = null;
-async function loadPdfjs() {
-  if (!_pdfjs) _pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-  return _pdfjs;
-}
-async function extractPdf(buffer) {
-  const { getDocument } = await loadPdfjs();
-  const doc = await getDocument({ data: new Uint8Array(buffer), isEvalSupported: false, useSystemFonts: true, disableFontFace: true, ...pdfAssets }).promise;
-  const pages = [];
-  for (let i = 1; i <= doc.numPages; i++) {
-    const page = await doc.getPage(i);
-    const tc = await page.getTextContent();
-    let buf = '';
-    for (const it of tc.items) { buf += it.str || ''; buf += it.hasEOL ? '\n' : ' '; }
-    pages.push(buf.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim());
-    try { page.cleanup(); } catch {}
-  }
-  try { await doc.destroy(); } catch {}
-  return pages.join('\n\n');
-}
 
 async function buildCache(base) {
   const s = safe(base);
@@ -85,14 +58,25 @@ function readableTextSync(base) {
   if (TEXT_EXT.has(ext(base))) { try { return fs.readFileSync(s.p, 'utf8'); } catch { return null; } }
   return null;
 }
+
+const lineCache = new Map();
 function countLines(base) {
+  const s = safe(base);
+  if (!s) return 0;
+  const src = isPdf(base) ? cachePathFor(s.base) : s.p;
+  let stamp;
+  try { const st = fs.statSync(src); stamp = st.mtimeMs + ':' + st.size; } catch { return 0; }
+  const hit = lineCache.get(src);
+  if (hit && hit.stamp === stamp) return hit.lines;
   const t = readableTextSync(base);
-  if (t == null) return 0;
-  return t.length ? t.split('\n').length : 0;
+  const lines = t == null ? 0 : (t.length ? t.split('\n').length : 0);
+  lineCache.set(src, { stamp, lines });
+  if (lineCache.size > 500) lineCache.delete(lineCache.keys().next().value);
+  return lines;
 }
 
 function rawList() {
-  let names = [];
+  let names;
   try { names = fs.readdirSync(MEMBANK_ROOT); } catch { return []; }
   const out = [];
   for (const n of names) {
@@ -101,10 +85,13 @@ function rawList() {
     if (!st.isFile()) continue;
     out.push({ name: n, size: st.size });
   }
+  out.sort((a, b) => a.name.localeCompare(b.name));
   return out;
 }
 function getMeta() { try { return getSetting('membank_meta', {}) || {}; } catch { return {}; } }
 function setMeta(m) { try { setSetting('membank_meta', m || {}); } catch {} }
+
+export function count() { return rawList().length; }
 
 export function list() {
   const meta = getMeta();
@@ -194,8 +181,8 @@ export function execTool(call) {
     const text = readableTextSync(call.path);
     if (text == null) return { ok: false, error: `Could not read "${call.path}". It may still be indexing, try again.` };
     const lines = text.split('\n');
-    let start = Number.isInteger(call.start) ? call.start : null;
-    let end = Number.isInteger(call.end) ? call.end : null;
+    const start = Number.isInteger(call.start) ? call.start : null;
+    const end = Number.isInteger(call.end) ? call.end : null;
     let body, from = 1;
     if (start != null || end != null) {
       const sN = Math.max(1, start || 1);
@@ -213,8 +200,8 @@ export function execTool(call) {
     if (!q) return { ok: false, error: 'Empty query.' };
     const needle = q.toLowerCase();
     const matches = [];
-    for (const f of list()) {
-      if (!f.readable) continue;
+    for (const f of rawList()) {
+      if (!isReadable(f.name)) continue;
       const text = readableTextSync(f.name);
       if (text == null) continue;
       const ls = text.split('\n');

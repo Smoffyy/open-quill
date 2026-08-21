@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Gauge } from './icons.jsx';
 import { t } from '../i18n.jsx';
 
-export default function LedgerBar({ ledger }) {
+export default function LedgerBar({ ledger, liveUsed = 0, live = false }) {
   const sentinelRef = useRef(null);
   const barRef = useRef(null);
   const [stuck, setStuck] = useState(false);
@@ -32,7 +32,7 @@ export default function LedgerBar({ ledger }) {
   }, []);
 
   const limit = ledger?.limit || 0;
-  const used = ledger?.used || 0;
+  const used = liveUsed > 0 ? liveUsed : (ledger?.used || 0);
   const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
   const list = ledger?.messages || [];
   const dropped = list.filter(m => m.excluded).length;
@@ -55,7 +55,8 @@ export default function LedgerBar({ ledger }) {
           {ledger?.overhead ? <span>{t('system + instructions')} {ledger.overhead.toLocaleString()}</span> : null}
           {folded ? <span>{folded} {t('folded into summary')}</span> : null}
           {dropped ? <span className="lh-dropped">{dropped} {t('dropped by you')}</span> : null}
-          {ledger?.measured ? <span>{t('measured against the model tokenizer')}</span> : <span>{t('estimated')}</span>}
+          {live && liveUsed > 0 ? <span className="lh-live">{t('live, counted by the model tokenizer')}</span>
+            : ledger?.measured ? <span>{t('measured against the model tokenizer')}</span> : <span>{t('estimated')}</span>}
         </div>
       </div>
     </>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../../api.js';
 import { ThumbUp, ThumbDown } from '../../icons.jsx';
 import { t } from '../../../i18n.jsx';
@@ -43,8 +43,8 @@ export default function FeedbackSection() {
         ))}
       </div>
       <div className="editor-actions" style={{ justifyContent: 'flex-start' }}>
-        <button className="btn" disabled={offset === 0} onClick={() => load(Math.max(0, offset - 50))}>Newer</button>
-        <button className="btn" disabled={(rows || []).length < 50} onClick={() => load(offset + 50)}>Older</button>
+        <button className="btn" disabled={offset === 0} onClick={() => load(Math.max(0, offset - 50))}>{t("Newer")}</button>
+        <button className="btn" disabled={(rows || []).length < 50} onClick={() => load(offset + 50)}>{t("Older")}</button>
       </div>
     </>
   );

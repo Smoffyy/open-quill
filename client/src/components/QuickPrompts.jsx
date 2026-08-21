@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { t } from '../i18n.jsx';
 import { QpIcon } from '../qpIcons.jsx';
 

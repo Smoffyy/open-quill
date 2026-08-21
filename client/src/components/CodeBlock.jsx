@@ -1,23 +1,45 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { copyText } from '../clipboard.js';
-import hljs from 'highlight.js/lib/common';
+import { cancelHighlight, highlight, hljsVersion, scheduleHighlight, subscribeHljs } from '../lib/hljs.js';
+import { escHtml } from '../lib/artifacts.js';
 import { Copy, Check } from './icons.jsx';
+import { t } from '../i18n.jsx';
 
-function escapeHtml(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
+const NEAR_VIEWPORT = '900px';
 
-export default function CodeBlock({ lang, code }) {
+function CodeBlock({ lang, code }) {
   const [copied, setCopied] = useState(false);
-  // re-highlight on each render so streaming code stays smooth
-  const html = useMemo(() => {
-    try {
-      if (code.length > 60000) return escapeHtml(code);
-      if (lang && hljs.getLanguage(lang)) return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
-      if (code.length > 12000) return escapeHtml(code);
-      return hljs.highlightAuto(code).value;
-    } catch { return escapeHtml(code); }
-  }, [code, lang]);
+  const hlVersion = useSyncExternalStore(subscribeHljs, hljsVersion, hljsVersion);
+  const [html, setHtml] = useState(() => escHtml(code));
+  const preRef = useRef(null);
+  const lit = useRef(null);
+
+  useEffect(() => {
+    if (lit.current && lit.current.v === hlVersion && lit.current.lang === lang) {
+      setHtml(highlight(code, lang, { cache: false }));
+      return;
+    }
+    setHtml(escHtml(code));
+    const el = preRef.current;
+    if (!el) return;
+    let done = false;
+    let alive = true;
+    const job = () => { if (!alive) return; lit.current = { v: hlVersion, lang }; setHtml(highlight(code, lang)); };
+    const paint = () => {
+      if (done) return;
+      done = true;
+      scheduleHighlight(job);
+    };
+    if (typeof IntersectionObserver === 'undefined') { paint(); return () => { alive = false; cancelHighlight(job); }; }
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { io.disconnect(); paint(); } }, { rootMargin: NEAR_VIEWPORT });
+    io.observe(el);
+    return () => {
+      alive = false;
+      io.disconnect();
+      cancelHighlight(job);
+    };
+  }, [code, lang, hlVersion]);
+
   async function copy() {
     if (await copyText(code)) {
       setCopied(true);
@@ -26,13 +48,17 @@ export default function CodeBlock({ lang, code }) {
   }
   return (
     <div className="code-wrap">
-      <div className={'code-bar' + (copied ? ' flash' : '')}>
-        <span>{lang || 'text'}</span>
-        <button className="code-copy" onPointerDown={(e) => { e.preventDefault(); copy(); }}>
-          {copied ? <Check key="c" className="copy-pop" /> : <Copy key="o" />} {copied ? 'Copied' : 'Copy'}
+      <div className="code-copy-anchor">
+        <button className="code-copy" title={copied ? t('Copied') : t('Copy')} aria-label={copied ? t('Copied') : t('Copy')}
+          onPointerDown={(e) => { e.preventDefault(); copy(); }}>
+          {copied ? <Check key="c" className="copy-pop" /> : <Copy key="o" />}
+          <span className="code-copy-label">{copied ? t('Copied') : t('Copy')}</span>
         </button>
       </div>
-      <pre><code className={'hljs' + (lang ? ` language-${lang}` : '')} dangerouslySetInnerHTML={{ __html: html }} /></pre>
+      <div className={'code-bar' + (copied ? ' flash' : '')}>{lang || 'text'}</div>
+      <pre ref={preRef}><code className={'hljs' + (lang ? ` language-${lang}` : '')} dangerouslySetInnerHTML={{ __html: html }} /></pre>
     </div>
   );
 }
+
+export default React.memo(CodeBlock);

@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
 import { Check, Trash, Sparkles } from './icons.jsx';
 import { t } from '../i18n.jsx';
+import { tk } from '../i18n.jsx';
 
 export const STYLE_PRESETS = [
-  { id: 'normal', name: 'Normal', desc: 'Default responses' },
-  { id: 'concise', name: 'Concise', desc: 'Shorter, direct answers' },
-  { id: 'explanatory', name: 'Explanatory', desc: 'Teaches as it answers' },
-  { id: 'formal', name: 'Formal', desc: 'Polished and professional' }
+  { id: 'normal', name: tk('Normal'), desc: tk('Default responses') },
+  { id: 'concise', name: tk('Concise'), desc: tk('Shorter, direct answers') },
+  { id: 'explanatory', name: tk('Explanatory'), desc: tk('Teaches as it answers') },
+  { id: 'formal', name: tk('Formal'), desc: tk('Polished and professional') }
 ];
 
 export function styleNameFor(styleId, styles = []) {
@@ -30,8 +31,8 @@ export default function StyleSubmenu({ styles = [], styleId = 'normal', onSelect
     try {
       const r = await api.post('/api/styles/generate', { sample, modelId: currentId });
       setPrompt(r.prompt || '');
-      toast('Style generated from your sample, review and save.');
-    } catch (e) { toast(e.message || 'Could not generate the style.'); }
+      toast(t('Style generated from your sample, review and save.'));
+    } catch (e) { toast(e.message || t('Could not generate the style.')); }
     setGenBusy(false);
   }
 
@@ -45,8 +46,8 @@ export default function StyleSubmenu({ styles = [], styleId = 'normal', onSelect
       onSelect?.(id);
       setCreating(false);
       setName(''); setPrompt(''); setSample('');
-      toast('Style saved and selected.');
-    } catch (e) { toast(e.message || 'Could not save the style.'); }
+      toast(t('Style saved and selected.'));
+    } catch (e) { toast(e.message || t('Could not save the style.')); }
     setSaveBusy(false);
   }
 
@@ -55,24 +56,24 @@ export default function StyleSubmenu({ styles = [], styleId = 'normal', onSelect
     try {
       await onSaveStyles?.(styles.filter(x => x.id !== id));
       if (styleId === id) onSelect?.('normal', true);
-    } catch (err) { toast(err.message || 'Could not delete the style.'); }
+    } catch (err) { toast(err.message || t('Could not delete the style.')); }
   }
 
   if (creating) {
     return (
       <div className="style-create">
-        <div className="style-menu-label">New style</div>
+        <div className="style-menu-label">{t("New style")}</div>
         <input placeholder={t("Style name")} value={name} maxLength={50} onChange={(e) => setName(e.target.value)} />
         <textarea placeholder={t("Describe how the assistant should write (tone, length, formatting…)")} rows={4} value={prompt} maxLength={4000} onChange={(e) => setPrompt(e.target.value)} />
         <div className="style-gen">
           <textarea placeholder={t("Or paste a writing sample to generate the style from…")} rows={3} value={sample} maxLength={12000} onChange={(e) => setSample(e.target.value)} />
           <button className="style-gen-btn" disabled={!sample.trim() || genBusy} onClick={generate}>
-            <Sparkles style={{ width: 13 }} /> {genBusy ? 'Generating…' : 'Generate from sample'}
+            <Sparkles style={{ width: 13 }} /> {genBusy ? t('Generating…') : t('Generate from sample')}
           </button>
         </div>
         <div className="style-create-actions">
-          <button className="style-cancel" onClick={() => setCreating(false)}>Cancel</button>
-          <button className="style-save" disabled={!name.trim() || !prompt.trim() || saveBusy} onClick={saveStyle}>{saveBusy ? 'Saving…' : 'Save style'}</button>
+          <button className="style-cancel" onClick={() => setCreating(false)}>{t("Cancel")}</button>
+          <button className="style-save" disabled={!name.trim() || !prompt.trim() || saveBusy} onClick={saveStyle}>{saveBusy ? t('Saving…') : t('Save style')}</button>
         </div>
       </div>
     );
@@ -80,7 +81,7 @@ export default function StyleSubmenu({ styles = [], styleId = 'normal', onSelect
 
   return (
     <>
-      <div className="style-menu-label">Response style</div>
+      <div className="style-menu-label">{t("Response style")}</div>
       {STYLE_PRESETS.map(p => (
         <button key={p.id} className={'style-item' + (p.id === styleId ? ' active' : '')} onClick={() => onSelect?.(p.id)}>
           <span className="style-item-name">{p.name}</span>
@@ -88,7 +89,7 @@ export default function StyleSubmenu({ styles = [], styleId = 'normal', onSelect
           {p.id === styleId && <Check style={{ width: 14 }} />}
         </button>
       ))}
-      {styles.length > 0 && <div className="style-menu-label">Your styles</div>}
+      {styles.length > 0 && <div className="style-menu-label">{t("Your styles")}</div>}
       {styles.map(x => (
         <button key={x.id} className={'style-item' + (x.id === styleId ? ' active' : '')} onClick={() => onSelect?.(x.id)}>
           <span className="style-item-name">{x.name}</span>
@@ -96,7 +97,7 @@ export default function StyleSubmenu({ styles = [], styleId = 'normal', onSelect
           {x.id === styleId && <Check style={{ width: 14 }} />}
         </button>
       ))}
-      <button className="style-item create" onClick={() => setCreating(true)}>+ Create a style</button>
+      <button className="style-item create" onClick={() => setCreating(true)}>{t("+ Create a style")}</button>
     </>
   );
 }

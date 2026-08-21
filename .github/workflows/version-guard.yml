@@ -2,7 +2,14 @@ name: Version guard
 
 on:
   pull_request:
-    branches: [beta, stable]
+    branches: [stable]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: version-guard-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   version-bumped:
@@ -12,22 +19,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Fail if package.json version was not bumped
-        run: |
-          BASE_VERSION=$(git show "origin/${{ github.base_ref }}:package.json" | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version" 2>/dev/null || echo "0.0.0")
-          HEAD_VERSION=$(node -p "require('./package.json').version")
-          echo "base=$BASE_VERSION head=$HEAD_VERSION"
-          if [ "$BASE_VERSION" = "$HEAD_VERSION" ]; then
-            echo "::error::package.json version ($HEAD_VERSION) must be bumped before merging into ${{ github.base_ref }}."
-            exit 1
-          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
 
-      - name: Fail if head version is not newer than base
+      - name: Fail if package.json version is not newer than stable
         run: |
           BASE_VERSION=$(git show "origin/${{ github.base_ref }}:package.json" | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version" 2>/dev/null || echo "0.0.0")
-          HEAD_VERSION=$(node -p "require('./package.json').version")
-          NEWEST=$(printf '%s\n%s\n' "$BASE_VERSION" "$HEAD_VERSION" | sort -V | tail -1)
-          if [ "$NEWEST" != "$HEAD_VERSION" ]; then
-            echo "::error::Head version $HEAD_VERSION is older than base version $BASE_VERSION."
-            exit 1
-          fi
+          node check-version-bump.mjs "$BASE_VERSION" "${{ github.base_ref }}"

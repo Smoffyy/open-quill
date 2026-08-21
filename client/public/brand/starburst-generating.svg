@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#e89b80">
+<path d="M12 12C11.25 9.6 10.7 7.1 10.85 4.6C10.92 3.3 11.35 2.35 12 2.35C12.65 2.35 13.08 3.3 13.15 4.6C13.3 7.1 12.75 9.6 12 12Z">
+<animateTransform attributeName="transform" type="translate" values="0 0;0 -0.9;0 0" keyTimes="0;0.4;1" calcMode="spline" keySplines="0.16 1 0.3 1;0.42 0 0.58 1" dur="1s" begin="0s" repeatCount="indefinite"/>
+<animate attributeName="fill" values="#e89b80;#f6cbb0;#e89b80" keyTimes="0;0.4;1" calcMode="spline" keySplines="0.16 1 0.3 1;0.42 0 0.58 1" dur="1s" begin="0s" repeatCount="indefinite"/>
+</path>
+<g transform="rotate(51.43 12 12)">
+<path d="M12 12C11.25 9.6 10.7 7.1 10.85 4.6C10.92 3.3 11.35 2.35 12 2.35C12.65 2.35 13.08 3.3 13.15 4.6C13.3 7.1 12.75 9.6 12 12Z">
+<animateTransform attributeName="transform" type="translate" values="0 0;0 -0.9;0 0" keyTimes="0;0.4;1" calcMode="spline" keySplines="0.16 1 0.3 1;0.42 0 0.58 1" dur="1s" begin="0.15s" repeatCount="indefinite"/>
+<animate attributeName="fill" values="#e89b80;#f6cbb0;#e89b80" keyTimes="0;0.4;1" calcMode="spline" keySplines="0.16 1 0.3 1;0.42 0 0.58 1" dur="1s" begin="0.15s" repeatCount="indefinite"/>
+</path>
+</g>
+<g transform="rotate(102.86 12 12)">
+<path d="M12 12C11.25 9.6 10.7 7.1 10.85 4.6C10.92 3.3 11.35 2.35 12 2.35C12.65 2.35 13.08 3.3 13.15 4.6C13.3 7.1 12.75 9.6 12 12Z">
+<animateTransform attributeName="transform" type="translate" values="0 0;0 -0.9;0 0" keyTimes="0;0.4;1" calcMode="spline" keySplines="0.16 1 0.3 1;0.42 0 0.58 1" dur="1s" begin="0.3s" repeatCount="indefinite"/>
+<animate attributeName="fill" values="#e89b80;#f6cbb0;#e89b80" keyTimes="0;0.4;1" calcMode="spline" keySplines="0.16 1 0.3 1;0.42 0 0.58 1" dur="1s" begin="0.3s" repeatCount="indefinite"/>
+</path>
+</g>
+<g transform="rotate(154.29 12 12)">
+<path d="M12 12C11.25 9.6 10.7 7.1 10.85 4.6C10.92 3.3 11.35 2.35 12 2.35C12.65 2.35 13.08 3.3 13.15 4.6C13.3 7.1 12.75 9.6 12 12Z">
+<animateTransform attributeName="transform" type="translate" values="0 0;0 -0.9;0 0" keyTimes="0;0.4;1" calcMode="spline" keySplines="0.16 1 0.3 1;0.42 0 0.58 1" dur="1s" begin="0.45s" repeatCount="indefinite"/>
+<animate attributeName="fill" values="#e89b80;#f6cbb0;#e89b80" keyTimes="0;0.4;1" calcMode="spline" keySplines="0.16 1 0.3 1;0.42 0 0.58 1" dur="1s" begin="0.45s" repeatCount="indefinite"/>
+</path>
+</g>
+<g transform="rotate(205.71 12 12)">
+<path d="M12 12C11.25 9.6 10.7 7.1 10.85 4.6C10.92 3.3 11.35 2.35 12 2.35C12.65 2.35 13.08 3.3 13.15 4.6C13.3 7.1 12.75 9.6 12 12Z">
+<animateTransform attributeName="transform" type="translate" values="0 0;0 -0.9;0 0" keyTimes="0;0.4;1" calcMode="spline" keySplines="0.16 1 0.3 1;0.42 0 0.58 1" dur="1s" begin="0.6s" repeatCount="indefinite"/>
+<animate attributeName="fill" values="#e89b80;#f6cbb0;#e89b80" keyTimes="0;0.4;1" calcMode="spline" keySplines="0.16 1 0.3 1;0.42 0 0.58 1" dur="1s" begin="0.6s" repeatCount="indefinite"/>
+</path>
+</g>
+<g transform="rotate(257.14 12 12)">
+<path d="M12 12C11.25 9.6 10.7 7.1 10.85 4.6C10.92 3.3 11.35 2.35 12 2.35C12.65 2.35 13.08 3.3 13.15 4.6C13.3 7.1 12.75 9.6 12 12Z">
+<animateTransform attributeName="transform" type="translate" values="0 0;0 -0.9;0 0" keyTimes="0;0.4;1" calcMode="spline" keySplines="0.16 1 0.3 1;0.42 0 0.58 1" dur="1s" begin="0.75s" repeatCount="indefinite"/>
+<animate attributeName="fill" values="#e89b80;#f6cbb0;#e89b80" keyTimes="0;0.4;1" calcMode="spline" keySplines="0.16 1 0.3 1;0.42 0 0.58 1" dur="1s" begin="0.75s" repeatCount="indefinite"/>
+</path>
+</g>
+<g transform="rotate(308.57 12 12)">
+<path d="M12 12C11.25 9.6 10.7 7.1 10.85 4.6C10.92 3.3 11.35 2.35 12 2.35C12.65 2.35 13.08 3.3 13.15 4.6C13.3 7.1 12.75 9.6 12 12Z">
+<animateTransform attributeName="transform" type="translate" values="0 0;0 -0.9;0 0" keyTimes="0;0.4;1" calcMode="spline" keySplines="0.16 1 0.3 1;0.42 0 0.58 1" dur="1s" begin="0.9s" repeatCount="indefinite"/>
+<animate attributeName="fill" values="#e89b80;#f6cbb0;#e89b80" keyTimes="0;0.4;1" calcMode="spline" keySplines="0.16 1 0.3 1;0.42 0 0.58 1" dur="1s" begin="0.9s" repeatCount="indefinite"/>
+</path>
+</g>
+</svg>

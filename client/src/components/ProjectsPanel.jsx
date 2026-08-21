@@ -1,19 +1,21 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
 import Composer from './Composer.jsx';
 import { Box, Search, Plus, ChevDown, Star, Dots, Trash, Pencil, X, FileText } from './icons.jsx';
+import { t } from '../i18n.jsx';
+import { focusUnlessTouch } from '../lib/touch.js';
 
 function updatedLabel(ts) {
   const d = new Date(ts);
   const now = new Date();
   const sameYear = d.getFullYear() === now.getFullYear();
   const opts = sameYear ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' };
-  return 'Updated ' + d.toLocaleDateString(undefined, opts);
+  return t('Updated {when}', { when: d.toLocaleDateString(undefined, opts) });
 }
 function lastMsgLabel(ts) {
   const d = new Date(ts);
-  return 'Last message ' + d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return t('Last message {when}', { when: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) });
 }
 
 function CreateModal({ onClose, onCreate }) {
@@ -21,34 +23,34 @@ function CreateModal({ onClose, onCreate }) {
   const [desc, setDesc] = useState('');
   const [busy, setBusy] = useState(false);
   const ref = useRef(null);
-  useEffect(() => { ref.current?.focus(); }, []);
+  useEffect(() => { focusUnlessTouch(ref.current); }, []);
   async function submit() {
     if (busy) return;
     setBusy(true);
-    try { const p = await api.post('/api/projects', { name: name.trim() || 'New project', description: desc.trim() }); onCreate(p); }
+    try { const p = await api.post('/api/projects', { name: name.trim() || t('New project'), description: desc.trim() }); onCreate(p); }
     catch (e) { setBusy(false); }
   }
   return (
     <div className="overlay pj-create-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="pj-create">
         <div className="pj-create-head">
-          <h2>Create a project</h2>
+          <h2>{t("Create a project")}</h2>
           <button className="pj-x" onClick={onClose}><X style={{ width: 18 }} /></button>
         </div>
         <label className="pj-field">
-          <span>What are you working on?</span>
-          <input ref={ref} value={name} placeholder="Name your project"
+          <span>{t("What are you working on?")}</span>
+          <input ref={ref} value={name} placeholder={t("Name your project")}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} />
         </label>
         <label className="pj-field">
-          <span>What are you trying to achieve?</span>
-          <textarea value={desc} placeholder="Describe your project, goals, subject, etc..."
+          <span>{t("What are you trying to achieve?")}</span>
+          <textarea value={desc} placeholder={t("Describe your project, goals, subject, etc...")}
             onChange={(e) => setDesc(e.target.value)} rows={3} />
         </label>
         <div className="pj-create-actions">
-          <button className="pj-btn ghost" onClick={onClose}>Cancel</button>
-          <button className="pj-btn solid" onClick={submit} disabled={busy}>Create project</button>
+          <button className="pj-btn ghost" onClick={onClose}>{t("Cancel")}</button>
+          <button className="pj-btn solid" onClick={submit} disabled={busy}>{t("Create project")}</button>
         </div>
       </div>
     </div>
@@ -76,9 +78,9 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
         fd.append('file', f);
         const r = await fetch('/api/projects/' + id + '/files', { method: 'POST', body: fd, credentials: 'include' });
         const d = await r.json();
-        if (!r.ok) toast(d.error || 'Upload failed.');
+        if (!r.ok) toast(d.error || t('Upload failed.'));
         else setPjFiles(d.files || []);
-      } catch { toast('Upload failed.'); }
+      } catch { toast(t('Upload failed.')); }
     }
     setFileBusy(false);
   }
@@ -86,6 +88,7 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
     try { const d = await api.del('/api/projects/' + id + '/files/' + encodeURIComponent(name)); setPjFiles(d.files || []); } catch {}
   }
   const fmtSize = (n) => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+  const capPct = Math.min(100, Math.round(pjFiles.reduce((n, f) => n + (f.size || 0), 0) / (20 * 1048576) * 100));
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState('');
   const menuRef = useRef(null);
@@ -114,14 +117,14 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
     if (v && v !== project.name) patch({ name: v }); else setName(project.name);
   }
   async function del() {
-    if (!confirm('Delete this project? Chats inside it are kept.')) return;
+    if (!confirm(t('Delete this project? Chats inside it are kept.'))) return;
     await api.del('/api/projects/' + id);
     onDeleted?.();
   }
 
   return (
     <div className="pj-detail">
-      <button className="pj-back" onClick={onBack}>← All projects</button>
+      <button className="pj-back" onClick={onBack}>{t("← All projects")}</button>
       <div className="pj-detail-grid">
         <div className="pj-main">
           <div className="pj-title-row">
@@ -137,8 +140,8 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
                 <button className="pj-icon-btn" onClick={() => setMenu(m => !m)}><Dots style={{ width: 18 }} /></button>
                 {menu && (
                   <div className="pj-menu">
-                    <button onClick={() => { setMenu(false); setRenaming(true); }}><Pencil style={{ width: 15 }} /> Rename</button>
-                    <button className="danger" onClick={() => { setMenu(false); del(); }}><Trash style={{ width: 15 }} /> Delete project</button>
+                    <button onClick={() => { setMenu(false); setRenaming(true); }}><Pencil style={{ width: 15 }} /> {t("Rename")}</button>
+                    <button className="danger" onClick={() => { setMenu(false); del(); }}><Trash style={{ width: 15 }} /> {t("Delete project")}</button>
                   </div>
                 )}
               </div>
@@ -155,8 +158,9 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
           </div>
 
           <div className="pj-chats">
+            {project.chats.length > 0 && <div className="pj-chats-head">{t("Recents")}</div>}
             {project.chats.length === 0 ? (
-              <div className="pj-empty">Start a chat to keep conversations organized and re-use project knowledge.</div>
+              <div className="pj-empty">{t("Start a chat to keep conversations organized and re-use project knowledge.")}</div>
             ) : (
               project.chats.map(c => (
                 <button key={c.id} className="pj-chat-row" onClick={() => onOpenChat(c.id, project)}>
@@ -171,16 +175,16 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
         <div className="pj-side">
           <div className="pj-card">
             <div className="pj-card-head">
-              <span>Instructions</span>
+              <span>{t("Instructions")}</span>
               <button className="pj-card-add" onClick={() => setEditingInstr(e => !e)}><Plus style={{ width: 16 }} /></button>
             </div>
             {editingInstr ? (
               <textarea className="pj-instr-edit" autoFocus value={instr} rows={5}
-                placeholder="Add instructions to tailor the Assistant's responses"
+                placeholder={t("Add instructions to tailor the Assistant's responses")}
                 onChange={(e) => setInstr(e.target.value)} onBlur={saveInstr} />
             ) : (
               <div className="pj-card-sub" onClick={() => setEditingInstr(true)}>
-                {project.instructions ? project.instructions : "Add instructions to tailor Assistant's responses"}
+                {project.instructions ? project.instructions : t("Add instructions to tailor Assistant's responses")}
               </div>
             )}
           </div>
@@ -191,22 +195,22 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
               <input ref={fileInputRef} type="file" multiple hidden accept=".pdf,.txt,.md,.markdown,.csv,.tsv,.json,.js,.ts,.jsx,.tsx,.py,.html,.css,.xml,.yaml,.yml,.log,.ini,.toml,.sh,.bat,.sql,.java,.c,.cpp,.h,.rs,.go,.rb,.php"
                 onChange={(e) => { uploadFiles([...(e.target.files || [])]); e.target.value = ''; }} />
             </div>
+            <div className="pj-cap">{t("{pct}% of project capacity used").replace('{pct}', capPct)}</div>
             {pjFiles.length === 0 ? (
               <div className="pj-files-empty" onClick={() => fileInputRef.current?.click()} style={{ cursor: 'pointer' }}>
                 <FileText style={{ width: 30 }} />
-                <span>{fileBusy ? 'Uploading…' : 'Add PDFs or text documents, chats in this project can search and read them.'}</span>
+                <span>{fileBusy ? t('Uploading…') : t('Add PDFs or text documents, chats in this project can search and read them.')}</span>
               </div>
             ) : (
-              <div className="pj-file-list">
+              <div className="pj-file-grid">
                 {pjFiles.map(f => (
-                  <div key={f.name} className="pj-file-row">
-                    <FileText style={{ width: 14 }} />
-                    <span className="pj-file-name" title={f.name}>{f.name}</span>
-                    <span className="pj-file-size">{fmtSize(f.size)}</span>
-                    <button className="pj-file-del" title="Remove" onClick={() => removeFile(f.name)}>✕</button>
+                  <div key={f.name} className="pj-file-tile" title={f.name}>
+                    <span className="ft-name">{f.name}</span>
+                    <span className="ft-meta">{fmtSize(f.size)}</span>
+                    <button className="ft-del" title={t("Remove")} onClick={() => removeFile(f.name)}>✕</button>
                   </div>
                 ))}
-                {fileBusy && <div className="pj-file-row"><span className="pj-file-name">Uploading…</span></div>}
+                {fileBusy && <div className="pj-file-tile"><span className="ft-name">{t("Uploading…")}</span></div>}
               </div>
             )}
           </div>
@@ -216,7 +220,7 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
   );
 }
 
-export default function ProjectsPanel({ openId, composerProps, onClose, onOpenChat, onStartChat, onOpenProject }) {
+export default function ProjectsPanel({ openId, composerProps, onClose, onOpenChat, onStartChat, onOpenProject, startCreate = false, onCreateHandled }) {
   const [projects, setProjects] = useState(null);
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('updated');
@@ -226,6 +230,8 @@ export default function ProjectsPanel({ openId, composerProps, onClose, onOpenCh
   const load = useCallback(async () => { try { setProjects(await api.get('/api/projects')); } catch { setProjects([]); } }, []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { setDetailId(openId || null); }, [openId]);
+  // The sidebar's + opens this panel and asks for the create dialog in one go.
+  useEffect(() => { if (!startCreate) return; setDetailId(null); setCreating(true); onCreateHandled && onCreateHandled(); }, [startCreate, onCreateHandled]);
 
   function openDetail(id) { setDetailId(id); onOpenProject?.(id); }
 
@@ -243,23 +249,23 @@ export default function ProjectsPanel({ openId, composerProps, onClose, onOpenCh
       ) : (
         <>
           <div className="co-head pj-head">
-            <h2>Projects</h2>
+            <h2>{t("Projects")}</h2>
             <div className="pj-head-actions">
               <div className="pj-sort">
-                <span>Sort by</span> <b>{sort === 'name' ? 'Name' : 'Last updated'}</b>
+                <span>{t("Sort by")}</span> <b>{sort === 'name' ? t('Name') : t('Last updated')}</b>
                 <button className="pj-sort-toggle" onClick={() => setSort(s => s === 'name' ? 'updated' : 'name')}><ChevDown style={{ width: 15 }} /></button>
               </div>
-              <button className="pj-new" onClick={() => setCreating(true)}>New project</button>
-              <button className="co-close" onClick={onClose}>✕</button>
+              <button className="pj-new" onClick={() => setCreating(true)}>{t("New project")}</button>
+              <button className="co-close" onClick={onClose} aria-label={t('Close')}>✕</button>
             </div>
           </div>
           <div className="co-body">
             <div className="pj-search">
               <Search style={{ width: 16 }} />
-              <input value={q} placeholder="Search projects..." onChange={(e) => setQ(e.target.value)} />
+              <input value={q} placeholder={t("Search projects...")} onChange={(e) => setQ(e.target.value)} />
             </div>
             {projects === null ? null : list.length === 0 ? (
-              <div className="co-end">{q.trim() ? 'No projects match your search.' : 'No projects yet, create one to get started.'}</div>
+              <div className="co-end">{q.trim() ? t('No projects match your search.') : t('No projects yet, create one to get started.')}</div>
             ) : (
               <div className="pj-grid">
                 {list.map((p, i) => (

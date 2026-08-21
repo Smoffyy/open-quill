@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { t } from '../i18n.jsx';
 
 const EMPTY = { id: '', name: '', modelId: null, instructions: '' };
@@ -28,47 +28,47 @@ export default function PersonasModal({ personas = [], models = [], currentId, o
     <div className="pm-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="pm-modal">
         <div className="pm-head">
-          <div>Personas</div>
+          <div>{t("Personas")}</div>
           <button className="pm-x" onClick={onClose}>✕</button>
         </div>
         {!edit ? (
           <div className="pm-body">
-            <div className="pm-note">A persona bundles a model and chat instructions. Apply one to set them both for the current chat in one click.</div>
+            <div className="pm-note">{t("A persona bundles a model and chat instructions. Apply one to set them both for the current chat in one click.")}</div>
             <div className="pm-list">
-              {list.length === 0 && <div className="pm-empty">No personas yet.</div>}
+              {list.length === 0 && <div className="pm-empty">{t("No personas yet.")}</div>}
               {list.map(p => {
                 const m = models.find(x => x.id === p.modelId);
                 return (
                   <div key={p.id} className="pm-item">
                     <div className="pm-item-main">
                       <div className="pm-item-name">{p.name}</div>
-                      <div className="pm-item-meta">{m ? m.displayName : 'Any model'}{p.instructions ? ' · custom instructions' : ''}</div>
+                      <div className="pm-item-meta">{m ? m.displayName : t('Any model')}{p.instructions ? ' · custom instructions' : ''}</div>
                     </div>
                     <div className="pm-item-actions">
-                      <button className="pm-btn" onClick={() => { onApply?.(p); onClose(); }}>Apply</button>
-                      <button className="pm-btn ghost" onClick={() => setEdit({ ...EMPTY, ...p })}>Edit</button>
-                      <button className="pm-btn ghost danger" onClick={() => remove(p.id)}>Delete</button>
+                      <button className="pm-btn" onClick={() => { onApply?.(p); onClose(); }}>{t("Apply")}</button>
+                      <button className="pm-btn ghost" onClick={() => setEdit({ ...EMPTY, ...p })}>{t("Edit")}</button>
+                      <button className="pm-btn ghost danger" onClick={() => remove(p.id)}>{t("Delete")}</button>
                     </div>
                   </div>
                 );
               })}
             </div>
-            <button className="pm-new" onClick={startNew}>+ New persona</button>
+            <button className="pm-new" onClick={startNew}>{t("+ New persona")}</button>
           </div>
         ) : (
           <div className="pm-body">
-            <label className="pm-label">Name</label>
+            <label className="pm-label">{t("Name")}</label>
             <input className="pm-input" value={edit.name} autoFocus placeholder={t("e.g. Senior code reviewer")} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
-            <label className="pm-label">Model</label>
+            <label className="pm-label">{t("Model")}</label>
             <select className="pm-input" value={edit.modelId || ''} onChange={(e) => setEdit({ ...edit, modelId: e.target.value || null })}>
-              <option value="">Any (keep current)</option>
+              <option value="">{t("Any (keep current)")}</option>
               {models.map(m => <option key={m.id} value={m.id}>{m.displayName}</option>)}
             </select>
-            <label className="pm-label">Chat instructions</label>
+            <label className="pm-label">{t("Chat instructions")}</label>
             <textarea className="pm-input" rows={5} maxLength={8000} value={edit.instructions} placeholder={t("Added to the system prompt when this persona is applied.")} onChange={(e) => setEdit({ ...edit, instructions: e.target.value })} />
             <div className="pm-edit-actions">
-              <button className="pm-btn ghost" onClick={() => setEdit(null)}>Cancel</button>
-              <button className="pm-btn" disabled={!edit.name.trim()} onClick={saveEdit}>Save</button>
+              <button className="pm-btn ghost" onClick={() => setEdit(null)}>{t("Cancel")}</button>
+              <button className="pm-btn" disabled={!edit.name.trim()} onClick={saveEdit}>{t("Save")}</button>
             </div>
           </div>
         )}

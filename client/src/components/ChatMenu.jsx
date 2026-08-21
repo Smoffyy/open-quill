@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../api.js';
-import { toast } from '../toast.js';
 import { Pencil, Fork, Star, Compact, Sliders, Pin, Copy, FileText } from './icons.jsx';
 import { t } from '../i18n.jsx';
 
@@ -15,7 +14,11 @@ export default function ChatMenu({ chat, modelId, pinned = [], pins = [], onUnpi
   const baseInstr = useRef(chat.instructions || '');
 
   useEffect(() => {
-    const h = (e) => { if (inspectOpen) return; if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    const h = (e) => {
+      if (inspectOpen || !ref.current) return;
+      const scope = ref.current.closest('.chat-name-wrap') || ref.current;
+      if (!scope.contains(e.target)) onClose();
+    };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, [onClose, inspectOpen]);
@@ -48,12 +51,12 @@ export default function ChatMenu({ chat, modelId, pinned = [], pins = [], onUnpi
   return (
     <div className="chat-menu-pop" ref={ref}>
       <div className="cmp-actions">
-        <button onClick={() => { onClose(); onRename?.(); }}><Pencil style={{ width: 15 }} /> Rename</button>
-        <button onClick={() => { onClose(); onToggleStar?.(); }}><Star style={{ width: 15 }} /> {chat.starred ? 'Unstar' : 'Star'}</button>
-        {onToggleArchive && <button onClick={() => { onClose(); onToggleArchive(); }}><FileText style={{ width: 15 }} /> {chat.archived ? 'Unarchive' : 'Archive'}</button>}
-        <button onClick={() => { onClose(); onFork?.(); }}><Fork style={{ width: 15 }} /> Fork chat</button>
-        <button onClick={() => { onClose(); onCopyConversation?.(); }}><Copy style={{ width: 15 }} /> Copy all</button>
-        {onOpenPersonas && <button onClick={() => { onClose(); onOpenPersonas(); }}><Star style={{ width: 15 }} /> Personas</button>}
+        <button onClick={() => { onClose(); onRename?.(); }}><Pencil style={{ width: 15 }} /> {t("Rename")}</button>
+        <button onClick={() => { onClose(); onToggleStar?.(); }}><Star style={{ width: 15 }} /> {chat.starred ? t('Unstar') : t('Star')}</button>
+        {onToggleArchive && <button onClick={() => { onClose(); onToggleArchive(); }}><FileText style={{ width: 15 }} /> {chat.archived ? t('Unarchive') : t('Archive')}</button>}
+        <button onClick={() => { onClose(); onFork?.(); }}><Fork style={{ width: 15 }} /> {t("Fork chat")}</button>
+        <button onClick={() => { onClose(); onCopyConversation?.(); }}><Copy style={{ width: 15 }} /> {t("Copy all")}</button>
+        {onOpenPersonas && <button onClick={() => { onClose(); onOpenPersonas(); }}><Star style={{ width: 15 }} /> {t("Personas")}</button>}
       </div>
       {pinned.length > 0 && (
         <div className="cmp-sec">
@@ -71,7 +74,7 @@ export default function ChatMenu({ chat, modelId, pinned = [], pins = [], onUnpi
       {pins.length > 0 && (
         <div className="cmp-sec">
           <div className="cmp-label"><Pin style={{ width: 14 }} /> Pinned files ({pins.length})</div>
-          <div className="cmp-note">Kept in context every turn for this chat.</div>
+          <div className="cmp-note">{t("Kept in context every turn for this chat.")}</div>
           <div className="cmp-pinfiles">
             {pins.map(p => (
               <div key={p.url} className="cmp-pinfile">
@@ -84,15 +87,15 @@ export default function ChatMenu({ chat, modelId, pinned = [], pins = [], onUnpi
         </div>
       )}
       <div className="cmp-sec">
-        <div className="cmp-label"><Sliders style={{ width: 14 }} /> Chat instructions</div>
-        <div className="cmp-note">Added to the system prompt for this chat only, on top of your global instructions.</div>
+        <div className="cmp-label"><Sliders style={{ width: 14 }} /> {t("Chat instructions")}</div>
+        <div className="cmp-note">{t("Added to the system prompt for this chat only, on top of your global instructions.")}</div>
         <textarea className="cmp-instr" value={instr} maxLength={8000} rows={4}
           placeholder={t("e.g. Answer as a senior code reviewer. Be terse.")}
           onChange={(e) => changeInstr(e.target.value)} />
-        <div className="cmp-saved">{savedTick ? 'Saved' : ''}</div>
+        <div className="cmp-saved">{savedTick ? t('Saved') : ''}</div>
       </div>
       <div className="cmp-sec">
-        <div className="cmp-label"><Compact style={{ width: 14 }} /> Context window</div>
+        <div className="cmp-label"><Compact style={{ width: 14 }} /> {t("Context window")}</div>
         {ctx ? (
           ctx.limit ? (
             <>
@@ -102,27 +105,27 @@ export default function ChatMenu({ chat, modelId, pinned = [], pins = [], onUnpi
           ) : (
             <div className="cmp-note">~{ctx.used.toLocaleString()} tokens in context. No window limit set for this model.</div>
           )
-        ) : <div className="cmp-note">Measuring…</div>}
+        ) : <div className="cmp-note">{t("Measuring…")}</div>}
       </div>
       <div className="cmp-sec">
-        <button className="cmp-inspect-btn" onClick={openInspect}><Compact style={{ width: 14 }} /> Inspect context</button>
+        <button className="cmp-inspect-btn" onClick={openInspect}><Compact style={{ width: 14 }} /> {t("Inspect context")}</button>
       </div>
       {inspectOpen && (
         <div className="ctx-inspect-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setInspectOpen(false); }}>
           <div className="ctx-inspect">
             <div className="ctx-inspect-head">
-              <div>Context inspector</div>
+              <div>{t("Context inspector")}</div>
               <button className="ctx-x" onClick={() => setInspectOpen(false)}>✕</button>
             </div>
-            {!inspect ? <div className="cmp-note" style={{ padding: 16 }}>Building…</div> : inspect.error ? <div className="cmp-note" style={{ padding: 16 }}>Could not load context.</div> : (
+            {!inspect ? <div className="cmp-note" style={{ padding: 16 }}>{t("Building…")}</div> : inspect.error ? <div className="cmp-note" style={{ padding: 16 }}>{t("Could not load context.")}</div> : (
               <div className="ctx-inspect-body">
                 <div className="ctx-summary">
                   <span><b>{inspect.totalTokens.toLocaleString()}</b> tokens{inspect.limit ? ` / ${inspect.limit.toLocaleString()} (${inspect.pct}%)` : ''}</span>
                 </div>
                 <div className="ctx-flags">
-                  {inspect.flags.memoryBank && <span className="ctx-flag">Memory bank on</span>}
-                  {inspect.flags.webSearch && <span className="ctx-flag">Web search available</span>}
-                  {inspect.flags.summary && <span className="ctx-flag">Older turns compacted</span>}
+                  {inspect.flags.memoryBank && <span className="ctx-flag">{t("Memory bank on")}</span>}
+                  {inspect.flags.webSearch && <span className="ctx-flag">{t("Web search available")}</span>}
+                  {inspect.flags.summary && <span className="ctx-flag">{t("Older turns compacted")}</span>}
                 </div>
                 <div className="ctx-segs">
                   {inspect.segments.map(s => (

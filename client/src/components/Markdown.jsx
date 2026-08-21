@@ -2,10 +2,12 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
+import { BASE_MACROS, CODE_SPLIT, KATEX_OPTIONS, ensureKatex, hasMath, isolateDisplayMath, katexPlugin, katexVersion, subscribeKatex, wrapMathEnvironments } from '../lib/mathjs.js';
 import CodeBlock from './CodeBlock.jsx';
 import ToolCard from './ToolCard.jsx';
+import ReasoningBlock from './ReasoningBlock.jsx';
+
+export const ReasonSegs = React.createContext(null);
 import { scanTools } from '../toolproto.js';
 
 function b64encode(str) {
@@ -63,8 +65,9 @@ function legacyBlocks(text) {
 function transformTools(text) {
   const hasNew = /[|<]\s*\/?\s*\|?\s*tool/i.test(text);
   const hasOqr = text.indexOf('[[OQR:') !== -1;
+  const hasOqt = text.indexOf('[[OQT:') !== -1;
   const hasLegacy = text.indexOf('```tool') !== -1;
-  if (!hasNew && !hasOqr && !hasLegacy) return text;
+  if (!hasNew && !hasOqr && !hasOqt && !hasLegacy) return text;
 
   const spans = [];
   const results = [];
@@ -76,7 +79,9 @@ function transformTools(text) {
     spans.push({ kind: 'oqr', start: m.index, end: m.index + m[0].length, ri: results.length });
     results.push(r);
   }
-  const partial = text.match(/\[\[OQR:[A-Za-z0-9+/=]*$/);
+  const oqtRe = /\[\[OQT:(\d+)\]\]/g;
+  while ((m = oqtRe.exec(text))) spans.push({ kind: 'oqt', start: m.index, end: m.index + m[0].length, seg: Number(m[1]) });
+  const partial = text.match(/\[\[OQ[RT]?:?[A-Za-z0-9+/=]*$/);
   if (partial) spans.push({ kind: 'strip', start: partial.index, end: text.length });
 
   if (hasNew) {
@@ -100,6 +105,7 @@ function transformTools(text) {
     if (s.kind === 'block') { const r = results[ri]; emit((r && r.call) || s.call, r && r.result); ri++; }
     else if (s.kind === 'live') { emit(s.call, null); }
     else if (s.kind === 'oqr') { if (s.ri >= ri) { const r = results[s.ri]; emit(r && r.call, r && r.result); ri = s.ri + 1; } }
+    else if (s.kind === 'oqt') { out += '```reasonseg\n' + s.seg + '\n```'; }
     cursor = s.end;
   }
   out += text.slice(cursor);
@@ -108,6 +114,19 @@ function transformTools(text) {
 
 function isFenceLine(line) {
   return /^\s*(`{3,}|~{3,})/.test(line);
+}
+
+function splitBreaks(value) {
+  const parts = value.split('\n');
+  const out = [];
+  for (let i = 0; i < parts.length; i++) {
+    if (i) out.push({ type: 'break' });
+    const piece = i === 0 ? parts[i].replace(/[ \t]+$/, '')
+      : i === parts.length - 1 ? parts[i].replace(/^[ \t]+/, '')
+        : parts[i].replace(/^[ \t]+|[ \t]+$/g, '');
+    if (piece) out.push({ type: 'text', value: piece });
+  }
+  return out;
 }
 
 function remarkBreaks() {
@@ -119,6 +138,8 @@ function remarkBreaks() {
         if (child.type === 'html' && typeof child.value === 'string' && /^(?:\s*<br\s*\/?>\s*)+$/i.test(child.value)) {
           const count = (child.value.match(/<br\s*\/?>/gi) || []).length || 1;
           for (let i = 0; i < count; i++) out.push({ type: 'break' });
+        } else if (child.type === 'text' && typeof child.value === 'string' && child.value.indexOf('\n') !== -1) {
+          for (const part of splitBreaks(child.value)) out.push(part);
         } else {
           walk(child);
           out.push(child);
@@ -140,6 +161,7 @@ function blockify(text) {
   let count = 0;
   let inFence = false;
   let hasContent = false;
+  let inMath = false;
   let pos = 0;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -156,10 +178,17 @@ function blockify(text) {
       pos = next;
       continue;
     }
-    if (!inFence && line.trim() === '' && hasContent) {
+    // A display block is as unsplittable as a fence: cutting it on a blank line
+    // hands remark-math two halves with an unbalanced $$ and both render as
+    // literal text with stray dollars.
+    if (!inFence) {
+      const dollars = (line.match(/\$\$/g) || []).length;
+      if (dollars % 2) inMath = !inMath;
+    }
+    if (!inFence && !inMath && line.trim() === '' && hasContent) {
       blocks.push(text.slice(start, end));
       start = next; count = 0; hasContent = false;
-    } else if (!inFence && count >= BLOCK_HARD_LINES) {
+    } else if (!inFence && !inMath && count >= BLOCK_HARD_LINES) {
       blocks.push(text.slice(start, end));
       start = next; count = 0; hasContent = false;
     } else if (line.trim() !== '') hasContent = true;
@@ -169,6 +198,15 @@ function blockify(text) {
   return blocks;
 }
 
+function ReasonSeg({ index }) {
+  const ctx = React.useContext(ReasonSegs);
+  const segs = ctx && ctx.segs;
+  const text = segs && segs[index];
+  if (text == null) return null;
+  const live = !!(ctx.live && index === segs.length - 1);
+  return <ReasoningBlock text={text} live={live} durationMs={(ctx.segMs && ctx.segMs[index]) || 0} preset={ctx.preset} collapsible={ctx.collapsible !== false} />;
+}
+
 const mdComponents = {
   pre({ children }) {
     const el = Array.isArray(children) ? children[0] : children;
@@ -176,6 +214,7 @@ const mdComponents = {
     const m = /language-(\w+)/.exec(props.className || '');
     const raw = String(props.children || '').replace(/\n$/, '');
     const lang = m ? m[1].toLowerCase() : '';
+    if (lang === 'reasonseg') return <ReasonSeg index={Number(raw.trim())} />;
     if (lang === 'toolcall') {
       const data = (() => { try { return JSON.parse(b64decode(raw)); } catch { return null; } })();
       if (data && data.call) return <ToolCard call={data.call} result={data.result} />;
@@ -190,10 +229,17 @@ const mdComponents = {
 
 const MarkdownBlock = React.memo(function MarkdownBlock({ text }) {
   const prepared = React.useMemo(() => guardBlock(text), [text]);
+  const needsMath = React.useMemo(() => hasMath(prepared), [prepared]);
+  const mathReady = React.useSyncExternalStore(subscribeKatex, katexVersion, katexVersion);
+  React.useEffect(() => { if (needsMath && !katexPlugin()) ensureKatex(); }, [needsMath, mathReady]);
+  const rehypePlugins = React.useMemo(() => {
+    const plugin = needsMath ? katexPlugin() : null;
+    return plugin ? [[plugin, { ...KATEX_OPTIONS, macros: { ...BASE_MACROS } }]] : [];
+  }, [needsMath, mathReady]);
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
-      rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false, macros: { '\\mdollar': '\\$' } }]]}
+      rehypePlugins={rehypePlugins}
       components={mdComponents}
     >{prepared}</ReactMarkdown>
   );
@@ -215,6 +261,9 @@ function guardDollars(s) {
   if (!singles.length) return s;
   const esc = new Set();
   for (const i of singles) {
+    // `$PATH`, `$JAVA_HOME` — shell variables, never math. Two of them in one
+    // paragraph used to pair up and get typeset.
+    if (/^[A-Z][A-Z0-9_]{1,}\b/.test(s.slice(i + 1, i + 24))) { esc.add(i); continue; }
     const m = /^\d[\d,]*(?:\.\d+)?/.exec(s.slice(i + 1, i + 24));
     if (!m) continue;
     const after = s[i + 1 + m[0].length] || '';
@@ -323,15 +372,19 @@ function neutralizeOpenMath(text) {
 
 function normalizeMathDelims(text) {
   if (!text || (text.indexOf('\\[') === -1 && text.indexOf('\\(') === -1)) return text;
-  const parts = text.split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`)/);
+  const parts = text.split(CODE_SPLIT);
   for (let i = 0; i < parts.length; i++) {
     const p = parts[i];
-    if (!p || p.startsWith('`')) continue;
-    parts[i] = p
-      .replace(/\\\[/g, () => SENT + '$$')
-      .replace(/\\\]/g, () => '$$' + SENT)
-      .replace(/\\\(/g, () => SENT + '$')
-      .replace(/\\\)/g, () => '$' + SENT);
+    if (!p || p.startsWith('`') || p.startsWith('~~~')) continue;
+    // `\\` is consumed first and returned untouched, so the row-spacing form
+    // `\\[4pt]` inside align/cases/pmatrix keeps its bracket instead of having
+    // the second backslash read as the opener of a display-math delimiter.
+    parts[i] = p.replace(/\\\\|\\\[|\\\]|\\\(|\\\)/g, (m) => (
+      m === '\\\\' ? m
+        : m === '\\[' ? SENT + '$$'
+          : m === '\\]' ? '$$' + SENT
+            : m === '\\(' ? SENT + '$' : '$' + SENT
+    ));
   }
   return parts.join('');
 }
@@ -358,8 +411,8 @@ function ProgressiveBlocks({ blocks }) {
   React.useEffect(() => { setCount(advance(0, PROGRESSIVE_INITIAL_LINES)); }, [advance]);
   React.useEffect(() => {
     if (count >= blocks.length) return;
-    const idle = window.requestIdleCallback || ((cb) => setTimeout(() => cb(), 16));
-    const cancel = window.cancelIdleCallback || clearTimeout;
+    const idle = window.requestIdleCallback ? window.requestIdleCallback.bind(window) : ((cb) => setTimeout(() => cb(), 16));
+    const cancel = window.cancelIdleCallback ? window.cancelIdleCallback.bind(window) : clearTimeout;
     const handle = idle(() => setCount(c => advance(c, PROGRESSIVE_STEP_LINES)));
     return () => cancel(handle);
   }, [count, blocks.length, advance]);
@@ -371,7 +424,7 @@ function Markdown({ children, streaming }) {
   if (typeof children !== 'string') {
     return <MarkdownBlock text={children} />;
   }
-  let text = normalizeMathDelims(transformTools(children));
+  let text = isolateDisplayMath(wrapMathEnvironments(normalizeMathDelims(transformTools(children))));
   if (streaming) text = neutralizeOpenMath(text);
   const blocks = blockify(text);
   if (!streaming && (text.length > PROGRESSIVE_SIZE_TRIGGER || blocks.length > PROGRESSIVE_BLOCK_TRIGGER)) {

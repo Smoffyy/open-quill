@@ -9,7 +9,7 @@ function acquireModel(modelId, onWait) {
     return Promise.resolve();
   }
   onWait();
-  return new Promise(resolve => waiters.push({ modelId, resolve }));
+  return new Promise(resolve => { waiters.push({ modelId, resolve }); });
 }
 
 function releaseModel() {

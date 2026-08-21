@@ -9,9 +9,11 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const folders = ['.', 'server', 'client'];
 const check = process.argv.includes('--check');
 
-const run = (cmd, cwd) => {
+let failed = false;
+
+const run = (cmd, cwd, fatal = false) => {
   try { return execSync(cmd, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }); }
-  catch (e) { return (e.stdout || '') + (e.stderr || ''); }
+  catch (e) { if (fatal) failed = true; return (e.stdout || '') + (e.stderr || ''); }
 };
 
 for (const f of folders) {
@@ -26,8 +28,10 @@ for (const f of folders) {
 
   if (check) continue;
   console.log(`updating ${label}...`);
-  console.log(run('npm update', dir).trim() || 'done');
+  console.log(run('npm update', dir, true).trim() || 'done');
 }
+
+if (failed) { console.error('\nFAILED, see above.'); process.exit(1); }
 
 if (check) console.log('\n(check only, nothing was changed)');
 else console.log('\nAll folders updated within their safe version ranges.');

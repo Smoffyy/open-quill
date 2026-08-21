@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useAdmin } from '../store.jsx';
 import { Card, fmtWhen } from '../widgets.jsx';
 import { Cube, Sliders, Users, Wave, Plus, Sparkles, Clock, Gear } from '../../icons.jsx';
@@ -21,7 +21,7 @@ export default function DashboardSection() {
 
   const stats = [
     ['Models', String(models.length), `${visibleModels} visible · ${hiddenModels} hidden${unavailModels ? ` · ${unavailModels} down` : ''}`, Cube, 'models'],
-    ['Providers', String(providers.length), Object.keys(providerTypes).length ? 'LLM backends connected' : 'LLM backends', Sliders, 'providers'],
+    ['Providers', String(providers.length), Object.keys(providerTypes).length ? t('LLM backends connected') : t('LLM backends'), Sliders, 'providers'],
     ['Members', String(users.length), `${adminCount} admin${adminCount === 1 ? '' : 's'}`, Users, 'members'],
     ['30-day spend', usage ? '$' + (usage.totals?.cost || 0).toFixed(2) : ', ', usage ? `${(usage.totals?.total || 0).toLocaleString()} tokens · ${(usage.totals?.generations || 0).toLocaleString()} generations` : 'Loading…', Wave, 'analytics']
   ];
@@ -45,31 +45,31 @@ export default function DashboardSection() {
           <div className={'dash-pub' + (pub.dirty ? ' dirty' : '')}>
             <span className="dash-pub-dot" />
             <div className="dash-pub-text">
-              <div className="dash-pub-title">{pub.dirty ? 'You have unpublished draft changes' : pub.published ? 'All clients are up to date' : 'Nothing published yet'}</div>
-              <div className="muted-note">{pub.publishedAt ? 'Last pushed ' + new Date(pub.publishedAt).toLocaleString() : 'Model, appearance, and home screen edits collect in a draft until you push them.'}</div>
+              <div className="dash-pub-title">{pub.dirty ? t('You have unpublished draft changes') : pub.published ? t('All clients are up to date') : t('Nothing published yet')}</div>
+              <div className="muted-note">{pub.publishedAt ? t('Last pushed {when}', { when: new Date(pub.publishedAt).toLocaleString() }) : t('Model, appearance, and home screen edits collect in a draft until you push them.')}</div>
             </div>
-            <button className="btn primary" onClick={A.publish} disabled={publishing || (!pub.dirty && pub.published)}>{publishing ? 'Pushing…' : 'Push now'}</button>
+            <button className="btn primary" onClick={A.publish} disabled={publishing || (!pub.dirty && pub.published)}>{publishing ? t('Pushing…') : t('Push now')}</button>
           </div>
           {defaultModel && (
             <div className="dash-default">
-              <span className="muted-note" style={{ display: 'inline' }}>Default model:</span>
+              <span className="muted-note" style={{ display: 'inline' }}>{t("Default model:")}</span>
               <button className="linklike" onClick={() => { A.setSelModel(defaultModel.id); A.setSection('models'); }}>{defaultModel.display_name || defaultModel.internal_name}</button>
             </div>
           )}
         </Card>
         <Card title={t("Quick actions")} sub={t("Common tasks, one click away.")}>
           <div className="dash-actions">
-            <button className="dash-action" onClick={() => { A.setSection('models'); A.addModel(); }}><Plus /> <span>New model</span></button>
-            <button className="dash-action" onClick={() => { A.setSection('models'); A.openDiscover(providers[0]?.id); }}><Cube /> <span>Discover models</span></button>
-            <button className="dash-action" onClick={() => A.setSection('providers')}><Sliders /> <span>Manage providers</span></button>
-            <button className="dash-action" onClick={() => A.setSection('appearance')}><Sparkles /> <span>Edit appearance</span></button>
-            <button className="dash-action" onClick={() => A.setSection('limits')}><Gear /> <span>Review limits</span></button>
-            <button className="dash-action" onClick={() => A.setSection('audit')}><Clock /> <span>Open audit log</span></button>
+            <button className="dash-action" onClick={() => { A.setSection('models'); A.addModel(); }}><Plus /> <span>{t("New model")}</span></button>
+            <button className="dash-action" onClick={() => { A.setSection('models'); A.openDiscover(providers[0]?.id); }}><Cube /> <span>{t("Discover models")}</span></button>
+            <button className="dash-action" onClick={() => A.setSection('providers')}><Sliders /> <span>{t("Manage providers")}</span></button>
+            <button className="dash-action" onClick={() => A.setSection('appearance')}><Sparkles /> <span>{t("Edit appearance")}</span></button>
+            <button className="dash-action" onClick={() => A.setSection('limits')}><Gear /> <span>{t("Review limits")}</span></button>
+            <button className="dash-action" onClick={() => A.setSection('audit')}><Clock /> <span>{t("Open audit log")}</span></button>
           </div>
         </Card>
       </div>
       <Card title={t("Recent activity")} sub={t("The latest sensitive admin actions.")}
-        right={<button className="linklike" onClick={() => A.setSection('audit')}>View full log</button>}>
+        right={<button className="linklike" onClick={() => A.setSection('audit')}>{t("View full log")}</button>}>
         {!recentAudit && <div className="muted-note">{t("Loading…")}</div>}
         {recentAudit && recentAudit.length === 0 && <div className="muted-note">{t("No admin activity recorded yet.")}</div>}
         {recentAudit && recentAudit.length > 0 && (

@@ -1,177 +1,221 @@
 <div align="center">
 
+<img src="client/public/brand/starburst.svg" alt="Open Quill" width="120"/>
+
 # Open Quill
 
-<img src="assets\v27\icon.svg" alt="Starburst Logo" width="200"/>
+**A self-hosted chat interface for local and cloud LLMs.**<br/>
+Anthropic-inspired design, artifacts, a real code sandbox. Nothing leaves your machine unless you say so.
 
-*A fully open-sourced chat interface featuring Anthropic inspired theming.*
+[![Latest Stable Release](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FSmoffyy%2Fopen-quill%2Freleases%2Flatest&query=%24.name&label=stable&labelColor=1f1f1e&color=d97757)](https://github.com/Smoffyy/open-quill/releases/latest)
+[![Latest Beta Release](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FSmoffyy%2Fopen-quill%2Freleases&query=%24%5B0%5D.name&label=beta&labelColor=1f1f1e&color=8a7f77)](https://github.com/Smoffyy/open-quill/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/Smoffyy/open-quill/ci.yml?branch=dev&label=CI&labelColor=1f1f1e&logo=githubactions&logoColor=f4f3ee)](https://github.com/Smoffyy/open-quill/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-8a7f77?labelColor=1f1f1e)](LICENSE)
+[![Follow on X](https://img.shields.io/badge/%40openquilldev-1f1f1e?logo=x&logoColor=f4f3ee)](https://x.com/openquilldev)
 
-[![Latest Stable Release](https://img.shields.io/github/v/release/Smoffyy/open-quill?label=Latest%20Stable%20Release)](https://github.com/Smoffyy/open-quill/releases/latest)
-[![Latest Beta Release](https://img.shields.io/github/v/release/Smoffyy/open-quill?include_prereleases&label=Latest%20Beta%20Release)](https://github.com/Smoffyy/open-quill/releases)
+[Quick start](#quick-start) · [Features](#features) · [Documentation](#documentation) · [Configuration](#configuration) · [Privacy](#privacy) · [Releases](#releases--versioning)
 
 </div>
 
-A **chat interface** inspired by **[Anthropic's Chat Interface](https://claude.ai/new)**, enhanced with new features while preserving the Anthropic's aesthetic. This project aims to recreate the look and feel of Anthropic's interface while introducing the ability to run everything **entirely locally** for greater privacy and control.
+<br/>
 
-This project is licensed under the [MIT License](LICENSE), by downloading, using, or modifying this project, you agree to the terms of the [LICENSE](LICENSE) file. **Forever free. Built by the community, for the community.**
+<p align="center">
+  <img src="docs/images/chat-artifacts.png" alt="Open Quill chat with the artifacts panel open, showing files the assistant created" width="100%"/>
+</p>
 
-> **This project is not enterprise ready and is not intended to be. It is a community built interface designed to be customized, modified, and configured however you prefer.**
+<p align="center"><sub>The assistant building a Rust project file by file, with every artifact versioned in the side panel.</sub></p>
+
+<br/>
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/greeting.png" alt="Home screen"/><br/><sub><b>Home</b>: greeting, composer and quick prompts.</sub></td>
+<td width="50%"><img src="docs/images/projects.png" alt="A project with instructions and files"/><br/><sub><b>Projects</b>: shared instructions and files across chats.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/images/admin-panel.png" alt="Admin panel, models section"/><br/><sub><b>Admin</b>: models, prompts, abilities and pricing.</sub></td>
+<td width="50%"><img src="docs/images/all-chats.png" alt="The all-chats overlay"/><br/><sub><b>Your chats</b>: search, archive and bulk actions.</sub></td>
+</tr>
+</table>
 
 ---
 
-<p align="center">
-  <img src="assets\v27\anthropic_screenshot1.jpeg" alt="Chat Interface with Artifacts"/>
-</p>
+## Quick start
 
-<details>
-  <summary>More Screenshots.</summary>
-  <br>
+### 1. Check the requirements
 
-  <p align="center">
-    <img src="assets\v27\anthropic_screenshot2.jpeg" alt="Artifacts"/>
-    <br>
-    <sub>Chat with Artifacts.</sub>
-  </p>
+| Requirement | Version | Notes |
+| --- | --- | --- |
+| [Node.js](https://nodejs.org/en/download/) | `22.23.2` or newer | CI builds and tests on Node 24 |
+| An OpenAI-compatible model server | any | [llama.cpp](https://github.com/ggml-org/llama.cpp) at `http://localhost:8080/v1` by default |
 
-  <p align="center">
-    <img src="assets\v27\anthropic_screenshot4.jpeg" alt="Chat"/>
-    <br>
-    <sub>Chat response.</sub>
-  </p>
+### 2. Install and run
 
-  <p align="center">
-    <img src="assets\v27\anthropic_screenshot3.jpeg" alt="Admin panel"/>
-    <br>
-    <sub>Models tab in Admin Panel.</sub>
-  </p>
+Pick one.
 
-  <p align="center">
-    <img src="assets\v27\openai_screenshot1.jpeg" alt="OpenAI chat"/>
-    <br>
-    <sub>OpenAI theme</sub>
-  </p>
+**From a release** &nbsp;·&nbsp; fastest, the client is already built &nbsp;·&nbsp; [download](https://github.com/Smoffyy/open-quill/releases/latest)
 
-</details>
+```bash
+cd server && npm install && cd ..
+npm start                 # serves on http://localhost:3001
+```
+
+**From source** &nbsp;·&nbsp; the `stable` or `dev` branch
+
+```bash
+npm run install:all
+npm run build             # builds the client into client/dist
+npm start                 # serves on http://localhost:3001
+```
+
+**Development** &nbsp;·&nbsp; hot reload, for working on Open Quill
+
+```bash
+npm run install:all
+npm run dev               # client :5173 (proxied) to server :3001
+```
+
+### 3. Create your account
+
+Open the address above. **The first account created is the admin.**
+
+### 4. Connect a model
+
+| Step | Where |
+| --- | --- |
+| Start your model server and load a model | llama.cpp, for example |
+| Set the API base URL and key, then save | **Admin Panel → Providers** |
+| Set each model's **internal model name** to the id your server expects | **Admin Panel → Models** |
+| Add a description, system prompt, icon and reasoning settings | **Admin Panel → Models** |
+
+The Admin Panel is in the profile menu, bottom-left of the sidebar.
+
+> [!NOTE]
+> Open Quill is built and tested primarily against llama.cpp. Other OpenAI-compatible providers generally work, but full feature parity is not guaranteed.
 
 ---
 
 ## Features
 
-- Anthropic-style UI with a serif assistant voice (Source Serif 4) and Open Sans user input
-- Two-step email + password sign-in; the **first account created becomes the admin**
-- Letter-by-letter streaming with a fade-in reveal
-- Per-phase model logos (static / generating / thinking), admin-uploadable
-- Reasoning models: an **Extended** toggle and collapsible "Thought process" view; supports `<think>` tags and `reasoning_content` deltas
-- Admin panel: manage models (display name, internal API id, description, system prompt), tuck models under a renamable "More models" group, toggle reasoning and set reasoning / non-reasoning tokens, and upload the three state logos
-- Reasoning / non-reasoning tokens are appended to the end of the system prompt on a new line (e.g. `/think`, `/no_think`)
-- Changes save instantly and push to every connected client in real time over WebSocket
-- Auto-generated chat titles, code blocks with hover-to-copy, smart autoscroll with a jump-to-bottom button
-- Zero native dependencies, data is stored in a local JSON file (`server/data.json`)
-- Artifacts, enabling users to create entire projects natively inside the UI!
-- And much more!
+### Interface
 
-## Why was this project made?
+- Anthropic-style design with a serif assistant voice (Newsreader) and Open Sans for your own messages
+- Two complete UI presets, Anthropic and OpenAI, switchable live, plus light/dark modes and selectable palettes
+- Token-by-token streaming with a fade-in reveal, smart autoscroll and a jump-to-bottom control
+- Auto-generated chat titles, hover-to-copy code blocks, branching conversations and side-by-side branch comparison
+- Full keyboard navigation with rebindable shortcuts, a command palette and in-thread search
+- English, Spanish, Chinese, French and Portuguese
 
-This project was made mainly because I was fascinated by the Anthropic interface and colors. There's many other apps that have recreated simliar styles of other interfaces and I wanted to contribute openly for others to build upon what I've created. This entire project will **FOREVER** be listed under the MIT License. The front end aims to keep a balance between useful functionality and a clean, aesthetically pleasing experience. This project was made with the help of my local assistants alongside me.
+### Models and reasoning
 
-I've created an official YouTube channel dedicated to this project, which will showcase major updates as well as tutorials on how to use the interface. Check it out at [open-quill-git YouTube](https://www.youtube.com/@open-quill-git)
+- Multiple providers side by side, each with its own base URL, key and sampler set
+- Per-model display name, description, system prompt, icon and sampling parameters
+- Reasoning models get an **Extended** toggle and a collapsible thought view, supporting both `<think>` tags and `reasoning_content` deltas
+- Trigger tokens such as `/think` and `/no_think` appended to the system prompt automatically
+- Custom kwargs surfaced to users as toggles, sliders or dropdowns
+- **Routers**: a model that forwards each turn to whichever of your real models matches first, by keyword, regex, attachment, code content or length
+- Exact context accounting using the model's own tokenizer, with a sliding window and summarization that layer rather than compete
 
-## Requirements
+### Files and tools
 
-- Node.js 18+ (Node 20+ recommended)
-- A running OpenAI-compatible server. Default target is LM Studio at `http://localhost:1234/v1`.
+| | |
+| --- | --- |
+| **Artifacts** | The assistant writes real files into a per-chat workspace you can view, diff, restore to any version, preview and download |
+| **Code sandbox** | A real shell and file toolset scoped to that workspace, so the assistant can scaffold, install, build, run and test |
+| **Web search** | Optional, backed by your own SearXNG instance |
+| **Connectors (MCP)** | Model Context Protocol servers as local subprocesses or remote endpoints |
+| **Projects and Spaces** | Group chats, share files and instructions across a body of work |
+| **Memory** | An editable, per-user memory assembled from recent conversations |
+| **Voice** | Speech-to-text and text-to-speech against an endpoint you configure |
 
-## Setup
+---
 
-```bash
-npm run install:all
-npm run build # builds the client into client/dist
-npm start # serves everything from http://localhost:3001
-```
+## Documentation
 
-Open http://localhost:3001 and create your account, the first one is the admin.
+The [`docs/`](docs/README.md) folder is a full user guide covering chatting and branching, the composer, models and reasoning, personas and styles, organizing chats, artifacts and the sandbox, settings, keyboard shortcuts, privacy, and a complete admin reference. **Start at [docs/README.md](docs/README.md).**
 
-### Development (hot reload)
+Building *on* Open Quill instead? [CLAUDE.md](CLAUDE.md) covers the architecture and [RELEASING.md](RELEASING.md) covers versioning, tagging and cutting a release.
 
-```bash
-npm run install:all
-npm run dev # client on :5173 (proxied), server on :3001
-```
+---
 
-Open http://localhost:5173.
+## Configuration
 
-## Connecting your model
+Environment variables go in a `.env` file in the **project root**. The server writes one on first start, so a fresh clone just works; to set it up ahead of time, copy the example that ships in the root with `cp .env.example .env`.
 
-1. Start your local server (e.g. llama.cpp server) and load a model.
-2. Sign in as the admin, open the profile menu (bottom-left) -> **Admin Panel** -> **Providers**.
-3. Set the API base URL (default `http://localhost:8080/v1`) and key, then Save.
-4. Under **Models**, set each model's **internal model name** to the id your server expects (llama.cpp accepts the model name configured when starting the server, or the model's id). Add a description, system prompt, logos, and reasoning settings as desired.
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OPEN_QUILL_DB` | `default` | Which database to load. Read once at startup |
+| `PORT` | `3001` | Port the server listens on |
+| `HOST` | `127.0.0.1` | Bind address. Set `0.0.0.0` to reach it from other devices on your network |
+| `DB_ENCRYPTION_KEY` | *generated* | Use one key for every database instead of a per-database key |
 
-## Databases
+### Databases
 
-Open Quill can run multiple, fully isolated databases and switch between them with a single line in a `.env` file. Each database keeps its own users, chats, preferences, interface and model configuration, artifacts, uploaded content, sandbox, project files and memory. Nothing is shared between them.
+Open Quill can run multiple fully isolated databases and switch between them with one line in `.env`. Each keeps its own users, chats, preferences, interface and model configuration, artifacts, uploads, sandbox, project files and memory. Nothing is shared between them.
 
-The active database is chosen by `OPEN_QUILL_DB` and is read **once at startup**. For safety it can never be switched while the server is running, change the value and restart to switch.
+`default` uses `server/data/`, the original location, so existing installs are untouched. Any other name lives in `server/data/databases/<name>/` and is created automatically the first time it loads. You can also create, switch and delete them from **Admin Panel → Databases**. For safety the active database can never be switched while the server is running. Change the value and restart.
 
-### First-time setup
+Full details, including how the selector is resolved and how per-database encryption keys work, are in **[docs/databases.md](docs/databases.md)**.
 
-You don't have to create the `.env` yourself, the server writes one automatically the first time it starts, so a fresh clone just works. To set it up ahead of time, copy the example that ships in the project root:
+> To reset a database, stop the server and delete its folder.
 
-```bash
-cp .env.example .env
-```
+---
 
-Then pick a database name:
+## Privacy
 
-```bash
-# .env  (in the project root, the folder you run npm from)
-OPEN_QUILL_DB=default
-```
+Open Quill is built to run entirely on your own machine, and by default nothing leaves it.
 
-`default` uses `server/data/`, the original location, so existing installs are untouched. Any other name lives in its own folder under `server/data/databases/<name>/` and is created automatically the first time it loads. Names may use lowercase letters, numbers, dashes and underscores.
+- **No telemetry, analytics, crash reporting or update checks.** The "Analytics" in the admin panel is your own local token and cost accounting, computed from the local database.
+- **The client only talks to its own backend.** No third-party scripts; fonts, KaTeX and highlight.js are bundled rather than fetched from a CDN, and `npm run build` fails if anything remote creeps into the bundle.
+- **Outbound requests are blocked by default.** Loopback and private addresses still work, so a model backend on this machine or your LAN is unaffected; anything pointed at a public address is refused before a packet leaves. Allow specific hosts under **Admin → Safety**.
+- **Secrets stay local.** The database encryption key and the auth token secret are generated on your machine and never transmitted. The database is encrypted at rest.
+- **The server binds to `127.0.0.1`** unless you change `HOST`.
 
-The `.env` belongs in the **project root**. If both a project-root `.env` and a `server/.env` exist, the project-root one wins and the other is ignored. On startup the server prints exactly which database and which file are in effect:
+Outbound connections happen only for features you explicitly enable, and only to destinations you specify: your **model provider**, your **voice** endpoint, your own **SearXNG** instance for web search (which then fetches result pages from the web, that being the point of the feature), any **MCP connectors** you add, and the **code sandbox**, which runs code with the same network access as the host.
 
-```
-[db] active database "default" -> .../server/data
-[db] database selector: .../.env (edit OPEN_QUILL_DB, then restart to switch)
-```
+See [docs/privacy-security.md](docs/privacy-security.md) for incognito chats, 2FA, sessions and account deletion.
 
-### Switching or creating databases
+---
 
-Two ways, both take effect on the next restart:
+## Releases & versioning
 
-- **Edit `.env`** — set `OPEN_QUILL_DB` to any name and restart. A brand-new name starts as a fresh, empty database.
-- **Admin panel** — sign in as the admin and open **Admin Panel -> Databases**. Create named databases, see which one is running versus which loads next, choose the one to load, and delete unused ones. Your choice is marked pending and applied on the next restart.
+From **Open Quill 27** onward the project uses year-based versioning: the major number increments annually.
 
-Each database is encrypted with its own key stored beside its data. To use one key for every database instead, set `DB_ENCRYPTION_KEY` in your `.env`.
+| Channel | Where | What to expect |
+| --- | --- | --- |
+| **Stable** | [Releases](https://github.com/Smoffyy/open-quill/releases/latest), marked *Latest* | Packaged with the client already built. What most people want |
+| **Beta** | [Releases](https://github.com/Smoffyy/open-quill/releases), marked *Pre-release* | Cut from `dev` as features land, versioned like `27.1.0-beta.3`. Expect the occasional rough edge |
+| **Bleeding edge** | The [`dev`](https://github.com/Smoffyy/open-quill/tree/dev) branch | Built from source. Expect breakage, and report issues with a commit hash |
 
-## Notes
+**Settings → Version** tells you which you are on: a bare version like `27.1.0` is a release, anything with a tail is not.
 
-- All data lives under the active database's folder inside `server/data/` (see **Databases** above). To reset a database, stop the server and delete its folder.
-- To change the port, set `PORT` before `npm start`.
+Maintaining a fork or cutting your own builds? [RELEASING.md](RELEASING.md) documents the whole process.
 
-## Privacy and local-only operation
+---
 
-Open Quill is built to run entirely on your own machine, and by default nothing leaves it:
+## Community & contributing
 
-- No telemetry, analytics, crash reporting, tracking, or update "phone-home" checks. The "Analytics" in the admin panel is your own local token/cost accounting, computed from the local database.
-- The web client only ever talks to its own backend (same-origin requests and a same-host WebSocket). It loads no third-party scripts; fonts are self-hosted, not fetched from a CDN.
-- Secrets (the database encryption key and the auth token secret) are generated and stored locally and are never transmitted. The database itself is encrypted at rest.
-- The server binds to `127.0.0.1` (this machine only) by default. Set `HOST=0.0.0.0` in your `.env` if you want to reach it from other devices on your network.
+- **[GitHub Discussions](https://github.com/Smoffyy/open-quill/discussions)**: questions, setup help and feature requests. The best place to influence what gets built next.
+- **[Issues](https://github.com/Smoffyy/open-quill/issues)**: bugs. Include the version from Settings → Version, or a commit hash if you are on `dev`.
+- **[X](https://x.com/openquilldev)**: release notes, previews and development updates.
 
-Outbound network requests happen only when you explicitly configure or enable a feature, and only to the destination you specify:
+Pull requests target **`dev`**, never `stable`. Before opening one, run `npm run lint`, `npm test` in `server/`, and `npm run build`. CI runs all three and must stay green.
 
-- **Model provider**: chat requests go to the provider base URL you set. The default is a local server (llama.cpp at `http://localhost:8080/v1`). If you choose a cloud provider and enter an API key, requests go there.
-- **Voice**: speech‑to‑text and text‑to‑speech use the base URL you configure (local by default).  
-- **Web search**: off unless you enable it and point it at your own SearXNG instance. When a search runs, the server fetches result pages from the web, which is the point of the feature.  
-- **Connectors (MCP)**: only those you add. These run as local subprocesses, or reach an `http(s)` URL if you configure one.  
-- **Code sandbox**: runs code the model or you generate; that code has the same network access as the host, so a script it runs could make its own requests.
+> [!IMPORTANT]
+> Open Quill is not enterprise software and is not trying to be. It is a community-built interface meant to be customized, modified and configured however you prefer.
 
-## Updates / Version Information
+---
 
-Beginning with **Open Quill 27**, the project will adopt a year based versioning system. Major releases will increment annually, starting with version **27** and continuing forward with each new release cycle.
+## Background
 
-If you'd like to try upcoming features on a **semi-stable** build, check out the [beta](https://github.com/Smoffyy/open-quill/tree/beta) branch. For users who prefer a packaged release without automatic updates, you can find available builds on the [releases](https://github.com/Smoffyy/open-quill/releases) page. *Please note that beta builds are considered semi-stable and may contain bugs or unfinished features.* 
+This project started because I was fascinated by Anthropic's interface and colour work. Plenty of apps recreate the look of other interfaces; I wanted to contribute one openly, for others to build on. The front end aims to balance genuine functionality against a clean, aesthetically pleasing experience.
 
-For developers and advanced users who want access to the **bleeding-edge** changes, the [dev](https://github.com/Smoffyy/open-quill/tree/dev) branch contains the latest in-development updates.
+It was developed in collaboration with my local agents, with additional design, refinement and implementation performed by me. In the interest of transparency and community collaboration, it will remain fully open-source and freely available in perpetuity.
+
+---
+
+## License
+
+Released under the [MIT License](LICENSE). By downloading, using or modifying this project you agree to its terms. **Forever free. Built by the community, for the community.**
+
+Open Quill stands on a great deal of excellent open-source work. See [CREDITS.md](CREDITS.md).

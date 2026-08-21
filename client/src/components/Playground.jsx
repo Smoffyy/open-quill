@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import '../styles/playground.css';
 import { api } from '../api.js';
 import { t } from '../i18n.jsx';
 import { Trash, Plus, Chevron, Panel, Gear } from './icons.jsx';
 import { KwargControl } from './ModelDropdown.jsx';
+import { Switch } from './settingsui.jsx';
 import { resolveKwargValues, kwargPayload, kwargValuesArr, defaultValueOf } from '../kwargs.js';
 
 const NUM_FIELDS = [
@@ -187,7 +189,7 @@ export default function Playground({ onClose }) {
           messages: history.map(m => ({ role: m.role, content: m.content }))
         })
       });
-      if (!res.ok || !res.body) throw new Error((await res.json().catch(() => ({}))).error || ('Upstream error ' + res.status));
+      if (!res.ok || !res.body) throw new Error((await res.json().catch(() => ({}))).error || t('Upstream error {status}', { status: res.status }));
       const reader = res.body.getReader();
       const dec = new TextDecoder();
       let buf = '';
@@ -344,13 +346,14 @@ export default function Playground({ onClose }) {
                 <label>{t('Extended thinking (prompt token)')}</label>
                 <div className="pg-note">{t('Appends the trigger below to the system prompt.')}</div>
               </div>
-              <div className={'switch' + (merged.has_reasoning ? ' on' : '')} />
+              <Switch on={!!merged.has_reasoning} label={t('Extended thinking (prompt token)')}
+                onToggle={() => set('has_reasoning', merged.has_reasoning ? 0 : 1)} />
             </div>
             {!!merged.has_reasoning && (
               <>
                 <div className="pg-switch-row" onClick={() => setExtended(x => !x)}>
                   <div><label>{t('Extended is on for this run')}</label></div>
-                  <div className={'switch' + (extended ? ' on' : '')} />
+                  <Switch on={extended} label={t('Extended is on for this run')} onToggle={() => setExtended(x => !x)} />
                 </div>
                 <Field label="Extended-mode trigger" changed={changedKeys.includes('reasoning_token')} onReset={() => revert('reasoning_token')}>
                   <input value={merged.reasoning_token || ''} placeholder="/think" onChange={(e) => set('reasoning_token', e.target.value)} />

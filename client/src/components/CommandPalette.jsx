@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useFocusTrap } from '../lib/focus.js';
 import { t } from '../i18n.jsx';
 
 export default function CommandPalette({ commands, onClose }) {
@@ -6,7 +7,8 @@ export default function CommandPalette({ commands, onClose }) {
   const [idx, setIdx] = useState(0);
   const inputRef = useRef(null);
   const listRef = useRef(null);
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  const boxRef = useRef(null);
+  useFocusTrap(boxRef, onClose, { initial: inputRef });
   const filtered = commands.filter(c => {
     const s = (c.label + ' ' + (c.keywords || '')).toLowerCase();
     return q.trim().toLowerCase().split(/\s+/).every(t => s.includes(t));
@@ -25,12 +27,12 @@ export default function CommandPalette({ commands, onClose }) {
   }, [idx]);
   return (
     <div className="overlay cmdk-overlay" onMouseDown={(e) => e.target.classList.contains('cmdk-overlay') && onClose()}>
-      <div className="cmdk">
-        <input ref={inputRef} className="cmdk-input" placeholder="Type a command…" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} />
-        <div className="cmdk-list" ref={listRef}>
-          {filtered.length === 0 && <div className="cmdk-empty">No matching commands</div>}
+      <div className="cmdk" ref={boxRef} role="dialog" aria-modal="true" aria-label={t('Command palette')}>
+        <input ref={inputRef} className="cmdk-input" placeholder={t('Type a command…')} aria-label={t('Command palette')} aria-expanded="true" aria-controls="oq-cmdk-list" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKey} />
+        <div className="cmdk-list" id="oq-cmdk-list" role="listbox" aria-label={t('Commands')} ref={listRef}>
+          {filtered.length === 0 && <div className="cmdk-empty">{t('No matching commands')}</div>}
           {filtered.map((c, i) => (
-            <button key={c.id} className={'cmdk-item' + (i === idx ? ' active' : '')} onMouseMove={() => setIdx(i)} onClick={() => run(c)}>
+            <button key={c.id} role="option" aria-selected={i === idx} className={'cmdk-item' + (i === idx ? ' active' : '')} onMouseMove={() => setIdx(i)} onClick={() => run(c)}>
               <span className="cmdk-label">{c.label}</span>
               {c.shortcut && <span className="cmdk-shortcut">{c.shortcut}</span>}
             </button>

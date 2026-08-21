@@ -1,8 +1,15 @@
 import { db, uid, now, tx } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
-import * as sandbox from '../../sandbox.js';
 import { stripToolSyntax } from '../../lib/history.js';
-import { ensureChain, childrenOf, activePath, leafUnder } from '../../lib/tree.js';
+import { ensureChain, childrenOf, activePath, leafUnder, sortedMsgs } from '../../lib/tree.js';
+
+const PREVIEW_MAX = 140;
+
+function previewText(content) {
+  const raw = stripToolSyntax(content || '');
+  const clean = raw.replace(/```[\s\S]*?(?:```|$)/g, ' ').replace(/\s+/g, ' ').trim();
+  return clean.length > PREVIEW_MAX ? clean.slice(0, PREVIEW_MAX - 1) + '…' : clean;
+}
 
 export default function registerMessageRoutes(app) {
   app.get('/api/chats/:id', authMiddleware, (req, res) => {
@@ -19,9 +26,11 @@ export default function registerMessageRoutes(app) {
       const sibs = childrenOf(c.id, m.parent_id ?? null);
       const mm = m.model_id ? modelById.get(m.model_id) : null;
       return {
-        id: m.id, role: m.role, content: m.content, reasoning: m.reasoning, model_id: m.model_id, attachments: m.attachments || [], created_at: m.created_at, pinned: !!m.pinned, excluded: !!m.excluded, steers: Array.isArray(m.steers) ? m.steers : null, feedback: m.feedback || 0,
+        id: m.id, role: m.role, content: m.content, reasoning: m.reasoning, reasoningSegs: Array.isArray(m.reasoning_segs) ? m.reasoning_segs : null, reasoningSegMs: Array.isArray(m.reasoning_seg_ms) ? m.reasoning_seg_ms : null, model_id: m.model_id, attachments: m.attachments || [], created_at: m.created_at, pinned: !!m.pinned, excluded: !!m.excluded, steers: Array.isArray(m.steers) ? m.steers : null, truncated: !!m.truncated, feedback: m.feedback || 0,
         model_name: m.model_name || mm?.display_name || legacyName.get(m.model_id) || '', model_icon: m.model_icon || mm?.static_icon || '',
         extended: !!m.extended, reasoningEffort: m.reasoning_effort || null, kwargValues: m.kwarg_values || null,
+        reasoningMs: Number(m.reasoning_ms) > 0 ? Number(m.reasoning_ms) : null,
+        speed: m.speed && m.speed.tps > 0 ? { tps: m.speed.tps, promptTps: m.speed.promptTps || 0, exact: !!m.speed.exact, out: (m.usage && m.usage.completion) || 0 } : null,
         parentId: m.parent_id ?? null, branchIndex: sibs.findIndex(s => s.id === m.id), branchCount: sibs.length,
         siblings: sibs.map(s => s.id)
       };
@@ -45,6 +54,26 @@ export default function registerMessageRoutes(app) {
     });
   });
 
+  app.get('/api/chats/:id/tree', authMiddleware, (req, res) => {
+    const c = db.chats.byId(req.params.id);
+    if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+    ensureChain(c.id);
+    const msgs = sortedMsgs(c.id);
+    const path = activePath(c.id);
+    const onPath = new Set(path.map(m => m.id));
+    const nameById = new Map(db.models.all().map(x => [x.id, x.display_name || '']));
+    const nodes = msgs.map(m => ({
+      id: m.id,
+      parentId: m.parent_id ?? null,
+      role: m.role,
+      modelName: m.model_name || nameById.get(m.model_id) || '',
+      created_at: m.created_at,
+      onPath: onPath.has(m.id),
+      preview: previewText(m.content)
+    }));
+    res.json({ activeLeaf: db.chats.byId(c.id)?.active_leaf || null, path: path.map(m => m.id), nodes });
+  });
+
   app.post('/api/chats/:id/branch', authMiddleware, (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
@@ -55,6 +84,26 @@ export default function registerMessageRoutes(app) {
     res.json({ ok: true });
   });
 
+  app.post('/api/chats/:id/cherrypick', authMiddleware, (req, res) => {
+    const c = db.chats.byId(req.params.id);
+    if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+    if (c.ended) return res.status(403).json({ error: 'This conversation was ended by the assistant and cannot be continued.' });
+    ensureChain(c.id);
+    const src = db.messages.byId(req.body.messageId);
+    if (!src || src.chat_id !== c.id) return res.status(404).json({ error: 'message not found' });
+    const path = activePath(c.id);
+    if (path.some(m => m.id === src.id)) return res.status(400).json({ error: 'That message is already in this branch.' });
+    const leaf = (db.chats.byId(c.id) || {}).active_leaf || null;
+    const id = uid();
+    db.messages.insert({
+      id, chat_id: c.id, role: src.role, content: src.content || '', reasoning: src.reasoning || '',
+      model_id: src.model_id || null, attachments: src.attachments || [],
+      parent_id: leaf, created_at: now(), copied_from: src.id
+    });
+    db.chats.update(c.id, { active_leaf: id });
+    res.json({ ok: true, id });
+  });
+
   app.post('/api/chats/:id/fork', authMiddleware, (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
@@ -63,7 +112,7 @@ export default function registerMessageRoutes(app) {
     const path = activePath(c.id);
     if (!path.length) return res.status(400).json({ error: 'empty chat' });
     const cutId = req.body.messageId;
-    let cut = cutId ? path.findIndex(m => m.id === cutId) : path.length - 1;
+    const cut = cutId ? path.findIndex(m => m.id === cutId) : path.length - 1;
     if (cut < 0) return res.status(404).json({ error: 'message not found' });
     const slice = path.slice(0, cut + 1);
     const t = now();

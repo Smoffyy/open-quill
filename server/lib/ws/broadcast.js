@@ -13,15 +13,17 @@ export function requestedKwargs(msg) {
   return out;
 }
 
+function send(ws, msg) { if (ws.readyState !== 1) return; try { ws.send(msg); } catch {} }
+
 export function broadcastConfig() {
   const msg = JSON.stringify({ type: 'config' });
-  for (const ws of clients.keys()) if (ws.readyState === 1) ws.send(msg);
+  for (const ws of clients.keys()) send(ws, msg);
 }
 
 // notify only admin sessions to refresh their draft view (live editing)
 export function broadcastAdminConfig() {
   const msg = JSON.stringify({ type: 'config' });
-  for (const [ws, st] of clients.entries()) if (ws.readyState === 1 && st.isAdmin) ws.send(msg);
+  for (const [ws, st] of clients.entries()) if (st.isAdmin) send(ws, msg);
 }
 
 export function killSessionSockets(sessionId) {
@@ -38,5 +40,5 @@ export function killSessionSockets(sessionId) {
 
 export function broadcastToUser(userId, payload) {
   const msg = JSON.stringify(payload);
-  for (const [sock, st] of clients.entries()) if (sock.readyState === 1 && st.userId === userId) sock.send(msg);
+  for (const [sock, st] of clients.entries()) if (st.userId === userId) send(sock, msg);
 }

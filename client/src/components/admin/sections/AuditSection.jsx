@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../../../api.js';
 import { Download } from '../../icons.jsx';
 import { t } from '../../../i18n.jsx';
@@ -29,20 +29,20 @@ export default function AuditSection() {
       <div className="hint">{audit.total > 0 ? `Showing ${audit.entries.length} of ${audit.total} entries.` : ''}</div>
       <div className="audit-filters">
         <select value={filter.action} onChange={(e) => { const action = e.target.value; setFilter(f => ({ ...f, action })); load(0, { ...filter, action }); }}>
-          <option value="">All actions</option>
+          <option value="">{t("All actions")}</option>
           {(audit.actions || []).map(a => <option key={a} value={a}>{a}</option>)}
         </select>
         <input placeholder={t("Filter by actor email")} value={filter.actor}
           onChange={(e) => setFilter(f => ({ ...f, actor: e.target.value }))}
           onKeyDown={(e) => { if (e.key === 'Enter') load(0); }} />
         <select value={filter.days} onChange={(e) => { const days = e.target.value; setFilter(f => ({ ...f, days })); load(0, { ...filter, days }); }}>
-          <option value="">Any time</option>
-          <option value="1">Last 24h</option>
-          <option value="7">Last 7 days</option>
-          <option value="30">Last 30 days</option>
+          <option value="">{t("Any time")}</option>
+          <option value="1">{t("Last 24h")}</option>
+          <option value="7">{t("Last 7 days")}</option>
+          <option value="30">{t("Last 30 days")}</option>
         </select>
-        <button className="btn ghost" onClick={() => load(0)}>Apply</button>
-        <button className="btn ghost" onClick={() => { window.location.href = '/api/admin/audit/export'; }}><Download style={{ width: 14, verticalAlign: '-2px' }} /> Export CSV</button>
+        <button className="btn ghost" onClick={() => load(0)}>{t("Apply")}</button>
+        <button className="btn ghost" onClick={() => { window.location.href = '/api/admin/audit/export'; }}><Download style={{ width: 14, verticalAlign: '-2px' }} /> {t("Export CSV")}</button>
       </div>
       {audit.entries.length === 0 && !audit.loading && <div className="muted-note">{t("No audit entries match.")}</div>}
       {audit.entries.length > 0 && (
@@ -57,7 +57,7 @@ export default function AuditSection() {
               {e.ip && <span className="au-ip">{e.ip}</span>}
             </div>
           ))}
-          {audit.hasMore && <button className="btn ghost audit-more" disabled={audit.loading} onClick={() => load(audit.offset + 60)}>{audit.loading ? 'Loading…' : 'Load more'}</button>}
+          {audit.hasMore && <button className="btn ghost audit-more" disabled={audit.loading} onClick={() => load(audit.offset + 60)}>{audit.loading ? t('Loading…') : t('Load more')}</button>}
         </div>
       )}
     </>

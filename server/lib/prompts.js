@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { db } from '../db.js';
 import * as sandbox from '../sandbox.js';
+import { canonicalTool } from '../tools/aliases.js';
 import { activePath } from './tree.js';
 import { stripToolSyntax } from './history.js';
 import { isTextLike, readUploadText } from './uploads.js';
@@ -10,31 +11,67 @@ import { isTextLike, readUploadText } from './uploads.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let SKILLS_CACHE = null;
+
+function hostEnvSection() {
+  const env = sandbox.hostEnvInfo();
+  const L = [];
+  L.push('## Host environment (READ THIS BEFORE EVERY bash CALL)');
+  L.push(`- Operating system: **${env.osName}** (${env.arch}). Shell used by \`bash\`: \`${env.shellName}\`.`);
+  if (env.interpreters.length) {
+    L.push('- Programs installed on this host. These are the ONLY ones you may invoke:');
+    for (const i of env.interpreters) L.push(`  - \`${i.name}\` — ${i.label}, ${i.version}${i.run ? ` (e.g. \`${i.run}\`)` : ''}`);
+  } else {
+    L.push('- **No language runtimes were detected on this host.** Do not assume `node`, `python`, `npm` or a compiler exist. Do everything with the file tools, and tell the user if a task genuinely needs a runtime that is missing.');
+  }
+  if (env.utils.length) L.push(`- Extra utilities on PATH, safe to call: ${env.utils.map(u => '`' + u + '`').join(', ')}.`);
+  if (env.missingUtils.length) L.push(`- **NOT installed on this host.** Calling any of these fails, so never try, not even to check: ${env.missingUtils.map(u => '`' + u + '`').join(', ')}.`);
+  if (env.pythonCmd && env.pythonCmd !== 'python3') L.push(`- The Python command here is \`${env.pythonCmd}\`. \`python3\` does NOT exist on this host.`);
+  if (!env.pythonCmd) L.push('- Python is NOT installed here. Do not write `python`, `python3` or `pip` commands.');
+  if (!env.runtimes.node) L.push('- Node.js is NOT installed here. Do not write `node` or `npm` commands.');
+  if (!env.unix) {
+    L.push('- This is **cmd.exe on Windows, not a Unix shell.** `find`, `sort` and `more` exist but are the Windows commands with different syntax, not the Unix ones.');
+    L.push('- Unix FLAGS fail, even on commands that do exist: `mkdir -p`, `rm -rf`, `cp -r`, `ls -la`. Plain `mkdir a\\b` already creates parent folders.');
+    L.push('- **In a `bash` command, cmd.exe\'s own builtins (`mkdir`, `del`, `copy`, `move`, `ren`, `rmdir`, `dir`, `type`) do NOT accept forward slashes as path separators — they read `/` as the start of a switch.** `mkdir src/main/java` fails with "The syntax of the command is incorrect." even though forward slashes work fine in `cd`, in every real interpreter, and in this app\'s own file tools. In `bash`, write these paths with backslashes: `mkdir src\\main\\java`. This is auto-corrected for you when it can be, but do not rely on that — write backslashes for these commands the first time. This does NOT apply to the `path` argument of `create_file`, `make_dir`, `view` and the other file tools, which always take forward slashes on every OS.');
+    L.push('- cmd.exe mangles quotes and newlines in long one-liners. To run real logic, write a script file with `create_file` and then run that file, instead of a `-c "..."` one-liner.');
+  } else {
+    L.push('- Standard Unix utilities are available, but the file tools are still preferred for file work because their results are structured, versioned, and shown to the user.');
+  }
+  L.push('- **Your shell working directory PERSISTS across `bash` calls.** After `cd sub`, every later command already runs in `sub` until you `cd` elsewhere. The current directory comes back as `cwd` with every result — read it.');
+  L.push('- **So do not re-issue the same `cd` on every call.** `cd myproject && ...` twice in a row is the single most common way to get stuck here: the second one looks for `myproject/myproject`, fails with "the system cannot find the path specified", and repeating it can never work. If you want a command to run somewhere specific regardless of where the shell is, pass `workdir` instead: `{"cmd": "npm test", "workdir": "myproject"}`. `workdir` is always relative to the workspace root, so it is safe to repeat.');
+  return L.join('\n');
+}
+
+const BOUNDARY_SECTION = [
+  '## The workspace boundary is enforced',
+  'You are confined to one folder. The harness checks this, so a violating call simply fails and wastes a turn. Get it right the first time.',
+  '',
+  '- **Every path is relative to the workspace root**: `src/app.py`, `data/in.csv`, `out.txt`.',
+  '- Rejected in tool arguments AND in shell commands: `/etc/passwd`, `/usr/local/bin`, `C:\\Users\\...`, `\\\\server\\share`, `~/notes.txt`, `../../secret`.',
+  '- There is no `/tmp`. Put scratch files inside the workspace, e.g. `tmp/scratch.txt`.',
+  '- `cd` may only move into folders inside the workspace.',
+  '- Host administration is blocked and cannot be worked around: `sudo`, `su`, `runas`, `shutdown`, `systemctl`, `service`, `reg`, `regedit`, `diskpart`, `format`, `mount`, `netsh`, `net`, `schtasks`, `crontab`, `taskkill`, `chown`, `icacls`, system package managers (`apt`, `apt-get`, `yum`, `dnf`, `pacman`, `brew`, `choco`, `winget`), `docker`, `kubectl`, `ssh`, `telnet`, `nc`.',
+  '- Project-local installs are fine and encouraged: `npm install`, `pip install`, `cargo build` and the like, run inside the workspace.',
+  '',
+  'If a task genuinely needs something outside the workspace, say so plainly in your reply. Never retry a blocked call with a different spelling.'
+].join('\n');
+
 export function sandboxPromptFor(chatId) {
   if (SKILLS_CACHE === null) {
     try { SKILLS_CACHE = fs.readFileSync(path.join(__dirname, '..', 'skills', 'sandbox.md'), 'utf8'); }
     catch { SKILLS_CACHE = ''; }
   }
   let p = SKILLS_CACHE;
-  const env = sandbox.hostEnvInfo();
-  p += `\n\n## Host environment (READ THIS BEFORE USING bash)\n- Operating system: **${env.osName}**. Shell: \`${env.shellName}\`.\n`;
-  if (!env.unix) {
-    p += '- This is NOT a Unix system. Commands like `cat`, `ls`, `grep`, `find`, `unzip`, `zipinfo`, `file`, `head`, `tail`, `wc`, `sed`, `awk`, `which`, `touch`, `chmod` DO NOT EXIST and will fail with exit code 9009 or "not recognized". Never call them, not even once to check.\n- Unix FLAGS do not exist here either, even on commands that do exist. `mkdir -p x/y` fails; plain `mkdir x\\y` already creates parent folders. `rm -rf`, `cp -r`, `ls -la`, `python3` are all invalid. A few of these are auto-corrected for you and the correction is reported back, but do not rely on it.\n- For every file operation use the dedicated tools: `view`, `list_files`, `find`, `search`, `extract_zip`, `bundle_zip`, `copy_file`, `move_file`, `make_dir`, `delete_file`. They always work and are cross-platform.\n- If you need to inspect data programmatically, write a small script file with `create_file` and run it with an interpreter listed below, instead of long shell one-liners (cmd.exe quoting mangles quotes and newlines in one-liners).\n';
-  } else {
-    p += '- Standard Unix utilities are available, but the dedicated file tools (`view`, `list_files`, `find`, `search`, `extract_zip`, `copy_file` and friends) are still preferred for file operations because their results are structured and versioned.\n';
-  }
-  p += '- Your shell working directory PERSISTS across bash calls: `cd sub` now stays in effect for later commands until you `cd` elsewhere.\n';
-  p += env.interpreters.length
-    ? `- Interpreters detected on this host: ${env.interpreters.join(', ')}. Only invoke interpreters from this list.\n`
-    : '- No language interpreters were detected on this host. Rely on the dedicated file tools; do not assume node or python exist.\n';
-  p += '\n## History markers are NOT a syntax\nEarlier tool activity may appear in this conversation as compact bracketed summaries like `[used bash: ...]` or `[used view: ...]`. Those are generated by the platform AFTER a real tool call, purely to save space. Writing text like `[used view: file.txt]` yourself does NOTHING: no tool runs, and it looks broken to the user. The ONLY way to use a tool is a real function/tool call with JSON arguments. Never write `[used`, `[tool`, or imitation tool-call text in your replies.';
+  p += '\n\n' + hostEnvSection();
+  p += '\n\n' + BOUNDARY_SECTION;
+  // Rule 3 of the skill already covers imitation tool text; this is not repeated
+  // here. Everything below is state the skill cannot know: what is on disk now.
   const { files, hidden } = sandbox.list(chatId, { withHidden: true });
-  if (!files.length && !hidden) return p + '\n\n## Current sandbox\nThe sandbox is empty.';
+  if (!files.length && !hidden) return p + '\n\n## Current workspace\nThe workspace is empty. Create what you need with `create_file`. There is nothing to read yet, so do not call `view` on files that do not exist.';
   const LIST_CAP = 200, INLINE_CAP = 12;
-  p += '\n\n## Current sandbox files\nThese are the LATEST versions on disk. Always edit these directly, never assume older content. The version number (vN) increases each time a file changes.\n';
+  p += '\n\n## Current workspace files\nThis is what is on disk RIGHT NOW, after every edit made so far. It is the truth: edit these, never an older version you remember. `vN` is the version number and increases on every change.\n';
   for (const f of files.slice(0, LIST_CAP)) p += `- ${f.path} (v${f.v}, ${f.size} bytes)\n`;
-  if (files.length > LIST_CAP) p += `- … and ${files.length - LIST_CAP} more file(s). The list is truncated to protect context, use \`list_files\`, \`search\`, or \`view\` to inspect anything not shown here.\n`;
-  if (hidden) p += `\n(${hidden} file(s) inside dependency or build folders (node_modules, .venv, target, dist, and similar) and anything matched by .gitignore are hidden from this listing and from context to keep things clean. They still exist on disk and your bash commands and interpreters use them normally; pass all:true to list_files/find to see them, or reference them by exact path.)\n`;
+  if (files.length > LIST_CAP) p += `- … and ${files.length - LIST_CAP} more file(s). The list is truncated to protect context; use \`list_files\`, \`find\` or \`search\` to reach anything not shown here.\n`;
+  if (hidden) p += `\n(${hidden} file(s) inside dependency or build folders (node_modules, .venv, target, dist, and similar) and anything matched by .gitignore are hidden from this listing to keep context clean. They still exist on disk and your commands use them normally; pass \`all: true\` to \`list_files\`/\`find\` to see them, or reference them by exact path.)\n`;
   p += '\n## Latest file contents (a sample; use `view` for anything not shown)\n';
   let budget = 40000, inlined = 0;
   for (const f of files) {
@@ -42,22 +79,24 @@ export function sandboxPromptFor(chatId) {
     if (f.ext === 'zip' || !sandbox.isText(f.path)) continue;
     const txt = sandbox.readText(chatId, f.path) || '';
     if (txt.length > 8000 || txt.length > budget) {
-      p += `\n### ${f.path} (v${f.v}), ${f.size} bytes, too large to inline; use the view tool to read it.\n`;
+      p += `\n### ${f.path} (v${f.v}), ${f.size} bytes, too large to inline; use the \`view\` tool to read it.\n`;
       continue;
     }
     p += `\n### ${f.path} (v${f.v})\n\`\`\`${f.ext || ''}\n${txt}\n\`\`\`\n`;
     budget -= txt.length; inlined++;
   }
-  p += '\n---\nREMINDER: The workspace is ON and the files above are the current truth. Edit existing files with `str_replace` (never recreate them from scratch), and use the dedicated file tools, `copy_file`, `move_file`, `make_dir`, `delete_file`, `find`, `search`, `bundle_zip`, `extract_zip`, for file operations. Use relative paths only. Keep calling tools until the task is fully done; do not stop to ask permission, do not paste whole file contents or fake terminal output into the chat, and when a tool fails, read the error and change approach instead of repeating the same call. Never write imitation tool text like `[used bash: ...]` in a reply; make real tool calls.';
+  // Last thing before the user's turn, so it is the most recent instruction a
+  // small model sees. Short on purpose: the rules are stated once, above.
+  p += '\n---\nREMINDER: the files above are the current truth — edit those, with `str_replace`, using relative paths. Real tool calls only: no pasted files, no invented output. Keep going until the task is done.';
   return p;
 }
 
 const BASH_TOOLS = new Set(['bash', 'run', 'shell']);
 
 export function cleanCall(call) {
-  const o = { tool: call.tool };
+  const o = { tool: canonicalTool(call.tool) };
   if (call.path != null) o.path = call.path;
-  if (BASH_TOOLS.has(call.tool)) { o.cmd = call.cmd ?? call.command ?? ''; if (call.workdir ?? call.cwd) o.workdir = call.workdir ?? call.cwd; }
+  if (BASH_TOOLS.has(o.tool)) { o.cmd = call.cmd ?? call.command ?? ''; if (call.workdir ?? call.cwd) o.workdir = call.workdir ?? call.cwd; }
   if (call.new_path != null || call.to != null) o.new_path = call.new_path ?? call.to;
   if (call.query != null) o.query = call.query;
   if (call.pattern != null) o.pattern = call.pattern;
@@ -71,7 +110,24 @@ export function cleanCall(call) {
   return o;
 }
 
-export function resultPayload(call, r) {
+const BODY_TOOLS = new Set(['create_file', 'write_file', 'str_replace', 'edit_file', 'insert_lines']);
+
+export function cutOffError(tool, cut, hitOutputLimit) {
+  const name = canonicalTool(tool) || tool || 'the call';
+  const parts = [
+    `this call was cut off before it finished sending, so it was NOT run and nothing was changed. The "${cut.key}" argument was still open after ${cut.chars} characters.`
+  ];
+  if (hitOutputLimit) parts.push('The reply reached its maximum output length mid-call.');
+  if (BODY_TOOLS.has(canonicalTool(tool))) {
+    parts.push(`Do not resend the same call: it will be cut off in the same place. Write the file in pieces instead — create_file with roughly the first half, then insert_lines to append the rest, one call each.`);
+  } else {
+    parts.push(`Send ${name} again with shorter arguments.`);
+  }
+  return parts.join(' ');
+}
+
+export function resultPayload(rawCall, r) {
+  const call = { ...rawCall, tool: canonicalTool(rawCall.tool) };
   const o = { ok: !!r.ok };
   if (r.error) o.error = r.error;
   if (r.v != null) o.v = r.v;
@@ -88,7 +144,7 @@ export function resultPayload(call, r) {
   if (r.note) o.note = r.note;
   if (r.path != null) o.path = r.path;
   if (r.from != null) o.from = r.from;
-  if (r.cwd) o.cwd = r.cwd;
+  if (r.cwd != null) o.cwd = r.cwd || '.';
   if (BASH_TOOLS.has(call.tool)) { o.output = (r.output || '').slice(0, 8000); o.exit = r.exit ?? null; }
   if ((call.tool === 'list_files' || call.tool === 'ls' || call.tool === 'tree') && Array.isArray(r.files)) o.files = r.files.slice(0, 100).map(f => ({ path: f.path, size: f.size }));
   if ((call.tool === 'find' || call.tool === 'glob') && Array.isArray(r.matches)) o.matches = r.matches.slice(0, 60);
@@ -97,13 +153,22 @@ export function resultPayload(call, r) {
   return o;
 }
 
-export function formatToolResult(call, r) {
+export function formatToolResult(rawCall, r) {
+  const call = { ...rawCall, tool: canonicalTool(rawCall.tool) };
   const head = `${call.tool}${call.path ? ' ' + call.path : ''}`;
-  if (!r.ok) return `${head} → ERROR: ${r.error}` + (r.output ? `\n${r.output}` : '');
+  if (!r.ok) {
+    // The shell's directory persists between calls, so "cannot find the path" is very
+    // often a path that is correct from the workspace root and wrong from where the
+    // shell actually is. Dropping the cwd here left that unknowable.
+    const where = BASH_TOOLS.has(call.tool) && r.cwd != null
+      ? `\n(the shell is in "${r.cwd || '.'}" — paths in the command are resolved from there, not from the workspace root)`
+      : '';
+    return `${head} → ERROR: ${r.error}` + (r.output ? `\n${r.output}` : '') + where;
+  }
   switch (call.tool) {
-    case 'bash': case 'run': case 'shell': return `$ ${call.cmd ?? call.command ?? ''}\n${r.output || '(no output)'}\n(exit ${r.exit ?? 0}${r.cwd ? `, cwd: ${r.cwd || '.'}` : ''})`;
-    case 'create_file': case 'write_file': return r.unchanged ? `${head} → unchanged (already v${r.v}, identical content, no write needed)` : `${head} → created (v${r.v}, ${r.bytes} bytes, +${r.adds ?? 0}/-${r.dels ?? 0})`;
-    case 'str_replace': case 'edit_file': return `${head} → edited (now v${r.v}, +${r.adds ?? 0}/-${r.dels ?? 0}${r.replaced > 1 ? `, ${r.replaced} occurrences` : ''})`;
+    case 'bash': case 'run': case 'shell': return `$ ${call.cmd ?? call.command ?? ''}\n${r.output || '(no output)'}\n(exit ${r.exit ?? 0}${r.cwd != null ? `, cwd: ${r.cwd || '.'}` : ''})` + (r.note ? `\nNOTE: ${r.note}` : '');
+    case 'create_file': case 'write_file': return (r.unchanged ? `${head} → unchanged (already v${r.v}, identical content, no write needed)` : `${head} → created (v${r.v}, ${r.bytes} bytes, +${r.adds ?? 0}/-${r.dels ?? 0})`) + (r.note ? `\nNOTE: ${r.note}` : '');
+    case 'str_replace': case 'edit_file': return `${head} → edited (now v${r.v}, +${r.adds ?? 0}/-${r.dels ?? 0}${r.replaced > 1 ? `, ${r.replaced} occurrences` : ''})` + (r.note ? `\nNOTE: ${r.note}` : '');
     case 'insert_lines': return `${head} → inserted ${r.adds} line(s) (now v${r.v})`;
     case 'view': case 'read_file': case 'cat': return `${head} →\n${r.content}`;
     case 'list_files': case 'ls': case 'tree': return `${head} →\n${r.tree || '(empty)'}` + (r.hidden ? `\n(${r.hidden} item(s) in ignored dependency/build folders hidden; pass all:true to include them)` : '');
@@ -120,29 +185,39 @@ export function formatToolResult(call, r) {
   }
 }
 
+const CHAT_SEARCH_MAX = 25;
+const CHAT_SEARCH_SCAN = 400;
+
 export function runChatSearchTool(userId, currentChatId, call) {
   if (call.tool === 'chat_search') {
     const q = String(call.query || '').trim().toLowerCase();
     if (!q) return { ok: false, error: 'Empty query.' };
+    const byId = new Map();
+    for (const c of db.chats.byUser(userId)) if (c.id !== currentChatId) byId.set(c.id, c);
+    const dateOf = (c) => new Date(c.updated_at || 0).toISOString().slice(0, 10);
     const matches = [];
-    const chats = db.chats.byUser(userId).sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0)).slice(0, 300);
-    let scanned = 0;
-    for (const c of chats) {
-      if (c.id === currentChatId) continue;
-      if (scanned > 30000) break;
+    const seen = new Set();
+    for (const c of [...byId.values()].sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0))) {
       const title = c.title || 'Untitled';
-      if (title.toLowerCase().includes(q)) matches.push({ chat_id: c.id, title, date: new Date(c.updated_at || 0).toISOString().slice(0, 10), text: '(title match)' });
-      if (matches.length >= 25) break;
-      for (const m of db.messages.byChat(c.id)) {
-        scanned++;
-        const content = String(m.content || '');
+      if (!title.toLowerCase().includes(q)) continue;
+      seen.add(c.id);
+      matches.push({ chat_id: c.id, title, date: dateOf(c), text: '(title match)' });
+      if (matches.length >= CHAT_SEARCH_MAX) break;
+    }
+    if (matches.length < CHAT_SEARCH_MAX) {
+      for (const row of db.messages.searchForUser(userId, q, CHAT_SEARCH_SCAN)) {
+        const c = byId.get(row.chatId);
+        if (!c || seen.has(c.id)) continue;
+        const content = String(row.content || '');
         const idx = content.toLowerCase().indexOf(q);
         if (idx === -1) continue;
-        const from = Math.max(0, idx - 80);
-        matches.push({ chat_id: c.id, title, date: new Date(c.updated_at || 0).toISOString().slice(0, 10), role: m.role, text: content.slice(from, idx + q.length + 120).replace(/\s+/g, ' ') });
-        if (matches.length >= 25) break;
+        seen.add(c.id);
+        matches.push({
+          chat_id: c.id, title: c.title || 'Untitled', date: dateOf(c), role: row.role || '',
+          text: content.slice(Math.max(0, idx - 80), idx + q.length + 120).replace(/\s+/g, ' ')
+        });
+        if (matches.length >= CHAT_SEARCH_MAX) break;
       }
-      if (matches.length >= 25) break;
     }
     return { ok: true, query: call.query, count: matches.length, matches };
   }
@@ -212,20 +287,11 @@ export function longConvoReminderFor(chatId) {
 
 export const CHAT_SEARCH_PROMPT = "## Past conversations\nYou can search the user's other conversations in this app with `chat_search` (pass `query`) and read one with `chat_view` (pass `chat_id`). Use these when the user refers to something discussed in a previous chat instead of saying you have no memory of it.";
 
-export function lastUserQuery(chatId) {
-  const rows = activePath(chatId);
-  for (let i = rows.length - 1; i >= 0; i--) if (rows[i].role === 'user' && (rows[i].content || '').trim()) return stripToolSyntax(rows[i].content);
-  return '';
-}
-
-export async function pinnedFilesPrompt(chat, query) {
+export function pinnedFilesPrompt(chat) {
   const pins = Array.isArray(chat?.pinned_files) ? chat.pinned_files : [];
   if (!pins.length) return '';
-  const blocks = [];
-  for (const a of pins) {
-    if (isTextLike(a)) blocks.push(`--- Pinned file: ${a.name} ---\n${readUploadText(a.url)}`);
-    else blocks.push(`[Pinned file: ${a.name} (not readable as text)]`);
-  }
-  if (!blocks.length) return '';
+  const blocks = pins.map(a => (isTextLike(a)
+    ? `--- Pinned file: ${a.name} ---\n${readUploadText(a.url)}`
+    : `[Pinned file: ${a.name} (not readable as text)]`));
   return 'The user has pinned the following file(s) to this conversation. Keep their contents available as context for every turn:\n\n' + blocks.join('\n\n');
 }

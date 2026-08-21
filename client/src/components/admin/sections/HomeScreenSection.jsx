@@ -1,4 +1,3 @@
-import React from 'react';
 import { useAdmin } from '../store.jsx';
 import { Card, AutosaveNote, QpIconPicker } from '../widgets.jsx';
 import { Plus, Trash } from '../../icons.jsx';
@@ -16,7 +15,7 @@ export default function HomeScreenSection() {
             <button className="btn danger" onClick={() => setCfg(c => ({ ...c, greetings: c.greetings.filter((_, j) => j !== i).length ? c.greetings.filter((_, j) => j !== i) : [''] }))}><Trash style={{ width: 14 }} /></button>
           </div>
         ))}
-        <button className="btn" style={{ marginTop: 8 }} onClick={() => setCfg(c => ({ ...c, greetings: [...c.greetings, ''] }))}><Plus style={{ width: 14, verticalAlign: '-2px' }} /> Add greeting</button>
+        <button className="btn" style={{ marginTop: 8 }} onClick={() => setCfg(c => ({ ...c, greetings: [...c.greetings, ''] }))}><Plus style={{ width: 14, verticalAlign: '-2px' }} /> {t("Add greeting")}</button>
       </Card>
       <Card title={t("Quick prompt buttons")} sub={t("Shown under the input on the home screen; clicking sends the prompt. Up to 8.")}>
         {(cfg.quickPrompts || []).map((q, i) => (
@@ -27,8 +26,8 @@ export default function HomeScreenSection() {
             <button className="btn danger" onClick={() => setCfg(c => ({ ...c, quickPrompts: c.quickPrompts.filter((_, j) => j !== i) }))}><Trash style={{ width: 14 }} /></button>
           </div>
         ))}
-        {(cfg.quickPrompts || []).length === 0 && <div className="muted-note" style={{ marginBottom: 6 }}>No quick prompts yet, add one below.</div>}
-        {(cfg.quickPrompts || []).length < 8 && <button className="btn" style={{ marginTop: 8 }} onClick={() => setCfg(c => ({ ...c, quickPrompts: [...(c.quickPrompts || []), { icon: 'none', label: '', prompt: '' }] }))}><Plus style={{ width: 14, verticalAlign: '-2px' }} /> Add button</button>}
+        {(cfg.quickPrompts || []).length === 0 && <div className="muted-note" style={{ marginBottom: 6 }}>{t("No quick prompts yet, add one below.")}</div>}
+        {(cfg.quickPrompts || []).length < 8 && <button className="btn" style={{ marginTop: 8 }} onClick={() => setCfg(c => ({ ...c, quickPrompts: [...(c.quickPrompts || []), { icon: 'none', label: '', prompt: '' }] }))}><Plus style={{ width: 14, verticalAlign: '-2px' }} /> {t("Add button")}</button>}
       </Card>
       <AutosaveNote status={settingsSave} />
     </>

@@ -1,5 +1,5 @@
 import { db, getSetting, setSetting } from '../db.js';
-import { getProviders, resolveProvider, providerSpec } from '../providers.js';
+import { resolveProvider, providerSpec } from '../providers.js';
 import { publicKwargDefs } from './kwargs.js';
 import { llamaContext } from './llamacpp.js';
 
@@ -26,8 +26,10 @@ export function applySunsets() {
     if (Array.isArray(snap)) {
       const i = snap.findIndex(x => x.id === m.id);
       if (i >= 0) {
-        snap[i] = { ...snap[i], ...patch };
-        setSetting('published_models', snap);
+        const next = snap.slice();
+        next[i] = { ...next[i], ...patch };
+        setSetting('published_models', next);
+        invalidateModelShapes();
       }
     }
   }
@@ -36,11 +38,13 @@ export function applySunsets() {
 export function shapePublic(m) {
   return {
     id: m.id, displayName: m.display_name, description: m.description,
+    kind: m.kind === 'router' ? 'router' : 'model',
+    routerTargets: m.kind === 'router' ? [...new Set([...(Array.isArray(m.router_rules) ? m.router_rules : []).map(r => r.modelId), m.router_default].filter(Boolean))] : [],
     hasReasoning: !!m.has_reasoning, inMoreModels: !!m.in_more_models, moreModelsLabel: m.more_models_label,
     effortEnabled: !!m.effort_enabled, effortLevels: (Array.isArray(m.effort_levels) && m.effort_levels.length) ? m.effort_levels : ['low', 'medium', 'high'], effortDefault: m.effort_default || '', effortAdminOnly: !!m.effort_admin_only,
     kwargs: publicKwargDefs(m),
     reasoningCollapsible: m.reasoning_collapsible !== 0, hideThinking: !!m.hide_thinking,
-    staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon, generatingAnim: m.generating_anim || 'spin', thinkingAnim: m.thinking_anim || 'pulse',
+    staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon, generatingAnim: m.generating_anim || 'none', thinkingAnim: m.thinking_anim || 'none',
     iconPosition: m.icon_position || 'below', hasVision: !!m.has_vision, iconSize: m.icon_size || 0, showName: !!m.show_name,
     sandboxAuto: !!m.sandbox_auto, sandboxAllowed: m.sandbox_allowed !== 0, dropdownIcon: m.dropdown_icon !== 0, isDefault: !!m.is_default, agentSteps: m.agent_steps || 0,
     webSearchAuto: !!m.web_search_auto, webSearchAllowed: m.web_search_allowed !== 0,
@@ -82,7 +86,12 @@ export function publicModels() {
   return list;
 }
 
-export function invalidateModelShapes() { shapeCache.draft = null; shapeCache.published = null; }
+export function invalidateModelShapes() {
+  shapeCache.draft = null;
+  shapeCache.published = null;
+  snapIndex.snap = null;
+  snapIndex.byId = null;
+}
 
 // resolve the model used to RUN a completion: admins use live draft, clients use the published snapshot
 const snapIndex = { snap: null, byId: null };
@@ -112,9 +121,10 @@ export function resolveModelOrDefault(modelId, isAdmin) {
 }
 
 export function roleLimit(key, isAdmin, fallback) {
-  const v = getSetting(key + (isAdmin ? '_admin' : '_user'));
-  if (v != null) return Number(v);
-  return Number(getSetting(key, String(fallback)));
+  const scoped = Number(getSetting(key + (isAdmin ? '_admin' : '_user')));
+  if (Number.isFinite(scoped) && scoped >= 0) return scoped;
+  const shared = Number(getSetting(key));
+  return Number.isFinite(shared) && shared >= 0 ? shared : Number(fallback) || 0;
 }
 
 export async function detectContextLength(prov, internal) {
@@ -132,21 +142,27 @@ export async function detectContextLength(prov, internal) {
       return asInt(ctxKey ? info[ctxKey] : 0);
     }
     if (prov?.type === 'llamacpp') {
-      try {
-        const r = await fetch(root + '/props', { headers });
-        if (r.ok) {
+      const propsUrls = internal
+        ? [root + '/props?model=' + encodeURIComponent(internal), root + '/props']
+        : [root + '/props'];
+      for (const url of propsUrls) {
+        try {
+          const r = await fetch(url, { headers });
+          if (!r.ok) continue;
           const json = await r.json();
-          const ctx = asInt(json?.default_generation_settings?.n_ctx) || asInt(json?.n_ctx);
+          const ctx = asInt(json?.default_generation_settings?.n_ctx)
+            || asInt(json?.default_generation_settings?.params?.n_ctx)
+            || asInt(json?.n_ctx);
           if (ctx) return ctx;
-        }
-      } catch {}
+        } catch {}
+      }
       try {
         const r = await fetch(base + '/models', { headers });
         if (r.ok) {
           const json = await r.json();
           const list = Array.isArray(json.data) ? json.data : [];
-          const hit = list.find(m => m.id === internal) || list[0];
-          const ctx = asInt(hit?.meta?.n_ctx_train) || asInt(hit?.meta?.n_ctx);
+          const hit = list.find(m => m.id === internal) || (list.length === 1 ? list[0] : null);
+          const ctx = asInt(hit?.meta?.n_ctx) || asInt(hit?.n_ctx) || asInt(hit?.meta?.n_ctx_train);
           if (ctx) return ctx;
         }
       } catch {}
@@ -180,8 +196,4 @@ export async function modelCtx(model) {
   ctxDetectCache.set(cacheKey, { ctx, at: Date.now() });
   if (ctxDetectCache.size > CTX_CACHE_MAX) ctxDetectCache.delete(ctxDetectCache.keys().next().value);
   return ctx;
-}
-
-export function defaultProviderId() {
-  return getProviders()[0]?.id || null;
 }

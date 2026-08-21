@@ -2,27 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAdmin } from '../store.jsx';
 import { Grip, EmptyState } from '../widgets.jsx';
 import ModelEditor from '../ModelEditor.jsx';
-import { Cube, Plus, Copy, Trash, Star, Pencil, Sliders, Chevron } from '../../icons.jsx';
-import { t } from '../../../i18n.jsx';
+import { Cube, Plus, Copy, Trash, Star, Pencil, Sliders, Chevron, Eye, EyeOff, Folder, SortIcon } from '../../icons.jsx';
+import { t, tk } from '../../../i18n.jsx';
 
 const GROUPS_KEY = 'oq-model-groups';
 const COLLAPSED_KEY = 'oq-model-groups-collapsed';
+const SORT_KEY = 'oq-model-sort';
 
-const EyeIcon = (p) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" {...p}>
-    <path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z" /><circle cx="12" cy="12" r="2.6" />
-  </svg>
-);
-const EyeOffIcon = (p) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" {...p}>
-    <path d="M3 3l18 18M10 5.9A9.9 9.9 0 0 1 12 5.5c6.5 0 10 6.5 10 6.5a17 17 0 0 1-3.2 3.9M6.4 6.9A16 16 0 0 0 2 12s3.5 6.5 10 6.5a10 10 0 0 0 3.4-.6" /><path d="M9.9 10.2a2.6 2.6 0 0 0 3.6 3.7" />
-  </svg>
-);
-const FolderIcon = (p) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" {...p}>
-    <path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" />
-  </svg>
-);
+const SORTS = [
+  ['manual', tk('Manual order')],
+  ['name', tk('Name A–Z')],
+  ['provider', tk('Provider')]
+];
 
 function loadGroupReg() {
   try {
@@ -33,12 +24,13 @@ function loadGroupReg() {
 
 export default function ModelsSection() {
   const A = useAdmin();
-  const { models, providers, providerTypes, selModel, setSelModel, modelSave, setAsk } = A;
+  const { models, providers, providerTypes, selModel, setSelModel, modelSave, setAsk, keepScroll, openKwargs, toggleKwarg, openKwarg } = A;
   const [filter, setFilter] = useState('');
   const [view, setView] = useState('all');
   const [multiSel, setMultiSel] = useState(() => new Set());
-  const [meSection, setMeSection] = useState('essentials');
+  const [meSection, setMeSection] = useState('general');
   const [dragIds, setDragIds] = useState(null);
+  const [dragGroup, setDragGroup] = useState(null);
   const [dragOver, setDragOver] = useState(null);
   const [menu, setMenu] = useState(null);
   const [marquee, setMarquee] = useState(null);
@@ -51,8 +43,23 @@ export default function ModelsSection() {
   });
   const [renamingGroup, setRenamingGroup] = useState(null);
   const [renameVal, setRenameVal] = useState('');
+  const [sort, setSort] = useState(() => {
+    try { const v = localStorage.getItem(SORT_KEY); return SORTS.some(([id]) => id === v) ? v : 'manual'; } catch { return 'manual'; }
+  });
+  const [sortOpen, setSortOpen] = useState(false);
   const selAnchor = useRef(null);
   const listRef = useRef(null);
+
+  useEffect(() => {
+    try { localStorage.setItem(SORT_KEY, sort); } catch {}
+  }, [sort]);
+
+  useEffect(() => {
+    if (!sortOpen) return;
+    const close = () => setSortOpen(false);
+    window.addEventListener('mousedown', close);
+    return () => window.removeEventListener('mousedown', close);
+  }, [sortOpen]);
 
   useEffect(() => {
     try { localStorage.setItem(GROUPS_KEY, JSON.stringify(groupReg)); } catch {}
@@ -112,9 +119,21 @@ export default function ModelsSection() {
   const q = filter.trim().toLowerCase();
   const inView = (m) => view === 'visible' ? (!!m.enabled && !m.unavailable) : view === 'hidden' ? !m.enabled : view === 'unavailable' ? !!m.unavailable : true;
   const shown = models.filter(m => inView(m) && (!q || (m.display_name || '').toLowerCase().includes(q) || (m.internal_name || '').toLowerCase().includes(q)));
-  const orderable = !q && view === 'all';
+  const orderable = !q && view === 'all' && sort === 'manual';
 
-  const ungrouped = shown.filter(m => !m.in_more_models);
+  const multiProvider = providers.length > 1;
+  const providerName = (id) => {
+    const p = providers.find(x => x.id === id);
+    return p ? (p.name || providerTypes[p.type]?.label || p.type || '') : '';
+  };
+  const applySort = (arr) => {
+    if (sort === 'name') return [...arr].sort((a, b) => (a.display_name || '').localeCompare(b.display_name || ''));
+    if (sort === 'provider') return [...arr].sort((a, b) =>
+      providerName(a.provider_id).localeCompare(providerName(b.provider_id)) || (a.display_name || '').localeCompare(b.display_name || ''));
+    return arr;
+  };
+
+  const ungrouped = applySort(shown.filter(m => !m.in_more_models));
   const groupMap = new Map();
   for (const m of shown) {
     if (!m.in_more_models) continue;
@@ -122,7 +141,18 @@ export default function ModelsSection() {
     if (!groupMap.has(k)) groupMap.set(k, []);
     groupMap.get(k).push(m);
   }
-  const groupOrder = groupReg.filter(k => orderable || (groupMap.get(k) || []).length);
+  for (const [k, v] of groupMap) groupMap.set(k, applySort(v));
+  const groupSeq = [];
+  {
+    const seen = new Set();
+    for (const m of models) {
+      if (!m.in_more_models) continue;
+      const k = m.more_models_label || '';
+      if (!seen.has(k)) { seen.add(k); groupSeq.push(k); }
+    }
+  }
+  const emptyGroups = groupReg.filter(k => !groupSeq.includes(k));
+  const groupOrder = [...groupSeq, ...emptyGroups].filter(k => orderable || (groupMap.get(k) || []).length);
   const displaySeq = [...ungrouped, ...groupOrder.flatMap(k => groupMap.get(k) || [])];
   const groupTitle = (k) => k || t('More models');
   const membersOf = (k) => models.filter(m => m.in_more_models && (m.more_models_label || '') === k);
@@ -130,7 +160,8 @@ export default function ModelsSection() {
   function rowClick(e, m) {
     if (e.shiftKey && selAnchor.current) {
       const order = displaySeq.map(x => x.id);
-      let a = order.indexOf(selAnchor.current), b = order.indexOf(m.id);
+      let a = order.indexOf(selAnchor.current);
+      const b = order.indexOf(m.id);
       if (a < 0) a = b;
       const [lo, hi] = a < b ? [a, b] : [b, a];
       setMultiSel(new Set(order.slice(lo, hi + 1)));
@@ -151,6 +182,20 @@ export default function ModelsSection() {
     setMultiSel(new Set());
     selAnchor.current = m.id;
     setSelModel(m.id);
+  }
+
+  function onListKey(e) {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const order = displaySeq.filter(m => !(m.in_more_models && collapsed.has(m.more_models_label || '')));
+    if (!order.length) return;
+    e.preventDefault();
+    const i = order.findIndex(m => sel && m.id === sel.id);
+    const next = order[Math.max(0, Math.min(order.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))];
+    if (!next) return;
+    setMultiSel(new Set());
+    selAnchor.current = next.id;
+    setSelModel(next.id);
+    listRef.current?.querySelector(`[data-mid="${next.id}"]`)?.scrollIntoView({ block: 'nearest' });
   }
 
   function toggleCheck(e, m) {
@@ -254,6 +299,32 @@ export default function ModelsSection() {
     });
   }
 
+  function moveGroup(from, to, after) {
+    setDragGroup(null);
+    setDragOver(null);
+    if (!from || from === to) return;
+    const isMember = (m, k) => !!m.in_more_models && (m.more_models_label || '') === k;
+    const moving = displaySeq.filter(m => isMember(m, from));
+    const anchors = displaySeq.filter(m => isMember(m, to));
+    if (!moving.length || !anchors.length) {
+      setGroupReg(reg => {
+        if (!reg.includes(from) || !reg.includes(to)) return reg;
+        const list = reg.filter(l => l !== from);
+        const i = list.indexOf(to);
+        if (i < 0) return reg;
+        list.splice(i + (after ? 1 : 0), 0, from);
+        return list;
+      });
+      return;
+    }
+    const rest = displaySeq.filter(m => !isMember(m, from));
+    const anchorId = after ? anchors[anchors.length - 1].id : anchors[0].id;
+    let at = rest.findIndex(m => m.id === anchorId);
+    if (at < 0) return;
+    if (after) at += 1;
+    A.commitModelOrder([...rest.slice(0, at), ...moving, ...rest.slice(at)]);
+  }
+
   function handleDrop(target, targetGroup, after) {
     const ids = dragIds;
     setDragIds(null);
@@ -295,38 +366,40 @@ export default function ModelsSection() {
         draggable={orderable}
         onDragStart={() => {
           if (!orderable) return;
+          setDragGroup(null);
           setDragIds(multiSel.size > 1 && multiSel.has(m.id) ? [...multiSel] : [m.id]);
         }}
         onDragEnd={() => { setDragIds(null); setDragOver(null); }}
         onDragOver={(e) => {
-          if (!orderable || (dragIds && dragIds.includes(m.id))) return;
+          if (!orderable || dragGroup || (dragIds && dragIds.includes(m.id))) return;
           e.preventDefault();
           const r = e.currentTarget.getBoundingClientRect();
           setDragOver({ id: m.id, after: e.clientY > r.top + r.height / 2 });
         }}
-        onDrop={(e) => { if (!orderable) return; e.preventDefault(); handleDrop(m, undefined, !!(dragOver && dragOver.id === m.id && dragOver.after)); }}
+        onDrop={(e) => { if (!orderable || dragGroup) return; e.preventDefault(); handleDrop(m, undefined, !!(dragOver && dragOver.id === m.id && dragOver.after)); }}
         onMouseDown={(e) => { if (e.shiftKey) e.preventDefault(); }}
         onContextMenu={(e) => openMenu(e, m)}
         onClick={(e) => rowClick(e, m)}>
         {orderable && <span className="mw-grip"><Grip /></span>}
+        <button type="button" className={'mw-check' + (multiSel.has(m.id) ? ' on' : '')} title={t("Select for bulk actions")} onClick={(e) => toggleCheck(e, m)}>
+          {multiSel.has(m.id)
+            ? <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5" fill="currentColor" /><path d="M8 12.4l2.8 2.8 5.6-6.4" fill="none" stroke="var(--card-bg)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="5" /></svg>}
+        </button>
         {m.static_icon ? <img className="mw-row-icon" src={m.static_icon} alt="" /> : <span className="mw-row-icon noicon">{(m.display_name || '?').trim().charAt(0).toUpperCase()}</span>}
         <div className="mw-row-meta">
           <span className="mw-row-name">
             {m.display_name || t('Untitled model')}
-            {!!m.is_default && <span className="mw-star" title={t("Default")}>★</span>}
+            {!!m.is_default && <span className="mw-star" title={t("Default model")}>★</span>}
           </span>
-          <span className="mw-row-sub">{m.internal_name || 'no id'}</span>
+          <span className="mw-row-sub">
+            {m.internal_name || t('no model ID')}
+            {multiProvider && providerName(m.provider_id) && <><span className="mw-row-dot">·</span>{providerName(m.provider_id)}</>}
+          </span>
         </div>
-        <span className="mw-row-hover">
-          <button type="button" className={'mw-hact' + (multiSel.has(m.id) ? ' on' : '')} title={t("Select for bulk actions")} onClick={(e) => toggleCheck(e, m)}>
-            {multiSel.has(m.id)
-              ? <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5" fill="currentColor" /><path d="M8 12.4l2.8 2.8 5.6-6.4" fill="none" stroke="var(--card-bg)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="5" /></svg>}
-          </button>
-        </span>
-        <span className="mw-dots">
-          {!m.enabled && <span className="mw-dot dim" title={t("Hidden")} />}
-          {!!m.unavailable && <span className="mw-dot warn" title={t("Unavailable")} />}
+        <span className="mw-tags">
+          {!m.enabled && <span className="mw-tag dim">{t('Hidden')}</span>}
+          {!!m.unavailable && <span className="mw-tag warn">{t('Down')}</span>}
         </span>
       </div>
     );
@@ -341,9 +414,36 @@ export default function ModelsSection() {
     const anyVisible = allMembers.some(x => !!x.enabled);
     return (
       <React.Fragment key={'grp:' + k}>
-        <div className={'mw-group-head' + (over ? ' drag-over' : '') + (isCollapsed ? ' collapsed' : '')}
-          onDragOver={(e) => { if (!orderable) return; e.preventDefault(); setDragOver({ id: 'group:' + k }); }}
-          onDrop={(e) => { if (!orderable) return; e.preventDefault(); handleDrop(null, k); }}>
+        <div className={'mw-group-head' + (over && !dragGroup ? ' drag-over' : '') + (isCollapsed ? ' collapsed' : '')
+            + (dragGroup === k ? ' dragging' : '')
+            + (over && dragGroup && !dragOver.after ? ' gdrag-before' : '')
+            + (over && dragGroup && dragOver.after ? ' gdrag-after' : '')}
+          draggable={orderable && !renaming}
+          onDragStart={(e) => {
+            if (!orderable || renaming) return;
+            e.stopPropagation();
+            setDragIds(null);
+            setDragGroup(k);
+          }}
+          onDragEnd={() => { setDragGroup(null); setDragOver(null); }}
+          onDragOver={(e) => {
+            if (!orderable) return;
+            e.preventDefault();
+            if (dragGroup) {
+              if (dragGroup === k) return;
+              const r = e.currentTarget.getBoundingClientRect();
+              setDragOver({ id: 'group:' + k, after: e.clientY > r.top + r.height / 2 });
+            } else {
+              setDragOver({ id: 'group:' + k });
+            }
+          }}
+          onDrop={(e) => {
+            if (!orderable) return;
+            e.preventDefault();
+            if (dragGroup) moveGroup(dragGroup, k, !!(dragOver && dragOver.id === 'group:' + k && dragOver.after));
+            else handleDrop(null, k);
+          }}>
+          {orderable && <span className="mw-group-grip"><Grip /></span>}
           <button type="button" className="mw-group-chev" title={isCollapsed ? t('Expand group') : t('Collapse group')}
             onClick={() => setCollapsed(c => { const n = new Set(c); if (n.has(k)) n.delete(k); else n.add(k); return n; })}>
             <Chevron />
@@ -355,10 +455,12 @@ export default function ModelsSection() {
               onKeyDown={(e) => { if (e.key === 'Enter') commitGroupRename(k); if (e.key === 'Escape') setRenamingGroup(null); }} />
           ) : (
             <>
-              <button type="button" className="mw-group-label" title={t("Click to rename this group")} onClick={() => { setRenamingGroup(k); setRenameVal(groupTitle(k)); }}>
+              <button type="button" className="mw-group-label" title={isCollapsed ? t('Expand group') : t('Collapse group')}
+                onClick={() => setCollapsed(c => { const n = new Set(c); if (n.has(k)) n.delete(k); else n.add(k); return n; })}
+                onDoubleClick={() => { setRenamingGroup(k); setRenameVal(groupTitle(k)); }}>
                 {groupTitle(k)}
               </button>
-              {isCollapsed && allMembers.length > 0 && <span className="mw-group-count">{allMembers.length}</span>}
+              {allMembers.length > 0 && <span className="mw-group-count">{allMembers.length}</span>}
               {allMembers.length > 0 && (
                 <button type="button" className="mw-group-edit" title={anyVisible ? t('Hide all models in this group') : t('Show all models in this group')}
                   onClick={() => A.setModelsEnabled(allMembers.map(x => x.id), !anyVisible)}>
@@ -376,8 +478,8 @@ export default function ModelsSection() {
         {!isCollapsed && rows.map(renderRow)}
         {!isCollapsed && orderable && rows.length === 0 && (
           <div className={'mw-group-empty' + (over ? ' drag-over' : '')}
-            onDragOver={(e) => { e.preventDefault(); setDragOver({ id: 'group:' + k }); }}
-            onDrop={(e) => { e.preventDefault(); handleDrop(null, k); }}>
+            onDragOver={(e) => { if (dragGroup) return; e.preventDefault(); setDragOver({ id: 'group:' + k }); }}
+            onDrop={(e) => { if (dragGroup) return; e.preventDefault(); handleDrop(null, k); }}>
             {t('Drag models here')}
           </div>
         )}
@@ -396,19 +498,44 @@ export default function ModelsSection() {
       <div className="mw-rail">
         <div className="mw-rail-head">
           <span className="mw-rail-title">{t('Models')} <span className="mw-count">{models.length}</span></span>
-          <button className="mw-add" onClick={A.addModel} title={t("Add model")}><Plus style={{ width: 16 }} /></button>
+          <div className="mw-sort" onMouseDown={(e) => e.stopPropagation()}>
+            <button className={'mw-add' + (sort !== 'manual' ? ' on' : '')} onClick={() => setSortOpen(o => !o)} title={t("Sort models")}><SortIcon style={{ width: 16 }} /></button>
+            {sortOpen && (
+              <div className="mw-sort-pop">
+                {SORTS.map(([id, label]) => (
+                  <button key={id} className={sort === id ? 'on' : ''} onClick={() => { setSort(id); setSortOpen(false); }}>
+                    {t(label)}{sort === id && <em>✓</em>}
+                  </button>
+                ))}
+                <div className="mw-sort-note">{t('Drag to reorder works in manual order.')}</div>
+              </div>
+            )}
+          </div>
         </div>
         <div className="mw-search">
           <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={t("Search models…")} />
         </div>
-        <div className="mw-filters">
-          {[['all', t('All'), models.length], ['visible', t('Visible'), visibleModels], ['hidden', t('Hidden'), hiddenModels], ['unavailable', t('Down'), unavailModels]].map(([v, l, n]) => (
-            <button key={v} className={'mw-chip' + (view === v ? ' on' : '')} onClick={() => setView(v)}>{l}{n > 0 && <em>{n}</em>}</button>
-          ))}
-        </div>
-        <div className="mw-list" ref={listRef} onMouseDown={startMarquee}
-          onDragOver={(e) => { if (orderable && e.target === listRef.current) { e.preventDefault(); setDragOver(null); } }}
-          onDrop={(e) => { if (orderable && e.target === listRef.current) { e.preventDefault(); handleDrop(null, null); } }}>
+        {multiSel.size > 0 ? (
+          <div className="mw-bulk">
+            <span className="mw-bulk-n">{t('{n} selected', { n: multiSel.size })}</span>
+            <button title={t("Show to users")} onClick={() => A.setModelsEnabled([...multiSel], true)}><Eye /></button>
+            <button title={t("Hide from users")} onClick={() => A.setModelsEnabled([...multiSel], false)}><EyeOff /></button>
+            <button title={t("Group models")} onClick={() => createGroup([...multiSel])}><Folder /></button>
+            <button title={t("Duplicate")} onClick={async () => { await A.duplicateModels([...multiSel]); setMultiSel(new Set()); }}><Copy /></button>
+            <button className="danger" title={t("Delete")} onClick={() => A.deleteModels([...multiSel], () => setMultiSel(new Set()))}><Trash /></button>
+            <button className="mw-bulk-x" title={t("Clear selection")} onClick={() => setMultiSel(new Set())}>✕</button>
+          </div>
+        ) : (
+          <div className="mw-filters">
+            {[['all', t('All'), models.length], ['visible', t('Visible'), visibleModels], ['hidden', t('Hidden'), hiddenModels], ['unavailable', t('Down'), unavailModels]].map(([v, l, n]) => (
+              <button key={v} className={'mw-chip' + (view === v ? ' on' : '')} disabled={n === 0 && view !== v}
+                onClick={() => setView(v)}>{l}{n > 0 && <em>{n}</em>}</button>
+            ))}
+          </div>
+        )}
+        <div className={'mw-list' + (multiSel.size ? ' selecting' : '')} ref={listRef} onMouseDown={startMarquee} tabIndex={0} onKeyDown={onListKey}
+          onDragOver={(e) => { if (orderable && !dragGroup && e.target === listRef.current) { e.preventDefault(); setDragOver(null); } }}
+          onDrop={(e) => { if (orderable && !dragGroup && e.target === listRef.current) { e.preventDefault(); handleDrop(null, null); } }}>
           {ungrouped.map(renderRow)}
           {groupOrder.map(renderGroup)}
           {orderable && (
@@ -416,7 +543,12 @@ export default function ModelsSection() {
               <Plus style={{ width: 12 }} /> {t('New group')}
             </button>
           )}
-          {shown.length === 0 && <div className="mw-none">{q ? t('No models match “{q}”.', { q: filter }) : t('Nothing here with this filter.')}</div>}
+          {shown.length === 0 && (
+            <div className="mw-none">
+              {q ? t('No models match “{q}”.', { q: filter }) : t('Nothing here with this filter.')}
+              <button className="linklike" onClick={() => { setFilter(''); setView('all'); }}>{t('Show all models')}</button>
+            </div>
+          )}
         </div>
         <div className="mw-rail-foot">
           <button className="btn add-model" onClick={A.addModel}><Plus style={{ width: 15, verticalAlign: '-2px' }} /> {t('Add model')}</button>
@@ -427,9 +559,10 @@ export default function ModelsSection() {
         {sel
           ? <ModelEditor key={sel.id} m={sel} onChange={A.changeModel}
               onDelete={(id) => A.deleteModels([id])} onDuplicate={A.duplicateModel}
-              autosaveState={modelSave} providers={providers} providerTypes={providerTypes}
-              section={meSection} onSection={setMeSection} />
-          : <div className="muted-note" style={{ padding: 20 }}>No models yet, add one to get started.</div>}
+              autosaveState={modelSave} providers={providers} providerTypes={providerTypes} models={models}
+              section={meSection} onSection={setMeSection}
+              keepScroll={keepScroll} kwargOpen={openKwargs} onKwargToggle={toggleKwarg} onKwargOpen={openKwarg} />
+          : <div className="muted-note" style={{ padding: 20 }}>{t("No models yet, add one to get started.")}</div>}
       </div>
       {marquee && <div className="mw-marquee" style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }} />}
       {menu && menuModels.length > 0 && (
@@ -437,7 +570,7 @@ export default function ModelsSection() {
           {menuSingle ? (
             <>
               <button onClick={() => act(() => A.changeModel({ ...menuSingle, enabled: menuSingle.enabled ? 0 : 1 }))}>
-                {menuSingle.enabled ? <EyeOffIcon /> : <EyeIcon />} {menuSingle.enabled ? t('Hide from users') : t('Show to users')}
+                {menuSingle.enabled ? <EyeOff /> : <Eye />} {menuSingle.enabled ? t('Hide from users') : t('Show to users')}
               </button>
               <button disabled={!!menuSingle.is_default} onClick={() => act(() => A.changeModel({ ...menuSingle, is_default: 1 }))}>
                 <Star /> {menuSingle.is_default ? t('Default model') : t('Make default')}
@@ -447,22 +580,22 @@ export default function ModelsSection() {
           ) : (
             <>
               <button onClick={() => act(() => A.setModelsEnabled(menu.ids, menuAllHidden))}>
-                {menuAllHidden ? <EyeIcon /> : <EyeOffIcon />} {menuAllHidden ? t('Show {n} models', { n: menuModels.length }) : t('Hide {n} models', { n: menuModels.length })}
+                {menuAllHidden ? <Eye /> : <EyeOff />} {menuAllHidden ? t('Show {n} models', { n: menuModels.length }) : t('Hide {n} models', { n: menuModels.length })}
               </button>
               <button onClick={() => act(async () => { await A.duplicateModels(menu.ids); setMultiSel(new Set()); })}><Copy /> {t('Duplicate {n} models', { n: menuModels.length })}</button>
             </>
           )}
           <div className="mw-menu-sep" />
           <button onClick={() => act(() => createGroup(menu.ids))}>
-            <FolderIcon /> {menuSingle ? t('New group') : t('Group models')}
+            <Folder /> {menuSingle ? t('New group') : t('Group models')}
           </button>
           {groupReg.filter(k => k !== menuCurrentGroup).map(k => (
             <button key={'mv:' + k} onClick={() => act(() => A.setModelsGroup(menu.ids, k))}>
-              <FolderIcon /> {t('Move to')} “{groupTitle(k)}”
+              <Folder /> {t('Move to')} “{groupTitle(k)}”
             </button>
           ))}
           {menuAnyGrouped && (
-            <button onClick={() => act(() => A.setModelsGroup(menu.ids, null))}><FolderIcon /> {menuSingle ? t('Remove from group') : t('Ungroup')}</button>
+            <button onClick={() => act(() => A.setModelsGroup(menu.ids, null))}><Folder /> {menuSingle ? t('Remove from group') : t('Ungroup')}</button>
           )}
           {!menuSingle && providers.length > 1 && (
             <>

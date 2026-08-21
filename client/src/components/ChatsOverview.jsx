@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
 import { t } from '../i18n.jsx';
@@ -43,6 +43,22 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
   }, []);
 
   useEffect(() => { loadMore(); }, [loadMore]);
+
+  useEffect(() => {
+    if (!hasMore || loading) return;
+    const el = bodyRef.current; if (!el) return;
+    if (el.scrollHeight <= el.clientHeight + 320) loadMore();
+  }, [chats, hasMore, loading, selecting, loadMore]);
+
+  useEffect(() => {
+    const el = bodyRef.current; if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      if (!hasMore || busyRef.current) return;
+      if (el.scrollHeight <= el.clientHeight + 320) loadMore();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hasMore, loadMore]);
 
   function switchTab(t) {
     setTab(t); tabRef.current = t;
@@ -109,30 +125,30 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
         <h2>{t("Your chats")}</h2>
         <div className="co-tools">
           <div className="seg co-seg">
-            <button className={tab === 'all' ? 'on' : ''} onClick={() => switchTab('all')}>Active</button>
-            <button className={tab === 'archived' ? 'on' : ''} onClick={() => switchTab('archived')}>Archived</button>
+            <button className={tab === 'all' ? 'on' : ''} onClick={() => switchTab('all')}>{t("Active")}</button>
+            <button className={tab === 'archived' ? 'on' : ''} onClick={() => switchTab('archived')}>{t("Archived")}</button>
           </div>
-          <button className={'co-select-btn' + (selecting ? ' on' : '')} onClick={() => { setSelecting(v => !v); setSelected(new Set()); }}>{selecting ? 'Done' : 'Select'}</button>
+          <button className={'co-select-btn' + (selecting ? ' on' : '')} onClick={() => { setSelecting(v => !v); setSelected(new Set()); }}>{selecting ? t('Done') : t('Select')}</button>
         </div>
-        <button className="co-close" onClick={onClose}>✕</button>
+        <button className="co-close" onClick={onClose} aria-label={t('Close')}>✕</button>
       </div>
       {selecting && (
         <div className="co-bulkbar">
-          <button className="co-bulk-link" onClick={selectAll}>{selected.size === chats.length && chats.length ? 'Clear selection' : 'Select all'}</button>
+          <button className="co-bulk-link" onClick={selectAll}>{selected.size === chats.length && chats.length ? t('Clear selection') : t('Select all')}</button>
           <span className="co-bulk-count">{selected.size} selected</span>
           <div className="co-bulk-actions">
-            <button className="btn ghost" disabled={!selected.size || busy} onClick={() => bulkArchive(tab !== 'archived')}>{tab === 'archived' ? 'Unarchive' : 'Archive'}</button>
-            <button className="btn ghost danger" disabled={!selected.size || busy} onClick={bulkDelete}>Delete</button>
+            <button className="btn ghost" disabled={!selected.size || busy} onClick={() => bulkArchive(tab !== 'archived')}>{tab === 'archived' ? t('Unarchive') : t('Archive')}</button>
+            <button className="btn ghost danger" disabled={!selected.size || busy} onClick={bulkDelete}>{t("Delete")}</button>
           </div>
         </div>
       )}
       <div className="co-body" ref={bodyRef} onScroll={onScroll}>
-        {chats.length === 0 && !loading && <div className="art-empty">{tab === 'archived' ? 'No archived chats.' : 'No chats yet.'}</div>}
+        {chats.length === 0 && !loading && <div className="art-empty">{tab === 'archived' ? t('No archived chats.') : t('No chats yet.')}</div>}
         <div className="co-grid">
           {chats.map((c, i) => (
             <button key={c.id} className={'co-card' + (selecting && selected.has(c.id) ? ' selected' : '')} style={{ animationDelay: (i % 18) * 22 + 'ms' }} onClick={() => clickCard(c)}>
               {selecting && <span className={'co-check' + (selected.has(c.id) ? ' on' : '')}>{selected.has(c.id) ? '✓' : ''}</span>}
-              <div className="co-title">{c.starred ? '★ ' : ''}{c.ended ? '🔒 ' : ''}{c.title || 'New chat'}</div>
+              <div className="co-title">{c.starred ? '★ ' : ''}{c.ended ? '🔒 ' : ''}{c.title || t('New chat')}</div>
               {c.preview && <div className="co-preview">{c.preview}</div>}
               <div className="co-fade" />
               <div className="co-time">{timeAgo(c.updated_at)}</div>
@@ -140,7 +156,7 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
           ))}
         </div>
         {loading && <div className="co-loading"><span className="skeleton" style={{ width: 120, height: 12 }} /></div>}
-        {!hasMore && chats.length > 0 && <div className="co-end">That's all of them.</div>}
+        {!hasMore && chats.length > 0 && <div className="co-end">{t("That's all of them.")}</div>}
       </div>
     </div>
   );

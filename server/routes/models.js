@@ -1,4 +1,4 @@
-import { db, uid, now, getSetting, setSetting } from '../db.js';
+import { db, uid, now, tx, getSetting, setSetting } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
 import { getProviders, resolveProvider, providerSpec } from '../providers.js';
 import { matchPreset, presetList, setCustomPresets, getCustomPresets } from '../pricing.js';
@@ -6,6 +6,31 @@ import { logAudit } from '../lib/audit.js';
 import { draftModels, publicModels, detectContextLength } from '../lib/models.js';
 import { sanitizeKwargs } from '../lib/kwargs.js';
 import { broadcastConfig, broadcastAdminConfig } from '../lib/ws/index.js';
+import { ROUTE_MATCHERS } from '../lib/router.js';
+
+function sanitizeRouterRules(raw) {
+  const list = Array.isArray(raw) ? raw : [];
+  return list.slice(0, 40).map(r => ({
+    match: ROUTE_MATCHERS.includes(r?.match) ? r.match : 'keyword',
+    value: String(r?.value ?? '').slice(0, 400),
+    modelId: String(r?.modelId ?? ''),
+    label: String(r?.label ?? '').slice(0, 60),
+  })).filter(r => r.modelId);
+}
+
+function sanitizeStop(raw) {
+  const lines = Array.isArray(raw) ? raw : String(raw ?? '').split('\n');
+  const seen = new Set();
+  const out = [];
+  for (const line of lines) {
+    const s = String(line ?? '').trim().slice(0, 120);
+    if (!s || seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+    if (out.length >= 8) break;
+  }
+  return out.join('\n');
+}
 
 export default function registerModelRoutes(app) {
   app.get('/api/models', authMiddleware, (req, res) => res.json(req.user.is_admin ? draftModels() : publicModels()));
@@ -45,6 +70,7 @@ export default function registerModelRoutes(app) {
     const preset = matchPreset(b.internal_name || '');
     const m = db.models.insert({
       id: uid(), display_name: b.display_name || 'New model', description: b.description || '',
+      kind: b.kind === 'router' ? 'router' : 'model', router_rules: sanitizeRouterRules(b.router_rules), router_default: String(b.router_default || ''),
       internal_name: b.internal_name || 'local-model', system_prompt: b.system_prompt || '',
       call_prompt: b.call_prompt || '',
       provider_id: b.provider_id || (getProviders()[0]?.id || null), max_tokens: parseInt(b.max_tokens) || null,
@@ -53,8 +79,8 @@ export default function registerModelRoutes(app) {
       effort_enabled: b.effort_enabled ? 1 : 0, effort_levels: Array.isArray(b.effort_levels) && b.effort_levels.length ? b.effort_levels : ['low', 'medium', 'high'], effort_default: b.effort_default || 'medium', effort_kwarg: b.effort_kwarg || 'reasoning_effort', effort_admin_only: b.effort_admin_only ? 1 : 0, hide_thinking: b.hide_thinking ? 1 : 0,
       reasoning_collapsible: b.reasoning_collapsible === false ? 0 : 1, icon_size: parseInt(b.icon_size) || (getSetting('ui_preset', '') === 'openai' ? 28 : 0),
       show_name: 'show_name' in b ? (b.show_name ? 1 : 0) : (getSetting('ui_preset', '') === 'openai' ? 1 : 0),
-      generating_anim: b.generating_anim || (getSetting('ui_preset', '') === 'openai' ? 'none' : ''),
-      thinking_anim: b.thinking_anim || (getSetting('ui_preset', '') === 'openai' ? 'none' : ''),
+      generating_anim: b.generating_anim || 'none',
+      thinking_anim: b.thinking_anim || 'none',
       has_vision: b.has_vision ? 1 : 0,
       think_open: b.think_open || '', think_close: b.think_close || '',
       sandbox_auto: b.sandbox_auto ? 1 : 0, sandbox_allowed: b.sandbox_allowed === false ? 0 : 1, dropdown_icon: 'dropdown_icon' in b ? (b.dropdown_icon === false ? 0 : 1) : (getSetting('ui_preset', '') === 'openai' ? 0 : 1), is_default: 0, agent_steps: Number.isInteger(b.agent_steps) ? Math.max(0, b.agent_steps) : 0,
@@ -93,6 +119,9 @@ export default function registerModelRoutes(app) {
       const v = String(req.body.sunset_action || '');
       patch.sunset_action = v === 'unavailable' ? 'unavailable' : 'hide';
     }
+    if ('kind' in req.body) patch.kind = req.body.kind === 'router' ? 'router' : 'model';
+    if ('router_default' in req.body) patch.router_default = String(req.body.router_default || '');
+    if ('router_rules' in req.body) patch.router_rules = sanitizeRouterRules(req.body.router_rules);
     if ('kwargs' in req.body) patch.kwargs = sanitizeKwargs(req.body.kwargs);
     if ('effort_levels' in req.body) {
       const arr = Array.isArray(req.body.effort_levels) ? req.body.effort_levels : String(req.body.effort_levels || '').split(',');
@@ -104,8 +133,12 @@ export default function registerModelRoutes(app) {
     if ('recent_window' in req.body) patch.recent_window = Math.max(1, parseInt(req.body.recent_window) || 4);
     if ('icon_size' in req.body) patch.icon_size = Math.max(0, Math.min(80, parseInt(req.body.icon_size) || 0));
     if ('summary_padding' in req.body) patch.summary_padding = Math.max(0.03, Math.min(0.6, parseFloat(req.body.summary_padding) || 0.125));
-    const numF = ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'repetition_penalty', 'min_p', 'cost_in', 'cost_out'];
-    const numI = ['top_k', 'seed', 'max_tokens', 'docs_intelligence', 'docs_speed', 'docs_max_output'];
+    if ('ctx_trim_mode' in req.body) patch.ctx_trim_mode = req.body.ctx_trim_mode === 'cache' ? 'cache' : 'retain';
+    if ('stop' in req.body) patch.stop = sanitizeStop(req.body.stop);
+    const numF = ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'repetition_penalty', 'min_p', 'cost_in', 'cost_out',
+      'dry_multiplier', 'dry_base', 'xtc_probability', 'xtc_threshold', 'mirostat_tau', 'mirostat_eta'];
+    const numI = ['top_k', 'seed', 'max_tokens', 'docs_intelligence', 'docs_speed', 'docs_max_output',
+      'dry_allowed_length', 'dry_penalty_last_n', 'mirostat'];
     for (const k of numF) if (k in req.body) { const v = req.body[k]; patch[k] = (v === '' || v == null || isNaN(Number(v))) ? null : Number(v); }
     for (const k of numI) if (k in req.body) { const v = req.body[k]; patch[k] = (v === '' || v == null || isNaN(parseInt(v))) ? null : parseInt(v); }
     if ('internal_name' in patch && !('cost_in' in req.body) && !('cost_out' in req.body) && cur.cost_in == null && cur.cost_out == null) {
@@ -163,14 +196,15 @@ export default function registerModelRoutes(app) {
   });
 
   app.post('/api/admin/models/reorder', authMiddleware, adminOnly, (req, res) => {
-    (req.body.ids || []).forEach((id, i) => db.models.update(id, { sort_order: i }));
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    tx(() => ids.forEach((id, i) => db.models.update(id, { sort_order: i })));
     broadcastAdminConfig();
     res.json({ ok: true });
   });
 
   // publish the current draft (full model rows) to all clients
   app.post('/api/admin/models/publish', authMiddleware, adminOnly, (req, res) => {
-    const snapshot = db.models.all().map(m => ({ ...m }));
+    const snapshot = db.models.all();
     setSetting('published_models', snapshot);
     setSetting('published_at', now());
     logAudit(req, 'models.publish', { meta: { count: snapshot.length } });
@@ -181,8 +215,8 @@ export default function registerModelRoutes(app) {
   // has the draft diverged from what is published?
   app.get('/api/admin/models/publish-state', authMiddleware, adminOnly, (req, res) => {
     const snap = getSetting('published_models', null);
-    const draft = db.models.all().map(m => ({ ...m }));
-    const dirty = JSON.stringify(snap) !== JSON.stringify(snap === null ? null : draft);
-    res.json({ published: Array.isArray(snap), dirty: snap === null ? true : dirty, publishedAt: getSetting('published_at', null) });
+    const published = Array.isArray(snap);
+    const dirty = !published || JSON.stringify(snap) !== JSON.stringify(db.models.all());
+    res.json({ published, dirty, publishedAt: getSetting('published_at', null) });
   });
 }

@@ -1,7 +1,8 @@
 import { db, uid, getSetting, setSetting } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
 import { oneShot } from '../llm/index.js';
-import { PROVIDER_TYPES, getProviders, typesForClient } from '../providers.js';
+import { PROVIDER_TYPES, getProviders, typesForClient, isProviderType } from '../providers.js';
+import { llamaEngine } from '../lib/llamacpp.js';
 import * as membank from '../membank.js';
 import * as websearch from '../websearch.js';
 import { logAudit } from '../lib/audit.js';
@@ -9,6 +10,74 @@ import { roleLimit } from '../lib/models.js';
 import { DEFAULT_MEMORY_PROMPT } from '../lib/memory.js';
 import { DEFAULT_SAFETY_PROMPT, SAFETY_REASON_SUFFIX, resolveSafetyModel, parseSafetyVerdict } from '../lib/safety.js';
 import { broadcastAdminConfig } from '../lib/ws/index.js';
+
+const domainList = (v) => JSON.stringify([...new Set(
+  String(v ?? '').slice(0, 20000)
+    .split(/[\n,]+/)
+    .map(s => s.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase())
+    .filter(Boolean)
+)].slice(0, 200));
+
+export const SETTING_FIELDS = {
+  __proto__: null,
+  apiBaseUrl: { key: 'api_base_url', text: 500, trim: true },
+  apiKey: { key: 'api_key', text: 500 },
+  webSearchEnabled: { key: 'web_search_enabled', bool: true },
+  webSearchEngine: { key: 'web_search_engine', text: 40, trim: true, fallback: 'searxng' },
+  searxngUrl: { key: 'searxng_url', text: 500, trim: true },
+  webSearchCount: { key: 'web_search_count', int: [1, 20], def: 5 },
+  webSearchDomains: { key: 'web_search_domains', map: domainList },
+  webSearchPrompt: { key: 'web_search_prompt', text: 16000 },
+  uploadLimitAdminMb: { key: 'upload_limit_mb_admin', num: [0, 4096], def: 8 },
+  uploadLimitUserMb: { key: 'upload_limit_mb_user', num: [0, 4096], def: 8 },
+  sandboxLimitAdminMb: { key: 'sandbox_limit_mb_admin', num: [0, 1048576], def: 1024 },
+  sandboxLimitUserMb: { key: 'sandbox_limit_mb_user', num: [0, 1048576], def: 256 },
+  modelQueue: { key: 'model_queue', bool: true },
+  membankEnabled: { key: 'membank_enabled', bool: true },
+  membankHideTools: { key: 'membank_hide_tools', bool: true },
+  membankPrompt: { key: 'membank_prompt', text: 16000 },
+  budgetUser: { key: 'budget_user', num: [0, 1e9], def: 0 },
+  budgetAdmin: { key: 'budget_admin', num: [0, 1e9], def: 0 },
+  budgetWarnFraction: { key: 'budget_warn_fraction', num: [0.1, 0.99], def: 0.8 },
+  budgetEnforce: { key: 'budget_enforce', bool: true },
+  sessionTtlDays: { key: 'session_ttl_days', int: [1, 365], def: 30 },
+  maxSessions: { key: 'max_sessions', int: [0, 50], def: 0 },
+  voiceMicEnabled: { key: 'voice_mic_enabled', bool: true },
+  voiceCallEnabled: { key: 'voice_call_enabled', bool: true },
+  voiceSttEngine: { key: 'voice_stt_engine', enum: ['browser', 'server'], def: 'browser' },
+  voiceSttUrl: { key: 'voice_stt_url', text: 500, trim: true },
+  voiceSttKey: { key: 'voice_stt_key', text: 500, trim: true },
+  voiceSttModel: { key: 'voice_stt_model', text: 120, trim: true, fallback: 'whisper-1' },
+  voiceTtsEngine: { key: 'voice_tts_engine', enum: ['browser', 'server'], def: 'browser' },
+  voiceTtsUrl: { key: 'voice_tts_url', text: 500, trim: true },
+  voiceTtsKey: { key: 'voice_tts_key', text: 500, trim: true },
+  voiceTtsModel: { key: 'voice_tts_model', text: 120, trim: true, fallback: 'tts-1' },
+  voiceTtsVoice: { key: 'voice_tts_voice', text: 120, trim: true },
+  voiceTtsSpeed: { key: 'voice_tts_speed', num: [0.25, 4], def: 1 },
+  safetyEnabled: { key: 'safety_enabled', bool: true },
+  safetyModelMode: { key: 'safety_model_mode', enum: ['current', 'specific'], def: 'current' },
+  safetyModelId: { key: 'safety_model_id', text: 64, trim: true },
+  safetyPrompt: { key: 'safety_prompt', text: 24000, fallback: DEFAULT_SAFETY_PROMPT },
+  safetyVerbose: { key: 'safety_verbose', bool: true },
+  safetyReasonEnabled: { key: 'safety_reason_enabled', bool: true },
+  memoryEnabled: { key: 'memory_enabled', bool: true },
+  memoryPrompt: { key: 'memory_prompt', text: 24000, fallback: DEFAULT_MEMORY_PROMPT },
+  chatSearchEnabled: { key: 'chat_search_enabled', bool: true }
+};
+
+export function coerceSetting(spec, raw) {
+  if (spec.map) return spec.map(raw);
+  if (spec.bool) return raw ? '1' : '0';
+  if (spec.enum) return spec.enum.includes(raw) ? raw : spec.def;
+  if (spec.int || spec.num) {
+    const [min, max] = spec.int || spec.num;
+    const n = spec.int ? parseInt(raw, 10) : Number(raw);
+    return String(Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : spec.def);
+  }
+  let v = String(raw ?? '').slice(0, spec.text);
+  if (spec.trim) v = v.trim();
+  return v || (spec.fallback ?? '');
+}
 
 export default function registerSettingsRoutes(app) {
   app.post('/api/safety-check', authMiddleware, async (req, res) => {
@@ -84,74 +153,50 @@ export default function registerSettingsRoutes(app) {
     }));
 
   app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
-    if ('apiBaseUrl' in req.body) setSetting('api_base_url', req.body.apiBaseUrl);
-    if ('apiKey' in req.body) setSetting('api_key', req.body.apiKey);
-    if ('webSearchEnabled' in req.body) setSetting('web_search_enabled', req.body.webSearchEnabled ? '1' : '0');
-    if ('webSearchEngine' in req.body) setSetting('web_search_engine', req.body.webSearchEngine || 'searxng');
-    if ('searxngUrl' in req.body) setSetting('searxng_url', (req.body.searxngUrl || '').trim());
-    if ('webSearchCount' in req.body) { const n = parseInt(req.body.webSearchCount); setSetting('web_search_count', String(Number.isFinite(n) && n > 0 ? Math.min(20, n) : 5)); }
-    if ('webSearchDomains' in req.body) { const list = String(req.body.webSearchDomains || '').split(/[\n,]+/).map(s => s.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase()).filter(Boolean); setSetting('web_search_domains', JSON.stringify(list)); }
-    if ('webSearchPrompt' in req.body) setSetting('web_search_prompt', req.body.webSearchPrompt || '');
-    const lim = (k, v, def) => { const n = Number(v); setSetting(k, String(Number.isFinite(n) && n >= 0 ? n : def)); };
-    if ('uploadLimitAdminMb' in req.body) lim('upload_limit_mb_admin', req.body.uploadLimitAdminMb, 8);
-    if ('uploadLimitUserMb' in req.body) lim('upload_limit_mb_user', req.body.uploadLimitUserMb, 8);
-    if ('sandboxLimitAdminMb' in req.body) lim('sandbox_limit_mb_admin', req.body.sandboxLimitAdminMb, 1024);
-    if ('sandboxLimitUserMb' in req.body) lim('sandbox_limit_mb_user', req.body.sandboxLimitUserMb, 256);
-    if ('modelQueue' in req.body) setSetting('model_queue', req.body.modelQueue ? '1' : '0');
-    if ('membankEnabled' in req.body) setSetting('membank_enabled', req.body.membankEnabled ? '1' : '0');
-    if ('membankHideTools' in req.body) setSetting('membank_hide_tools', req.body.membankHideTools ? '1' : '0');
-    if ('membankPrompt' in req.body) setSetting('membank_prompt', String(req.body.membankPrompt || ''));
-    if ('budgetUser' in req.body) lim('budget_user', req.body.budgetUser, 0);
-    if ('budgetAdmin' in req.body) lim('budget_admin', req.body.budgetAdmin, 0);
-    if ('budgetWarnFraction' in req.body) { const n = Number(req.body.budgetWarnFraction); setSetting('budget_warn_fraction', String(Number.isFinite(n) ? Math.min(0.99, Math.max(0.1, n)) : 0.8)); }
-    if ('budgetEnforce' in req.body) setSetting('budget_enforce', req.body.budgetEnforce ? '1' : '0');
-    if ('sessionTtlDays' in req.body) { const n = parseInt(req.body.sessionTtlDays); setSetting('session_ttl_days', String(Number.isFinite(n) && n > 0 ? Math.min(365, n) : 30)); }
-    if ('maxSessions' in req.body) { const n = parseInt(req.body.maxSessions); setSetting('max_sessions', String(Number.isFinite(n) && n >= 0 ? Math.min(50, n) : 0)); }
-    if ('voiceMicEnabled' in req.body) setSetting('voice_mic_enabled', req.body.voiceMicEnabled ? '1' : '0');
-    if ('voiceCallEnabled' in req.body) setSetting('voice_call_enabled', req.body.voiceCallEnabled ? '1' : '0');
-    if ('voiceSttEngine' in req.body) setSetting('voice_stt_engine', req.body.voiceSttEngine === 'server' ? 'server' : 'browser');
-    if ('voiceSttUrl' in req.body) setSetting('voice_stt_url', String(req.body.voiceSttUrl || '').trim());
-    if ('voiceSttKey' in req.body) setSetting('voice_stt_key', String(req.body.voiceSttKey || '').trim());
-    if ('voiceSttModel' in req.body) setSetting('voice_stt_model', String(req.body.voiceSttModel || '').trim() || 'whisper-1');
-    if ('voiceTtsEngine' in req.body) setSetting('voice_tts_engine', req.body.voiceTtsEngine === 'server' ? 'server' : 'browser');
-    if ('voiceTtsUrl' in req.body) setSetting('voice_tts_url', String(req.body.voiceTtsUrl || '').trim());
-    if ('voiceTtsKey' in req.body) setSetting('voice_tts_key', String(req.body.voiceTtsKey || '').trim());
-    if ('voiceTtsModel' in req.body) setSetting('voice_tts_model', String(req.body.voiceTtsModel || '').trim() || 'tts-1');
-    if ('voiceTtsVoice' in req.body) setSetting('voice_tts_voice', String(req.body.voiceTtsVoice || '').trim());
-    if ('voiceTtsSpeed' in req.body) { const n = Number(req.body.voiceTtsSpeed); setSetting('voice_tts_speed', String(Number.isFinite(n) && n >= 0.25 && n <= 4 ? n : 1)); }
-    if ('safetyEnabled' in req.body) setSetting('safety_enabled', req.body.safetyEnabled ? '1' : '0');
-    if ('safetyModelMode' in req.body) setSetting('safety_model_mode', req.body.safetyModelMode === 'specific' ? 'specific' : 'current');
-    if ('safetyModelId' in req.body) setSetting('safety_model_id', String(req.body.safetyModelId || ''));
-    if ('safetyPrompt' in req.body) setSetting('safety_prompt', String(req.body.safetyPrompt || '') || DEFAULT_SAFETY_PROMPT);
-    if ('safetyVerbose' in req.body) setSetting('safety_verbose', req.body.safetyVerbose ? '1' : '0');
-    if ('safetyReasonEnabled' in req.body) setSetting('safety_reason_enabled', req.body.safetyReasonEnabled ? '1' : '0');
-    if ('memoryEnabled' in req.body) setSetting('memory_enabled', req.body.memoryEnabled ? '1' : '0');
-    if ('memoryPrompt' in req.body) setSetting('memory_prompt', String(req.body.memoryPrompt || '') || DEFAULT_MEMORY_PROMPT);
-    if ('chatSearchEnabled' in req.body) setSetting('chat_search_enabled', req.body.chatSearchEnabled ? '1' : '0');
-    logAudit(req, 'settings.update', { meta: { fields: Object.keys(req.body || {}) } });
+    const b = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+    const applied = [];
+    for (const field of Object.keys(b)) {
+      const spec = SETTING_FIELDS[field];
+      if (!spec) continue;
+      setSetting(spec.key, coerceSetting(spec, b[field]));
+      applied.push(field);
+    }
+    logAudit(req, 'settings.update', { meta: { fields: applied } });
     res.json({ ok: true });
   });
 
   app.get('/api/admin/provider-types', authMiddleware, adminOnly, (req, res) => res.json(typesForClient()));
   app.get('/api/admin/providers', authMiddleware, adminOnly, (req, res) => res.json({ providers: getProviders(), types: typesForClient() }));
+
+  app.get('/api/admin/providers/:id/engine', authMiddleware, adminOnly, async (req, res) => {
+    const prov = getProviders().find(p => p.id === req.params.id);
+    if (!prov) return res.status(404).json({ error: 'not found' });
+    if (prov.type !== 'llamacpp') return res.status(400).json({ error: 'Only llama.cpp servers report engine details.' });
+    try {
+      const info = await llamaEngine(prov);
+      if (!info || !info.ok) return res.status(502).json({ error: 'The server did not answer.' });
+      res.json(info);
+    } catch (e) { res.status(502).json({ error: String(e.message || e).slice(0, 200) }); }
+  });
   app.post('/api/admin/providers', authMiddleware, adminOnly, (req, res) => {
     const b = req.body || {};
-    const type = PROVIDER_TYPES[b.type] ? b.type : 'lmstudio';
-    const prov = { id: uid(), name: (b.name || PROVIDER_TYPES[type].label).trim(), type, base_url: (b.base_url || '').trim() || PROVIDER_TYPES[type].defaultBaseUrl, api_key: b.api_key || '' };
+    const type = isProviderType(b.type) ? b.type : 'lmstudio';
+    const prov = { id: uid(), name: String(b.name || PROVIDER_TYPES[type].label).trim().slice(0, 120), type, base_url: String(b.base_url || '').trim().slice(0, 500) || PROVIDER_TYPES[type].defaultBaseUrl, api_key: String(b.api_key || '').slice(0, 500) };
     setSetting('providers', [...getProviders(), prov]);
     logAudit(req, 'provider.create', { type: 'provider', id: prov.id, meta: { name: prov.name, type: prov.type } });
     res.json({ id: prov.id });
   });
   app.patch('/api/admin/providers/:id', authMiddleware, adminOnly, (req, res) => {
     const b = req.body || {};
-    const list = getProviders();
+    const list = getProviders().slice();
     const i = list.findIndex(p => p.id === req.params.id);
     if (i === -1) return res.status(404).json({ error: 'not found' });
     const p = { ...list[i] };
-    if ('name' in b) p.name = (b.name || '').trim() || p.name;
-    if ('type' in b && PROVIDER_TYPES[b.type]) p.type = b.type;
-    if ('base_url' in b) p.base_url = (b.base_url || '').trim() || PROVIDER_TYPES[p.type].defaultBaseUrl;
-    if ('api_key' in b) p.api_key = b.api_key || '';
+    if ('name' in b) p.name = String(b.name || '').trim().slice(0, 120) || p.name;
+    if ('type' in b && isProviderType(b.type)) p.type = b.type;
+    if (!isProviderType(p.type)) p.type = 'lmstudio';
+    if ('base_url' in b) p.base_url = String(b.base_url || '').trim().slice(0, 500) || PROVIDER_TYPES[p.type].defaultBaseUrl;
+    if ('api_key' in b) p.api_key = String(b.api_key || '').slice(0, 500);
     list[i] = p;
     setSetting('providers', list);
     logAudit(req, 'provider.update', { type: 'provider', id: p.id, meta: { name: p.name } });

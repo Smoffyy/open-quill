@@ -1,174 +1,215 @@
-# open-quill UI presets
+# open-quill
 
-open-quill ships two complete first-party skins, switchable per workspace by an admin. This document is the map for anyone or assistant touching theming.
+Self-hosted chat interface for local and cloud LLMs. Express + SQLite server, React + Vite client, WebSocket streaming.
 
-## The one-attribute architecture
+**Everything is served from this origin.** No CDN, no Google Fonts, no analytics, no phone-home. Fonts, KaTeX and highlight.js are npm dependencies bundled locally. Three mechanisms enforce it and none may be weakened: `server/lib/egress.js` wraps global `fetch` at boot, `server/lib/localonly.js` sends a Content-Security-Policy confining the browser to this origin, and `client/scripts/check-local.mjs` fails `npm run build` if anything in `dist/` would fetch off-origin.
 
-Everything hangs off a single attribute on `<html>`:
+## Scripts
+
+Run from the repo root:
+
+| Script | Does |
+| --- | --- |
+| `npm run install:all` | Install root, server and client dependencies |
+| `npm run dev` | Hot-reload server (`:3001`) and client (`:5173`) together |
+| `npm start` | Production server on `:3001`, serving `client/dist` |
+| `npm run build` | Build the client, then verify nothing remote crept in |
+| `npm run test:client` | Client logic tests |
+| `npm run lint` / `lint:fix` | ESLint over client and server (flat config at the root) |
+| `npm run smoke` | Server-render every admin section and modal |
+| `npm run i18n:check` | Report missing/orphan translation keys |
+| `npm run check:local` | Off-origin check on its own |
+| `npm run check:release` | Verify this version has a release folder, notes and a changelog entry |
+| `npm run check:deps` / `update:deps` | Dependency report / update |
+
+In `server/`: `npm test` (`node --test`, discovers every `*.test.js`).
+In `client/`: `npm run dead:css` (advisory unused-class report — verify before deleting; a zero-hit class can still be emitted by a library).
+
+The root `package.json` version is the **single source of truth** for the app version; `server/lib/appversion.js` reads it and the release workflows check tags against it. That module is deliberately dependency-free so `check-release.mjs` can import the release logic without booting the database.
+
+## Layout
 
 ```
-data-preset="anthropic" | "openai"
+server/
+  index.js            express setup, route registration, initWs, startup tasks
+  db.js               encrypted SQLite, JSON-blob tables, getSetting/setSetting
+  auth.js             hashing, sessions, authMiddleware, adminOnly
+  totp.js             2FA
+  providers.js        provider registry     pricing.js   cost presets
+  llm/                completion streaming — import from llm/index.js only
+  tools/              tool schemas, arg parsing, text-call parsing, name aliases
+  sandbox.js          barrel; implementation lives in sandbox/
+  sandbox/            paths, meta, ignore, zip, files, hostenv, shell, args, exec
+  websearch.js membank.js skillsys.js mcp.js projectfiles.js
+  lib/                shared logic (see below)
+  lib/ws/             broadcast, live (in-flight turns), turn (agentic loop), connection
+  routes/             HTTP endpoints, one register(app) per module
+  test/               http.test.js (real server) + logic.test.js (pure logic)
+
+client/src/
+  App.jsx             top-level state, streaming, routing between home/chat/spaces
+  api.js prefs.js toast.js clipboard.js voice.js lightbox.js toolproto.js
+  lib/                pure logic and hooks (see below)
+  components/         UI; admin/ and artifacts/ are subtrees
+  styles/             app.css imports all; openai.css always last
+  locales/            one JSON per language
+  scripts/            check-local, i18n-check, dead-css, smoke
+
+client/public/
+  brand/              the starburst logo, referenced at runtime
+  pwa/                install icons, referenced only by index.html and the manifest
+  fonts/              woff2, loaded by styles/fonts.css
 ```
 
-plus the ordinary theme attribute:
+**The logo is `lib/brand.js`, not a string.** `BRAND_ICON` and its two motion variants have a client copy and a server copy (`server/lib/brand.js`, which seeds them into new model rows); the two must agree and neither imports the other. Model rows *store* these paths, so moving the files means adding to `LEGACY` in the server copy — the boot migration in `db.js` rewrites exact matches once and leaves operator uploads alone.
 
-```
-data-theme="light" | "anthropic" | "openai"   (oled is a legacy alias of the openai palette)
-```
+Key `server/lib/` modules: `appconfig`, `audit`, `origin` (same-origin guard), `budget`, `convo` (conversation assembly), `history`, `memory`, `models`, `prompts`, `release` (Settings → Version content), `sandboxguard` (path + command screening), `purge`, `queue`, `safety`, `spaces`, `tree` (message branching), `llamacpp`, `ctxwindow` (prompt fitting), `kwargs`, `router`, `toolstats`, `uploads`, `egress`, `localonly`.
 
-Rules:
+Key `client/src/lib/` modules: `appversion` + `channel` (version parsing and its channel wording), `keybinds` + `keyboard` (shortcut model and listener), `threadscroll` + `genmirror` (see below), `submenu`, `focus`, `anchor` (portaled menu placement), `mathjs`, `hljs`, `reveal`, `reasoning`, `threadmeta`, `artifacts`, `drafts`, `attachments`, `dictation`, `palettes`, `status`.
 
-1. **The Anthropic preset is the default codebase.** It must never require preset-specific CSS. If you write a rule for it, write it plain.
-2. **Every OpenAI-preset rule lives in `client/src/styles/openai.css`** and is scoped `[data-preset="openai"]` (or `:root[data-theme="openai"]` / `:root[data-preset="openai"][data-theme="light"]` for palette tokens). Nothing OpenAI-flavored may leak into other stylesheets.
-3. `openai.css` is imported **last** in `client/src/styles/app.css`, so equal-specificity ties go to the preset sheet by design. Don't reorder imports.
-4. **Components are never forked.** Behavioral differences branch inline on `cfg.uiPreset === 'openai'` (React) or `document.documentElement.getAttribute('data-preset') === 'openai'` (non-React code paths). Keep the branch list short and auditable — it is enumerated below.
+**Dependency direction is routes → lib.** `lib/ws/` must never import from `routes/`.
 
-## Where the preset comes from
+## Architecture rules
 
-- Server setting `ui_preset` (SQLite key-value via `getSetting`/`setSetting` in `server/db.js`).
-- Exposed in `GET /api/app-config` as `uiPreset` and `uiPresetChosen` (assembled in `server/lib/appconfig.js`, route in `server/routes/misc.js`).
-- Changed via `PATCH /api/admin/app-config { uiPreset }` → also flips the default `app_font` (sans for openai, serif for anthropic) unless the same request sets a font, writes an audit log entry, and calls `broadcastConfig()` so every connected client re-themes live.
-- First-run: when `uiPresetChosen === false`, admins see the chooser modal (`.preset-scrim` / `.preset-modal` in `App.jsx` + `modals.css`). Admins can change it later in Admin → Branding → Interface preset (`AdminPanel.jsx`).
-- Pre-React boot: `client/index.html` reads `localStorage 'oq-preset'` and `'oq-theme'` and sets both attributes before paint (no flash). `applyCfg`/`applyPrefs` keep localStorage in sync afterwards.
+### Two UI presets
 
-## Theme mapping (prefs.js → applyPrefs)
+Everything hangs off `data-preset="anthropic" | "openai"` on `<html>`, plus `data-theme` and an optional `data-palette`. `client/src/lib/palettes.js` is the registry and maps a palette id to a `{ theme, palette }` pair.
 
-- User theme prefs are only `system | light | dark` (stored `oled` reads as `dark`).
-- Under preset `anthropic`: dark → `data-theme="anthropic"`.
-- Under preset `openai`: dark → `data-theme="openai"` (the pitch-black palette).
-- Cursor: while the preset is `openai`, the streaming cursor is **forced** circle+on for everyone; any other preset reverts to the user's stored cursor prefs (computed at apply time, never written to their prefs).
+1. **The Anthropic preset is the default codebase.** Write its rules plain; it must never need preset-specific CSS.
+2. **Every OpenAI rule lives in `client/src/styles/openai.css`**, scoped `[data-preset="openai"]`. Nothing OpenAI-flavoured may leak into another stylesheet.
+3. `openai.css` is imported **last**, so equal-specificity ties go to it by design. Don't reorder imports.
+4. **Components are never forked.** Behavioural differences branch inline on `cfg.uiPreset === 'openai'`.
+5. **A palette must not introduce a new `data-theme` value** — around forty rules are scoped `:root[data-theme="anthropic"]` and a new theme value silently drops all of them. Add a token-override block instead.
+6. **No preset may make a user pref inert.** A preset may change a pref's *default*, never its effect.
 
-## The complete JS branch list (`cfg.uiPreset === 'openai'` or data-preset reads)
+The preset comes from the `ui_preset` setting, is exposed by `GET /api/app-config`, and changes live via `broadcastConfig()`. `client/index.html` reads `localStorage` and sets the attributes before paint.
 
-- `App.jsx` — chat topbar ModelDropdown; home-screen `.home-topbar` ModelDropdown; `hideModelPicker` for the composer; persistent per-message assistant icons (`showIcon`); floating chat composer wrapper class + 808px max width; incognito hero renders "Temporary Chat" + note; instant streaming (reveal loop `instant` flag); `QuickPrompts` keeps layout space when hidden (`qp-ghost`).
-- `prefs.js` — theme mapping and forced circle cursor described above.
-- `SettingsModal.jsx` — preset-aware cursor defaults when seeding the prefs object.
-- `Composer.jsx` — none. The `.ml` multiline class is preset-agnostic; only `openai.css` styles it.
-- `server/routes/models.js` — new-model defaults while `ui_preset === 'openai'`: `icon_size 28`, `show_name 1`, `icon_position 'left'`, `generating_anim/thinking_anim 'none'`, `dropdown_icon 0`.
+### Handling untrusted input
 
-## Layout invariants worth knowing before editing
+- **A lookup table indexed from outside gets `__proto__: null`.** `TABLE['constructor']` is otherwise truthy and inherits from `Object`. A fixed set of allowed values is a `Set`, not an object.
+- **Coerce and cap at the boundary, once** — `String(x ?? '').slice(0, n)` at the route. `PATCH /api/admin/settings` does this from the `SETTING_FIELDS` table; adding a setting is one row there, never a hand-written `if`.
+- **Never index the database with an unchecked value.** `db.*.byId`/`update`/`remove*` return `undefined` for non-primitives instead of throwing; WebSocket handlers must type-check themselves, being outside the express error handler.
+- **An id from a request body must be checked against the resource it will be used on.**
+- **`getSetting` returns the cached object, not a copy** — never mutate a setting in place; build a new value, then `setSetting` and invalidate derived caches.
+- `req.body` is normalized to `{}` by middleware right after `express.json()`; Express 5 leaves it `undefined` otherwise.
 
-- The OpenAI composer is a 52px pill: constant side padding (48px left / 96px right) in **both** single-line and `.ml` states; `.ml` only adds `padding-bottom: 52px`. Keeping the horizontal padding identical between states is what prevents wrap-point feedback loops (typing jitter). Don't reintroduce state-dependent horizontal padding.
-- `.composer-bar` is absolutely pinned inside the pill (`z-index: 6`); the composer itself is `z-index: 3`, plus-menu `80 !important`, quick prompts `1`, floating chat wrapper `30`.
-- The chat composer floats (`.composer-wrap.floating`) over the scroll area with a to-top gradient; `thread-pad` reserves 130px so content never hides beneath it.
-- Widths: thread and composer wrapper are 808px containers with 20px side padding → 768px content, matching measured chatgpt.com.
-- Measured palette (from screenshots at 1×): dark `#000` app/sidebar, `#212121` composer, `#2b2b2b` bubble, `#303030` menus, `#424242` menu hover, `#1a1a1a` active rows; light `#fcfcfc` app/sidebar, `#fff` composer with `#0000001f` border, `#e9e9e9` bubble, `#e2e2e2` active rows, black accent.
-- Markdown math accepts `$…$`, `$$…$$`, and normalizes `\(…\)` / `\[…\]` (outside code) in `Markdown.jsx:normalizeMathDelims`; streaming holds unclosed math via `autoCloseMath`.
+### Security invariants
 
-## Adding a feature checklist
+- **`lib/origin.js` is the single answer to "did this come from our own UI".** `Sec-Fetch-Site` is the primary signal — comparing `Origin` to `Host` is wrong the moment anything proxies. Applied to HTTP writes (before body parsing) and to the WebSocket handshake. Test both `npm run dev` (proxied) and `npm start` (direct); the failure mode is silent and total.
+- **Egress**: loopback and private ranges allowed, public refused. Hostnames resolve with `dns.lookup(all: true)` and are allowed only if *every* address is private. Web search is exempt by construction via `unguardedFetch`, because it fetches public result pages; the exemption is reachable only by importing that symbol.
+- **Uploads require a session** (404, not 401 — existence is itself privileged). Stored under a fresh uuid, served with `nosniff`, a strict CSP and `Content-Disposition: attachment` outside a small inline set. The app icon is the one public exception and follows the setting.
+- **Login and registration are separate endpoints.** Login never reveals which half was wrong and always pays for one argon2 verify, so timing is not an oracle. The limiter keys on both address and account; registration counts under its own key.
+- **A user-supplied regex runs in a killable worker** (`sandbox/regexsearch.js`, 5s). `compileSearchPattern` rejects the obvious catastrophic shapes first. Plain substring search stays in-process. `lib/router.js` screens rule patterns the same way.
 
-1. Build it plain (Anthropic look) first.
-2. If the OpenAI skin needs different visuals, add scoped rules to `openai.css` only.
-3. If it needs different *behavior*, branch on `cfg.uiPreset` and add the branch to the list above.
-4. Verify both presets and both light/dark before shipping. Preset switching is live — test by toggling in Admin → Branding with a second window open.
+### The sandbox
 
----
+**Never let the model guess anything the server already knows.** The host environment is detected by scanning `PATH`, not assumed, and the same object feeds the tool description, the prompt section and the error hints so they cannot contradict each other.
 
-# Project map
+- The boundary is **enforced, not requested**: `lib/sandboxguard.js` holds `normalizeRel` (forgiving where intent is unambiguous, strict where it is not) and `screenCommand`. Both are pure and tested. Protect the false-positive set — ordinary build commands must keep working.
+- **Wrong tool names, argument names and near-miss edits are resolved, not rejected**, because a small model that spelled something wrong will otherwise burn its whole turn budget resending it. Resolution is scoped to the enabled tool set and an exact name always beats an alias.
+- **A cut-off tool call is not a malformed one.** Truncated arguments are flagged via the `CUT_OFF` symbol and the call is refused *before dispatch*; nothing partial is written to disk.
+- **Every failure teaches** — name the argument, show a correct example, list what is valid. `turn.js` stops early on a repeated step or three steps with no progress.
+- On Windows: `cmd.exe` builtins reject forward slashes, so `winTranslate` flips them for a fixed set of commands; the file tools' `path` argument still always takes forward slashes.
 
-Full layout of the repository so any change lands in the right file. The server was refactored from a single `server/index.js` monolith into `lib/` (shared logic) and `routes/` (HTTP endpoints); the old monolith no longer exists. Keep it that way: new endpoints go in an existing route module (or a new one registered in `index.js`), new shared logic goes in `lib/`.
+### Streaming and turns
 
-## Root
+- **A turn belongs to the chat, not the socket** (`lib/ws/live.js`). Reloading mid-reply resumes; only incognito turns abort on socket close. One turn per chat, with `beginTurn`/`endTurn` paired in a `finally`.
+- **`done` and `endTurn` must land in the same tick** server-side — nothing async may separate them, or the client's queued send is rejected.
+- **Nothing may be appended to `messages` between `done` arriving and `finalize()` committing** client-side. `startNextTurn` is the single place a queued send is dispatched, and it runs after `finalize()`'s `setMessages`.
+- **The socket itself is `lib/socket.js`** (`useSocket`), which owns the WebSocket, the exponential reconnect backoff and the teardown, and nothing else. It takes `onMessage` and `shouldReconnect` through refs so a re-render never re-opens the connection, and `send` returns `false` rather than throwing when the socket is down — `App.jsx` turns that `false` into the user-facing "connection lost" notice. **`handleWs` deliberately stays in `App.jsx`**: it is a dispatch over the reveal loop's own refs (`targetContent`, `pendingDone`, `dispLen`, `finalize`), and moving it out would mean threading thirty of them through a parameter object, which reads as modular while coupling more tightly.
+- The client mirror of in-flight turns lives in **`lib/genmirror.js`** (`useGenMirror`). It holds the `Map` in a ref so a token never re-renders the tree, and derives `busyChats` only when membership actually changes. `App.jsx` never touches the Map: it goes through `queueRec`/`dropRec`/`recFor`/`resumeRec`/`peek`, which is what keeps the mirror from drifting. Adding a field to a turn record means editing `blankRecord` there, not spreading a literal at a call site.
 
-- `package.json` — workspace scripts and the **single source of truth for the app version** (`server/lib/appconfig.js` reads it as `APP_VERSION`; release workflows verify tags against it).
-  - `npm run install:all` — installs root, server, and client deps.
-  - `npm run build` — builds the client into `client/dist`.
-  - `npm run dev` — hot-reload server + client concurrently.
-  - `npm start` — production server, serves `client/dist` at `http://localhost:3001`.
-  - `npm run update:deps` / `check:deps` — dependency updater (`update-deps.mjs`; `update-deps-major.mjs` for majors).
-- `CLAUDE.md` — this document. `README.md`, `CREDITS.md`, `LICENSE` — served by `GET /api/docs/:name`.
-- `.github/workflows/` — CI and release automation (see "Branching & releases" below).
-- `assets/` — repo/README imagery only, not served by the app.
+**Thread scrolling is `lib/threadscroll.js`** (`useThreadScroll`), which owns every scroll ref and both loops: the rAF-coalesced `onScroll` read and the streaming autoscroll (`startFollow`/`stopFollow`). Two things to preserve. `stick` is the whole model — it means "the user is at the bottom and wants to stay there" — and is cleared by wheel-up, an upward drag, or the `oq-release-scroll` event the reasoning block dispatches. And `pinToBottom(smooth, delay)` replaces the `stick.current = true; setTimeout(scrollBottom, N)` idiom that was written out at seven call sites; use it rather than reaching for the refs.
 
-## Server (`server/`)
+### Context window
 
-Entry point is `index.js` (~60 lines): express setup, cookie parsing, `/uploads` static hosting, route registration, static `client/dist` serving, websocket init via `initWs(server)`, and startup tasks (custom pricing presets, audit pruning). Route order matters only in that the static-client catch-all is registered last.
+**Prompt size is measured, never estimated**, for any llama.cpp-backed model. Every endpoint carries the model name (router mode 400s without it). Context length comes from `/props` → `/v1/models` → `/slots`, and is the **per-slot** value; `n_ctx_train` is not the window. The estimator only picks the first probe point. `slideToFit` keeps the system prompt and newest user message and verifies every candidate with the real tokenizer. Images carry a reserve, corrected upward from real usage and never lowered.
 
-### Core modules (pre-existing)
+### Performance patterns
 
-- `db.js` — encrypted SQLite (better-sqlite3-multiple-ciphers) with JSON-blob tables; exports `db.<table>` accessors plus `uid`, `now`, `getSetting`, `setSetting`. Data lives in `server/data/` (gitignored).
-- `auth.js` — password hashing, JWT-style token signing, cookie parsing, sessions, `authMiddleware`, `adminOnly`, `sessionFromRequest`.
-- `llm/` — provider-agnostic completion streaming, re-exported from `llm/index.js` (import that, never the leaf files): `provider.js` (endpoint/auth/prompt vars), `prompt.js` (`buildMessages`), `sampling.js`, `emitter.js` (think-tag splitting plus the text tool-call filter), `wire.js` (`normalizeMessages`, `requestKwargs`), `stream.js` (`streamCompletion`), `oneshot.js` (`oneShot`), `summarize.js` (`stripThink`, `generateTitle`, `summarizeConversation`).
-- `providers.js` — provider registry (`PROVIDER_TYPES`, `getProviders`, `resolveProvider`, `providerSpec`).
-- `pricing.js` — per-model cost presets (`matchPreset`, custom presets).
-- `tools/` — re-exported from `tools/index.js`: `schemas.js` (`buildTools` and the per-capability schemas), `args.js` (`parseArgs`, `toCall`), `textcalls.js` (`parseTextToolCalls`, for models that emit tool calls as text instead of structured calls), `preview.js` (`livePreview`). No custom/live tools: that feature was removed.
-- `toolproto.js` — inline tool-call syntax scanner shared conceptually with `client/src/toolproto.js`.
-- `sandbox.js` — per-chat file sandbox (versioned files, bash, zip). `skills/sandbox.md` is the base sandbox system prompt.
-- `websearch.js`, `membank.js`, `skillsys.js`, `mcp.js`, `projectfiles.js` — self-contained tool backends (each exports `execTool`/`promptFor`/`resultPayload`/`formatResult` variants).
-- `totp.js` — 2FA secrets, verification, recovery codes.
+- **Occlusion, not virtualization**, for long threads: `content-visibility` on message bodies, gated by content size rather than message count. Never on `.msg` itself — paint containment clips the icon-left avatar.
+- **Code blocks highlight lazily**, off the render path, one job per idle slot.
+- **KaTeX and highlight.js are lazy and local**, loaded through a module-level singleton plus `useSyncExternalStore`. highlight.js loads common → individual languages → full build.
+- **Locales are per-language chunks.** `manualChunks` names them `locale-<code>` and `modulePreload.resolveDependencies` filters them; without that filter every language is downloaded by everyone.
+- **Query in SQL, not in JavaScript.** `db.<table>.all/filter/find` parse the entire table — fine for small tables, wrong on any hot path.
+- Scroll handlers are rAF-coalesced and set state only when a derived boolean actually flips.
 
-### Shared logic (`server/lib/`)
+### CSS
 
-- `appconfig.js` — `APP_VERSION` + `appConfig()` (the `GET /api/app-config` payload).
-- `audit.js` — `logAudit`, `pruneAudit`, `clientIp`.
-- `budget.js` — monthly spend math: `budgetStatus`, `budgetFor`, `monthStartMs`.
-- `convo.js` — conversation assembly: `chatHistory`, token estimation + per-chat calibration (`estimateTokens`, `calibratedTokens`, `tokenCalib`), rolling-context truncation, auto-summarization (`compactStep`, `compactThreshold`), `promptVars`, `instrFor`, `styleTextFor`.
-- `history.js` — `stripToolSyntax` / `historyText` (turn stored tool blocks into compact markers), `decodeOqr`.
-- `memory.js` — per-user long-term memory (`updateUserMemory`, `maybeUpdateMemory`, `DEFAULT_MEMORY_PROMPT`).
-- `models.js` — model shaping/resolution: `shapePublic`, `draftModels`, `publicModels`, `resolveModel(OrDefault)`, `applyEffort`, `roleLimit`, context-length detection (`modelCtx`, `detectContextLength`).
-- `prompts.js` — system-prompt builders and tool formatting: `sandboxPromptFor`, `cleanCall`, `resultPayload`, `formatToolResult`, chat-search tools, `endChatPromptFor`, `longConvoReminderFor`, `pinnedFilesPrompt`.
-- `queue.js` — optional one-model-at-a-time request queue (`runQueued`).
-- `safety.js` — safety filter prompt + verdict parsing.
-- `spaces.js` — space membership helpers, `broadcastSpace`, `removeUserFromSpaces`, `spaceAssistantRespond`.
-- `tree.js` — message branching tree: `activePath`, `ensureChain`, `childrenOf`, `leafUnder`, `sortedMsgs`. All of these share one per-chat graph (`graphOf`) cached against `db.messages.version()`, so a chat's messages are loaded and parsed once per mutation rather than once per call. Do not go back to loading messages directly in these helpers.
-- `llamacpp.js` — llama-server integration: `/props` and `/slots` for exact `n_ctx`, `/apply-template` plus `/tokenize` for exact prompt token counts (`llamaTokenCount`), and `isContextOverflowError` for recovering from context overflow. Results are cached; llama.cpp is the default provider type.
-- `uploads.js` — `UPLOADS` dir, multer `diskStore`, attachment readers (`readUploadText`, `readImageDataUri`, `isTextLike`), `purgeUploads`.
-- `ws/` — the websocket engine, re-exported from `ws/index.js`: `broadcast.js` (the `clients` map, `broadcastConfig`, `broadcastAdminConfig`, `broadcastToUser`, `killSessionSockets`, `requestedKwargs`), `turn.js` (`runCompletion`, the agentic tool-call loop, plus `maybeCompact`), `connection.js` (`initWs(server)` and the `chat`/`regenerate`/`edit`/`incognito`/`stop` handlers). `runCompletion` is module-scope and takes `(ws, state, safeSend, chat, model, ...)` rather than closing over the socket. **`lib/ws/` must never import from `routes/`** — dependency direction is routes → lib.
+- **Never write `overflow-y: auto` on its own.** Per spec it makes the other axis `auto` too, silently creating a horizontal scroll container. Always `overflow: hidden auto`.
+- **A menu that can leave its container must be portaled** through `lib/anchor.js`. Clamp conditionally — an unconditional inline `left` is a feedback loop waiting for its trigger to resize.
+- **A `position: sticky` bar must be opaque.** `--code-bg` is translucent in most palettes, so `.code-bar` reproduces the whole stack the wrap composites against.
+- Wide content scrolls inside its own container (`table`, `pre`, `.katex-display`); the page body never scrolls horizontally.
+- Anything interactive needs a visible `:focus-visible` ring and, if it is not a real button, a role, `tabIndex` and key handling. Use the shared `Switch` rather than writing switch markup by hand.
 
-### HTTP routes (`server/routes/`)
+### i18n
 
-Each exports `default function register(app)` and is wired in `index.js`.
-
-- `auth.js` — login/logout, `/api/me` (profile, styles, memory, personas, saved prompts, usage, sessions, budget, password, 2FA, delete-account), message feedback, improve-prompt, style generation, user search.
-- `chats/` — split by concern and wired together by `chats/index.js`: `browse.js` (list, overview, search), `folders.js`, `crud.js` (create, delete, pins), `messages.js` (chat fetch, branching), `inspect.js` (context, summary), `transfer.js` (export/import).
-- `projects.js` — project CRUD + project file uploads.
-- `artifacts.js` — sandbox file viewing, versions, downloads, restore, zip.
-- `models.js` — public `/api/models`, admin model CRUD, discovery, reorder, publish/publish-state (draft vs published snapshot), pricing presets, context detection.
-- `settings.js` — `/api/safety-check`, `GET/PATCH /api/admin/settings`, provider CRUD.
-- `admin.js` — users, skills, MCP servers, feedback, safety log, audit log (+ CSV export), admin usage analytics, per-user budgets.
-- `media.js` — general + admin uploads, voice transcribe/speak proxies, memory bank files.
-- `spaces.js` — shared group-chat spaces (invite/respond/leave/members/messages/typing).
-- `misc.js` — `/api/app-config`, `PATCH /api/admin/app-config` (branding, greetings, quick prompts, UI preset), `/api/docs/:name`.
-
-## Client (`client/`)
-
-Vite + React. `vite.config.js` proxies `/api`, `/uploads`, and the websocket to `:3001` in dev.
-
-- `src/main.jsx` — entry, mounts `App`.
-- `src/App.jsx` — top-level state: auth, chat list, streaming websocket handling, composer props, keyboard shortcuts, modals, routing between home/chat/spaces.
-- `src/api.js` — fetch wrapper for every REST call (`api.get/post/patch/put/del`, uploads).
-- `src/prefs.js` — theme/preset application (see preset doc above). `src/toast.js`, `src/clipboard.js`, `src/lightbox.js`, `src/voice.js` — small utilities. `src/toolproto.js` — client-side tool-syntax scanner. `src/qpIcons.jsx` — quick-prompt icon set.
-- `src/styles/` — `app.css` imports everything; `openai.css` is the OpenAI preset (always last). Others: `base`, `layout`, `chrome`, `chat`, `composer` styles live across `polish`, `extras`, `modals`, `admin`, `artifacts`, `fonts`.
-
-### Components (`src/components/`)
-
-- `AdminPanel.jsx` — admin shell: tab navigation, models list/publish flow, branding, members, settings tabs. Tab ids: `overview, models, providers, branding, home, members, websearch, membank, voice, safety, memory, skills, mcp, feedback, limits, audit, analytics`.
-- `admin/widgets.jsx` — shared admin primitives: `Card`, `Toggle`, `IconSlot`, `IconCropModal`, `SystemPromptEditor`, `QpIconPicker`, `AutosaveNote`, `CopyBtn`, `StatusChips`, `Grip`, `bgPreviewStyle`.
-- `admin/ModelEditor.jsx` — the per-model editor (sections: General, Intelligence, Abilities, Style, Tuning; `ME_SECTIONS`).
-- `Composer.jsx` — the input: attachments, dictation, slash commands, style menu, sandbox/web-search toggles, saved prompts.
-- `Message.jsx`, `Markdown.jsx`, `CodeBlock.jsx`, `ReasoningBlock.jsx`, `StreamingText.jsx`, `ToolCard.jsx` — message rendering pipeline.
-- `Sidebar.jsx`, `ChatMenu.jsx`, `ChatsOverview.jsx`, `SearchModal.jsx`, `BranchCompare.jsx` — navigation and history.
-- `ArtifactsPanel.jsx` — sandbox file browser/preview. `ProjectsPanel.jsx`, `SpacesPanel.jsx` — projects and spaces UIs.
-- `SettingsModal.jsx`, `PersonasModal.jsx`, `StyleMenu.jsx`, `ShortcutsModal.jsx`, `DocModal.jsx`, `Login.jsx`, `CallPanel.jsx`, `ModelDropdown.jsx`, `ChatControls.jsx`, `AppBackground.jsx`, `Toaster.jsx`, `Lightbox.jsx`, `icons.jsx`.
-
-## Removed features (do not resurrect)
-
-- **Custom Functions** (admin-defined browser-side buttons): `server/functions.js`, `FunctionsBar.jsx`, `/api/admin/functions`, `cfg.functions` — all deleted.
-- **Live Tools** (admin-defined server-side JS tools): `server/customtools.js`, `/api/admin/tools`, `customToolSchemas` in `tools.js`, model fields `tools_allowed`/`tools_auto` — all deleted. Stale `tools_allowed`/`tools_auto` keys may linger in old model rows in the DB; they are ignored everywhere.
-
-## Branching & releases
-
-Permanent branches: `dev` → `beta` → `stable`. Versions live in tags, not branch names.
-
-- Pre-release: merge `dev` into `beta`, bump root `package.json` version, tag `vX.Y.Z-beta.N` → `.github/workflows/prerelease.yml` builds and publishes a GitHub pre-release named "X.Y.Z Beta N".
-- Stable: merge `beta` into `stable`, tag `vX.Y.Z` → `.github/workflows/release.yml` publishes the release and marks it latest.
-- `ci.yml` runs build + server smoke test on every push/PR to the three branches. `version-guard.yml` blocks PRs into `beta`/`stable` unless the root `package.json` version was bumped.
-- Releases only fire on tags, never on branch pushes, so an accidental push to `beta` publishes nothing.
+`t()` translates at render, `tk()` marks a literal at definition so the extractor can see it — module-level tables need both. Run `npm run i18n:check` after touching any user-facing string; every locale is expected to report `complete`. **There is no RTL support**; the stylesheets use physical properties throughout.
 
 ## Tests
 
-`server/test/logic.test.js` runs on `node --test` with no extra dependencies: `npm test` from the repo root, or `cd server && npm test`. CI runs it after the build and smoke test.
+`server/npm test` discovers every `*.test.js` — do not replace discovery with a named list.
 
-It covers the pure logic that is easy to break silently: kwarg resolution and pairing chains, text tool-call parsing (including the negative cases where prose or an unknown tool name must NOT become a call), compaction thresholds and in-turn tool trimming, llama.cpp overflow detection, and the Windows command translation in `sandbox.js`. Add cases here when touching any of those; they are cheap and they have already caught a real regression.
+- **`test/http.test.js`** boots the real server as a child process and drives it over `node:http` (not `fetch`, which may refuse to set `Origin`/`Sec-Fetch-Site`). It exists because 128 unit tests passed while every button in the app was dead. Adding an endpoint or middleware means a case here, not just in `logic.test.js`.
+- **`test/logic.test.js`** covers pure logic: kwargs, text tool-calls, compaction, overflow detection, Windows command translation, the sandbox guards, alias resolution, `preferredChild`. The sandbox tool tests deliberately touch a real temp workspace, because importing a module does not resolve identifiers a handler only references at call time.
+- **`client/test/logic.test.js`** covers the keybind model, reasoning parsing, reveal resolution, maths preprocessing, thread/branch helpers and the artifacts diff logic. **Only import-free modules are testable** — `node --test` cannot parse JSX, which is why pure logic is pulled out of components.
+- **`npm run smoke`** server-renders every admin section and modal. `vite build` type-checks nothing, so passing wrong props compiles perfectly and blanks the panel at runtime.
 
-CI syntax-checks every `.js` file under `server/` via `find`, so new files and folders are covered automatically. Do not replace that with a hand-written file list.
+## Branching and releases
+
+Step-by-step commands live in [RELEASING.md](RELEASING.md); this section is the shape of it.
+
+Two branches: **`dev`** is where work lands, **`stable`** is what is released. Channels live in the version string, not in branch names.
+
+**A tag is the version string exactly** — `27.2.0-beta.3`, no `v` prefix. `.npmrc` sets `tag-version-prefix=` so `npm version` agrees, and both release workflows match the bare form. The release *title* is the tag verbatim too, so one string identifies a build in git, on the releases page, in `package.json` and in Settings → Version. `tag-guard.yml` fires on a `v*` tag and fails with instructions, because a prefixed tag matches neither release workflow and would otherwise fail silently. Client-side, `lib/appversion.js` drops a stray `v` on the way in and treats the prerelease tail as free-form, so a channel that is not `beta` still renders as words.
+
+`dev` carries a prerelease tail (`27.2.0-beta.3`) and tagging it publishes a GitHub pre-release. Dropping the tail and merging to `stable` is what makes something a release — tag `27.2.0` and `release.yml` marks it latest. The last commit before a release PR is the bump to the final version, and the first commit after merging opens the next cycle (`27.3.0-beta.1`), so `dev` is never equal to `stable`.
+
+`ci.yml` runs on push/PR to both branches. `version-guard.yml` blocks a PR into `stable` that does not raise the version, comparing with `check-version-bump.mjs` — **`sort -V` is not usable here**, as it ranks `27.2.0-beta.5` above `27.2.0` and would reject the exact PR that ships a release.
+
+### What Settings → Version shows
+
+`release/<line>/` holds it — `release.json` (codename, released, icon),
+`notes.md`, and the badge. Cutting a release is a new folder plus a version bump.
+
+`server/lib/release.js` picks the folder from the root `package.json` version,
+most specific first: `27.1.0`, then `27.1`, then `27` — so one folder per major
+line is normal, and per-patch detail stays in `CHANGELOG.md`. A missing folder is
+legitimate and degrades quietly, which is why a bump with no folder looks blank.
+
+**Release notes must not go back into `/api/app-config`.** They are fetched
+lazily from `GET /api/release` because that config payload rides every page load
+and every `broadcastConfig()`.
+
+
+## Keeping the tree clean
+
+These checks find dead weight, and all should stay at zero:
+
+| Check | Finds |
+| --- | --- |
+| `npm run lint` | unused vars and imports, hook-rule violations, unreachable code |
+| `npm run dead:css` | class names in `styles/` no `.js`/`.jsx`/`.html` references |
+| `npm run i18n:check` | missing **and** orphaned translation keys |
+| `npm run smoke` | components that crash when rendered |
+| `npm run build` | anything that would fetch off-origin |
+| `npm run check:release` | a version bump with no release folder, notes or changelog entry |
+
+Two traps when acting on them. **`dead:css` is advisory** — a zero-hit class can still be emitted by a library (`katex-error`, `hljs`), which is what `EXTERNAL` at the top of the script is for; verify before deleting. And **`i18n:check` force-adds keys its scanner cannot see** (the `extra` array), mostly the quick-prompt defaults that live in `server/lib/appconfig.js` rather than in client source. An entry there suppresses orphan detection for that key, so when you delete a string, check that array too or its translations quietly survive forever.
+
+`import React` is not needed — the JSX transform is automatic. Components import only the hooks they use.
+
+**ESLint runs in CI and must stay at zero errors.** `eslint.config.js` is flat config at the repo root covering both workspaces. Two calibration decisions to know before "fixing" the config: `react-hooks/exhaustive-deps` is a **warning**, because several deps arrays here deliberately omit values, and the React Compiler rules that ship in `eslint-plugin-react-hooks` 7 (`set-state-in-effect`, `immutability`, `purity`, `refs`, `static-components`) are **off**, because this codebase does not opt into the compiler and they flag ~90 working patterns. Turn them on only alongside actually adopting it.
+
+**Hooks must never sit below an early return.** `Message.jsx` renders user and assistant messages from one component and returns early for `msg.role === 'user'`; every hook belongs above that branch, even the ones only the assistant path uses.
+
+## Menus
+
+`client/src/lib/submenu.js` (`useSubmenus`) owns every hover-opened submenu in a menu. It holds **one** `open` id rather than a boolean per submenu, which is what makes "only one open at a time" structural instead of something each handler has to remember — the previous four-boolean version had each opener closing only some of its siblings, so they overlapped. Opening is immediate; only closing is delayed, by `SUBMENU_CLOSE_DELAY` (160ms), and that delay is load-bearing — the pointer leaves the parent row before it reaches the submenu panel, so closing on `mouseleave` with no grace period makes a submenu impossible to move into. Use this hook for any new submenu rather than adding another timer.
+
+## Adding a feature
+
+1. Build it plain (Anthropic look) first.
+2. Scoped rules in `openai.css` only if the OpenAI skin needs different visuals.
+3. Branch on `cfg.uiPreset` only if it needs different *behaviour*.
+4. Verify both presets, light and dark. Preset switching is live — toggle in Admin → Branding with a second window open.

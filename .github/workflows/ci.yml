@@ -2,9 +2,18 @@ name: CI
 
 on:
   push:
-    branches: [dev, beta, stable]
+    branches: [dev, stable]
   pull_request:
-    branches: [dev, beta, stable]
+    branches: [dev, stable]
+
+permissions:
+  contents: read
+
+# A second push to the same branch or PR makes the run in flight pointless.
+# Branch pushes are left to finish so the history of dev stays complete.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-and-smoke:
@@ -29,20 +38,33 @@ jobs:
           cd server
           find . -name node_modules -prune -o -name '*.js' -print0 | xargs -0 -n1 node --check
 
+      - name: Lint
+        run: npm run lint
+
       - name: Build client
         run: npm run build
 
-      - name: Smoke test server
-        run: |
-          node server/index.js &
-          SERVER_PID=$!
-          sleep 4
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/)
-          echo "GET / -> $STATUS"
-          API=$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Content-Type: application/json" -d '{"email":"ci@test.dev"}' http://localhost:3001/api/auth/check-email)
-          echo "POST /api/auth/check-email -> $API"
-          kill $SERVER_PID
-          [ "$STATUS" = "200" ] && [ "$API" = "200" ]
+      - name: Translations are complete
+        run: npm run i18n:check
 
+      - name: Components render without crashing
+        run: npm run smoke
+
+      - name: Release metadata is present and shippable
+        run: npm run check:release
+
+      - name: Client logic tests
+        run: npm run test:client
+
+      # Runs every *.test.js under server/ — the pure-logic suite and the integration
+      # suite, which boots the real server against a throwaway database and drives it
+      # with the header shapes a browser actually sends. This replaced a hand-written
+      # curl script: that script set no Origin header, so it could not see a CSRF guard
+      # that refused every write from the real UI. Keep this discovering files rather
+      # than naming them, or a new test file silently stops running in CI.
       - name: Server tests
         run: cd server && npm test
+
+      - name: Clean up CI database
+        if: always()
+        run: rm -rf server/data

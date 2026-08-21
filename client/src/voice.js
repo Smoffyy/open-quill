@@ -27,7 +27,7 @@ export async function fetchSpeech(text) {
 
 export function cleanForSpeech(text) {
   let t = String(text || '');
-  t = t.replace(/\[\[OQR:[\s\S]*?\]\]/g, ' ');
+  t = t.replace(/\[\[OQ[RT]:[\s\S]*?\]\]/g, ' ');
   t = t.replace(/```[\s\S]*?```/g, ' Code block omitted. ');
   t = t.replace(/`([^`]+)`/g, '$1');
   t = t.replace(/!\[[^\]]*\]\([^)]*\)/g, ' ');

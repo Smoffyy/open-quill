@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../api.js';
 import { SECTIONS, LEGACY_SECTION_IDS } from './nav.jsx';
+import { t } from '../../i18n.jsx';
+import { appFontId } from '../../prefs.js';
 
 const AdminCtx = createContext(null);
 
@@ -16,7 +18,7 @@ export const DEFAULT_SETTINGS = {
   memoryEnabled: false, memoryPrompt: '', chatSearchEnabled: false
 };
 
-export const DEFAULT_CFG = { appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [], appFont: 'serif', uiPreset: 'anthropic' };
+export const DEFAULT_CFG = { appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [], appFont: 'newsreader', uiPreset: 'anthropic', modelDocs: true, allowSignups: true, localOnly: true, egressLocalOnly: true, egressAllowWebSearch: true, egressAllowlist: [] };
 
 function initialSection() {
   try {
@@ -27,7 +29,7 @@ function initialSection() {
   return 'dashboard';
 }
 
-export function AdminProvider({ user, onClose, children }) {
+export function AdminProvider({ user, onClose, children, modelId = null }) {
   const [section, setSection] = useState(initialSection);
   const [models, setModels] = useState([]);
   const [providers, setProviders] = useState([]);
@@ -47,6 +49,25 @@ export function AdminProvider({ user, onClose, children }) {
   const [ask, setAsk] = useState(null);
   const [discover, setDiscover] = useState(null);
   const [provTest, setProvTest] = useState({});
+  const [openKwargs, setOpenKwargs] = useState(() => new Set());
+  const scrollMem = useRef(new Map());
+
+  const toggleKwarg = useCallback((key) => setOpenKwargs(s => {
+    const n = new Set(s);
+    if (n.has(key)) n.delete(key); else n.add(key);
+    return n;
+  }), []);
+  const openKwarg = useCallback((key) => setOpenKwargs(s => (s.has(key) ? s : new Set(s).add(key))), []);
+
+  const keepScroll = useCallback((key, el) => {
+    if (!el || !key) return undefined;
+    let settling = true;
+    el.scrollTop = scrollMem.current.get(key) || 0;
+    requestAnimationFrame(() => { settling = false; });
+    const onScroll = () => { if (!settling) scrollMem.current.set(key, el.scrollTop); };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
 
   const saveTimers = useRef({});
   const pendingIds = useRef(new Set());
@@ -56,6 +77,15 @@ export function AdminProvider({ user, onClose, children }) {
   const modelsRef = useRef([]);
   const providersRef = useRef([]);
   useEffect(() => { modelsRef.current = models; }, [models]);
+  // Open on whatever model the user currently has equipped rather than on the top
+  // of the list. Seeded once, and only while nothing has been picked, so it cannot
+  // yank the selection back after the admin clicks something else.
+  const seededSel = useRef(false);
+  useEffect(() => {
+    if (seededSel.current || !modelId || !models.length) return;
+    seededSel.current = true;
+    if (models.some(m => m.id === modelId)) setSelModel(s => s ?? modelId);
+  }, [models, modelId]);
   useEffect(() => { providersRef.current = providers; }, [providers]);
   useEffect(() => { try { localStorage.setItem('oq-admin-tab', section); } catch {} }, [section]);
 
@@ -81,8 +111,9 @@ export function AdminProvider({ user, onClose, children }) {
         appName: c.appName || '', disclaimer: c.disclaimer || '',
         greetings: c.greetings?.length ? c.greetings : [''], appIcon: c.appIcon || '',
         quickPrompts: Array.isArray(c.quickPrompts) ? c.quickPrompts : [],
-        appFont: c.appFont === 'sans' ? 'sans' : 'serif',
-        uiPreset: c.uiPreset === 'openai' ? 'openai' : 'anthropic'
+        appFont: appFontId(c.appFont),
+        uiPreset: c.uiPreset === 'openai' ? 'openai' : 'anthropic',
+        modelDocs: c.modelDocs !== false
       });
     } catch {}
     loadUsers();
@@ -220,8 +251,8 @@ export function AdminProvider({ user, onClose, children }) {
   const deleteModels = useCallback((ids, onDone) => {
     const n = ids.length;
     setAsk({
-      message: n === 1 ? 'Delete this model? This cannot be undone.' : `Delete ${n} models? This cannot be undone.`,
-      danger: n === 1 ? 'Delete model' : `Delete ${n} models`,
+      message: n === 1 ? t('Delete this model? This cannot be undone.') : t('Delete {n} models? This cannot be undone.', { n }),
+      danger: n === 1 ? t('Delete model') : t('Delete {n} models', { n }),
       onConfirm: async () => {
         for (const id of ids) await api.del('/api/admin/models/' + id);
         setModels(ms => ms.filter(m => !ids.includes(m.id)));
@@ -254,7 +285,7 @@ export function AdminProvider({ user, onClose, children }) {
     try {
       const r = await api.get('/api/admin/discover-models?provider=' + encodeURIComponent(pid));
       setDiscover({ loading: false, error: '', list: r.models || [], providerId: pid });
-    } catch (e) { setDiscover({ loading: false, error: e?.message || 'Could not reach the backend.', list: [], providerId: pid }); }
+    } catch (e) { setDiscover({ loading: false, error: e?.message || t('Could not reach the backend.'), list: [], providerId: pid }); }
   }, []);
 
   const addDiscovered = useCallback(async (id) => {
@@ -277,14 +308,19 @@ export function AdminProvider({ user, onClose, children }) {
 
   const deleteProvider = useCallback(async (id) => {
     try { await api.del('/api/admin/providers/' + id); await reloadProviders(); await loadAll(); }
-    catch (e) { setAsk({ message: e?.message || 'Could not delete provider.', onConfirm: () => {} }); }
+    catch (e) { setAsk({ message: e?.message || t('Could not delete provider.'), onConfirm: () => {} }); }
   }, [reloadProviders, loadAll]);
 
   const testProvider = useCallback(async (id) => {
     setProvTest(t => ({ ...t, [id]: { busy: true } }));
+    const prov = providersRef.current.find(p => p.id === id);
     try {
       const r = await api.get('/api/admin/discover-models?provider=' + encodeURIComponent(id));
-      setProvTest(t => ({ ...t, [id]: { ok: true, count: (r.models || []).length } }));
+      let engine = null;
+      if (prov && prov.type === 'llamacpp') {
+        try { engine = await api.get('/api/admin/providers/' + encodeURIComponent(id) + '/engine'); } catch {}
+      }
+      setProvTest(t => ({ ...t, [id]: { ok: true, count: (r.models || []).length, engine } }));
     } catch (e) {
       setProvTest(t => ({ ...t, [id]: { ok: false, err: e?.message || 'Unreachable' } }));
     }
@@ -311,7 +347,7 @@ export function AdminProvider({ user, onClose, children }) {
 
   const removeUser = useCallback((id) => {
     setAsk({
-      message: 'Remove this user and all their chats? This cannot be undone.', danger: 'Remove user',
+      message: t('Remove this user and all their chats? This cannot be undone.'), danger: t('Remove user'),
       onConfirm: async () => { await api.del('/api/admin/users/' + id); setUsers(us => us.filter(u => u.id !== id)); }
     });
   }, []);
@@ -329,7 +365,8 @@ export function AdminProvider({ user, onClose, children }) {
     usage, usageDays, setUsageDays, loadUsage,
     recentAudit, loadRecentAudit,
     changeModel, addModel, duplicateModel, duplicateModels, setModelsEnabled, setModelsProvider, setModelsGroup, renameModelGroup, deleteModels, commitModelOrder,
-    setRole, saveBudget, removeUser, loadUsers, loadAll
+    setRole, saveBudget, removeUser, loadUsers, loadAll,
+    openKwargs, toggleKwarg, openKwarg, keepScroll
   };
 
   return <AdminCtx.Provider value={value}>{children}</AdminCtx.Provider>;

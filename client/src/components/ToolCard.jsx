@@ -1,48 +1,50 @@
 import React, { useMemo, useState } from 'react';
-import hljs from 'highlight.js';
+import { highlight } from '../lib/hljs.js';
 import { copyText } from '../clipboard.js';
 import { Wrench, FileText, Trash, Folder, Download, Search, Copy, Check, Terminal, Pencil, Plus, Chevron } from './icons.jsx';
+import { baseName, dirOf } from '../lib/files.js';
+import { t, tk } from '../i18n.jsx';
 
 const VERBS = {
-  bash: ['Running', 'Ran'],
-  run: ['Running', 'Ran'],
-  create_file: ['Creating', 'Created'],
-  str_replace: ['Editing', 'Edited'],
-  view: ['Reading', 'Read'],
-  list_files: ['Listing files', 'Listed files'],
-  delete_file: ['Deleting', 'Deleted'],
-  clear_sandbox: ['Clearing sandbox', 'Cleared sandbox'],
-  delete_all: ['Clearing sandbox', 'Cleared sandbox'],
-  rename_file: ['Moving', 'Moved'],
-  move_file: ['Moving', 'Moved'],
-  copy_file: ['Copying', 'Copied'],
-  make_dir: ['Creating folder', 'Created folder'],
-  mkdir: ['Creating folder', 'Created folder'],
-  search: ['Searching', 'Searched'],
-  find: ['Finding files', 'Found files'],
-  web_search: ['Searching the web', 'Searched the web'],
-  extract_zip: ['Extracting', 'Extracted'],
-  bundle_zip: ['Bundling', 'Bundled'],
-  mb_view: ['Reading', 'Read'],
-  mb_search: ['Searching memory', 'Searched memory'],
-  chat_search: ['Searching past chats', 'Searched past chats'],
-  chat_view: ['Reading a past chat', 'Read a past chat'],
-  skill_view: ['Loading skill', 'Loaded skill'],
-  end_conversation: ['Ending the conversation', 'Ended the conversation']
+  bash: [tk('Running'), tk('Ran')],
+  run: [tk('Running'), tk('Ran')],
+  create_file: [tk('Creating'), tk('Created')],
+  str_replace: [tk('Editing'), tk('Edited')],
+  view: [tk('Reading'), tk('Read')],
+  list_files: [tk('Listing files'), tk('Listed files')],
+  delete_file: [tk('Deleting'), tk('Deleted')],
+  clear_sandbox: [tk('Clearing sandbox'), tk('Cleared sandbox')],
+  delete_all: [tk('Clearing sandbox'), tk('Cleared sandbox')],
+  rename_file: [tk('Moving'), tk('Moved')],
+  move_file: [tk('Moving'), tk('Moved')],
+  copy_file: [tk('Copying'), tk('Copied')],
+  make_dir: [tk('Creating folder'), tk('Created folder')],
+  mkdir: [tk('Creating folder'), tk('Created folder')],
+  search: [tk('Searching'), tk('Searched')],
+  find: [tk('Finding files'), tk('Found files')],
+  web_search: [tk('Searching the web'), tk('Searched the web')],
+  extract_zip: [tk('Extracting'), tk('Extracted')],
+  bundle_zip: [tk('Bundling'), tk('Bundled')],
+  mb_view: [tk('Reading'), tk('Read')],
+  mb_search: [tk('Searching memory'), tk('Searched memory')],
+  chat_search: [tk('Searching past chats'), tk('Searched past chats')],
+  chat_view: [tk('Reading a past chat'), tk('Read a past chat')],
+  skill_view: [tk('Loading skill'), tk('Loaded skill')],
+  end_conversation: [tk('Ending the conversation'), tk('Ended the conversation')]
 };
 function verbsFor(tool) {
-  if (VERBS[tool]) return VERBS[tool];
+  if (VERBS[tool]) return VERBS[tool].map(v => t(v));
   if (String(tool || '').startsWith('mcp_')) {
-    const short = String(tool).split('_').slice(2).join(' ') || 'connector';
-    return ['Using ' + short, 'Used ' + short];
+    const short = String(tool).split('_').slice(2).join(' ') || t('connector');
+    return [t('Using {name}', { name: short }), t('Used {name}', { name: short })];
   }
   return null;
 }
 const FILE_TOOLS = new Set(['create_file', 'str_replace', 'delete_file', 'rename_file', 'move_file', 'copy_file', 'make_dir', 'mkdir']);
 
-function escapeHtml(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
 function stripAnsi(s) { return String(s || '').replace(/\u001b\[[0-9;]*m/g, ''); }
-function baseName(p) { return (p || '').split('/').pop(); }
+function countLines(s) { return s ? s.split('\n').length : 0; }
+function plural(n, one, many) { return t(n === 1 ? one : many, { n }); }
 
 function openPathFor(call) {
   if (!call) return null;
@@ -71,67 +73,121 @@ function iconFor(tool) {
   if (tool === 'str_replace' || tool === 'rename_file' || tool === 'move_file') return Pencil;
   return Wrench;
 }
-function targetName(call) {
-  if (!call) return '';
-  if (call.tool === 'bundle_zip') return (call.name || 'bundle') + '.zip';
-  if (call.tool === 'rename_file' || call.tool === 'move_file' || call.tool === 'copy_file') return call.path && call.new_path ? `${baseName(call.path)} → ${baseName(call.new_path)}` : baseName(call.path);
-  if (call.tool === 'search' || call.tool === 'mb_search' || call.tool === 'chat_search') return call.query ? `"${call.query}"` : '';
-  if (call.tool === 'find') return call.pattern ? `"${call.pattern}"` : (call.query ? `"${call.query}"` : '');
-  if (call.tool === 'skill_view') return call.name || '';
-  if (call.tool === 'list_files' || call.tool === 'clear_sandbox' || call.tool === 'delete_all') return '';
-  return baseName(call.path) || '';
+
+// A path is shown whole, with the directory dimmed and the name at full weight.
+// Two files called __init__.py are otherwise the same line twice, and the folder
+// a step touched is exactly the context that made these lines hard to trust.
+function PathBits({ path }) {
+  const dir = dirOf(path), base = baseName(path);
+  return (
+    <span className="tl-path">
+      {dir && <span className="tl-dir">{dir}/</span>}
+      <span className="tl-base">{base}</span>
+    </span>
+  );
 }
+
+// What this step is acting on, as a shape the row can render rather than a
+// pre-joined string, so paths keep their dim/strong split wherever they appear.
+function targetOf(call) {
+  if (!call) return null;
+  const q = (s) => (s ? { kind: 'text', text: `"${s}"` } : null);
+  switch (call.tool) {
+    case 'bundle_zip': return { kind: 'text', text: (call.name || 'bundle') + '.zip' };
+    case 'rename_file': case 'move_file': case 'copy_file':
+      return call.path && call.new_path
+        ? { kind: 'move', from: call.path, to: call.new_path }
+        : (call.path || call.new_path ? { kind: 'path', path: call.path || call.new_path } : null);
+    case 'search': case 'mb_search': case 'chat_search': return q(call.query);
+    case 'find': return q(call.pattern || call.query);
+    case 'skill_view': return call.name ? { kind: 'text', text: call.name } : null;
+    case 'list_files': return call.path ? { kind: 'path', path: call.path } : { kind: 'text', text: t('the workspace') };
+    case 'clear_sandbox': case 'delete_all': return null;
+    default:
+      if (call.path) return { kind: 'path', path: call.path };
+      // Still streaming: show the characters that have arrived rather than nothing.
+      return call.partialPath ? { kind: 'path', path: call.partialPath } : null;
+  }
+}
+
+function Target({ target }) {
+  if (!target) return null;
+  if (target.kind === 'move') {
+    return (
+      <span className="tl-name">
+        <PathBits path={target.from} />
+        <span className="tl-arrow">→</span>
+        <PathBits path={target.to} />
+      </span>
+    );
+  }
+  if (target.kind === 'path') return <span className="tl-name"><PathBits path={target.path} /></span>;
+  return <span className="tl-name">{target.text}</span>;
+}
+
 function resultNote(call, res) {
   if (!res || !res.ok) return null;
   switch (call.tool) {
-    case 'view': return res.lines ? `${res.lines} lines` : null;
-    case 'list_files': return res.files ? `${res.files.length} file${res.files.length === 1 ? '' : 's'}` : null;
-    case 'find': return res.count != null ? `${res.count} file${res.count === 1 ? '' : 's'}` : null;
-    case 'search': return res.count != null ? `${res.count} match${res.count === 1 ? '' : 'es'}` : null;
-    case 'mb_search': return res.count != null ? `${res.count} match${res.count === 1 ? '' : 'es'}` : null;
-    case 'mb_view': return res.total != null ? `${res.total} lines` : null;
-    case 'chat_search': return res.count != null ? `${res.count} match${res.count === 1 ? '' : 'es'}` : null;
+    case 'view': return res.lines ? plural(res.lines, '{n} line', '{n} lines') : null;
+    case 'list_files': return res.files ? plural(res.files.length, '{n} file', '{n} files') : null;
+    case 'find': return res.count != null ? plural(res.count, '{n} file', '{n} files') : null;
+    case 'search': return res.count != null ? plural(res.count, '{n} match', '{n} matches') : null;
+    case 'mb_search': return res.count != null ? plural(res.count, '{n} match', '{n} matches') : null;
+    case 'mb_view': return res.total != null ? plural(res.total, '{n} line', '{n} lines') : null;
+    case 'chat_search': return res.count != null ? plural(res.count, '{n} match', '{n} matches') : null;
     case 'chat_view': return res.title ? `"${res.title}"` : null;
     case 'skill_view': return res.name ? res.name : null;
-    case 'extract_zip': return res.files ? `${res.files.length} file${res.files.length === 1 ? '' : 's'}` : null;
-    case 'bundle_zip': return res.count != null ? `${res.count} file${res.count === 1 ? '' : 's'}` : null;
-    case 'clear_sandbox': case 'delete_all': return res.cleared != null ? `${res.cleared} removed` : null;
+    case 'extract_zip': return res.files ? plural(res.files.length, '{n} file', '{n} files') : null;
+    case 'bundle_zip': return res.count != null ? plural(res.count, '{n} file', '{n} files') : null;
+    case 'clear_sandbox': case 'delete_all': return res.cleared != null ? t('{n} removed', { n: res.cleared }) : null;
     default: return null;
   }
 }
 
 function BashCard({ call, result }) {
-  const [open, setOpen] = useState(false);
+  // Tri-state: null means "the user has not decided", which lets a failure open
+  // itself without also overriding a later manual collapse.
+  const [open, setOpen] = useState(null);
   const [copied, setCopied] = useState(false);
   const cmd = call?.cmd || '';
-  const html = useMemo(() => {
-    try { return hljs.highlight(cmd, { language: 'bash', ignoreIllegals: true }).value; }
-    catch { return escapeHtml(cmd); }
-  }, [cmd]);
+  const html = useMemo(() => highlight(cmd, 'bash', { auto: false }), [cmd]);
   const out = result ? stripAnsi(result.output) : '';
   const failed = result && !result.ok;
+  const isOpen = open == null ? !!failed : open;
   const oneLine = cmd.split('\n')[0];
+  const lines = countLines(out.replace(/\n$/, ''));
+  // The shell's directory persists between calls, so it is worth showing — but
+  // only once it has actually moved. "cwd: ." on every row is noise.
+  const rawCwd = result && result.cwd ? String(result.cwd) : '';
+  const cwd = rawCwd && rawCwd !== '.' ? rawCwd : null;
   async function copy(e) { e.stopPropagation(); if (await copyText(cmd)) { setCopied(true); setTimeout(() => setCopied(false), 1400); } }
   return (
-    <div className={'tool-bash' + (failed ? ' err' : '') + (open ? ' open' : '')}>
-      <button className="tb-head" onClick={() => setOpen(o => !o)}>
+    <div className={'tool-bash' + (result ? '' : ' pending') + (failed ? ' err' : '') + (isOpen ? ' open' : '')}>
+      <button className="tb-head" onClick={() => setOpen(!isOpen)} aria-expanded={isOpen}>
         <Terminal style={{ width: 14 }} />
-        <span className="tb-label">{result ? 'Terminal' : 'Running'}</span>
+        <span className="tb-label">{result ? t('Terminal') : t('Running')}</span>
         <code className="tb-peek">{oneLine}</code>
-        {failed && <span className="tb-badge err">{result.exit != null ? `exit ${result.exit}` : 'error'}</span>}
+        {cwd && cwd !== '.' && <span className="tb-cwd" title={t('Working directory')}>{cwd}</span>}
+        {result && !failed && lines > 0 && <span className="tl-note">{plural(lines, '{n} line', '{n} lines')}</span>}
+        {result && !failed && lines === 0 && <span className="tl-note">{t('no output')}</span>}
+        {failed && <span className="tb-badge err">{result.exit != null ? t('exit {code}', { code: result.exit }) : t('error')}</span>}
         {!result && <span className="tc-dots"><i /><i /><i /></span>}
         <Chevron className="tb-chev" />
       </button>
-      <div className={'tb-collapse' + (open ? ' open' : '')}>
+      <div className={'tb-collapse' + (isOpen ? ' open' : '')}>
         <div className="tb-inner">
           <div className="tb-cmdrow">
             <pre className="tb-cmd"><span className="tb-prompt">$</span> <code className="hljs" dangerouslySetInnerHTML={{ __html: html }} /></pre>
-            <button className="tb-copy" onClick={copy}>{copied ? <Check style={{ width: 13 }} /> : <Copy style={{ width: 13 }} />}</button>
+            <button className="tb-copy" onClick={copy} title={copied ? t('Copied') : t('Copy')}>{copied ? <Check style={{ width: 13 }} /> : <Copy style={{ width: 13 }} />}</button>
           </div>
           {result && (
             <div className="tb-out">
-              <div className="tb-out-head">{failed ? (result.error || 'Error') : 'Output'}{result.exit != null && result.exit !== 0 ? ` · exit ${result.exit}` : ''}</div>
-              {out ? <pre className="tb-out-body">{out}</pre> : <div className="tb-out-empty">No output</div>}
+              <div className="tb-out-head">
+                <span>{failed ? (result.error || t('Error')) : t('Output')}</span>
+                {result.exit != null && <span className={'tb-exit' + (result.exit ? ' err' : '')}>{t('exit {code}', { code: result.exit })}</span>}
+                {cwd && <span className="tb-exit">{t('cwd')}: {cwd || '.'}</span>}
+              </div>
+              {out ? <pre className="tb-out-body">{out}</pre> : <div className="tb-out-empty">{t("No output")}</div>}
             </div>
           )}
         </div>
@@ -140,84 +196,53 @@ function BashCard({ call, result }) {
   );
 }
 
-function chatIdFromUrl() {
-  const m = window.location.pathname.match(/\/chat\/([a-zA-Z0-9-]+)/);
-  return m ? m[1] : null;
-}
+// Streaming arguments arrive a character at a time, so for a moment there is a
+// verb and nothing else. A placeholder bar holds the space the name will take
+// instead of rendering a bare "Creating", which read as a bug rather than as a
+// step still being spelled out.
+function NamePending() { return <span className="tl-skel" aria-label={t('reading arguments')} />; }
 
-function FileCard({ call, result }) {
+function ToolLine({ call, result, note, diff }) {
   const v = verbsFor(call.tool) || [call.tool, call.tool];
   const pending = !result;
   const verb = v[pending ? 0 : 1];
   const Icon = iconFor(call.tool);
-  const name = targetName(call);
+  const target = targetOf(call);
   const failed = result && !result.ok;
-  const adds = result?.adds, dels = result?.dels;
-  const unchanged = result && result.ok && result.unchanged;
-  const showDiff = result && result.ok && (adds || dels) && (call.tool === 'create_file' || call.tool === 'str_replace');
   const openPath = (!failed && call.tool !== 'delete_file') ? openPathFor(call) : null;
-  const [preview, setPreview] = React.useState(null);
-  const [previewBusy, setPreviewBusy] = React.useState(false);
-  const canPeek = !!openPath && result && result.ok && (call.tool === 'create_file' || call.tool === 'str_replace' || call.tool === 'view') && chatIdFromUrl();
-  async function togglePeek(e) {
-    e.stopPropagation();
-    if (preview != null) { setPreview(null); return; }
-    if (previewBusy) return;
-    setPreviewBusy(true);
-    try {
-      const cid = chatIdFromUrl();
-      const r = await fetch(`/api/chats/${cid}/file?path=${encodeURIComponent(openPath)}`, { credentials: 'include' });
-      const d = await r.json();
-      if (d && typeof d.text === 'string') {
-        const t = d.text.length > 6000 ? d.text.slice(0, 6000) + '\n\u2026 (truncated \u2014 open in artifacts for the full file)' : d.text;
-        setPreview(t || '(empty file)');
-      } else setPreview(d && d.binary ? '(binary file \u2014 open in artifacts to download)' : '(could not load preview)');
-    } catch { setPreview('(could not load preview)'); }
-    setPreviewBusy(false);
-  }
+  const full = target && target.kind === 'path' ? target.path : target && target.kind === 'move' ? target.to : null;
   return (
-    <>
     <span className={'tool-line' + (pending ? ' pending' : '') + (failed ? ' err' : '') + (openPath ? ' clickable' : '')}
       onClick={openPath ? () => openArtifact(openPath) : undefined}
-      title={openPath ? 'Open ' + name + ' in artifacts' : undefined}>
-      <Icon style={{ width: 14 }} className="tl-icon" />
+      role={openPath ? 'button' : undefined}
+      tabIndex={openPath ? 0 : undefined}
+      onKeyDown={openPath ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openArtifact(openPath); } } : undefined}
+      title={full || (target && target.text) || undefined}>
+      <Icon style={{ width: 20 }} className="tl-icon" />
       <span className="tl-verb">{verb}</span>
-      {name && <span className="tl-name">{name}</span>}
-      {showDiff && (
-        <span className="tl-diff">
-          {adds ? <span className="add">+{adds}</span> : null}
-          {dels ? <span className="del">−{dels}</span> : null}
-        </span>
-      )}
-      {unchanged && <span className="tl-note">unchanged</span>}
+      {target ? <Target target={target} /> : pending ? <NamePending /> : null}
+      {diff}
+      {note && <span className="tl-note">{note}</span>}
       {failed && <span className="tl-err">{result.error}</span>}
-      {pending && <span className="tc-dots"><i /><i /><i /></span>}
-      {canPeek && <button className="tc-preview-btn" onClick={togglePeek}>{previewBusy ? '\u2026' : preview != null ? 'Hide' : 'Peek'}</button>}
     </span>
-    {preview != null && <div className="tc-preview">{preview}</div>}
-    </>
   );
 }
 
-function ChipCard({ call, result }) {
-  const v = verbsFor(call.tool) || [call.tool || 'Working', call.tool || 'Done'];
-  const pending = !result;
-  const verb = v[pending ? 0 : 1];
-  const Icon = iconFor(call.tool);
-  const name = targetName(call);
-  const failed = result && !result.ok;
-  const note = resultNote(call, result);
-  const openPath = !failed && call.tool === 'view' ? openPathFor(call) : null;
-  return (
-    <span className={'tool-line' + (pending ? ' pending' : '') + (failed ? ' err' : '') + (openPath ? ' clickable' : '')}
-      onClick={openPath ? () => openArtifact(openPath) : undefined}
-      title={openPath ? 'Open ' + name + ' in artifacts' : undefined}>
-      <Icon style={{ width: 14 }} className="tl-icon" /><span className="tl-verb">{verb}</span>{name && <span className="tl-name">{name}</span>}
-      {note && <span className="tl-note">{note}</span>}
-      {failed && <span className="tl-err">{result.error}</span>}
-      {pending && <span className="tc-dots"><i /><i /><i /></span>}
+function FileCard({ call, result }) {
+  const adds = result?.adds, dels = result?.dels;
+  const unchanged = result && result.ok && result.unchanged;
+  const showDiff = result && result.ok && (adds || dels) && (call.tool === 'create_file' || call.tool === 'str_replace');
+  const diff = showDiff ? (
+    <span className="tl-diff">
+      {adds ? <span className="add">+{adds}</span> : null}
+      {dels ? <span className="del">−{dels}</span> : null}
     </span>
-  );
+  ) : null;
+  return <ToolLine call={call} result={result} diff={diff} note={unchanged ? t('unchanged') : null} />;
+}
+
+function ChipCard({ call, result }) {
+  return <ToolLine call={call} result={result} note={resultNote(call, result)} />;
 }
 
 function hostOf(url) {
@@ -232,20 +257,20 @@ function WebSearchCard({ call, result }) {
   const failed = result && !result.ok;
   const results = (result && result.results) || [];
   return (
-    <div className={'tool-bash ws' + (failed ? ' err' : '') + (open ? ' open' : '')}>
-      <button className="tb-head" onClick={() => setOpen(o => !o)}>
+    <div className={'tool-bash ws' + (pending ? ' pending' : '') + (failed ? ' err' : '') + (open ? ' open' : '')}>
+      <button className="tb-head" onClick={() => setOpen(o => !o)} aria-expanded={open}>
         <Search style={{ width: 14 }} />
-        <span className="tb-label">{pending ? 'Searching the web' : 'Web search'}</span>
+        <span className="tb-label">{pending ? t('Searching the web') : t('Web search')}</span>
         <code className="tb-peek">{call.query ? `"${call.query}"` : ''}</code>
-        {!failed && result && <span className="tl-note">{result.count} result{result.count === 1 ? '' : 's'}</span>}
-        {failed && <span className="tb-badge err">error</span>}
+        {!failed && result && <span className="tl-note">{plural(result.count, '{n} result', '{n} results')}</span>}
+        {failed && <span className="tb-badge err">{t('error')}</span>}
         {pending && <span className="tc-dots"><i /><i /><i /></span>}
         <Chevron className="tb-chev" />
       </button>
       <div className={'tb-collapse' + (open ? ' open' : '')}>
         <div className="tb-inner">
           {failed
-            ? <div className="tb-out"><div className="tb-out-head">Error</div><div className="tb-out-empty">{result.error}</div></div>
+            ? <div className="tb-out"><div className="tb-out-head">{t("Error")}</div><div className="tb-out-empty">{result.error}</div></div>
             : results.length
               ? <div className="ws-results">{results.map((r, i) => {
                   const host = hostOf(r.url);
@@ -256,13 +281,13 @@ function WebSearchCard({ call, result }) {
                         <span className="ws-title">{r.title || host || r.url}</span>
                         <span className="ws-meta">
                           <span className="ws-host">{host}</span>
-                          {r.chars != null && <span className="ws-chars">{r.chars.toLocaleString()} chars read</span>}
+                          {r.chars != null && <span className="ws-chars">{t('{n} chars read', { n: r.chars.toLocaleString() })}</span>}
                         </span>
                       </span>
                     </a>
                   );
                 })}</div>
-              : <div className="tb-out-empty" style={{ padding: '8px 12px' }}>No results.</div>}
+              : <div className="tb-out-empty" style={{ padding: '8px 12px' }}>{t("No results.")}</div>}
         </div>
       </div>
     </div>

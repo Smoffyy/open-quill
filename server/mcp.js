@@ -126,7 +126,7 @@ function stdioClient(server) {
 
 function stdioRequest(client, method, params, timeoutMs) {
   return new Promise((resolve, reject) => {
-    if (client.proc.exitCode != null) return reject(new Error('MCP server process exited.'));
+    if (client.proc.exitCode != null) { reject(new Error('MCP server process exited.')); return; }
     const id = ++client.seq;
     const timer = setTimeout(() => { client.pending.delete(id); reject(new Error('MCP request timed out.')); }, timeoutMs);
     client.pending.set(id, { resolve, reject, timer });

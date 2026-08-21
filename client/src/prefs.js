@@ -1,6 +1,7 @@
-export function resolveTheme(t) {
-  if (!t || t === 'system') return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
-  return t;
+import { paletteFor } from './lib/palettes.js';
+
+export function prefersDark() {
+  return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
 }
 export function currentPreset() {
   const attr = document.documentElement.getAttribute('data-preset');
@@ -13,25 +14,26 @@ export function applyPrefs(prefs, preset) {
   const p = preset === 'openai' || preset === 'anthropic' ? preset : currentPreset();
   root.setAttribute('data-preset', p);
   try { localStorage.setItem('oq-preset', p); } catch {}
-  let t = prefs?.theme;
-  if (t === 'oled') t = 'dark';
-  let nextTheme = resolveTheme(t);
-  if (nextTheme === 'dark' || nextTheme === 'anthropic' || nextTheme === 'oled' || nextTheme === 'openai') {
-    nextTheme = p === 'openai' ? 'openai' : 'anthropic';
-  }
-  root.setAttribute('data-theme', nextTheme);
-  try { localStorage.setItem('oq-theme', nextTheme); } catch {}
+  const pal = paletteFor(prefs?.theme, p, prefersDark());
+  root.setAttribute('data-theme', pal.theme);
+  if (pal.palette) root.setAttribute('data-palette', pal.palette);
+  else root.removeAttribute('data-palette');
+  try {
+    localStorage.setItem('oq-theme', pal.theme);
+    if (pal.palette) localStorage.setItem('oq-palette', pal.palette);
+    else localStorage.removeItem('oq-palette');
+  } catch {}
   root.setAttribute('data-density', prefs?.density === 'compact' ? 'compact' : 'comfortable');
-  root.setAttribute('data-entrance', prefs?.messageEntrance === false ? 'off' : 'on');
-  root.setAttribute('data-animations', prefs?.animations === false ? 'off' : 'on');
-  const cursorOn = p === 'openai' ? true : (prefs?.streamCursor == null ? false : !!prefs.streamCursor);
-  const cursorStyle = p === 'openai' ? 'circle' : (prefs?.cursorStyle || 'block');
+  const minimal = !!prefs?.minimalAnims;
+  root.setAttribute('data-entrance', minimal ? 'off' : 'on');
+  root.setAttribute('data-animations', minimal ? 'off' : 'on');
+  const cursorOn = prefs?.streamCursor == null ? p === 'openai' : !!prefs.streamCursor;
+  const cursorStyle = prefs?.cursorStyle || (p === 'openai' ? 'circle' : 'block');
   root.setAttribute('data-cursor', cursorOn ? (cursorStyle === 'circle' ? 'circle' : 'block') : 'off');
-  root.setAttribute('data-microfx', prefs?.microFx === false ? 'off' : 'on');
-  root.setAttribute('data-composerfx', prefs?.composerFx === false ? 'off' : 'on');
-  root.setAttribute('data-focusglow', prefs?.focusGlow ? 'on' : 'off');
-  root.setAttribute('data-iconglow', prefs?.iconGlow ? 'on' : 'off');
+  root.setAttribute('data-microfx', minimal ? 'off' : 'on');
+  root.setAttribute('data-composerfx', minimal ? 'off' : 'on');
   root.setAttribute('data-oled', prefs?.oledShift ? 'on' : 'off');
+  root.setAttribute('data-minimal', prefs?.minimalAnims ? 'on' : 'off');
   const blink = Math.max(150, Math.min(2000, parseInt(prefs?.cursorBlinkMs) || 500));
   const pulse = Math.max(300, Math.min(4000, parseInt(prefs?.cursorPulseMs) || 1000));
   root.style.setProperty('--caret-blink', blink + 'ms');
@@ -44,27 +46,48 @@ export function applyPrefs(prefs, preset) {
 
 export const ACCENT_PRESETS = ['#d97757', '#4f8ff7', '#46b07a', '#9b6bd8', '#e0567f', '#e0a93c', '#3bb6c4', '#7a8794'];
 
+export const APP_FONTS = new Set(['newsreader', 'sourceserif', 'sans']);
+const LEGACY_FONT_IDS = { __proto__: null, serif: 'newsreader' };
+
+export function appFontId(v) {
+  const id = LEGACY_FONT_IDS[v] || v;
+  return APP_FONTS.has(id) ? id : 'newsreader';
+}
+
 export const USER_FONT_KEY = 'oq-user-font';
-const USER_FONT_STACKS = {
-  sans: "'Open Sans'",
-  serif: "'Source Serif 4 Variable'",
+export const USER_FONTS = {
+  __proto__: null,
+  newsreader: { stack: "'Newsreader Variable'", weight: 420, strong: 615 },
+  sourceserif: { stack: "'Source Serif 4 Variable'", weight: 465, strong: 680 },
+  sans: { stack: "'Open Sans'", weight: 400, strong: 600 },
 };
+const LEGACY_USER_FONT_IDS = { __proto__: null, serif: 'sourceserif' };
+
+function userFontId(v) {
+  const id = LEGACY_USER_FONT_IDS[v] || v;
+  return USER_FONTS[id] ? id : 'default';
+}
 export function getUserFont() {
-  try { const v = localStorage.getItem(USER_FONT_KEY); return v === 'sans' || v === 'serif' ? v : 'default'; } catch { return 'default'; }
+  try { return userFontId(localStorage.getItem(USER_FONT_KEY)); } catch { return 'default'; }
 }
 export function applyUserFont(v) {
   const font = v || getUserFont();
   const root = document.documentElement;
-  if (font === 'sans' || font === 'serif') {
-    root.style.setProperty('--font-sans', USER_FONT_STACKS[font]);
-    root.style.setProperty('--font-serif', USER_FONT_STACKS[font]);
+  const pick = USER_FONTS[font];
+  if (pick) {
+    root.style.setProperty('--font-sans', pick.stack);
+    root.style.setProperty('--font-serif', pick.stack);
+    root.style.setProperty('--prose-weight', String(pick.weight));
+    root.style.setProperty('--prose-strong', String(pick.strong));
   } else {
     root.style.removeProperty('--font-sans');
     root.style.removeProperty('--font-serif');
+    root.style.removeProperty('--prose-weight');
+    root.style.removeProperty('--prose-strong');
   }
 }
 export function setUserFont(v) {
-  const font = v === 'sans' || v === 'serif' ? v : 'default';
+  const font = userFontId(v);
   try { if (font === 'default') localStorage.removeItem(USER_FONT_KEY); else localStorage.setItem(USER_FONT_KEY, font); } catch {}
   applyUserFont(font);
 }

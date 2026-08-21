@@ -1,17 +1,14 @@
 import { db, uid, now, tx } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
-import * as sandbox from '../../sandbox.js';
 import { activePath } from '../../lib/tree.js';
 
 export default function registerTransferRoutes(app) {
   app.get('/api/chats/export-all', authMiddleware, (req, res) => {
     const myChats = db.chats.oldestByUser(req.user.id);
-    const myFolders = db.folders.where('user_id', req.user.id);
-    const folderName = new Map(myFolders.map(f => [f.id, f.name]));
     const out = {
       type: 'open-quill-chats-export', version: 2, exportedAt: new Date().toISOString(),
       chats: myChats.map(c => ({
-        title: c.title, starred: !!c.starred, archived: !!c.archived, folderName: c.folder_id ? (folderName.get(c.folder_id) || null) : null,
+        title: c.title, starred: !!c.starred, archived: !!c.archived,
         summary: c.summary || '',
         messages: activePath(c.id).map(m => ({ role: m.role, content: m.content || '', reasoning: m.reasoning || '', created_at: m.created_at }))
       })),
@@ -35,7 +32,7 @@ export default function registerTransferRoutes(app) {
   app.post('/api/chats/import', authMiddleware, (req, res) => {
     const body = req.body || {};
     const bundle = Array.isArray(body.chats) ? body.chats
-      : (Array.isArray(body.messages) ? [{ title: body.title, starred: false, folderName: null, summary: body.summary || '', messages: body.messages }] : null);
+      : (Array.isArray(body.messages) ? [{ title: body.title, starred: false, summary: body.summary || '', messages: body.messages }] : null);
     if ((!bundle || !bundle.length) && !body.profile) return res.status(400).json({ error: 'Nothing to import, pick a valid open-quill export file.' });
     if (body.profile && typeof body.profile === 'object') {
       const u = db.users.byId(req.user.id) || {};
@@ -58,22 +55,11 @@ export default function registerTransferRoutes(app) {
       db.users.update(req.user.id, patch);
     }
     if (!bundle || !bundle.length) return res.json({ imported: 0, profile: true });
-    const mineFolders = db.folders.where('user_id', req.user.id);
-    const folderCache = new Map(mineFolders.map(f => [f.name, f.id]));
-    let maxOrder = mineFolders.reduce((m, f) => Math.max(m, f.sort_order || 0), -1);
     let imported = 0;
     for (const c of bundle.slice(0, 500)) {
       if (!c || !Array.isArray(c.messages) || !c.messages.length) continue;
-      let folderId = null;
-      if (c.folderName) {
-        if (!folderCache.has(c.folderName)) {
-          const nf = db.folders.insert({ id: uid(), user_id: req.user.id, name: String(c.folderName).slice(0, 80), collapsed: 0, sort_order: ++maxOrder, created_at: now() });
-          folderCache.set(c.folderName, nf.id);
-        }
-        folderId = folderCache.get(c.folderName);
-      }
       const t = now();
-      const chat = db.chats.insert({ id: uid(), user_id: req.user.id, folder_id: folderId, title: String(c.title || 'Imported chat').slice(0, 120) || 'Imported chat', starred: c.starred ? 1 : 0, archived: c.archived ? 1 : 0, sandbox: 0, summary: String(c.summary || ''), created_at: t, updated_at: t });
+      const chat = db.chats.insert({ id: uid(), user_id: req.user.id, title: String(c.title || 'Imported chat').slice(0, 120) || 'Imported chat', starred: c.starred ? 1 : 0, archived: c.archived ? 1 : 0, sandbox: 0, summary: String(c.summary || ''), created_at: t, updated_at: t });
       let parent = null;
       tx(() => {
         for (const m of c.messages.slice(0, 2000)) {

@@ -1,0 +1,271 @@
+.trail {
+  position: absolute;
+  right: 4px;
+  top: 76px;
+  bottom: 150px;
+  width: 26px;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  z-index: 4;
+  opacity: .55;
+  transition: opacity var(--fx-t, .18s) ease;
+}
+.trail:hover, .trail:focus-within { opacity: 1; }
+.trail-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  overflow: hidden auto;
+  scrollbar-width: none;
+  padding: 2px 0;
+}
+.trail-list::-webkit-scrollbar { display: none; }
+
+.trail-tick {
+  flex: 0 0 auto;
+  width: 11px;
+  border: 0;
+  padding: 0;
+  border-radius: 2px;
+  background: var(--text-faint);
+  cursor: pointer;
+  transition: background var(--fx-t, .14s) ease, width var(--fx-t, .14s) ease, transform var(--fx-t, .14s) ease;
+}
+.trail-tick.r-assistant { width: 17px; background: color-mix(in srgb, var(--text-muted) 70%, transparent); }
+.trail-tick:hover, .trail-tick:focus-visible { background: var(--text); }
+.trail-tick.in-view { background: var(--accent); }
+.trail-tick.is-tool { width: 9px; background: color-mix(in srgb, var(--accent) 45%, var(--text-faint)); }
+.trail-tick.is-branch { width: 21px; box-shadow: inset 0 0 0 1px var(--text); }
+.trail-tick.is-pinned { border-radius: 50%; width: 7px; }
+.trail-tick.is-out { opacity: .35; }
+.trail-tick.is-match { background: #e0a33c; }
+.trail-tick.is-match.in-view { background: #f0b64a; }
+
+.trail-tip {
+  position: absolute;
+  right: 30px;
+  transform: translateY(-50%);
+  max-width: 300px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: var(--pop-bg);
+  border: 1px solid var(--pop-border);
+  box-shadow: var(--pop-shadow);
+  color: var(--pop-text);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.45;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  pointer-events: none;
+  z-index: 6;
+}
+.trail-tip-who { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--pop-muted); }
+.trail-tip-text { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.trail-tip-meta { font-size: 11px; color: var(--pop-muted); }
+
+.thread-find {
+  position: absolute;
+  top: calc(62px + var(--ledger-h, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px 12px;
+  width: min(520px, calc(100% - 48px));
+  border-radius: 12px;
+  background: var(--pop-bg);
+  border: 1px solid var(--pop-border);
+  box-shadow: var(--pop-shadow);
+  color: var(--pop-text);
+  font-family: var(--font-sans);
+  animation: tfDrop var(--fx-a, .16s) ease;
+}
+@keyframes tfDrop { from { opacity: 0; transform: translateX(-50%) translateY(-6px); } }
+.thread-find > svg { flex: 0 0 auto; color: var(--pop-muted); }
+.tf-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--pop-text);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+}
+.tf-input::placeholder { color: var(--pop-muted); }
+.tf-count { flex: 0 0 auto; font-size: 12px; color: var(--pop-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tf-btn {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--pop-text);
+  cursor: pointer;
+}
+.tf-btn:hover:not(:disabled) { background: var(--pop-hover); }
+.tf-btn:disabled { opacity: .35; cursor: default; }
+.tf-close { margin-left: 2px; }
+
+::highlight(oq-find) { background-color: #e0a33c66; color: inherit; }
+::highlight(oq-find-active) { background-color: #e0a33c; color: #1a1500; }
+
+.thread.finding .msg { scroll-margin-top: 110px; }
+
+.bt-overlay { align-items: start; }
+.bt-modal {
+  width: min(860px, calc(100vw - 40px));
+  max-height: min(80vh, 760px);
+  margin-top: 8vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--modal-bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--pop-shadow);
+  overflow: hidden;
+  font-family: var(--font-sans);
+  animation: btIn var(--fx-a, .18s) ease;
+}
+@keyframes btIn { from { opacity: 0; transform: translateY(-8px); } }
+.bt-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.bt-title { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--text); }
+.bt-sub { font-size: 12.5px; color: var(--text-muted); }
+.bt-x { margin-left: auto; display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--text-muted); cursor: pointer; }
+.bt-x:hover { background: var(--hover-mid); color: var(--text); }
+.bt-body { flex: 1 1 auto; overflow: auto; padding: 18px 16px; }
+.bt-foot { padding: 10px 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-faint); }
+.bt-empty { padding: 28px 4px; text-align: center; color: var(--text-muted); font-size: 13px; }
+
+.bt-seg { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.bt-run { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.bt-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--card-bg);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+.bt-node:hover { background: var(--surface-hover); color: var(--text); }
+.bt-node:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.bt-node.on-path { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+.bt-node.is-leaf { border-color: var(--accent); }
+.bt-dot { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); }
+.bt-node.r-assistant .bt-dot { background: var(--accent); }
+.bt-node.on-path .bt-dot { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.bt-who { flex: 0 0 auto; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-faint); max-width: 128px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-fold {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-faint);
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.bt-fold:hover { color: var(--text); border-color: var(--text-faint); }
+
+.bt-split { display: flex; gap: 12px; margin-top: 6px; align-items: flex-start; }
+.bt-branch {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 8px 8px 8px 10px;
+  border-left: 2px solid var(--border);
+  border-radius: 0;
+}
+.bt-branch.on-path { border-left-color: var(--accent); }
+.bt-branch-tag { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-faint); margin-bottom: 6px; }
+.bt-branch.on-path .bt-branch-tag { color: var(--accent); }
+
+.thread.virt > .msg:not(:nth-last-child(-n+8)):not(.icon-left) .assistant-body,
+.thread.virt > .msg:not(:nth-last-child(-n+8)) .bubble-user,
+.thread.virt > .msg:not(:nth-last-child(-n+8)) .msg-attachments,
+.thread.virt > .msg:not(:nth-last-child(-n+8)) .reasoning-collapse {
+  content-visibility: auto;
+}
+.thread.virt > .msg:not(:nth-last-child(-n+8)):not(.icon-left) .assistant-body { contain-intrinsic-size: auto 420px; }
+.thread.virt > .msg:not(:nth-last-child(-n+8)) .bubble-user { contain-intrinsic-size: auto 68px; }
+.thread.virt > .msg:not(:nth-last-child(-n+8)) .msg-attachments { contain-intrinsic-size: auto 84px; }
+.thread.virt > .msg:not(:nth-last-child(-n+8)) .reasoning-collapse { contain-intrinsic-size: auto 0; }
+
+/* A single pasted script can be one 100,000px message with hundreds of code
+   blocks, which per-message occlusion cannot help while any of it is on screen.
+   Each block carries its own containment so the browser skips the ones off
+   screen even within one message. */
+.thread.virt .code-wrap { content-visibility: auto; contain-intrinsic-size: auto 220px; }
+
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 300;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  text-decoration: none;
+  transform: translateY(-160%);
+  transition: transform var(--fx-t, .15s) ease;
+}
+.skip-link:focus-visible { transform: none; outline: 2px solid var(--text); outline-offset: 2px; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.msg[data-mid]:focus-visible { outline: none; }
+.msg.kb-focus { position: relative; }
+.msg.kb-focus::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 2px;
+  bottom: 2px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: kbIn var(--fx-a, .16s) ease;
+}
+@keyframes kbIn { from { opacity: 0; transform: scaleY(.4); } }
+
+@media (max-width: 900px) {
+  .trail { display: none; }
+  .thread-find { top: 58px; width: calc(100% - 24px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thread-find, .bt-modal, .msg.kb-focus::before { animation: none; }
+  .trail-tick, .trail { transition: none; }
+}

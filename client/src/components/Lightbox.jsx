@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { subscribeLightbox } from '../lightbox.js';
+import { t } from '../i18n.jsx';
 
 export default function Lightbox() {
   const [img, setImg] = useState(null);
@@ -19,7 +20,7 @@ export default function Lightbox() {
   return (
     <div className={'lightbox' + (leaving ? ' leaving' : '')} onClick={close}>
       <img src={img.src} alt={img.alt} onClick={(e) => e.stopPropagation()} />
-      <a className="lightbox-open" href={img.src} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>Open original ↗</a>
+      <a className="lightbox-open" href={img.src} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>{t("Open original ↗")}</a>
       <button className="lightbox-x" onClick={close}>✕</button>
     </div>
   );

@@ -1,4 +1,3 @@
-import React from 'react';
 import { useAdmin } from '../store.jsx';
 import { Card, AutosaveNote, SettingRow } from '../widgets.jsx';
 import { t } from '../../../i18n.jsx';
@@ -14,13 +13,13 @@ export default function WebSearchSection() {
         {settings.webSearchEnabled && <>
           <div className="field"><label>{t("Search engine")}</label>
             <select value={settings.webSearchEngine || 'searxng'} onChange={(e) => setSettings(s => ({ ...s, webSearchEngine: e.target.value }))}>
-              <option value="searxng">SearXNG</option>
+              <option value="searxng">{t("SearXNG")}</option>
             </select>
           </div>
           {(settings.webSearchEngine || 'searxng') === 'searxng' && (
             <div className="field" style={{ marginBottom: 0 }}><label>{t("SearXNG query URL")}</label>
               <input value={settings.searxngUrl || ''} onChange={(e) => setSettings(s => ({ ...s, searxngUrl: e.target.value }))} placeholder={t("http://localhost:8888")} />
-              <div className="muted-note">Base URL of your SearXNG instance. The server calls <code>/search?q=…&amp;format=json</code>, so JSON output must be enabled in your SearXNG settings.</div>
+              <div className="muted-note">{t("Base URL of your SearXNG instance. The server calls /search with format=json, so JSON output must be enabled in your SearXNG settings.")}</div>
             </div>
           )}
         </>}

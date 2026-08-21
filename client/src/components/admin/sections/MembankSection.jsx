@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../../../api.js';
 import { useAdmin } from '../store.jsx';
 import { Card, AutosaveNote, SettingRow } from '../widgets.jsx';
@@ -33,7 +33,7 @@ export default function MembankSection() {
     setErr('');
     if (!name || name === oldName) { setEdit(null); return; }
     try { const r = await api.patch('/api/admin/membank/' + encodeURIComponent(oldName), { name }); setFiles(r.files || []); setEdit(null); }
-    catch (e) { setErr(e?.message || 'Could not rename file.'); }
+    catch (e) { setErr(e?.message || t('Could not rename file.')); }
   }
   async function setFolder(name, folder) {
     setFiles(fs => fs.map(f => f.name === name ? { ...f, folder } : f));
@@ -67,9 +67,9 @@ export default function MembankSection() {
   return (
     <>
       <Card title={t("Behavior")} sub={t("How and when models reach for these files.")}>
-        <SettingRow label={t("Enable memory bank")} note={<>When on, all models receive a system-prompt section listing these files plus the <code>mb_view</code> and <code>mb_search</code> tools.</>}
+        <SettingRow label={t("Enable memory bank")} note={t("When on, all models receive a system-prompt section listing these files, plus the mb_view and mb_search tools.")}
           on={!!settings.membankEnabled} onToggle={() => setSettings(s => ({ ...s, membankEnabled: !s.membankEnabled }))} />
-        <SettingRow label={t("Hide tool calls from users")} note={<>When on, file reads stay behind the scenes, the model still uses the files, but users won't see the <code>mb_view</code> / <code>mb_search</code> steps in the reply.</>}
+        <SettingRow label={t("Hide tool calls from users")} note={t("When on, file reads stay behind the scenes. The model still uses the files, but users will not see the mb_view or mb_search steps in the reply.")}
           on={!!settings.membankHideTools} onToggle={() => setSettings(s => ({ ...s, membankHideTools: !s.membankHideTools }))} />
         <div className="field" style={{ marginBottom: 0 }}>
           <label>{t("System prompt")}</label>
@@ -78,7 +78,7 @@ export default function MembankSection() {
         </div>
       </Card>
       <Card title={t("Files")} sub={t("Text and PDF files work best (.md, .txt, .json, .pdf, code, etc.). PDFs are read as extracted text. Up to 25 MB each.")}
-        right={<button className="btn" onClick={() => pickRef.current?.click()}>Upload files</button>}>
+        right={<button className="btn" onClick={() => pickRef.current?.click()}>{t("Upload files")}</button>}>
         <input ref={pickRef} type="file" multiple hidden onChange={onPick} />
         <div className="muted-note">{t("Drag the handle to reorder or move files between folders. Type a folder name to group files; clear it to leave a file ungrouped.")}</div>
         <datalist id="mb-folders">{[...new Set(files.map(f => f.folder).filter(Boolean))].map(fo => <option key={fo} value={fo} />)}</datalist>
@@ -106,8 +106,8 @@ export default function MembankSection() {
                     </div>
                     {editing ? (
                       <>
-                        <button className="btn" style={{ flexShrink: 0 }} onClick={() => saveRename(f.name)}>Save</button>
-                        <button className="btn ghost" style={{ flexShrink: 0 }} onClick={() => { setEdit(null); setErr(''); }}>Cancel</button>
+                        <button className="btn" style={{ flexShrink: 0 }} onClick={() => saveRename(f.name)}>{t("Save")}</button>
+                        <button className="btn ghost" style={{ flexShrink: 0 }} onClick={() => { setEdit(null); setErr(''); }}>{t("Cancel")}</button>
                       </>
                     ) : (
                       <>

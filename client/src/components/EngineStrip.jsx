@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Gauge } from './icons.jsx';
 import { t } from '../i18n.jsx';
 
@@ -9,24 +9,58 @@ const rate = (n) => {
   return (v >= 100 ? Math.round(v) : Math.round(v * 10) / 10) + ' tok/s';
 };
 
-export default function EngineStrip({ telemetry, streaming }) {
+function Sparkline({ points }) {
+  if (points.length < 3) return null;
+  const max = Math.max(...points, 1);
+  const w = 54, h = 14;
+  const step = w / (points.length - 1);
+  const d = points.map((p, i) => `${i ? 'L' : 'M'}${(i * step).toFixed(1)},${(h - (p / max) * (h - 2) - 1).toFixed(1)}`).join(' ');
+  return (
+    <svg className="es-spark" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
+      <path d={d} fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export default function EngineStrip({ telemetry, streaming, route }) {
   const [show, setShow] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [last, setLast] = useState(null);
+  useEffect(() => {
+    if (!streaming || !telemetry) return;
+    const v = Number(telemetry.tps || 0);
+    if (!v) return;
+    setHistory(h => (h.length > 47 ? [...h.slice(-47), v] : [...h, v]));
+  }, [telemetry, streaming]);
+  useEffect(() => { if (streaming) setHistory([]); }, [streaming]);
+  useEffect(() => { if (telemetry) setLast(telemetry); }, [telemetry]);
   useEffect(() => {
     if (streaming && telemetry) { setShow(true); return; }
     if (!telemetry) { setShow(false); return; }
     const timer = setTimeout(() => setShow(false), 5000);
     return () => clearTimeout(timer);
   }, [streaming, telemetry]);
-  if (!show || !telemetry) return null;
-  const { tps, promptTps, promptTokens, genTokens, ctx, exact } = telemetry;
+
+  const shown = show && !!telemetry;
+  const data = telemetry || last;
+  if (!data) return <div className="es-slot" aria-hidden="true" />;
+
+  const { tps, promptTps, promptTokens, genTokens, ctx, exact } = data;
   const used = (promptTokens || 0) + (genTokens || 0);
   const pct = ctx > 0 ? Math.min(100, Math.round((used / ctx) * 1000) / 10) : 0;
   const level = pct >= 90 ? ' danger' : pct >= 75 ? ' warn' : '';
   return (
-    <div className={'engine-strip' + (streaming ? '' : ' final')} role="status" aria-live="off">
+    <div className={'es-slot' + (shown ? ' open' : '')}>
+      <div className={'engine-strip' + (streaming ? '' : ' final')} role="status" aria-live="off">
       <span className="es-icon"><Gauge style={{ width: 13 }} /></span>
+      {route && (
+        <span className="es-stat es-route" title={t('Chosen by {hub} because of: {via}', { hub: route.hubName, via: route.via })}>
+          <span className="es-label">{t('via')}</span> {route.modelName}
+        </span>
+      )}
       <span className="es-stat es-tps">
         <strong>{rate(tps)}</strong>
+        <Sparkline points={history} />
         {!exact && <span className="es-est" title={t('Estimated from streamed text, this provider does not report timings.')}>est</span>}
       </span>
       {promptTps > 0 && (
@@ -44,6 +78,7 @@ export default function EngineStrip({ telemetry, streaming }) {
           {pct}%
         </span>
       )}
+      </div>
     </div>
   );
 }
