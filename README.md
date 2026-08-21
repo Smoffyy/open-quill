@@ -42,40 +42,53 @@ Anthropic-inspired design, artifacts, a real code sandbox. Nothing leaves your m
 
 ## Quick start
 
-**Requirements**: [Node.js](https://nodejs.org/en/download/) `>=22.23.2` (CI builds and tests on Node 24) and an OpenAI-compatible server. The default is [llama.cpp](https://github.com/ggml-org/llama.cpp) at `http://localhost:8080/v1`.
+### 1. Check the requirements
 
-### From a release (recommended)
+| Requirement | Version | Notes |
+| --- | --- | --- |
+| [Node.js](https://nodejs.org/en/download/) | `22.23.2` or newer | CI builds and tests on Node 24 |
+| An OpenAI-compatible model server | any | [llama.cpp](https://github.com/ggml-org/llama.cpp) at `http://localhost:8080/v1` by default |
 
-Download the archive from the [releases page](https://github.com/Smoffyy/open-quill/releases/latest). The client is already built, so:
+### 2. Install and run
+
+Pick one.
+
+**From a release** &nbsp;·&nbsp; fastest, the client is already built &nbsp;·&nbsp; [download](https://github.com/Smoffyy/open-quill/releases/latest)
 
 ```bash
 cd server && npm install && cd ..
-npm start
+npm start                 # serves on http://localhost:3001
 ```
 
-### From source
+**From source** &nbsp;·&nbsp; the `stable` or `dev` branch
 
 ```bash
 npm run install:all
-npm run build      # builds the client into client/dist
-npm start          # serves everything from http://localhost:3001
+npm run build             # builds the client into client/dist
+npm start                 # serves on http://localhost:3001
 ```
 
-Open <http://localhost:3001> and create your account. **The first account is the admin.**
-
-### Development
+**Development** &nbsp;·&nbsp; hot reload, for working on Open Quill
 
 ```bash
 npm run install:all
-npm run dev        # client on :5173 (proxied), server on :3001
+npm run dev               # client :5173 (proxied) to server :3001
 ```
 
-### Connecting a model
+### 3. Create your account
 
-1. Start your local server (llama.cpp, for example) and load a model.
-2. Sign in as the admin, then open the profile menu (bottom-left) → **Admin Panel** → **Providers**.
-3. Set the API base URL (default `http://localhost:8080/v1`) and key, then save.
-4. Under **Models**, set each model's **internal model name** to the id your server expects, then add a description, system prompt, icon and reasoning settings.
+Open the address above. **The first account created is the admin.**
+
+### 4. Connect a model
+
+| Step | Where |
+| --- | --- |
+| Start your model server and load a model | llama.cpp, for example |
+| Set the API base URL and key, then save | **Admin Panel → Providers** |
+| Set each model's **internal model name** to the id your server expects | **Admin Panel → Models** |
+| Add a description, system prompt, icon and reasoning settings | **Admin Panel → Models** |
+
+The Admin Panel is in the profile menu, bottom-left of the sidebar.
 
 > [!NOTE]
 > Open Quill is built and tested primarily against llama.cpp. Other OpenAI-compatible providers generally work, but full feature parity is not guaranteed.
