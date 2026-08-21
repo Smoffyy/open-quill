@@ -19,6 +19,24 @@ const prerelease = version.includes('-');
 
 notes.push(`version ${version}${prerelease ? ' (pre-release)' : ''}`);
 
+const WORKSPACES = ['server', 'client'];
+for (const ws of WORKSPACES) {
+  for (const file of ['package.json', 'package-lock.json']) {
+    const full = path.join(__dirname, ws, file);
+    let json;
+    try { json = JSON.parse(fs.readFileSync(full, 'utf8')); }
+    catch { errors.push(`${ws}/${file} could not be read.`); continue; }
+    const seen = file === 'package.json'
+      ? [json.version]
+      : [json.version, json.packages?.['']?.version];
+    for (const v of seen) {
+      if (v !== undefined && v !== version) {
+        errors.push(`${ws}/${file} says ${v}, the root says ${version}. Run: cd ${ws} && npm version ${version} --no-git-tag-version --allow-same-version`);
+      }
+    }
+  }
+}
+
 const candidates = releaseCandidates(version);
 if (!candidates.length) {
   errors.push(`package.json version "${version}" is not a dotted number, so no release folder can be resolved.`);
