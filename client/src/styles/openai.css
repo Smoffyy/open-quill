@@ -1,6 +1,8 @@
 :root[data-preset="openai"] {
   --font-serif: 'Open Sans';
   --font-sans: 'Open Sans';
+  --prose-weight: 400;
+  --prose-strong: 600;
   --radius: 24px;
 }
 :root[data-theme="openai"] {
@@ -123,6 +125,9 @@
 [data-preset="openai"] .composer .attach-row, [data-preset="openai"] .composer .queued-chip,
 [data-preset="openai"] .composer .continue-row, [data-preset="openai"] .composer .slash-menu,
 [data-preset="openai"] .composer .steer-row { margin-left: -36px; margin-right: -84px; }
+/* The tile row's vertical spacing is measured against the Anthropic composer's
+   20px of top padding; this skin's is an 8px pill, so it keeps its own. */
+[data-preset="openai"] .composer .attach-row { margin-top: 0; padding: 0 0 8px; }
 
 [data-preset="openai"] .composer-wrap.floating {
   position: absolute; bottom: 0; left: 0; right: 0; z-index: 30;
@@ -165,8 +170,7 @@
 [data-preset="openai"] .model-opt .mo-name, [data-preset="openai"] .submenu-row { font-weight: 500; }
 [data-preset="openai"] .toggle-row { padding: 7px 8px; }
 [data-preset="openai"] .model-opt, [data-preset="openai"] .submenu-row, [data-preset="openai"] .toggle-row { border-radius: 10px; }
-[data-preset="openai"] .effort-seg { border-radius: 11px; }
-[data-preset="openai"] .effort-seg-thumb, [data-preset="openai"] .effort-seg-btn { border-radius: 9px; }
+[data-preset="openai"] .effort-rail, [data-preset="openai"] .effort-thumb { border-radius: 999px; }
 [data-preset="openai"] .model-opt .check, [data-preset="openai"] .plus-menu .pm-check { color: var(--text); }
 
 [data-preset="openai"] .quick-prompts { position: relative; z-index: 1; flex-direction: column; align-items: flex-start; width: 100%; max-width: 768px; margin: 18px auto 0; gap: 2px; }
@@ -182,7 +186,17 @@
 [data-preset="openai"] .msg { margin-bottom: 20px; font-family: var(--font-sans); }
 [data-preset="openai"] .assistant-body { font-size: 15px; line-height: 1.7; font-family: var(--font-sans); }
 [data-preset="openai"] .assistant-body p, [data-preset="openai"] .assistant-body ul, [data-preset="openai"] .assistant-body ol { margin-bottom: 14px; }
-[data-preset="openai"] .msg.user { margin-bottom: 26px; }
+[data-preset="openai"] .assistant-body p,
+[data-preset="openai"] .assistant-body h1, [data-preset="openai"] .assistant-body h2,
+[data-preset="openai"] .assistant-body h3, [data-preset="openai"] .assistant-body h4 { padding: 0; }
+[data-preset="openai"] .assistant-body h1, [data-preset="openai"] .assistant-body h2,
+[data-preset="openai"] .assistant-body h3, [data-preset="openai"] .assistant-body h4 { margin: 20px 0 10px; font-size: inherit; line-height: 1.3; }
+[data-preset="openai"] .assistant-body ul, [data-preset="openai"] .assistant-body ol { display: block; padding: 0 0 0 24px; }
+[data-preset="openai"] .assistant-body li { margin: 5px 0; padding-left: 0; }
+[data-preset="openai"] .actions { margin-top: 6px; margin-left: 0; }
+[data-preset="openai"] .action-btn svg { width: 18px; height: 18px; }
+[data-preset="openai"] .composer textarea { max-height: 280px; }
+[data-preset="openai"] .msg.user { margin-top: 0; margin-bottom: 26px; }
 [data-preset="openai"] .user-col { max-width: 70%; }
 [data-preset="openai"] .bubble-user {
   background: var(--user-bubble); border-radius: 22px; padding: 8px 18px; font-size: 15px; line-height: 22px;
@@ -192,6 +206,7 @@
 [data-preset="openai"] .msg-icon-name { font-family: var(--font-sans); font-size: 13.5px; font-weight: 600; color: var(--text); }
 [data-preset="openai"] .msg.assistant.icon-left .il-avatar { top: -4px; }
 [data-preset="openai"] .reasoning-head, [data-preset="openai"] .rb-label { font-family: var(--font-sans); font-size: 15px; }
+[data-preset="openai"] .reasoning { padding-left: 0; }
 [data-preset="openai"] .reasoning-head { border-radius: 999px; padding: 5px 13px 5px 11px; }
 [data-preset="openai"] .reasoning-head:hover { background: var(--surface-hover); }
 [data-preset="openai"] .rb-steps, [data-preset="openai"] .rb-peek-in { font-size: 14.5px; line-height: 1.7; }
@@ -244,8 +259,12 @@
 :root[data-preset="openai"][data-theme="openai"] .code-wrap pre { border-radius: 0 0 12px 12px; }
 :root[data-preset="openai"][data-theme="openai"] .code-bar { border-bottom: 1px solid rgba(255, 255, 255, .06); }
 
+[data-preset="openai"] .model-trigger { gap: 4px; font-weight: 400; line-height: 20px; }
 [data-preset="openai"] .model-trigger .ext { color: var(--text-faint); font-weight: 400; font-size: 14px; }
 
+[data-preset="openai"] .tool-line { margin-left: 0; }
+[data-preset="openai"] .tool-line.clickable { margin-left: -5px; }
+[data-preset="openai"] .tool-bash { padding-left: 0; }
 [data-preset="openai"] .tool-bash.ws.open .tb-inner { border-radius: 14px; }
 [data-preset="openai"] .ws-results { padding: 6px; }
 [data-preset="openai"] .ws-results a.ws-result { border-radius: 11px; padding: 8px 10px; gap: 11px; }
@@ -329,7 +348,38 @@
 [data-preset="openai"] .action-btn { width: 28px; height: 28px; border-radius: 7px; }
 [data-preset="openai"] .msg-time { font-size: 12px; line-height: normal; padding-left: 0; }
 [data-preset="openai"] .code-wrap { border-radius: 12px; }
-[data-preset="openai"] .code-bar { background: #1f1f1d; border-radius: 12px 12px 0 0; }
+/* chatgpt.com does want a real bar over a code block, so the skin builds one
+   back: `.code-bar` becomes the opaque sticky header again and the copy button,
+   which the Anthropic default floats bare over the code, drops into it with its
+   label showing. The success flash lives here too — it tints the bar, and the
+   Anthropic default has no bar to tint. */
+[data-preset="openai"] .code-bar {
+  position: sticky; top: 0; z-index: 3;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px; min-height: 40px; font-size: 12.5px; line-height: 18.75px;
+  background: #1f1f1d; border-radius: 12px 12px 0 0;
+  transition: box-shadow var(--fx-t, .2s) ease;
+}
+[data-preset="openai"] .code-bar.flash { animation: barFlash var(--fx-a, .55s) ease; }
+[data-preset="openai"][data-microfx="off"] .code-bar.flash { animation: none; }
+/* Tint with an inset shadow rather than the background: the background is what
+   makes the bar opaque over the scrolling code, and animating it to transparent
+   punched a hole straight through the sticky header. */
+@keyframes barFlash {
+  0% { box-shadow: inset 0 0 0 100px color-mix(in srgb, var(--accent) 22%, transparent); }
+  100% { box-shadow: inset 0 0 0 100px transparent; }
+}
+[data-preset="openai"] .code-copy-anchor { float: none; width: auto; height: 0; position: sticky; top: 0; z-index: 4; opacity: 1; }
+[data-preset="openai"] .code-copy {
+  top: 8px; right: 10px; width: auto; height: 24px; padding: 4px 8px;
+  background: #2c2c2a; color: #c9c8c0; border-radius: 6px; opacity: .7;
+  transition: opacity var(--fx-t, .15s), background var(--fx-t, .15s), color var(--fx-t, .15s);
+}
+[data-preset="openai"] .code-wrap:hover .code-copy { opacity: 1; }
+[data-preset="openai"] .code-copy:hover { background: #3a3a37; color: #f3f2ec; }
+[data-preset="openai"] .code-copy svg { width: 13px; height: 13px; }
+[data-preset="openai"] .code-copy-label { display: inline; }
+[data-preset="openai"] .code-wrap pre { padding: 0 14px 14px; }
 [data-preset="openai"] .code-wrap pre { padding: 4px 16px 16px; }
 [data-preset="openai"] .code-wrap pre code { font-size: 13.5px; line-height: 1.6; }
 [data-preset="openai"] .assistant-body code:not(pre code) { border: 0; padding: 1px 6px; border-radius: 5px; }

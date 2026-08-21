@@ -24,7 +24,7 @@ function loadGroupReg() {
 
 export default function ModelsSection() {
   const A = useAdmin();
-  const { models, providers, providerTypes, selModel, setSelModel, modelSave, setAsk } = A;
+  const { models, providers, providerTypes, selModel, setSelModel, modelSave, setAsk, keepScroll, openKwargs, toggleKwarg, openKwarg } = A;
   const [filter, setFilter] = useState('');
   const [view, setView] = useState('all');
   const [multiSel, setMultiSel] = useState(() => new Set());
@@ -560,7 +560,8 @@ export default function ModelsSection() {
           ? <ModelEditor key={sel.id} m={sel} onChange={A.changeModel}
               onDelete={(id) => A.deleteModels([id])} onDuplicate={A.duplicateModel}
               autosaveState={modelSave} providers={providers} providerTypes={providerTypes} models={models}
-              section={meSection} onSection={setMeSection} />
+              section={meSection} onSection={setMeSection}
+              keepScroll={keepScroll} kwargOpen={openKwargs} onKwargToggle={toggleKwarg} onKwargOpen={openKwarg} />
           : <div className="muted-note" style={{ padding: 20 }}>{t("No models yet, add one to get started.")}</div>}
       </div>
       {marquee && <div className="mw-marquee" style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }} />}

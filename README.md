@@ -75,7 +75,7 @@ This project is licensed under the [MIT License](LICENSE); by downloading, using
 
 ### Interface
 
-- Anthropic-style design with a serif assistant voice (Source Serif 4) and Open Sans for user input
+- Anthropic-style design with a serif assistant voice (Newsreader) and Open Sans for user input
 - Token-by-token streaming with a fade-in reveal, smart autoscroll, and a jump-to-bottom control
 - Auto-generated chat titles, hover-to-copy code blocks, branching conversations, and side-by-side branch comparison
 - Light and dark modes, selectable themes, and a configurable home screen

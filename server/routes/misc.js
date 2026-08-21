@@ -9,6 +9,8 @@ import { broadcastConfig } from '../lib/ws/index.js';
 import { egressLog, clearEgressLog } from '../lib/egress.js';
 import { releaseInfo, releaseIconPath } from '../lib/release.js';
 
+const APP_FONTS = new Set(['newsreader', 'sourceserif', 'sans']);
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DOCS = { __proto__: null, credits: 'CREDITS.md', changelog: 'CHANGELOG.md', license: 'LICENSE' };
 const ICON_TYPES = { __proto__: null, '.png': 'image/png', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
@@ -64,12 +66,12 @@ export default function registerMiscRoutes(app) {
     }
     if ('modelDocs' in b) { setSetting('model_docs_enabled', b.modelDocs ? '1' : '0'); logAudit(req, 'branding.modelDocs', { meta: { on: !!b.modelDocs } }); broadcastConfig(); }
     if ('appIcon' in b) setSetting('app_icon', text(b.appIcon, 1024));
-    if ('appFont' in b) setSetting('app_font', b.appFont === 'sans' ? 'sans' : 'serif');
+    if ('appFont' in b) setSetting('app_font', APP_FONTS.has(b.appFont) ? b.appFont : 'newsreader');
     if ('uiPreset' in b) {
       const next = b.uiPreset === 'openai' ? 'openai' : 'anthropic';
       const prev = getSetting('ui_preset', '');
       setSetting('ui_preset', next);
-      if (prev !== next && !('appFont' in b)) setSetting('app_font', next === 'openai' ? 'sans' : 'serif');
+      if (prev !== next && !('appFont' in b)) setSetting('app_font', next === 'openai' ? 'sans' : 'newsreader');
       logAudit(req, 'branding.preset', { meta: { preset: next } });
       broadcastConfig();
     }

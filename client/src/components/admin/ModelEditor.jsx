@@ -188,7 +188,9 @@ function RoutingPane({ m, set, models }) {
   );
 }
 
-export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, providers = [], providerTypes = {}, models = [], section = 'general', onSection }) {
+const RESET_SCROLL = (key, el) => { if (el) el.scrollTop = 0; };
+
+export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosaveState, providers = [], providerTypes = {}, models = [], section = 'general', onSection, keepScroll = RESET_SCROLL, kwargOpen, onKwargToggle, onKwargOpen }) {
   const [spOpen, setSpOpen] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [detectMsg, setDetectMsg] = useState('');
@@ -218,7 +220,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
   useEffect(() => {
     const body = bodyRef.current;
     if (!body) return;
-    body.scrollTop = 0;
+    const drop = keepScroll('me:' + section, body);
     const marks = [...body.querySelectorAll('.med-group[data-anchor]')];
     setOutline(marks.map(el => ({ a: el.dataset.anchor, label: el.textContent || '' })));
     setSeen(marks[0]?.dataset.anchor || '');
@@ -232,8 +234,8 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
     marks.forEach(el => io.observe(el));
     const onScroll = () => { if (atEnd()) setSeen(marks[marks.length - 1].dataset.anchor); };
     body.addEventListener('scroll', onScroll, { passive: true });
-    return () => { io.disconnect(); body.removeEventListener('scroll', onScroll); };
-  }, [section, m.id, kwargCount, m.is_router, m.enable_summaries]);
+    return () => { io.disconnect(); body.removeEventListener('scroll', onScroll); if (drop) drop(); };
+  }, [section, m.id, kwargCount, m.is_router, m.enable_summaries, keepScroll]);
 
   function goTo(a) {
     const el = bodyRef.current?.querySelector(`[data-anchor="${a}"]`);
@@ -464,7 +466,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
                 ? t("{n} extra value(s) are sent with every request to this model. Each one can appear in the model picker with your own wording, stay hidden, or follow another control so two values always move together.", { n: kwargCount })
                 : t("Extra values sent with every request to this model, such as thinking budgets and reasoning levels. Each one can appear in the model picker with your own wording, stay hidden, or follow another control so two values always move together.")}
             </div>
-            <KwargsEditor m={m} onChange={onChange} />
+            <KwargsEditor m={m} onChange={onChange} open={kwargOpen} onToggle={onKwargToggle} onOpen={onKwargOpen} />
           </div>
         )}
 

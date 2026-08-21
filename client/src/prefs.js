@@ -46,27 +46,48 @@ export function applyPrefs(prefs, preset) {
 
 export const ACCENT_PRESETS = ['#d97757', '#4f8ff7', '#46b07a', '#9b6bd8', '#e0567f', '#e0a93c', '#3bb6c4', '#7a8794'];
 
+export const APP_FONTS = new Set(['newsreader', 'sourceserif', 'sans']);
+const LEGACY_FONT_IDS = { __proto__: null, serif: 'newsreader' };
+
+export function appFontId(v) {
+  const id = LEGACY_FONT_IDS[v] || v;
+  return APP_FONTS.has(id) ? id : 'newsreader';
+}
+
 export const USER_FONT_KEY = 'oq-user-font';
-const USER_FONT_STACKS = {
-  sans: "'Open Sans'",
-  serif: "'Source Serif 4 Variable'",
+export const USER_FONTS = {
+  __proto__: null,
+  newsreader: { stack: "'Newsreader Variable'", weight: 420, strong: 615 },
+  sourceserif: { stack: "'Source Serif 4 Variable'", weight: 465, strong: 680 },
+  sans: { stack: "'Open Sans'", weight: 400, strong: 600 },
 };
+const LEGACY_USER_FONT_IDS = { __proto__: null, serif: 'sourceserif' };
+
+function userFontId(v) {
+  const id = LEGACY_USER_FONT_IDS[v] || v;
+  return USER_FONTS[id] ? id : 'default';
+}
 export function getUserFont() {
-  try { const v = localStorage.getItem(USER_FONT_KEY); return v === 'sans' || v === 'serif' ? v : 'default'; } catch { return 'default'; }
+  try { return userFontId(localStorage.getItem(USER_FONT_KEY)); } catch { return 'default'; }
 }
 export function applyUserFont(v) {
   const font = v || getUserFont();
   const root = document.documentElement;
-  if (font === 'sans' || font === 'serif') {
-    root.style.setProperty('--font-sans', USER_FONT_STACKS[font]);
-    root.style.setProperty('--font-serif', USER_FONT_STACKS[font]);
+  const pick = USER_FONTS[font];
+  if (pick) {
+    root.style.setProperty('--font-sans', pick.stack);
+    root.style.setProperty('--font-serif', pick.stack);
+    root.style.setProperty('--prose-weight', String(pick.weight));
+    root.style.setProperty('--prose-strong', String(pick.strong));
   } else {
     root.style.removeProperty('--font-sans');
     root.style.removeProperty('--font-serif');
+    root.style.removeProperty('--prose-weight');
+    root.style.removeProperty('--prose-strong');
   }
 }
 export function setUserFont(v) {
-  const font = v === 'sans' || v === 'serif' ? v : 'default';
+  const font = userFontId(v);
   try { if (font === 'default') localStorage.removeItem(USER_FONT_KEY); else localStorage.setItem(USER_FONT_KEY, font); } catch {}
   applyUserFont(font);
 }

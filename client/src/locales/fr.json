@@ -1253,7 +1253,6 @@
   "Something went wrong.": "Une erreur est survenue.",
   "Sort by": "Trier par",
   "Sort models": "Trier les modèles",
-  "Source Serif (default)": "Source Serif (par défaut)",
   "Space name": "Nom de l'espace",
   "Space settings": "Réglages de l'espace",
   "Spaces": "Espaces",
@@ -1335,7 +1334,6 @@
   "The command is spawned by this server and speaks MCP over stdio.": "La commande est lancée par ce serveur et communique en MCP via stdio.",
   "The connection this model runs through. Add or edit connections in the Providers section.": "La connexion par laquelle passe ce modèle. Ajoutez ou modifiez les connexions dans la section Fournisseurs.",
   "The crop stays vector, only the viewBox changes, so the logo keeps its sharp edges at any size.": "Le recadrage reste vectoriel, seule la viewBox change : le logo garde donc sa netteté à toutes les tailles.",
-  "The display font used for headings, greetings, and assistant text across the entire UI. Open Sans gives a cleaner, sans-serif look everywhere.": "La police d'affichage utilisée pour les titres, les messages d'accueil et le texte de l'assistant dans toute l'interface. Open Sans donne partout un rendu plus épuré, sans empattements.",
   "The exact key the server expects. Leave blank and nothing is sent.": "La clé exacte attendue par le serveur. Laissez vide et rien n'est envoyé.",
   "The exact prompt this conversation would send right now, in order, with what each part costs.": "Le prompt exact que cette conversation enverrait à l'instant, dans l'ordre, avec le coût de chaque partie.",
   "The first rule that matches wins. Anything that matches nothing goes to the fallback below.": "La première règle qui correspond l'emporte. Tout ce qui ne correspond à rien va au modèle de repli ci-dessous.",
@@ -1755,5 +1753,9 @@
   "Stopping — finishing the step in progress": "Arrêt en cours : fin de l’étape en cours",
   "Continue": "Continuer",
   "Pick up where this reply stopped": "Reprendre là où cette réponse s’est arrêtée",
-  "Carry on from exactly where your previous reply stopped. Do not repeat or summarise what you already did — it is already saved. If work is still unfinished, make the tool calls to finish it now.": "Reprends exactement là où ta réponse précédente s’est arrêtée. Ne répète pas et ne résume pas ce que tu as déjà fait : c’est déjà enregistré. S’il reste du travail, fais maintenant les appels d’outils pour le terminer."
+  "Carry on from exactly where your previous reply stopped. Do not repeat or summarise what you already did — it is already saved. If work is still unfinished, make the tool calls to finish it now.": "Reprends exactement là où ta réponse précédente s’est arrêtée. Ne répète pas et ne résume pas ce que tu as déjà fait : c’est déjà enregistré. S’il reste du travail, fais maintenant les appels d’outils pour le terminer.",
+  "About {name}": "À propos de {name}",
+  "Newsreader (default)": "Newsreader (par défaut)",
+  "Source Serif": "Source Serif",
+  "The display font used for headings, greetings, and assistant text across the entire UI. Newsreader is the closest open match to the Anthropic serif. Open Sans gives a cleaner, sans-serif look everywhere.": "La police utilisée pour les titres, les salutations et le texte de l'assistant dans toute l'interface. Newsreader est l'équivalent libre le plus proche de la serif d'Anthropic. Open Sans donne un rendu plus net, sans empattement, partout."
 }

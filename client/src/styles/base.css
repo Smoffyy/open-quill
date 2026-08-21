@@ -23,8 +23,10 @@
   --hover-soft: #ffffff14;
   --hover-mid: #ffffff1f;
   --hover: var(--hover-soft);
-  --font-serif: 'Source Serif 4 Variable';
+  --font-serif: 'Newsreader Variable';
   --font-sans: 'Open Sans';
+  --prose-weight: 420;
+  --prose-strong: 615;
   --radius: 14px;
   --attach-size: 104px;
   --attach-radius: 12px;
@@ -38,6 +40,9 @@
   --pop-faint: rgba(255, 255, 255, .45);
   --pop-blue: #2a78d6;
   --pop-switch: rgba(255, 255, 255, .2);
+  --effort-track: rgba(0, 0, 0, .2);
+  --effort-thumb: #a5a49a;
+  --effort-hot: 255, 255, 255;
   --pop-shadow: 0 4px 14px rgba(0, 0, 0, .25), 0 12px 32px rgba(0, 0, 0, .3);
   --field-ring: rgba(255, 255, 255, .1);
   --field-ring-hover: rgba(255, 255, 255, .2);
@@ -79,13 +84,15 @@
   --field-ring-hover: rgba(0, 0, 0, .2);
   --search-hit: #2a78d6;
   --pop-switch: rgba(0, 0, 0, .16);
+  --effort-track: rgba(0, 0, 0, .07);
+  --effort-thumb: #7c7b73;
+  --effort-hot: 74, 26, 8;
   --pop-shadow: 0 4px 14px rgba(0, 0, 0, .1), 0 12px 32px rgba(0, 0, 0, .12);
   --composer-hover: rgba(0, 0, 0, .06);
 }
 :root[data-theme="light"] .code-wrap { background: #1f1f1d; }
 /* Wherever the wrap takes an opaque background of its own, the sticky bar has to
    take the same one, or it goes back to being see-through. */
-:root[data-theme="light"] .code-bar { background: #1f1f1d; }
 
 :root[data-theme="anthropic"] {
   color-scheme: dark;
@@ -175,7 +182,7 @@
   --pop-shadow: 0 4px 14px rgba(0, 0, 0, .25), 0 12px 32px rgba(0, 0, 0, .3);
   --cmdk-active: #2c2c2a;
 }
-:root[data-theme="anthropic"][data-palette="legacy"] .greeting { color: rgba(255, 255, 255, .8); font-weight: 400; font-size: 40px; }
+:root[data-theme="anthropic"][data-palette="legacy"] .greeting { color: rgba(255, 255, 255, .8); font-weight: 470; font-size: 40px; }
 :root[data-theme="anthropic"][data-palette="legacy"] .composer { border-color: var(--border); box-shadow: none; }
 :root[data-theme="anthropic"][data-palette="legacy"] .composer:focus-within { border-color: var(--border); box-shadow: none; }
 :root[data-theme="anthropic"][data-palette="legacy"] .plus-menu,
@@ -189,15 +196,16 @@
   --surface: #1a1a19;
   --surface-2: #20201f;
   --surface-hover: #262625;
+  --ghost-hover: rgba(255, 255, 255, .075);
   --border: rgba(255, 255, 255, .1);
   --border-soft: rgba(255, 255, 255, .08);
-  --text: #ffffff;
+  --text: #f0efec;
   --text-muted: #c3c2b7;
   --text-faint: #898781;
   --accent: #c6613f;
   --user-bubble: rgba(255, 255, 255, .05);
   --composer-bg: #20201f;
-  --composer-hover: rgba(255, 255, 255, .1);
+  --composer-hover: rgba(255, 255, 255, .075);
   --menu-bg: #20201f;
   --modal-bg: #1a1a19;
   --modal-side: #151515;
@@ -211,7 +219,8 @@
   --sidebar-text: #c3c2b7;
   --sidebar-label: #898781;
   --sidebar-icon: #ffffff;
-  --model-name: #ffffff;
+  --model-name: #f0efec;
+  --pop-text: #f0efec;
   --pop-bg: #20201f;
   --pop-border: rgba(255, 255, 255, .1);
   --pop-ring: rgba(255, 255, 255, .2);
@@ -230,7 +239,7 @@
 :root[data-theme="anthropic"][data-palette="2026q3"] .chat-row.active { background: #0b0b0b; }
 :root[data-theme="anthropic"][data-palette="2026q3"] .composer { box-shadow: 0 4px 20px rgba(0, 0, 0, .035), inset 0 0 0 1px rgba(255, 255, 255, .1); }
 :root[data-theme="anthropic"][data-palette="2026q3"] .composer:focus-within { box-shadow: 0 4px 20px rgba(0, 0, 0, .075), inset 0 0 0 1px rgba(255, 255, 255, .2); }
-:root[data-theme="anthropic"][data-palette="2026q3"] .greeting { font-weight: 300; color: #ffffff; }
+:root[data-theme="anthropic"][data-palette="2026q3"] .greeting { color: var(--text); }
 :root[data-theme="anthropic"][data-palette="2026q3"] .quick-prompt { background: #20201f; }
 :root[data-theme="anthropic"][data-palette="2026q3"] .quick-prompt:hover,
 :root[data-theme="anthropic"][data-palette="2026q3"] .quick-prompt:focus-visible { background: #262625; }
@@ -273,7 +282,6 @@
   --pop-divider: rgba(255, 255, 255, .10);
 }
 :root[data-theme="oled"] .code-wrap, :root[data-theme="openai"] .code-wrap { background: #050505; }
-:root[data-theme="oled"] .code-bar, :root[data-theme="openai"] .code-bar { background: #050505; }
 /* anthropic: sidebar saved-chat + label text */
 :root[data-theme="anthropic"] .section-label { color: var(--sidebar-label); }
 :root[data-theme="anthropic"] .sidebar { border-right-color: rgba(255, 255, 255, .1); }
@@ -309,7 +317,7 @@
 :root[data-theme="anthropic"] .send { color: #fff; }
 :root[data-theme="anthropic"] .composer .mic,
 :root[data-theme="anthropic"] .mdocs-btn { color: var(--text); }
-:root[data-theme="anthropic"] .greeting { color: var(--sidebar-text); font-weight: 370; }
+:root[data-theme="anthropic"] .greeting { color: var(--sidebar-text); font-weight: 390; }
 :root[data-theme="anthropic"] .composer { border-color: transparent; box-shadow: 0 4px 20px rgba(0, 0, 0, .035), 0 0 0 1px rgba(225, 224, 217, .15); }
 :root[data-theme="anthropic"] .composer:focus-within { border-color: transparent; box-shadow: 0 4px 20px rgba(0, 0, 0, .075), 0 0 0 1px rgba(225, 224, 217, .3); }
 :root[data-theme="anthropic"] .composer textarea::placeholder { color: var(--sidebar-label); }
@@ -331,7 +339,7 @@
 /* anthropic: model name + description in the dropdown */
 :root[data-theme="anthropic"] .model-trigger { color: var(--model-name); }
 :root[data-theme="anthropic"] .mo-desc { color: var(--mo-desc); opacity: 1; }
-:root[data-theme="anthropic"] .model-trigger .ext { color: rgba(255,255,255,.5); }
+:root[data-theme="anthropic"] .model-trigger .ext { color: var(--sidebar-label); }
 :root[data-theme="anthropic"] .quick-prompt { background: #313130; }
 :root[data-theme="anthropic"] .quick-prompt:hover,
 :root[data-theme="anthropic"] .quick-prompt:focus-visible { background: var(--surface-hover); }

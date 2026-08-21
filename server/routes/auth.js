@@ -81,7 +81,7 @@ export default function registerAuthRoutes(app) {
       allowSignups: getSetting('allow_signups', '1') === '1',
       appName: getSetting('app_name', 'open-quill'),
       appIcon: getSetting('app_icon', ''),
-      appFont: getSetting('app_font', 'serif'),
+      appFont: getSetting('app_font', 'newsreader'),
       uiPreset: getSetting('ui_preset', '') === 'openai' ? 'openai' : 'anthropic',
     });
   });

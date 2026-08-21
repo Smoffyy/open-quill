@@ -12,10 +12,12 @@ import { scanTools } from '../src/toolproto.js';
 import { STATUS_DELAY_DEFAULT, STATUS_DELAY_MAX, statusDelayMs, statusDelaySecs } from '../src/lib/status.js';
 import { paletteFor, palettesFor, themeValue, paletteById, DEFAULT_DARK, DEFAULT_LIGHT, presetOf } from '../src/lib/palettes.js';
 import { scrollInsideMenu } from '../src/lib/anchor.js';
+import { clampPx, knobAt, knobRaw, knobTravel, overshoot, stretchFor, squashFor, stretchOrigin, nearestIndex, slideFor, DRAG_SLOP, STRETCH_PX, SLIDE_BASE, SLIDE_SPAN } from '../src/lib/dragsteps.js';
+import { cellRand, cellRamp, cellAlpha, headColumn, fadeTrail, stampTrail, parseRgb, hotMix, CELL, CELL_GAP, TRAIL_DECAY, HEAD_WHITE } from '../src/lib/cellfield.js';
 import {
   isRange, clampToRange, allNumeric, kwargPayload,
   controlOf as controlOfKwarg, defaultValueOf as defaultValueOfKwarg,
-  resolveKwargValues as resolveKwargs, gateOpen, kwargVisible, KWARG_PRESETS
+  resolveKwargValues as resolveKwargs, gateOpen, kwargVisible, gateSourceIds, KWARG_PRESETS
 } from '../src/kwargs.js';
 import {
   baseName, extOf, fmtSize, escHtml, diffLines, stableLineDiff,
@@ -648,6 +650,232 @@ test('a closed gate drops the value only when sendWhenHidden is off', () => {
   assert.equal(kwargPayload(kept, resolveKwargs(kept, {}, false)).thinking_budget_tokens, 1024);
   const dropped = mk(false);
   assert.equal('thinking_budget_tokens' in kwargPayload(dropped, resolveKwargs(dropped, {}, false)), false);
+});
+
+test('the kwarg behind an open gate takes over the trigger chip', () => {
+  const defs = [
+    { id: 'think', name: 'enable_thinking', chip: 'Extended', values: ['false', 'true'], default: 'false' },
+    { id: 'effort', name: 'reasoning_effort', values: ['low', 'medium', 'xhigh'], default: 'low',
+      showIf: { id: 'think', value: 'true' } }
+  ];
+  const off = resolveKwargs(defs, {}, false);
+  assert.equal(gateSourceIds(defs, off).has('think'), false);
+
+  const on = resolveKwargs(defs, { think: 'true' }, false);
+  assert.equal(gateSourceIds(defs, on).has('think'), true);
+  assert.equal(gateSourceIds(defs, on).has('effort'), false);
+});
+
+test('an admin-hidden gated kwarg leaves its source chip alone', () => {
+  const defs = [
+    { id: 'think', name: 'enable_thinking', chip: 'Extended', values: ['false', 'true'], default: 'false' },
+    { id: 'effort', name: 'reasoning_effort', values: ['low', 'high'], default: 'low',
+      visible: false, showIf: { id: 'think', value: 'true' } }
+  ];
+  assert.equal(gateSourceIds(defs, resolveKwargs(defs, { think: 'true' }, false)).has('think'), false);
+});
+
+test('the switch knob centres on the pointer and stops at both ends', () => {
+  const r = { left: 100, width: 36 };
+  assert.equal(knobAt(110, r, 2, 16), 0);
+  assert.equal(knobAt(100, r, 2, 16), 0);
+  assert.equal(knobAt(0, r, 2, 16), 0);
+  assert.equal(knobAt(136, r, 2, 16), 16);
+  assert.equal(knobAt(999, r, 2, 16), 16);
+  assert.equal(knobAt(118, r, 2, 16), 8);
+});
+
+test('a switch too narrow for its knob still reports a position', () => {
+  assert.equal(knobAt(50, { left: 0, width: 12 }, 2, 16), 0);
+  assert.equal(clampPx(5, 10, 10), 10);
+  assert.equal(clampPx(5, 10, 2), 10);
+});
+
+test('a segmented control picks the nearest segment centre, uneven widths included', () => {
+  const stops = [{ x: 1, w: 60 }, { x: 61, w: 90 }];
+  assert.equal(nearestIndex(stops, 0), 0);
+  assert.equal(nearestIndex(stops, 31), 0);
+  assert.equal(nearestIndex(stops, 106), 1);
+  assert.equal(nearestIndex(stops, 999), 1);
+  assert.equal(nearestIndex([], 5), 0);
+  assert.equal(nearestIndex(null, 5), 0);
+});
+
+test('a sweep lights every column it crossed, not just the two ends', () => {
+  const heat = new Float32Array(10);
+  stampTrail(heat, 2, 6);
+  for (let c = 2; c <= 6; c++) assert.equal(heat[c], 1, 'column ' + c);
+  assert.equal(heat[1], 0);
+  assert.equal(heat[7], 0);
+  stampTrail(heat, 8, 4);
+  assert.equal(heat[8], 1);
+});
+
+test('a sweep past either edge clamps instead of writing out of bounds', () => {
+  const heat = new Float32Array(4);
+  stampTrail(heat, -9, 1);
+  assert.equal(heat[0], 1);
+  stampTrail(heat, 2, 99);
+  assert.equal(heat[3], 1);
+  assert.equal(heat.length, 4);
+});
+
+test('older columns are dimmer than newer ones, which is what makes it a tail', () => {
+  const heat = new Float32Array(6);
+  stampTrail(heat, 0, 0);
+  fadeTrail(heat);
+  stampTrail(heat, 1, 1);
+  fadeTrail(heat);
+  stampTrail(heat, 2, 2);
+  assert.ok(heat[2] > heat[1] && heat[1] > heat[0]);
+  assert.ok(heat[0] > 0);
+});
+
+test('the trail fades out rather than lingering forever', () => {
+  const heat = new Float32Array(2);
+  stampTrail(heat, 0, 1);
+  for (let i = 0; i < 80; i++) fadeTrail(heat);
+  assert.ok(heat[0] < 0.001);
+  assert.ok(TRAIL_DECAY > 0 && TRAIL_DECAY < 1);
+});
+
+test('the head sits at the last filled column, and off the strip when empty', () => {
+  assert.equal(headColumn(1, 200), 49);
+  assert.equal(headColumn(0, 200), -1);
+  assert.ok(headColumn(0.5, 200) < headColumn(1, 200));
+});
+
+test('a colour reads the same whether the theme hands over channels or an rgb string', () => {
+  assert.deepEqual(parseRgb('rgb(198, 97, 63)'), [198, 97, 63]);
+  assert.deepEqual(parseRgb(' 255, 255, 255 '), [255, 255, 255]);
+  assert.deepEqual(parseRgb('rgba(1, 2, 3, .5)'), [1, 2, 3]);
+  assert.deepEqual(parseRgb('nonsense', [9, 9, 9]), [9, 9, 9]);
+  assert.deepEqual(parseRgb('', [9, 9, 9]), [9, 9, 9]);
+});
+
+test('the comet head whitens while the cold tail keeps the accent', () => {
+  const base = [198, 97, 63];
+  const white = [255, 255, 255];
+  assert.equal(hotMix(base, white, 0), 'rgb(198,97,63)');
+  const warm = parseRgb(hotMix(base, white, 0.5));
+  const head = parseRgb(hotMix(base, white, 1));
+  assert.ok(head[1] > warm[1] && warm[1] > base[1]);
+  assert.equal(head[1], Math.round(97 + (255 - 97) * HEAD_WHITE));
+});
+
+test('whitening is biased to the very front, so the tail does not wash out', () => {
+  const base = [0, 0, 0];
+  const white = [255, 255, 255];
+  const half = parseRgb(hotMix(base, white, 0.5))[0];
+  assert.ok(half < 255 * HEAD_WHITE * 0.5);
+});
+
+test('a light theme can pull the head the other way, towards its own ink', () => {
+  const base = [201, 102, 63];
+  const ink = [74, 26, 8];
+  const head = parseRgb(hotMix(base, ink, 1));
+  assert.ok(head[0] < base[0]);
+});
+
+test('a hot cell outshines a cold one at the same column and phase', () => {
+  const cold = cellAlpha(10, 50, 0.3, 1, 0);
+  const hot = cellAlpha(10, 50, 0.3, 1, 1);
+  assert.ok(hot > cold);
+  assert.ok(hot <= 1);
+});
+
+test('every cell gets a stable value of its own, so the field does not pulse as one', () => {
+  const a = cellRand(3, 1);
+  assert.equal(cellRand(3, 1), a);
+  assert.notEqual(cellRand(4, 1), a);
+  assert.notEqual(cellRand(3, 2), a);
+  for (const [c, r] of [[0, 0], [7, 2], [49, 4], [123, 9]]) {
+    const v = cellRand(c, r);
+    assert.ok(v >= 0 && v < 1, `cellRand(${c},${r}) = ${v}`);
+  }
+});
+
+test('the field ramps up towards the smart end and never goes dark at the bright one', () => {
+  assert.equal(cellRamp(0, 50), 0);
+  assert.equal(cellRamp(49, 50), 1);
+  assert.ok(cellRamp(25, 50) < 0.5);
+  assert.equal(cellRamp(0, 1), 1);
+});
+
+test('cell alpha stays inside 0..1 whatever the phase', () => {
+  for (let p = 0; p < 12; p++) {
+    for (const col of [0, 10, 49]) {
+      const a = cellAlpha(col, 50, cellRand(col, 2), p / 2);
+      assert.ok(a >= 0 && a <= 1, `alpha ${a} out of range`);
+    }
+  }
+});
+
+test('the cells leave a gap, so the grid reads as pixels and not a solid bar', () => {
+  assert.ok(CELL_GAP > 0 && CELL_GAP < CELL);
+});
+
+test('a longer jump takes longer, but never so long that a nudge feels sluggish', () => {
+  assert.equal(slideFor(0), SLIDE_BASE);
+  assert.equal(slideFor(1), SLIDE_BASE + SLIDE_SPAN);
+  assert.equal(slideFor(-1), SLIDE_BASE + SLIDE_SPAN);
+  const oneStep = slideFor(0.2);
+  const across = slideFor(1);
+  assert.ok(oneStep > SLIDE_BASE && oneStep < across);
+  assert.ok(across / oneStep < 2, 'the far jump should not feel twice as slow as a nudge');
+});
+
+test('slide time is clamped for distances outside the track', () => {
+  assert.equal(slideFor(5), SLIDE_BASE + SLIDE_SPAN);
+  assert.equal(slideFor(NaN), SLIDE_BASE);
+});
+
+test('overshoot is zero inside the track and signed outside it', () => {
+  assert.equal(overshoot(8, 0, 16), 0);
+  assert.equal(overshoot(0, 0, 16), 0);
+  assert.equal(overshoot(16, 0, 16), 0);
+  assert.equal(overshoot(-9, 0, 16), -9);
+  assert.equal(overshoot(20, 0, 16), 4);
+});
+
+test('the stretch saturates instead of growing without bound', () => {
+  assert.equal(stretchFor(0, 16), 1);
+  const near = stretchFor(10, 16);
+  const far = stretchFor(400, 16);
+  assert.ok(near > 1 && near < far);
+  assert.ok(far <= 1 + STRETCH_PX / 16 + 1e-9);
+  assert.equal(stretchFor(-10, 16), near);
+});
+
+test('the stretch is a constant pixel pull, so wide thumbs do not balloon', () => {
+  const knob = stretchFor(400, 16) - 1;
+  const wide = stretchFor(400, 80) - 1;
+  assert.ok(Math.abs(knob * 16 - wide * 80) < 1e-9);
+});
+
+test('a stretched thumb thins out, and an unstretched one is left alone', () => {
+  assert.equal(squashFor(1), 1);
+  assert.equal(squashFor(0.5), 1);
+  const sq = squashFor(1.3);
+  assert.ok(sq < 1 && sq > 0.8);
+});
+
+test('the pinned edge is the one being pulled away from', () => {
+  assert.equal(stretchOrigin(5), 'right center');
+  assert.equal(stretchOrigin(-5), 'left center');
+});
+
+test('knobRaw keeps the overshoot that knobAt clamps away', () => {
+  const r = { left: 0, width: 36 };
+  assert.equal(knobTravel(r, 2, 16), 16);
+  assert.equal(knobRaw(60, r, 2, 16), 50);
+  assert.equal(knobAt(60, r, 2, 16), 16);
+  assert.equal(knobRaw(-20, r, 2, 16), -30);
+  assert.equal(knobAt(-20, r, 2, 16), 0);
+});
+
+test('the drag slop stays small enough that a tap is never read as a drag', () => {
+  assert.ok(DRAG_SLOP > 0 && DRAG_SLOP <= 4);
 });
 
 test('an unresolvable or absent gate leaves the kwarg visible', () => {

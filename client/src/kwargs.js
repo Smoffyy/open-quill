@@ -142,6 +142,17 @@ export function kwargVisible(defs, values, def) {
   return def.visible !== false && gateOpen(defs, values, def);
 }
 
+export function gateSourceIds(defs, values) {
+  const list = Array.isArray(defs) ? defs : [];
+  const out = new Set();
+  for (const d of list) {
+    if (!d.showIf || !d.showIf.id) continue;
+    if (!kwargVisible(list, values, d)) continue;
+    out.add(d.showIf.id);
+  }
+  return out;
+}
+
 export function coerceKwargValue(value, type) {
   const s = String(value);
   if (type === 'string') return s;

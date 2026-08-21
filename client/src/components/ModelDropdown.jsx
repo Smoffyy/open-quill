@@ -2,7 +2,10 @@ import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevDown, Chevron, ImageIcon, Brain, Info, TextIcon } from './icons.jsx';
 import { t, tk } from '../i18n.jsx';
-import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues, isRange, clampToRange, rangeStep, kwargVisible } from '../kwargs.js';
+import { Switch } from './settingsui.jsx';
+import { clampPx, overshoot, stretchFor, squashFor, stretchOrigin, slideFor, DRAG_SLOP } from '../lib/dragsteps.js';
+import { paintCells, fadeTrail, stampTrail, headColumn, CELL, CELL_FPS, CELL_SPEED } from '../lib/cellfield.js';
+import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues, isRange, clampToRange, rangeStep, kwargVisible, gateSourceIds } from '../kwargs.js';
 
 const CAP_ICONS = [
   { key: 'capText', label: tk('Text-Only'), Icon: TextIcon },
@@ -67,16 +70,17 @@ function CapInfo({ m }) {
 
 const capLevel = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
-export function KwargControl({ def, value, isAdmin, onSet }) {
+export function KwargControl({ def, value, isAdmin, onSet, gated }) {
   const values = kwargValuesArr(def);
   const locked = (!!def.adminOnly && !isAdmin) || !!def.parentId;
+  const tie = gated ? ' gated' : '';
   const label = def.label || def.name || t('Option');
   const note = def.parentId
     ? (value == null ? t('Follows the setting above, not sent right now') : t('Follows the setting above'))
     : (locked ? t('Set by your administrator') : def.description);
   if (def.parentId) {
     return (
-      <div className="kw-static">
+      <div className={'kw-static' + tie}>
         <div className="tr-main">
           <div className="mo-name">{label}</div>
           {note && <div className="mo-desc">{note}</div>}
@@ -91,7 +95,7 @@ export function KwargControl({ def, value, isAdmin, onSet }) {
     const min = Number(def.min), max = Number(def.max), step = rangeStep(def);
     const pct = max > min ? ((at - min) / (max - min)) * 100 : 0;
     return (
-      <div className={'kw-range' + (locked ? ' locked' : '')}>
+      <div className={'kw-range' + (locked ? ' locked' : '') + tie}>
         <div className="kw-head">
           <span className="mo-name">{label}</span>
           <span className="kw-cur">{at}{locked ? ' · ' + t('admin set') : ''}</span>
@@ -111,19 +115,20 @@ export function KwargControl({ def, value, isAdmin, onSet }) {
   if (control === 'toggle') {
     const on = /^true$/i.test(active);
     return (
-      <div className={'toggle-row' + (locked ? ' locked' : '')}
+      <div className={'toggle-row' + (locked ? ' locked' : '') + tie}
         onClick={() => { if (!locked) onSet(def.id, on ? falseValueOf(def) : trueValueOf(def)); }}>
         <div className="tr-main">
           <div className="mo-name">{label}</div>
           {note && <div className="mo-desc">{note}</div>}
         </div>
-        <div className={'switch' + (on ? ' on' : '')} />
+        <Switch on={on} label={label} disabled={locked}
+          onToggle={() => { if (!locked) onSet(def.id, on ? falseValueOf(def) : trueValueOf(def)); }} />
       </div>
     );
   }
   if (control === 'select') {
     return (
-      <div className="kw-row">
+      <div className={'kw-row' + tie}>
         <div className="kw-head">
           <span className="mo-name">{label}</span>
           {locked && <span className="kw-cur">{t('admin set')}</span>}
@@ -138,18 +143,174 @@ export function KwargControl({ def, value, isAdmin, onSet }) {
   }
   const idx = Math.max(0, values.indexOf(active));
   return (
-    <div className={'effort-row' + (locked ? ' locked' : '')}>
+    <EffortSlider label={label} note={note} values={values} idx={idx} locked={locked} gated={gated}
+      onPick={(v) => onSet(def.id, v)} />
+  );
+}
+
+function CellField({ fillRef }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const cv = ref.current;
+    const ctx = cv && cv.getContext ? cv.getContext('2d') : null;
+    if (!ctx) return undefined;
+    const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const css = getComputedStyle(cv);
+    const colour = css.color;
+    const hot = css.getPropertyValue('--effort-hot');
+    let box = { w: 1, h: 1, dpr: 1 };
+    let heat = new Float32Array(0);
+    let head = -1;
+    let raf = 0;
+    let last = -Infinity;
+
+    const measure = () => {
+      const r = cv.getBoundingClientRect();
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      box = { w: Math.max(1, Math.round(r.width)), h: Math.max(1, Math.round(r.height)), dpr };
+      const px = Math.round(box.w * dpr);
+      const py = Math.round(box.h * dpr);
+      if (cv.width !== px || cv.height !== py) { cv.width = px; cv.height = py; }
+      const cols = Math.ceil(box.w / CELL);
+      if (heat.length !== cols) heat = new Float32Array(cols);
+    };
+
+    const frame = (ts) => {
+      if (ts - last >= 1000 / CELL_FPS) {
+        last = ts;
+        const lit = fillRef.current ? fillRef.current.getBoundingClientRect().width : 0;
+        const now = headColumn(box.w ? lit / box.w : 0, box.w);
+        fadeTrail(heat);
+        stampTrail(heat, head < 0 ? now : head, now);
+        head = now;
+        paintCells(ctx, box.w, box.h, box.dpr, colour, ts / CELL_SPEED, heat, hot);
+      }
+      raf = requestAnimationFrame(frame);
+    };
+
+    measure();
+    if (still) {
+      paintCells(ctx, box.w, box.h, box.dpr, colour, 0, null, hot);
+    } else {
+      raf = requestAnimationFrame(frame);
+    }
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => {
+      measure();
+      if (still) paintCells(ctx, box.w, box.h, box.dpr, colour, 0, null, hot);
+    }) : null;
+    if (ro) ro.observe(cv);
+    return () => { cancelAnimationFrame(raf); if (ro) ro.disconnect(); };
+  }, [fillRef]);
+
+  return <canvas ref={ref} className="effort-cells" aria-hidden="true" />;
+}
+
+const THUMB = 16;
+const glowAt = (fill) => Math.max(0, (fill - 0.25) * 0.86);
+function EffortSlider({ label, note, values, idx, locked, gated, onPick }) {
+  const railRef = useRef(null);
+  const fillRef = useRef(null);
+  const seen = useRef(idx);
+  const inputRef = useRef(null);
+  const dragging = useRef(false);
+  const from = useRef(0);
+  const [free, setFree] = useState(null);
+  const [slide, setSlide] = useState(null);
+  const [grip, setGrip] = useState('center');
+  const last = values.length - 1;
+  const span = Math.max(1, last);
+
+  const at = (clientX) => {
+    const rail = railRef.current;
+    if (!rail) return null;
+    const r = rail.getBoundingClientRect();
+    if (!r.width) return null;
+    const local = clientX - r.left;
+    const centre = clampPx(local, 0, r.width);
+    const travel = Math.max(1, r.width - THUMB);
+    const raw = local - THUMB / 2;
+    const over = overshoot(raw, 0, travel);
+    const stretch = stretchFor(over, THUMB);
+    return {
+      pos: clampPx(raw, 0, travel) / travel,
+      fill: centre / r.width,
+      i: Math.min(last, Math.max(0, Math.round((centre / r.width) * span))),
+      stretch,
+      squash: squashFor(stretch),
+      origin: stretchOrigin(over)
+    };
+  };
+
+  const track = (e) => {
+    const hit = at(e.clientX);
+    if (!hit) return;
+    if (hit.origin && (hit.stretch > 1)) setGrip(hit.origin);
+    setSlide(null);
+    setFree({ pos: hit.pos, fill: hit.fill, stretch: hit.stretch, squash: hit.squash });
+    if (hit.i !== idx) onPick(values[hit.i]);
+  };
+
+  const onDown = (e) => {
+    if (locked || e.button !== 0) return;
+    e.preventDefault();
+    dragging.current = true;
+    from.current = e.clientX;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    if (inputRef.current) inputRef.current.focus();
+    const hit = at(e.clientX);
+    if (!hit || hit.i === idx) return;
+    setSlide(slideFor((hit.i - idx) / span));
+    onPick(values[hit.i]);
+  };
+  const onMove = (e) => {
+    if (!dragging.current) return;
+    if (!free && Math.abs(e.clientX - from.current) <= DRAG_SLOP) return;
+    track(e);
+  };
+  const stop = () => { dragging.current = false; setFree(null); };
+
+  const cur = capLevel(values[idx]);
+  const rising = idx >= seen.current;
+  seen.current = idx;
+  const pos = free ? free.pos : idx / span;
+  const fill = free ? free.fill : idx / span;
+
+  return (
+    <div className={'effort-row' + (locked ? ' locked' : '') + (idx === last ? ' at-max' : '') + (gated ? ' gated' : '')}>
       <div className="effort-head">
-        <span className="mo-name">{label}</span>
-        <span className="effort-cur">{locked ? capLevel(active) + ' \u00b7 ' + t('admin set') : capLevel(active)}</span>
+        <span className="effort-title">
+          <span className="mo-name">{label}</span>
+          <span className="effort-cur">
+            <span key={cur} className={'effort-val' + (rising ? '' : ' down')}>{cur}</span>
+            {locked ? ' · ' + t('admin set') : null}
+          </span>
+        </span>
+        {note && (
+          <span className="effort-info">
+            <button type="button" aria-label={t('About {name}', { name: label })}>
+              <Info style={{ width: 16, height: 16 }} />
+            </button>
+            <span className="effort-tip" role="tooltip">{note}</span>
+          </span>
+        )}
       </div>
-      {note && <div className="mo-desc" style={{ marginBottom: 8, marginTop: -4 }}>{note}</div>}
-      <div className="effort-seg" style={{ '--n': values.length, '--i': idx }}>
-        <span className="effort-seg-thumb" />
-        {values.map((v, i) => (
-          <button key={v} type="button" disabled={locked} className={'effort-seg-btn' + (i === idx ? ' on' : '')}
-            onClick={() => { if (!locked) onSet(def.id, v); }}>{capLevel(v)}</button>
-        ))}
+      <div className={'effort-slider' + (free ? ' dragging' : '')}
+        style={{ '--pos': pos, '--fill': fill, '--glow': glowAt(fill), '--grip': grip, '--stretch': free ? free.stretch : 1, '--squash': free ? free.squash : 1, ...(slide ? { '--slide': slide + 'ms' } : null) }}
+        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop}>
+        <span className="effort-rail" ref={railRef}>
+          <span className="effort-fill" ref={fillRef} />
+          <span className="effort-glow"><CellField fillRef={fillRef} /></span>
+        </span>
+        <span className="effort-dots">
+          {values.map((v, i) => (
+            <span key={v} className={'effort-dot' + (i === last ? ' top' : '')} style={{ '--i': i, '--n1': span }} />
+          ))}
+        </span>
+        <input ref={inputRef} type="range" className="effort-input" min={0} max={span} step={1}
+          value={idx} disabled={locked} aria-label={label} aria-valuetext={cur}
+          onChange={(e) => { if (!locked) onPick(values[Math.min(last, Number(e.target.value))]); }} />
+        <span className="effort-thumb" />
       </div>
     </div>
   );
@@ -311,8 +472,10 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
   };
   const ownKwargs = kwDefs.filter(d => !d.parentId);
   const shownKwargs = kwDefs.filter(d => kwargVisible(kwDefs, kwActive, d));
+  const shownIds = new Set(shownKwargs.map(d => d.id));
+  const gates = gateSourceIds(kwDefs, kwActive);
   const chips = ownKwargs
-    .filter(d => kwargVisible(kwDefs, kwActive, d))
+    .filter(d => kwargVisible(kwDefs, kwActive, d) && !gates.has(d.id))
     .map(d => kwargChip(d, kwActive[d.id]))
     .filter(Boolean)
     .slice(0, 2);
@@ -359,10 +522,12 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
   return (
     <div className="model-select" ref={ref}>
       <button type="button" className={'model-trigger' + (open ? ' on' : '')} onClick={() => setOpen(o => !o)}>
-        {current?.displayName || 'Model'}
-        {chips.length
-          ? chips.map((c, i) => <span key={c + i} className="ext ext-effort">{t(c)}</span>)
-          : (extended && current?.hasReasoning && <span className="ext">{t("Extended")}</span>)}
+        <span className="mt-label">
+          {current?.displayName || 'Model'}
+          {chips.length
+            ? chips.map((c, i) => <span key={c + i} className="ext">{t(c)}</span>)
+            : (extended && current?.hasReasoning && <span className="ext">{t("Extended")}</span>)}
+        </span>
         <ChevDown style={{ width: 12, height: 12 }} />
       </button>
       {open && <div className="model-scrim" onClick={() => setOpen(false)} />}
@@ -375,7 +540,8 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
             <>
               <hr />
               {shownKwargs.map(d => (
-                <KwargControl key={d.id} def={d} value={kwActive[d.id]} isAdmin={isAdmin} onSet={setKwarg} />
+                <KwargControl key={d.id} def={d} value={kwActive[d.id]} isAdmin={isAdmin} onSet={setKwarg}
+                  gated={!!(d.showIf && d.showIf.id && shownIds.has(d.showIf.id))} />
               ))}
             </>
           ) : current?.hasReasoning ? (
@@ -386,7 +552,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
                   <div className="mo-name">{t("Extended")}</div>
                   <div className="mo-desc">{t("Always uses deep reasoning")}</div>
                 </div>
-                <div className={'switch' + (extended ? ' on' : '')} />
+                <Switch on={extended} label={t("Extended")} onToggle={onToggleExtended} />
               </div>
             </>
           ) : null}
@@ -398,7 +564,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
                   <div className="mo-name">{t("Background in chat")}</div>
                   <div className="mo-desc">{t("Keep this model's backdrop during conversations")}</div>
                 </div>
-                <div className={'switch' + (bgInChat ? ' on' : '')} />
+                <Switch on={bgInChat} label={t("Background in chat")} onToggle={onToggleBgInChat} />
               </div>
             </>
           )}
