@@ -65,7 +65,7 @@ client/public/
 
 Key `server/lib/` modules: `appconfig`, `audit`, `origin` (same-origin guard), `budget`, `convo` (conversation assembly), `history`, `memory`, `models`, `prompts`, `release` (Settings → Version content), `sandboxguard` (path + command screening), `purge`, `queue`, `safety`, `spaces`, `tree` (message branching), `llamacpp`, `ctxwindow` (prompt fitting), `kwargs`, `router`, `toolstats`, `uploads`, `egress`, `localonly`.
 
-Key `client/src/lib/` modules: `keybinds` + `keyboard` (shortcut model and listener), `threadscroll` + `genmirror` (see below), `submenu`, `focus`, `anchor` (portaled menu placement), `mathjs`, `hljs`, `reveal`, `reasoning`, `threadmeta`, `artifacts`, `drafts`, `attachments`, `dictation`, `palettes`, `status`.
+Key `client/src/lib/` modules: `appversion` + `channel` (version parsing and its channel wording), `keybinds` + `keyboard` (shortcut model and listener), `threadscroll` + `genmirror` (see below), `submenu`, `focus`, `anchor` (portaled menu placement), `mathjs`, `hljs`, `reveal`, `reasoning`, `threadmeta`, `artifacts`, `drafts`, `attachments`, `dictation`, `palettes`, `status`.
 
 **Dependency direction is routes → lib.** `lib/ws/` must never import from `routes/`.
 
@@ -161,7 +161,7 @@ Step-by-step commands live in [RELEASING.md](RELEASING.md); this section is the 
 
 Two branches: **`dev`** is where work lands, **`stable`** is what is released. Channels live in the version string, not in branch names.
 
-**A tag is the version string exactly** — `27.2.0-beta.3`, no `v` prefix. `.npmrc` sets `tag-version-prefix=` so `npm version` agrees, and both release workflows match the bare form.
+**A tag is the version string exactly** — `27.2.0-beta.3`, no `v` prefix. `.npmrc` sets `tag-version-prefix=` so `npm version` agrees, and both release workflows match the bare form. The release *title* is the tag verbatim too, so one string identifies a build in git, on the releases page, in `package.json` and in Settings → Version. `tag-guard.yml` fires on a `v*` tag and fails with instructions, because a prefixed tag matches neither release workflow and would otherwise fail silently. Client-side, `lib/appversion.js` drops a stray `v` on the way in and treats the prerelease tail as free-form, so a channel that is not `beta` still renders as words.
 
 `dev` carries a prerelease tail (`27.2.0-beta.3`) and tagging it publishes a GitHub pre-release. Dropping the tail and merging to `stable` is what makes something a release — tag `27.2.0` and `release.yml` marks it latest. The last commit before a release PR is the bump to the final version, and the first commit after merging opens the next cycle (`27.3.0-beta.1`), so `dev` is never equal to `stable`.
 

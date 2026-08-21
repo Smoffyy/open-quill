@@ -12,6 +12,8 @@ import { createPortal } from 'react-dom';
 import { SetRow, SwitchRow, SegSlide, SelectRow, useSelectMenu } from './settingsui.jsx';
 import { legacyRevealStyle, resolveReveal, revealSpeedMs } from '../lib/reveal.js';
 import { BRAND_ICON } from '../lib/brand.js';
+import { parseVersion } from '../lib/appversion.js';
+import { channelLabel } from '../lib/channel.js';
 
 const NAV_GROUPS = [
   { label: tk('Account'), items: [
@@ -201,29 +203,6 @@ function AccentSelect({ value, onPick }) {
         </div>, document.body)}
     </div>
   );
-}
-
-function parseVersion(v) {
-  const s = String(v || '').trim();
-  if (!s) return null;
-  const [base, ...restArr] = s.split('-');
-  const rest = restArr.join('-');
-  let channel = '', build = '';
-  if (rest) {
-    const mm = rest.match(/^([a-z]+)[.\-_]?(\d+)?$/i);
-    if (mm) { channel = mm[1]; build = mm[2] || ''; }
-    else channel = rest;
-  }
-  const year = (base.match(/^(\d{4})/) || [])[1] || '';
-  return { full: s, base, channel, build, year };
-}
-
-const CHANNEL_LABELS = { __proto__: null, rc: tk('Release candidate'), beta: tk('Beta'), alpha: tk('Alpha'), dev: tk('Development') };
-
-function channelLabel(channel) {
-  if (!channel) return '';
-  const known = CHANNEL_LABELS[channel.toLowerCase()];
-  return known ? t(known) : channel[0].toUpperCase() + channel.slice(1);
 }
 
 // The server hands back a plain YYYY-MM-DD. Splitting it by hand rather than passing it to

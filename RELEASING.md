@@ -58,7 +58,7 @@ git push --follow-tags
 2. commits them, with the version as the commit message
 3. creates the annotated tag `27.1.0-beta.3`
 
-`--follow-tags` pushes the commit and the tag together. `prerelease.yml` then builds a zip and opens a **draft** pre-release named `27.1.0 Beta 3`. It stays invisible until a maintainer publishes it from the Releases page.
+`--follow-tags` pushes the commit and the tag together. `prerelease.yml` then builds a zip and opens a **draft** pre-release named `27.1.0-beta.3`, the tag verbatim. It stays invisible until a maintainer publishes it from the Releases page.
 
 > Pushing without `--follow-tags` lands the commit but not the tag, so no release appears. `git push --tags` fixes it.
 
@@ -147,6 +147,7 @@ Editing these against a running server needs a page refresh, not a restart.
 
 | Message | What happened | Fix |
 | --- | --- | --- |
+| `Tag v27.1.0-beta.3 has a "v" prefix` | The tag was created by hand with a `v`. Neither release workflow matches it, so nothing was published. | Follow the commands `tag-guard.yml` prints: delete the tag locally and on the remote, re-tag bare, push. |
 | `Tag 27.1.0-beta.3 does not match package.json version 27.1.0-beta.2` | A tag was created by hand without bumping, or the version was bumped without re-tagging. | Delete the tag, bump with `npm version`, re-tag. |
 | `points at a commit that is not on stable` | A release was tagged on `dev`. | Merge into `stable` first, then tag from there. |
 | `no release folder for 27.2.0` | The version was bumped but `release/<line>/` does not exist. | Create the folder, or the version panel renders blank. |

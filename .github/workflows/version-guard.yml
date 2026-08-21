@@ -4,6 +4,13 @@ on:
   pull_request:
     branches: [stable]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: version-guard-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   version-bumped:
     runs-on: ubuntu-latest

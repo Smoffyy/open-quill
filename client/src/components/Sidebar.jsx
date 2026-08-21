@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Plus, Chat, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, FileText, Star, Download, Chevron, Users, Box, Compact, Stop, Sliders, Check } from './icons.jsx';
 import { t } from '../i18n.jsx';
 import { resolveKeybinds, comboKeys } from '../lib/keybinds.js';
+import { displayVersion } from '../lib/channel.js';
 
 function ProfileMenu({ user, version, anchorRef, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, onClose }) {
   const ref = useRef(null);
@@ -28,7 +29,7 @@ function ProfileMenu({ user, version, anchorRef, onSettings, onAdmin, onPlaygrou
       <button onClick={onLicense}><FileText /> {t('Licensing')}</button>
       <hr />
       <button onClick={onLogout}><Logout /> {t('Log out')}</button>
-      {version && <div className="pm-version">open-quill v{version}</div>}
+      {version && <div className="pm-version">Open Quill {displayVersion(version)}</div>}
     </div>, document.body
   );
 }

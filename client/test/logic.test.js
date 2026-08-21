@@ -1041,3 +1041,59 @@ test('revealSpeedMs clamps anything unreadable to the default interval', async (
   assert.equal(revealSpeedMs(-50), 0);
   assert.equal(revealSpeedMs(9999), 100);
 });
+
+
+// --- version display ------------------------------------------------------
+// The version string is the npm version verbatim: it is also the git tag and the
+// GitHub release title, so nothing here may add or assume a "v" prefix. The
+// channel is whatever the release was named, not a fixed vocabulary.
+
+test('parseVersion splits a release and a prerelease tail', async () => {
+  const { parseVersion } = await import('../src/lib/appversion.js');
+  assert.deepEqual(parseVersion('27.1.0'), { full: '27.1.0', base: '27.1.0', channel: '', build: '', year: '' });
+  const b = parseVersion('27.1.0-beta.3');
+  assert.equal(b.base, '27.1.0');
+  assert.equal(b.channel, 'beta');
+  assert.equal(b.build, '3');
+});
+
+test('parseVersion drops a stray v so an old-style tag still reads consistently', async () => {
+  const { parseVersion } = await import('../src/lib/appversion.js');
+  assert.equal(parseVersion('v27.1.0-beta.2').full, '27.1.0-beta.2');
+  assert.equal(parseVersion('v27.0.0').base, '27.0.0');
+});
+
+test('parseVersion accepts a channel nobody has thought of yet', async () => {
+  const { parseVersion } = await import('../src/lib/appversion.js');
+  for (const [s, channel, build] of [
+    ['2027.0.0-cascade.2', 'cascade', '2'],
+    ['27.2.0-developer.1', 'developer', '1'],
+    ['27.2.0-rc1', 'rc', '1'],
+    ['27.2.0-preview', 'preview', ''],
+    ['27.2.0-beta.3.1', 'beta', '3.1'],
+  ]) {
+    const p = parseVersion(s);
+    assert.equal(p.channel, channel, s);
+    assert.equal(p.build, build, s);
+  }
+});
+
+test('parseVersion ignores build metadata and refuses nothing at all', async () => {
+  const { parseVersion } = await import('../src/lib/appversion.js');
+  assert.equal(parseVersion('27.1.0+sha.abc').base, '27.1.0');
+  for (const v of [null, undefined, '', '   ']) assert.equal(parseVersion(v), null, String(v));
+});
+
+test('formatVersion reads as words, and leaves a plain release alone', async () => {
+  const { formatVersion } = await import('../src/lib/appversion.js');
+  assert.equal(formatVersion('27.1.0-beta.3'), '27.1.0 Beta 3');
+  assert.equal(formatVersion('27.1.0'), '27.1.0');
+  assert.equal(formatVersion('2027.0.0-cascade.2'), '2027.0.0 Cascade 2');
+  assert.equal(formatVersion('27.2.0-preview'), '27.2.0 Preview');
+  assert.equal(formatVersion(''), '');
+});
+
+test('formatVersion takes the channel wording from its caller', async () => {
+  const { formatVersion } = await import('../src/lib/appversion.js');
+  assert.equal(formatVersion('27.2.0-rc.1', () => 'Release candidate'), '27.2.0 Release candidate 1');
+});

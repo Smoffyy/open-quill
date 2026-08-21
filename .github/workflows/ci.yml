@@ -6,6 +6,15 @@ on:
   pull_request:
     branches: [dev, stable]
 
+permissions:
+  contents: read
+
+# A second push to the same branch or PR makes the run in flight pointless.
+# Branch pushes are left to finish so the history of dev stays complete.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build-and-smoke:
     runs-on: ubuntu-latest

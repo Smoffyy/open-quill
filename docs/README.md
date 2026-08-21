@@ -1,6 +1,6 @@
 # Open Quill Documentation
 
-This is the user guide for Open Quill, covering everything the interface can do. It's written for people using the app, not people building it. If you're looking for build/deploy instructions, environment variables, or database management, see the [root README](../README.md). These docs cover what you can do once the app is running.
+This is the user guide for Open Quill, covering everything the interface can do. It's written for people using the app, not people building it. If you're looking for build and deploy instructions or environment variables, see the [root README](../README.md). These docs cover what you can do once the app is running.
 
 ## Guides
 
@@ -18,6 +18,7 @@ This is the user guide for Open Quill, covering everything the interface can do.
 | [Keyboard Shortcuts](keyboard-shortcuts.md) | The full default keymap and how to rebind it |
 | [Privacy & Security](privacy-security.md) | Incognito chats, 2FA, sessions, account deletion, local-only networking |
 | [Admin Guide](admin-guide.md) | Every tab in the Admin Panel, for whoever administers the workspace |
+| [Databases](databases.md) | Running multiple isolated databases, switching between them, encryption |
 
 ## Conventions used in these docs
 
