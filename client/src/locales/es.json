@@ -1253,7 +1253,6 @@
   "Something went wrong.": "Algo salió mal.",
   "Sort by": "Ordenar por",
   "Sort models": "Ordenar modelos",
-  "Source Serif (default)": "Source Serif (predeterminada)",
   "Space name": "Nombre del espacio",
   "Space settings": "Ajustes del espacio",
   "Spaces": "Espacios",
@@ -1335,7 +1334,6 @@
   "The command is spawned by this server and speaks MCP over stdio.": "El comando lo lanza este servidor y habla MCP por stdio.",
   "The connection this model runs through. Add or edit connections in the Providers section.": "La conexión por la que funciona este modelo. Añade o edita conexiones en la sección Proveedores.",
   "The crop stays vector, only the viewBox changes, so the logo keeps its sharp edges at any size.": "El recorte sigue siendo vectorial: solo cambia el viewBox, así que el logo se mantiene nítido a cualquier tamaño.",
-  "The display font used for headings, greetings, and assistant text across the entire UI. Open Sans gives a cleaner, sans-serif look everywhere.": "La fuente usada para títulos, saludos y texto del asistente en toda la UI. Open Sans da un aspecto más limpio, sans-serif, en todas partes.",
   "The exact key the server expects. Leave blank and nothing is sent.": "La clave exacta que espera el servidor. Si lo dejas vacío no se envía nada.",
   "The exact prompt this conversation would send right now, in order, with what each part costs.": "El prompt exacto que esta conversación enviaría ahora mismo, en orden, con lo que cuesta cada parte.",
   "The first rule that matches wins. Anything that matches nothing goes to the fallback below.": "Gana la primera regla que coincida. Lo que no coincida con nada va al modelo de reserva de abajo.",
@@ -1756,5 +1754,8 @@
   "Continue": "Continuar",
   "Pick up where this reply stopped": "Retomar donde se detuvo esta respuesta",
   "Carry on from exactly where your previous reply stopped. Do not repeat or summarise what you already did — it is already saved. If work is still unfinished, make the tool calls to finish it now.": "Retoma exactamente donde se detuvo tu respuesta anterior. No repitas ni resumas lo que ya hiciste: ya está guardado. Si queda trabajo pendiente, haz ahora las llamadas a herramientas para terminarlo.",
-  "About {name}": "Acerca de {name}"
+  "About {name}": "Acerca de {name}",
+  "Newsreader (default)": "Newsreader (predeterminada)",
+  "Source Serif": "Source Serif",
+  "The display font used for headings, greetings, and assistant text across the entire UI. Newsreader is the closest open match to the Anthropic serif. Open Sans gives a cleaner, sans-serif look everywhere.": "La fuente usada en titulares, saludos y el texto del asistente en toda la interfaz. Newsreader es la alternativa libre más parecida a la serif de Anthropic. Open Sans ofrece un aspecto más limpio, sin serifas, en todas partes."
 }

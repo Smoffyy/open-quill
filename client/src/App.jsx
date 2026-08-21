@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { api } from './api.js';
 import { t, tk } from './i18n.jsx';
-import { applyPrefs, prefersDark } from './prefs.js';
+import { applyPrefs, prefersDark, appFontId } from './prefs.js';
 import { kwargValuesArr, defaultValueOf } from './kwargs.js';
 import Login from './components/Login.jsx';
 import Sidebar from './components/Sidebar.jsx';
@@ -388,7 +388,7 @@ export default function App() {
         const preset = c.uiPreset === 'openai' ? 'openai' : 'anthropic';
         document.documentElement.setAttribute('data-preset', preset);
         try { localStorage.setItem('oq-preset', preset); } catch {}
-        document.documentElement.setAttribute('data-font', c.appFont === 'sans' ? 'sans' : 'serif');
+        document.documentElement.setAttribute('data-font', appFontId(c.appFont));
         applyPrefs(null, preset);
       }).catch(() => {});
     });
@@ -520,7 +520,7 @@ export default function App() {
     document.documentElement.setAttribute('data-preset', preset);
     try { localStorage.setItem('oq-preset', preset); } catch {}
     applyPrefs(userRef.current?.prefs, preset);
-    document.documentElement.setAttribute('data-font', c.appFont === 'sans' ? 'sans' : 'serif');
+    document.documentElement.setAttribute('data-font', appFontId(c.appFont));
     let link = document.querySelector('link[rel="icon"]');
     if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
     link.href = c.appIcon || BRAND_ICON;

@@ -43,10 +43,27 @@ Licenses listed for bundled dependencies were read from the installed packages. 
 The direct dependencies above pull in a wider tree: roughly 136 packages under `server/` and 144 under `client/`. Most of the client total is the [unified](https://unifiedjs.com) collective - remark, rehype, mdast, hast, micromark and friends - which powers markdown parsing. Every one of those maintainers deserves the same thanks as the names listed above.
 
 ## Fonts
-Both families are vendored into `client/public/fonts` as woff2 builds packaged by [Fontsource](https://fontsource.org), so no font is ever fetched from a third party at runtime.
+All three families are vendored into `client/public/fonts` as woff2, so no font is ever fetched from a third party at runtime.
 
+- [Newsreader](https://github.com/productiontype/Newsreader) - SIL Open Font License 1.1 - Production Type - the default serif, and the closest open match to the serif Claude ships
 - [Source Serif 4](https://github.com/adobe-fonts/source-serif) - SIL Open Font License 1.1 - Adobe
 - [Open Sans](https://github.com/googlefonts/opensans) - SIL Open Font License 1.1 - Steve Matteson and the Open Sans Project Authors
+
+Source Serif 4 and Open Sans are the builds packaged by [Fontsource](https://fontsource.org). Newsreader is built from the Google Fonts latin subset and is a **Modified Version** under the OFL, which the license permits and which Newsreader allows without a rename, carrying no Reserved Font Name. Three changes:
+
+- the `opsz` axis is instanced out at 72, leaving `wght` 200-800, so optical sizing cannot drift with font size and the metrics stay fixed
+- `OS/2.sxHeight` and `sCapHeight` are corrected to that instance's real outline values, which the instancer leaves pointing at the `opsz` default
+- the em and en dashes are redrawn at the family's own hyphen thickness; Newsreader otherwise draws them as hairlines around half that weight
+
+`client/src/styles/fonts.css` then applies `size-adjust` and ascent/descent overrides on top. Rebuilding the font means redoing that pipeline - a stock Google Fonts download will not match.
+
+Copyright notices, as carried in the font files themselves:
+
+- Copyright 2020 The Newsreader Project Authors (http://github.com/productiontype/Newsreader)
+- © 2014 - 2021 Adobe Systems Incorporated (http://www.adobe.com/), with Reserved Font Name "Source"
+- Copyright 2020 The Open Sans Project Authors (https://github.com/googlefonts/opensans)
+
+All three are licensed under the [SIL Open Font License 1.1](http://scripts.sil.org/OFL); the full text ships with each upstream project linked above.
 
 ## Inference engines and local services
 open-quill does not bundle these, but it is built to talk to them and would not be much use without them. Licenses are deliberately omitted here: check each project directly, since several differ from the bundled dependencies above.

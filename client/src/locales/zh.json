@@ -1253,7 +1253,6 @@
   "Something went wrong.": "出了点问题。",
   "Sort by": "排序方式",
   "Sort models": "排序模型",
-  "Source Serif (default)": "Source Serif（默认）",
   "Space name": "空间名称",
   "Space settings": "空间设置",
   "Spaces": "空间",
@@ -1335,7 +1334,6 @@
   "The command is spawned by this server and speaks MCP over stdio.": "该命令由此服务器启动，并通过 stdio 使用 MCP 通信。",
   "The connection this model runs through. Add or edit connections in the Providers section.": "此模型所使用的连接。可在「服务商」中添加或编辑连接。",
   "The crop stays vector, only the viewBox changes, so the logo keeps its sharp edges at any size.": "裁剪保持矢量格式，只改变 viewBox，因此图标在任何尺寸下都能保持清晰锐利。",
-  "The display font used for headings, greetings, and assistant text across the entire UI. Open Sans gives a cleaner, sans-serif look everywhere.": "整个界面中标题、问候语和助手文本所用的显示字体。Open Sans 会让各处呈现更简洁的无衬线风格。",
   "The exact key the server expects. Leave blank and nothing is sent.": "服务器所需的确切键名。留空则不发送任何内容。",
   "The exact prompt this conversation would send right now, in order, with what each part costs.": "此对话此刻会发送的完整提示词，按顺序列出，并标明每一部分的开销。",
   "The first rule that matches wins. Anything that matches nothing goes to the fallback below.": "第一条匹配的规则生效。任何未匹配的内容都会交给下方的兜底模型。",
@@ -1756,5 +1754,8 @@
   "Continue": "继续",
   "Pick up where this reply stopped": "从这条回复停下的地方继续",
   "Carry on from exactly where your previous reply stopped. Do not repeat or summarise what you already did — it is already saved. If work is still unfinished, make the tool calls to finish it now.": "从你上一条回复停下的地方继续。不要重复或总结你已经做过的事——那些已经保存了。如果还有未完成的工作，现在就发起工具调用来完成它。",
-  "About {name}": "关于{name}"
+  "About {name}": "关于{name}",
+  "Newsreader (default)": "Newsreader（默认）",
+  "Source Serif": "Source Serif",
+  "The display font used for headings, greetings, and assistant text across the entire UI. Newsreader is the closest open match to the Anthropic serif. Open Sans gives a cleaner, sans-serif look everywhere.": "整个界面中标题、问候语和助手文本所用的字体。Newsreader 是最接近 Anthropic 衬线字体的开源替代。Open Sans 则让整体外观更简洁、无衬线。"
 }

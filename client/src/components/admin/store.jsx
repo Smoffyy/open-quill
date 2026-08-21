@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef, useCallback } f
 import { api } from '../../api.js';
 import { SECTIONS, LEGACY_SECTION_IDS } from './nav.jsx';
 import { t } from '../../i18n.jsx';
+import { appFontId } from '../../prefs.js';
 
 const AdminCtx = createContext(null);
 
@@ -17,7 +18,7 @@ export const DEFAULT_SETTINGS = {
   memoryEnabled: false, memoryPrompt: '', chatSearchEnabled: false
 };
 
-export const DEFAULT_CFG = { appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [], appFont: 'serif', uiPreset: 'anthropic', modelDocs: true, allowSignups: true, localOnly: true, egressLocalOnly: true, egressAllowWebSearch: true, egressAllowlist: [] };
+export const DEFAULT_CFG = { appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [], appFont: 'newsreader', uiPreset: 'anthropic', modelDocs: true, allowSignups: true, localOnly: true, egressLocalOnly: true, egressAllowWebSearch: true, egressAllowlist: [] };
 
 function initialSection() {
   try {
@@ -110,7 +111,7 @@ export function AdminProvider({ user, onClose, children, modelId = null }) {
         appName: c.appName || '', disclaimer: c.disclaimer || '',
         greetings: c.greetings?.length ? c.greetings : [''], appIcon: c.appIcon || '',
         quickPrompts: Array.isArray(c.quickPrompts) ? c.quickPrompts : [],
-        appFont: c.appFont === 'sans' ? 'sans' : 'serif',
+        appFont: appFontId(c.appFont),
         uiPreset: c.uiPreset === 'openai' ? 'openai' : 'anthropic',
         modelDocs: c.modelDocs !== false
       });
