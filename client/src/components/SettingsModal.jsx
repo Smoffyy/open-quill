@@ -399,10 +399,9 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
               <h2>{t("General")}</h2>
               <div className="hint">{t("Your account basics.")}</div>
               <div className="me-section-h">{t("Profile")}</div>
-              <div className="field">
-                <label>{t("What should we call you?")}</label>
-                <input value={name} onChange={(e) => changeName(e.target.value)} />
-              </div>
+              <SetRow label={t("What should we call you?")}>
+                <input className="set-input" value={name} onChange={(e) => changeName(e.target.value)} />
+              </SetRow>
               <div className="me-section-h">{t("Preferences")}</div>
               {/* This was the one native <select> left in Settings. The modal opens on a
                   transform animation, and browsers composite an OS-drawn select separately,

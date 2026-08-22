@@ -34,7 +34,7 @@ export const Trash = (p) => <I {...p}><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1
 export const Dots = (p) => <svg viewBox="0 0 24 24" fill="currentColor" {...p}><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>;
 export const DotsV = (p) => <svg viewBox="0 0 24 24" fill="currentColor" {...p}><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>;
 export const Cube = (p) => <I {...p}><path d="m12 2 9 5v10l-9 5-9-5V7z M12 12l9-5M12 12v10M12 12 3 7" /></I>;
-export const Clock = (p) => <I {...p}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></I>;
+export const Clock = (p) => <I {...p}><circle cx="12" cy="12" r="9"/><path className="ic-hand-h" d="M12 7.6V12"/><path className="ic-hand-m" d="M12 12l3.2 2.1"/></I>;
 export const Sliders = (p) => <I {...p}><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></I>;
 export const Keyboard = (p) => <I {...p}><rect x="2" y="5" width="20" height="14" rx="2.5" /><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M10 13h.01M14 13h.01M18 13h.01M8 16.5h8" /></I>;
 export const Heart = (p) => <I {...p}><path d="M12 21s-6.7-4.3-9.3-8.5C1 9.6 2.4 6 5.8 6 8 6 9 7.2 12 9.5 15 7.2 16 6 18.2 6c3.4 0 4.8 3.6 3.1 6.5C18.7 16.7 12 21 12 21z"/></I>;
@@ -79,11 +79,11 @@ export const Steer = (p) => <I {...p}><path d="M12 3v6M12 15v6M3 12h6M15 12h6"/>
 export const Eye = (p) => <I {...p}><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z" /><circle cx="12" cy="12" r="2.6" /></I>;
 export const EyeOff = (p) => <I {...p}><path d="M3 3l18 18M10 5.9A9.9 9.9 0 0 1 12 5.5c6.5 0 10 6.5 10 6.5a17 17 0 0 1-3.2 3.9M6.4 6.9A16 16 0 0 0 2 12s3.5 6.5 10 6.5a10 10 0 0 0 3.4-.6" /><path d="M9.9 10.2a2.6 2.6 0 0 0 3.6 3.7" /></I>;
 export const SortIcon = (p) => <I {...p}><path d="M4 7h11M4 12h7M4 17h4M17 15l3 3 3-3M20 18V8" /></I>;
-export const Home = (p) => <I {...p}><path d="M4 10.4 12 4l8 6.4V19a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 19z"/><path d="M9.6 20.6v-6.2h4.8v6.2"/></I>;
-export const CodeTag = (p) => <I {...p}><path d="M8.4 7.6 3.8 12l4.6 4.4M15.6 7.6 20.2 12l-4.6 4.4M13.7 5.4l-3.4 13.2"/></I>;
-export const Artifact = (p) => <I {...p}><circle cx="7.4" cy="6.6" r="3"/><circle cx="17" cy="12" r="3"/><circle cx="7.4" cy="17.4" r="3"/><path d="M10 8.1l4.4 2.5M10 15.9l4.4-2.5"/></I>;
-export const Briefcase = (p) => <I {...p}><rect x="3" y="7.4" width="18" height="12.6" rx="2.2"/><path d="M8.8 7.4V5.6A1.6 1.6 0 0 1 10.4 4h3.2a1.6 1.6 0 0 1 1.6 1.6v1.8"/><path d="M3 12.4h18"/></I>;
-export const Palette = (p) => <I {...p}><path d="M12 3.2a8.8 8.8 0 1 0 0 17.6c1.2 0 1.9-.8 1.9-1.7 0-.5-.2-.9-.5-1.2a1.6 1.6 0 0 1 1.2-2.7h1.9a4.3 4.3 0 0 0 4.3-4.3C20.8 6.5 16.9 3.2 12 3.2z"/><circle cx="7.6" cy="11" r="1.1" fill="currentColor" stroke="none"/><circle cx="11" cy="7.4" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.6" cy="8.6" r="1.1" fill="currentColor" stroke="none"/></I>;
+export const Home = (p) => <I {...p}><path className="ic-roof" d="M4 10.4 12 4l8 6.4"/><path d="M5.4 9.3V19a1.6 1.6 0 0 0 1.6 1.6h10a1.6 1.6 0 0 0 1.6-1.6V9.3"/><path className="ic-door" d="M9.6 20.6v-6.2h4.8v6.2"/></I>;
+export const CodeTag = (p) => <I {...p}><path className="ic-b1" d="M8.4 7.6 3.8 12l4.6 4.4"/><path className="ic-b2" d="M15.6 7.6 20.2 12l-4.6 4.4"/><path d="M13.7 5.4l-3.4 13.2"/></I>;
+export const Artifact = (p) => <I {...p}><circle className="ic-a1" cx="7.6" cy="15.6" r="3.4"/><path className="ic-a2" d="M6.8 10.4a4.6 4.6 0 0 1 7.4-3.6l-4.3 5.4z"/><rect className="ic-a3" x="13.4" y="11" width="7" height="9" rx="1.6"/></I>;
+export const Briefcase = (p) => <I {...p}><g className="ic-case"><rect x="3" y="7.4" width="18" height="12.6" rx="2.4"/><path d="M7.6 13.2h3.2M13.2 13.2h3.2"/></g><path className="ic-handle" d="M8.8 7.4V5.6A1.6 1.6 0 0 1 10.4 4h3.2a1.6 1.6 0 0 1 1.6 1.6v1.8"/></I>;
+export const Palette = (p) => <I {...p}><path className="ic-pal" d="M12 3.2a8.8 8.8 0 1 0 0 17.6c1.2 0 1.9-.8 1.9-1.7 0-.5-.2-.9-.5-1.2a1.6 1.6 0 0 1 1.2-2.7h1.9a4.3 4.3 0 0 0 4.3-4.3C20.8 6.5 16.9 3.2 12 3.2z"/><circle className="ic-dot1" cx="7.6" cy="11" r="1.1" fill="currentColor" stroke="none"/><circle className="ic-dot2" cx="11" cy="7.4" r="1.1" fill="currentColor" stroke="none"/><circle className="ic-dot3" cx="15.6" cy="8.6" r="1.1" fill="currentColor" stroke="none"/></I>;
 export const AppsDownload = (p) => <I {...p}><path d="M12 4v9.4m0 0 3.2-3.2M12 13.4 8.8 10.2"/><path d="M4.6 16.2v1.8A2 2 0 0 0 6.6 20h10.8a2 2 0 0 0 2-2v-1.8"/></I>;
 export const Screenshot = (p) => <I {...p}><rect x="3" y="5.6" width="18" height="13.4" rx="2.2"/><circle cx="12" cy="12.3" r="3.2"/></I>;
 export const Paperclip = (p) => <I {...p}><path d="M17.6 10.4 11 17a3.4 3.4 0 0 1-4.8-4.8l7.4-7.4a2.3 2.3 0 0 1 3.2 3.2l-7.4 7.4a1.1 1.1 0 0 1-1.6-1.6l6.6-6.6"/></I>;
