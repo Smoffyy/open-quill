@@ -1,11 +1,117 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Chat, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, FileText, Star, Download, Chevron, Users, Box, Compact, Stop, Sliders, Check } from './icons.jsx';
-import { t } from '../i18n.jsx';
+import Segmented from './Segmented.jsx';
+import Tip from './Tip.jsx';
+import { Plus, Chat, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, FileText, Star, Download, Chevron, ChevDown, Users, Box, Compact, Stop, Sliders, Check, Home, CodeTag, Artifact, Briefcase, Palette, AppsDownload, Clock, ArrowOut, QuickTask } from './icons.jsx';
+import { t, tk } from '../i18n.jsx';
 import { resolveKeybinds, comboKeys } from '../lib/keybinds.js';
 import { displayVersion } from '../lib/channel.js';
 
-function ProfileMenu({ user, version, anchorRef, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, onClose }) {
+const SIDE_MIN = 232;
+const SIDE_MAX = 440;
+const SIDE_KEY = 'oq-sidebar-w';
+
+export function storedSidebarWidth() {
+  try {
+    const n = parseInt(localStorage.getItem(SIDE_KEY), 10);
+    if (Number.isFinite(n)) return Math.min(SIDE_MAX, Math.max(SIDE_MIN, n));
+  } catch { }
+  return null;
+}
+
+function SideResize({ targetRef, onCommit }) {
+  const drag = useRef(null);
+
+  useEffect(() => {
+    const move = (e) => {
+      const d = drag.current;
+      const el = targetRef.current;
+      if (!d || !el) return;
+      el.style.width = Math.min(SIDE_MAX, Math.max(SIDE_MIN, d.w + (e.clientX - d.x))) + 'px';
+    };
+    const up = () => {
+      const el = targetRef.current;
+      if (!drag.current || !el) return;
+      drag.current = null;
+      el.style.transition = '';
+      document.body.classList.remove('resizing-x');
+      const w = Math.round(el.getBoundingClientRect().width);
+      try { localStorage.setItem(SIDE_KEY, String(w)); } catch { }
+      if (onCommit) onCommit(w);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+  }, [targetRef, onCommit]);
+
+  const start = (e) => {
+    const el = targetRef.current;
+    if (!el || e.button !== 0) return;
+    e.preventDefault();
+    drag.current = { x: e.clientX, w: el.getBoundingClientRect().width };
+    el.style.transition = 'none';
+    document.body.classList.add('resizing-x');
+  };
+
+  const setWidth = (w) => {
+    const el = targetRef.current;
+    if (!el) return;
+    if (w == null) {
+      el.style.width = '';
+      try { localStorage.removeItem(SIDE_KEY); } catch { }
+    } else {
+      el.style.width = w + 'px';
+      try { localStorage.setItem(SIDE_KEY, String(w)); } catch { }
+    }
+    if (onCommit) onCommit(w);
+  };
+
+  const nudge = (e) => {
+    const el = targetRef.current;
+    if (!el || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+    e.preventDefault();
+    const step = e.shiftKey ? 32 : 8;
+    setWidth(Math.min(SIDE_MAX, Math.max(SIDE_MIN,
+      Math.round(el.getBoundingClientRect().width) + (e.key === 'ArrowRight' ? step : -step))));
+  };
+
+  return (
+    <div className="side-resize" role="separator" aria-orientation="vertical" aria-label={t('Resize sidebar')}
+      tabIndex={0} onPointerDown={start} onKeyDown={nudge} onDoubleClick={() => setWidth(null)}>
+      <span className="side-resize-grip" aria-hidden="true" />
+    </div>
+  );
+}
+
+const SIDE_TABS = [
+  { id: 'home', label: tk('Home'), Icon: Home },
+  { id: 'code', label: tk('Code'), Icon: CodeTag }
+];
+
+const FOLD_KEY = 'oq-folded-sections';
+
+function readFolded() {
+  try { return new Set(JSON.parse(localStorage.getItem(FOLD_KEY) || '[]')); } catch { return new Set(); }
+}
+
+function SectionHead({ id, label, folded, onToggle, children }) {
+  return (
+    <div className="section-label recents-label has-head">
+      <button className="sec-head" aria-expanded={!folded} onClick={() => onToggle(id)}>
+        <span className="sec-head-label">{label}</span>
+        <ChevDown className="sec-head-chev" aria-hidden="true" />
+      </button>
+      <span className="sec-head-actions">{children}</span>
+    </div>
+  );
+}
+
+function ProfileMenu({ user, version, anchorRef, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, onChats, onSpaces, spacesPending = 0, onClose }) {
   const ref = useRef(null);
   const [pos, setPos] = useState(null);
   useLayoutEffect(() => {
@@ -21,6 +127,12 @@ function ProfileMenu({ user, version, anchorRef, onSettings, onAdmin, onPlaygrou
   return createPortal(
     <div className="popover" ref={ref} role="menu" aria-label={t('Profile menu')}
       style={pos ? { position: 'fixed', left: pos.left, bottom: pos.bottom, width: pos.width, right: 'auto' } : { visibility: 'hidden' }}>
+      <button onClick={onChats}><Chat /> {t('Chats')}</button>
+      <button onClick={onSpaces}>
+        <Users /> {t('Spaces')}
+        {spacesPending > 0 && <span className="pm-count">{spacesPending}</span>}
+      </button>
+      <hr />
       {user.isAdmin && <button onClick={onAdmin}><Shield /> {t('Admin Panel')}</button>}
       {user.isAdmin && <button onClick={onPlayground}><Flask /> {t('Playground')}</button>}
       <button onClick={onSettings}><Gear /> {t('Settings')}</button>
@@ -84,8 +196,11 @@ function ChatRow({ c, active, showTrash, projects = [], onMoveToProject, onOpen,
       onClick={(e) => { if (e.ctrlKey || e.metaKey) { openInTab(); return; } onOpen(c.id); }}
       onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); openInTab(); } }}
       onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}>
-      {busy && <span className="row-busy" role="img" aria-label={t('Still generating')} title={t('Still generating')} />}
-      {c.projectId && <Box className="row-project" style={{ width: 15 }} aria-label={t('In a project')} />}
+      <span className="row-ic">
+        {busy ? <span className="row-busy" role="img" aria-label={t('Still generating')} title={t('Still generating')} />
+          : c.projectId ? <Box className="row-project" style={{ width: 15 }} aria-label={t('In a project')} />
+          : <span className="row-dot" aria-hidden="true" />}
+      </span>
       <span className="title">{c.title}</span>
       {showTrash ? (
         <button className="row-ctrl shift-del" onClick={(e) => { e.stopPropagation(); onDelete(c.id); }} title={t("Delete chat")} aria-label={t("Delete chat")}><Trash style={{ width: 14 }} /></button>
@@ -139,21 +254,38 @@ function Sidebar({
   user, chats, onSearch, chatsLoaded = true, activeId, appName, onNew, onOpen, onDelete, onToggleStar,
   collapsed, onToggle, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview,
   onSpaces, spacesPending = 0, projects = [], onProjects, onOpenProject, onNewProject, onMoveToProject, mobileOpen = false, onMobileClose,
+  onArtifacts, onScheduled, onCustomize, onDesign, onApps, onTab, dest = null,
   busyChats = [], onStopChat
 }) {
   const busyIds = React.useMemo(() => new Set(busyChats), [busyChats]);
-  const newChatCombo = React.useMemo(() => {
-    const combo = resolveKeybinds(user?.prefs).newChat;
-    return combo ? comboKeys(combo).join('+') : '';
+  const combos = React.useMemo(() => {
+    const k = resolveKeybinds(user?.prefs);
+    const show = (id) => (k[id] ? comboKeys(k[id]).join('+') : '');
+    return { newChat: show('newChat'), sidebar: show('toggleSidebar'), search: show('searchChats') };
   }, [user?.prefs]);
+  const newChatCombo = combos.newChat;
+  const sidebarCombo = combos.sidebar;
+  const searchCombo = combos.search;
   const [menu, setMenu] = useState(false);
+  const [tab, setTabState] = useState('home');
+  const [codeMore, setCodeMore] = useState(false);
+  const setTab = (v) => { setTabState(v); if (onTab) onTab(v); };
   const [shiftHeld, setShiftHeld] = useState(false);
   const [hover, setHover] = useState(false);
   const chatsRef = useRef(null);
+  const sideRef = useRef(null);
+  const [width, setWidth] = useState(() => storedSidebarWidth());
   const [scrolled, setScrolled] = useState(false);
   const profileBtnRef = useRef(null);
   const [groupBy, setGroupBy] = useState(() => { try { return localStorage.getItem('oq-group-by') || 'date'; } catch { return 'date'; } });
   const [groupMenu, setGroupMenu] = useState(false);
+  const [folded, setFolded] = useState(readFolded);
+  const toggleFold = (id) => setFolded(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    try { localStorage.setItem(FOLD_KEY, JSON.stringify([...next])); } catch { }
+    return next;
+  });
   const groupRef = useRef(null);
   const pickGroup = (v) => { setGroupBy(v); setGroupMenu(false); try { localStorage.setItem('oq-group-by', v); } catch {} };
   useEffect(() => {
@@ -215,32 +347,44 @@ function Sidebar({
 
   return (
     <div className={'sidebar' + (collapsed ? ' collapsed' : '') + (mobileOpen ? ' mobile-open' : '')}
+      ref={sideRef} style={width && !collapsed ? { width } : undefined}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+      {!collapsed && <SideResize targetRef={sideRef} onCommit={setWidth} />}
       <div className="sidebar-head">
         <div className="brand">{appName || 'open-quill'}</div>
         <div className="sidebar-head-actions">
-          <button className="icon-btn search-btn" onClick={onSearch} title={t("Search chats (Ctrl+Shift+F)")}><Search style={{ width: 16 }} /></button>
-          <button className="icon-btn collapse-btn" onClick={onToggle} title={collapsed ? t('Expand sidebar') : t('Collapse sidebar')}><Panel style={{ width: 16 }} /></button>
+          <Tip label={collapsed ? t('Expand sidebar') : t('Collapse sidebar')} keys={sidebarCombo}>
+            <button className="icon-btn collapse-btn" onClick={onToggle}
+              aria-label={collapsed ? t('Expand sidebar') : t('Collapse sidebar')}><Panel style={{ width: 16 }} /></button>
+          </Tip>
+          <Tip label={t('Search')} keys={searchCombo}>
+            <button className="icon-btn search-btn" onClick={onSearch} aria-label={t('Search')}><Search style={{ width: 16 }} /></button>
+          </Tip>
           <button className="icon-btn mobile-close-btn" onClick={onMobileClose} title={t("Close menu")}><span style={{ fontSize: 20, lineHeight: 1 }}>✕</span></button>
         </div>
       </div>
+      {!collapsed && <Segmented className="side-tabs" value={tab} onChange={setTab} label={t('Sidebar sections')}
+        options={SIDE_TABS.map(o => ({ ...o, label: t(o.label) }))} />}
       <div className="nav">
-        <button className="nav-item new-chat" title={t("New chat")}
+        <div className="new-row">
+        <button className={'nav-item new-chat' + (!activeId && !dest ? ' on' : '')} title={t("New chat")}
+          aria-current={!activeId && !dest ? 'page' : undefined}
           onClick={(e) => { if (e.ctrlKey || e.metaKey) { window.open('/', '_blank', 'noopener'); return; } onNew(); }}
           onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); window.open('/', '_blank', 'noopener'); } }}
-          onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}><span className="new-chat-plus"><Plus /></span> <span className="nav-label">{t("New chat")}</span>
+          onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}><span className="nav-ic new-chat-plus"><Plus /></span> <span className="nav-label">{t("New chat")}</span>
           {newChatCombo && <span className="nav-shortcut">{newChatCombo}</span>}</button>
+        <button className="new-quick" title={t('Quick task')} aria-label={t('Quick task')}
+          onClick={(e) => { e.stopPropagation(); (onScheduled || onNew)(); }}><QuickTask /></button>
+        </div>
+        {tab === 'home' && <button className={'nav-item' + (dest === 'projects' ? ' on' : '')} title={t("Projects")} aria-current={dest === 'projects' ? 'page' : undefined} onClick={onProjects}><span className="nav-ic"><Box /></span> <span className="nav-label">{t("Projects")}</span></button>}
+        <button className={'nav-item' + (dest === 'artifacts' ? ' on' : '')} title={t("Artifacts")} aria-current={dest === 'artifacts' ? 'page' : undefined} onClick={() => onArtifacts && onArtifacts()}><span className="nav-ic"><Artifact /></span> <span className="nav-label">{t("Artifacts")}</span></button>
+        {tab === 'home' && <button className={'nav-item' + (dest === 'scheduled' ? ' on' : '')} title={t("Scheduled")} aria-current={dest === 'scheduled' ? 'page' : undefined} onClick={() => onScheduled && onScheduled()}><span className="nav-ic"><Clock /></span> <span className="nav-label">{t("Scheduled")}</span></button>}
+        <button className="nav-item" title={t("Customize")} onClick={() => onCustomize && onCustomize()}><span className="nav-ic"><Briefcase /></span> <span className="nav-label">{t("Customize")}</span></button>
+        {tab === 'code' && <button className="nav-item" aria-expanded={codeMore} onClick={() => setCodeMore(m => !m)}><span className="nav-ic"><ChevDown className={'nav-more-chev' + (codeMore ? ' open' : '')} /></span> <span className="nav-label">{t('More')}</span></button>}
+        {tab === 'code' && codeMore && <button className={'nav-item' + (dest === 'scheduled' ? ' on' : '')} onClick={() => onScheduled && onScheduled()}><span className="nav-ic"><Clock /></span> <span className="nav-label">{t("Scheduled")}</span></button>}
       </div>
       <div className="chats-wrap">
       <div className={'chats' + (scrolled ? ' scrolled' : '')} ref={chatsRef} onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}>
-        <div className="nav nav-scrolled">
-          <button className="nav-item" title={t("Chats")} onClick={onChatsOverview}><Chat /> <span className="nav-label">{t("Chats")}</span></button>
-          <button className="nav-item" title={t("Projects")} onClick={onProjects}><Box /> <span className="nav-label">{t("Projects")}</span></button>
-          <button className="nav-item" title={t("Spaces")} onClick={onSpaces}>
-            <Users /> <span className="nav-label">{t("Spaces")}</span>
-            {spacesPending > 0 && <span className="nav-badge">{spacesPending}</span>}
-          </button>
-        </div>
         {!chatsLoaded ? (
           <>
             <div className="section-label">{t("Recents")}</div>
@@ -251,32 +395,38 @@ function Sidebar({
         ) : (
           <>
             {projects.length > 0 && <>
-              <div className="section-label recents-label">
-                {t('Projects')}
+              <SectionHead id="projects" label={t('Projects')} folded={folded.has('projects')} onToggle={toggleFold}>
+                <button className="rl-group" title={t('All projects')} aria-label={t('All projects')}
+                  onClick={onProjects}><ArrowOut /></button>
                 {onNewProject && <button className="rl-group" title={t('New project')} aria-label={t('New project')}
-                  onClick={onNewProject}><Plus style={{ width: 14, height: 14 }} /></button>}
-              </div>
-              {projects.slice(0, SIDEBAR_PROJECT_LIMIT).map(p => (
+                  onClick={onNewProject}><Plus /></button>}
+              </SectionHead>
+              {!folded.has('projects') && projects.slice(0, SIDEBAR_PROJECT_LIMIT).map(p => (
                 <div key={p.id} className="chat-row project-row" onClick={() => onOpenProject && onOpenProject(p.id)}>
-                  <Box style={{ width: 20, flexShrink: 0, opacity: .85 }} />
+                  <span className="row-ic"><Box style={{ width: 20, flexShrink: 0, opacity: .85 }} /></span>
                   <span className="title">{p.name}</span>
                 </div>
               ))}
             </>}
 
             {(starred.length > 0 || starredProjects.length > 0) && <>
-              <div className="section-label">{t("Starred")}</div>
-              {starredProjects.map(p => (
+              <SectionHead id="starred" label={t("Starred")} folded={folded.has('starred')} onToggle={toggleFold} />
+              {!folded.has('starred') && starredProjects.map(p => (
                 <div key={p.id} className="chat-row project-row" onClick={() => onOpenProject && onOpenProject(p.id)}>
-                  <Box style={{ width: 20, flexShrink: 0, opacity: .85 }} />
+                  <span className="row-ic"><Box style={{ width: 20, flexShrink: 0, opacity: .85 }} /></span>
                   <span className="title">{p.name}</span>
                 </div>
               ))}
-              {starred.map(row)}
+              {!folded.has('starred') && starred.map(row)}
             </>}
 
-            <div className="section-label recents-label" ref={groupRef}>
-              {t('Recents')}
+            <div className="section-label recents-label has-head" ref={groupRef}>
+              <button className="sec-head" aria-expanded={!folded.has('recents')} onClick={() => toggleFold('recents')}>
+                <span className="sec-head-label">{t('Recents')}</span>
+                <ChevDown className="sec-head-chev" aria-hidden="true" />
+              </button>
+              <span className="sec-head-actions">
+              <button className="rl-group" title={t('All chats')} aria-label={t('All chats')} onClick={onChatsOverview}><ArrowOut /></button>
               <button className="rl-group" title={t('Group by')} aria-label={t('Group by')} aria-haspopup="menu" aria-expanded={groupMenu}
                 onClick={() => setGroupMenu(o => !o)}><Sliders style={{ width: 13, height: 13 }} /></button>
               {groupMenu && (
@@ -290,10 +440,11 @@ function Sidebar({
                   ))}
                 </div>
               )}
+              </span>
             </div>
             {others.length === 0 && <div className="chats-empty">{t("No chats yet")}</div>}
-            {recentGroups[0].items.map(row)}
-            {recentGroups.slice(1).map(g => g.items.length > 0 && (
+            {!folded.has('recents') && recentGroups[0].items.map(row)}
+            {!folded.has('recents') && recentGroups.slice(1).map(g => g.items.length > 0 && (
               <React.Fragment key={g.key}>
                 <div className="section-label recents-sub">{g.label}</div>
                 {g.items.map(row)}
@@ -307,8 +458,17 @@ function Sidebar({
       </div>
       </div>
       <div className="rail-spacer" />
+      <div className="nav side-foot-nav">
+        <button className="nav-item" title={t("Design")} onClick={() => onDesign && onDesign()}>
+          <span className="nav-ic"><Palette /></span> <span className="nav-label">{t("Design")}</span>
+          <Chevron className="nav-go" aria-hidden="true" />
+        </button>
+      </div>
       <div className="profile">
         {menu && <ProfileMenu user={user} version={version} anchorRef={profileBtnRef}
+          onChats={() => { setMenu(false); onChatsOverview && onChatsOverview(); }}
+          onSpaces={() => { setMenu(false); onSpaces && onSpaces(); }}
+          spacesPending={spacesPending}
           onSettings={() => { setMenu(false); onSettings(); }}
           onPlayground={() => { setMenu(false); onPlayground && onPlayground(); }}
           onAdmin={() => { setMenu(false); onAdmin(); }}
@@ -316,13 +476,20 @@ function Sidebar({
           onChangelog={() => { setMenu(false); onChangelog(); }}
           onLicense={() => { setMenu(false); onLicense(); }}
           onLogout={onLogout} onClose={() => setMenu(false)} />}
-        <button className="profile-btn" ref={profileBtnRef} onClick={() => setMenu(m => !m)}>
+        <button className="profile-btn" ref={profileBtnRef} onClick={() => setMenu(m => !m)}
+          aria-haspopup="menu" aria-expanded={menu}>
           <div className="avatar">{(user.displayName || user.email)[0].toUpperCase()}</div>
           <div className="profile-info">
             <div className="name">{user.displayName}</div>
             <div className="plan">{user.isAdmin ? t('Admin') : t('Member')}</div>
           </div>
+          <ChevDown className="profile-caret" aria-hidden="true" />
         </button>
+        <Tip label={t('Get apps and extensions')}>
+          <button className="profile-apps" onClick={() => onApps && onApps()} aria-label={t('Get apps and extensions')}>
+            <AppsDownload />
+          </button>
+        </Tip>
       </div>
     </div>
   );

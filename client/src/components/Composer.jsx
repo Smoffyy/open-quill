@@ -1,15 +1,28 @@
 import { useRef, useEffect, useState, useLayoutEffect, useCallback } from 'react';
 import ModelDropdown from './ModelDropdown.jsx';
+import Segmented from './Segmented.jsx';
+import Tip from './Tip.jsx';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
 import { useAttachments } from '../lib/attachments.js';
 import { useDictation } from '../lib/dictation.js';
-import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer } from './icons.jsx';
+import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, ChevDown, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer, Screenshot, Plug, Puzzle, Telescope, Sun, Chat, Info } from './icons.jsx';
 import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
 import { extLabel } from '../lib/files.js';
-import { t, fmtDate } from '../i18n.jsx';
+import { t, tk, fmtDate } from '../i18n.jsx';
 import { focusUnlessTouch } from '../lib/touch.js';
 import { useSubmenus } from '../lib/submenu.js';
+
+const MODES = [
+  { id: 'chat', label: tk('Chat') },
+  { id: 'cowork', label: tk('Cowork') }
+];
+
+const COWORK_IDEAS = [
+  { id: 'briefing', Icon: Sun, label: tk('Send me a daily briefing') },
+  { id: 'inbox', Icon: Chat, label: tk('Organize my inbox') },
+  { id: 'customize', Icon: Sliders, label: tk('Customize Cowork for me') }
+];
 
 // The picker no longer advertises a list. The server decides what it can read by
 // sniffing the bytes, so any format is accepted here and one that turns out to be
@@ -77,6 +90,8 @@ export default function Composer({
   } = useAttachments({ visionSupported });
 
   const [plusMenu, setPlusMenu] = useState(false);
+  const [mode, setMode] = useState('chat');
+  const [runMode, setRunMode] = useState('manual');
   const [plusDown, setPlusDown] = useState(false);
   const sub = useSubmenus();
   const { closeAll: closeSubs } = sub;
@@ -414,10 +429,13 @@ export default function Composer({
       <div className="composer-bar">
         <div className="composer-left">
           <div className="plus-wrap" ref={plusRef}>
-            <button className={'plus' + (plusMenu ? ' on' : '')} onClick={() => setPlusMenu(m => !m)} title={t("More")}>
-              <Plus style={{ width: 20, height: 20 }} />
-              {enabledCount > 0 && <span className="plus-badge">{enabledCount}</span>}
-            </button>
+            <Tip label={t('More')} keys="/">
+              <button className={'plus' + (plusMenu ? ' on' : '')} onClick={() => setPlusMenu(m => !m)} aria-label={t("More")}
+                aria-haspopup="menu" aria-expanded={plusMenu}>
+                <Plus style={{ width: 20, height: 20 }} />
+                {enabledCount > 0 && <span className="plus-badge">{enabledCount}</span>}
+              </button>
+            </Tip>
             {plusMenu && (
               <div className={'plus-menu' + (plusDown ? ' down' : '')}>
                 <button className="pm-item" onClick={() => { setPlusMenu(false); fileInput.current?.click(); }}>
@@ -524,6 +542,32 @@ export default function Composer({
                     )}
                   </div>
                 )}
+                <div className="pm-divider" />
+                <button className="pm-item" disabled title={t('Not available yet')}>
+                  <Screenshot />
+                  <span className="pm-label">{t('Take a screenshot')}</span>
+                </button>
+                <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('connect')} onMouseLeave={sub.hoverClose}>
+                  <button className={'pm-item' + (sub.isOpen('connect') ? ' active' : '')} onClick={() => sub.toggle('connect')}>
+                    <Plug />
+                    <span className="pm-label">{t('Add connector')}</span>
+                    <Chevron className="pm-chev" />
+                  </button>
+                  {sub.isOpen('connect') && (
+                    <PmSub onMouseEnter={() => sub.hoverOpen('connect')} onMouseLeave={sub.hoverClose}>
+                      <div className="pm-empty">{t('No connectors yet')}</div>
+                    </PmSub>
+                  )}
+                </div>
+                <button className="pm-item" disabled title={t('Not available yet')}>
+                  <Puzzle />
+                  <span className="pm-label">{t('Add plugins…')}</span>
+                </button>
+                <div className="pm-divider" />
+                <button className="pm-item" disabled title={t('Not available yet')}>
+                  <Telescope />
+                  <span className="pm-label">{t('Research')}</span>
+                </button>
                 {(sandboxAllowed || webSearchAvailable) && <div className="pm-divider" />}
                 {sandboxAllowed && (
                   <button className="pm-item" onClick={() => onToggleSandbox && onToggleSandbox()}>
@@ -558,8 +602,13 @@ export default function Composer({
               {onClearProject && <button className="cp-x" onClick={onClearProject} title={t("Remove from project")}><X style={{ width: 12 }} /></button>}
             </div>
           )}
+          {modelUp && (
+            <Segmented className="mode-seg" role="radiogroup" label={t('Conversation mode')}
+              value={mode} onChange={setMode}
+              options={MODES.map(o => ({ ...o, label: t(o.label), title: o.title ? t(o.title) : undefined }))} />
+          )}
           {!hideModelPicker && onOpenDocs && (
-            <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={onOpenDocs}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>
+            <Tip label={t('Model docs')}><button type="button" className="mdocs-btn" aria-label={t('Model docs')} onClick={onOpenDocs}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button></Tip>
           )}
         </div>
         <div className="composer-right">
@@ -570,10 +619,12 @@ export default function Composer({
             kwargValues={kwargValues} onSetKwarg={onSetKwarg}
             modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />}
           {voiceMic && (
-            <button className={'mic' + (dictating ? ' rec' : '') + (transcribing ? ' busy' : '')} onClick={toggleDictation}
-              title={dictating ? t('Stop dictation') : transcribing ? t('Transcribing…') : t('Dictate')} disabled={transcribing}>
-              <Mic style={{ width: 20, height: 20 }} />
-            </button>
+            <Tip label={dictating ? t('Stop dictation') : transcribing ? t('Transcribing…') : t('Dictate')}>
+              <button className={'mic' + (dictating ? ' rec' : '') + (transcribing ? ' busy' : '')} onClick={toggleDictation}
+                aria-label={dictating ? t('Stop dictation') : transcribing ? t('Transcribing…') : t('Dictate')} disabled={transcribing}>
+                <Mic style={{ width: 20, height: 20 }} />
+              </button>
+            </Tip>
           )}
           {steering && hasText && (
             <button key="steer" className="send steer" onClick={doSend} title={t('Steer this reply')}><Steer style={{ width: 20, height: 20 }} /></button>
@@ -586,13 +637,38 @@ export default function Composer({
           ) : canSend ? (
             <button key="send" className="send" onClick={doSend} disabled={uploading}><Up style={{ width: 20, height: 20 }} /></button>
           ) : voiceCall ? (
-            <button key="call" className="mic call" onClick={onStartCall} title={t("Start a voice call")}><Wave style={{ width: 20, height: 20 }} /></button>
+            <Tip label={t("Start a voice call")}><button key="call" className="mic call" onClick={onStartCall} aria-label={t("Start a voice call")}><Wave style={{ width: 20, height: 20 }} /></button></Tip>
           ) : (
             <button key="send" className="send ghost" disabled><Up style={{ width: 20, height: 20 }} /></button>
           )}
         </div>
       </div>
+      {mode === 'cowork' && modelUp && (
+        <div className="cowork-row">
+          <button className="cowork-chip" onClick={() => setPlusMenu(true)}>
+            <Box /> <span>{project ? project.name : t('Project')}</span> <ChevDown />
+          </button>
+          <button className="cowork-chip" onClick={() => setRunMode(m => (m === 'manual' ? 'auto' : 'manual'))}>
+            <Cube /> <span>{runMode === 'manual' ? t('Manual') : t('Automatic')}</span> <ChevDown />
+          </button>
+          <Tip label={t('Cowork runs multi-step tasks with tools. It has no runtime here yet.')}>
+            <button className="cowork-info" aria-label={t('About Cowork')}><Info /></button>
+          </Tip>
+        </div>
+      )}
     </div>
+    {mode === 'cowork' && modelUp && <div className="beta-badge">{t('Beta')}</div>}
+    {mode === 'cowork' && modelUp && (
+      <div className="cowork-ideas">
+        <div className="cowork-ideas-label">{t('Ideas for you')}</div>
+        {COWORK_IDEAS.map(({ id, Icon, label }) => (
+          <button key={id} className="cowork-idea" onClick={() => onChange(t(label))}>
+            <span className="cowork-idea-ic"><Icon /></span>
+            <span className="cowork-idea-label">{t(label)}</span>
+          </button>
+        ))}
+      </div>
+    )}
     </div>
   );
 }

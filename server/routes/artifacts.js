@@ -10,7 +10,52 @@ function ownChat(req, res) {
   return c;
 }
 
+const LIBRARY_PAGE = 60;
+const LIBRARY_SCAN = 400;
+const PREVIEW_CHARS = 600;
+
 export default function registerArtifactRoutes(app) {
+  app.get('/api/artifacts', authMiddleware, (req, res) => {
+    const q = String(req.query.q ?? '').slice(0, 120).trim().toLowerCase();
+    const limit = Math.min(LIBRARY_PAGE, Math.max(1, parseInt(req.query.limit, 10) || LIBRARY_PAGE));
+    const chats = db.chats.byUser(req.user.id)
+      .filter(c => !c.archived)
+      .sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0))
+      .slice(0, LIBRARY_SCAN);
+    const items = [];
+    let scanned = 0;
+    for (const c of chats) {
+      if (items.length >= limit) break;
+      scanned++;
+      let files;
+      try { files = sandbox.list(c.id); } catch { continue; }
+      if (!Array.isArray(files)) continue;
+      for (const f of files) {
+        if (q && f.path.toLowerCase().indexOf(q) === -1 && String(c.title || '').toLowerCase().indexOf(q) === -1) continue;
+        let preview = '';
+        if (f.size > 0 && f.size < 512 * 1024) {
+          try {
+            if (sandbox.isViewableText(c.id, f.path)) preview = String(sandbox.readText(c.id, f.path) || '').slice(0, PREVIEW_CHARS);
+          } catch { preview = ''; }
+        }
+        items.push({
+          preview,
+          id: c.id + ':' + f.path,
+          chatId: c.id,
+          chatTitle: c.title || '',
+          path: f.path,
+          name: f.path.split('/').pop(),
+          ext: f.ext || '',
+          size: f.size || 0,
+          v: f.v || 1,
+          updated_at: c.updated_at || 0
+        });
+        if (items.length >= limit) break;
+      }
+    }
+    res.json({ artifacts: items, scanned, more: chats.length > scanned });
+  });
+
   app.get('/api/chats/:id/files', authMiddleware, (req, res) => {
     const c = ownChat(req, res); if (!c) return;
     res.json({ files: sandbox.list(c.id) });

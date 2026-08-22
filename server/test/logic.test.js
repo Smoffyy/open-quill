@@ -37,6 +37,7 @@ import { historyText } from '../lib/history.js';
 import { bash } from '../sandbox/shell.js';
 import { wireToolCalls, normalizeMessages } from '../llm/wire.js';
 import { unzipBuffer, zipBuffer } from '../sandbox/zip.js';
+import { normalizeSchedule, nextRun, isDue } from '../lib/tasks.js';
 
 const asReq = (headers = {}, method = 'POST', localAddress = '10.0.0.5') =>
   ({ method, headers, socket: { localAddress } });
@@ -1841,3 +1842,43 @@ test('a file the extension list rejects is still recognised as text by its bytes
 });
 
 
+
+
+test('normalizeSchedule clamps every field and falls back on nonsense', () => {
+  assert.deepEqual(normalizeSchedule(null), { kind: 'daily', hour: 9, minute: 0 });
+  assert.deepEqual(normalizeSchedule({ kind: 'nope' }), { kind: 'daily', hour: 9, minute: 0 });
+  assert.deepEqual(normalizeSchedule({ kind: 'daily', hour: 99, minute: -4 }), { kind: 'daily', hour: 23, minute: 0 });
+  assert.equal(normalizeSchedule({ kind: 'interval', everyMinutes: 1 }).everyMinutes, 5, 'a 1-minute interval is floored to 5');
+  assert.equal(normalizeSchedule({ kind: 'weekly', weekday: 12 }).weekday, 6);
+  assert.equal(normalizeSchedule({ kind: 'daily', hour: 'x' }).hour, 9);
+  assert.equal(normalizeSchedule([]).kind, 'daily', 'an array is not a schedule object');
+});
+
+test('nextRun always lands in the future and on an allowed day', () => {
+  const base = new Date(2026, 7, 21, 12, 0, 0).getTime(); // a Friday, midday
+  const daily = nextRun({ kind: 'daily', hour: 9, minute: 30 }, base);
+  assert.ok(daily > base);
+  assert.equal(new Date(daily).getHours(), 9);
+  assert.equal(new Date(daily).getMinutes(), 30);
+
+  const weekdays = nextRun({ kind: 'weekdays', hour: 8, minute: 0 }, base);
+  const day = new Date(weekdays).getDay();
+  assert.ok(day >= 1 && day <= 5, 'weekdays never resolves to a weekend');
+
+  const weekly = nextRun({ kind: 'weekly', weekday: 3, hour: 16, minute: 0 }, base);
+  assert.equal(new Date(weekly).getDay(), 3);
+  assert.ok(weekly > base);
+
+  assert.equal(nextRun({ kind: 'interval', everyMinutes: 60 }, base), base + 3600000);
+  assert.equal(nextRun({ kind: 'once', at: base - 1000 }, base), 0, 'a past one-shot is not rescheduled');
+  assert.equal(nextRun({ kind: 'once', at: base + 1000 }, base), base + 1000);
+});
+
+test('isDue ignores disabled and unscheduled tasks', () => {
+  const at = 1000;
+  assert.equal(isDue({ enabled: 1, next_run: 999 }, at), true);
+  assert.equal(isDue({ enabled: 1, next_run: 1001 }, at), false);
+  assert.equal(isDue({ enabled: 0, next_run: 1 }, at), false);
+  assert.equal(isDue({ enabled: 1, next_run: 0 }, at), false, 'next_run 0 means never');
+  assert.equal(isDue(null, at), false);
+});

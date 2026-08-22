@@ -432,3 +432,44 @@ test('release metadata is served to members only', async () => {
     assert.equal(icon.headers['x-content-type-options'], 'nosniff');
   }
 });
+
+test('scheduled tasks round-trip and normalise a hostile schedule', async () => {
+  assert.equal((await request('GET', '/api/tasks')).status, 401, 'tasks need a session');
+
+  const empty = await browser('GET', '/api/tasks');
+  assert.equal(empty.status, 200);
+  assert.deepEqual(empty.json.tasks, []);
+
+  const made = await browser('POST', '/api/tasks', {
+    body: { title: '  Daily briefing  ', prompt: 'What needs my attention?', schedule: { kind: 'weekdays', hour: 99, minute: -1 } }
+  });
+  assert.equal(made.status, 200, made.text);
+  assert.equal(made.json.title, 'Daily briefing', 'the title is trimmed at the boundary');
+  assert.deepEqual(made.json.schedule, { kind: 'weekdays', hour: 23, minute: 0 }, 'out-of-range fields are clamped, not stored');
+  assert.ok(made.json.nextRun > Date.now(), 'an enabled task is scheduled forward');
+  const id = made.json.id;
+
+  const off = await browser('PATCH', `/api/tasks/${id}`, { body: { enabled: false } });
+  assert.equal(off.status, 200);
+  assert.equal(off.json.enabled, false);
+  assert.equal(off.json.nextRun, 0, 'a disabled task stops being due');
+
+  const junk = await browser('PATCH', `/api/tasks/${id}`, { body: { schedule: 'not-an-object', title: '' } });
+  assert.equal(junk.status, 200, 'a nonsense schedule is normalised rather than rejected with a 500');
+  assert.equal(junk.json.schedule.kind, 'daily');
+  assert.equal(junk.json.title, 'New task');
+
+  assert.equal((await browser('POST', `/api/tasks/${id}/run`)).status, 200);
+  assert.equal((await browser('DELETE', `/api/tasks/${id}`)).status, 200);
+  assert.equal((await browser('GET', '/api/tasks')).json.tasks.length, 0);
+  assert.equal((await browser('PATCH', '/api/tasks/nope', { body: {} })).status, 404, 'an unknown id is a miss, not a crash');
+});
+
+test('the artifacts library answers for a member and refuses a stranger', async () => {
+  assert.equal((await request('GET', '/api/artifacts')).status, 401);
+  const res = await browser('GET', '/api/artifacts');
+  assert.equal(res.status, 200);
+  assert.ok(Array.isArray(res.json.artifacts), 'always an array, even with no chats');
+  const capped = await browser('GET', '/api/artifacts?limit=9999&q=' + encodeURIComponent('x'.repeat(500)));
+  assert.equal(capped.status, 200, 'an oversized limit and query are clamped at the boundary');
+});

@@ -79,3 +79,15 @@ export const Steer = (p) => <I {...p}><path d="M12 3v6M12 15v6M3 12h6M15 12h6"/>
 export const Eye = (p) => <I {...p}><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z" /><circle cx="12" cy="12" r="2.6" /></I>;
 export const EyeOff = (p) => <I {...p}><path d="M3 3l18 18M10 5.9A9.9 9.9 0 0 1 12 5.5c6.5 0 10 6.5 10 6.5a17 17 0 0 1-3.2 3.9M6.4 6.9A16 16 0 0 0 2 12s3.5 6.5 10 6.5a10 10 0 0 0 3.4-.6" /><path d="M9.9 10.2a2.6 2.6 0 0 0 3.6 3.7" /></I>;
 export const SortIcon = (p) => <I {...p}><path d="M4 7h11M4 12h7M4 17h4M17 15l3 3 3-3M20 18V8" /></I>;
+export const Home = (p) => <I {...p}><path d="M4 10.4 12 4l8 6.4V19a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 19z"/><path d="M9.6 20.6v-6.2h4.8v6.2"/></I>;
+export const CodeTag = (p) => <I {...p}><path d="M8.4 7.6 3.8 12l4.6 4.4M15.6 7.6 20.2 12l-4.6 4.4M13.7 5.4l-3.4 13.2"/></I>;
+export const Artifact = (p) => <I {...p}><circle cx="7.4" cy="6.6" r="3"/><circle cx="17" cy="12" r="3"/><circle cx="7.4" cy="17.4" r="3"/><path d="M10 8.1l4.4 2.5M10 15.9l4.4-2.5"/></I>;
+export const Briefcase = (p) => <I {...p}><rect x="3" y="7.4" width="18" height="12.6" rx="2.2"/><path d="M8.8 7.4V5.6A1.6 1.6 0 0 1 10.4 4h3.2a1.6 1.6 0 0 1 1.6 1.6v1.8"/><path d="M3 12.4h18"/></I>;
+export const Palette = (p) => <I {...p}><path d="M12 3.2a8.8 8.8 0 1 0 0 17.6c1.2 0 1.9-.8 1.9-1.7 0-.5-.2-.9-.5-1.2a1.6 1.6 0 0 1 1.2-2.7h1.9a4.3 4.3 0 0 0 4.3-4.3C20.8 6.5 16.9 3.2 12 3.2z"/><circle cx="7.6" cy="11" r="1.1" fill="currentColor" stroke="none"/><circle cx="11" cy="7.4" r="1.1" fill="currentColor" stroke="none"/><circle cx="15.6" cy="8.6" r="1.1" fill="currentColor" stroke="none"/></I>;
+export const AppsDownload = (p) => <I {...p}><path d="M12 4v9.4m0 0 3.2-3.2M12 13.4 8.8 10.2"/><path d="M4.6 16.2v1.8A2 2 0 0 0 6.6 20h10.8a2 2 0 0 0 2-2v-1.8"/></I>;
+export const Screenshot = (p) => <I {...p}><rect x="3" y="5.6" width="18" height="13.4" rx="2.2"/><circle cx="12" cy="12.3" r="3.2"/></I>;
+export const Paperclip = (p) => <I {...p}><path d="M17.6 10.4 11 17a3.4 3.4 0 0 1-4.8-4.8l7.4-7.4a2.3 2.3 0 0 1 3.2 3.2l-7.4 7.4a1.1 1.1 0 0 1-1.6-1.6l6.6-6.6"/></I>;
+export const Puzzle = (p) => <I {...p}><path d="M10.4 4.2a1.8 1.8 0 0 1 3.2 0c0 .5-.2.9-.4 1.2h3a1 1 0 0 1 1 1v3c.3-.2.7-.4 1.2-.4a1.8 1.8 0 0 1 0 3.2c-.5 0-.9-.2-1.2-.4v4a1 1 0 0 1-1 1h-4c.2-.3.4-.7.4-1.2a1.8 1.8 0 0 0-3.2 0c0 .5.2.9.4 1.2H6a1 1 0 0 1-1-1v-4c.3.2.7.4 1.2.4a1.8 1.8 0 0 0 0-3.2c-.5 0-.9.2-1.2.4v-3a1 1 0 0 1 1-1h3c-.2-.3-.4-.7-.4-1.2z"/></I>;
+export const Telescope = (p) => <I {...p}><circle cx="10.6" cy="10.6" r="6.4"/><path d="m15.2 15.2 5.4 5.4M8.2 8.2l4.8 4.8"/></I>;
+export const ArrowOut = (p) => <I {...p}><path d="M8.4 15.6 15.6 8.4M9.6 8.4h6v6"/></I>;
+export const QuickTask = (p) => <I {...p}><rect x="3.6" y="4.6" width="16.8" height="14.8" rx="2.4"/><path d="M15.4 4.6v14.8"/></I>;
