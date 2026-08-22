@@ -385,8 +385,8 @@
 }
 @keyframes rbLineIn { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
 @keyframes rbLineOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-7px); } }
-[data-animations="off"] .rb-line { animation: none; }
-[data-animations="off"] .rb-line.out { display: none; }
+[data-animations="off"] .reasoning:not(.live) .rb-line { animation: none; }
+[data-animations="off"] .reasoning:not(.live) .rb-line.out { display: none; }
 
 /* anthropic: clock node per step, closed off by a Done row */
 .reasoning.rolling .rb-step { padding-left: 34px; }

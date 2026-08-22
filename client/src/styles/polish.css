@@ -299,7 +299,6 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 
 /* ============ effect gates (user settings) ============ */
 [data-microfx="off"] .actions { transform: none; transition: opacity var(--fx-t, .15s); }
-[data-microfx="off"] .reasoning-head.live .rb-label { background: none; -webkit-background-clip: initial; background-clip: initial; color: inherit; animation: none; }
 [data-microfx="off"] .to-bottom { animation: none; }
 
 [data-microfx="off"] .tool-chip, [data-microfx="off"] .tool-line, [data-microfx="off"] .tool-bash { animation: none; }
