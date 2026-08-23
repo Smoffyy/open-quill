@@ -78,6 +78,11 @@ function cleanVersion(text) {
 }
 
 let ENV_CACHE = null;
+export function primeHostEnv(env) {
+  if (!ENV_CACHE && env && typeof env === 'object') ENV_CACHE = env;
+  return ENV_CACHE;
+}
+
 export function hostEnvInfo() {
   if (ENV_CACHE) return ENV_CACHE;
   const win = process.platform === 'win32';

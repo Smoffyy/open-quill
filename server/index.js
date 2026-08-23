@@ -1,6 +1,7 @@
 import './lib/dataroot.js';
 import express from 'express';
 import http from 'http';
+import { Worker } from 'worker_threads';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -103,8 +104,19 @@ process.on('unhandledRejection', (reason) => { console.error('[unhandledRejectio
 process.on('uncaughtException', (err) => { console.error('[uncaughtException]', err); });
 process.on('exit', () => { try { mcp.shutdown(); } catch {} });
 
+function warmHostEnv() {
+  let worker;
+  try { worker = new Worker(new URL('./sandbox/hostenv.worker.js', import.meta.url)); } catch { return; }
+  worker.once('message', (env) => {
+    import('./sandbox.js').then(s => { try { s.primeHostEnv(env); } catch {} }).catch(() => {});
+    worker.terminate().catch(() => {});
+  });
+  worker.once('error', () => {});
+  worker.unref();
+}
+
 server.listen(PORT, HOST, () => console.log(`open-quill running on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`));
-setTimeout(() => { import('./sandbox.js').then(s => { try { s.hostEnvInfo(); } catch {} }).catch(() => {}); }, 0).unref();
+warmHostEnv();
 const pruneOld = () => { pruneAudit(); pruneToolStats(); };
 pruneOld();
 setInterval(pruneOld, 24 * 60 * 60 * 1000).unref();

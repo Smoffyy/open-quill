@@ -31,6 +31,7 @@ const PASSWORD = 'integration-password';
 const START_TIMEOUT_MS = 30000;
 
 let child = null;
+let readyMs = 0;
 let PORT = 0;
 let ORIGIN = '';
 let cookie = '';
@@ -76,7 +77,7 @@ function request(method, pathname, opts = {}) {
       });
     });
     req.on('error', reject);
-    req.setTimeout(15000, () => req.destroy(new Error(`timed out: ${method} ${pathname}`)));
+    req.setTimeout(opts.timeoutMs || 15000, () => req.destroy(new Error(`timed out: ${method} ${pathname}`)));
     if (payload !== undefined) req.write(payload);
     req.end();
   });
@@ -142,11 +143,28 @@ function removeDb() {
   fs.rmSync(DB_DIR, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
 }
 
+// Listening is not the same as answering: anything that blocks the event loop during
+// startup leaves the port open and every request queued behind it. Wait for a real
+// response, and remember how long it took so the test below can hold that line.
+async function waitForReady() {
+  const started = Date.now();
+  const deadline = started + START_TIMEOUT_MS;
+  for (;;) {
+    try {
+      const res = await request('GET', '/api/auth/context', { timeoutMs: 2000 });
+      if (res.status === 200) return Date.now() - started;
+    } catch {}
+    if (Date.now() >= deadline) throw new Error(`server listened but never answered within ${START_TIMEOUT_MS}ms`);
+    await new Promise(r => { setTimeout(r, 50); });
+  }
+}
+
 before(async () => {
   removeDb();
   PORT = await freePort();
   ORIGIN = `http://127.0.0.1:${PORT}`;
   child = await startServer();
+  readyMs = await waitForReady();
 
   // The first account created on a fresh database becomes owner+admin.
   const res = await request('POST', '/api/auth/register', {
@@ -164,6 +182,14 @@ after(async () => {
     await Promise.race([gone, new Promise(r => { setTimeout(r, 5000); })]);
   }
   removeDb();
+});
+
+// The regression this guards: host detection ran synchronously on the main thread right
+// after listen, so a machine with a full toolchain installed could not answer anything for
+// as long as it took to spawn every probe. CI has more runtimes than a laptop and blew past
+// the 15s request timeout. Detection now runs in a worker, so this should be immediate.
+test('the server answers as soon as it is listening', () => {
+  assert.ok(readyMs < 10000, `server took ${readyMs}ms to answer its first request; startup must not block the event loop`);
 });
 
 test('the app answers and serves its policy header', async () => {
