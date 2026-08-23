@@ -118,20 +118,20 @@ export default function ReasoningBlock({ text, live, durationMs = 0, preset = 'a
       )}
       <div className={'reasoning-collapse' + (open ? ' open' : '')}>
         <div className="rb-inner">
-          <ol className="rb-steps">
+          <div className="rb-steps" role="list">
             {steps.map((lines, i) => (
-              <li className="rb-step" key={i}>
+              <div className="rb-step" role="listitem" key={i}>
                 {rolling && <Clock className="rb-node" />}
-                {lines.map((l, j) => <p key={j}>{l}</p>)}
-              </li>
+                {lines.map((l, j) => <div className="rb-p" key={j}>{l}</div>)}
+              </div>
             ))}
             {rolling && !live && (
-              <li className="rb-step rb-done">
+              <div className="rb-step rb-done" role="listitem">
                 <CheckCircle className="rb-node" />
-                <p>{t('Done')}</p>
-              </li>
+                <div className="rb-p">{t('Done')}</div>
+              </div>
             )}
-          </ol>
+          </div>
           {!live && (
             <button className="rb-copy" onClick={doCopy} title={copied ? t('Copied') : t('Copy')} aria-label={t('Copy')}>
               {copied ? <Check /> : <Copy />}

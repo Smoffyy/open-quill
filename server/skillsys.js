@@ -51,8 +51,8 @@ export function update(id, b) {
 
 export function remove(id) { save(list().filter(s => s.id !== id)); return { ok: true }; }
 
-export function promptFor() {
-  const skills = getEnabled();
+export function promptFor(extra = []) {
+  const skills = [...getEnabled(), ...extra];
   if (!skills.length) return '';
   let p = '## Skills\n' + DEFAULT_INTRO + '\n\nAvailable skills:\n';
   for (const s of skills) {
@@ -63,10 +63,10 @@ export function promptFor() {
   return p;
 }
 
-export function execTool(call) {
+export function execTool(call, extra = []) {
   if (call.tool !== 'skill_view') return { ok: false, error: 'Unknown skill tool.' };
   const name = normalizeName(call.name);
-  const s = getEnabled().find(x => x.name === name);
+  const s = [...getEnabled(), ...extra].find(x => x.name === name);
   if (!s) return { ok: false, error: `No skill named "${call.name}".` };
   return { ok: true, name: s.name, content: s.content };
 }

@@ -1,10 +1,11 @@
 import { useRef, useEffect, useState, useLayoutEffect, useCallback } from 'react';
 import ModelDropdown from './ModelDropdown.jsx';
+import Tip from './Tip.jsx';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
 import { useAttachments } from '../lib/attachments.js';
 import { useDictation } from '../lib/dictation.js';
-import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer } from './icons.jsx';
+import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer, Screenshot, Plug, Puzzle, Telescope, SkillIcon } from './icons.jsx';
 import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
 import { extLabel } from '../lib/files.js';
 import { t, fmtDate } from '../i18n.jsx';
@@ -58,7 +59,7 @@ export default function Composer({
   safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
   conversationEnded = false, endedReason = '',
-  removedModel = null, onOpenDocs = null,
+  removedModel = null, skills = [], onToggleSkill = null, onManageSkills = null,
   queueCount = 0, onQueue, onSteer, canSteer = false,
   compareIds = [], onSetCompare, hideModelPicker = false, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
   ctxGauge = null
@@ -414,16 +415,23 @@ export default function Composer({
       <div className="composer-bar">
         <div className="composer-left">
           <div className="plus-wrap" ref={plusRef}>
-            <button className={'plus' + (plusMenu ? ' on' : '')} onClick={() => setPlusMenu(m => !m)} title={t("More")}>
-              <Plus style={{ width: 20, height: 20 }} />
-              {enabledCount > 0 && <span className="plus-badge">{enabledCount}</span>}
-            </button>
+            <Tip label={t('More')} keys="/">
+              <button className={'plus' + (plusMenu ? ' on' : '')} onClick={() => setPlusMenu(m => !m)} aria-label={t("More")}
+                aria-haspopup="menu" aria-expanded={plusMenu}>
+                <Plus style={{ width: 20, height: 20 }} />
+                {enabledCount > 0 && <span className="plus-badge">{enabledCount}</span>}
+              </button>
+            </Tip>
             {plusMenu && (
               <div className={'plus-menu' + (plusDown ? ' down' : '')}>
                 <button className="pm-item" onClick={() => { setPlusMenu(false); fileInput.current?.click(); }}>
                   <FileText />
                   <span className="pm-label">{visionSupported ? t('Add files or photos') : t('Add files')}</span>
                   <span className="pm-shortcut">{/mac/i.test(navigator.platform) ? '⌘U' : t('Ctrl+U')}</span>
+                </button>
+                <button className="pm-item" disabled title={t('Not available yet')}>
+                  <Screenshot />
+                  <span className="pm-label">{t('Take a screenshot')}</span>
                 </button>
                 {onSetProject && (
                   <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('project')} onMouseLeave={sub.hoverClose}>
@@ -524,6 +532,57 @@ export default function Composer({
                     )}
                   </div>
                 )}
+                <div className="pm-divider" />
+                <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('skills')} onMouseLeave={sub.hoverClose}>
+                  <button className={'pm-item' + (sub.isOpen('skills') ? ' active' : '')} onClick={() => sub.toggle('skills')}>
+                    <SkillIcon />
+                    <span className="pm-label">{t('Skills')}</span>
+                    <Chevron className="pm-chev" />
+                  </button>
+                  {sub.isOpen('skills') && (
+                    <PmSub onMouseEnter={() => sub.hoverOpen('skills')} onMouseLeave={sub.hoverClose}>
+                      {skills.length === 0 && <div className="pm-empty">{t('No skills yet')}</div>}
+                      {skills.map(sk => (
+                        <button key={sk.id} className="pm-item" title={sk.description || sk.name}
+                          onClick={() => onToggleSkill && onToggleSkill(sk)}>
+                          <SkillIcon />
+                          <span className="pm-label">{sk.name}</span>
+                          {sk.enabled && <Check className="pm-check" />}
+                        </button>
+                      ))}
+                      <div className="pm-divider" />
+                      <button className="pm-item" onClick={() => { sub.closeAll(); setPlusMenu(false); onManageSkills && onManageSkills(); }}>
+                        <Sliders />
+                        <span className="pm-label">{t('Manage skills')}</span>
+                      </button>
+                      <button className="pm-item" onClick={() => { sub.closeAll(); setPlusMenu(false); onManageSkills && onManageSkills('browse'); }}>
+                        <Plus />
+                        <span className="pm-label">{t('Browse skills')}</span>
+                      </button>
+                    </PmSub>
+                  )}
+                </div>
+                <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('connect')} onMouseLeave={sub.hoverClose}>
+                  <button className={'pm-item' + (sub.isOpen('connect') ? ' active' : '')} onClick={() => sub.toggle('connect')}>
+                    <Plug />
+                    <span className="pm-label">{t('Add connector')}</span>
+                    <Chevron className="pm-chev" />
+                  </button>
+                  {sub.isOpen('connect') && (
+                    <PmSub onMouseEnter={() => sub.hoverOpen('connect')} onMouseLeave={sub.hoverClose}>
+                      <div className="pm-empty">{t('No connectors yet')}</div>
+                    </PmSub>
+                  )}
+                </div>
+                <button className="pm-item" disabled title={t('Not available yet')}>
+                  <Puzzle />
+                  <span className="pm-label">{t('Add plugins…')}</span>
+                </button>
+                <div className="pm-divider" />
+                <button className="pm-item" disabled title={t('Not available yet')}>
+                  <Telescope />
+                  <span className="pm-label">{t('Research')}</span>
+                </button>
                 {(sandboxAllowed || webSearchAvailable) && <div className="pm-divider" />}
                 {sandboxAllowed && (
                   <button className="pm-item" onClick={() => onToggleSandbox && onToggleSandbox()}>
@@ -558,9 +617,6 @@ export default function Composer({
               {onClearProject && <button className="cp-x" onClick={onClearProject} title={t("Remove from project")}><X style={{ width: 12 }} /></button>}
             </div>
           )}
-          {!hideModelPicker && onOpenDocs && (
-            <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={onOpenDocs}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>
-          )}
         </div>
         <div className="composer-right">
           {ctxGauge}
@@ -570,10 +626,12 @@ export default function Composer({
             kwargValues={kwargValues} onSetKwarg={onSetKwarg}
             modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />}
           {voiceMic && (
-            <button className={'mic' + (dictating ? ' rec' : '') + (transcribing ? ' busy' : '')} onClick={toggleDictation}
-              title={dictating ? t('Stop dictation') : transcribing ? t('Transcribing…') : t('Dictate')} disabled={transcribing}>
-              <Mic style={{ width: 20, height: 20 }} />
-            </button>
+            <Tip label={dictating ? t('Stop dictation') : transcribing ? t('Transcribing…') : t('Dictate')}>
+              <button className={'mic' + (dictating ? ' rec' : '') + (transcribing ? ' busy' : '')} onClick={toggleDictation}
+                aria-label={dictating ? t('Stop dictation') : transcribing ? t('Transcribing…') : t('Dictate')} disabled={transcribing}>
+                <Mic style={{ width: 20, height: 20 }} />
+              </button>
+            </Tip>
           )}
           {steering && hasText && (
             <button key="steer" className="send steer" onClick={doSend} title={t('Steer this reply')}><Steer style={{ width: 20, height: 20 }} /></button>
@@ -586,7 +644,7 @@ export default function Composer({
           ) : canSend ? (
             <button key="send" className="send" onClick={doSend} disabled={uploading}><Up style={{ width: 20, height: 20 }} /></button>
           ) : voiceCall ? (
-            <button key="call" className="mic call" onClick={onStartCall} title={t("Start a voice call")}><Wave style={{ width: 20, height: 20 }} /></button>
+            <Tip label={t("Start a voice call")}><button key="call" className="mic call" onClick={onStartCall} aria-label={t("Start a voice call")}><Wave style={{ width: 20, height: 20 }} /></button></Tip>
           ) : (
             <button key="send" className="send ghost" disabled><Up style={{ width: 20, height: 20 }} /></button>
           )}

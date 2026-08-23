@@ -97,7 +97,7 @@
 .msg-time:hover::after { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* ---------- new chat circled plus ---------- */
-.new-chat-plus { position: relative; display: inline-grid; place-items: center; width: 20px; height: 20px; flex-shrink: 0; }
+.nav-ic.new-chat-plus { position: relative; display: inline-grid; place-items: center; width: 20px; height: 20px; flex-shrink: 0; }
 .new-chat-plus::before {
   content: ''; position: absolute; left: 50%; top: 50%; width: 22.4px; height: 22.4px; margin: -11.2px 0 0 -11.2px;
   border-radius: 50%; background: color-mix(in srgb, var(--text-muted) 15%, transparent);
@@ -912,9 +912,6 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .mdoc-cmp-bar span { display: block; height: 100%; border-radius: 3px; background: var(--text-faint); }
 .mdoc-cmp-row.self .mdoc-cmp-bar span { background: var(--accent); }
 .mdoc-cmp-val { width: 62px; text-align: right; font-variant-numeric: tabular-nums; flex-shrink: 0; }
-.mdocs-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; color: var(--text-faint); transition: color var(--fx-t, .12s), background var(--fx-t, .12s); flex-shrink: 0; }
-.mdocs-btn:hover { color: var(--text); background: var(--composer-hover, var(--hover-soft)); }
-.mdocs-btn svg { width: 20px; height: 20px; }
 
 /* ---------- persistent context fill, next to the model picker ---------- */
 .ctx-gauge {

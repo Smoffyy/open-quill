@@ -32,6 +32,9 @@ import ModelDropdown from './components/ModelDropdown.jsx';
 import CallPanel from './components/CallPanel.jsx';
 import { voiceEmit } from './voice.js';
 import ChatsOverview from './components/ChatsOverview.jsx';
+import ArtifactsLibrary from './components/ArtifactsLibrary.jsx';
+import ScheduledTasks from './components/ScheduledTasks.jsx';
+import Tip from './components/Tip.jsx';
 import SpacesPanel from './components/SpacesPanel.jsx';
 import ProjectsPanel from './components/ProjectsPanel.jsx';
 import ChatMenu from './components/ChatMenu.jsx';
@@ -54,7 +57,7 @@ import { useSocket } from './lib/socket.js';
 const BranchTree = React.lazy(() => import('./components/BranchTree.jsx'));
 import { toast } from './toast.js';
 import { copyText } from './clipboard.js';
-import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork } from './components/icons.jsx';
+import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork, Panel } from './components/icons.jsx';
 import { BRAND_ICON } from './lib/brand.js';
 
 const SKELETON_DELAY = 3000;
@@ -63,10 +66,6 @@ const SKELETON_DELAY = 3000;
 const EMPTY_CALLS = Object.freeze([]);
 const HEAVY_THREAD_CHARS = 40000;
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: tk('Assistants can make mistakes, double-check responses.'), greetings: [tk('How can I help you?')], appIcon: '', quickPrompts: [], version: '' };
-
-
-
-
 
 export default function App() {
   const [user, setUser] = useState(undefined);
@@ -112,26 +111,39 @@ export default function App() {
     return fallback;
   }, [modelById]);
   const sidebarFns = useRef({});
-  const sbNewChat = useCallback((...a) => sidebarFns.current.newChat(...a), []);
-  const sbOpenChat = useCallback((...a) => sidebarFns.current.openChat(...a), []);
+  const sbNewChat = useCallback((...a) => { setLibPage(null); setChatsOverview(false); setShowSpaces(false); sidebarFns.current.newChat(...a); }, []);
+  const sbOpenChat = useCallback((...a) => { setLibPage(null); setChatsOverview(false); setShowSpaces(false); sidebarFns.current.openChat(...a); }, []);
   const sbDeleteChat = useCallback((...a) => sidebarFns.current.deleteChat(...a), []);
   const sbToggleStar = useCallback((...a) => sidebarFns.current.toggleStar(...a), []);
   const sbLogout = useCallback((...a) => sidebarFns.current.logout(...a), []);
   const sbMoveToProject = useCallback((...a) => sidebarFns.current.moveChatToProject(...a), []);
-  const sbProjects = useCallback(() => sidebarFns.current.openProjects(null), []);
-  const sbOpenProject = useCallback((id) => sidebarFns.current.openProjects(id), []);
-  const sbNewProject = useCallback(() => sidebarFns.current.newProject(), []);
+  const navTo = useCallback((to) => {
+    setMobileDrawer(false);
+    setChatsOverview(to === 'chats');
+    setShowSpaces(to === 'spaces');
+    if (to !== 'projects') { setShowProjects(false); setProjectOpenId(null); }
+    setLibPage(to === 'artifacts' || to === 'scheduled' ? to : null);
+    if (to === 'spaces') history.pushState({}, '', '/spaces');
+    else if (to !== 'projects' && /^\/(spaces|projects?|project)(\/|$)/.test(location.pathname)) history.pushState({}, '', '/');
+  }, []);
+  const sbProjects = useCallback(() => { navTo('projects'); sidebarFns.current.openProjects(null); }, [navTo]);
+  const sbOpenProject = useCallback((id) => { navTo('projects'); sidebarFns.current.openProjects(id); }, [navTo]);
+  const sbNewProject = useCallback(() => { navTo('projects'); sidebarFns.current.newProject(); }, [navTo]);
   const onSearchCb = useCallback(() => setCmdkOpen(true), []);
   const onToggleSidebarCb = useCallback(() => setCollapsed(c => !c), []);
   const onMobileCloseCb = useCallback(() => setMobileDrawer(false), []);
   const onSettingsCb = useCallback(() => { setMobileDrawer(false); setSettingsTab('general'); setShowSettings(true); }, []);
+  const onSkillsCb = useCallback(() => { setMobileDrawer(false); setSettingsTab('skills'); setShowSettings(true); }, []);
+  const onDocsCb = useCallback(() => { setMobileDrawer(false); setShowDocs(true); }, []);
   const onAdminCb = useCallback(() => { setMobileDrawer(false); history.pushState({}, '', '/admin'); setShowAdmin(true); }, []);
   const onPlaygroundCb = useCallback(() => { setMobileDrawer(false); history.pushState({}, '', '/playground'); setShowPlayground(true); }, []);
   const onCreditsCb = useCallback(() => { setMobileDrawer(false); setShowCredits(true); }, []);
   const onChangelogCb = useCallback(() => { setMobileDrawer(false); setShowChangelog(true); }, []);
   const onLicenseCb = useCallback(() => { setMobileDrawer(false); setShowLicense(true); }, []);
-  const onChatsOverviewCb = useCallback(() => { setMobileDrawer(false); setChatsOverview(true); }, []);
-  const onSpacesCb = useCallback(() => { setMobileDrawer(false); history.pushState({}, '', '/spaces'); setShowSpaces(true); }, []);
+  const onChatsOverviewCb = useCallback(() => navTo('chats'), [navTo]);
+  const onSpacesCb = useCallback(() => navTo('spaces'), [navTo]);
+  const onArtifactsCb = useCallback(() => navTo('artifacts'), [navTo]);
+  const onScheduledCb = useCallback(() => navTo('scheduled'), [navTo]);
   const closeArtifacts = useCallback(() => setArtifactsOpen(false), []);
 
   const [extended, setExtended] = useState(false);
@@ -186,6 +198,15 @@ export default function App() {
   useEffect(() => { setRouteInfo(null); }, [activeId]);
   const [ledgerPrompt, setLedgerPrompt] = useState(false);
   const [showDocs, setShowDocs] = useState(false);
+  const [skills, setSkills] = useState([]);
+  const loadSkills = useCallback(() => api.get('/api/skills').then(r => setSkills(r.skills || [])).catch(() => {}), []);
+  const toggleSkill = useCallback(async (sk) => {
+    if (!sk.editable) { toast(t('Workspace skills are managed in the admin panel.')); return; }
+    try { await api.patch('/api/skills/' + sk.id, { enabled: !sk.enabled }); loadSkills(); }
+    catch { toast(t('Could not update the skill.')); }
+  }, [loadSkills]);
+  const onSettingsClosed = useCallback(() => { setShowSettings(false); loadSkills(); }, [loadSkills]);
+  useEffect(() => { loadSkills(); }, [loadSkills]);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showPlayground, setShowPlayground] = useState(false);
   const [showCredits, setShowCredits] = useState(false);
@@ -223,6 +244,20 @@ export default function App() {
   const [incognito, setIncognito] = useState(false);
   const [incognitoGreeting, setIncognitoGreeting] = useState(tk('Greetings, whoever you are'));
   const [chatsOverview, setChatsOverview] = useState(false);
+  const [libPage, setLibPage] = useState(null);
+  const runTask = useCallback(async (task) => {
+    try {
+      const r = await api.post('/api/tasks/' + task.id + '/run', {});
+      setLibPage(null);
+      newChat();
+      setInput(r.prompt || '');
+      setFocusTick(n => n + 1);
+    } catch { toast(t('Could not run the task.')); }
+  }, []);
+  const sidebarCombo = React.useMemo(() => {
+    const c = resolveKeybinds(user?.prefs).toggleSidebar;
+    return c ? comboKeys(c).join('+') : '';
+  }, [user?.prefs]);
   const [showSpaces, setShowSpaces] = useState(false);
   const [spacesPending, setSpacesPending] = useState(0);
   const [projects, setProjects] = useState([]);
@@ -1379,7 +1414,7 @@ export default function App() {
     styles: user?.styles || [], styleId, onSelectStyle: setStyleId, onSaveStyles: saveStyles,
     conversationEnded: chatEnded, endedReason: chatEndedReason,
     removedModel: activeId ? chatRemovedModel : null,
-    onOpenDocs: cfg.modelDocs !== false ? () => setShowDocs(true) : undefined,
+    skills, onToggleSkill: toggleSkill, onManageSkills: () => onSkillsCb(),
     hideModelPicker: cfg.uiPreset === 'openai',
     models, currentId, onSelect: pickModel, extended, onToggleExtended: () => setExtended(e => !e),
     reasoningEffort, onSetEffort: setReasoningEffort, kwargValues, onSetKwarg: setKwarg,
@@ -1493,7 +1528,7 @@ export default function App() {
   const modelPicker = (
     <div className="topbar-model tbm-flex">
       <ModelDropdown models={models} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} kwargValues={kwargValues} onSetKwarg={setKwarg} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
-      <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={() => setShowDocs(true)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>
+      
       {ctxGaugeEl}
     </div>
   );
@@ -1506,6 +1541,9 @@ export default function App() {
       <AppBackground bg={activeBg} />
       {intro && <div className="intro-curtain" />}
       <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName} onSearch={onSearchCb}
+        dest={showProjects ? 'projects' : showSpaces ? 'spaces' : chatsOverview ? 'chats' : libPage}
+        onArtifacts={onArtifactsCb} onScheduled={onScheduledCb}
+        onCustomize={onSkillsCb} onModelDocs={onDocsCb} showModelDocs={cfg.modelDocs !== false} onApps={onSettingsCb}
         onNew={sbNewChat} onOpen={sbOpenChat} onDelete={sbDeleteChat} onToggleStar={sbToggleStar}
         collapsed={collapsed} onToggle={onToggleSidebarCb}
         mobileOpen={mobileDrawer} onMobileClose={onMobileCloseCb}
@@ -1516,10 +1554,26 @@ export default function App() {
         projects={projects} onProjects={sbProjects} onOpenProject={sbOpenProject} onNewProject={sbNewProject} onMoveToProject={sbMoveToProject}
         busyChats={busyChats} onStopChat={stopChat} />
 
+      {collapsed && (
+        <Tip label={t('Open sidebar')} keys={sidebarCombo}>
+          <button className="rail-open" onClick={onToggleSidebarCb} aria-label={t('Open sidebar')}>
+            <Panel style={{ width: 16 }} />
+          </button>
+        </Tip>
+      )}
       {mobileDrawer && <div className="drawer-backdrop" onClick={() => setMobileDrawer(false)} />}
 
       <div className={'main' + (incognito ? ' incognito' : '')} data-incognito={incognito ? 'on' : undefined}>
         <Toaster />
+        {libPage && (
+          <div className="lib-overlay" role="region" aria-label={libPage === 'artifacts' ? t('Artifacts') : t('Scheduled tasks')}>
+            {libPage === 'artifacts'
+              ? <ArtifactsLibrary onSearch={() => setShowSearch(true)} onNew={() => { setLibPage(null); newChat(); }}
+                  onOpen={(a) => { setLibPage(null); openChat(a.chatId); }} />
+              : <ScheduledTasks onSearch={() => setShowSearch(true)} onRunTask={runTask} />}
+          </div>
+        )}
+
         {incognito && (
           <div className="incognito-bar">
             <div className="incog-left">
@@ -1658,9 +1712,6 @@ export default function App() {
                     <Paper style={{ width: 18 }} />{files.length > 0 && <span className="paper-count">{files.length}</span>}
                   </button>
                 )}
-                {/* Share button, disabled for now, kept for later use
-                <button className="share-btn">{t("Share")}</button>
-                */}
               </div>
             </div>
             {findOpen && user?.prefs?.threadFind !== false && <ThreadFind scrollRef={scrollRef} revision={findRevision} onMatches={onFindMatches} onClose={closeFind} />}
@@ -1761,7 +1812,8 @@ export default function App() {
       )}
 
       {showDocs && <React.Suspense fallback={null}><ModelDocs models={models} currentId={currentId} onClose={() => setShowDocs(false)} onTry={(id) => { pickModel(id); setShowDocs(false); }} /></React.Suspense>}
-      {showSettings && <React.Suspense fallback={null}><SettingsModal user={user} cfg={cfg} initialTab={settingsTab} onClose={() => setShowSettings(false)} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile} /></React.Suspense>}
+      {showSettings && <React.Suspense fallback={null}><SettingsModal user={user} cfg={cfg} initialTab={settingsTab} onClose={onSettingsClosed} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile}
+        onTrySkill={(sk) => { newChat(); setInput('/' + sk.name + ' '); setFocusTick(n => n + 1); }} /></React.Suspense>}
       {user?.isAdmin && cfg.uiPresetChosen === false && !presetPicked && (
         <div className="preset-scrim">
           <div className="preset-modal">

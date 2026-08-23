@@ -91,7 +91,7 @@
 /* footer */
 .art-foot { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-top: 1px solid var(--border-soft); flex-shrink: 0; }
 .art-foot-count { font-size: 12px; color: var(--text-faint); }
-.art-dl-all { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; line-height: 20px; color: var(--text-muted); text-decoration: none; padding: 4px 8px; border-radius: 8px; transition: background var(--fx-t, .12s), color var(--fx-t, .12s); }
+.art-dl-all { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; line-height: 20px; color: var(--text-muted); text-decoration: none; padding: 4px 8px; border-radius: 7px; transition: background var(--fx-t, .12s), color var(--fx-t, .12s); }
 .art-dl-all:hover { background: var(--hover-soft); color: var(--text); }
 
 /* empty states */
@@ -414,7 +414,6 @@
 .qp-icon svg { display: block; }
 
 /* version in profile popover */
-.pm-version { font-size: 11.5px; color: var(--text-faint); text-align: center; padding: 8px 4px 2px; }
 
 /* admin quick-prompt editor rows */
 .qp-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }

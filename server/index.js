@@ -1,6 +1,7 @@
 import './lib/dataroot.js';
 import express from 'express';
 import http from 'http';
+import { Worker } from 'worker_threads';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -16,6 +17,8 @@ import registerAuthRoutes from './routes/auth.js';
 import registerChatRoutes from './routes/chats/index.js';
 import registerProjectRoutes from './routes/projects.js';
 import registerArtifactRoutes from './routes/artifacts.js';
+import registerTaskRoutes from './routes/tasks.js';
+import registerSkillRoutes from './routes/skills.js';
 import registerModelRoutes from './routes/models.js';
 import registerPlaygroundRoutes from './routes/playground.js';
 import registerSettingsRoutes from './routes/settings.js';
@@ -61,6 +64,8 @@ registerAuthRoutes(app);
 registerChatRoutes(app);
 registerProjectRoutes(app);
 registerArtifactRoutes(app);
+registerTaskRoutes(app);
+registerSkillRoutes(app);
 registerModelRoutes(app);
 registerPlaygroundRoutes(app);
 registerSettingsRoutes(app);
@@ -99,8 +104,19 @@ process.on('unhandledRejection', (reason) => { console.error('[unhandledRejectio
 process.on('uncaughtException', (err) => { console.error('[uncaughtException]', err); });
 process.on('exit', () => { try { mcp.shutdown(); } catch {} });
 
+function warmHostEnv() {
+  let worker;
+  try { worker = new Worker(new URL('./sandbox/hostenv.worker.js', import.meta.url)); } catch { return; }
+  worker.once('message', (env) => {
+    import('./sandbox.js').then(s => { try { s.primeHostEnv(env); } catch {} }).catch(() => {});
+    worker.terminate().catch(() => {});
+  });
+  worker.once('error', () => {});
+  worker.unref();
+}
+
 server.listen(PORT, HOST, () => console.log(`open-quill running on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`));
-setTimeout(() => { import('./sandbox.js').then(s => { try { s.hostEnvInfo(); } catch {} }).catch(() => {}); }, 0).unref();
+warmHostEnv();
 const pruneOld = () => { pruneAudit(); pruneToolStats(); };
 pruneOld();
 setInterval(pruneOld, 24 * 60 * 60 * 1000).unref();

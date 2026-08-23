@@ -10,6 +10,7 @@ import {
 } from '../lib/kwargs.js';
 import { parseTextToolCalls, parseArgs, toCall, cutOffOf } from '../tools/index.js';
 import { classifyToolError } from '../lib/toolstats.js';
+import { parseSkillFile, buildSkillFile, normalizeName, validate } from '../lib/skillfile.js';
 import { cutOffError } from '../lib/prompts.js';
 import { makeToolTextFilter, makeEmitter } from '../llm/emitter.js';
 import { trimInTurn, compactThreshold, estimateTokens, textTokens, makeTokenCounter, truncateForRollingCtx, FALLBACK_CTX } from '../lib/convo.js';
@@ -37,6 +38,7 @@ import { historyText } from '../lib/history.js';
 import { bash } from '../sandbox/shell.js';
 import { wireToolCalls, normalizeMessages } from '../llm/wire.js';
 import { unzipBuffer, zipBuffer } from '../sandbox/zip.js';
+import { normalizeSchedule, nextRun, isDue } from '../lib/tasks.js';
 
 const asReq = (headers = {}, method = 'POST', localAddress = '10.0.0.5') =>
   ({ method, headers, socket: { localAddress } });
@@ -1841,3 +1843,93 @@ test('a file the extension list rejects is still recognised as text by its bytes
 });
 
 
+
+
+test('normalizeSchedule clamps every field and falls back on nonsense', () => {
+  assert.deepEqual(normalizeSchedule(null), { kind: 'daily', hour: 9, minute: 0 });
+  assert.deepEqual(normalizeSchedule({ kind: 'nope' }), { kind: 'daily', hour: 9, minute: 0 });
+  assert.deepEqual(normalizeSchedule({ kind: 'daily', hour: 99, minute: -4 }), { kind: 'daily', hour: 23, minute: 0 });
+  assert.equal(normalizeSchedule({ kind: 'interval', everyMinutes: 1 }).everyMinutes, 5, 'a 1-minute interval is floored to 5');
+  assert.equal(normalizeSchedule({ kind: 'weekly', weekday: 12 }).weekday, 6);
+  assert.equal(normalizeSchedule({ kind: 'daily', hour: 'x' }).hour, 9);
+  assert.equal(normalizeSchedule([]).kind, 'daily', 'an array is not a schedule object');
+});
+
+test('nextRun always lands in the future and on an allowed day', () => {
+  const base = new Date(2026, 7, 21, 12, 0, 0).getTime(); // a Friday, midday
+  const daily = nextRun({ kind: 'daily', hour: 9, minute: 30 }, base);
+  assert.ok(daily > base);
+  assert.equal(new Date(daily).getHours(), 9);
+  assert.equal(new Date(daily).getMinutes(), 30);
+
+  const weekdays = nextRun({ kind: 'weekdays', hour: 8, minute: 0 }, base);
+  const day = new Date(weekdays).getDay();
+  assert.ok(day >= 1 && day <= 5, 'weekdays never resolves to a weekend');
+
+  const weekly = nextRun({ kind: 'weekly', weekday: 3, hour: 16, minute: 0 }, base);
+  assert.equal(new Date(weekly).getDay(), 3);
+  assert.ok(weekly > base);
+
+  assert.equal(nextRun({ kind: 'interval', everyMinutes: 60 }, base), base + 3600000);
+  assert.equal(nextRun({ kind: 'once', at: base - 1000 }, base), 0, 'a past one-shot is not rescheduled');
+  assert.equal(nextRun({ kind: 'once', at: base + 1000 }, base), base + 1000);
+});
+
+test('isDue ignores disabled and unscheduled tasks', () => {
+  const at = 1000;
+  assert.equal(isDue({ enabled: 1, next_run: 999 }, at), true);
+  assert.equal(isDue({ enabled: 1, next_run: 1001 }, at), false);
+  assert.equal(isDue({ enabled: 0, next_run: 1 }, at), false);
+  assert.equal(isDue({ enabled: 1, next_run: 0 }, at), false, 'next_run 0 means never');
+  assert.equal(isDue(null, at), false);
+});
+
+test('a SKILL.md round-trips through parse and build', () => {
+  const body = ['# Brand voice', '', 'Use this when writing.'].join('\n');
+  const file = buildSkillFile({ name: 'Brand Voice!', description: 'Keeps drafts in my voice', body });
+  assert.match(file, /^---\nname: brand-voice\ndescription: Keeps drafts in my voice\n---\n/);
+
+  const back = parseSkillFile(file);
+  assert.equal(back.name, 'brand-voice');
+  assert.equal(back.description, 'Keeps drafts in my voice');
+  assert.equal(back.body, body);
+  assert.equal(back.hasFrontmatter, true);
+});
+
+test('parseSkillFile survives what an uploaded file actually looks like', () => {
+  const bare = parseSkillFile(['# Just a heading', '', 'no frontmatter here'].join('\n'));
+  assert.equal(bare.hasFrontmatter, false);
+  assert.equal(bare.name, '', 'a name is never invented from the body');
+  assert.equal(bare.body, ['# Just a heading', '', 'no frontmatter here'].join('\n'));
+
+  const quoted = parseSkillFile(['---', 'name: "my-skill"', "description: 'quoted, with a comma'", '---', 'body'].join('\n'));
+  assert.equal(quoted.name, 'my-skill', 'quotes are stripped');
+  assert.equal(quoted.description, 'quoted, with a comma');
+
+  const folded = parseSkillFile(['---', 'name: wrapped', 'description: first line', '  continued on the next', '---', 'body'].join('\n'));
+  assert.equal(folded.description, 'first line continued on the next', 'an indented continuation folds into the value');
+
+  const crlf = parseSkillFile(['---', 'name: crlf-skill', 'description: d', '---', 'body'].join('\r\n'));
+  assert.equal(crlf.name, 'crlf-skill', 'CRLF frontmatter parses');
+
+  const bom = parseSkillFile('﻿' + ['---', 'name: bom-skill', 'description: d', '---', 'body'].join('\n'));
+  assert.equal(bom.name, 'bom-skill', 'a leading BOM does not hide the frontmatter');
+
+  const proto = parseSkillFile(['---', 'name: ok-name', 'constructor: nope', '---', 'body'].join('\n'));
+  assert.equal(proto.name, 'ok-name', 'a frontmatter key named constructor cannot reach Object.prototype');
+});
+
+test('skill names are normalised and validated at the boundary', () => {
+  assert.equal(normalizeName('  My Skill!!  '), 'my-skill');
+  assert.equal(normalizeName('---a---'), 'a');
+  assert.equal(normalizeName('Skill 2.0'), 'skill-2-0');
+
+  assert.ok(validate({ name: 'x', body: 'b' }).error, 'a one-character name is refused');
+  assert.ok(validate({ name: 'ok-name', body: '   ' }).error, 'empty instructions are refused');
+  assert.ok(validate({ name: 'taken', body: 'b' }, ['taken']).error, 'a duplicate name is refused');
+
+  const ok = validate({ name: 'Good Name', description: ['line one', 'line two'].join('\n'), body: 'b' });
+  assert.equal(ok.name, 'good-name');
+  assert.equal(ok.description, 'line one line two', 'a description never carries a newline into the frontmatter');
+  assert.equal(ok.enabled, true);
+});

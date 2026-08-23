@@ -516,7 +516,7 @@ export default function ModelEditor({ m, onChange, onDelete, onDuplicate, autosa
               <div className="icon-grid anim-row">
                 <div />
                 <select className="anim-sel" value={m.generating_anim || 'none'} onChange={(e) => set('generating_anim', e.target.value)}>
-                  <option value="spin">{t("Spin")}</option><option value="pulse">{t("Breathe")}</option><option value="bounce">{t("Bounce")}</option><option value="wobble">{t("Wobble")}</option><option value="fade">{t("Fade")}</option><option value="none">{t("No motion")}</option>
+                  <option value="spin">{t("Spin")}</option><option value="pulse">{t("Breathe")}</option><option value="bounce">{t("Bounce")}</option><option value="wobble">{t("Wobble")}</option><option value="fade">{t("Fade")}</option><option value="sprite">{t("Frames")}</option><option value="none">{t("No motion")}</option>
                 </select>
                 <select className="anim-sel" value={m.thinking_anim || 'none'} onChange={(e) => set('thinking_anim', e.target.value)}>
                   <option value="pulse">{t("Breathe")}</option><option value="spin">{t("Spin")}</option><option value="bounce">{t("Bounce")}</option><option value="wobble">{t("Wobble")}</option><option value="fade">{t("Fade")}</option><option value="none">{t("No motion")}</option>
