@@ -143,6 +143,12 @@ CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id, next_run);`);
   sdb.pragma('user_version = 10');
 }
 
+if (sdb.pragma('user_version', { simple: true }) < 11) {
+  sdb.exec(`CREATE TABLE IF NOT EXISTS skills (id TEXT PRIMARY KEY, user_id TEXT, name TEXT, updated_at INTEGER, created_at INTEGER, data TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
+CREATE INDEX IF NOT EXISTS idx_skills_user ON skills(user_id, name);`);
+  sdb.pragma('user_version = 11');
+}
+
 // Case-insensitive substring test done inside SQLite. SQLite's own LIKE and lower() fold
 // ASCII only, so using them here would quietly stop matching "ДОМ" against "дом" the way
 // the JavaScript scans these queries replaced always did. The needle is lowercased by the
@@ -172,7 +178,8 @@ const MIRROR = {
   projects: { user_id: o => o.user_id ?? null, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 },
   feedback: { ts: o => o.ts ?? 0, user_id: o => o.user_id ?? null },
   toolstats: { ts: o => o.ts ?? 0 },
-  tasks: { user_id: o => o.user_id ?? null, next_run: o => o.next_run ?? 0, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 }
+  tasks: { user_id: o => o.user_id ?? null, next_run: o => o.next_run ?? 0, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 },
+  skills: { user_id: o => o.user_id ?? null, name: o => o.name ?? null, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 }
 };
 
 const bumps = new Map();
@@ -392,6 +399,12 @@ const projectsCol = collection('projects');
 const projectsByUserStmt = sdb.prepare('SELECT data FROM projects WHERE user_id=? ORDER BY updated_at DESC');
 projectsCol.byUser = userId => projectsByUserStmt.all(userId).map(r => JSON.parse(r.data));
 
+const skillsCol = collection('skills');
+const skillsByUserStmt = sdb.prepare('SELECT data FROM skills WHERE user_id=? ORDER BY name ASC');
+const skillNameStmt = sdb.prepare('SELECT data FROM skills WHERE user_id=? AND name=? LIMIT 1');
+skillsCol.byUser = userId => skillsByUserStmt.all(userId).map(r => JSON.parse(r.data));
+skillsCol.byName = (userId, name) => { const r = skillNameStmt.get(userId, name); return r ? JSON.parse(r.data) : undefined; };
+
 const tasksCol = collection('tasks');
 const tasksByUserStmt = sdb.prepare('SELECT data FROM tasks WHERE user_id=? ORDER BY next_run>0 DESC, next_run ASC, created_at DESC');
 const tasksDueStmt = sdb.prepare('SELECT data FROM tasks WHERE next_run>0 AND next_run<=? ORDER BY next_run ASC LIMIT ?');
@@ -412,7 +425,8 @@ export const db = {
   projects: projectsCol,
   feedback: feedbackCol,
   toolStats: toolStatsCol,
-  tasks: tasksCol
+  tasks: tasksCol,
+  skills: skillsCol
 };
 
 const sGet = sdb.prepare('SELECT value FROM settings WHERE key=?');

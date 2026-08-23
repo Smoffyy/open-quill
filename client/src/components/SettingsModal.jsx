@@ -2,9 +2,10 @@ import { useState, useRef, useEffect } from 'react';
 import { api } from '../api.js';
 import { applyPrefs, ACCENT_PRESETS, getUserFont, setUserFont, currentPreset } from '../prefs.js';
 import { palettesFor, themeValue } from '../lib/palettes.js';
-import { Sun, Gear, Sliders, Info, Chevron, Check, Clock, Download, Upload, Shield, Trash, Brain, Refresh, Keyboard, Search } from './icons.jsx';
+import { Sun, Gear, Sliders, Info, Chevron, Check, Clock, Download, Upload, Shield, Trash, Brain, Refresh, Keyboard, Search, SkillIcon } from './icons.jsx';
 import Markdown from './Markdown.jsx';
 import KeybindsPanel from './KeybindsPanel.jsx';
+import SkillsSection from './SkillsSection.jsx';
 import { t, tk, useI18n } from '../i18n.jsx';
 import { STATUS_DELAY_DEFAULT, STATUS_DELAY_MAX, statusDelaySecs } from '../lib/status.js';
 import { menuStyleOf, useAnchoredMenu } from '../lib/anchor.js';
@@ -32,6 +33,9 @@ const NAV_GROUPS = [
   { label: tk('About'), items: [
     { id: 'version', label: tk('Version'), Icon: Info },
   ] },
+  { label: tk('Customize'), items: [
+    { id: 'skills', label: tk('Skills'), Icon: SkillIcon },
+  ] },
 ];
 
 const SETTINGS_INDEX = {
@@ -46,6 +50,7 @@ const SETTINGS_INDEX = {
     tk('Speed on each reply'), tk('Progress line delay'), tk('Context ledger on open'), tk('Mid-stream steering'),
   ],
   memory: [tk('Use memory in chats'), tk('Update from recent chats'), tk('Forget everything')],
+  skills: [tk('Browse'), tk('Add'), tk('Create with the assistant'), tk('Write skill instructions'), tk('Upload a skill')],
   usage: [tk('Usage window'), tk('By model')],
 };
 
@@ -225,7 +230,7 @@ function presetDefaults(isOpenai, fallbackTheme) {
   };
 }
 
-export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdated, onDeleted, onExportChats, onImportChats }) {
+export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdated, onDeleted, onExportChats, onImportChats, onTrySkill }) {
   const [tab, setTab] = useState(initialTab || 'general');
   const { lang: i18nLang, setLang: setAppLang, langs } = useI18n();
   const [name, setName] = useState(user.displayName);
@@ -393,7 +398,8 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
       <div className="modal">
         <button className="modal-close" onClick={onClose} aria-label={t('Close')}>✕</button>
         <SettingsNav tab={tab} setTab={setTab} cfg={cfg} />
-        <div className="modal-main">
+        <div className={'modal-main' + (tab === 'skills' ? ' modal-main-flush' : '')}>
+          {tab === 'skills' && <SkillsSection onTrySkill={(sk) => { onTrySkill?.(sk); onClose(); }} />}
           {tab === 'general' && (
             <>
               <h2>{t("General")}</h2>

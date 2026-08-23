@@ -10,6 +10,7 @@ import {
 } from '../lib/kwargs.js';
 import { parseTextToolCalls, parseArgs, toCall, cutOffOf } from '../tools/index.js';
 import { classifyToolError } from '../lib/toolstats.js';
+import { parseSkillFile, buildSkillFile, normalizeName, validate } from '../lib/skillfile.js';
 import { cutOffError } from '../lib/prompts.js';
 import { makeToolTextFilter, makeEmitter } from '../llm/emitter.js';
 import { trimInTurn, compactThreshold, estimateTokens, textTokens, makeTokenCounter, truncateForRollingCtx, FALLBACK_CTX } from '../lib/convo.js';
@@ -1881,4 +1882,54 @@ test('isDue ignores disabled and unscheduled tasks', () => {
   assert.equal(isDue({ enabled: 0, next_run: 1 }, at), false);
   assert.equal(isDue({ enabled: 1, next_run: 0 }, at), false, 'next_run 0 means never');
   assert.equal(isDue(null, at), false);
+});
+
+test('a SKILL.md round-trips through parse and build', () => {
+  const body = ['# Brand voice', '', 'Use this when writing.'].join('\n');
+  const file = buildSkillFile({ name: 'Brand Voice!', description: 'Keeps drafts in my voice', body });
+  assert.match(file, /^---\nname: brand-voice\ndescription: Keeps drafts in my voice\n---\n/);
+
+  const back = parseSkillFile(file);
+  assert.equal(back.name, 'brand-voice');
+  assert.equal(back.description, 'Keeps drafts in my voice');
+  assert.equal(back.body, body);
+  assert.equal(back.hasFrontmatter, true);
+});
+
+test('parseSkillFile survives what an uploaded file actually looks like', () => {
+  const bare = parseSkillFile(['# Just a heading', '', 'no frontmatter here'].join('\n'));
+  assert.equal(bare.hasFrontmatter, false);
+  assert.equal(bare.name, '', 'a name is never invented from the body');
+  assert.equal(bare.body, ['# Just a heading', '', 'no frontmatter here'].join('\n'));
+
+  const quoted = parseSkillFile(['---', 'name: "my-skill"', "description: 'quoted, with a comma'", '---', 'body'].join('\n'));
+  assert.equal(quoted.name, 'my-skill', 'quotes are stripped');
+  assert.equal(quoted.description, 'quoted, with a comma');
+
+  const folded = parseSkillFile(['---', 'name: wrapped', 'description: first line', '  continued on the next', '---', 'body'].join('\n'));
+  assert.equal(folded.description, 'first line continued on the next', 'an indented continuation folds into the value');
+
+  const crlf = parseSkillFile(['---', 'name: crlf-skill', 'description: d', '---', 'body'].join('\r\n'));
+  assert.equal(crlf.name, 'crlf-skill', 'CRLF frontmatter parses');
+
+  const bom = parseSkillFile('﻿' + ['---', 'name: bom-skill', 'description: d', '---', 'body'].join('\n'));
+  assert.equal(bom.name, 'bom-skill', 'a leading BOM does not hide the frontmatter');
+
+  const proto = parseSkillFile(['---', 'name: ok-name', 'constructor: nope', '---', 'body'].join('\n'));
+  assert.equal(proto.name, 'ok-name', 'a frontmatter key named constructor cannot reach Object.prototype');
+});
+
+test('skill names are normalised and validated at the boundary', () => {
+  assert.equal(normalizeName('  My Skill!!  '), 'my-skill');
+  assert.equal(normalizeName('---a---'), 'a');
+  assert.equal(normalizeName('Skill 2.0'), 'skill-2-0');
+
+  assert.ok(validate({ name: 'x', body: 'b' }).error, 'a one-character name is refused');
+  assert.ok(validate({ name: 'ok-name', body: '   ' }).error, 'empty instructions are refused');
+  assert.ok(validate({ name: 'taken', body: 'b' }, ['taken']).error, 'a duplicate name is refused');
+
+  const ok = validate({ name: 'Good Name', description: ['line one', 'line two'].join('\n'), body: 'b' });
+  assert.equal(ok.name, 'good-name');
+  assert.equal(ok.description, 'line one line two', 'a description never carries a newline into the frontmatter');
+  assert.equal(ok.enabled, true);
 });

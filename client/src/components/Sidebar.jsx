@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import Segmented from './Segmented.jsx';
 import Tip from './Tip.jsx';
-import { Plus, Chat, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, FileText, Star, Download, Chevron, ChevDown, Users, Box, Compact, Stop, Sliders, Check, Home, CodeTag, Artifact, Briefcase, Palette, AppsDownload, Clock, ArrowOut, QuickTask } from './icons.jsx';
-import { t, tk } from '../i18n.jsx';
+import { Plus, Chat, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, FileText, Star, Download, Chevron, ChevDown, Users, Box, Compact, Stop, Sliders, Check, Artifact, Briefcase, ModelDocs, AppsDownload, Clock, ArrowOut, QuickTask } from './icons.jsx';
+import { t } from '../i18n.jsx';
 import { resolveKeybinds, comboKeys } from '../lib/keybinds.js';
 import { displayVersion } from '../lib/channel.js';
 
@@ -88,11 +87,6 @@ function SideResize({ targetRef, onCommit }) {
   );
 }
 
-const SIDE_TABS = [
-  { id: 'home', label: tk('Home'), Icon: Home },
-  { id: 'code', label: tk('Code'), Icon: CodeTag }
-];
-
 const FOLD_KEY = 'oq-folded-sections';
 
 function readFolded() {
@@ -115,9 +109,13 @@ function ProfileMenu({ user, version, anchorRef, onSettings, onAdmin, onPlaygrou
   const ref = useRef(null);
   const [pos, setPos] = useState(null);
   useLayoutEffect(() => {
-    const r = anchorRef.current?.getBoundingClientRect();
+    const btn = anchorRef.current;
+    const r = btn?.getBoundingClientRect();
     if (!r) return;
-    setPos({ left: r.left, width: Math.max(210, r.width), bottom: window.innerHeight - r.top + 6 });
+    const rail = btn.closest('.sidebar')?.getBoundingClientRect();
+    const left = rail ? rail.left + 8 : r.left;
+    const width = rail ? Math.max(210, rail.width - 8) : Math.max(210, r.width);
+    setPos({ left, width, bottom: window.innerHeight - r.top + 5.8 });
   }, [anchorRef]);
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target) && !anchorRef.current?.contains(e.target)) onClose(); };
@@ -127,6 +125,7 @@ function ProfileMenu({ user, version, anchorRef, onSettings, onAdmin, onPlaygrou
   return createPortal(
     <div className="popover" ref={ref} role="menu" aria-label={t('Profile menu')}
       style={pos ? { position: 'fixed', left: pos.left, bottom: pos.bottom, width: pos.width, right: 'auto' } : { visibility: 'hidden' }}>
+      <div className="pm-account">{user.email}</div>
       <button onClick={onChats}><Chat /> {t('Chats')}</button>
       <button onClick={onSpaces}>
         <Users /> {t('Spaces')}
@@ -254,7 +253,7 @@ function Sidebar({
   user, chats, onSearch, chatsLoaded = true, activeId, appName, onNew, onOpen, onDelete, onToggleStar,
   collapsed, onToggle, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview,
   onSpaces, spacesPending = 0, projects = [], onProjects, onOpenProject, onNewProject, onMoveToProject, mobileOpen = false, onMobileClose,
-  onArtifacts, onScheduled, onCustomize, onDesign, onApps, onTab, dest = null,
+  onArtifacts, onScheduled, onCustomize, onModelDocs, showModelDocs = true, onApps, dest = null,
   busyChats = [], onStopChat
 }) {
   const busyIds = React.useMemo(() => new Set(busyChats), [busyChats]);
@@ -267,9 +266,6 @@ function Sidebar({
   const sidebarCombo = combos.sidebar;
   const searchCombo = combos.search;
   const [menu, setMenu] = useState(false);
-  const [tab, setTabState] = useState('home');
-  const [codeMore, setCodeMore] = useState(false);
-  const setTab = (v) => { setTabState(v); if (onTab) onTab(v); };
   const [shiftHeld, setShiftHeld] = useState(false);
   const [hover, setHover] = useState(false);
   const chatsRef = useRef(null);
@@ -363,8 +359,6 @@ function Sidebar({
           <button className="icon-btn mobile-close-btn" onClick={onMobileClose} title={t("Close menu")}><span style={{ fontSize: 20, lineHeight: 1 }}>✕</span></button>
         </div>
       </div>
-      {!collapsed && <Segmented className="side-tabs" value={tab} onChange={setTab} label={t('Sidebar sections')}
-        options={SIDE_TABS.map(o => ({ ...o, label: t(o.label) }))} />}
       <div className="nav">
         <div className="new-row">
         <button className={'nav-item new-chat' + (!activeId && !dest ? ' on' : '')} title={t("New chat")}
@@ -376,12 +370,10 @@ function Sidebar({
         <button className="new-quick" title={t('Quick task')} aria-label={t('Quick task')}
           onClick={(e) => { e.stopPropagation(); (onScheduled || onNew)(); }}><QuickTask /></button>
         </div>
-        {tab === 'home' && <button className={'nav-item' + (dest === 'projects' ? ' on' : '')} title={t("Projects")} aria-current={dest === 'projects' ? 'page' : undefined} onClick={onProjects}><span className="nav-ic"><Box /></span> <span className="nav-label">{t("Projects")}</span></button>}
+        <button className={'nav-item' + (dest === 'projects' ? ' on' : '')} title={t("Projects")} aria-current={dest === 'projects' ? 'page' : undefined} onClick={onProjects}><span className="nav-ic"><Box /></span> <span className="nav-label">{t("Projects")}</span></button>
         <button className={'nav-item' + (dest === 'artifacts' ? ' on' : '')} title={t("Artifacts")} aria-current={dest === 'artifacts' ? 'page' : undefined} onClick={() => onArtifacts && onArtifacts()}><span className="nav-ic"><Artifact /></span> <span className="nav-label">{t("Artifacts")}</span></button>
-        {tab === 'home' && <button className={'nav-item' + (dest === 'scheduled' ? ' on' : '')} title={t("Scheduled")} aria-current={dest === 'scheduled' ? 'page' : undefined} onClick={() => onScheduled && onScheduled()}><span className="nav-ic"><Clock /></span> <span className="nav-label">{t("Scheduled")}</span></button>}
+        <button className={'nav-item' + (dest === 'scheduled' ? ' on' : '')} title={t("Scheduled")} aria-current={dest === 'scheduled' ? 'page' : undefined} onClick={() => onScheduled && onScheduled()}><span className="nav-ic"><Clock /></span> <span className="nav-label">{t("Scheduled")}</span></button>
         <button className="nav-item" title={t("Customize")} onClick={() => onCustomize && onCustomize()}><span className="nav-ic"><Briefcase /></span> <span className="nav-label">{t("Customize")}</span></button>
-        {tab === 'code' && <button className="nav-item" aria-expanded={codeMore} onClick={() => setCodeMore(m => !m)}><span className="nav-ic"><ChevDown className={'nav-more-chev' + (codeMore ? ' open' : '')} /></span> <span className="nav-label">{t('More')}</span></button>}
-        {tab === 'code' && codeMore && <button className={'nav-item' + (dest === 'scheduled' ? ' on' : '')} onClick={() => onScheduled && onScheduled()}><span className="nav-ic"><Clock /></span> <span className="nav-label">{t("Scheduled")}</span></button>}
       </div>
       <div className="chats-wrap">
       <div className={'chats' + (scrolled ? ' scrolled' : '')} ref={chatsRef} onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}>
@@ -458,12 +450,14 @@ function Sidebar({
       </div>
       </div>
       <div className="rail-spacer" />
-      <div className="nav side-foot-nav">
-        <button className="nav-item" title={t("Design")} onClick={() => onDesign && onDesign()}>
-          <span className="nav-ic"><Palette /></span> <span className="nav-label">{t("Design")}</span>
-          <Chevron className="nav-go" aria-hidden="true" />
-        </button>
-      </div>
+      {showModelDocs && (
+        <div className="nav side-foot-nav">
+          <button className="nav-item" title={t("Model docs")} onClick={() => onModelDocs && onModelDocs()}>
+            <span className="nav-ic"><ModelDocs /></span> <span className="nav-label">{t("Model docs")}</span>
+            <Chevron className="nav-go" aria-hidden="true" />
+          </button>
+        </div>
+      )}
       <div className="profile">
         {menu && <ProfileMenu user={user} version={version} anchorRef={profileBtnRef}
           onChats={() => { setMenu(false); onChatsOverview && onChatsOverview(); }}

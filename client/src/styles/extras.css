@@ -912,9 +912,6 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .mdoc-cmp-bar span { display: block; height: 100%; border-radius: 3px; background: var(--text-faint); }
 .mdoc-cmp-row.self .mdoc-cmp-bar span { background: var(--accent); }
 .mdoc-cmp-val { width: 62px; text-align: right; font-variant-numeric: tabular-nums; flex-shrink: 0; }
-.mdocs-btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; color: var(--text-faint); transition: color var(--fx-t, .12s), background var(--fx-t, .12s); flex-shrink: 0; }
-.mdocs-btn:hover { color: var(--text); background: var(--composer-hover, var(--hover-soft)); }
-.mdocs-btn svg { width: 20px; height: 20px; }
 
 /* ---------- persistent context fill, next to the model picker ---------- */
 .ctx-gauge {

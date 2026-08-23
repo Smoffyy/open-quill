@@ -473,3 +473,49 @@ test('the artifacts library answers for a member and refuses a stranger', async 
   const capped = await browser('GET', '/api/artifacts?limit=9999&q=' + encodeURIComponent('x'.repeat(500)));
   assert.equal(capped.status, 200, 'an oversized limit and query are clamped at the boundary');
 });
+
+test('skills round-trip, reject a bad name and stay scoped to their owner', async () => {
+  assert.equal((await request('GET', '/api/skills')).status, 401, 'skills need a session');
+
+  const empty = await browser('GET', '/api/skills');
+  assert.equal(empty.status, 200);
+  assert.deepEqual(empty.json.skills.filter(s => s.scope === 'user'), []);
+
+  const made = await browser('POST', '/api/skills', {
+    body: { name: '  Brand Voice!  ', description: 'Keeps drafts in my voice', body: '# Brand voice\n\nUse this when writing.' }
+  });
+  assert.equal(made.status, 200, made.text);
+  assert.equal(made.json.name, 'brand-voice', 'the name is normalised at the boundary');
+  assert.equal(made.json.enabled, true);
+  assert.equal(made.json.editable, true);
+  assert.match(made.json.file, /^---\nname: brand-voice\n/, 'the SKILL.md is rebuilt from the stored fields');
+  const id = made.json.id;
+
+  assert.equal((await browser('POST', '/api/skills', { body: { name: 'brand voice', body: 'x' } })).status, 400,
+    'a duplicate name is refused rather than shadowing the first');
+  assert.equal((await browser('POST', '/api/skills', { body: { name: 'a', body: 'x' } })).status, 400,
+    'a one-character name is refused');
+  assert.equal((await browser('POST', '/api/skills', { body: { name: 'ok-name', body: '  ' } })).status, 400,
+    'empty instructions are refused');
+
+  const uploaded = await browser('POST', '/api/skills', {
+    body: { file: '---\nname: from-file\ndescription: Parsed out of the upload\n---\n\n# From file\n' }
+  });
+  assert.equal(uploaded.status, 200, uploaded.text);
+  assert.equal(uploaded.json.name, 'from-file');
+  assert.equal(uploaded.json.description, 'Parsed out of the upload', 'frontmatter wins over anything the client sends');
+
+  const off = await browser('PATCH', `/api/skills/${id}`, { body: { enabled: false } });
+  assert.equal(off.status, 200);
+  assert.equal(off.json.enabled, false);
+  assert.equal(off.json.name, 'brand-voice', 'an enable-only patch does not revalidate the name');
+
+  assert.equal((await browser('PATCH', '/api/skills/nope', { body: { enabled: false } })).status, 404,
+    'an unknown id is a miss, not a crash');
+  assert.equal((await browser('DELETE', '/api/skills/nope')).status, 404);
+
+  assert.equal((await browser('DELETE', `/api/skills/${id}`)).status, 200);
+  assert.equal((await browser('DELETE', `/api/skills/${uploaded.json.id}`)).status, 200);
+  const after = await browser('GET', '/api/skills');
+  assert.equal(after.json.skills.filter(s => s.scope === 'user').length, 0);
+});
