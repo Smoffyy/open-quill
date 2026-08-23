@@ -410,6 +410,13 @@
 .rb-copy:hover { color: var(--text); background: var(--hover-soft); }
 .reasoning:hover .rb-copy, .rb-copy:focus-visible { opacity: 1; }
 
+.assistant-body .reasoning .rb-inner > .rb-steps { display: block; gap: 0; margin: 4px 0 0; padding: 0; }
+.assistant-body .reasoning .rb-inner .rb-step { margin: 0; padding: 0 34px 16px 30px; }
+.assistant-body .reasoning.rolling .rb-inner .rb-step { padding-left: 34px; }
+.assistant-body .reasoning .rb-inner .rb-step:last-child { padding-bottom: 2px; }
+.assistant-body .reasoning .rb-inner .rb-step p { margin: 0 0 12px; padding: 0; }
+.assistant-body .reasoning .rb-inner .rb-step p:last-child { margin-bottom: 0; }
+
 /* ---------- code blocks ---------- */
 .code-wrap { position: relative; margin: 0 0 12px; border: 0.8px solid var(--code-border, var(--border-soft)); border-radius: 8px; background: var(--code-bg, #1f1f1d); }
 .assistant-body > .code-wrap:last-child { margin-bottom: 0; }
