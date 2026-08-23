@@ -4,7 +4,39 @@ import Tip from './Tip.jsx';
 import { Plus, Chat, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, FileText, Star, Download, Chevron, ChevDown, Users, Box, Compact, Stop, Sliders, Check, Artifact, Briefcase, ModelDocs, AppsDownload, Clock, ArrowOut, QuickTask } from './icons.jsx';
 import { t } from '../i18n.jsx';
 import { resolveKeybinds, comboKeys } from '../lib/keybinds.js';
-import { displayVersion } from '../lib/channel.js';
+import { parseVersion } from '../lib/appversion.js';
+import { nextFitSize, FIT_PASSES } from '../lib/fittext.js';
+
+function useFitText(ref, text, min) {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !text) return;
+    const fit = () => {
+      el.style.fontSize = '';
+      const base = parseFloat(getComputedStyle(el).fontSize);
+      if (!(base > 0)) return;
+      const floor = base * min;
+      let size = base;
+      for (let i = 0; i < FIT_PASSES; i++) {
+        const next = nextFitSize(size, el.clientWidth, el.scrollWidth, floor);
+        if (!next) break;
+        size = next;
+        el.style.fontSize = size + 'px';
+      }
+    };
+    fit();
+    const box = el.parentElement;
+    if (!box || typeof ResizeObserver !== 'function') return;
+    let last = box.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (box.clientWidth === last) return;
+      last = box.clientWidth;
+      fit();
+    });
+    ro.observe(box);
+    return () => ro.disconnect();
+  }, [ref, text, min]);
+}
 
 const SIDE_MIN = 232;
 const SIDE_MAX = 440;
@@ -105,7 +137,7 @@ function SectionHead({ id, label, folded, onToggle, children }) {
   );
 }
 
-function ProfileMenu({ user, version, anchorRef, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, onChats, onSpaces, spacesPending = 0, onClose }) {
+function ProfileMenu({ user, anchorRef, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, onChats, onSpaces, spacesPending = 0, onClose }) {
   const ref = useRef(null);
   const [pos, setPos] = useState(null);
   useLayoutEffect(() => {
@@ -140,7 +172,6 @@ function ProfileMenu({ user, version, anchorRef, onSettings, onAdmin, onPlaygrou
       <button onClick={onLicense}><FileText /> {t('Licensing')}</button>
       <hr />
       <button onClick={onLogout}><Logout /> {t('Log out')}</button>
-      {version && <div className="pm-version">Open Quill {displayVersion(version)}</div>}
     </div>, document.body
   );
 }
@@ -256,6 +287,11 @@ function Sidebar({
   onArtifacts, onScheduled, onCustomize, onModelDocs, showModelDocs = true, onApps, dest = null,
   busyChats = [], onStopChat
 }) {
+  const brandRef = useRef(null);
+  const verRef = useRef(null);
+  const verText = version ? parseVersion(version)?.full || '' : '';
+  useFitText(brandRef, appName || 'open-quill', 0.6);
+  useFitText(verRef, verText, 0.8);
   const busyIds = React.useMemo(() => new Set(busyChats), [busyChats]);
   const combos = React.useMemo(() => {
     const k = resolveKeybinds(user?.prefs);
@@ -347,7 +383,10 @@ function Sidebar({
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
       {!collapsed && <SideResize targetRef={sideRef} onCommit={setWidth} />}
       <div className="sidebar-head">
-        <div className="brand">{appName || 'open-quill'}</div>
+        <div className="brand-wrap">
+          <div className="brand" ref={brandRef}>{appName || 'open-quill'}</div>
+          {verText && <div className="brand-version" ref={verRef}>{verText}</div>}
+        </div>
         <div className="sidebar-head-actions">
           <Tip label={collapsed ? t('Expand sidebar') : t('Collapse sidebar')} keys={sidebarCombo}>
             <button className="icon-btn collapse-btn" onClick={onToggle}
@@ -459,7 +498,7 @@ function Sidebar({
         </div>
       )}
       <div className="profile">
-        {menu && <ProfileMenu user={user} version={version} anchorRef={profileBtnRef}
+        {menu && <ProfileMenu user={user} anchorRef={profileBtnRef}
           onChats={() => { setMenu(false); onChatsOverview && onChatsOverview(); }}
           onSpaces={() => { setMenu(false); onSpaces && onSpaces(); }}
           spacesPending={spacesPending}

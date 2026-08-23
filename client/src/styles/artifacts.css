@@ -414,7 +414,6 @@
 .qp-icon svg { display: block; }
 
 /* version in profile popover */
-.pm-version { font-size: 11.5px; color: var(--text-faint); text-align: center; padding: 8px 4px 2px; }
 
 /* admin quick-prompt editor rows */
 .qp-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }

@@ -44,10 +44,12 @@
 :root[data-preset="anthropic"] .sidebar { width: 280px; border-right: .8px solid var(--pop-border); }
 
 :root[data-preset="anthropic"] .sidebar-head {
-  height: 44px; padding: 0 8px; align-items: center; justify-content: space-between; flex-shrink: 0;
+  min-height: 54px; padding: 7px 8px; align-items: flex-start; justify-content: space-between; flex-shrink: 0;
 }
-:root[data-preset="anthropic"] .brand { margin: 0 0 0 8px; font-size: 20px; line-height: 20px; }
-:root[data-preset="anthropic"] .sidebar-head-actions { gap: 0; }
+:root[data-preset="anthropic"] .brand-wrap { margin: 0 0 0 8px; }
+:root[data-preset="anthropic"] .brand { font-size: 20px; line-height: 22px; }
+:root[data-preset="anthropic"] .sidebar-head-actions { gap: 0; margin-top: -5px; }
+:root[data-preset="anthropic"] .sidebar.collapsed .sidebar-head-actions { margin-top: 0; }
 :root[data-preset="anthropic"] .sidebar-head-actions .icon-btn {
   width: 32px; height: 32px; border-radius: 8px; color: var(--text-faint);
 }
