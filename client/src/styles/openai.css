@@ -210,7 +210,8 @@
 [data-preset="openai"] .reasoning-head { border-radius: 999px; padding: 5px 13px 5px 11px; }
 [data-preset="openai"] .reasoning-head:hover { background: var(--surface-hover); }
 [data-preset="openai"] .rb-steps, [data-preset="openai"] .rb-peek-in { font-size: 14.5px; line-height: 1.7; }
-[data-preset="openai"] .reasoning.carded { border-radius: 20px; animation: oaiPeekIn .3s var(--ease-out) backwards; }
+[data-preset="openai"] .reasoning.carded { border-radius: 20px; padding: 6px 15px 12px; margin: 2px 0 10px -16px; animation: oaiPeekIn .3s var(--ease-out) backwards; }
+[data-preset="openai"] .reasoning.carded .reasoning-head { margin-left: -11px; }
 [data-preset="openai"] .rb-copy { border-radius: 999px; }
 
 /* openai: restated from the base sheet so the preset (which loads last) cannot
