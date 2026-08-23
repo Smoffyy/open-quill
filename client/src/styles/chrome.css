@@ -2,8 +2,6 @@
 .topbar { display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0 12px; flex-shrink: 0; }
 .topbar .chat-name { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 14px; line-height: 20px; }
 .topbar .icon-btn { width: 28px; height: 28px; border-radius: 7px; }
-.share-btn { height: 28px; padding: 0 10px; border-radius: 7px; background: var(--surface); font-size: 14px; line-height: 20px; font-family: var(--font-sans); }
-.share-btn:hover { background: var(--surface-hover); }
 .disclaimer { text-align: center; font-size: 12px; line-height: 16px; color: var(--text-faint); font-family: var(--font-sans); padding: 8px 0; }
 .disclaimer a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .disclaimer a:hover { color: var(--text-muted); }

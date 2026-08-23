@@ -2,35 +2,28 @@ import { useState, useEffect } from 'react';
 import { api } from '../api.js';
 import LibraryPage, { LibraryEmpty } from './LibraryPage.jsx';
 import { Plus, ChevDown, Paper } from './icons.jsx';
-import { t, tk } from '../i18n.jsx';
-
-const TABS = [
-  { id: 'all', label: tk('All') },
-  { id: 'yours', label: tk('Yours') },
-  { id: 'shared', label: tk('Shared with you') }
-];
+import { t } from '../i18n.jsx';
 
 const KB = 1024;
 const sizeLabel = (n) => (n >= KB * KB ? (n / (KB * KB)).toFixed(1) + ' MB' : n >= KB ? Math.round(n / KB) + ' KB' : n + ' B');
 
 function ArtifactCard({ item, onOpen }) {
   return (
-    <button type="button" className="art-card" onClick={onOpen}>
-      <div className="art-card-preview" aria-hidden="true">
+    <button type="button" className="lib-card" onClick={onOpen}>
+      <div className="lib-card-preview" aria-hidden="true">
         {item.preview
-          ? <pre className="art-card-snippet">{item.preview}</pre>
-          : <span className="art-card-ext">{item.ext || 'file'}</span>}
+          ? <pre className="lib-card-snippet">{item.preview}</pre>
+          : <span className="lib-card-ext">{item.ext || 'file'}</span>}
       </div>
-      <div className="art-card-foot">
-        <span className="art-card-title">{item.name}</span>
-        <span className="art-card-meta">{item.chatTitle || t('Untitled')} · {sizeLabel(item.size)}</span>
+      <div className="lib-card-foot">
+        <span className="lib-card-title">{item.name}</span>
+        <span className="lib-card-meta">{item.chatTitle || t('Untitled')} · {sizeLabel(item.size)}</span>
       </div>
     </button>
   );
 }
 
 export default function ArtifactsLibrary({ onSearch, onNew, onOpen }) {
-  const [tab, setTab] = useState('all');
   const [filter, setFilter] = useState('all');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -44,16 +37,13 @@ export default function ArtifactsLibrary({ onSearch, onNew, onOpen }) {
     return () => { live = false; };
   }, []);
 
-  const shown = items.filter(i => (tab === 'all' || tab === 'yours')
-    && (filter === 'all' || i.ext === filter));
+  const shown = items.filter(i => filter === 'all' || i.ext === filter);
   const exts = [...new Set(items.map(i => i.ext).filter(Boolean))].sort();
 
   return (
     <LibraryPage
       title={t('Artifacts')}
       onSearch={onSearch}
-      tabs={TABS.map(x => ({ ...x, label: t(x.label) }))}
-      tabValue={tab} onTab={setTab}
       actions={<>
         <button className="lib-pill" onClick={() => {
           const i = exts.indexOf(filter);
@@ -68,7 +58,7 @@ export default function ArtifactsLibrary({ onSearch, onNew, onOpen }) {
       {loading ? null : shown.length === 0 ? (
         <LibraryEmpty icon={<Paper />} line={t('No artifacts yet.')} />
       ) : (
-        <div className="art-grid">{shown.map(i => (
+        <div className="lib-grid">{shown.map(i => (
           <ArtifactCard key={i.id} item={i} onOpen={() => onOpen && onOpen(i)} />
         ))}</div>
       )}

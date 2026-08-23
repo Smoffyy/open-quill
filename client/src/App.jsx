@@ -34,7 +34,6 @@ import { voiceEmit } from './voice.js';
 import ChatsOverview from './components/ChatsOverview.jsx';
 import ArtifactsLibrary from './components/ArtifactsLibrary.jsx';
 import ScheduledTasks from './components/ScheduledTasks.jsx';
-import ShareChatModal from './components/ShareChatModal.jsx';
 import Tip from './components/Tip.jsx';
 import SpacesPanel from './components/SpacesPanel.jsx';
 import ProjectsPanel from './components/ProjectsPanel.jsx';
@@ -246,7 +245,6 @@ export default function App() {
   const [incognitoGreeting, setIncognitoGreeting] = useState(tk('Greetings, whoever you are'));
   const [chatsOverview, setChatsOverview] = useState(false);
   const [libPage, setLibPage] = useState(null);
-  const [shareOpen, setShareOpen] = useState(false);
   const runTask = useCallback(async (task) => {
     try {
       const r = await api.post('/api/tasks/' + task.id + '/run', {});
@@ -1714,7 +1712,6 @@ export default function App() {
                     <Paper style={{ width: 18 }} />{files.length > 0 && <span className="paper-count">{files.length}</span>}
                   </button>
                 )}
-                {activeId && <button className="share-btn" onClick={() => setShareOpen(true)}>{t("Share")}</button>}
               </div>
             </div>
             {findOpen && user?.prefs?.threadFind !== false && <ThreadFind scrollRef={scrollRef} revision={findRevision} onMatches={onFindMatches} onClose={closeFind} />}
@@ -1837,7 +1834,6 @@ export default function App() {
           </div>
         </div>
       )}
-      {shareOpen && <ShareChatModal onClose={() => setShareOpen(false)} />}
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} onChatsChanged={() => loadChats()} />}
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} onOpen={(id) => openChat(id)} />}
       {personasOpen && <PersonasModal personas={user?.personas || []} models={models} currentId={currentId} onApply={applyPersona} onSave={savePersonas} onClose={() => setPersonasOpen(false)} />}

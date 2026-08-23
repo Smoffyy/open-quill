@@ -86,7 +86,7 @@
 }
 [data-preset="openai"] .topbar-model .model-trigger:hover { background: var(--surface-hover); }
 [data-preset="openai"] .topbar-model .model-trigger svg { color: var(--text-faint); }
-.home-topbar { position: absolute; top: 10px; left: 14px; z-index: 20; }
+.home-topbar { position: absolute; top: 15px; left: 20px; z-index: 20; }
 [data-preset="openai"] .topbar-model .model-menu, .home-topbar .model-menu {
   bottom: auto; top: 42px; left: 0; right: auto; transform-origin: top left; border-radius: 16px;
 }

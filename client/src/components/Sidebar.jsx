@@ -202,9 +202,9 @@ function ChatRow({ c, active, showTrash, projects = [], onMoveToProject, onOpen,
       </span>
       <span className="title">{c.title}</span>
       {showTrash ? (
-        <button className="row-ctrl shift-del" onClick={(e) => { e.stopPropagation(); onDelete(c.id); }} title={t("Delete chat")} aria-label={t("Delete chat")}><Trash style={{ width: 14 }} /></button>
+        <button className="row-ctrl shift-del" onClick={(e) => { e.stopPropagation(); onDelete(c.id); }} title={t("Delete chat")} aria-label={t("Delete chat")}><Trash /></button>
       ) : (
-        <button className="row-ctrl" ref={btnRef} onClick={openMenu} title={t("Options")} aria-label={t("Options")} aria-expanded={!!menu} aria-haspopup="menu"><DotsV style={{ width: 20 }} /></button>
+        <button className="row-ctrl" ref={btnRef} onClick={openMenu} title={t("Options")} aria-label={t("Options")} aria-expanded={!!menu} aria-haspopup="menu"><DotsV /></button>
       )}
       {menu && createPortal(
         <div className="chat-menu" ref={menuRef} role="menu" aria-label={t("Chat options")} style={{ top: menu.top, left: menu.left, visibility: menu.ready ? undefined : 'hidden' }}>
@@ -420,7 +420,7 @@ function Sidebar({
               <span className="sec-head-actions">
               <button className="rl-group" title={t('All chats')} aria-label={t('All chats')} onClick={onChatsOverview}><ArrowOut /></button>
               <button className="rl-group" title={t('Group by')} aria-label={t('Group by')} aria-haspopup="menu" aria-expanded={groupMenu}
-                onClick={() => setGroupMenu(o => !o)}><Sliders style={{ width: 13, height: 13 }} /></button>
+                onClick={() => setGroupMenu(o => !o)}><Sliders /></button>
               {groupMenu && (
                 <div className="rl-menu" role="menu">
                   <div className="rl-menu-head">{t('Group by')}</div>
