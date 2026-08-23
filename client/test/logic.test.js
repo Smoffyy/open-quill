@@ -915,7 +915,7 @@ test('the progress-line delay clamps to a whole number of seconds in range', () 
 test('a palette resolves to a theme plus an optional palette attribute', () => {
   assert.equal(paletteFor('system', 'anthropic', true).id, 'anthropic-2026q3');
   assert.equal(paletteFor('system', 'anthropic', false).id, 'anthropic-light');
-  assert.equal(paletteFor('system', 'openai', true).id, 'openai-2024q1');
+  assert.equal(paletteFor('system', 'openai', true).id, 'openai-2025');
   assert.equal(paletteFor('anthropic-2026q3', 'anthropic').theme, 'anthropic');
   assert.equal(paletteFor('anthropic-2026q3', 'anthropic').palette, '2026q3');
   assert.equal(paletteFor('anthropic-2025q2', 'anthropic').palette, '', 'the older dark carries no palette attribute');
@@ -924,13 +924,13 @@ test('a palette resolves to a theme plus an optional palette attribute', () => {
 test('legacy theme values still land on the preset default', () => {
   for (const legacy of ['dark', 'oled', 'anthropic', 'openai']) {
     assert.equal(paletteFor(legacy, 'anthropic').id, 'anthropic-2026q3', legacy);
-    assert.equal(paletteFor(legacy, 'openai').id, 'openai-2024q1', legacy);
+    assert.equal(paletteFor(legacy, 'openai').id, 'openai-2025', legacy);
   }
   assert.equal(paletteFor('light', 'openai').id, 'openai-light');
 });
 
 test('a palette from the other preset falls back by darkness, never breaks', () => {
-  assert.equal(paletteFor('anthropic-2026q3', 'openai').id, 'openai-2024q1');
+  assert.equal(paletteFor('anthropic-2026q3', 'openai').id, 'openai-2025');
   assert.equal(paletteFor('anthropic-light', 'openai').id, 'openai-light');
   assert.equal(paletteFor('openai-2024q1', 'anthropic').id, 'anthropic-2026q3');
   assert.equal(paletteFor('nonsense', 'anthropic', true).id, 'anthropic-2026q3');
@@ -945,7 +945,18 @@ test('the theme picker only ever offers its own preset a value it can select', (
     }
   }
   assert.equal(palettesFor('anthropic').length, 4);
-  assert.equal(palettesFor('openai').length, 2);
+  assert.equal(palettesFor('openai').length, 3);
+});
+
+test('the 2025 openai palette is a token override, not a new theme value', () => {
+  const p = paletteFor('openai-2025', 'openai');
+  assert.equal(p.id, 'openai-2025');
+  assert.equal(p.theme, 'openai', 'a new data-theme would silently drop every rule scoped to the old one');
+  assert.equal(p.palette, '2025');
+  assert.ok(p.dark);
+  assert.equal(themeValue('openai-2025', 'openai'), 'openai-2025', 'the picker can select it');
+  assert.equal(paletteFor('openai-2025', 'anthropic').id, 'anthropic-2026q3', 'falls back by darkness under the other preset');
+  assert.deepEqual(palettesFor('openai').map(x => x.id), ['openai-light', 'openai-2024q1', 'openai-2025']);
 });
 
 test('the legacy palette is a distinct anthropic dark, not the default', () => {
@@ -953,7 +964,7 @@ test('the legacy palette is a distinct anthropic dark, not the default', () => {
   assert.equal(leg.theme, 'anthropic');
   assert.equal(leg.palette, 'legacy');
   assert.notEqual(paletteFor('dark', 'anthropic').id, 'anthropic-legacy', 'legacy is opt-in, never the default');
-  assert.equal(paletteFor('anthropic-legacy', 'openai').id, 'openai-2024q1', 'falls back by darkness under the other preset');
+  assert.equal(paletteFor('anthropic-legacy', 'openai').id, 'openai-2025', 'falls back by darkness under the other preset');
   const ids = palettesFor('anthropic').map(p => p.id);
   assert.deepEqual(ids, ['anthropic-light', 'anthropic-legacy', 'anthropic-2025q2', 'anthropic-2026q3']);
 });

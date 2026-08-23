@@ -29,6 +29,33 @@
   --hover-mid: #ffffff1a;
   --oai-row-fill: #393939;
 }
+:root[data-theme="openai"][data-palette="2025"] {
+  --bg: #000000;
+  --sidebar: #000000;
+  --input-bg: #212121;
+  --user-bubble: #323232;
+  --surface: #000000;
+  --surface-2: #212121;
+  --surface-hover: #ffffff14;
+  --border: #ffffff1a;
+  --border-soft: #ffffff0d;
+  --text: #ffffff;
+  --text-muted: #cdcdcd;
+  --text-faint: #afafaf;
+  --pop-bg: #353535;
+  --pop-border: #ffffff0d;
+  --pop-hover: #414141;
+  --pop-divider: #ffffff14;
+  --pop-switch: #ffffff40;
+  --modal-bg: #212121;
+  --modal-side: #000000;
+  --menu-bg: #353535;
+  --card-bg: #1b1b1b;
+  --hover-soft: #ffffff0d;
+  --hover-mid: #ffffff1a;
+  --oai-row-fill: #ffffff26;
+}
+
 :root[data-preset="openai"][data-theme="light"] {
   --bg: #fcfcfc;
   --sidebar: #fcfcfc;
@@ -63,9 +90,11 @@
 [data-preset="openai"] .chat-menu button { gap: 9px; padding: 8px 9px; border-radius: 7px; font-size: 13.5px; line-height: normal; color: var(--text); }
 [data-preset="openai"] .chat-menu button:hover { background: var(--surface-hover); }
 [data-preset="openai"] .chat-menu svg { width: 15px; height: 15px; }
-[data-preset="openai"] .chat-row { border-radius: 8px; padding: 7px 10px; font-size: 13.5px; line-height: normal; color: var(--text); }
+[data-preset="openai"] .new-row .nav-item.new-chat { padding-right: 34px; }
+[data-preset="openai"] .row-ic { display: grid; place-items: center; width: 20px; height: 20px; flex-shrink: 0; }
+[data-preset="openai"] .chat-row { border-radius: 8px; gap: 8px; padding: 7px 10px; font-size: 13.5px; line-height: normal; color: var(--text); }
 [data-preset="openai"] .chat-row:hover, [data-preset="openai"] .chat-row.active { color: var(--text); }
-[data-preset="openai"] .section-label, [data-preset="openai"] .recents-label { color: var(--text); font-weight: 700; opacity: 1; font-size: 12.5px; }
+[data-preset="openai"] .section-label, [data-preset="openai"] .recents-label { color: var(--text-faint); font-weight: 500; opacity: 1; font-size: 12.5px; }
 [data-preset="openai"] .recents-label:hover { color: var(--text); }
 
 [data-preset="openai"] .topbar { justify-content: flex-start; gap: 8px; padding: 10px 14px; position: relative; }
@@ -336,6 +365,7 @@
 :root[data-preset="openai"] .lib-pill:hover::before { background: var(--hover-mid); }
 :root[data-preset="openai"] .chat-row:hover::before,
 :root[data-preset="openai"] .chat-row.active::before { background: var(--oai-row-fill); }
+:root[data-preset="openai"] .nav-item.on::before { background: var(--oai-row-fill); }
 @media (prefers-reduced-motion: reduce) {
   :root[data-preset="openai"] :is(.nav-item, .chat-row, .icon-btn)::before { transition: none; transform: none; }
 }
@@ -502,7 +532,14 @@
   [data-preset="openai"] .mobile-menu-btn.empty-menu { top: calc(12px + env(safe-area-inset-top)); left: 12px; }
   [data-preset="openai"] .home-topbar { left: 62px; top: calc(15px + env(safe-area-inset-top)); }
   [data-preset="openai"] .topbar .mobile-menu-btn { order: -1; }
-  [data-preset="openai"] .topbar-model { flex: 0 1 auto; min-width: 0; max-width: 46%; margin-right: 0; overflow: hidden; }
+  [data-preset="openai"] .topbar-model { flex: 0 1 auto; min-width: 0; margin-right: 0; overflow: hidden; }
+  [data-preset="openai"] .topbar .topbar-model { max-width: none; }
+  [data-preset="openai"] .topbar .topbar-actions { flex-shrink: 0; }
+  [data-preset="openai"] .topbar { padding-left: 8px; padding-right: 8px; gap: 6px; }
+  [data-preset="openai"] .home-topbar .topbar-model { max-width: calc(100vw - 164px); }
+  [data-preset="openai"] .topbar-model .model-select { min-width: 0; max-width: 100%; }
+  [data-preset="openai"] .topbar-model .model-trigger { min-width: 0; max-width: 100%; }
+  [data-preset="openai"] .topbar-model .mt-label { min-width: 0; }
   [data-preset="openai"] .topbar-model .model-trigger { white-space: nowrap; min-width: 0; overflow: hidden; }
   [data-preset="openai"] .topbar-model .model-trigger > span:first-child { overflow: hidden; text-overflow: ellipsis; }
   [data-preset="openai"] .topbar-model .model-trigger .ext { display: none; }
