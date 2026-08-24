@@ -57,7 +57,7 @@ import { useSocket } from './lib/socket.js';
 const BranchTree = React.lazy(() => import('./components/BranchTree.jsx'));
 import { toast } from './toast.js';
 import { copyText } from './clipboard.js';
-import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork, Panel } from './components/icons.jsx';
+import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork, Panel, Copy, Check } from './components/icons.jsx';
 import { BRAND_ICON } from './lib/brand.js';
 
 const SKELETON_DELAY = 3000;
@@ -316,6 +316,7 @@ export default function App() {
   const queuedRef = useRef(false);
   useEffect(() => { queuedRef.current = queued; }, [queued]);
   const [chatErrors, setChatErrors] = useState({});
+  const [errorCopied, setErrorCopied] = useState(false);
   const [dispContent, setDispContent] = useState('');
   const [dispReason, setDispReason] = useState('');
   const [dispSegs, setDispSegs] = useState(null);
@@ -1759,7 +1760,13 @@ export default function App() {
                       <span className="chat-error-title">{t('Something went wrong')}</span>
                       <span className="chat-error-text">{chatErrors[activeKey()]}</span>
                     </div>
-                    <button className="chat-error-x" title={t('Dismiss')} onClick={() => dismissError()}><X style={{ width: 15 }} /></button>
+                    <div className="chat-error-actions">
+                      <button className="chat-error-copy" title={errorCopied ? t('Copied') : t('Copy')}
+                        onClick={async () => { if (await copyText(chatErrors[activeKey()])) { setErrorCopied(true); setTimeout(() => setErrorCopied(false), 1400); } }}>
+                        {errorCopied ? <Check style={{ width: 15 }} /> : <Copy style={{ width: 15 }} />}
+                      </button>
+                      <button className="chat-error-x" title={t('Dismiss')} onClick={() => dismissError()}><X style={{ width: 15 }} /></button>
+                    </div>
                   </div>
                 )}
                 {queuedList.map(q => (

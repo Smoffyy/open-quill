@@ -651,7 +651,10 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       }
     }
   } catch (err) {
-    if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: String(err.message || err) }));
+    if (err.name !== 'AbortError') {
+      console.error('[turn]', err);
+      safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: String(err.message || err) }));
+    }
   }
   closeReasoning();
   const wasStopped = stopRequested();

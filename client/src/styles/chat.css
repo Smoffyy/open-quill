@@ -586,5 +586,6 @@
 .chat-error-main { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
 .chat-error-title { font-size: 13px; font-weight: 600; color: color-mix(in srgb, #e0563f 78%, var(--text)); }
 .chat-error-text { font-size: 13.5px; line-height: 1.5; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
-.chat-error-x { flex-shrink: 0; color: var(--text-muted); width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; transition: background var(--fx-t, .12s), color var(--fx-t, .12s); }
-.chat-error-x:hover { background: var(--hover-mid); color: var(--text); }
+.chat-error-actions { flex-shrink: 0; display: flex; align-items: center; gap: 2px; }
+.chat-error-x, .chat-error-copy { flex-shrink: 0; color: var(--text-muted); width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; transition: background var(--fx-t, .12s), color var(--fx-t, .12s); }
+.chat-error-x:hover, .chat-error-copy:hover { background: var(--hover-mid); color: var(--text); }

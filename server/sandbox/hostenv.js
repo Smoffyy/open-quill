@@ -79,7 +79,9 @@ function cleanVersion(text) {
 
 let ENV_CACHE = null;
 export function primeHostEnv(env) {
-  if (!ENV_CACHE && env && typeof env === 'object') ENV_CACHE = env;
+  if (!ENV_CACHE && env && typeof env === 'object' && Array.isArray(env.interpreters) && Array.isArray(env.utils) && Array.isArray(env.missingUtils)) {
+    ENV_CACHE = env;
+  }
   return ENV_CACHE;
 }
 
