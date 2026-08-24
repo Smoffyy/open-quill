@@ -88,6 +88,7 @@
 [data-preset="openai"] .chat-row .row-ctrl { position: static; width: 20px; height: 20px; }
 [data-preset="openai"] .chat-menu { padding: 5px; background: var(--menu-bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 32px #00000055; }
 [data-preset="openai"] .chat-menu button { gap: 9px; padding: 8px 9px; border-radius: 7px; font-size: 13.5px; line-height: normal; color: var(--text); }
+[data-preset="openai"] .chat-menu button.danger { color: var(--danger); }
 [data-preset="openai"] .chat-menu button:hover { background: var(--surface-hover); }
 [data-preset="openai"] .chat-menu svg { width: 15px; height: 15px; }
 [data-preset="openai"] .new-row .nav-item.new-chat { padding-right: 34px; }
@@ -232,6 +233,7 @@
   background: var(--user-bubble); border-radius: 22px; padding: 8px 18px; font-size: 15px; line-height: 22px;
   font-family: var(--font-sans); max-width: 100%;
 }
+[data-preset="openai"] .msg.assistant > .msg-icon { margin-left: 0; }
 [data-preset="openai"] .msg-icon img { border-radius: 8px; }
 [data-preset="openai"] .msg-icon-name { font-family: var(--font-sans); font-size: 13.5px; font-weight: 600; color: var(--text); }
 [data-preset="openai"] .msg.assistant.icon-left .il-avatar { top: -4px; }
@@ -550,3 +552,14 @@
   [data-preset="openai"] .assistant-body { font-size: 17px; }
   [data-preset="openai"] .topbar { height: auto; padding: 10px 12px; padding-top: calc(10px + env(safe-area-inset-top)); }
 }
+
+[data-preset="openai"] .composer.has-chips { padding-bottom: 52px; }
+[data-preset="openai"] .composer.ml.has-chips { padding-bottom: 96px; }
+[data-preset="openai"] .composer.has-chips .composer-bar { bottom: 52px; }
+[data-preset="openai"] .composer-chips {
+  position: absolute; left: 8px; right: 8px; bottom: 8px;
+  display: flex; align-items: center; flex-wrap: nowrap; gap: 6px;
+  overflow: auto hidden; scrollbar-width: none;
+}
+[data-preset="openai"] .composer-chips::-webkit-scrollbar { display: none; }
+[data-preset="openai"] .composer .active-chip { height: 36px; min-width: 36px; border-radius: 999px; }

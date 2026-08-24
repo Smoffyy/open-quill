@@ -24,8 +24,10 @@ function InviteSearch({ spaceId, onInvited }) {
   useEffect(() => {
     if (!open) return;
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
     document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
   }, [open]);
   useEffect(() => {
     if (!q.trim() || q.trim().length < 2) { setResults([]); return; }

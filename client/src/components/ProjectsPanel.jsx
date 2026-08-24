@@ -100,8 +100,10 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
   useEffect(() => {
     if (!menu) return;
     const h = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenu(false); };
+    const esc = (e) => { if (e.key === 'Escape') setMenu(false); };
     document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
   }, [menu]);
   if (!project) return <div className="pj-detail" />;
 

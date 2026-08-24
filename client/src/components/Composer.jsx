@@ -52,6 +52,17 @@ function PmSub({ className = '', children, onMouseEnter, onMouseLeave }) {
   );
 }
 
+function ActiveChip({ icon, label, onRemove }) {
+  return (
+    <Tip label={label}>
+      <button type="button" className="active-chip" onClick={onRemove} aria-label={label}>
+        <span className="ac-icon">{icon}</span>
+        <span className="ac-x"><X /></span>
+      </button>
+    </Tip>
+  );
+}
+
 export default function Composer({
   value, onChange, onSend, onStop, streaming, stopping = false, models,
   currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, onOpenProject, projects = [], onSetProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
@@ -61,7 +72,7 @@ export default function Composer({
   conversationEnded = false, endedReason = '',
   removedModel = null, skills = [], onToggleSkill = null, onManageSkills = null,
   queueCount = 0, onQueue, onSteer, canSteer = false,
-  compareIds = [], onSetCompare, hideModelPicker = false, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
+  compareIds = [], onSetCompare, hideModelPicker = false, chipsBelow = false, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
   ctxGauge = null
 }) {
   const ta = useRef(null);
@@ -93,8 +104,10 @@ export default function Composer({
       setPlusDown(window.innerHeight - r.bottom > 320);
     }
     const h = (e) => { if (plusRef.current && !plusRef.current.contains(e.target)) setPlusMenu(false); };
+    const esc = (e) => { if (e.key === 'Escape') setPlusMenu(false); };
     document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
   }, [plusMenu]);
 
   const grewOnce = useRef(false);
@@ -278,11 +291,16 @@ export default function Composer({
   const budgetBlock = budgetState === 'over' && budget?.enforce && !canUseUnavailable;
   const showBudgetBanner = budgetState === 'warn' || budgetState === 'over';
   const sunsetOnly = !!sunsetInfo && !bannerMounted && !showBudgetBanner && !safetyFlagged && !conversationEnded && !removedModel;
-  const enabledCount = (sandbox ? 1 : 0) + (webSearch ? 1 : 0);
+  const activeTools = [];
+  if (sandboxAllowed && sandbox) activeTools.push({ id: 'sandbox', icon: <Cube />, label: t("Sandbox tools"), off: () => onToggleSandbox && onToggleSandbox() });
+  if (webSearchAvailable && webSearch) activeTools.push({ id: 'websearch', icon: <Globe />, label: t("Web search"), off: () => onToggleWebSearch && onToggleWebSearch() });
+  for (const sk of skills) if (sk.enabled) activeTools.push({ id: 'skill:' + sk.id, icon: <SkillIcon />, label: sk.name, off: () => onToggleSkill && onToggleSkill(sk) });
+  if (onSelectStyle && styleId && styleId !== 'normal') activeTools.push({ id: 'style', icon: <Sliders />, label: styleNameFor(styleId, styles), off: () => onSelectStyle('normal') });
+  const chips = activeTools.map(a => <ActiveChip key={a.id} icon={a.icon} label={a.label} onRemove={a.off} />);
   const hasText = /\S/.test(value);
   const canSend = (hasText || files.length > 0) && !uploading && !blockSend && !budgetBlock && !safetyFlagged && !safetyChecking && !conversationEnded;
   const [multiline, setMultiline] = useState(false);
-  const cls = 'composer' + (multiline ? ' ml' : '') + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + ((unavailable || removedModel) ? ' unavailable' : '') + ((blockSend || budgetBlock) ? ' blocked' : '');
+  const cls = 'composer' + (multiline ? ' ml' : '') + (chipsBelow && activeTools.length > 0 ? ' has-chips' : '') + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + ((unavailable || removedModel) ? ' unavailable' : '') + ((blockSend || budgetBlock) ? ' blocked' : '');
   const fmtUsd = (n) => '$' + (Number(n || 0) > 0 && Number(n || 0) < 0.01 ? Number(n).toFixed(4) : Number(n || 0).toFixed(2));
 
   return (
@@ -419,7 +437,6 @@ export default function Composer({
               <button className={'plus' + (plusMenu ? ' on' : '')} onClick={() => setPlusMenu(m => !m)} aria-label={t("More")}
                 aria-haspopup="menu" aria-expanded={plusMenu}>
                 <Plus style={{ width: 20, height: 20 }} />
-                {enabledCount > 0 && <span className="plus-badge">{enabledCount}</span>}
               </button>
             </Tip>
             {plusMenu && (
@@ -601,6 +618,7 @@ export default function Composer({
               </div>
             )}
           </div>
+          {!chipsBelow && activeTools.length > 0 && <div className="composer-chips">{chips}</div>}
           {project && (
             <div className="composer-project">
               {onOpenProject ? (
@@ -650,6 +668,7 @@ export default function Composer({
           )}
         </div>
       </div>
+      {chipsBelow && activeTools.length > 0 && <div className="composer-chips">{chips}</div>}
     </div>
     </div>
   );

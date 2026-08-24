@@ -134,7 +134,7 @@ export default function AnalyticsSection() {
                   <tr key={u.userId}>
                     <td>{u.name}</td>
                     <td className="num">{(u.prompt + u.completion).toLocaleString()}</td>
-                    <td className="num">{u.cost ? fmtMoney(u.cost) : ', '}</td>
+                    <td className="num">{u.cost ? fmtMoney(u.cost) : '—'}</td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -148,7 +148,7 @@ export default function AnalyticsSection() {
                   <tr key={m.modelId}>
                     <td>{m.name}</td>
                     <td className="num">{(m.prompt + m.completion).toLocaleString()}</td>
-                    <td className="num">{m.cost ? fmtMoney(m.cost) : ', '}</td>
+                    <td className="num">{m.cost ? fmtMoney(m.cost) : '—'}</td>
                   </tr>
                 ))}</tbody>
               </table>

@@ -12,6 +12,11 @@
   --text-faint: #6f6e66;
   --accent: #d97757;
   --on-accent: #ffffff;
+  --danger: #e5484d;
+  --success: #4caf7d;
+  --warning: #e2b03f;
+  --diff-add: #3fb950;
+  --diff-del: #f85149;
   --user-bubble: #2f2f2c;
   --composer-bg: var(--surface);
   --composer-hover: rgba(255, 255, 255, .08);
@@ -94,6 +99,8 @@
   --composer-hover: rgba(0, 0, 0, .06);
 }
 :root[data-theme="light"] .code-wrap { background: #1f1f1d; }
+:root[data-theme="light"] .tb-cmd code.hljs,
+:root[data-theme="light"] .tb-cmd code.hljs * { color: var(--text); }
 /* Wherever the wrap takes an opaque background of its own, the sticky bar has to
    take the same one, or it goes back to being see-through. */
 
@@ -361,6 +368,6 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: none; ba
 input, textarea { font-family: inherit; color: inherit; }
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: var(--hover-mid); border-radius: 9px; }
-::-webkit-scrollbar-thumb:hover { background: #ffffff30; }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--text) 19%, transparent); }
 ::-webkit-scrollbar-track { background: transparent; }
 

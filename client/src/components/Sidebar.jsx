@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Tip from './Tip.jsx';
-import { Plus, Chat, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, FileText, Star, Download, Chevron, ChevDown, Users, Box, Compact, Stop, Sliders, Check, Artifact, Briefcase, ModelDocs, AppsDownload, Clock, ArrowOut, QuickTask } from './icons.jsx';
+import { Plus, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, Star, Download, Chevron, ChevDown, Box, Compact, Stop, Sliders, Check, Artifact, Briefcase, ModelDocs, AppsDownload, Clock, ArrowOut, QuickTask, Sparkles, Paper } from './icons.jsx';
 import { t } from '../i18n.jsx';
 import { resolveKeybinds, comboKeys } from '../lib/keybinds.js';
 import { parseVersion } from '../lib/appversion.js';
@@ -137,7 +137,7 @@ function SectionHead({ id, label, folded, onToggle, children }) {
   );
 }
 
-function ProfileMenu({ user, anchorRef, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, onChats, onSpaces, spacesPending = 0, onClose }) {
+function ProfileMenu({ user, anchorRef, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, onClose }) {
   const ref = useRef(null);
   const [pos, setPos] = useState(null);
   useLayoutEffect(() => {
@@ -151,25 +151,21 @@ function ProfileMenu({ user, anchorRef, onSettings, onAdmin, onPlayground, onCre
   }, [anchorRef]);
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target) && !anchorRef.current?.contains(e.target)) onClose(); };
+    const esc = (e) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
   }, []);
   return createPortal(
     <div className="popover" ref={ref} role="menu" aria-label={t('Profile menu')}
       style={pos ? { position: 'fixed', left: pos.left, bottom: pos.bottom, width: pos.width, right: 'auto' } : { visibility: 'hidden' }}>
       <div className="pm-account">{user.email}</div>
-      <button onClick={onChats}><Chat /> {t('Chats')}</button>
-      <button onClick={onSpaces}>
-        <Users /> {t('Spaces')}
-        {spacesPending > 0 && <span className="pm-count">{spacesPending}</span>}
-      </button>
-      <hr />
       {user.isAdmin && <button onClick={onAdmin}><Shield /> {t('Admin Panel')}</button>}
       {user.isAdmin && <button onClick={onPlayground}><Flask /> {t('Playground')}</button>}
       <button onClick={onSettings}><Gear /> {t('Settings')}</button>
       <button onClick={onCredits}><Heart /> {t('Credits')}</button>
-      <button onClick={onChangelog}><FileText /> {t('Changelog')}</button>
-      <button onClick={onLicense}><FileText /> {t('Licensing')}</button>
+      <button onClick={onChangelog}><Sparkles /> {t('Changelog')}</button>
+      <button onClick={onLicense}><Paper /> {t('Licensing')}</button>
       <hr />
       <button onClick={onLogout}><Logout /> {t('Log out')}</button>
     </div>, document.body
@@ -190,11 +186,14 @@ function ChatRow({ c, active, showTrash, projects = [], onMoveToProject, onOpen,
       setMenu(null); setSubOpen(false);
     };
     const dismiss = () => { setMenu(null); setSubOpen(false); };
+    const esc = (e) => { if (e.key === 'Escape') dismiss(); };
     document.addEventListener('mousedown', h);
+    document.addEventListener('keydown', esc);
     window.addEventListener('resize', dismiss);
     window.addEventListener('scroll', dismiss, true);
     return () => {
       document.removeEventListener('mousedown', h);
+      document.removeEventListener('keydown', esc);
       window.removeEventListener('resize', dismiss);
       window.removeEventListener('scroll', dismiss, true);
     };
@@ -323,8 +322,10 @@ function Sidebar({
   useEffect(() => {
     if (!groupMenu) return;
     const h = (e) => { if (groupRef.current && !groupRef.current.contains(e.target)) setGroupMenu(false); };
+    const esc = (e) => { if (e.key === 'Escape') setGroupMenu(false); };
     document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
   }, [groupMenu]);
   useEffect(() => {
     const down = (e) => { if (e.key === 'Shift') setShiftHeld(true); };
@@ -499,9 +500,6 @@ function Sidebar({
       )}
       <div className="profile">
         {menu && <ProfileMenu user={user} anchorRef={profileBtnRef}
-          onChats={() => { setMenu(false); onChatsOverview && onChatsOverview(); }}
-          onSpaces={() => { setMenu(false); onSpaces && onSpaces(); }}
-          spacesPending={spacesPending}
           onSettings={() => { setMenu(false); onSettings(); }}
           onPlayground={() => { setMenu(false); onPlayground && onPlayground(); }}
           onAdmin={() => { setMenu(false); onAdmin(); }}

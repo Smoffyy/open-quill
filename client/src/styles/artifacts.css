@@ -181,8 +181,8 @@
 .tc-dots i:nth-child(3) { animation-delay: var(--fx-a, .4s); }
 @keyframes tooldot { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
 .tc-note { color: var(--text-muted); font-size: 12px; padding-left: 2px; }
-.tc-note.err, .tool-chip.err .tc-verb { color: var(--danger, #e5635b); }
-.tool-chip.err svg { color: var(--danger, #e5635b); }
+.tc-note.err, .tool-chip.err .tc-verb { color: var(--danger); }
+.tool-chip.err svg { color: var(--danger); }
 
 /* tool line, understated grey status for file ops & misc tools */
 .tool-line {
@@ -196,7 +196,7 @@
 .tool-live .tool-line, .tool-live .tool-bash { animation: chipIn var(--fx-a, .26s) var(--ease-out) backwards; }
 @media (prefers-reduced-motion: reduce) { .tool-live .tool-line, .tool-live .tool-bash { animation: none; } }
 .tool-line .tl-icon { width: 20px; height: 20px; color: var(--text-muted); flex-shrink: 0; }
-.tool-line.err .tl-icon { color: var(--danger, #e5635b); }
+.tool-line.err .tl-icon { color: var(--danger); }
 .tl-verb { color: var(--text-muted); }
 .tl-name { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; font-family: var(--font-sans); font-size: 14px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The folder is context and the file name is the answer, so they are weighted
@@ -215,10 +215,10 @@
 [data-microfx="off"] .tool-line.pending .tl-skel { animation: none; }
 @media (prefers-reduced-motion: reduce) { .tool-line.pending .tl-skel { animation: none; } }
 .tl-diff { display: inline-flex; gap: 6px; font-family: var(--font-mono, monospace); font-size: 12px; line-height: 12px; }
-.tl-diff .add { color: var(--diff-add, #36884a); }
-.tl-diff .del { color: var(--diff-del, #ec7e7e); }
+.tl-diff .add { color: var(--diff-add); }
+.tl-diff .del { color: var(--diff-del); }
 .tl-note { color: var(--text-muted); font-size: 12px; opacity: .85; }
-.tl-err { color: var(--danger, #e5635b); font-size: 12px; }
+.tl-err { color: var(--danger); font-size: 12px; }
 .tool-line.clickable { cursor: pointer; border-radius: 7px; padding: 2px 5px; margin: 18px -5px 18px 3px; transition: background var(--fx-t, .14s); }
 .tool-line.clickable:hover { background: var(--surface-2); }
 .tool-line.clickable:hover .tl-name { color: var(--text); }
@@ -285,14 +285,14 @@
 .tb-label { flex-shrink: 0; }
 .tb-peek { flex: 1; min-width: 0; font-family: monospace; font-size: 12px; color: var(--text-muted); opacity: .8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tb-badge { font-family: monospace; font-size: 11px; flex-shrink: 0; }
-.tb-badge.err { color: var(--danger, #e5635b); }
+.tb-badge.err { color: var(--danger); }
 .tb-chev { width: 14px; height: 14px; flex-shrink: 0; transition: transform var(--fx-t, .2s); color: var(--text-muted); }
 .tool-bash.open .tb-chev { transform: rotate(90deg); }
 .tb-collapse { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--fx-t, .26s) var(--ease-out), opacity var(--fx-t, .2s) ease; opacity: 0; }
 .tb-collapse.open { grid-template-rows: 1fr; opacity: 1; }
 .tb-inner { overflow: hidden; min-height: 0; }
 .tool-bash.open .tb-inner { border: 1px solid var(--border-soft); border-radius: 12px; overflow: hidden; margin-top: 6px; background: var(--code-bg, var(--surface-2)); }
-.tool-bash.open.err .tb-inner { border-color: color-mix(in srgb, var(--danger, #e5635b) 45%, var(--border-soft)); }
+.tool-bash.open.err .tb-inner { border-color: color-mix(in srgb, var(--danger) 45%, var(--border-soft)); }
 .tb-cmdrow { display: flex; align-items: flex-start; gap: 8px; }
 .tb-cmd { margin: 0; flex: 1; min-width: 0; padding: 11px 4px 11px 14px; font-family: monospace; font-size: 13px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; color: var(--text); }
 .tb-cmd .tb-prompt { color: var(--accent); user-select: none; margin-right: 4px; }
@@ -305,9 +305,9 @@
    point of a persistent shell is that where it is matters to what comes next. */
 .tb-exit { margin-left: auto; font-family: var(--font-mono, monospace); text-transform: none; letter-spacing: 0; color: var(--text-faint); }
 .tb-exit + .tb-exit { margin-left: 0; }
-.tb-exit.err { color: var(--danger, #e5635b); }
+.tb-exit.err { color: var(--danger); }
 .tb-cwd { flex-shrink: 0; max-width: 30%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono, monospace); font-size: 11px; color: var(--text-faint); background: var(--surface-2); border-radius: 5px; padding: 1px 6px; }
-.tool-bash.err .tb-out-head { color: var(--danger, #e5635b); }
+.tool-bash.err .tb-out-head { color: var(--danger); }
 .tb-out-body { margin: 0; padding: 4px 14px 12px; font-family: monospace; font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: var(--text); max-height: 360px; overflow: auto; }
 .tb-out-empty { padding: 4px 14px 12px; font-family: var(--font-sans); font-size: 12.5px; color: var(--text-muted); font-style: italic; }
 
@@ -348,8 +348,8 @@
 .edit-actions { display: flex; align-items: center; gap: 8px; justify-content: flex-end; margin-top: 8px; }
 .edit-actions .btn.ghost { background: transparent; color: var(--text); border-radius: 6px; height: 24px; padding: 0 8px; font-size: 13px; font-weight: 400; }
 .edit-actions .btn.ghost:hover { background: var(--hover-mid); }
-.edit-actions .btn.primary { background: #fff; color: #0b0b0b; border-radius: 6px; height: 24px; padding: 0 8px; font-size: 13px; font-weight: 500; }
-.edit-actions .btn.primary:hover { background: #f0f0f0; }
+.edit-actions .btn.primary { background: var(--text); color: var(--bg); border-radius: 6px; height: 24px; padding: 0 8px; font-size: 13px; font-weight: 500; }
+.edit-actions .btn.primary:hover { background: color-mix(in srgb, var(--text) 88%, var(--bg)); }
 .branch-nav { display: inline-flex; align-items: center; gap: 2px; margin-right: 4px; }
 .branch-arrow { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 17px; line-height: 1; padding: 2px 5px; border-radius: 6px; }
 .branch-arrow:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
@@ -367,11 +367,11 @@
 .art-btn.icon.on { background: var(--accent); color: var(--on-accent); }
 .art-diff { font-family: var(--font-mono, monospace); font-size: 12.5px; line-height: 1.55; overflow: auto; padding: 6px 0; }
 .art-diff-line { display: flex; white-space: pre; padding: 0 12px; }
-.art-diff-line.add { background: color-mix(in srgb, #3fb950 18%, transparent); }
-.art-diff-line.del { background: color-mix(in srgb, #f85149 16%, transparent); }
+.art-diff-line.add { background: color-mix(in srgb, var(--diff-add) 18%, transparent); }
+.art-diff-line.del { background: color-mix(in srgb, var(--diff-del) 16%, transparent); }
 .art-diff-sign { width: 16px; flex: none; color: var(--text-faint); user-select: none; }
-.art-diff-line.add .art-diff-sign { color: #3fb950; }
-.art-diff-line.del .art-diff-sign { color: #f85149; }
+.art-diff-line.add .art-diff-sign { color: var(--diff-add); }
+.art-diff-line.del .art-diff-sign { color: var(--diff-del); }
 .art-diff-text { flex: 1; }
 
 /* artifacts: folder tree */

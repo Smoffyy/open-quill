@@ -27,12 +27,15 @@ export function useAnchoredMenu(open, setOpen, btnRef, menuRef, opts) {
       setOpen(false);
     };
     const close = () => setOpen(false);
+    const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
     const onScroll = (e) => { if (!scrollInsideMenu(menuRef.current, e.target)) setOpen(false); };
     document.addEventListener('mousedown', away);
+    document.addEventListener('keydown', esc);
     window.addEventListener('resize', close);
     window.addEventListener('scroll', onScroll, true);
     return () => {
       document.removeEventListener('mousedown', away);
+      document.removeEventListener('keydown', esc);
       window.removeEventListener('resize', close);
       window.removeEventListener('scroll', onScroll, true);
     };

@@ -19,8 +19,10 @@ export default function ChatMenu({ chat, modelId, pinned = [], pins = [], onUnpi
       const scope = ref.current.closest('.chat-name-wrap') || ref.current;
       if (!scope.contains(e.target)) onClose();
     };
+    const esc = (e) => { if (e.key === 'Escape' && !inspectOpen) onClose(); };
     document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
   }, [onClose, inspectOpen]);
 
   useEffect(() => {

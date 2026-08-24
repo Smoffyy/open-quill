@@ -13,13 +13,15 @@ export function QpIconPicker({ value, onPick }) {
   useEffect(() => {
     if (!open) return;
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
     document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
   }, [open]);
   return (
     <div className="qp-iconpick" ref={ref}>
       <button type="button" className="qp-iconbtn" onClick={() => setOpen(o => !o)} title={t("Choose an icon")}>
-        {value && value !== 'none' ? <QpIcon name={value} style={{ width: 16, height: 16 }} /> : <span className="qp-iconnone">, </span>}
+        {value && value !== 'none' ? <QpIcon name={value} style={{ width: 16, height: 16 }} /> : <span className="qp-iconnone">—</span>}
       </button>
       {open && (
         <div className="qp-iconmenu">

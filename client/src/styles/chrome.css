@@ -31,7 +31,7 @@
 .login .primary:disabled { opacity: .6; pointer-events: none; }
 .login .back { display: block; width: 100%; margin-top: 12px; font-size: 13px; color: var(--text-muted); font-family: var(--font-sans); background: transparent; }
 .login .back:hover { color: var(--text); }
-.login .err { color: #c0392b; font-size: 13px; margin-bottom: 10px; font-family: var(--font-sans); text-align: center; }
+.login .err { color: var(--danger); font-size: 13px; margin-bottom: 10px; font-family: var(--font-sans); text-align: center; }
 .login .login-note { margin-top: 12px; font-size: 12.5px; color: var(--text-faint); font-family: var(--font-sans); text-align: center; }
 .login .sub { margin-top: 26px; font-size: 15px; color: var(--text-muted); }
 .login .byline { margin-top: 10px; font-size: 12px; letter-spacing: 1px; color: var(--text-faint); font-family: var(--font-sans); }

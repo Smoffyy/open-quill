@@ -1416,6 +1416,7 @@ export default function App() {
     removedModel: activeId ? chatRemovedModel : null,
     skills, onToggleSkill: toggleSkill, onManageSkills: () => onSkillsCb(),
     hideModelPicker: cfg.uiPreset === 'openai',
+    chipsBelow: cfg.uiPreset === 'openai',
     models, currentId, onSelect: pickModel, extended, onToggleExtended: () => setExtended(e => !e),
     reasoningEffort, onSetEffort: setReasoningEffort, kwargValues, onSetKwarg: setKwarg,
     visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin, budget,

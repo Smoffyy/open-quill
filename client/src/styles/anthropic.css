@@ -416,7 +416,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 .sched-item-acts { display: flex; align-items: center; gap: 2px; margin-left: auto; flex-shrink: 0; }
 .sched-item-acts .lib-icon-btn { width: 28px; height: 28px; border-radius: 7px; }
 .sched-item-acts .lib-icon-btn svg { width: 14px; height: 14px; }
-.lib-icon-btn.danger:hover { color: #ec7e7e; }
+.lib-icon-btn.danger:hover { color: var(--danger); }
 .lib-card-ext {
   display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 6px;
   background: var(--cl-hover); color: var(--text-muted);
@@ -563,7 +563,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
   display: flex; align-items: center; gap: 12px; flex-shrink: 0;
   height: 56px; padding: 0 56px 0 16px;
 }
-.modal-main-flush ~ .modal-close, .modal:has(.modal-main-flush) .modal-close { top: 24px; right: 24px; }
+.modal-main-flush ~ .modal-close, .modal:has(.modal-main-flush) .modal-close { top: 18px; right: 18px; }
 .modal .modal-main .sk-title, .sk-title { flex: 1; min-width: 0; margin: 0; padding-left: 12px; font-family: var(--font-sans); font-size: 15px; line-height: 20px; font-weight: 500; color: var(--text); }
 .sk-back {
   display: inline-flex; align-items: center; gap: 8px; flex: 1; min-width: 0;
@@ -681,7 +681,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 .sk-menu { padding: 4px; border-radius: 12px; }
 .sk-menu button { gap: 8px; height: 32px; min-height: 32px; padding: 6px 10px; border-radius: 8px; font-size: 14px; line-height: 20px; white-space: nowrap; }
 .sk-menu button svg { width: 16px; height: 16px; flex-shrink: 0; }
-.sk-menu button.danger { color: #e06a52; }
+.sk-menu button.danger { color: var(--danger); }
 
 .sk-dir-overlay { z-index: 240; }
 .sk-dir {

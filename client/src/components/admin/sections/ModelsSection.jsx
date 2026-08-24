@@ -57,8 +57,10 @@ export default function ModelsSection() {
   useEffect(() => {
     if (!sortOpen) return;
     const close = () => setSortOpen(false);
+    const esc = (e) => { if (e.key === 'Escape') setSortOpen(false); };
     window.addEventListener('mousedown', close);
-    return () => window.removeEventListener('mousedown', close);
+    window.addEventListener('keydown', esc);
+    return () => { window.removeEventListener('mousedown', close); window.removeEventListener('keydown', esc); };
   }, [sortOpen]);
 
   useEffect(() => {
