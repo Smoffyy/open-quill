@@ -89,7 +89,7 @@ function MeterStrip({ m }) {
       {(pIn || pOut) && (
         <div className="mdoc-meter">
           <div className="mdoc-meter-label">{t('Price')}</div>
-          <div className="mdoc-price">{pIn || '—'} <em>·</em> {pOut || '—'}</div>
+          <div className="mdoc-price">{pIn || '-'} <em>·</em> {pOut || '-'}</div>
           <div className="mdoc-meter-val">{t('Input')} · {t('Output')}</div>
         </div>
       )}

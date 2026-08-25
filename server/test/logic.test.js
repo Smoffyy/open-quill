@@ -1933,3 +1933,14 @@ test('skill names are normalised and validated at the boundary', () => {
   assert.equal(ok.description, 'line one line two', 'a description never carries a newline into the frontmatter');
   assert.equal(ok.enabled, true);
 });
+
+test('the client and server copies of the tool protocol stay byte-identical', () => {
+  // Both sides parse the same wire format: the server records tool calls with scanTools
+  // and the client renders them with its own copy. If the two drift, a call the model
+  // makes is stored one way and drawn another, so the copies are compared here.
+  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  const repo = path.dirname(root);
+  const server = fs.readFileSync(path.join(root, 'toolproto.js'), 'utf8');
+  const client = fs.readFileSync(path.join(repo, 'client', 'src', 'toolproto.js'), 'utf8');
+  assert.equal(client, server, 'client/src/toolproto.js and server/toolproto.js must be kept identical');
+});

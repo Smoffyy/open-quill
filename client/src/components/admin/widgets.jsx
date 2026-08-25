@@ -21,7 +21,7 @@ export function QpIconPicker({ value, onPick }) {
   return (
     <div className="qp-iconpick" ref={ref}>
       <button type="button" className="qp-iconbtn" onClick={() => setOpen(o => !o)} title={t("Choose an icon")}>
-        {value && value !== 'none' ? <QpIcon name={value} style={{ width: 16, height: 16 }} /> : <span className="qp-iconnone">—</span>}
+        {value && value !== 'none' ? <QpIcon name={value} style={{ width: 16, height: 16 }} /> : <span className="qp-iconnone">-</span>}
       </button>
       {open && (
         <div className="qp-iconmenu">

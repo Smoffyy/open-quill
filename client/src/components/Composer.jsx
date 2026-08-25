@@ -93,6 +93,8 @@ export default function Composer({
   const sub = useSubmenus();
   const { closeAll: closeSubs } = sub;
   useEffect(() => { if (!plusMenu) closeSubs(); }, [plusMenu, closeSubs]);
+  // Picking something in a submenu is the end of that errand, so the whole menu goes away.
+  const closePlusMenu = useCallback(() => { closeSubs(); setPlusMenu(false); }, [closeSubs]);
   const [showReason, setShowReason] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
 
@@ -462,13 +464,13 @@ export default function Composer({
                         {projects.length === 0 && <div className="pm-empty">{t('No projects yet')}</div>}
                         {projects.map(p => (
                           <button key={p.id} className={'pm-item' + (project && p.id === project.id ? ' active' : '')}
-                            onClick={() => { onSetProject(p); sub.closeAll(); setPlusMenu(false); }}>
+                            onClick={() => { onSetProject(p); closePlusMenu(); }}>
                             <Box />
                             <span className="pm-label">{p.name}</span>
                           </button>
                         ))}
                         {project && onClearProject && (
-                          <button className="pm-item" onClick={() => { onClearProject(); sub.closeAll(); setPlusMenu(false); }}>
+                          <button className="pm-item" onClick={() => { onClearProject(); closePlusMenu(); }}>
                             <span className="pm-label">{t('Remove from project')}</span>
                           </button>
                         )}
@@ -513,7 +515,7 @@ export default function Composer({
                     {sub.isOpen('styles') && (
                       <PmSub className="styles" onMouseEnter={() => sub.hoverOpen('styles')} onMouseLeave={sub.hoverClose}>
                         <StyleSubmenu styles={styles} styleId={styleId} currentId={currentId} onSaveStyles={onSaveStyles}
-                          onSelect={(id) => { onSelectStyle && onSelectStyle(id); }} />
+                          onSelect={(id) => { onSelectStyle && onSelectStyle(id); closePlusMenu(); }} />
                       </PmSub>
                     )}
                   </div>
@@ -538,7 +540,7 @@ export default function Composer({
                           const on = compareIds.includes(m.id);
                           return (
                             <button key={m.id} className={'style-item' + (on ? ' active' : '')}
-                              onClick={() => onSetCompare(on ? compareIds.filter(x => x !== m.id) : (compareIds.length < 2 ? [...compareIds, m.id] : compareIds))}>
+                              onClick={() => { onSetCompare(on ? compareIds.filter(x => x !== m.id) : (compareIds.length < 2 ? [...compareIds, m.id] : compareIds)); closePlusMenu(); }}>
                               <span className="style-item-name">{m.displayName || m.id}</span>
                               {on && <Check style={{ width: 14 }} />}
                             </button>
@@ -561,18 +563,18 @@ export default function Composer({
                       {skills.length === 0 && <div className="pm-empty">{t('No skills yet')}</div>}
                       {skills.map(sk => (
                         <button key={sk.id} className="pm-item" title={sk.description || sk.name}
-                          onClick={() => onToggleSkill && onToggleSkill(sk)}>
+                          onClick={() => { onToggleSkill && onToggleSkill(sk); closePlusMenu(); }}>
                           <SkillIcon />
                           <span className="pm-label">{sk.name}</span>
                           {sk.enabled && <Check className="pm-check" />}
                         </button>
                       ))}
                       <div className="pm-divider" />
-                      <button className="pm-item" onClick={() => { sub.closeAll(); setPlusMenu(false); onManageSkills && onManageSkills(); }}>
+                      <button className="pm-item" onClick={() => { closePlusMenu(); onManageSkills && onManageSkills(); }}>
                         <Sliders />
                         <span className="pm-label">{t('Manage skills')}</span>
                       </button>
-                      <button className="pm-item" onClick={() => { sub.closeAll(); setPlusMenu(false); onManageSkills && onManageSkills('browse'); }}>
+                      <button className="pm-item" onClick={() => { closePlusMenu(); onManageSkills && onManageSkills('browse'); }}>
                         <Plus />
                         <span className="pm-label">{t('Browse skills')}</span>
                       </button>
@@ -602,14 +604,14 @@ export default function Composer({
                 </button>
                 {(sandboxAllowed || webSearchAvailable) && <div className="pm-divider" />}
                 {sandboxAllowed && (
-                  <button className="pm-item" onClick={() => onToggleSandbox && onToggleSandbox()}>
+                  <button className="pm-item" onClick={() => { onToggleSandbox && onToggleSandbox(); closePlusMenu(); }}>
                     <Cube />
                     <span className="pm-label">{t("Sandbox tools")}</span>
                     {sandbox && <Check className="pm-check" />}
                   </button>
                 )}
                 {webSearchAvailable && (
-                  <button className="pm-item" onClick={() => onToggleWebSearch && onToggleWebSearch()}>
+                  <button className="pm-item" onClick={() => { onToggleWebSearch && onToggleWebSearch(); closePlusMenu(); }}>
                     <Globe />
                     <span className="pm-label">{t("Web search")}</span>
                     {webSearch && <Check className="pm-check" />}
@@ -656,7 +658,7 @@ export default function Composer({
           )}
           {streaming ? (
             <button key="stop" className={'send stop' + (stopping ? ' stopping' : '')} onClick={onStop} disabled={stopping}
-              title={stopping ? t('Stopping — finishing the step in progress') : t('Stop generating')}><Stop style={{ width: 20, height: 20 }} /></button>
+              title={stopping ? t('Stopping, finishing the step in progress') : t('Stop generating')}><Stop style={{ width: 20, height: 20 }} /></button>
           ) : safetyChecking ? (
             <button key="send" className={'send' + (safetyVerbose ? ' checking' : ' quiet')} disabled title={safetyVerbose ? t('Safety check…') : undefined}><Up style={{ width: 20, height: 20 }} /></button>
           ) : canSend ? (

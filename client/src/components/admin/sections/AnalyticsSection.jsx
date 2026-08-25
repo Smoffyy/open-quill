@@ -57,7 +57,7 @@ function ToolReliability() {
                 <React.Fragment key={id}>
                   <tr onClick={() => setOpen(isOpen ? '' : id)} style={{ cursor: r.fail ? 'pointer' : 'default' }}>
                     <td>{r.tool}</td>
-                    <td className="muted-note">{r.modelName || '—'}</td>
+                    <td className="muted-note">{r.modelName || '-'}</td>
                     <td className="num">{r.calls.toLocaleString()}</td>
                     <td className="num">{r.fail.toLocaleString()}</td>
                     <td className="num">{Math.round(r.rate * 100)}%</td>
@@ -134,7 +134,7 @@ export default function AnalyticsSection() {
                   <tr key={u.userId}>
                     <td>{u.name}</td>
                     <td className="num">{(u.prompt + u.completion).toLocaleString()}</td>
-                    <td className="num">{u.cost ? fmtMoney(u.cost) : '—'}</td>
+                    <td className="num">{u.cost ? fmtMoney(u.cost) : '-'}</td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -148,7 +148,7 @@ export default function AnalyticsSection() {
                   <tr key={m.modelId}>
                     <td>{m.name}</td>
                     <td className="num">{(m.prompt + m.completion).toLocaleString()}</td>
-                    <td className="num">{m.cost ? fmtMoney(m.cost) : '—'}</td>
+                    <td className="num">{m.cost ? fmtMoney(m.cost) : '-'}</td>
                   </tr>
                 ))}</tbody>
               </table>

@@ -5,6 +5,23 @@ import { makeToolResolver } from '../tools/aliases.js';
 import { normalizeMessages, requestKwargs } from './wire.js';
 import { stripNestedKwargs } from '../lib/kwargs.js';
 
+async function assertOk(res) {
+  if (!res.ok || !res.body) { const t = await res.text().catch(() => ''); throw new Error(`Upstream error ${res.status}: ${t.slice(0, 300)}`); }
+}
+
+async function pumpLines(res, handle, finish) {
+  const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
+  while (true) {
+    const { done, value } = await reader.read(); if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n'); buffer = lines.pop();
+    for (const line of lines) if (handle(line)) { await reader.cancel().catch(() => {}); finish(); return; }
+  }
+  buffer += decoder.decode();
+  handle(buffer);
+  finish();
+}
+
 export async function streamCompletion({ model, messages, tools, signal, onEvent }) {
   const { spec, base, key } = modelProvider(model);
   const hasTools = Array.isArray(tools) && tools.length > 0;
@@ -37,8 +54,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
       method: 'POST', headers: authHeaders(key), signal,
       body: JSON.stringify({ model: model.internal_name, messages: wire, stream: true, think: !!model.has_reasoning, options: ollamaOptions(model, spec), ...(hasTools ? { tools } : {}), ...stripNestedKwargs(requestKwargs(model)) })
     });
-    if (!res.ok || !res.body) { const t = await res.text().catch(() => ''); throw new Error(`Upstream error ${res.status}: ${t.slice(0, 300)}`); }
-    const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
+    await assertOk(res);
     const handle = (line) => {
       const t = line.trim(); if (!t) return false;
       try {
@@ -64,23 +80,14 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
       } catch {}
       return false;
     };
-    while (true) {
-      const { done, value } = await reader.read(); if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n'); buffer = lines.pop();
-      for (const line of lines) if (handle(line)) { await reader.cancel().catch(() => {}); flush(); finishCalls(); return; }
-    }
-    buffer += decoder.decode();
-    handle(buffer);
-    flush(); finishCalls(); return;
+    return pumpLines(res, handle, () => { flush(); finishCalls(); });
   }
 
   const res = await fetch(endpoint(base, '/chat/completions'), {
     method: 'POST', headers: authHeaders(key), signal,
     body: JSON.stringify({ model: model.internal_name, messages: wire, stream: true, stream_options: { include_usage: true }, ...(spec.timingsPerToken ? { timings_per_token: true } : {}), ...(spec.promptProgress ? { return_progress: true } : {}), ...(hasTools ? { tools, tool_choice: 'auto' } : {}), ...samplingParams(model, spec), ...requestKwargs(model) })
   });
-  if (!res.ok || !res.body) { const t = await res.text().catch(() => ''); throw new Error(`Upstream error ${res.status}: ${t.slice(0, 300)}`); }
-  const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
+  await assertOk(res);
   const handle = (line) => {
     const trimmed = line.trim();
     if (!trimmed.startsWith('data:')) return false;
@@ -118,15 +125,6 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
     } catch {}
     return false;
   };
-  while (true) {
-    const { done, value } = await reader.read(); if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n'); buffer = lines.pop();
-    for (const line of lines) if (handle(line)) { await reader.cancel().catch(() => {}); flush(); finishCalls(); return; }
-  }
-  buffer += decoder.decode();
-  handle(buffer);
-  flush();
-  finishCalls();
+  return pumpLines(res, handle, () => { flush(); finishCalls(); });
 }
 

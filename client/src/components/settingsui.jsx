@@ -71,7 +71,7 @@ export function SwitchRow({ label, desc, on, onToggle }) {
   );
 }
 
-export function SegSlide({ value, options, onPick, label }) {
+export function SegSlide({ value, options, onPick, label, className }) {
   const wrap = useRef(null);
   const [box, setBox] = useState(null);
   const idx = Math.max(0, options.findIndex(o => o.v === value));
@@ -111,11 +111,11 @@ export function SegSlide({ value, options, onPick, label }) {
   const { dragging, bind } = usePointerDrag({ onTrack: track, onEnd: () => setLive(null) });
   const at = live || box;
   return (
-    <div className="segs" ref={wrap} role="radiogroup" aria-label={label} {...bind}>
+    <div className={'segs' + (className ? ' ' + className : '')} ref={wrap} role="radiogroup" aria-label={label} {...bind}>
       {at && <span className={'segs-thumb' + (dragging ? ' dragging' : '')}
         style={{ transform: `translateX(${at.x}px) scaleX(${at.stretch || 1}) scaleY(${at.squash || 1})`, width: at.w, transformOrigin: origin }} />}
       {options.map(o => (
-        <button key={o.v} type="button" role="radio" aria-checked={value === o.v}
+        <button key={o.v} type="button" role="radio" aria-checked={value === o.v} title={o.title} aria-label={o.title}
           className={'segs-opt' + (value === o.v ? ' on' : '')} onClick={() => onPick(o.v)}>{o.label}</button>
       ))}
     </div>

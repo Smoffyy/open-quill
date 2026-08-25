@@ -2,6 +2,7 @@
   "name": "open-quill",
   "version": "27.1.0",
   "private": true,
+  "type": "module",
   "description": "Local Anthropic-style chat UI for OpenAI-compatible servers",
   "scripts": {
     "install:all": "npm install && cd server && npm install && cd ../client && npm install",

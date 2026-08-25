@@ -20,6 +20,7 @@ import { DEFAULT_DARK, DEFAULT_LIGHT, paletteById, paletteFor, presetOf } from '
 import Disclaimer from './components/Disclaimer.jsx';
 
 import Message from './components/Message.jsx';
+import TopbarActions from './components/TopbarActions.jsx';
 const SettingsModal = React.lazy(() => import('./components/SettingsModal.jsx'));
 const PromptLedger = React.lazy(() => import('./components/PromptLedger.jsx'));
 const ModelDocs = React.lazy(() => import('./components/ModelDocs.jsx'));
@@ -71,7 +72,6 @@ export default function App() {
   const [user, setUser] = useState(undefined);
   const userRef = useRef(undefined);
   useEffect(() => { userRef.current = user; }, [user]);
-  const [intro, setIntro] = useState(false);
   const [models, setModels] = useState([]);
   const [currentId, setCurrentId] = useState(null);
   const [chatRemovedModel, setChatRemovedModel] = useState(null);
@@ -348,10 +348,8 @@ export default function App() {
   } = useThreadScroll({ canFollow });
   const animate = resolveReveal(user?.prefs, cfg.uiPreset === 'openai' ? 'openai' : 'anthropic') === 'typewriter';
   const revealMs = revealSpeedMs(user?.prefs?.revealMs);
-  const [threadStagger, setThreadStagger] = useState(false);
   const [threadLoading, setThreadLoading] = useState(false);
   const skelTimer = useRef(null);
-  const staggerTimer = useRef(null);
   const showMsgSpeed = !!user?.prefs?.msgSpeed;
   const showCtxGauge = !!user?.prefs?.ctxGauge;
   const statusDelay = statusDelaySecs(user?.prefs?.statusDelay);
@@ -404,16 +402,9 @@ export default function App() {
 
   useEffect(() => { dispLen.current = dispContent.length; }, [dispContent]);
 
-  useEffect(() => {
-    if (!intro) return;
-    const t = setTimeout(() => setIntro(false), 3400);
-    return () => clearTimeout(t);
-  }, [intro]);
-
   useEffect(() => () => {
     stopLoops();
     clearTimeout(skelTimer.current);
-    clearTimeout(staggerTimer.current);
   }, []);
 
   useEffect(() => {
@@ -446,7 +437,6 @@ export default function App() {
   async function loadProjects() { try { setProjects(await api.get('/api/projects')); } catch {} }
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-entrance', user?.prefs?.minimalAnims ? 'off' : 'on');
   }, [user]);
 
   useEffect(() => {
@@ -1111,11 +1101,6 @@ export default function App() {
       applyChatMeta(chat);
       applyLastModel(messages);
       cacheChat(id, { chat, messages });
-      if (!cached && user?.prefs?.chatStagger !== false && !user?.prefs?.minimalAnims) {
-        clearTimeout(staggerTimer.current);
-        setThreadStagger(true);
-        staggerTimer.current = setTimeout(() => setThreadStagger(false), 700);
-      }
       try { const f = await api.get('/api/chats/' + id + '/files'); if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { files: f.files || [] }); return; } setFiles(f.files || []); setArtifactsOpen((f.files || []).length > 0 && artifactsOpenRef.current); cacheChat(id, { files: f.files || [] }); }
       catch { if (seq === openSeq.current && activeIdRef.current === id && !cached) setFiles([]); }
       if (!cached) { pinToBottom(false, 30); }
@@ -1367,7 +1352,7 @@ export default function App() {
   // current during render, so the click always reaches the live send.
   const continueReply = useCallback(() => {
     setCanContinue(false);
-    sendRef.current([], t('Carry on from exactly where your previous reply stopped. Do not repeat or summarise what you already did — it is already saved. If work is still unfinished, make the tool calls to finish it now.'));
+    sendRef.current([], t('Carry on from exactly where your previous reply stopped. Do not repeat or summarise what you already did, it is already saved. If work is still unfinished, make the tool calls to finish it now.'));
   }, []);
   const stopChat = useCallback((chatId) => {
     if (!chatId) return;
@@ -1382,7 +1367,7 @@ export default function App() {
   }
 
   if (user === undefined) return <div style={{ height: '100%', background: 'var(--bg)' }} />;
-  if (!user) return <Login cfg={authCtx} onLogin={(u) => { setUser(u); setIntro(true); }} />;
+  if (!user) return <Login cfg={authCtx} onLogin={(u) => setUser(u)} />;
 
   const model = modelById.get(currentId);
   const activeChat = activeId ? chats.find(c => c.id === activeId) : null;
@@ -1432,6 +1417,15 @@ export default function App() {
     ctxGauge: cfg.uiPreset === 'openai' ? null : ctxGaugeEl
   };
   const showArtifactsBtn = sandboxOn || files.length > 0;
+  // Sits beside the incognito button in both the greeting and a live chat, so turning
+  // sandbox tools on reveals it before the first message is sent.
+  const artifactsBtn = showArtifactsBtn ? (
+    <button className={'paper-btn' + (artifactsOpen ? ' active' : '') + (liveFile ? ' writing' : '')}
+      onClick={() => { setCallOpen(false); setArtifactsOpen(o => !o); }}
+      title={t("Artifacts")} aria-label={t("Artifacts")} aria-pressed={artifactsOpen}>
+      <Paper />{files.length > 0 && <span className="paper-count">{files.length}</span>}
+    </button>
+  ) : null;
 
   function focusedMsg() {
     const list = messagesRef.current;
@@ -1538,10 +1532,9 @@ export default function App() {
   sidebarFns.current = { newChat, openChat, deleteChat, toggleStar, logout, openProjects, moveChatToProject, newProject: () => { openProjects(null); setProjectCreate(true); } };
 
   return (
-    <div className={'app' + (incognito ? ' app-incognito' : '') + (intro ? ' intro' : '') + (bgVisible ? ' has-bg' : '') + (collapsed ? ' sb-collapsed' : '')}>
+    <div className={'app' + (incognito ? ' app-incognito' : '') + (bgVisible ? ' has-bg' : '') + (collapsed ? ' sb-collapsed' : '')}>
       <a className="skip-link" href="#oq-composer">{t('Skip to message input')}</a>
       <AppBackground bg={activeBg} />
-      {intro && <div className="intro-curtain" />}
       <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName} onSearch={onSearchCb}
         dest={showProjects ? 'projects' : showSpaces ? 'spaces' : chatsOverview ? 'chats' : libPage}
         onArtifacts={onArtifactsCb} onScheduled={onScheduledCb}
@@ -1589,14 +1582,16 @@ export default function App() {
           <button className="mobile-menu-btn empty-menu" onClick={() => setMobileDrawer(true)} title={t("Menu")}><Menu style={{ width: 20 }} /></button>
         )}
         {!incognito && empty && (
-          <button className={'incognito-fab' + (user?.isAdmin ? ' with-ctl' : '')} onClick={toggleIncognito} title={t("Incognito chat, not saved")} disabled={streaming || queued}>
-            <Ghost style={{ width: 18 }} />
-          </button>
-        )}
-        {empty && !incognito && user?.isAdmin && (
-          <button className={'incognito-fab ctl-fab' + (ctlOpen ? ' active' : '')} onClick={() => { setArtifactsOpen(false); setCtlOpen(o => !o); }} title={t("Chat controls (admin)")} disabled={streaming || queued}>
-            <Sliders style={{ width: 17 }} />
-          </button>
+          <TopbarActions className="home-actions"
+            leading={<>
+              <button className="paper-btn" onClick={toggleIncognito} title={t("Incognito chat, not saved")} disabled={streaming || queued}>
+                <Ghost />
+              </button>
+              {artifactsBtn}
+            </>}
+            items={[
+              user?.isAdmin && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, disabled: streaming || queued, onClick: () => { setArtifactsOpen(false); setCtlOpen(o => !o); } }
+            ]} />
         )}
         {empty && !incognito && cfg.uiPreset === 'openai' && (
           <div className="home-topbar">
@@ -1678,47 +1673,26 @@ export default function App() {
                   )}
                 </div>
               )}
-              <div className="topbar-actions">
-                {!incognito && (
-                  <button className="paper-btn" onClick={toggleIncognito} title={t("Incognito chat, not saved")} disabled={streaming || queued}>
-                    <Ghost style={{ width: 18 }} />
-                  </button>
-                )}
-                {hasSummary && (
-                  <button className="paper-btn" onClick={() => setSummaryOpen(true)} title={t("Conversation memory")}>
-                    <Compact style={{ width: 18 }} />
-                  </button>
-                )}
-                {user?.isAdmin && activeId && (
-                  <button className={'paper-btn' + (ctlOpen ? ' active' : '')} onClick={() => { setArtifactsOpen(false); setCtlOpen(o => !o); }} title={t("Chat controls (admin)")}>
-                    <Sliders style={{ width: 17 }} />
-                  </button>
-                )}
-                {messages.length > 0 && user?.prefs?.threadFind !== false && (
-                  <button className={'paper-btn' + (findOpen ? ' active' : '')} onClick={() => (findOpen ? closeFind() : setFindOpen(true))} title={t('Find in conversation')} aria-label={t('Find in conversation')} aria-pressed={findOpen}>
-                    <Search style={{ width: 17 }} />
-                  </button>
-                )}
-                {activeId && messages.length > 0 && user?.prefs?.branchMap !== false && (
-                  <button className={'paper-btn' + (treeOpen ? ' active' : '')} onClick={() => setTreeOpen(o => !o)} title={t('Branch map')} aria-label={t('Branch map')} aria-pressed={treeOpen}>
-                    <Fork style={{ width: 17 }} />
-                  </button>
-                )}
-                {activeId && (
-                  <button className={'paper-btn' + (ledgerOpen ? ' active' : '')} onClick={() => setLedgerOpen(o => !o)} title={t('Context ledger')} aria-label={t('Context ledger')} aria-pressed={ledgerOpen}>
-                    <Gauge style={{ width: 18 }} />
-                  </button>
-                )}
-                {showArtifactsBtn && (
-                  <button className={'paper-btn' + (artifactsOpen ? ' active' : '') + (liveFile ? ' writing' : '')} onClick={() => { setCallOpen(false); setArtifactsOpen(o => !o); }} title={t("Artifacts")}>
-                    <Paper style={{ width: 18 }} />{files.length > 0 && <span className="paper-count">{files.length}</span>}
-                  </button>
-                )}
-              </div>
+              <TopbarActions
+                leading={<>
+                  {!incognito && (
+                    <button className="paper-btn" onClick={toggleIncognito} title={t("Incognito chat, not saved")} disabled={streaming || queued}>
+                      <Ghost />
+                    </button>
+                  )}
+                  {artifactsBtn}
+                </>}
+                items={[
+                  hasSummary && { id: 'summary', icon: <Compact />, label: t("Conversation memory"), onClick: () => setSummaryOpen(true) },
+                  user?.isAdmin && activeId && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => { setArtifactsOpen(false); setCtlOpen(o => !o); } },
+                  messages.length > 0 && user?.prefs?.threadFind !== false && { id: 'find', icon: <Search />, label: t('Find in conversation'), active: findOpen, onClick: () => (findOpen ? closeFind() : setFindOpen(true)) },
+                  activeId && messages.length > 0 && user?.prefs?.branchMap !== false && { id: 'tree', icon: <Fork />, label: t('Branch map'), active: treeOpen, onClick: () => setTreeOpen(o => !o) },
+                  activeId && { id: 'ledger', icon: <Gauge />, label: t('Context ledger'), active: ledgerOpen, onClick: () => setLedgerOpen(o => !o) },
+                ]} />
             </div>
             {findOpen && user?.prefs?.threadFind !== false && <ThreadFind scrollRef={scrollRef} revision={findRevision} onMatches={onFindMatches} onClose={closeFind} />}
             <div className="scroll-area" id="oq-thread" ref={scrollRef} onScroll={onScroll} onWheel={onWheel} onTouchMove={onTouchMove}>
-              <div className={'thread' + (threadStagger ? ' stagger' : '') + (ledgerOpen ? ' ledger-on' : '') + (heavyThread ? ' virt' : '') + (findOpen ? ' finding' : '')}
+              <div className={'thread' + (ledgerOpen ? ' ledger-on' : '') + (heavyThread ? ' virt' : '') + (findOpen ? ' finding' : '')}
                 role="log" aria-label={t('Conversation')} aria-live="polite" aria-relevant="additions text" aria-busy={streaming ? 'true' : 'false'}>
                 {ledgerOpen && <LedgerBar ledger={ledger} liveUsed={liveLedgerUsed} live={streaming} />}
                 {threadLoading && messages.length === 0 && <ThreadSkeleton />}

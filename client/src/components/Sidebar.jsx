@@ -401,11 +401,11 @@ function Sidebar({
       </div>
       <div className="nav">
         <div className="new-row">
-        <button className={'nav-item new-chat' + (!activeId && !dest ? ' on' : '')} title={t("New chat")}
+        <button className={'nav-item new-chat' + (!activeId && !dest ? ' on' : '')} title={t("New")}
           aria-current={!activeId && !dest ? 'page' : undefined}
           onClick={(e) => { if (e.ctrlKey || e.metaKey) { window.open('/', '_blank', 'noopener'); return; } onNew(); }}
           onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); window.open('/', '_blank', 'noopener'); } }}
-          onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}><span className="nav-ic new-chat-plus"><Plus /></span> <span className="nav-label">{t("New chat")}</span>
+          onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}><span className="nav-ic new-chat-plus"><Plus /></span> <span className="nav-label">{t("New")}</span>
           {newChatCombo && <span className="nav-shortcut">{newChatCombo}</span>}</button>
         <button className="new-quick" title={t('Quick task')} aria-label={t('Quick task')}
           onClick={(e) => { e.stopPropagation(); (onScheduled || onNew)(); }}><QuickTask /></button>

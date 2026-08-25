@@ -224,8 +224,8 @@ function presetDefaults(isOpenai, fallbackTheme) {
   return {
     revealStyle: 'typewriter', autoscroll: true, theme: fallbackTheme || 'system', accent: '', density: 'comfortable',
     streamCursor: isOpenai, cursorStyle: isOpenai ? 'circle' : 'block',
-    cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40, chatStagger: true, themeFade: true,
-    oledShift: false, minimalAnims: false,
+    cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40, themeFade: true,
+    oledShift: false,
     threadRail: true, threadFind: true, branchMap: true, msgKeys: true, keybinds: {}
   };
 }
@@ -427,7 +427,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                 <div className="muted-note" style={{ textAlign: 'right' }}>{instructions.length}/8000</div>
               </div>
               <div className="me-section-h">{t("Your data")}</div>
-              <SetRow label={t("Export everything")} desc={t("Download everything — chats, styles, personas, prompts, memory — as one JSON file.")}>
+              <SetRow label={t("Export everything")} desc={t("Download everything (chats, styles, personas, prompts, memory) as one JSON file.")}>
                 <button className="btn ghost" onClick={onExportChats}><Download style={{ width: 14, verticalAlign: '-2px' }} /> {t("Export")}</button>
               </SetRow>
               <SetRow label={t("Import")} desc={t("Restore from an exported file. Chats are added and profile data is merged.")}>
@@ -573,15 +573,10 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
             <>
               <h2>{t("Appearance")}</h2>
               <div className="hint">{t("Choose how open-quill looks.")}</div>
-              <SetRow label={t("Theme")} desc={t("Follow your system, or pick a palette. Colours only — the layout never changes.")}>
+              <SetRow label={t("Theme")} desc={t("Follow your system, or pick a palette. Colours only, the layout never changes.")}>
                 <SelectRow label={t("Theme")} value={themeValue(prefs.theme, activePreset)}
                   onPick={(v) => setPref('theme', v)}
                   options={[{ v: 'system', label: t('System') }].concat(palettesFor(activePreset).map(p => ({ v: p.id, label: p.label })))} />
-              </SetRow>
-              <SetRow label={t("Motion")} desc={t("Reduce animation in streaming responses and other interface elements.")}>
-                <SegSlide label={t("Motion")} value={prefs.minimalAnims ? 'reduced' : 'system'}
-                  onPick={(v) => setPref('minimalAnims', v === 'reduced')}
-                  options={[{ v: 'system', label: t('System') }, { v: 'reduced', label: t('Reduced') }]} />
               </SetRow>
               <SetRow label={t("Chat font")} desc={t("Overrides the theme's default font, on this device only.")}>
                 <SelectRow label={t("Chat font")} value={userFont}
@@ -603,8 +598,6 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
               <div className="me-section-h">{t("Display")}</div>
               <SwitchRow label={t("OLED screen protection")} desc={t("Nudges the interface a few pixels and eases brightness to limit burn-in.")}
                 on={prefs.oledShift} onToggle={() => setPref('oledShift', !prefs.oledShift)} />
-              <Toggle prefs={prefs} setPref={setPref} k="chatStagger" label={t("Staggered open")}
-                desc={t("When opening a chat, messages assemble into view one after another.")} />
             </>
           )}
           {tab === 'keybinds' && <KeybindsPanel prefs={prefs} setPref={setPref} />}
@@ -725,7 +718,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
               {usageData && (
                 <>
                   <div className="usage-tiles">
-                    {[[t('Total tokens'), fmtN(usageData.totals.total)], [t('Input'), fmtN(usageData.totals.prompt)], [t('Output'), fmtN(usageData.totals.completion)], [t('Est. cost'), usageData.totals.cost ? fmtUsd(usageData.totals.cost) : (usageData.totals.costKnown ? '$0.00' : '—')]].map(([lbl, val]) => (
+                    {[[t('Total tokens'), fmtN(usageData.totals.total)], [t('Input'), fmtN(usageData.totals.prompt)], [t('Output'), fmtN(usageData.totals.completion)], [t('Est. cost'), usageData.totals.cost ? fmtUsd(usageData.totals.cost) : (usageData.totals.costKnown ? '$0.00' : '-')]].map(([lbl, val]) => (
                       <div key={lbl} className="usage-tile">
                         <div className="ut-val">{val}</div>
                         <div className="ut-lbl">{lbl}</div>

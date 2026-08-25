@@ -85,9 +85,8 @@
   box-shadow: var(--pop-shadow);
   color: var(--pop-text);
   font-family: var(--font-sans);
-  animation: tfDrop var(--fx-a, .16s) ease;
+
 }
-@keyframes tfDrop { from { opacity: 0; transform: translateX(-50%) translateY(-6px); } }
 .thread-find > svg { flex: 0 0 auto; color: var(--pop-muted); }
 .tf-input {
   flex: 1 1 auto;
@@ -135,9 +134,8 @@
   box-shadow: var(--pop-shadow);
   overflow: hidden;
   font-family: var(--font-sans);
-  animation: btIn var(--fx-a, .18s) ease;
+
 }
-@keyframes btIn { from { opacity: 0; transform: translateY(-8px); } }
 .bt-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
 .bt-title { display: flex; align-items: center; gap: 8px; font-size: 15px; color: var(--text); }
 .bt-sub { font-size: 12.5px; color: var(--text-muted); }
@@ -171,7 +169,7 @@
 .bt-node.is-leaf { border-color: var(--accent); }
 .bt-dot { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); }
 .bt-node.r-assistant .bt-dot { background: var(--accent); }
-.bt-node.on-path .bt-dot { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.bt-node.on-path .bt-dot { box-shadow: 0 0 0 3px color-mix(in srgb, var(--pop-blue) 22%, transparent); }
 .bt-who { flex: 0 0 auto; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-faint); max-width: 128px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bt-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bt-fold {
@@ -195,9 +193,9 @@
   border-left: 2px solid var(--border);
   border-radius: 0;
 }
-.bt-branch.on-path { border-left-color: var(--accent); }
+.bt-branch.on-path { border-left-color: var(--pop-blue); }
 .bt-branch-tag { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-faint); margin-bottom: 6px; }
-.bt-branch.on-path .bt-branch-tag { color: var(--accent); }
+.bt-branch.on-path .bt-branch-tag { color: var(--pop-blue); }
 
 .thread.virt > .msg:not(:nth-last-child(-n+8)):not(.icon-left) .assistant-body,
 .thread.virt > .msg:not(:nth-last-child(-n+8)) .bubble-user,
@@ -256,9 +254,8 @@
   width: 3px;
   border-radius: 2px;
   background: var(--accent);
-  animation: kbIn var(--fx-a, .16s) ease;
+
 }
-@keyframes kbIn { from { opacity: 0; transform: scaleY(.4); } }
 
 @media (max-width: 900px) {
   .trail { display: none; }

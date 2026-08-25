@@ -134,6 +134,13 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   const assistantId = uid();
   const assistantParent = (db.chats.byId(chat.id) || {}).active_leaf || null;
   let content = '', reasoning = '', usage = null, lastStepCompletion = 0;
+  const addStepUsage = (stepUsage) => {
+    if (!stepUsage) return;
+    if (!usage) usage = { prompt: 0, completion: 0, total: 0 };
+    usage.prompt += stepUsage.prompt; usage.completion += stepUsage.completion;
+    usage.total += stepUsage.total || (stepUsage.prompt + stepUsage.completion);
+    lastStepCompletion = stepUsage.completion;
+  };
   const reasonSegs = [];
   let contentSinceReason = false;
   let speed = null;
@@ -477,12 +484,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
             maxSteps++;
             applySteer(notes, stepText);
             if (liveSent) safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live: null }));
-            if (stepUsage) {
-              if (!usage) usage = { prompt: 0, completion: 0, total: 0 };
-              usage.prompt += stepUsage.prompt; usage.completion += stepUsage.completion;
-              usage.total += stepUsage.total || (stepUsage.prompt + stepUsage.completion);
-              lastStepCompletion = stepUsage.completion;
-            }
+            addStepUsage(stepUsage);
             state.aborts.delete(chat.id);
             continue;
           }
@@ -532,12 +534,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           learnImageCost(model, imgs, stepPromptTokens - lastFitTokens + imgs * imageTokenCost(model));
         }
       }
-      if (stepUsage) {
-        if (!usage) usage = { prompt: 0, completion: 0, total: 0 };
-        usage.prompt += stepUsage.prompt; usage.completion += stepUsage.completion;
-        usage.total += stepUsage.total || (stepUsage.prompt + stepUsage.completion);
-        lastStepCompletion = stepUsage.completion;
-      }
+      addStepUsage(stepUsage);
       if (!aborted) {
         const notes = takeSteers();
         if (notes && steerBudget > 0) {

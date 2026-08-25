@@ -62,12 +62,12 @@ export default function ChatMenu({ chat, modelId, pinned = [], pins = [], onUnpi
       </div>
       {pinned.length > 0 && (
         <div className="cmp-sec">
-          <div className="cmp-label"><Pin style={{ width: 14 }} /> Pinned ({pinned.length})</div>
+          <div className="cmp-label"><Pin style={{ width: 14 }} /> {t("Pinned")} <span className="cmp-count">{pinned.length}</span></div>
           <div className="cmp-pins">
             {pinned.map(m => (
               <button key={m.id} className="cmp-pin" onClick={() => onJump?.(m.id)}>
-                <span className="cmp-pin-role">{m.role === 'user' ? 'You' : 'AI'}</span>
-                <span className="cmp-pin-text">{(typeof m.content === 'string' ? m.content : '').replace(/\s+/g, ' ').trim().slice(0, 80) || '(no text)'}</span>
+                <span className="cmp-pin-role">{m.role === 'user' ? t('You') : t('Assistant')}</span>
+                <span className="cmp-pin-text">{(typeof m.content === 'string' ? m.content : '').replace(/\s+/g, ' ').trim().slice(0, 80) || t('(empty)')}</span>
               </button>
             ))}
           </div>
@@ -75,8 +75,8 @@ export default function ChatMenu({ chat, modelId, pinned = [], pins = [], onUnpi
       )}
       {pins.length > 0 && (
         <div className="cmp-sec">
-          <div className="cmp-label"><Pin style={{ width: 14 }} /> Pinned files ({pins.length})</div>
-          <div className="cmp-note">{t("Kept in context every turn for this chat.")}</div>
+          <div className="cmp-label"><Pin style={{ width: 14 }} /> {t("Pinned files")} <span className="cmp-count">{pins.length}</span></div>
+          <div className="cmp-note">{t("Always kept in context.")}</div>
           <div className="cmp-pinfiles">
             {pins.map(p => (
               <div key={p.url} className="cmp-pinfile">
@@ -90,7 +90,7 @@ export default function ChatMenu({ chat, modelId, pinned = [], pins = [], onUnpi
       )}
       <div className="cmp-sec">
         <div className="cmp-label"><Sliders style={{ width: 14 }} /> {t("Chat instructions")}</div>
-        <div className="cmp-note">{t("Added to the system prompt for this chat only, on top of your global instructions.")}</div>
+        <div className="cmp-note">{t("Applies to this chat only.")}</div>
         <textarea className="cmp-instr" value={instr} maxLength={8000} rows={4}
           placeholder={t("e.g. Answer as a senior code reviewer. Be terse.")}
           onChange={(e) => changeInstr(e.target.value)} />

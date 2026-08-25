@@ -23,7 +23,7 @@ export default function DashboardSection() {
     ['Models', String(models.length), `${visibleModels} visible · ${hiddenModels} hidden${unavailModels ? ` · ${unavailModels} down` : ''}`, Cube, 'models'],
     ['Providers', String(providers.length), Object.keys(providerTypes).length ? t('LLM backends connected') : t('LLM backends'), Sliders, 'providers'],
     ['Members', String(users.length), `${adminCount} admin${adminCount === 1 ? '' : 's'}`, Users, 'members'],
-    ['30-day spend', usage ? '$' + (usage.totals?.cost || 0).toFixed(2) : '—', usage ? `${(usage.totals?.total || 0).toLocaleString()} tokens · ${(usage.totals?.generations || 0).toLocaleString()} generations` : 'Loading…', Wave, 'analytics']
+    ['30-day spend', usage ? '$' + (usage.totals?.cost || 0).toFixed(2) : '-', usage ? `${(usage.totals?.total || 0).toLocaleString()} tokens · ${(usage.totals?.generations || 0).toLocaleString()} generations` : 'Loading…', Wave, 'analytics']
   ];
 
   return (

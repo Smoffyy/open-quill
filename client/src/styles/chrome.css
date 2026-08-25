@@ -7,7 +7,7 @@
 .disclaimer a:hover { color: var(--text-muted); }
 
 /* ---------- scroll-to-bottom ---------- */
-.to-bottom { position: absolute; left: 50%; transform: translateX(-50%); bottom: 190px; width: 34px; height: 34px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); display: grid; place-items: center; color: var(--text); box-shadow: 0 4px 14px #0000004d; animation: pop var(--fx-a, .18s) ease; z-index: 5; }
+.to-bottom { position: absolute; left: 50%; transform: translateX(-50%); bottom: 190px; width: 34px; height: 34px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); display: grid; place-items: center; color: var(--text); box-shadow: 0 4px 14px #0000004d; z-index: 5; }
 .to-bottom:hover { background: var(--surface-hover); }
 
 /* ---------- login ---------- */

@@ -18,10 +18,9 @@
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
-.overlay { position: fixed; inset: 0; display: grid; place-items: center; z-index: 100; animation: fade var(--fx-a, .16s) ease; }
+.overlay { position: fixed; inset: 0; display: grid; place-items: center; z-index: 100; }
 .overlay { padding-left: 0; }
-@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
-.modal { width: min(960px, 94vw); height: min(720px, calc(100vh - 48px)); background: var(--modal-bg); border: 1px solid var(--modal-line, var(--border)); border-radius: 12px; display: flex; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,.28); animation: pop var(--fx-a, .18s) ease; }
+.modal { position: relative; width: min(960px, 94vw); height: min(720px, calc(100vh - 48px)); background: var(--modal-bg); border: 1px solid var(--modal-line, var(--border)); border-radius: 12px; display: flex; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,.28); }
 /* Settings sidebar. These rules used to live in admin.css, which is lazy-loaded
    by AdminPanel alone, so an ordinary user opening Settings got an unstyled
    nav: the group headings fell back to 16px with no padding and sat 37px left
@@ -57,7 +56,7 @@
   padding: 4px; border-radius: 12px; background: var(--pop-bg, var(--menu-bg));
   box-shadow: var(--pop-shadow, 0 8px 24px rgba(0, 0, 0, .32));
   font-family: var(--font-sans); font-size: 14px;
-  animation: setSelIn var(--fx-a, .12s) var(--ease-out) both;
+
 }
 .ms-res-page,
 .ms-res-line {
@@ -78,7 +77,6 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .ms-hit { color: var(--search-hit, #6da7ec); }
-[data-animations="off"] .ms-results { animation: none; }
 .modal-side .ms-nav { flex: 1; min-height: 0; overflow: hidden auto; display: flex; flex-direction: column; gap: 12px; padding: 0 12px 12px; }
 .modal-side .ms-sec { display: flex; flex-direction: column; gap: 1px; }
 .modal-side .ms-group { font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--sidebar-label, var(--text-faint)); padding: 12px 8px 0; margin-bottom: 11px; font-family: var(--font-sans); line-height: 17px; }
@@ -87,16 +85,15 @@
 .modal-tab:hover { background: var(--hover-soft); color: var(--text); }
 .modal-tab.active { background: var(--modal-active, var(--surface-hover)); color: var(--text); font-weight: 500; }
 .modal-tab svg { width: 20px; height: 20px; flex: none; }
-.modal-tab.sub { padding-left: 36px; font-size: 13px; animation: subIn var(--fx-a, .2s) ease both; }
+.modal-tab.sub { padding-left: 36px; font-size: 13px; }
 .modal-tab.has-sub .tab-chev { margin-left: auto; opacity: .55; transition: transform var(--fx-t, .2s) cubic-bezier(.2,.7,.3,1); }
 .modal-tab.has-sub.open .tab-chev { transform: rotate(90deg); }
 .autosave-note { display: flex; align-items: center; gap: 8px; margin-top: 18px; font-size: 12.5px; color: var(--text-faint); font-family: var(--font-sans); }
 .settings-autosave { display: flex; align-items: center; gap: 8px; margin-top: 22px; font-size: 12.5px; color: var(--text-faint); font-family: var(--font-sans); }
 .autosave-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint); transition: background var(--fx-t, .25s), box-shadow var(--fx-t, .25s); }
 .autosave-dot.flash { background: var(--success); box-shadow: 0 0 8px color-mix(in srgb, var(--success) 67%, transparent); }
-@keyframes subIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 /* ---- version (about) ---- */
-.vh { animation: subIn var(--fx-a, .2s) ease both; max-width: 560px; }
+.vh { max-width: 560px; }
 .vh-top { display: flex; align-items: center; gap: 20px; padding: 4px 0 22px; }
 .vh-badge { width: 84px; height: 84px; border-radius: 19px; flex-shrink: 0; overflow: hidden; display: grid; place-items: center; background: var(--surface-2); border: 1px solid var(--border-soft); box-shadow: 0 2px 10px #00000026; }
 .vh-badge img { width: 100%; height: 100%; object-fit: cover; }
@@ -154,7 +151,7 @@
 .modal h2 { font-family: var(--font-sans); font-size: 18px; font-weight: 600; margin: 0 0 3px; letter-spacing: -.01em; }
 .modal .hint { color: var(--text-muted); font-size: 13px; font-family: var(--font-sans); margin-bottom: 18px; }
 
-.admin-page { position: fixed; inset: 0; z-index: 50; display: flex; background: var(--bg); animation: fade var(--fx-a, .14s) ease; }
+.admin-page { position: fixed; inset: 0; z-index: 50; display: flex; background: var(--bg); }
 .admin-rail { width: 240px; flex-shrink: 0; background: var(--sidebar); border-right: 1px solid var(--border-soft); padding: 22px 14px; display: flex; flex-direction: column; gap: 4px; }
 .ar-brand { font-family: var(--font-serif); font-size: 18px; color: var(--text); padding: 4px 10px 16px; }
 .ar-tab { display: flex; align-items: center; gap: 11px; width: 100%; padding: 10px 12px; border-radius: 9px; font-size: 14px; color: var(--text-muted); text-align: left; transition: background var(--fx-t, .12s), color var(--fx-t, .12s); }
@@ -249,10 +246,7 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 .avatar { transition: transform var(--fx-t, .15s) ease; }
 
 /* ---------- view transitions ---------- */
-@keyframes composerDrop { from { opacity: 0; transform: translateY(-16vh); } to { opacity: 1; transform: translateY(0); } }
-@keyframes greetingIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-.active-composer { position: relative; z-index: 14; animation: composerDrop var(--fx-a, .42s) cubic-bezier(.2,.7,.3,1) both; }
-.greeting { animation: greetingIn var(--fx-a, .4s) ease both; }
+.active-composer { position: relative; z-index: 14; }
 
 
 /* ---------- admin users ---------- */
@@ -271,7 +265,7 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 /* ---------- attachments ---------- */
 .composer .attach-row { --attach-size: 120px; --attach-radius: 8px; }
 .attach-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: -6px; padding: 0 0 30px; }
-.attach-chip { position: relative; width: var(--attach-size); height: var(--attach-size); flex: 0 0 auto; animation: pop var(--fx-a, .14s) ease; }
+.attach-chip { position: relative; width: var(--attach-size); height: var(--attach-size); flex: 0 0 auto; }
 .attach-chip.image img { width: 100%; height: 100%; object-fit: contain; background: var(--composer-bg); border-radius: var(--attach-radius); border: 0.8px solid var(--pop-ring, var(--border)); display: block; }
 .attach-file { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; background: var(--composer-bg); border: 0.8px solid var(--pop-ring, var(--border)); border-radius: var(--attach-radius); padding: 8px 10px; overflow: hidden; }
 .attach-file svg { color: var(--text-muted); flex-shrink: 0; }
@@ -296,7 +290,7 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 .att-pin { position: absolute; top: 5px; right: 5px; width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; background: var(--menu-bg); border: 1px solid var(--border); color: var(--text-faint); opacity: 0; transition: opacity var(--fx-t, .12s), color var(--fx-t, .12s); }
 .att.file:hover .att-pin, .att-pin.on, .att-pin:focus-visible { opacity: 1; }
 .att-pin:hover { color: var(--text); }
-.att-pin.on { color: var(--accent); }
+.att-pin.on { color: var(--pop-blue); }
 
 @media (max-width: 560px) { :root { --attach-size: 88px; } }
 
@@ -321,15 +315,15 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 .drop-hint { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 18px; background: color-mix(in srgb, var(--glow) 14%, transparent); color: var(--text); font-size: 14px; font-family: var(--font-sans); font-weight: 600; letter-spacing: .01em; pointer-events: none; z-index: 6; }
 
 /* ---------- in-app confirm dialog ---------- */
-.confirm-overlay { position: fixed; inset: 0; background: #00000066; display: grid; place-items: center; z-index: 200; animation: fade var(--fx-a, .12s) ease; }
-.confirm-box { width: min(380px, 90vw); background: var(--menu-bg); border: 1px solid var(--border); border-radius: 14px; padding: 22px; box-shadow: 0 8px 32px rgba(0,0,0,.28); animation: pop var(--fx-a, .16s) ease; }
+.confirm-overlay { position: fixed; inset: 0; background: #00000066; display: grid; place-items: center; z-index: 200; }
+.confirm-box { width: min(380px, 90vw); background: var(--menu-bg); border: 1px solid var(--border); border-radius: 14px; padding: 22px; box-shadow: 0 8px 32px rgba(0,0,0,.28); }
 .confirm-msg { font-size: 15px; color: var(--text); line-height: 1.5; margin-bottom: 18px; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }
 .btn.danger-solid { background: #c4452f; color: #fff; }
 .btn.danger-solid:hover { background: #d44e36; }
 
-.preset-scrim { position: fixed; inset: 0; z-index: 400; background: rgba(0, 0, 0, .55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: grid; place-items: center; animation: fadeIn var(--fx-a, .18s) ease; }
-.preset-modal { width: min(560px, calc(100vw - 32px)); background: var(--modal-bg); border: 1px solid var(--border-soft); border-radius: 18px; padding: 30px 28px 26px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,.28); animation: pop var(--fx-a, .18s) ease; }
+.preset-scrim { position: fixed; inset: 0; z-index: 400; background: rgba(0, 0, 0, .55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: grid; place-items: center; }
+.preset-modal { width: min(560px, calc(100vw - 32px)); background: var(--modal-bg); border: 1px solid var(--border-soft); border-radius: 18px; padding: 30px 28px 26px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,.28); }
 .preset-title { font-family: var(--font-serif); font-size: 24px; font-weight: 500; margin: 0 0 6px; color: var(--text); }
 .preset-sub { color: var(--text-muted); font-size: 13.5px; font-family: var(--font-sans); margin: 0 0 20px; }
 .preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -342,13 +336,12 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 .preset-swatch.openai .ps-dot { width: 22px; height: 22px; border-radius: 50%; background: #fff; }
 .preset-name { font-weight: 600; font-size: 15px; color: var(--text); }
 .preset-desc { font-size: 12.5px; color: var(--text-muted); line-height: 1.45; }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 .modal .me-sections { display: flex; gap: 2px; border-bottom: 1px solid var(--border-soft); margin-bottom: 16px; }
 .modal .me-sec { position: relative; padding: 9px 12px; font-size: 13.5px; font-weight: 500; color: var(--text-muted); background: transparent; border-radius: 0; }
 .modal .me-sec:hover { color: var(--text); }
 .modal .me-sec.on { color: var(--text); }
-.modal .me-sec.on::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px 2px 0 0; background: var(--accent); }
+.modal .me-sec.on::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px; border-radius: 2px 2px 0 0; background: var(--pop-blue); }
 
 /* Settings dialog controls, matched to claude.ai: a white-overlay fill, no border */
 .modal-main input[type="text"], .modal-main input[type="number"], .modal-main input[type="email"],
@@ -379,7 +372,7 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
   position: absolute; left: 1px; top: 1px; bottom: 1px; border-radius: 7px;
   background: var(--seg-thumb, var(--hover-mid));
   box-shadow: inset 0 0 0 1px var(--seg-thumb-ring, var(--border-soft)), 0 1px 2px rgba(0, 0, 0, .05);
-  transition: transform var(--fx-t, .28s) cubic-bezier(.34, 1.5, .5, 1), width var(--fx-t, .2s) cubic-bezier(.32, .72, 0, 1);
+  transition: transform .28s cubic-bezier(.34, 1.5, .5, 1), width .2s cubic-bezier(.32, .72, 0, 1);
   pointer-events: none;
 }
 .segs-opt {
@@ -390,6 +383,9 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 }
 .segs-opt.on { color: var(--text); }
 .segs-opt:hover:not(.on) { color: var(--text-muted); }
+/* icon-sized variant for the artifact header */
+.segs.compact .segs-opt { height: 24px; padding: 0 7px; }
+.segs.compact .segs-opt svg { display: block; }
 
 .set-select { position: relative; }
 .set-select-trigger {
@@ -403,9 +399,8 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 .set-select-menu {
   position: absolute; top: calc(100% + 4px); right: 0; z-index: 30; min-width: 224px;
   padding: 4px; border-radius: 12px; background: var(--pop-bg, var(--menu-bg));
-  box-shadow: var(--pop-shadow); animation: setSelIn var(--fx-a, .12s) var(--ease-out) both;
+  box-shadow: var(--pop-shadow);
 }
-@keyframes setSelIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 .set-select-opt {
   display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;
   height: 32px; padding: 4px 12px; border-radius: 8px;
@@ -414,8 +409,6 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 }
 .set-select-opt:hover { background: var(--pop-hover, var(--hover-mid)); }
 .set-select-opt svg { width: 14px; flex-shrink: 0; color: var(--pop-text, var(--text)); }
-[data-animations="off"] .segs-thumb, .segs-thumb.dragging { transition: none; }
-[data-animations="off"] .set-select-menu { animation: none; }
 :root[data-theme="light"] .segs-thumb { background: var(--seg-thumb, #ffffff); }
 .set-select-trigger .accent-dot,
 .set-select-opt .accent-dot {

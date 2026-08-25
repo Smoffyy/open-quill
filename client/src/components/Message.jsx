@@ -31,7 +31,7 @@ function MoreMenu({ items }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   const menuRef = useRef(null);
-  const pos = useAnchoredMenu(open, setOpen, btnRef, menuRef);
+  const pos = useAnchoredMenu(open, setOpen, btnRef, menuRef, { align: 'center' });
   const list = items.filter(Boolean);
   if (!list.length) return null;
   return (
@@ -224,7 +224,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   const [compare, setCompare] = useState(false);
   const retryRef = useRef(null);
   const retryMenuRef = useRef(null);
-  const retryPos = useAnchoredMenu(retryMenu, setRetryMenu, retryRef, retryMenuRef);
+  const retryPos = useAnchoredMenu(retryMenu, setRetryMenu, retryRef, retryMenuRef, { align: 'center' });
   async function doCopy() {
     const clean = (msg.content || '').replace(/\[\[OQ(?:R:[A-Za-z0-9+/=]+|T:\d+)\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
     if (!(await copyText(clean))) return;
@@ -313,9 +313,9 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
               {onEdit && <button className="action-btn" onClick={startEdit} title={t("Edit")} aria-label={t("Edit")}><Pencil /></button>}
               <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
               <MoreMenu items={[
-                onFork && { label: t('Branch into a new chat'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
-                onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin (keep in context)'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
-                onDelete && chatId && { label: t('Delete message'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
+                onFork && { label: t('Branch'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
+                onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
+                onDelete && chatId && { label: t('Delete'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
               ]} />
             </div>
           )}
@@ -396,9 +396,9 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
           <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
           {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")} aria-label={t("Compare versions")}><Columns /></button>}
           <MoreMenu items={[
-            onFork && { label: t('Branch into a new chat'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
-            onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin (keep in context)'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
-            onDelete && chatId && !String(msg.id).startsWith('inc-') && { label: t('Delete message'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
+            onFork && { label: t('Branch'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
+            onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
+            onDelete && chatId && !String(msg.id).startsWith('inc-') && { label: t('Delete'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
           ]} />
           {showSpeed && <SpeedChip speed={msg.speed} />}
           {model?.displayName && <span className="msg-model-badge">{model.displayName}</span>}

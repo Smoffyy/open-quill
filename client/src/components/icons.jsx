@@ -80,6 +80,8 @@ export const Eye = (p) => <I {...p}><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3
 export const EyeOff = (p) => <I {...p}><path d="M3 3l18 18M10 5.9A9.9 9.9 0 0 1 12 5.5c6.5 0 10 6.5 10 6.5a17 17 0 0 1-3.2 3.9M6.4 6.9A16 16 0 0 0 2 12s3.5 6.5 10 6.5a10 10 0 0 0 3.4-.6" /><path d="M9.9 10.2a2.6 2.6 0 0 0 3.6 3.7" /></I>;
 export const SortIcon = (p) => <I {...p}><path d="M4 7h11M4 12h7M4 17h4M17 15l3 3 3-3M20 18V8" /></I>;
 export const ModelDocs = (p) => <I {...p}><path className="ic-page-l" d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8"/><path className="ic-page-r" d="M12 5.6c1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4v14.6c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8"/><path d="M12 5.6v14.6"/></I>;
+export const Expand = (p) => <I {...p}><path d="M9 3H3v6M3 3l7 7M15 21h6v-6M21 21l-7-7" /></I>;
+export const Collapse = (p) => <I {...p}><path d="M4 10h6V4M10 10 3 3M20 14h-6v6M14 14l7 7" /></I>;
 export const CodeTag = (p) => <I {...p}><path className="ic-b1" d="M8.4 7.6 3.8 12l4.6 4.4"/><path className="ic-b2" d="M15.6 7.6 20.2 12l-4.6 4.4"/><path d="M13.7 5.4l-3.4 13.2"/></I>;
 export const SkillIcon = (p) => <I {...p}><rect className="ic-sk-box" x="3.2" y="4.4" width="17.6" height="15.2" rx="2.6"/><path className="ic-sk-l1" d="M7.2 9.2h6.4"/><path className="ic-sk-l2" d="M7.2 12.6h9.6"/><path className="ic-sk-l3" d="M7.2 16h4.8"/></I>;
 export const Artifact = (p) => <I {...p}><circle className="ic-a1" cx="7.3" cy="14.7" r="3.4"/><path className="ic-a2" d="M6.5 9.5a4.6 4.6 0 0 1 7.4-3.6l-4.3 5.4z"/><rect className="ic-a3" x="13.1" y="10.1" width="7" height="9" rx="1.6"/></I>;
