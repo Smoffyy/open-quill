@@ -257,7 +257,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
     const ro = new ResizeObserver(() => {
       const top = el.getBoundingClientRect().top;
       const suspended = performance.now() < iconSuspendUntil.current;
-      if (iconPrevTop.current !== null && !suspended) {
+      if (iconPrevTop.current !== null && !suspended && streaming) {
         const delta = iconPrevTop.current - top;
         if (Math.abs(delta) > 0.5) {
           el.style.transition = 'none';
@@ -269,7 +269,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
     });
     ro.observe(container);
     return () => { container.removeEventListener('click', onToggleStart); ro.disconnect(); settle(); };
-  }, [pos]);
+  }, [pos, streaming]);
 
   const [fb, setFb] = useState(msg.feedback || 0);
   useEffect(() => { setFb(msg.feedback || 0); }, [msg.id]);
@@ -417,7 +417,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   if (pos === 'left') {
     const gutter = model?.iconSize > 0 ? model.iconSize : 40;
     return (
-      <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant icon-left' + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
+      <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant icon-left' + (streaming ? ' streaming-msg' : '') + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
         {icon && <div className="il-avatar" style={{ left: -(gutter + 14) }}>{icon}</div>}
         {showName && <div className="assistant-name">{model.displayName}</div>}
         {inner}
@@ -426,7 +426,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   }
 
   return (
-    <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant' + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
+    <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant' + (streaming ? ' streaming-msg' : '') + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
       {pos === 'above' && icon}
       {inner}
       {pos === 'below' && icon}

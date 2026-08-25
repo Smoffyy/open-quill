@@ -630,15 +630,15 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 
   /* settings modal: stack nav on top */
   .modal { width: 100% !important; max-width: 100% !important; height: min(720px, calc(100dvh - 32px)) !important; max-height: calc(100dvh - 32px); flex-direction: column; }
-  .modal-side {
+  :root:root .modal > .modal-side {
     display: flex; width: 100%; height: auto; flex-direction: row; align-items: center; gap: 4px;
-    overflow: auto hidden; padding: 8px 12px; border-right: none;
+    overflow: auto hidden; padding: 8px 12px 16px; scrollbar-width: thin; border-right: none;
     border-bottom: 1px solid var(--modal-line, var(--border-soft)); flex-shrink: 0;
   }
-  .modal-side .ms-group, .modal-side .ms-search { display: none; }
-  .modal-side .ms-nav { flex-direction: row; gap: 4px; padding: 0; overflow: auto hidden; }
-  .modal-side .ms-sec { flex-direction: row; gap: 4px; }
-  .modal-side button, .modal-side .ms-item, .modal-side .modal-tab {
+  :root:root .modal > .modal-side :is(.ms-group, .ms-search, .ms-searchbox) { display: none; }
+  :root:root .modal > .modal-side .ms-nav { flex-direction: row; gap: 4px; padding: 0; overflow: auto hidden; }
+  :root:root .modal > .modal-side .ms-sec { flex-direction: row; gap: 4px; }
+  :root:root .modal > .modal-side :is(button, .ms-item, .modal-tab) {
     white-space: nowrap; flex-shrink: 0; width: auto; padding: 0 10px;
   }
   .modal-main { padding: 20px 18px; }
@@ -649,7 +649,7 @@ body:has(.app.has-bg) > .model-submenu.pinned {
     background: var(--modal-bg, var(--surface)); color: var(--text); z-index: 5;
   }
   .modal-close:hover, .modal-close:active { background: var(--modal-active, var(--hover-mid)); color: var(--text); }
-  .modal-side {
+  :root:root .modal > .modal-side {
     padding-right: 46px;
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 54px), transparent calc(100% - 26px));
     mask-image: linear-gradient(to right, #000 calc(100% - 54px), transparent calc(100% - 26px));
