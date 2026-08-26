@@ -20,7 +20,7 @@ export const NAV_GROUPS = [
     { id: 'memory', label: tk('Memory'), desc: tk('Per-user long-term memory and searching past chats as a tool.'), Icon: Brain, keywords: tk('user memory history chat search remember') },
     { id: 'membank', label: tk('Memory Bank'), desc: tk('Reference files every model can read on demand.'), Icon: FileText, keywords: tk('files knowledge documents reference') },
     { id: 'skills', label: tk('Skills'), desc: tk('Reusable instruction files models load on demand for specific tasks.'), Icon: Bulb, keywords: tk('instructions markdown playbooks') },
-    { id: 'mcp', label: tk('Connectors'), desc: tk('Connect local MCP servers and expose their tools to every model.'), Icon: Plug, keywords: tk('mcp servers tools protocol integrations') },
+    { id: 'mcp', label: tk('MCP'), desc: tk('Connect MCP servers for everyone on this workspace.'), Icon: Plug, keywords: tk('mcp servers tools protocol integrations connectors') },
     { id: 'privacy', label: tk('Privacy'), desc: tk('What this server has tried to connect to, and whether it was allowed.'), Icon: Shield, keywords: tk('egress outbound network local offline connections') },
     { id: 'safety', label: tk('Safety'), desc: tk('Screen user prompts with a model before they reach the assistant.'), Icon: Shield, keywords: tk('moderation filter blocked screening guardrails') }
   ] },

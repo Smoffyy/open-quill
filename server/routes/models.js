@@ -3,7 +3,7 @@ import { authMiddleware, adminOnly } from '../auth.js';
 import { getProviders, resolveProvider, providerSpec } from '../providers.js';
 import { matchPreset, presetList, setCustomPresets, getCustomPresets } from '../pricing.js';
 import { logAudit } from '../lib/audit.js';
-import { draftModels, publicModels, detectContextLength } from '../lib/models.js';
+import { draftModels, publicModels, detectContextLength, timedFetch } from '../lib/models.js';
 import { sanitizeKwargs } from '../lib/kwargs.js';
 import { broadcastConfig, broadcastAdminConfig } from '../lib/ws/index.js';
 import { ROUTE_MATCHERS } from '../lib/router.js';
@@ -45,12 +45,12 @@ export default function registerModelRoutes(app) {
       const headers = key ? { Authorization: `Bearer ${key}` } : {};
       let ids = [];
       if (spec.protocol === 'ollama') {
-        const r = await fetch(base.replace(/\/v1$/, '') + '/api/tags', { headers });
+        const r = await timedFetch(base.replace(/\/v1$/, '') + '/api/tags', { headers });
         if (!r.ok) return res.status(502).json({ error: `Backend returned ${r.status}.` });
         const j = await r.json().catch(() => ({}));
         ids = (Array.isArray(j?.models) ? j.models : []).map(x => x?.name || x?.model).filter(Boolean);
       } else {
-        const r = await fetch(base + '/models', { headers });
+        const r = await timedFetch(base + '/models', { headers });
         if (!r.ok) return res.status(502).json({ error: `Backend returned ${r.status}.` });
         const j = await r.json().catch(() => ({}));
         const raw = Array.isArray(j?.data) ? j.data : (Array.isArray(j?.models) ? j.models : []);

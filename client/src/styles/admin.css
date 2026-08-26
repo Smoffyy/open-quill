@@ -339,10 +339,6 @@
 .audit-more { margin-top: 8px; align-self: center; }
 .oqa .audit-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
 
-.mcp-status { margin-left: 8px; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px; text-transform: uppercase; letter-spacing: .04em; }
-.mcp-status.connected { color: var(--success); background: color-mix(in srgb, var(--success) 14%, transparent); }
-.mcp-status.error { color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
-.mcp-status.new { color: var(--text-muted); background: var(--hover); }
 .fb-totals { display: flex; gap: 10px; align-items: center; }
 .fb-total { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; padding: 5px 11px; border-radius: 20px; }
 .fb-total.up { color: var(--success); background: color-mix(in srgb, var(--success) 12%, transparent); }

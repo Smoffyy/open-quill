@@ -1,24 +1,34 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../../api.js';
 import { SegPick, Switch } from '../widgets.jsx';
-import { Plus, Trash, Pencil, Plug, Refresh } from '../../icons.jsx';
+import { Plus, Plug } from '../../icons.jsx';
+import McpCard from '../../McpCard.jsx';
 import { t } from '../../../i18n.jsx';
 
 export default function McpSection() {
   const [servers, setServers] = useState([]);
   const [edit, setEdit] = useState(null);
+  const [editError, setEditError] = useState('');
   const [busy, setBusy] = useState('');
 
   useEffect(() => {
     (async () => { try { const d = await api.get('/api/admin/mcp'); setServers(d.servers || []); } catch {} })();
   }, []);
 
+  function startAdd() {
+    setEditError('');
+    setEdit({ name: '', transport: 'stdio', command: '', args: '', url: '', headers: '', enabled: true });
+  }
+
   async function save(sv) {
+    setEditError('');
+    setBusy('save');
     try {
       if (sv.id) { const r = await api.patch('/api/admin/mcp/' + sv.id, sv); setServers(list => list.map(x => x.id === sv.id ? r.server : x)); }
-      else { const r = await api.post('/api/admin/mcp', sv); setServers(list => [...list, r.server]); if (r.warning) alert(t('Server saved, but connecting failed: ') + r.warning); }
+      else { const r = await api.post('/api/admin/mcp', sv); setServers(list => [...list, r.server]); }
       setEdit(null);
-    } catch (e) { alert(e.message || t('Could not save server.')); }
+    } catch (e) { setEditError(e.message || t('Could not save server.')); }
+    setBusy('');
   }
   async function remove(id) { try { await api.del('/api/admin/mcp/' + id); setServers(list => list.filter(x => x.id !== id)); } catch {} }
   async function toggle(sv) { try { const r = await api.patch('/api/admin/mcp/' + sv.id, { enabled: !sv.enabled }); setServers(list => list.map(x => x.id === sv.id ? r.server : x)); } catch {} }
@@ -28,14 +38,17 @@ export default function McpSection() {
     setBusy('');
   }
 
+  const editing = !!edit;
+
   return (
     <>
       <div className="admin-section-head">
-        <div><div className="muted-note">{t("Connect MCP (Model Context Protocol) servers running on this machine or your network. Their tools are exposed to every model with tool calling, prefixed mcp_. Everything stays local, no cloud relay is involved.")}</div></div>
-        <button className="btn primary" onClick={() => setEdit({ name: '', transport: 'stdio', command: '', args: '', url: '', headers: '', enabled: true })}><Plus style={{ width: 15 }} /> {t("Add server")}</button>
+        <div className="muted-note mcp-intro">{t("Tools from each server reach every model that has tool calling, named with an mcp_ prefix. Servers run on this machine or your network, nothing is relayed through a cloud. Users can add HTTP servers of their own under Settings.")}</div>
+        <button className="btn primary" onClick={startAdd}><Plus style={{ width: 15 }} /> {t("Add server")}</button>
       </div>
-      {edit && (
-        <div className="fn-editor">
+
+      {editing && (
+        <div className="fn-editor mcp-editor">
           <div className="field"><label>{t("Server name")}</label>
             <input value={edit.name} onChange={(e) => setEdit(x => ({ ...x, name: e.target.value }))} placeholder={t("Filesystem")} />
           </div>
@@ -68,34 +81,30 @@ export default function McpSection() {
           <div className="med-toggle-card">
             <label className="inline-toggle"><span>{t("Enabled")}</span><Switch on={edit.enabled} label={t("Enabled")} onToggle={() => setEdit(x => ({ ...x, enabled: !x.enabled }))} /></label>
           </div>
+          {editError && <div className="mcp-form-error" role="alert">{editError}</div>}
           <div className="editor-actions">
-            <button className="btn" onClick={() => setEdit(null)}>{t("Cancel")}</button>
-            <button className="btn primary" onClick={() => save(edit)}>{t("Save server")}</button>
+            <button className="btn" onClick={() => { setEdit(null); setEditError(''); }}>{t("Cancel")}</button>
+            <button className="btn primary" disabled={busy === 'save'} onClick={() => save(edit)}>{busy === 'save' ? t("Connecting…") : t("Save server")}</button>
           </div>
         </div>
       )}
-      <div className="fn-list">
-        {servers.length === 0 && !edit && <div className="muted-note">{t("No MCP servers yet.")}</div>}
+
+      {servers.length === 0 && !editing && (
+        <div className="mcp-empty">
+          <span className="mcp-empty-icon"><Plug style={{ width: 20 }} /></span>
+          <div className="mcp-empty-title">{t("No MCP servers yet")}</div>
+          <div className="mcp-empty-note">{t("Add an MCP server to give your models tools such as file access, a browser, or your own internal APIs.")}</div>
+          <button className="btn primary" onClick={startAdd}><Plus style={{ width: 15 }} /> {t("Add server")}</button>
+        </div>
+      )}
+
+      <div className="mcp-list">
         {servers.map(sv => (
-          <div key={sv.id} className="fn-card">
-            <div className="fn-card-main">
-              <div className="fn-card-title">
-                <Plug style={{ width: 15 }} /> {sv.name}
-                <span className={'mcp-status ' + (sv.status || 'new')}>{sv.status === 'connected' ? `${(sv.tools || []).length} tool${(sv.tools || []).length === 1 ? '' : 's'}` : sv.status === 'error' ? 'error' : 'not connected'}</span>
-              </div>
-              <div className="fn-card-desc">
-                {sv.transport === 'http' ? sv.url : `${sv.command} ${sv.args || ''}`.trim()}
-                {sv.status === 'error' && sv.error ? `, ${sv.error}` : ''}
-                {sv.status === 'connected' && (sv.tools || []).length ? `, ${(sv.tools || []).map(t => t.name).slice(0, 6).join(', ')}${(sv.tools || []).length > 6 ? '…' : ''}` : ''}
-              </div>
-            </div>
-            <div className="fn-card-actions">
-              <button className="icon-btn" title={t("Reconnect and refresh tools")} disabled={busy === sv.id} onClick={() => refresh(sv.id)}><Refresh style={{ width: 15, opacity: busy === sv.id ? .4 : 1 }} /></button>
-              <Switch on={sv.enabled} label={t("Enabled")} title={t("Enabled")} onToggle={() => toggle(sv)} />
-              <button className="icon-btn" title={t("Edit")} aria-label={t("Edit")} onClick={() => setEdit({ ...sv })}><Pencil style={{ width: 15 }} /></button>
-              <button className="icon-btn" title={t("Delete")} aria-label={t("Delete")} onClick={() => remove(sv.id)}><Trash style={{ width: 15 }} /></button>
-            </div>
-          </div>
+          <McpCard key={sv.id} server={sv} busy={busy === sv.id}
+            onRefresh={() => refresh(sv.id)}
+            onToggle={() => toggle(sv)}
+            onEdit={() => { setEditError(''); setEdit({ ...sv }); }}
+            onDelete={() => remove(sv.id)} />
         ))}
       </div>
     </>

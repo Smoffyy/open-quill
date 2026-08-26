@@ -2,10 +2,11 @@ import { useState, useRef, useEffect } from 'react';
 import { api } from '../api.js';
 import { applyPrefs, ACCENT_PRESETS, getUserFont, setUserFont, currentPreset } from '../prefs.js';
 import { palettesFor, themeValue } from '../lib/palettes.js';
-import { Sun, Gear, Sliders, Info, Chevron, Check, Clock, Download, Upload, Shield, Trash, Brain, Refresh, Keyboard, Search, SkillIcon } from './icons.jsx';
+import { Sun, Gear, Sliders, Info, Chevron, Check, Clock, Download, Upload, Shield, Trash, Brain, Refresh, Keyboard, Search, SkillIcon, Plug } from './icons.jsx';
 import Markdown from './Markdown.jsx';
 import KeybindsPanel from './KeybindsPanel.jsx';
 import SkillsSection from './SkillsSection.jsx';
+import UserMcpSection from './UserMcpSection.jsx';
 import { t, tk, useI18n } from '../i18n.jsx';
 import { STATUS_DELAY_DEFAULT, STATUS_DELAY_MAX, statusDelaySecs } from '../lib/status.js';
 import { menuStyleOf, useAnchoredMenu } from '../lib/anchor.js';
@@ -35,6 +36,7 @@ const NAV_GROUPS = [
   ] },
   { label: tk('Customize'), items: [
     { id: 'skills', label: tk('Skills'), Icon: SkillIcon },
+    { id: 'mcp', label: tk('MCP'), Icon: Plug },
   ] },
 ];
 
@@ -51,6 +53,7 @@ const SETTINGS_INDEX = {
   ],
   memory: [tk('Use memory in chats'), tk('Update from recent chats'), tk('Forget everything')],
   skills: [tk('Browse'), tk('Add'), tk('Create with the assistant'), tk('Write skill instructions'), tk('Upload a skill')],
+  mcp: [tk('Add server'), tk('Server name'), tk('URL'), tk('Headers'), tk('From this workspace')],
   usage: [tk('Usage window'), tk('By model')],
 };
 
@@ -398,8 +401,9 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
       <div className="modal">
         <button className="modal-close" onClick={onClose} aria-label={t('Close')}>✕</button>
         <SettingsNav tab={tab} setTab={setTab} cfg={cfg} />
-        <div className={'modal-main' + (tab === 'skills' ? ' modal-main-flush' : '')}>
+        <div className={'modal-main' + (tab === 'skills' || tab === 'mcp' ? ' modal-main-flush' : '')}>
           {tab === 'skills' && <SkillsSection onTrySkill={(sk) => { onTrySkill?.(sk); onClose(); }} />}
+          {tab === 'mcp' && <UserMcpSection />}
           {tab === 'general' && (
             <>
               <h2>{t("General")}</h2>

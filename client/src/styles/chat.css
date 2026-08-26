@@ -234,12 +234,7 @@
 .scroll-area { flex: 1; overflow: hidden auto; scroll-behavior: auto; scrollbar-gutter: stable both-edges; }
 .thread { max-width: 808px; margin: 0 auto; padding: 12px 36px 0; min-height: 100%; }
 .thread-pad { height: 96px; }
-/* The turn gap hangs BELOW nothing and ABOVE the user message, which is how
-   claude.ai does it. Carrying it as a bottom margin on the preceding reply
-   reads the same mid-thread but leaves the first message in a chat with no
-   space above it. `.thread`'s 12px top padding stops that first 24px from
-   collapsing out, so the opening bubble lands 36px under the topbar and a
-   reply-first thread still starts flush, both matching claude.ai. */
+
 .msg { margin-bottom: 0; }
 .msg.user { display: flex; justify-content: flex-end; margin-top: 24px; margin-bottom: 4px; }
 .user-col { display: flex; flex-direction: column; align-items: flex-end; max-width: 85%; }
@@ -419,14 +414,7 @@
 /* ---------- code blocks ---------- */
 .code-wrap { position: relative; margin: 0 0 12px; border: 0.8px solid var(--code-border, var(--border-soft)); border-radius: 8px; background: var(--code-bg, #1f1f1d); }
 .assistant-body > .code-wrap:last-child { margin-bottom: 0; }
-/* claude.ai puts no bar over a code block: the language is plain text in the
-   block's own top padding and the copy button floats clear at the top-right,
-   fading in on hover. Nothing is painted behind either of them, so the opaque-
-   stack problem the old sticky header had goes away with the header.
-   The button hangs off a zero-width sticky strut rather than the label row —
-   a float, so it costs no vertical space — which is what lets it ride down a
-   tall block and stay reachable while the thread scrolls past. The OpenAI skin
-   does want a real bar, so it builds one back out of `.code-bar`. */
+
 .code-bar {
   padding: 14px 14px 0; font-family: var(--font-sans); font-size: 12px; line-height: 17px;
   color: var(--code-label, #9b9a90);

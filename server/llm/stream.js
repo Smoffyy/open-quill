@@ -9,6 +9,16 @@ async function assertOk(res) {
   if (!res.ok || !res.body) { const t = await res.text().catch(() => ''); throw new Error(`Upstream error ${res.status}: ${t.slice(0, 300)}`); }
 }
 
+async function providerFetch(url, init) {
+  try { return await fetch(url, init); }
+  catch (e) {
+    if (e?.name === 'AbortError' || e?.code === 'EGRESS_BLOCKED') throw e;
+    let where = url;
+    try { where = new URL(url).origin; } catch {}
+    throw new Error(`Could not reach the model provider at ${where} (${e?.cause?.code || e?.message || e}).`, { cause: e });
+  }
+}
+
 async function pumpLines(res, handle, finish) {
   const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
   while (true) {
@@ -50,7 +60,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
   };
 
   if (spec.protocol === 'ollama') {
-    const res = await fetch(endpoint(base, '/api/chat'), {
+    const res = await providerFetch(endpoint(base, '/api/chat'), {
       method: 'POST', headers: authHeaders(key), signal,
       body: JSON.stringify({ model: model.internal_name, messages: wire, stream: true, think: !!model.has_reasoning, options: ollamaOptions(model, spec), ...(hasTools ? { tools } : {}), ...stripNestedKwargs(requestKwargs(model)) })
     });
@@ -83,7 +93,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
     return pumpLines(res, handle, () => { flush(); finishCalls(); });
   }
 
-  const res = await fetch(endpoint(base, '/chat/completions'), {
+  const res = await providerFetch(endpoint(base, '/chat/completions'), {
     method: 'POST', headers: authHeaders(key), signal,
     body: JSON.stringify({ model: model.internal_name, messages: wire, stream: true, stream_options: { include_usage: true }, ...(spec.timingsPerToken ? { timings_per_token: true } : {}), ...(spec.promptProgress ? { return_progress: true } : {}), ...(hasTools ? { tools, tool_choice: 'auto' } : {}), ...samplingParams(model, spec), ...requestKwargs(model) })
   });

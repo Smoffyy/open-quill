@@ -99,7 +99,8 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   const chatSearchOn = !!model.chat_search_allowed && getSetting('chat_search_enabled', '0') === '1';
   const userSkills = chatRow.user_id ? userskills.enabledFor(chatRow.user_id).map(s => ({ name: s.name, description: s.description, content: s.body })) : [];
   const skillsOn = !!model.skills_allowed && (skillsys.getEnabled().length + userSkills.length) > 0;
-  const mcpSchemas = model.mcp_allowed ? mcp.toolSchemas() : [];
+  const mcpUser = chatRow.user_id || null;
+  const mcpSchemas = model.mcp_allowed ? mcp.toolSchemas(mcpUser) : [];
   const mcpOn = mcpSchemas.length > 0;
   const endChatOn = !!model.end_chat_allowed;
   const projFilesOn = !!chatRow.project_id && projectfiles.list(chatRow.project_id).length > 0;
@@ -119,7 +120,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     if (membankOn) parts.push(membank.promptFor(getSetting('membank_prompt', '')));
     if (chatSearchOn) parts.push(CHAT_SEARCH_PROMPT);
     if (skillsOn) parts.push(skillsys.promptFor(userSkills));
-    if (mcpOn) parts.push(mcp.promptFor());
+    if (mcpOn) parts.push(mcp.promptFor(mcpUser));
     if (endChatOn) parts.push(endChatPromptFor(model));
     if (projFilesOn) parts.push(projectfiles.promptFor(chatRow.project_id, projRow ? projRow.name : ''));
     if (longReminderOn) parts.push(longConvoReminderFor(chat.id));
@@ -187,8 +188,8 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       const r = skillsys.execTool(call, userSkills);
       return { payload: skillsys.resultPayload(call, r), formatted: skillsys.formatResult(call, r), hide: false };
     }
-    if (mcpOn && mcp.isMcpTool(call.tool)) {
-      const r = await mcp.execTool(call);
+    if (mcpOn && mcp.isMcpTool(call.tool, mcpUser)) {
+      const r = await mcp.execTool(call, mcpUser);
       return { payload: mcp.resultPayload(call, r), formatted: mcp.formatResult(call, r), hide: false };
     }
     if (call.tool === 'web_search') {

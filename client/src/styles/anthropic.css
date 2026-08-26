@@ -283,8 +283,6 @@ body.resizing-x .side-resize-grip { opacity: 1; }
   outline: 1.6px solid var(--focus-ring); outline-offset: 1.6px;
 }
 
-/* Claude squishes the background layer behind a control, never the control
-   itself, so a press leaves the label and icon exactly where they were. */
 :root[data-preset="anthropic"] :is(
   .nav-item, .chat-row, .icon-btn, .profile-btn, .profile-apps,
   .lib-pill, .lib-primary, .lib-icon-btn, .lib-tab, .sched-card
