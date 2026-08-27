@@ -587,7 +587,7 @@ body:has(.app.has-bg) > .model-submenu.pinned {
   .greeting img { width: 44px !important; height: 44px !important; }
   .greeting svg { width: 34px !important; height: 34px !important; }
   .greeting-sub { font-size: 14px; }
-  .home-actions { top: 12px; right: 12px; }
+  .home-actions, .topbar > .topbar-actions { top: 12px; right: 12px; }
 
   /* ---- thread / messages ---- */
   .thread { padding: 0 16px; }
@@ -672,7 +672,7 @@ body:has(.app.has-bg) > .model-submenu.pinned {
   .chats-overview .co-head, .pj-head, .co-head { padding-top: calc(14px + env(safe-area-inset-top)); }
   .incognito-bar { padding-top: calc(8px + env(safe-area-inset-top)); }
   .mobile-menu-btn.empty-menu { top: calc(8px + env(safe-area-inset-top)); }
-  .home-actions { top: calc(12px + env(safe-area-inset-top)); }
+  .home-actions, .topbar > .topbar-actions { top: calc(12px + env(safe-area-inset-top)); }
   .sidebar-head { padding-top: calc(8px + env(safe-area-inset-top)); }
 
   .center-wrap { padding: calc(18vh + 1px) 12px 24px; justify-content: flex-start; overflow: hidden auto; }

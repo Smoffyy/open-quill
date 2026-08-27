@@ -263,7 +263,8 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .field label.sub { font-size: 12px; color: var(--text-faint); margin-bottom: 4px; }
 
 /* ============ incognito chat ============ */
-.topbar-actions.home-actions { position: absolute; top: 14px; right: 18px; z-index: 30; }
+.topbar-actions.home-actions,
+.topbar > .topbar-actions { position: absolute; top: 14px; right: 18px; z-index: 30; }
 .paper-btn:disabled { opacity: .4; pointer-events: none; }
 
 /* the outline that fills the viewport edge when incognito is active */
