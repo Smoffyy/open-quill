@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import Markdown, { ReasonSegs } from './Markdown.jsx';
 import { copyText } from '../clipboard.js';
@@ -87,7 +87,7 @@ function Attachments({ items, pins, onTogglePinFile }) {
   );
 }
 
-const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name, streamIn }, ref) {
+const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name }, ref) {
   const base = model?.staticIcon || '';
   const map = {
     static: base,
@@ -100,7 +100,7 @@ const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, nam
   const cls = anim === 'none' ? '' : anim;
   const sz = model?.iconSize > 0 ? model.iconSize : 40;
   return (
-    <div ref={ref} className={'msg-icon' + (below ? ' below' : '') + (name ? ' with-name' : '') + (streamIn ? ' stream-in' : '')}>
+    <div ref={ref} className={'msg-icon' + (below ? ' below' : '') + (name ? ' with-name' : '')}>
       {base && <img src={src} className={cls} style={{ width: sz, height: sz }} alt="" />}
       {name && <span className="msg-icon-name">{name}</span>}
     </div>
@@ -217,6 +217,10 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
     typingTimer.current = setTimeout(() => setTyping(false), Number.isFinite(v) && v > 0 ? v : 500);
     return () => clearTimeout(typingTimer.current);
   }, [streaming, msg.content]);
+  const [textEntered, setTextEntered] = useState(false);
+  useEffect(() => {
+    if (streaming && msg.content) setTextEntered(true);
+  }, [streaming, msg.content]);
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -241,35 +245,28 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
 
   const pos = model?.iconPosition || 'below';
   const iconRef = useRef(null);
-  const iconPrevTop = useRef(null);
-  const iconSuspendUntil = useRef(0);
-  useEffect(() => {
+  const iconSlide = useRef({ top: null, done: false });
+  useLayoutEffect(() => {
     const el = iconRef.current;
-    const container = el && el.closest('.msg');
-    if (pos !== 'below' || !el || !container) return;
-    const settle = () => { el.style.transition = ''; el.style.transform = ''; };
-    const onToggleStart = (e) => {
-      if (!e.target.closest('.reasoning-head')) return;
-      settle();
-      iconSuspendUntil.current = performance.now() + 500;
-    };
-    container.addEventListener('click', onToggleStart);
-    const ro = new ResizeObserver(() => {
-      const top = el.getBoundingClientRect().top;
-      const suspended = performance.now() < iconSuspendUntil.current;
-      if (iconPrevTop.current !== null && !suspended && streaming) {
-        const delta = iconPrevTop.current - top;
-        if (Math.abs(delta) > 0.5) {
-          el.style.transition = 'none';
-          el.style.transform = `translateY(${delta}px)`;
-          requestAnimationFrame(() => requestAnimationFrame(settle));
-        }
-      }
-      iconPrevTop.current = top;
-    });
-    ro.observe(container);
-    return () => { container.removeEventListener('click', onToggleStart); ro.disconnect(); settle(); };
-  }, [pos, streaming]);
+    if (pos !== 'below' || !streaming || !el) { iconSlide.current = { top: null, done: false }; return; }
+    const state = iconSlide.current;
+    const top = el.offsetTop;
+    if (state.top === null) {
+      state.top = top;
+      return;
+    }
+    if (state.done) return;
+    const delta = state.top - top;
+    if (Math.abs(delta) > 0.5) {
+      el.style.transition = 'none';
+      el.style.transform = `translateY(${delta}px)`;
+      requestAnimationFrame(() => {
+        el.style.transition = 'transform .6s cubic-bezier(.16,1,.3,1)';
+        el.style.transform = '';
+      });
+      state.done = true;
+    }
+  }, [pos, streaming, msg.content, msg.reasoning, phase, liveCall, liveCalls, status]);
 
   const [fb, setFb] = useState(msg.feedback || 0);
   useEffect(() => { setFb(msg.feedback || 0); }, [msg.id]);
@@ -327,8 +324,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   const iconPhase = streaming ? phase : 'static';
   const showIt = showIcon || streaming;
   const showName = !!model?.showName && !!model?.displayName;
-  const iconStreamIn = streaming && !!msg.content;
-  const icon = showIt ? <ModelIcon ref={iconRef} model={model} phase={iconPhase} below={pos === 'below'} name={pos === 'left' ? null : (showName ? model.displayName : null)} streamIn={iconStreamIn} /> : null;
+  const icon = showIt ? <ModelIcon ref={iconRef} model={model} phase={iconPhase} below={pos === 'below'} name={pos === 'left' ? null : (showName ? model.displayName : null)} /> : null;
 
   async function rate(r) {
     const next = fb === r ? 0 : r;
@@ -349,7 +345,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
       {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> {t("Pinned")}</div>}
       <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} durationMs={msg.reasoningMs || 0} preset={preset} collapsible={model?.reasoningCollapsible !== false} />
       {(msg.content || streaming) && (
-        <div className={'assistant-body' + (streaming ? ' streaming' : '') + (streaming && typing ? ' typing' : '') + (streaming && phase === 'thinking' ? ' thinking' : '')}>
+        <div className={'assistant-body' + (streaming ? ' streaming' : '') + (streaming && typing ? ' typing' : '') + (streaming && phase === 'thinking' ? ' thinking' : '') + (textEntered ? ' text-enter' : '')}>
           {msg.content ? (
             <ReasonSegs.Provider value={segCtx}>
               <Markdown streaming={streaming}>{msg.content}</Markdown>
