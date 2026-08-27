@@ -227,7 +227,7 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .pj-tile-top { display: flex; align-items: center; gap: 10px; }
 .pj-tile-icon { display: none; }
 .pj-tile-name { font-size: 14px; font-weight: 500; line-height: 20px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pj-tile-desc { margin-top: 8px; font-size: 14px; line-height: 20px; color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pj-tile-desc { margin-top: 8px; font-size: 14px; line-height: 20px; color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .pj-tile-time { position: absolute; left: 16px; bottom: 16px; font-size: 13px; line-height: 17px; color: var(--text-faint); }
 
 .pj-create-overlay { z-index: 320; }
@@ -289,7 +289,7 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .pj-file-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
 .pj-file-tile { position: relative; height: 120px; padding: 12px; border-radius: 10px; background: var(--surface-2); text-align: left; display: flex; flex-direction: column; gap: 4px; transition: background var(--fx-t, .14s); }
 .pj-file-tile:hover { background: var(--surface-hover); }
-.pj-file-tile .ft-name { font-size: 13px; line-height: 17px; font-weight: 500; color: var(--text); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.pj-file-tile .ft-name { font-size: 13px; line-height: 17px; font-weight: 500; color: var(--text); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; }
 .pj-file-tile .ft-meta { font-size: 12px; color: var(--text-faint); margin-top: auto; }
 .pj-file-tile .ft-del { position: absolute; top: 6px; right: 6px; opacity: 0; padding: 3px; border-radius: 6px; color: var(--text-faint); transition: opacity var(--fx-t, .12s), color var(--fx-t, .12s); }
 .pj-file-tile:hover .ft-del { opacity: 1; }

@@ -480,7 +480,7 @@
 .cp-orb.muted { filter: grayscale(.7) brightness(.8); }
 .cp-orb.error, .cp-orb.connecting { filter: grayscale(.5) brightness(.7); }
 .cp-status { font-size: 13.5px; font-weight: 500; color: var(--text-muted); min-height: 18px; }
-.cp-heard { font-size: 12.5px; color: var(--text-faint); max-width: 85%; text-align: center; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.cp-heard { font-size: 12.5px; color: var(--text-faint); max-width: 85%; text-align: center; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
 .cp-hint { font-size: 11px; color: var(--text-faint); }
 .cp-bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 22px 20px; }
 .cp-btn { position: relative; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border-soft); color: var(--text); transition: background var(--fx-t, .12s), color var(--fx-t, .12s), border-color var(--fx-t, .12s); }

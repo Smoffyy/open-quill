@@ -65,7 +65,7 @@
   z-index: 6;
 }
 .trail-tip-who { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--pop-muted); }
-.trail-tip-text { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.trail-tip-text { display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .trail-tip-meta { font-size: 11px; color: var(--pop-muted); }
 
 .thread-find {
