@@ -93,11 +93,11 @@
 [data-preset="openai"] .chat-menu svg { width: 15px; height: 15px; }
 [data-preset="openai"] .new-row .nav-item.new-chat { padding-right: 34px; }
 [data-preset="openai"] .row-ic { display: grid; place-items: center; width: 20px; height: 20px; flex-shrink: 0; }
-[data-preset="openai"] .chat-row { height: var(--cl-row-h); border-radius: 8px; gap: 8px; padding: 0 34px 0 10px; font-size: 13.5px; line-height: normal; color: var(--text); }
+[data-preset="openai"] .chat-row { height: var(--cl-row-h); border-radius: 8px; gap: 8px; padding: 0 1px 0 10px; font-size: 13.5px; line-height: normal; color: var(--text); }
 [data-preset="openai"] .chat-row .title {
   overflow: hidden; text-overflow: clip;
-  mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent 100%);
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 calc(100% - 50px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 50px), transparent 100%);
 }
 [data-preset="openai"] .chat-row:hover, [data-preset="openai"] .chat-row.active { color: var(--text); }
 [data-preset="openai"] .section-label, [data-preset="openai"] .recents-label { color: var(--text-faint); font-weight: 500; opacity: 1; font-size: 12.5px; }
