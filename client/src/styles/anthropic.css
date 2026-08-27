@@ -434,7 +434,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 :root[data-preset="anthropic"] .chat-row .title {
   overflow: hidden; text-overflow: clip;
   mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent 100%);
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent 100%);
 }
 
 :root[data-preset="anthropic"] .modal {

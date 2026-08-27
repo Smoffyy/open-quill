@@ -172,7 +172,7 @@ function ProfileMenu({ user, anchorRef, onSettings, onAdmin, onPlayground, onCre
   );
 }
 
-function ChatRow({ c, active, showTrash, projects = [], onMoveToProject, onOpen, onDelete, onToggleStar, onDragChat, busyIds, onStopChat }) {
+function ChatRow({ c, active, showTrash, projects = [], onMoveToProject, onOpen, onDelete, onToggleStar, busyIds, onStopChat }) {
   const busy = !!(busyIds && busyIds.has(c.id));
   const [menu, setMenu] = useState(null); // null or {top,left}
   const [subOpen, setSubOpen] = useState(false);
@@ -219,9 +219,6 @@ function ChatRow({ c, active, showTrash, projects = [], onMoveToProject, onOpen,
   const close = () => { setMenu(null); setSubOpen(false); };
   return (
     <div className={'chat-row' + (active ? ' active' : '') + (busy ? ' busy' : '')}
-      draggable
-      onDragStart={(e) => { onDragChat?.(c.id); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', c.id); } catch {} }}
-      onDragEnd={() => onDragChat?.(null)}
       onClick={(e) => { if (e.ctrlKey || e.metaKey) { openInTab(); return; } onOpen(c.id); }}
       onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); openInTab(); } }}
       onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}>

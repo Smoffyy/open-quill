@@ -261,8 +261,6 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .anim-row { margin-top: 6px; }
 .anim-row .anim-sel { width: 100%; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 5px 7px; font-size: 12.5px; font-family: var(--font-sans); }
 .field label.sub { font-size: 12px; color: var(--text-faint); margin-bottom: 4px; }
-/* dragging feedback */
-.chat-row[draggable="true"]:active { cursor: grabbing; }
 
 /* ============ incognito chat ============ */
 .topbar-actions.home-actions { position: absolute; top: 14px; right: 18px; z-index: 30; }

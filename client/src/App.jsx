@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { api } from './api.js';
 import { t, tk } from './i18n.jsx';
 import { applyPrefs, prefersDark, appFontId } from './prefs.js';
@@ -61,7 +61,7 @@ import { copyText } from './clipboard.js';
 import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork, Panel, Copy, Check } from './components/icons.jsx';
 import { BRAND_ICON } from './lib/brand.js';
 
-const SKELETON_DELAY = 3000;
+const SKELETON_DELAY = 100;
 // One frozen empty array, so clearing the live tool rows never hands React a new
 // identity and re-renders the whole thread for nothing.
 const EMPTY_CALLS = Object.freeze([]);
@@ -445,6 +445,11 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPop);
   }, []);
   useEffect(() => { syncView(); }, [activeId, incognito]);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !stick.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, [activeId, messages]);
   useEffect(() => {
     const down = (e) => { if (scrollRef.current && scrollRef.current.contains(e.target)) selectingRef.current = true; };
     const up = () => { selectingRef.current = false; };

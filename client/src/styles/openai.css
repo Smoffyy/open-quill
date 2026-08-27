@@ -85,7 +85,7 @@
    27px/5px group spacing are cleared rather than inherited. */
 [data-preset="openai"] .section-label { padding: 12px 14px 5px; line-height: normal; height: auto; margin: 0; }
 [data-preset="openai"] .rl-group { margin-top: 0; margin-bottom: 0; }
-[data-preset="openai"] .chat-row .row-ctrl { position: static; width: 20px; height: 20px; }
+[data-preset="openai"] .chat-row .row-ctrl { right: 6px; top: 4px; }
 [data-preset="openai"] .chat-menu { padding: 5px; background: var(--menu-bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 32px #00000055; }
 [data-preset="openai"] .chat-menu button { gap: 9px; padding: 8px 9px; border-radius: 7px; font-size: 13.5px; line-height: normal; color: var(--text); }
 [data-preset="openai"] .chat-menu button.danger { color: var(--danger); }
@@ -93,7 +93,12 @@
 [data-preset="openai"] .chat-menu svg { width: 15px; height: 15px; }
 [data-preset="openai"] .new-row .nav-item.new-chat { padding-right: 34px; }
 [data-preset="openai"] .row-ic { display: grid; place-items: center; width: 20px; height: 20px; flex-shrink: 0; }
-[data-preset="openai"] .chat-row { border-radius: 8px; gap: 8px; padding: 7px 32px 7px 10px; font-size: 13.5px; line-height: normal; color: var(--text); }
+[data-preset="openai"] .chat-row { height: var(--cl-row-h); border-radius: 8px; gap: 8px; padding: 0 34px 0 10px; font-size: 13.5px; line-height: normal; color: var(--text); }
+[data-preset="openai"] .chat-row .title {
+  overflow: hidden; text-overflow: clip;
+  mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent 100%);
+}
 [data-preset="openai"] .chat-row:hover, [data-preset="openai"] .chat-row.active { color: var(--text); }
 [data-preset="openai"] .section-label, [data-preset="openai"] .recents-label { color: var(--text-faint); font-weight: 500; opacity: 1; font-size: 12.5px; }
 [data-preset="openai"] .recents-label:hover { color: var(--text); }
