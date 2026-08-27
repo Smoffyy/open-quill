@@ -231,7 +231,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 .lib-card-foot { display: flex; flex-direction: column; gap: 8px; padding: 14px; }
 .lib-card-title {
   font-size: 14px; line-height: 20px; font-weight: 500; color: var(--text);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .lib-card-meta { font-size: 13px; line-height: 17px; color: var(--text-faint); font-family: var(--font-sans); }
 
@@ -251,7 +251,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 .sched-card-title { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--text); }
 .sched-card-desc {
   font-size: 14px; line-height: 20px; color: var(--text-muted); font-family: var(--font-sans);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .sched-card-when {
   display: inline-flex; align-items: center; gap: 6px; margin-top: 6px;
@@ -709,7 +709,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 .sk-card-meta { font-size: 12px; line-height: 16px; color: var(--text-muted); }
 .sk-card-desc {
   margin: 8px 0 0; font-size: 13px; line-height: 18px; color: var(--text-muted);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .sk-card-add { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; color: var(--text-muted); }
 .sk-card-add svg { width: 16px; height: 16px; }
