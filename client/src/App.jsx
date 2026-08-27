@@ -343,7 +343,7 @@ export default function App() {
   const canFollow = useCallback(() => !selectingRef.current && !hasSelectionRef.current, []);
   const {
     scrollRef, stick, showJump,
-    scrollBottom, pinToBottom, onScroll, onWheel, onTouchMove, jumpDown,
+    scrollBottom, pinToBottom, onScroll, onWheel, onTouchMove, jumpDown, resetJump,
     startFollow, stopFollow
   } = useThreadScroll({ canFollow });
   const animate = resolveReveal(user?.prefs, cfg.uiPreset === 'openai' ? 'openai' : 'anthropic') === 'typewriter';
@@ -888,6 +888,7 @@ export default function App() {
 
   function syncView() {
     stopLoops();
+    resetJump();
     const key = activeKey();
     const r = peek(key);
     if (r && !r.done) {
