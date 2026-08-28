@@ -36,8 +36,8 @@
 }
 .trail-tick.r-assistant { width: 17px; background: color-mix(in srgb, var(--text-muted) 70%, transparent); }
 .trail-tick:hover, .trail-tick:focus-visible { background: var(--text); }
-.trail-tick.in-view { background: var(--accent); }
-.trail-tick.is-tool { width: 9px; background: color-mix(in srgb, var(--accent) 45%, var(--text-faint)); }
+.trail-tick.in-view { background: var(--text); }
+.trail-tick.is-tool { width: 9px; background: color-mix(in srgb, var(--text) 45%, var(--text-faint)); }
 .trail-tick.is-branch { width: 21px; box-shadow: inset 0 0 0 1px var(--text); }
 .trail-tick.is-pinned { border-radius: 50%; width: 7px; }
 .trail-tick.is-out { opacity: .35; }
@@ -164,11 +164,11 @@
   min-width: 0;
 }
 .bt-node:hover { background: var(--surface-hover); color: var(--text); }
-.bt-node:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.bt-node:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; }
 .bt-node.on-path { background: var(--surface-2); color: var(--text); border-color: var(--border); }
-.bt-node.is-leaf { border-color: var(--accent); }
+.bt-node.is-leaf { border-color: var(--text); }
 .bt-dot { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); }
-.bt-node.r-assistant .bt-dot { background: var(--accent); }
+.bt-node.r-assistant .bt-dot { background: var(--text); }
 .bt-node.on-path .bt-dot { box-shadow: 0 0 0 3px color-mix(in srgb, var(--pop-blue) 22%, transparent); }
 .bt-who { flex: 0 0 auto; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-faint); max-width: 128px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bt-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -221,8 +221,8 @@
   z-index: 300;
   padding: 8px 14px;
   border-radius: 10px;
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--primary);
+  color: var(--on-primary);
   font-family: var(--font-sans);
   font-size: 13px;
   text-decoration: none;
@@ -253,7 +253,7 @@
   bottom: 2px;
   width: 3px;
   border-radius: 2px;
-  background: var(--accent);
+  background: var(--text);
 
 }
 

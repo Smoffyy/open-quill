@@ -12,6 +12,7 @@
     "lint:fix": "eslint . --fix",
     "test:client": "cd client && npm test",
     "i18n:check": "cd client && npm run i18n:check",
+    "i18n:sync": "cd client && npm run i18n:sync --",
     "check:local": "cd client && npm run check:local",
     "check:release": "node check-release.mjs",
     "dev": "concurrently -n server,client -c blue,magenta \"npm:dev:server\" \"npm:dev:client\"",

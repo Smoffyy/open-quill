@@ -30,9 +30,9 @@
 .login-tabs button.on { background: var(--card-bg, var(--surface)); color: var(--text); box-shadow: 0 1px 2px #00000014; }
 .login input { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 9px; font-size: 15px; background: var(--input-bg, var(--surface-2)); color: var(--text); outline: none; font-family: var(--font-sans); margin-bottom: 10px; }
 .login input::placeholder { color: var(--text-faint); }
-.login input:focus { border-color: var(--accent); }
-.login .primary { width: 100%; padding: 12px; background: var(--accent); color: var(--on-accent); border-radius: 9px; font-size: 15px; font-family: var(--font-sans); font-weight: 600; transition: background var(--fx-t, .15s), opacity var(--fx-t, .15s); }
-.login .primary:hover { background: color-mix(in srgb, var(--accent) 86%, var(--on-accent)); }
+.login input:focus { border-color: var(--text); }
+.login .primary { width: 100%; padding: 12px; background: var(--primary); color: var(--on-primary); border-radius: 9px; font-size: 15px; font-family: var(--font-sans); font-weight: 600; transition: background var(--fx-t, .15s), opacity var(--fx-t, .15s); }
+.login .primary:hover { background: color-mix(in srgb, var(--primary) 86%, var(--on-primary)); }
 .login .primary:disabled { opacity: .6; pointer-events: none; }
 .login .back { display: block; width: 100%; margin-top: 12px; font-size: 13px; color: var(--text-muted); font-family: var(--font-sans); background: transparent; }
 .login .back:hover { color: var(--text); }

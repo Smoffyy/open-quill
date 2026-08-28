@@ -33,12 +33,8 @@ export function applyPrefs(prefs, preset) {
   root.style.setProperty('--caret-blink', blink + 'ms');
   root.style.setProperty('--caret-cycle', (blink * 2) + 'ms');
   root.style.setProperty('--caret-pulse', pulse + 'ms');
-  if (prefs?.accent) root.style.setProperty('--accent', prefs.accent);
-  else root.style.removeProperty('--accent');
   applyUserFont();
 }
-
-export const ACCENT_PRESETS = ['#d97757', '#4f8ff7', '#46b07a', '#9b6bd8', '#e0567f', '#e0a93c', '#3bb6c4', '#7a8794'];
 
 export const APP_FONTS = new Set(['newsreader', 'sourceserif', 'sans']);
 const LEGACY_FONT_IDS = { __proto__: null, serif: 'newsreader' };

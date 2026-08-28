@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 
-const DEFAULT_GLOW = 'var(--accent)';
+const DEFAULT_GLOW = 'var(--text)';
 
 function dominantColor(url) {
   return new Promise((resolve) => {

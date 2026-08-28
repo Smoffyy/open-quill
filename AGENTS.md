@@ -19,7 +19,8 @@ Self-hosted chat interface for local and cloud LLMs. Express + SQLite server, Re
 | `npm run test:client` | Client logic tests |
 | `npm run lint` / `lint:fix` | ESLint, whole repo (flat config at root) |
 | `npm run smoke` | Server-renders every admin section/modal (catches runtime-only prop bugs) |
-| `npm run i18n:check` | Missing/orphan translation keys |
+| `npm run i18n:check` | Missing/orphan translation keys (`--json` for the machine-readable list) |
+| `npm run i18n:sync` | Prune stale keys, merge a translation patch, or scaffold a new language |
 | `npm run check:release` | Version has a matching release folder + changelog entry |
 
 `server/`: `npm test` = `node --test`, auto-discovers every `*.test.js`. `client/`: `npm run dead:css` is an *advisory* unused-class report — verify before deleting, a zero-hit class can still be emitted by a library.
@@ -88,7 +89,7 @@ The logo (`lib/brand.js`) has a client and server copy that must agree; model ro
 
 **Menus**: `lib/submenu.js` (`useSubmenus`) holds one `open` id for a whole menu — that's what makes "only one submenu open" structural. Closing is delayed 160ms (`SUBMENU_CLOSE_DELAY`) so the pointer can travel into the panel; opening is immediate.
 
-**i18n**: `t()` translates at render, `tk()` marks a literal at definition for the extractor — module-level tables need both. Run `npm run i18n:check` after any user-facing string change. No RTL support.
+**i18n**: `t()` translates at render, `tk()` marks a literal at definition for the extractor — module-level tables need both. English is the source language: `t()` falls back to the key, so `en.json` only really carries its `_meta`. Run `npm run i18n:check` after any user-facing string change; the key scanner and its force-add list for keys it cannot see live in `scripts/i18n-keys.mjs`. Never hand-edit a pack — `npm run i18n:sync` prunes orphans, merges a `{lang: {key: translation}}` patch, and scaffolds a new language, keeping every pack byte-identical in format and in one shared key order. A pack with `_meta.partial` may be incomplete: missing keys render in English and do not fail the check, so a language can land a few hundred strings at a time. Adding `locales/<code>.json` is the whole job — nothing hardcodes the language list. No RTL support (`_meta.dir` is honoured, the stylesheets are not).
 
 ## Tests
 
@@ -96,7 +97,7 @@ The logo (`lib/brand.js`) has a client and server copy that must agree; model ro
 
 ## Keeping the tree clean
 
-`npm run lint`, `dead:css` (advisory), `i18n:check` (has an `extra` force-add list in `appconfig.js` for keys the scanner can't see), `smoke`, `build`, `check:release` should all stay clean. ESLint: `react-hooks/exhaustive-deps` is a warning (deps arrays deliberately omit values in places); React Compiler rules are off (not adopted). Hooks must never sit below an early return — `Message.jsx` returns early for user messages, so assistant-only hooks still go above that branch.
+`npm run lint`, `dead:css` (advisory), `i18n:check` (has an `EXTRA_KEYS` force-add list in `client/scripts/i18n-keys.mjs` for keys the scanner can't see), `smoke`, `build`, `check:release` should all stay clean. ESLint: `react-hooks/exhaustive-deps` is a warning (deps arrays deliberately omit values in places); React Compiler rules are off (not adopted). Hooks must never sit below an early return — `Message.jsx` returns early for user messages, so assistant-only hooks still go above that branch.
 
 ## Adding a feature
 

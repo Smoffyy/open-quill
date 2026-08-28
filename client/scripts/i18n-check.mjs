@@ -1,41 +1,38 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { collectKeys, packFiles, readPack, auditPack, SOURCE_LANG } from './i18n-keys.mjs';
 
-const SRC = fileURLToPath(new URL('../src', import.meta.url));
-const keys = new Set();
-const re = /\bt[k]?\(\s*("((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')/g;
+const asJson = process.argv.includes('--json');
+const keys = collectKeys();
 
-function walk(dir) {
-  for (const f of fs.readdirSync(dir)) {
-    const p = path.join(dir, f);
-    const st = fs.statSync(p);
-    if (st.isDirectory()) { if (f !== 'locales') walk(p); }
-    else if (f.endsWith('.jsx') || f.endsWith('.js')) {
-      const src = fs.readFileSync(p, 'utf8');
-      let m;
-      while ((m = re.exec(src))) keys.add((m[2] ?? m[3]).replace(/\\'/g, "'").replace(/\\"/g, '"'));
-    }
-  }
-}
-walk(SRC);
-const scSrc = fs.readFileSync(path.join(SRC, 'components/ShortcutsModal.jsx'), 'utf8');
-for (const m of scSrc.matchAll(/title:\s*'((?:[^'\\]|\\.)*)'/g)) if (m[1]) keys.add(m[1].replace(/\\'/g, "'"));
-for (const m of scSrc.matchAll(/\[\s*'((?:[^'\\]|\\.)*)'\s*,\s*\[/g)) if (m[1]) keys.add(m[1].replace(/\\'/g, "'"));
-const kbSrc = fs.readFileSync(path.join(SRC, 'lib/keybinds.js'), 'utf8');
-for (const m of kbSrc.matchAll(/\b(?:label|group):\s*'((?:[^'\\]|\\.)*)'/g)) if (m[1]) keys.add(m[1].replace(/\\'/g, "'"));
-for (const extra of ['Custom']) keys.add(extra);
-for (const extra of ['Ideas','Write','Code','Learn','Life stuff','Give me ideas on what I should do today.','Write a one paragraph summary about how Large Language Models (LLMs) work.','Write a Python function that checks whether a string is a palindrome.','How far away is the sun from Earth?','Give me practical advice for a life problem.','Greetings, whoever you are','No names, no traces','This one stays between us','Off the record','How can I help you?','Assistants can make mistakes, double-check responses.','Advanced','Tools','Effort','Context','Icons','Sandbox','Grouped','Vision','Reasoning','Appearance','Low','Fair','Medium','High','Highest','Slow','Steady','Fast','Fastest','Text','Image','Audio','Video','Docs','toggle','slider','dropdown','Top level of the request','Boolean','Number','String','On/off toggle','Slider','Dropdown','Users get an on/off switch.','Users get a segmented slider through every value.','Users get a dropdown of every value.','Blank kwarg','An empty kwarg you fill in yourself.','On/off thinking toggle with false and true.','A slider through low, medium, and high.','Hidden kwarg meant to follow a thinking toggle.','change','changes','user','assistant','system','Temperature','Top P','Top K','Min P','Repetition penalty','Presence penalty','Frequency penalty','Max tokens','Context window','Seed','System prompt','Extended-mode trigger','Standard-mode trigger']) keys.add(extra);
-
-const localesDir = path.join(SRC, 'locales');
+const report = [];
 let fail = false;
-for (const f of fs.readdirSync(localesDir)) {
-  if (!f.endsWith('.json') || f === 'en.json') continue;
-  const dict = JSON.parse(fs.readFileSync(path.join(localesDir, f), 'utf8'));
-  const missing = [...keys].filter(k => !(k in dict));
-  const orphaned = Object.keys(dict).filter(k => k !== '_meta' && !keys.has(k));
-  if (missing.length) { fail = true; console.log(`${f}: ${missing.length} missing`); missing.forEach(k => console.log('  - ' + k)); }
-  if (orphaned.length) { console.log(`${f}: ${orphaned.length} orphaned`); orphaned.forEach(k => console.log('  ~ ' + k)); }
-  if (!missing.length && !orphaned.length) console.log(`${f}: complete (${keys.size} keys)`);
+
+for (const { code, file, path: p } of packFiles()) {
+  const dict = readPack(p);
+  const { missing, orphaned } = auditPack(dict, keys);
+  // English needs no entries at all — t() renders the key. Only its leftovers matter.
+  const untranslated = code === SOURCE_LANG ? [] : missing;
+  const partial = !!(dict._meta && dict._meta.partial);
+  // A partial pack is allowed to be incomplete on purpose; an orphan is a stale
+  // key either way, so it is always worth printing but never fatal on its own.
+  if (untranslated.length && !partial) fail = true;
+  report.push({ code, file, partial, missing: untranslated, orphaned, total: keys.size });
 }
+
+if (asJson) {
+  console.log(JSON.stringify(report, null, 2));
+  process.exit(fail ? 1 : 0);
+}
+
+for (const r of report) {
+  if (r.missing.length) {
+    console.log(`${r.file}: ${r.missing.length} ${r.partial ? 'untranslated (partial pack)' : 'missing'}`);
+    r.missing.forEach(k => console.log('  - ' + k));
+  }
+  if (r.orphaned.length) {
+    console.log(`${r.file}: ${r.orphaned.length} orphaned`);
+    r.orphaned.forEach(k => console.log('  ~ ' + k));
+  }
+  if (!r.missing.length && !r.orphaned.length) console.log(`${r.file}: complete (${r.total} keys)`);
+}
+
 process.exit(fail ? 1 : 0);

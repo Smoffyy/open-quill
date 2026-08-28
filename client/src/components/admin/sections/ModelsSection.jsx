@@ -383,11 +383,6 @@ export default function ModelsSection() {
         onContextMenu={(e) => openMenu(e, m)}
         onClick={(e) => rowClick(e, m)}>
         {orderable && <span className="mw-grip"><Grip /></span>}
-        <button type="button" className={'mw-check' + (multiSel.has(m.id) ? ' on' : '')} title={t("Select for bulk actions")} onClick={(e) => toggleCheck(e, m)}>
-          {multiSel.has(m.id)
-            ? <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5" fill="currentColor" /><path d="M8 12.4l2.8 2.8 5.6-6.4" fill="none" stroke="var(--card-bg)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="5" /></svg>}
-        </button>
         {m.static_icon ? <img className="mw-row-icon" src={m.static_icon} alt="" /> : <span className="mw-row-icon noicon">{(m.display_name || '?').trim().charAt(0).toUpperCase()}</span>}
         <div className="mw-row-meta">
           <span className="mw-row-name">
@@ -403,6 +398,11 @@ export default function ModelsSection() {
           {!m.enabled && <span className="mw-tag dim">{t('Hidden')}</span>}
           {!!m.unavailable && <span className="mw-tag warn">{t('Down')}</span>}
         </span>
+        <button type="button" className={'mw-check' + (multiSel.has(m.id) ? ' on' : '')} title={t("Select for bulk actions")} onClick={(e) => toggleCheck(e, m)}>
+          {multiSel.has(m.id)
+            ? <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5" fill="currentColor" /><path d="M8 12.4l2.8 2.8 5.6-6.4" fill="none" stroke="var(--card-bg)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="5" /></svg>}
+        </button>
       </div>
     );
   }

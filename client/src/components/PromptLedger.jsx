@@ -4,7 +4,7 @@ import { copyText } from '../clipboard.js';
 import { useFocusTrap } from '../lib/focus.js';
 import { t } from '../i18n.jsx';
 
-const COLORS = ['var(--accent)', '#6c8ebf', '#b48ead', '#a3be8c', '#d08770', '#8fa1b3'];
+const COLORS = ['var(--text)', '#6c8ebf', '#b48ead', '#a3be8c', '#d08770', '#8fa1b3'];
 
 function Section({ label, role, tokens, text, open, onToggle, color }) {
   return (

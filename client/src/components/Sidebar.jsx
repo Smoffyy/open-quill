@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Tip from './Tip.jsx';
-import { Plus, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, Star, Download, Chevron, ChevDown, Box, Compact, Stop, Sliders, Check, Artifact, Briefcase, ModelDocs, AppsDownload, Clock, ArrowOut, QuickTask, Sparkles, Paper } from './icons.jsx';
+import { Plus, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, Star, Download, Chevron, ChevDown, Box, Compact, Stop, Sliders, Check, Artifact, Briefcase, ModelDocs, Info, Clock, ArrowOut, QuickTask, Sparkles, Paper } from './icons.jsx';
 import { t } from '../i18n.jsx';
 import { resolveKeybinds, comboKeys } from '../lib/keybinds.js';
 import { parseVersion } from '../lib/appversion.js';
@@ -204,6 +204,12 @@ function ChatRow({ c, active, showTrash, projects = [], onMoveToProject, onOpen,
     const r = btnRef.current.getBoundingClientRect();
     setMenu({ top: r.bottom + 6, left: r.left, anchorTop: r.top, ready: false });
   }
+  function openContextMenu(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    setSubOpen(false);
+    setMenu({ top: e.clientY + 4, left: e.clientX, anchorTop: e.clientY, ready: false });
+  }
   useLayoutEffect(() => {
     if (!menu || menu.ready || !menuRef.current) return;
     const pad = 8;
@@ -221,7 +227,8 @@ function ChatRow({ c, active, showTrash, projects = [], onMoveToProject, onOpen,
     <div className={'chat-row' + (active ? ' active' : '') + (busy ? ' busy' : '')}
       onClick={(e) => { if (e.ctrlKey || e.metaKey) { openInTab(); return; } onOpen(c.id); }}
       onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); openInTab(); } }}
-      onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}>
+      onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}
+      onContextMenu={openContextMenu}>
       <span className="row-ic">
         {busy ? <span className="row-busy" role="img" aria-label={t('Still generating')} title={t('Still generating')} />
           : c.projectId ? <Box className="row-project" style={{ width: 15 }} aria-label={t('In a project')} />
@@ -280,7 +287,7 @@ function Sidebar({
   user, chats, onSearch, chatsLoaded = true, activeId, appName, onNew, onOpen, onDelete, onToggleStar,
   collapsed, onToggle, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview,
   onSpaces, spacesPending = 0, projects = [], onProjects, onOpenProject, onNewProject, onMoveToProject, mobileOpen = false, onMobileClose,
-  onArtifacts, onScheduled, onCustomize, onModelDocs, showModelDocs = true, onApps, dest = null,
+  onArtifacts, onScheduled, onCustomize, onModelDocs, showModelDocs = true, onVersion, dest = null,
   busyChats = [], onStopChat
 }) {
   const brandRef = useRef(null);
@@ -513,9 +520,9 @@ function Sidebar({
           </div>
           <ChevDown className="profile-caret" aria-hidden="true" />
         </button>
-        <Tip label={t('Get apps and extensions')}>
-          <button className="profile-apps" onClick={() => onApps && onApps()} aria-label={t('Get apps and extensions')}>
-            <AppsDownload />
+        <Tip label={t('Version')}>
+          <button className="profile-apps" onClick={() => onVersion && onVersion()} aria-label={t('Version')}>
+            <Info />
           </button>
         </Tip>
       </div>

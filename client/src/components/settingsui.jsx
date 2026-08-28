@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Chevron, Check } from './icons.jsx';
 import { useAnchoredMenu, menuStyleOf } from '../lib/anchor.js';
 import { usePointerDrag, knobRaw, knobTravel, overshoot, stretchFor, squashFor, stretchOrigin, nearestIndex, measureStops, clampPx } from '../lib/dragsteps.js';
+import { t } from '../i18n.jsx';
 
 export function SetRow({ label, desc, children }) {
   return (
@@ -12,6 +13,21 @@ export function SetRow({ label, desc, children }) {
         {desc && <span className="set-row-desc">{desc}</span>}
       </div>
       <div className="set-row-ctrl">{children}</div>
+    </div>
+  );
+}
+
+// Reset always renders and only goes invisible at the default, so the row keeps
+// one width. Letting it mount on the first drag step re-flowed the row under the
+// pointer, which read as the slider jumping.
+export function RangeRow({ value, min, max, step, def, format, onChange }) {
+  return (
+    <div className="reveal-row">
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={(e) => onChange(parseInt(e.target.value))} />
+      <span className="reveal-val">{format(value)}</span>
+      <button className={'linklike rv-reset' + (value === def ? ' off' : '')}
+        onClick={() => onChange(def)}>{t('Reset')}</button>
     </div>
   );
 }

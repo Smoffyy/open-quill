@@ -90,13 +90,13 @@ export function BannerCropModal({ file, onDone, onCancel }) {
           <div className="crop-preview banner-preview">{previewUrl && <img src={previewUrl} alt="" />}</div>
           <div className="crop-controls">
             <div className="field"><label>{t("Zoom")}</label>
-              <input type="range" min="1" max="3" step="0.02" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
+              <input type="range" min="1" max="3" step="0.02" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--text)' }} />
             </div>
             <div className="field"><label>{t("Horizontal position")}</label>
-              <input type="range" min="-1" max="1" step="0.02" value={offX} onChange={(e) => setOffX(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
+              <input type="range" min="-1" max="1" step="0.02" value={offX} onChange={(e) => setOffX(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--text)' }} />
             </div>
             <div className="field"><label>{t("Vertical position")}</label>
-              <input type="range" min="-1" max="1" step="0.02" value={offY} onChange={(e) => setOffY(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
+              <input type="range" min="-1" max="1" step="0.02" value={offY} onChange={(e) => setOffY(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--text)' }} />
             </div>
             <div className="editor-actions">
               <button className="btn" onClick={onCancel}>{t('Cancel')}</button>
@@ -187,7 +187,7 @@ export function IconCropModal({ file, onDone, onCancel }) {
               </div>
             </div>
             <div className="field"><label>{t("Zoom")}</label>
-              <input type="range" min="1" max="3" step="0.02" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
+              <input type="range" min="1" max="3" step="0.02" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--text)' }} />
             </div>
             <div className="editor-actions">
               <button className="btn" onClick={onCancel}>{t('Cancel')}</button>
@@ -314,13 +314,13 @@ export function SvgCropModal({ file, onDone, onCancel }) {
               </div>
             </div>
             <div className="field"><label>{t("Zoom")}</label>
-              <input type="range" min="1" max="3" step="0.02" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
+              <input type="range" min="1" max="3" step="0.02" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--text)' }} />
             </div>
             <div className="field"><label>{t("Horizontal position")}</label>
-              <input type="range" min="-1" max="1" step="0.02" value={offX} onChange={(e) => setOffX(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
+              <input type="range" min="-1" max="1" step="0.02" value={offX} onChange={(e) => setOffX(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--text)' }} />
             </div>
             <div className="field"><label>{t("Vertical position")}</label>
-              <input type="range" min="-1" max="1" step="0.02" value={offY} onChange={(e) => setOffY(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent)' }} />
+              <input type="range" min="-1" max="1" step="0.02" value={offY} onChange={(e) => setOffY(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--text)' }} />
             </div>
             <div className="editor-actions">
               <button className="btn" onClick={onCancel}>{t('Cancel')}</button>

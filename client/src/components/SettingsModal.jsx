@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { api } from '../api.js';
-import { applyPrefs, ACCENT_PRESETS, getUserFont, setUserFont, currentPreset } from '../prefs.js';
+import { applyPrefs, getUserFont, setUserFont, currentPreset } from '../prefs.js';
 import { palettesFor, themeValue } from '../lib/palettes.js';
-import { Sun, Gear, Sliders, Info, Chevron, Check, Clock, Download, Upload, Shield, Trash, Brain, Refresh, Keyboard, Search, SkillIcon, Plug } from './icons.jsx';
+import { Gear, Chat, Info, Clock, Download, Upload, Shield, Trash, Brain, Refresh, Keyboard, Search, SkillIcon, Plug } from './icons.jsx';
 import Markdown from './Markdown.jsx';
 import KeybindsPanel from './KeybindsPanel.jsx';
 import SkillsSection from './SkillsSection.jsx';
@@ -11,27 +11,20 @@ import { t, tk, useI18n } from '../i18n.jsx';
 import { STATUS_DELAY_DEFAULT, STATUS_DELAY_MAX, statusDelaySecs } from '../lib/status.js';
 import { menuStyleOf, useAnchoredMenu } from '../lib/anchor.js';
 import { createPortal } from 'react-dom';
-import { SetRow, SwitchRow, SegSlide, SelectRow, useSelectMenu } from './settingsui.jsx';
+import { SetRow, SwitchRow, SegSlide, SelectRow, RangeRow } from './settingsui.jsx';
 import { legacyRevealStyle, resolveReveal, revealSpeedMs } from '../lib/reveal.js';
 import { BRAND_ICON } from '../lib/brand.js';
 import { parseVersion } from '../lib/appversion.js';
 import { channelLabel } from '../lib/channel.js';
 
 const NAV_GROUPS = [
-  { label: tk('Account'), items: [
+  { label: tk('Settings'), items: [
     { id: 'general', label: tk('General'), Icon: Gear },
     { id: 'security', label: tk('Security'), Icon: Shield },
-  ] },
-  { label: tk('Interface'), items: [
-    { id: 'appearance', label: tk('Appearance'), Icon: Sun },
-    { id: 'chat', label: tk('Chat'), Icon: Sliders },
+    { id: 'chat', label: tk('Chat'), Icon: Chat },
     { id: 'keybinds', label: tk('Keybinds'), Icon: Keyboard },
-  ] },
-  { label: tk('Insights'), items: [
     { id: 'memory', label: tk('Memory'), Icon: Brain, needs: 'memoryFeature' },
     { id: 'usage', label: tk('Usage'), Icon: Clock },
-  ] },
-  { label: tk('About'), items: [
     { id: 'version', label: tk('Version'), Icon: Info },
   ] },
   { label: tk('Customize'), items: [
@@ -42,9 +35,11 @@ const NAV_GROUPS = [
 
 const SETTINGS_INDEX = {
   __proto__: null,
-  general: [tk('What should we call you?'), tk('Language'), tk('Instructions for the Assistant'), tk('Export everything'), tk('Import')],
+  general: [
+    tk('What should we call you?'), tk('Language'), tk('Instructions for the Assistant'), tk('Export everything'), tk('Import'),
+    tk('Theme'), tk('Motion'), tk('Chat font'), tk('Message density'), tk('OLED screen protection'), tk('Staggered open'),
+  ],
   security: [tk('Password'), tk('Two-factor authentication'), tk('Active sessions')],
-  appearance: [tk('Theme'), tk('Motion'), tk('Chat font'), tk('Message density'), tk('Accent colour'), tk('OLED screen protection'), tk('Staggered open')],
   chat: [
     tk('Text reveal'), tk('Reveal speed'), tk('Auto-scroll'), tk('Streaming cursor'), tk('Cursor style'),
     tk('Blink speed'), tk('Pulse speed'), tk('Conversation map'), tk('Find in conversation'), tk('Branch map'),
@@ -171,48 +166,6 @@ function Toggle({ prefs, setPref, k, label, desc }) {
   return <SwitchRow label={label} desc={desc} on={!!prefs[k]} onToggle={() => setPref(k, !prefs[k])} />;
 }
 
-const ACCENT_NAMES = [tk('Clay'), tk('Blue'), tk('Green'), tk('Violet'), tk('Pink'), tk('Amber'), tk('Teal'), tk('Slate')];
-
-function AccentSelect({ value, onPick }) {
-  const { open, setOpen, btnRef, menuRef, pos } = useSelectMenu();
-  const opts = ACCENT_PRESETS.map((c, i) => ({ v: c, label: t(ACCENT_NAMES[i] || c) }));
-  const hit = opts.find(o => o.v === value);
-  const swatch = value || 'var(--accent)';
-  return (
-    <div className={'set-select' + (open ? ' open' : '')}>
-      <button ref={btnRef} type="button" className="set-select-trigger" aria-haspopup="listbox" aria-expanded={open}
-        aria-label={t('Accent colour')} onClick={() => setOpen(o => !o)}>
-        <span className="accent-dot" style={{ background: swatch }} />
-        <span>{hit ? hit.label : (value ? t('Custom') : t('Theme default'))}</span>
-        <Chevron style={{ width: 14 }} />
-      </button>
-      {open && createPortal(
-        <div ref={menuRef} className="set-select-menu portal" role="listbox" style={menuStyleOf(pos, { minWidth: 224 })}>
-          <button type="button" role="option" aria-selected={!value}
-            className={'set-select-opt' + (!value ? ' on' : '')} onClick={() => { onPick(''); setOpen(false); }}>
-            <span className="accent-dot" style={{ background: 'var(--accent)' }} />
-            <span className="accent-name">{t('Theme default')}</span>
-            {!value && <Check />}
-          </button>
-          {opts.map(o => (
-            <button key={o.v} type="button" role="option" aria-selected={o.v === value}
-              className={'set-select-opt' + (o.v === value ? ' on' : '')} onClick={() => { onPick(o.v); setOpen(false); }}>
-              <span className="accent-dot" style={{ background: o.v }} />
-              <span className="accent-name">{o.label}</span>
-              {o.v === value && <Check />}
-            </button>
-          ))}
-          <label className="set-select-opt accent-custom">
-            <span className="accent-dot" style={{ background: hit || !value ? 'conic-gradient(from 180deg, #d97757, #4f8ff7, #46b07a, #e0a93c, #d97757)' : value }} />
-            <span className="accent-name">{t('Custom…')}</span>
-            <input type="color" value={value || '#d97757'}
-              onChange={(e) => onPick(e.target.value)} />
-          </label>
-        </div>, document.body)}
-    </div>
-  );
-}
-
 // The server hands back a plain YYYY-MM-DD. Splitting it by hand rather than passing it to
 // Date() keeps it off the UTC-parsing path, which would render the day before east of Greenwich.
 function formatReleased(s) {
@@ -225,7 +178,7 @@ function formatReleased(s) {
 
 function presetDefaults(isOpenai, fallbackTheme) {
   return {
-    revealStyle: 'typewriter', autoscroll: true, theme: fallbackTheme || 'system', accent: '', density: 'comfortable',
+    revealStyle: 'typewriter', autoscroll: true, theme: fallbackTheme || 'system', density: 'comfortable',
     streamCursor: isOpenai, cursorStyle: isOpenai ? 'circle' : 'block',
     cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40, themeFade: true,
     oledShift: false,
@@ -399,7 +352,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
   return (
     <div className="overlay" onMouseDown={(e) => e.target.classList.contains('overlay') && onClose()}>
       <div className="modal">
-        <button className="modal-close" onClick={onClose} aria-label={t('Close')}>✕</button>
+        <button className="modal-close ring" onClick={onClose} aria-label={t('Close')}>✕</button>
         <SettingsNav tab={tab} setTab={setTab} cfg={cfg} />
         <div className={'modal-main' + (tab === 'skills' || tab === 'mcp' ? ' modal-main-flush' : '')}>
           {tab === 'skills' && <SkillsSection onTrySkill={(sk) => { onTrySkill?.(sk); onClose(); }} />}
@@ -407,7 +360,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
           {tab === 'general' && (
             <>
               <h2>{t("General")}</h2>
-              <div className="hint">{t("Your account basics.")}</div>
+              <div className="hint">{t("Your account basics and how open-quill looks.")}</div>
               <div className="me-section-h">{t("Profile")}</div>
               <SetRow label={t("What should we call you?")}>
                 <input className="set-input" value={name} onChange={(e) => changeName(e.target.value)} />
@@ -430,6 +383,28 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                   onChange={(e) => changeInstructions(e.target.value)} />
                 <div className="muted-note" style={{ textAlign: 'right' }}>{instructions.length}/8000</div>
               </div>
+              <div className="me-section-h">{t("Appearance")}</div>
+              <SetRow label={t("Theme")} desc={t("Follow your system, or pick a palette. Colours only, the layout never changes.")}>
+                <SelectRow label={t("Theme")} value={themeValue(prefs.theme, activePreset)}
+                  onPick={(v) => setPref('theme', v)}
+                  options={[{ v: 'system', label: t('System') }].concat(palettesFor(activePreset).map(p => ({ v: p.id, label: p.label })))} />
+              </SetRow>
+              <SetRow label={t("Chat font")} desc={t("Overrides the theme's default font, on this device only.")}>
+                <SelectRow label={t("Chat font")} value={userFont}
+                  onPick={(v) => { setUserFontState(v); setUserFont(v); }}
+                  options={[
+                    { v: 'default', label: t('Theme default') },
+                    { v: 'newsreader', label: 'Newsreader', font: "'Newsreader Variable', serif" },
+                    { v: 'sourceserif', label: 'Source Serif', font: "'Source Serif 4 Variable', serif" },
+                    { v: 'sans', label: 'Open Sans', font: "'Open Sans', sans-serif" }
+                  ]} />
+              </SetRow>
+              <SetRow label={t("Message density")} desc={t("Vertical spacing between messages.")}>
+                <SegSlide label={t("Message density")} value={prefs.density || 'comfortable'} onPick={(v) => setPref('density', v)}
+                  options={[{ v: 'comfortable', label: t('Comfortable') }, { v: 'compact', label: t('Compact') }]} />
+              </SetRow>
+              <SwitchRow label={t("OLED screen protection")} desc={t("Nudges the interface a few pixels and eases brightness to limit burn-in.")}
+                on={prefs.oledShift} onToggle={() => setPref('oledShift', !prefs.oledShift)} />
               <div className="me-section-h">{t("Your data")}</div>
               <SetRow label={t("Export everything")} desc={t("Download everything (chats, styles, personas, prompts, memory) as one JSON file.")}>
                 <button className="btn ghost" onClick={onExportChats}><Download style={{ width: 14, verticalAlign: '-2px' }} /> {t("Export")}</button>
@@ -573,37 +548,6 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
               </div>
             );
           })()}
-          {tab === 'appearance' && (
-            <>
-              <h2>{t("Appearance")}</h2>
-              <div className="hint">{t("Choose how open-quill looks.")}</div>
-              <SetRow label={t("Theme")} desc={t("Follow your system, or pick a palette. Colours only, the layout never changes.")}>
-                <SelectRow label={t("Theme")} value={themeValue(prefs.theme, activePreset)}
-                  onPick={(v) => setPref('theme', v)}
-                  options={[{ v: 'system', label: t('System') }].concat(palettesFor(activePreset).map(p => ({ v: p.id, label: p.label })))} />
-              </SetRow>
-              <SetRow label={t("Chat font")} desc={t("Overrides the theme's default font, on this device only.")}>
-                <SelectRow label={t("Chat font")} value={userFont}
-                  onPick={(v) => { setUserFontState(v); setUserFont(v); }}
-                  options={[
-                    { v: 'default', label: t('Theme default') },
-                    { v: 'newsreader', label: 'Newsreader', font: "'Newsreader Variable', serif" },
-                    { v: 'sourceserif', label: 'Source Serif', font: "'Source Serif 4 Variable', serif" },
-                    { v: 'sans', label: 'Open Sans', font: "'Open Sans', sans-serif" }
-                  ]} />
-              </SetRow>
-              <SetRow label={t("Message density")} desc={t("Vertical spacing between messages.")}>
-                <SegSlide label={t("Message density")} value={prefs.density || 'comfortable'} onPick={(v) => setPref('density', v)}
-                  options={[{ v: 'comfortable', label: t('Comfortable') }, { v: 'compact', label: t('Compact') }]} />
-              </SetRow>
-              <SetRow label={t("Accent colour")} desc={t("Tints buttons, links and highlights.")}>
-                <AccentSelect value={prefs.accent || ''} onPick={(v) => setPref('accent', v)} />
-              </SetRow>
-              <div className="me-section-h">{t("Display")}</div>
-              <SwitchRow label={t("OLED screen protection")} desc={t("Nudges the interface a few pixels and eases brightness to limit burn-in.")}
-                on={prefs.oledShift} onToggle={() => setPref('oledShift', !prefs.oledShift)} />
-            </>
-          )}
           {tab === 'keybinds' && <KeybindsPanel prefs={prefs} setPref={setPref} />}
           {tab === 'chat' && (() => {
             const rv = revealSpeedMs(prefs.revealMs);
@@ -644,11 +588,8 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                     const bv = Math.max(150, Math.min(2000, parseInt(prefs.cursorBlinkMs) || 500));
                     return (
                       <SetRow label={t("Blink speed")} desc={t("Idle blink rate. It stays solid while text streams, like a terminal.")}>
-                        <div className="reveal-row">
-                          <input type="range" min="150" max="2000" step="50" value={bv} onChange={(e) => setPref('cursorBlinkMs', parseInt(e.target.value))} />
-                          <span className="reveal-val">{bv} ms</span>
-                          {bv !== 500 && <button className="linklike" onClick={() => setPref('cursorBlinkMs', 500)}>{t("Reset")}</button>}
-                        </div>
+                        <RangeRow value={bv} min="150" max="2000" step="50" def={500}
+                          format={(v) => v + ' ms'} onChange={(v) => setPref('cursorBlinkMs', v)} />
                       </SetRow>
                     );
                   })()}
@@ -656,11 +597,8 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                     const pv = Math.max(300, Math.min(4000, parseInt(prefs.cursorPulseMs) || 1000));
                     return (
                       <SetRow label={t("Pulse speed")} desc={t("How quickly the circle grows and shrinks.")}>
-                        <div className="reveal-row">
-                          <input type="range" min="300" max="4000" step="100" value={pv} onChange={(e) => setPref('cursorPulseMs', parseInt(e.target.value))} />
-                          <span className="reveal-val">{pv} ms</span>
-                          {pv !== 1000 && <button className="linklike" onClick={() => setPref('cursorPulseMs', 1000)}>{t("Reset")}</button>}
-                        </div>
+                        <RangeRow value={pv} min="300" max="4000" step="100" def={1000}
+                          format={(v) => v + ' ms'} onChange={(v) => setPref('cursorPulseMs', v)} />
                       </SetRow>
                     );
                   })()}
@@ -693,11 +631,8 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                     const sv = statusDelaySecs(prefs.statusDelay);
                     return (
                       <SetRow label={t("Progress line delay")} desc={t("How long a reply may take before the progress line fades in. Default 3s")}>
-                        <div className="reveal-row">
-                          <input type="range" min="0" max={STATUS_DELAY_MAX} step="1" value={sv} onChange={(e) => setPref('statusDelay', parseInt(e.target.value))} />
-                          <span className="reveal-val">{sv === 0 ? t("Instant") : sv + 's'}</span>
-                          {sv !== STATUS_DELAY_DEFAULT && <button className="linklike" onClick={() => setPref('statusDelay', STATUS_DELAY_DEFAULT)}>{t("Reset")}</button>}
-                        </div>
+                        <RangeRow value={sv} min="0" max={STATUS_DELAY_MAX} step="1" def={STATUS_DELAY_DEFAULT}
+                          format={(v) => v === 0 ? t("Instant") : v + 's'} onChange={(v) => setPref('statusDelay', v)} />
                       </SetRow>
                     );
                   })()}
@@ -770,7 +705,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                 <input type="password" placeholder={t("New password")} value={pw.next} onChange={(e) => setPw(p => ({ ...p, next: e.target.value }))} />
                 <input type="password" placeholder={t("Confirm new password")} value={pw.confirm} onChange={(e) => setPw(p => ({ ...p, confirm: e.target.value }))} />
                 {pwErr && <div className="dz-err">{pwErr}</div>}
-                {pwMsg && <div className="muted-note" style={{ color: 'var(--accent)' }}>{pwMsg}</div>}
+                {pwMsg && <div className="muted-note" style={{ color: 'var(--text)' }}>{pwMsg}</div>}
                 <div><button className="btn" onClick={changePassword} disabled={!pw.current || !pw.next}>{t("Update password")}</button></div>
               </div>
               <div className="sec-block">

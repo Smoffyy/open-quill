@@ -40,7 +40,7 @@
 /* unified button / focus states + smooth sidebar */
 .btn, .icon-btn, .action-btn, .art-btn, .quick-prompt, .send, .seg button, .model-trigger { transition: background var(--fx-t, .14s) ease, color var(--fx-t, .14s) ease, border-color var(--fx-t, .14s) ease, transform var(--fx-t, .08s) ease, opacity var(--fx-t, .14s) ease; }
 
-:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 62%, transparent); outline-offset: 2px; border-radius: 5px; }
+:focus-visible { outline: 2px solid color-mix(in srgb, var(--text) 62%, transparent); outline-offset: 2px; border-radius: 5px; }
 button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .sidebar { transition: width .22s cubic-bezier(.4, 0, .2, 1); }
 
@@ -59,7 +59,7 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
   border-radius: 9px; color: var(--text); font-size: 14px; outline: none; font-family: var(--font-sans);
 }
 .samp-field input::placeholder { color: var(--text-faint); }
-.samp-field input:focus { border-color: var(--accent); }
+.samp-field input:focus { border-color: var(--text); }
 
 /* settings danger zone */
 .danger-zone { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--border); }
@@ -70,7 +70,7 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .btn.danger:hover { background: color-mix(in srgb, var(--danger) 26%, transparent); }
 
 /* artifacts button pulse while a file is being written */
-.paper-btn.writing { color: var(--accent); animation: writing-pulse 1.1s ease-in-out infinite; }
+.paper-btn.writing { color: var(--text); animation: writing-pulse 1.1s ease-in-out infinite; }
 
 /* upload error line in the composer */
 .attach-err { margin: 2px 4px 8px; font-size: 13px; color: var(--danger); }
@@ -162,12 +162,12 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .audit-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; align-items: center; }
 .audit-filters select, .audit-filters input { padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 13px; }
 .audit-filters input { min-width: 180px; }
-.audit-filters select:focus, .audit-filters input:focus { outline: none; border-color: var(--accent); }
+.audit-filters select:focus, .audit-filters input:focus { outline: none; border-color: var(--text); }
 .preset-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
 .preset-form input { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 13px; }
 .preset-form input[type="number"] { width: 90px; }
-.preset-form input:focus { outline: none; border-color: var(--accent); }
-.recovery-box { margin: 10px 0; padding: 12px; border: 1px solid var(--accent); border-radius: 10px; }
+.preset-form input:focus { outline: none; border-color: var(--text); }
+.recovery-box { margin: 10px 0; padding: 12px; border: 1px solid var(--text); border-radius: 10px; }
 .recovery-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
 .recovery-grid code { font-family: monospace; font-size: 14px; letter-spacing: 1px; padding: 4px 8px; background: var(--surface-hover); border-radius: 6px; text-align: center; }
 .totp-secret { display: block; font-family: monospace; font-size: 16px; letter-spacing: 2px; padding: 10px 12px; background: var(--surface-hover); border-radius: 8px; word-break: break-all; }
@@ -217,8 +217,8 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 }
 [data-cursor="block"] .assistant-body.streaming.thinking > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after,
 [data-cursor="circle"] .assistant-body.streaming.thinking > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { content: none; }
-[data-cursor="block"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { width: 12px; height: 1.05em; border-radius: 2.5px; vertical-align: -3px; background: var(--accent); animation-name: caretHard; animation-duration: var(--caret-cycle, 1000ms); animation-timing-function: steps(1); animation-iteration-count: infinite; }
-[data-cursor="circle"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { width: 0.75em; height: 0.75em; border-radius: 50%; background: var(--accent); animation-name: caretPulse; animation-duration: var(--caret-pulse, 1000ms); animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
+[data-cursor="block"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { width: 12px; height: 1.05em; border-radius: 2.5px; vertical-align: -3px; background: var(--text); animation-name: caretHard; animation-duration: var(--caret-cycle, 1000ms); animation-timing-function: steps(1); animation-iteration-count: infinite; }
+[data-cursor="circle"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { width: 0.75em; height: 0.75em; border-radius: 50%; background: var(--text); animation-name: caretPulse; animation-duration: var(--caret-pulse, 1000ms); animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
 [data-cursor="block"] .assistant-body.streaming.typing > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { animation: caretSoft 0.9s ease-in-out infinite; }
 [data-cursor="circle"] .assistant-body.streaming.typing > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after { animation: caretPulse var(--caret-pulse, 900ms) ease-in-out infinite; }
 @keyframes caretHard { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
@@ -233,7 +233,7 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 
 /* composer feel */
 .composer { transition: background-color var(--fx-t, .45s) ease, border-color var(--fx-t, .3s) var(--ease-out), box-shadow var(--fx-t, .34s) var(--ease-out); }
-.composer:focus-within { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent), 0 4px 22px #00000022; }
+.composer:focus-within { border-color: color-mix(in srgb, var(--text) 55%, var(--border)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 30%, transparent), 0 4px 22px #00000022; }
 .attach-chip { transition: transform var(--fx-t, .18s) var(--ease-out), border-color var(--fx-t, .15s) ease; }
 
 .composer-left button { transition: background var(--fx-t, .15s) ease, color var(--fx-t, .15s) ease, border-color var(--fx-t, .15s) ease, transform var(--fx-t, .15s) var(--ease-out); }
@@ -247,7 +247,7 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 
 
 .reveal-row { display: flex; align-items: center; gap: 12px; }
-.reveal-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+.reveal-row input[type="range"] { flex: 1; accent-color: var(--text); }
 .reveal-val { font-size: 13px; color: var(--text-muted); min-width: 58px; text-align: right; }
 
 /* Replay is prevented by scoping the entrance to .tool-live rather than by
@@ -312,10 +312,10 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 /* ============ models publish (draft → clients) ============ */
 .publish-area { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
 .push-btn { white-space: nowrap; }
-.push-btn.dirty { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+.push-btn.dirty { box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 35%, transparent); }
 .push-btn:disabled { opacity: .5; cursor: default; box-shadow: none; }
 .pub-note { font-size: 11.5px; color: var(--text-faint); }
-.pub-note.dirty { color: var(--accent); font-weight: 600; }
+.pub-note.dirty { color: var(--text); font-weight: 600; }
 .autosave-status { font-size: 12px; color: var(--text-faint); align-self: center; }
 
 /* ============ model unavailable banner ============ */

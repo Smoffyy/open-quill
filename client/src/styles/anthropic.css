@@ -558,7 +558,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 .sk-btn svg { width: 12px; height: 12px; flex-shrink: 0; }
 .sk-btn:hover { background: rgba(255, 255, 255, .16); }
 :root[data-theme="light"] .sk-btn:hover { background: rgba(0, 0, 0, .1); }
-.sk-btn.primary { background: var(--accent); color: var(--on-accent); }
+.sk-btn.primary { background: var(--primary); color: var(--on-primary); }
 .sk-btn.primary:hover { filter: brightness(1.06); }
 .sk-btn:disabled { opacity: .55; cursor: default; }
 .sk-btn:focus-visible, .sk-icon-btn:focus-visible, .sk-back:focus-visible { outline: 1.6px solid var(--focus-ring); outline-offset: 1.6px; }

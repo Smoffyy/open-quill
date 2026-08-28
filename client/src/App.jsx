@@ -134,6 +134,7 @@ export default function App() {
   const onMobileCloseCb = useCallback(() => setMobileDrawer(false), []);
   const onSettingsCb = useCallback(() => { setMobileDrawer(false); setSettingsTab('general'); setShowSettings(true); }, []);
   const onSkillsCb = useCallback(() => { setMobileDrawer(false); setSettingsTab('skills'); setShowSettings(true); }, []);
+  const onVersionCb = useCallback(() => { setMobileDrawer(false); setSettingsTab('version'); setShowSettings(true); }, []);
   const onDocsCb = useCallback(() => { setMobileDrawer(false); setShowDocs(true); }, []);
   const onAdminCb = useCallback(() => { setMobileDrawer(false); history.pushState({}, '', '/admin'); setShowAdmin(true); }, []);
   const onPlaygroundCb = useCallback(() => { setMobileDrawer(false); history.pushState({}, '', '/playground'); setShowPlayground(true); }, []);
@@ -1544,7 +1545,7 @@ export default function App() {
       <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName} onSearch={onSearchCb}
         dest={showProjects ? 'projects' : showSpaces ? 'spaces' : chatsOverview ? 'chats' : libPage}
         onArtifacts={onArtifactsCb} onScheduled={onScheduledCb}
-        onCustomize={onSkillsCb} onModelDocs={onDocsCb} showModelDocs={cfg.modelDocs !== false} onApps={onSettingsCb}
+        onCustomize={onSkillsCb} onModelDocs={onDocsCb} showModelDocs={cfg.modelDocs !== false} onVersion={onVersionCb}
         onNew={sbNewChat} onOpen={sbOpenChat} onDelete={sbDeleteChat} onToggleStar={sbToggleStar}
         collapsed={collapsed} onToggle={onToggleSidebarCb}
         mobileOpen={mobileDrawer} onMobileClose={onMobileCloseCb}

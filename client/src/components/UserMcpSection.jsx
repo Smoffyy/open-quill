@@ -90,7 +90,6 @@ export default function UserMcpSection() {
             <span className="mcp-empty-icon"><Plug style={{ width: 20 }} /></span>
             <div className="mcp-empty-title">{t("No connectors of your own")}</div>
             <div className="mcp-empty-note">{t("Point this at an MCP server you run and its tools become available to the models you chat with.")}</div>
-            <button className="sk-btn primary" onClick={startAdd}><Plus /> {t("Add server")}</button>
           </div>
         )}
 
