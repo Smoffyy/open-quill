@@ -9,11 +9,8 @@ let fail = false;
 for (const { code, file, path: p } of packFiles()) {
   const dict = readPack(p);
   const { missing, orphaned } = auditPack(dict, keys);
-  // English needs no entries at all — t() renders the key. Only its leftovers matter.
   const untranslated = code === SOURCE_LANG ? [] : missing;
   const partial = !!(dict._meta && dict._meta.partial);
-  // A partial pack is allowed to be incomplete on purpose; an orphan is a stale
-  // key either way, so it is always worth printing but never fatal on its own.
   if (untranslated.length && !partial) fail = true;
   report.push({ code, file, partial, missing: untranslated, orphaned, total: keys.size });
 }

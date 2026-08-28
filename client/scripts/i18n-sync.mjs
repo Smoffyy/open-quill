@@ -32,10 +32,6 @@ if (flag('--new')) {
   if (!name) die('--new needs --name, the language\'s own name for itself (e.g. Deutsch)');
   const p = path.join(LOCALES, code + '.json');
   if (fs.existsSync(p)) die(code + '.json already exists');
-  // partial lets the pack ship incomplete: every key it lacks renders in English,
-  // so a new language never has to land all at once.
-  // dir stays ltr on purpose: the stylesheets have no RTL pass, so an RTL
-  // language is a deliberate _meta edit plus that CSS work, not a flag.
   const pack = { _meta: { code, name, dir: 'ltr', partial: true } };
   if (dry) console.log('would create ' + code + '.json');
   else { writePack(p, pack); console.log('created locales/' + code + '.json (partial)'); }
@@ -70,8 +66,6 @@ for (const { code, file, path: p } of packs) {
   const next = {};
   let pruned = 0, updated = 0, added = 0;
 
-  // Existing keys keep their position, so the packs stay lined up with each
-  // other and a sync shows up as the handful of lines that actually changed.
   for (const [k, v] of Object.entries(dict)) {
     if (k === '_meta') { next[k] = v; continue; }
     if (!keys.has(k)) { pruned++; continue; }

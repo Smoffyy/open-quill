@@ -17,9 +17,6 @@ export function SetRow({ label, desc, children }) {
   );
 }
 
-// Reset always renders and only goes invisible at the default, so the row keeps
-// one width. Letting it mount on the first drag step re-flowed the row under the
-// pointer, which read as the slider jumping.
 export function RangeRow({ value, min, max, step, def, format, onChange }) {
   return (
     <div className="reveal-row">

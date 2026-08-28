@@ -11,6 +11,7 @@ import QuickPrompts from './components/QuickPrompts.jsx';
 import CompactingBar from './components/CompactingBar.jsx';
 import EngineStrip from './components/EngineStrip.jsx';
 import CtxGauge from './components/CtxGauge.jsx';
+import ContextInspector from './components/ContextInspector.jsx';
 import LedgerBar from './components/LedgerBar.jsx';
 import ThreadSkeleton from './components/ThreadSkeleton.jsx';
 import SummaryModal from './components/SummaryModal.jsx';
@@ -38,7 +39,7 @@ import ScheduledTasks from './components/ScheduledTasks.jsx';
 import Tip from './components/Tip.jsx';
 import SpacesPanel from './components/SpacesPanel.jsx';
 import ProjectsPanel from './components/ProjectsPanel.jsx';
-import ChatMenu from './components/ChatMenu.jsx';
+import { ChatMenu, menuAtButton } from './components/ChatMenu.jsx';
 import PersonasModal from './components/PersonasModal.jsx';
 import SearchModal from './components/SearchModal.jsx';
 import Toaster from './components/Toaster.jsx';
@@ -58,7 +59,7 @@ import { useSocket } from './lib/socket.js';
 const BranchTree = React.lazy(() => import('./components/BranchTree.jsx'));
 import { toast } from './toast.js';
 import { copyText } from './clipboard.js';
-import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork, Panel, Copy, Check } from './components/icons.jsx';
+import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork, Panel, Copy, Check, Star, Telescope } from './components/icons.jsx';
 import { BRAND_ICON } from './lib/brand.js';
 
 const SKELETON_DELAY = 100;
@@ -228,13 +229,14 @@ export default function App() {
   const [stopping, setStopping] = useState(false);
   const [compacting, setCompacting] = useState(false);
   const [hasSummary, setHasSummary] = useState(false);
-  const [chatMenuOpen, setChatMenuOpen] = useState(false);
+  const [titleMenu, setTitleMenu] = useState(null);
   const [showSearch, setShowSearch] = useState(false);
-  const [chatInstructions, setChatInstructions] = useState('');
   const [chatPins, setChatPins] = useState([]);
   const [personasOpen, setPersonasOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameVal, setRenameVal] = useState('');
+  const [inspectOpen, setInspectOpen] = useState(false);
+  const titleChevRef = useRef(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [artifactsOpen, setArtifactsOpen] = useState(false);
@@ -970,7 +972,7 @@ export default function App() {
     } catch {}
   }, [activeId, chatPins]);
   function jumpToMessage(id, opts) {
-    setChatMenuOpen(false);
+    setTitleMenu(null);
     stick.current = false;
     requestAnimationFrame(() => {
       const el = document.querySelector('[data-mid="' + id + '"]');
@@ -1006,7 +1008,6 @@ export default function App() {
   async function applyPersona(p) {
     if (!p) return;
     if (p.modelId && models.find(m => m.id === p.modelId)) setCurrentId(p.modelId);
-    setChatInstructions(p.instructions || '');
     if (activeId) {
       try { await api.patch('/api/chats/' + activeId, { instructions: p.instructions || '' }); } catch {}
     }
@@ -1042,7 +1043,6 @@ export default function App() {
     setChatEndedReason(chat.endedReason || '');
     setChatGenParams(chat.genParams || null);
     setChatSysOverride(chat.systemOverride || '');
-    setChatInstructions(chat.instructions || '');
     setChatPins(Array.isArray(chat.pinnedFiles) ? chat.pinnedFiles : []);
   }
   function resolveLastModel(lastA) {
@@ -1093,7 +1093,7 @@ export default function App() {
     setCanContinue(false); setQueue([]);
     flushDraft();
     setInput(loadDraft(id));
-    setChatMenuOpen(false);
+    setTitleMenu(null);
     if (push) history.pushState({}, '', '/chat/' + id);
     else history.replaceState({}, '', '/chat/' + id);
     pinToBottom(false, 30);
@@ -1174,14 +1174,6 @@ export default function App() {
     try { await api.del('/api/chats/' + id + '/messages/' + messageId); await refreshMessages(id); }
     catch { refreshMessages(id); }
   }, []);
-  function toggleArchive(id) {
-    const cur = chats.find(c => c.id === id);
-    const next = !cur?.archived;
-    setChats(cs => cs.map(c => c.id === id ? { ...c, archived: next } : c));
-    api.patch('/api/chats/' + id, { archived: next }).catch(() => {});
-    if (next && id === activeId) toast(t('Chat archived, find it under Chats → Archived.'));
-  }
-
   function toggleStar(id) {
     const cur = chats.find(c => c.id === id);
     const next = !cur?.starred;
@@ -1644,6 +1636,7 @@ export default function App() {
               <button className="mobile-menu-btn" onClick={() => setMobileDrawer(true)} title={t("Menu")}><Menu style={{ width: 20 }} /></button>
               {renaming ? (
                 <input className="chat-rename" autoFocus value={renameVal}
+                  onFocus={(e) => e.target.select()}
                   onChange={(e) => setRenameVal(e.target.value)}
                   onBlur={commitRename}
                   onKeyDown={(e) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenaming(false); }} />
@@ -1657,26 +1650,24 @@ export default function App() {
                       <span className="ct-sep">/</span>
                     </>
                   )}
-                  <button className="chat-name" onClick={() => setChatMenuOpen(o => !o)}>
-                    <span className="ct-title">{activeChat?.title || t('New chat')}</span> <ChevDown style={{ width: 15 }} />
+                  <button className="chat-name ct-name" disabled={!activeId} title={t('Rename chat')}
+                    onClick={() => { setRenameVal(activeChat?.title || ''); setRenaming(true); }}>
+                    <span className="ct-title">{activeChat?.title || t('New chat')}</span>
                   </button>
-                  {(chatInstructions || '').trim() && <span className="chat-instr-dot" title={t("This chat has custom instructions")} />}
-                  {chatMenuOpen && activeId && (
+                  <button className="chat-name ct-caret" ref={titleChevRef} disabled={!activeId}
+                    title={t('Chat options')} aria-label={t('Chat options')} aria-haspopup="menu" aria-expanded={!!titleMenu}
+                    onClick={(e) => { const at = menuAtButton(e.currentTarget); setTitleMenu(m => m ? null : at); }}>
+                    <ChevDown />
+                  </button>
+                  {titleMenu && activeId && (
                     <ChatMenu
-                      chat={{ id: activeId, title: activeChat?.title || t('New chat'), instructions: chatInstructions, starred: !!activeChat?.starred, archived: !!activeChat?.archived }}
-                      modelId={currentId}
-                      pinned={messages.filter(m => m.pinned)}
-                      pins={chatPins}
-                      onUnpinFile={(url) => togglePinFile({ url })}
-                      onOpenPersonas={() => { setChatMenuOpen(false); setPersonasOpen(true); }}
-                      onJump={jumpToMessage}
-                      onCopyConversation={copyConversation}
-                      onClose={() => setChatMenuOpen(false)}
-                      onRename={() => { setRenameVal(activeChat?.title || ''); setRenaming(true); }}
-                      onFork={() => forkChat()}
-                      onToggleStar={() => toggleStar(activeId)}
-                      onToggleArchive={() => toggleArchive(activeId)}
-                      onInstructionsSaved={(v) => setChatInstructions(v)} />
+                      chat={{ id: activeId, title: activeChat?.title || t('New chat'), starred: !!activeChat?.starred, projectId: activeChat?.projectId || null }}
+                      at={titleMenu} projects={projects} busy={busyChats.includes(activeId)} anchorRef={titleChevRef}
+                      onStopChat={stopChat}
+                      onToggleStar={toggleStar}
+                      onMoveToProject={moveChatToProject}
+                      onDelete={deleteChat}
+                      onClose={() => setTitleMenu(null)} />
                   )}
                 </div>
               )}
@@ -1691,6 +1682,9 @@ export default function App() {
                 </>}
                 items={[
                   hasSummary && { id: 'summary', icon: <Compact />, label: t("Conversation memory"), onClick: () => setSummaryOpen(true) },
+                  { id: 'personas', icon: <Star />, label: t('Personas'), onClick: () => setPersonasOpen(true) },
+                  messages.length > 0 && { id: 'copyall', icon: <Copy />, label: t('Copy all'), onClick: () => copyConversation() },
+                  activeId && { id: 'inspect', icon: <Telescope />, label: t('Inspect context'), onClick: () => setInspectOpen(true) },
                   user?.isAdmin && activeId && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => { setArtifactsOpen(false); setCtlOpen(o => !o); } },
                   messages.length > 0 && user?.prefs?.threadFind !== false && { id: 'find', icon: <Search />, label: t('Find in conversation'), active: findOpen, onClick: () => (findOpen ? closeFind() : setFindOpen(true)) },
                   activeId && messages.length > 0 && user?.prefs?.branchMap !== false && { id: 'tree', icon: <Fork />, label: t('Branch map'), active: treeOpen, onClick: () => setTreeOpen(o => !o) },
@@ -1825,6 +1819,7 @@ export default function App() {
       )}
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} onChatsChanged={() => loadChats()} />}
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} onOpen={(id) => openChat(id)} />}
+      {inspectOpen && activeId && <ContextInspector chatId={activeId} modelId={currentId} onClose={() => setInspectOpen(false)} />}
       {personasOpen && <PersonasModal personas={user?.personas || []} models={models} currentId={currentId} onApply={applyPersona} onSave={savePersonas} onClose={() => setPersonasOpen(false)} />}
       {ledgerPrompt && activeId && (
         <React.Suspense fallback={null}>

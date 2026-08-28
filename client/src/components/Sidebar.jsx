@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Tip from './Tip.jsx';
-import { Plus, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, Star, Download, Chevron, ChevDown, Box, Compact, Stop, Sliders, Check, Artifact, Briefcase, ModelDocs, Info, Clock, ArrowOut, QuickTask, Sparkles, Paper } from './icons.jsx';
+import { ChatMenu, menuAtButton, menuAtPointer } from './ChatMenu.jsx';
+import { Plus, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, Chevron, ChevDown, Box, Compact, Sliders, Check, Artifact, Briefcase, ModelDocs, Info, Clock, ArrowOut, QuickTask, Sparkles, Paper } from './icons.jsx';
 import { t } from '../i18n.jsx';
 import { resolveKeybinds, comboKeys } from '../lib/keybinds.js';
 import { parseVersion } from '../lib/appversion.js';
@@ -174,61 +175,15 @@ function ProfileMenu({ user, anchorRef, onSettings, onAdmin, onPlayground, onCre
 
 function ChatRow({ c, active, showTrash, projects = [], onMoveToProject, onOpen, onDelete, onToggleStar, busyIds, onStopChat }) {
   const busy = !!(busyIds && busyIds.has(c.id));
-  const [menu, setMenu] = useState(null); // null or {top,left}
-  const [subOpen, setSubOpen] = useState(false);
+  const [menu, setMenu] = useState(null);
   const btnRef = useRef(null);
-  const menuRef = useRef(null);
-  useEffect(() => {
-    if (!menu) return;
-    const h = (e) => {
-      if (btnRef.current && btnRef.current.contains(e.target)) return;
-      if (menuRef.current && menuRef.current.contains(e.target)) return;
-      setMenu(null); setSubOpen(false);
-    };
-    const dismiss = () => { setMenu(null); setSubOpen(false); };
-    const esc = (e) => { if (e.key === 'Escape') dismiss(); };
-    document.addEventListener('mousedown', h);
-    document.addEventListener('keydown', esc);
-    window.addEventListener('resize', dismiss);
-    window.addEventListener('scroll', dismiss, true);
-    return () => {
-      document.removeEventListener('mousedown', h);
-      document.removeEventListener('keydown', esc);
-      window.removeEventListener('resize', dismiss);
-      window.removeEventListener('scroll', dismiss, true);
-    };
-  }, [menu]);
-  function openMenu(e) {
-    e.stopPropagation();
-    if (menu) { setMenu(null); setSubOpen(false); return; }
-    const r = btnRef.current.getBoundingClientRect();
-    setMenu({ top: r.bottom + 6, left: r.left, anchorTop: r.top, ready: false });
-  }
-  function openContextMenu(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    setSubOpen(false);
-    setMenu({ top: e.clientY + 4, left: e.clientX, anchorTop: e.clientY, ready: false });
-  }
-  useLayoutEffect(() => {
-    if (!menu || menu.ready || !menuRef.current) return;
-    const pad = 8;
-    const mr = menuRef.current.getBoundingClientRect();
-    let top = menu.top;
-    let left = menu.left;
-    if (top + mr.height > window.innerHeight - pad) top = Math.max(pad, menu.anchorTop - mr.height - 6);
-    if (top + mr.height > window.innerHeight - pad) top = Math.max(pad, window.innerHeight - mr.height - pad);
-    left = Math.min(Math.max(pad, left), window.innerWidth - mr.width - pad);
-    setMenu(m => m ? { ...m, top, left, ready: true } : m);
-  }, [menu, subOpen]);
   const openInTab = () => window.open('/chat/' + c.id, '_blank', 'noopener');
-  const close = () => { setMenu(null); setSubOpen(false); };
   return (
     <div className={'chat-row' + (active ? ' active' : '') + (busy ? ' busy' : '')}
       onClick={(e) => { if (e.ctrlKey || e.metaKey) { openInTab(); return; } onOpen(c.id); }}
       onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); openInTab(); } }}
       onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}
-      onContextMenu={openContextMenu}>
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu(menuAtPointer(e)); }}>
       <span className="row-ic">
         {busy ? <span className="row-busy" role="img" aria-label={t('Still generating')} title={t('Still generating')} />
           : c.projectId ? <Box className="row-project" style={{ width: 15 }} aria-label={t('In a project')} />
@@ -238,47 +193,12 @@ function ChatRow({ c, active, showTrash, projects = [], onMoveToProject, onOpen,
       {showTrash ? (
         <button className="row-ctrl shift-del" onClick={(e) => { e.stopPropagation(); onDelete(c.id); }} title={t("Delete chat")} aria-label={t("Delete chat")}><Trash /></button>
       ) : (
-        <button className="row-ctrl" ref={btnRef} onClick={openMenu} title={t("Options")} aria-label={t("Options")} aria-expanded={!!menu} aria-haspopup="menu"><DotsV /></button>
+        <button className="row-ctrl" ref={btnRef} title={t("Options")} aria-label={t("Options")} aria-expanded={!!menu} aria-haspopup="menu"
+          onClick={(e) => { e.stopPropagation(); const at = menuAtButton(e.currentTarget); setMenu(m => m ? null : at); }}><DotsV /></button>
       )}
-      {menu && createPortal(
-        <div className="chat-menu" ref={menuRef} role="menu" aria-label={t("Chat options")} style={{ top: menu.top, left: menu.left, visibility: menu.ready ? undefined : 'hidden' }}>
-          {busy && onStopChat && (
-            <button onClick={(e) => { e.stopPropagation(); onStopChat(c.id); close(); }}>
-              <Stop style={{ width: 20 }} /> {t('Stop generating')}
-            </button>
-          )}
-          <button onClick={(e) => { e.stopPropagation(); onToggleStar(c.id); close(); }}>
-            <Star style={{ width: 20 }} /> {c.starred ? t('Unstar chat') : t('Star chat')}
-          </button>
-          {onMoveToProject && (
-            <div className="cm-sub">
-              <button onClick={(e) => { e.stopPropagation(); setSubOpen(s => !s); setMenu(m => m ? { ...m, ready: false } : m); }}>
-                <Box style={{ width: 20 }} /> {t('Add to project')}
-                <Chevron style={{ width: 13, marginLeft: 'auto', transform: subOpen ? 'rotate(90deg)' : 'none' }} />
-              </button>
-              {subOpen && (
-                <div className="cm-sublist">
-                  {c.projectId && <button onClick={(e) => { e.stopPropagation(); onMoveToProject(c.id, null); close(); }}>{t('Remove from project')}</button>}
-                  {projects.length === 0 && <div className="cm-empty">{t('No projects yet')}</div>}
-                  {projects.map(p => (
-                    <button key={p.id} className={p.id === c.projectId ? 'on' : ''} onClick={(e) => { e.stopPropagation(); onMoveToProject(c.id, p.id); close(); }}>
-                      <Box style={{ width: 15 }} /> {p.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          <button onClick={(e) => { e.stopPropagation(); window.open('/api/chats/' + c.id + '/export?format=md', '_blank'); close(); }}>
-            <Download style={{ width: 20 }} /> Export as Markdown
-          </button>
-          <button onClick={(e) => { e.stopPropagation(); window.open('/api/chats/' + c.id + '/export?format=json', '_blank'); close(); }}>
-            <Download style={{ width: 20 }} /> Export as JSON
-          </button>
-          <button className="danger" onClick={(e) => { e.stopPropagation(); onDelete(c.id); close(); }}>
-            <Trash style={{ width: 20 }} /> Delete chat
-          </button>
-        </div>, document.body)}
+      {menu && <ChatMenu chat={c} at={menu} projects={projects} busy={busy} anchorRef={btnRef}
+        onStopChat={onStopChat} onToggleStar={onToggleStar} onMoveToProject={onMoveToProject}
+        onDelete={onDelete} onClose={() => setMenu(null)} />}
     </div>
   );
 }

@@ -5,18 +5,12 @@ import { fileURLToPath } from 'url';
 export const SRC = fileURLToPath(new URL('../src', import.meta.url));
 export const LOCALES = path.join(SRC, 'locales');
 
-// English is the source language: t() falls back to the key itself, so en.json
-// carries the _meta block that puts English in the picker and nothing else has
-// to exist for it.
 export const SOURCE_LANG = 'en';
 
 const CALL_RE = /\bt[k]?\(\s*("((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')/g;
 
 const unescape = (s) => s.replace(/\\'/g, "'").replace(/\\"/g, '"');
 
-// Keys the regex scanner cannot see: built from data tables, composed at runtime,
-// or supplied by the server. Anything added here must be a literal a translator
-// would recognise on its own.
 const EXTRA_KEYS = [
   'Custom',
   'Ideas', 'Write', 'Code', 'Learn', 'Life stuff',
@@ -43,8 +37,6 @@ const EXTRA_KEYS = [
   'Extended-mode trigger', 'Standard-mode trigger',
 ];
 
-// Tables that name their strings with a bare property instead of tk(), so the
-// call-site regex walks straight past them.
 const TABLE_SCANS = [
   { file: 'components/ShortcutsModal.jsx', re: /title:\s*'((?:[^'\\]|\\.)*)'/g },
   { file: 'components/ShortcutsModal.jsx', re: /\[\s*'((?:[^'\\]|\\.)*)'\s*,\s*\[/g },
@@ -86,8 +78,6 @@ export function readPack(p) {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 }
 
-// The packs on disk are exactly this shape, so a no-op write is a byte-for-byte
-// round trip and never shows up as a diff.
 export function writePack(p, obj) {
   fs.writeFileSync(p, JSON.stringify(obj, null, 2) + '\n');
 }
