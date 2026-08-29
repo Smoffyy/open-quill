@@ -430,6 +430,13 @@ export default function ModelEditor({ model: m, models, providers, providerTypes
             </div>
           </Field>
         </div>
+        <div style={{ marginTop: 14, maxWidth: 420 }}>
+          <Field label={t('Position')} hint={t('Where the logo sits against the reply.')}>
+            <Seg value={m.icon_position || 'below'} label={t('Position')}
+              onChange={(v) => set('icon_position', v)}
+              options={[{ value: 'below', label: t('Below') }, { value: 'left', label: t('Left') }, { value: 'above', label: t('Above') }]} />
+          </Field>
+        </div>
         <div style={{ paddingTop: 8 }}>
           <Toggle m={m} set={set} k="dropdown_icon" inverted label={t('Logo in the picker')} note={t('Shows the static logo beside the name in the model list.')} />
           <Toggle m={m} set={set} k="show_name" label={t('Name beside replies')} note={t('Prints the model name next to its logo on each reply.')} />

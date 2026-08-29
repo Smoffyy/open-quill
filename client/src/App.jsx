@@ -49,7 +49,7 @@ import ThreadRail from './components/ThreadRail.jsx';
 import ThreadFind from './components/ThreadFind.jsx';
 import { railItems } from './lib/threadmeta.js';
 import { useDrafts } from './lib/drafts.js';
-import { statusDelaySecs } from './lib/status.js';
+import { statusDelayEnabled } from './lib/status.js';
 import { resolveReveal, revealSpeedMs } from './lib/reveal.js';
 import { comboKeys, comboLabel, resolveKeybinds } from './lib/keybinds.js';
 import { useKeybinds } from './lib/keyboard.js';
@@ -355,7 +355,7 @@ export default function App() {
   const skelTimer = useRef(null);
   const showMsgSpeed = !!user?.prefs?.msgSpeed;
   const showCtxGauge = !!user?.prefs?.ctxGauge;
-  const statusDelay = statusDelaySecs(user?.prefs?.statusDelay);
+  const statusDelay = statusDelayEnabled(user?.prefs?.statusDelay);
   const liveExactTokens = !!(streaming && livePrompt > 0 && telemetry?.exact);
   const liveLedgerTokens = liveExactTokens ? (telemetry.genTokens || 0) : 0;
   const liveLedgerUsed = (ledgerOpen && liveExactTokens) ? livePrompt + liveLedgerTokens : 0;
@@ -1768,7 +1768,7 @@ export default function App() {
             {user?.prefs?.threadRail !== false && <ThreadRail items={railList} scrollRef={scrollRef} matches={findMatches} onJump={railJump} />}
             {showJump && <button className="to-bottom" onClick={jumpDown} title={t('Jump to latest')} aria-label={t('Jump to latest')}><Down style={{ width: 17 }} /></button>}
             <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')} style={{ maxWidth: cfg.uiPreset === 'openai' ? undefined : 808, margin: '0 auto', width: '100%', padding: '0 20px' }}>
-              {user?.prefs?.engineStrip !== false && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
+              {user?.prefs?.engineStrip === true && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
               <Composer {...composerProps} focusKey={focusTick} />
               <Disclaimer text={cfg.disclaimer} />
             </div>

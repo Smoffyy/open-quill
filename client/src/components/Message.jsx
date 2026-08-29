@@ -9,7 +9,7 @@ import ToolCard from './ToolCard.jsx';
 import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash, Dots, Steer } from './icons.jsx';
 import { api } from '../api.js';
 import { extLabel } from '../lib/files.js';
-import { STATUS_DELAY_DEFAULT, statusDelayMs } from '../lib/status.js';
+import { useStatusLabel } from '../lib/status.js';
 import { useAnchoredMenu, menuStyleOf } from '../lib/anchor.js';
 import { t } from '../i18n.jsx';
 
@@ -87,7 +87,36 @@ function Attachments({ items, pins, onTogglePinFile }) {
   );
 }
 
-const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name }, ref) {
+function StatusCaption({ label, detail }) {
+  const [mounted, setMounted] = useState(!!label);
+  const [visible, setVisible] = useState(false);
+  const [text, setText] = useState(label || '');
+  const [title, setTitle] = useState(detail || '');
+  const shown = useRef(false);
+  const hideTimer = useRef(null);
+  useEffect(() => {
+    if (label) {
+      setText(label);
+      setTitle(detail || '');
+      if (!shown.current) {
+        shown.current = true;
+        clearTimeout(hideTimer.current);
+        setMounted(true);
+        const raf = requestAnimationFrame(() => setVisible(true));
+        return () => cancelAnimationFrame(raf);
+      }
+    } else if (shown.current) {
+      shown.current = false;
+      setVisible(false);
+      hideTimer.current = setTimeout(() => setMounted(false), 220);
+    }
+  }, [label, detail]);
+  useEffect(() => () => clearTimeout(hideTimer.current), []);
+  if (!mounted) return null;
+  return <span className={'msg-icon-status' + (visible ? ' show' : '')} title={title || undefined}>{text}</span>;
+}
+
+const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name, statusLabel, statusDetail }, ref) {
   const base = model?.staticIcon || '';
   const map = {
     static: base,
@@ -95,7 +124,7 @@ const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, nam
     thinking: model?.thinkingIcon || base
   };
   const src = map[phase] || base;
-  if (!base && !name) return null;
+  if (!base && !name && !statusLabel) return null;
   const anim = phase === 'generating' ? (model?.generatingAnim || 'none') : phase === 'thinking' ? (model?.thinkingAnim || 'none') : '';
   const cls = anim === 'none' ? '' : anim;
   const sz = model?.iconSize > 0 ? model.iconSize : 40;
@@ -103,65 +132,10 @@ const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, nam
     <div ref={ref} className={'msg-icon' + (below ? ' below' : '') + (name ? ' with-name' : '')}>
       {base && <img src={src} className={cls} style={{ width: sz, height: sz }} alt="" />}
       {name && <span className="msg-icon-name">{name}</span>}
+      <StatusCaption label={statusLabel} detail={statusDetail} />
     </div>
   );
 });
-
-const compact = (n) => (n >= 10000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : Number(n).toLocaleString());
-
-function StreamStatus({ status, delay = STATUS_DELAY_DEFAULT }) {
-  const total = status && status.total ? status.total : 0;
-  const hasProgress = total > 0;
-  const waiting = !!(status && status.phase === 'waiting');
-  const wait = statusDelayMs(delay);
-  const [show, setShow] = useState(wait === 0);
-  useEffect(() => {
-    if (wait === 0) { setShow(true); return; }
-    setShow(false);
-    const timer = setTimeout(() => setShow(true), wait);
-    return () => clearTimeout(timer);
-  }, [wait]);
-  if (!show) return null;
-
-  if (waiting) {
-    const secs = Math.round((status.ms || 0) / 1000);
-    return (
-      <div className="model-status" role="status">
-        <span className="mst-label">{t('Waiting for the backend')}</span>
-        <span className="mst-note">{t('Nothing back yet after {n}s. A local server loading a model can take a while.', { n: secs })}</span>
-      </div>
-    );
-  }
-
-  const pct = status && Number.isFinite(status.pct) ? status.pct : null;
-  const cached = status && status.cache ? status.cache : 0;
-  const processed = status && status.total ? Math.max(cached, status.processed || 0) : 0;
-  const ms = status && status.ms ? status.ms : 0;
-  const generating = status && status.phase === 'generating';
-  const label = generating ? t('Working') : cached > 0 ? t('Reusing cache') : t('Reading your prompt');
-  const fresh = processed - cached;
-  const eta = (!generating && ms > 400 && fresh > 0 && total > processed)
-    ? Math.round((total - processed) / (fresh / (ms / 1000)))
-    : 0;
-
-  const parts = [];
-  if (hasProgress) parts.push(`${compact(processed)} / ${compact(total)} ${t('tokens')}`);
-  if (cached > 0) parts.push(`${Math.round((cached / total) * 100)}% ${t('reused')}`);
-  if (eta >= 2) parts.push(`~${eta}s ${t('left')}`);
-
-  return (
-    <div className="model-status" role="status">
-      <span className="mst-label">{label}</span>
-      {pct !== null && hasProgress && (
-        <>
-          <span className="mst-bar"><span className="mst-fill" style={{ width: pct + '%' }} /></span>
-          <span className="mst-pct">{pct}%</span>
-        </>
-      )}
-      {parts.length > 0 && <span className="mst-note">{parts.join(' · ')}</span>}
-    </div>
-  );
-}
 
 function LedgerRow({ tokens, pct, state, id, onToggleExclude }) {
   const excluded = state === 'excluded';
@@ -204,7 +178,7 @@ function SteerChips({ notes }) {
   );
 }
 
-function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, statusDelay = STATUS_DELAY_DEFAULT, showSpeed = false, preset = 'anthropic' }) {
+function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, statusDelay = true, showSpeed = false, preset = 'anthropic' }) {
   if (chatEnded) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onFork = null; onDelete = null; }
   if (!chatId) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onFork = null; onTogglePin = null; }
   const [typing, setTyping] = useState(false);
@@ -266,7 +240,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
       });
       state.done = true;
     }
-  }, [pos, streaming, msg.content, msg.reasoning, phase, liveCall, liveCalls, status]);
+  }, [pos, streaming, msg.content, msg.reasoning, phase, liveCall, liveCalls]);
 
   const [fb, setFb] = useState(msg.feedback || 0);
   useEffect(() => { setFb(msg.feedback || 0); }, [msg.id]);
@@ -279,6 +253,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
     () => (segs ? { segs, segMs, live: !!(streaming && tailIsMarker), preset, collapsible: model?.reasoningCollapsible !== false } : null),
     [segs, segMsKey, streaming, tailIsMarker, preset, model]
   );
+  const statusInfo = useStatusLabel(status, statusDelay);
 
   if (msg.role === 'user') {
     return (
@@ -324,13 +299,6 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   const iconPhase = streaming ? phase : 'static';
   const showIt = showIcon || streaming;
   const showName = !!model?.showName && !!model?.displayName;
-  const icon = showIt ? <ModelIcon ref={iconRef} model={model} phase={iconPhase} below={pos === 'below'} name={pos === 'left' ? null : (showName ? model.displayName : null)} /> : null;
-
-  async function rate(r) {
-    const next = fb === r ? 0 : r;
-    setFb(next);
-    try { await api.post(`/api/messages/${msg.id}/feedback`, { rating: next }); } catch { setFb(fb); }
-  }
 
   // Every call the model is currently spelling out, so a step that writes six
   // files shows six rows instead of one that keeps being overwritten. Falls back
@@ -338,6 +306,15 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   const liveRows = (liveCalls && liveCalls.length)
     ? liveCalls
     : (liveCall && liveCall.tool ? [{ index: 0, call: liveCall }] : []);
+  const showStatus = streaming && !msg.content && !msg.reasoning && !liveRows.length && statusInfo.show;
+  const icon = showIt ? <ModelIcon ref={iconRef} model={model} phase={iconPhase} below={pos === 'below'} name={pos === 'left' ? null : (showName ? model.displayName : null)}
+    statusLabel={showStatus ? statusInfo.label : null} statusDetail={statusInfo.detail} /> : null;
+
+  async function rate(r) {
+    const next = fb === r ? 0 : r;
+    setFb(next);
+    try { await api.post(`/api/messages/${msg.id}/feedback`, { rating: next }); } catch { setFb(fb); }
+  }
 
   const inner = (
     <>
@@ -356,7 +333,6 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
               {liveRows.map(r => <ToolCard key={r.index} call={r.call} result={null} />)}
             </div>
           )}
-          {streaming && !msg.content && !msg.reasoning && !liveRows.length && <StreamStatus status={status} delay={statusDelay} />}
           {streaming && !msg.content && !liveRows.length && <p className="stream-wait" aria-hidden="true"></p>}
         </div>
       )}

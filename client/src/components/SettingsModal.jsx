@@ -8,7 +8,7 @@ import KeybindsPanel from './KeybindsPanel.jsx';
 import SkillsSection from './SkillsSection.jsx';
 import UserMcpSection from './UserMcpSection.jsx';
 import { t, tk, useI18n } from '../i18n.jsx';
-import { STATUS_DELAY_DEFAULT, STATUS_DELAY_MAX, statusDelaySecs } from '../lib/status.js';
+import { STATUS_DELAY_SECS } from '../lib/status.js';
 import { menuStyleOf, useAnchoredMenu } from '../lib/anchor.js';
 import { createPortal } from 'react-dom';
 import { SetRow, SwitchRow, SegSlide, SelectRow, RangeRow } from './settingsui.jsx';
@@ -622,20 +622,13 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                     on={prefs.webSearchDefault} onToggle={() => setPref('webSearchDefault', !prefs.webSearchDefault)} />
                   )}
                   <SwitchRow label={t("Engine telemetry")} desc={t("Live speed and context fill above the message bar while a reply streams.")}
-                    on={prefs.engineStrip !== false} onToggle={() => setPref('engineStrip', prefs.engineStrip === false)} />
+                    on={prefs.engineStrip === true} onToggle={() => setPref('engineStrip', prefs.engineStrip !== true)} />
                   <SwitchRow label={t("Context gauge")} desc={t("A how-full-is-the-window meter beside the model picker, updated every message.")}
                     on={prefs.ctxGauge} onToggle={() => setPref('ctxGauge', !prefs.ctxGauge)} />
                   <SwitchRow label={t("Speed on each reply")} desc={t("Keep the tokens per second beside each reply, so models stay comparable.")}
                     on={prefs.msgSpeed} onToggle={() => setPref('msgSpeed', !prefs.msgSpeed)} />
-                  {(() => {
-                    const sv = statusDelaySecs(prefs.statusDelay);
-                    return (
-                      <SetRow label={t("Progress line delay")} desc={t("How long a reply may take before the progress line fades in. Default 3s")}>
-                        <RangeRow value={sv} min="0" max={STATUS_DELAY_MAX} step="1" def={STATUS_DELAY_DEFAULT}
-                          format={(v) => v === 0 ? t("Instant") : v + 's'} onChange={(v) => setPref('statusDelay', v)} />
-                      </SetRow>
-                    );
-                  })()}
+                  <SwitchRow label={t("Progress line")} desc={t("Shows what the model is doing beside its logo if a reply takes more than {n}s.", { n: STATUS_DELAY_SECS })}
+                    on={prefs.statusDelay !== false} onToggle={() => setPref('statusDelay', prefs.statusDelay === false)} />
                   <SwitchRow label={t("Context ledger on open")} desc={t("Open chats with the per-message token ledger already showing.")}
                     on={prefs.ledgerDefault} onToggle={() => setPref('ledgerDefault', !prefs.ledgerDefault)} />
                   <SwitchRow label={t("Mid-stream steering")} desc={t("Correct a reply mid-stream. Restarts from the cut point and costs an extra request.")}
