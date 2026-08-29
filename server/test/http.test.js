@@ -416,12 +416,37 @@ test('uploads need a session, except the icon the sign-in screen shows', async (
   assert.equal((await request('GET', '/uploads/brand.png')).status, 404, 'not public until it is the icon');
   const set = await browser('PATCH', '/api/admin/app-config', { body: { appIcon: '/uploads/brand.png' } });
   assert.equal(set.status, 200);
+  // An admin edit only stages the value, so the icon is not public on the strength
+  // of a draft: it has to be published first.
+  assert.equal((await request('GET', '/uploads/brand.png')).status, 404, 'a staged icon is still private');
+  assert.equal((await browser('POST', '/api/admin/models/publish', { body: {} })).status, 200);
   assert.equal((await request('GET', '/uploads/brand.png')).status, 200, 'now the login screen can load it');
   assert.equal((await request('GET', '/uploads/attachment.png')).status, 404, 'and only that one file');
 
   // the exemption follows the setting rather than being latched on first use
   await browser('PATCH', '/api/admin/app-config', { body: { appIcon: '' } });
+  await browser('POST', '/api/admin/models/publish', { body: {} });
   assert.equal((await request('GET', '/uploads/brand.png')).status, 404, 'unset the icon and it is private again');
+});
+
+test('admin edits stage until they are published', async () => {
+  // Staged: the panel reads its own draft back, but nothing live has moved yet.
+  await browser('PATCH', '/api/admin/settings', { body: { voiceMicEnabled: true } });
+  const staged = await browser('GET', '/api/admin/settings');
+  assert.equal(staged.json.voiceMicEnabled, true, 'the panel sees its own draft');
+
+  const state = await browser('GET', '/api/admin/models/publish-state');
+  assert.equal(state.json.staged, true, 'the draft is reported as staged');
+  assert.equal(state.json.dirty, true, 'and that alone marks the draft dirty');
+
+  // The admin previews their own draft; the published value is what everyone else
+  // reads, which the public app-icon test above exercises from a signed-out caller.
+  await browser('PATCH', '/api/admin/app-config', { body: { appName: 'Staged Name' } });
+  assert.equal((await browser('GET', '/api/app-config')).json.appName, 'Staged Name', 'an admin previews the draft');
+
+  assert.equal((await browser('POST', '/api/admin/models/publish', { body: {} })).status, 200);
+  assert.equal((await browser('GET', '/api/admin/models/publish-state')).json.staged, false, 'publishing clears the staging area');
+  assert.equal((await browser('GET', '/api/app-config')).json.appName, 'Staged Name', 'and the value survives as the live one');
 });
 
 test('unknown routes answer in the right language', async () => {

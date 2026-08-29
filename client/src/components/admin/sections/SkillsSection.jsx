@@ -1,72 +1,129 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../../api.js';
-import { Plus, Trash, Pencil, Bulb } from '../../icons.jsx';
-import { Switch } from '../widgets.jsx';
+import { useAdmin } from '../store.jsx';
+import { Block, Fields, Field, Input, Area, Btn, Table, Switch, Empty, Dialog, Note } from '../ui.jsx';
+import { Plus, Trash, Pencil } from '../../icons.jsx';
 import { t } from '../../../i18n.jsx';
 
+const BLANK = { name: '', description: '', content: '', enabled: true };
+
 export default function SkillsSection() {
-  const [skills, setSkills] = useState([]);
-  const [edit, setEdit] = useState(null);
+  const { confirm } = useAdmin();
+  const [skills, setSkills] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    (async () => { try { const d = await api.get('/api/admin/skills'); setSkills(d.skills || []); } catch {} })();
+    (async () => {
+      try { const d = await api.get('/api/admin/skills'); setSkills(d.skills || []); }
+      catch { setSkills([]); }
+    })();
   }, []);
 
-  async function save(sk) {
+  async function save() {
+    setError('');
     try {
-      if (sk.id) { const r = await api.patch('/api/admin/skills/' + sk.id, sk); setSkills(list => list.map(x => x.id === sk.id ? r.skill : x)); }
-      else { const r = await api.post('/api/admin/skills', sk); setSkills(list => [...list, r.skill]); }
-      setEdit(null);
-    } catch (e) { alert(e.message || t('Could not save skill.')); }
+      if (draft.id) {
+        const r = await api.patch('/api/admin/skills/' + draft.id, draft);
+        setSkills(list => list.map(x => (x.id === draft.id ? r.skill : x)));
+      } else {
+        const r = await api.post('/api/admin/skills', draft);
+        setSkills(list => [...list, r.skill]);
+      }
+      setDraft(null);
+    } catch (e) { setError(e.message || t('Could not save that skill.')); }
   }
-  async function remove(id) { try { await api.del('/api/admin/skills/' + id); setSkills(list => list.filter(x => x.id !== id)); } catch {} }
-  async function toggle(sk) { try { const r = await api.patch('/api/admin/skills/' + sk.id, { enabled: !sk.enabled }); setSkills(list => list.map(x => x.id === sk.id ? r.skill : x)); } catch {} }
+
+  async function toggle(sk) {
+    try {
+      const r = await api.patch('/api/admin/skills/' + sk.id, { enabled: !sk.enabled });
+      setSkills(list => list.map(x => (x.id === sk.id ? r.skill : x)));
+    } catch {}
+  }
+
+  function del(sk) {
+    confirm({
+      title: t('Delete skill'),
+      message: t('Models will stop being offered “{name}”. Chats that already used it are unaffected.', { name: sk.name }),
+      confirm: t('Delete skill'),
+      onConfirm: async () => {
+        try { await api.del('/api/admin/skills/' + sk.id); setSkills(list => list.filter(x => x.id !== sk.id)); } catch {}
+      }
+    });
+  }
+
+  const valid = draft && draft.name.trim() && draft.description.trim();
 
   return (
     <>
-      <div className="admin-section-head">
-        <div><div className="muted-note">{t("Skills are markdown instruction files listed in the system prompt. When a task matches a skill description, the model loads it with skill_view and follows it. Offered to any model with tool calling.")}</div></div>
-        <button className="btn primary" onClick={() => setEdit({ name: '', description: '', content: '', enabled: true })}><Plus style={{ width: 15 }} /> {t("New skill")}</button>
-      </div>
-      {edit && (
-        <div className="fn-editor">
-          <div className="field"><label>{t("Skill name")}</label>
-            <input value={edit.name} onChange={(e) => setEdit(x => ({ ...x, name: e.target.value }))} placeholder={t("brand-voice")} />
-            <div className="muted-note">{t("Lowercase letters, digits, hyphens. This is the name the model loads.")}</div>
+      <Block
+        sub={t('Every enabled skill is listed in the system prompt as a name and a description. When a task matches one, the model calls skill_view to read it in full and follows it. Offered to any model with tool calling.')}
+        actions={<Btn kind="primary" size="sm" onClick={() => { setDraft({ ...BLANK }); setError(''); }}>
+          <Plus /> {t('New skill')}
+        </Btn>}>
+        {skills == null && <Empty title={t('Loading')} />}
+        {skills != null && skills.length === 0 && (
+          <Empty title={t('No skills defined')}>
+            {t('A skill is a written procedure the model pulls in on demand, so the instructions cost nothing until they are needed.')}
+          </Empty>
+        )}
+        {skills != null && skills.length > 0 && (
+          <Table head={[
+            { label: t('Name'), mono: true, fit: true },
+            { label: t('Loads when') },
+            { label: t('Lines'), num: true, fit: true },
+            { label: t('Enabled'), fit: true },
+            { label: '', fit: true }
+          ]}>
+            {skills.map(sk => (
+              <tr key={sk.id}>
+                <td className="mono">{sk.name}</td>
+                <td className="dim">{sk.description || t('no description')}</td>
+                <td className="num mono">{(sk.content || '').split('\n').length}</td>
+                <td className="fit">
+                  <Switch on={sk.enabled} label={t('Enabled')} onToggle={() => toggle(sk)} />
+                </td>
+                <td className="acts">
+                  <Btn size="sm" title={t('Edit')} aria-label={t('Edit')} onClick={() => { setDraft({ ...sk }); setError(''); }}><Pencil /></Btn>
+                  {' '}
+                  <Btn size="sm" kind="danger" title={t('Delete')} aria-label={t('Delete')} onClick={() => del(sk)}><Trash /></Btn>
+                </td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </Block>
+
+      {draft && (
+        <Dialog title={draft.id ? t('Edit skill') : t('New skill')} onClose={() => setDraft(null)}
+          foot={<>
+            <Btn onClick={() => setDraft(null)}>{t('Cancel')}</Btn>
+            <Btn kind="primary" disabled={!valid} onClick={save}>{t('Save skill')}</Btn>
+          </>}>
+          <Fields>
+            <Field label={t('Name')} hint={t('Lowercase letters, digits, and hyphens. This is the identifier the model loads.')}>
+              <Input mono value={draft.name} placeholder="brand-voice"
+                onChange={(e) => setDraft(d => ({ ...d, name: e.target.value }))} />
+            </Field>
+            <Field label={t('Loads when')}
+              hint={t('The only thing the model sees before loading, so describe the trigger, not the content.')}>
+              <Input value={draft.description}
+                placeholder={t('Writing any customer-facing marketing copy.')}
+                onChange={(e) => setDraft(d => ({ ...d, description: e.target.value }))} />
+            </Field>
+            <Field label={t('Instructions')} hint={t('Markdown. Returned in full when the model loads the skill.')}>
+              <Area mono rows={14} spellCheck={false} value={draft.content}
+                placeholder={'# Brand voice\n\nAlways…'}
+                onChange={(e) => setDraft(d => ({ ...d, content: e.target.value }))} />
+            </Field>
+          </Fields>
+          <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Switch on={draft.enabled} label={t('Enabled')} onToggle={() => setDraft(d => ({ ...d, enabled: !d.enabled }))} />
+            <span>{t('Offer this skill to models')}</span>
           </div>
-          <div className="field"><label>{t("Description")}</label>
-            <input value={edit.description} onChange={(e) => setEdit(x => ({ ...x, description: e.target.value }))} placeholder={t("How to write copy in our brand voice. Load before writing any marketing text.")} />
-            <div className="muted-note">{t("Shown in the system prompt, tell the model exactly WHEN to load this skill.")}</div>
-          </div>
-          <div className="field"><label>{t("Content")}</label>
-            <textarea className="code-area" rows={14} value={edit.content} onChange={(e) => setEdit(x => ({ ...x, content: e.target.value }))} spellCheck={false} placeholder={'# Brand voice\n\nAlways…'} />
-            <div className="muted-note">{t("Markdown works well. The full content is returned to the model when it loads the skill.")}</div>
-          </div>
-          <div className="med-toggle-card">
-            <label className="inline-toggle"><span>{t("Enabled")}</span><Switch on={edit.enabled} label={t("Enabled")} onToggle={() => setEdit(x => ({ ...x, enabled: !x.enabled }))} /></label>
-          </div>
-          <div className="editor-actions">
-            <button className="btn" onClick={() => setEdit(null)}>{t("Cancel")}</button>
-            <button className="btn primary" onClick={() => save(edit)}>{t("Save skill")}</button>
-          </div>
-        </div>
+          {error && <div style={{ marginTop: 12 }}><Note tone="bad">{error}</Note></div>}
+        </Dialog>
       )}
-      <div className="fn-list">
-        {skills.length === 0 && !edit && <div className="muted-note">{t("No skills yet.")}</div>}
-        {skills.map(sk => (
-          <div key={sk.id} className="fn-card">
-            <div className="fn-card-main">
-              <div className="fn-card-title"><Bulb style={{ width: 15 }} /> <code>{sk.name}</code> <span className="muted-note" style={{ display: 'inline' }}>{(sk.content || '').split('\n').length} lines</span></div>
-              <div className="fn-card-desc">{sk.description || t('No description.')}</div>
-            </div>
-            <div className="fn-card-actions">
-              <Switch on={sk.enabled} label={t("Enabled")} title={t("Enabled")} onToggle={() => toggle(sk)} />
-              <button className="icon-btn" title={t("Edit")} aria-label={t("Edit")} onClick={() => setEdit({ ...sk })}><Pencil style={{ width: 15 }} /></button>
-              <button className="icon-btn" title={t("Delete")} aria-label={t("Delete")} onClick={() => remove(sk.id)}><Trash style={{ width: 15 }} /></button>
-            </div>
-          </div>
-        ))}
-      </div>
     </>
   );
 }

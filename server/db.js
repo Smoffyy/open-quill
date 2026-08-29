@@ -431,6 +431,8 @@ export const db = {
 
 const sGet = sdb.prepare('SELECT value FROM settings WHERE key=?');
 const sSet = sdb.prepare('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value');
+const sDel = sdb.prepare('DELETE FROM settings WHERE key=?');
+const sKeys = sdb.prepare('SELECT key FROM settings WHERE key LIKE ?');
 
 const settingsCache = new Map();
 
@@ -450,6 +452,15 @@ export function getSetting(key, fallback = null) {
 export function setSetting(key, value) {
   sSet.run(key, JSON.stringify(value));
   settingsCache.set(key, value);
+}
+
+export function delSetting(key) {
+  sDel.run(key);
+  settingsCache.delete(key);
+}
+
+export function settingKeysWithPrefix(prefix) {
+  return sKeys.all(prefix + '%').map(r => r.key);
 }
 
 function checkpoint() { try { sdb.pragma('wal_checkpoint(TRUNCATE)'); } catch {} }

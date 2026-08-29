@@ -1,11 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getSetting, setSetting } from '../db.js';
+import { getSetting } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
 import { logAudit } from '../lib/audit.js';
 import { appConfig } from '../lib/appconfig.js';
-import { broadcastConfig } from '../lib/ws/index.js';
+import { broadcastAdminConfig } from '../lib/ws/index.js';
+import { draftSet } from '../lib/draft.js';
 import { egressLog, clearEgressLog } from '../lib/egress.js';
 import { releaseInfo, releaseIconPath } from '../lib/release.js';
 
@@ -18,14 +19,14 @@ const ICON_TYPES = { __proto__: null, '.png': 'image/png', '.svg': 'image/svg+xm
 const text = (v, cap) => String(v ?? '').slice(0, cap);
 
 export default function registerMiscRoutes(app) {
-  app.get('/api/app-config', authMiddleware, (req, res) => res.json(appConfig()));
+  app.get('/api/app-config', authMiddleware, (req, res) => res.json(appConfig(!!req.user?.is_admin)));
 
   app.patch('/api/admin/app-config', authMiddleware, adminOnly, (req, res) => {
     const b = req.body && typeof req.body === 'object' ? req.body : {};
     let changed = false;
     const put = (key, value) => {
       if (getSetting(key, null) === value) return false;
-      setSetting(key, value);
+      draftSet(key, value);
       changed = true;
       return true;
     };
@@ -76,7 +77,7 @@ export default function registerMiscRoutes(app) {
         logAudit(req, 'branding.preset', { meta: { preset: next } });
       }
     }
-    if (changed) broadcastConfig();
+    if (changed) broadcastAdminConfig();
     res.json({ ok: true });
   });
 

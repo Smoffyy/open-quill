@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Trash, Pencil, Refresh, Terminal, Globe, Info } from './icons.jsx';
-import { Switch } from './admin/widgets.jsx';
+import { Switch } from './settingsui.jsx';
 import { t } from '../i18n.jsx';
 
 const TOOL_PREVIEW = 8;
