@@ -104,6 +104,8 @@
 .model-main-list { scrollbar-width: thin; }
 .model-main-list::-webkit-scrollbar { width: 6px; }
 .model-opt:hover { background: var(--pop-hover); }
+.model-opt.model-empty { cursor: default; }
+.model-opt.model-empty:hover { background: none; }
 .model-opt .mo-main { flex: 1; }
 .model-opt .mo-name { font-size: 14px; font-weight: 400; line-height: 20px; color: var(--pop-text); }
 .model-opt .mo-desc { font-size: 13px; line-height: 17px; color: var(--mo-desc); font-family: var(--font-sans); margin-top: 0; }

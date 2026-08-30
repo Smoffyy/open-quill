@@ -462,6 +462,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
     }
   }, [open, models]);
 
+  const hasModels = models.length > 0;
   const current = models.find(m => m.id === currentId);
   const kwDefs = Array.isArray(current?.kwargs) ? current.kwargs : [];
   const selected = { ...(reasoningEffort ? { effort: reasoningEffort } : {}), ...(kwargValues && typeof kwargValues === 'object' ? kwargValues : {}) };
@@ -523,7 +524,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
     <div className="model-select" ref={ref}>
       <button type="button" className={'model-trigger' + (open ? ' on' : '')} onClick={() => setOpen(o => !o)}>
         <span className="mt-label">
-          {current?.displayName || 'Model'}
+          {current?.displayName || (hasModels ? 'Model' : t('No models available'))}
           {chips.length
             ? chips.map((c, i) => <span key={c + i} className="ext">{t(c)}</span>)
             : (extended && current?.hasReasoning && <span className="ext">{t("Extended")}</span>)}
@@ -534,7 +535,14 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
       {open && (
         <div ref={menuRef} className={'model-menu' + (place.sheet ? '' : ' up')} style={menuStyle}>
           <div className="model-main-list" ref={listRef} style={listMaxH ? { maxHeight: listMaxH, overflow: 'hidden auto' } : undefined}>
-            {main.map(renderOpt)}
+            {hasModels ? main.map(renderOpt) : (
+              <div className="model-opt model-empty">
+                <div className="mo-main">
+                  <div className="mo-name">{t('No models available')}</div>
+                  <div className="mo-desc">{t('Ask an admin to add a model to get started.')}</div>
+                </div>
+              </div>
+            )}
           </div>
           {shownKwargs.length ? (
             <>

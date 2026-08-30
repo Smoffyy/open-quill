@@ -1063,10 +1063,10 @@ export default function App() {
     pendingModelCheck.current = null;
     resolveLastModel(lastA);
   }
-  function armSkeleton(on) {
+  function armSkeleton(on, onDelay) {
     clearTimeout(skelTimer.current);
     if (!on) { setThreadLoading(false); return; }
-    skelTimer.current = setTimeout(() => setThreadLoading(true), SKELETON_DELAY);
+    skelTimer.current = setTimeout(() => { if (onDelay) onDelay(); setThreadLoading(true); }, SKELETON_DELAY);
   }
   async function openChat(id, push = true) {
     setMobileDrawer(false);
@@ -1083,12 +1083,13 @@ export default function App() {
       setFiles(cached.files || []);
       setPendingFiles({});
       setArtifactsOpen((cached.files || []).length > 0 && artifactsOpenRef.current);
+      armSkeleton(false);
     } else {
-      setMessages([]);
-      setFiles([]);
       setPendingFiles({});
+      armSkeleton(true, () => {
+        if (seq === openSeq.current && activeIdRef.current === id) { setMessages([]); setFiles([]); }
+      });
     }
-    armSkeleton(!cached);
     setCtlOpen(false);
     setCanContinue(false); setQueue([]);
     flushDraft();
@@ -1096,7 +1097,7 @@ export default function App() {
     setTitleMenu(null);
     if (push) history.pushState({}, '', '/chat/' + id);
     else history.replaceState({}, '', '/chat/' + id);
-    pinToBottom(false, 30);
+    if (cached) pinToBottom(false, 30);
     try {
       const { chat, messages } = await api.get('/api/chats/' + id);
       if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { chat, messages }); return; }
