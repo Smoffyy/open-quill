@@ -1109,9 +1109,9 @@ export default function App() {
       applyChatMeta(chat);
       applyLastModel(messages);
       cacheChat(id, { chat, messages });
+      if (!cached) pinToBottom(false, 30);
       try { const f = await api.get('/api/chats/' + id + '/files'); if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { files: f.files || [] }); return; } setFiles(f.files || []); setArtifactsOpen((f.files || []).length > 0 && artifactsOpenRef.current); cacheChat(id, { files: f.files || [] }); }
       catch { if (seq === openSeq.current && activeIdRef.current === id && !cached) setFiles([]); }
-      if (!cached) { pinToBottom(false, 30); }
     } catch { if (seq === openSeq.current) { armSkeleton(false); if (!cached) { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); } } }
   }
   function newChat(fromPop) {
