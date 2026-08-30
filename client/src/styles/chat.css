@@ -246,6 +246,18 @@
   background: var(--user-bubble); border-radius: 12px; padding: 12px 16px; max-width: 100%;
   font-family: var(--font-sans); font-size: 15px; line-height: 20px; word-break: break-word;
 }
+.bubble-user-text { --user-clamp-h: 200px; }
+.bubble-user-text.clamped {
+  max-height: var(--user-clamp-h); overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 44px), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 44px), transparent 100%);
+}
+.bubble-toggle {
+  display: block; margin-top: 6px; margin-left: -6px; background: none; border: none;
+  padding: 3px 6px; border-radius: 6px;
+  font-family: var(--font-sans); font-size: 14px; color: var(--text-muted); cursor: pointer;
+}
+.bubble-toggle:hover { background: var(--ghost-hover, var(--surface-hover)); color: var(--text); }
 .user-actions { justify-content: flex-end; margin-top: 4px; }
 .msg.user:hover .actions { opacity: 1; }
 .msg.assistant { position: relative; }

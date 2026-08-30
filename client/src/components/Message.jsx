@@ -13,6 +13,30 @@ import { useStatusLabel } from '../lib/status.js';
 import { useAnchoredMenu, menuStyleOf } from '../lib/anchor.js';
 import { t } from '../i18n.jsx';
 
+function UserBubble({ content }) {
+  const [collapsed, setCollapsed] = useState(true);
+  const [overflowing, setOverflowing] = useState(false);
+  const textRef = useRef(null);
+  useLayoutEffect(() => {
+    const el = textRef.current;
+    if (!el) return;
+    const clampPx = parseFloat(getComputedStyle(el).getPropertyValue('--user-clamp-h')) || 200;
+    setOverflowing(el.scrollHeight > clampPx + 1);
+  }, [content]);
+  return (
+    <div className="bubble-user">
+      <div className={'bubble-user-text' + (collapsed && overflowing ? ' clamped' : '')} ref={textRef}>
+        <Markdown>{content}</Markdown>
+      </div>
+      {overflowing && (
+        <button className="bubble-toggle" onClick={() => setCollapsed(c => !c)}>
+          {collapsed ? t('Show more') : t('Show less')}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Columns(props) {
   return (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect x="3" y="4" width="7" height="16" rx="1" /><rect x="14" y="4" width="7" height="16" rx="1" /></svg>);
 }
@@ -274,7 +298,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
               </div>
             </>
           ) : (
-            msg.content && <div className="bubble-user"><Markdown>{msg.content}</Markdown></div>
+            msg.content && <UserBubble content={msg.content} />
           )}
           {msg.content && !editing && (
             <div className="actions user-actions">

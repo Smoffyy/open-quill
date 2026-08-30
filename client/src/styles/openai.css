@@ -241,6 +241,7 @@
   background: var(--user-bubble); border-radius: 22px; padding: 8px 18px; font-size: 15px; line-height: 22px;
   font-family: var(--font-sans); max-width: 100%;
 }
+[data-preset="openai"] .bubble-user-text { --user-clamp-h: 220px; }
 [data-preset="openai"] .msg.assistant > .msg-icon { margin-left: 0; }
 [data-preset="openai"] .msg-icon img { border-radius: 8px; }
 [data-preset="openai"] .msg-icon-name { font-family: var(--font-sans); font-size: 13.5px; font-weight: 600; color: var(--text); }
