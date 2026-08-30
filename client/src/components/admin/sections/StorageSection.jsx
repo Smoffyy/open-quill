@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../../api.js';
 import { useAdmin } from '../store.jsx';
-import { Block, Field, Input, Btn, Table, Badge, KV, Empty, Note, fmtBytes } from '../ui.jsx';
-import { Trash } from '../../icons.jsx';
+import { Card, Field, Input, Btn, IconBtn, Acts, Table, Badge, KV, Empty, Note, fmtBytes } from '../ui.jsx';
+import { Trash, Box } from '../../icons.jsx';
 import { t } from '../../../i18n.jsx';
+
+const NAME_MAX = 40;
+const DEFAULT_DB = 'default';
 
 export default function StorageSection() {
   const { confirm } = useAdmin();
@@ -57,32 +60,30 @@ export default function StorageSection() {
     });
   }
 
-  if (!data && !error) return <Block><Empty title={t('Loading')} /></Block>;
+  if (!data && !error) return <Empty icon={Box} title={t('Loading')} />;
 
   const list = data?.databases || [];
   const restartNeeded = data?.requiresRestart;
 
   return (
     <>
-      <Block title={t('Current')}>
+      {!!error && <Note tone="bad">{error}</Note>}
+
+      <Card title={t('Current')}>
         <KV items={[
-          [t('running'), data?.active, true],
-          [t('next start'), data?.pending || data?.active, true],
-          ...(data?.envFile ? [[t('configured in'), data.envFile, true]] : []),
-          [t('env key'), 'OPEN_QUILL_DB', true]
+          [t('Running'), data?.active, true],
+          [t('Next start'), data?.pending || data?.active, true],
+          ...(data?.envFile ? [[t('Configured in'), data.envFile, true]] : []),
+          [t('Env key'), 'OPEN_QUILL_DB', true]
         ]} />
-        <div style={{ marginTop: 14 }}>
-          <Note tone={restartNeeded ? 'warn' : undefined}>
-            {restartNeeded
-              ? t('A different database is selected for the next start. Restart the server to switch to it.')
-              : t('A database can only be swapped before the server opens it, so selecting one here takes effect on the next start. Each one is a fully separate world: its own accounts, chats, models, and uploads.')}
-          </Note>
-        </div>
-      </Block>
+        <Note tone={restartNeeded ? 'warn' : undefined}>
+          {restartNeeded
+            ? t('A different database is selected for the next start. Restart the server to switch to it.')
+            : t('A database can only be swapped before the server opens it, so selecting one here takes effect on the next start. Each one is a fully separate world: its own accounts, chats, models, and uploads.')}
+        </Note>
+      </Card>
 
-      {error && <Block><Note tone="bad">{error}</Note></Block>}
-
-      <Block title={t('Databases')}>
+      <Card title={t('Databases')} flush>
         <Table head={[
           { label: t('Name'), mono: true },
           { label: t('State'), fit: true },
@@ -101,33 +102,34 @@ export default function StorageSection() {
               </td>
               <td className="num mono">{fmtBytes(db.sizeBytes)}</td>
               <td className="acts">
-                {!db.pending && (
-                  <Btn size="sm" disabled={busy === 'activate'} onClick={() => select(db)}>{t('Use next start')}</Btn>
-                )}
-                {!db.active && !db.pending && db.name !== 'default' && (
-                  <> <Btn size="sm" kind="danger" disabled={busy === 'del:' + db.name}
-                    title={t('Delete database')} aria-label={t('Delete database')} onClick={() => del(db)}><Trash /></Btn></>
-                )}
+                <Acts end>
+                  {!db.pending && (
+                    <Btn size="sm" disabled={busy === 'activate'} onClick={() => select(db)}>{t('Use next start')}</Btn>
+                  )}
+                  {!db.active && !db.pending && db.name !== DEFAULT_DB && (
+                    <IconBtn kind="danger" label={t('Delete database')} disabled={busy === 'del:' + db.name}
+                      onClick={() => del(db)}><Trash /></IconBtn>
+                  )}
+                </Acts>
               </td>
             </tr>
           ))}
         </Table>
-      </Block>
+      </Card>
 
-      <Block title={t('Create')} sub={t('Starts empty and initialises itself the first time the server opens it.')}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', maxWidth: 520 }}>
-          <div style={{ flex: 1 }}>
-            <Field label={t('Name')} hint={t('Lowercase letters, digits, dashes, and underscores.')}>
-              <Input mono value={name} maxLength={40} placeholder="staging"
-                onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
-                onKeyDown={(e) => { if (e.key === 'Enter') create(); }} />
-            </Field>
-          </div>
+      <Card title={t('Create')} sub={t('Starts empty and initialises itself the first time the server opens it.')}
+        foot={<>
+          <span className="cp-toolbar-spacer" />
           <Btn kind="primary" disabled={busy === 'create' || !name.trim()} onClick={create}>
             {busy === 'create' ? t('Creating…') : t('Create')}
           </Btn>
-        </div>
-      </Block>
+        </>}>
+        <Field label={t('Name')} hint={t('Lowercase letters, digits, dashes, and underscores.')}>
+          <Input mono value={name} maxLength={NAME_MAX} placeholder="staging"
+            onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
+            onKeyDown={(e) => { if (e.key === 'Enter') create(); }} />
+        </Field>
+      </Card>
     </>
   );
 }

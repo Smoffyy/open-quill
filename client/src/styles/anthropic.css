@@ -335,6 +335,9 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 :root[data-preset="anthropic"] .msg-icon img.pulse,
 :root[data-preset="anthropic"] .msg-icon img.bounce,
 :root[data-preset="anthropic"] .msg-icon img.wobble { animation-duration: .72s; }
+/* `sprite` is a legacy generating_anim/thinking_anim value. No current build
+   offers it in the model editor, so an unused-class report flags it, but a
+   database written by an older release can still hold it. Keep it. */
 .msg-icon img.sprite {
   animation: icon-sprite .72s steps(8, jump-none) infinite;
   object-fit: none; object-position: top center;

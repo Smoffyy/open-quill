@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Block, Fields, Field, Input, Select, Btn, Table, Empty } from '../ui.jsx';
+import { Card, Fields, Field, Input, Select, Btn, Table, Empty } from '../ui.jsx';
 import { api } from '../../../api.js';
-import { Download } from '../../icons.jsx';
+import { Download, Clock } from '../../icons.jsx';
 import { t } from '../../../i18n.jsx';
 
 const PAGE = 60;
@@ -44,36 +44,45 @@ export default function EventsSection() {
   }
 
   return (
-    <Block
-      sub={state.total > 0 ? t('{shown} of {total} entries', { shown: state.entries.length, total: state.total }) : null}
-      actions={<Btn size="sm" onClick={() => { window.location.href = '/api/admin/audit/export'; }}><Download /> {t('Export CSV')}</Btn>}>
-      <Fields cols={3}>
-        <Field label={t('Action')}>
-          <Select value={filter.action} onChange={(v) => apply({ action: v })}
-            options={[{ value: '', label: t('Any action') }, ...(state.actions || []).map(a => ({ value: a, label: a }))]} />
-        </Field>
-        <Field label={t('Actor')}>
-          <Input mono value={filter.actor} placeholder={t('email contains…')}
-            onChange={(e) => setFilter(f => ({ ...f, actor: e.target.value }))}
-            onKeyDown={(e) => { if (e.key === 'Enter') load(0); }} />
-        </Field>
-        <Field label={t('Window')}>
-          <Select value={filter.days} onChange={(v) => apply({ days: v })}
-            options={[
-              { value: '', label: t('All time') },
-              { value: '1', label: t('Last 24 hours') },
-              { value: '7', label: t('Last 7 days') },
-              { value: '30', label: t('Last 30 days') }
-            ]} />
-        </Field>
-      </Fields>
+    <>
+      <Card title={t('Filters')}
+        actions={<Btn size="sm" onClick={() => { window.location.href = '/api/admin/audit/export'; }}>
+          <Download /> {t('Export CSV')}
+        </Btn>}>
+        <Fields cols={3}>
+          <Field label={t('Action')}>
+            <Select value={filter.action} onChange={(v) => apply({ action: v })} label={t('Action')}
+              options={[{ value: '', label: t('Any action') }, ...(state.actions || []).map(a => ({ value: a, label: a }))]} />
+          </Field>
+          <Field label={t('Actor')}>
+            <Input mono value={filter.actor} placeholder={t('email contains…')} aria-label={t('Actor')}
+              onChange={(e) => setFilter(f => ({ ...f, actor: e.target.value }))}
+              onKeyDown={(e) => { if (e.key === 'Enter') load(0); }} />
+          </Field>
+          <Field label={t('Window')}>
+            <Select value={filter.days} onChange={(v) => apply({ days: v })} label={t('Window')}
+              options={[
+                { value: '', label: t('All time') },
+                { value: '1', label: t('Last 24 hours') },
+                { value: '7', label: t('Last 7 days') },
+                { value: '30', label: t('Last 30 days') }
+              ]} />
+          </Field>
+        </Fields>
+      </Card>
 
-      <div style={{ marginTop: 16 }}>
+      <Card title={t('Events')} flush
+        sub={state.total > 0 ? t('{shown} of {total} entries', { shown: state.entries.length, total: state.total }) : null}
+        foot={state.hasMore
+          ? <Btn size="sm" disabled={state.loading} onClick={() => load(state.offset + PAGE)}>
+            {state.loading ? t('Loading…') : t('Load {n} more', { n: PAGE })}
+          </Btn>
+          : null}>
         {state.entries.length === 0 && !state.loading
-          ? <Empty title={t('No matching events')}>{t('Widen the filters, or wait for the next admin action to be recorded.')}</Empty>
+          ? <Empty icon={Clock} title={t('No matching events')}>{t('Widen the filters, or wait for the next admin action to be recorded.')}</Empty>
           : (
             <Table head={[
-              { label: t('Time'), fit: true, mono: true },
+              { label: t('Time'), fit: true },
               { label: t('Action'), fit: true, mono: true },
               { label: t('Actor'), mono: true },
               { label: t('Detail'), mono: true },
@@ -81,23 +90,16 @@ export default function EventsSection() {
             ]}>
               {state.entries.map(e => (
                 <tr key={e.id}>
-                  <td className="mono dim">{new Date(e.ts).toLocaleString()}</td>
+                  <td className="dim">{new Date(e.ts).toLocaleString()}</td>
                   <td className="mono">{e.action}</td>
                   <td className="mono">{e.actorEmail}</td>
-                  <td className="mono dim">{meta(e.meta)}</td>
+                  <td className="mono dim wrap">{meta(e.meta)}</td>
                   <td className="mono dim">{e.ip || '—'}</td>
                 </tr>
               ))}
             </Table>
           )}
-        {state.hasMore && (
-          <div className="cp-acts" style={{ marginTop: 14 }}>
-            <Btn size="sm" disabled={state.loading} onClick={() => load(state.offset + PAGE)}>
-              {state.loading ? t('Loading…') : t('Load {n} more', { n: PAGE })}
-            </Btn>
-          </div>
-        )}
-      </div>
-    </Block>
+      </Card>
+    </>
   );
 }

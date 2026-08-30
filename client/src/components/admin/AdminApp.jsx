@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { AdminProvider, useAdmin } from './store.jsx';
 import { NAV, SECTIONS, sectionMeta } from './nav.jsx';
-import { Btn, Confirm, SaveState } from './ui.jsx';
-import { Search, X } from '../icons.jsx';
+import { Confirm, SaveState } from './ui.jsx';
+import { PublishState } from './publish.jsx';
+import { Search, X, Cube } from '../icons.jsx';
 import { t } from '../../i18n.jsx';
 import { BRAND_ICON } from '../../lib/brand.js';
 
@@ -25,10 +26,6 @@ import UsageSection from './sections/UsageSection.jsx';
 import RatingsSection from './sections/RatingsSection.jsx';
 import EventsSection from './sections/EventsSection.jsx';
 import StorageSection from './sections/StorageSection.jsx';
-
-// Sections whose edits are staged for publish. The rest are either read-only
-// records or infrastructure that has to take effect the moment it is saved.
-const STAGED = new Set(['search', 'voice', 'memory', 'files', 'branding', 'launcher', 'guardrails', 'network', 'quotas']);
 
 const VIEWS = {
   __proto__: null,
@@ -53,15 +50,16 @@ const VIEWS = {
   storage: StorageSection
 };
 
+const MAX_HITS = 12;
+
 function isMac() {
   const hint = navigator.userAgentData?.platform || navigator.platform || navigator.userAgent || '';
   return /mac/i.test(hint);
 }
 
 function Finder() {
-  const A = useAdmin();
-  const { catalog, setSection } = A;
-  const { models, setSelected } = catalog;
+  const { catalog, setSection, openModel } = useAdmin();
+  const { models } = catalog;
   const [q, setQ] = useState('');
   const [cursor, setCursor] = useState(0);
   const boxRef = useRef(null);
@@ -106,13 +104,13 @@ function Finder() {
       .slice(0, 5)
       .map(m => ({
         key: 'm:' + m.id,
-        Icon: null,
+        Icon: Cube,
         label: m.display_name || m.internal_name || t('Untitled'),
         hint: t('model'),
-        go: () => { setSelected(m.id); setSection('models'); }
+        go: () => openModel(m.id)
       }));
-    return [...rows.slice(0, 12), ...ms];
-  }, [needle, models, setSelected, setSection]);
+    return [...rows.slice(0, MAX_HITS), ...ms];
+  }, [needle, models, openModel, setSection]);
 
   useEffect(() => { setCursor(0); }, [needle]);
 
@@ -127,7 +125,7 @@ function Finder() {
   return (
     <div className="cp-find" ref={boxRef}>
       <Search />
-      <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)}
+      <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)} type="search"
         placeholder={t('Find a section or model')} aria-label={t('Find a section or model')}
         onKeyDown={(e) => {
           if (e.key === 'Escape') { setQ(''); e.currentTarget.blur(); }
@@ -137,12 +135,12 @@ function Finder() {
         }} />
       <kbd>{isMac() ? '⌘K' : 'Ctrl K'}</kbd>
       {!!needle && (
-        <div className="cp-find-pop">
-          {hits.length === 0 && <div className="cp-find-empty">{t('Nothing matches “{q}”', { q })}</div>}
+        <div className="cp-menu">
+          {hits.length === 0 && <div className="cp-menu-empty">{t('Nothing matches “{q}”', { q })}</div>}
           {hits.map((h, i) => (
-            <button key={h.key} className={'cp-find-row' + (i === cursor ? ' on' : '')}
+            <button key={h.key} type="button" className={'cp-menu-item' + (i === cursor ? ' on' : '')}
               onMouseEnter={() => setCursor(i)} onClick={() => run(i)}>
-              {h.Icon ? <h.Icon /> : <span style={{ width: 14 }} />}
+              <h.Icon />
               <span>{h.label}</span>
               <em>{h.hint}</em>
             </button>
@@ -153,29 +151,8 @@ function Finder() {
   );
 }
 
-// Every edit in the panel is staged, so this belongs to the whole panel rather
-// than to the models page it started on.
-function DraftState() {
-  const { catalog } = useAdmin();
-  const { draft, publishing, publish } = catalog;
-  return (
-    <div className="cp-draft">
-      <span className="cp-draft-note">
-        <span className={'cp-dot' + (draft.dirty ? ' pending' : draft.published ? ' live' : '')} />
-        {draft.dirty
-          ? <b>{t('Unpublished changes')}</b>
-          : draft.published ? t('Live') : t('Not published')}
-      </span>
-      <Btn kind="primary" disabled={publishing || (!draft.dirty && draft.published)} onClick={publish}>
-        {publishing ? t('Publishing…') : t('Publish')}
-      </Btn>
-    </div>
-  );
-}
-
 function Shell() {
-  const A = useAdmin();
-  const { section, setSection, catalog, members, onClose, ask, setAsk, keepScroll, workspace } = A;
+  const { section, setSection, catalog, members, onClose, ask, setAsk, keepScroll, workspace } = useAdmin();
   const scrollRef = useRef(null);
   const meta = sectionMeta(section);
   const View = VIEWS[section] || OverviewSection;
@@ -198,63 +175,65 @@ function Shell() {
   return (
     <div className="cp-scrim" role="dialog" aria-modal="true" aria-label={t('Control panel')}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-    <div className="cp">
-      <header className="cp-top">
-        <div className="cp-mark">
-          <img src={workspace.config.appIcon || BRAND_ICON} alt="" />
-          <b>{workspace.config.appName || 'open-quill'}</b>
-          <span>{t('admin')}</span>
+      <div className="cp">
+        <header className="cp-top">
+          <div className="cp-mark">
+            <img src={workspace.config.appIcon || BRAND_ICON} alt="" />
+            <b>{workspace.config.appName || 'open-quill'}</b>
+            <span>{t('Admin')}</span>
+          </div>
+          <div className="cp-top-spacer" />
+          <Finder />
+          <div className="cp-top-acts">
+            <PublishState />
+            <button type="button" className="cp-exit" onClick={onClose} title={t('Close')} aria-label={t('Close')}>
+              <X />
+            </button>
+          </div>
+        </header>
+
+        <div className="cp-body">
+          <nav className="cp-rail" aria-label={t('Sections')}>
+            {NAV.map(g => (
+              <div key={g.group} style={{ display: 'contents' }}>
+                <div className="cp-rail-group">{t(g.group)}</div>
+                {g.items.map(({ id, label, Icon }) => (
+                  <button key={id} type="button" className={'cp-rail-item' + (section === id ? ' on' : '')}
+                    aria-current={section === id ? 'page' : undefined} onClick={() => setSection(id)}>
+                    <Icon />
+                    <span>{t(label)}</span>
+                    {counts[id] > 0 && <span className="cp-rail-count">{counts[id]}</span>}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </nav>
+
+          <main className="cp-view">
+            <div className="cp-head">
+              <div className="cp-head-main">
+                <h1>{t(meta.title)}</h1>
+                <p>{t(meta.blurb)}</p>
+              </div>
+              <div className="cp-head-acts">
+                {meta.saves === 'workspace' && <SaveState state={workspace.saveState} />}
+              </div>
+            </div>
+            <div ref={scrollRef} className="cp-scroll">
+              <div className="cp-page"><View /></div>
+            </div>
+          </main>
         </div>
-        <div className="cp-top-spacer" />
-        <Finder />
-        <DraftState />
-        <button className="cp-exit" onClick={onClose} title={t('Close')} aria-label={t('Close')}>
-          <X style={{ width: 14 }} />
-        </button>
-      </header>
 
-      <div className="cp-body">
-        <nav className="cp-rail" aria-label={t('Sections')}>
-          {NAV.map(g => (
-            <div key={g.group} style={{ display: 'contents' }}>
-              <div className="cp-rail-group">{t(g.group)}</div>
-              {g.items.map(({ id, label, Icon }) => (
-                <button key={id} className={'cp-rail-item' + (section === id ? ' on' : '')}
-                  aria-current={section === id ? 'page' : undefined} onClick={() => setSection(id)}>
-                  <Icon />
-                  <span>{t(label)}</span>
-                  {counts[id] > 0 && <span className="cp-rail-count">{counts[id]}</span>}
-                </button>
-              ))}
-            </div>
-          ))}
-        </nav>
-
-        <main className="cp-view">
-          <div className="cp-head">
-            <div className="cp-head-main">
-              <h1>{t(meta.title)}</h1>
-              <p>{t(meta.blurb)}</p>
-            </div>
-            <div className="cp-head-acts">
-              {STAGED.has(section) && <SaveState state={workspace.saveState} />}
-            </div>
-          </div>
-          <div ref={scrollRef} className="cp-scroll">
-            <div className="cp-page"><View /></div>
-          </div>
-        </main>
+        <Confirm ask={ask} onClose={() => setAsk(null)} />
       </div>
-
-      <Confirm ask={ask} onClose={() => setAsk(null)} />
-    </div>
     </div>
   );
 }
 
-export default function AdminApp({ user, onClose, modelId }) {
+export default function AdminApp({ user, onClose }) {
   return (
-    <AdminProvider user={user} onClose={onClose} modelId={modelId}>
+    <AdminProvider user={user} onClose={onClose}>
       <Shell />
     </AdminProvider>
   );

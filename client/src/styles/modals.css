@@ -3,7 +3,6 @@
    around the panel. The old look came from the modal's 70px drop shadow
    darkening the backdrop right where it met the edges. */
 .overlay,
-.confirm-overlay,
 .ctx-inspect-overlay,
 .bc-overlay,
 .pm-overlay,
@@ -88,10 +87,6 @@
 .modal-tab.sub { padding-left: 36px; font-size: 13px; }
 .modal-tab.has-sub .tab-chev { margin-left: auto; opacity: .55; transition: transform var(--fx-t, .2s) cubic-bezier(.2,.7,.3,1); }
 .modal-tab.has-sub.open .tab-chev { transform: rotate(90deg); }
-.autosave-note { display: flex; align-items: center; gap: 8px; margin-top: 18px; font-size: 12.5px; color: var(--text-faint); font-family: var(--font-sans); }
-.settings-autosave { display: flex; align-items: center; gap: 8px; margin-top: 22px; font-size: 12.5px; color: var(--text-faint); font-family: var(--font-sans); }
-.autosave-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-faint); transition: background var(--fx-t, .25s), box-shadow var(--fx-t, .25s); }
-.autosave-dot.flash { background: var(--success); box-shadow: 0 0 8px color-mix(in srgb, var(--success) 67%, transparent); }
 /* ---- version (about) ---- */
 .vh { max-width: 560px; }
 .vh-top { display: flex; align-items: center; gap: 20px; padding: 4px 0 22px; }
@@ -194,7 +189,6 @@
 
 .model-card { border: 1px solid var(--border); border-radius: 12px; margin-bottom: 12px; background: var(--card-bg); overflow: hidden; }
 .model-card.dragging { opacity: .45; }
-.model-card.drag-over { border-color: var(--text); }
 .grip { color: var(--text-faint); cursor: grab; display: grid; place-items: center; padding: 2px; flex-shrink: 0; }
 .grip:active { cursor: grabbing; }
 .model-card-body { padding: 0 16px 16px; }
@@ -220,7 +214,6 @@
 .icon-slot .up { font-size: 12px; color: var(--text); font-family: var(--font-sans); }
 .muted-note { font-size: 12px; color: var(--text-faint); font-family: var(--font-sans); margin-top: 4px; line-height: 1.5; }
 .instr-area { margin-top: 10px; }
-.saved-flash { color: var(--success); font-size: 13px; font-family: var(--font-sans); }
 
 .doc-body { font-size: 15px; line-height: 1.7; color: var(--text); }
 .doc-body.serif { font-family: var(--font-serif); font-size: 16.5px; line-height: 1.72; }
@@ -250,7 +243,6 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 /* ---------- view transitions ---------- */
 .active-composer { position: relative; z-index: 14; }
 
-
 /* ---------- admin users ---------- */
 .user-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 10px; background: var(--card-bg); }
 .user-row .u-main { flex: 1; min-width: 0; }
@@ -260,9 +252,6 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 .you-tag { font-size: 11px; color: var(--text-faint); }
 
 /* ---------- customization ---------- */
-.greeting-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-.greeting-row input { flex: 1; }
-.greeting-row .btn.danger { padding: 9px 11px; flex-shrink: 0; }
 
 /* ---------- attachments ---------- */
 .composer .attach-row { --attach-size: 120px; --attach-radius: 8px; }
@@ -316,11 +305,6 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 .composer.dragging { border-color: var(--glow); box-shadow: 0 0 0 2px var(--glow), 0 0 30px -4px var(--glow); }
 .drop-hint { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 18px; background: color-mix(in srgb, var(--glow) 14%, transparent); color: var(--text); font-size: 14px; font-family: var(--font-sans); font-weight: 600; letter-spacing: .01em; pointer-events: none; z-index: 6; }
 
-/* ---------- in-app confirm dialog ---------- */
-.confirm-overlay { position: fixed; inset: 0; background: #00000066; display: grid; place-items: center; z-index: 200; }
-.confirm-box { width: min(380px, 90vw); background: var(--menu-bg); border: 1px solid var(--border); border-radius: 14px; padding: 22px; box-shadow: 0 8px 32px rgba(0,0,0,.28); }
-.confirm-msg { font-size: 15px; color: var(--text); line-height: 1.5; margin-bottom: 18px; }
-.confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }
 .btn.danger-solid { background: #c4452f; color: #fff; }
 .btn.danger-solid:hover { background: #d44e36; }
 

@@ -6,11 +6,15 @@ import { t } from '../../i18n.jsx';
 
 export { Switch };
 
-export function Block({ title, sub, actions, children }) {
+/* ---------- layout ---------- */
+
+// Every page is a stack of cards. A card owns its own padding and internal
+// rhythm so a section never reaches for an inline margin.
+export function Card({ title, sub, actions, foot, flush, children }) {
   return (
-    <section className="cp-block">
-      {(title || actions) && (
-        <div className="cp-block-head">
+    <section className="cp-card">
+      {(title || sub || actions) && (
+        <div className="cp-card-head">
           <div>
             {title && <h2>{title}</h2>}
             {sub && <p className="cp-sub">{sub}</p>}
@@ -18,20 +22,37 @@ export function Block({ title, sub, actions, children }) {
           {actions && <div className="cp-acts">{actions}</div>}
         </div>
       )}
-      {children}
+      <div className={'cp-card-body' + (flush ? ' flush' : '')}>{children}</div>
+      {foot && <div className="cp-card-foot">{foot}</div>}
     </section>
   );
 }
 
-export function Row({ label, note, children }) {
+// A list of setting rows. Rows are hairline-separated and share one right edge,
+// which is what keeps every control on a page in a single column.
+export function Rows({ children }) {
+  return <div className="cp-rows">{children}</div>;
+}
+
+export function Row({ label, note, wide, children }) {
   return (
     <div className="cp-row">
       <div className="cp-row-main">
         <span className="cp-row-label">{label}</span>
         {note && <div className="cp-row-note">{note}</div>}
       </div>
-      <div className="cp-row-ctrl">{children}</div>
+      <div className={'cp-row-ctrl' + (wide ? ' wide' : '')}>{children}</div>
     </div>
+  );
+}
+
+// The shape almost every policy setting takes. Having one component for it is
+// what makes the switches line up and the copy read the same everywhere.
+export function ToggleRow({ label, note, on, onToggle, disabled }) {
+  return (
+    <Row label={label} note={note}>
+      <Switch on={on} label={label} disabled={disabled} onToggle={onToggle} />
+    </Row>
   );
 }
 
@@ -42,13 +63,25 @@ export function Fields({ cols, children }) {
 export function Field({ label, hint, error, optional, children }) {
   return (
     <div className="cp-field">
-      {label && <label>{label}{optional && <span className="opt"> {t('optional')}</span>}</label>}
+      {label && <label>{label}{optional && <span className="opt"> · {t('optional')}</span>}</label>}
       {children}
       {hint && <div className="cp-hint">{hint}</div>}
       {error && <div className="cp-err">{error}</div>}
     </div>
   );
 }
+
+// A control with a button beside it — an id with a copy action, a number with a
+// detect action. The control takes the space, the button keeps its size.
+export function Inline({ children }) {
+  return <div className="cp-inline">{children}</div>;
+}
+
+export function Acts({ end, children }) {
+  return <div className={'cp-acts' + (end ? ' end' : '')}>{children}</div>;
+}
+
+/* ---------- controls ---------- */
 
 export function Input({ mono, ...rest }) {
   return <input className={'cp-input' + (mono ? ' mono' : '')} {...rest} />;
@@ -77,10 +110,79 @@ export function Seg({ value, options, onChange, label }) {
   );
 }
 
-export function Btn({ kind, size, children, ...rest }) {
-  const cls = ['btn', kind, size].filter(Boolean).join(' ');
+export function Range({ value, min, max, step = 1, onChange, label }) {
+  return (
+    <input type="range" className="cp-range" min={min} max={max} step={step}
+      value={value} aria-label={label} onChange={onChange} />
+  );
+}
+
+export function Btn({ kind, size, icon, className, children, ...rest }) {
+  const cls = ['btn', kind, size, icon && 'icon', className].filter(Boolean).join(' ');
   return <button type="button" className={cls} {...rest}>{children}</button>;
 }
+
+// An icon-only button always carries its name for a screen reader and a tooltip
+// for everyone else, so the two can never drift apart.
+export function IconBtn({ kind, size = 'sm', label, children, ...rest }) {
+  return <Btn kind={kind} size={size} icon title={label} aria-label={label} {...rest}>{children}</Btn>;
+}
+
+export function CopyBtn({ text, title }) {
+  const [ok, setOk] = useState(false);
+  const timer = useRef(null);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  return (
+    <IconBtn kind="quiet" label={title || t('Copy')}
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text || '');
+          setOk(true);
+          clearTimeout(timer.current);
+          timer.current = setTimeout(() => setOk(false), 1200);
+        } catch {}
+      }}>
+      {ok ? <Check /> : <Copy />}
+    </IconBtn>
+  );
+}
+
+/* ---------- tabs ---------- */
+
+// Arrow keys move between tabs the way the ARIA pattern expects; the active
+// underline is painted on the strip so switching never resizes a tab.
+export function Tabs({ items, value, onChange, label, panelId }) {
+  const ref = useRef(null);
+
+  function onKeyDown(e) {
+    const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    const i = items.findIndex(it => it.id === value);
+    const next = items[(i + dir + items.length) % items.length];
+    onChange(next.id);
+    ref.current?.querySelector(`[data-tab="${next.id}"]`)?.focus();
+  }
+
+  return (
+    <div className="cp-tabs" role="tablist" aria-label={label} ref={ref} onKeyDown={onKeyDown}>
+      {items.map(it => {
+        const on = it.id === value;
+        return (
+          <button key={it.id} type="button" role="tab" data-tab={it.id}
+            className="cp-tab" aria-selected={on} tabIndex={on ? 0 : -1}
+            aria-controls={panelId} onClick={() => onChange(it.id)}>
+            {it.Icon && <it.Icon />}
+            <span>{it.label}</span>
+            {it.count > 0 && <span className="cp-tab-n">{it.count}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ---------- data display ---------- */
 
 export function Badge({ tone, children }) {
   return <span className={'cp-badge' + (tone ? ' ' + tone : '')}>{children}</span>;
@@ -91,8 +193,10 @@ export function Table({ head, children, empty, fixed }) {
     <div className="cp-table-wrap">
       <table className={'cp-table' + (fixed ? ' fixed' : '')}>
         <thead><tr>{head.map((h, i) => (
-          <th key={i} style={h.width ? { width: h.width } : undefined}
-            className={[h.mono && 'mono', h.num && 'num', h.fit && 'fit'].filter(Boolean).join(' ') || undefined}>{h.label}</th>
+          <th key={i} scope="col" style={h.width ? { width: h.width } : undefined}
+            className={[h.mono && 'mono', h.num && 'num', h.fit && 'fit'].filter(Boolean).join(' ') || undefined}>
+            {h.label}
+          </th>
         ))}</tr></thead>
         <tbody>
           {children}
@@ -117,9 +221,10 @@ export function Stats({ items }) {
   );
 }
 
-export function Empty({ title, children, actions }) {
+export function Empty({ icon: Icon, title, children, actions }) {
   return (
     <div className="cp-empty">
+      {Icon && <Icon />}
       <b>{title}</b>
       {children && <p>{children}</p>}
       {actions && <div className="cp-acts">{actions}</div>}
@@ -154,33 +259,37 @@ export function KV({ items }) {
 export function SaveState({ state }) {
   if (state !== 'saving' && state !== 'saved' && state !== 'error') return null;
   return (
-    <span className={'cp-save' + (state === 'error' ? ' bad' : '')}>
-      <span className={'cp-dot' + (state === 'saving' ? ' pending' : state === 'saved' ? ' live' : '')} />
+    <span className={'cp-state' + (state === 'error' ? ' bad' : '')} role="status">
+      <span className={'cp-dot' + (state === 'saving' ? ' pending' : state === 'saved' ? ' live' : ' bad')} />
       {state === 'saving' ? t('Saving') : state === 'saved' ? t('Saved') : t('Not saved')}
     </span>
   );
 }
 
-export function CopyBtn({ text, title }) {
-  const [ok, setOk] = useState(false);
-  return (
-    <Btn kind="quiet" size="sm" title={title || t('Copy')} aria-label={title || t('Copy')}
-      onClick={async () => {
-        try { await navigator.clipboard.writeText(text || ''); setOk(true); setTimeout(() => setOk(false), 1200); } catch {}
-      }}>
-      {ok ? <Check /> : <Copy />}
-    </Btn>
-  );
-}
+/* ---------- overlays ---------- */
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const FIRST_FIELD = 'input:not([disabled]), textarea:not([disabled]), select:not([disabled])';
 
 export function Dialog({ title, size, onClose, foot, children }) {
   const box = useRef(null);
   const titleId = useId();
 
+  // Opening focus and restoring it belong to the dialog's lifetime, not to the
+  // identity of onClose. Callers pass an inline arrow, so folding these into the
+  // key-handler effect below would re-focus the first field on every keystroke.
   useEffect(() => {
     const restoreTo = document.activeElement;
+    // A form dialog opens on its first field; one without fields falls back to
+    // its first control, so focus is never left outside the dialog.
+    const open = box.current?.querySelector(FIRST_FIELD) || box.current?.querySelector(FOCUSABLE);
+    open?.focus();
+    return () => {
+      if (restoreTo && typeof restoreTo.focus === 'function' && document.contains(restoreTo)) restoreTo.focus();
+    };
+  }, []);
+
+  useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') { e.stopPropagation(); onClose(); return; }
       if (e.key !== 'Tab' || !box.current) return;
@@ -193,10 +302,7 @@ export function Dialog({ title, size, onClose, foot, children }) {
       else if (!e.shiftKey && on === last) { e.preventDefault(); first.focus(); }
     };
     document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      if (restoreTo && typeof restoreTo.focus === 'function' && document.contains(restoreTo)) restoreTo.focus();
-    };
+    return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
   return createPortal(
@@ -205,7 +311,7 @@ export function Dialog({ title, size, onClose, foot, children }) {
         role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className="cp-dialog-head">
           <h3 id={titleId}>{title}</h3>
-          <Btn kind="quiet" size="sm" aria-label={t('Close')} onClick={onClose}><X /></Btn>
+          <IconBtn kind="quiet" label={t('Close')} onClick={onClose}><X /></IconBtn>
         </div>
         <div className="cp-dialog-body">{children}</div>
         {foot && <div className="cp-dialog-foot">{foot}</div>}
@@ -214,17 +320,65 @@ export function Dialog({ title, size, onClose, foot, children }) {
 }
 
 export function Confirm({ ask, onClose }) {
+  const [busy, setBusy] = useState(false);
   if (!ask) return null;
   return (
-    <Dialog title={ask.title || t('Confirm')} size="narrow" onClose={onClose}
+    <Dialog title={ask.title || t('Confirm')} size="narrow" onClose={busy ? () => {} : onClose}
       foot={<>
-        <Btn onClick={onClose}>{t('Cancel')}</Btn>
-        <Btn kind="danger" onClick={async () => { const fn = ask.onConfirm; onClose(); await fn(); }}>{ask.confirm || t('Confirm')}</Btn>
+        <Btn disabled={busy} onClick={onClose}>{t('Cancel')}</Btn>
+        <Btn kind="danger" disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try { await ask.onConfirm(); } finally { setBusy(false); onClose(); }
+          }}>
+          {ask.confirm || t('Confirm')}
+        </Btn>
       </>}>
-      <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55 }}>{ask.message}</p>
+      {ask.message}
     </Dialog>
   );
 }
+
+// A menu anchored to a point rather than an element — the models list opens one
+// on right-click. Clicking away, resizing or Escape all dismiss it.
+export function PointMenu({ at, onClose, width = 250, children }) {
+  useEffect(() => {
+    const away = () => onClose();
+    const esc = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('mousedown', away);
+    window.addEventListener('resize', away);
+    window.addEventListener('keydown', esc);
+    return () => {
+      window.removeEventListener('mousedown', away);
+      window.removeEventListener('resize', away);
+      window.removeEventListener('keydown', esc);
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div className="cp-menu" role="menu"
+      style={{ position: 'fixed', left: at.x, top: at.y, width }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onContextMenu={(e) => e.preventDefault()}>
+      {children}
+    </div>, document.body);
+}
+
+export function MenuItem({ tone, sub, active, children, ...rest }) {
+  const cls = ['cp-menu-item', tone, sub && 'sub', active && 'on'].filter(Boolean).join(' ');
+  return <button type="button" role="menuitem" className={cls} {...rest}>{children}</button>;
+}
+
+// Keeps a pointer position inside the viewport, so a menu opened near an edge
+// is never drawn off-screen.
+export function clampToViewport(x, y, w, h) {
+  return {
+    x: Math.max(8, Math.min(x, window.innerWidth - w - 8)),
+    y: Math.max(8, Math.min(y, window.innerHeight - h - 8))
+  };
+}
+
+/* ---------- helpers ---------- */
 
 export function useAutoFocus() {
   const ref = useRef(null);

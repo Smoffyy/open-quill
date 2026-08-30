@@ -1841,7 +1841,7 @@ export default function App() {
       {showShortcuts && <ShortcutsModal prefs={user?.prefs} onClose={() => setShowShortcuts(false)} onCustomize={() => { setShowShortcuts(false); setSettingsTab('keybinds'); setShowSettings(true); }} />}
       {treeOpen && activeId && user?.prefs?.branchMap !== false && <React.Suspense fallback={null}><BranchTree chatId={activeId} onSelect={selectBranch} onJump={jumpToMessage} onClose={() => setTreeOpen(false)} onChanged={async () => { await refreshMessages(activeId); setTimeout(() => scrollBottom(false), 20); toast(t('Message copied into this branch')); }} /></React.Suspense>}
       <Lightbox />
-      {showAdmin && <React.Suspense fallback={null}><AdminPanel user={user} modelId={currentId} onClose={() => { setShowAdmin(false); if (/^\/admin(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
+      {showAdmin && <React.Suspense fallback={null}><AdminPanel user={user} onClose={() => { setShowAdmin(false); if (/^\/admin(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
       {showPlayground && <React.Suspense fallback={null}><Playground onClose={() => { setShowPlayground(false); if (/^\/playground(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
       {showSpaces && <SpacesPanel user={user} onClose={() => { setShowSpaces(false); refreshSpacesPending(); if (/^\/spaces(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} />}
       {showProjects && <ProjectsPanel openId={projectOpenId} composerProps={composerProps}

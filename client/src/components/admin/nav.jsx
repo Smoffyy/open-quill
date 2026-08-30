@@ -1,12 +1,18 @@
 import { Panel, Cube, Sliders, Users, Sparkles, Chat, Globe, Mic, Brain, FileText, Bulb, Plug, Shield, Eye, Wave, Star, Box, Gear, Clock } from '../icons.jsx';
 import { tk } from '../../i18n.jsx';
 
+/* Each section declares everything the shell needs to render it:
+   - title/blurb  the page header
+   - find/index   what the Ctrl-K finder matches on
+   - saves        which store backs it, so the header can show that store's
+                  save state instead of the shell keeping its own list */
+
 export const NAV = [
   { group: tk('Runtime'), items: [
     { id: 'overview', label: tk('Overview'), Icon: Panel, title: tk('Overview'),
       blurb: tk('Catalog size, member count, spend, and the last few admin actions.'),
       find: tk('dashboard home status summary snapshot'),
-      index: [tk('Catalog draft'), tk('Recent admin events'), tk('Publish')] },
+      index: [tk('Draft'), tk('Recent admin events'), tk('Publish')] },
     { id: 'models', label: tk('Models'), Icon: Cube, title: tk('Models'),
       blurb: tk('The catalog users choose from. Each entry binds a provider model id to a prompt, a set of abilities, and a price.'),
       find: tk('llm catalog prompt system parameters sampling'),
@@ -17,19 +23,19 @@ export const NAV = [
       index: [tk('Base URL'), tk('API key'), tk('Discover'), tk('Test')] }
   ] },
   { group: tk('Tools'), items: [
-    { id: 'search', label: tk('Web search'), Icon: Globe, title: tk('Web search'),
+    { id: 'search', label: tk('Web search'), Icon: Globe, title: tk('Web search'), saves: 'workspace',
       blurb: tk('Exposes a search tool backed by a SearXNG instance you run.'),
       find: tk('searxng internet browse query engine'),
       index: [tk('Web search tool'), tk('Query URL'), tk('Host allowlist'), tk('Pages per search'), tk('Tool instructions')] },
-    { id: 'voice', label: tk('Voice'), Icon: Mic, title: tk('Voice'),
+    { id: 'voice', label: tk('Voice'), Icon: Mic, title: tk('Voice'), saves: 'workspace',
       blurb: tk('Dictation and hands-free calls, with pluggable speech-to-text and text-to-speech endpoints.'),
       find: tk('stt tts whisper speech microphone call kokoro piper'),
       index: [tk('Dictation'), tk('Calls'), tk('Speech to text'), tk('Text to speech'), tk('Rate')] },
-    { id: 'memory', label: tk('Memory'), Icon: Brain, title: tk('Memory'),
+    { id: 'memory', label: tk('Memory'), Icon: Brain, title: tk('Memory'), saves: 'workspace',
       blurb: tk('Per-user long-term memory, and tools for searching a user’s own past chats.'),
       find: tk('remember history recall chat search'),
       index: [tk('Long-term memory'), tk('Chat history tools'), tk('Search past chats')] },
-    { id: 'files', label: tk('Reference files'), Icon: FileText, title: tk('Reference files'),
+    { id: 'files', label: tk('Reference files'), Icon: FileText, title: tk('Reference files'), saves: 'workspace',
       blurb: tk('A shared file set every model can list, read, and search on demand.'),
       find: tk('memory bank documents knowledge upload pdf markdown'),
       index: [tk('Expose the file set'), tk('Preamble'), tk('Files')] },
@@ -43,30 +49,30 @@ export const NAV = [
       index: [tk('Add server'), tk('Transport'), tk('Command'), tk('Headers')] }
   ] },
   { group: tk('Workspace'), items: [
-    { id: 'branding', label: tk('Branding'), Icon: Sparkles, title: tk('Branding'),
+    { id: 'branding', label: tk('Branding'), Icon: Sparkles, title: tk('Branding'), saves: 'workspace',
       blurb: tk('Name, icon, interface preset, and typography sent to every connected client.'),
       find: tk('appearance logo font theme identity disclaimer preset'),
       index: [tk('Icon'), tk('Interface preset'), tk('Display font'), tk('Footer line'), tk('Model reference button')] },
-    { id: 'launcher', label: tk('New chat screen'), Icon: Chat, title: tk('New chat screen'),
+    { id: 'launcher', label: tk('New chat screen'), Icon: Chat, title: tk('New chat screen'), saves: 'workspace',
       blurb: tk('Greetings and one-tap prompts shown before the first message.'),
       find: tk('home greeting welcome quick prompts starters'),
       index: [tk('Greetings'), tk('Starter prompts')] },
-    { id: 'members', label: tk('Members'), Icon: Users, title: tk('Members'),
+    { id: 'members', label: tk('Members'), Icon: Users, title: tk('Members'), saves: 'workspace',
       blurb: tk('Accounts, roles, per-member spend caps, and registration.'),
       find: tk('users people admins roles accounts signup budget'),
       index: [tk('Accept new sign-ups'), tk('Role'), tk('Remove member')] }
   ] },
   { group: tk('Policy'), items: [
-    { id: 'guardrails', label: tk('Guardrails'), Icon: Shield, title: tk('Guardrails'),
+    { id: 'guardrails', label: tk('Guardrails'), Icon: Shield, title: tk('Guardrails'), saves: 'workspace',
       blurb: tk('Screen prompts with a model before they reach the assistant.'),
       find: tk('safety moderation filter block screening'),
       index: [tk('Screen prompts'), tk('Screening model'), tk('Screening prompt'), tk('Refusal log')] },
-    { id: 'network', label: tk('Network'), Icon: Eye, title: tk('Network'),
+    { id: 'network', label: tk('Network'), Icon: Eye, title: tk('Network'), saves: 'workspace',
       blurb: tk('Outbound connection policy, and a log of what this server has tried to reach.'),
       find: tk('egress privacy offline local only allowlist firewall'),
       index: [tk('Block public internet'), tk('Host allowlist'), tk('Connection log')] },
-    { id: 'quotas', label: tk('Quotas'), Icon: Gear, title: tk('Quotas'),
-      blurb: tk('Upload ceilings, sandbox storage, request queueing, and spend caps. Applied immediately.'),
+    { id: 'quotas', label: tk('Quotas'), Icon: Gear, title: tk('Quotas'), saves: 'workspace',
+      blurb: tk('Upload ceilings, sandbox storage, request queueing, and spend caps.'),
       find: tk('limits budgets caps uploads sandbox queue sessions'),
       index: [tk('Attachments'), tk('Sandbox storage'), tk('Scheduling'), tk('Spend caps'), tk('Sessions')] }
   ] },

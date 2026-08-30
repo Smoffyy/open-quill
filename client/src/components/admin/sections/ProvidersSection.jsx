@@ -1,21 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAdmin } from '../store.jsx';
-import { Block, Fields, Field, Input, Select, Btn, Badge, KV, Empty, Dialog, Table, fmtInt } from '../ui.jsx';
-import { Cube, Plus, Trash } from '../../icons.jsx';
+import { Card, Fields, Field, Input, Select, Btn, IconBtn, Acts, Badge, KV, Empty, Dialog, Table, fmtInt } from '../ui.jsx';
+import { Cube, Plus, Trash, Sliders } from '../../icons.jsx';
 import { api } from '../../../api.js';
 import { t } from '../../../i18n.jsx';
 
 function Engine({ e }) {
   const rows = [];
-  if (e.ctx > 0) rows.push([t('context per slot'), fmtInt(e.ctx) + ' ' + t('tokens'), true]);
-  if (e.slots > 0) rows.push([t('slots'), e.slotsBusy == null ? String(e.slots) : t('{busy} busy of {total}', { busy: e.slotsBusy, total: e.slots }), true]);
-  rows.push([t('image input'), e.vision ? t('yes') : t('no'), true]);
-  if (e.models?.length) rows.push([t('loaded'), e.models.map(m => m.id).join(', '), true]);
+  if (e.ctx > 0) rows.push([t('Context per slot'), fmtInt(e.ctx) + ' ' + t('tokens'), true]);
+  if (e.slots > 0) rows.push([t('Slots'), e.slotsBusy == null ? String(e.slots) : t('{busy} busy of {total}', { busy: e.slotsBusy, total: e.slots }), true]);
+  rows.push([t('Image input'), e.vision ? t('yes') : t('no')]);
+  if (e.models?.length) rows.push([t('Loaded'), e.models.map(m => m.id).join(', '), true]);
   return (
-    <div style={{ marginTop: 14 }}>
+    <>
       <KV items={rows} />
       {e.slotsHidden && <div className="cp-hint">{t('This server was started with slot reporting off, so occupancy cannot be read.')}</div>}
-    </div>
+    </>
   );
 }
 
@@ -36,9 +36,13 @@ function Discover({ providerId, onClose, onAdded }) {
 
   async function add(id) {
     setState(s => ({ ...s, list: s.list.map(x => (x.id === id ? { ...x, busy: true } : x)) }));
-    await api.post('/api/admin/models', { display_name: id, internal_name: id, provider_id: providerId });
-    setState(s => ({ ...s, list: s.list.map(x => (x.id === id ? { ...x, added: true, busy: false } : x)) }));
-    onAdded();
+    try {
+      await api.post('/api/admin/models', { display_name: id, internal_name: id, provider_id: providerId });
+      setState(s => ({ ...s, list: s.list.map(x => (x.id === id ? { ...x, added: true, busy: false } : x)) }));
+      onAdded();
+    } catch {
+      setState(s => ({ ...s, list: s.list.map(x => (x.id === id ? { ...x, busy: false } : x)) }));
+    }
   }
 
   return (
@@ -51,10 +55,10 @@ function Discover({ providerId, onClose, onAdded }) {
       <p className="cp-hint" style={{ marginTop: 0 }}>
         {t('Adding one creates a catalog entry bound to this provider. It behaves like any other entry afterwards, so you can rename, hide, or delete it.')}
       </p>
-      {state.loading && <Empty title={t('Asking the backend')} />}
+      {state.loading && <Empty icon={Cube} title={t('Asking the backend')} />}
       {state.error && <div className="cp-err">{state.error}</div>}
       {!state.loading && !state.error && state.list.length === 0 && (
-        <Empty title={t('Nothing reported')}>{t('The backend answered but listed no models.')}</Empty>
+        <Empty icon={Cube} title={t('Nothing reported')}>{t('The backend answered but listed no models.')}</Empty>
       )}
       {state.list.length > 0 && (
         <Table head={[{ label: t('Model id'), mono: true }, { label: '', fit: true }]}>
@@ -88,23 +92,23 @@ export default function ProvidersSection() {
     });
   }
 
+  if (providers.length === 0) {
+    return (
+      <Empty icon={Sliders} title={t('No connections')}
+        actions={<Btn kind="primary" onClick={addProvider}><Plus /> {t('Add connection')}</Btn>}>
+        {t('A connection is one base URL the server talks to. Every model in the catalog runs through one.')}
+      </Empty>
+    );
+  }
+
   return (
     <>
-      {providers.length === 0 && (
-        <Block>
-          <Empty title={t('No connections')}
-            actions={<Btn kind="primary" onClick={addProvider}><Plus /> {t('Add connection')}</Btn>}>
-            {t('A connection is one base URL the server talks to. Every model in the catalog runs through one.')}
-          </Empty>
-        </Block>
-      )}
-
       {providers.map((p, i) => {
         const type = providerTypes[p.type] || {};
         const state = probe[p.id];
         const attached = models.filter(m => (m.provider_id || providers[0]?.id) === p.id).length;
         return (
-          <Block key={p.id}
+          <Card key={p.id}
             title={p.name || t('Connection {n}', { n: i + 1 })}
             sub={t('{type} · {n} models bound', { type: type.label || p.type, n: attached })}
             actions={<>
@@ -115,8 +119,8 @@ export default function ProvidersSection() {
                 {state?.busy ? t('Testing…') : t('Test')}
               </Btn>
               <Btn size="sm" onClick={() => setDiscover(p.id)}><Cube /> {t('Discover')}</Btn>
-              <Btn size="sm" kind="danger" disabled={providers.length <= 1} onClick={() => del(p)}
-                title={t('Delete connection')} aria-label={t('Delete connection')}><Trash /></Btn>
+              <IconBtn kind="danger" label={t('Delete connection')} disabled={providers.length <= 1}
+                onClick={() => del(p)}><Trash /></IconBtn>
             </>}>
             <Fields cols={2}>
               <Field label={t('Name')}>
@@ -124,7 +128,7 @@ export default function ProvidersSection() {
                   onChange={(e) => patchProvider(p.id, { name: e.target.value })} />
               </Field>
               <Field label={t('Type')} hint={t('Decides which request shape and endpoints the server uses.')}>
-                <Select value={p.type} onChange={(v) => patchProvider(p.id, { type: v })}
+                <Select value={p.type} onChange={(v) => patchProvider(p.id, { type: v })} label={t('Type')}
                   options={Object.entries(providerTypes).map(([k, v]) => ({ value: k, label: v.label }))} />
               </Field>
               <Field label={t('Base URL')} hint={t('No trailing slash. The server appends the endpoint path itself.')}>
@@ -133,21 +137,19 @@ export default function ProvidersSection() {
               </Field>
               <Field label={t('API key')} optional={!!type.keyOptional}
                 hint={t('Held server-side and never sent to the browser.')}>
-                <Input mono type="password" value={p.api_key || ''}
+                <Input mono type="password" value={p.api_key || ''} autoComplete="off"
                   placeholder={type.keyOptional ? t('not needed locally') : t('required')}
                   onChange={(e) => patchProvider(p.id, { api_key: e.target.value })} />
               </Field>
             </Fields>
             {state?.engine?.ok && <Engine e={state.engine} />}
-          </Block>
+          </Card>
         );
       })}
 
-      {providers.length > 0 && (
-        <Block>
-          <Btn onClick={addProvider}><Plus /> {t('Add connection')}</Btn>
-        </Block>
-      )}
+      <Acts>
+        <Btn onClick={addProvider}><Plus /> {t('Add connection')}</Btn>
+      </Acts>
 
       {discover && <Discover providerId={discover} onClose={() => setDiscover(null)} onAdded={reload} />}
     </>

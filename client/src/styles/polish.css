@@ -27,16 +27,6 @@
 [data-density="compact"] .msg-icon { margin-bottom: 5px; }
 [data-density="compact"] .msg-icon.below { margin-top: 7px; }
 
-/* accent color picker */
-.accent-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
-.accent-swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; position: relative; transition: transform var(--fx-t, .1s) ease, border-color var(--fx-t, .12s) ease; padding: 0; }
-
-.accent-swatch.on { border-color: var(--text); }
-.accent-swatch.custom { background: conic-gradient(from 0deg, #f44, #fd0, #4d4, #4dd, #46f, #d4f, #f44); display: grid; place-items: center; color: #fff; overflow: hidden; }
-.accent-swatch.custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-.accent-swatch.custom span { font-size: 15px; font-weight: 700; mix-blend-mode: difference; }
-.accent-reset { padding: 5px 11px; font-size: 12.5px; }
-
 /* unified button / focus states + smooth sidebar */
 .btn, .icon-btn, .action-btn, .art-btn, .quick-prompt, .send, .seg button, .model-trigger { transition: background var(--fx-t, .14s) ease, color var(--fx-t, .14s) ease, border-color var(--fx-t, .14s) ease, transform var(--fx-t, .08s) ease, opacity var(--fx-t, .14s) ease; }
 
@@ -46,20 +36,6 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 
 /* model dropdown option icon */
 .model-opt .mo-icon { width: 20px; height: 20px; border-radius: 5px; object-fit: contain; flex: none; margin-top: 0; }
-
-/* admin sampling parameters grid */
-.sampling-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 12px; }
-.provider-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px; }
-.provider-card { border: 1px solid var(--border); border-radius: 12px; padding: 14px; background: var(--surface); display: flex; flex-direction: column; gap: 12px; }
-.provider-card .field { margin: 0; }
-.samp-field { display: flex; flex-direction: column; gap: 5px; }
-.samp-field label { font-size: 12.5px; color: var(--text-muted); }
-.samp-field input {
-  width: 100%; padding: 10px 12px; background: var(--input-bg); border: 1px solid var(--border);
-  border-radius: 9px; color: var(--text); font-size: 14px; outline: none; font-family: var(--font-sans);
-}
-.samp-field input::placeholder { color: var(--text-faint); }
-.samp-field input:focus { border-color: var(--text); }
 
 /* settings danger zone */
 .danger-zone { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--border); }
@@ -139,7 +115,6 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 /* anthropic flavour: the timeline draws itself, nodes popping in down the rail */
 .reasoning.rolling .reasoning-collapse.open .rb-step::after { transform-origin: top; }
 
-
 /* send / stop / mic swap */
 
 /* copy check bounce */
@@ -159,10 +134,6 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .u-budget input { width: 86px; border: none; background: transparent; color: var(--text); font-size: 13px; padding: 4px 2px; }
 .u-budget input:focus { outline: none; }
 .u-budget input::placeholder { opacity: .45; }
-.audit-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; align-items: center; }
-.audit-filters select, .audit-filters input { padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 13px; }
-.audit-filters input { min-width: 180px; }
-.audit-filters select:focus, .audit-filters input:focus { outline: none; border-color: var(--text); }
 .preset-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
 .preset-form input { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 13px; }
 .preset-form input[type="number"] { width: 90px; }
@@ -238,13 +209,9 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 
 .composer-left button { transition: background var(--fx-t, .15s) ease, color var(--fx-t, .15s) ease, border-color var(--fx-t, .15s) ease, transform var(--fx-t, .15s) var(--ease-out); }
 
-
-
 /* theme cross-fade */
 
 /* ============ effect gates (user settings) ============ */
-
-
 
 .reveal-row { display: flex; align-items: center; gap: 12px; }
 .reveal-row input[type="range"] { flex: 1; accent-color: var(--text); }
@@ -258,8 +225,6 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 
 /* ============ icon animation styles ============ */
 
-.anim-row { margin-top: 6px; }
-.anim-row .anim-sel { width: 100%; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 5px 7px; font-size: 12.5px; font-family: var(--font-sans); }
 .field label.sub { font-size: 12px; color: var(--text-faint); margin-bottom: 4px; }
 
 /* ============ incognito chat ============ */
@@ -311,12 +276,6 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 
 /* ============ models publish (draft → clients) ============ */
 .publish-area { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
-.push-btn { white-space: nowrap; }
-.push-btn.dirty { box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 35%, transparent); }
-.push-btn:disabled { opacity: .5; cursor: default; box-shadow: none; }
-.pub-note { font-size: 11.5px; color: var(--text-faint); }
-.pub-note.dirty { color: var(--text); font-weight: 600; }
-.autosave-status { font-size: 12px; color: var(--text-faint); align-self: center; }
 
 /* ============ model unavailable banner ============ */
 .composer.blocked .composer-input,

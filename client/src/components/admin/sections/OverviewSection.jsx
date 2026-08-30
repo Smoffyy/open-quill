@@ -1,20 +1,29 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../../api.js';
 import { useAdmin } from '../store.jsx';
-import { Block, Btn, Table, Stats, Badge, Empty, Note, KV, fmtInt, fmtMoney, fmtAgo } from '../ui.jsx';
+import { Card, Btn, Acts, Table, Stats, Badge, Empty, Note, KV, fmtInt, fmtMoney, fmtAgo } from '../ui.jsx';
+import { PublishState } from '../publish.jsx';
+import { Plus, Sliders, Users, Clock } from '../../icons.jsx';
 import { t } from '../../../i18n.jsx';
 
+const RECENT_EVENTS = 8;
+const USAGE_DAYS = 30;
+
 export default function OverviewSection() {
-  const { catalog, members, setSection } = useAdmin();
-  const { models, providers, draft, publish, publishing } = catalog;
+  const { catalog, members, setSection, openModel } = useAdmin();
+  const { models, providers, draft, publishError, createModel } = catalog;
   const [usage, setUsage] = useState(null);
   const [events, setEvents] = useState(null);
 
   useEffect(() => {
+    let alive = true;
     (async () => {
-      try { setUsage(await api.get('/api/admin/usage?days=30')); } catch { setUsage(null); }
-      try { const d = await api.get('/api/admin/audit?limit=8&offset=0'); setEvents(d.entries || []); } catch { setEvents([]); }
+      try { const u = await api.get('/api/admin/usage?days=' + USAGE_DAYS); if (alive) setUsage(u); }
+      catch { if (alive) setUsage(null); }
+      try { const d = await api.get('/api/admin/audit?limit=' + RECENT_EVENTS + '&offset=0'); if (alive) setEvents(d.entries || []); }
+      catch { if (alive) setEvents([]); }
     })();
+    return () => { alive = false; };
   }, []);
 
   const visible = models.filter(m => m.enabled && !m.unavailable).length;
@@ -25,55 +34,62 @@ export default function OverviewSection() {
 
   return (
     <>
-      <Block>
-        <Stats items={[
-          { k: t('Catalog'), v: fmtInt(models.length), n: t('{v} visible · {h} hidden{d}', { v: visible, h: hidden, d: down ? ' · ' + down + ' down' : '' }) },
-          { k: t('Connections'), v: fmtInt(providers.length) },
-          { k: t('Members'), v: fmtInt(members.members.length), n: t('{n} with admin', { n: admins }) },
-          { k: t('30-day spend'), v: usage ? fmtMoney(usage.totals.cost) : '—', n: usage ? t('{n} tokens', { n: fmtInt(usage.totals.total) }) : t('loading') }
-        ]} />
-      </Block>
+      <Stats items={[
+        { k: t('Catalog'), v: fmtInt(models.length), n: t('{v} visible · {h} hidden{d}', { v: visible, h: hidden, d: down ? ' · ' + down + ' ' + t('down') : '' }) },
+        { k: t('Connections'), v: fmtInt(providers.length) },
+        { k: t('Members'), v: fmtInt(members.members.length), n: t('{n} with admin', { n: admins }) },
+        { k: t('30-day spend'), v: usage ? fmtMoney(usage.totals.cost) : '—', n: usage ? t('{n} tokens', { n: fmtInt(usage.totals.total) }) : t('loading') }
+      ]} />
 
-      <Block title={t('Catalog draft')}
-        sub={t('Model edits are held back until published. Everything else in this panel is live the moment you change it.')}
-        actions={<Btn kind="primary" disabled={publishing || (!draft.dirty && draft.published)} onClick={publish}>
-          {publishing ? t('Publishing…') : t('Publish catalog')}
-        </Btn>}>
+      <Card title={t('Draft')}
+        sub={t('Every edit in this panel is staged. You see your own draft straight away; members keep running the published version until you publish.')}
+        actions={<PublishState />}>
         <Note tone={draft.dirty ? 'warn' : undefined}>
           {draft.dirty
-            ? t('The draft has changes clients are not running yet.')
-            : draft.published ? t('Clients are running the current draft.') : t('The catalog has never been published.')}
+            ? t('The draft has changes members are not running yet.')
+            : draft.published ? t('Members are running the current draft.') : t('Nothing has been published yet.')}
         </Note>
-        <div style={{ marginTop: 14 }}>
-          <KV items={[
-            [t('last published'), draft.publishedAt ? new Date(draft.publishedAt).toLocaleString() : t('never'), true],
-            [t('fallback model'), fallback ? (fallback.display_name || fallback.internal_name) : t('none set'), true]
-          ]} />
-        </div>
-      </Block>
+        {!!publishError && <Note tone="bad">{publishError}</Note>}
+        <KV items={[
+          [t('Last published'), draft.publishedAt ? new Date(draft.publishedAt).toLocaleString() : t('never')],
+          [t('Fallback model'), fallback
+            ? <button type="button" className="linklike" onClick={() => openModel(fallback.id)}>
+              {fallback.display_name || fallback.internal_name}
+            </button>
+            : t('none set')]
+        ]} />
+      </Card>
 
-      <Block title={t('Recent admin events')}
+      <Card title={t('Set up')} sub={t('The three things a workspace needs before members can chat.')}>
+        <Acts>
+          <Btn onClick={createModel}><Plus /> {t('Add model')}</Btn>
+          <Btn onClick={() => setSection('providers')}><Sliders /> {t('Connections')}</Btn>
+          <Btn onClick={() => setSection('members')}><Users /> {t('Members')}</Btn>
+        </Acts>
+      </Card>
+
+      <Card title={t('Recent admin events')} flush
         actions={<Btn size="sm" onClick={() => setSection('events')}>{t('Open event log')}</Btn>}>
-        {!events && <Empty title={t('Loading')} />}
+        {!events && <Empty icon={Clock} title={t('Loading')} />}
         {events && events.length === 0 && (
-          <Empty title={t('Nothing recorded')}>{t('Sensitive admin actions appear here as they happen.')}</Empty>
+          <Empty icon={Clock} title={t('Nothing recorded')}>{t('Sensitive admin actions appear here as they happen.')}</Empty>
         )}
         {events && events.length > 0 && (
           <Table head={[
-            { label: t('Action'), fit: true, mono: true },
+            { label: t('Action'), fit: true },
             { label: t('Actor'), mono: true },
-            { label: t('When'), num: true, fit: true, mono: true }
+            { label: t('When'), num: true, fit: true }
           ]}>
             {events.map(e => (
               <tr key={e.id}>
-                <td className="mono"><Badge>{e.action}</Badge></td>
+                <td className="fit"><Badge>{e.action}</Badge></td>
                 <td className="mono dim">{e.actorEmail}</td>
-                <td className="num mono dim">{fmtAgo(e.ts)}</td>
+                <td className="num dim">{fmtAgo(e.ts)}</td>
               </tr>
             ))}
           </Table>
         )}
-      </Block>
+      </Card>
     </>
   );
 }

@@ -25,38 +25,52 @@ export const CONFIG_DEFAULTS = {
   allowSignups: true, localOnly: true, egressLocalOnly: true, egressAllowWebSearch: true, egressAllowlist: []
 };
 
-// Both of these are staged: the PATCH writes a draft the panel reads back, and
-// publish promotes it. Admins preview their own app-config draft; members keep
-// reading the published one until then.
+const SAVE_DELAY = 450;
+const SAVED_LINGER = 1800;
+
+// Both stores autosave: an edit is PATCHed after a short pause, and the header
+// reports the result. Admins preview their own app-config draft; members keep
+// reading the published one until publish promotes it.
+//
+// A save is keyed off the *identity* of the state object rather than a "have we
+// loaded yet" flag. Loading replaces both objects, and a flag flipped in a
+// promise callback can lose the race with React's render, which used to fire a
+// PATCH of freshly-loaded values every single time the panel opened.
 export function useWorkspace() {
   const [settings, setSettings] = useState(SETTINGS_DEFAULTS);
   const [config, setConfig] = useState(CONFIG_DEFAULTS);
   const [lanes, setLanes] = useState({ settings: 'idle', config: 'idle' });
 
-  const ready = useRef(false);
-  const settingsTimer = useRef(null);
-  const configTimer = useRef(null);
-  const settled = useRef({});
+  const saved = useRef({ settings: SETTINGS_DEFAULTS, config: CONFIG_DEFAULTS });
+  const timers = useRef({});
+  const linger = useRef({});
 
   const mark = useCallback((lane, state) => {
     setLanes(v => (v[lane] === state ? v : { ...v, [lane]: state }));
-    clearTimeout(settled.current[lane]);
+    clearTimeout(linger.current[lane]);
     if (state !== 'saved') return;
-    settled.current[lane] = setTimeout(
-      () => setLanes(v => (v[lane] === 'saved' ? { ...v, [lane]: 'idle' } : v)), 1800);
+    linger.current[lane] = setTimeout(
+      () => setLanes(v => (v[lane] === 'saved' ? { ...v, [lane]: 'idle' } : v)), SAVED_LINGER);
   }, []);
 
-  useEffect(() => () => { for (const id of Object.values(settled.current)) clearTimeout(id); }, []);
+  useEffect(() => () => {
+    for (const id of Object.values(linger.current)) clearTimeout(id);
+    for (const id of Object.values(timers.current)) clearTimeout(id);
+  }, []);
 
   const saveState = lanes.settings === 'error' || lanes.config === 'error' ? 'error'
     : lanes.settings === 'saving' || lanes.config === 'saving' ? 'saving'
       : lanes.settings === 'saved' || lanes.config === 'saved' ? 'saved' : 'idle';
 
   const load = useCallback(async () => {
-    try { setSettings({ ...SETTINGS_DEFAULTS, ...(await api.get('/api/admin/settings')) }); } catch {}
+    try {
+      const next = { ...SETTINGS_DEFAULTS, ...(await api.get('/api/admin/settings')) };
+      saved.current.settings = next;
+      setSettings(next);
+    } catch {}
     try {
       const c = await api.get('/api/app-config');
-      setConfig({
+      const next = {
         ...CONFIG_DEFAULTS,
         appName: c.appName || '',
         disclaimer: c.disclaimer || '',
@@ -71,40 +85,48 @@ export function useWorkspace() {
         egressLocalOnly: c.egressLocalOnly !== false,
         egressAllowWebSearch: c.egressAllowWebSearch !== false,
         egressAllowlist: Array.isArray(c.egressAllowlist) ? c.egressAllowlist : []
-      });
+      };
+      saved.current.config = next;
+      setConfig(next);
     } catch {}
   }, []);
 
-  useEffect(() => { load().then(() => { ready.current = true; }); }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    if (!ready.current) return;
-    clearTimeout(settingsTimer.current);
+    if (settings === saved.current.settings) return undefined;
     mark('settings', 'saving');
-    settingsTimer.current = setTimeout(async () => {
-      try { await api.patch('/api/admin/settings', settings); mark('settings', 'saved'); }
-      catch { mark('settings', 'error'); }
-    }, 450);
+    clearTimeout(timers.current.settings);
+    timers.current.settings = setTimeout(async () => {
+      try {
+        await api.patch('/api/admin/settings', settings);
+        saved.current.settings = settings;
+        mark('settings', 'saved');
+      } catch { mark('settings', 'error'); }
+    }, SAVE_DELAY);
+    return undefined;
   }, [settings, mark]);
 
   useEffect(() => {
-    if (!ready.current) return;
-    clearTimeout(configTimer.current);
+    if (config === saved.current.config) return undefined;
     mark('config', 'saving');
-    configTimer.current = setTimeout(async () => {
+    clearTimeout(timers.current.config);
+    timers.current.config = setTimeout(async () => {
       try {
         await api.patch('/api/admin/app-config', {
           ...config,
           greetings: config.greetings.map(g => g.trim()).filter(Boolean),
           quickPrompts: (config.quickPrompts || []).filter(q => (q.label || '').trim() && (q.prompt || '').trim())
         });
+        saved.current.config = config;
         mark('config', 'saved');
       } catch { mark('config', 'error'); }
-    }, 450);
+    }, SAVE_DELAY);
+    return undefined;
   }, [config, mark]);
 
-  const set = useCallback((key, value) => setSettings(s => ({ ...s, [key]: value })), []);
-  const setCfg = useCallback((key, value) => setConfig(c => ({ ...c, [key]: value })), []);
+  const set = useCallback((key, value) => setSettings(s => (s[key] === value ? s : { ...s, [key]: value })), []);
+  const setCfg = useCallback((key, value) => setConfig(c => (c[key] === value ? c : { ...c, [key]: value })), []);
 
   return { settings, setSettings, set, config, setConfig, setCfg, saveState, reload: load };
 }

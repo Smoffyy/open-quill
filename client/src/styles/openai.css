@@ -412,10 +412,8 @@
 [data-preset="openai"] .modal-tab.active { background: var(--surface-hover); color: var(--text); }
 [data-preset="openai"] .modal-side { border-right-color: var(--border-soft); }
 [data-preset="openai"] .modal h2 { font-family: var(--font-sans); }
-[data-preset="openai"] .confirm-box,
 [data-preset="openai"] .preset-modal { border-radius: 20px; }
 :root[data-preset="openai"][data-theme="light"] .overlay,
-:root[data-preset="openai"][data-theme="light"] .confirm-overlay,
 :root[data-preset="openai"][data-theme="light"] .ctx-inspect-overlay,
 :root[data-preset="openai"][data-theme="light"] .bc-overlay,
 :root[data-preset="openai"][data-theme="light"] .pm-overlay,
@@ -472,7 +470,6 @@
 [data-preset="openai"] .cmdk-overlay, [data-preset="openai"] .search-overlay { background: rgba(0, 0, 0, .45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 [data-preset="openai"] .search-overlay { padding-top: 13vh; }
 [data-preset="openai"] .overlay,
-[data-preset="openai"] .confirm-overlay,
 [data-preset="openai"] .ctx-inspect-overlay,
 [data-preset="openai"] .bc-overlay,
 [data-preset="openai"] .pm-overlay,
@@ -497,15 +494,12 @@
   [data-preset="openai"] .search-modal,
   [data-preset="openai"] .shortcuts-modal,
   [data-preset="openai"] .cmdk,
-  [data-preset="openai"] .sp-modal,
   [data-preset="openai"] .pj-create,
-  [data-preset="openai"] .summary-modal,
-  [data-preset="openai"] .confirm-box {
+  [data-preset="openai"] .summary-modal {
     width: 100% !important; max-width: 100% !important; border-radius: 22px 22px 0 0 !important;
  margin: 0 !important;
   }
   [data-preset="openai"] .modal { height: 90vh !important; max-height: 90vh; }
-  [data-preset="openai"] .confirm-box { border-radius: 18px !important; margin: 0 12px 12px !important; width: auto !important; }
   [data-preset="openai"] .cmdk-overlay, [data-preset="openai"] .search-overlay { place-items: end stretch; padding-top: 0 !important; }
   [data-preset="openai"] .model-scrim { display: block; position: fixed; inset: 0; z-index: 49; background: #00000070; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
   [data-preset="openai"] .drawer-backdrop { background: #00000080; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }

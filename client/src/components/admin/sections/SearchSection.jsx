@@ -1,5 +1,5 @@
 import { useAdmin } from '../store.jsx';
-import { Block, Row, Fields, Field, Input, Area, Select, Switch } from '../ui.jsx';
+import { Card, Rows, ToggleRow, Fields, Field, Input, Area, Select } from '../ui.jsx';
 import { t } from '../../../i18n.jsx';
 
 export default function SearchSection() {
@@ -9,20 +9,20 @@ export default function SearchSection() {
 
   return (
     <>
-      <Block>
-        <Row label={t('Web search tool')}
-          note={t('Adds a per-chat toggle in the attachment menu. While it is on for a chat, the model may call the tool on its own.')}>
-          <Switch on={on} label={t('Web search tool')} onToggle={() => set('webSearchEnabled', !on)} />
-        </Row>
-      </Block>
+      <Card title={t('Availability')}>
+        <Rows>
+          <ToggleRow label={t('Web search tool')} on={on} onToggle={() => set('webSearchEnabled', !on)}
+            note={t('Adds a per-chat toggle in the attachment menu. While it is on for a chat, the model may call the tool on its own.')} />
+        </Rows>
+      </Card>
 
       {on && (
         <>
-          <Block title={t('Backend')} sub={t('The server queries this instance directly. Keys and URLs never reach the browser.')}>
+          <Card title={t('Backend')} sub={t('The server queries this instance directly. Keys and URLs never reach the browser.')}>
             <Fields cols={2}>
               <Field label={t('Engine')}>
                 <Select value={settings.webSearchEngine || 'searxng'} onChange={(v) => set('webSearchEngine', v)}
-                  options={[{ value: 'searxng', label: 'SearXNG' }]} />
+                  label={t('Engine')} options={[{ value: 'searxng', label: 'SearXNG' }]} />
               </Field>
               <Field label={t('Query URL')}
                 hint={t('The server calls {path} on this base. JSON output must be enabled in your SearXNG settings.py.', { path: '/search?format=json' })}>
@@ -30,9 +30,9 @@ export default function SearchSection() {
                   onChange={(e) => set('searxngUrl', e.target.value)} />
               </Field>
             </Fields>
-          </Block>
+          </Card>
 
-          <Block title={t('Scope')} sub={t('How much the model reads per search, and which hosts it may read from.')}>
+          <Card title={t('Scope')} sub={t('How much the model reads per search, and which hosts it may read from.')}>
             <Fields cols={2}>
               <Field label={t('Pages per search')} hint={t('Between 1 and 20. Each page is fetched and read in full, so higher costs latency and context.')}>
                 <Input type="number" min="1" max="20" value={settings.webSearchCount ?? 5}
@@ -45,14 +45,14 @@ export default function SearchSection() {
                   onChange={(e) => set('webSearchDomains', e.target.value)} />
               </Field>
             </Fields>
-          </Block>
+          </Card>
 
-          <Block title={t('Tool instructions')}
+          <Card title={t('Tool instructions')}
             sub={t('Appended to the system prompt only for chats where search is on. Use it to say when searching is worth the round trip.')}>
-            <Area rows={6} value={settings.webSearchPrompt ?? ''}
+            <Area rows={6} value={settings.webSearchPrompt ?? ''} aria-label={t('Tool instructions')}
               placeholder={t('Search only when the answer depends on current information, or when you are unsure.')}
               onChange={(e) => set('webSearchPrompt', e.target.value)} />
-          </Block>
+          </Card>
         </>
       )}
     </>
