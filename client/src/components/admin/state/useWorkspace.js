@@ -31,18 +31,26 @@ export const CONFIG_DEFAULTS = {
 export function useWorkspace() {
   const [settings, setSettings] = useState(SETTINGS_DEFAULTS);
   const [config, setConfig] = useState(CONFIG_DEFAULTS);
-  const [saveState, setSaveState] = useState('idle');
+  const [lanes, setLanes] = useState({ settings: 'idle', config: 'idle' });
 
   const ready = useRef(false);
   const settingsTimer = useRef(null);
   const configTimer = useRef(null);
-  const settledAt = useRef(null);
+  const settled = useRef({});
 
-  const markSaved = useCallback(() => {
-    setSaveState('saved');
-    clearTimeout(settledAt.current);
-    settledAt.current = setTimeout(() => setSaveState(s => (s === 'saved' ? 'idle' : s)), 1800);
+  const mark = useCallback((lane, state) => {
+    setLanes(v => (v[lane] === state ? v : { ...v, [lane]: state }));
+    clearTimeout(settled.current[lane]);
+    if (state !== 'saved') return;
+    settled.current[lane] = setTimeout(
+      () => setLanes(v => (v[lane] === 'saved' ? { ...v, [lane]: 'idle' } : v)), 1800);
   }, []);
+
+  useEffect(() => () => { for (const id of Object.values(settled.current)) clearTimeout(id); }, []);
+
+  const saveState = lanes.settings === 'error' || lanes.config === 'error' ? 'error'
+    : lanes.settings === 'saving' || lanes.config === 'saving' ? 'saving'
+      : lanes.settings === 'saved' || lanes.config === 'saved' ? 'saved' : 'idle';
 
   const load = useCallback(async () => {
     try { setSettings({ ...SETTINGS_DEFAULTS, ...(await api.get('/api/admin/settings')) }); } catch {}
@@ -72,17 +80,17 @@ export function useWorkspace() {
   useEffect(() => {
     if (!ready.current) return;
     clearTimeout(settingsTimer.current);
-    setSaveState('saving');
+    mark('settings', 'saving');
     settingsTimer.current = setTimeout(async () => {
-      try { await api.patch('/api/admin/settings', settings); markSaved(); }
-      catch { setSaveState('error'); }
+      try { await api.patch('/api/admin/settings', settings); mark('settings', 'saved'); }
+      catch { mark('settings', 'error'); }
     }, 450);
-  }, [settings, markSaved]);
+  }, [settings, mark]);
 
   useEffect(() => {
     if (!ready.current) return;
     clearTimeout(configTimer.current);
-    setSaveState('saving');
+    mark('config', 'saving');
     configTimer.current = setTimeout(async () => {
       try {
         await api.patch('/api/admin/app-config', {
@@ -90,10 +98,10 @@ export function useWorkspace() {
           greetings: config.greetings.map(g => g.trim()).filter(Boolean),
           quickPrompts: (config.quickPrompts || []).filter(q => (q.label || '').trim() && (q.prompt || '').trim())
         });
-        markSaved();
-      } catch { setSaveState('error'); }
+        mark('config', 'saved');
+      } catch { mark('config', 'error'); }
     }, 450);
-  }, [config, markSaved]);
+  }, [config, mark]);
 
   const set = useCallback((key, value) => setSettings(s => ({ ...s, [key]: value })), []);
   const setCfg = useCallback((key, value) => setConfig(c => ({ ...c, [key]: value })), []);

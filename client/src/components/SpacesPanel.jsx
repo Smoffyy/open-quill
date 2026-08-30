@@ -176,7 +176,16 @@ function SpaceChat({ space, user, models, onChanged, onClose }) {
     try { setMessages(await api.get('/api/spaces/' + space.id + '/messages')); } catch {}
   }, [space.id]);
 
-  useEffect(() => { load(); pollRef.current = setInterval(load, 4000); return () => clearInterval(pollRef.current); }, [load]);
+  useEffect(() => {
+    const tick = () => { if (!document.hidden) load(); };
+    tick();
+    pollRef.current = setInterval(tick, 4000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      clearInterval(pollRef.current);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [load]);
 
   useEffect(() => {
     const h = (e) => {

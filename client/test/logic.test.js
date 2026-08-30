@@ -9,7 +9,6 @@ import { parseSteps, lastSentence, thoughtSeconds } from '../src/lib/reasoning.j
 import { hasMath, isolateDisplayMath, wrapMathEnvironments } from '../src/lib/mathjs.js';
 import { hasToolCall, previewOf, buildTree, collapseRuns } from '../src/lib/threadmeta.js';
 import { scanTools } from '../src/toolproto.js';
-import { STATUS_DELAY_DEFAULT, STATUS_DELAY_MAX, statusDelayMs, statusDelaySecs } from '../src/lib/status.js';
 import { paletteFor, palettesFor, themeValue, paletteById, DEFAULT_DARK, DEFAULT_LIGHT, presetOf } from '../src/lib/palettes.js';
 import { scrollInsideMenu } from '../src/lib/anchor.js';
 import { nextFitSize, FIT_MIN, FIT_PASSES } from '../src/lib/fittext.js';
@@ -896,20 +895,6 @@ test('the thinking budget preset matches the shape llama.cpp expects', () => {
   const out = kwargPayload([p], resolveKwargs([p], { [p.id]: '5000' }, false));
   assert.equal(out.thinking_budget_tokens, 5120, 'snapped to the 1024 grid');
   assert.equal('extra_body' in out, false);
-});
-
-test('the progress-line delay clamps to a whole number of seconds in range', () => {
-  assert.equal(statusDelaySecs(undefined), STATUS_DELAY_DEFAULT);
-  assert.equal(statusDelaySecs(null), STATUS_DELAY_DEFAULT);
-  assert.equal(statusDelaySecs(''), STATUS_DELAY_DEFAULT);
-  assert.equal(statusDelaySecs('nonsense'), STATUS_DELAY_DEFAULT);
-  assert.equal(statusDelaySecs(0), 0, 'zero is instant, not absent');
-  assert.equal(statusDelaySecs('0'), 0);
-  assert.equal(statusDelaySecs(-4), 0);
-  assert.equal(statusDelaySecs(99), STATUS_DELAY_MAX);
-  assert.equal(statusDelaySecs(4.6), 5);
-  assert.equal(statusDelayMs(3), 3000);
-  assert.equal(statusDelayMs(0), 0);
 });
 
 test('a palette resolves to a theme plus an optional palette attribute', () => {

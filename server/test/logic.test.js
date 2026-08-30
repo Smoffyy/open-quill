@@ -33,6 +33,8 @@ import { sameOrigin, sameOriginGuard, requestHost } from '../lib/origin.js';
 import { SETTING_FIELDS, coerceSetting } from '../routes/settings.js';
 import { isText } from '../sandbox/ignore.js';
 import { announcedMoreWork } from '../lib/continuation.js';
+import { openFence, seamFor, steerInstruction } from '../lib/steer.js';
+import { createLoopGuard } from '../lib/loopguard.js';
 import { stops, beginTurn, endTurn } from '../lib/ws/live.js';
 import { historyText } from '../lib/history.js';
 import { bash } from '../sandbox/shell.js';
@@ -1932,6 +1934,88 @@ test('skill names are normalised and validated at the boundary', () => {
   assert.equal(ok.name, 'good-name');
   assert.equal(ok.description, 'line one line two', 'a description never carries a newline into the frontmatter');
   assert.equal(ok.enabled, true);
+});
+
+test('openFence tracks which code fence is still open', () => {
+  assert.equal(openFence(''), null);
+  assert.equal(openFence('just prose'), null);
+  assert.deepEqual(openFence('```js\nconst a = 1;'), { mark: '`', len: 3 });
+  assert.equal(openFence('```js\nconst a = 1;\n```'), null, 'a matching close ends it');
+  assert.deepEqual(openFence('~~~\nyaml: here'), { mark: '~', len: 3 }, 'tildes open a fence too');
+  assert.deepEqual(openFence('```\na\n~~~'), { mark: '`', len: 3 }, 'the other character does not close it');
+  assert.equal(openFence('````\na\n`````'), null, 'a longer closing run is still a close');
+  assert.deepEqual(openFence('`````\na\n```'), { mark: '`', len: 5 }, 'but a shorter one is not');
+  assert.deepEqual(openFence('```js\na\n``` trailing'), { mark: '`', len: 3 }, 'a close may not carry text');
+  assert.equal(openFence('   ```\na\n   ```'), null, 'up to three spaces of indent is still a fence');
+  assert.equal(openFence('Use ``` to open a block.'), null, 'a backtick run inside a sentence is not a fence');
+  assert.deepEqual(openFence('```\na\n```\n```py\nb'), { mark: '`', len: 3 }, 'the last one wins');
+});
+
+test('seamFor closes the reply off so the next block starts clean', () => {
+  assert.equal(seamFor(''), '', 'nothing written, nothing to close');
+  assert.equal(seamFor('   \n  '), '', 'whitespace only is nothing written');
+  assert.equal(seamFor('half a senten'), '\n\n', 'finish the line, then leave a blank one');
+  assert.equal(seamFor('done.\n'), '\n', 'already at a line end, so only the blank line');
+  assert.equal(seamFor('done.\n\n'), '', 'already separated');
+  assert.equal(seamFor('```js\nconst a = 1;'), '\n```\n\n', 'an open fence is closed before the blank line');
+  assert.equal(seamFor('~~~\nkey: val'), '\n~~~\n\n', 'with the character it was opened with');
+  assert.equal(seamFor('````\nx'), '\n````\n\n', 'and at the length it was opened with');
+  assert.match(seamFor('```js\nconst a = 1;'), /\n$/, 'a seam always ends on a new line');
+});
+
+test('a steer tells the model whether anything is already on screen', () => {
+  const before = steerInstruction(['be terser'], false, false);
+  assert.match(before, /Before you wrote anything/);
+  assert.match(before, /- be terser/);
+  assert.doesNotMatch(before, /cannot be taken back/, 'nothing to warn about yet');
+
+  const during = steerInstruction(['be terser', 'use python'], true, false);
+  assert.match(during, /interrupted you mid-reply/);
+  assert.match(during, /- be terser\n- use python/, 'every note is listed');
+  assert.match(during, /closed off cleanly/);
+
+  const inBlock = steerInstruction(['stop'], true, true);
+  assert.match(inBlock, /do not write a closing fence/, 'the seam already closed it');
+});
+
+test('the loop guard stops a turn repeating one failing call', () => {
+  const g = createLoopGuard();
+  const call = [{ name: 'bash', argsText: '{"cmd":"nope"}' }];
+  assert.equal(g.note({ calls: call, ok: 0, failed: 1, failKinds: ['bash:not_found'] }), false, 'once is not a loop');
+  assert.equal(g.note({ calls: call, ok: 0, failed: 1, failKinds: ['bash:not_found'] }), true, 'the identical call twice is');
+});
+
+test('the loop guard catches the same failure behind wobbling arguments', () => {
+  const g = createLoopGuard();
+  const kinds = ['bash:not_found'];
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'a' }], ok: 0, failed: 1, failKinds: kinds }), false);
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'b' }], ok: 0, failed: 1, failKinds: kinds }), false);
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'c' }], ok: 0, failed: 1, failKinds: kinds }), true);
+});
+
+test('the loop guard resets the moment anything works', () => {
+  const g = createLoopGuard();
+  const kinds = ['bash:not_found'];
+  g.note({ calls: [{ name: 'bash', argsText: 'a' }], ok: 0, failed: 1, failKinds: kinds });
+  g.note({ calls: [{ name: 'bash', argsText: 'b' }], ok: 0, failed: 1, failKinds: kinds });
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'c' }], ok: 1, failed: 0, failKinds: [] }), false,
+    'a successful step is progress');
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'd' }], ok: 0, failed: 1, failKinds: kinds }), false,
+    'and the count started over');
+});
+
+test('the loop guard leaves a step that failed differently each time alone', () => {
+  const g = createLoopGuard();
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'a' }], ok: 0, failed: 1, failKinds: ['bash:not_found'] }), false);
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'b' }], ok: 0, failed: 1, failKinds: ['bash:timeout'] }), false);
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'c' }], ok: 0, failed: 1, failKinds: ['bash:blocked'] }), false,
+    'a model working through different problems is making progress');
+});
+
+test('the loop guard ignores a step that made no calls at all', () => {
+  const g = createLoopGuard();
+  assert.equal(g.note({ calls: [], ok: 0, failed: 0, failKinds: [] }), false);
+  assert.equal(g.note({ calls: [], ok: 0, failed: 0, failKinds: [] }), false, 'no calls is not a failing loop');
 });
 
 test('the client and server copies of the tool protocol stay byte-identical', () => {

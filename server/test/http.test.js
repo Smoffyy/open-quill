@@ -115,6 +115,30 @@ function exchange(headers, send, { frames = 1, timeoutMs = 8000 } = {}) {
   });
 }
 
+function listen(headers, want, { timeoutMs = 6000 } = {}) {
+  const got = [];
+  let ws = null;
+  const ready = new Promise((resolve, reject) => {
+    ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`, { headers });
+    ws.on('open', resolve);
+    ws.on('error', reject);
+    ws.on('unexpected-response', (_q, res) => reject(new Error('handshake ' + res.statusCode)));
+    ws.on('message', (raw) => { try { const m = JSON.parse(raw); if (want(m)) got.push(m); } catch {} });
+  });
+  return {
+    ready,
+    frames: got,
+    settle: () => new Promise(r => { setTimeout(r, 400); }),
+    waitFor: (n = 1) => new Promise((resolve) => {
+      const started = Date.now();
+      const tick = setInterval(() => {
+        if (got.length >= n || Date.now() - started > timeoutMs) { clearInterval(tick); resolve(got); }
+      }, 50);
+    }),
+    close: () => { try { ws.terminate(); } catch {} }
+  };
+}
+
 function startServer() {
   return new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, ['index.js'], {
@@ -447,6 +471,83 @@ test('admin edits stage until they are published', async () => {
   assert.equal((await browser('POST', '/api/admin/models/publish', { body: {} })).status, 200);
   assert.equal((await browser('GET', '/api/admin/models/publish-state')).json.staged, false, 'publishing clears the staging area');
   assert.equal((await browser('GET', '/api/app-config')).json.appName, 'Staged Name', 'and the value survives as the live one');
+});
+
+test('a staged app-config edit can be taken back before it is published', async () => {
+  const cfg = (await browser('GET', '/api/app-config')).json;
+  const live = { uiPreset: cfg.uiPreset, appFont: cfg.appFont, appName: cfg.appName };
+  const other = live.uiPreset === 'openai' ? 'anthropic' : 'openai';
+
+  await browser('PATCH', '/api/admin/app-config', { body: { appName: 'Typo Name', uiPreset: other, appFont: 'sourceserif' } });
+  const staged = (await browser('GET', '/api/app-config')).json;
+  assert.equal(staged.appName, 'Typo Name', 'the admin previews the staged name');
+  assert.equal(staged.uiPreset, other, 'and the staged preset');
+  assert.equal((await browser('GET', '/api/admin/models/publish-state')).json.staged, true);
+
+  await browser('PATCH', '/api/admin/app-config', { body: live });
+  const back = (await browser('GET', '/api/app-config')).json;
+  assert.equal(back.appName, live.appName, 'the name draft is gone, not still holding the edit');
+  assert.equal(back.uiPreset, live.uiPreset, 'and so is the preset draft');
+  assert.equal(back.appFont, live.appFont);
+});
+
+test('deleting a space tells the other members', async () => {
+  const guestEmail = 'space-guest@test.local';
+  const reg = await request('POST', '/api/auth/register', {
+    origin: ORIGIN, secFetchSite: 'same-origin', body: { email: guestEmail, password: PASSWORD }
+  });
+  assert.equal(reg.status, 200, `guest registration failed: ${reg.text}`);
+  const guestCookie = String(reg.headers['set-cookie']?.[0] || '').split(';')[0];
+  const guest = (method, pathname, opts = {}) =>
+    request(method, pathname, { origin: ORIGIN, secFetchSite: 'same-origin', cookie: guestCookie, ...opts });
+
+  const me = await guest('GET', '/api/me');
+  const guestId = me.json?.user?.id;
+  assert.ok(guestId, 'the guest has an id');
+
+  const space = (await browser('POST', '/api/spaces', { body: { name: 'Shared' } })).json;
+  assert.ok(space?.id, 'space created');
+
+  assert.equal((await browser('POST', `/api/spaces/${space.id}/invite`, { body: { userId: guestId } })).status, 200);
+  assert.equal((await guest('POST', `/api/spaces/${space.id}/respond`, { body: { accept: true } })).status, 200);
+  assert.equal((await guest('GET', '/api/spaces')).json.length, 1, 'the guest can see it');
+
+  const sock = listen({ Cookie: guestCookie, Origin: ORIGIN }, m => m.type === 'space_deleted');
+  await sock.ready;
+  await sock.settle();
+
+  assert.equal((await browser('DELETE', `/api/spaces/${space.id}`)).status, 200);
+  const frames = await sock.waitFor(1);
+  sock.close();
+
+  assert.equal(frames.length, 1, 'the guest is told the space is gone');
+  assert.equal(frames[0].spaceId, space.id);
+  assert.equal((await guest('GET', '/api/spaces')).json.length, 0, 'and it really is gone');
+});
+
+test('the space list is scoped to its member and newest first', async () => {
+  const before = (await browser('GET', '/api/spaces')).json.length;
+  const a = (await browser('POST', '/api/spaces', { body: { name: 'Alpha' } })).json;
+  await new Promise(r => { setTimeout(r, 5); });
+  const b = (await browser('POST', '/api/spaces', { body: { name: 'Beta' } })).json;
+
+  const mine = (await browser('GET', '/api/spaces')).json;
+  assert.equal(mine.length, before + 2);
+  assert.equal(mine[0].id, b.id, 'newest first');
+  assert.equal(mine.filter(s => s.id === a.id).length, 1, 'no duplicate rows per membership');
+
+  const stranger = await request('GET', '/api/spaces', { origin: ORIGIN, secFetchSite: 'same-origin' });
+  assert.equal(stranger.status, 401, 'a signed-out caller gets nothing');
+
+  assert.equal((await browser('DELETE', `/api/spaces/${a.id}`)).status, 200);
+  assert.equal((await browser('DELETE', `/api/spaces/${b.id}`)).status, 200);
+});
+
+test('a space owner can only remove somebody who is actually in the space', async () => {
+  const space = (await browser('POST', '/api/spaces', { body: { name: 'Solo' } })).json;
+  const missing = await browser('DELETE', `/api/spaces/${space.id}/members/not-a-real-user`);
+  assert.equal(missing.status, 404, 'removing a non-member is a miss, not a silent no-op');
+  assert.equal((await browser('DELETE', `/api/spaces/${space.id}`)).status, 200);
 });
 
 test('unknown routes answer in the right language', async () => {

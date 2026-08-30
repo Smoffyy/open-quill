@@ -2,7 +2,8 @@
   "_meta": {
     "code": "zh",
     "name": "简体中文",
-    "dir": "ltr"
+    "dir": "ltr",
+    "partial": true
   },
   "(empty)": "（空）",
   "(router)": "（路由）",
@@ -381,7 +382,6 @@
   "How can I help you today?": "今天我能帮你做些什么？",
   "How can I help you?": "有什么可以帮你的？",
   "How far away is the sun from Earth?": "太阳距离地球有多远？",
-  "How long a reply may take before the progress line fades in. Default 3s": "回复可以耗时多久后才淡入进度行。默认 3 秒",
   "How quickly text appears once it has arrived, not how fast the model replies.": "已收到的文本显示得多快，而非模型回复得多快。",
   "How quickly the circle grows and shrinks.": "圆点放大和缩小的速度。",
   "How responses look, move, and feel.": "回复的外观、动效和体感。",

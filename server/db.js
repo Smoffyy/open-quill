@@ -2,6 +2,8 @@ import fs from 'fs';
 import crypto from 'crypto';
 import Database from 'better-sqlite3-multiple-ciphers';
 import { DATA_ROOT, dataPath } from './lib/dataroot.js';
+import { migrate } from './db/schema.js';
+import { makeCollection, bumpTable } from './db/collection.js';
 import { BRAND_ICON, BRAND_GENERATING, BRAND_THINKING, BRAND_ICON_FIELDS, remapBrandPath } from './lib/brand.js';
 
 const DATA_DIR = DATA_ROOT;
@@ -49,105 +51,9 @@ sdb.pragma('journal_mode = WAL');
 sdb.pragma('synchronous = NORMAL');
 sdb.pragma('foreign_keys = ON');
 
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY, email TEXT, created_at INTEGER, data TEXT NOT NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email);
-CREATE TABLE IF NOT EXISTS folders (
-  id TEXT PRIMARY KEY, user_id TEXT, sort_order INTEGER, created_at INTEGER, data TEXT NOT NULL,
-  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_folders_user ON folders(user_id, sort_order);
-CREATE TABLE IF NOT EXISTS chats (
-  id TEXT PRIMARY KEY, user_id TEXT, folder_id TEXT, updated_at INTEGER, data TEXT NOT NULL,
-  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_chats_user ON chats(user_id, updated_at);
-CREATE TABLE IF NOT EXISTS messages (
-  id TEXT PRIMARY KEY, chat_id TEXT, parent_id TEXT, created_at INTEGER, data TEXT NOT NULL,
-  FOREIGN KEY(chat_id) REFERENCES chats(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id, created_at);
-CREATE TABLE IF NOT EXISTS models (
-  id TEXT PRIMARY KEY, sort_order INTEGER, enabled INTEGER, data TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_models_sort ON models(sort_order);
-CREATE TABLE IF NOT EXISTS usage (
-  id TEXT PRIMARY KEY, user_id TEXT, model_id TEXT, created_at INTEGER, data TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_usage_user ON usage(user_id, created_at);
-CREATE TABLE IF NOT EXISTS settings (
-  key TEXT PRIMARY KEY, value TEXT NOT NULL
-);
-`;
+migrate(sdb);
 
-if (sdb.pragma('user_version', { simple: true }) === 0) {
-  sdb.exec(SCHEMA);
-  sdb.pragma('user_version = 1');
-}
-
-if (sdb.pragma('user_version', { simple: true }) < 2) {
-  sdb.exec(`CREATE TABLE IF NOT EXISTS usage (id TEXT PRIMARY KEY, user_id TEXT, model_id TEXT, created_at INTEGER, data TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS idx_usage_user ON usage(user_id, created_at);`);
-  sdb.pragma('user_version = 2');
-}
-
-if (sdb.pragma('user_version', { simple: true }) < 3) {
-  sdb.exec(`CREATE TABLE IF NOT EXISTS spaces (id TEXT PRIMARY KEY, owner_id TEXT, created_at INTEGER, updated_at INTEGER, data TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS idx_spaces_owner ON spaces(owner_id);
-CREATE TABLE IF NOT EXISTS space_messages (id TEXT PRIMARY KEY, space_id TEXT, created_at INTEGER, data TEXT NOT NULL, FOREIGN KEY(space_id) REFERENCES spaces(id) ON DELETE CASCADE);
-CREATE INDEX IF NOT EXISTS idx_space_messages_space ON space_messages(space_id, created_at);`);
-  sdb.pragma('user_version = 3');
-}
-
-if (sdb.pragma('user_version', { simple: true }) < 4) {
-  sdb.exec(`CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, user_id TEXT, last_seen INTEGER, created_at INTEGER, data TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
-CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id, last_seen);`);
-  sdb.pragma('user_version = 4');
-}
-
-if (sdb.pragma('user_version', { simple: true }) < 5) {
-  sdb.exec(`CREATE TABLE IF NOT EXISTS audit (id TEXT PRIMARY KEY, ts INTEGER, actor_id TEXT, data TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit(ts);`);
-  sdb.pragma('user_version = 5');
-}
-
-if (sdb.pragma('user_version', { simple: true }) < 6) {
-  sdb.exec(`CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, user_id TEXT, updated_at INTEGER, created_at INTEGER, data TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
-CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id, updated_at);`);
-  sdb.pragma('user_version = 6');
-}
-
-if (sdb.pragma('user_version', { simple: true }) < 7) {
-  sdb.exec(`CREATE TABLE IF NOT EXISTS feedback (id TEXT PRIMARY KEY, ts INTEGER, user_id TEXT, data TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS idx_feedback_ts ON feedback(ts);`);
-  sdb.pragma('user_version = 7');
-}
-
-if (sdb.pragma('user_version', { simple: true }) < 8) {
-  sdb.exec(`CREATE INDEX IF NOT EXISTS idx_usage_created ON usage(created_at);
-CREATE INDEX IF NOT EXISTS idx_messages_parent ON messages(chat_id, parent_id);`);
-  sdb.pragma('user_version = 8');
-}
-
-if (sdb.pragma('user_version', { simple: true }) < 9) {
-  sdb.exec(`CREATE TABLE IF NOT EXISTS toolstats (id TEXT PRIMARY KEY, ts INTEGER, data TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS idx_toolstats_ts ON toolstats(ts);`);
-  sdb.pragma('user_version = 9');
-}
-
-if (sdb.pragma('user_version', { simple: true }) < 10) {
-  sdb.exec(`CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, user_id TEXT, next_run INTEGER, updated_at INTEGER, created_at INTEGER, data TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
-CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id, next_run);`);
-  sdb.pragma('user_version = 10');
-}
-
-if (sdb.pragma('user_version', { simple: true }) < 11) {
-  sdb.exec(`CREATE TABLE IF NOT EXISTS skills (id TEXT PRIMARY KEY, user_id TEXT, name TEXT, updated_at INTEGER, created_at INTEGER, data TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
-CREATE INDEX IF NOT EXISTS idx_skills_user ON skills(user_id, name);`);
-  sdb.pragma('user_version = 11');
-}
+const collection = (table) => makeCollection(sdb, table);
 
 // Case-insensitive substring test done inside SQLite. SQLite's own LIKE and lower() fold
 // ASCII only, so using them here would quietly stop matching "ДОМ" against "дом" the way
@@ -163,103 +69,6 @@ export function tx(fn) { return sdb.transaction(fn)(); }
 export const uid = () => crypto.randomUUID();
 let lastTs = 0;
 export const now = () => { const t = Date.now(); lastTs = t > lastTs ? t : lastTs + 1; return lastTs; };
-
-const MIRROR = {
-  users: { email: o => o.email ?? null, created_at: o => o.created_at ?? 0 },
-  folders: { user_id: o => o.user_id ?? null, sort_order: o => o.sort_order ?? 0, created_at: o => o.created_at ?? 0 },
-  chats: { user_id: o => o.user_id ?? null, folder_id: o => o.folder_id ?? null, updated_at: o => o.updated_at ?? 0 },
-  messages: { chat_id: o => o.chat_id ?? null, parent_id: o => o.parent_id ?? null, created_at: o => o.created_at ?? 0 },
-  models: { sort_order: o => o.sort_order ?? 0, enabled: o => o.enabled ?? 0 },
-  usage: { user_id: o => o.user_id ?? null, model_id: o => o.model_id ?? null, created_at: o => o.created_at ?? 0 },
-  spaces: { owner_id: o => o.owner_id ?? null, created_at: o => o.created_at ?? 0, updated_at: o => o.updated_at ?? 0 },
-  space_messages: { space_id: o => o.space_id ?? null, created_at: o => o.created_at ?? 0 },
-  sessions: { user_id: o => o.user_id ?? null, last_seen: o => o.last_seen ?? 0, created_at: o => o.created_at ?? 0 },
-  audit: { ts: o => o.ts ?? 0, actor_id: o => o.actor_id ?? null },
-  projects: { user_id: o => o.user_id ?? null, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 },
-  feedback: { ts: o => o.ts ?? 0, user_id: o => o.user_id ?? null },
-  toolstats: { ts: o => o.ts ?? 0 },
-  tasks: { user_id: o => o.user_id ?? null, next_run: o => o.next_run ?? 0, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 },
-  skills: { user_id: o => o.user_id ?? null, name: o => o.name ?? null, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 }
-};
-
-const bumps = new Map();
-function bumpTable(table) { bumps.set(table, (bumps.get(table) || 0) + 1); }
-
-const isKey = id => typeof id === 'string' || typeof id === 'number';
-
-function collection(table) {
-  const cols = Object.keys(MIRROR[table]);
-  const mirror = MIRROR[table];
-  const bump = () => bumpTable(table);
-  const colList = ['id', ...cols, 'data'];
-  const insSql = `INSERT INTO ${table} (${colList.join(',')}) VALUES (${colList.map(() => '?').join(',')})`;
-  const insStmt = sdb.prepare(insSql);
-  const updSql = `UPDATE ${table} SET ${[...cols, 'data'].map(c => `${c}=?`).join(',')} WHERE id=?`;
-  const updStmt = sdb.prepare(updSql);
-  const getStmt = sdb.prepare(`SELECT data FROM ${table} WHERE id=?`);
-  const allStmt = sdb.prepare(`SELECT data FROM ${table}`);
-  const delStmt = sdb.prepare(`DELETE FROM ${table} WHERE id=?`);
-  const cntStmt = sdb.prepare(`SELECT count(*) AS n FROM ${table}`);
-  const parse = r => r ? JSON.parse(r.data) : undefined;
-  const rowVals = o => [...cols.map(c => mirror[c](o)), JSON.stringify(o)];
-
-  const whereStmts = new Map();
-  const whereStmt = (col) => {
-    if (!whereStmts.has(col)) whereStmts.set(col, sdb.prepare(`SELECT data FROM ${table} WHERE ${col} IS ?`));
-    return whereStmts.get(col);
-  };
-  const countWhereStmts = new Map();
-  const countWhereStmt = (col) => {
-    if (!countWhereStmts.has(col)) countWhereStmts.set(col, sdb.prepare(`SELECT count(*) AS n FROM ${table} WHERE ${col} IS ?`));
-    return countWhereStmts.get(col);
-  };
-  const delWhereStmts = new Map();
-  const delWhereStmt = (col) => {
-    if (!delWhereStmts.has(col)) delWhereStmts.set(col, sdb.prepare(`DELETE FROM ${table} WHERE ${col} IS ?`));
-    return delWhereStmts.get(col);
-  };
-
-  const api = {
-    version: () => bumps.get(table) || 0,
-    all: () => allStmt.all().map(r => JSON.parse(r.data)),
-    filter: fn => allStmt.all().map(r => JSON.parse(r.data)).filter(fn),
-    find: fn => allStmt.all().map(r => JSON.parse(r.data)).find(fn),
-    // Ids arrive from request bodies and params. better-sqlite3 throws on a bound object
-    // or array, which turned "look up this thing" into a 500 in every route that did not
-    // coerce first; a non-primitive id simply matches nothing.
-    byId: id => (isKey(id) ? parse(getStmt.get(id)) : undefined),
-    where: (col, val) => (cols.includes(col) ? whereStmt(col).all(val ?? null).map(r => JSON.parse(r.data)) : api.filter(o => (o[col] ?? null) === (val ?? null))),
-    countWhere: (col, val) => (cols.includes(col) ? countWhereStmt(col).get(val ?? null).n : api.filter(o => (o[col] ?? null) === (val ?? null)).length),
-    removeWhere: (col, val) => { if (!cols.includes(col)) return api.remove(o => (o[col] ?? null) === (val ?? null)); delWhereStmt(col).run(val ?? null); bump(); },
-    insert: obj => { insStmt.run(obj.id, ...rowVals(obj)); bump(); return obj; },
-    update: (id, patch) => {
-      if (!isKey(id)) return undefined;
-      const cur = parse(getStmt.get(id));
-      if (!cur) return undefined;
-      Object.assign(cur, patch);
-      updStmt.run(...rowVals(cur), id);
-      bump();
-      return cur;
-    },
-    removeById: id => { if (!isKey(id)) return; delStmt.run(id); bump(); },
-    removeByIds: ids => {
-      const list = (Array.isArray(ids) ? ids : [...ids]).filter(isKey);
-      if (!list.length) return;
-      const tx = sdb.transaction(rows => { for (const id of rows) delStmt.run(id); });
-      tx(list);
-      bump();
-    },
-    remove: fn => {
-      const rows = allStmt.all().map(r => JSON.parse(r.data)).filter(fn);
-      if (!rows.length) return;
-      const tx = sdb.transaction(list => { for (const r of list) delStmt.run(r.id); });
-      tx(rows);
-      bump();
-    },
-    count: fn => fn ? api.filter(fn).length : cntStmt.get().n
-  };
-  return api;
-}
 
 const messagesCol = collection('messages');
 const byChatStmt = sdb.prepare('SELECT data FROM messages WHERE chat_id=? ORDER BY created_at');
@@ -327,11 +136,50 @@ usageCol.nameForModel = modelId => { const r = usageNameStmt.get(modelId); retur
 const usageSpendStmt = sdb.prepare("SELECT COALESCE(SUM(json_extract(data,'$.cost')), 0) AS cost FROM usage WHERE user_id=? AND created_at >= ?");
 usageCol.spendSince = (userId, since) => { try { return Number(usageSpendStmt.get(userId, since)?.cost) || 0; } catch { return 0; } };
 const usageSpendAllStmt = sdb.prepare("SELECT user_id, COALESCE(SUM(json_extract(data,'$.cost')), 0) AS cost FROM usage WHERE created_at >= ? GROUP BY user_id");
+const USAGE_SUMS = `
+  COUNT(*) AS count,
+  COALESCE(SUM(json_extract(data,'$.prompt')), 0) AS prompt,
+  COALESCE(SUM(json_extract(data,'$.completion')), 0) AS completion,
+  COALESCE(SUM(json_extract(data,'$.cost')), 0) AS cost`;
+const usageTotalsStmt = sdb.prepare(`
+  SELECT ${USAGE_SUMS}, COUNT(DISTINCT COALESCE(user_id, 'unknown')) AS users
+  FROM usage WHERE created_at >= ?`);
+const usageByUserAggStmt = sdb.prepare(`
+  SELECT user_id, ${USAGE_SUMS}
+  FROM usage WHERE created_at >= ? GROUP BY user_id`);
+const usageByModelAggStmt = sdb.prepare(`
+  SELECT model_id, ${USAGE_SUMS},
+    MAX(json_extract(data,'$.model_name')) AS model_name
+  FROM usage WHERE created_at >= ? GROUP BY model_id`);
+const usageByDayAggStmt = sdb.prepare(`
+  SELECT strftime('%Y-%m-%d', created_at / 1000, 'unixepoch') AS day, ${USAGE_SUMS}
+  FROM usage WHERE created_at >= ? GROUP BY day ORDER BY day`);
+usageCol.report = (since) => {
+  const from = since || 0;
+  const t = usageTotalsStmt.get(from) || {};
+  const num = (v) => Number(v) || 0;
+  return {
+    totals: { count: num(t.count), prompt: num(t.prompt), completion: num(t.completion), cost: num(t.cost), users: num(t.users) },
+    byUser: usageByUserAggStmt.all(from).map(r => ({ userId: r.user_id || 'unknown', count: num(r.count), prompt: num(r.prompt), completion: num(r.completion), cost: num(r.cost) })),
+    byModel: usageByModelAggStmt.all(from).map(r => ({ modelId: r.model_id || 'unknown', name: r.model_name || '', count: num(r.count), prompt: num(r.prompt), completion: num(r.completion), cost: num(r.cost) })),
+    byDay: usageByDayAggStmt.all(from).map(r => ({ day: r.day, prompt: num(r.prompt), completion: num(r.completion), cost: num(r.cost) }))
+  };
+};
 usageCol.spendSinceByUser = (since) => {
   const out = new Map();
   try { for (const r of usageSpendAllStmt.all(since)) out.set(r.user_id, Number(r.cost) || 0); } catch {}
   return out;
 };
+
+const spacesCol = collection('spaces');
+const spacesByMemberStmt = sdb.prepare(`
+  SELECT DISTINCT s.data AS data, s.updated_at AS updated_at
+  FROM spaces s, json_each(json_extract(s.data,'$.members')) m
+  WHERE json_type(s.data,'$.members') = 'array'
+    AND json_extract(m.value,'$.userId') IS ?
+  ORDER BY s.updated_at DESC`);
+spacesCol.byMember = userId =>
+  spacesByMemberStmt.all(userId ?? null).map(r => JSON.parse(r.data));
 
 const spaceMessagesCol = collection('space_messages');
 const spMsgBySpaceStmt = sdb.prepare('SELECT data FROM space_messages WHERE space_id=? ORDER BY created_at');
@@ -418,7 +266,7 @@ export const db = {
   models: collection('models'),
   folders: collection('folders'),
   usage: usageCol,
-  spaces: collection('spaces'),
+  spaces: spacesCol,
   spaceMessages: spaceMessagesCol,
   sessions: sessionsCol,
   audit: auditCol,

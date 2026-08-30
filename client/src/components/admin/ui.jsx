@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Copy, X } from '../icons.jsx';
 import { Switch, SegSlide, SelectRow } from '../settingsui.jsx';
@@ -173,17 +173,38 @@ export function CopyBtn({ text, title }) {
   );
 }
 
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function Dialog({ title, size, onClose, foot, children }) {
+  const box = useRef(null);
+  const titleId = useId();
+
   useEffect(() => {
-    const esc = (e) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', esc);
-    return () => document.removeEventListener('keydown', esc);
+    const restoreTo = document.activeElement;
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); onClose(); return; }
+      if (e.key !== 'Tab' || !box.current) return;
+      const items = [...box.current.querySelectorAll(FOCUSABLE)].filter(el => el.offsetParent !== null);
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const on = document.activeElement;
+      if (e.shiftKey && (on === first || !box.current.contains(on))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && on === last) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      if (restoreTo && typeof restoreTo.focus === 'function' && document.contains(restoreTo)) restoreTo.focus();
+    };
   }, [onClose]);
+
   return createPortal(
     <div className="cp-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={'cp-dialog' + (size ? ' ' + size : '')}>
+      <div ref={box} className={'cp-dialog' + (size ? ' ' + size : '')}
+        role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className="cp-dialog-head">
-          <h3>{title}</h3>
+          <h3 id={titleId}>{title}</h3>
           <Btn kind="quiet" size="sm" aria-label={t('Close')} onClick={onClose}><X /></Btn>
         </div>
         <div className="cp-dialog-body">{children}</div>

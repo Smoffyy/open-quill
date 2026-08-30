@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { api } from '../../api.js';
 import { Dialog, Btn, Field, Fields, Seg, Note } from './ui.jsx';
 import { QP_ICON_LIST, QpIcon } from '../../qpIcons.jsx';
@@ -20,11 +20,12 @@ const shapes = () => SHAPE_KEYS.map(([value, label]) => ({ value, label: t(label
 function useObjectImage(file) {
   const [img, setImg] = useState(null);
   useEffect(() => {
+    let alive = true;
     const url = URL.createObjectURL(file);
     const i = new Image();
-    i.onload = () => setImg(i);
+    i.onload = () => { if (alive) setImg(i); };
     i.src = url;
-    return () => URL.revokeObjectURL(url);
+    return () => { alive = false; URL.revokeObjectURL(url); };
   }, [file]);
   return img;
 }
@@ -33,9 +34,10 @@ function RasterCrop({ file, onDone, onCancel }) {
   const [shape, setShape] = useState('rounded');
   const [zoom, setZoom] = useState(1);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   const img = useObjectImage(file);
 
-  function paint() {
+  const paint = useCallback(() => {
     const size = 256;
     const c = document.createElement('canvas');
     c.width = c.height = size;
@@ -49,16 +51,20 @@ function RasterCrop({ file, onDone, onCancel }) {
     ctx.drawImage(img, (img.width - crop) / 2, (img.height - crop) / 2, crop, crop, 0, 0, size, size);
     ctx.restore();
     return c;
-  }
+  }, [img, shape, zoom]);
 
-  const preview = img ? paint().toDataURL('image/png') : '';
+  const preview = useMemo(() => (img ? paint().toDataURL('image/png') : ''), [img, paint]);
 
   function apply() {
     setBusy(true);
+    setError('');
     paint().toBlob(async (blob) => {
-      const f = new File([blob], (file.name.replace(/\.[^.]+$/, '') || 'icon') + '-crop.png', { type: 'image/png' });
-      const { url } = await api.upload(f);
-      onDone(url);
+      if (!blob) { setBusy(false); setError(t('The image could not be encoded.')); return; }
+      try {
+        const f = new File([blob], (file.name.replace(/\.[^.]+$/, '') || 'icon') + '-crop.png', { type: 'image/png' });
+        const { url } = await api.upload(f);
+        onDone(url);
+      } catch { setBusy(false); setError(t('The upload failed.')); }
     }, 'image/png');
   }
 
@@ -71,6 +77,7 @@ function RasterCrop({ file, onDone, onCancel }) {
       <div style={{ display: 'grid', placeItems: 'center', padding: '4px 0 18px' }}>
         {preview && <img src={preview} alt="" style={{ width: 128, height: 128 }} />}
       </div>
+      {error && <div style={{ marginBottom: 14 }}><Note tone="bad">{error}</Note></div>}
       <Fields>
         <Field label={t('Shape')}><Seg value={shape} options={shapes()} onChange={setShape} label={t('Shape')} /></Field>
         <Slider label={t('Zoom')} min={1} max={3} step={0.02} value={zoom} onChange={setZoom} />
@@ -111,7 +118,7 @@ function VectorCrop({ file, onDone, onCancel }) {
     return () => { alive = false; };
   }, [file]);
 
-  function build() {
+  const build = useCallback(() => {
     if (!source) return '';
     const { raw, box } = source;
     const doc = new DOMParser().parseFromString(raw, 'image/svg+xml');
@@ -154,10 +161,11 @@ function VectorCrop({ file, onDone, onCancel }) {
       root.appendChild(wrap);
     }
     return new XMLSerializer().serializeToString(root);
-  }
+  }, [source, shape, zoom, offX, offY]);
 
-  const out = source ? build() : '';
-  const preview = out ? 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(out) : '';
+  const out = useMemo(() => (source ? build() : ''), [source, build]);
+  const preview = useMemo(
+    () => (out ? 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(out) : ''), [out]);
 
   async function apply(asIs) {
     setBusy(true);

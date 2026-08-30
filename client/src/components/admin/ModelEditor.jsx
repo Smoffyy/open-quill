@@ -161,7 +161,6 @@ export default function ModelEditor({ model: m, models, providers, providerTypes
   const [detected, setDetected] = useState('');
 
   const set = (k, v) => onChange({ ...m, [k]: v });
-  const setKind = (k, v) => onChange({ ...m, [k]: v });
 
   useEffect(() => {
     const esc = (e) => { if (e.key === 'Escape' && !e.target.closest('input, textarea, select')) onBack(); };
@@ -355,7 +354,7 @@ export default function ModelEditor({ model: m, models, providers, providerTypes
 
       <Block title={t('Request controls')}
         sub={t('Extra fields merged into each request body, and the controls members get for them.')}>
-        <KwargsEditor m={m} set={set} />
+        <KwargsEditor m={m} set={set} onChange={onChange} />
       </Block>
 
       <Block title={t('Capabilities')}>
@@ -578,7 +577,7 @@ export default function ModelEditor({ model: m, models, providers, providerTypes
       </Block>
 
       <Block title={t('Routing')}>
-        <Router m={m} set={setKind} models={models} />
+        <Router m={m} set={set} models={models} />
       </Block>
     </>
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../../../api.js';
 import { useAdmin } from '../store.jsx';
 import { Block, Row, Field, Area, Switch, Btn, Table, Stats, Badge, Empty, Note, fmtAgo, fmtInt } from '../ui.jsx';
@@ -8,15 +8,31 @@ export default function NetworkSection() {
   const { workspace } = useAdmin();
   const { config, setCfg } = workspace;
   const [log, setLog] = useState(null);
+  const alive = useRef(true);
+  const busy = useRef(false);
 
   async function load() {
-    try { setLog(await api.get('/api/admin/egress-log')); } catch { setLog({ entries: [], allowed: 0, blocked: 0 }); }
+    if (busy.current) return;
+    busy.current = true;
+    try {
+      const next = await api.get('/api/admin/egress-log');
+      if (alive.current) setLog(next);
+    } catch {
+      if (alive.current) setLog(l => l || { entries: [], allowed: 0, blocked: 0 });
+    } finally { busy.current = false; }
   }
 
   useEffect(() => {
-    load();
-    const id = setInterval(load, 5000);
-    return () => clearInterval(id);
+    alive.current = true;
+    const tick = () => { if (!document.hidden) load(); };
+    tick();
+    const id = setInterval(tick, 5000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      alive.current = false;
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', tick);
+    };
   }, []);
 
   const blocking = config.egressLocalOnly !== false;

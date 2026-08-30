@@ -17,10 +17,11 @@ function firstSection() {
   return DEFAULT_SECTION;
 }
 
-export function AdminProvider({ user, onClose, children }) {
+export function AdminProvider({ user, onClose, modelId = null, children }) {
   const [section, setSectionRaw] = useState(firstSection);
   const [ask, setAsk] = useState(null);
   const scrollMem = useRef(new Map());
+  const seeded = useRef(false);
 
   const setSection = useCallback((id) => setSectionRaw(resolveSection(id)), []);
   useEffect(() => { try { localStorage.setItem(TAB_KEY, section); } catch {} }, [section]);
@@ -30,6 +31,13 @@ export function AdminProvider({ user, onClose, children }) {
   const catalog = useCatalog({ confirm });
   const workspace = useWorkspace();
   const members = useMembers({ confirm });
+
+  const { models, setSelected } = catalog;
+  useEffect(() => {
+    if (seeded.current || !modelId || !models.length) return;
+    seeded.current = true;
+    if (models.some(m => m.id === modelId)) setSelected(s => s ?? modelId);
+  }, [models, modelId, setSelected]);
 
   // Each section keeps its own scroll offset, so flipping between them does not
   // dump the admin back at the top of a long page.

@@ -49,8 +49,7 @@ export default function FilesSection() {
     const to = arr.findIndex(f => f.name === target.name);
     if (from < 0 || to < 0) { setDragging(null); return; }
     const [moved] = arr.splice(from, 1);
-    moved.folder = target.folder || '';
-    arr.splice(to, 0, moved);
+    arr.splice(to, 0, { ...moved, folder: target.folder || '' });
     setDragging(null);
     setFiles(arr);
     try {

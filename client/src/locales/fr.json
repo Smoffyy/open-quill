@@ -2,7 +2,8 @@
   "_meta": {
     "code": "fr",
     "name": "Français",
-    "dir": "ltr"
+    "dir": "ltr",
+    "partial": true
   },
   "(empty)": "(vide)",
   "(router)": "(routeur)",
@@ -381,7 +382,6 @@
   "How can I help you today?": "Comment puis-je vous aider aujourd'hui ?",
   "How can I help you?": "Comment puis-je vous aider ?",
   "How far away is the sun from Earth?": "À quelle distance le Soleil se trouve-t-il de la Terre ?",
-  "How long a reply may take before the progress line fades in. Default 3s": "Temps qu'une réponse peut prendre avant l'apparition de la ligne de progression. Par défaut 3 s",
   "How quickly text appears once it has arrived, not how fast the model replies.": "À quelle vitesse le texte déjà reçu s'affiche, pas la vitesse de réponse du modèle.",
   "How quickly the circle grows and shrinks.": "À quelle vitesse le cercle grandit et rétrécit.",
   "How responses look, move, and feel.": "L'apparence, les animations et le ressenti des réponses.",

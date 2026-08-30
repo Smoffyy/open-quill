@@ -100,7 +100,7 @@ function Presets({ onPick }) {
   );
 }
 
-export default function KwargsEditor({ m, set }) {
+export default function KwargsEditor({ m, set, onChange }) {
   const defs = Array.isArray(m.kwargs) ? m.kwargs : [];
   const [open, setOpen] = useState(() => new Set());
   const [text, setText] = useState({});
@@ -117,6 +117,10 @@ export default function KwargsEditor({ m, set }) {
     while (used.has(made.id)) made.id = newKwargId();
     setDefs([...defs, made]);
     setOpen(s => new Set(s).add(made.id));
+  }
+
+  function convertLegacy() {
+    onChange({ ...m, kwargs: [legacyToKwarg(m)], effort_enabled: 0 });
   }
 
   function remove(id) {
@@ -188,7 +192,7 @@ export default function KwargsEditor({ m, set }) {
               {t('This model still uses the old thinking control. Converting it to a kwarg unlocks custom labels, extra values, and paired kwargs. Nothing changes for members: the same value goes out under the same name.')}
               <div className="cp-acts" style={{ marginTop: 10 }}>
                 <Btn size="sm" kind="primary"
-                  onClick={() => set('kwargs', [legacyToKwarg(m)]) || set('effort_enabled', 0)}>{t('Convert')}</Btn>
+                  onClick={convertLegacy}>{t('Convert')}</Btn>
               </div>
             </Note>
           </div>
@@ -230,7 +234,7 @@ export default function KwargsEditor({ m, set }) {
                   <Chevron style={{ transform: shut ? 'none' : 'rotate(90deg)' }} />
                 </Btn>
               </td>
-              <td colSpan={shut ? 4 : 4} style={{ paddingTop: 12 }}>
+              <td colSpan={4} style={{ paddingTop: 12 }}>
                 {shut ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span className="mono">{def.name || t('unnamed')}</span>

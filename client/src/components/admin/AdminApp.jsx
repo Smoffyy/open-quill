@@ -53,9 +53,15 @@ const VIEWS = {
   storage: StorageSection
 };
 
+function isMac() {
+  const hint = navigator.userAgentData?.platform || navigator.platform || navigator.userAgent || '';
+  return /mac/i.test(hint);
+}
+
 function Finder() {
   const A = useAdmin();
   const { catalog, setSection } = A;
+  const { models, setSelected } = catalog;
   const [q, setQ] = useState('');
   const [cursor, setCursor] = useState(0);
   const boxRef = useRef(null);
@@ -95,18 +101,18 @@ function Finder() {
         rows.push({ key: 's:' + sec.id + ':' + entry, Icon: sec.Icon, label, hint: t(sec.title), go: () => setSection(sec.id) });
       }
     }
-    const ms = catalog.models
+    const ms = models
       .filter(m => (m.display_name || '').toLowerCase().includes(needle) || (m.internal_name || '').toLowerCase().includes(needle))
       .slice(0, 5)
       .map(m => ({
         key: 'm:' + m.id,
         Icon: null,
-        label: m.display_name || m.internal_name || 'Untitled',
+        label: m.display_name || m.internal_name || t('Untitled'),
         hint: t('model'),
-        go: () => { catalog.setSelected(m.id); setSection('models'); }
+        go: () => { setSelected(m.id); setSection('models'); }
       }));
     return [...rows.slice(0, 12), ...ms];
-  }, [needle, catalog, setSection]);
+  }, [needle, models, setSelected, setSection]);
 
   useEffect(() => { setCursor(0); }, [needle]);
 
@@ -129,7 +135,7 @@ function Finder() {
           else if (e.key === 'ArrowUp') { e.preventDefault(); setCursor(c => (c - 1 + hits.length) % Math.max(1, hits.length)); }
           else if (e.key === 'Enter') { e.preventDefault(); run(cursor); }
         }} />
-      <kbd>{navigator.platform.toLowerCase().includes('mac') ? '⌘K' : 'Ctrl K'}</kbd>
+      <kbd>{isMac() ? '⌘K' : 'Ctrl K'}</kbd>
       {!!needle && (
         <div className="cp-find-pop">
           {hits.length === 0 && <div className="cp-find-empty">{t('Nothing matches “{q}”', { q })}</div>}

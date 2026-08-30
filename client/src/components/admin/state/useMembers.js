@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../../api.js';
+import { t } from '../../../i18n.jsx';
 
 export function useMembers({ confirm }) {
   const [members, setMembers] = useState([]);
@@ -25,9 +26,9 @@ export function useMembers({ confirm }) {
 
   const remove = useCallback((id, email) => {
     confirm({
-      title: 'Remove member',
-      message: `Removing ${email || 'this member'} deletes their account and every chat, file, and artifact they own. This cannot be undone.`,
-      confirm: 'Remove member',
+      title: t('Remove member'),
+      message: t('Removing {who} deletes their account and every chat, file, and artifact they own. This cannot be undone.', { who: email || t('this member') }),
+      confirm: t('Remove member'),
       onConfirm: async () => {
         await api.del('/api/admin/users/' + id);
         setMembers(us => us.filter(u => u.id !== id));

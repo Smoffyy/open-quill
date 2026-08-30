@@ -1,12 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getSetting } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
 import { logAudit } from '../lib/audit.js';
 import { appConfig } from '../lib/appconfig.js';
 import { broadcastAdminConfig } from '../lib/ws/index.js';
-import { draftSet } from '../lib/draft.js';
+import { draftGet, draftSet } from '../lib/draft.js';
 import { egressLog, clearEgressLog } from '../lib/egress.js';
 import { releaseInfo, releaseIconPath } from '../lib/release.js';
 
@@ -25,7 +24,7 @@ export default function registerMiscRoutes(app) {
     const b = req.body && typeof req.body === 'object' ? req.body : {};
     let changed = false;
     const put = (key, value) => {
-      if (getSetting(key, null) === value) return false;
+      if (draftGet(key, null) === value) return false;
       draftSet(key, value);
       changed = true;
       return true;
@@ -71,7 +70,7 @@ export default function registerMiscRoutes(app) {
     if ('appFont' in b) put('app_font', APP_FONTS.has(b.appFont) ? b.appFont : 'newsreader');
     if ('uiPreset' in b) {
       const next = b.uiPreset === 'openai' ? 'openai' : 'anthropic';
-      const prev = getSetting('ui_preset', '');
+      const prev = draftGet('ui_preset', '');
       if (put('ui_preset', next)) {
         if (prev !== next && !('appFont' in b)) put('app_font', next === 'openai' ? 'sans' : 'newsreader');
         logAudit(req, 'branding.preset', { meta: { preset: next } });

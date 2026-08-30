@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../../api.js';
+import { t } from '../../../i18n.jsx';
 
 // Models are the only thing publish() snapshots, so this hook owns the whole
 // draft story: local edits, debounced PATCHes, and whether the draft has
@@ -51,7 +52,7 @@ export function useCatalog({ confirm }) {
     let retry;
     async function onConfig() {
       const el = document.activeElement;
-      if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT')) {
+      if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') && el.closest('.cp, .cp-dialog')) {
         clearTimeout(retry);
         retry = setTimeout(onConfig, 2500);
         return;
@@ -122,11 +123,11 @@ export function useCatalog({ confirm }) {
 
   const removeModels = useCallback((ids, after) => {
     confirm({
-      title: ids.length === 1 ? 'Delete model' : 'Delete models',
+      title: ids.length === 1 ? t('Delete model') : t('Delete models'),
       message: ids.length === 1
-        ? 'This removes the model from the catalog. Chats that used it keep their messages. This cannot be undone.'
-        : `This removes ${ids.length} models from the catalog. Chats that used them keep their messages. This cannot be undone.`,
-      confirm: ids.length === 1 ? 'Delete model' : `Delete ${ids.length} models`,
+        ? t('This removes the model from the catalog. Chats that used it keep their messages. This cannot be undone.')
+        : t('This removes {n} models from the catalog. Chats that used them keep their messages. This cannot be undone.', { n: ids.length }),
+      confirm: ids.length === 1 ? t('Delete model') : t('Delete {n} models', { n: ids.length }),
       onConfirm: async () => {
         for (const id of ids) await api.del('/api/admin/models/' + id);
         setModels(ms => ms.filter(m => !ids.includes(m.id)));
