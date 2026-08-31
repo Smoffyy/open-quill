@@ -238,10 +238,17 @@ export default function ModelsSection() {
   function openMenu(e, ids, extra) {
     e.preventDefault();
     e.stopPropagation();
-    setMenu({ at: menuAnchor(e), ids, ...extra });
+    const anchorEl = e.type === 'click' ? e.currentTarget : null;
+    setMenu({ at: menuAnchor(e), ids, anchorEl, ...extra });
   }
 
   function rowMenu(e, m) {
+    if (e.type === 'click' && menu && menu.anchorEl === e.currentTarget) {
+      e.preventDefault();
+      e.stopPropagation();
+      setMenu(null);
+      return;
+    }
     const ids = picked.size > 1 && picked.has(m.id) ? [...picked] : [m.id];
     if (ids.length === 1) setPicked(new Set());
     openMenu(e, ids);
@@ -473,7 +480,7 @@ export default function ModelsSection() {
       </div>
 
       {menu && (menu.ids.length === 0 || menuModels.length > 0) && (
-        <PointMenu at={menu.at} width={MENU_W} onClose={() => setMenu(null)}>
+        <PointMenu at={menu.at} width={MENU_W} anchorEl={menu.anchorEl} onClose={() => setMenu(null)}>
           {menu.ids.length === 0 ? (
             menu.folder ? (
               <>

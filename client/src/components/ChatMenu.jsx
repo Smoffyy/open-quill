@@ -17,15 +17,19 @@ export function ChatMenu({ chat, at, projects = [], busy = false, anchorRef, onS
       onClose();
     };
     const esc = (e) => { if (e.key === 'Escape') onClose(); };
+    const onScroll = (e) => {
+      if (menuRef.current && menuRef.current.contains(e.target)) return;
+      if (anchorRef && anchorRef.current && e.target && typeof e.target.contains === 'function' && e.target.contains(anchorRef.current)) onClose();
+    };
     document.addEventListener('mousedown', away);
     document.addEventListener('keydown', esc);
     window.addEventListener('resize', onClose);
-    window.addEventListener('scroll', onClose, true);
+    window.addEventListener('scroll', onScroll, true);
     return () => {
       document.removeEventListener('mousedown', away);
       document.removeEventListener('keydown', esc);
       window.removeEventListener('resize', onClose);
-      window.removeEventListener('scroll', onClose, true);
+      window.removeEventListener('scroll', onScroll, true);
     };
   }, [anchorRef, onClose]);
 

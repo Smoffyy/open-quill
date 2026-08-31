@@ -28,7 +28,10 @@ export function useAnchoredMenu(open, setOpen, btnRef, menuRef, opts) {
     };
     const close = () => setOpen(false);
     const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
-    const onScroll = (e) => { if (!scrollInsideMenu(menuRef.current, e.target)) setOpen(false); };
+    const onScroll = (e) => {
+      if (scrollInsideMenu(menuRef.current, e.target)) return;
+      if (btnRef.current && e.target && typeof e.target.contains === 'function' && e.target.contains(btnRef.current)) setOpen(false);
+    };
     document.addEventListener('mousedown', away);
     document.addEventListener('keydown', esc);
     window.addEventListener('resize', close);
