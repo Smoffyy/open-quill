@@ -372,7 +372,7 @@
 }
 .cp-card-head .cp-acts { flex-shrink: 0; }
 .cp-card-body { padding: var(--cp-5); }
-.cp-card-body > * + * { margin-top: var(--cp-5); }
+.cp-card-body > *:not(:first-child) { margin-top: var(--cp-5); }
 .cp-card-foot {
   display: flex;
   align-items: center;
