@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { api } from '../api.js';
 import { applyPrefs, getUserFont, setUserFont, currentPreset } from '../prefs.js';
 import { palettesFor, themeValue } from '../lib/palettes.js';
-import { Gear, Chat, Info, Clock, Download, Upload, Shield, Trash, Brain, Refresh, Keyboard, Search, SkillIcon, Plug } from './icons.jsx';
+import { Gear, Chat, Info, Clock, Download, Upload, Shield, Trash, Brain, Refresh, Keyboard, Search, SkillIcon, Plug, Palette } from './icons.jsx';
 import Markdown from './Markdown.jsx';
 import KeybindsPanel from './KeybindsPanel.jsx';
 import SkillsSection from './SkillsSection.jsx';
@@ -20,6 +20,7 @@ import { channelLabel } from '../lib/channel.js';
 const NAV_GROUPS = [
   { label: tk('Settings'), items: [
     { id: 'general', label: tk('General'), Icon: Gear },
+    { id: 'interface', label: tk('Interface'), Icon: Palette },
     { id: 'security', label: tk('Security'), Icon: Shield },
     { id: 'chat', label: tk('Chat'), Icon: Chat },
     { id: 'keybinds', label: tk('Keybinds'), Icon: Keyboard },
@@ -37,13 +38,16 @@ const SETTINGS_INDEX = {
   __proto__: null,
   general: [
     tk('What should we call you?'), tk('Language'), tk('Instructions for the Assistant'), tk('Export everything'), tk('Import'),
-    tk('Theme'), tk('Motion'), tk('Chat font'), tk('Message density'), tk('OLED screen protection'), tk('Staggered open'),
+  ],
+  interface: [
+    tk('Theme'), tk('Chat font'), tk('Message density'), tk('OLED screen protection'),
+    tk('Text reveal'), tk('Reveal speed'), tk('Streaming cursor'), tk('Cursor style'), tk('Blink speed'), tk('Pulse speed'),
+    tk('Conversation map'), tk('Find in conversation'), tk('Branch map'), tk('Message shortcuts'),
   ],
   security: [tk('Password'), tk('Two-factor authentication'), tk('Active sessions')],
   chat: [
-    tk('Text reveal'), tk('Reveal speed'), tk('Auto-scroll'), tk('Streaming cursor'), tk('Cursor style'),
-    tk('Blink speed'), tk('Pulse speed'), tk('Conversation map'), tk('Find in conversation'), tk('Branch map'),
-    tk('Message shortcuts'), tk('Web search on by default'), tk('Engine telemetry'), tk('Context gauge'),
+    tk('Auto-scroll'),
+    tk('Web search on by default'), tk('Engine telemetry'), tk('Context gauge'),
     tk('Speed on each reply'), tk('Progress line delay'), tk('Context ledger on open'), tk('Mid-stream steering'),
   ],
   memory: [tk('Use memory in chats'), tk('Update from recent chats'), tk('Forget everything')],
@@ -360,7 +364,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
           {tab === 'general' && (
             <>
               <h2>{t("General")}</h2>
-              <div className="hint">{t("Your account basics and how open-quill looks.")}</div>
+              <div className="hint">{t("Your account basics. Colours, fonts and layout live under Interface.")}</div>
               <div className="me-section-h">{t("Profile")}</div>
               <SetRow label={t("What should we call you?")}>
                 <input className="set-input" value={name} onChange={(e) => changeName(e.target.value)} />
@@ -383,28 +387,6 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                   onChange={(e) => changeInstructions(e.target.value)} />
                 <div className="muted-note" style={{ textAlign: 'right' }}>{instructions.length}/8000</div>
               </div>
-              <div className="me-section-h">{t("Appearance")}</div>
-              <SetRow label={t("Theme")} desc={t("Follow your system, or pick a palette. Colours only, the layout never changes.")}>
-                <SelectRow label={t("Theme")} value={themeValue(prefs.theme, activePreset)}
-                  onPick={(v) => setPref('theme', v)}
-                  options={[{ v: 'system', label: t('System') }].concat(palettesFor(activePreset).map(p => ({ v: p.id, label: p.label })))} />
-              </SetRow>
-              <SetRow label={t("Chat font")} desc={t("Overrides the theme's default font, on this device only.")}>
-                <SelectRow label={t("Chat font")} value={userFont}
-                  onPick={(v) => { setUserFontState(v); setUserFont(v); }}
-                  options={[
-                    { v: 'default', label: t('Theme default') },
-                    { v: 'newsreader', label: 'Newsreader', font: "'Newsreader Variable', serif" },
-                    { v: 'sourceserif', label: 'Source Serif', font: "'Source Serif 4 Variable', serif" },
-                    { v: 'sans', label: 'Open Sans', font: "'Open Sans', sans-serif" }
-                  ]} />
-              </SetRow>
-              <SetRow label={t("Message density")} desc={t("Vertical spacing between messages.")}>
-                <SegSlide label={t("Message density")} value={prefs.density || 'comfortable'} onPick={(v) => setPref('density', v)}
-                  options={[{ v: 'comfortable', label: t('Comfortable') }, { v: 'compact', label: t('Compact') }]} />
-              </SetRow>
-              <SwitchRow label={t("OLED screen protection")} desc={t("Nudges the interface a few pixels and eases brightness to limit burn-in.")}
-                on={prefs.oledShift} onToggle={() => setPref('oledShift', !prefs.oledShift)} />
               <div className="me-section-h">{t("Your data")}</div>
               <SetRow label={t("Export everything")} desc={t("Download everything (chats, styles, personas, prompts, memory) as one JSON file.")}>
                 <button className="btn ghost" onClick={onExportChats}><Download style={{ width: 14, verticalAlign: '-2px' }} /> {t("Export")}</button>
@@ -549,72 +531,103 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
             );
           })()}
           {tab === 'keybinds' && <KeybindsPanel prefs={prefs} setPref={setPref} />}
-          {tab === 'chat' && (() => {
+          {tab === 'interface' && (() => {
             const rv = revealSpeedMs(prefs.revealMs);
             const noReveal = cfg?.uiPreset === 'openai';
             const style = resolveReveal(prefs, 'anthropic');
             const styleOpt = REVEAL_STYLE_OPTS.find(o => o.v === style) || REVEAL_STYLE_OPTS[0];
             return (
               <>
+                <h2>{t("Interface")}</h2>
+                <div className="hint">{t("How this app looks on your device. These are your own preferences; the layout itself is set by an administrator.")}</div>
+                <div className="me-section-h">{t("Appearance")}</div>
+                <SetRow label={t("Theme")} desc={t("Follow your system, or pick a palette. Colours only, the layout never changes.")}>
+                  <SelectRow label={t("Theme")} value={themeValue(prefs.theme, activePreset)}
+                    onPick={(v) => setPref('theme', v)}
+                    options={[{ v: 'system', label: t('System') }].concat(palettesFor(activePreset).map(p => ({ v: p.id, label: p.label })))} />
+                </SetRow>
+                <SetRow label={t("Chat font")} desc={t("Overrides the theme's default font, on this device only.")}>
+                  <SelectRow label={t("Chat font")} value={userFont}
+                    onPick={(v) => { setUserFontState(v); setUserFont(v); }}
+                    options={[
+                      { v: 'default', label: t('Theme default') },
+                      { v: 'newsreader', label: 'Newsreader', font: "'Newsreader Variable', serif" },
+                      { v: 'sourceserif', label: 'Source Serif', font: "'Source Serif 4 Variable', serif" },
+                      { v: 'sans', label: 'Open Sans', font: "'Open Sans', sans-serif" }
+                    ]} />
+                </SetRow>
+                <SetRow label={t("Message density")} desc={t("Vertical spacing between messages.")}>
+                  <SegSlide label={t("Message density")} value={prefs.density || 'comfortable'} onPick={(v) => setPref('density', v)}
+                    options={[{ v: 'comfortable', label: t('Comfortable') }, { v: 'compact', label: t('Compact') }]} />
+                </SetRow>
+                <SwitchRow label={t("OLED screen protection")} desc={t("Nudges the interface a few pixels and eases brightness to limit burn-in.")}
+                  on={prefs.oledShift} onToggle={() => setPref('oledShift', !prefs.oledShift)} />
+                <div className="me-section-h">{t("Text reveal")}</div>
+                {!noReveal && (
+                  <SetRow label={t("Text reveal")} desc={t(styleOpt.note)}>
+                    <SegSlide label={t("Text reveal")} value={style} onPick={(v) => setPref('revealStyle', v)}
+                      options={REVEAL_STYLE_OPTS.map(o => ({ v: o.v, label: t(o.label) }))} />
+                  </SetRow>
+                )}
+                {style === 'typewriter' && !noReveal && (
+                  <SetRow label={t("Reveal speed")} desc={t("How quickly text appears once it has arrived, not how fast the model replies.")}>
+                    <SegSlide label={t("Reveal speed")} value={REVEAL_STOPS.some(o => o.v === rv) ? rv : -1} onPick={(v) => setPref('revealMs', v)}
+                      options={REVEAL_STOPS.map(o => ({ v: o.v, label: t(o.label) })).concat(REVEAL_STOPS.some(o => o.v === rv) ? [] : [{ v: -1, label: rv + ' ms' }])} />
+                  </SetRow>
+                )}
+              <div className="me-section-h">{t("Cursor")}</div>
+              <>
+                <SwitchRow label={t("Streaming cursor")} desc={t("Show a soft cursor at the write position as text streams in.")}
+                  on={prefs.streamCursor} onToggle={() => setPref('streamCursor', !prefs.streamCursor)} />
+                {!!prefs.streamCursor && (
+                  <SetRow label={t("Cursor style")}>
+                    <SegSlide label={t("Cursor style")} value={prefs.cursorStyle === 'circle' ? 'circle' : 'block'} onPick={(v) => setPref('cursorStyle', v)}
+                      options={[{ v: 'block', label: t('Block') }, { v: 'circle', label: t('Circle') }]} />
+                  </SetRow>
+                )}
+                {!!prefs.streamCursor && (prefs.cursorStyle || 'block') === 'block' && (() => {
+                  const bv = Math.max(150, Math.min(2000, parseInt(prefs.cursorBlinkMs) || 500));
+                  return (
+                    <SetRow label={t("Blink speed")} desc={t("Idle blink rate. It stays solid while text streams, like a terminal.")}>
+                      <RangeRow value={bv} min="150" max="2000" step="50" def={500}
+                        format={(v) => v + ' ms'} onChange={(v) => setPref('cursorBlinkMs', v)} />
+                    </SetRow>
+                  );
+                })()}
+                {!!prefs.streamCursor && prefs.cursorStyle === 'circle' && (() => {
+                  const pv = Math.max(300, Math.min(4000, parseInt(prefs.cursorPulseMs) || 1000));
+                  return (
+                    <SetRow label={t("Pulse speed")} desc={t("How quickly the circle grows and shrinks.")}>
+                      <RangeRow value={pv} min="300" max="4000" step="100" def={1000}
+                        format={(v) => v + ' ms'} onChange={(v) => setPref('cursorPulseMs', v)} />
+                    </SetRow>
+                  );
+                })()}
+              </>
+              <div className="me-section-h">{t("Navigation")}</div>
+              <>
+                <div className="sec-note">{t("Tools for moving around a long conversation. Turn any off for a bare view.")}</div>
+                <SwitchRow label={t("Conversation map")} desc={t("A rail down the right edge with one mark per turn. Click a mark to jump.")}
+                  on={prefs.threadRail !== false} onToggle={() => setPref('threadRail', prefs.threadRail === false)} />
+                <SwitchRow label={t("Find in conversation")} desc={t("Search the open chat from the header. Off gives Ctrl+F back to the browser.")}
+                  on={prefs.threadFind !== false} onToggle={() => setPref('threadFind', prefs.threadFind === false)} />
+                <SwitchRow label={t("Branch map")} desc={t("A header button showing the whole conversation, every branch included.")}
+                  on={prefs.branchMap !== false} onToggle={() => setPref('branchMap', prefs.branchMap === false)} />
+                <SwitchRow label={t("Message shortcuts")} desc={t("J and K move between messages; C copies, E edits, R retries, Y branches.")}
+                  on={prefs.msgKeys !== false} onToggle={() => setPref('msgKeys', prefs.msgKeys === false)} />
+              </>
+              </>
+            );
+          })()}
+
+          {tab === 'chat' && (() => {
+            return (
+              <>
                 <h2>{t("Chat")}</h2>
                 <div className="hint">{t("How responses look, move, and feel.")}</div>
                 <div className="me-section-h">{t("Streaming")}</div>
-                <>
-                  {!noReveal && (
-                    <SetRow label={t("Text reveal")} desc={t(styleOpt.note)}>
-                      <SegSlide label={t("Text reveal")} value={style} onPick={(v) => setPref('revealStyle', v)}
-                        options={REVEAL_STYLE_OPTS.map(o => ({ v: o.v, label: t(o.label) }))} />
-                    </SetRow>
-                  )}
-                  {style === 'typewriter' && !noReveal && (
-                    <SetRow label={t("Reveal speed")} desc={t("How quickly text appears once it has arrived, not how fast the model replies.")}>
-                      <SegSlide label={t("Reveal speed")} value={REVEAL_STOPS.some(o => o.v === rv) ? rv : -1} onPick={(v) => setPref('revealMs', v)}
-                        options={REVEAL_STOPS.map(o => ({ v: o.v, label: t(o.label) })).concat(REVEAL_STOPS.some(o => o.v === rv) ? [] : [{ v: -1, label: rv + ' ms' }])} />
-                    </SetRow>
-                  )}
-                  <Toggle prefs={prefs} setPref={setPref} k="autoscroll" label={t("Auto-scroll")} desc={t("Keep the latest text in view unless you scroll up.")} />
-                </>
-                <div className="me-section-h">{t("Cursor")}</div>
-                <>
-                  <SwitchRow label={t("Streaming cursor")} desc={t("Show a soft cursor at the write position as text streams in.")}
-                    on={prefs.streamCursor} onToggle={() => setPref('streamCursor', !prefs.streamCursor)} />
-                  {!!prefs.streamCursor && (
-                    <SetRow label={t("Cursor style")}>
-                      <SegSlide label={t("Cursor style")} value={prefs.cursorStyle === 'circle' ? 'circle' : 'block'} onPick={(v) => setPref('cursorStyle', v)}
-                        options={[{ v: 'block', label: t('Block') }, { v: 'circle', label: t('Circle') }]} />
-                    </SetRow>
-                  )}
-                  {!!prefs.streamCursor && (prefs.cursorStyle || 'block') === 'block' && (() => {
-                    const bv = Math.max(150, Math.min(2000, parseInt(prefs.cursorBlinkMs) || 500));
-                    return (
-                      <SetRow label={t("Blink speed")} desc={t("Idle blink rate. It stays solid while text streams, like a terminal.")}>
-                        <RangeRow value={bv} min="150" max="2000" step="50" def={500}
-                          format={(v) => v + ' ms'} onChange={(v) => setPref('cursorBlinkMs', v)} />
-                      </SetRow>
-                    );
-                  })()}
-                  {!!prefs.streamCursor && prefs.cursorStyle === 'circle' && (() => {
-                    const pv = Math.max(300, Math.min(4000, parseInt(prefs.cursorPulseMs) || 1000));
-                    return (
-                      <SetRow label={t("Pulse speed")} desc={t("How quickly the circle grows and shrinks.")}>
-                        <RangeRow value={pv} min="300" max="4000" step="100" def={1000}
-                          format={(v) => v + ' ms'} onChange={(v) => setPref('cursorPulseMs', v)} />
-                      </SetRow>
-                    );
-                  })()}
-                </>
-                <div className="me-section-h">{t("Navigation")}</div>
-                <>
-                  <div className="sec-note">{t("Tools for moving around a long conversation. Turn any off for a bare view.")}</div>
-                  <SwitchRow label={t("Conversation map")} desc={t("A rail down the right edge with one mark per turn. Click a mark to jump.")}
-                    on={prefs.threadRail !== false} onToggle={() => setPref('threadRail', prefs.threadRail === false)} />
-                  <SwitchRow label={t("Find in conversation")} desc={t("Search the open chat from the header. Off gives Ctrl+F back to the browser.")}
-                    on={prefs.threadFind !== false} onToggle={() => setPref('threadFind', prefs.threadFind === false)} />
-                  <SwitchRow label={t("Branch map")} desc={t("A header button showing the whole conversation, every branch included.")}
-                    on={prefs.branchMap !== false} onToggle={() => setPref('branchMap', prefs.branchMap === false)} />
-                  <SwitchRow label={t("Message shortcuts")} desc={t("J and K move between messages; C copies, E edits, R retries, Y branches.")}
-                    on={prefs.msgKeys !== false} onToggle={() => setPref('msgKeys', prefs.msgKeys === false)} />
-                </>
+                <Toggle prefs={prefs} setPref={setPref} k="autoscroll" label={t("Auto-scroll")} desc={t("Keep the latest text in view unless you scroll up.")} />
+                <div className="sec-note">{t("How text reveals, the streaming cursor and the navigation rails live under Interface.")}</div>
                 <div className="me-section-h">{t("Tools and context")}</div>
                 <>
                   {cfg?.webSearchAvailable && (

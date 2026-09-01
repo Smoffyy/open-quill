@@ -27,6 +27,7 @@ import registerAdminRoutes from './routes/admin.js';
 import registerMediaRoutes from './routes/media.js';
 import registerSpaceRoutes from './routes/spaces.js';
 import registerMiscRoutes from './routes/misc.js';
+import registerThemeRoutes from './routes/theme.js';
 import { localOnlyMiddleware } from './lib/localonly.js';
 import { installEgressGuard } from './lib/egress.js';
 import { sameOriginGuard } from './lib/origin.js';
@@ -74,6 +75,7 @@ registerSettingsRoutes(app);
 registerAdminRoutes(app);
 registerMediaRoutes(app);
 registerSpaceRoutes(app);
+registerThemeRoutes(app);
 registerMiscRoutes(app);
 
 // Unknown API routes answer in JSON. Falling through to the SPA handler below served a

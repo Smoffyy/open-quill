@@ -4,6 +4,8 @@ import Tip from './Tip.jsx';
 import { ChatMenu, menuAtButton, menuAtPointer } from './ChatMenu.jsx';
 import { Plus, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, Chevron, ChevDown, Box, Compact, Sliders, Check, Artifact, Briefcase, ModelDocs, Info, Clock, ArrowOut, QuickTask, Sparkles, Paper } from './icons.jsx';
 import { t } from '../i18n.jsx';
+import { useThemeText } from '../lib/theme/store.jsx';
+import ThemeSlot from './builder/ThemeSlot.jsx';
 import { resolveKeybinds, comboKeys } from '../lib/keybinds.js';
 import { parseVersion } from '../lib/appversion.js';
 import { nextFitSize, FIT_PASSES } from '../lib/fittext.js';
@@ -212,6 +214,16 @@ function Sidebar({
 }) {
   const brandRef = useRef(null);
   const verRef = useRef(null);
+  // Every label the theme builder can rename reads through here, so a renamed
+  // item still falls back to the translated string when no override is set.
+  const navNew = useThemeText('nav.new', t('New'));
+  const navProjects = useThemeText('nav.projects', t('Projects'));
+  const navArtifacts = useThemeText('nav.artifacts', t('Artifacts'));
+  const navScheduled = useThemeText('nav.scheduled', t('Scheduled'));
+  const navCustomize = useThemeText('nav.customize', t('Customize'));
+  const allChats = useThemeText('nav.allChats', t('All chats'));
+  const emptyChats = useThemeText('empty.chats', t('No chats yet'));
+  const recentsLabel = useThemeText('nav.recents', t('Recents'));
   const verText = version ? parseVersion(version)?.full || '' : '';
   useFitText(brandRef, appName || 'open-quill', 0.6);
   useFitText(verRef, verText, 0.8);
@@ -323,27 +335,28 @@ function Sidebar({
           <button className="icon-btn mobile-close-btn" onClick={onMobileClose} title={t("Close menu")}><span style={{ fontSize: 20, lineHeight: 1 }}>✕</span></button>
         </div>
       </div>
+      <ThemeSlot name="sidebar.top" />
       <div className="nav">
         <div className="new-row">
-        <button className={'nav-item new-chat' + (!activeId && !dest ? ' on' : '')} title={t("New")}
+        <button className={'nav-item new-chat' + (!activeId && !dest ? ' on' : '')} title={navNew}
           aria-current={!activeId && !dest ? 'page' : undefined}
           onClick={(e) => { if (e.ctrlKey || e.metaKey) { window.open('/', '_blank', 'noopener'); return; } onNew(); }}
           onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); window.open('/', '_blank', 'noopener'); } }}
-          onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}><span className="nav-ic new-chat-plus"><Plus /></span> <span className="nav-label">{t("New")}</span>
+          onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}><span className="nav-ic new-chat-plus"><Plus /></span> <span className="nav-label">{navNew}</span>
           {newChatCombo && <span className="nav-shortcut">{newChatCombo}</span>}</button>
         <button className="new-quick" title={t('Quick task')} aria-label={t('Quick task')}
           onClick={(e) => { e.stopPropagation(); (onScheduled || onNew)(); }}><QuickTask /></button>
         </div>
-        <button className={'nav-item' + (dest === 'projects' ? ' on' : '')} title={t("Projects")} aria-current={dest === 'projects' ? 'page' : undefined} onClick={onProjects}><span className="nav-ic"><Box /></span> <span className="nav-label">{t("Projects")}</span></button>
-        <button className={'nav-item' + (dest === 'artifacts' ? ' on' : '')} title={t("Artifacts")} aria-current={dest === 'artifacts' ? 'page' : undefined} onClick={() => onArtifacts && onArtifacts()}><span className="nav-ic"><Artifact /></span> <span className="nav-label">{t("Artifacts")}</span></button>
-        <button className={'nav-item' + (dest === 'scheduled' ? ' on' : '')} title={t("Scheduled")} aria-current={dest === 'scheduled' ? 'page' : undefined} onClick={() => onScheduled && onScheduled()}><span className="nav-ic"><Clock /></span> <span className="nav-label">{t("Scheduled")}</span></button>
-        <button className="nav-item" title={t("Customize")} onClick={() => onCustomize && onCustomize()}><span className="nav-ic"><Briefcase /></span> <span className="nav-label">{t("Customize")}</span></button>
+        <button data-oq-item="nav.projects" className={'nav-item' + (dest === 'projects' ? ' on' : '')} title={navProjects} aria-current={dest === 'projects' ? 'page' : undefined} onClick={onProjects}><span className="nav-ic"><Box /></span> <span className="nav-label">{navProjects}</span></button>
+        <button data-oq-item="nav.artifacts" className={'nav-item' + (dest === 'artifacts' ? ' on' : '')} title={navArtifacts} aria-current={dest === 'artifacts' ? 'page' : undefined} onClick={() => onArtifacts && onArtifacts()}><span className="nav-ic"><Artifact /></span> <span className="nav-label">{navArtifacts}</span></button>
+        <button data-oq-item="nav.scheduled" className={'nav-item' + (dest === 'scheduled' ? ' on' : '')} title={navScheduled} aria-current={dest === 'scheduled' ? 'page' : undefined} onClick={() => onScheduled && onScheduled()}><span className="nav-ic"><Clock /></span> <span className="nav-label">{navScheduled}</span></button>
+        <button data-oq-item="nav.customize" className="nav-item" title={navCustomize} onClick={() => onCustomize && onCustomize()}><span className="nav-ic"><Briefcase /></span> <span className="nav-label">{navCustomize}</span></button>
       </div>
       <div className="chats-wrap">
       <div className={'chats' + (scrolled ? ' scrolled' : '')} ref={chatsRef} onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}>
         {!chatsLoaded ? (
           <>
-            <div className="section-label">{t("Recents")}</div>
+            <div className="section-label">{recentsLabel}</div>
             {Array.from({ length: 7 }).map((_, i) => (
               <div key={i} className="chat-skel"><span className="skeleton" style={{ width: (55 + ((i * 37) % 40)) + '%' }} /></div>
             ))}
@@ -378,7 +391,7 @@ function Sidebar({
 
             <div className="section-label recents-label has-head" ref={groupRef}>
               <button className="sec-head" aria-expanded={!folded.has('recents')} onClick={() => toggleFold('recents')}>
-                <span className="sec-head-label">{t('Recents')}</span>
+                <span className="sec-head-label">{recentsLabel}</span>
                 <ChevDown className="sec-head-chev" aria-hidden="true" />
               </button>
               <span className="sec-head-actions">
@@ -398,7 +411,7 @@ function Sidebar({
               )}
               </span>
             </div>
-            {others.length === 0 && <div className="chats-empty">{t("No chats yet")}</div>}
+            {others.length === 0 && <div className="chats-empty">{emptyChats}</div>}
             {!folded.has('recents') && recentGroups[0].items.map(row)}
             {!folded.has('recents') && recentGroups.slice(1).map(g => g.items.length > 0 && (
               <React.Fragment key={g.key}>
@@ -407,12 +420,13 @@ function Sidebar({
               </React.Fragment>
             ))}
             {overflow && (
-              <button className="all-chats-btn" onClick={onChatsOverview}><Compact style={{ width: 15, flexShrink: 0 }} /> <span>{t("All chats")}</span></button>
+              <button className="all-chats-btn" onClick={onChatsOverview}><Compact style={{ width: 15, flexShrink: 0 }} /> <span>{allChats}</span></button>
             )}
           </>
         )}
       </div>
       </div>
+      <ThemeSlot name="sidebar.bottom" />
       <div className="rail-spacer" />
       {showModelDocs && (
         <div className="nav side-foot-nav">

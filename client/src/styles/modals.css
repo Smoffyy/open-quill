@@ -309,19 +309,42 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
 .btn.danger-solid:hover { background: #d44e36; }
 
 .preset-scrim { position: fixed; inset: 0; z-index: 400; background: rgba(0, 0, 0, .55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: grid; place-items: center; }
-.preset-modal { width: min(560px, calc(100vw - 32px)); background: var(--modal-bg); border: 1px solid var(--border-soft); border-radius: 18px; padding: 30px 28px 26px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,.28); }
+.preset-modal { width: min(700px, calc(100vw - 32px)); background: var(--modal-bg); border: 1px solid var(--border-soft); border-radius: 18px; padding: 30px 28px 24px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,.28); }
 .preset-title { font-family: var(--font-serif); font-size: 24px; font-weight: 500; margin: 0 0 6px; color: var(--text); }
-.preset-sub { color: var(--text-muted); font-size: 13.5px; font-family: var(--font-sans); margin: 0 0 20px; }
-.preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.preset-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 14px; border: 1px solid var(--border-soft); border-radius: 14px; background: var(--surface); font-family: var(--font-sans); transition: border-color var(--fx-t, .15s), background var(--fx-t, .15s), transform var(--fx-t, .12s); }
-.preset-card:hover { border-color: var(--text); background: var(--surface-hover); }
-.preset-swatch { width: 64px; height: 64px; border-radius: 16px; display: grid; place-items: center; }
+.preset-sub { max-width: 44ch; margin: 0 auto 22px; color: var(--text-muted); font-size: 13.5px; line-height: 1.5; font-family: var(--font-sans); }
+/* Sized from the cards rather than a fixed column count, so a layout added to
+   the seed list lands in the grid instead of breaking it. */
+.preset-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.preset-card { display: flex; flex-direction: column; align-items: center; gap: 9px; padding: 20px 14px 18px; border: 1px solid var(--border-soft); border-radius: 14px; background: var(--surface); font-family: var(--font-sans); text-align: center; transition: border-color var(--fx-t, .15s), background var(--fx-t, .15s), transform var(--fx-t, .12s); }
+.preset-card:hover:not(:disabled) { border-color: var(--text); background: var(--surface-hover); }
+.preset-card:focus-visible { border-color: var(--text); outline: 2px solid var(--search-hit); outline-offset: 2px; }
+.preset-card:active:not(:disabled) { transform: translateY(1px); }
+.preset-card:disabled { cursor: default; }
+/* Only the card being committed keeps full contrast, so the click reads as
+   "this one" rather than "everything stopped working". */
+.preset-card:disabled:not(.busy) { opacity: .5; }
+.preset-card.busy { border-color: var(--text); background: var(--surface-hover); }
+.preset-swatch { width: 60px; height: 60px; border-radius: 15px; display: grid; place-items: center; flex-shrink: 0; }
 .preset-swatch.anthropic { background: #262624; border: 1px solid #3a3a37; }
 .preset-swatch.anthropic .ps-dot { width: 22px; height: 22px; border-radius: 6px; background: #d97757; }
 .preset-swatch.openai { background: #000; border: 1px solid #2b2b2b; }
 .preset-swatch.openai .ps-dot { width: 22px; height: 22px; border-radius: 50%; background: #fff; }
+/* Blank previews itself: the flat surfaces and square corners it actually ships. */
+.preset-swatch.blank, .preset-swatch.plain { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; }
+.preset-swatch.blank .ps-dot, .preset-swatch.plain .ps-dot { width: 22px; height: 22px; border-radius: 4px; background: var(--text-muted); }
 .preset-name { font-weight: 600; font-size: 15px; color: var(--text); }
-.preset-desc { font-size: 12.5px; color: var(--text-muted); line-height: 1.45; }
+.preset-desc { font-size: 12.5px; color: var(--text-muted); line-height: 1.45; text-wrap: balance; }
+.preset-foot { margin: 18px 0 0; font-family: var(--font-sans); font-size: 12px; color: var(--text-faint); }
+
+@media (max-width: 520px) {
+  .preset-modal { padding: 24px 18px 20px; }
+  .preset-grid { grid-template-columns: 1fr; }
+  /* One row per layout on a narrow screen: swatch on the left, name over its
+     description on the right. */
+  .preset-card { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 14px; row-gap: 2px; text-align: left; padding: 13px 14px; }
+  .preset-swatch { grid-row: 1 / 3; width: 44px; height: 44px; border-radius: 12px; }
+  .preset-swatch .ps-dot { width: 16px; height: 16px; }
+}
 
 .modal .me-sections { display: flex; gap: 2px; border-bottom: 1px solid var(--border-soft); margin-bottom: 16px; }
 .modal .me-sec { position: relative; padding: 9px 12px; font-size: 13.5px; font-weight: 500; color: var(--text-muted); background: transparent; border-radius: 0; }

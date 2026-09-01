@@ -35,6 +35,19 @@ export function promoteDrafts() {
   return keys;
 }
 
+// Promote exactly one key. The theme publish uses this: activating a layout
+// stages ui_preset, and shipping the theme without it would leave a member
+// rendering the new element rules on the old base preset. Publishing the whole
+// draft namespace instead would quietly ship unrelated staged settings, which is
+// the workspace Publish button's job, not this one's.
+export function promoteDraft(key) {
+  const staged = getSetting(PREFIX + key, undefined);
+  if (staged === undefined) return false;
+  setSetting(key, staged);
+  delSetting(PREFIX + key);
+  return true;
+}
+
 export function discardDrafts() {
   const keys = draftKeys();
   for (const key of keys) delSetting(PREFIX + key);

@@ -27,7 +27,7 @@ import Viewer from '../src/components/artifacts/Viewer.jsx';
 import Composer from '../src/components/Composer.jsx';
 import ModelDropdown from '../src/components/ModelDropdown.jsx';
 import { AdminProvider } from '../src/components/admin/store.jsx';
-import BrandingSection from '../src/components/admin/sections/BrandingSection.jsx';
+import InterfaceSection from '../src/components/admin/sections/InterfaceSection.jsx';
 import EventsSection from '../src/components/admin/sections/EventsSection.jsx';
 import FilesSection from '../src/components/admin/sections/FilesSection.jsx';
 import GuardrailsSection from '../src/components/admin/sections/GuardrailsSection.jsx';
@@ -127,7 +127,7 @@ cases.push(['ArtifactsViewer:pending', () => React.createElement(Viewer, {
 // admin sections read everything from AdminProvider, so they need the context to render at all.
 // renderToString does not run effects, so the provider's API calls never fire here.
 const ADMIN_SECTIONS = [
-  ['Branding', BrandingSection], ['Events', EventsSection], ['Files', FilesSection],
+  ['Interface', InterfaceSection], ['Events', EventsSection], ['Files', FilesSection],
   ['Guardrails', GuardrailsSection], ['Launcher', LauncherSection], ['Mcp', McpSection],
   ['Members', MembersSection], ['Memory', MemorySection], ['Models', ModelsSection],
   ['Network', NetworkSection], ['Overview', OverviewSection], ['Providers', ProvidersSection],

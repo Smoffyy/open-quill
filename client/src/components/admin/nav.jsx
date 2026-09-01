@@ -1,4 +1,4 @@
-import { Panel, Cube, Sliders, Users, Sparkles, Chat, Globe, Mic, Brain, FileText, Bulb, Plug, Shield, Eye, Wave, Star, Box, Gear, Clock } from '../icons.jsx';
+import { Panel, Cube, Sliders, Users, Chat, Globe, Mic, Brain, FileText, Bulb, Plug, Shield, Eye, Wave, Star, Box, Gear, Clock, Palette } from '../icons.jsx';
 import { tk } from '../../i18n.jsx';
 
 /* Each section declares everything the shell needs to render it:
@@ -49,10 +49,10 @@ export const NAV = [
       index: [tk('Add server'), tk('Transport'), tk('Command'), tk('Headers')] }
   ] },
   { group: tk('Workspace'), items: [
-    { id: 'branding', label: tk('Branding'), Icon: Sparkles, title: tk('Branding'), saves: 'workspace',
-      blurb: tk('Name, icon, interface preset, and typography sent to every connected client.'),
-      find: tk('appearance logo font theme identity disclaimer preset'),
-      index: [tk('Icon'), tk('Interface preset'), tk('Display font'), tk('Footer line'), tk('Model reference button')] },
+    { id: 'interface', label: tk('Interface'), Icon: Palette, title: tk('Interface'), saves: 'workspace',
+      blurb: tk('The theme builder, the theme library, and the identity every connected client renders.'),
+      find: tk('appearance branding logo font theme identity disclaimer preset builder layout design build mode publish'),
+      index: [tk('Theme builder'), tk('Enter build mode'), tk('Themes'), tk('Active theme'), tk('Icon'), tk('Base layout'), tk('Display font'), tk('Footer line'), tk('Model reference button')] },
     { id: 'launcher', label: tk('New chat screen'), Icon: Chat, title: tk('New chat screen'), saves: 'workspace',
       blurb: tk('Greetings and one-tap prompts shown before the first message.'),
       find: tk('home greeting welcome quick prompts starters'),
@@ -104,7 +104,7 @@ export const DEFAULT_SECTION = 'overview';
 const ALIASES = {
   __proto__: null,
   dashboard: 'overview', overview: 'overview',
-  appearance: 'branding', branding: 'branding',
+  appearance: 'interface', branding: 'interface', interface: 'interface', theme: 'interface',
   homescreen: 'launcher', home: 'launcher',
   websearch: 'search',
   membank: 'files',
