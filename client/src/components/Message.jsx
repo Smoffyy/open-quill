@@ -215,10 +215,9 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
     typingTimer.current = setTimeout(() => setTyping(false), Number.isFinite(v) && v > 0 ? v : 500);
     return () => clearTimeout(typingTimer.current);
   }, [streaming, msg.content]);
-  const [textEntered, setTextEntered] = useState(false);
-  useEffect(() => {
-    if (streaming && msg.content) setTextEntered(true);
-  }, [streaming, msg.content]);
+  const textEnteredRef = useRef(false);
+  if (streaming && msg.content) textEnteredRef.current = true;
+  const textEntered = textEnteredRef.current;
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
