@@ -1030,3 +1030,20 @@ code.cp-code {
   .cp-mark span { display: none; }
   .cp-editor-head { position: static; }
 }
+
+/* Theme rows in the Interface section. One row per theme, the active one marked
+   on its left edge so the list reads at a glance. */
+.cp-theme-rows { display: flex; flex-direction: column; gap: var(--cp-1); }
+.cp-theme-row {
+  display: flex;
+  align-items: center;
+  gap: var(--cp-2);
+  padding: var(--cp-2);
+  border: 1px solid var(--cp-line);
+  border-radius: var(--cp-r);
+  background: var(--cp-sunk);
+}
+.cp-theme-row.on { border-color: color-mix(in srgb, var(--accent) 48%, transparent); }
+.cp-theme-info { flex: 1; min-width: 0; }
+.cp-theme-info b { display: block; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-theme-info span { display: block; margin-top: 2px; font-size: 12px; color: var(--cp-faint); }

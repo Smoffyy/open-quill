@@ -45,12 +45,12 @@ server/
 client/src/
   App.jsx        top-level state, WS wiring, routing
   lib/           pure logic and hooks
-  components/    UI; admin/ and artifacts/ are subtrees
+  components/    UI; admin/, artifacts/ and builder/ are subtrees
   styles/        app.css imports all; openai.css always last
   locales/       one JSON per language
 ```
 
-**Dependency direction is routes → lib**; `lib/ws/` never imports from `routes/`. Other `server/lib/`: `appconfig`, `audit`, `budget`, `convo`, `history`, `memory`, `models`, `prompts`, `release`, `router`, `ctxwindow`, `sandboxguard`, `toolstats`, `uploads`. Other `client/src/lib/`: `appversion`, `keybinds`/`keyboard`, `anchor`, `palettes`, `reveal`, `reasoning`, `threadmeta`, `drafts`.
+**Dependency direction is routes → lib**; `lib/ws/` never imports from `routes/`. Other `server/lib/`: `appconfig`, `audit`, `budget`, `convo`, `history`, `memory`, `models`, `prompts`, `release`, `router`, `ctxwindow`, `sandboxguard`, `toolstats`, `uploads`. Other `client/src/lib/`: `appversion`, `keybinds`/`keyboard`, `anchor`, `palettes`, `reveal`, `reasoning`, `threadmeta`, `drafts`, `theme/`.
 
 The logo (`lib/brand.js`) has a client and server copy that must agree; model rows store icon paths, so moving the files needs a `LEGACY` entry in the server copy.
 
@@ -83,6 +83,17 @@ The logo (`lib/brand.js`) has a client and server copy that must agree; model ro
 5. A palette must not introduce a new `data-theme` value (~40 rules are scoped to existing ones).
 6. No preset may make a user pref inert — it can change a default, never the effect.
 
+**Theme builder** (`lib/theme/`, `components/builder/`) — a configuration layer *above* the two presets, not a replacement for them. A preset is the stylesheet a theme paints over; `theme.basePreset` drives `data-preset`, so rules 1-6 above still hold.
+1. A theme is one JSON document (`schema.js`): global tokens, per-element styles/states/responsive overrides, ordering, visibility, text overrides, inserted slot nodes. `css.js` turns it into one `<style id="oq-theme-style">` appended last. Nothing else in the client knows a theme exists.
+2. Elements are found by **CSS selector**, not by instrumentation (`ELEMENTS` in `schema.js`) — styling a component never requires touching it. Only reordering (`data-oq-item`, `ORDER_GROUPS`), editable text (`useThemeText`) and inserted nodes (`ThemeSlot`) need the component to opt in.
+3. Generated rules carry a `:root:root:root` prefix so they outweigh the palette rules they override; `!important` is reserved for hiding. Reordering writes flex `order`, so a drag never touches the React tree.
+4. Tokens that name an existing app variable are emitted **only when set** — emitting a default would flatten the preset. Tokens the builder introduces (`--oq-*`) always emit theirs.
+5. Every style value is whitelisted twice: `STYLE_PROPS` in `server/lib/theme.js` at the write boundary, and `safeValue()` in `css.js` before it reaches a stylesheet.
+6. Storage is one settings blob (`ui_theme_store`) read through the existing `draft:` namespace — admins render their staged copy, members render the published one, and the workspace Publish button promotes both together.
+   Two things can be unpublished and the builder says which: a theme's own document (`docDiffCount` on the server, counted per property against the published copy) and the *choice* of active theme (`activeId` vs `publishedActiveId`). Undo history and the session baseline are stored per theme id, so switching themes to compare designs never discards a stack.
+7. Build mode is admin-only chrome around the running app: `#root` is repositioned by `styles/builder.css` and the preview *is* the live interface, not a copy.
+8. Surfaces that only exist while something happens (messages, menus, windows, banners) are reached through `builder/Stage.jsx`: empty regions get sample content, and the `Show` picker opens the app's own window or menu with a passthrough click (`e.oqPass`) or an `oq-command` event. Nothing there is a mock-up.
+
 **Performance**: occlusion (`content-visibility`) not virtualization for long threads, gated by content size — never on `.msg` itself (clips the avatar). Code highlighting and KaTeX/highlight.js are lazy and local. Locale chunks are per-language and filtered from `modulePreload`.
 
 **CSS**: never `overflow-y: auto` alone (makes the other axis `auto` too — use `overflow: hidden auto`). Menus that can leave their container portal through `lib/anchor.js`. Sticky bars must be opaque (`--code-bg` is translucent). Wide content scrolls in its own container, never the page body. Interactive elements need `:focus-visible` + real semantics.
@@ -104,4 +115,5 @@ The logo (`lib/brand.js`) has a client and server copy that must agree; model ro
 1. Build it plain (Anthropic look) first.
 2. Add `openai.css` rules only if the OpenAI skin needs different visuals.
 3. Branch on `cfg.uiPreset` only for different behavior.
-4. Verify both presets, light and dark — preset switching is live (Admin → Branding).
+4. Verify both presets, light and dark — preset switching is live (Admin → Interface).
+5. If the new UI is worth an admin being able to restyle, add it to `ELEMENTS` in `lib/theme/schema.js`; a selector entry is the whole job.

@@ -16,7 +16,7 @@ import MemorySection from './sections/MemorySection.jsx';
 import FilesSection from './sections/FilesSection.jsx';
 import SkillsSection from './sections/SkillsSection.jsx';
 import McpSection from './sections/McpSection.jsx';
-import BrandingSection from './sections/BrandingSection.jsx';
+import InterfaceSection from './sections/InterfaceSection.jsx';
 import LauncherSection from './sections/LauncherSection.jsx';
 import MembersSection from './sections/MembersSection.jsx';
 import GuardrailsSection from './sections/GuardrailsSection.jsx';
@@ -38,7 +38,7 @@ const VIEWS = {
   files: FilesSection,
   skills: SkillsSection,
   mcp: McpSection,
-  branding: BrandingSection,
+  interface: InterfaceSection,
   launcher: LauncherSection,
   members: MembersSection,
   guardrails: GuardrailsSection,

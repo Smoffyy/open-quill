@@ -9,6 +9,7 @@ import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevro
 import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
 import { extLabel } from '../lib/files.js';
 import { t, fmtDate } from '../i18n.jsx';
+import { useThemeText } from '../lib/theme/store.jsx';
 import { focusUnlessTouch } from '../lib/touch.js';
 import { useSubmenus } from '../lib/submenu.js';
 
@@ -75,6 +76,7 @@ export default function Composer({
   compareIds = [], onSetCompare, hideModelPicker = false, chipsBelow = false, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
   ctxGauge = null
 }) {
+  const composerPlaceholder = useThemeText('composer.placeholder', t('How can I help you today?'));
   const ta = useRef(null);
   const fileInput = useRef(null);
   const plusRef = useRef(null);
@@ -418,7 +420,7 @@ export default function Composer({
           <span className="steer-note">{steerMode ? t('Applied to the reply in progress, without losing what is already written.') : t('Sent as a new message when this reply finishes.')}</span>
         </div>
       )}
-      <textarea ref={ta} rows={1} value={value} placeholder={steering ? t('Steer this reply, e.g. "shorter" or "you misread the file"…') : streaming ? (queueCount > 0 ? t('Queue another message ({n} waiting)…', { n: queueCount }) : t('Type to queue a message…')) : (placeholder || t('How can I help you today?'))}
+      <textarea ref={ta} rows={1} value={value} placeholder={steering ? t('Steer this reply, e.g. "shorter" or "you misread the file"…') : streaming ? (queueCount > 0 ? t('Queue another message ({n} waiting)…', { n: queueCount }) : t('Type to queue a message…')) : (placeholder || composerPlaceholder)}
         id="oq-composer" aria-label={t('Message input')}
         onChange={(e) => onChange(e.target.value)} onKeyDown={key} onPaste={onPaste} />
       <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}

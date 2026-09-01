@@ -16,6 +16,7 @@ import { makeToolTextFilter, makeEmitter } from '../llm/emitter.js';
 import { trimInTurn, compactThreshold, estimateTokens, textTokens, makeTokenCounter, truncateForRollingCtx, FALLBACK_CTX } from '../lib/convo.js';
 import { scanTools } from '../toolproto.js';
 import { isContextOverflowError } from '../lib/llamacpp.js';
+import { sanitizeDoc, blankLayoutDoc, normalizeStoreForTest, docDiffCount } from '../lib/theme.js';
 import { winTranslate } from '../sandbox.js';
 import { screenCommand, normalizeRel, compileSearchPattern } from '../lib/sandboxguard.js';
 import { resolveToolName, makeToolResolver, nearestTool, SANDBOX_TOOLS } from '../tools/aliases.js';
@@ -2027,4 +2028,115 @@ test('the client and server copies of the tool protocol stay byte-identical', ()
   const server = fs.readFileSync(path.join(root, 'toolproto.js'), 'utf8');
   const client = fs.readFileSync(path.join(repo, 'client', 'src', 'toolproto.js'), 'utf8');
   assert.equal(client, server, 'client/src/toolproto.js and server/toolproto.js must be kept identical');
+});
+
+/* ---------- theme documents ---------- */
+
+test('a theme document only keeps properties the builder can produce', () => {
+  const doc = sanitizeDoc({
+    basePreset: 'openai',
+    tokens: { color: { accent: '#4f9cf9' }, bogus: { x: 'y' } },
+    content: { 'nav.new': 'Start', '  ': 'dropped' },
+    elements: {
+      greeting: { style: { fontSize: '40px', position: 'fixed', notACssProp: '1' }, hidden: true, order: 3 },
+      empty: { style: {} }
+    },
+    slots: { 'sidebar.top': [{ id: 'n1', type: 'note', props: { text: 'hi' } }] },
+    css: '.x { color: red }'
+  });
+  assert.equal(doc.basePreset, 'openai');
+  // An unrecognised group is carried, not dropped: the client registry decides
+  // what renders, so an older server must still be able to hold a newer theme.
+  assert.deepEqual(doc.tokens, { color: { accent: '#4f9cf9' }, bogus: { x: 'y' } });
+  assert.deepEqual(doc.content, { 'nav.new': 'Start' });
+  assert.deepEqual(doc.elements.greeting.style, { fontSize: '40px', position: 'fixed' });
+  assert.equal(doc.elements.greeting.hidden, true);
+  assert.equal(doc.elements.greeting.order, 3);
+  assert.equal('empty' in doc.elements, false, 'an element with nothing set is not stored');
+  assert.equal(doc.slots['sidebar.top'][0].type, 'note');
+});
+
+test('a theme document cannot smuggle anything out of a css declaration', () => {
+  const doc = sanitizeDoc({
+    elements: {
+      greeting: {
+        style: {
+          color: 'red} body{display:none',
+          background: 'url(https://evil.example/x.png)',
+          fontFamily: 'a; behavior: url(x)',
+          borderColor: 'expression(alert(1))',
+          backgroundImage: 'javascript:alert(1)'
+        }
+      }
+    }
+  });
+  assert.equal(doc.elements.greeting, undefined, 'every unsafe value is dropped, leaving nothing to store');
+});
+
+test('a theme document survives a hostile shape without throwing', () => {
+  for (const raw of [null, 'nope', 42, [], { elements: 'x', tokens: [], slots: 7, content: null }]) {
+    const doc = sanitizeDoc(raw);
+    assert.deepEqual(doc.elements, {});
+    assert.deepEqual(doc.tokens, {});
+    assert.deepEqual(doc.slots, {});
+    assert.equal(doc.basePreset, 'anthropic', 'an unrecognised preset falls back rather than propagating');
+  }
+});
+
+test('theme element states and breakpoints are limited to the ones the inspector offers', () => {
+  const doc = sanitizeDoc({
+    elements: {
+      navItem: {
+        states: { hover: { color: '#fff' }, onMars: { color: '#f00' } },
+        responsive: { mobile: { hidden: true }, watch: { hidden: true } },
+        animation: { name: 'fade', duration: 99999, delay: -5, easing: 'ease-out' }
+      }
+    }
+  });
+  const el = doc.elements.navItem;
+  assert.deepEqual(Object.keys(el.states), ['hover']);
+  assert.deepEqual(Object.keys(el.responsive), ['mobile']);
+  assert.equal(el.animation.duration, 5000, 'a duration is capped rather than rejected');
+  assert.equal(el.animation.delay, 0);
+});
+
+test('the unpublished counter counts what actually differs, not what a theme sets', () => {
+  const published = { elements: { sidebar: { style: { width: '260px', color: 'red' } } }, tokens: { color: { accent: '#111' } } };
+  // Same document, so an admin who has published everything is told exactly that
+  // rather than being shown the size of their design.
+  assert.equal(docDiffCount(published, JSON.parse(JSON.stringify(published))), 0);
+
+  const staged = { elements: { sidebar: { style: { width: '300px', color: 'red' }, hidden: true } }, tokens: { color: { accent: '#111' } } };
+  assert.equal(docDiffCount(published, staged), 2);
+
+  // A theme that has never been published counts as entirely new.
+  assert.equal(docDiffCount({}, published), 3);
+});
+
+test('the Blank layout ships as a preset that keeps a member’s own theme working', () => {
+  const doc = blankLayoutDoc();
+  assert.equal(doc.basePreset, 'anthropic', 'Blank is the plain preset with its decoration turned down');
+  assert.ok(Object.keys(doc.elements).length > 5);
+  // A literal colour would freeze the interface into one palette and make the
+  // light/dark preference inert, which is the one thing a base layout must not do.
+  const values = [
+    ...Object.values(doc.tokens).flatMap(g => Object.values(g)),
+    ...Object.values(doc.elements).flatMap(el => Object.values(el.style || {}))
+  ];
+  for (const v of values) {
+    assert.ok(!/#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(/i.test(v), 'Blank must not hardcode a colour, found: ' + v);
+  }
+});
+
+test('an existing workspace picks up a builtin layout it predates', () => {
+  const older = { v: 1, activeId: 'anthropic', themes: [
+    { id: 'anthropic', name: 'Anthropic', basePreset: 'anthropic', builtin: true, doc: {} },
+    { id: 'openai', name: 'OpenAI', basePreset: 'openai', builtin: true, doc: {} }
+  ] };
+  const store = normalizeStoreForTest(older);
+  const ids = store.themes.map(t => t.id);
+  assert.ok(ids.includes('blank'), 'the seed list is what decides which layouts ship');
+  assert.equal(store.activeId, 'anthropic', 'topping up never changes which theme is live');
+  assert.equal(store.themes.find(t => t.id === 'anthropic').note, 'The native layout',
+    'a builtin blurb comes from the seed list, not from whatever an older store saved');
 });

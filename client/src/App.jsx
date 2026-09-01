@@ -19,6 +19,10 @@ import CommandPalette from './components/CommandPalette.jsx';
 import { computeActiveBg } from './lib/appbg.js';
 import { DEFAULT_DARK, DEFAULT_LIGHT, paletteById, paletteFor, presetOf } from './lib/palettes.js';
 import Disclaimer from './components/Disclaimer.jsx';
+import { ThemeProvider } from './lib/theme/store.jsx';
+import ThemeSlot from './components/builder/ThemeSlot.jsx';
+import FirstRun from './components/builder/FirstRun.jsx';
+const BuildMode = React.lazy(() => import('./components/builder/BuildMode.jsx'));
 
 import Message from './components/Message.jsx';
 import TopbarActions from './components/TopbarActions.jsx';
@@ -526,10 +530,12 @@ export default function App() {
   async function loadChats() { try { setChats(await api.get('/api/chats')); } catch {} finally { setChatsLoaded(true); } }
   async function loadAppConfig() { try { applyCfg(await api.get('/api/app-config')); } catch {} }
   const [presetPicked, setPresetPicked] = useState(false);
-  async function choosePreset(p) {
+  // Activating a layout is what sets the base preset now, so the first-run
+  // picker hands back here only to dismiss itself and re-read the config.
+  const onPresetChosen = useCallback(() => {
     setPresetPicked(true);
-    try { await api.patch('/api/admin/app-config', { uiPreset: p }); await loadAppConfig(); } catch {}
-  }
+    loadAppConfig();
+  }, []);
   useEffect(() => {
     const appName = cfg.appName || 'open-quill';
     if (incognito) { document.title = t('Incognito chat - {app}', { app: appName }); return; }
@@ -1514,6 +1520,7 @@ export default function App() {
     { id: 'promptledger', label: t('What gets sent'), keywords: 'prompt inspect context debug tokens', action: () => { if (activeId) setLedgerPrompt(true); } },
     { id: 'keybinds', label: t('Customize shortcuts'), keywords: 'keybinds hotkeys keys remap', action: () => { setSettingsTab('keybinds'); setShowSettings(true); } },
     ...(user?.isAdmin ? [{ id: 'admin', label: t('Open admin panel'), keywords: 'models users connection providers', action: () => { history.pushState({}, '', '/admin'); setShowAdmin(true); } }] : []),
+    ...(user?.isAdmin ? [{ id: 'build', label: t('Enter build mode'), keywords: 'theme builder design layout customise interface', action: () => { try { localStorage.setItem('oq-build-mode', '1'); } catch {} window.location.reload(); } }] : []),
     ...(user?.isAdmin ? [{ id: 'playground', label: t('Open playground'), keywords: 'test model tune sampling kwargs prompt', action: () => { history.pushState({}, '', '/playground'); setShowPlayground(true); } }] : []),
     { id: 'changelog', label: t('View changelog'), keywords: 'updates version', action: () => setShowChangelog(true) },
     { id: 'credits', label: t('View credits'), keywords: 'about', action: () => setShowCredits(true) },
@@ -1532,6 +1539,7 @@ export default function App() {
   sidebarFns.current = { newChat, openChat, deleteChat, toggleStar, logout, openProjects, moveChatToProject, newProject: () => { openProjects(null); setProjectCreate(true); } };
 
   return (
+    <ThemeProvider user={user} cfg={cfg}>
     <div className={'app' + (incognito ? ' app-incognito' : '') + (bgVisible ? ' has-bg' : '') + (collapsed ? ' sb-collapsed' : '')}>
       <a className="skip-link" href="#oq-composer">{t('Skip to message input')}</a>
       <AppBackground bg={activeBg} />
@@ -1560,6 +1568,7 @@ export default function App() {
 
       <div className={'main' + (incognito ? ' incognito' : '')} data-incognito={incognito ? 'on' : undefined}>
         <Toaster />
+        <ThemeSlot name="main.top" />
         {libPage && (
           <div className="lib-overlay" role="region" aria-label={libPage === 'artifacts' ? t('Artifacts') : t('Scheduled tasks')}>
             {libPage === 'artifacts'
@@ -1600,6 +1609,7 @@ export default function App() {
         )}
         {empty ? (
           <div className="center-wrap">
+            <ThemeSlot name="home.above" />
             <div className="greeting">
               {incognito
                 ? (cfg.uiPreset === 'openai'
@@ -1619,6 +1629,7 @@ export default function App() {
                       : line;
                   })()}
             </div>
+            <ThemeSlot name="composer.above" />
             <div className="composer-wrap">
               <Composer {...composerProps} autoFocus modelUp focusKey={focusTick} />
             </div>
@@ -1629,6 +1640,7 @@ export default function App() {
                 <QuickPrompts prompts={cfg.quickPrompts} visible={!input.trim()} disabled={streaming} onPick={(p) => send([], p)} />
               )}
             </div>
+            <ThemeSlot name="home.below" />
           </div>
         ) : (
           <>
@@ -1799,24 +1811,7 @@ export default function App() {
       {showSettings && <React.Suspense fallback={null}><SettingsModal user={user} cfg={cfg} initialTab={settingsTab} onClose={onSettingsClosed} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile}
         onTrySkill={(sk) => { newChat(); setInput('/' + sk.name + ' '); setFocusTick(n => n + 1); }} /></React.Suspense>}
       {user?.isAdmin && cfg.uiPresetChosen === false && !presetPicked && (
-        <div className="preset-scrim">
-          <div className="preset-modal">
-            <h2 className="preset-title">{t("Choose your interface")}</h2>
-            <p className="preset-sub">{t("Pick the look for this workspace. You can change it any time in Admin → Branding.")}</p>
-            <div className="preset-grid">
-              <button className="preset-card" onClick={() => choosePreset('anthropic')}>
-                <span className="preset-swatch anthropic"><span className="ps-dot" /></span>
-                <span className="preset-name">{t("Anthropic")}</span>
-                <span className="preset-desc">{t("Warm serif look with the classic open-quill layout.")}</span>
-              </button>
-              <button className="preset-card" onClick={() => choosePreset('openai')}>
-                <span className="preset-swatch openai"><span className="ps-dot" /></span>
-                <span className="preset-name">{t("OpenAI")}</span>
-                <span className="preset-desc">{t("Pitch-black ChatGPT layout with the model picker up top.")}</span>
-              </button>
-            </div>
-          </div>
-        </div>
+        <FirstRun onDone={onPresetChosen} />
       )}
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} onChatsChanged={() => loadChats()} />}
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} onOpen={(id) => openChat(id)} />}
@@ -1854,5 +1849,7 @@ export default function App() {
       {showChangelog && <DocModal title={t("Changelog")} name="changelog" onClose={() => setShowChangelog(false)} />}
       {cmdkOpen && <CommandPalette commands={commands} onClose={() => setCmdkOpen(false)} />}
     </div>
+    {user?.isAdmin && <React.Suspense fallback={null}><BuildMode /></React.Suspense>}
+    </ThemeProvider>
   );
 }
