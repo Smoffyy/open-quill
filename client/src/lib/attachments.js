@@ -71,12 +71,23 @@ export function useAttachments({ visionSupported }) {
     setGlow(DEFAULT_GLOW);
   }
 
-  const dragProps = {
-    onDragEnter: (e) => { e.preventDefault(); dragDepth.current++; setDragActive(true); },
-    onDragOver: (e) => { e.preventDefault(); },
-    onDragLeave: (e) => { e.preventDefault(); dragDepth.current--; if (dragDepth.current <= 0) { dragDepth.current = 0; setDragActive(false); } },
-    onDrop: (e) => { e.preventDefault(); dragDepth.current = 0; setDragActive(false); addFiles(e.dataTransfer.files); }
-  };
+  useEffect(() => {
+    const hasFiles = (e) => !!e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+    const onEnter = (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current++; setDragActive(true); };
+    const onOver = (e) => { if (!hasFiles(e)) return; e.preventDefault(); };
+    const onLeave = (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current--; if (dragDepth.current <= 0) { dragDepth.current = 0; setDragActive(false); } };
+    const onDrop = (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current = 0; setDragActive(false); addFiles(e.dataTransfer.files); };
+    window.addEventListener('dragenter', onEnter);
+    window.addEventListener('dragover', onOver);
+    window.addEventListener('dragleave', onLeave);
+    window.addEventListener('drop', onDrop);
+    return () => {
+      window.removeEventListener('dragenter', onEnter);
+      window.removeEventListener('dragover', onOver);
+      window.removeEventListener('dragleave', onLeave);
+      window.removeEventListener('drop', onDrop);
+    };
+  }, [visionSupported]);
 
-  return { files, dragActive, glow, upErr, setUpErr, addFiles, pickFiles, onPaste, removeFile, clearFiles, dragProps };
+  return { files, dragActive, glow, upErr, setUpErr, addFiles, pickFiles, onPaste, removeFile, clearFiles };
 }

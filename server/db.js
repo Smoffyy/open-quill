@@ -317,10 +317,10 @@ process.on('SIGINT', () => { checkpoint(); process.exit(0); });
 process.on('SIGTERM', () => { checkpoint(); process.exit(0); });
 
 if (!getSetting('seeded')) {
-  setSetting('api_base_url', 'http://localhost:8080');
+  setSetting('api_base_url', 'http://localhost:9931');
   setSetting('api_key', '');
   const pid = uid();
-  setSetting('providers', [{ id: pid, name: 'llama.cpp', type: 'llamacpp', base_url: 'http://localhost:8080', api_key: '' }]);
+  setSetting('providers', [{ id: pid, name: 'llama.cpp', type: 'llamacpp', base_url: 'http://localhost:9931', api_key: '' }]);
   db.models.insert({
     id: uid(), display_name: 'Quillku 1', description: 'Fastest for quick answers',
     internal_name: 'local-model', system_prompt: 'You are a helpful assistant.', provider_id: pid,

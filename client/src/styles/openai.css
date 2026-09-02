@@ -418,7 +418,8 @@
 :root[data-preset="openai"][data-theme="light"] .bc-overlay,
 :root[data-preset="openai"][data-theme="light"] .pm-overlay,
 :root[data-preset="openai"][data-theme="light"] .preset-scrim,
-:root[data-preset="openai"][data-theme="light"] .mdoc-overlay { background: rgba(0, 0, 0, .32); }
+:root[data-preset="openai"][data-theme="light"] .mdoc-overlay,
+:root[data-preset="openai"][data-theme="light"] .drop-overlay { background: rgba(0, 0, 0, .32); }
 
 [data-preset="openai"] .topbar { height: auto; padding: 14px 20px; }
 [data-preset="openai"] .topbar .chat-name { height: auto; padding: 5px 9px; border-radius: 9px; font-size: 15px; line-height: normal; color: var(--text-muted); }

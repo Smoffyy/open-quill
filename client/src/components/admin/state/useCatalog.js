@@ -197,7 +197,7 @@ export function useCatalog({ confirm }) {
   }, []);
 
   const addProvider = useCallback(async () => {
-    await api.post('/api/admin/providers', { type: 'lmstudio' });
+    await api.post('/api/admin/providers', { type: 'llamacpp' });
     await loadProviders();
   }, [loadProviders]);
 

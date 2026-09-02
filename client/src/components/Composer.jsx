@@ -1,11 +1,12 @@
 import { useRef, useEffect, useState, useLayoutEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import ModelDropdown from './ModelDropdown.jsx';
 import Tip from './Tip.jsx';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
 import { useAttachments } from '../lib/attachments.js';
 import { useDictation } from '../lib/dictation.js';
-import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer, Screenshot, Plug, Puzzle, Telescope, SkillIcon } from './icons.jsx';
+import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer, Screenshot, Plug, Puzzle, Telescope, SkillIcon, ImageIcon, Copy, Folder } from './icons.jsx';
 import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
 import { extLabel } from '../lib/files.js';
 import { t, fmtDate } from '../i18n.jsx';
@@ -53,6 +54,22 @@ function PmSub({ className = '', children, onMouseEnter, onMouseLeave }) {
   );
 }
 
+function DropOverlay() {
+  return createPortal(
+    <div className="drop-overlay" aria-hidden="true">
+      <div className="drop-overlay-content">
+        <div className="drop-overlay-icons">
+          <ImageIcon />
+          <Copy />
+          <Folder />
+        </div>
+        <div className="drop-overlay-text">{t('Drop files here to add to chat')}</div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function ActiveChip({ icon, label, onRemove }) {
   return (
     <Tip label={label}>
@@ -87,7 +104,7 @@ export default function Composer({
   const { dictating, transcribing, toggleDictation } = useDictation({ sttEngine, valueRef, onChange });
   const {
     files, dragActive, glow, upErr, setUpErr,
-    pickFiles, onPaste, removeFile, clearFiles, dragProps
+    pickFiles, onPaste, removeFile, clearFiles
   } = useAttachments({ visionSupported });
 
   const [plusMenu, setPlusMenu] = useState(false);
@@ -304,11 +321,12 @@ export default function Composer({
   const hasText = /\S/.test(value);
   const canSend = (hasText || files.length > 0) && !uploading && !blockSend && !budgetBlock && !safetyFlagged && !safetyChecking && !conversationEnded;
   const [multiline, setMultiline] = useState(false);
-  const cls = 'composer' + (multiline ? ' ml' : '') + (chipsBelow && activeTools.length > 0 ? ' has-chips' : '') + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + ((unavailable || removedModel) ? ' unavailable' : '') + ((blockSend || budgetBlock) ? ' blocked' : '');
+  const cls = 'composer' + (multiline ? ' ml' : '') + (chipsBelow && activeTools.length > 0 ? ' has-chips' : '') + (hasImage ? ' glowing' : '') + ((unavailable || removedModel) ? ' unavailable' : '') + ((blockSend || budgetBlock) ? ' blocked' : '');
   const fmtUsd = (n) => '$' + (Number(n || 0) > 0 && Number(n || 0) < 0.01 ? Number(n).toFixed(4) : Number(n || 0).toFixed(2));
 
   return (
     <div className={'composer-stack' + ((bannerMounted || showBudgetBanner || safetyFlagged || conversationEnded || removedModel || sunsetInfo) ? ' has-banner' : '')}>
+    {dragActive && <DropOverlay />}
     {(bannerMounted || showBudgetBanner || safetyFlagged || conversationEnded || removedModel || sunsetInfo) && (
       <div className={'unavail-bg' + (bannerOut && !showBudgetBanner && !safetyFlagged && !conversationEnded && !removedModel && !sunsetInfo ? ' out' : '')}
         style={sunsetOnly ? {
@@ -372,9 +390,7 @@ export default function Composer({
         )}
       </div>
     )}
-    <div className={cls} style={{ '--glow': glow }}
-      {...dragProps}>
-      {dragActive && <div className="drop-hint">Drop to attach{visionSupported ? '' : ' files'}</div>}
+    <div className={cls} style={{ '--glow': glow }}>
       {files.length > 0 && (
         <div className="attach-row">
           {files.map(f => (

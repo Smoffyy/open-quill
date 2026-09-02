@@ -299,11 +299,18 @@ button { transition: transform var(--fx-t, .12s) ease, background var(--fx-t, .1
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 32%, transparent);
 }
 
-/* ---------- composer drag / glow ---------- */
+/* ---------- composer glow ---------- */
 .composer { position: relative; }
 .composer.glowing { border-color: var(--glow); box-shadow: 0 0 0 1px var(--glow), 0 0 18px -5px var(--glow), 0 2px 14px #0000002e; }
-.composer.dragging { border-color: var(--glow); box-shadow: 0 0 0 2px var(--glow), 0 0 30px -4px var(--glow); }
-.drop-hint { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 18px; background: color-mix(in srgb, var(--glow) 14%, transparent); color: var(--text); font-size: 14px; font-family: var(--font-sans); font-weight: 600; letter-spacing: .01em; pointer-events: none; z-index: 6; }
+
+/* ---------- whole-window file drop overlay ---------- */
+@keyframes dropOverlayIn { from { opacity: 0; } to { opacity: 1; } }
+.drop-overlay { position: fixed; inset: 0; z-index: 400; display: grid; place-items: center; pointer-events: none; background: rgba(0, 0, 0, .55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: dropOverlayIn .12s ease; }
+.drop-overlay::before { content: ''; position: absolute; inset: 8px; border: 2px solid var(--pop-blue); border-radius: 16px; box-shadow: 0 0 24px 2px color-mix(in srgb, var(--pop-blue) 45%, transparent); }
+.drop-overlay-content { position: relative; display: flex; flex-direction: column; align-items: center; }
+.drop-overlay-icons { display: flex; align-items: center; gap: 18px; color: var(--pop-blue); margin-bottom: 12px; }
+.drop-overlay-icons svg { width: 22px; height: 22px; }
+.drop-overlay-text { color: var(--pop-blue); font-family: var(--font-sans); font-size: 14px; font-weight: 600; letter-spacing: .01em; }
 
 .btn.danger-solid { background: #c4452f; color: #fff; }
 .btn.danger-solid:hover { background: #d44e36; }
