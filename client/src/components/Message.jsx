@@ -45,8 +45,13 @@ function fmtTime(ts) {
   if (!ts) return null;
   const d = new Date(ts);
   if (isNaN(d.getTime())) return null;
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  let short;
+  if (days < 1) short = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  else if (days <= 7) short = days === 1 ? t('1 day ago') : t('{n} days ago', { n: days });
+  else short = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
   return {
-    short: d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+    short,
     full: d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
   };
 }
@@ -140,7 +145,7 @@ function StatusCaption({ label, detail }) {
   return <span className={'msg-icon-status' + (visible ? ' show' : '')} title={title || undefined}>{text}</span>;
 }
 
-const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name, statusLabel, statusDetail }, ref) {
+const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name, nameHoverOnly, statusLabel, statusDetail }, ref) {
   const base = model?.staticIcon || '';
   const map = {
     static: base,
@@ -155,7 +160,7 @@ const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, nam
   return (
     <div ref={ref} className={'msg-icon' + (below ? ' below' : '') + (name ? ' with-name' : '')}>
       {base && <img src={src} className={cls} style={{ width: sz, height: sz }} alt="" />}
-      {name && <span className="msg-icon-name">{name}</span>}
+      {name && <span className={'msg-icon-name' + (nameHoverOnly ? ' hover-reveal' : '')}>{name}</span>}
       <StatusCaption label={statusLabel} detail={statusDetail} />
     </div>
   );
@@ -321,7 +326,8 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   }
   const iconPhase = streaming ? phase : 'static';
   const showIt = showIcon || streaming;
-  const showName = !!model?.showName && !!model?.displayName;
+  const hasName = !!model?.displayName;
+  const showName = !!model?.showName && hasName;
 
   // Every call the model is currently spelling out, so a step that writes six
   // files shows six rows instead of one that keeps being overwritten. Falls back
@@ -330,7 +336,8 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
     ? liveCalls
     : (liveCall && liveCall.tool ? [{ index: 0, call: liveCall }] : []);
   const showStatus = streaming && !msg.content && !msg.reasoning && !liveRows.length && statusInfo.show;
-  const icon = showIt ? <ModelIcon ref={iconRef} model={model} phase={iconPhase} below={pos === 'below'} name={pos === 'left' ? null : (showName ? model.displayName : null)}
+  const icon = showIt ? <ModelIcon ref={iconRef} model={model} phase={iconPhase} below={pos === 'below'} name={pos === 'left' ? null : (hasName ? model.displayName : null)}
+    nameHoverOnly={pos !== 'left' && hasName && !showName}
     statusLabel={showStatus ? statusInfo.label : null} statusDetail={statusInfo.detail} /> : null;
 
   async function rate(r) {
@@ -396,7 +403,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
             onDelete && chatId && !String(msg.id).startsWith('inc-') && { label: t('Delete'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
           ]} />
           {showSpeed && <SpeedChip speed={msg.speed} />}
-          {model?.displayName && <span className="msg-model-badge">{model.displayName}</span>}
+          {(() => { const ti = fmtTime(msg.created_at); return ti ? <span className="msg-time" data-full={ti.full}>{ti.short}</span> : null; })()}
           {canContinue && onContinue && (
             <button className="action-btn continue-act" onClick={onContinue} title={t("Pick up where this reply stopped")}>
               <Retry style={{ width: 14 }} /> {t("Continue")}
@@ -414,7 +421,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
     return (
       <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant icon-left' + (streaming ? ' streaming-msg' : '') + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
         {icon && <div className="il-avatar" style={{ left: -(gutter + 14) }}>{icon}</div>}
-        {showName && <div className="assistant-name">{model.displayName}</div>}
+        {hasName && <div className={'assistant-name' + (showName ? '' : ' hover-reveal')}>{model.displayName}</div>}
         {inner}
       </div>
     );

@@ -430,14 +430,12 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .toast-ico { display: grid; place-items: center; color: var(--text); }
 .toast-msg { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* ---- message jump flash + model badge ---- */
-.msg-model-badge { margin-left: 6px; font-size: 11px; color: var(--text-faint); font-family: var(--font-sans); opacity: 0; transition: opacity var(--fx-t, .15s); }
-.msg.has-actions:hover .msg-model-badge { opacity: .8; }
+/* ---- message jump flash ---- */
 .msg-speed {
   margin-left: 6px; font-size: 11px; color: var(--text-faint); font-family: var(--font-sans);
   font-variant-numeric: tabular-nums; white-space: nowrap; opacity: 0; transition: opacity var(--fx-t, .15s); cursor: default;
 }
-.msg-speed + .msg-model-badge { margin-left: 6px; }
+.msg-speed + .msg-time { margin-left: 6px; }
 .msg-speed .ms-est { margin-left: 1px; opacity: .7; }
 .msg.has-actions:hover .msg-speed { opacity: .75; }
 

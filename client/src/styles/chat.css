@@ -296,6 +296,8 @@
 .msg.assistant > .msg-icon { margin-left: 8px; }
 .msg-icon img { display: block; }
 .msg-icon-name { font-family: var(--font-sans); font-size: 14px; font-weight: 500; color: var(--text-muted); white-space: nowrap; }
+.msg-icon-name.hover-reveal { display: none; }
+.msg.assistant:hover .msg-icon-name.hover-reveal { display: inline; }
 
 .msg.assistant.icon-left { position: relative; }
 .msg.assistant.icon-left .il-avatar { position: absolute; top: 0; }
@@ -304,6 +306,8 @@
   .msg.assistant.icon-left .il-avatar { position: static; margin-bottom: 8px; }
 }
 .msg.assistant.icon-left .assistant-name { font-family: var(--font-sans); font-size: 15px; font-weight: 600; color: var(--text); margin: 0 0 6px; line-height: 1.3; }
+.msg.assistant.icon-left .assistant-name.hover-reveal { display: none; }
+.msg.assistant.icon-left:hover .assistant-name.hover-reveal { display: block; }
 
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
 .seg button { padding: 8px 14px; font-size: 13px; font-family: var(--font-sans); color: var(--text-muted); background: var(--input-bg); transition: background var(--fx-t, .12s), color var(--fx-t, .12s); }

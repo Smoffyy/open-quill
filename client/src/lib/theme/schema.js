@@ -222,7 +222,6 @@ export const ELEMENTS = [
   { id: 'msgActions', label: tk('Message actions'), cat: 'thread', sel: '.actions', parent: 'message', caps: ALL, orders: true },
   { id: 'actionBtn', label: tk('Message action button'), cat: 'thread', sel: '.action-btn', parent: 'msgActions', caps: CTRL, icon: true },
   { id: 'msgTime', label: tk('Message timestamp'), cat: 'thread', sel: '.msg-time', parent: 'message', caps: TEXTY },
-  { id: 'msgModelBadge', label: tk('Model badge'), cat: 'thread', sel: '.msg-model-badge', parent: 'message', caps: BOX.concat(['type']) },
   { id: 'codeWrap', label: tk('Code block'), cat: 'thread', sel: '.code-wrap', parent: 'assistantBody', caps: ALL },
   { id: 'codeBar', label: tk('Code block header'), cat: 'thread', sel: '.code-bar', parent: 'codeWrap', caps: ALL },
   { id: 'reasoning', label: tk('Reasoning block'), cat: 'thread', sel: '.reasoning', parent: 'message', caps: ALL },
