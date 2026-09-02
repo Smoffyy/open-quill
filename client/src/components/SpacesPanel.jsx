@@ -4,6 +4,7 @@ import Markdown from './Markdown.jsx';
 import { Plus, Chevron, Users, Trash, Send, Gear, Check, Logout } from './icons.jsx';
 import { t } from '../i18n.jsx';
 import { focusUnlessTouch } from '../lib/touch.js';
+import { useDismiss } from '../lib/dismiss.js';
 
 function timeAgo(ts) {
   const s = Math.floor((Date.now() - ts) / 1000);
@@ -21,14 +22,7 @@ function InviteSearch({ spaceId, onInvited }) {
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-  useEffect(() => {
-    if (!open) return;
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('mousedown', h);
-    document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
-  }, [open]);
+  useDismiss(open, () => setOpen(false), ref);
   useEffect(() => {
     if (!q.trim() || q.trim().length < 2) { setResults([]); return; }
     let on = true;

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { t } from '../../i18n.jsx';
 import { tokenRefs } from '../../lib/theme/schema.js';
 import { X, Check, Refresh } from '../icons.jsx';
+import { useDismiss } from '../../lib/dismiss.js';
 
 /* Controls are deliberately plain: a label, a widget, and a reset affordance
    that appears only once the value has been touched. An admin should be able to
@@ -143,17 +144,7 @@ export function Color({ value, onChange, allowTokens = true, inherited }) {
   const hex = toHex(value);
   const refs = allowTokens ? tokenRefs('color') : [];
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const away = (e) => {
-      if (btn.current?.contains(e.target) || pop.current?.contains(e.target)) return;
-      setOpen(false);
-    };
-    const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('mousedown', away);
-    document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc); };
-  }, [open]);
+  useDismiss(open, () => setOpen(false), [btn, pop]);
 
   const rect = open && btn.current ? btn.current.getBoundingClientRect() : null;
 

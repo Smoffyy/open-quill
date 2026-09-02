@@ -3,6 +3,7 @@ import { api } from '../../api.js';
 import { Dialog, Btn, Field, Fields, Seg, Note } from './ui.jsx';
 import { QP_ICON_LIST, QpIcon } from '../../qpIcons.jsx';
 import { t, tk } from '../../i18n.jsx';
+import { useDismiss } from '../../lib/dismiss.js';
 
 function Slider({ label, min, max, step, value, onChange }) {
   return (
@@ -245,14 +246,7 @@ export function ImagePicker({ value, fallback, onChange, hint }) {
 export function GlyphPicker({ value, onPick }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-  useEffect(() => {
-    if (!open) return undefined;
-    const away = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('mousedown', away);
-    document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc); };
-  }, [open]);
+  useDismiss(open, () => setOpen(false), ref);
   return (
     <div style={{ position: 'relative' }} ref={ref}>
       <Btn size="sm" style={{ width: 26, padding: 0 }} onClick={() => setOpen(o => !o)} title={t('Choose a glyph')} aria-label={t('Choose a glyph')}>

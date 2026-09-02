@@ -13,6 +13,7 @@ import { t, fmtDate } from '../i18n.jsx';
 import { useThemeText } from '../lib/theme/store.jsx';
 import { focusUnlessTouch } from '../lib/touch.js';
 import { useSubmenus } from '../lib/submenu.js';
+import { useDismiss } from '../lib/dismiss.js';
 
 // The picker no longer advertises a list. The server decides what it can read by
 // sniffing the bytes, so any format is accepted here and one that turns out to be
@@ -124,12 +125,8 @@ export default function Composer({
       const r = btn.getBoundingClientRect();
       setPlusDown(window.innerHeight - r.bottom > 320);
     }
-    const h = (e) => { if (plusRef.current && !plusRef.current.contains(e.target)) setPlusMenu(false); };
-    const esc = (e) => { if (e.key === 'Escape') setPlusMenu(false); };
-    document.addEventListener('mousedown', h);
-    document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
   }, [plusMenu]);
+  useDismiss(plusMenu, () => setPlusMenu(false), plusRef);
 
   const grewOnce = useRef(false);
   const fitRaf = useRef(0);

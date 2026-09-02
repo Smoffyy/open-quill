@@ -5,6 +5,7 @@ import Composer from './Composer.jsx';
 import { Box, Search, Plus, ChevDown, Star, Dots, Trash, Pencil, X, FileText } from './icons.jsx';
 import { t } from '../i18n.jsx';
 import { focusUnlessTouch } from '../lib/touch.js';
+import { useDismiss } from '../lib/dismiss.js';
 
 function updatedLabel(ts) {
   const d = new Date(ts);
@@ -97,14 +98,7 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
     catch { onBack(); }
   }, [id]);
   useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    if (!menu) return;
-    const h = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenu(false); };
-    const esc = (e) => { if (e.key === 'Escape') setMenu(false); };
-    document.addEventListener('mousedown', h);
-    document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
-  }, [menu]);
+  useDismiss(menu, () => setMenu(false), menuRef);
   if (!project) return <div className="pj-detail" />;
 
   async function patch(body) {

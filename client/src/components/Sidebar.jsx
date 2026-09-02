@@ -9,6 +9,7 @@ import ThemeSlot from './builder/ThemeSlot.jsx';
 import { resolveKeybinds, comboKeys } from '../lib/keybinds.js';
 import { parseVersion } from '../lib/appversion.js';
 import { nextFitSize, FIT_PASSES } from '../lib/fittext.js';
+import { useDismiss } from '../lib/dismiss.js';
 
 function useFitText(ref, text, min) {
   useLayoutEffect(() => {
@@ -152,13 +153,7 @@ function ProfileMenu({ user, anchorRef, onSettings, onAdmin, onPlayground, onCre
     const width = rail ? Math.max(210, rail.width - 8) : Math.max(210, r.width);
     setPos({ left, width, bottom: window.innerHeight - r.top + 5.8 });
   }, [anchorRef]);
-  useEffect(() => {
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target) && !anchorRef.current?.contains(e.target)) onClose(); };
-    const esc = (e) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('mousedown', h);
-    document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
-  }, []);
+  useDismiss(true, onClose, [ref, anchorRef]);
   return createPortal(
     <div className="popover" ref={ref} role="menu" aria-label={t('Profile menu')}
       style={pos ? { position: 'fixed', left: pos.left, bottom: pos.bottom, width: pos.width, right: 'auto' } : { visibility: 'hidden' }}>
@@ -255,14 +250,7 @@ function Sidebar({
   });
   const groupRef = useRef(null);
   const pickGroup = (v) => { setGroupBy(v); setGroupMenu(false); try { localStorage.setItem('oq-group-by', v); } catch {} };
-  useEffect(() => {
-    if (!groupMenu) return;
-    const h = (e) => { if (groupRef.current && !groupRef.current.contains(e.target)) setGroupMenu(false); };
-    const esc = (e) => { if (e.key === 'Escape') setGroupMenu(false); };
-    document.addEventListener('mousedown', h);
-    document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
-  }, [groupMenu]);
+  useDismiss(groupMenu, () => setGroupMenu(false), groupRef);
   useEffect(() => {
     const down = (e) => { if (e.key === 'Shift') setShiftHeld(true); };
     const up = (e) => { if (e.key === 'Shift') setShiftHeld(false); };

@@ -26,6 +26,7 @@ import UsageSection from './sections/UsageSection.jsx';
 import RatingsSection from './sections/RatingsSection.jsx';
 import EventsSection from './sections/EventsSection.jsx';
 import StorageSection from './sections/StorageSection.jsx';
+import { useDismiss } from '../../lib/dismiss.js';
 
 const VIEWS = {
   __proto__: null,
@@ -77,12 +78,7 @@ function Finder() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  useEffect(() => {
-    if (!q) return undefined;
-    const away = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setQ(''); };
-    document.addEventListener('mousedown', away);
-    return () => document.removeEventListener('mousedown', away);
-  }, [q]);
+  useDismiss(!!q, () => setQ(''), boxRef, { escape: false });
 
   const needle = q.trim().toLowerCase();
   const hits = useMemo(() => {

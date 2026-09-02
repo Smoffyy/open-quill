@@ -6,6 +6,7 @@ import { Switch } from './settingsui.jsx';
 import { clampPx, overshoot, stretchFor, squashFor, stretchOrigin, slideFor, DRAG_SLOP } from '../lib/dragsteps.js';
 import { paintCells, fadeTrail, stampTrail, headColumn, CELL, CELL_FPS, CELL_SPEED } from '../lib/cellfield.js';
 import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues, isRange, clampToRange, rangeStep, kwargVisible, gateSourceIds } from '../kwargs.js';
+import { useDismiss } from '../lib/dismiss.js';
 
 const CAP_ICONS = [
   { key: 'capText', label: tk('Text-Only'), Icon: TextIcon },
@@ -387,16 +388,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
   const ref = useRef(null);
   const menuRef = useRef(null);
   const listRef = useRef(null);
-  useEffect(() => {
-    const h = (e) => {
-      const el = e.target;
-      if (ref.current && ref.current.contains(el)) return;
-      if (el && typeof el.closest === 'function' && el.closest('.model-submenu')) return;
-      setOpen(false);
-    };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
+  useDismiss(true, () => setOpen(false), ref, { escape: false, inside: '.model-submenu' });
   useEffect(() => { if (!open) setOpenSub(null); }, [open]);
   useEffect(() => {
     if (!open) return undefined;

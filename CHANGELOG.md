@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [27.2.0] - 2026-09-01
+
+### Fixed
+- **Changing language no longer leaves a connection behind** - the app is rebuilt from scratch when you pick a different language, and the websocket it was using was hung up in a way that immediately scheduled its own reconnect. The result was a second socket that nothing owned: still registered on the server, still receiving every message sent to you, and only cleared when the tab closed. Three language changes left three connections open where there should have been one. A deliberate hangup now stays hung up, while a connection genuinely dropped by the server still reconnects with the same backoff as before.
+- **A draft in one chat is no longer discarded by sending in another** - drafts are written a fraction of a second after you stop typing, and clearing the draft for one chat cancelled that pending write whichever chat it belonged to. Typing in one conversation and then sending in another could lose the first one's text. Clearing now only affects the chat being cleared.
+- **The file preview no longer shows the previous chat's half-written file** - the panel that shows a file as the assistant writes it was reset from nine different places in the code, and two of them cleared the tool rows but left the file itself behind. All nine now go through one reset, so they cannot drift apart again.
+- **Going Back into Spaces from a project no longer leaves both panels open** - the code that turns a URL into a screen stopped as soon as it recognised one, so the screen you were previously on was never closed. Every screen is now opened or closed on every navigation.
+- **Starting a chat from a project clears the previous chat's readouts** - generation speed, prompt size and the backend status line were left showing numbers from whatever was on screen before. Starting a turn cleared all of them, switching chats cleared some, and starting a project chat cleared none; they now share one reset.
+
+### Changed
+- **One dismissal behaviour for every menu and popover** - "close when you click outside me, or press Escape" had been written out by hand in nine components, each with slightly different rules about what counts as outside. They share a single implementation now, so a menu cannot be the one that ignores Escape or the one that closes on its own opening click.
+- **The connection logic is separated from the interface and covered by tests** - the websocket's open, retry and close behaviour lived inside a React hook, where it could only be checked by running the app and watching. It is now a plain module with the same behaviour, driven by tests that cover reconnect backoff, a close that must stay closed, a hangup mid-connect, and frames arriving after a close - including the case where a mistake would silently disable reconnection while leaving everything else looking healthy.
+- **Live tool rows have their own module** - the state behind "the assistant is writing this file" and "these are the calls in this step" was spread across App as four separate pieces reset by hand at every point a conversation changed. It is one unit now, with the rules about which tools produce a preview, how simultaneous calls keep their own rows, and when a finished file is committed pulled out as tested functions.
+- **The reply being typed out is its own piece of the app** - the text received so far, how much of it has been revealed, and the timer that walks one toward the other were six pieces of state and eight references threaded through everything else the main screen does. They are one unit now. The pacing of the reveal - large strides while a fast model is ahead, easing to something that reads as typing near the end - is a plain function with tests, where it used to be four nested conditionals that could only be judged by watching a model type.
+- **Every message the server streams has its own handler** - a single 165-line chain of conditions decided what each kind of update did, closing over every variable on the screen, so working out which update touched which piece of state meant reading all of it. Each kind now has a small named handler that states what it needs, and the rule the whole protocol turns on - an update for a chat you are not looking at still records progress, but only the chat on screen redraws - is written down once instead of repeated twenty times. Forty tests cover it, including the case where a reply that finished while its text was still appearing must be saved before the next one starts.
+- **What a web address means is decided in one place** - reading a URL into a screen, and building one for a chat or project, were scattered as regular expressions through the file. They are one small tested module now.
+- **The main screen is about a third smaller** - App.jsx went from 1,855 lines to roughly 1,600 while gaining behaviour, with the removed code becoming eight focused modules rather than being deleted.
+
+---
+
 ## [27.1.0] — 2026-08-21
 
 ### Added
