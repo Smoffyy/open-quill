@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { api } from '../api.js';
 import { applyPrefs, getUserFont, setUserFont, currentPreset } from '../prefs.js';
 import { palettesFor, themeValue } from '../lib/palettes.js';
@@ -224,7 +224,14 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
   const [usageWindow, setUsageWindow] = useState('all');
   const [sessions, setSessions] = useState(null);
   const [sessionErr, setSessionErr] = useState('');
-  useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
+  // Closing the modal used to *cancel* the debounced save rather than complete it,
+  // so a change made in the last 450ms was silently dropped: flip a switch, click
+  // the X, and the setting was applied to the page but never persisted, reverting
+  // on the next load. Unmount now flushes.
+  const pendingSave = useRef(null);
+  const flushSaveRef = useRef(null);
+  const flushMemoryRef = useRef(null);
+  useEffect(() => () => { flushSaveRef.current?.(); flushMemoryRef.current?.(); }, []);
   useEffect(() => {
     if (tab !== 'usage') return;
     let alive = true; setUsageErr(''); setUsageData(null);
@@ -294,17 +301,38 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
   const deviceLabel = (ua) => { const s = String(ua || ''); if (/edg/i.test(s)) return 'Edge'; if (/chrome|crios/i.test(s)) return 'Chrome'; if (/firefox|fxios/i.test(s)) return 'Firefox'; if (/safari/i.test(s)) return 'Safari'; return 'Browser'; };
   const osLabel = (ua) => { const s = String(ua || ''); if (/windows/i.test(s)) return 'Windows'; if (/android/i.test(s)) return 'Android'; if (/iphone|ipad|ios/i.test(s)) return 'iOS'; if (/mac os|macintosh/i.test(s)) return 'macOS'; if (/linux/i.test(s)) return 'Linux'; return t('Unknown OS'); };
 
-  function scheduleSave(nextName, nextPrefs) {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(async () => {
-      try {
-        const { user: u } = await api.patch('/api/me', { displayName: nextName, prefs: nextPrefs, instructions: instrRef.current });
-        onUpdated(u);
-      } catch {}
-    }, 450);
+  // The three editable fields are mirrored into refs so the save reads whatever is
+  // current at the moment it runs, rather than whatever was true when it was
+  // scheduled. instrRef already worked this way; name and prefs now match it, so
+  // scheduleSave carries no payload and cannot go stale.
+  const nameRef = useRef(name);
+  const prefsRef = useRef(prefs);
+  nameRef.current = name;
+  prefsRef.current = prefs;
+
+  async function flushSave() {
+    if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
+    if (!pendingSave.current) return;
+    pendingSave.current = false;
+    try {
+      const { user: u } = await api.patch('/api/me', {
+        displayName: nameRef.current, prefs: prefsRef.current, instructions: instrRef.current
+      });
+      onUpdated(u);
+    } catch {}
   }
-  function changeName(v) { setName(v); scheduleSave(v, prefs); }
-  function changeInstructions(v) { setInstructions(v); instrRef.current = v; scheduleSave(name, prefs); }
+  flushSaveRef.current = flushSave;
+
+  // Touches only refs, so it is genuinely stable and can be depended on honestly
+  // rather than omitted from a deps array. The timer goes through the ref too, so
+  // a flush queued by one render is always run by the current implementation.
+  const scheduleSave = useCallback(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    pendingSave.current = true;
+    saveTimer.current = setTimeout(() => flushSaveRef.current?.(), 450);
+  }, []);
+  function changeName(v) { setName(v); scheduleSave(); }
+  function changeInstructions(v) { setInstructions(v); instrRef.current = v; scheduleSave(); }
 
   async function clearChats() {
     setClearMsg('');
@@ -317,26 +345,45 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
     catch (e) { setDelErr(e?.message || t('Could not delete account.')); }
   }
 
-  function setPref(k, v) { setPrefs(p => { const next = { ...p, [k]: v }; applyPrefs(next); scheduleSave(name, next); return next; }); }
+  // Painting the page and scheduling a network save used to happen *inside* the
+  // state updater. An updater has to be a pure function of the previous state,
+  // and React is free to call it more than once for a single update, so side
+  // effects there are the wrong shape even where they currently survive it. The
+  // updaters below only compute the next value; this effect reacts to it.
+  const prefsMounted = useRef(false);
+  useEffect(() => {
+    // The first run is the state we were constructed with, not a change the user
+    // made. Saving it would persist the merged defaults for someone who had none.
+    if (!prefsMounted.current) { prefsMounted.current = true; return; }
+    applyPrefs(prefs);
+    scheduleSave();
+  }, [prefs, scheduleSave]);
+
+  function setPref(k, v) { setPrefs(p => ({ ...p, [k]: v })); }
   function resetPrefs() {
     const isOpenai = document.documentElement.getAttribute('data-preset') === 'openai';
     const applied = document.documentElement.getAttribute('data-theme');
     const fallbackTheme = (applied === 'anthropic' || applied === 'openai' || applied === 'oled') ? 'dark' : (applied || 'system');
-    const next = presetDefaults(isOpenai, fallbackTheme);
-    setPrefs(next);
-    applyPrefs(next);
-    scheduleSave(name, next);
+    setPrefs(presetDefaults(isOpenai, fallbackTheme));
     setConfirmReset(false);
   }
   const [memory, setMemory] = useState(user.memory || '');
   const [memBusy, setMemBusy] = useState(false);
   const memTimer = useRef(null);
+  const pendingMemory = useRef(null);
+  async function flushMemory() {
+    if (memTimer.current) { clearTimeout(memTimer.current); memTimer.current = null; }
+    const v = pendingMemory.current;
+    if (v == null) return;
+    pendingMemory.current = null;
+    try { await api.put('/api/me/memory', { memory: v }); onUpdated?.({ ...user, memory: v }); } catch {}
+  }
+  flushMemoryRef.current = flushMemory;
   function changeMemory(v) {
     setMemory(v);
     clearTimeout(memTimer.current);
-    memTimer.current = setTimeout(async () => {
-      try { await api.put('/api/me/memory', { memory: v }); onUpdated?.({ ...user, memory: v }); } catch {}
-    }, 700);
+    pendingMemory.current = v;
+    memTimer.current = setTimeout(flushMemory, 700);
   }
   async function refreshMemory() {
     if (memBusy) return;

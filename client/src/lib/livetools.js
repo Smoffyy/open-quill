@@ -5,7 +5,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 // model is spelling out right now.
 //
 // This used to be three useStates and a ref sitting in App, cleared by hand at
-// nine different sites — a new chat, a new turn, an error, a finished turn, an
+// nine different sites: a new chat, a new turn, an error, a finished turn, an
 // incognito toggle, a project start. They had drifted: two of them cleared the
 // calls but left the file preview pointing at the previous chat's write. One
 // clear() is what stops that class of bug coming back.

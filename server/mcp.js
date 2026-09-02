@@ -287,6 +287,25 @@ function sanitizeSchema(schema) {
   };
 }
 
+// Function names are capped at 64 characters. Truncating alone let two long tool
+// names on one server collapse into the same string: the model was handed two
+// identical function names and every call resolved to whichever came first, so
+// the other tool was silently unreachable. A short digest of the full name keeps
+// them distinct within the cap.
+export const MCP_NAME_MAX = 64;
+
+function digest(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0).toString(36).slice(0, 4).padStart(4, '0');
+}
+
+export function mcpToolName(slug, toolName) {
+  const full = `mcp_${slug}_${toolName}`;
+  if (full.length <= MCP_NAME_MAX) return full;
+  return full.slice(0, MCP_NAME_MAX - 5) + '_' + digest(full);
+}
+
 export function toolSchemas(userId = null) {
   const out = [];
   for (const server of getEnabled(userId)) {
@@ -294,7 +313,7 @@ export function toolSchemas(userId = null) {
       out.push({
         type: 'function',
         function: {
-          name: `mcp_${server.slug}_${t.name}`.slice(0, 64),
+          name: mcpToolName(server.slug, t.name),
           description: `[MCP: ${server.name}] ${t.description || ''}`.slice(0, 1000),
           parameters: sanitizeSchema(t.inputSchema)
         }
@@ -311,7 +330,10 @@ function resolveTool(name, userId = null) {
     const prefix = `mcp_${server.slug}_`;
     if (name.startsWith(prefix)) {
       const toolName = name.slice(prefix.length);
-      const t = (server.tools || []).find(x => `mcp_${server.slug}_${x.name}`.slice(0, 64) === name || x.name === toolName);
+      // Matched through the same builder the schema used, so a name that had to be
+      // shortened still resolves. The bare-name fallback covers a model that
+      // answers with the tool's own name rather than the prefixed one.
+      const t = (server.tools || []).find(x => mcpToolName(server.slug, x.name) === name || x.name === toolName);
       if (t) return { server, tool: t };
     }
   }
@@ -322,7 +344,10 @@ export function promptFor(userId = null) {
   const servers = getEnabled(userId).filter(s => (s.tools || []).length);
   if (!servers.length) return '';
   let p = '## MCP Connectors\nExternal tools are available through MCP servers connected by the admin. Their names are prefixed with `mcp_`. Call them like any other function when they fit the task.\n';
-  for (const s of servers) p += `\n${s.name}: ${(s.tools || []).map(t => `mcp_${s.slug}_${t.name}`).join(', ')}`;
+  // Through the same builder as the schema: the prompt used to spell out the full
+  // name while the schema carried a shortened one, so the model was told to call
+  // something that did not exist.
+  for (const s of servers) p += `\n${s.name}: ${(s.tools || []).map(t => mcpToolName(s.slug, t.name)).join(', ')}`;
   return p;
 }
 

@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react';
 
 // "Close when the pointer goes down outside me, or Escape is pressed" was written
 // out by hand in a dozen components. They only ever differed in which elements
-// count as inside, so that is the parameter; the rest — which events, the
-// pairing of add and remove, the null-ref guard — is fixed here.
+// count as inside, so that is the parameter; the rest (which events, the pairing
+// of add and remove, the null-ref guard) is fixed here.
 
 // Exported for the tests: elements are only touched through `contains`/`closest`,
 // so this is testable without a DOM.

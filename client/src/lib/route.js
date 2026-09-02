@@ -39,7 +39,7 @@ function decodeStrict(s) {
 }
 
 // The paths a view is allowed to sit on. Leaving one of these screens returns to
-// "/" only when the URL still points at the screen being closed — otherwise the
+// "/" only when the URL still points at the screen being closed. Otherwise the
 // user has already navigated somewhere else and rewriting it would undo that.
 const OWNS = {
   admin: /^\/admin(\/|$)/,

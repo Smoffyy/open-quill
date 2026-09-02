@@ -52,16 +52,16 @@ client/src/
 
 **Dependency direction is routes → lib**; `lib/ws/` never imports from `routes/`. Other `server/lib/`: `appconfig`, `audit`, `budget`, `convo`, `history`, `memory`, `models`, `prompts`, `release`, `router`, `ctxwindow`, `sandboxguard`, `toolstats`, `uploads`. Other `client/src/lib/`: `appversion`, `keybinds`/`keyboard`, `anchor`, `palettes`, `reveal`, `reasoning`, `threadmeta`, `drafts`, `theme/`.
 
-**App.jsx's state lives in `client/src/lib/`, one hook per concern** — App wires them together and owns the ordering between them, nothing more:
-- `turnstream` — the assistant message being written: received text, how much is revealed, the reveal timer. `revealChunk`/`revealPeriod`/`hasMarker` are pure and tested.
-- `turnmeta` — telemetry, prompt size, backend status, steers, routing. `reset()` is what a new turn clears; **`route` is deliberately outside it**, because `routed` arrives *before* `start`.
-- `livetools` — the file being written and the tool rows of the current step. One `clear()`; `mergeCall` keeps simultaneous calls on their own rows by index.
-- `genmirror` — per-chat records for turns that are not on screen.
-- `wsmessages` — one handler per server frame, `dispatchWs(m, ctx)`. The protocol rule lives here: **a frame for a background chat updates the mirror, only a frame for `activeKey()` touches the view**. Cannot import `i18n.jsx` (`node --test` can't parse JSX), so translated strings come in through `ctx.text` / `ctx.actions`.
-- `wsclient`/`socket` — socket lifecycle apart from React. A `close()` must stay closed: letting `onclose` schedule a retry leaks a live socket on every remount, and App is keyed by language.
-- `dismiss` — `useDismiss(open, onClose, refs)`, the one outside-click/Escape implementation.
-- `route` — `parseRoute(pathname)` and the path builders; URL meaning is pure and tested.
-- `lru` — the bounded chat cache.
+**App.jsx's state lives in `client/src/lib/`, one hook per concern**. App wires them together and owns the ordering between them, nothing more:
+- `turnstream`: the assistant message being written, meaning received text, how much is revealed, and the reveal timer. `revealChunk`/`revealPeriod`/`hasMarker` are pure and tested.
+- `turnmeta`: telemetry, prompt size, backend status, steers, routing. `reset()` is what a new turn clears; **`route` is deliberately outside it**, because `routed` arrives *before* `start`.
+- `livetools`: the file being written and the tool rows of the current step. One `clear()`; `mergeCall` keeps simultaneous calls on their own rows by index.
+- `genmirror`: per-chat records for turns that are not on screen.
+- `wsmessages`: one handler per server frame, `dispatchWs(m, ctx)`. The protocol rule lives here: **a frame for a background chat updates the mirror, only a frame for `activeKey()` touches the view**. Cannot import `i18n.jsx` (`node --test` can't parse JSX), so translated strings come in through `ctx.text` / `ctx.actions`.
+- `wsclient`/`socket`: socket lifecycle apart from React. A `close()` must stay closed: letting `onclose` schedule a retry leaks a live socket on every remount, and App is keyed by language.
+- `dismiss`: `useDismiss(open, onClose, refs)`, the one outside-click/Escape implementation.
+- `route`: `parseRoute(pathname)` and the path builders; URL meaning is pure and tested.
+- `lru`: the bounded chat cache.
 
 `finalize()` stays in App on purpose: the "nothing appends to `messages` between `done` and finalize" ordering has to be visible next to the code it constrains.
 

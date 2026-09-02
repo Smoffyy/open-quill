@@ -41,6 +41,8 @@ import { historyText } from '../lib/history.js';
 import { bash } from '../sandbox/shell.js';
 import { wireToolCalls, normalizeMessages } from '../llm/wire.js';
 import { unzipBuffer, zipBuffer } from '../sandbox/zip.js';
+import * as sandboxFiles from '../sandbox/files.js';
+import { mcpToolName, MCP_NAME_MAX } from '../mcp.js';
 import { normalizeSchedule, nextRun, isDue } from '../lib/tasks.js';
 
 const asReq = (headers = {}, method = 'POST', localAddress = '10.0.0.5') =>
@@ -2139,4 +2141,93 @@ test('an existing workspace picks up a builtin layout it predates', () => {
   assert.equal(store.activeId, 'anthropic', 'topping up never changes which theme is live');
   assert.equal(store.themes.find(t => t.id === 'anthropic').note, 'The native layout',
     'a builtin blurb comes from the seed list, not from whatever an older store saved');
+});
+
+test('extractZip: the entry cap counts dependency files too', async () => {
+  // The regression: files under node_modules/dist/.git are hidden from listings,
+  // so the counter that enforced the 5000-entry cap never grew for them. A zip of
+  // a project folder with its dependencies wrote every entry, bounded only by the
+  // byte cap - which for thousands of tiny files is no bound at all.
+  const chatId = 'ziptest-' + Date.now();
+  const entries = [];
+  for (let i = 0; i < 6000; i++) entries.push({ name: `node_modules/pkg${i}/index.js`, data: Buffer.from('x') });
+  entries.push({ name: 'app.js', data: Buffer.from('real file') });
+
+  const zipPath = 'bundle.zip';
+  sandboxFiles.importBuffer(chatId, zipPath, zipBuffer(entries));
+  const r = sandboxFiles.extractZip(chatId, zipPath);
+  try {
+    assert.equal(r.ok, true);
+    assert.ok(r.deps <= 5000, `wrote ${r.deps} dependency files, expected the 5000 cap to hold`);
+    assert.ok(r.skipped !== 0 || r.note, 'the caller is told entries were skipped');
+    const listed = sandboxFiles.list(chatId, { all: true });
+    assert.ok(listed.length <= 5002, `${listed.length} files on disk, expected the cap to bound it`);
+  } finally {
+    sandboxFiles.remove(chatId);
+  }
+});
+
+test('extractZip: an ordinary archive still extracts whole', async () => {
+  const chatId = 'ziptest2-' + Date.now();
+  sandboxFiles.importBuffer(chatId, 'small.zip', zipBuffer([
+    { name: 'a.txt', data: Buffer.from('hello') },
+    { name: 'src/b.js', data: Buffer.from('const x = 1;') },
+    { name: 'node_modules/dep/i.js', data: Buffer.from('dep') }
+  ]));
+  const r = sandboxFiles.extractZip(chatId, 'small.zip');
+  try {
+    assert.equal(r.ok, true);
+    assert.equal(r.count, 2, 'two listed files');
+    assert.equal(r.deps, 1, 'the dependency file was written but hidden');
+    assert.equal(sandboxFiles.readText(chatId, 'a.txt'), 'hello');
+    assert.equal(sandboxFiles.readText(chatId, 'node_modules/dep/i.js'), 'dep');
+  } finally {
+    sandboxFiles.remove(chatId);
+  }
+});
+
+test('copyFile stamps every file in a copied directory', async () => {
+  const chatId = 'copytest-' + Date.now();
+  sandboxFiles.createFile(chatId, 'src/a.txt', 'A');
+  sandboxFiles.createFile(chatId, 'src/deep/b.txt', 'B');
+  sandboxFiles.createFile(chatId, 'unrelated.txt', 'C');
+  const r = sandboxFiles.copyFile(chatId, 'src', 'copy');
+  try {
+    assert.equal(r.ok, true);
+    assert.equal(r.count, 2, 'both files under the copy were versioned, and nothing outside it');
+    assert.equal(sandboxFiles.readText(chatId, 'copy/a.txt'), 'A');
+    assert.equal(sandboxFiles.readText(chatId, 'copy/deep/b.txt'), 'B');
+  } finally {
+    sandboxFiles.remove(chatId);
+  }
+});
+
+test('mcpToolName: an ordinary name is just the prefix and the tool', () => {
+  assert.equal(mcpToolName('files', 'read'), 'mcp_files_read');
+  assert.ok(mcpToolName('files', 'read').length <= MCP_NAME_MAX);
+});
+
+test('mcpToolName: two long names on one server stay distinct', () => {
+  // The regression: plain truncation collapsed these into one string, so the
+  // model saw two identical function names and the second tool was unreachable.
+  const slug = 'acme_data_platform_v2';
+  const a = mcpToolName(slug, 'fetch_customer_subscription_billing_history_detailed');
+  const b = mcpToolName(slug, 'fetch_customer_subscription_billing_history_summary');
+  assert.notEqual(a, b);
+  assert.ok(a.length <= MCP_NAME_MAX, `${a.length} chars`);
+  assert.ok(b.length <= MCP_NAME_MAX, `${b.length} chars`);
+});
+
+test('mcpToolName is stable, so the same tool keeps the same name', () => {
+  const once = mcpToolName('s', 'x'.repeat(90));
+  const twice = mcpToolName('s', 'x'.repeat(90));
+  assert.equal(once, twice);
+});
+
+test('mcpToolName never exceeds the cap, whatever it is given', () => {
+  for (const slug of ['a', 'a'.repeat(24)]) {
+    for (const tool of ['b', 'b'.repeat(80), 'weird_name_' + 'z'.repeat(200)]) {
+      assert.ok(mcpToolName(slug, tool).length <= MCP_NAME_MAX, `${slug}/${tool.length}`);
+    }
+  }
 });

@@ -1,7 +1,7 @@
 // The socket's lifecycle, with no React in it: open, reconnect with backoff, and
 // a close that stays closed. It lives apart from the hook so the reconnect rules
-// can be tested against a fake WebSocket instead of only being reasoned about —
-// the bug that prompted this (an intentional close still scheduling a reconnect,
+// can be tested against a fake WebSocket instead of only being reasoned about.
+// The bug that prompted this (an intentional close still scheduling a reconnect,
 // leaking a live socket on every remount) was invisible from the hook's surface.
 
 export const RETRY_BASE = 1500;
@@ -30,7 +30,7 @@ export function createSocketClient(opts = {}) {
   const WS = opts.WebSocketImpl || (typeof WebSocket !== 'undefined' ? WebSocket : null);
   // Wrapped, not referenced. `{ set: setTimeout }` detaches the browser's timer
   // from `window` and calling it throws "Illegal invocation", which would silently
-  // kill every reconnect — the failure only shows up once a socket actually drops.
+  // kill every reconnect, and the failure only shows up once a socket drops.
   const timers = opts.timers || {
     set: (fn, ms) => setTimeout(fn, ms),
     clear: (id) => clearTimeout(id)
