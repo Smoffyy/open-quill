@@ -1,14 +1,14 @@
 .trail {
   position: absolute;
-  right: 4px;
+  right: 8px;
   top: 76px;
   bottom: 150px;
-  width: 26px;
+  width: 24px;
   display: flex;
   align-items: stretch;
   justify-content: center;
   z-index: 4;
-  opacity: .55;
+  opacity: .5;
   transition: opacity var(--fx-t, .18s) ease;
 }
 .trail:hover, .trail:focus-within { opacity: 1; }
@@ -16,30 +16,32 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   width: 100%;
   overflow: hidden auto;
   scrollbar-width: none;
-  padding: 2px 0;
+  padding: 10px 0;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 14px, black calc(100% - 14px), transparent);
+  mask-image: linear-gradient(to bottom, transparent, black 14px, black calc(100% - 14px), transparent);
 }
 .trail-list::-webkit-scrollbar { display: none; }
 
 .trail-tick {
   flex: 0 0 auto;
-  width: 11px;
+  width: 5px;
   border: 0;
   padding: 0;
-  border-radius: 2px;
+  border-radius: 1px;
   background: var(--text-faint);
   cursor: pointer;
-  transition: background var(--fx-t, .14s) ease, width var(--fx-t, .14s) ease, transform var(--fx-t, .14s) ease;
+  transition: background var(--fx-t, .14s) ease, width var(--fx-t, .14s) ease, opacity var(--fx-t, .14s) ease, transform .25s ease;
 }
-.trail-tick.r-assistant { width: 17px; background: color-mix(in srgb, var(--text-muted) 70%, transparent); }
+.trail-tick.r-assistant { width: 10px; background: color-mix(in srgb, var(--text-muted) 70%, transparent); }
 .trail-tick:hover, .trail-tick:focus-visible { background: var(--text); }
 .trail-tick.in-view { background: var(--text); }
-.trail-tick.is-tool { width: 9px; background: color-mix(in srgb, var(--text) 45%, var(--text-faint)); }
-.trail-tick.is-branch { width: 21px; box-shadow: inset 0 0 0 1px var(--text); }
-.trail-tick.is-pinned { border-radius: 50%; width: 7px; }
+.trail-tick.is-tool { width: 4px; background: color-mix(in srgb, var(--text) 45%, var(--text-faint)); }
+.trail-tick.is-branch { width: 13px; }
+.trail-tick.is-pinned { background: var(--text); }
 .trail-tick.is-out { opacity: .35; }
 .trail-tick.is-match { background: #e0a33c; }
 .trail-tick.is-match.in-view { background: #f0b64a; }

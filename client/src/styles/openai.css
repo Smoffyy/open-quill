@@ -298,7 +298,7 @@
 [data-preset="openai"] .ws-title { font-size: 13px; }
 [data-preset="openai"] .ws-meta { font-size: 11px; }
 
-[data-preset="openai"] .trail { top: 66px; bottom: 168px; right: 8px; }
+[data-preset="openai"] .trail { top: 66px; bottom: 168px; }
 [data-preset="openai"] .trail-tick { border-radius: 999px; background: color-mix(in srgb, var(--text) 32%, transparent); }
 [data-preset="openai"] .trail-tick.r-assistant { background: color-mix(in srgb, var(--text) 46%, transparent); }
 [data-preset="openai"] .trail-tick.in-view { background: var(--text); }
