@@ -31,10 +31,11 @@
   --hover-soft: #ffffff14;
   --hover-mid: #ffffff1f;
   --hover: var(--hover-soft);
-  --font-serif: 'Newsreader Variable';
+  --font-serif: 'Literata Variable';
   --font-sans: 'Open Sans';
-  --prose-weight: 420;
-  --prose-strong: 615;
+  --prose-weight: 400;
+  --prose-strong: 600;
+  --greeting-weight: 290;
   --radius: 14px;
   --attach-size: 104px;
   --attach-radius: 12px;
@@ -329,7 +330,7 @@
 :root[data-theme="anthropic"] .nav-item:active { background: var(--sidebar-hover); }
 :root[data-theme="anthropic"] .send { color: #fff; }
 :root[data-theme="anthropic"] .composer .mic,
-:root[data-theme="anthropic"] .greeting { color: var(--sidebar-text); font-weight: 390; }
+:root[data-theme="anthropic"] .greeting { color: var(--sidebar-text); font-weight: var(--greeting-weight, 390); }
 :root[data-theme="anthropic"] .composer { border-color: transparent; box-shadow: 0 4px 20px rgba(0, 0, 0, .035), 0 0 0 1px rgba(225, 224, 217, .15); }
 :root[data-theme="anthropic"] .composer:focus-within { border-color: transparent; box-shadow: 0 4px 20px rgba(0, 0, 0, .075), 0 0 0 1px rgba(225, 224, 217, .3); }
 :root[data-theme="anthropic"] .composer textarea::placeholder { color: var(--sidebar-label); }

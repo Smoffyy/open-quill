@@ -98,7 +98,7 @@ The Admin Panel is in the profile menu, bottom-left of the sidebar.
 
 ### Interface
 
-- Anthropic-style design with a serif assistant voice (Newsreader) and Open Sans for your own messages
+- Anthropic-style design with a serif assistant voice (Literata) and Open Sans for your own messages
 - Two complete UI presets, Anthropic and OpenAI, switchable live, plus light/dark modes and selectable palettes
 - Token-by-token streaming with a fade-in reveal, smart autoscroll and a jump-to-bottom control
 - Auto-generated chat titles, hover-to-copy code blocks, branching conversations and side-by-side branch comparison

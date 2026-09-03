@@ -21,7 +21,7 @@ export const SETTINGS_DEFAULTS = {
 
 export const CONFIG_DEFAULTS = {
   appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [],
-  appFont: 'newsreader', uiPreset: 'anthropic', modelDocs: true,
+  appFont: 'literata', uiPreset: 'anthropic', modelDocs: true,
   allowSignups: true, localOnly: true, egressLocalOnly: true, egressAllowWebSearch: true, egressAllowlist: []
 };
 

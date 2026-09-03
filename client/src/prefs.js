@@ -36,20 +36,21 @@ export function applyPrefs(prefs, preset) {
   applyUserFont();
 }
 
-export const APP_FONTS = new Set(['newsreader', 'sourceserif', 'sans']);
-const LEGACY_FONT_IDS = { __proto__: null, serif: 'newsreader' };
+export const APP_FONTS = new Set(['literata', 'newsreader', 'sourceserif', 'sans']);
+const LEGACY_FONT_IDS = { __proto__: null, serif: 'literata' };
 
 export function appFontId(v) {
   const id = LEGACY_FONT_IDS[v] || v;
-  return APP_FONTS.has(id) ? id : 'newsreader';
+  return APP_FONTS.has(id) ? id : 'literata';
 }
 
 export const USER_FONT_KEY = 'oq-user-font';
 export const USER_FONTS = {
   __proto__: null,
-  newsreader: { stack: "'Newsreader Variable'", weight: 420, strong: 615 },
-  sourceserif: { stack: "'Source Serif 4 Variable'", weight: 465, strong: 680 },
-  sans: { stack: "'Open Sans'", weight: 400, strong: 600 },
+  literata: { stack: "'Literata Variable'", weight: 400, strong: 600, greeting: 290 },
+  newsreader: { stack: "'Newsreader Variable'", weight: 420, strong: 615, greeting: 390 },
+  sourceserif: { stack: "'Source Serif 4 Variable'", weight: 465, strong: 680, greeting: 390 },
+  sans: { stack: "'Open Sans'", weight: 400, strong: 600, greeting: 390 },
 };
 const LEGACY_USER_FONT_IDS = { __proto__: null, serif: 'sourceserif' };
 
@@ -69,11 +70,13 @@ export function applyUserFont(v) {
     root.style.setProperty('--font-serif', pick.stack);
     root.style.setProperty('--prose-weight', String(pick.weight));
     root.style.setProperty('--prose-strong', String(pick.strong));
+    root.style.setProperty('--greeting-weight', String(pick.greeting));
   } else {
     root.style.removeProperty('--font-sans');
     root.style.removeProperty('--font-serif');
     root.style.removeProperty('--prose-weight');
     root.style.removeProperty('--prose-strong');
+    root.style.removeProperty('--greeting-weight');
   }
 }
 export function setUserFont(v) {

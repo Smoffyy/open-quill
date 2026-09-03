@@ -9,7 +9,7 @@ import { draftGet, draftSet } from '../lib/draft.js';
 import { egressLog, clearEgressLog } from '../lib/egress.js';
 import { releaseInfo, releaseIconPath } from '../lib/release.js';
 
-const APP_FONTS = new Set(['newsreader', 'sourceserif', 'sans']);
+const APP_FONTS = new Set(['literata', 'newsreader', 'sourceserif', 'sans']);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DOCS = { __proto__: null, credits: 'CREDITS.md', changelog: 'CHANGELOG.md', license: 'LICENSE' };
@@ -67,12 +67,12 @@ export default function registerMiscRoutes(app) {
       logAudit(req, 'branding.modelDocs', { meta: { on: !!b.modelDocs } });
     }
     if ('appIcon' in b) put('app_icon', text(b.appIcon, 1024));
-    if ('appFont' in b) put('app_font', APP_FONTS.has(b.appFont) ? b.appFont : 'newsreader');
+    if ('appFont' in b) put('app_font', APP_FONTS.has(b.appFont) ? b.appFont : 'literata');
     if ('uiPreset' in b) {
       const next = b.uiPreset === 'openai' ? 'openai' : 'anthropic';
       const prev = draftGet('ui_preset', '');
       if (put('ui_preset', next)) {
-        if (prev !== next && !('appFont' in b)) put('app_font', next === 'openai' ? 'sans' : 'newsreader');
+        if (prev !== next && !('appFont' in b)) put('app_font', next === 'openai' ? 'sans' : 'literata');
         logAudit(req, 'branding.preset', { meta: { preset: next } });
       }
     }

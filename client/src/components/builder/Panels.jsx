@@ -316,6 +316,7 @@ export function TokensPanel() {
                   {kind === 'fontFamily' && (
                     <Select value={value} onChange={set} placeholder={t('Preset default')}
                       options={[
+                        { value: "'Literata Variable', serif", label: 'Literata' },
                         { value: "'Newsreader Variable', serif", label: 'Newsreader' },
                         { value: "'Source Serif 4 Variable', serif", label: 'Source Serif' },
                         { value: "'Open Sans', sans-serif", label: 'Open Sans' },

@@ -598,6 +598,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                     onPick={(v) => { setUserFontState(v); setUserFont(v); }}
                     options={[
                       { v: 'default', label: t('Theme default') },
+                      { v: 'literata', label: 'Literata', font: "'Literata Variable', serif" },
                       { v: 'newsreader', label: 'Newsreader', font: "'Newsreader Variable', serif" },
                       { v: 'sourceserif', label: 'Source Serif', font: "'Source Serif 4 Variable', serif" },
                       { v: 'sans', label: 'Open Sans', font: "'Open Sans', sans-serif" }

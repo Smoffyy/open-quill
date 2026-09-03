@@ -9,8 +9,8 @@ import { Palette, Sparkles, Eye } from '../../icons.jsx';
 import { toast } from '../../../toast.js';
 
 const PRESETS = [['anthropic', tk('Anthropic')], ['openai', tk('OpenAI')]];
-const FONTS = [['newsreader', tk('Newsreader')], ['sourceserif', tk('Source Serif')], ['sans', tk('Open Sans')]];
-const PRESET_FONT = { __proto__: null, openai: 'sans', anthropic: 'newsreader' };
+const FONTS = [['literata', tk('Literata')], ['newsreader', tk('Newsreader')], ['sourceserif', tk('Source Serif')], ['sans', tk('Open Sans')]];
+const PRESET_FONT = { __proto__: null, openai: 'sans', anthropic: 'literata' };
 const BUILD_KEY = 'oq-build-mode';
 
 /* The admin-facing half of the interface story: pick which theme is live, look
@@ -135,12 +135,12 @@ export default function InterfaceSection() {
         <Rows>
           <Row label={t('Preset')} note={t('Switching also sets a matching default font. Models created while a preset is active inherit its icon defaults.')}>
             <Seg value={config.uiPreset || 'anthropic'} label={t('Base layout')}
-              onChange={(v) => setConfig(c => ({ ...c, uiPreset: v, appFont: PRESET_FONT[v] || 'newsreader' }))}
+              onChange={(v) => setConfig(c => ({ ...c, uiPreset: v, appFont: PRESET_FONT[v] || 'literata' }))}
               options={PRESETS.map(([value, label]) => ({ value, label: t(label) }))} />
           </Row>
           <Row label={t('Display font')}
             note={t('Used for headings, greetings, and assistant text. A theme can override this per element.')}>
-            <Seg value={config.appFont || 'newsreader'} label={t('Display font')}
+            <Seg value={config.appFont || 'literata'} label={t('Display font')}
               onChange={(v) => setCfg('appFont', v)}
               options={FONTS.map(([value, label]) => ({ value, label: t(label) }))} />
           </Row>

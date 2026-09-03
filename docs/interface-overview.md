@@ -14,7 +14,7 @@
 - **Theme**: System, Light, or Dark. System follows your OS preference.
 - **Accent color**: a handful of presets plus a custom color picker.
 - **Message density**: Comfortable or Compact spacing.
-- **Font**: Default (matches the active preset), Newsreader, Source Serif, or Open Sans.
+- **Font**: Default (matches the active preset), Literata, Newsreader, Source Serif, or Open Sans.
 - **OLED screen protection**: deepens dark mode toward pure black, useful on OLED displays.
 
 Theme and font choices are stored per-device before you're even signed in, so a reload never flashes the wrong theme, and they're synced to your account afterward.

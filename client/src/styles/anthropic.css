@@ -758,4 +758,4 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 }
 :root[data-preset="anthropic"] .tb-copy svg { width: 14px; height: 14px; }
 
-:root[data-preset="anthropic"] .greeting { font-weight: 390; }
+:root[data-preset="anthropic"] .greeting { font-weight: var(--greeting-weight, 390); }

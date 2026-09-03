@@ -11,6 +11,7 @@ import { Trash, Copy, Refresh } from '../icons.jsx';
 const FONT_STACKS = [
   { value: 'var(--font-serif)', label: 'Heading font' },
   { value: 'var(--font-sans)', label: 'Body font' },
+  { value: "'Literata Variable', serif", label: 'Literata' },
   { value: "'Newsreader Variable', serif", label: 'Newsreader' },
   { value: "'Source Serif 4 Variable', serif", label: 'Source Serif' },
   { value: "'Open Sans', sans-serif", label: 'Open Sans' },
