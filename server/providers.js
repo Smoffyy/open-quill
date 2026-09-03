@@ -6,7 +6,7 @@ import { getSetting } from './db.js';
 export const PROVIDER_TYPES = {
   __proto__: null,
   llamacpp: {
-    label: 'llama.cpp server', defaultBaseUrl: 'http://localhost:8080', protocol: 'openai', keyOptional: true,
+    label: 'llama.cpp server', defaultBaseUrl: 'http://localhost:9931', protocol: 'openai', keyOptional: true,
     samplers: ['temperature', 'top_p', 'top_k', 'min_p', 'repetition_penalty', 'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens', 'stop',
       'dry_multiplier', 'dry_base', 'dry_allowed_length', 'dry_penalty_last_n', 'xtc_probability', 'xtc_threshold', 'mirostat', 'mirostat_tau', 'mirostat_eta'],
     remap: { repetition_penalty: 'repeat_penalty' }, timingsPerToken: true, promptProgress: true, stopMax: 8

@@ -3,7 +3,8 @@ import { authMiddleware, adminOnly } from '../auth.js';
 import { getProviders, resolveProvider, providerSpec } from '../providers.js';
 import { matchPreset, presetList, setCustomPresets, getCustomPresets } from '../pricing.js';
 import { logAudit } from '../lib/audit.js';
-import { draftModels, publicModels, detectContextLength } from '../lib/models.js';
+import { promoteDrafts, hasDrafts } from '../lib/draft.js';
+import { draftModels, publicModels, detectContextLength, timedFetch } from '../lib/models.js';
 import { sanitizeKwargs } from '../lib/kwargs.js';
 import { broadcastConfig, broadcastAdminConfig } from '../lib/ws/index.js';
 import { ROUTE_MATCHERS } from '../lib/router.js';
@@ -45,12 +46,12 @@ export default function registerModelRoutes(app) {
       const headers = key ? { Authorization: `Bearer ${key}` } : {};
       let ids = [];
       if (spec.protocol === 'ollama') {
-        const r = await fetch(base.replace(/\/v1$/, '') + '/api/tags', { headers });
+        const r = await timedFetch(base.replace(/\/v1$/, '') + '/api/tags', { headers });
         if (!r.ok) return res.status(502).json({ error: `Backend returned ${r.status}.` });
         const j = await r.json().catch(() => ({}));
         ids = (Array.isArray(j?.models) ? j.models : []).map(x => x?.name || x?.model).filter(Boolean);
       } else {
-        const r = await fetch(base + '/models', { headers });
+        const r = await timedFetch(base + '/models', { headers });
         if (!r.ok) return res.status(502).json({ error: `Backend returned ${r.status}.` });
         const j = await r.json().catch(() => ({}));
         const raw = Array.isArray(j?.data) ? j.data : (Array.isArray(j?.models) ? j.models : []);
@@ -206,17 +207,21 @@ export default function registerModelRoutes(app) {
   app.post('/api/admin/models/publish', authMiddleware, adminOnly, (req, res) => {
     const snapshot = db.models.all();
     setSetting('published_models', snapshot);
+    // Staged settings and app-config become live in the same step, so one button
+    // means one coherent state rather than a catalog that leads its own config.
+    const promoted = promoteDrafts();
     setSetting('published_at', now());
-    logAudit(req, 'models.publish', { meta: { count: snapshot.length } });
+    logAudit(req, 'config.publish', { meta: { models: snapshot.length, settings: promoted.length } });
     broadcastConfig();
-    res.json({ ok: true, count: snapshot.length, publishedAt: getSetting('published_at') });
+    res.json({ ok: true, count: snapshot.length, settings: promoted.length, publishedAt: getSetting('published_at') });
   });
 
   // has the draft diverged from what is published?
   app.get('/api/admin/models/publish-state', authMiddleware, adminOnly, (req, res) => {
     const snap = getSetting('published_models', null);
     const published = Array.isArray(snap);
-    const dirty = !published || JSON.stringify(snap) !== JSON.stringify(db.models.all());
-    res.json({ published, dirty, publishedAt: getSetting('published_at', null) });
+    const staged = hasDrafts();
+    const dirty = !published || staged || JSON.stringify(snap) !== JSON.stringify(db.models.all());
+    res.json({ published, dirty, staged, publishedAt: getSetting('published_at', null) });
   });
 }

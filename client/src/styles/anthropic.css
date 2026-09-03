@@ -96,7 +96,7 @@
 
 :root[data-preset="anthropic"] .chats { padding: 0 8px 12px; }
 :root[data-preset="anthropic"] .chat-row {
-  height: var(--cl-row-h); gap: 8px; padding: 0 2px; margin-bottom: var(--cl-row-gap);
+  height: var(--cl-row-h); gap: 8px; padding: 0 1px 0 2px; margin-bottom: var(--cl-row-gap);
   border-radius: 8px; font-size: 14px; line-height: 21px;
 }
 :root[data-preset="anthropic"] .chat-row:hover .row-dot,
@@ -148,12 +148,10 @@
   padding: 3px 8px; border-radius: 6px; background: var(--pop-bg); color: var(--pop-text);
   font-size: 13px; line-height: 18px; font-family: var(--font-sans);
   box-shadow: inset 0 0 0 1px var(--pop-border), 0 1px 2px rgba(11, 11, 11, .06), 0 2px 8px rgba(0, 0, 0, .24);
-  pointer-events: none; animation: tip-in var(--fx-a, .12s) ease;
+  pointer-events: none;
 }
 .tip-keys { color: var(--pop-faint); white-space: nowrap; }
-@keyframes tip-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .tip { animation: none; } }
-[data-animations="off"] .tip { animation: none; }
 
 .sidebar { position: relative; }
 @media (max-width: 768px) {
@@ -233,7 +231,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 .lib-card-foot { display: flex; flex-direction: column; gap: 8px; padding: 14px; }
 .lib-card-title {
   font-size: 14px; line-height: 20px; font-weight: 500; color: var(--text);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .lib-card-meta { font-size: 13px; line-height: 17px; color: var(--text-faint); font-family: var(--font-sans); }
 
@@ -253,7 +251,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 .sched-card-title { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--text); }
 .sched-card-desc {
   font-size: 14px; line-height: 20px; color: var(--text-muted); font-family: var(--font-sans);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .sched-card-when {
   display: inline-flex; align-items: center; gap: 6px; margin-top: 6px;
@@ -263,7 +261,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 
 .lib-overlay {
   position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column;
-  background: var(--bg); animation: fade-in var(--fx-a, .16s) ease;
+  background: var(--bg);
 }
 .lib-overlay-x {
   position: absolute; top: 8px; right: 12px; z-index: 1;
@@ -271,11 +269,9 @@ body.resizing-x .side-resize-grip { opacity: 1; }
   transition: background var(--fx-t, .15s), color var(--fx-t, .15s);
 }
 .lib-overlay-x:hover { background: var(--cl-hover); color: var(--text); }
-@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-[data-animations="off"] .lib-overlay { animation: none; }
 @media (prefers-reduced-motion: reduce) { .lib-overlay { animation: none; } }
 
-:root { --focus-ring: #5598e7; --spring: linear(0 0%, 0.2459 7.14286%, 0.6526 14.2857%, 0.9468 21.4286%, 1.0764 28.5714%, 1.0915 35.7143%, 1.0585 42.8571%, 1.0219 50%, 0.9993 57.1429%, 0.9914 64.2857%, 0.9921 71.4286%, 0.9957 78.5714%, 0.9988 85.7143%, 1.0004 92.8571%, 1 100%); }
+:root { --focus-ring: #5598e7; }
 
 :root[data-preset="anthropic"] .nav-item:focus-visible,
 :root[data-preset="anthropic"] .chat-row:focus-visible,
@@ -287,8 +283,6 @@ body.resizing-x .side-resize-grip { opacity: 1; }
   outline: 1.6px solid var(--focus-ring); outline-offset: 1.6px;
 }
 
-/* Claude squishes the background layer behind a control, never the control
-   itself, so a press leaves the label and icon exactly where they were. */
 :root[data-preset="anthropic"] :is(
   .nav-item, .chat-row, .icon-btn, .profile-btn, .profile-apps,
   .lib-pill, .lib-primary, .lib-icon-btn, .lib-tab, .sched-card
@@ -301,8 +295,6 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 )::before {
   content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
   background: transparent;
-  transition: background .06s var(--cl-ease-hover, cubic-bezier(.165, .84, .44, 1)),
-    transform .45s var(--spring);
 }
 :root[data-preset="anthropic"] :is(
   .nav-item, .chat-row, .icon-btn, .profile-btn, .profile-apps,
@@ -315,9 +307,6 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 :root[data-preset="anthropic"] .nav-item.on::before,
 :root[data-preset="anthropic"] .nav-item.on:hover::before { background: var(--cl-active); }
 :root[data-preset="anthropic"] .chat-row.active::before { background: var(--cmdk-active); }
-@media (prefers-reduced-motion: reduce) {
-  :root[data-preset="anthropic"] :is(.nav-item, .chat-row, .icon-btn)::before { transition: none; transform: none; }
-}
 
 .sec-head {
   display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; padding: 4px; border-radius: 8px;
@@ -333,17 +322,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 .sec-head[aria-expanded="true"] .sec-head-chev { transform: rotate(90deg); }
 :root[data-preset="anthropic"] .section-label.has-head { padding: 0 0 0 2px; margin: 26px 0 5px; }
 
-@keyframes cds-um-enter {
-  from { opacity: 0; transform: scale(.92) translateY(6px); }
-  to { opacity: 1; transform: none; }
-}
-:root[data-preset="anthropic"] .bubble-user {
-  animation: cds-um-enter .45s cubic-bezier(.34, 1.3, .64, 1) both;
-}
-[data-animations="off"] .bubble-user { animation: none; }
-@media (prefers-reduced-motion: reduce) { .bubble-user { animation: none; } }
 
-@keyframes claude-pulse { 0%, 100% { opacity: .6; } 50% { opacity: 1; } }
 
 
 @keyframes cl-chunk-in { from { opacity: 0; } to { opacity: 1; } }
@@ -356,12 +335,14 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 :root[data-preset="anthropic"] .msg-icon img.pulse,
 :root[data-preset="anthropic"] .msg-icon img.bounce,
 :root[data-preset="anthropic"] .msg-icon img.wobble { animation-duration: .72s; }
+/* `sprite` is a legacy generating_anim/thinking_anim value. No current build
+   offers it in the model editor, so an unused-class report flags it, but a
+   database written by an older release can still hold it. Keep it. */
 .msg-icon img.sprite {
   animation: icon-sprite .72s steps(8, jump-none) infinite;
   object-fit: none; object-position: top center;
 }
 @keyframes icon-sprite { from { object-position: top center; } to { object-position: bottom center; } }
-[data-animations="off"] .msg-icon img.sprite { animation: none; }
 @media (prefers-reduced-motion: reduce) { .msg-icon img.sprite { animation: none; } }
 
 :root[data-preset="anthropic"] .sidebar.collapsed {
@@ -452,12 +433,11 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
   .nav-item svg [class^="ic-"] { transition: none; transform: none !important; }
 }
-[data-animations="off"] .nav-item svg [class^="ic-"] { transition: none; transform: none !important; }
 
 :root[data-preset="anthropic"] .chat-row .title {
   overflow: hidden; text-overflow: clip;
-  mask-image: linear-gradient(to right, #000 85%, transparent 99%);
-  -webkit-mask-image: linear-gradient(to right, #000 85%, transparent 99%);
+  mask-image: linear-gradient(to right, #000 calc(100% - var(--row-fade)), transparent calc(100% - var(--row-fade-end)));
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--row-fade)), transparent calc(100% - var(--row-fade-end)));
 }
 
 :root[data-preset="anthropic"] .modal {
@@ -527,8 +507,8 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 .set-input { width: 224px; max-width: 100%; }
 :root[data-preset="anthropic"] .modal-main .me-section-h { margin: 28px 0 8px; }
 
-:root[data-preset="anthropic"]:not([data-minimal="on"]) {
-  --fx-t: .06s;
+:root[data-preset="anthropic"] {
+  --fx-t: 0s;
   --fx-a: .18s;
   --cl-ease-hover: cubic-bezier(.165, .84, .44, 1);
   --cl-ease-std: cubic-bezier(.4, 0, .2, 1);
@@ -546,11 +526,10 @@ body.resizing-x .side-resize-grip { opacity: 1; }
   .nav-item, .icon-btn, .profile-btn, .profile-apps, .lib-pill, .lib-primary,
   .lib-icon-btn, .lib-tab, .sched-card
 ):active {
-  transition-duration: .06s;
+  transition-duration: 0s;
 }
 :root[data-preset="anthropic"] :is(input, textarea, select) {
-  transition: box-shadow .06s var(--cl-ease-std, cubic-bezier(.4, 0, .2, 1)),
-    background-color .06s var(--cl-ease-hover, cubic-bezier(.165, .84, .44, 1));
+  transition: box-shadow 0s, background-color 0s;
 }
 :root[data-preset="anthropic"] :is(.nav-item, .chat-row, .icon-btn, .profile-btn, .profile-apps, .lib-pill, .lib-primary, .lib-icon-btn, .lib-tab, .sched-card):is(:hover, :active, .on, .active, :focus-visible) {
   background: none;
@@ -563,7 +542,6 @@ body.resizing-x .side-resize-grip { opacity: 1; }
   display: flex; align-items: center; gap: 12px; flex-shrink: 0;
   height: 56px; padding: 0 56px 0 16px;
 }
-.modal-main-flush ~ .modal-close, .modal:has(.modal-main-flush) .modal-close { top: 18px; right: 18px; }
 .modal .modal-main .sk-title, .sk-title { flex: 1; min-width: 0; margin: 0; padding-left: 12px; font-family: var(--font-sans); font-size: 15px; line-height: 20px; font-weight: 500; color: var(--text); }
 .sk-back {
   display: inline-flex; align-items: center; gap: 8px; flex: 1; min-width: 0;
@@ -583,7 +561,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 .sk-btn svg { width: 12px; height: 12px; flex-shrink: 0; }
 .sk-btn:hover { background: rgba(255, 255, 255, .16); }
 :root[data-theme="light"] .sk-btn:hover { background: rgba(0, 0, 0, .1); }
-.sk-btn.primary { background: var(--accent); color: var(--on-accent); }
+.sk-btn.primary { background: var(--primary); color: var(--on-primary); }
 .sk-btn.primary:hover { filter: brightness(1.06); }
 .sk-btn:disabled { opacity: .55; cursor: default; }
 .sk-btn:focus-visible, .sk-icon-btn:focus-visible, .sk-back:focus-visible { outline: 1.6px solid var(--focus-ring); outline-offset: 1.6px; }
@@ -734,7 +712,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 .sk-card-meta { font-size: 12px; line-height: 16px; color: var(--text-muted); }
 .sk-card-desc {
   margin: 8px 0 0; font-size: 13px; line-height: 18px; color: var(--text-muted);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .sk-card-add { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; color: var(--text-muted); }
 .sk-card-add svg { width: 16px; height: 16px; }
@@ -753,7 +731,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
   font-size: 14px; line-height: 20px; font-weight: 400;
 }
 :root[data-preset="anthropic"] .all-chats-btn svg { width: 16px; height: 16px; }
-:root[data-preset="anthropic"] .incognito-fab svg { width: 18px; height: 18px; }
+
 
 :root[data-preset="anthropic"] .modal .btn {
   height: 32px; padding: 0 12px; border-radius: 8px;
@@ -761,10 +739,10 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 }
 :root[data-preset="anthropic"] .modal .btn svg { width: 16px; height: 16px; }
 
-:root[data-preset="anthropic"] .topbar .paper-btn {
+:root[data-preset="anthropic"] :is(.topbar, .home-actions) .paper-btn {
   width: 32px; height: 32px; border-radius: 8px;
 }
-:root[data-preset="anthropic"] .topbar .paper-btn svg { width: 16px; height: 16px; }
+:root[data-preset="anthropic"] :is(.topbar, .home-actions) .paper-btn svg { width: 19px; height: 19px; }
 :root[data-preset="anthropic"] .topbar .chat-name svg { width: 12px; height: 12px; }
 
 :root[data-preset="anthropic"] :is(.art-dl-all, .rb-copy, .art-card-dl) svg { width: 14px; height: 14px; }

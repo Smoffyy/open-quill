@@ -127,6 +127,15 @@ export function roleLimit(key, isAdmin, fallback) {
   return Number.isFinite(shared) && shared >= 0 ? shared : Number(fallback) || 0;
 }
 
+export const PROBE_TIMEOUT = 8000;
+
+export async function timedFetch(url, opts, ms = PROBE_TIMEOUT) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms);
+  try { return await fetch(url, { ...opts, signal: ctl.signal }); }
+  finally { clearTimeout(timer); }
+}
+
 export async function detectContextLength(prov, internal) {
   const { spec, base, key } = providerSpec(prov);
   const headers = { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) };
@@ -134,7 +143,7 @@ export async function detectContextLength(prov, internal) {
   const asInt = (v) => { const n = parseInt(v); return Number.isFinite(n) && n > 0 ? n : 0; };
   try {
     if (spec.protocol === 'ollama') {
-      const r = await fetch(root + '/api/show', { method: 'POST', headers, body: JSON.stringify({ model: internal }) });
+      const r = await timedFetch(root + '/api/show', { method: 'POST', headers, body: JSON.stringify({ model: internal }) });
       if (!r.ok) return 0;
       const json = await r.json();
       const info = json.model_info || {};
@@ -147,7 +156,7 @@ export async function detectContextLength(prov, internal) {
         : [root + '/props'];
       for (const url of propsUrls) {
         try {
-          const r = await fetch(url, { headers });
+          const r = await timedFetch(url, { headers });
           if (!r.ok) continue;
           const json = await r.json();
           const ctx = asInt(json?.default_generation_settings?.n_ctx)
@@ -157,7 +166,7 @@ export async function detectContextLength(prov, internal) {
         } catch {}
       }
       try {
-        const r = await fetch(base + '/models', { headers });
+        const r = await timedFetch(base + '/models', { headers });
         if (r.ok) {
           const json = await r.json();
           const list = Array.isArray(json.data) ? json.data : [];
@@ -168,7 +177,7 @@ export async function detectContextLength(prov, internal) {
       } catch {}
       return 0;
     }
-    const r = await fetch(root + '/api/v0/models', { headers: { 'Content-Type': 'application/json' } });
+    const r = await timedFetch(root + '/api/v0/models', { headers: { 'Content-Type': 'application/json' } });
     if (!r.ok) return 0;
     const json = await r.json();
     const list = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);

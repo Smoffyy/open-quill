@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { api } from './api.js';
 import { t, tk } from './i18n.jsx';
 import { applyPrefs, prefersDark, appFontId } from './prefs.js';
@@ -11,15 +11,21 @@ import QuickPrompts from './components/QuickPrompts.jsx';
 import CompactingBar from './components/CompactingBar.jsx';
 import EngineStrip from './components/EngineStrip.jsx';
 import CtxGauge from './components/CtxGauge.jsx';
+import ContextInspector from './components/ContextInspector.jsx';
 import LedgerBar from './components/LedgerBar.jsx';
 import ThreadSkeleton from './components/ThreadSkeleton.jsx';
 import SummaryModal from './components/SummaryModal.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
 import { computeActiveBg } from './lib/appbg.js';
-import { DEFAULT_DARK, DEFAULT_LIGHT, paletteById, paletteFor, presetOf } from './lib/palettes.js';
+import { presetOf, nextTheme } from './lib/palettes.js';
 import Disclaimer from './components/Disclaimer.jsx';
+import { ThemeProvider } from './lib/theme/store.jsx';
+import ThemeSlot from './components/builder/ThemeSlot.jsx';
+import FirstRun from './components/builder/FirstRun.jsx';
+const BuildMode = React.lazy(() => import('./components/builder/BuildMode.jsx'));
 
 import Message from './components/Message.jsx';
+import TopbarActions from './components/TopbarActions.jsx';
 const SettingsModal = React.lazy(() => import('./components/SettingsModal.jsx'));
 const PromptLedger = React.lazy(() => import('./components/PromptLedger.jsx'));
 const ModelDocs = React.lazy(() => import('./components/ModelDocs.jsx'));
@@ -30,14 +36,13 @@ import ArtifactsPanel from './components/ArtifactsPanel.jsx';
 import ChatControls from './components/ChatControls.jsx';
 import ModelDropdown from './components/ModelDropdown.jsx';
 import CallPanel from './components/CallPanel.jsx';
-import { voiceEmit } from './voice.js';
 import ChatsOverview from './components/ChatsOverview.jsx';
 import ArtifactsLibrary from './components/ArtifactsLibrary.jsx';
 import ScheduledTasks from './components/ScheduledTasks.jsx';
 import Tip from './components/Tip.jsx';
 import SpacesPanel from './components/SpacesPanel.jsx';
 import ProjectsPanel from './components/ProjectsPanel.jsx';
-import ChatMenu from './components/ChatMenu.jsx';
+import { ChatMenu, menuAtButton } from './components/ChatMenu.jsx';
 import PersonasModal from './components/PersonasModal.jsx';
 import SearchModal from './components/SearchModal.jsx';
 import Toaster from './components/Toaster.jsx';
@@ -47,23 +52,26 @@ import ThreadRail from './components/ThreadRail.jsx';
 import ThreadFind from './components/ThreadFind.jsx';
 import { railItems } from './lib/threadmeta.js';
 import { useDrafts } from './lib/drafts.js';
-import { statusDelaySecs } from './lib/status.js';
+import { statusDelayEnabled } from './lib/status.js';
 import { resolveReveal, revealSpeedMs } from './lib/reveal.js';
 import { comboKeys, comboLabel, resolveKeybinds } from './lib/keybinds.js';
 import { useKeybinds } from './lib/keyboard.js';
 import { useThreadScroll } from './lib/threadscroll.js';
 import { useGenMirror } from './lib/genmirror.js';
+import { useLiveTools, EMPTY_CALLS } from './lib/livetools.js';
+import { dispatchWs } from './lib/wsmessages.js';
+import { createLru } from './lib/lru.js';
+import { useTurnMeta, liveLedgerTokens } from './lib/turnmeta.js';
+import { useTurnStream } from './lib/turnstream.js';
+import { parseRoute, shouldResetPath, pathForChat, pathForProject } from './lib/route.js';
 import { useSocket } from './lib/socket.js';
 const BranchTree = React.lazy(() => import('./components/BranchTree.jsx'));
 import { toast } from './toast.js';
 import { copyText } from './clipboard.js';
-import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork, Panel, Copy, Check } from './components/icons.jsx';
+import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork, Panel, Copy, Check, Star, Telescope } from './components/icons.jsx';
 import { BRAND_ICON } from './lib/brand.js';
 
-const SKELETON_DELAY = 3000;
-// One frozen empty array, so clearing the live tool rows never hands React a new
-// identity and re-renders the whole thread for nothing.
-const EMPTY_CALLS = Object.freeze([]);
+const SKELETON_DELAY = 100;
 const HEAVY_THREAD_CHARS = 40000;
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: tk('Assistants can make mistakes, double-check responses.'), greetings: [tk('How can I help you?')], appIcon: '', quickPrompts: [], version: '' };
 
@@ -71,7 +79,6 @@ export default function App() {
   const [user, setUser] = useState(undefined);
   const userRef = useRef(undefined);
   useEffect(() => { userRef.current = user; }, [user]);
-  const [intro, setIntro] = useState(false);
   const [models, setModels] = useState([]);
   const [currentId, setCurrentId] = useState(null);
   const [chatRemovedModel, setChatRemovedModel] = useState(null);
@@ -124,7 +131,7 @@ export default function App() {
     if (to !== 'projects') { setShowProjects(false); setProjectOpenId(null); }
     setLibPage(to === 'artifacts' || to === 'scheduled' ? to : null);
     if (to === 'spaces') history.pushState({}, '', '/spaces');
-    else if (to !== 'projects' && /^\/(spaces|projects?|project)(\/|$)/.test(location.pathname)) history.pushState({}, '', '/');
+    else if (to !== 'projects' && (shouldResetPath('spaces', location.pathname) || shouldResetPath('projects', location.pathname))) history.pushState({}, '', '/');
   }, []);
   const sbProjects = useCallback(() => { navTo('projects'); sidebarFns.current.openProjects(null); }, [navTo]);
   const sbOpenProject = useCallback((id) => { navTo('projects'); sidebarFns.current.openProjects(id); }, [navTo]);
@@ -134,6 +141,7 @@ export default function App() {
   const onMobileCloseCb = useCallback(() => setMobileDrawer(false), []);
   const onSettingsCb = useCallback(() => { setMobileDrawer(false); setSettingsTab('general'); setShowSettings(true); }, []);
   const onSkillsCb = useCallback(() => { setMobileDrawer(false); setSettingsTab('skills'); setShowSettings(true); }, []);
+  const onVersionCb = useCallback(() => { setMobileDrawer(false); setSettingsTab('version'); setShowSettings(true); }, []);
   const onDocsCb = useCallback(() => { setMobileDrawer(false); setShowDocs(true); }, []);
   const onAdminCb = useCallback(() => { setMobileDrawer(false); history.pushState({}, '', '/admin'); setShowAdmin(true); }, []);
   const onPlaygroundCb = useCallback(() => { setMobileDrawer(false); history.pushState({}, '', '/playground'); setShowPlayground(true); }, []);
@@ -168,15 +176,9 @@ export default function App() {
   const [queuedList, setQueuedList] = useState([]);
   const queuedListRef = useRef([]);
   const setQueue = (updater) => setQueuedList(prev => { const next = typeof updater === 'function' ? updater(prev) : updater; queuedListRef.current = next; return next; });
-  const chatCache = useRef(new Map());
-  const cacheChat = (id, entry) => {
-    if (!id) return;
-    const cache = chatCache.current;
-    const prev = cache.get(id) || {};
-    cache.delete(id);
-    cache.set(id, { ...prev, ...entry });
-    if (cache.size > 25) cache.delete(cache.keys().next().value);
-  };
+  const chatCache = useRef(null);
+  if (!chatCache.current) chatCache.current = createLru(25);
+  const cacheChat = (id, entry) => chatCache.current.merge(id, entry);
   const sendRef = useRef(null);
   const genOptsRef = useRef({});
   const [canContinue, setCanContinue] = useState(false);
@@ -194,8 +196,10 @@ export default function App() {
   const [settingsTab, setSettingsTab] = useState('general');
   const kbHandlers = useRef({});
   const [chordHint, setChordHint] = useState(null);
-  const [routeInfo, setRouteInfo] = useState(null);
-  useEffect(() => { setRouteInfo(null); }, [activeId]);
+  const turnMeta = useTurnMeta();
+  // The routing decision belongs to the chat, not to the turn, so it survives a
+  // new turn starting and is dropped when the chat changes.
+  useEffect(() => { turnMeta.setRoute(null); }, [activeId, turnMeta.setRoute]);
   const [ledgerPrompt, setLedgerPrompt] = useState(false);
   const [showDocs, setShowDocs] = useState(false);
   const [skills, setSkills] = useState([]);
@@ -221,19 +225,19 @@ export default function App() {
   const [webSearch, setWebSearch] = useState(false);
   const [files, setFiles] = useState([]);
   const [pendingFiles, setPendingFiles] = useState({});
-  const [liveFile, setLiveFile] = useState(null);
-  const [liveCall, setLiveCall] = useState(null);
-  const [liveCalls, setLiveCalls] = useState(EMPTY_CALLS);
+  const liveTools = useLiveTools();
+  const { file: liveFile, call: liveCall, calls: liveCalls, clear: clearLive } = liveTools;
   const [stopping, setStopping] = useState(false);
   const [compacting, setCompacting] = useState(false);
   const [hasSummary, setHasSummary] = useState(false);
-  const [chatMenuOpen, setChatMenuOpen] = useState(false);
+  const [titleMenu, setTitleMenu] = useState(null);
   const [showSearch, setShowSearch] = useState(false);
-  const [chatInstructions, setChatInstructions] = useState('');
   const [chatPins, setChatPins] = useState([]);
   const [personasOpen, setPersonasOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameVal, setRenameVal] = useState('');
+  const [inspectOpen, setInspectOpen] = useState(false);
+  const titleChevRef = useRef(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [artifactsOpen, setArtifactsOpen] = useState(false);
@@ -302,25 +306,12 @@ export default function App() {
   const msgKeysOn = user?.prefs?.msgKeys !== false;
   useEffect(() => { if (!msgKeysOn) setKbFocus(null); }, [msgKeysOn]);
 
-  const [telemetry, setTelemetry] = useState(null);
-  const [livePrompt, setLivePrompt] = useState(0);
-  const [modelStatus, setModelStatus] = useState(null);
-  const [liveSteers, setLiveSteers] = useState([]);
+  const { telemetry, promptTokens: livePrompt, status: modelStatus, steers: liveSteers, route: routeInfo } = turnMeta;
   const [ledgerOpen, setLedgerOpen] = useState(false);
   const ledgerDefaultApplied = useRef(false);
   const [ledger, setLedger] = useState(null);
-  const [streaming, setStreaming] = useState(false);
-  const streamingRef = useRef(false);
-  useEffect(() => { streamingRef.current = streaming; }, [streaming]);
-  const [queued, setQueued] = useState(false);
-  const queuedRef = useRef(false);
-  useEffect(() => { queuedRef.current = queued; }, [queued]);
   const [chatErrors, setChatErrors] = useState({});
   const [errorCopied, setErrorCopied] = useState(false);
-  const [dispContent, setDispContent] = useState('');
-  const [dispReason, setDispReason] = useState('');
-  const [dispSegs, setDispSegs] = useState(null);
-  const [phase, setPhase] = useState('static');
 
   const handleWsRef = useRef(null);
   const onWsMessage = useCallback((m) => handleWsRef.current?.(m), []);
@@ -329,45 +320,46 @@ export default function App() {
   const { connect, send: socketSend } = socket;
   const getCurrentModelId = useCallback(() => currentIdRef.current, []);
   const { busyChats, syncBusy, peek, queueRec, dropRec, recFor, resumeRec } = useGenMirror(getCurrentModelId);
-  const targetContent = useRef('');
-  const targetReason = useRef('');
-  const pendingDone = useRef(false);
   const nextTurnPending = useRef(false);
-  const liveRef = useRef(null);
   const selectingRef = useRef(false);
   const hasSelectionRef = useRef(false);
-  const assistantIdRef = useRef(null);
-  const streamModelRef = useRef(null);
-  const revealTimer = useRef(null);
-  const dispLen = useRef(0);
   const canFollow = useCallback(() => !selectingRef.current && !hasSelectionRef.current, []);
   const {
     scrollRef, stick, showJump,
-    scrollBottom, pinToBottom, onScroll, onWheel, onTouchMove, jumpDown,
+    scrollBottom, pinToBottom, onScroll, onWheel, onTouchMove, jumpDown, resetJump,
     startFollow, stopFollow
   } = useThreadScroll({ canFollow });
   const animate = resolveReveal(user?.prefs, cfg.uiPreset === 'openai' ? 'openai' : 'anthropic') === 'typewriter';
   const revealMs = revealSpeedMs(user?.prefs?.revealMs);
-  const [threadStagger, setThreadStagger] = useState(false);
+  // finalize is redefined every render; the hook reads it through a ref so the
+  // reveal timer always calls the current one.
+  const finalizeRef = useRef(null);
+  const stream = useTurnStream({
+    animate,
+    speedMs: revealMs,
+    onRevealComplete: () => finalizeRef.current?.(),
+    onFollowStart: startFollow,
+    onFollowStop: stopFollow
+  });
+  const {
+    content: dispContent, reasoning: dispReason, segs: dispSegs,
+    phase, streaming, queued, streamingRef, queuedRef,
+    assistantId: assistantIdRef, modelId: streamModelRef
+  } = stream;
   const [threadLoading, setThreadLoading] = useState(false);
   const skelTimer = useRef(null);
-  const staggerTimer = useRef(null);
   const showMsgSpeed = !!user?.prefs?.msgSpeed;
   const showCtxGauge = !!user?.prefs?.ctxGauge;
-  const statusDelay = statusDelaySecs(user?.prefs?.statusDelay);
-  const liveExactTokens = !!(streaming && livePrompt > 0 && telemetry?.exact);
-  const liveLedgerTokens = liveExactTokens ? (telemetry.genTokens || 0) : 0;
-  const liveLedgerUsed = (ledgerOpen && liveExactTokens) ? livePrompt + liveLedgerTokens : 0;
+  const statusDelay = statusDelayEnabled(user?.prefs?.statusDelay);
+  const ledgerTokens = liveLedgerTokens({ streaming, promptTokens: livePrompt, telemetry, ledgerOpen });
 
   const activeIdRef = useRef(null);
   const currentIdRef = useRef(null);
-  const animateRef = useRef(animate);
   const incognitoRef = useRef(false);
   useEffect(() => { incognitoRef.current = incognito; }, [incognito]);
   const { saveDraft, loadDraft, clearDraft, flushDraft } = useDrafts(incognitoRef);
   const refreshSeq = useRef(0);
   useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
-  useEffect(() => { liveRef.current = liveFile; }, [liveFile]);
   const messagesRef = useRef([]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => {
@@ -398,22 +390,10 @@ export default function App() {
     return () => clearTimeout(t);
   }, [models, currentId, activeId, messages.length, incognito, user]);
   useEffect(() => { currentIdRef.current = currentId; }, [currentId]);
-  useEffect(() => { animateRef.current = animate; }, [animate]);
-  const revealRef = useRef(revealMs);
-  useEffect(() => { revealRef.current = revealMs; }, [revealMs]);
-
-  useEffect(() => { dispLen.current = dispContent.length; }, [dispContent]);
-
-  useEffect(() => {
-    if (!intro) return;
-    const t = setTimeout(() => setIntro(false), 3400);
-    return () => clearTimeout(t);
-  }, [intro]);
 
   useEffect(() => () => {
-    stopLoops();
+    stream.stopTimer();
     clearTimeout(skelTimer.current);
-    clearTimeout(staggerTimer.current);
   }, []);
 
   useEffect(() => {
@@ -446,15 +426,16 @@ export default function App() {
   async function loadProjects() { try { setProjects(await api.get('/api/projects')); } catch {} }
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-entrance', user?.prefs?.minimalAnims ? 'off' : 'on');
-  }, [user]);
-
-  useEffect(() => {
     const onPop = () => openFromUrl();
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
   useEffect(() => { syncView(); }, [activeId, incognito]);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !stick.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, [activeId, messages]);
   useEffect(() => {
     const down = (e) => { if (scrollRef.current && scrollRef.current.contains(e.target)) selectingRef.current = true; };
     const up = () => { selectingRef.current = false; };
@@ -493,30 +474,22 @@ export default function App() {
     else if (!activeId && !incognito && m && user?.prefs?.webSearchDefault && cfg.webSearchAvailable) setWebSearch(true);
   }, [currentId, activeId, models, incognito, cfg.webSearchAvailable, user?.prefs?.webSearchDefault]);
   function openFromUrl() {
-    const p = location.pathname;
-    const wantsAdmin = /^\/admin(\/|$)/.test(p);
-    const wantsPlayground = /^\/playground(\/|$)/.test(p);
-    const isAdmin = !!user?.isAdmin;
-    if ((wantsAdmin || wantsPlayground) && !isAdmin) history.replaceState({}, '', '/');
-    const admin = wantsAdmin && isAdmin;
-    const playground = wantsPlayground && isAdmin;
-    setShowAdmin(admin);
-    setShowPlayground(playground);
-    if (admin || playground) return;
-    const spaces = /^\/spaces(\/|$)/.test(p);
-    setShowSpaces(spaces);
-    if (spaces) return;
-    const pm = p.match(/^\/project\/(.+)$/);
-    if (pm) { setProjectOpenId(decodeURIComponent(pm[1])); setShowProjects(true); return; }
-    if (/^\/projects(\/|$)/.test(p)) { setProjectOpenId(null); setShowProjects(true); return; }
-    setShowProjects(false);
-    const m = p.match(/^\/chat\/(.+)$/);
-    if (m) openChat(decodeURIComponent(m[1]), false);
-    else {
-      flushDraft();
-      setActiveId(null); setMessages([]);
-      if (!incognitoRef.current) setInput(loadDraft(null));
-    }
+    const r = parseRoute(location.pathname, { isAdmin: !!user?.isAdmin });
+    if (r.replace) history.replaceState({}, '', r.replace);
+    const onProjects = r.view === 'project' || r.view === 'projects';
+    // Every view flag is written on every route change. The branches used to
+    // return early, so going Back into Spaces from a project left the projects
+    // panel mounted underneath it.
+    setShowAdmin(r.view === 'admin');
+    setShowPlayground(r.view === 'playground');
+    setShowSpaces(r.view === 'spaces');
+    setShowProjects(onProjects);
+    if (onProjects) { setProjectOpenId(r.id ?? null); return; }
+    if (r.view !== 'home' && r.view !== 'chat') return;
+    if (r.view === 'chat') { openChat(r.id, false); return; }
+    flushDraft();
+    setActiveId(null); setMessages([]);
+    if (!incognitoRef.current) setInput(loadDraft(null));
   }
 
   async function loadModels() {
@@ -528,10 +501,12 @@ export default function App() {
   async function loadChats() { try { setChats(await api.get('/api/chats')); } catch {} finally { setChatsLoaded(true); } }
   async function loadAppConfig() { try { applyCfg(await api.get('/api/app-config')); } catch {} }
   const [presetPicked, setPresetPicked] = useState(false);
-  async function choosePreset(p) {
+  // Activating a layout is what sets the base preset now, so the first-run
+  // picker hands back here only to dismiss itself and re-read the config.
+  const onPresetChosen = useCallback(() => {
     setPresetPicked(true);
-    try { await api.patch('/api/admin/app-config', { uiPreset: p }); await loadAppConfig(); } catch {}
-  }
+    loadAppConfig();
+  }, []);
   useEffect(() => {
     const appName = cfg.appName || 'open-quill';
     if (incognito) { document.title = t('Incognito chat - {app}', { app: appName }); return; }
@@ -605,272 +580,68 @@ export default function App() {
     const body = String(text || '').trim();
     if (!id || !body) return;
     wsSend({ type: 'steer', chatId: id, text: body });
-    setLiveSteers(l => [...l, body]);
+    turnMeta.addSteers(body);
   }, []);
 
-  function handleWs(m) {
-    if (m.type === 'session_revoked') { location.href = '/'; return; }
-    if (m.type === 'config') { loadModels(); loadAppConfig(); try { window.dispatchEvent(new CustomEvent('oq-config')); } catch {} return; }
-    if (m.type === 'resume') {
-      const list = Array.isArray(m.turns) ? m.turns : [];
-      for (const t of list) {
-        if (!t || !t.chatId) continue;
-        resumeRec(t.chatId, {
-          content: t.content || '',
-          reasoning: t.reasoning || '',
-          phase: t.phase === 'queued' ? 'queued' : (t.phase === 'thinking' ? 'thinking' : 'generating'),
-          assistantId: t.messageId || null,
-          model_id: t.modelId || currentIdRef.current,
-          live: t.live || null,
-          steers: Array.isArray(t.steers) ? t.steers : [],
-          status: t.status || null,
-          promptTokens: t.promptTokens || 0
-        });
-        if (t.chatId === activeKey() && t.promptTokens > 0) setLivePrompt(t.promptTokens);
-      }
-      syncBusy();
-      if (list.some(t => t && t.chatId === activeKey())) syncView();
-      return;
+  // Every frame's effect on state lives in lib/wsmessages.js, one handler per
+  // type. This builds the context they read; it is rebuilt each render so the
+  // handlers always see current closures.
+  const wsCtx = {
+    activeKey,
+    refs: { activeIdRef, currentIdRef, ledgerOpenRef, compareRef, nextTurnPending, refreshSeq },
+    mirror: { recFor, peek, dropRec, syncBusy, resumeRec },
+    stream,
+    meta: turnMeta,
+    tools: liveTools,
+    set: {
+      files: setFiles, pendingFiles: setPendingFiles, chats: setChats, errors: setChatErrors,
+      compacting: setCompacting, hasSummary: setHasSummary,
+      ended: setChatEnded, endedReason: setChatEndedReason, canContinue: setCanContinue
+    },
+    text: { modelError: t('The model returned an error.') },
+    actions: {
+      notifyContextTrimmed: (limit) => toast(
+        t('Context limit reached ({limit} tokens), trimming older messages so the chat can continue', { limit: limit.toLocaleString() }),
+        { icon: 'info', kind: 'warn', duration: 6000 }),
+      finalize: () => finalize(),
+      finalizeBackground: (key) => finalizeBackground(key),
+      syncView: () => syncView(),
+      loadModels: () => loadModels(),
+      loadAppConfig: () => loadAppConfig(),
+      loadBudget: () => loadBudget(),
+      loadLedger: () => loadLedger(),
+      refreshSpacesPending: () => refreshSpacesPending()
     }
-    if (typeof m.type === 'string' && m.type.startsWith('space_')) {
-      try { window.dispatchEvent(new CustomEvent('oq-space', { detail: m })); } catch {}
-      if (m.type === 'space_invite' || m.type === 'space_updated' || m.type === 'space_removed' || m.type === 'space_deleted') refreshSpacesPending();
-      return;
-    }
-    if (m.type === 'files') {
-      if (m.chatId && m.chatId !== activeIdRef.current) return;
-      setFiles(m.files || []);
-      const done = new Set((m.files || []).map(f => f.path));
-      setPendingFiles(p => {
-        const stale = Object.keys(p).filter(k => done.has(k));
-        if (!stale.length) return p;
-        const next = { ...p };
-        for (const k of stale) delete next[k];
-        return next;
-      });
-      const lf = liveRef.current;
-      if (lf && lf.path && done.has(lf.path)) { liveRef.current = null; setLiveFile(null); }
-      return;
-    }
-    if (m.type === 'tool_live') {
-      const r = recFor(m.chatId); r.live = m.live || null;
-      // A step can stream several calls at once. Each carries its index, so a
-      // later one updates its own row instead of overwriting the row before it;
-      // a null clears the whole step (the model stopped emitting calls).
-      r.liveCalls = m.live && Number.isFinite(m.index)
-        ? [...(r.liveCalls || []).filter(x => x.index !== m.index), { index: m.index, call: m.live }].sort((a, b) => a.index - b.index)
-        : [];
-      if (m.chatId !== activeKey()) return;
-      setLiveCalls(r.liveCalls);
-      const live = m.live;
-      const prev = liveRef.current;
-      if (prev && prev.path && prev.tool === 'create_file' && (!live || live.path !== prev.path)) {
-        const path = prev.path, text = prev.content || '';
-        setPendingFiles(p => (p[path] === text ? p : { ...p, [path]: text }));
-      }
-      if (live && live.path && (live.tool === 'create_file' || live.tool === 'str_replace')) {
-        const lf = { path: live.path, content: live.content || '', tool: live.tool, oldStr: live.oldStr ?? null };
-        liveRef.current = lf; setLiveFile(lf);
-      } else if (!live) {
-        liveRef.current = null; setLiveFile(null);
-      }
-      setLiveCall(live && live.tool ? { ...live } : null);
-      return;
-    }
-    if (m.type === 'tool_live_delta') {
-      const r = recFor(m.chatId);
-      if (r.live && r.live.tool) r.live = { ...r.live, content: (r.live.content || '') + m.text };
-      if (m.chatId !== activeKey()) return;
-      const lf = liveRef.current;
-      if (lf) { const nf = { ...lf, content: (lf.content || '') + m.text }; liveRef.current = nf; setLiveFile(nf); }
-      return;
-    }
-    if (m.type === 'tool_exec') {
-      // Execution is sequential and the finished calls are already committed to
-      // the transcript, so exactly one row is in flight here.
-      const r = recFor(m.chatId); r.live = m.call || null;
-      r.liveCalls = m.call && m.call.tool ? [{ index: 0, call: m.call }] : [];
-      if (m.chatId !== activeKey()) return;
-      setLiveCalls(r.liveCalls);
-      if (m.call && m.call.tool) setLiveCall(m.call);
-      return;
-    }
-    if (m.type === 'tool') { return; }
-    if (m.type === 'compacting') { if (m.chatId === activeKey()) setCompacting(true); return; }
-    if (m.type === 'compacted') { if (m.chatId === activeKey()) { setCompacting(false); setHasSummary(true); } return; }
-    if (m.type === 'ctx_rolling') {
-      if (m.chatId === activeKey()) toast(t('Context limit reached ({limit} tokens), trimming older messages so the chat can continue', { limit: (m.limit || 0).toLocaleString() }), { icon: 'info', kind: 'warn', duration: 6000 });
-      return;
-    }
-    if (m.type === 'title') { setChats(cs => cs.map(c => c.id === m.chatId ? { ...c, title: m.title } : c)); return; }
-    if (m.type === 'chat_ended') {
-      setChats(cs => cs.map(c => c.id === m.chatId ? { ...c, ended: true } : c));
-      if (m.chatId === activeKey()) { setChatEnded(true); setChatEndedReason(m.reason || ''); }
-      return;
-    }
-    if (m.type === 'routed') {
-      if (m.chatId === activeKey()) setRouteInfo({ hubName: m.hubName, modelName: m.modelName, via: m.via });
-      return;
-    }
-    if (m.type === 'queued') {
-      const r = recFor(m.chatId); r.phase = 'queued';
-      if (m.chatId === activeKey()) setQueued(true);
-      return;
-    }
-    if (m.type === 'status') {
-      const r = recFor(m.chatId);
-      r.status = m.phase === 'generating' ? null : { phase: m.phase, processed: m.processed, total: m.total, cache: m.cache, pct: m.pct, ms: m.ms };
-      if (m.chatId === activeKey()) setModelStatus(r.status);
-      return;
-    }
-    if (m.type === 'prompt_size') {
-      if (m.chatId === activeKey()) setLivePrompt(m.tokens || 0);
-      return;
-    }
-    if (m.type === 'telemetry') {
-      if (m.chatId === activeKey()) setTelemetry({ tps: m.tps, promptTps: m.promptTps, promptTokens: m.promptTokens, genTokens: m.genTokens, ctx: m.ctx, exact: !!m.exact });
-      return;
-    }
-    if (m.type === 'steered') {
-      const r = recFor(m.chatId);
-      r.steers = [...(r.steers || []), ...(m.notes || [])];
-      if (m.chatId === activeKey()) setLiveSteers(r.steers);
-      return;
-    }
-    if (m.type === 'start') {
-      voiceEmit({ type: 'start', chatId: m.chatId });
-      if (m.chatId === activeKey() && pendingDone.current) { nextTurnPending.current = false; finalize(); }
-      const r = recFor(m.chatId);
-      r.content = ''; r.reasoning = ''; r.phase = 'generating'; r.done = false; r.error = false; r.assistantId = m.messageId; r.live = null; r.steers = []; r.status = null;
-      if (m.chatId === activeKey()) {
-        setTelemetry(null); setLivePrompt(0); setLiveSteers([]); setModelStatus(null);
-        refreshSeq.current++;
-        setCompacting(false); setLiveFile(null); setLiveCall(null); setLiveCalls(EMPTY_CALLS); liveRef.current = null;
-        targetContent.current = ''; targetReason.current = ''; pendingDone.current = false;
-        assistantIdRef.current = m.messageId; dispLen.current = 0;
-        streamModelRef.current = r.model_id || currentIdRef.current;
-        setDispContent(''); setDispReason(''); setDispSegs(null); setPhase('generating'); setStreaming(true); setQueued(false);
-        startStream();
-      }
-      return;
-    }
-    if (m.type === 'reasoning') {
-      const r = recFor(m.chatId);
-      if (m.seg != null) {
-        if (!r.reasonSegs) r.reasonSegs = [];
-        r.reasonSegs[m.seg] = (r.reasonSegs[m.seg] || '') + m.text;
-        if (m.chatId === activeKey()) setDispSegs(r.reasonSegs.slice());
-        return;
-      }
-      r.reasoning += m.text;
-      if (!r.content) r.phase = 'thinking';
-      if (m.chatId === activeKey()) {
-        targetReason.current = r.reasoning;
-        setDispReason(r.reasoning);
-        if (!targetContent.current) setPhase('thinking');
-      }
-      return;
-    }
-    if (m.type === 'content') {
-      voiceEmit({ type: 'content', chatId: m.chatId, text: m.text });
-      const r = recFor(m.chatId); r.content += m.text; r.phase = 'generating';
-      if (m.chatId === activeKey()) {
-        targetContent.current = r.content;
-        setPhase('generating');
-        if (m.text.indexOf('[[OQR:') !== -1 || m.text.indexOf('[[OQT:') !== -1) { dispLen.current = r.content.length; setDispContent(r.content); setLiveCall(null); setLiveCalls(EMPTY_CALLS); }
-        else if (!animateRef.current) { setDispContent(r.content); dispLen.current = r.content.length; }
-      }
-      return;
-    }
-    if (m.type === 'error') {
-      voiceEmit({ type: 'error', chatId: m.chatId });
-      const r = peek(m.chatId);
-      const hadContent = !!(r && r.content);
-      if (m.chatId === activeKey()) {
-        if (hadContent) { pendingDone.current = true; finalize(); }
-        else {
-          stopLoops();
-          dropRec(m.chatId);
-          targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
-          setDispContent(''); setDispReason(''); setDispSegs(null);
-          setLiveFile(null); setLiveCall(null); setLiveCalls(EMPTY_CALLS); liveRef.current = null;
-          setQueued(false); setStreaming(false); setPhase('static');
-        }
-      } else if (hadContent) {
-        finalizeBackground(m.chatId);
-      } else {
-        dropRec(m.chatId);
-      }
-      setChatErrors(prev => ({ ...prev, [m.chatId]: String(m.error || t('The model returned an error.')) }));
-      return;
-    }
-    if (m.type === 'done') {
-      voiceEmit({ type: 'done', chatId: m.chatId });
-      const r = recFor(m.chatId); r.done = true;
-      syncBusy();
-      loadBudget();
-      if (m.chatId !== activeKey()) { finalizeBackground(m.chatId); return; }
-      setPendingFiles(p => (Object.keys(p).length ? {} : p));
-      if (ledgerOpenRef.current) loadLedger();
-      setCanContinue(!!m.truncated);
-      const cmp = compareRef.current;
-      if (cmp && cmp.chatId === m.chatId && !cmp.messageId && m.messageId) cmp.messageId = m.messageId;
-      nextTurnPending.current = true;
-      pendingDone.current = true;
-      const revealed = dispLen.current >= targetContent.current.length;
-      if (!animateRef.current || revealed) finalize();
-      return;
-    }
-  }
+  };
+
+  function handleWs(m) { dispatchWs(m, wsCtx); }
 
   handleWsRef.current = handleWs;
 
-  function stopLoops() {
-    clearInterval(revealTimer.current);
-    revealTimer.current = null;
-    stopFollow();
-  }
-
-  function startStream() {
-    stopLoops();
-    startFollow();
-    const period = Math.max(8, Math.min(100, revealRef.current || 0)) ;
-    revealTimer.current = setInterval(() => {
-      const target = targetContent.current;
-      if (dispLen.current >= target.length) { if (pendingDone.current) finalize(); return; }
-      const instant = !animateRef.current || revealRef.current <= 0;
-      setDispContent(prev => {
-        const remaining = target.length - prev.length;
-        const n = instant ? remaining
-          : remaining > 1200 ? Math.ceil(remaining / 3)
-          : remaining > 240 ? Math.ceil(remaining / 6)
-          : Math.max(2, Math.ceil(remaining / 9));
-        const next = target.slice(0, prev.length + n);
-        dispLen.current = next.length;
-        return next;
-      });
-    }, period);
-  }
-
+  // Nothing may append to `messages` between the server's `done` and this
+  // committing, or the streamed reply is replaced by a thread that does not
+  // contain it yet. The stream hands its text over and clears itself in one go;
+  // the ordering below is the part that matters and stays here.
   function finalize() {
     const key = activeKey();
     const r = peek(key);
     if (!r && !streaming) return;
-    stopLoops();
-    const content = targetContent.current;
-    const reasoning = targetReason.current;
-    const id = assistantIdRef.current || (r && r.assistantId) || ('a' + Date.now());
-    const mid = streamModelRef.current || (r ? r.model_id : currentIdRef.current);
+    const out = stream.commit();
+    const id = out.assistantId || (r && r.assistantId) || ('a' + Date.now());
+    const mid = out.modelId || (r ? r.model_id : currentIdRef.current);
     if (r && r.done) dropRec(key);
-    setStreaming(false); setPhase('static'); setQueued(false); setStopping(false);
-    if (content || reasoning) setMessages(ms => ms.some(m => m.id === id) ? ms : [...ms, { id, role: 'assistant', content, reasoning, model_id: mid }]);
-    setDispContent(''); setDispReason(''); setDispSegs(null);
-    setLiveFile(null); setLiveCall(null); setLiveCalls(EMPTY_CALLS); liveRef.current = null;
-    targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
+    setStopping(false);
+    if (out.content || out.reasoning) {
+      setMessages(ms => ms.some(m => m.id === id)
+        ? ms
+        : [...ms, { id, role: 'assistant', content: out.content, reasoning: out.reasoning, model_id: mid }]);
+    }
+    clearLive();
     if (stick.current && !selectingRef.current && !hasSelectionRef.current) setTimeout(() => scrollBottom(false), 0);
     if (key !== 'incognito') { loadChats(); if (key) refreshMessages(key); }
     startNextTurn();
   }
+  finalizeRef.current = finalize;
 
   function startNextTurn() {
     if (!nextTurnPending.current) return;
@@ -896,35 +667,24 @@ export default function App() {
     if (key !== 'incognito') loadChats();
   }
 
+  // Point the view at whatever the chat we just switched to is doing: pick up a
+  // turn still in flight, or show nothing in flight at all.
   function syncView() {
-    stopLoops();
+    stream.stopTimer();
+    resetJump();
     const key = activeKey();
     const r = peek(key);
     if (r && !r.done) {
       refreshSeq.current++;
-      targetContent.current = r.content; targetReason.current = r.reasoning;
-      assistantIdRef.current = r.assistantId; pendingDone.current = false;
-      streamModelRef.current = r.model_id || currentIdRef.current;
-      dispLen.current = r.content.length;
-      setDispContent(r.content); setDispReason(r.reasoning); setDispSegs(r.reasonSegs ? r.reasonSegs.slice() : null);
-      const live = r.live;
-      if (live && live.path && (live.tool === 'create_file' || live.tool === 'str_replace')) {
-        const lf = { path: live.path, content: live.content || '', tool: live.tool, oldStr: live.oldStr ?? null };
-        liveRef.current = lf; setLiveFile(lf);
-      } else { liveRef.current = null; setLiveFile(null); }
-      setLiveCall(live && live.tool ? { ...live } : null);
-      setLiveCalls(Array.isArray(r.liveCalls) && r.liveCalls.length ? r.liveCalls : EMPTY_CALLS);
-      setLiveSteers(Array.isArray(r.steers) ? r.steers : []);
-      setModelStatus(r.status || null);
-      setPhase(r.phase === 'thinking' ? 'thinking' : 'generating');
-      setStreaming(true); setQueued(r.phase === 'queued');
-      startStream();
+      stream.restore(r, currentIdRef.current);
+      liveTools.restore(r.live, r.liveCalls);
+      turnMeta.restore(r);
     } else {
       if (r && r.done) dropRec(key);
-      targetContent.current = ''; targetReason.current = ''; pendingDone.current = false; dispLen.current = 0;
-      setStreaming(false); setQueued(false); setPhase('static');
-      setDispContent(''); setDispReason(''); setDispSegs(null);
-      setLiveCall(null); setLiveCalls(EMPTY_CALLS);
+      stream.clear();
+      // Also drops the file preview, which this branch used to leave pointing at
+      // the previous chat's half-written file.
+      clearLive();
     }
   }
   async function refreshMessages(id) {
@@ -973,7 +733,7 @@ export default function App() {
     } catch {}
   }, [activeId, chatPins]);
   function jumpToMessage(id, opts) {
-    setChatMenuOpen(false);
+    setTitleMenu(null);
     stick.current = false;
     requestAnimationFrame(() => {
       const el = document.querySelector('[data-mid="' + id + '"]');
@@ -1009,7 +769,6 @@ export default function App() {
   async function applyPersona(p) {
     if (!p) return;
     if (p.modelId && models.find(m => m.id === p.modelId)) setCurrentId(p.modelId);
-    setChatInstructions(p.instructions || '');
     if (activeId) {
       try { await api.patch('/api/chats/' + activeId, { instructions: p.instructions || '' }); } catch {}
     }
@@ -1035,6 +794,15 @@ export default function App() {
     return true;
   }
 
+  // Everything a chat's view owns, cleared as one. newChat, toggleIncognito and
+  // startProjectChat each used to spell this out, and they had already begun to
+  // disagree about which pieces were included.
+  function resetChatView() {
+    setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false);
+    clearLive(); setArtifactFocus(null);
+    turnMeta.reset(); setLedger(null);
+  }
+
   const openSeq = useRef(0);
   function applyChatMeta(chat) {
     setCurrentProject(chat.projectId ? (projects.find(p => p.id === chat.projectId) || { id: chat.projectId, name: 'Project' }) : null);
@@ -1045,7 +813,6 @@ export default function App() {
     setChatEndedReason(chat.endedReason || '');
     setChatGenParams(chat.genParams || null);
     setChatSysOverride(chat.systemOverride || '');
-    setChatInstructions(chat.instructions || '');
     setChatPins(Array.isArray(chat.pinnedFiles) ? chat.pinnedFiles : []);
   }
   function resolveLastModel(lastA) {
@@ -1066,16 +833,16 @@ export default function App() {
     pendingModelCheck.current = null;
     resolveLastModel(lastA);
   }
-  function armSkeleton(on) {
+  function armSkeleton(on, onDelay) {
     clearTimeout(skelTimer.current);
     if (!on) { setThreadLoading(false); return; }
-    skelTimer.current = setTimeout(() => setThreadLoading(true), SKELETON_DELAY);
+    skelTimer.current = setTimeout(() => { if (onDelay) onDelay(); setThreadLoading(true); }, SKELETON_DELAY);
   }
   async function openChat(id, push = true) {
     setMobileDrawer(false);
     if (incognito) setIncognito(false);
     setShowProjects(false);
-    if (id !== activeIdRef.current) { setLiveFile(null); setLiveCall(null); setLiveCalls(EMPTY_CALLS); liveRef.current = null; setArtifactFocus(null); setTelemetry(null); setLiveSteers([]); setLedger(null); setModelStatus(null); }
+    if (id !== activeIdRef.current) { clearLive(); setArtifactFocus(null); turnMeta.reset(); setLedger(null); }
     setActiveId(id);
     const seq = ++openSeq.current;
     const cached = chatCache.current.get(id);
@@ -1086,20 +853,21 @@ export default function App() {
       setFiles(cached.files || []);
       setPendingFiles({});
       setArtifactsOpen((cached.files || []).length > 0 && artifactsOpenRef.current);
+      armSkeleton(false);
     } else {
-      setMessages([]);
-      setFiles([]);
       setPendingFiles({});
+      armSkeleton(true, () => {
+        if (seq === openSeq.current && activeIdRef.current === id) { setMessages([]); setFiles([]); }
+      });
     }
-    armSkeleton(!cached);
     setCtlOpen(false);
     setCanContinue(false); setQueue([]);
     flushDraft();
     setInput(loadDraft(id));
-    setChatMenuOpen(false);
-    if (push) history.pushState({}, '', '/chat/' + id);
-    else history.replaceState({}, '', '/chat/' + id);
-    pinToBottom(false, 30);
+    setTitleMenu(null);
+    if (push) history.pushState({}, '', pathForChat(id));
+    else history.replaceState({}, '', pathForChat(id));
+    if (cached) pinToBottom(false, 30);
     try {
       const { chat, messages } = await api.get('/api/chats/' + id);
       if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { chat, messages }); return; }
@@ -1111,14 +879,9 @@ export default function App() {
       applyChatMeta(chat);
       applyLastModel(messages);
       cacheChat(id, { chat, messages });
-      if (!cached && user?.prefs?.chatStagger !== false && !user?.prefs?.minimalAnims) {
-        clearTimeout(staggerTimer.current);
-        setThreadStagger(true);
-        staggerTimer.current = setTimeout(() => setThreadStagger(false), 700);
-      }
+      if (!cached) pinToBottom(false, 30);
       try { const f = await api.get('/api/chats/' + id + '/files'); if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { files: f.files || [] }); return; } setFiles(f.files || []); setArtifactsOpen((f.files || []).length > 0 && artifactsOpenRef.current); cacheChat(id, { files: f.files || [] }); }
       catch { if (seq === openSeq.current && activeIdRef.current === id && !cached) setFiles([]); }
-      if (!cached) { pinToBottom(false, 30); }
     } catch { if (seq === openSeq.current) { armSkeleton(false); if (!cached) { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); } } }
   }
   function newChat(fromPop) {
@@ -1128,8 +891,7 @@ export default function App() {
     setCurrentProject(null);
     armSkeleton(false);
     setActiveId(null); setMessages([]); setInput('');
-    setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); setLiveCalls(EMPTY_CALLS); liveRef.current = null; setArtifactFocus(null);
-    setTelemetry(null); setLiveSteers([]); setLedger(null); setModelStatus(null);
+    resetChatView();
     setChatEnded(false); setChatEndedReason('');
     setChatRemovedModel(null);
     setCanContinue(false); setQueue([]);
@@ -1160,7 +922,7 @@ export default function App() {
       flushDraft();
       setActiveId(null); setMessages([]); setInput('');
       incognitoRef.current = true;
-      setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); setLiveCalls(EMPTY_CALLS); liveRef.current = null; setArtifactFocus(null);
+      resetChatView();
       setSandbox(false);
       const gs = [tk('Greetings, whoever you are'), tk('No names, no traces'), tk('This one stays between us'), tk('Off the record')];
       setIncognitoGreeting(gs[Math.floor(Math.random() * gs.length)]);
@@ -1182,14 +944,6 @@ export default function App() {
     try { await api.del('/api/chats/' + id + '/messages/' + messageId); await refreshMessages(id); }
     catch { refreshMessages(id); }
   }, []);
-  function toggleArchive(id) {
-    const cur = chats.find(c => c.id === id);
-    const next = !cur?.archived;
-    setChats(cs => cs.map(c => c.id === id ? { ...c, archived: next } : c));
-    api.patch('/api/chats/' + id, { archived: next }).catch(() => {});
-    if (next && id === activeId) toast(t('Chat archived, find it under Chats → Archived.'));
-  }
-
   function toggleStar(id) {
     const cur = chats.find(c => c.id === id);
     const next = !cur?.starred;
@@ -1254,7 +1008,7 @@ export default function App() {
       const c = await api.post('/api/chats');
       chatId = c.id; setActiveId(chatId);
       setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false }, ...cs]);
-      history.pushState({}, '', '/chat/' + chatId);
+      history.pushState({}, '', pathForChat(chatId));
       if ((chatGenParams && Object.keys(chatGenParams).length) || (chatSysOverride && chatSysOverride.trim())) {
         try { await api.patch('/api/chats/' + chatId, { genParams: chatGenParams || {}, systemOverride: chatSysOverride || '' }); } catch {}
       }
@@ -1277,8 +1031,8 @@ export default function App() {
     setShowProjects(false); setProjectOpenId(null);
     setCurrentProject(project);
     setActiveId(c.id); setMessages([]); setInput('');
-    setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false); setLiveFile(null); setLiveCall(null); setLiveCalls(EMPTY_CALLS); liveRef.current = null; setArtifactFocus(null);
-    history.pushState({}, '', '/chat/' + c.id);
+    resetChatView();
+    history.pushState({}, '', pathForChat(c.id));
     if (!wsSend({ type: 'chat', chatId: c.id, modelId: currentId, extended, reasoningEffort, kwargValues, content: text, attachments, sandbox, webSearch, styleId })) return;
     queueRec(c.id, currentId);
     setMessages([{ id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
@@ -1309,7 +1063,7 @@ export default function App() {
     setMobileDrawer(false);
     setProjectOpenId(id);
     setShowProjects(true);
-    history.pushState({}, '', id ? '/project/' + id : '/projects');
+    history.pushState({}, '', pathForProject(id));
   }
 
   const regenerate = useCallback((messageId) => {
@@ -1360,14 +1114,14 @@ export default function App() {
   // early replaced the in-progress message with a thread that does not contain
   // it yet, losing every tool result the user had just watched happen. The
   // server's `done` arrives after the write and drives finalize as usual.
-  function stop() { socketSend({ type: 'stop', chatId: activeKey() }); setQueued(false); setStopping(true); }
+  function stop() { socketSend({ type: 'stop', chatId: activeKey() }); stream.setQueued(false); setStopping(true); }
   // Message is memoized, so onContinue has to keep a stable identity — but a
   // useCallback closing over `send` freezes the first render's copy, where
   // currentId is still null and send returns immediately. sendRef is kept
   // current during render, so the click always reaches the live send.
   const continueReply = useCallback(() => {
     setCanContinue(false);
-    sendRef.current([], t('Carry on from exactly where your previous reply stopped. Do not repeat or summarise what you already did — it is already saved. If work is still unfinished, make the tool calls to finish it now.'));
+    sendRef.current([], t('Carry on from exactly where your previous reply stopped. Do not repeat or summarise what you already did, it is already saved. If work is still unfinished, make the tool calls to finish it now.'));
   }, []);
   const stopChat = useCallback((chatId) => {
     if (!chatId) return;
@@ -1382,7 +1136,7 @@ export default function App() {
   }
 
   if (user === undefined) return <div style={{ height: '100%', background: 'var(--bg)' }} />;
-  if (!user) return <Login cfg={authCtx} onLogin={(u) => { setUser(u); setIntro(true); }} />;
+  if (!user) return <Login cfg={authCtx} onLogin={(u) => setUser(u)} />;
 
   const model = modelById.get(currentId);
   const activeChat = activeId ? chats.find(c => c.id === activeId) : null;
@@ -1432,6 +1186,15 @@ export default function App() {
     ctxGauge: cfg.uiPreset === 'openai' ? null : ctxGaugeEl
   };
   const showArtifactsBtn = sandboxOn || files.length > 0;
+  // Sits beside the incognito button in both the greeting and a live chat, so turning
+  // sandbox tools on reveals it before the first message is sent.
+  const artifactsBtn = showArtifactsBtn ? (
+    <button className={'paper-btn' + (artifactsOpen ? ' active' : '') + (liveFile ? ' writing' : '')}
+      onClick={() => { setCallOpen(false); setArtifactsOpen(o => !o); }}
+      title={t("Artifacts")} aria-label={t("Artifacts")} aria-pressed={artifactsOpen}>
+      <Paper />{files.length > 0 && <span className="paper-count">{files.length}</span>}
+    </button>
+  ) : null;
 
   function focusedMsg() {
     const list = messagesRef.current;
@@ -1455,15 +1218,14 @@ export default function App() {
     openSettings: () => { setSettingsTab('general'); setShowSettings(true); },
     toggleIncognito: () => { toggleIncognito(); },
     toggleTheme: () => {
-      const preset = presetOf(cfg.uiPreset);
-      const current = paletteFor(user?.prefs?.theme, preset, prefersDark());
-      if (current && current.dark) {
-        lastDarkPalette.current = current.id;
-        updatePref('theme', DEFAULT_LIGHT[preset]);
-      } else {
-        const back = paletteById(lastDarkPalette.current);
-        updatePref('theme', (back && back.preset === preset) ? back.id : DEFAULT_DARK[preset]);
-      }
+      const next = nextTheme({
+        themePref: user?.prefs?.theme,
+        preset: presetOf(cfg.uiPreset),
+        prefersDark: prefersDark(),
+        lastDark: lastDarkPalette.current
+      });
+      if (next.remember) lastDarkPalette.current = next.remember;
+      updatePref('theme', next.theme);
     },
     focusComposer: () => { setFocusTick(x => x + 1); },
     attachFiles: () => { window.dispatchEvent(new CustomEvent('oq-attach-files')); },
@@ -1520,6 +1282,7 @@ export default function App() {
     { id: 'promptledger', label: t('What gets sent'), keywords: 'prompt inspect context debug tokens', action: () => { if (activeId) setLedgerPrompt(true); } },
     { id: 'keybinds', label: t('Customize shortcuts'), keywords: 'keybinds hotkeys keys remap', action: () => { setSettingsTab('keybinds'); setShowSettings(true); } },
     ...(user?.isAdmin ? [{ id: 'admin', label: t('Open admin panel'), keywords: 'models users connection providers', action: () => { history.pushState({}, '', '/admin'); setShowAdmin(true); } }] : []),
+    ...(user?.isAdmin ? [{ id: 'build', label: t('Enter build mode'), keywords: 'theme builder design layout customise interface', action: () => { try { localStorage.setItem('oq-build-mode', '1'); } catch {} window.location.reload(); } }] : []),
     ...(user?.isAdmin ? [{ id: 'playground', label: t('Open playground'), keywords: 'test model tune sampling kwargs prompt', action: () => { history.pushState({}, '', '/playground'); setShowPlayground(true); } }] : []),
     { id: 'changelog', label: t('View changelog'), keywords: 'updates version', action: () => setShowChangelog(true) },
     { id: 'credits', label: t('View credits'), keywords: 'about', action: () => setShowCredits(true) },
@@ -1538,14 +1301,14 @@ export default function App() {
   sidebarFns.current = { newChat, openChat, deleteChat, toggleStar, logout, openProjects, moveChatToProject, newProject: () => { openProjects(null); setProjectCreate(true); } };
 
   return (
-    <div className={'app' + (incognito ? ' app-incognito' : '') + (intro ? ' intro' : '') + (bgVisible ? ' has-bg' : '') + (collapsed ? ' sb-collapsed' : '')}>
+    <ThemeProvider user={user} cfg={cfg}>
+    <div className={'app' + (incognito ? ' app-incognito' : '') + (bgVisible ? ' has-bg' : '') + (collapsed ? ' sb-collapsed' : '')}>
       <a className="skip-link" href="#oq-composer">{t('Skip to message input')}</a>
       <AppBackground bg={activeBg} />
-      {intro && <div className="intro-curtain" />}
       <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName} onSearch={onSearchCb}
         dest={showProjects ? 'projects' : showSpaces ? 'spaces' : chatsOverview ? 'chats' : libPage}
         onArtifacts={onArtifactsCb} onScheduled={onScheduledCb}
-        onCustomize={onSkillsCb} onModelDocs={onDocsCb} showModelDocs={cfg.modelDocs !== false} onApps={onSettingsCb}
+        onCustomize={onSkillsCb} onModelDocs={onDocsCb} showModelDocs={cfg.modelDocs !== false} onVersion={onVersionCb}
         onNew={sbNewChat} onOpen={sbOpenChat} onDelete={sbDeleteChat} onToggleStar={sbToggleStar}
         collapsed={collapsed} onToggle={onToggleSidebarCb}
         mobileOpen={mobileDrawer} onMobileClose={onMobileCloseCb}
@@ -1567,6 +1330,7 @@ export default function App() {
 
       <div className={'main' + (incognito ? ' incognito' : '')} data-incognito={incognito ? 'on' : undefined}>
         <Toaster />
+        <ThemeSlot name="main.top" />
         {libPage && (
           <div className="lib-overlay" role="region" aria-label={libPage === 'artifacts' ? t('Artifacts') : t('Scheduled tasks')}>
             {libPage === 'artifacts'
@@ -1589,14 +1353,16 @@ export default function App() {
           <button className="mobile-menu-btn empty-menu" onClick={() => setMobileDrawer(true)} title={t("Menu")}><Menu style={{ width: 20 }} /></button>
         )}
         {!incognito && empty && (
-          <button className={'incognito-fab' + (user?.isAdmin ? ' with-ctl' : '')} onClick={toggleIncognito} title={t("Incognito chat, not saved")} disabled={streaming || queued}>
-            <Ghost style={{ width: 18 }} />
-          </button>
-        )}
-        {empty && !incognito && user?.isAdmin && (
-          <button className={'incognito-fab ctl-fab' + (ctlOpen ? ' active' : '')} onClick={() => { setArtifactsOpen(false); setCtlOpen(o => !o); }} title={t("Chat controls (admin)")} disabled={streaming || queued}>
-            <Sliders style={{ width: 17 }} />
-          </button>
+          <TopbarActions className="home-actions"
+            leading={<>
+              <button className="paper-btn" onClick={toggleIncognito} title={t("Incognito chat, not saved")} disabled={streaming || queued}>
+                <Ghost />
+              </button>
+              {artifactsBtn}
+            </>}
+            items={[
+              user?.isAdmin && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, disabled: streaming || queued, onClick: () => { setArtifactsOpen(false); setCtlOpen(o => !o); } }
+            ]} />
         )}
         {empty && !incognito && cfg.uiPreset === 'openai' && (
           <div className="home-topbar">
@@ -1605,6 +1371,7 @@ export default function App() {
         )}
         {empty ? (
           <div className="center-wrap">
+            <ThemeSlot name="home.above" />
             <div className="greeting">
               {incognito
                 ? (cfg.uiPreset === 'openai'
@@ -1624,6 +1391,7 @@ export default function App() {
                       : line;
                   })()}
             </div>
+            <ThemeSlot name="composer.above" />
             <div className="composer-wrap">
               <Composer {...composerProps} autoFocus modelUp focusKey={focusTick} />
             </div>
@@ -1634,6 +1402,7 @@ export default function App() {
                 <QuickPrompts prompts={cfg.quickPrompts} visible={!input.trim()} disabled={streaming} onPick={(p) => send([], p)} />
               )}
             </div>
+            <ThemeSlot name="home.below" />
           </div>
         ) : (
           <>
@@ -1642,6 +1411,7 @@ export default function App() {
               <button className="mobile-menu-btn" onClick={() => setMobileDrawer(true)} title={t("Menu")}><Menu style={{ width: 20 }} /></button>
               {renaming ? (
                 <input className="chat-rename" autoFocus value={renameVal}
+                  onFocus={(e) => e.target.select()}
                   onChange={(e) => setRenameVal(e.target.value)}
                   onBlur={commitRename}
                   onKeyDown={(e) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenaming(false); }} />
@@ -1649,78 +1419,58 @@ export default function App() {
                 <div className="chat-name-wrap">
                   {activeProject && (
                     <>
-                      <button className="ct-crumb" onClick={() => { setProjectOpenId(activeProject.id); setShowProjects(true); history.pushState({}, '', '/project/' + activeProject.id); }}>
+                      <button className="ct-crumb" onClick={() => { setProjectOpenId(activeProject.id); setShowProjects(true); history.pushState({}, '', pathForProject(activeProject.id)); }}>
                         {activeProject.name}
                       </button>
                       <span className="ct-sep">/</span>
                     </>
                   )}
-                  <button className="chat-name" onClick={() => setChatMenuOpen(o => !o)}>
-                    <span className="ct-title">{activeChat?.title || t('New chat')}</span> <ChevDown style={{ width: 15 }} />
+                  <button className="chat-name ct-name" disabled={!activeId} title={t('Rename chat')}
+                    onClick={() => { setRenameVal(activeChat?.title || ''); setRenaming(true); }}>
+                    <span className="ct-title">{activeChat?.title || t('New chat')}</span>
                   </button>
-                  {(chatInstructions || '').trim() && <span className="chat-instr-dot" title={t("This chat has custom instructions")} />}
-                  {chatMenuOpen && activeId && (
+                  <button className="chat-name ct-caret" ref={titleChevRef} disabled={!activeId}
+                    title={t('Chat options')} aria-label={t('Chat options')} aria-haspopup="menu" aria-expanded={!!titleMenu}
+                    onClick={(e) => { const at = menuAtButton(e.currentTarget); setTitleMenu(m => m ? null : at); }}>
+                    <ChevDown />
+                  </button>
+                  {titleMenu && activeId && (
                     <ChatMenu
-                      chat={{ id: activeId, title: activeChat?.title || t('New chat'), instructions: chatInstructions, starred: !!activeChat?.starred, archived: !!activeChat?.archived }}
-                      modelId={currentId}
-                      pinned={messages.filter(m => m.pinned)}
-                      pins={chatPins}
-                      onUnpinFile={(url) => togglePinFile({ url })}
-                      onOpenPersonas={() => { setChatMenuOpen(false); setPersonasOpen(true); }}
-                      onJump={jumpToMessage}
-                      onCopyConversation={copyConversation}
-                      onClose={() => setChatMenuOpen(false)}
-                      onRename={() => { setRenameVal(activeChat?.title || ''); setRenaming(true); }}
-                      onFork={() => forkChat()}
-                      onToggleStar={() => toggleStar(activeId)}
-                      onToggleArchive={() => toggleArchive(activeId)}
-                      onInstructionsSaved={(v) => setChatInstructions(v)} />
+                      chat={{ id: activeId, title: activeChat?.title || t('New chat'), starred: !!activeChat?.starred, projectId: activeChat?.projectId || null }}
+                      at={titleMenu} projects={projects} busy={busyChats.includes(activeId)} anchorRef={titleChevRef}
+                      onStopChat={stopChat}
+                      onToggleStar={toggleStar}
+                      onMoveToProject={moveChatToProject}
+                      onDelete={deleteChat}
+                      onClose={() => setTitleMenu(null)} />
                   )}
                 </div>
               )}
-              <div className="topbar-actions">
-                {!incognito && (
-                  <button className="paper-btn" onClick={toggleIncognito} title={t("Incognito chat, not saved")} disabled={streaming || queued}>
-                    <Ghost style={{ width: 18 }} />
-                  </button>
-                )}
-                {hasSummary && (
-                  <button className="paper-btn" onClick={() => setSummaryOpen(true)} title={t("Conversation memory")}>
-                    <Compact style={{ width: 18 }} />
-                  </button>
-                )}
-                {user?.isAdmin && activeId && (
-                  <button className={'paper-btn' + (ctlOpen ? ' active' : '')} onClick={() => { setArtifactsOpen(false); setCtlOpen(o => !o); }} title={t("Chat controls (admin)")}>
-                    <Sliders style={{ width: 17 }} />
-                  </button>
-                )}
-                {messages.length > 0 && user?.prefs?.threadFind !== false && (
-                  <button className={'paper-btn' + (findOpen ? ' active' : '')} onClick={() => (findOpen ? closeFind() : setFindOpen(true))} title={t('Find in conversation')} aria-label={t('Find in conversation')} aria-pressed={findOpen}>
-                    <Search style={{ width: 17 }} />
-                  </button>
-                )}
-                {activeId && messages.length > 0 && user?.prefs?.branchMap !== false && (
-                  <button className={'paper-btn' + (treeOpen ? ' active' : '')} onClick={() => setTreeOpen(o => !o)} title={t('Branch map')} aria-label={t('Branch map')} aria-pressed={treeOpen}>
-                    <Fork style={{ width: 17 }} />
-                  </button>
-                )}
-                {activeId && (
-                  <button className={'paper-btn' + (ledgerOpen ? ' active' : '')} onClick={() => setLedgerOpen(o => !o)} title={t('Context ledger')} aria-label={t('Context ledger')} aria-pressed={ledgerOpen}>
-                    <Gauge style={{ width: 18 }} />
-                  </button>
-                )}
-                {showArtifactsBtn && (
-                  <button className={'paper-btn' + (artifactsOpen ? ' active' : '') + (liveFile ? ' writing' : '')} onClick={() => { setCallOpen(false); setArtifactsOpen(o => !o); }} title={t("Artifacts")}>
-                    <Paper style={{ width: 18 }} />{files.length > 0 && <span className="paper-count">{files.length}</span>}
-                  </button>
-                )}
-              </div>
+              <TopbarActions
+                leading={<>
+                  {!incognito && (
+                    <button className="paper-btn" onClick={toggleIncognito} title={t("Incognito chat, not saved")} disabled={streaming || queued}>
+                      <Ghost />
+                    </button>
+                  )}
+                  {artifactsBtn}
+                </>}
+                items={[
+                  hasSummary && { id: 'summary', icon: <Compact />, label: t("Conversation memory"), onClick: () => setSummaryOpen(true) },
+                  { id: 'personas', icon: <Star />, label: t('Personas'), onClick: () => setPersonasOpen(true) },
+                  messages.length > 0 && { id: 'copyall', icon: <Copy />, label: t('Copy all'), onClick: () => copyConversation() },
+                  activeId && { id: 'inspect', icon: <Telescope />, label: t('Inspect context'), onClick: () => setInspectOpen(true) },
+                  user?.isAdmin && activeId && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => { setArtifactsOpen(false); setCtlOpen(o => !o); } },
+                  messages.length > 0 && user?.prefs?.threadFind !== false && { id: 'find', icon: <Search />, label: t('Find in conversation'), active: findOpen, onClick: () => (findOpen ? closeFind() : setFindOpen(true)) },
+                  activeId && messages.length > 0 && user?.prefs?.branchMap !== false && { id: 'tree', icon: <Fork />, label: t('Branch map'), active: treeOpen, onClick: () => setTreeOpen(o => !o) },
+                  activeId && { id: 'ledger', icon: <Gauge />, label: t('Context ledger'), active: ledgerOpen, onClick: () => setLedgerOpen(o => !o) },
+                ]} />
             </div>
             {findOpen && user?.prefs?.threadFind !== false && <ThreadFind scrollRef={scrollRef} revision={findRevision} onMatches={onFindMatches} onClose={closeFind} />}
             <div className="scroll-area" id="oq-thread" ref={scrollRef} onScroll={onScroll} onWheel={onWheel} onTouchMove={onTouchMove}>
-              <div className={'thread' + (threadStagger ? ' stagger' : '') + (ledgerOpen ? ' ledger-on' : '') + (heavyThread ? ' virt' : '') + (findOpen ? ' finding' : '')}
+              <div className={'thread' + (ledgerOpen ? ' ledger-on' : '') + (heavyThread ? ' virt' : '') + (findOpen ? ' finding' : '')}
                 role="log" aria-label={t('Conversation')} aria-live="polite" aria-relevant="additions text" aria-busy={streaming ? 'true' : 'false'}>
-                {ledgerOpen && <LedgerBar ledger={ledger} liveUsed={liveLedgerUsed} live={streaming} />}
+                {ledgerOpen && <LedgerBar ledger={ledger} liveUsed={ledgerTokens.used} live={streaming} />}
                 {threadLoading && messages.length === 0 && <ThreadSkeleton />}
                 {(() => {
                   const streamKey = assistantIdRef.current || '_stream';
@@ -1733,7 +1483,7 @@ export default function App() {
                   const ledgerLimit = (ledgerOpen && ledger && ledger.limit) || 0;
                   return renderList.map(msg => {
                     const li = ledgerOpen ? ledgerById.get(msg.id) : null;
-                    const liTokens = li ? li.tokens : (ledgerOpen && msg._streaming ? liveLedgerTokens : 0);
+                    const liTokens = li ? li.tokens : (ledgerOpen && msg._streaming ? ledgerTokens.generated : 0);
                     return (
                     <Message key={msg._k || msg.id} msg={msg} model={resolveMsgModel(msg, model)} models={models} currentId={currentId} chatId={activeId} pins={chatPins} chatEnded={chatEnded}
                       canContinue={(canContinue || !!msg.truncated) && !streaming && !chatEnded && msg === lastA && !msg._streaming}
@@ -1793,7 +1543,7 @@ export default function App() {
             {user?.prefs?.threadRail !== false && <ThreadRail items={railList} scrollRef={scrollRef} matches={findMatches} onJump={railJump} />}
             {showJump && <button className="to-bottom" onClick={jumpDown} title={t('Jump to latest')} aria-label={t('Jump to latest')}><Down style={{ width: 17 }} /></button>}
             <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')} style={{ maxWidth: cfg.uiPreset === 'openai' ? undefined : 808, margin: '0 auto', width: '100%', padding: '0 20px' }}>
-              {user?.prefs?.engineStrip !== false && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
+              {user?.prefs?.engineStrip === true && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
               <Composer {...composerProps} focusKey={focusTick} />
               <Disclaimer text={cfg.disclaimer} />
             </div>
@@ -1823,27 +1573,11 @@ export default function App() {
       {showSettings && <React.Suspense fallback={null}><SettingsModal user={user} cfg={cfg} initialTab={settingsTab} onClose={onSettingsClosed} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile}
         onTrySkill={(sk) => { newChat(); setInput('/' + sk.name + ' '); setFocusTick(n => n + 1); }} /></React.Suspense>}
       {user?.isAdmin && cfg.uiPresetChosen === false && !presetPicked && (
-        <div className="preset-scrim">
-          <div className="preset-modal">
-            <h2 className="preset-title">{t("Choose your interface")}</h2>
-            <p className="preset-sub">{t("Pick the look for this workspace. You can change it any time in Admin → Branding.")}</p>
-            <div className="preset-grid">
-              <button className="preset-card" onClick={() => choosePreset('anthropic')}>
-                <span className="preset-swatch anthropic"><span className="ps-dot" /></span>
-                <span className="preset-name">{t("Anthropic")}</span>
-                <span className="preset-desc">{t("Warm serif look with the classic open-quill layout.")}</span>
-              </button>
-              <button className="preset-card" onClick={() => choosePreset('openai')}>
-                <span className="preset-swatch openai"><span className="ps-dot" /></span>
-                <span className="preset-name">{t("OpenAI")}</span>
-                <span className="preset-desc">{t("Pitch-black ChatGPT layout with the model picker up top.")}</span>
-              </button>
-            </div>
-          </div>
-        </div>
+        <FirstRun onDone={onPresetChosen} />
       )}
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} onChatsChanged={() => loadChats()} />}
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} onOpen={(id) => openChat(id)} />}
+      {inspectOpen && activeId && <ContextInspector chatId={activeId} modelId={currentId} onClose={() => setInspectOpen(false)} />}
       {personasOpen && <PersonasModal personas={user?.personas || []} models={models} currentId={currentId} onApply={applyPersona} onSave={savePersonas} onClose={() => setPersonasOpen(false)} />}
       {ledgerPrompt && activeId && (
         <React.Suspense fallback={null}>
@@ -1864,18 +1598,20 @@ export default function App() {
       {showShortcuts && <ShortcutsModal prefs={user?.prefs} onClose={() => setShowShortcuts(false)} onCustomize={() => { setShowShortcuts(false); setSettingsTab('keybinds'); setShowSettings(true); }} />}
       {treeOpen && activeId && user?.prefs?.branchMap !== false && <React.Suspense fallback={null}><BranchTree chatId={activeId} onSelect={selectBranch} onJump={jumpToMessage} onClose={() => setTreeOpen(false)} onChanged={async () => { await refreshMessages(activeId); setTimeout(() => scrollBottom(false), 20); toast(t('Message copied into this branch')); }} /></React.Suspense>}
       <Lightbox />
-      {showAdmin && <React.Suspense fallback={null}><AdminPanel user={user} modelId={currentId} onClose={() => { setShowAdmin(false); if (/^\/admin(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
-      {showPlayground && <React.Suspense fallback={null}><Playground onClose={() => { setShowPlayground(false); if (/^\/playground(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
-      {showSpaces && <SpacesPanel user={user} onClose={() => { setShowSpaces(false); refreshSpacesPending(); if (/^\/spaces(\/|$)/.test(location.pathname)) history.pushState({}, '', '/'); }} />}
+      {showAdmin && <React.Suspense fallback={null}><AdminPanel user={user} onClose={() => { setShowAdmin(false); if (shouldResetPath('admin', location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
+      {showPlayground && <React.Suspense fallback={null}><Playground onClose={() => { setShowPlayground(false); if (shouldResetPath('playground', location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
+      {showSpaces && <SpacesPanel user={user} onClose={() => { setShowSpaces(false); refreshSpacesPending(); if (shouldResetPath('spaces', location.pathname)) history.pushState({}, '', '/'); }} />}
       {showProjects && <ProjectsPanel openId={projectOpenId} composerProps={composerProps}
         startCreate={projectCreate} onCreateHandled={() => setProjectCreate(false)}
-        onClose={() => { setShowProjects(false); setProjectOpenId(null); if (/^\/projects?(\/|$)/.test(location.pathname) || /^\/project\//.test(location.pathname)) history.pushState({}, '', '/'); }}
+        onClose={() => { setShowProjects(false); setProjectOpenId(null); if (shouldResetPath('projects', location.pathname)) history.pushState({}, '', '/'); }}
         onOpenChat={openProjectChat} onStartChat={startProjectChat}
-        onOpenProject={(id) => { setProjectOpenId(id); history.replaceState({}, '', id ? '/project/' + id : '/projects'); loadProjects(); }} />}
+        onOpenProject={(id) => { setProjectOpenId(id); history.replaceState({}, '', pathForProject(id)); loadProjects(); }} />}
       {showCredits && <DocModal title={t("Credits")} name="credits" serif onClose={() => setShowCredits(false)} />}
       {showLicense && <DocModal title={t("Licensing")} name="license" onClose={() => setShowLicense(false)} />}
       {showChangelog && <DocModal title={t("Changelog")} name="changelog" onClose={() => setShowChangelog(false)} />}
       {cmdkOpen && <CommandPalette commands={commands} onClose={() => setCmdkOpen(false)} />}
     </div>
+    {user?.isAdmin && <React.Suspense fallback={null}><BuildMode /></React.Suspense>}
+    </ThemeProvider>
   );
 }

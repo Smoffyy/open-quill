@@ -322,25 +322,25 @@ export default function CallPanel({ chatId, model, voice, onSendText, onClose })
 
   return (
     <div className="callpanel">
-      <div className="cp-head">
-        <div className="cp-title">
-          {model?.staticIcon ? <img className="cp-model-icon" src={model.staticIcon} alt="" /> : null}
+      <div className="call-head">
+        <div className="call-title">
+          {model?.staticIcon ? <img className="call-model-icon" src={model.staticIcon} alt="" /> : null}
           <span>{model?.displayName || t('Voice call')}</span>
         </div>
-        <button className="cp-close" onClick={onClose} title={t("Close panel")}><X style={{ width: 16 }} /></button>
+        <button className="call-close" onClick={onClose} title={t("Close panel")}><X style={{ width: 16 }} /></button>
       </div>
-      <div className="cp-stage" onClick={interrupt} title={mode === 'speaking' ? t('Tap to interrupt') : ''}>
-        <div ref={orbRef} className={'cp-orb ' + mode + (muted ? ' muted' : '')} />
-        <div className="cp-status">{statusText}</div>
-        {lastHeard && !err && <div className="cp-heard">“{lastHeard}”</div>}
-        {mode === 'speaking' && <div className="cp-hint">{t("Tap the orb to interrupt")}</div>}
+      <div className="call-stage" onClick={interrupt} title={mode === 'speaking' ? t('Tap to interrupt') : ''}>
+        <div ref={orbRef} className={'call-orb ' + mode + (muted ? ' muted' : '')} />
+        <div className="call-status">{statusText}</div>
+        {lastHeard && !err && <div className="call-heard">“{lastHeard}”</div>}
+        {mode === 'speaking' && <div className="call-hint">{t("Tap the orb to interrupt")}</div>}
       </div>
-      <div className="cp-bar">
-        <button className={'cp-btn' + (muted ? ' on' : '')} onClick={() => setMuted(m => !m)} title={muted ? t('Unmute microphone') : t('Mute microphone')}>
+      <div className="call-bar">
+        <button className={'call-btn' + (muted ? ' on' : '')} onClick={() => setMuted(m => !m)} title={muted ? t('Unmute microphone') : t('Mute microphone')}>
           <Mic style={{ width: 18 }} />
-          {muted && <span className="cp-slash" />}
+          {muted && <span className="call-slash" />}
         </button>
-        <button className="cp-btn hangup" onClick={onClose} title={t("End call")}><X style={{ width: 18 }} /></button>
+        <button className="call-btn hangup" onClick={onClose} title={t("End call")}><X style={{ width: 18 }} /></button>
       </div>
     </div>
   );

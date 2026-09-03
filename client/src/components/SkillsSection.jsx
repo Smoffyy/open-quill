@@ -11,7 +11,7 @@ import { useAnchoredMenu, menuStyleOf } from '../lib/anchor.js';
 const STARTERS = [
   { name: 'brand-voice', description: tk('Keep every draft in your own voice: tone, vocabulary and the phrases you never use.'), body: '# Brand voice\n\nUse this skill whenever you write anything the user will send or publish.\n\n## Tone\n\n- Plain, direct sentences. No filler openings.\n- Prefer the active voice.\n\n## Never\n\n- Never open with "Great question".\n- Never use em dashes.\n' },
   { name: 'code-review', description: tk('Review a diff for correctness first, then for simplification, with a fixed report shape.'), body: '# Code review\n\nUse this skill when the user asks for a review of a diff, branch or file.\n\n## Order\n\n1. Correctness bugs that would break at runtime.\n2. Reuse: something in the tree already does this.\n3. Simplification.\n\n## Report\n\nOne line per finding: `file:line` then the defect, then the failing input.\n' },
-  { name: 'meeting-notes', description: tk('Turn a raw transcript into decisions, owners and open questions.'), body: '# Meeting notes\n\nUse this skill when given a transcript or rough notes.\n\n## Output\n\n**Decisions** — what was actually settled.\n**Owners** — who has the next action, and by when.\n**Open** — what is still unresolved.\n\nLeave out anything that is neither a decision nor an action.\n' },
+  { name: 'meeting-notes', description: tk('Turn a raw transcript into decisions, owners and open questions.'), body: '# Meeting notes\n\nUse this skill when given a transcript or rough notes.\n\n## Output\n\n**Decisions**: what was actually settled.\n**Owners**: who has the next action, and by when.\n**Open**: what is still unresolved.\n\nLeave out anything that is neither a decision nor an action.\n' },
   { name: 'sql-helper', description: tk('Write and explain SQL against a schema the user pastes, with the query plan in mind.'), body: '# SQL helper\n\nUse this skill when the user asks for a query.\n\n1. Restate the schema you are working against.\n2. Write the query.\n3. Say which index it relies on.\n\nNever return a query that scans a table the user said was large.\n' },
   { name: 'changelog', description: tk('Turn commits into release notes grouped by what the reader can now do.'), body: '# Changelog\n\nUse this skill when asked for release notes.\n\nGroup by **Added / Changed / Fixed**. One line each, written from the reader’s point of view, not the commit’s.\n' },
   { name: 'test-writer', description: tk('Write tests that fail for the right reason before they pass.'), body: '# Test writer\n\nUse this skill when asked to add tests.\n\n- Cover the boundary, not the happy path twice.\n- Assert on behaviour, never on the shape of an internal call.\n- Name the test after the condition it protects.\n' }
@@ -318,7 +318,7 @@ export default function SkillsSection({ onTrySkill }) {
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpenId(s.id); } }}
                   className={s.enabled ? '' : 'off'}>
                   <td><div className="sk-cell-name"><span>{s.name}</span></div></td>
-                  <td>{s.updated_at ? shortDate(s.updated_at) : '—'}</td>
+                  <td>{s.updated_at ? shortDate(s.updated_at) : '-'}</td>
                   <td>{s.author}</td>
                 </tr>
               ))}

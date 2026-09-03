@@ -52,3 +52,17 @@ export function themeValue(themePref, preset) {
   if (hit.preset !== p) return DEFAULT_DARK[p] && hit.dark ? DEFAULT_DARK[p] : DEFAULT_LIGHT[p];
   return hit.id;
 }
+
+// Toggling light/dark is not a boolean: a palette is a named theme, and a user
+// who picked a particular dark palette should get *that* one back rather than the
+// preset default. `lastDark` is the id they were last on, remembered across the
+// round trip; a remembered palette belonging to another preset is not applicable
+// and the preset's own default is used instead.
+export function nextTheme({ themePref, preset, prefersDark, lastDark }) {
+  const current = paletteFor(themePref, preset, prefersDark);
+  if (current && current.dark) {
+    return { theme: DEFAULT_LIGHT[preset], remember: current.id };
+  }
+  const back = paletteById(lastDark);
+  return { theme: (back && back.preset === preset) ? back.id : DEFAULT_DARK[preset], remember: null };
+}

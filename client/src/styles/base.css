@@ -12,6 +12,9 @@
   --text-faint: #6f6e66;
   --accent: #d97757;
   --on-accent: #ffffff;
+  --primary: var(--text);
+  --on-primary: var(--bg);
+  --link: var(--search-hit);
   --danger: #e5484d;
   --success: #4caf7d;
   --warning: #e2b03f;

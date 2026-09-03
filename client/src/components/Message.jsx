@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import Markdown, { ReasonSegs } from './Markdown.jsx';
 import { copyText } from '../clipboard.js';
@@ -9,9 +9,33 @@ import ToolCard from './ToolCard.jsx';
 import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash, Dots, Steer } from './icons.jsx';
 import { api } from '../api.js';
 import { extLabel } from '../lib/files.js';
-import { STATUS_DELAY_DEFAULT, statusDelayMs } from '../lib/status.js';
+import { useStatusLabel } from '../lib/status.js';
 import { useAnchoredMenu, menuStyleOf } from '../lib/anchor.js';
 import { t } from '../i18n.jsx';
+
+function UserBubble({ content }) {
+  const [collapsed, setCollapsed] = useState(true);
+  const [overflowing, setOverflowing] = useState(false);
+  const textRef = useRef(null);
+  useLayoutEffect(() => {
+    const el = textRef.current;
+    if (!el) return;
+    const clampPx = parseFloat(getComputedStyle(el).getPropertyValue('--user-clamp-h')) || 200;
+    setOverflowing(el.scrollHeight > clampPx + 1);
+  }, [content]);
+  return (
+    <div className="bubble-user">
+      <div className={'bubble-user-text' + (collapsed && overflowing ? ' clamped' : '')} ref={textRef}>
+        <Markdown>{content}</Markdown>
+      </div>
+      {overflowing && (
+        <button className="bubble-toggle" onClick={() => setCollapsed(c => !c)}>
+          {collapsed ? t('Show more') : t('Show less')}
+        </button>
+      )}
+    </div>
+  );
+}
 
 function Columns(props) {
   return (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect x="3" y="4" width="7" height="16" rx="1" /><rect x="14" y="4" width="7" height="16" rx="1" /></svg>);
@@ -21,8 +45,13 @@ function fmtTime(ts) {
   if (!ts) return null;
   const d = new Date(ts);
   if (isNaN(d.getTime())) return null;
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  let short;
+  if (days < 1) short = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  else if (days <= 7) short = days === 1 ? t('1 day ago') : t('{n} days ago', { n: days });
+  else short = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
   return {
-    short: d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+    short,
     full: d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
   };
 }
@@ -31,7 +60,7 @@ function MoreMenu({ items }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   const menuRef = useRef(null);
-  const pos = useAnchoredMenu(open, setOpen, btnRef, menuRef);
+  const pos = useAnchoredMenu(open, setOpen, btnRef, menuRef, { align: 'center' });
   const list = items.filter(Boolean);
   if (!list.length) return null;
   return (
@@ -87,7 +116,36 @@ function Attachments({ items, pins, onTogglePinFile }) {
   );
 }
 
-const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name, streamIn }, ref) {
+function StatusCaption({ label, detail }) {
+  const [mounted, setMounted] = useState(!!label);
+  const [visible, setVisible] = useState(false);
+  const [text, setText] = useState(label || '');
+  const [title, setTitle] = useState(detail || '');
+  const shown = useRef(false);
+  const hideTimer = useRef(null);
+  useEffect(() => {
+    if (label) {
+      setText(label);
+      setTitle(detail || '');
+      if (!shown.current) {
+        shown.current = true;
+        clearTimeout(hideTimer.current);
+        setMounted(true);
+        const raf = requestAnimationFrame(() => setVisible(true));
+        return () => cancelAnimationFrame(raf);
+      }
+    } else if (shown.current) {
+      shown.current = false;
+      setVisible(false);
+      hideTimer.current = setTimeout(() => setMounted(false), 220);
+    }
+  }, [label, detail]);
+  useEffect(() => () => clearTimeout(hideTimer.current), []);
+  if (!mounted) return null;
+  return <span className={'msg-icon-status' + (visible ? ' show' : '')} title={title || undefined}>{text}</span>;
+}
+
+const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name, nameHoverOnly, statusLabel, statusDetail }, ref) {
   const base = model?.staticIcon || '';
   const map = {
     static: base,
@@ -95,73 +153,18 @@ const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, nam
     thinking: model?.thinkingIcon || base
   };
   const src = map[phase] || base;
-  if (!base && !name) return null;
+  if (!base && !name && !statusLabel) return null;
   const anim = phase === 'generating' ? (model?.generatingAnim || 'none') : phase === 'thinking' ? (model?.thinkingAnim || 'none') : '';
   const cls = anim === 'none' ? '' : anim;
   const sz = model?.iconSize > 0 ? model.iconSize : 40;
   return (
-    <div ref={ref} className={'msg-icon' + (below ? ' below' : '') + (name ? ' with-name' : '') + (streamIn ? ' stream-in' : '')}>
+    <div ref={ref} className={'msg-icon' + (below ? ' below' : '') + (name ? ' with-name' : '')}>
       {base && <img src={src} className={cls} style={{ width: sz, height: sz }} alt="" />}
-      {name && <span className="msg-icon-name">{name}</span>}
+      {name && <span className={'msg-icon-name' + (nameHoverOnly ? ' hover-reveal' : '')}>{name}</span>}
+      <StatusCaption label={statusLabel} detail={statusDetail} />
     </div>
   );
 });
-
-const compact = (n) => (n >= 10000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : Number(n).toLocaleString());
-
-function StreamStatus({ status, delay = STATUS_DELAY_DEFAULT }) {
-  const total = status && status.total ? status.total : 0;
-  const hasProgress = total > 0;
-  const waiting = !!(status && status.phase === 'waiting');
-  const wait = statusDelayMs(delay);
-  const [show, setShow] = useState(wait === 0);
-  useEffect(() => {
-    if (wait === 0) { setShow(true); return; }
-    setShow(false);
-    const timer = setTimeout(() => setShow(true), wait);
-    return () => clearTimeout(timer);
-  }, [wait]);
-  if (!show) return null;
-
-  if (waiting) {
-    const secs = Math.round((status.ms || 0) / 1000);
-    return (
-      <div className="model-status" role="status">
-        <span className="mst-label">{t('Waiting for the backend')}</span>
-        <span className="mst-note">{t('Nothing back yet after {n}s. A local server loading a model can take a while.', { n: secs })}</span>
-      </div>
-    );
-  }
-
-  const pct = status && Number.isFinite(status.pct) ? status.pct : null;
-  const cached = status && status.cache ? status.cache : 0;
-  const processed = status && status.total ? Math.max(cached, status.processed || 0) : 0;
-  const ms = status && status.ms ? status.ms : 0;
-  const generating = status && status.phase === 'generating';
-  const label = generating ? t('Working') : cached > 0 ? t('Reusing cache') : t('Reading your prompt');
-  const fresh = processed - cached;
-  const eta = (!generating && ms > 400 && fresh > 0 && total > processed)
-    ? Math.round((total - processed) / (fresh / (ms / 1000)))
-    : 0;
-
-  const parts = [];
-  if (hasProgress) parts.push(`${compact(processed)} / ${compact(total)} ${t('tokens')}`);
-  if (cached > 0) parts.push(`${Math.round((cached / total) * 100)}% ${t('reused')}`);
-  if (eta >= 2) parts.push(`~${eta}s ${t('left')}`);
-
-  return (
-    <div className="model-status" role="status">
-      <span className="mst-label">{label}</span>
-      {pct !== null && hasProgress && (
-        <>
-          <span className="mst-bar"><span className="mst-fill" style={{ width: pct + '%' }} /></span>
-          <span className="mst-pct">{pct}%</span>
-        </>
-      )}
-      {parts.length > 0 && <span className="mst-note">{parts.join(' · ')}</span>}
-    </div>
-  );
-}
 
 function LedgerRow({ tokens, pct, state, id, onToggleExclude }) {
   const excluded = state === 'excluded';
@@ -204,7 +207,7 @@ function SteerChips({ notes }) {
   );
 }
 
-function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, statusDelay = STATUS_DELAY_DEFAULT, showSpeed = false, preset = 'anthropic' }) {
+function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, statusDelay = true, showSpeed = false, preset = 'anthropic' }) {
   if (chatEnded) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onFork = null; onDelete = null; }
   if (!chatId) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onFork = null; onTogglePin = null; }
   const [typing, setTyping] = useState(false);
@@ -217,6 +220,9 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
     typingTimer.current = setTimeout(() => setTyping(false), Number.isFinite(v) && v > 0 ? v : 500);
     return () => clearTimeout(typingTimer.current);
   }, [streaming, msg.content]);
+  const textEnteredRef = useRef(false);
+  if (streaming && msg.content) textEnteredRef.current = true;
+  const textEntered = textEnteredRef.current;
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -224,7 +230,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   const [compare, setCompare] = useState(false);
   const retryRef = useRef(null);
   const retryMenuRef = useRef(null);
-  const retryPos = useAnchoredMenu(retryMenu, setRetryMenu, retryRef, retryMenuRef);
+  const retryPos = useAnchoredMenu(retryMenu, setRetryMenu, retryRef, retryMenuRef, { align: 'center' });
   async function doCopy() {
     const clean = (msg.content || '').replace(/\[\[OQ(?:R:[A-Za-z0-9+/=]+|T:\d+)\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
     if (!(await copyText(clean))) return;
@@ -241,35 +247,28 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
 
   const pos = model?.iconPosition || 'below';
   const iconRef = useRef(null);
-  const iconPrevTop = useRef(null);
-  const iconSuspendUntil = useRef(0);
-  useEffect(() => {
+  const iconSlide = useRef({ top: null, done: false });
+  useLayoutEffect(() => {
     const el = iconRef.current;
-    const container = el && el.closest('.msg');
-    if (pos !== 'below' || !el || !container) return;
-    const settle = () => { el.style.transition = ''; el.style.transform = ''; };
-    const onToggleStart = (e) => {
-      if (!e.target.closest('.reasoning-head')) return;
-      settle();
-      iconSuspendUntil.current = performance.now() + 500;
-    };
-    container.addEventListener('click', onToggleStart);
-    const ro = new ResizeObserver(() => {
-      const top = el.getBoundingClientRect().top;
-      const suspended = performance.now() < iconSuspendUntil.current;
-      if (iconPrevTop.current !== null && !suspended) {
-        const delta = iconPrevTop.current - top;
-        if (Math.abs(delta) > 0.5) {
-          el.style.transition = 'none';
-          el.style.transform = `translateY(${delta}px)`;
-          requestAnimationFrame(() => requestAnimationFrame(settle));
-        }
-      }
-      iconPrevTop.current = top;
-    });
-    ro.observe(container);
-    return () => { container.removeEventListener('click', onToggleStart); ro.disconnect(); settle(); };
-  }, [pos]);
+    if (pos !== 'below' || !streaming || !el) { iconSlide.current = { top: null, done: false }; return; }
+    const state = iconSlide.current;
+    const top = el.offsetTop;
+    if (state.top === null) {
+      state.top = top;
+      return;
+    }
+    if (state.done) return;
+    const delta = state.top - top;
+    if (Math.abs(delta) > 0.5) {
+      el.style.transition = 'none';
+      el.style.transform = `translateY(${delta}px)`;
+      requestAnimationFrame(() => {
+        el.style.transition = 'transform .6s cubic-bezier(.16,1,.3,1)';
+        el.style.transform = '';
+      });
+      state.done = true;
+    }
+  }, [pos, streaming, msg.content, msg.reasoning, phase, liveCall, liveCalls]);
 
   const [fb, setFb] = useState(msg.feedback || 0);
   useEffect(() => { setFb(msg.feedback || 0); }, [msg.id]);
@@ -282,6 +281,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
     () => (segs ? { segs, segMs, live: !!(streaming && tailIsMarker), preset, collapsible: model?.reasoningCollapsible !== false } : null),
     [segs, segMsKey, streaming, tailIsMarker, preset, model]
   );
+  const statusInfo = useStatusLabel(status, statusDelay);
 
   if (msg.role === 'user') {
     return (
@@ -302,7 +302,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
               </div>
             </>
           ) : (
-            msg.content && <div className="bubble-user"><Markdown>{msg.content}</Markdown></div>
+            msg.content && <UserBubble content={msg.content} />
           )}
           {msg.content && !editing && (
             <div className="actions user-actions">
@@ -313,9 +313,9 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
               {onEdit && <button className="action-btn" onClick={startEdit} title={t("Edit")} aria-label={t("Edit")}><Pencil /></button>}
               <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
               <MoreMenu items={[
-                onFork && { label: t('Branch into a new chat'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
-                onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin (keep in context)'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
-                onDelete && chatId && { label: t('Delete message'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
+                onFork && { label: t('Branch'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
+                onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
+                onDelete && chatId && { label: t('Delete'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
               ]} />
             </div>
           )}
@@ -326,15 +326,8 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   }
   const iconPhase = streaming ? phase : 'static';
   const showIt = showIcon || streaming;
-  const showName = !!model?.showName && !!model?.displayName;
-  const iconStreamIn = streaming && !!msg.content;
-  const icon = showIt ? <ModelIcon ref={iconRef} model={model} phase={iconPhase} below={pos === 'below'} name={pos === 'left' ? null : (showName ? model.displayName : null)} streamIn={iconStreamIn} /> : null;
-
-  async function rate(r) {
-    const next = fb === r ? 0 : r;
-    setFb(next);
-    try { await api.post(`/api/messages/${msg.id}/feedback`, { rating: next }); } catch { setFb(fb); }
-  }
+  const hasName = !!model?.displayName;
+  const showName = !!model?.showName && hasName;
 
   // Every call the model is currently spelling out, so a step that writes six
   // files shows six rows instead of one that keeps being overwritten. Falls back
@@ -342,6 +335,16 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   const liveRows = (liveCalls && liveCalls.length)
     ? liveCalls
     : (liveCall && liveCall.tool ? [{ index: 0, call: liveCall }] : []);
+  const showStatus = streaming && !msg.content && !msg.reasoning && !liveRows.length && statusInfo.show;
+  const icon = showIt ? <ModelIcon ref={iconRef} model={model} phase={iconPhase} below={pos === 'below'} name={pos === 'left' ? null : (hasName ? model.displayName : null)}
+    nameHoverOnly={pos !== 'left' && hasName && !showName}
+    statusLabel={showStatus ? statusInfo.label : null} statusDetail={statusInfo.detail} /> : null;
+
+  async function rate(r) {
+    const next = fb === r ? 0 : r;
+    setFb(next);
+    try { await api.post(`/api/messages/${msg.id}/feedback`, { rating: next }); } catch { setFb(fb); }
+  }
 
   const inner = (
     <>
@@ -349,7 +352,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
       {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> {t("Pinned")}</div>}
       <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} durationMs={msg.reasoningMs || 0} preset={preset} collapsible={model?.reasoningCollapsible !== false} />
       {(msg.content || streaming) && (
-        <div className={'assistant-body' + (streaming ? ' streaming' : '') + (streaming && typing ? ' typing' : '') + (streaming && phase === 'thinking' ? ' thinking' : '')}>
+        <div className={'assistant-body' + (streaming ? ' streaming' : '') + (streaming && typing ? ' typing' : '') + (streaming && phase === 'thinking' ? ' thinking' : '') + (textEntered ? ' text-enter' : '')}>
           {msg.content ? (
             <ReasonSegs.Provider value={segCtx}>
               <Markdown streaming={streaming}>{msg.content}</Markdown>
@@ -360,7 +363,6 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
               {liveRows.map(r => <ToolCard key={r.index} call={r.call} result={null} />)}
             </div>
           )}
-          {streaming && !msg.content && !msg.reasoning && !liveRows.length && <StreamStatus status={status} delay={statusDelay} />}
           {streaming && !msg.content && !liveRows.length && <p className="stream-wait" aria-hidden="true"></p>}
         </div>
       )}
@@ -396,12 +398,12 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
           <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
           {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")} aria-label={t("Compare versions")}><Columns /></button>}
           <MoreMenu items={[
-            onFork && { label: t('Branch into a new chat'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
-            onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin (keep in context)'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
-            onDelete && chatId && !String(msg.id).startsWith('inc-') && { label: t('Delete message'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
+            onFork && { label: t('Branch'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
+            onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
+            onDelete && chatId && !String(msg.id).startsWith('inc-') && { label: t('Delete'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
           ]} />
           {showSpeed && <SpeedChip speed={msg.speed} />}
-          {model?.displayName && <span className="msg-model-badge">{model.displayName}</span>}
+          {(() => { const ti = fmtTime(msg.created_at); return ti ? <span className="msg-time" data-full={ti.full}>{ti.short}</span> : null; })()}
           {canContinue && onContinue && (
             <button className="action-btn continue-act" onClick={onContinue} title={t("Pick up where this reply stopped")}>
               <Retry style={{ width: 14 }} /> {t("Continue")}
@@ -417,16 +419,16 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   if (pos === 'left') {
     const gutter = model?.iconSize > 0 ? model.iconSize : 40;
     return (
-      <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant icon-left' + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
+      <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant icon-left' + (streaming ? ' streaming-msg' : '') + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
         {icon && <div className="il-avatar" style={{ left: -(gutter + 14) }}>{icon}</div>}
-        {showName && <div className="assistant-name">{model.displayName}</div>}
+        {hasName && <div className={'assistant-name' + (showName ? '' : ' hover-reveal')}>{model.displayName}</div>}
         {inner}
       </div>
     );
   }
 
   return (
-    <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant' + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
+    <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant' + (streaming ? ' streaming-msg' : '') + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
       {pos === 'above' && icon}
       {inner}
       {pos === 'below' && icon}

@@ -134,7 +134,7 @@ The Admin Panel is in the profile menu, bottom-left of the sidebar.
 
 The [`docs/`](docs/README.md) folder is a full user guide covering chatting and branching, the composer, models and reasoning, personas and styles, organizing chats, artifacts and the sandbox, settings, keyboard shortcuts, privacy, and a complete admin reference. **Start at [docs/README.md](docs/README.md).**
 
-Building *on* Open Quill instead? [CLAUDE.md](CLAUDE.md) covers the architecture and [RELEASING.md](RELEASING.md) covers versioning, tagging and cutting a release.
+Building *on* Open Quill instead? [AGENTS.md](AGENTS.md) covers the architecture and [RELEASING.md](RELEASING.md) covers versioning, tagging and cutting a release.
 
 ---
 

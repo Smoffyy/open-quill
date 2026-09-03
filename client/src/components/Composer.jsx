@@ -1,16 +1,19 @@
 import { useRef, useEffect, useState, useLayoutEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import ModelDropdown from './ModelDropdown.jsx';
 import Tip from './Tip.jsx';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
 import { useAttachments } from '../lib/attachments.js';
 import { useDictation } from '../lib/dictation.js';
-import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer, Screenshot, Plug, Puzzle, Telescope, SkillIcon } from './icons.jsx';
+import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer, Screenshot, Plug, Puzzle, Telescope, SkillIcon, ImageIcon, Copy, Folder } from './icons.jsx';
 import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
 import { extLabel } from '../lib/files.js';
 import { t, fmtDate } from '../i18n.jsx';
+import { useThemeText } from '../lib/theme/store.jsx';
 import { focusUnlessTouch } from '../lib/touch.js';
 import { useSubmenus } from '../lib/submenu.js';
+import { useDismiss } from '../lib/dismiss.js';
 
 // The picker no longer advertises a list. The server decides what it can read by
 // sniffing the bytes, so any format is accepted here and one that turns out to be
@@ -52,6 +55,22 @@ function PmSub({ className = '', children, onMouseEnter, onMouseLeave }) {
   );
 }
 
+function DropOverlay() {
+  return createPortal(
+    <div className="drop-overlay" aria-hidden="true">
+      <div className="drop-overlay-content">
+        <div className="drop-overlay-icons">
+          <ImageIcon />
+          <Copy />
+          <Folder />
+        </div>
+        <div className="drop-overlay-text">{t('Drop files here to add to chat')}</div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function ActiveChip({ icon, label, onRemove }) {
   return (
     <Tip label={label}>
@@ -75,6 +94,7 @@ export default function Composer({
   compareIds = [], onSetCompare, hideModelPicker = false, chipsBelow = false, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
   ctxGauge = null
 }) {
+  const composerPlaceholder = useThemeText('composer.placeholder', t('How can I help you today?'));
   const ta = useRef(null);
   const fileInput = useRef(null);
   const plusRef = useRef(null);
@@ -85,7 +105,7 @@ export default function Composer({
   const { dictating, transcribing, toggleDictation } = useDictation({ sttEngine, valueRef, onChange });
   const {
     files, dragActive, glow, upErr, setUpErr,
-    pickFiles, onPaste, removeFile, clearFiles, dragProps
+    pickFiles, onPaste, removeFile, clearFiles
   } = useAttachments({ visionSupported });
 
   const [plusMenu, setPlusMenu] = useState(false);
@@ -93,6 +113,8 @@ export default function Composer({
   const sub = useSubmenus();
   const { closeAll: closeSubs } = sub;
   useEffect(() => { if (!plusMenu) closeSubs(); }, [plusMenu, closeSubs]);
+  // Picking something in a submenu is the end of that errand, so the whole menu goes away.
+  const closePlusMenu = useCallback(() => { closeSubs(); setPlusMenu(false); }, [closeSubs]);
   const [showReason, setShowReason] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
 
@@ -103,12 +125,8 @@ export default function Composer({
       const r = btn.getBoundingClientRect();
       setPlusDown(window.innerHeight - r.bottom > 320);
     }
-    const h = (e) => { if (plusRef.current && !plusRef.current.contains(e.target)) setPlusMenu(false); };
-    const esc = (e) => { if (e.key === 'Escape') setPlusMenu(false); };
-    document.addEventListener('mousedown', h);
-    document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('mousedown', h); document.removeEventListener('keydown', esc); };
   }, [plusMenu]);
+  useDismiss(plusMenu, () => setPlusMenu(false), plusRef);
 
   const grewOnce = useRef(false);
   const fitRaf = useRef(0);
@@ -300,11 +318,12 @@ export default function Composer({
   const hasText = /\S/.test(value);
   const canSend = (hasText || files.length > 0) && !uploading && !blockSend && !budgetBlock && !safetyFlagged && !safetyChecking && !conversationEnded;
   const [multiline, setMultiline] = useState(false);
-  const cls = 'composer' + (multiline ? ' ml' : '') + (chipsBelow && activeTools.length > 0 ? ' has-chips' : '') + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + ((unavailable || removedModel) ? ' unavailable' : '') + ((blockSend || budgetBlock) ? ' blocked' : '');
+  const cls = 'composer' + (multiline ? ' ml' : '') + (chipsBelow && activeTools.length > 0 ? ' has-chips' : '') + (hasImage ? ' glowing' : '') + ((unavailable || removedModel) ? ' unavailable' : '') + ((blockSend || budgetBlock) ? ' blocked' : '');
   const fmtUsd = (n) => '$' + (Number(n || 0) > 0 && Number(n || 0) < 0.01 ? Number(n).toFixed(4) : Number(n || 0).toFixed(2));
 
   return (
     <div className={'composer-stack' + ((bannerMounted || showBudgetBanner || safetyFlagged || conversationEnded || removedModel || sunsetInfo) ? ' has-banner' : '')}>
+    {dragActive && <DropOverlay />}
     {(bannerMounted || showBudgetBanner || safetyFlagged || conversationEnded || removedModel || sunsetInfo) && (
       <div className={'unavail-bg' + (bannerOut && !showBudgetBanner && !safetyFlagged && !conversationEnded && !removedModel && !sunsetInfo ? ' out' : '')}
         style={sunsetOnly ? {
@@ -368,9 +387,7 @@ export default function Composer({
         )}
       </div>
     )}
-    <div className={cls} style={{ '--glow': glow }}
-      {...dragProps}>
-      {dragActive && <div className="drop-hint">Drop to attach{visionSupported ? '' : ' files'}</div>}
+    <div className={cls} style={{ '--glow': glow }}>
       {files.length > 0 && (
         <div className="attach-row">
           {files.map(f => (
@@ -416,7 +433,7 @@ export default function Composer({
           <span className="steer-note">{steerMode ? t('Applied to the reply in progress, without losing what is already written.') : t('Sent as a new message when this reply finishes.')}</span>
         </div>
       )}
-      <textarea ref={ta} rows={1} value={value} placeholder={steering ? t('Steer this reply, e.g. "shorter" or "you misread the file"…') : streaming ? (queueCount > 0 ? t('Queue another message ({n} waiting)…', { n: queueCount }) : t('Type to queue a message…')) : (placeholder || t('How can I help you today?'))}
+      <textarea ref={ta} rows={1} value={value} placeholder={steering ? t('Steer this reply, e.g. "shorter" or "you misread the file"…') : streaming ? (queueCount > 0 ? t('Queue another message ({n} waiting)…', { n: queueCount }) : t('Type to queue a message…')) : (placeholder || composerPlaceholder)}
         id="oq-composer" aria-label={t('Message input')}
         onChange={(e) => onChange(e.target.value)} onKeyDown={key} onPaste={onPaste} />
       <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}
@@ -462,13 +479,13 @@ export default function Composer({
                         {projects.length === 0 && <div className="pm-empty">{t('No projects yet')}</div>}
                         {projects.map(p => (
                           <button key={p.id} className={'pm-item' + (project && p.id === project.id ? ' active' : '')}
-                            onClick={() => { onSetProject(p); sub.closeAll(); setPlusMenu(false); }}>
+                            onClick={() => { onSetProject(p); closePlusMenu(); }}>
                             <Box />
                             <span className="pm-label">{p.name}</span>
                           </button>
                         ))}
                         {project && onClearProject && (
-                          <button className="pm-item" onClick={() => { onClearProject(); sub.closeAll(); setPlusMenu(false); }}>
+                          <button className="pm-item" onClick={() => { onClearProject(); closePlusMenu(); }}>
                             <span className="pm-label">{t('Remove from project')}</span>
                           </button>
                         )}
@@ -513,7 +530,7 @@ export default function Composer({
                     {sub.isOpen('styles') && (
                       <PmSub className="styles" onMouseEnter={() => sub.hoverOpen('styles')} onMouseLeave={sub.hoverClose}>
                         <StyleSubmenu styles={styles} styleId={styleId} currentId={currentId} onSaveStyles={onSaveStyles}
-                          onSelect={(id) => { onSelectStyle && onSelectStyle(id); }} />
+                          onSelect={(id) => { onSelectStyle && onSelectStyle(id); closePlusMenu(); }} />
                       </PmSub>
                     )}
                   </div>
@@ -538,7 +555,7 @@ export default function Composer({
                           const on = compareIds.includes(m.id);
                           return (
                             <button key={m.id} className={'style-item' + (on ? ' active' : '')}
-                              onClick={() => onSetCompare(on ? compareIds.filter(x => x !== m.id) : (compareIds.length < 2 ? [...compareIds, m.id] : compareIds))}>
+                              onClick={() => { onSetCompare(on ? compareIds.filter(x => x !== m.id) : (compareIds.length < 2 ? [...compareIds, m.id] : compareIds)); closePlusMenu(); }}>
                               <span className="style-item-name">{m.displayName || m.id}</span>
                               {on && <Check style={{ width: 14 }} />}
                             </button>
@@ -561,18 +578,18 @@ export default function Composer({
                       {skills.length === 0 && <div className="pm-empty">{t('No skills yet')}</div>}
                       {skills.map(sk => (
                         <button key={sk.id} className="pm-item" title={sk.description || sk.name}
-                          onClick={() => onToggleSkill && onToggleSkill(sk)}>
+                          onClick={() => { onToggleSkill && onToggleSkill(sk); closePlusMenu(); }}>
                           <SkillIcon />
                           <span className="pm-label">{sk.name}</span>
                           {sk.enabled && <Check className="pm-check" />}
                         </button>
                       ))}
                       <div className="pm-divider" />
-                      <button className="pm-item" onClick={() => { sub.closeAll(); setPlusMenu(false); onManageSkills && onManageSkills(); }}>
+                      <button className="pm-item" onClick={() => { closePlusMenu(); onManageSkills && onManageSkills(); }}>
                         <Sliders />
                         <span className="pm-label">{t('Manage skills')}</span>
                       </button>
-                      <button className="pm-item" onClick={() => { sub.closeAll(); setPlusMenu(false); onManageSkills && onManageSkills('browse'); }}>
+                      <button className="pm-item" onClick={() => { closePlusMenu(); onManageSkills && onManageSkills('browse'); }}>
                         <Plus />
                         <span className="pm-label">{t('Browse skills')}</span>
                       </button>
@@ -602,14 +619,14 @@ export default function Composer({
                 </button>
                 {(sandboxAllowed || webSearchAvailable) && <div className="pm-divider" />}
                 {sandboxAllowed && (
-                  <button className="pm-item" onClick={() => onToggleSandbox && onToggleSandbox()}>
+                  <button className="pm-item" onClick={() => { onToggleSandbox && onToggleSandbox(); closePlusMenu(); }}>
                     <Cube />
                     <span className="pm-label">{t("Sandbox tools")}</span>
                     {sandbox && <Check className="pm-check" />}
                   </button>
                 )}
                 {webSearchAvailable && (
-                  <button className="pm-item" onClick={() => onToggleWebSearch && onToggleWebSearch()}>
+                  <button className="pm-item" onClick={() => { onToggleWebSearch && onToggleWebSearch(); closePlusMenu(); }}>
                     <Globe />
                     <span className="pm-label">{t("Web search")}</span>
                     {webSearch && <Check className="pm-check" />}
@@ -656,7 +673,7 @@ export default function Composer({
           )}
           {streaming ? (
             <button key="stop" className={'send stop' + (stopping ? ' stopping' : '')} onClick={onStop} disabled={stopping}
-              title={stopping ? t('Stopping — finishing the step in progress') : t('Stop generating')}><Stop style={{ width: 20, height: 20 }} /></button>
+              title={stopping ? t('Stopping, finishing the step in progress') : t('Stop generating')}><Stop style={{ width: 20, height: 20 }} /></button>
           ) : safetyChecking ? (
             <button key="send" className={'send' + (safetyVerbose ? ' checking' : ' quiet')} disabled title={safetyVerbose ? t('Safety check…') : undefined}><Up style={{ width: 20, height: 20 }} /></button>
           ) : canSend ? (

@@ -23,52 +23,12 @@ import {
   cutOffError, CHAT_SEARCH_PROMPT
 } from '../prompts.js';
 import { noteToolCall, classifyToolError } from '../toolstats.js';
+import { openFence, seamFor, steerInstruction } from '../steer.js';
+import { createLoopGuard, STUCK_NOTE } from '../loopguard.js';
 
 const MAX_STEERS = 6;
 const TELEMETRY_MS = 220;
 const SILENT_MS = 2500;
-
-function openFence(text) {
-  let open = null;
-  for (const raw of String(text || '').split('\n')) {
-    const line = raw.replace(/\t/g, '    ');
-    const m = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
-    if (!m) continue;
-    const mark = m[1][0];
-    const len = m[1].length;
-    const rest = m[2].trim();
-    if (open) { if (mark === open.mark && len >= open.len && rest === '') open = null; }
-    else if (!(mark === '`' && rest.includes('`'))) open = { mark, len };
-  }
-  return open;
-}
-
-function seamFor(text) {
-  const body = String(text || '');
-  if (!body.trim()) return '';
-  let out = body.endsWith('\n') ? '' : '\n';
-  const fence = openFence(body);
-  if (fence) out += fence.mark.repeat(fence.len) + '\n';
-  if (!/\n[ \t]*\n$/.test(body + out)) out += '\n';
-  return out;
-}
-
-function steerInstruction(notes, hadText, wasInBlock) {
-  const list = notes.map(n => '- ' + n).join('\n');
-  if (!hadText) return `Before you wrote anything, the user steered you with this:\n${list}\n\nWrite your reply applying that steer, and do not mention the interruption.`;
-  return [
-    `The user interrupted you mid-reply and steered you with this:`,
-    list,
-    '',
-    'What you had already written is on their screen and cannot be taken back. It may have been cut off mid-word or mid-line.',
-    wasInBlock
-      ? 'You were inside a fenced code block when you were cut off; that block has already been closed for you, so do not write a closing fence.'
-      : 'Your text has already been closed off cleanly.',
-    'Carry on in a NEW markdown block, starting fresh. If you are writing code, open a new fenced block with the correct language tag. Never continue a sentence, a line of code, or a code block that was cut off.',
-    'If the steer asks for a different approach or a rewrite, start that new version now; one short line naming the switch is fine. Otherwise pick up where the reply was going.',
-    'Do not reproduce the earlier text, do not apologise, and do not comment on the interruption beyond that one line.'
-  ].join('\n');
-}
 
 export async function maybeCompact(ws, chat, model, extended, sandboxOn) {
   const threshold = compactThreshold(model, await modelCtx(model));
@@ -99,7 +59,8 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   const chatSearchOn = !!model.chat_search_allowed && getSetting('chat_search_enabled', '0') === '1';
   const userSkills = chatRow.user_id ? userskills.enabledFor(chatRow.user_id).map(s => ({ name: s.name, description: s.description, content: s.body })) : [];
   const skillsOn = !!model.skills_allowed && (skillsys.getEnabled().length + userSkills.length) > 0;
-  const mcpSchemas = model.mcp_allowed ? mcp.toolSchemas() : [];
+  const mcpUser = chatRow.user_id || null;
+  const mcpSchemas = model.mcp_allowed ? mcp.toolSchemas(mcpUser) : [];
   const mcpOn = mcpSchemas.length > 0;
   const endChatOn = !!model.end_chat_allowed;
   const projFilesOn = !!chatRow.project_id && projectfiles.list(chatRow.project_id).length > 0;
@@ -119,7 +80,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     if (membankOn) parts.push(membank.promptFor(getSetting('membank_prompt', '')));
     if (chatSearchOn) parts.push(CHAT_SEARCH_PROMPT);
     if (skillsOn) parts.push(skillsys.promptFor(userSkills));
-    if (mcpOn) parts.push(mcp.promptFor());
+    if (mcpOn) parts.push(mcp.promptFor(mcpUser));
     if (endChatOn) parts.push(endChatPromptFor(model));
     if (projFilesOn) parts.push(projectfiles.promptFor(chatRow.project_id, projRow ? projRow.name : ''));
     if (longReminderOn) parts.push(longConvoReminderFor(chat.id));
@@ -134,6 +95,13 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   const assistantId = uid();
   const assistantParent = (db.chats.byId(chat.id) || {}).active_leaf || null;
   let content = '', reasoning = '', usage = null, lastStepCompletion = 0;
+  const addStepUsage = (stepUsage) => {
+    if (!stepUsage) return;
+    if (!usage) usage = { prompt: 0, completion: 0, total: 0 };
+    usage.prompt += stepUsage.prompt; usage.completion += stepUsage.completion;
+    usage.total += stepUsage.total || (stepUsage.prompt + stepUsage.completion);
+    lastStepCompletion = stepUsage.completion;
+  };
   const reasonSegs = [];
   let contentSinceReason = false;
   let speed = null;
@@ -180,8 +148,8 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       const r = skillsys.execTool(call, userSkills);
       return { payload: skillsys.resultPayload(call, r), formatted: skillsys.formatResult(call, r), hide: false };
     }
-    if (mcpOn && mcp.isMcpTool(call.tool)) {
-      const r = await mcp.execTool(call);
+    if (mcpOn && mcp.isMcpTool(call.tool, mcpUser)) {
+      const r = await mcp.execTool(call, mcpUser);
       return { payload: mcp.resultPayload(call, r), formatted: mcp.formatResult(call, r), hide: false };
     }
     if (call.tool === 'web_search') {
@@ -245,9 +213,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   const stepCap = (model.agent_steps && model.agent_steps > 0) ? model.agent_steps : 1000;
   let maxSteps = toolsOn ? stepCap : 1;
   const callFails = new Map();
-  let prevStepSig = '';
-  let prevFailShape = '';
-  let noProgress = 0;
+  const loopGuard = createLoopGuard();
   let continues = 0;
   let stepController = null;
   let lastFinish = '';
@@ -477,12 +443,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
             maxSteps++;
             applySteer(notes, stepText);
             if (liveSent) safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live: null }));
-            if (stepUsage) {
-              if (!usage) usage = { prompt: 0, completion: 0, total: 0 };
-              usage.prompt += stepUsage.prompt; usage.completion += stepUsage.completion;
-              usage.total += stepUsage.total || (stepUsage.prompt + stepUsage.completion);
-              lastStepCompletion = stepUsage.completion;
-            }
+            addStepUsage(stepUsage);
             state.aborts.delete(chat.id);
             continue;
           }
@@ -532,12 +493,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           learnImageCost(model, imgs, stepPromptTokens - lastFitTokens + imgs * imageTokenCost(model));
         }
       }
-      if (stepUsage) {
-        if (!usage) usage = { prompt: 0, completion: 0, total: 0 };
-        usage.prompt += stepUsage.prompt; usage.completion += stepUsage.completion;
-        usage.total += stepUsage.total || (stepUsage.prompt + stepUsage.completion);
-        lastStepCompletion = stepUsage.completion;
-      }
+      addStepUsage(stepUsage);
       if (!aborted) {
         const notes = takeSteers();
         if (notes && steerBudget > 0) {
@@ -632,21 +588,9 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         { role: 'assistant', content: stripThink(model, stepText), tool_calls: toolCalls.map(c => ({ id: c.id, name: c.name, argsText: c.argsText })) },
         ...toolMsgs
       ];
-      // Two ways to be stuck. The identical call twice over is the obvious one. The other
-      // is the same tool failing the same way while the arguments wobble cosmetically —
-      // quoting a path, prefixing a `cd` — which the signature check never matches, so it
-      // burned the whole step budget before anything noticed.
-      const stepSig = toolCalls.map(c => c.name + ':' + (c.argsText || '')).join('|');
-      const barren = stepOk === 0 && stepFailed > 0;
-      const failShape = barren ? [...stepFailKinds].sort().join(',') : '';
-      noProgress = failShape && failShape === prevFailShape ? noProgress + 1 : 0;
-      const loopStuck = (barren && stepSig === prevStepSig) || noProgress >= 2;
-      prevStepSig = stepSig;
-      prevFailShape = failShape;
-      if (loopStuck) {
-        const note = '\n\nI stopped because the last actions kept failing in the same way. Tell me how you would like to proceed.';
-        content += note;
-        safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: note }));
+      if (loopGuard.note({ calls: toolCalls, ok: stepOk, failed: stepFailed, failKinds: stepFailKinds })) {
+        content += STUCK_NOTE;
+        safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: STUCK_NOTE }));
         break;
       }
     }

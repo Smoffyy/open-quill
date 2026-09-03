@@ -3,7 +3,7 @@ import { Search, X, Up, Down } from './icons.jsx';
 import { t } from '../i18n.jsx';
 import { focusUnlessTouch } from '../lib/touch.js';
 
-const SKIP = 'trail,thread-find,actions,code-bar,code-copy-anchor,msg-time,ctx-row,steer-chips,retry-menu,more-menu,msg-model-badge,pin-tag,model-status';
+const SKIP = 'trail,thread-find,actions,code-bar,code-copy-anchor,msg-time,ctx-row,steer-chips,retry-menu,more-menu,pin-tag';
 const SKIP_SET = new Set(SKIP.split(','));
 const HL_ALL = 'oq-find';
 const HL_ONE = 'oq-find-active';

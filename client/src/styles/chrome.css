@@ -1,5 +1,10 @@
 /* ---------- top bar ---------- */
-.topbar { display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0 12px; flex-shrink: 0; }
+.topbar { position: relative; display: flex; align-items: center; justify-content: flex-start; height: 48px; padding: 0 12px; flex-shrink: 0; }
+.topbar::after {
+  content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 24px; z-index: 3;
+  background: linear-gradient(to bottom, var(--bg), transparent);
+  pointer-events: none;
+}
 .topbar .chat-name { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 14px; line-height: 20px; }
 .topbar .icon-btn { width: 28px; height: 28px; border-radius: 7px; }
 .disclaimer { text-align: center; font-size: 12px; line-height: 16px; color: var(--text-faint); font-family: var(--font-sans); padding: 8px 0; }
@@ -7,7 +12,7 @@
 .disclaimer a:hover { color: var(--text-muted); }
 
 /* ---------- scroll-to-bottom ---------- */
-.to-bottom { position: absolute; left: 50%; transform: translateX(-50%); bottom: 190px; width: 34px; height: 34px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border); display: grid; place-items: center; color: var(--text); box-shadow: 0 4px 14px #0000004d; animation: pop var(--fx-a, .18s) ease; z-index: 5; }
+.to-bottom { position: absolute; left: 50%; transform: translateX(-50%); bottom: 150px; width: 34px; height: 34px; border-radius: 50%; background: var(--surface-hover); border: 1px solid var(--border-strong, var(--border)); display: grid; place-items: center; color: var(--text); box-shadow: 0 4px 16px #00000073; z-index: 5; }
 .to-bottom:hover { background: var(--surface-hover); }
 
 /* ---------- login ---------- */
@@ -25,9 +30,9 @@
 .login-tabs button.on { background: var(--card-bg, var(--surface)); color: var(--text); box-shadow: 0 1px 2px #00000014; }
 .login input { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 9px; font-size: 15px; background: var(--input-bg, var(--surface-2)); color: var(--text); outline: none; font-family: var(--font-sans); margin-bottom: 10px; }
 .login input::placeholder { color: var(--text-faint); }
-.login input:focus { border-color: var(--accent); }
-.login .primary { width: 100%; padding: 12px; background: var(--accent); color: var(--on-accent); border-radius: 9px; font-size: 15px; font-family: var(--font-sans); font-weight: 600; transition: background var(--fx-t, .15s), opacity var(--fx-t, .15s); }
-.login .primary:hover { background: color-mix(in srgb, var(--accent) 86%, var(--on-accent)); }
+.login input:focus { border-color: var(--text); }
+.login .primary { width: 100%; padding: 12px; background: var(--primary); color: var(--on-primary); border-radius: 9px; font-size: 15px; font-family: var(--font-sans); font-weight: 600; transition: background var(--fx-t, .15s), opacity var(--fx-t, .15s); }
+.login .primary:hover { background: color-mix(in srgb, var(--primary) 86%, var(--on-primary)); }
 .login .primary:disabled { opacity: .6; pointer-events: none; }
 .login .back { display: block; width: 100%; margin-top: 12px; font-size: 13px; color: var(--text-muted); font-family: var(--font-sans); background: transparent; }
 .login .back:hover { color: var(--text); }
