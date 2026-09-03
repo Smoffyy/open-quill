@@ -25,7 +25,7 @@ Self-hosted chat interface for local and cloud LLMs. Express + SQLite server, Re
 
 `server/`: `npm test` = `node --test`, auto-discovers every `*.test.js`. `client/`: `npm run dead:css` is an *advisory* unused-class report — verify before deleting, a zero-hit class can still be emitted by a library.
 
-**Version**: root `package.json` version is the single source of truth (`server/lib/appversion.js` reads it). Full release process (branches, tags, `npm version`) is in `RELEASING.md` — don't reconstruct it from scratch.
+**Version**: root `package.json` version is the single source of truth (`server/lib/appversion.js` reads it). Every `package.json` and `package-lock.json` in the repo must carry it too, which `check-release.mjs` enforces. Versions are bare (`27.2.0`, never a `-beta` tail): bump it once on `dev` at the start of a cycle, then merging `dev` into `stable` is what drafts the GitHub release. Publishing that draft creates the tag, so nothing is ever tagged by hand.
 
 ## Layout
 

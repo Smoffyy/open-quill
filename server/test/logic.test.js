@@ -26,7 +26,6 @@ import { preferredChild } from '../lib/tree.js';
 import { looksTextual, isZipOfficeDoc } from '../lib/extract.js';
 import { releaseCandidates, parseManifest } from '../lib/release.js';
 import { remapBrandPath } from '../lib/brand.js';
-import { compareVersions } from '../../check-version-bump.mjs';
 import { samplingParams, parseStop } from '../llm/sampling.js';
 import { PROVIDER_TYPES, isProviderType, providerSpec } from '../providers.js';
 import { slideWithCounter, trimMode } from '../lib/ctxwindow.js';
@@ -1629,25 +1628,6 @@ test('remapBrandPath leaves an operator upload alone', () => {
     assert.equal(remapBrandPath(v), v, String(v));
   }
   assert.equal(remapBrandPath('constructor'), 'constructor', 'the table is null-prototyped');
-});
-
-test('compareVersions orders a release above its own prerelease', () => {
-  assert.equal(compareVersions('27.2.0', '27.2.0-beta.5'), 1, 'sort -V gets this backwards');
-  assert.equal(compareVersions('27.2.0-beta.5', '27.2.0'), -1);
-  assert.equal(compareVersions('27.2.0-rc.1', '27.2.0-beta.9'), 1);
-  assert.equal(compareVersions('27.2.0-beta.10', '27.2.0-beta.5'), 1, 'numeric, not lexical');
-  assert.equal(compareVersions('27.2.0-beta.5', '27.2.0-beta.5'), 0);
-});
-
-test('compareVersions orders release numbers before prerelease tails', () => {
-  assert.equal(compareVersions('27.2.0', '27.1.0'), 1);
-  assert.equal(compareVersions('27.1.0', '27.2.0'), -1);
-  assert.equal(compareVersions('28.0.0-beta.1', '27.9.9'), 1);
-});
-
-test('compareVersions ranks prerelease tails alphabetically on the same base', () => {
-  assert.equal(compareVersions('27.1.0-beta.1', '27.1.0-developer.20'), -1, 'beta sorts under developer, so the rename is not a bump');
-  assert.equal(compareVersions('27.1.0-beta.1', '27.0.0'), 1, 'but it still beats the last stable, which is what the guard compares');
 });
 
 // --- continuing a turn the model ended too early -------------------------
