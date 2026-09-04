@@ -21,7 +21,7 @@ export const SETTINGS_DEFAULTS = {
 
 export const CONFIG_DEFAULTS = {
   appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [],
-  appFont: 'literata', uiPreset: 'anthropic', modelDocs: true,
+  appFont: 'literata', uiPreset: 'anthropic', modelDocs: true, modelDocsConfig: null,
   allowSignups: true, localOnly: true, egressLocalOnly: true, egressAllowWebSearch: true, egressAllowlist: []
 };
 
@@ -80,6 +80,7 @@ export function useWorkspace() {
         appFont: appFontId(c.appFont),
         uiPreset: c.uiPreset === 'openai' ? 'openai' : 'anthropic',
         modelDocs: c.modelDocs !== false,
+        modelDocsConfig: c.modelDocsConfig || null,
         allowSignups: c.allowSignups !== false,
         localOnly: c.localOnly !== false,
         egressLocalOnly: c.egressLocalOnly !== false,

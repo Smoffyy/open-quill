@@ -118,9 +118,9 @@ export default function InterfaceSection() {
 
       <Card title={t('Composer')}>
         <Rows>
-          <ToggleRow label={t('Model reference button')} on={config.modelDocs !== false}
+          <ToggleRow label={t('Model reference')} on={config.modelDocs !== false}
             onToggle={() => setCfg('modelDocs', !(config.modelDocs !== false))}
-            note={t('Adds a button beside the attachment control that opens a side-by-side comparison of every visible model.')} />
+            note={t('Adds an entry at the foot of the sidebar. Admins edit every page from inside the reference itself.')} />
         </Rows>
         <Field label={t('Footer line')}
           hint={t('Shown under the composer. Markdown links are allowed with http, https, mailto, or same-site paths. Custom text is rendered as written and is never translated.')}>

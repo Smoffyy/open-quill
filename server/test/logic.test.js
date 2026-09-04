@@ -10,6 +10,7 @@ import {
 } from '../lib/kwargs.js';
 import { parseTextToolCalls, parseArgs, toCall, cutOffOf } from '../tools/index.js';
 import { classifyToolError } from '../lib/toolstats.js';
+import { sanitizeDocsConfig, readDocsConfig, sanitizePairs, sanitizeCards, sanitizeStrList, DOCS_DEFAULTS } from '../lib/modeldocs.js';
 import { parseSkillFile, buildSkillFile, normalizeName, validate } from '../lib/skillfile.js';
 import { cutOffError } from '../lib/prompts.js';
 import { makeToolTextFilter, makeEmitter } from '../llm/emitter.js';
@@ -2210,4 +2211,60 @@ test('mcpToolName never exceeds the cap, whatever it is given', () => {
       assert.ok(mcpToolName(slug, tool).length <= MCP_NAME_MAX, `${slug}/${tool.length}`);
     }
   }
+});
+
+test('sanitizeDocsConfig fills every field from the defaults', () => {
+  const c = sanitizeDocsConfig(null);
+  assert.equal(c.title, DOCS_DEFAULTS.title);
+  assert.equal(c.navLabel, 'Models');
+  assert.equal(c.featureLabel, 'Feature');
+  assert.equal(c.tilesTitle, 'Get started');
+  assert.equal(c.outro, '');
+  assert.deepEqual(c.sections, []);
+  assert.deepEqual(c.links, []);
+  assert.deepEqual(c.tiles, []);
+});
+
+test('sanitizeDocsConfig keeps the overview tiles an admin wrote, and drops untitled ones', () => {
+  const c = sanitizeDocsConfig({ tiles: [{ title: 'Quickstart', desc: 'First call', url: '/docs' }, { desc: 'no title' }] });
+  assert.deepEqual(c.tiles, [{ title: 'Quickstart', desc: 'First call', url: '/docs' }]);
+});
+
+test('sanitizeDocsConfig derives a page id from the title and keeps ids unique', () => {
+  const c = sanitizeDocsConfig({
+    sections: [{ label: 'Guides', pages: [{ title: 'Choosing a Model' }, { title: 'Choosing a model' }, {}] }]
+  });
+  assert.deepEqual(c.sections[0].pages.map(p => p.id), ['choosing-a-model', 'choosing-a-model-1', 'page-3']);
+  assert.equal(c.sections[0].id, 'guides');
+  assert.equal(c.sections[0].pages[2].title, 'Untitled');
+});
+
+test('sanitizeDocsConfig caps the shape a client can send', () => {
+  const c = sanitizeDocsConfig({
+    title: 'x'.repeat(400),
+    sections: Array.from({ length: 40 }, (_, i) => ({ label: 'S' + i, pages: [] })),
+    links: Array.from({ length: 40 }, () => ({ label: 'l', url: 'u' }))
+  });
+  assert.equal(c.title.length, 120);
+  assert.equal(c.sections.length, 12);
+  assert.equal(c.links.length, 8);
+});
+
+test('sanitizeDocsConfig drops a link with no label, and marks external ones', () => {
+  const c = sanitizeDocsConfig({ links: [{ label: '', url: 'https://x' }, { label: 'Docs', url: '/docs', ext: 1 }] });
+  assert.deepEqual(c.links, [{ label: 'Docs', url: '/docs', ext: true }]);
+});
+
+test('readDocsConfig parses a stored JSON string and survives a corrupt one', () => {
+  assert.equal(readDocsConfig(() => JSON.stringify({ navLabel: 'Engines' })).navLabel, 'Engines');
+  assert.equal(readDocsConfig(() => '{not json').navLabel, 'Models');
+  assert.equal(readDocsConfig(() => null).navLabel, 'Models');
+});
+
+test('per-model docs lists drop empty rows and cap their length', () => {
+  assert.deepEqual(sanitizePairs([{ label: '', value: '' }, { label: 'Chat', value: 'x' }]), [{ label: 'Chat', value: 'x' }]);
+  assert.equal(sanitizePairs(Array.from({ length: 40 }, () => ({ label: 'a' }))).length, 12);
+  assert.deepEqual(sanitizeCards([{ desc: 'no title' }, { title: 'T', desc: 'D', url: 'U' }]), [{ title: 'T', desc: 'D', url: 'U' }]);
+  assert.deepEqual(sanitizeStrList(['  a ', '', 'b']), ['a', 'b']);
+  assert.deepEqual(sanitizeStrList('not an array'), []);
 });

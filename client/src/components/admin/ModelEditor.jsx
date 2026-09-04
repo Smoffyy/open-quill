@@ -16,7 +16,6 @@ const TABS = [
   ['abilities', tk('Abilities')],
   ['sampling', tk('Sampling')],
   ['appearance', tk('Appearance')],
-  ['reference', tk('Reference page')],
   ['routing', tk('Routing')]
 ];
 
@@ -57,8 +56,6 @@ const SAMPLERS = [
 
 const DEFAULT_SAMPLERS = ['temperature', 'top_p', 'top_k', 'min_p', 'repetition_penalty',
   'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens'];
-
-const MODALITIES = [['text', tk('text')], ['image', tk('image')], ['audio', tk('audio')], ['video', tk('video')]];
 
 const APPROX_CHARS_PER_TOKEN = 4;
 
@@ -175,18 +172,6 @@ function Router({ m, set, models }) {
   );
 }
 
-function ModalityList({ m, set, prefix, force }) {
-  return MODALITIES.map(([k, label]) => {
-    const key = prefix + k;
-    const stored = k === 'text' ? m[key] !== 0 : !!m[key];
-    const on = stored || (force === k && !!m.has_vision);
-    return (
-      <Row key={key} label={t(label)}>
-        <Switch on={on} label={t(label)} onToggle={() => set(key, stored ? 0 : 1)} />
-      </Row>
-    );
-  });
-}
 
 export default function ModelEditor({ model: m, models, providers, providerTypes, saveState, onChange, onBack, onDuplicate, onDelete }) {
   const panelId = useId();
@@ -556,56 +541,6 @@ export default function ModelEditor({ model: m, models, providers, providerTypes
                 </Field>
               )}
             </Card>
-          </>
-        )}
-
-        {tab === 'reference' && (
-          <>
-            <Card title={t('Reference page')}
-              sub={t('Feeds the model reference members open from the chat. Name, logo, subtitle, window, and price come from the fields above.')}>
-              <Rows>
-                <Flag m={m} set={set} k="docs_featured" label={t('Feature at the top')} note={t('Placed in the highlighted row with a banner.')} />
-              </Rows>
-              {!!m.docs_featured && (
-                <Field label={t('Banner')} hint={t('An image URL or a CSS gradient, shown above the name.')}>
-                  <Input mono value={m.docs_image || ''} onChange={(e) => set('docs_image', e.target.value)} />
-                </Field>
-              )}
-              <Fields cols={3}>
-                <Field label={t('Reference logo')} hint={t('Optional. Falls back to the model logo.')}>
-                  <ImagePicker value={m.docs_icon || ''} fallback="" onChange={(v) => set('docs_icon', v)} />
-                </Field>
-                <Field label={t('Intelligence')} hint={t('{n} of 5. Zero hides the meter.', { n: m.docs_intelligence || 0 })}>
-                  <Range min="0" max="5" value={m.docs_intelligence || 0} label={t('Intelligence')}
-                    onChange={(e) => set('docs_intelligence', e.target.value)} />
-                </Field>
-                <Field label={t('Speed')} hint={t('{n} of 5. Zero hides the meter.', { n: m.docs_speed || 0 })}>
-                  <Range min="0" max="5" value={m.docs_speed || 0} label={t('Speed')}
-                    onChange={(e) => set('docs_speed', e.target.value)} />
-                </Field>
-              </Fields>
-              <Fields cols={2}>
-                <Field label={t('Max output tokens')} hint={t('Blank hides the row.')}>
-                  <Input mono type="number" min="0" step="1" value={m.docs_max_output ?? ''} placeholder="128000"
-                    onChange={(e) => set('docs_max_output', e.target.value)} />
-                </Field>
-                <Field label={t('Knowledge cutoff')} hint={t('Free text. Blank hides the row.')}>
-                  <Input value={m.docs_cutoff || ''} placeholder="Feb 16, 2026" onChange={(e) => set('docs_cutoff', e.target.value)} />
-                </Field>
-              </Fields>
-              <Field label={t('Long description')} hint={t('A few paragraphs on what this model is best at.')}>
-                <Area rows={7} value={m.docs_body || ''} onChange={(e) => set('docs_body', e.target.value)} />
-              </Field>
-            </Card>
-
-            <div className="cp-fields cols-2">
-              <Card title={t('Accepts')}>
-                <Rows><ModalityList m={m} set={set} prefix="docs_in_" force="image" /></Rows>
-              </Card>
-              <Card title={t('Produces')}>
-                <Rows><ModalityList m={m} set={set} prefix="docs_out_" /></Rows>
-              </Card>
-            </div>
           </>
         )}
 

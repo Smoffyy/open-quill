@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Tip from './Tip.jsx';
 import { ChatMenu, menuAtButton, menuAtPointer } from './ChatMenu.jsx';
+import DocsNav from './DocsNav.jsx';
 import { Plus, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, Chevron, ChevDown, Box, Compact, Sliders, Check, Artifact, Briefcase, ModelDocs, Info, Clock, ArrowOut, QuickTask, Sparkles, Paper } from './icons.jsx';
 import { t } from '../i18n.jsx';
 import { useThemeText } from '../lib/theme/store.jsx';
@@ -205,7 +206,7 @@ function Sidebar({
   collapsed, onToggle, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview,
   onSpaces, spacesPending = 0, projects = [], onProjects, onOpenProject, onNewProject, onMoveToProject, mobileOpen = false, onMobileClose,
   onArtifacts, onScheduled, onCustomize, onModelDocs, showModelDocs = true, onVersion, dest = null,
-  busyChats = [], onStopChat
+  docs = null, busyChats = [], onStopChat
 }) {
   const brandRef = useRef(null);
   const verRef = useRef(null);
@@ -303,10 +304,12 @@ function Sidebar({
   const row = (c) => <ChatRow key={c.id} c={c} active={c.id === activeId} showTrash={showTrash} {...rowProps} />;
 
   return (
-    <div className={'sidebar' + (collapsed ? ' collapsed' : '') + (mobileOpen ? ' mobile-open' : '')}
+    <div className={'sidebar' + (collapsed ? ' collapsed' : '') + (mobileOpen ? ' mobile-open' : '') + (docs ? ' docs-mode' : '')}
       ref={sideRef} style={width && !collapsed ? { width } : undefined}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
       {!collapsed && <SideResize targetRef={sideRef} onCommit={setWidth} />}
+      {docs && <DocsNav tree={docs.tree} target={docs.target} onSelect={docs.onSelect} onExit={docs.onExit} appName={appName} />}
+      {!docs && <>
       <div className="sidebar-head">
         <div className="brand-wrap">
           <div className="brand" ref={brandRef}>{appName || 'open-quill'}</div>
@@ -424,6 +427,7 @@ function Sidebar({
           </button>
         </div>
       )}
+      </>}
       <div className="profile">
         {menu && <ProfileMenu user={user} anchorRef={profileBtnRef}
           onSettings={() => { setMenu(false); onSettings(); }}

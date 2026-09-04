@@ -15,6 +15,7 @@ export function parseRoute(pathname, opts = {}) {
     /^\/admin(\/|$)/.test(p) ? 'admin' :
     /^\/playground(\/|$)/.test(p) ? 'playground' :
     /^\/spaces(\/|$)/.test(p) ? 'spaces' :
+    /^\/docs(\/|$)/.test(p) ? 'docs' :
     null
   );
   if (named) {
@@ -45,6 +46,7 @@ const OWNS = {
   admin: /^\/admin(\/|$)/,
   playground: /^\/playground(\/|$)/,
   spaces: /^\/spaces(\/|$)/,
+  docs: /^\/docs(\/|$)/,
   projects: /^\/projects?(\/|$)|^\/project\//
 };
 

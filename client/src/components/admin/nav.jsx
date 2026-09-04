@@ -52,7 +52,7 @@ export const NAV = [
     { id: 'interface', label: tk('Interface'), Icon: Palette, title: tk('Interface'), saves: 'workspace',
       blurb: tk('The theme builder, the theme library, and the identity every connected client renders.'),
       find: tk('appearance branding logo font theme identity disclaimer preset builder layout design build mode publish'),
-      index: [tk('Theme builder'), tk('Enter build mode'), tk('Themes'), tk('Active theme'), tk('Icon'), tk('Base layout'), tk('Display font'), tk('Footer line'), tk('Model reference button')] },
+      index: [tk('Theme builder'), tk('Enter build mode'), tk('Themes'), tk('Active theme'), tk('Icon'), tk('Base layout'), tk('Display font'), tk('Footer line'), tk('Model reference')] },
     { id: 'launcher', label: tk('New chat screen'), Icon: Chat, title: tk('New chat screen'), saves: 'workspace',
       blurb: tk('Greetings and one-tap prompts shown before the first message.'),
       find: tk('home greeting welcome quick prompts starters'),

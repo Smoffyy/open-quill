@@ -420,7 +420,6 @@
 :root[data-preset="openai"][data-theme="light"] .bc-overlay,
 :root[data-preset="openai"][data-theme="light"] .pm-overlay,
 :root[data-preset="openai"][data-theme="light"] .preset-scrim,
-:root[data-preset="openai"][data-theme="light"] .mdoc-overlay,
 :root[data-preset="openai"][data-theme="light"] .drop-overlay { background: rgba(0, 0, 0, .32); }
 
 [data-preset="openai"] .topbar { height: auto; padding: 14px 20px; }
@@ -475,9 +474,7 @@
 [data-preset="openai"] .overlay,
 [data-preset="openai"] .ctx-inspect-overlay,
 [data-preset="openai"] .bc-overlay,
-[data-preset="openai"] .pm-overlay,
-[data-preset="openai"] .mdoc-overlay { background: rgba(0, 0, 0, .45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
-[data-preset="openai"] .mdoc { border-radius: 26px; }
+[data-preset="openai"] .pm-overlay { background: rgba(0, 0, 0, .45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 [data-preset="openai"] .rail-open { display: none; }
 [data-preset="openai"] .sidebar.collapsed { width: 58px; }
 [data-preset="openai"] .sidebar.collapsed .chats { display: none; }
@@ -542,3 +539,25 @@
 }
 [data-preset="openai"] .composer-chips::-webkit-scrollbar { display: none; }
 [data-preset="openai"] .composer .active-chip { height: 36px; min-width: 36px; border-radius: 999px; }
+
+[data-preset="openai"] .mdoc-h1,
+[data-preset="openai"] .mdoc-h2,
+[data-preset="openai"] .mdoc-card-head,
+[data-preset="openai"] .mdoc-band th,
+[data-preset="openai"] .mdoc-stat-val,
+[data-preset="openai"] .dnav-back { font-family: var(--font-sans); letter-spacing: -.01em; }
+[data-preset="openai"] .mdoc-h1 { font-weight: 600; }
+[data-preset="openai"] .mdoc-stats,
+[data-preset="openai"] .mdoc-card,
+[data-preset="openai"] .mdoc-tile,
+[data-preset="openai"] .mdoc-meters,
+[data-preset="openai"] .mdoc-tablewrap,
+[data-preset="openai"] .mdoc-notice { border-radius: 18px; }
+[data-preset="openai"] .mdoc-idpill,
+[data-preset="openai"] .mdoc-primary,
+[data-preset="openai"] .mdoc-notice-btn { border-radius: 999px; height: 32px; }
+[data-preset="openai"] .dnav-item,
+[data-preset="openai"] .dnav-back,
+[data-preset="openai"] .dnav-search { border-radius: 999px; }
+[data-preset="openai"] .mdoc-mico { border-radius: 999px; }
+[data-preset="openai"] .mdoc-mico.sm { border-radius: 999px; }

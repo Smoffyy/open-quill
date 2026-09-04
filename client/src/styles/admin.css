@@ -343,6 +343,15 @@
 
 /* ---------- card ---------- */
 
+.cp-subcard {
+  border: 1px solid var(--cp-line);
+  border-radius: var(--cp-r);
+  padding: var(--cp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--cp-4);
+}
+
 .cp-card {
   border: 1px solid var(--cp-line);
   border-radius: var(--cp-r);
@@ -469,6 +478,8 @@
 
 /* A field whose control sits beside a button, e.g. an id with a copy action. */
 .cp-inline { display: flex; align-items: center; gap: var(--cp-2); min-width: 0; }
+.cp-pairlist { display: flex; flex-direction: column; gap: var(--cp-2); }
+.cp-pairrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) auto; align-items: center; gap: var(--cp-2); }
 .cp-inline > :first-child { flex: 1; min-width: 0; }
 /* Inside a form field the neighbouring button matches the input it sits beside;
    in a table cell the row's own compact height already governs both. */

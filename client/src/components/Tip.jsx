@@ -8,7 +8,7 @@ const EDGE = 8;
 
 let lastClosed = 0;
 
-export default function Tip({ label, keys, side, disabled, children }) {
+export default function Tip({ label, keys, side, tone, disabled, children }) {
   const hostRef = useRef(null);
   const tipRef = useRef(null);
   const timer = useRef(0);
@@ -68,7 +68,7 @@ export default function Tip({ label, keys, side, disabled, children }) {
       onKeyDown={(e) => { if (e.key === 'Escape') close(); }}>
       {children}
       {open && label && createPortal(
-        <div className="tip" role="tooltip" ref={tipRef}
+        <div className={'tip' + (tone ? ' tip-' + tone : '')} role="tooltip" ref={tipRef}
           style={pos ? { top: pos.top, left: pos.left } : { opacity: 0, top: 0, left: 0 }}>
           <span className="tip-label">{label}</span>
           {keys && <span className="tip-keys">{keys}</span>}

@@ -26,6 +26,9 @@ import ArtifactsPanel from '../src/components/ArtifactsPanel.jsx';
 import Viewer from '../src/components/artifacts/Viewer.jsx';
 import Composer from '../src/components/Composer.jsx';
 import ModelDropdown from '../src/components/ModelDropdown.jsx';
+import ModelDocs from '../src/components/ModelDocs.jsx';
+import DocsNav from '../src/components/DocsNav.jsx';
+import { docsConfig, docsTree } from '../src/lib/modeldocs.js';
 import { AdminProvider } from '../src/components/admin/store.jsx';
 import InterfaceSection from '../src/components/admin/sections/InterfaceSection.jsx';
 import EventsSection from '../src/components/admin/sections/EventsSection.jsx';
@@ -122,6 +125,39 @@ cases.push(['ArtifactsViewer:pending', () => React.createElement(Viewer, {
   chatId: 'c1', path: 'notes.txt', onBack: noop, canBack: false,
   liveText: null, writingElsewhere: 'other.js', onJumpToLive: noop,
   committed: false, pendingText: 'half a file', fileV: 0
+})]);
+
+const docsModelList = [
+  {
+    id: 'm1', displayName: 'Sonata', description: 'Everyday model', numCtx: 200000,
+    docsBadge: 'latest', docsMaxOutput: 64000, docsCutoff: 'Jan 2026', docsLatency: 'Fast',
+    docsThinking: 'Adaptive', docsEffort: 'high', docsBody: 'A paragraph.', docsNotes: 'One\nTwo',
+    docsIds: [{ label: 'Chat API', value: 'sonata-1' }], docsPlatforms: ['Local'],
+    docsLinks: [{ label: 'Announcement', url: 'https://example.invalid', ext: true }],
+    docsResources: [{ title: 'Prompting', desc: 'Guidance', url: '' }],
+    docsReference: [{ title: 'Pricing', desc: 'Rates', url: '' }],
+    docsIn: { text: true, image: true }, docsOut: { text: true },
+    docsIntelligence: 4, docsSpeed: 4, priceIn: 2, priceOut: 10, docsFeatured: true
+  },
+  {
+    id: 'm2', displayName: 'Aria', description: 'Fast model', numCtx: 32000, docsGroup: 'Legacy models',
+    docsBadge: 'legacy', docsIds: [], docsPlatforms: [], docsLinks: [], docsResources: [], docsReference: [],
+    docsIn: { text: true }, docsOut: { text: true },
+    docsNotice: 'Retiring soon.', docsNoticeAction: 'See Sonata', docsNoticeUrl: 'm1'
+  }
+];
+const docsCfg = docsConfig({ sections: [{ id: 'guides', label: 'Guides', pages: [{ id: 'p1', title: 'Choosing a model', subtitle: 'How to pick', body: '# Hello\n\nBody text.' }] }] });
+const docsProps = { models: docsModelList, cfg: docsCfg, appName: 'open-quill', onTry: noop, onNavigate: noop, onSaved: noop };
+cases.push(['ModelDocs:overview', () => React.createElement(ModelDocs, { ...docsProps, target: { kind: 'overview', id: null } })]);
+cases.push(['ModelDocs:model', () => React.createElement(ModelDocs, { ...docsProps, target: { kind: 'model', id: 'm1' } })]);
+cases.push(['ModelDocs:legacy', () => React.createElement(ModelDocs, { ...docsProps, target: { kind: 'model', id: 'm2' } })]);
+cases.push(['ModelDocs:page', () => React.createElement(ModelDocs, { ...docsProps, target: { kind: 'page', id: 'p1' } })]);
+cases.push(['ModelDocs:missing', () => React.createElement(ModelDocs, { ...docsProps, target: { kind: 'model', id: 'gone' } })]);
+cases.push(['ModelDocs:admin', () => React.createElement(ModelDocs, { ...docsProps, isAdmin: true, target: { kind: 'model', id: 'm1' } })]);
+cases.push(['ModelDocs:adminOverview', () => React.createElement(ModelDocs, { ...docsProps, isAdmin: true, target: { kind: 'overview', id: null } })]);
+cases.push(['DocsNav', () => React.createElement(DocsNav, {
+  tree: docsTree(docsModelList, docsCfg), target: { kind: 'overview', id: null },
+  onSelect: noop, onExit: noop, appName: 'open-quill'
 })]);
 
 // admin sections read everything from AdminProvider, so they need the context to render at all.

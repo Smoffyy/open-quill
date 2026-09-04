@@ -57,7 +57,16 @@ export function shapePublic(m) {
     docsFeatured: !!m.docs_featured, docsIntelligence: m.docs_intelligence || 0, docsSpeed: m.docs_speed || 0,
     docsMaxOutput: m.docs_max_output || 0, docsCutoff: m.docs_cutoff || '', docsBody: m.docs_body || '', docsImage: m.docs_image || '', docsIcon: m.docs_icon || '',
     docsIn: { text: m.docs_in_text !== 0, image: !!m.docs_in_image || !!m.has_vision, audio: !!m.docs_in_audio, video: !!m.docs_in_video },
-    docsOut: { text: m.docs_out_text !== 0, image: !!m.docs_out_image, audio: !!m.docs_out_audio, video: !!m.docs_out_video }
+    docsOut: { text: m.docs_out_text !== 0, image: !!m.docs_out_image, audio: !!m.docs_out_audio, video: !!m.docs_out_video },
+    docsHidden: !!m.docs_hidden, docsBadge: m.docs_badge || '', docsGroup: m.docs_group || '', docsSummary: m.docs_summary || '',
+    docsLatency: m.docs_latency || '', docsThinking: m.docs_thinking || '', docsEffort: m.docs_effort || '',
+    docsTrainCutoff: m.docs_train_cutoff || '', docsStatus: m.docs_status || '', docsReleased: m.docs_released || '', docsRetired: m.docs_retired || '',
+    docsIds: Array.isArray(m.docs_ids) ? m.docs_ids : [], docsPlatforms: Array.isArray(m.docs_platforms) ? m.docs_platforms : [],
+    docsPriceCacheWrite: m.docs_price_cache_write ?? null, docsPriceCacheRead: m.docs_price_cache_read ?? null, docsPriceBatch: m.docs_price_batch || '',
+    docsNotes: m.docs_notes || '', docsLinks: Array.isArray(m.docs_links) ? m.docs_links : [],
+    docsResources: Array.isArray(m.docs_resources) ? m.docs_resources : [], docsReference: Array.isArray(m.docs_reference) ? m.docs_reference : [],
+    docsNotice: m.docs_notice || '', docsNoticeAction: m.docs_notice_action || '', docsNoticeUrl: m.docs_notice_url || '',
+    docsActionLabel: m.docs_action_label || ''
   };
 }
 

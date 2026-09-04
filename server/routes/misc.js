@@ -8,6 +8,7 @@ import { broadcastAdminConfig } from '../lib/ws/index.js';
 import { draftGet, draftSet } from '../lib/draft.js';
 import { egressLog, clearEgressLog } from '../lib/egress.js';
 import { releaseInfo, releaseIconPath } from '../lib/release.js';
+import { sanitizeDocsConfig } from '../lib/modeldocs.js';
 
 const APP_FONTS = new Set(['literata', 'newsreader', 'sourceserif', 'sans']);
 
@@ -65,6 +66,9 @@ export default function registerMiscRoutes(app) {
     }
     if ('modelDocs' in b && put('model_docs_enabled', b.modelDocs ? '1' : '0')) {
       logAudit(req, 'branding.modelDocs', { meta: { on: !!b.modelDocs } });
+    }
+    if (b.modelDocsConfig && typeof b.modelDocsConfig === 'object' && put('model_docs_config', JSON.stringify(sanitizeDocsConfig(b.modelDocsConfig)))) {
+      logAudit(req, 'branding.modelDocsConfig', {});
     }
     if ('appIcon' in b) put('app_icon', text(b.appIcon, 1024));
     if ('appFont' in b) put('app_font', APP_FONTS.has(b.appFont) ? b.appFont : 'literata');
