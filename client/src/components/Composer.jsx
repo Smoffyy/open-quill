@@ -85,7 +85,7 @@ function ActiveChip({ icon, label, onRemove }) {
 export default function Composer({
   value, onChange, onSend, onStop, streaming, stopping = false, models,
   currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, onOpenProject, projects = [], onSetProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
-  voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall,
+  voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall, callActive = false,
   safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
   conversationEnded = false, endedReason = '',
@@ -679,7 +679,7 @@ export default function Composer({
           ) : canSend ? (
             <button key="send" className="send" onClick={doSend} disabled={uploading}><Up style={{ width: 20, height: 20 }} /></button>
           ) : voiceCall ? (
-            <Tip label={t("Start a voice call")}><button key="call" className="mic call" onClick={onStartCall} aria-label={t("Start a voice call")}><Wave style={{ width: 20, height: 20 }} /></button></Tip>
+            <Tip label={callActive ? t("End call") : t("Start a voice call")}><button key="call" className={'mic call' + (callActive ? ' on' : '')} onClick={onStartCall} aria-label={callActive ? t("End call") : t("Start a voice call")} aria-pressed={callActive}>{callActive ? <X style={{ width: 18, height: 18 }} /> : <Wave style={{ width: 20, height: 20 }} />}</button></Tip>
           ) : (
             <button key="send" className="send ghost" disabled><Up style={{ width: 20, height: 20 }} /></button>
           )}

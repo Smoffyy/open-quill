@@ -541,7 +541,7 @@ body:has(.app.has-bg) > .model-submenu.pinned {
   .paper-btn svg { width: 18px; height: 18px; }
   .chat-rename { min-width: 0; flex: 1; }
 
-  .chatctl-panel, .artifacts, .callpanel {
+  .chatctl-panel, .artifacts {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 130;
     width: min(92vw, 440px); max-width: 440px; height: 100%; flex-shrink: 0;
   }

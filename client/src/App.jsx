@@ -246,6 +246,13 @@ export default function App() {
   const artifactsOpenRef = useRef(false);
   useEffect(() => { artifactsOpenRef.current = artifactsOpen; }, [artifactsOpen]);
   const [callOpen, setCallOpen] = useState(false);
+  const [callRender, setCallRender] = useState(false);
+  useEffect(() => {
+    if (callOpen) { setCallRender(true); return; }
+    if (!callRender) return;
+    const id = setTimeout(() => setCallRender(false), 300);
+    return () => clearTimeout(id);
+  }, [callOpen, callRender]);
   const [artifactFocus, setArtifactFocus] = useState(null);
   const [incognito, setIncognito] = useState(false);
   const [incognitoGreeting, setIncognitoGreeting] = useState(tk('Greetings, whoever you are'));
@@ -1030,10 +1037,10 @@ export default function App() {
       return;
     }
 
-    let chatId = activeId;
+    let chatId = activeIdRef.current;
     if (!chatId) {
       const c = await api.post('/api/chats');
-      chatId = c.id; setActiveId(chatId);
+      chatId = c.id; setActiveId(chatId); activeIdRef.current = chatId;
       setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false }, ...cs]);
       history.pushState({}, '', pathForChat(chatId));
       if ((chatGenParams && Object.keys(chatGenParams).length) || (chatSysOverride && chatSysOverride.trim())) {
@@ -1172,7 +1179,7 @@ export default function App() {
   const sandboxOn = sandboxAllowed && sandbox;
   const webSearchAvailable = !incognito && !!cfg.webSearchAvailable && (model ? model.webSearchAllowed !== false : true);
   const webSearchOn = webSearchAvailable && webSearch;
-  const empty = !activeId && messages.length === 0;
+  const empty = !activeId && messages.length === 0 && !callOpen;
   const bgInChat = user?.prefs?.modelBgInChat !== false;
   const modelHasBg = !incognito && !!(model?.bgEnabled && model?.bgImage);
   const activeBg = computeActiveBg(models, currentId, activeId, messages.length, incognito, user?.prefs);
@@ -1209,7 +1216,7 @@ export default function App() {
     savedPrompts: user?.savedPrompts || [], onUsePrompt: (t) => { setInput(t); setFocusTick(x => x + 1); }, onSavePrompt: savePromptFromInput, onDeletePrompt: deleteSavedPrompt,
     onNewChat: () => newChat(), onShortcuts: () => setShowShortcuts(true),
     voiceMic: !!cfg.voiceMic, voiceCall: !!cfg.voiceCall && !incognito, sttEngine: cfg.voiceStt || 'browser',
-    onStartCall: () => { setArtifactsOpen(false); setCallOpen(true); },
+    callActive: callOpen, onStartCall: () => { setArtifactsOpen(false); setCallOpen(o => !o); },
     ctxGauge: cfg.uiPreset === 'openai' ? null : ctxGaugeEl
   };
   const showArtifactsBtn = sandboxOn || files.length > 0;
@@ -1324,10 +1331,16 @@ export default function App() {
   const modelPicker = (
     <div className="topbar-model tbm-flex">
       <ModelDropdown models={models} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} kwargValues={kwargValues} onSetKwarg={setKwarg} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
-      
+
       {ctxGaugeEl}
     </div>
   );
+
+  const callDock = callRender ? (
+    <CallPanel chatId={activeId} model={model} active={callOpen}
+      voice={{ stt: cfg.voiceStt || 'browser', tts: cfg.voiceTts || 'browser', ttsVoice: cfg.voiceTtsVoice || '', ttsSpeed: cfg.voiceTtsSpeed || 1 }}
+      onSendText={(txt) => send([], txt, { call: true })} />
+  ) : null;
 
   sidebarFns.current = { newChat, openChat, deleteChat, toggleStar, logout, openProjects, moveChatToProject, newProject: () => { openProjects(null); setProjectCreate(true); } };
 
@@ -1578,6 +1591,7 @@ export default function App() {
             {showJump && <button className="to-bottom" onClick={jumpDown} title={t('Jump to latest')} aria-label={t('Jump to latest')}><Down style={{ width: 17 }} /></button>}
             <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')} style={{ maxWidth: cfg.uiPreset === 'openai' ? undefined : 'var(--reading-max, 808px)', margin: '0 auto', width: '100%', padding: '0 20px' }}>
               {user?.prefs?.engineStrip === true && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
+              {callDock}
               <Composer {...composerProps} focusKey={focusTick} />
               <Disclaimer text={cfg.disclaimer} />
             </div>
@@ -1590,12 +1604,6 @@ export default function App() {
       )}
       {ctlOpen && user?.isAdmin && !incognito && (
         <ChatControls chatId={activeId || null} initialParams={chatGenParams} initialOverride={chatSysOverride} onChange={(p, o) => { setChatGenParams(p && Object.keys(p).length ? p : null); setChatSysOverride(o || ''); }} onClose={() => setCtlOpen(false)} />
-      )}
-      {callOpen && (
-        <CallPanel chatId={activeId} model={model}
-          voice={{ stt: cfg.voiceStt || 'browser', tts: cfg.voiceTts || 'browser', ttsVoice: cfg.voiceTtsVoice || '', ttsSpeed: cfg.voiceTtsSpeed || 1 }}
-          onSendText={(t) => send([], t, { call: true })}
-          onClose={() => setCallOpen(false)} />
       )}
 
       {summaryOpen && activeId && (
