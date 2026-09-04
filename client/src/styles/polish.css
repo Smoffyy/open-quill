@@ -281,7 +281,7 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .composer.blocked .composer-input,
 .composer.blocked textarea { opacity: .6; }
 .composer-stack { position: relative; }
-.unavail-bg { position: absolute; inset: 0; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 18px; z-index: 0; }
+.unavail-bg { position: absolute; inset: 0; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 20px; z-index: 0; }
 .unavail-banner { position: relative; z-index: 1; padding: 12px 18px; font-size: 13.5px; }
 .composer-stack.has-banner .composer { position: relative; z-index: 1; }
 .unavail-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
