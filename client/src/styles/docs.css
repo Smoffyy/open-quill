@@ -326,7 +326,8 @@
   display: grid; place-items: center; width: 24px; height: 24px; margin: -4px 0; flex-shrink: 0;
   color: inherit; opacity: .85; border-radius: 6px;
 }
-.mdoc-info:hover { opacity: 1; background: var(--dk-fill-hover); }
+.mdoc-info:hover { opacity: 1; background: none; color: #fff; }
+.tip-pinned .mdoc-info, .tip-pinned .mdoc-info:hover { opacity: 1; background: none !important; color: #fff; }
 .mdoc-info svg { width: 16px; height: 16px; }
 
 .mdoc-iconedit { position: relative; flex-shrink: 0; line-height: 0; }

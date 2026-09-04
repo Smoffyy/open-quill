@@ -36,8 +36,8 @@ const TIPS = {
 function InfoTip({ text }) {
   if (!text) return null;
   return (
-    <Tip label={t(text)} tone="docs">
-      <button className="mdoc-info" aria-label={t(text)} onClick={(e) => e.preventDefault()}>
+    <Tip label={t(text)} tone="docs" toggle>
+      <button className="mdoc-info" aria-label={t(text)}>
         <Info />
       </button>
     </Tip>
@@ -546,7 +546,7 @@ function ModelPage({ m, models, cfg, set, onTry, onOpen, appName, onExit }) {
 
       <Show when={!!(m.docsBody || m.description)}>
         <>
-          <h2 className="mdoc-h2">{t('Overview')}</h2>
+          <h2 className="mdoc-h2">{t('About this model')}</h2>
           <div className="mdoc-prose">
             <Area value={m.docsBody} onChange={S('docsBody')} rows={8}
               placeholder={t('A few paragraphs on what this model is best at. Markdown is supported.')}
@@ -558,7 +558,7 @@ function ModelPage({ m, models, cfg, set, onTry, onOpen, appName, onExit }) {
 
       {models.length > 1 && (
         <>
-          <h2 className="mdoc-h2">{t('How it compares')}</h2>
+          <h2 className="mdoc-h2">{t('How this model compares')}</h2>
           <CompareTable models={models} selfId={m.id} onOpen={onOpen} />
         </>
       )}
@@ -606,7 +606,7 @@ function ModelPage({ m, models, cfg, set, onTry, onOpen, appName, onExit }) {
 
       <Show when={notes.length > 0}>
         <>
-          <h2 className="mdoc-h2">{t('Good to know')}</h2>
+          <h2 className="mdoc-h2">{t('Notes')}</h2>
           {on
             ? <Area value={m.docsNotes} onChange={S('docsNotes')} rows={4} placeholder={t('One bullet per line. Blank hides the section.')} />
             : <ul className="mdoc-notes">{notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
@@ -624,8 +624,9 @@ function ModelPage({ m, models, cfg, set, onTry, onOpen, appName, onExit }) {
 function OverviewPage({ models, cfg, setCfg, onOpen, appName, onExit }) {
   const { on } = useEdit();
   const [all, setAll] = useState(false);
-  const featured = models.filter(m => m.docsFeatured);
-  const lead = (featured.length ? featured : models.filter(m => !m.docsGroup)).slice(0, 6);
+  const active = models.filter(m => m.docsBadge !== 'legacy' && m.docsBadge !== 'preview');
+  const featured = active.filter(m => m.docsFeatured);
+  const lead = featured.length ? featured : active;
   const labels = { text: t('Text'), image: t('Images'), audio: t('Audio'), video: t('Video') };
   const baseRows = [
     [t('Comparative latency'), (m) => m.docsLatency, false, null, TIPS.latency],

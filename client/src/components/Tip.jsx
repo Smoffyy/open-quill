@@ -8,19 +8,29 @@ const EDGE = 8;
 
 let lastClosed = 0;
 
-export default function Tip({ label, keys, side, tone, disabled, children }) {
+export default function Tip({ label, keys, side, tone, disabled, toggle, children }) {
   const hostRef = useRef(null);
   const tipRef = useRef(null);
   const timer = useRef(0);
   const [open, setOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
   const [pos, setPos] = useState(null);
 
-  const close = useCallback(() => {
+  const closeAll = useCallback(() => {
+    clearTimeout(timer.current);
+    if (open) lastClosed = Date.now();
+    setOpen(false);
+    setPinned(false);
+    setPos(null);
+  }, [open]);
+
+  const closeHover = useCallback(() => {
+    if (pinned) return;
     clearTimeout(timer.current);
     if (open) lastClosed = Date.now();
     setOpen(false);
     setPos(null);
-  }, [open]);
+  }, [open, pinned]);
 
   const show = useCallback(() => {
     if (disabled || !label) return;
@@ -29,20 +39,34 @@ export default function Tip({ label, keys, side, tone, disabled, children }) {
     timer.current = setTimeout(() => setOpen(true), wait);
   }, [disabled, label]);
 
+  const handleToggleClick = useCallback(() => {
+    if (pinned) {
+      closeAll();
+    } else {
+      clearTimeout(timer.current);
+      setOpen(true);
+      setPinned(true);
+    }
+  }, [pinned, closeAll]);
+
   useEffect(() => () => clearTimeout(timer.current), []);
 
   useEffect(() => {
     if (!open) return;
-    const dismiss = () => close();
-    window.addEventListener('scroll', dismiss, true);
-    window.addEventListener('resize', dismiss);
-    document.addEventListener('mousedown', dismiss);
-    return () => {
-      window.removeEventListener('scroll', dismiss, true);
-      window.removeEventListener('resize', dismiss);
-      document.removeEventListener('mousedown', dismiss);
+    const onOutside = (e) => {
+      if (e.target && hostRef.current?.contains(e.target)) return;
+      closeAll();
     };
-  }, [open, close]);
+    const onDismiss = () => closeAll();
+    window.addEventListener('scroll', onDismiss, true);
+    window.addEventListener('resize', onDismiss);
+    document.addEventListener('mousedown', onOutside);
+    return () => {
+      window.removeEventListener('scroll', onDismiss, true);
+      window.removeEventListener('resize', onDismiss);
+      document.removeEventListener('mousedown', onOutside);
+    };
+  }, [open, closeAll]);
 
   useEffect(() => {
     if (!open) return;
@@ -60,12 +84,13 @@ export default function Tip({ label, keys, side, tone, disabled, children }) {
   }, [open, side]);
 
   return (
-    <span className="tip-host" ref={hostRef}
-      onMouseEnter={show} onMouseLeave={close}
-      onPointerDownCapture={close}
+    <span className={'tip-host' + (pinned ? ' tip-pinned' : '')} ref={hostRef}
+      onMouseEnter={show} onMouseLeave={toggle ? closeHover : closeAll}
+      onPointerDownCapture={(e) => { if (toggle && hostRef.current?.contains(e.target)) return; closeAll(); }}
+      onClick={toggle ? handleToggleClick : undefined}
       onFocusCapture={(e) => { if (e.target.matches?.(':focus-visible')) show(); }}
-      onBlurCapture={close}
-      onKeyDown={(e) => { if (e.key === 'Escape') close(); }}>
+      onBlurCapture={closeAll}
+      onKeyDown={(e) => { if (e.key === 'Escape') closeAll(); }}>
       {children}
       {open && label && createPortal(
         <div className={'tip' + (tone ? ' tip-' + tone : '')} role="tooltip" ref={tipRef}
