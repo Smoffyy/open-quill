@@ -25,6 +25,8 @@ export const KEYBIND_ACTIONS = [
   { id: 'toggleLedger', group: 'In this conversation', label: 'Context ledger', def: 'alt+l', typing: true, overlay: false },
   { id: 'promptLedger', group: 'In this conversation', label: 'What gets sent', def: 'alt+p', typing: true, overlay: false },
   { id: 'toggleArtifacts', group: 'In this conversation', label: 'Artifacts panel', def: 'alt+a', typing: true, overlay: false },
+  { id: 'toggleOutline', group: 'In this conversation', label: 'Contents', def: 'alt+o', pref: 'threadOutline', typing: true, overlay: false },
+  { id: 'focusMode', group: 'In this conversation', label: 'Focus mode', def: 'alt+f', typing: true, overlay: false },
   { id: 'nextChat', group: 'In this conversation', label: 'Next chat in sidebar', def: 'alt+j', typing: true, overlay: false },
   { id: 'prevChat', group: 'In this conversation', label: 'Previous chat in sidebar', def: 'alt+k', typing: true, overlay: false },
   { id: 'msgCopy', group: 'Focused message', label: 'Copy', def: 'c', pref: 'msgKeys', typing: false, overlay: false },

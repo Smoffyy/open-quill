@@ -2,6 +2,11 @@
 .app { display: flex; height: 100%; }
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; transition: background-color var(--fx-t, .45s) ease; }
 
+:root:root[data-oq-focus] .sidebar { width: 0; border-right-color: transparent; }
+:root:root[data-oq-focus] .trail { display: none; }
+:root:root[data-oq-focus] .topbar { opacity: .55; transition: opacity var(--fx-t, .2s) ease; }
+:root:root[data-oq-focus] .topbar:hover, :root:root[data-oq-focus] .topbar:focus-within { opacity: 1; }
+
 /* ---------- sidebar ---------- */
 .sidebar {
   width: 288px; background: var(--sidebar); display: flex; flex-direction: column;

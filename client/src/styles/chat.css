@@ -234,7 +234,14 @@
 /* ---------- messages ---------- */
 .scroll-area { container-type: inline-size; }
 .scroll-area { flex: 1; overflow: hidden auto; scroll-behavior: auto; scrollbar-gutter: stable both-edges; }
-.thread { max-width: 808px; margin: 0 auto; padding: 12px 36px 0; min-height: 100%; }
+.thread { max-width: var(--reading-max, 808px); margin: 0 auto; padding: 12px 36px 0; min-height: 100%; }
+:root[data-read="wide"] { --reading-max: 1080px; }
+.assistant-body :is(h1, h2, h3, h4, h5, h6) { scroll-margin-top: 84px; }
+.assistant-body :is(h1, h2, h3, h4, h5, h6).head-flash { animation: oq-head-flash 1.3s ease; }
+@keyframes oq-head-flash {
+  0%, 15% { background: color-mix(in srgb, var(--accent, #d97757) 22%, transparent); }
+  100% { background: transparent; }
+}
 .thread-pad { height: 96px; }
 
 .msg { margin-bottom: 0; }

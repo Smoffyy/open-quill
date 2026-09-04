@@ -243,6 +243,7 @@ export const ELEMENTS = [
   { id: 'threadRail', label: tk('Thread rail'), cat: 'thread', sel: '.trail', parent: 'main', caps: ALL },
   { id: 'threadRailTick', label: tk('Thread rail marker'), cat: 'thread', sel: '.trail-tick', parent: 'threadRail', caps: BOX },
   { id: 'threadFind', label: tk('Find in conversation'), cat: 'thread', sel: '.thread-find', parent: 'main', caps: ALL },
+  { id: 'outlinePanel', label: tk('Contents panel'), cat: 'thread', sel: '.outline-panel', parent: 'main', caps: ALL },
   { id: 'ledgerBar', label: tk('Context ledger'), cat: 'thread', sel: '.ledger-head', parent: 'thread', caps: ALL },
   { id: 'proseP', label: tk('Paragraph'), cat: 'thread', sel: '.assistant-body p', parent: 'assistantBody', caps: TEXTY },
   { id: 'proseH1', label: tk('Heading 1'), cat: 'thread', sel: '.assistant-body h1', parent: 'assistantBody', caps: TEXTY },

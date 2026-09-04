@@ -356,6 +356,9 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 }
 .rail-open:hover { color: var(--sidebar-text, var(--text-muted)); }
 .rail-open:focus-visible { outline: 1.6px solid var(--focus-ring); outline-offset: 1.6px; }
+@media (min-width: 721px) {
+  :root[data-preset="anthropic"] .app.sb-collapsed .topbar { padding-left: 48px; }
+}
 
 .new-row { position: relative; display: flex; align-items: center; }
 .new-row .nav-item { flex: 1; min-width: 0; }

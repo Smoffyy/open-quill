@@ -555,7 +555,7 @@ export default function Composer({
                           const on = compareIds.includes(m.id);
                           return (
                             <button key={m.id} className={'style-item' + (on ? ' active' : '')}
-                              onClick={() => { onSetCompare(on ? compareIds.filter(x => x !== m.id) : (compareIds.length < 2 ? [...compareIds, m.id] : compareIds)); closePlusMenu(); }}>
+                              onClick={() => onSetCompare(on ? compareIds.filter(x => x !== m.id) : (compareIds.length < 2 ? [...compareIds, m.id] : compareIds))}>
                               <span className="style-item-name">{m.displayName || m.id}</span>
                               {on && <Check style={{ width: 14 }} />}
                             </button>

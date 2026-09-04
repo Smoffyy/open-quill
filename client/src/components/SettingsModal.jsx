@@ -186,7 +186,7 @@ function presetDefaults(isOpenai, fallbackTheme) {
     streamCursor: isOpenai, cursorStyle: isOpenai ? 'circle' : 'block',
     cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40, themeFade: true,
     oledShift: false,
-    threadRail: true, threadFind: true, branchMap: true, msgKeys: true, keybinds: {}
+    threadRail: true, threadFind: true, branchMap: true, threadOutline: true, msgKeys: true, readWidth: 'normal', keybinds: {}
   };
 }
 
@@ -608,6 +608,10 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                   <SegSlide label={t("Message density")} value={prefs.density || 'comfortable'} onPick={(v) => setPref('density', v)}
                     options={[{ v: 'comfortable', label: t('Comfortable') }, { v: 'compact', label: t('Compact') }]} />
                 </SetRow>
+                <SetRow label={t("Reading width")} desc={t("How wide the conversation column runs. Wide suits tables and code.")}>
+                  <SegSlide label={t("Reading width")} value={prefs.readWidth === 'wide' ? 'wide' : 'normal'} onPick={(v) => setPref('readWidth', v)}
+                    options={[{ v: 'normal', label: t('Comfortable') }, { v: 'wide', label: t('Wide') }]} />
+                </SetRow>
                 <SwitchRow label={t("OLED screen protection")} desc={t("Nudges the interface a few pixels and eases brightness to limit burn-in.")}
                   on={prefs.oledShift} onToggle={() => setPref('oledShift', !prefs.oledShift)} />
                 <div className="me-section-h">{t("Text reveal")}</div>
@@ -661,6 +665,8 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                   on={prefs.threadFind !== false} onToggle={() => setPref('threadFind', prefs.threadFind === false)} />
                 <SwitchRow label={t("Branch map")} desc={t("A header button showing the whole conversation, every branch included.")}
                   on={prefs.branchMap !== false} onToggle={() => setPref('branchMap', prefs.branchMap === false)} />
+                <SwitchRow label={t("Contents")} desc={t("A header button listing the headings in the assistant's replies. Click one to jump.")}
+                  on={prefs.threadOutline !== false} onToggle={() => setPref('threadOutline', prefs.threadOutline === false)} />
                 <SwitchRow label={t("Message shortcuts")} desc={t("J and K move between messages; C copies, E edits, R retries, Y branches.")}
                   on={prefs.msgKeys !== false} onToggle={() => setPref('msgKeys', prefs.msgKeys === false)} />
               </>
@@ -675,7 +681,6 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                 <div className="hint">{t("How responses look, move, and feel.")}</div>
                 <div className="me-section-h">{t("Streaming")}</div>
                 <Toggle prefs={prefs} setPref={setPref} k="autoscroll" label={t("Auto-scroll")} desc={t("Keep the latest text in view unless you scroll up.")} />
-                <div className="sec-note">{t("How text reveals, the streaming cursor and the navigation rails live under Interface.")}</div>
                 <div className="me-section-h">{t("Tools and context")}</div>
                 <>
                   {cfg?.webSearchAvailable && (

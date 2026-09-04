@@ -77,7 +77,7 @@
 }
 
 [data-preset="openai"] .sidebar { background: var(--sidebar); border-right: 1px solid var(--border-soft); font-family: var(--font-sans); }
-@media (min-width: 721px) { [data-preset="openai"] .sidebar:not(.collapsed) { width: 260px; } }
+@media (min-width: 721px) { [data-preset="openai"] .sidebar:not(.collapsed) { width: 288px; } }
 [data-preset="openai"] .sidebar .brand { font-family: var(--font-sans); font-size: 16px; font-weight: 600; letter-spacing: 0; }
 [data-preset="openai"] .nav-item { border-radius: 10px; padding: 7px 10px; font-size: 14px; line-height: normal; font-weight: 500; gap: 11px; }
 [data-preset="openai"] .nav-item svg { width: 17px; height: 17px; }
@@ -102,6 +102,8 @@
 [data-preset="openai"] .chat-row:hover, [data-preset="openai"] .chat-row.active { color: var(--text); }
 [data-preset="openai"] .section-label, [data-preset="openai"] .recents-label { color: var(--text-faint); font-weight: 500; opacity: 1; font-size: 12.5px; }
 [data-preset="openai"] .recents-label:hover { color: var(--text); }
+[data-preset="openai"] .sec-head[aria-expanded="false"] .sec-head-chev { transform: rotate(-90deg); }
+[data-preset="openai"] .sec-head[aria-expanded="true"] .sec-head-chev { transform: none; }
 
 [data-preset="openai"] .topbar { justify-content: flex-start; gap: 8px; padding: 10px 14px; position: relative; }
 [data-preset="openai"] .topbar-actions { margin-left: auto; }
@@ -124,7 +126,7 @@
 }
 [data-preset="openai"] .topbar-model .model-trigger:hover { background: var(--surface-hover); }
 [data-preset="openai"] .topbar-model .model-trigger svg { color: var(--text-faint); }
-.home-topbar { position: absolute; top: 15px; left: 20px; z-index: 20; }
+.home-topbar { position: absolute; top: 14px; left: 20px; z-index: 20; }
 [data-preset="openai"] .topbar-model .model-menu, .home-topbar .model-menu {
   bottom: auto; top: 42px; left: 0; right: auto; transform-origin: top left; border-radius: 16px;
 }
@@ -220,7 +222,7 @@
 
 .quick-prompts.qp-ghost { visibility: hidden; pointer-events: none; }
 
-[data-preset="openai"] .thread { max-width: 808px; padding: 30px 20px 0; }
+[data-preset="openai"] .thread { max-width: var(--reading-max, 808px); padding: 30px 20px 0; }
 [data-preset="openai"] .msg { margin-bottom: 20px; font-family: var(--font-sans); }
 [data-preset="openai"] .assistant-body { font-size: 15px; line-height: 1.7; font-family: var(--font-sans); }
 [data-preset="openai"] .assistant-body p, [data-preset="openai"] .assistant-body ul, [data-preset="openai"] .assistant-body ol { margin-bottom: 14px; }
@@ -476,6 +478,7 @@
 [data-preset="openai"] .pm-overlay,
 [data-preset="openai"] .mdoc-overlay { background: rgba(0, 0, 0, .45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 [data-preset="openai"] .mdoc { border-radius: 26px; }
+[data-preset="openai"] .rail-open { display: none; }
 [data-preset="openai"] .sidebar.collapsed { width: 58px; }
 [data-preset="openai"] .sidebar.collapsed .chats { display: none; }
 [data-preset="openai"] .sidebar.collapsed .sidebar-head { padding: 16px 0 10px; }

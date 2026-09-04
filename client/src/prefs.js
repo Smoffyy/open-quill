@@ -24,6 +24,7 @@ export function applyPrefs(prefs, preset) {
     else localStorage.removeItem('oq-palette');
   } catch {}
   root.setAttribute('data-density', prefs?.density === 'compact' ? 'compact' : 'comfortable');
+  root.setAttribute('data-read', prefs?.readWidth === 'wide' ? 'wide' : 'normal');
   const cursorOn = prefs?.streamCursor == null ? p === 'openai' : !!prefs.streamCursor;
   const cursorStyle = prefs?.cursorStyle || (p === 'openai' ? 'circle' : 'block');
   root.setAttribute('data-cursor', cursorOn ? (cursorStyle === 'circle' ? 'circle' : 'block') : 'off');

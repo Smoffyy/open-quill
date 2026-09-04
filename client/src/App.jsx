@@ -50,12 +50,14 @@ import Lightbox from './components/Lightbox.jsx';
 import ShortcutsModal from './components/ShortcutsModal.jsx';
 import ThreadRail from './components/ThreadRail.jsx';
 import ThreadFind from './components/ThreadFind.jsx';
+import Outline from './components/Outline.jsx';
+import { buildOutline } from './lib/outline.js';
 import { railItems } from './lib/threadmeta.js';
 import { useDrafts } from './lib/drafts.js';
 import { statusDelayEnabled } from './lib/status.js';
 import { resolveReveal, revealSpeedMs } from './lib/reveal.js';
 import { comboKeys, comboLabel, resolveKeybinds } from './lib/keybinds.js';
-import { useKeybinds } from './lib/keyboard.js';
+import { useKeybinds, isTypingTarget } from './lib/keyboard.js';
 import { useThreadScroll } from './lib/threadscroll.js';
 import { useGenMirror } from './lib/genmirror.js';
 import { useLiveTools, EMPTY_CALLS } from './lib/livetools.js';
@@ -68,7 +70,7 @@ import { useSocket } from './lib/socket.js';
 const BranchTree = React.lazy(() => import('./components/BranchTree.jsx'));
 import { toast } from './toast.js';
 import { copyText } from './clipboard.js';
-import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork, Panel, Copy, Check, Star, Telescope } from './components/icons.jsx';
+import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork, Panel, Copy, Check, Star, Telescope, TextIcon, Expand } from './components/icons.jsx';
 import { BRAND_ICON } from './lib/brand.js';
 
 const SKELETON_DELAY = 100;
@@ -273,14 +275,28 @@ export default function App() {
   const [findOpen, setFindOpen] = useState(false);
   const [findMatches, setFindMatches] = useState(null);
   const [treeOpen, setTreeOpen] = useState(false);
+  const [outlineOpen, setOutlineOpen] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
   const [kbFocus, setKbFocus] = useState(null);
   const lastDarkPalette = useRef('');
   const kbFocusRef = useRef(null);
   useEffect(() => { kbFocusRef.current = kbFocus; }, [kbFocus]);
+  useEffect(() => {
+    const root = document.documentElement;
+    root.toggleAttribute('data-oq-focus', focusMode);
+    if (!focusMode) return undefined;
+    const esc = (e) => {
+      if (e.key !== 'Escape' || isTypingTarget(document.activeElement) || document.querySelector('.overlay')) return;
+      setFocusMode(false);
+    };
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('keydown', esc); root.removeAttribute('data-oq-focus'); };
+  }, [focusMode]);
   const onFindMatches = useCallback((ids) => setFindMatches(ids), []);
   const closeFind = useCallback(() => { setFindOpen(false); setFindMatches(null); }, []);
   const msgActions = useRef({});
   const railList = useMemo(() => railItems(messages), [messages]);
+  const outline = useMemo(() => buildOutline(messages), [messages]);
   const findRevision = useMemo(() => {
     let n = 0;
     for (const m of messages) n += m.content ? m.content.length : 0;
@@ -745,6 +761,17 @@ export default function App() {
     });
   }
   const railJump = useCallback((id) => { setKbFocus(id); jumpToMessage(id, { flash: false }); }, []);
+  const outlineJump = useCallback((entry) => {
+    const esc = (s) => (window.CSS && CSS.escape ? CSS.escape(s) : s);
+    const host = document.querySelector('[data-mid="' + esc(entry.mid) + '"]');
+    if (!host) return;
+    const heads = host.querySelectorAll('h1,h2,h3,h4,h5,h6');
+    const target = heads[entry.li] || host;
+    stick.current = false;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    target.classList.remove('head-flash'); void target.offsetWidth; target.classList.add('head-flash');
+    setTimeout(() => target.classList.remove('head-flash'), 1400);
+  }, [stick]);
   async function copyConversation() {
     const text = messages.filter(m => m.role === 'user' || m.role === 'assistant')
       .map(m => (m.role === 'user' ? 'You' : t('Assistant')) + ':\n' + (typeof m.content === 'string' ? m.content : '')).join('\n\n');
@@ -1240,6 +1267,8 @@ export default function App() {
     prevChat: () => stepChat(-1),
     findInChat: () => { if (!messagesRef.current.length) return false; setFindOpen(true); },
     branchMap: () => { if (!activeIdRef.current || !messagesRef.current.length) return false; setTreeOpen(true); },
+    toggleOutline: () => { if (!outline.length) return false; setOutlineOpen(o => !o); },
+    focusMode: () => { if (!focusMode && !(activeIdRef.current && messagesRef.current.length)) return false; setFocusMode(o => !o); },
     msgNext: () => stepFocus(1),
     msgPrev: () => stepFocus(-1),
     clearFocus: () => { if (!kbFocusRef.current) return false; setKbFocus(null); },
@@ -1271,6 +1300,8 @@ export default function App() {
     { id: 'new', label: t('New chat'), shortcut: comboLabel(kb.newChat), keywords: 'create start', action: () => newChat() },
     { id: 'sidebar', label: collapsed ? t('Show sidebar') : t('Hide sidebar'), shortcut: comboLabel(kb.toggleSidebar), keywords: 'toggle collapse panel', action: () => setCollapsed(c => !c) },
     { id: 'ledger', label: ledgerOpen ? t('Hide context ledger') : t('Show context ledger'), shortcut: comboLabel(kb.toggleLedger), keywords: 'context tokens ledger budget window', action: () => setLedgerOpen(o => !o) },
+    ...((activeId && messages.length > 0) || focusMode ? [{ id: 'focus', label: focusMode ? t('Exit focus mode') : t('Enter focus mode'), shortcut: comboLabel(kb.focusMode), keywords: 'reading distraction free immersive zen hide sidebar', action: () => setFocusMode(o => !o) }] : []),
+    ...(outline.length ? [{ id: 'outline', label: outlineOpen ? t('Hide contents') : t('Show contents'), shortcut: comboLabel(kb.toggleOutline), keywords: 'outline headings table of contents jump sections', action: () => setOutlineOpen(o => !o) }] : []),
     { id: 'chats', label: t('Browse all chats'), keywords: 'overview history search', action: () => setChatsOverview(true) },
     { id: 'search', label: t('Search chats'), shortcut: comboLabel(kb.searchChats), keywords: 'find message text', action: () => setShowSearch(true) },
     { id: 'shortcuts', label: t('Keyboard shortcuts'), shortcut: comboLabel(kb.shortcuts), keywords: 'keys help hotkeys', action: () => setShowShortcuts(true) },
@@ -1463,6 +1494,8 @@ export default function App() {
                   user?.isAdmin && activeId && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => { setArtifactsOpen(false); setCtlOpen(o => !o); } },
                   messages.length > 0 && user?.prefs?.threadFind !== false && { id: 'find', icon: <Search />, label: t('Find in conversation'), active: findOpen, onClick: () => (findOpen ? closeFind() : setFindOpen(true)) },
                   activeId && messages.length > 0 && user?.prefs?.branchMap !== false && { id: 'tree', icon: <Fork />, label: t('Branch map'), active: treeOpen, onClick: () => setTreeOpen(o => !o) },
+                  outline.length > 1 && user?.prefs?.threadOutline !== false && { id: 'outline', icon: <TextIcon />, label: t('Contents'), active: outlineOpen, onClick: () => setOutlineOpen(o => !o) },
+                  activeId && messages.length > 0 && { id: 'focus', icon: <Expand />, label: focusMode ? t('Exit focus mode') : t('Focus mode'), active: focusMode, onClick: () => setFocusMode(o => !o) },
                   activeId && { id: 'ledger', icon: <Gauge />, label: t('Context ledger'), active: ledgerOpen, onClick: () => setLedgerOpen(o => !o) },
                 ]} />
             </div>
@@ -1541,8 +1574,9 @@ export default function App() {
               </div>
             </div>
             {user?.prefs?.threadRail !== false && <ThreadRail items={railList} scrollRef={scrollRef} matches={findMatches} onJump={railJump} />}
+            {outlineOpen && outline.length > 0 && user?.prefs?.threadOutline !== false && <Outline items={outline} onJump={outlineJump} onClose={() => setOutlineOpen(false)} />}
             {showJump && <button className="to-bottom" onClick={jumpDown} title={t('Jump to latest')} aria-label={t('Jump to latest')}><Down style={{ width: 17 }} /></button>}
-            <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')} style={{ maxWidth: cfg.uiPreset === 'openai' ? undefined : 808, margin: '0 auto', width: '100%', padding: '0 20px' }}>
+            <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')} style={{ maxWidth: cfg.uiPreset === 'openai' ? undefined : 'var(--reading-max, 808px)', margin: '0 auto', width: '100%', padding: '0 20px' }}>
               {user?.prefs?.engineStrip === true && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
               <Composer {...composerProps} focusKey={focusTick} />
               <Disclaimer text={cfg.disclaimer} />
