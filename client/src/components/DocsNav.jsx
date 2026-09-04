@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { t } from '../i18n.jsx';
 import { Chevron, Search } from './icons.jsx';
+import { BRAND_ICON } from '../lib/brand.js';
 import { docsSearch } from '../lib/modeldocs.js';
 
 function Item({ label, active, indent = false, onClick }) {
@@ -32,7 +33,7 @@ function Group({ group, open, onToggle, target, onSelect }) {
   );
 }
 
-export default function DocsNav({ tree, target, onSelect, onExit, appName }) {
+export default function DocsNav({ tree, target, onSelect, onExit, appName, appIcon }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(() => new Set());
   const view = useMemo(() => docsSearch(tree, query) || tree, [tree, query]);
@@ -53,9 +54,9 @@ export default function DocsNav({ tree, target, onSelect, onExit, appName }) {
   return (
     <div className="dnav">
       <div className="dnav-head">
-        <button className="dnav-back" onClick={onExit}>
-          <Chevron className="dnav-back-chev" aria-hidden="true" />
-          <span>{appName || t('Back')}</span>
+        <button className="dnav-brand" onClick={onExit} title={appName || t('Back')}>
+          <img className="dnav-brand-ic" src={appIcon || BRAND_ICON} alt="" />
+          <b className="dnav-brand-name">{appName || 'open-quill'}</b>
         </button>
       </div>
       <div className="dnav-searchbox">

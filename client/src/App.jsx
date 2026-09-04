@@ -1367,7 +1367,7 @@ export default function App() {
     <div className={'app' + (incognito ? ' app-incognito' : '') + (bgVisible ? ' has-bg' : '') + (collapsed && !docsTarget ? ' sb-collapsed' : '')}>
       <a className="skip-link" href="#oq-composer">{t('Skip to message input')}</a>
       <AppBackground bg={activeBg} />
-      <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName} onSearch={onSearchCb}
+      <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName} appIcon={cfg.appIcon} onSearch={onSearchCb}
         dest={showProjects ? 'projects' : showSpaces ? 'spaces' : chatsOverview ? 'chats' : libPage}
         onArtifacts={onArtifactsCb} onScheduled={onScheduledCb}
         onCustomize={onSkillsCb} onModelDocs={onDocsCb} showModelDocs={cfg.modelDocs !== false} onVersion={onVersionCb}
@@ -1398,7 +1398,7 @@ export default function App() {
           <div className="lib-overlay mdoc-overlay" role="region" aria-label={t('Model docs')}>
             <React.Suspense fallback={null}>
               <ModelDocs models={models} cfg={docsCfg} target={docsTarget} appName={cfg.appName || 'open-quill'}
-                isAdmin={!!user?.isAdmin} onNavigate={onDocsNav}
+                isAdmin={!!user?.isAdmin} onNavigate={onDocsNav} onExit={onDocsExit}
                 onSaved={async () => { await loadModels(); await loadAppConfig(); }}
                 onTry={(id) => { pickModel(id); onDocsExit(); }} />
             </React.Suspense>

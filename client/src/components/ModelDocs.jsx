@@ -217,13 +217,16 @@ function CopyPill({ value }) {
   );
 }
 
-function Crumbs({ items }) {
+function Crumbs({ items, onHome }) {
+  const list = items.filter(Boolean);
   return (
     <nav className="mdoc-crumbs" aria-label={t('Breadcrumb')}>
-      {items.filter(Boolean).map((c, i) => (
+      {list.map((c, i) => (
         <React.Fragment key={i}>
           {i > 0 && <Chevron className="mdoc-crumb-sep" aria-hidden="true" />}
-          <span>{c}</span>
+          {i === 0 && onHome
+            ? <button className="mdoc-crumb-home" onClick={onHome}>{c}</button>
+            : <span>{c}</span>}
         </React.Fragment>
       ))}
     </nav>
@@ -408,11 +411,13 @@ function CompareTable({ models, selfId, onOpen }) {
           {models.map(m => (
             <tr key={m.id} className={m.id === selfId ? 'self' : ''}>
               <th scope="row">
-                {m.id === selfId
-                  ? <span className="mdoc-table-name">{m.displayName}</span>
-                  : <button className="mdoc-table-link" onClick={() => onOpen(m.id)}>{m.displayName}</button>}
-                {m.id === selfId && <span className="mdoc-thismodel">{t('This model')}</span>}
-                <Badge kind={m.docsBadge} />
+                <span className="mdoc-table-namewrap">
+                  {m.id === selfId
+                    ? <span className="mdoc-table-name">{m.displayName}</span>
+                    : <button className="mdoc-table-link" onClick={() => onOpen(m.id)}>{m.displayName}</button>}
+                  {m.id === selfId && <span className="mdoc-thismodel">{t('This model')}</span>}
+                  <Badge kind={m.docsBadge} />
+                </span>
               </th>
               {cols.map(c => (
                 <td key={c.id}>{c.mono && c.get(m) ? <code>{c.get(m)}</code> : (c.get(m) || '—')}</td>
@@ -476,7 +481,7 @@ function Modalities({ m, set }) {
   );
 }
 
-function ModelPage({ m, models, cfg, set, onTry, onOpen, appName }) {
+function ModelPage({ m, models, cfg, set, onTry, onOpen, appName, onExit }) {
   const { on } = useEdit();
   const labels = { text: t('Text'), image: t('Images'), audio: t('Audio'), video: t('Video') };
   const inLabel = modalityLabel(m.docsIn, labels) || t('Text');
@@ -487,7 +492,7 @@ function ModelPage({ m, models, cfg, set, onTry, onOpen, appName }) {
   return (
     <>
       <Notice m={m} set={set} onOpen={onOpen} />
-      <Crumbs items={[appName, m.docsGroup || cfg.navLabel]} />
+      <Crumbs items={[appName, m.docsGroup || cfg.navLabel]} onHome={onExit} />
       <header className="mdoc-header">
         <ModelIcon m={m} set={set} />
         <div className="mdoc-header-text">
@@ -616,7 +621,7 @@ function ModelPage({ m, models, cfg, set, onTry, onOpen, appName }) {
   );
 }
 
-function OverviewPage({ models, cfg, setCfg, onOpen, appName }) {
+function OverviewPage({ models, cfg, setCfg, onOpen, appName, onExit }) {
   const { on } = useEdit();
   const [all, setAll] = useState(false);
   const featured = models.filter(m => m.docsFeatured);
@@ -660,7 +665,7 @@ function OverviewPage({ models, cfg, setCfg, onOpen, appName }) {
   const links = Array.isArray(cfg.links) ? cfg.links : [];
   return (
     <>
-      <Crumbs items={[appName, cfg.navLabel]} />
+      <Crumbs items={[appName, cfg.navLabel]} onHome={onExit} />
       <h1 className="mdoc-h1">
         {on
           ? <input className="mdoc-f-input h1" value={cfg.title} placeholder={t('Models overview')}
@@ -854,7 +859,7 @@ function Sections({ cfg, setCfg }) {
   );
 }
 
-function CustomPage({ page, section, cfg, setCfg, appName }) {
+function CustomPage({ page, section, cfg, setCfg, appName, onExit }) {
   const { on } = useEdit();
   const si = cfg.sections.findIndex(s => s.id === section.id);
   const pi = si >= 0 ? cfg.sections[si].pages.findIndex(p => p.id === page.id) : -1;
@@ -863,7 +868,7 @@ function CustomPage({ page, section, cfg, setCfg, appName }) {
     : s)));
   return (
     <>
-      <Crumbs items={[appName, section.label]} />
+      <Crumbs items={[appName, section.label]} onHome={onExit} />
       <h1 className="mdoc-h1">
         {on
           ? <input className="mdoc-f-input h1" value={page.title} aria-label={t('Page title')}
@@ -903,7 +908,7 @@ function EditBar({ editing, dirty, saving, error, onStart, onCancel, onSave }) {
   );
 }
 
-export default function ModelDocs({ models, cfg, target, appName, isAdmin, onTry, onNavigate, onSaved }) {
+export default function ModelDocs({ models, cfg, target, appName, isAdmin, onTry, onNavigate, onSaved, onExit }) {
   const scroller = useRef(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -974,14 +979,15 @@ export default function ModelDocs({ models, cfg, target, appName, isAdmin, onTry
               onStart={() => setEditing(true)} onCancel={cancel} onSave={save} />
           )}
           {target.kind === 'overview' && (
-            <OverviewPage models={list} cfg={liveCfg} setCfg={setCfgKey} onOpen={openModel} appName={appName} />
+            <OverviewPage models={list} cfg={liveCfg} setCfg={setCfgKey} onOpen={openModel} appName={appName} onExit={onExit} />
           )}
           {target.kind === 'model' && (model
-            ? <ModelPage m={model} models={list} cfg={liveCfg} set={setModel} onTry={onTry} onOpen={openModel} appName={appName} />
+            ? <ModelPage m={model} models={list} cfg={liveCfg} set={setModel} onTry={onTry} onOpen={openModel} appName={appName} onExit={onExit} />
             : <p className="mdoc-sub">{t('That model is no longer listed.')}</p>)}
           {target.kind === 'page' && (found
-            ? <CustomPage page={found[1]} section={found[0]} cfg={liveCfg} setCfg={setCfgKey} appName={appName} />
+            ? <CustomPage page={found[1]} section={found[0]} cfg={liveCfg} setCfg={setCfgKey} appName={appName} onExit={onExit} />
             : <p className="mdoc-sub">{t('That page is no longer listed.')}</p>)}
+          {editing && target.kind !== 'page' && <div className="mdoc-settings-head">{t('Page settings')}</div>}
         </Edit.Provider>
       </div>
     </div>

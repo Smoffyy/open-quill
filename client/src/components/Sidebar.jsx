@@ -202,7 +202,7 @@ function ChatRow({ c, active, showTrash, projects = [], onMoveToProject, onOpen,
 }
 
 function Sidebar({
-  user, chats, onSearch, chatsLoaded = true, activeId, appName, onNew, onOpen, onDelete, onToggleStar,
+  user, chats, onSearch, chatsLoaded = true, activeId, appName, appIcon, onNew, onOpen, onDelete, onToggleStar,
   collapsed, onToggle, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview,
   onSpaces, spacesPending = 0, projects = [], onProjects, onOpenProject, onNewProject, onMoveToProject, mobileOpen = false, onMobileClose,
   onArtifacts, onScheduled, onCustomize, onModelDocs, showModelDocs = true, onVersion, dest = null,
@@ -308,7 +308,7 @@ function Sidebar({
       ref={sideRef} style={width && !collapsed ? { width } : undefined}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
       {!collapsed && <SideResize targetRef={sideRef} onCommit={setWidth} />}
-      {docs && <DocsNav tree={docs.tree} target={docs.target} onSelect={docs.onSelect} onExit={docs.onExit} appName={appName} />}
+      {docs && <DocsNav tree={docs.tree} target={docs.target} onSelect={docs.onSelect} onExit={docs.onExit} appName={appName} appIcon={appIcon} />}
       {!docs && <>
       <div className="sidebar-head">
         <div className="brand-wrap">

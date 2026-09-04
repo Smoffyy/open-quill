@@ -145,6 +145,7 @@ export const DOCS_MODEL_FIELDS = {
   docsFeatured: 'docs_featured',
   docsHidden: 'docs_hidden',
   docsBadge: 'docs_badge',
+  docsIcon: 'docs_icon',
   docsGroup: 'docs_group',
   docsSummary: 'docs_summary',
   docsBody: 'docs_body',

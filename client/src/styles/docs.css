@@ -50,13 +50,16 @@
 .sidebar.docs-mode { background: var(--dk-page); border-right: 0.8px solid var(--dk-ring); }
 .dnav { display: flex; flex-direction: column; min-height: 0; flex: 1; font-family: var(--dk-sans); }
 .dnav-head { padding: 16px 12px 8px; }
-.dnav-back {
+.dnav-brand {
   display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; padding: 0 8px;
-  border-radius: 8px; color: var(--dk-primary); font-size: 14px; line-height: 20px; font-weight: 500;
-  transition: background .12s ease;
+  border-radius: 8px; color: var(--dk-primary); transition: background .12s ease; min-width: 0;
 }
-.dnav-back:hover { background: var(--dk-fill-hover); }
-.dnav-back-chev { width: 16px; height: 16px; flex-shrink: 0; transform: rotate(180deg); color: var(--dk-tertiary); }
+.dnav-brand:hover { background: var(--dk-fill-hover); }
+.dnav-brand-ic { width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0; object-fit: contain; }
+.dnav-brand-name {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 14px; line-height: 20px; font-weight: 600; letter-spacing: -.01em;
+}
 
 .dnav-searchbox { position: relative; margin: 0 12px 8px; flex-shrink: 0; }
 .dnav-search-ic {
@@ -107,6 +110,11 @@
   font-size: 14px; line-height: 20px; color: var(--dk-tertiary);
 }
 .mdoc-crumb-sep { width: 14px; height: 14px; flex-shrink: 0; }
+.mdoc-crumb-home {
+  color: var(--dk-tertiary); font-size: inherit; line-height: inherit;
+  transition: color .12s ease;
+}
+.mdoc-crumb-home:hover { color: var(--dk-primary); }
 
 .mdoc-h1 {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0;
@@ -145,11 +153,11 @@
 
 .mdoc-header { display: flex; align-items: center; gap: 16px; }
 .mdoc-header-text { min-width: 0; flex: 1; }
-.mdoc-mico { width: 48px; height: 48px; border-radius: 11px; object-fit: contain; flex-shrink: 0; background: var(--dk-fill); }
-.mdoc-mico.sm { width: 28px; height: 28px; border-radius: 7px; }
+.mdoc-mico { width: 56px; height: 56px; border-radius: 11px; object-fit: contain; padding: 12px; flex-shrink: 0; background: var(--dk-fill); }
+.mdoc-mico.sm { width: 28px; height: 28px; border-radius: 7px; padding: 0; }
 .mdoc-mico.md { width: 40px; height: 40px; border-radius: 7px; padding: 8px; }
 .mdoc-mico.noicon {
-  display: grid; place-items: center; font-family: var(--dk-serif); font-size: 20px; font-weight: 500;
+  display: grid; place-items: center; padding: 0; font-family: var(--dk-serif); font-size: 22px; font-weight: 500;
   color: var(--dk-primary); box-shadow: inset 0 0 0 1px var(--dk-ring);
 }
 .mdoc-mico.sm.noicon { font-size: 13px; }
@@ -247,8 +255,10 @@
   font-size: 12px; line-height: 17px; font-weight: 500; color: var(--dk-tertiary); white-space: nowrap;
   border-bottom: 0.8px solid var(--dk-ring); background: var(--dk-card);
 }
-.mdoc-table tbody th { font-weight: 500; color: var(--dk-primary); white-space: nowrap; }
+.mdoc-table thead th:first-child, .mdoc-table tbody th { width: 220px; }
+.mdoc-table tbody th { font-weight: 500; color: var(--dk-primary); white-space: normal; }
 .mdoc-table tbody td { font-weight: 400; color: var(--dk-secondary); white-space: nowrap; }
+.mdoc-table-namewrap { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .mdoc-table tbody tr.self { background: var(--dk-fill); }
 .mdoc-table code { font-family: var(--dk-mono); font-size: 13px; padding: 2px 4px; border-radius: 7px; background: var(--dk-fill); color: var(--dk-tertiary); }
 .mdoc-table-link {
@@ -258,10 +268,9 @@
 .mdoc-table-link:hover { text-decoration-color: currentColor; }
 .mdoc-table-name { color: var(--dk-primary); font-weight: 500; }
 .mdoc-thismodel {
-  display: inline-flex; align-items: center; height: 20px; margin-left: 8px; padding: 0 8px; border-radius: 5px;
+  display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 5px;
   font-size: 12px; line-height: 15px; font-weight: 500; background: var(--dk-fill); color: var(--dk-secondary);
 }
-.mdoc-table tbody th .mdoc-badge { margin-left: 8px; }
 
 .mdoc-matrixwrap { padding-bottom: 8px; }
 .mdoc-matrix { table-layout: fixed; }
@@ -321,7 +330,7 @@
 .mdoc-info svg { width: 16px; height: 16px; }
 
 .mdoc-iconedit { position: relative; flex-shrink: 0; line-height: 0; }
-.mdoc-iconedit-btn { position: relative; display: block; border-radius: 11px; }
+.mdoc-iconedit-btn { position: relative; display: flex; border-radius: 11px; }
 .mdoc-iconedit-btn:disabled { opacity: .6; }
 .mdoc-iconedit-veil {
   position: absolute; inset: 0; display: grid; place-items: center; border-radius: 11px;
@@ -404,10 +413,10 @@ a.mdoc-tile:hover, button.mdoc-tile:hover { background: var(--dk-fill-hover); }
 
 .mdoc-f-input, .mdoc-f-area, select.mdoc-f-input {
   width: 100%; font-family: inherit; font-size: inherit; line-height: inherit; font-weight: inherit;
-  color: var(--dk-primary); background: var(--dk-fill); border: 0; border-radius: 7px; padding: 2px 6px;
+  color: var(--dk-primary); background: var(--dk-fill); border: 0; border-radius: 7px; padding: 4px 8px;
   box-shadow: inset 0 0 0 1px var(--dk-ring); transition: box-shadow .12s ease;
 }
-.mdoc-f-area { padding: 6px; resize: vertical; min-height: 72px; }
+.mdoc-f-area { padding: 8px; resize: vertical; min-height: 72px; }
 .mdoc-f-input::placeholder, .mdoc-f-area::placeholder { color: var(--dk-tertiary); }
 .mdoc-f-input:focus-visible, .mdoc-f-area:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--dk-accent); }
 .mdoc-f-input.mono, .mdoc-f-area.mono { font-family: var(--dk-mono); font-size: 13px; }
@@ -415,13 +424,20 @@ a.mdoc-tile:hover, button.mdoc-tile:hover { background: var(--dk-fill-hover); }
 .mdoc-f-input.h1 { font-family: var(--dk-serif); font-size: 28px; line-height: 36.4px; font-weight: 500; }
 .mdoc-f-input.sub { font-size: 15px; line-height: 20px; }
 .mdoc-f-input.stat { font-family: var(--dk-serif); font-size: 28px; line-height: 36.4px; font-weight: 500; }
-select.mdoc-f-input { height: 28px; padding: 0 6px; }
+select.mdoc-f-input { height: 28px; padding: 0 8px; }
 
 .mdoc-fieldlabel { display: block; margin-bottom: 4px; font-size: 12px; line-height: 17px; color: var(--dk-tertiary); }
 .mdoc-editgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
 .mdoc-editbox {
   margin-top: 10px; padding: 14px; border-radius: 11px; background: var(--dk-card);
   border: 0.8px solid var(--dk-ring); display: flex; flex-direction: column; gap: 12px;
+}
+.mdoc-col > .mdoc-editbox { margin: 16px 0 0; }
+.mdoc-editing { display: flex; flex-direction: column; }
+.mdoc-editing > .mdoc-editbox { order: 2; }
+.mdoc-settings-head {
+  order: 1; margin-top: 40px; padding-top: 20px; border-top: 0.8px solid var(--dk-ring);
+  font-family: var(--dk-serif); font-size: 20.625px; line-height: 25.78px; font-weight: 600; color: var(--dk-primary);
 }
 .mdoc-editbox-head { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--dk-primary); }
 .mdoc-listrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 8px; align-items: center; }
