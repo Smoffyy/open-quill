@@ -28,7 +28,7 @@ import Composer from '../src/components/Composer.jsx';
 import ModelDropdown from '../src/components/ModelDropdown.jsx';
 import ModelDocs from '../src/components/ModelDocs.jsx';
 import DocsNav from '../src/components/DocsNav.jsx';
-import { docsConfig, docsTree } from '../src/lib/modeldocs.js';
+import { docsConfig, docsTree, docsModels } from '../src/lib/modeldocs.js';
 import { AdminProvider } from '../src/components/admin/store.jsx';
 import InterfaceSection from '../src/components/admin/sections/InterfaceSection.jsx';
 import EventsSection from '../src/components/admin/sections/EventsSection.jsx';
@@ -147,7 +147,12 @@ const docsModelList = [
   }
 ];
 const docsCfg = docsConfig({ sections: [{ id: 'guides', label: 'Guides', pages: [{ id: 'p1', title: 'Choosing a model', subtitle: 'How to pick', body: '# Hello\n\nBody text.' }] }] });
-const docsProps = { models: docsModelList, cfg: docsCfg, appName: 'open-quill', onTry: noop, onNavigate: noop, onSaved: noop };
+const makeDocsEdit = (editing) => ({
+  editing, modelEdits: {}, baseModels: docsModels(docsModelList), liveModels: docsModels(docsModelList), liveCfg: docsCfg,
+  setModelField: noop, setCfgField: noop, dirty: false, saving: false, error: '', start: noop, cancel: noop, save: noop
+});
+const docsProps = { appName: 'open-quill', onTry: noop, onNavigate: noop, onExit: noop, edit: makeDocsEdit(false) };
+const docsEditProps = { ...docsProps, isAdmin: true, edit: makeDocsEdit(true) };
 cases.push(['ModelDocs:overview', () => React.createElement(ModelDocs, { ...docsProps, target: { kind: 'overview', id: null } })]);
 cases.push(['ModelDocs:model', () => React.createElement(ModelDocs, { ...docsProps, target: { kind: 'model', id: 'm1' } })]);
 cases.push(['ModelDocs:legacy', () => React.createElement(ModelDocs, { ...docsProps, target: { kind: 'model', id: 'm2' } })]);
@@ -155,9 +160,15 @@ cases.push(['ModelDocs:page', () => React.createElement(ModelDocs, { ...docsProp
 cases.push(['ModelDocs:missing', () => React.createElement(ModelDocs, { ...docsProps, target: { kind: 'model', id: 'gone' } })]);
 cases.push(['ModelDocs:admin', () => React.createElement(ModelDocs, { ...docsProps, isAdmin: true, target: { kind: 'model', id: 'm1' } })]);
 cases.push(['ModelDocs:adminOverview', () => React.createElement(ModelDocs, { ...docsProps, isAdmin: true, target: { kind: 'overview', id: null } })]);
+cases.push(['ModelDocs:editing', () => React.createElement(ModelDocs, { ...docsEditProps, target: { kind: 'model', id: 'm1' } })]);
 cases.push(['DocsNav', () => React.createElement(DocsNav, {
   tree: docsTree(docsModelList, docsCfg), target: { kind: 'overview', id: null },
   onSelect: noop, onExit: noop, appName: 'open-quill'
+})]);
+cases.push(['DocsNav:editing', () => React.createElement(DocsNav, {
+  tree: docsTree(docsModelList, docsCfg, { includeEmpty: true }), target: { kind: 'overview', id: null },
+  onSelect: noop, onExit: noop, appName: 'open-quill', editing: true,
+  onAddTab: noop, onAddPage: noop, onRemoveTab: noop, onRemovePage: noop, onRenameTab: noop
 })]);
 
 // admin sections read everything from AdminProvider, so they need the context to render at all.

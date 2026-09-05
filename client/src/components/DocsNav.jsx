@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { t } from '../i18n.jsx';
-import { Chevron, Search } from './icons.jsx';
+import { Chevron, Search, Plus, Trash } from './icons.jsx';
 import { BRAND_ICON } from '../lib/brand.js';
 import { docsSearch } from '../lib/modeldocs.js';
 
@@ -33,7 +33,10 @@ function Group({ group, open, onToggle, target, onSelect }) {
   );
 }
 
-export default function DocsNav({ tree, target, onSelect, onExit, appName, appIcon }) {
+export default function DocsNav({
+  tree, target, onSelect, onExit, appName, appIcon,
+  editing, onAddTab, onAddPage, onRemoveTab, onRemovePage, onRenameTab
+}) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(() => new Set());
   const view = useMemo(() => docsSearch(tree, query) || tree, [tree, query]);
@@ -55,6 +58,7 @@ export default function DocsNav({ tree, target, onSelect, onExit, appName, appIc
     <div className="dnav">
       <div className="dnav-head">
         <button className="dnav-brand" onClick={onExit} title={appName || t('Back')}>
+          <Chevron className="dnav-brand-back" aria-hidden="true" />
           <img className="dnav-brand-ic" src={appIcon || BRAND_ICON} alt="" />
           <b className="dnav-brand-name">{appName || 'open-quill'}</b>
         </button>
@@ -86,13 +90,37 @@ export default function DocsNav({ tree, target, onSelect, onExit, appName, appIc
         </div>
         {view.sections.map(s => (
           <div className="dnav-section" key={s.id}>
-            <div className="dnav-heading">{s.label}</div>
+            <div className="dnav-heading">
+              {editing ? (
+                <div className="dnav-heading-edit">
+                  <input className="dnav-heading-input" value={s.label} placeholder={t('Tab name')}
+                    aria-label={t('Tab name')} onChange={(e) => onRenameTab(s.id, e.target.value)} />
+                  <button className="dnav-iconbtn" aria-label={t('Remove tab')} title={t('Remove tab')}
+                    onClick={() => onRemoveTab(s.id)}><Trash /></button>
+                </div>
+              ) : s.label}
+            </div>
             {s.pages.map(p => (
-              <Item key={p.id} label={p.title} active={target.kind === 'page' && target.id === p.id}
-                onClick={() => onSelect({ kind: 'page', id: p.id })} />
+              editing ? (
+                <div className="dnav-editrow" key={p.id}>
+                  <Item label={p.title || t('Untitled page')} active={target.kind === 'page' && target.id === p.id}
+                    onClick={() => onSelect({ kind: 'page', id: p.id })} />
+                  <button className="dnav-iconbtn" aria-label={t('Remove page')} title={t('Remove page')}
+                    onClick={() => onRemovePage(s.id, p.id)}><Trash /></button>
+                </div>
+              ) : (
+                <Item key={p.id} label={p.title} active={target.kind === 'page' && target.id === p.id}
+                  onClick={() => onSelect({ kind: 'page', id: p.id })} />
+              )
             ))}
+            {editing && (
+              <button className="dnav-addbtn" onClick={() => onAddPage(s.id)}><Plus /> {t('Add page')}</button>
+            )}
           </div>
         ))}
+        {editing && (
+          <button className="dnav-addbtn dnav-addtab" onClick={onAddTab}><Plus /> {t('Add tab')}</button>
+        )}
       </div>
     </div>
   );

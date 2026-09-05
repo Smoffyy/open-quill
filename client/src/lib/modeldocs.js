@@ -38,7 +38,7 @@ export function docsModels(models) {
   return (Array.isArray(models) ? models : []).filter(m => m && !m.removed && !m.docsHidden && m.kind !== 'router');
 }
 
-export function docsTree(models, cfg) {
+export function docsTree(models, cfg, opts) {
   const list = docsModels(models);
   const top = [];
   const groups = [];
@@ -53,10 +53,11 @@ export function docsTree(models, cfg) {
     }
     byLabel.get(label).models.push(m);
   }
+  const includeEmpty = !!(opts && opts.includeEmpty);
   return {
     overviewLabel: cfg.overviewLabel,
     models: { label: cfg.navLabel, top, groups },
-    sections: cfg.sections.filter(s => s.pages.length > 0)
+    sections: includeEmpty ? cfg.sections : cfg.sections.filter(s => s.pages.length > 0)
   };
 }
 

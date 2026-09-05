@@ -1,12 +1,12 @@
-import React, { useState, useMemo, useRef, useEffect, useCallback, createContext, useContext } from 'react';
+import React, { useState, useRef, useEffect, useCallback, createContext, useContext } from 'react';
 import { t } from '../i18n.jsx';
 import { api } from '../api.js';
 import Markdown from './Markdown.jsx';
 import Tip from './Tip.jsx';
 import { Copy, Check, ArrowOut, Chevron, Info, Pencil, Trash, Plus, X } from './icons.jsx';
 import {
-  docsModels, docsConfig, fmtTokens, fmtPrice, priceRange, bulletLines, modalityLabel,
-  publicModelId, docsModelPatch, parseTokens, parseMoney, DOCS_BADGE_OPTIONS
+  fmtTokens, fmtPrice, priceRange, bulletLines, modalityLabel,
+  publicModelId, parseTokens, parseMoney, DOCS_BADGE_OPTIONS
 } from '../lib/modeldocs.js';
 
 const INTEL_LABELS = ['', 'Low', 'Fair', 'Medium', 'High', 'Highest'];
@@ -809,54 +809,7 @@ function OverviewPage({ models, cfg, setCfg, onOpen, appName, onExit }) {
         </>
       </Show>
 
-      <Sections cfg={cfg} setCfg={setCfg} />
     </>
-  );
-}
-
-function Sections({ cfg, setCfg }) {
-  const { on } = useEdit();
-  if (!on) return null;
-  const list = cfg.sections;
-  const setSections = (v) => setCfg('sections', v);
-  const editSection = (i, patch) => setSections(list.map((s, j) => (j === i ? { ...s, ...patch } : s)));
-  return (
-    <EditBox title={t('Extra pages')} hint={t('Groups of written pages listed under the models in the reference sidebar.')}>
-      {list.map((s, si) => (
-        <div className="mdoc-editbox" key={si}>
-          <div className="mdoc-listrow">
-            <input className="mdoc-f-input" value={s.label} placeholder={t('Group heading')} aria-label={t('Group heading')}
-              onChange={(e) => editSection(si, { label: e.target.value })} />
-            <span className="mdoc-hint">{t('{n} page(s)', { n: s.pages.length })}</span>
-            <button className="mdoc-iconbtn" aria-label={t('Remove')}
-              onClick={() => setSections(list.filter((_, j) => j !== si))}><Trash /></button>
-          </div>
-          {s.pages.map((p, pi) => (
-            <div className="mdoc-editbox" key={pi}>
-              <div className="mdoc-listrow">
-                <input className="mdoc-f-input" value={p.title} placeholder={t('Page title')} aria-label={t('Page title')}
-                  onChange={(e) => editSection(si, { pages: s.pages.map((x, k) => (k === pi ? { ...x, title: e.target.value } : x)) })} />
-                <input className="mdoc-f-input mono" value={p.id} placeholder={t('page-id')} aria-label={t('Page id')}
-                  onChange={(e) => editSection(si, { pages: s.pages.map((x, k) => (k === pi ? { ...x, id: e.target.value } : x)) })} />
-                <button className="mdoc-iconbtn" aria-label={t('Remove')}
-                  onClick={() => editSection(si, { pages: s.pages.filter((_, k) => k !== pi) })}><Trash /></button>
-              </div>
-              <input className="mdoc-f-input" value={p.subtitle} placeholder={t('Subtitle')} aria-label={t('Subtitle')}
-                onChange={(e) => editSection(si, { pages: s.pages.map((x, k) => (k === pi ? { ...x, subtitle: e.target.value } : x)) })} />
-              <textarea className="mdoc-f-area" rows={6} value={p.body} placeholder={t('Markdown body')} aria-label={t('Body')}
-                onChange={(e) => editSection(si, { pages: s.pages.map((x, k) => (k === pi ? { ...x, body: e.target.value } : x)) })} />
-            </div>
-          ))}
-          <button className="mdoc-addbtn"
-            onClick={() => editSection(si, { pages: [...s.pages, { id: '', title: '', subtitle: '', body: '' }] })}>
-            <Plus /> {t('Add page')}
-          </button>
-        </div>
-      ))}
-      <button className="mdoc-addbtn" onClick={() => setSections([...list, { id: '', label: '', pages: [] }])}>
-        <Plus /> {t('Add group')}
-      </button>
-    </EditBox>
   );
 }
 
@@ -893,7 +846,7 @@ function EditBar({ editing, dirty, saving, error, onStart, onCancel, onSave }) {
   return (
     <div className="mdoc-editbar">
       <span className="mdoc-editbar-label">
-        {error ? error : editing ? t('Editing the reference. Changes are staged until you publish the workspace.') : ''}
+        {error ? error : editing ? t('Editing the reference. Click any page in the sidebar to edit it. Changes are staged until you publish the workspace.') : ''}
       </span>
       {editing ? (
         <>
@@ -903,71 +856,30 @@ function EditBar({ editing, dirty, saving, error, onStart, onCancel, onSave }) {
           </button>
         </>
       ) : (
-        <button className="mdoc-editbtn" onClick={onStart}><Pencil /> {t('Edit page')}</button>
+        <button className="mdoc-editbtn" onClick={onStart}><Pencil /> {t('Edit')}</button>
       )}
     </div>
   );
 }
 
-export default function ModelDocs({ models, cfg, target, appName, isAdmin, onTry, onNavigate, onSaved, onExit }) {
+export default function ModelDocs({ target, appName, isAdmin, onTry, onNavigate, onExit, edit }) {
   const scroller = useRef(null);
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [modelEdits, setModelEdits] = useState({});
-  const [cfgEdit, setCfgEdit] = useState(null);
-
-  const liveCfg = cfgEdit || cfg;
-  const list = useMemo(() => {
-    const base = docsModels(models);
-    if (!editing) return base;
-    return base.map(m => (modelEdits[m.id] ? { ...m, ...modelEdits[m.id] } : m));
-  }, [models, modelEdits, editing]);
+  const { editing, modelEdits, baseModels, liveModels: list, liveCfg, setModelField, setCfgField, dirty, saving, error, start, cancel, save } = edit;
 
   const model = target.kind === 'model'
     ? (list.find(m => m.id === target.id)
-      || (editing && modelEdits[target.id] ? { ...docsModels(models).find(m => m.id === target.id), ...modelEdits[target.id] } : null))
+      || (editing && modelEdits[target.id] ? { ...baseModels.find(m => m.id === target.id), ...modelEdits[target.id] } : null))
     : null;
   const found = target.kind === 'page'
     ? liveCfg.sections.flatMap(s => s.pages.map(p => [s, p])).find(([, p]) => p.id === target.id)
     : null;
 
   useEffect(() => { if (scroller.current) scroller.current.scrollTop = 0; }, [target.kind, target.id]);
-  useEffect(() => { setEditing(false); setModelEdits({}); setCfgEdit(null); setError(''); }, [target.kind, target.id]);
 
   const setModel = useCallback((key, value) => {
     if (!model) return;
-    setModelEdits(prev => ({ ...prev, [model.id]: { ...(prev[model.id] || {}), [key]: value } }));
-  }, [model]);
-
-  const setCfgKey = useCallback((key, value) => {
-    setCfgEdit(prev => ({ ...docsConfig(prev || cfg), [key]: value }));
-  }, [cfg]);
-
-  const dirty = Object.keys(modelEdits).length > 0 || cfgEdit !== null;
-
-  const cancel = () => { setEditing(false); setModelEdits({}); setCfgEdit(null); setError(''); };
-
-  const save = async () => {
-    setSaving(true);
-    setError('');
-    try {
-      for (const [id, patch] of Object.entries(modelEdits)) {
-        const base = docsModels(models).find(x => x.id === id);
-        if (!base) continue;
-        await api.patch('/api/admin/models/' + id, docsModelPatch({ ...base, ...patch }));
-      }
-      if (cfgEdit) await api.patch('/api/admin/app-config', { modelDocsConfig: cfgEdit });
-      setModelEdits({});
-      setCfgEdit(null);
-      setEditing(false);
-      if (onSaved) await onSaved();
-    } catch (e) {
-      setError(e?.message || t('Could not save these changes.'));
-    } finally {
-      setSaving(false);
-    }
-  };
+    setModelField(model.id, key, value);
+  }, [model, setModelField]);
 
   const openModel = (id) => onNavigate({ kind: 'model', id });
 
@@ -977,16 +889,16 @@ export default function ModelDocs({ models, cfg, target, appName, isAdmin, onTry
         <Edit.Provider value={{ on: editing }}>
           {isAdmin && (
             <EditBar editing={editing} dirty={dirty} saving={saving} error={error}
-              onStart={() => setEditing(true)} onCancel={cancel} onSave={save} />
+              onStart={start} onCancel={cancel} onSave={save} />
           )}
           {target.kind === 'overview' && (
-            <OverviewPage models={list} cfg={liveCfg} setCfg={setCfgKey} onOpen={openModel} appName={appName} onExit={onExit} />
+            <OverviewPage models={list} cfg={liveCfg} setCfg={setCfgField} onOpen={openModel} appName={appName} onExit={onExit} />
           )}
           {target.kind === 'model' && (model
             ? <ModelPage m={model} models={list} cfg={liveCfg} set={setModel} onTry={onTry} onOpen={openModel} appName={appName} onExit={onExit} />
             : <p className="mdoc-sub">{t('That model is no longer listed.')}</p>)}
           {target.kind === 'page' && (found
-            ? <CustomPage page={found[1]} section={found[0]} cfg={liveCfg} setCfg={setCfgKey} appName={appName} onExit={onExit} />
+            ? <CustomPage page={found[1]} section={found[0]} cfg={liveCfg} setCfg={setCfgField} appName={appName} onExit={onExit} />
             : <p className="mdoc-sub">{t('That page is no longer listed.')}</p>)}
           {editing && target.kind !== 'page' && <div className="mdoc-settings-head">{t('Page settings')}</div>}
         </Edit.Provider>

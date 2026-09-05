@@ -308,7 +308,9 @@ function Sidebar({
       ref={sideRef} style={width && !collapsed ? { width } : undefined}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
       {!collapsed && <SideResize targetRef={sideRef} onCommit={setWidth} />}
-      {docs && <DocsNav tree={docs.tree} target={docs.target} onSelect={docs.onSelect} onExit={docs.onExit} appName={appName} appIcon={appIcon} />}
+      {docs && <DocsNav tree={docs.tree} target={docs.target} onSelect={docs.onSelect} onExit={docs.onExit} appName={appName} appIcon={appIcon}
+        editing={docs.editing} onAddTab={docs.onAddTab} onAddPage={docs.onAddPage} onRemoveTab={docs.onRemoveTab}
+        onRemovePage={docs.onRemovePage} onRenameTab={docs.onRenameTab} />}
       {!docs && <>
       <div className="sidebar-head">
         <div className="brand-wrap">

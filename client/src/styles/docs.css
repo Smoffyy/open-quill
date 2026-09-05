@@ -60,6 +60,7 @@
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 14px; line-height: 20px; font-weight: 600; letter-spacing: -.01em;
 }
+.dnav-brand-back { width: 15px; height: 15px; flex-shrink: 0; color: var(--dk-tertiary); transform: rotate(180deg); }
 
 .dnav-searchbox { position: relative; margin: 0 12px 8px; flex-shrink: 0; }
 .dnav-search-ic {
@@ -97,7 +98,34 @@
 .dnav-children { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; padding-left: 16px; }
 .dnav-empty { padding: 6px 8px; font-size: 14px; line-height: 20px; color: var(--dk-tertiary); }
 
+.dnav-heading-edit { display: flex; align-items: center; gap: 4px; width: 100%; }
+.dnav-heading-input {
+  flex: 1; min-width: 0; height: 28px; padding: 0 8px; border: 0; border-radius: 7px;
+  background: var(--dk-fill); color: var(--dk-primary); font-size: 14px; line-height: 20px;
+  font-family: inherit; font-weight: 500;
+}
+.dnav-heading-input::placeholder { color: var(--dk-tertiary); }
+.dnav-heading-input:focus-visible { outline: 2px solid var(--dk-accent); outline-offset: -1px; }
+.dnav-editrow { display: flex; align-items: center; gap: 2px; }
+.dnav-editrow .dnav-item { flex: 1; min-width: 0; }
+.dnav-iconbtn {
+  display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0;
+  color: var(--dk-tertiary); transition: background .12s ease, color .12s ease;
+}
+.dnav-iconbtn:hover { background: var(--dk-fill-hover); color: var(--dk-primary); }
+.dnav-iconbtn svg { width: 15px; height: 15px; }
+.dnav-addbtn {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px;
+  margin-top: 2px; border-radius: 7px; font-size: 14px; line-height: 20px; background: var(--dk-fill-pill);
+  color: var(--dk-primary); box-shadow: inset 0 0 0 1px var(--dk-ring), var(--dk-pill-shadow);
+}
+.dnav-addbtn:hover { background: var(--dk-fill-selected); }
+.dnav-addbtn svg { width: 14px; height: 14px; }
+.dnav-addtab { margin: 0 8px; }
+
 .mdoc-overlay { overflow: hidden; }
+.main:has(.mdoc-overlay) .topbar-actions.home-actions,
+.main:has(.mdoc-overlay) .topbar > .topbar-actions { display: none; }
 .mdoc-page {
   flex: 1; min-height: 0; overflow: hidden auto; scrollbar-width: thin;
   background: var(--dk-page); color: var(--dk-primary); font-family: var(--dk-sans);

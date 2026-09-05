@@ -67,6 +67,7 @@ import { useTurnMeta, liveLedgerTokens } from './lib/turnmeta.js';
 import { useTurnStream } from './lib/turnstream.js';
 import { parseRoute, shouldResetPath, pathForChat, pathForProject } from './lib/route.js';
 import { docsConfig, docsTree, docsPath, parseDocsPath } from './lib/modeldocs.js';
+import { useDocsEdit } from './lib/docsedit.js';
 import { useSocket } from './lib/socket.js';
 const BranchTree = React.lazy(() => import('./components/BranchTree.jsx'));
 import { toast } from './toast.js';
@@ -235,7 +236,30 @@ export default function App() {
   const [focusTick, setFocusTick] = useState(0);
   const [cfg, setCfg] = useState(DEFAULT_CFG);
   const docsCfg = useMemo(() => docsConfig(cfg.modelDocsConfig), [cfg.modelDocsConfig]);
-  const docsNavTree = useMemo(() => docsTree(models, docsCfg), [models, docsCfg]);
+  const docsEdit = useDocsEdit(models, docsCfg, { onSaved: async () => { await loadModels(); await loadAppConfig(); } });
+  const docsNavTree = useMemo(() => docsTree(docsEdit.liveModels, docsEdit.liveCfg, { includeEmpty: docsEdit.editing }),
+    [docsEdit.liveModels, docsEdit.liveCfg, docsEdit.editing]);
+  const docsAddTab = useCallback(() => {
+    docsEdit.setCfgField('sections', [...docsEdit.liveCfg.sections, { id: 'tab-' + Date.now().toString(36), label: '', pages: [] }]);
+  }, [docsEdit]);
+  const docsAddPage = useCallback((sectionId) => {
+    const id = 'page-' + Date.now().toString(36);
+    docsEdit.setCfgField('sections', docsEdit.liveCfg.sections.map(s => (s.id === sectionId
+      ? { ...s, pages: [...s.pages, { id, title: '', subtitle: '', body: '' }] }
+      : s)));
+    onDocsNav({ kind: 'page', id });
+  }, [docsEdit]);
+  const docsRemoveTab = useCallback((sectionId) => {
+    docsEdit.setCfgField('sections', docsEdit.liveCfg.sections.filter(s => s.id !== sectionId));
+  }, [docsEdit]);
+  const docsRemovePage = useCallback((sectionId, pageId) => {
+    docsEdit.setCfgField('sections', docsEdit.liveCfg.sections.map(s => (s.id === sectionId
+      ? { ...s, pages: s.pages.filter(p => p.id !== pageId) }
+      : s)));
+  }, [docsEdit]);
+  const docsRenameTab = useCallback((sectionId, label) => {
+    docsEdit.setCfgField('sections', docsEdit.liveCfg.sections.map(s => (s.id === sectionId ? { ...s, label } : s)));
+  }, [docsEdit]);
   const [authCtx, setAuthCtx] = useState(null);
   const [budget, setBudget] = useState(null);
   const [greeting, setGreeting] = useState(DEFAULT_CFG.greetings[0]);
@@ -1371,7 +1395,11 @@ export default function App() {
         dest={showProjects ? 'projects' : showSpaces ? 'spaces' : chatsOverview ? 'chats' : libPage}
         onArtifacts={onArtifactsCb} onScheduled={onScheduledCb}
         onCustomize={onSkillsCb} onModelDocs={onDocsCb} showModelDocs={cfg.modelDocs !== false} onVersion={onVersionCb}
-        docs={docsTarget ? { tree: docsNavTree, target: docsTarget, onSelect: onDocsNav, onExit: onDocsExit } : null}
+        docs={docsTarget ? {
+          tree: docsNavTree, target: docsTarget, onSelect: onDocsNav, onExit: onDocsExit,
+          editing: user?.isAdmin && docsEdit.editing,
+          onAddTab: docsAddTab, onAddPage: docsAddPage, onRemoveTab: docsRemoveTab, onRemovePage: docsRemovePage, onRenameTab: docsRenameTab
+        } : null}
         onNew={sbNewChat} onOpen={sbOpenChat} onDelete={sbDeleteChat} onToggleStar={sbToggleStar}
         collapsed={collapsed && !docsTarget} onToggle={onToggleSidebarCb}
         mobileOpen={mobileDrawer} onMobileClose={onMobileCloseCb}
@@ -1397,9 +1425,8 @@ export default function App() {
         {docsTarget && (
           <div className="lib-overlay mdoc-overlay" role="region" aria-label={t('Model docs')}>
             <React.Suspense fallback={null}>
-              <ModelDocs models={models} cfg={docsCfg} target={docsTarget} appName={cfg.appName || 'open-quill'}
+              <ModelDocs target={docsTarget} appName={cfg.appName || 'open-quill'} edit={docsEdit}
                 isAdmin={!!user?.isAdmin} onNavigate={onDocsNav} onExit={onDocsExit}
-                onSaved={async () => { await loadModels(); await loadAppConfig(); }}
                 onTry={(id) => { pickModel(id); onDocsExit(); }} />
             </React.Suspense>
           </div>
