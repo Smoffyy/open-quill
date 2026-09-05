@@ -6,6 +6,7 @@ import { Switch } from './settingsui.jsx';
 import { clampPx, overshoot, stretchFor, squashFor, stretchOrigin, slideFor, DRAG_SLOP } from '../lib/dragsteps.js';
 import { paintCells, fadeTrail, stampTrail, headColumn, CELL, CELL_FPS, CELL_SPEED } from '../lib/cellfield.js';
 import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues, isRange, clampToRange, rangeStep, kwargVisible, gateSourceIds } from '../kwargs.js';
+import { useDismiss } from '../lib/dismiss.js';
 
 const CAP_ICONS = [
   { key: 'capText', label: tk('Text-Only'), Icon: TextIcon },
@@ -387,16 +388,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
   const ref = useRef(null);
   const menuRef = useRef(null);
   const listRef = useRef(null);
-  useEffect(() => {
-    const h = (e) => {
-      const el = e.target;
-      if (ref.current && ref.current.contains(el)) return;
-      if (el && typeof el.closest === 'function' && el.closest('.model-submenu')) return;
-      setOpen(false);
-    };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, []);
+  useDismiss(true, () => setOpen(false), ref, { escape: false, inside: '.model-submenu' });
   useEffect(() => { if (!open) setOpenSub(null); }, [open]);
   useEffect(() => {
     if (!open) return undefined;
@@ -462,6 +454,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
     }
   }, [open, models]);
 
+  const hasModels = models.length > 0;
   const current = models.find(m => m.id === currentId);
   const kwDefs = Array.isArray(current?.kwargs) ? current.kwargs : [];
   const selected = { ...(reasoningEffort ? { effort: reasoningEffort } : {}), ...(kwargValues && typeof kwargValues === 'object' ? kwargValues : {}) };
@@ -523,7 +516,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
     <div className="model-select" ref={ref}>
       <button type="button" className={'model-trigger' + (open ? ' on' : '')} onClick={() => setOpen(o => !o)}>
         <span className="mt-label">
-          {current?.displayName || 'Model'}
+          {current?.displayName || (hasModels ? 'Model' : t('No models available'))}
           {chips.length
             ? chips.map((c, i) => <span key={c + i} className="ext">{t(c)}</span>)
             : (extended && current?.hasReasoning && <span className="ext">{t("Extended")}</span>)}
@@ -534,7 +527,14 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
       {open && (
         <div ref={menuRef} className={'model-menu' + (place.sheet ? '' : ' up')} style={menuStyle}>
           <div className="model-main-list" ref={listRef} style={listMaxH ? { maxHeight: listMaxH, overflow: 'hidden auto' } : undefined}>
-            {main.map(renderOpt)}
+            {hasModels ? main.map(renderOpt) : (
+              <div className="model-opt model-empty">
+                <div className="mo-main">
+                  <div className="mo-name">{t('No models available')}</div>
+                  <div className="mo-desc">{t('Ask an admin to add a model to get started.')}</div>
+                </div>
+              </div>
+            )}
           </div>
           {shownKwargs.length ? (
             <>

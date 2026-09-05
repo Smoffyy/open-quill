@@ -234,6 +234,7 @@ export function initWs(server) {
         } finally { live.endTurn(chat.id); }
         maybeUpdateMemory(u.id, model);
       } catch (err) {
+        console.error('[ws chat]', err);
         const send = ownsTurn ? liveSend : safeSend;
         send(JSON.stringify({ type: 'error', chatId: msg.chatId, error: String(err.message || err) }));
         send(JSON.stringify({ type: 'done', chatId: msg.chatId }));

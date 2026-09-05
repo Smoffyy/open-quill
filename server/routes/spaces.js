@@ -1,7 +1,7 @@
 import { db, uid, now } from '../db.js';
 import { authMiddleware } from '../auth.js';
-import { broadcastToUser } from '../lib/ws/index.js';
-import { broadcastSpace, isMember, isAccepted, memberOf, canPost, removeUserFromSpaces, shapeSpace, shapeSpaceMsg, spaceAssistantRespond } from '../lib/spaces.js';
+import { broadcastToUser, broadcastToUsers } from '../lib/ws/index.js';
+import { broadcastSpace, spaceAudience, isMember, isAccepted, memberOf, canPost, removeUserFromSpaces, shapeSpace, shapeSpaceMsg, spaceAssistantRespond } from '../lib/spaces.js';
 
 function ownSpace(req, res, { requireOwner = false } = {}) {
   const s = db.spaces.byId(req.params.id);
@@ -12,8 +12,7 @@ function ownSpace(req, res, { requireOwner = false } = {}) {
 
 export default function registerSpaceRoutes(app) {
   app.get('/api/spaces', authMiddleware, (req, res) => {
-    const mine = db.spaces.filter(s => isMember(s, req.user.id)).sort((a, b) => b.updated_at - a.updated_at);
-    res.json(mine.map(s => shapeSpace(s, req.user.id)));
+    res.json(db.spaces.byMember(req.user.id).map(s => shapeSpace(s, req.user.id)));
   });
 
   app.post('/api/spaces', authMiddleware, (req, res) => {
@@ -43,9 +42,10 @@ export default function registerSpaceRoutes(app) {
 
   app.delete('/api/spaces/:id', authMiddleware, (req, res) => {
     const s = ownSpace(req, res, { requireOwner: true }); if (!s) return;
+    const audience = spaceAudience(s);
     db.spaceMessages.removeWhere('space_id', s.id);
     db.spaces.removeById(s.id);
-    broadcastSpace(s.id, { type: 'space_deleted', spaceId: s.id });
+    broadcastToUsers(audience, { type: 'space_deleted', spaceId: s.id });
     res.json({ ok: true });
   });
 
@@ -95,6 +95,7 @@ export default function registerSpaceRoutes(app) {
   app.delete('/api/spaces/:id/members/:userId', authMiddleware, (req, res) => {
     const s = ownSpace(req, res, { requireOwner: true }); if (!s) return;
     if (req.params.userId === s.owner_id) return res.status(400).json({ error: 'The owner cannot be removed, transfer or delete the space instead.' });
+    if (!isMember(s, req.params.userId)) return res.status(404).json({ error: 'Member not found.' });
     const members = (s.members || []).filter(m => m.userId !== req.params.userId);
     const updated = db.spaces.update(s.id, { members, updated_at: now() });
     broadcastSpace(s.id, { type: 'space_updated', spaceId: s.id, space: shapeSpace(updated, null) });

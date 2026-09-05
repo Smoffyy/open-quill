@@ -27,12 +27,18 @@ export function useAnchoredMenu(open, setOpen, btnRef, menuRef, opts) {
       setOpen(false);
     };
     const close = () => setOpen(false);
-    const onScroll = (e) => { if (!scrollInsideMenu(menuRef.current, e.target)) setOpen(false); };
+    const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
+    const onScroll = (e) => {
+      if (scrollInsideMenu(menuRef.current, e.target)) return;
+      if (btnRef.current && e.target && typeof e.target.contains === 'function' && e.target.contains(btnRef.current)) setOpen(false);
+    };
     document.addEventListener('mousedown', away);
+    document.addEventListener('keydown', esc);
     window.addEventListener('resize', close);
     window.addEventListener('scroll', onScroll, true);
     return () => {
       document.removeEventListener('mousedown', away);
+      document.removeEventListener('keydown', esc);
       window.removeEventListener('resize', close);
       window.removeEventListener('scroll', onScroll, true);
     };
@@ -50,7 +56,9 @@ export function useAnchoredMenu(open, setOpen, btnRef, menuRef, opts) {
     const up = nat > below && above > below;
     const maxH = Math.min(nat, Math.max(120, up ? above : below));
     const top = up ? Math.max(MENU_EDGE, r.top - gap - maxH) : Math.min(r.bottom + gap, vh - MENU_EDGE - maxH);
-    const want = align === 'left' ? r.left : r.right - mw;
+    const want = align === 'left' ? r.left
+      : align === 'center' ? r.left + (r.width - mw) / 2
+      : r.right - mw;
     const left = Math.min(Math.max(MENU_EDGE, want), Math.max(MENU_EDGE, vw - MENU_EDGE - mw));
     setPos({ top: Math.round(top), left: Math.round(left), maxH: nat > maxH ? Math.round(maxH) : 0, minW: mw });
   }, [open]);

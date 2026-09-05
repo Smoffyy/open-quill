@@ -24,42 +24,34 @@ export function applyPrefs(prefs, preset) {
     else localStorage.removeItem('oq-palette');
   } catch {}
   root.setAttribute('data-density', prefs?.density === 'compact' ? 'compact' : 'comfortable');
-  const minimal = !!prefs?.minimalAnims;
-  root.setAttribute('data-entrance', minimal ? 'off' : 'on');
-  root.setAttribute('data-animations', minimal ? 'off' : 'on');
+  root.setAttribute('data-read', prefs?.readWidth === 'wide' ? 'wide' : 'normal');
   const cursorOn = prefs?.streamCursor == null ? p === 'openai' : !!prefs.streamCursor;
   const cursorStyle = prefs?.cursorStyle || (p === 'openai' ? 'circle' : 'block');
   root.setAttribute('data-cursor', cursorOn ? (cursorStyle === 'circle' ? 'circle' : 'block') : 'off');
-  root.setAttribute('data-microfx', minimal ? 'off' : 'on');
-  root.setAttribute('data-composerfx', minimal ? 'off' : 'on');
   root.setAttribute('data-oled', prefs?.oledShift ? 'on' : 'off');
-  root.setAttribute('data-minimal', prefs?.minimalAnims ? 'on' : 'off');
   const blink = Math.max(150, Math.min(2000, parseInt(prefs?.cursorBlinkMs) || 500));
   const pulse = Math.max(300, Math.min(4000, parseInt(prefs?.cursorPulseMs) || 1000));
   root.style.setProperty('--caret-blink', blink + 'ms');
   root.style.setProperty('--caret-cycle', (blink * 2) + 'ms');
   root.style.setProperty('--caret-pulse', pulse + 'ms');
-  if (prefs?.accent) root.style.setProperty('--accent', prefs.accent);
-  else root.style.removeProperty('--accent');
   applyUserFont();
 }
 
-export const ACCENT_PRESETS = ['#d97757', '#4f8ff7', '#46b07a', '#9b6bd8', '#e0567f', '#e0a93c', '#3bb6c4', '#7a8794'];
-
-export const APP_FONTS = new Set(['newsreader', 'sourceserif', 'sans']);
-const LEGACY_FONT_IDS = { __proto__: null, serif: 'newsreader' };
+export const APP_FONTS = new Set(['literata', 'newsreader', 'sourceserif', 'sans']);
+const LEGACY_FONT_IDS = { __proto__: null, serif: 'literata' };
 
 export function appFontId(v) {
   const id = LEGACY_FONT_IDS[v] || v;
-  return APP_FONTS.has(id) ? id : 'newsreader';
+  return APP_FONTS.has(id) ? id : 'literata';
 }
 
 export const USER_FONT_KEY = 'oq-user-font';
 export const USER_FONTS = {
   __proto__: null,
-  newsreader: { stack: "'Newsreader Variable'", weight: 420, strong: 615 },
-  sourceserif: { stack: "'Source Serif 4 Variable'", weight: 465, strong: 680 },
-  sans: { stack: "'Open Sans'", weight: 400, strong: 600 },
+  literata: { stack: "'Literata Variable'", weight: 400, strong: 600, greeting: 290 },
+  newsreader: { stack: "'Newsreader Variable'", weight: 420, strong: 615, greeting: 390 },
+  sourceserif: { stack: "'Source Serif 4 Variable'", weight: 465, strong: 680, greeting: 390 },
+  sans: { stack: "'Open Sans'", weight: 400, strong: 600, greeting: 390 },
 };
 const LEGACY_USER_FONT_IDS = { __proto__: null, serif: 'sourceserif' };
 
@@ -79,11 +71,13 @@ export function applyUserFont(v) {
     root.style.setProperty('--font-serif', pick.stack);
     root.style.setProperty('--prose-weight', String(pick.weight));
     root.style.setProperty('--prose-strong', String(pick.strong));
+    root.style.setProperty('--greeting-weight', String(pick.greeting));
   } else {
     root.style.removeProperty('--font-sans');
     root.style.removeProperty('--font-serif');
     root.style.removeProperty('--prose-weight');
     root.style.removeProperty('--prose-strong');
+    root.style.removeProperty('--greeting-weight');
   }
 }
 export function setUserFont(v) {

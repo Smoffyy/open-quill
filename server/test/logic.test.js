@@ -10,11 +10,14 @@ import {
 } from '../lib/kwargs.js';
 import { parseTextToolCalls, parseArgs, toCall, cutOffOf } from '../tools/index.js';
 import { classifyToolError } from '../lib/toolstats.js';
+import { sanitizeDocsConfig, readDocsConfig, sanitizePairs, sanitizeCards, sanitizeStrList, DOCS_DEFAULTS } from '../lib/modeldocs.js';
+import { parseSkillFile, buildSkillFile, normalizeName, validate } from '../lib/skillfile.js';
 import { cutOffError } from '../lib/prompts.js';
 import { makeToolTextFilter, makeEmitter } from '../llm/emitter.js';
 import { trimInTurn, compactThreshold, estimateTokens, textTokens, makeTokenCounter, truncateForRollingCtx, FALLBACK_CTX } from '../lib/convo.js';
 import { scanTools } from '../toolproto.js';
 import { isContextOverflowError } from '../lib/llamacpp.js';
+import { sanitizeDoc, blankLayoutDoc, normalizeStoreForTest, docDiffCount } from '../lib/theme.js';
 import { winTranslate } from '../sandbox.js';
 import { screenCommand, normalizeRel, compileSearchPattern } from '../lib/sandboxguard.js';
 import { resolveToolName, makeToolResolver, nearestTool, SANDBOX_TOOLS } from '../tools/aliases.js';
@@ -24,7 +27,6 @@ import { preferredChild } from '../lib/tree.js';
 import { looksTextual, isZipOfficeDoc } from '../lib/extract.js';
 import { releaseCandidates, parseManifest } from '../lib/release.js';
 import { remapBrandPath } from '../lib/brand.js';
-import { compareVersions } from '../../check-version-bump.mjs';
 import { samplingParams, parseStop } from '../llm/sampling.js';
 import { PROVIDER_TYPES, isProviderType, providerSpec } from '../providers.js';
 import { slideWithCounter, trimMode } from '../lib/ctxwindow.js';
@@ -32,11 +34,16 @@ import { sameOrigin, sameOriginGuard, requestHost } from '../lib/origin.js';
 import { SETTING_FIELDS, coerceSetting } from '../routes/settings.js';
 import { isText } from '../sandbox/ignore.js';
 import { announcedMoreWork } from '../lib/continuation.js';
+import { openFence, seamFor, steerInstruction } from '../lib/steer.js';
+import { createLoopGuard } from '../lib/loopguard.js';
 import { stops, beginTurn, endTurn } from '../lib/ws/live.js';
 import { historyText } from '../lib/history.js';
 import { bash } from '../sandbox/shell.js';
 import { wireToolCalls, normalizeMessages } from '../llm/wire.js';
 import { unzipBuffer, zipBuffer } from '../sandbox/zip.js';
+import * as sandboxFiles from '../sandbox/files.js';
+import { mcpToolName, MCP_NAME_MAX } from '../mcp.js';
+import { normalizeSchedule, nextRun, isDue } from '../lib/tasks.js';
 
 const asReq = (headers = {}, method = 'POST', localAddress = '10.0.0.5') =>
   ({ method, headers, socket: { localAddress } });
@@ -1624,25 +1631,6 @@ test('remapBrandPath leaves an operator upload alone', () => {
   assert.equal(remapBrandPath('constructor'), 'constructor', 'the table is null-prototyped');
 });
 
-test('compareVersions orders a release above its own prerelease', () => {
-  assert.equal(compareVersions('27.2.0', '27.2.0-beta.5'), 1, 'sort -V gets this backwards');
-  assert.equal(compareVersions('27.2.0-beta.5', '27.2.0'), -1);
-  assert.equal(compareVersions('27.2.0-rc.1', '27.2.0-beta.9'), 1);
-  assert.equal(compareVersions('27.2.0-beta.10', '27.2.0-beta.5'), 1, 'numeric, not lexical');
-  assert.equal(compareVersions('27.2.0-beta.5', '27.2.0-beta.5'), 0);
-});
-
-test('compareVersions orders release numbers before prerelease tails', () => {
-  assert.equal(compareVersions('27.2.0', '27.1.0'), 1);
-  assert.equal(compareVersions('27.1.0', '27.2.0'), -1);
-  assert.equal(compareVersions('28.0.0-beta.1', '27.9.9'), 1);
-});
-
-test('compareVersions ranks prerelease tails alphabetically on the same base', () => {
-  assert.equal(compareVersions('27.1.0-beta.1', '27.1.0-developer.20'), -1, 'beta sorts under developer, so the rename is not a bump');
-  assert.equal(compareVersions('27.1.0-beta.1', '27.0.0'), 1, 'but it still beats the last stable, which is what the guard compares');
-});
-
 // --- continuing a turn the model ended too early -------------------------
 // A step with no tool call ends the turn. When the model announced the next
 // step and then stopped without taking it, that is a stall, not an answer.
@@ -1841,3 +1829,442 @@ test('a file the extension list rejects is still recognised as text by its bytes
 });
 
 
+
+
+test('normalizeSchedule clamps every field and falls back on nonsense', () => {
+  assert.deepEqual(normalizeSchedule(null), { kind: 'daily', hour: 9, minute: 0 });
+  assert.deepEqual(normalizeSchedule({ kind: 'nope' }), { kind: 'daily', hour: 9, minute: 0 });
+  assert.deepEqual(normalizeSchedule({ kind: 'daily', hour: 99, minute: -4 }), { kind: 'daily', hour: 23, minute: 0 });
+  assert.equal(normalizeSchedule({ kind: 'interval', everyMinutes: 1 }).everyMinutes, 5, 'a 1-minute interval is floored to 5');
+  assert.equal(normalizeSchedule({ kind: 'weekly', weekday: 12 }).weekday, 6);
+  assert.equal(normalizeSchedule({ kind: 'daily', hour: 'x' }).hour, 9);
+  assert.equal(normalizeSchedule([]).kind, 'daily', 'an array is not a schedule object');
+});
+
+test('nextRun always lands in the future and on an allowed day', () => {
+  const base = new Date(2026, 7, 21, 12, 0, 0).getTime(); // a Friday, midday
+  const daily = nextRun({ kind: 'daily', hour: 9, minute: 30 }, base);
+  assert.ok(daily > base);
+  assert.equal(new Date(daily).getHours(), 9);
+  assert.equal(new Date(daily).getMinutes(), 30);
+
+  const weekdays = nextRun({ kind: 'weekdays', hour: 8, minute: 0 }, base);
+  const day = new Date(weekdays).getDay();
+  assert.ok(day >= 1 && day <= 5, 'weekdays never resolves to a weekend');
+
+  const weekly = nextRun({ kind: 'weekly', weekday: 3, hour: 16, minute: 0 }, base);
+  assert.equal(new Date(weekly).getDay(), 3);
+  assert.ok(weekly > base);
+
+  assert.equal(nextRun({ kind: 'interval', everyMinutes: 60 }, base), base + 3600000);
+  assert.equal(nextRun({ kind: 'once', at: base - 1000 }, base), 0, 'a past one-shot is not rescheduled');
+  assert.equal(nextRun({ kind: 'once', at: base + 1000 }, base), base + 1000);
+});
+
+test('isDue ignores disabled and unscheduled tasks', () => {
+  const at = 1000;
+  assert.equal(isDue({ enabled: 1, next_run: 999 }, at), true);
+  assert.equal(isDue({ enabled: 1, next_run: 1001 }, at), false);
+  assert.equal(isDue({ enabled: 0, next_run: 1 }, at), false);
+  assert.equal(isDue({ enabled: 1, next_run: 0 }, at), false, 'next_run 0 means never');
+  assert.equal(isDue(null, at), false);
+});
+
+test('a SKILL.md round-trips through parse and build', () => {
+  const body = ['# Brand voice', '', 'Use this when writing.'].join('\n');
+  const file = buildSkillFile({ name: 'Brand Voice!', description: 'Keeps drafts in my voice', body });
+  assert.match(file, /^---\nname: brand-voice\ndescription: Keeps drafts in my voice\n---\n/);
+
+  const back = parseSkillFile(file);
+  assert.equal(back.name, 'brand-voice');
+  assert.equal(back.description, 'Keeps drafts in my voice');
+  assert.equal(back.body, body);
+  assert.equal(back.hasFrontmatter, true);
+});
+
+test('parseSkillFile survives what an uploaded file actually looks like', () => {
+  const bare = parseSkillFile(['# Just a heading', '', 'no frontmatter here'].join('\n'));
+  assert.equal(bare.hasFrontmatter, false);
+  assert.equal(bare.name, '', 'a name is never invented from the body');
+  assert.equal(bare.body, ['# Just a heading', '', 'no frontmatter here'].join('\n'));
+
+  const quoted = parseSkillFile(['---', 'name: "my-skill"', "description: 'quoted, with a comma'", '---', 'body'].join('\n'));
+  assert.equal(quoted.name, 'my-skill', 'quotes are stripped');
+  assert.equal(quoted.description, 'quoted, with a comma');
+
+  const folded = parseSkillFile(['---', 'name: wrapped', 'description: first line', '  continued on the next', '---', 'body'].join('\n'));
+  assert.equal(folded.description, 'first line continued on the next', 'an indented continuation folds into the value');
+
+  const crlf = parseSkillFile(['---', 'name: crlf-skill', 'description: d', '---', 'body'].join('\r\n'));
+  assert.equal(crlf.name, 'crlf-skill', 'CRLF frontmatter parses');
+
+  const bom = parseSkillFile('﻿' + ['---', 'name: bom-skill', 'description: d', '---', 'body'].join('\n'));
+  assert.equal(bom.name, 'bom-skill', 'a leading BOM does not hide the frontmatter');
+
+  const proto = parseSkillFile(['---', 'name: ok-name', 'constructor: nope', '---', 'body'].join('\n'));
+  assert.equal(proto.name, 'ok-name', 'a frontmatter key named constructor cannot reach Object.prototype');
+});
+
+test('skill names are normalised and validated at the boundary', () => {
+  assert.equal(normalizeName('  My Skill!!  '), 'my-skill');
+  assert.equal(normalizeName('---a---'), 'a');
+  assert.equal(normalizeName('Skill 2.0'), 'skill-2-0');
+
+  assert.ok(validate({ name: 'x', body: 'b' }).error, 'a one-character name is refused');
+  assert.ok(validate({ name: 'ok-name', body: '   ' }).error, 'empty instructions are refused');
+  assert.ok(validate({ name: 'taken', body: 'b' }, ['taken']).error, 'a duplicate name is refused');
+
+  const ok = validate({ name: 'Good Name', description: ['line one', 'line two'].join('\n'), body: 'b' });
+  assert.equal(ok.name, 'good-name');
+  assert.equal(ok.description, 'line one line two', 'a description never carries a newline into the frontmatter');
+  assert.equal(ok.enabled, true);
+});
+
+test('openFence tracks which code fence is still open', () => {
+  assert.equal(openFence(''), null);
+  assert.equal(openFence('just prose'), null);
+  assert.deepEqual(openFence('```js\nconst a = 1;'), { mark: '`', len: 3 });
+  assert.equal(openFence('```js\nconst a = 1;\n```'), null, 'a matching close ends it');
+  assert.deepEqual(openFence('~~~\nyaml: here'), { mark: '~', len: 3 }, 'tildes open a fence too');
+  assert.deepEqual(openFence('```\na\n~~~'), { mark: '`', len: 3 }, 'the other character does not close it');
+  assert.equal(openFence('````\na\n`````'), null, 'a longer closing run is still a close');
+  assert.deepEqual(openFence('`````\na\n```'), { mark: '`', len: 5 }, 'but a shorter one is not');
+  assert.deepEqual(openFence('```js\na\n``` trailing'), { mark: '`', len: 3 }, 'a close may not carry text');
+  assert.equal(openFence('   ```\na\n   ```'), null, 'up to three spaces of indent is still a fence');
+  assert.equal(openFence('Use ``` to open a block.'), null, 'a backtick run inside a sentence is not a fence');
+  assert.deepEqual(openFence('```\na\n```\n```py\nb'), { mark: '`', len: 3 }, 'the last one wins');
+});
+
+test('seamFor closes the reply off so the next block starts clean', () => {
+  assert.equal(seamFor(''), '', 'nothing written, nothing to close');
+  assert.equal(seamFor('   \n  '), '', 'whitespace only is nothing written');
+  assert.equal(seamFor('half a senten'), '\n\n', 'finish the line, then leave a blank one');
+  assert.equal(seamFor('done.\n'), '\n', 'already at a line end, so only the blank line');
+  assert.equal(seamFor('done.\n\n'), '', 'already separated');
+  assert.equal(seamFor('```js\nconst a = 1;'), '\n```\n\n', 'an open fence is closed before the blank line');
+  assert.equal(seamFor('~~~\nkey: val'), '\n~~~\n\n', 'with the character it was opened with');
+  assert.equal(seamFor('````\nx'), '\n````\n\n', 'and at the length it was opened with');
+  assert.match(seamFor('```js\nconst a = 1;'), /\n$/, 'a seam always ends on a new line');
+});
+
+test('a steer tells the model whether anything is already on screen', () => {
+  const before = steerInstruction(['be terser'], false, false);
+  assert.match(before, /Before you wrote anything/);
+  assert.match(before, /- be terser/);
+  assert.doesNotMatch(before, /cannot be taken back/, 'nothing to warn about yet');
+
+  const during = steerInstruction(['be terser', 'use python'], true, false);
+  assert.match(during, /interrupted you mid-reply/);
+  assert.match(during, /- be terser\n- use python/, 'every note is listed');
+  assert.match(during, /closed off cleanly/);
+
+  const inBlock = steerInstruction(['stop'], true, true);
+  assert.match(inBlock, /do not write a closing fence/, 'the seam already closed it');
+});
+
+test('the loop guard stops a turn repeating one failing call', () => {
+  const g = createLoopGuard();
+  const call = [{ name: 'bash', argsText: '{"cmd":"nope"}' }];
+  assert.equal(g.note({ calls: call, ok: 0, failed: 1, failKinds: ['bash:not_found'] }), false, 'once is not a loop');
+  assert.equal(g.note({ calls: call, ok: 0, failed: 1, failKinds: ['bash:not_found'] }), true, 'the identical call twice is');
+});
+
+test('the loop guard catches the same failure behind wobbling arguments', () => {
+  const g = createLoopGuard();
+  const kinds = ['bash:not_found'];
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'a' }], ok: 0, failed: 1, failKinds: kinds }), false);
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'b' }], ok: 0, failed: 1, failKinds: kinds }), false);
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'c' }], ok: 0, failed: 1, failKinds: kinds }), true);
+});
+
+test('the loop guard resets the moment anything works', () => {
+  const g = createLoopGuard();
+  const kinds = ['bash:not_found'];
+  g.note({ calls: [{ name: 'bash', argsText: 'a' }], ok: 0, failed: 1, failKinds: kinds });
+  g.note({ calls: [{ name: 'bash', argsText: 'b' }], ok: 0, failed: 1, failKinds: kinds });
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'c' }], ok: 1, failed: 0, failKinds: [] }), false,
+    'a successful step is progress');
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'd' }], ok: 0, failed: 1, failKinds: kinds }), false,
+    'and the count started over');
+});
+
+test('the loop guard leaves a step that failed differently each time alone', () => {
+  const g = createLoopGuard();
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'a' }], ok: 0, failed: 1, failKinds: ['bash:not_found'] }), false);
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'b' }], ok: 0, failed: 1, failKinds: ['bash:timeout'] }), false);
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'c' }], ok: 0, failed: 1, failKinds: ['bash:blocked'] }), false,
+    'a model working through different problems is making progress');
+});
+
+test('the loop guard ignores a step that made no calls at all', () => {
+  const g = createLoopGuard();
+  assert.equal(g.note({ calls: [], ok: 0, failed: 0, failKinds: [] }), false);
+  assert.equal(g.note({ calls: [], ok: 0, failed: 0, failKinds: [] }), false, 'no calls is not a failing loop');
+});
+
+test('the client and server copies of the tool protocol stay byte-identical', () => {
+  // Both sides parse the same wire format: the server records tool calls with scanTools
+  // and the client renders them with its own copy. If the two drift, a call the model
+  // makes is stored one way and drawn another, so the copies are compared here.
+  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  const repo = path.dirname(root);
+  const server = fs.readFileSync(path.join(root, 'toolproto.js'), 'utf8');
+  const client = fs.readFileSync(path.join(repo, 'client', 'src', 'toolproto.js'), 'utf8');
+  assert.equal(client, server, 'client/src/toolproto.js and server/toolproto.js must be kept identical');
+});
+
+/* ---------- theme documents ---------- */
+
+test('a theme document only keeps properties the builder can produce', () => {
+  const doc = sanitizeDoc({
+    basePreset: 'openai',
+    tokens: { color: { accent: '#4f9cf9' }, bogus: { x: 'y' } },
+    content: { 'nav.new': 'Start', '  ': 'dropped' },
+    elements: {
+      greeting: { style: { fontSize: '40px', position: 'fixed', notACssProp: '1' }, hidden: true, order: 3 },
+      empty: { style: {} }
+    },
+    slots: { 'sidebar.top': [{ id: 'n1', type: 'note', props: { text: 'hi' } }] },
+    css: '.x { color: red }'
+  });
+  assert.equal(doc.basePreset, 'openai');
+  // An unrecognised group is carried, not dropped: the client registry decides
+  // what renders, so an older server must still be able to hold a newer theme.
+  assert.deepEqual(doc.tokens, { color: { accent: '#4f9cf9' }, bogus: { x: 'y' } });
+  assert.deepEqual(doc.content, { 'nav.new': 'Start' });
+  assert.deepEqual(doc.elements.greeting.style, { fontSize: '40px', position: 'fixed' });
+  assert.equal(doc.elements.greeting.hidden, true);
+  assert.equal(doc.elements.greeting.order, 3);
+  assert.equal('empty' in doc.elements, false, 'an element with nothing set is not stored');
+  assert.equal(doc.slots['sidebar.top'][0].type, 'note');
+});
+
+test('a theme document cannot smuggle anything out of a css declaration', () => {
+  const doc = sanitizeDoc({
+    elements: {
+      greeting: {
+        style: {
+          color: 'red} body{display:none',
+          background: 'url(https://evil.example/x.png)',
+          fontFamily: 'a; behavior: url(x)',
+          borderColor: 'expression(alert(1))',
+          backgroundImage: 'javascript:alert(1)'
+        }
+      }
+    }
+  });
+  assert.equal(doc.elements.greeting, undefined, 'every unsafe value is dropped, leaving nothing to store');
+});
+
+test('a theme document survives a hostile shape without throwing', () => {
+  for (const raw of [null, 'nope', 42, [], { elements: 'x', tokens: [], slots: 7, content: null }]) {
+    const doc = sanitizeDoc(raw);
+    assert.deepEqual(doc.elements, {});
+    assert.deepEqual(doc.tokens, {});
+    assert.deepEqual(doc.slots, {});
+    assert.equal(doc.basePreset, 'anthropic', 'an unrecognised preset falls back rather than propagating');
+  }
+});
+
+test('theme element states and breakpoints are limited to the ones the inspector offers', () => {
+  const doc = sanitizeDoc({
+    elements: {
+      navItem: {
+        states: { hover: { color: '#fff' }, onMars: { color: '#f00' } },
+        responsive: { mobile: { hidden: true }, watch: { hidden: true } },
+        animation: { name: 'fade', duration: 99999, delay: -5, easing: 'ease-out' }
+      }
+    }
+  });
+  const el = doc.elements.navItem;
+  assert.deepEqual(Object.keys(el.states), ['hover']);
+  assert.deepEqual(Object.keys(el.responsive), ['mobile']);
+  assert.equal(el.animation.duration, 5000, 'a duration is capped rather than rejected');
+  assert.equal(el.animation.delay, 0);
+});
+
+test('the unpublished counter counts what actually differs, not what a theme sets', () => {
+  const published = { elements: { sidebar: { style: { width: '260px', color: 'red' } } }, tokens: { color: { accent: '#111' } } };
+  // Same document, so an admin who has published everything is told exactly that
+  // rather than being shown the size of their design.
+  assert.equal(docDiffCount(published, JSON.parse(JSON.stringify(published))), 0);
+
+  const staged = { elements: { sidebar: { style: { width: '300px', color: 'red' }, hidden: true } }, tokens: { color: { accent: '#111' } } };
+  assert.equal(docDiffCount(published, staged), 2);
+
+  // A theme that has never been published counts as entirely new.
+  assert.equal(docDiffCount({}, published), 3);
+});
+
+test('the Blank layout ships as a preset that keeps a member’s own theme working', () => {
+  const doc = blankLayoutDoc();
+  assert.equal(doc.basePreset, 'anthropic', 'Blank is the plain preset with its decoration turned down');
+  assert.ok(Object.keys(doc.elements).length > 5);
+  // A literal colour would freeze the interface into one palette and make the
+  // light/dark preference inert, which is the one thing a base layout must not do.
+  const values = [
+    ...Object.values(doc.tokens).flatMap(g => Object.values(g)),
+    ...Object.values(doc.elements).flatMap(el => Object.values(el.style || {}))
+  ];
+  for (const v of values) {
+    assert.ok(!/#[0-9a-f]{3,8}\b|\brgba?\(|\bhsla?\(/i.test(v), 'Blank must not hardcode a colour, found: ' + v);
+  }
+});
+
+test('an existing workspace picks up a builtin layout it predates', () => {
+  const older = { v: 1, activeId: 'anthropic', themes: [
+    { id: 'anthropic', name: 'Anthropic', basePreset: 'anthropic', builtin: true, doc: {} },
+    { id: 'openai', name: 'OpenAI', basePreset: 'openai', builtin: true, doc: {} }
+  ] };
+  const store = normalizeStoreForTest(older);
+  const ids = store.themes.map(t => t.id);
+  assert.ok(ids.includes('blank'), 'the seed list is what decides which layouts ship');
+  assert.equal(store.activeId, 'anthropic', 'topping up never changes which theme is live');
+  assert.equal(store.themes.find(t => t.id === 'anthropic').note, 'The native layout',
+    'a builtin blurb comes from the seed list, not from whatever an older store saved');
+});
+
+test('extractZip: the entry cap counts dependency files too', async () => {
+  // The regression: files under node_modules/dist/.git are hidden from listings,
+  // so the counter that enforced the 5000-entry cap never grew for them. A zip of
+  // a project folder with its dependencies wrote every entry, bounded only by the
+  // byte cap - which for thousands of tiny files is no bound at all.
+  const chatId = 'ziptest-' + Date.now();
+  const entries = [];
+  for (let i = 0; i < 6000; i++) entries.push({ name: `node_modules/pkg${i}/index.js`, data: Buffer.from('x') });
+  entries.push({ name: 'app.js', data: Buffer.from('real file') });
+
+  const zipPath = 'bundle.zip';
+  sandboxFiles.importBuffer(chatId, zipPath, zipBuffer(entries));
+  const r = sandboxFiles.extractZip(chatId, zipPath);
+  try {
+    assert.equal(r.ok, true);
+    assert.ok(r.deps <= 5000, `wrote ${r.deps} dependency files, expected the 5000 cap to hold`);
+    assert.ok(r.skipped !== 0 || r.note, 'the caller is told entries were skipped');
+    const listed = sandboxFiles.list(chatId, { all: true });
+    assert.ok(listed.length <= 5002, `${listed.length} files on disk, expected the cap to bound it`);
+  } finally {
+    sandboxFiles.remove(chatId);
+  }
+});
+
+test('extractZip: an ordinary archive still extracts whole', async () => {
+  const chatId = 'ziptest2-' + Date.now();
+  sandboxFiles.importBuffer(chatId, 'small.zip', zipBuffer([
+    { name: 'a.txt', data: Buffer.from('hello') },
+    { name: 'src/b.js', data: Buffer.from('const x = 1;') },
+    { name: 'node_modules/dep/i.js', data: Buffer.from('dep') }
+  ]));
+  const r = sandboxFiles.extractZip(chatId, 'small.zip');
+  try {
+    assert.equal(r.ok, true);
+    assert.equal(r.count, 2, 'two listed files');
+    assert.equal(r.deps, 1, 'the dependency file was written but hidden');
+    assert.equal(sandboxFiles.readText(chatId, 'a.txt'), 'hello');
+    assert.equal(sandboxFiles.readText(chatId, 'node_modules/dep/i.js'), 'dep');
+  } finally {
+    sandboxFiles.remove(chatId);
+  }
+});
+
+test('copyFile stamps every file in a copied directory', async () => {
+  const chatId = 'copytest-' + Date.now();
+  sandboxFiles.createFile(chatId, 'src/a.txt', 'A');
+  sandboxFiles.createFile(chatId, 'src/deep/b.txt', 'B');
+  sandboxFiles.createFile(chatId, 'unrelated.txt', 'C');
+  const r = sandboxFiles.copyFile(chatId, 'src', 'copy');
+  try {
+    assert.equal(r.ok, true);
+    assert.equal(r.count, 2, 'both files under the copy were versioned, and nothing outside it');
+    assert.equal(sandboxFiles.readText(chatId, 'copy/a.txt'), 'A');
+    assert.equal(sandboxFiles.readText(chatId, 'copy/deep/b.txt'), 'B');
+  } finally {
+    sandboxFiles.remove(chatId);
+  }
+});
+
+test('mcpToolName: an ordinary name is just the prefix and the tool', () => {
+  assert.equal(mcpToolName('files', 'read'), 'mcp_files_read');
+  assert.ok(mcpToolName('files', 'read').length <= MCP_NAME_MAX);
+});
+
+test('mcpToolName: two long names on one server stay distinct', () => {
+  // The regression: plain truncation collapsed these into one string, so the
+  // model saw two identical function names and the second tool was unreachable.
+  const slug = 'acme_data_platform_v2';
+  const a = mcpToolName(slug, 'fetch_customer_subscription_billing_history_detailed');
+  const b = mcpToolName(slug, 'fetch_customer_subscription_billing_history_summary');
+  assert.notEqual(a, b);
+  assert.ok(a.length <= MCP_NAME_MAX, `${a.length} chars`);
+  assert.ok(b.length <= MCP_NAME_MAX, `${b.length} chars`);
+});
+
+test('mcpToolName is stable, so the same tool keeps the same name', () => {
+  const once = mcpToolName('s', 'x'.repeat(90));
+  const twice = mcpToolName('s', 'x'.repeat(90));
+  assert.equal(once, twice);
+});
+
+test('mcpToolName never exceeds the cap, whatever it is given', () => {
+  for (const slug of ['a', 'a'.repeat(24)]) {
+    for (const tool of ['b', 'b'.repeat(80), 'weird_name_' + 'z'.repeat(200)]) {
+      assert.ok(mcpToolName(slug, tool).length <= MCP_NAME_MAX, `${slug}/${tool.length}`);
+    }
+  }
+});
+
+test('sanitizeDocsConfig fills every field from the defaults', () => {
+  const c = sanitizeDocsConfig(null);
+  assert.equal(c.title, DOCS_DEFAULTS.title);
+  assert.equal(c.navLabel, 'Models');
+  assert.equal(c.featureLabel, 'Feature');
+  assert.equal(c.tilesTitle, 'Get started');
+  assert.equal(c.outro, '');
+  assert.deepEqual(c.sections, []);
+  assert.deepEqual(c.links, []);
+  assert.deepEqual(c.tiles, []);
+});
+
+test('sanitizeDocsConfig keeps the overview tiles an admin wrote, and drops untitled ones', () => {
+  const c = sanitizeDocsConfig({ tiles: [{ title: 'Quickstart', desc: 'First call', url: '/docs' }, { desc: 'no title' }] });
+  assert.deepEqual(c.tiles, [{ title: 'Quickstart', desc: 'First call', url: '/docs' }]);
+});
+
+test('sanitizeDocsConfig derives a page id from the title and keeps ids unique', () => {
+  const c = sanitizeDocsConfig({
+    sections: [{ label: 'Guides', pages: [{ title: 'Choosing a Model' }, { title: 'Choosing a model' }, {}] }]
+  });
+  assert.deepEqual(c.sections[0].pages.map(p => p.id), ['choosing-a-model', 'choosing-a-model-1', 'page-3']);
+  assert.equal(c.sections[0].id, 'guides');
+  assert.equal(c.sections[0].pages[2].title, 'Untitled');
+});
+
+test('sanitizeDocsConfig caps the shape a client can send', () => {
+  const c = sanitizeDocsConfig({
+    title: 'x'.repeat(400),
+    sections: Array.from({ length: 40 }, (_, i) => ({ label: 'S' + i, pages: [] })),
+    links: Array.from({ length: 40 }, () => ({ label: 'l', url: 'u' }))
+  });
+  assert.equal(c.title.length, 120);
+  assert.equal(c.sections.length, 12);
+  assert.equal(c.links.length, 8);
+});
+
+test('sanitizeDocsConfig drops a link with no label, and marks external ones', () => {
+  const c = sanitizeDocsConfig({ links: [{ label: '', url: 'https://x' }, { label: 'Docs', url: '/docs', ext: 1 }] });
+  assert.deepEqual(c.links, [{ label: 'Docs', url: '/docs', ext: true }]);
+});
+
+test('readDocsConfig parses a stored JSON string and survives a corrupt one', () => {
+  assert.equal(readDocsConfig(() => JSON.stringify({ navLabel: 'Engines' })).navLabel, 'Engines');
+  assert.equal(readDocsConfig(() => '{not json').navLabel, 'Models');
+  assert.equal(readDocsConfig(() => null).navLabel, 'Models');
+});
+
+test('per-model docs lists drop empty rows and cap their length', () => {
+  assert.deepEqual(sanitizePairs([{ label: '', value: '' }, { label: 'Chat', value: 'x' }]), [{ label: 'Chat', value: 'x' }]);
+  assert.equal(sanitizePairs(Array.from({ length: 40 }, () => ({ label: 'a' }))).length, 12);
+  assert.deepEqual(sanitizeCards([{ desc: 'no title' }, { title: 'T', desc: 'D', url: 'U' }]), [{ title: 'T', desc: 'D', url: 'U' }]);
+  assert.deepEqual(sanitizeStrList(['  a ', '', 'b']), ['a', 'b']);
+  assert.deepEqual(sanitizeStrList('not an array'), []);
+});

@@ -3,10 +3,12 @@ import { authMiddleware, adminOnly } from '../auth.js';
 import { getProviders, resolveProvider, providerSpec } from '../providers.js';
 import { matchPreset, presetList, setCustomPresets, getCustomPresets } from '../pricing.js';
 import { logAudit } from '../lib/audit.js';
-import { draftModels, publicModels, detectContextLength } from '../lib/models.js';
+import { promoteDrafts, hasDrafts } from '../lib/draft.js';
+import { draftModels, publicModels, detectContextLength, timedFetch } from '../lib/models.js';
 import { sanitizeKwargs } from '../lib/kwargs.js';
 import { broadcastConfig, broadcastAdminConfig } from '../lib/ws/index.js';
 import { ROUTE_MATCHERS } from '../lib/router.js';
+import { DOCS_MODEL_STR, DOCS_MODEL_BOOL, DOCS_MODEL_INT, DOCS_MODEL_FLOAT, DOCS_BADGES, sanitizePairs, sanitizeCards, sanitizeDocsLinks, sanitizeStrList } from '../lib/modeldocs.js';
 
 function sanitizeRouterRules(raw) {
   const list = Array.isArray(raw) ? raw : [];
@@ -45,12 +47,12 @@ export default function registerModelRoutes(app) {
       const headers = key ? { Authorization: `Bearer ${key}` } : {};
       let ids = [];
       if (spec.protocol === 'ollama') {
-        const r = await fetch(base.replace(/\/v1$/, '') + '/api/tags', { headers });
+        const r = await timedFetch(base.replace(/\/v1$/, '') + '/api/tags', { headers });
         if (!r.ok) return res.status(502).json({ error: `Backend returned ${r.status}.` });
         const j = await r.json().catch(() => ({}));
         ids = (Array.isArray(j?.models) ? j.models : []).map(x => x?.name || x?.model).filter(Boolean);
       } else {
-        const r = await fetch(base + '/models', { headers });
+        const r = await timedFetch(base + '/models', { headers });
         if (!r.ok) return res.status(502).json({ error: `Backend returned ${r.status}.` });
         const j = await r.json().catch(() => ({}));
         const raw = Array.isArray(j?.data) ? j.data : (Array.isArray(j?.models) ? j.models : []);
@@ -106,8 +108,8 @@ export default function registerModelRoutes(app) {
   app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
     const cur = db.models.byId(req.params.id);
     if (!cur) return res.status(404).json({ error: 'not found' });
-    const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'call_prompt', 'end_chat_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id', 'bg_image', 'effort_kwarg', 'effort_default', 'docs_cutoff', 'docs_body', 'docs_image', 'docs_icon'];
-    const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'show_name', 'skills_allowed', 'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'long_convo_reminder', 'effort_enabled', 'effort_admin_only', 'hide_thinking', 'docs_featured', 'docs_in_text', 'docs_in_image', 'docs_in_audio', 'docs_in_video', 'docs_out_text', 'docs_out_image', 'docs_out_audio', 'docs_out_video'];
+    const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'call_prompt', 'end_chat_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id', 'bg_image', 'effort_kwarg', 'effort_default', ...DOCS_MODEL_STR];
+    const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'show_name', 'skills_allowed', 'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'long_convo_reminder', 'effort_enabled', 'effort_admin_only', 'hide_thinking', ...DOCS_MODEL_BOOL];
     const patch = {};
     for (const k of str) if (k in req.body) patch[k] = req.body[k];
     for (const k of bool) if (k in req.body) patch[k] = req.body[k] ? 1 : 0;
@@ -119,6 +121,12 @@ export default function registerModelRoutes(app) {
       const v = String(req.body.sunset_action || '');
       patch.sunset_action = v === 'unavailable' ? 'unavailable' : 'hide';
     }
+    if ('docs_badge' in patch) patch.docs_badge = DOCS_BADGES.has(patch.docs_badge) ? patch.docs_badge : '';
+    if ('docs_ids' in req.body) patch.docs_ids = sanitizePairs(req.body.docs_ids);
+    if ('docs_platforms' in req.body) patch.docs_platforms = sanitizeStrList(req.body.docs_platforms);
+    if ('docs_links' in req.body) patch.docs_links = sanitizeDocsLinks(req.body.docs_links);
+    if ('docs_resources' in req.body) patch.docs_resources = sanitizeCards(req.body.docs_resources);
+    if ('docs_reference' in req.body) patch.docs_reference = sanitizeCards(req.body.docs_reference);
     if ('kind' in req.body) patch.kind = req.body.kind === 'router' ? 'router' : 'model';
     if ('router_default' in req.body) patch.router_default = String(req.body.router_default || '');
     if ('router_rules' in req.body) patch.router_rules = sanitizeRouterRules(req.body.router_rules);
@@ -136,8 +144,8 @@ export default function registerModelRoutes(app) {
     if ('ctx_trim_mode' in req.body) patch.ctx_trim_mode = req.body.ctx_trim_mode === 'cache' ? 'cache' : 'retain';
     if ('stop' in req.body) patch.stop = sanitizeStop(req.body.stop);
     const numF = ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'repetition_penalty', 'min_p', 'cost_in', 'cost_out',
-      'dry_multiplier', 'dry_base', 'xtc_probability', 'xtc_threshold', 'mirostat_tau', 'mirostat_eta'];
-    const numI = ['top_k', 'seed', 'max_tokens', 'docs_intelligence', 'docs_speed', 'docs_max_output',
+      'dry_multiplier', 'dry_base', 'xtc_probability', 'xtc_threshold', 'mirostat_tau', 'mirostat_eta', ...DOCS_MODEL_FLOAT];
+    const numI = ['top_k', 'seed', 'max_tokens', ...DOCS_MODEL_INT,
       'dry_allowed_length', 'dry_penalty_last_n', 'mirostat'];
     for (const k of numF) if (k in req.body) { const v = req.body[k]; patch[k] = (v === '' || v == null || isNaN(Number(v))) ? null : Number(v); }
     for (const k of numI) if (k in req.body) { const v = req.body[k]; patch[k] = (v === '' || v == null || isNaN(parseInt(v))) ? null : parseInt(v); }
@@ -206,17 +214,21 @@ export default function registerModelRoutes(app) {
   app.post('/api/admin/models/publish', authMiddleware, adminOnly, (req, res) => {
     const snapshot = db.models.all();
     setSetting('published_models', snapshot);
+    // Staged settings and app-config become live in the same step, so one button
+    // means one coherent state rather than a catalog that leads its own config.
+    const promoted = promoteDrafts();
     setSetting('published_at', now());
-    logAudit(req, 'models.publish', { meta: { count: snapshot.length } });
+    logAudit(req, 'config.publish', { meta: { models: snapshot.length, settings: promoted.length } });
     broadcastConfig();
-    res.json({ ok: true, count: snapshot.length, publishedAt: getSetting('published_at') });
+    res.json({ ok: true, count: snapshot.length, settings: promoted.length, publishedAt: getSetting('published_at') });
   });
 
   // has the draft diverged from what is published?
   app.get('/api/admin/models/publish-state', authMiddleware, adminOnly, (req, res) => {
     const snap = getSetting('published_models', null);
     const published = Array.isArray(snap);
-    const dirty = !published || JSON.stringify(snap) !== JSON.stringify(db.models.all());
-    res.json({ published, dirty, publishedAt: getSetting('published_at', null) });
+    const staged = hasDrafts();
+    const dirty = !published || staged || JSON.stringify(snap) !== JSON.stringify(db.models.all());
+    res.json({ published, dirty, staged, publishedAt: getSetting('published_at', null) });
   });
 }

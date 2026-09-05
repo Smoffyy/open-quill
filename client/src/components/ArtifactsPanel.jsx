@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FileText, Download, Search, X, Panel, Folder, Menu, Chevron, ChevDown } from './icons.jsx';
+import { FileText, Download, Search, X, Folder, Menu, Chevron, ChevDown, Expand, Collapse } from './icons.jsx';
 import { t } from '../i18n.jsx';
 import Viewer from './artifacts/Viewer.jsx';
 import FileTree, { FileCard } from './artifacts/FileTree.jsx';
@@ -17,8 +17,9 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
   const [filter, setFilter] = useState('');
   const [tree, setTree] = useState(() => localStorage.getItem('oq-art-flat') !== '1');
   const [closed, setClosed] = useState(() => new Set());
-  const [width, setWidth] = useState(() => { const s = parseInt(localStorage.getItem('oq-art-w')); return s ? clampW(s) : Math.min(480, Math.round(window.innerWidth * 0.42)); });
+  const [width, setWidth] = useState(null);
   const [resizing, setResizing] = useState(false);
+  const [full, setFull] = useState(false);
   const dragRef = useRef(null);
 
   const byPath = new Map(files.map(f => [f.path, f]));
@@ -31,9 +32,11 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
     if (toRight) setSplit(path); else setActive(path);
   }, [focusedPane, split]);
 
-  const goOverview = useCallback(() => { setActive(null); setSplit(null); setFocusedPane('left'); }, []);
+  const goOverview = useCallback(() => { setActive(null); setSplit(null); setFocusedPane('left'); setFull(false); }, []);
 
   useEffect(() => { setActive(null); setSplit(null); setClosed(new Set()); }, [chatId]);
+  // switching between the list and a file returns to that view's own width
+  useEffect(() => { setWidth(null); }, [active == null]);
   useEffect(() => { if (focus && focus.path) { setActive(focus.path); setFocusedPane('left'); } }, [focus]);
   useEffect(() => {
     const exists = (p) => p && byPath.has(p);
@@ -80,7 +83,7 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
       document.body.style.cursor = ''; document.body.style.userSelect = '';
       if (raf) cancelAnimationFrame(raf);
       setResizing(false);
-      if (nextW != null) { setWidth(nextW); localStorage.setItem('oq-art-w', String(nextW)); }
+      if (nextW != null) setWidth(nextW);
     };
     document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
     document.addEventListener('touchmove', move, { passive: false }); document.addEventListener('touchend', up);
@@ -116,17 +119,22 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
     setClosed(c => (allDirPaths(root).every(p => c.has(p)) ? new Set() : new Set(allDirPaths(root))));
   }, [root]);
 
-  const splitBtn = <button className="art-btn icon" onClick={() => { setSplit(active); setFocusedPane('right'); }} title={t("Split view")}><Panel style={{ width: 15 }} /></button>;
+  const fullBtn = (
+    <button className="art-btn icon" onClick={() => setFull(f => !f)} title={full ? t('Exit full screen') : t('Full screen')}
+      aria-label={full ? t('Exit full screen') : t('Full screen')} aria-pressed={full}>
+      {full ? <Collapse style={{ width: 15 }} /> : <Expand style={{ width: 15 }} />}
+    </button>
+  );
   const closeSplitBtn = <button className="art-btn icon" onClick={() => { setSplit(null); setFocusedPane('left'); }} title={t("Close split")}><X style={{ width: 14 }} /></button>;
 
   return (
-    <div className={'artifacts' + (resizing ? ' resizing' : '')} style={{ width }}>
+    <div className={'artifacts' + (resizing ? ' resizing' : '') + (active != null ? ' viewing' : '') + (full ? ' full' : '')} style={width && !full ? { width } : undefined}>
       <div className="art-resizer" onMouseDown={startResize} onTouchStart={startResize} ref={dragRef} title={t("Drag to resize")}><span /></div>
       {active != null ? (
         <div className={'art-panes' + (split ? ' split' : '')}>
           <div className={'art-pane' + (focusedPane === 'left' || !split ? ' focused' : '')}>
             <MemoViewer {...paneProps(active)} onBack={goOverview} canBack
-              headerExtra={<>{!split && splitBtn}<button className="art-btn icon" onClick={onClose} title={t("Close panel")}><X style={{ width: 15 }} /></button></>}
+              headerExtra={<>{fullBtn}<button className="art-btn icon" onClick={onClose} title={t("Close panel")}><X style={{ width: 15 }} /></button></>}
               onFocusPane={() => setFocusedPane('left')} />
           </div>
           {split && (

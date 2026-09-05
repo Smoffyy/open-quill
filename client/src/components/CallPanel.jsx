@@ -1,16 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { voiceSubscribe, setVoiceActive, transcribeBlob, fetchSpeech, cleanForSpeech, extractSentences } from '../voice.js';
-import { Mic, X } from './icons.jsx';
 import { t } from '../i18n.jsx';
 
 const MODES = { listening: 'Listening…', hearing: 'Listening…', thinking: 'Thinking…', speaking: 'Speaking' };
 
-export default function CallPanel({ chatId, model, voice, onSendText, onClose }) {
+export default function CallPanel({ chatId, model, voice, active = true, onSendText }) {
   const [mode, setMode] = useState('connecting');
-  const [muted, setMuted] = useState(false);
   const [err, setErr] = useState('');
-  const [lastHeard, setLastHeard] = useState('');
+  const [, setLastHeard] = useState('');
+  const [shown, setShown] = useState(false);
   const orbRef = useRef(null);
+  const smooth = useRef(0);
+  const orbClock = useRef(0);
   const modeRef = useRef('connecting');
   const mutedRef = useRef(false);
   const chatRef = useRef(chatId);
@@ -28,13 +29,12 @@ export default function CallPanel({ chatId, model, voice, onSendText, onClose })
   const ttsBusy = useRef(false);
   const sentBuf = useRef('');
   const genDone = useRef(true);
-  const smooth = useRef(0);
   const closedRef = useRef(false);
   const suppressTts = useRef(false);
 
   const setModeSafe = (m) => { modeRef.current = m; setMode(m); };
   useEffect(() => { chatRef.current = chatId; }, [chatId]);
-  useEffect(() => { mutedRef.current = muted; }, [muted]);
+  useEffect(() => { const id = requestAnimationFrame(() => setShown(!!active)); return () => cancelAnimationFrame(id); }, [active]);
 
   function level(analyser) {
     if (!analyser) return 0;
@@ -45,17 +45,78 @@ export default function CallPanel({ chatId, model, voice, onSendText, onClose })
     return Math.sqrt(sum / buf.length);
   }
 
-  function animate() {
+  let lastFrame = 0;
+  function animate(ts) {
     const m = modeRef.current;
     let raw = 0;
-    if (m === 'speaking' && voice.tts === 'server') raw = level(outAnalyser.current) * 2.4;
-    else if (m === 'speaking') raw = 0.28 + Math.sin(Date.now() / 180) * 0.1;
-    else if (m === 'hearing' || m === 'listening') raw = level(micAnalyser.current) * 2.0;
-    else if (m === 'thinking') raw = 0.1 + Math.sin(Date.now() / 300) * 0.06;
-    smooth.current += (Math.min(1, raw) - smooth.current) * 0.18;
-    const el = orbRef.current;
-    if (el) el.style.transform = `scale(${1 + smooth.current * 0.45})`;
+    if (m === 'speaking' && voice.tts === 'server') raw = level(outAnalyser.current) * 2.6;
+    else if (m === 'speaking') raw = 0.34 + Math.sin(Date.now() / 170) * 0.14;
+    else if ((m === 'hearing' || m === 'listening') && !mutedRef.current) raw = level(micAnalyser.current) * 2.1;
+    else if (m === 'thinking') raw = 0.16 + Math.sin(Date.now() / 300) * 0.06;
+    smooth.current += (Math.min(1, raw) - smooth.current) * 0.16;
+
+    const dt = lastFrame ? Math.min(0.05, (ts - lastFrame) / 1000) : 0.016;
+    lastFrame = ts;
+    orbClock.current += dt * (0.5 + smooth.current * 1.6);
+    drawOrb(smooth.current, m);
     rafRef.current = requestAnimationFrame(animate);
+  }
+
+  function drawOrb(lvl, m) {
+    const cvs = orbRef.current;
+    if (!cvs) return;
+    const ctx = cvs.getContext('2d');
+    if (!ctx) return;
+    const W = cvs.width, H = cvs.height, cx = W / 2, cy = H / 2, R = W * 0.47;
+    const tt = orbClock.current;
+    const dim = (m === 'connecting' || m === 'error');
+    ctx.clearRect(0, 0, W, H);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.clip();
+
+    const base = ctx.createLinearGradient(cx, cy - R, cx, cy + R);
+    base.addColorStop(0, '#5566ec');
+    base.addColorStop(0.5, '#8a97f4');
+    base.addColorStop(1, '#c3cbfb');
+    ctx.fillStyle = base;
+    ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+
+    ctx.globalCompositeOperation = 'screen';
+    const clouds = [
+      { c: '255,255,255', fx: 0.55, fy: 0.8, ph: 0.0, rad: 0.72, oy: 0.28 },
+      { c: '224,232,255', fx: 0.9, fy: 1.15, ph: 2.1, rad: 0.55, oy: 0.42 },
+      { c: '255,255,255', fx: 1.25, fy: 0.65, ph: 4.2, rad: 0.46, oy: 0.5 },
+      { c: '176,190,252', fx: 0.7, fy: 1.4, ph: 1.3, rad: 0.6, oy: -0.15 },
+    ];
+    const swing = R * (0.34 + lvl * 0.42);
+    for (const b of clouds) {
+      const bx = cx + Math.sin(tt * b.fx + b.ph) * swing;
+      const by = cy + b.oy * R + Math.cos(tt * b.fy + b.ph * 1.4) * swing * 0.7;
+      const br = R * b.rad * (0.9 + lvl * 0.45);
+      const g = ctx.createRadialGradient(bx, by, 0, bx, by, br);
+      g.addColorStop(0, `rgba(${b.c},${(0.55 + lvl * 0.35).toFixed(3)})`);
+      g.addColorStop(1, `rgba(${b.c},0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(bx, by, br, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    ctx.globalCompositeOperation = 'source-over';
+    const shade = ctx.createRadialGradient(cx - R * 0.28, cy - R * 0.34, R * 0.2, cx, cy, R * 1.02);
+    shade.addColorStop(0, 'rgba(255,255,255,0)');
+    shade.addColorStop(0.72, 'rgba(40,50,120,0)');
+    shade.addColorStop(1, 'rgba(30,38,96,0.42)');
+    ctx.fillStyle = shade;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fill();
+
+    cvs.style.transform = `scale(${(1 + lvl * 0.12).toFixed(3)})`;
+    cvs.style.opacity = dim ? '0.5' : '1';
   }
 
   function vadTick() {
@@ -294,6 +355,13 @@ export default function CallPanel({ chatId, model, voice, onSendText, onClose })
       }
     })();
 
+    const cvs = orbRef.current;
+    if (cvs) {
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      cvs.width = Math.round(cvs.clientWidth * dpr) || Math.round(150 * dpr);
+      cvs.height = Math.round(cvs.clientHeight * dpr) || Math.round(150 * dpr);
+    }
+
     const vadTimer = setInterval(vadTick, 50);
     rafRef.current = requestAnimationFrame(animate);
 
@@ -312,35 +380,14 @@ export default function CallPanel({ chatId, model, voice, onSendText, onClose })
     };
   }, []);
 
-  useEffect(() => {
-    if (mode !== 'listening') return;
-    if (muted) pauseMicInput();
-    else if (voice.stt === 'browser' && srRef.current) { try { srRef.current.start(); } catch {} }
-  }, [muted]);
-
-  const statusText = err || (mode === 'connecting' ? 'Connecting…' : muted && (mode === 'listening' || mode === 'hearing') ? 'Muted' : MODES[mode] || '');
+  const statusText = err || (mode === 'connecting' ? 'Connecting…' : MODES[mode] || '');
 
   return (
-    <div className="callpanel">
-      <div className="cp-head">
-        <div className="cp-title">
-          {model?.staticIcon ? <img className="cp-model-icon" src={model.staticIcon} alt="" /> : null}
-          <span>{model?.displayName || t('Voice call')}</span>
-        </div>
-        <button className="cp-close" onClick={onClose} title={t("Close panel")}><X style={{ width: 16 }} /></button>
-      </div>
-      <div className="cp-stage" onClick={interrupt} title={mode === 'speaking' ? t('Tap to interrupt') : ''}>
-        <div ref={orbRef} className={'cp-orb ' + mode + (muted ? ' muted' : '')} />
-        <div className="cp-status">{statusText}</div>
-        {lastHeard && !err && <div className="cp-heard">“{lastHeard}”</div>}
-        {mode === 'speaking' && <div className="cp-hint">{t("Tap the orb to interrupt")}</div>}
-      </div>
-      <div className="cp-bar">
-        <button className={'cp-btn' + (muted ? ' on' : '')} onClick={() => setMuted(m => !m)} title={muted ? t('Unmute microphone') : t('Mute microphone')}>
-          <Mic style={{ width: 18 }} />
-          {muted && <span className="cp-slash" />}
-        </button>
-        <button className="cp-btn hangup" onClick={onClose} title={t("End call")}><X style={{ width: 18 }} /></button>
+    <div className={'call-dock' + (shown ? ' shown' : '')}>
+      <div className={'call-orb-wrap ' + mode}
+        onClick={interrupt} title={mode === 'speaking' ? t('Tap to interrupt') : ''} role="img"
+        aria-label={statusText || t('Voice call')}>
+        <canvas ref={orbRef} className="call-orb" aria-hidden="true" />
       </div>
     </div>
   );

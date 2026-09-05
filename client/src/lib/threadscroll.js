@@ -37,13 +37,13 @@ export function useThreadScroll(opts = {}) {
     if (!el) return;
     const top = el.scrollTop;
     const dist = el.scrollHeight - top - el.clientHeight;
-    const jump = dist > JUMP_DISTANCE;
-    if (jump !== jumpRef.current) { jumpRef.current = jump; setShowJump(jump); }
     if (touchDrag.current) { touchDrag.current = false; if (dist > AT_BOTTOM) stick.current = false; }
     if (programmatic.current) { programmatic.current = false; lastTop.current = top; return; }
     if (top < lastTop.current - 1) stick.current = false;
     else if (dist < AT_BOTTOM) stick.current = true;
     lastTop.current = top;
+    const jump = dist > JUMP_DISTANCE && !stick.current;
+    if (jump !== jumpRef.current) { jumpRef.current = jump; setShowJump(jump); }
   }, []);
 
   const onScroll = useCallback(() => {
@@ -59,6 +59,12 @@ export function useThreadScroll(opts = {}) {
     setShowJump(false);
     pinToBottom(true);
   }, [pinToBottom]);
+
+  const resetJump = useCallback(() => {
+    stick.current = true;
+    jumpRef.current = false;
+    setShowJump(false);
+  }, []);
 
   const follow = useCallback(function tick() {
     const el = scrollRef.current;
@@ -97,7 +103,7 @@ export function useThreadScroll(opts = {}) {
 
   return useMemo(() => ({
     scrollRef, stick, programmatic, showJump,
-    scrollBottom, pinToBottom, onScroll, onWheel, onTouchMove, jumpDown,
+    scrollBottom, pinToBottom, onScroll, onWheel, onTouchMove, jumpDown, resetJump,
     startFollow, stopFollow
-  }), [showJump, scrollBottom, pinToBottom, onScroll, onWheel, onTouchMove, jumpDown, startFollow, stopFollow]);
+  }), [showJump, scrollBottom, pinToBottom, onScroll, onWheel, onTouchMove, jumpDown, resetJump, startFollow, stopFollow]);
 }

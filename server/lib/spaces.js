@@ -1,16 +1,15 @@
 import { db, uid, now } from '../db.js';
 import { oneShot, stripThink } from '../llm/index.js';
-import { clients } from './ws/index.js';
+import { broadcastToUsers } from './ws/index.js';
+
+export function spaceAudience(space) {
+  return new Set((space?.members || []).filter(m => m.status === 'accepted').map(m => m.userId));
+}
 
 export function broadcastSpace(spaceId, payload, excludeUserId) {
   const space = db.spaces.byId(spaceId);
   if (!space) return;
-  const ids = new Set((space.members || []).filter(m => m.status === 'accepted').map(m => m.userId));
-  const msg = JSON.stringify(payload);
-  for (const [sock, st] of clients.entries()) {
-    if (sock.readyState !== 1 || !ids.has(st.userId) || st.userId === excludeUserId) continue;
-    try { sock.send(msg); } catch {}
-  }
+  broadcastToUsers(spaceAudience(space), payload, excludeUserId);
 }
 
 export function isMember(space, userId) { return (space.members || []).some(m => m.userId === userId); }
@@ -21,7 +20,7 @@ export function canPost(space, userId) { const m = memberOf(space, userId); retu
 export function removeUserFromSpaces(userId, spaceId) {
   const list = spaceId
     ? [db.spaces.byId(spaceId)].filter(s => s && isMember(s, userId))
-    : db.spaces.filter(s => isMember(s, userId));
+    : db.spaces.byMember(userId);
   for (const s of list) {
     let members = (s.members || []).filter(m => m.userId !== userId);
     let ownerId = s.owner_id;
@@ -48,15 +47,19 @@ export function shapeSpace(s, userId) {
 export function shapeSpaceMsg(m) { return { id: m.id, spaceId: m.space_id, userId: m.user_id, authorName: m.author_name, role: m.role, content: m.content, createdAt: m.created_at }; }
 
 const spaceCooldown = new Map();
+const spaceReplying = new Set();
+
 export async function spaceAssistantRespond(spaceId) {
   const space = db.spaces.byId(spaceId);
   if (!space) return;
+  if (spaceReplying.has(spaceId)) return;
   const last = spaceCooldown.get(spaceId) || 0;
   if (Date.now() - last < 1200) return;
   if (spaceCooldown.size > 1000) spaceCooldown.clear();
   spaceCooldown.set(spaceId, Date.now());
   const model = db.models.byId(space.model_id) || db.models.find(m => m.is_default) || db.models.all()[0];
   if (!model) return;
+  spaceReplying.add(spaceId);
   broadcastSpace(spaceId, { type: 'space_typing', spaceId, typing: true });
   try {
     const history = db.spaceMessages.bySpace(spaceId).slice(-40);
@@ -82,5 +85,8 @@ export async function spaceAssistantRespond(spaceId) {
     db.spaces.update(spaceId, { updated_at: t });
     broadcastSpace(spaceId, { type: 'space_message', spaceId, message: shapeSpaceMsg(row) });
   } catch {}
-  finally { broadcastSpace(spaceId, { type: 'space_typing', spaceId, typing: false }); }
+  finally {
+    spaceReplying.delete(spaceId);
+    broadcastSpace(spaceId, { type: 'space_typing', spaceId, typing: false });
+  }
 }

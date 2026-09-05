@@ -13,11 +13,15 @@ const errors = [];
 const warnings = [];
 const notes = [];
 
+const final = process.argv.includes('--final');
 const version = APP_VERSION;
 const base = version.split('-')[0];
-const prerelease = version.includes('-');
 
-notes.push(`version ${version}${prerelease ? ' (pre-release)' : ''}`);
+if (version !== base) {
+  errors.push(`package.json version "${version}" has a prerelease tail. Versions are bare: ${base}.`);
+}
+
+notes.push(`version ${version}${final ? '' : ' (in development)'}`);
 
 const WORKSPACES = ['server', 'client'];
 for (const ws of WORKSPACES) {
@@ -67,8 +71,8 @@ if (found) {
     else warnings.push(`release/${found.name}/release.json has no codename.`);
 
     if (!manifest.released) {
-      if (prerelease) notes.push('no release date yet');
-      else errors.push(`release/${found.name}/release.json needs a "released" date before tagging ${base}.`);
+      if (final) errors.push(`release/${found.name}/release.json needs a "released" date before ${base} is published.`);
+      else warnings.push(`release/${found.name}/release.json has no "released" date yet. Set one before merging into stable.`);
     }
 
     if (!manifest.icon) {
@@ -96,7 +100,10 @@ if (changelog) {
   const heading = new RegExp(`^## \\[${base.replace(/\./g, '\\.')}\\].*$`, 'm');
   const hit = changelog.match(heading);
   if (!hit) errors.push(`CHANGELOG.md has no "## [${base}]" section, and the version panel points users at it.`);
-  else if (!prerelease && /TBD/i.test(hit[0])) errors.push(`CHANGELOG.md still says "${hit[0].trim()}". Set a date before tagging ${base}.`);
+  else if (/TBD/i.test(hit[0])) {
+    if (final) errors.push(`CHANGELOG.md still says "${hit[0].trim()}". Set the date before merging into stable.`);
+    else warnings.push(`CHANGELOG.md still says "${hit[0].trim()}", which is fine while ${base} is in development.`);
+  }
   else notes.push(`changelog ${hit[0].trim().replace(/^##\s*/, '')}`);
 }
 

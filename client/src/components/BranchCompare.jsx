@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import Markdown from './Markdown.jsx';
+import { X } from './icons.jsx';
 import { t } from '../i18n.jsx';
 
 export default function BranchCompare({ chatId, messageId, onSelect, onClose }) {
@@ -27,8 +28,8 @@ export default function BranchCompare({ chatId, messageId, onSelect, onClose }) 
     <div className="bc-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bc-modal">
         <div className="bc-head">
-          <div>Compare versions{sibs.length ? ` · ${sibs.length}` : ''}</div>
-          <button className="bc-x" onClick={onClose}>✕</button>
+          <div>{t("Compare versions")}{sibs.length ? ` · ${sibs.length}` : ''}</div>
+          <button className="bc-x" onClick={onClose} title={t("Close")} aria-label={t("Close")}><X style={{ width: 14 }} /></button>
         </div>
         {err ? <div className="bc-empty">{t("Could not load versions.")}</div>
           : !data ? <div className="bc-empty">{t("Loading…")}</div>
@@ -40,9 +41,9 @@ export default function BranchCompare({ chatId, messageId, onSelect, onClose }) 
                   <div className="bc-col-head">
                     <span className="bc-col-n">#{s.index + 1}</span>
                     {s.modelName && <span className="bc-col-model">{s.modelName}</span>}
-                    {s.id === data.activeId && <span className="bc-col-cur">current</span>}
+                    {s.id === data.activeId && <span className="bc-col-cur">{t("current")}</span>}
                   </div>
-                  <div className="bc-col-body"><Markdown>{s.content || '(empty)'}</Markdown></div>
+                  <div className="bc-col-body"><Markdown>{s.content || t('(empty)')}</Markdown></div>
                   <div className="bc-col-foot">
                     <button className="bc-use" disabled={s.id === data.activeId} onClick={() => { onSelect?.(s.id); onClose(); }}>
                       {s.id === data.activeId ? t('In use') : t('Use this version')}

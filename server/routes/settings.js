@@ -6,7 +6,7 @@ import { llamaEngine } from '../lib/llamacpp.js';
 import * as membank from '../membank.js';
 import * as websearch from '../websearch.js';
 import { logAudit } from '../lib/audit.js';
-import { roleLimit } from '../lib/models.js';
+import { draftGet, draftSet } from '../lib/draft.js';
 import { DEFAULT_MEMORY_PROMPT } from '../lib/memory.js';
 import { DEFAULT_SAFETY_PROMPT, SAFETY_REASON_SUFFIX, resolveSafetyModel, parseSafetyVerdict } from '../lib/safety.js';
 import { broadcastAdminConfig } from '../lib/ws/index.js';
@@ -108,48 +108,48 @@ export default function registerSettingsRoutes(app) {
 
   app.get('/api/admin/settings', authMiddleware, adminOnly, (req, res) =>
     res.json({
-      apiBaseUrl: getSetting('api_base_url'), apiKey: getSetting('api_key'),
-      uploadLimitAdminMb: roleLimit('upload_limit_mb', true, 8),
-      uploadLimitUserMb: roleLimit('upload_limit_mb', false, 8),
-      sandboxLimitAdminMb: roleLimit('sandbox_limit_mb', true, 1024),
-      sandboxLimitUserMb: roleLimit('sandbox_limit_mb', false, 256),
-      modelQueue: getSetting('model_queue', '0') === '1',
-      membankEnabled: getSetting('membank_enabled', '0') === '1',
-      membankHideTools: getSetting('membank_hide_tools', '0') === '1',
-      membankPrompt: getSetting('membank_prompt', membank.DEFAULT_PROMPT),
-      webSearchEnabled: getSetting('web_search_enabled', '0') === '1',
-      webSearchEngine: getSetting('web_search_engine', 'searxng'),
-      searxngUrl: getSetting('searxng_url', ''),
-      webSearchCount: parseInt(getSetting('web_search_count', '5')) || 5,
-      webSearchDomains: (() => { try { const d = JSON.parse(getSetting('web_search_domains', '[]')); return Array.isArray(d) ? d.join('\n') : ''; } catch { return ''; } })(),
-      webSearchPrompt: getSetting('web_search_prompt', websearch.DEFAULT_WS_PROMPT),
-      budgetUser: Number(getSetting('budget_user', 0)) || 0,
-      budgetAdmin: Number(getSetting('budget_admin', 0)) || 0,
-      budgetWarnFraction: Number(getSetting('budget_warn_fraction', 0.8)) || 0.8,
-      budgetEnforce: getSetting('budget_enforce', '0') === '1',
-      sessionTtlDays: Number(getSetting('session_ttl_days', 30)) || 30,
-      maxSessions: Number(getSetting('max_sessions', 0)) || 0,
-      voiceMicEnabled: getSetting('voice_mic_enabled', '0') === '1',
-      voiceCallEnabled: getSetting('voice_call_enabled', '0') === '1',
-      voiceSttEngine: getSetting('voice_stt_engine', 'browser'),
-      voiceSttUrl: getSetting('voice_stt_url', ''),
-      voiceSttKey: getSetting('voice_stt_key', ''),
-      voiceSttModel: getSetting('voice_stt_model', 'whisper-1'),
-      voiceTtsEngine: getSetting('voice_tts_engine', 'browser'),
-      voiceTtsUrl: getSetting('voice_tts_url', ''),
-      voiceTtsKey: getSetting('voice_tts_key', ''),
-      voiceTtsModel: getSetting('voice_tts_model', 'tts-1'),
-      voiceTtsVoice: getSetting('voice_tts_voice', 'alloy'),
-      voiceTtsSpeed: Number(getSetting('voice_tts_speed', 1)) || 1,
-      safetyEnabled: getSetting('safety_enabled', '0') === '1',
-      safetyModelMode: getSetting('safety_model_mode', 'current') === 'specific' ? 'specific' : 'current',
-      safetyModelId: getSetting('safety_model_id', ''),
-      safetyPrompt: getSetting('safety_prompt', DEFAULT_SAFETY_PROMPT),
-      safetyVerbose: getSetting('safety_verbose', '1') === '1',
-      safetyReasonEnabled: getSetting('safety_reason_enabled', '0') === '1',
-      memoryEnabled: getSetting('memory_enabled', '0') === '1',
-      memoryPrompt: getSetting('memory_prompt', DEFAULT_MEMORY_PROMPT),
-      chatSearchEnabled: getSetting('chat_search_enabled', '0') === '1'
+      apiBaseUrl: draftGet('api_base_url'), apiKey: draftGet('api_key'),
+      uploadLimitAdminMb: Number(draftGet('upload_limit_mb_admin', 8)) || 0,
+      uploadLimitUserMb: Number(draftGet('upload_limit_mb_user', 8)) || 0,
+      sandboxLimitAdminMb: Number(draftGet('sandbox_limit_mb_admin', 1024)) || 0,
+      sandboxLimitUserMb: Number(draftGet('sandbox_limit_mb_user', 256)) || 0,
+      modelQueue: draftGet('model_queue', '0') === '1',
+      membankEnabled: draftGet('membank_enabled', '0') === '1',
+      membankHideTools: draftGet('membank_hide_tools', '0') === '1',
+      membankPrompt: draftGet('membank_prompt', membank.DEFAULT_PROMPT),
+      webSearchEnabled: draftGet('web_search_enabled', '0') === '1',
+      webSearchEngine: draftGet('web_search_engine', 'searxng'),
+      searxngUrl: draftGet('searxng_url', ''),
+      webSearchCount: parseInt(draftGet('web_search_count', '5')) || 5,
+      webSearchDomains: (() => { try { const d = JSON.parse(draftGet('web_search_domains', '[]')); return Array.isArray(d) ? d.join('\n') : ''; } catch { return ''; } })(),
+      webSearchPrompt: draftGet('web_search_prompt', websearch.DEFAULT_WS_PROMPT),
+      budgetUser: Number(draftGet('budget_user', 0)) || 0,
+      budgetAdmin: Number(draftGet('budget_admin', 0)) || 0,
+      budgetWarnFraction: Number(draftGet('budget_warn_fraction', 0.8)) || 0.8,
+      budgetEnforce: draftGet('budget_enforce', '0') === '1',
+      sessionTtlDays: Number(draftGet('session_ttl_days', 30)) || 30,
+      maxSessions: Number(draftGet('max_sessions', 0)) || 0,
+      voiceMicEnabled: draftGet('voice_mic_enabled', '0') === '1',
+      voiceCallEnabled: draftGet('voice_call_enabled', '0') === '1',
+      voiceSttEngine: draftGet('voice_stt_engine', 'browser'),
+      voiceSttUrl: draftGet('voice_stt_url', ''),
+      voiceSttKey: draftGet('voice_stt_key', ''),
+      voiceSttModel: draftGet('voice_stt_model', 'whisper-1'),
+      voiceTtsEngine: draftGet('voice_tts_engine', 'browser'),
+      voiceTtsUrl: draftGet('voice_tts_url', ''),
+      voiceTtsKey: draftGet('voice_tts_key', ''),
+      voiceTtsModel: draftGet('voice_tts_model', 'tts-1'),
+      voiceTtsVoice: draftGet('voice_tts_voice', 'alloy'),
+      voiceTtsSpeed: Number(draftGet('voice_tts_speed', 1)) || 1,
+      safetyEnabled: draftGet('safety_enabled', '0') === '1',
+      safetyModelMode: draftGet('safety_model_mode', 'current') === 'specific' ? 'specific' : 'current',
+      safetyModelId: draftGet('safety_model_id', ''),
+      safetyPrompt: draftGet('safety_prompt', DEFAULT_SAFETY_PROMPT),
+      safetyVerbose: draftGet('safety_verbose', '1') === '1',
+      safetyReasonEnabled: draftGet('safety_reason_enabled', '0') === '1',
+      memoryEnabled: draftGet('memory_enabled', '0') === '1',
+      memoryPrompt: draftGet('memory_prompt', DEFAULT_MEMORY_PROMPT),
+      chatSearchEnabled: draftGet('chat_search_enabled', '0') === '1'
     }));
 
   app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
@@ -158,10 +158,11 @@ export default function registerSettingsRoutes(app) {
     for (const field of Object.keys(b)) {
       const spec = SETTING_FIELDS[field];
       if (!spec) continue;
-      setSetting(spec.key, coerceSetting(spec, b[field]));
+      draftSet(spec.key, coerceSetting(spec, b[field]));
       applied.push(field);
     }
-    logAudit(req, 'settings.update', { meta: { fields: applied } });
+    logAudit(req, 'settings.stage', { meta: { fields: applied } });
+    broadcastAdminConfig();
     res.json({ ok: true });
   });
 

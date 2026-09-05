@@ -1,15 +1,19 @@
 import { useRef, useEffect, useState, useLayoutEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import ModelDropdown from './ModelDropdown.jsx';
+import Tip from './Tip.jsx';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
 import { useAttachments } from '../lib/attachments.js';
 import { useDictation } from '../lib/dictation.js';
-import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer } from './icons.jsx';
+import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer, Screenshot, Plug, Puzzle, Telescope, SkillIcon, ImageIcon, Copy, Folder } from './icons.jsx';
 import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
 import { extLabel } from '../lib/files.js';
 import { t, fmtDate } from '../i18n.jsx';
+import { useThemeText } from '../lib/theme/store.jsx';
 import { focusUnlessTouch } from '../lib/touch.js';
 import { useSubmenus } from '../lib/submenu.js';
+import { useDismiss } from '../lib/dismiss.js';
 
 // The picker no longer advertises a list. The server decides what it can read by
 // sniffing the bytes, so any format is accepted here and one that turns out to be
@@ -51,18 +55,46 @@ function PmSub({ className = '', children, onMouseEnter, onMouseLeave }) {
   );
 }
 
+function DropOverlay() {
+  return createPortal(
+    <div className="drop-overlay" aria-hidden="true">
+      <div className="drop-overlay-content">
+        <div className="drop-overlay-icons">
+          <ImageIcon />
+          <Copy />
+          <Folder />
+        </div>
+        <div className="drop-overlay-text">{t('Drop files here to add to chat')}</div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function ActiveChip({ icon, label, onRemove }) {
+  return (
+    <Tip label={label}>
+      <button type="button" className="active-chip" onClick={onRemove} aria-label={label}>
+        <span className="ac-icon">{icon}</span>
+        <span className="ac-x"><X /></span>
+      </button>
+    </Tip>
+  );
+}
+
 export default function Composer({
   value, onChange, onSend, onStop, streaming, stopping = false, models,
   currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, onOpenProject, projects = [], onSetProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
-  voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall,
+  voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall, callActive = false,
   safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
   conversationEnded = false, endedReason = '',
-  removedModel = null, onOpenDocs = null,
+  removedModel = null, skills = [], onToggleSkill = null, onManageSkills = null,
   queueCount = 0, onQueue, onSteer, canSteer = false,
-  compareIds = [], onSetCompare, hideModelPicker = false, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
+  compareIds = [], onSetCompare, hideModelPicker = false, chipsBelow = false, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
   ctxGauge = null
 }) {
+  const composerPlaceholder = useThemeText('composer.placeholder', t('How can I help you today?'));
   const ta = useRef(null);
   const fileInput = useRef(null);
   const plusRef = useRef(null);
@@ -73,7 +105,7 @@ export default function Composer({
   const { dictating, transcribing, toggleDictation } = useDictation({ sttEngine, valueRef, onChange });
   const {
     files, dragActive, glow, upErr, setUpErr,
-    pickFiles, onPaste, removeFile, clearFiles, dragProps
+    pickFiles, onPaste, removeFile, clearFiles
   } = useAttachments({ visionSupported });
 
   const [plusMenu, setPlusMenu] = useState(false);
@@ -81,6 +113,8 @@ export default function Composer({
   const sub = useSubmenus();
   const { closeAll: closeSubs } = sub;
   useEffect(() => { if (!plusMenu) closeSubs(); }, [plusMenu, closeSubs]);
+  // Picking something in a submenu is the end of that errand, so the whole menu goes away.
+  const closePlusMenu = useCallback(() => { closeSubs(); setPlusMenu(false); }, [closeSubs]);
   const [showReason, setShowReason] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
 
@@ -91,10 +125,8 @@ export default function Composer({
       const r = btn.getBoundingClientRect();
       setPlusDown(window.innerHeight - r.bottom > 320);
     }
-    const h = (e) => { if (plusRef.current && !plusRef.current.contains(e.target)) setPlusMenu(false); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
   }, [plusMenu]);
+  useDismiss(plusMenu, () => setPlusMenu(false), plusRef);
 
   const grewOnce = useRef(false);
   const fitRaf = useRef(0);
@@ -277,15 +309,21 @@ export default function Composer({
   const budgetBlock = budgetState === 'over' && budget?.enforce && !canUseUnavailable;
   const showBudgetBanner = budgetState === 'warn' || budgetState === 'over';
   const sunsetOnly = !!sunsetInfo && !bannerMounted && !showBudgetBanner && !safetyFlagged && !conversationEnded && !removedModel;
-  const enabledCount = (sandbox ? 1 : 0) + (webSearch ? 1 : 0);
+  const activeTools = [];
+  if (sandboxAllowed && sandbox) activeTools.push({ id: 'sandbox', icon: <Cube />, label: t("Sandbox tools"), off: () => onToggleSandbox && onToggleSandbox() });
+  if (webSearchAvailable && webSearch) activeTools.push({ id: 'websearch', icon: <Globe />, label: t("Web search"), off: () => onToggleWebSearch && onToggleWebSearch() });
+  for (const sk of skills) if (sk.enabled) activeTools.push({ id: 'skill:' + sk.id, icon: <SkillIcon />, label: sk.name, off: () => onToggleSkill && onToggleSkill(sk) });
+  if (onSelectStyle && styleId && styleId !== 'normal') activeTools.push({ id: 'style', icon: <Sliders />, label: styleNameFor(styleId, styles), off: () => onSelectStyle('normal') });
+  const chips = activeTools.map(a => <ActiveChip key={a.id} icon={a.icon} label={a.label} onRemove={a.off} />);
   const hasText = /\S/.test(value);
   const canSend = (hasText || files.length > 0) && !uploading && !blockSend && !budgetBlock && !safetyFlagged && !safetyChecking && !conversationEnded;
   const [multiline, setMultiline] = useState(false);
-  const cls = 'composer' + (multiline ? ' ml' : '') + (dragActive ? ' dragging' : '') + (hasImage ? ' glowing' : '') + ((unavailable || removedModel) ? ' unavailable' : '') + ((blockSend || budgetBlock) ? ' blocked' : '');
+  const cls = 'composer' + (multiline ? ' ml' : '') + (chipsBelow && activeTools.length > 0 ? ' has-chips' : '') + (hasImage ? ' glowing' : '') + ((unavailable || removedModel) ? ' unavailable' : '') + ((blockSend || budgetBlock) ? ' blocked' : '');
   const fmtUsd = (n) => '$' + (Number(n || 0) > 0 && Number(n || 0) < 0.01 ? Number(n).toFixed(4) : Number(n || 0).toFixed(2));
 
   return (
     <div className={'composer-stack' + ((bannerMounted || showBudgetBanner || safetyFlagged || conversationEnded || removedModel || sunsetInfo) ? ' has-banner' : '')}>
+    {dragActive && <DropOverlay />}
     {(bannerMounted || showBudgetBanner || safetyFlagged || conversationEnded || removedModel || sunsetInfo) && (
       <div className={'unavail-bg' + (bannerOut && !showBudgetBanner && !safetyFlagged && !conversationEnded && !removedModel && !sunsetInfo ? ' out' : '')}
         style={sunsetOnly ? {
@@ -349,9 +387,7 @@ export default function Composer({
         )}
       </div>
     )}
-    <div className={cls} style={{ '--glow': glow }}
-      {...dragProps}>
-      {dragActive && <div className="drop-hint">Drop to attach{visionSupported ? '' : ' files'}</div>}
+    <div className={cls} style={{ '--glow': glow }}>
       {files.length > 0 && (
         <div className="attach-row">
           {files.map(f => (
@@ -397,7 +433,7 @@ export default function Composer({
           <span className="steer-note">{steerMode ? t('Applied to the reply in progress, without losing what is already written.') : t('Sent as a new message when this reply finishes.')}</span>
         </div>
       )}
-      <textarea ref={ta} rows={1} value={value} placeholder={steering ? t('Steer this reply, e.g. "shorter" or "you misread the file"…') : streaming ? (queueCount > 0 ? t('Queue another message ({n} waiting)…', { n: queueCount }) : t('Type to queue a message…')) : (placeholder || t('How can I help you today?'))}
+      <textarea ref={ta} rows={1} value={value} placeholder={steering ? t('Steer this reply, e.g. "shorter" or "you misread the file"…') : streaming ? (queueCount > 0 ? t('Queue another message ({n} waiting)…', { n: queueCount }) : t('Type to queue a message…')) : (placeholder || composerPlaceholder)}
         id="oq-composer" aria-label={t('Message input')}
         onChange={(e) => onChange(e.target.value)} onKeyDown={key} onPaste={onPaste} />
       <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}
@@ -414,16 +450,22 @@ export default function Composer({
       <div className="composer-bar">
         <div className="composer-left">
           <div className="plus-wrap" ref={plusRef}>
-            <button className={'plus' + (plusMenu ? ' on' : '')} onClick={() => setPlusMenu(m => !m)} title={t("More")}>
-              <Plus style={{ width: 20, height: 20 }} />
-              {enabledCount > 0 && <span className="plus-badge">{enabledCount}</span>}
-            </button>
+            <Tip label={t('More')} keys="/">
+              <button className={'plus' + (plusMenu ? ' on' : '')} onClick={() => setPlusMenu(m => !m)} aria-label={t("More")}
+                aria-haspopup="menu" aria-expanded={plusMenu}>
+                <Plus style={{ width: 20, height: 20 }} />
+              </button>
+            </Tip>
             {plusMenu && (
               <div className={'plus-menu' + (plusDown ? ' down' : '')}>
                 <button className="pm-item" onClick={() => { setPlusMenu(false); fileInput.current?.click(); }}>
                   <FileText />
                   <span className="pm-label">{visionSupported ? t('Add files or photos') : t('Add files')}</span>
                   <span className="pm-shortcut">{/mac/i.test(navigator.platform) ? '⌘U' : t('Ctrl+U')}</span>
+                </button>
+                <button className="pm-item" disabled title={t('Not available yet')}>
+                  <Screenshot />
+                  <span className="pm-label">{t('Take a screenshot')}</span>
                 </button>
                 {onSetProject && (
                   <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('project')} onMouseLeave={sub.hoverClose}>
@@ -437,13 +479,13 @@ export default function Composer({
                         {projects.length === 0 && <div className="pm-empty">{t('No projects yet')}</div>}
                         {projects.map(p => (
                           <button key={p.id} className={'pm-item' + (project && p.id === project.id ? ' active' : '')}
-                            onClick={() => { onSetProject(p); sub.closeAll(); setPlusMenu(false); }}>
+                            onClick={() => { onSetProject(p); closePlusMenu(); }}>
                             <Box />
                             <span className="pm-label">{p.name}</span>
                           </button>
                         ))}
                         {project && onClearProject && (
-                          <button className="pm-item" onClick={() => { onClearProject(); sub.closeAll(); setPlusMenu(false); }}>
+                          <button className="pm-item" onClick={() => { onClearProject(); closePlusMenu(); }}>
                             <span className="pm-label">{t('Remove from project')}</span>
                           </button>
                         )}
@@ -488,7 +530,7 @@ export default function Composer({
                     {sub.isOpen('styles') && (
                       <PmSub className="styles" onMouseEnter={() => sub.hoverOpen('styles')} onMouseLeave={sub.hoverClose}>
                         <StyleSubmenu styles={styles} styleId={styleId} currentId={currentId} onSaveStyles={onSaveStyles}
-                          onSelect={(id) => { onSelectStyle && onSelectStyle(id); }} />
+                          onSelect={(id) => { onSelectStyle && onSelectStyle(id); closePlusMenu(); }} />
                       </PmSub>
                     )}
                   </div>
@@ -524,16 +566,67 @@ export default function Composer({
                     )}
                   </div>
                 )}
+                <div className="pm-divider" />
+                <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('skills')} onMouseLeave={sub.hoverClose}>
+                  <button className={'pm-item' + (sub.isOpen('skills') ? ' active' : '')} onClick={() => sub.toggle('skills')}>
+                    <SkillIcon />
+                    <span className="pm-label">{t('Skills')}</span>
+                    <Chevron className="pm-chev" />
+                  </button>
+                  {sub.isOpen('skills') && (
+                    <PmSub onMouseEnter={() => sub.hoverOpen('skills')} onMouseLeave={sub.hoverClose}>
+                      {skills.length === 0 && <div className="pm-empty">{t('No skills yet')}</div>}
+                      {skills.map(sk => (
+                        <button key={sk.id} className="pm-item" title={sk.description || sk.name}
+                          onClick={() => { onToggleSkill && onToggleSkill(sk); closePlusMenu(); }}>
+                          <SkillIcon />
+                          <span className="pm-label">{sk.name}</span>
+                          {sk.enabled && <Check className="pm-check" />}
+                        </button>
+                      ))}
+                      <div className="pm-divider" />
+                      <button className="pm-item" onClick={() => { closePlusMenu(); onManageSkills && onManageSkills(); }}>
+                        <Sliders />
+                        <span className="pm-label">{t('Manage skills')}</span>
+                      </button>
+                      <button className="pm-item" onClick={() => { closePlusMenu(); onManageSkills && onManageSkills('browse'); }}>
+                        <Plus />
+                        <span className="pm-label">{t('Browse skills')}</span>
+                      </button>
+                    </PmSub>
+                  )}
+                </div>
+                <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('connect')} onMouseLeave={sub.hoverClose}>
+                  <button className={'pm-item' + (sub.isOpen('connect') ? ' active' : '')} onClick={() => sub.toggle('connect')}>
+                    <Plug />
+                    <span className="pm-label">{t('Add connector')}</span>
+                    <Chevron className="pm-chev" />
+                  </button>
+                  {sub.isOpen('connect') && (
+                    <PmSub onMouseEnter={() => sub.hoverOpen('connect')} onMouseLeave={sub.hoverClose}>
+                      <div className="pm-empty">{t('No connectors yet')}</div>
+                    </PmSub>
+                  )}
+                </div>
+                <button className="pm-item" disabled title={t('Not available yet')}>
+                  <Puzzle />
+                  <span className="pm-label">{t('Add plugins…')}</span>
+                </button>
+                <div className="pm-divider" />
+                <button className="pm-item" disabled title={t('Not available yet')}>
+                  <Telescope />
+                  <span className="pm-label">{t('Research')}</span>
+                </button>
                 {(sandboxAllowed || webSearchAvailable) && <div className="pm-divider" />}
                 {sandboxAllowed && (
-                  <button className="pm-item" onClick={() => onToggleSandbox && onToggleSandbox()}>
+                  <button className="pm-item" onClick={() => { onToggleSandbox && onToggleSandbox(); closePlusMenu(); }}>
                     <Cube />
                     <span className="pm-label">{t("Sandbox tools")}</span>
                     {sandbox && <Check className="pm-check" />}
                   </button>
                 )}
                 {webSearchAvailable && (
-                  <button className="pm-item" onClick={() => onToggleWebSearch && onToggleWebSearch()}>
+                  <button className="pm-item" onClick={() => { onToggleWebSearch && onToggleWebSearch(); closePlusMenu(); }}>
                     <Globe />
                     <span className="pm-label">{t("Web search")}</span>
                     {webSearch && <Check className="pm-check" />}
@@ -542,6 +635,7 @@ export default function Composer({
               </div>
             )}
           </div>
+          {!chipsBelow && activeTools.length > 0 && <div className="composer-chips">{chips}</div>}
           {project && (
             <div className="composer-project">
               {onOpenProject ? (
@@ -558,9 +652,6 @@ export default function Composer({
               {onClearProject && <button className="cp-x" onClick={onClearProject} title={t("Remove from project")}><X style={{ width: 12 }} /></button>}
             </div>
           )}
-          {!hideModelPicker && onOpenDocs && (
-            <button type="button" className="mdocs-btn" title={t('Model docs')} onClick={onOpenDocs}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5.6C10.6 4.4 8.7 3.8 6.5 3.8c-1 0-2 .13-2.9.4v14.6c.9-.27 1.9-.4 2.9-.4 2.2 0 4.1.6 5.5 1.8 1.4-1.2 3.3-1.8 5.5-1.8 1 0 2 .13 2.9.4V4.2c-.9-.27-1.9-.4-2.9-.4-2.2 0-4.1.6-5.5 1.8zM12 5.6v14.6" /></svg></button>
-          )}
         </div>
         <div className="composer-right">
           {ctxGauge}
@@ -570,28 +661,31 @@ export default function Composer({
             kwargValues={kwargValues} onSetKwarg={onSetKwarg}
             modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />}
           {voiceMic && (
-            <button className={'mic' + (dictating ? ' rec' : '') + (transcribing ? ' busy' : '')} onClick={toggleDictation}
-              title={dictating ? t('Stop dictation') : transcribing ? t('Transcribing…') : t('Dictate')} disabled={transcribing}>
-              <Mic style={{ width: 20, height: 20 }} />
-            </button>
+            <Tip label={dictating ? t('Stop dictation') : transcribing ? t('Transcribing…') : t('Dictate')}>
+              <button className={'mic' + (dictating ? ' rec' : '') + (transcribing ? ' busy' : '')} onClick={toggleDictation}
+                aria-label={dictating ? t('Stop dictation') : transcribing ? t('Transcribing…') : t('Dictate')} disabled={transcribing}>
+                <Mic style={{ width: 20, height: 20 }} />
+              </button>
+            </Tip>
           )}
           {steering && hasText && (
             <button key="steer" className="send steer" onClick={doSend} title={t('Steer this reply')}><Steer style={{ width: 20, height: 20 }} /></button>
           )}
           {streaming ? (
             <button key="stop" className={'send stop' + (stopping ? ' stopping' : '')} onClick={onStop} disabled={stopping}
-              title={stopping ? t('Stopping — finishing the step in progress') : t('Stop generating')}><Stop style={{ width: 20, height: 20 }} /></button>
+              title={stopping ? t('Stopping, finishing the step in progress') : t('Stop generating')}><Stop style={{ width: 20, height: 20 }} /></button>
           ) : safetyChecking ? (
             <button key="send" className={'send' + (safetyVerbose ? ' checking' : ' quiet')} disabled title={safetyVerbose ? t('Safety check…') : undefined}><Up style={{ width: 20, height: 20 }} /></button>
           ) : canSend ? (
             <button key="send" className="send" onClick={doSend} disabled={uploading}><Up style={{ width: 20, height: 20 }} /></button>
           ) : voiceCall ? (
-            <button key="call" className="mic call" onClick={onStartCall} title={t("Start a voice call")}><Wave style={{ width: 20, height: 20 }} /></button>
+            <Tip label={callActive ? t("End call") : t("Start a voice call")}><button key="call" className={'mic call' + (callActive ? ' on' : '')} onClick={onStartCall} aria-label={callActive ? t("End call") : t("Start a voice call")} aria-pressed={callActive}>{callActive ? <X style={{ width: 18, height: 18 }} /> : <Wave style={{ width: 20, height: 20 }} />}</button></Tip>
           ) : (
             <button key="send" className="send ghost" disabled><Up style={{ width: 20, height: 20 }} /></button>
           )}
         </div>
       </div>
+      {chipsBelow && activeTools.length > 0 && <div className="composer-chips">{chips}</div>}
     </div>
     </div>
   );

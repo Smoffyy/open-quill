@@ -57,7 +57,16 @@ export function shapePublic(m) {
     docsFeatured: !!m.docs_featured, docsIntelligence: m.docs_intelligence || 0, docsSpeed: m.docs_speed || 0,
     docsMaxOutput: m.docs_max_output || 0, docsCutoff: m.docs_cutoff || '', docsBody: m.docs_body || '', docsImage: m.docs_image || '', docsIcon: m.docs_icon || '',
     docsIn: { text: m.docs_in_text !== 0, image: !!m.docs_in_image || !!m.has_vision, audio: !!m.docs_in_audio, video: !!m.docs_in_video },
-    docsOut: { text: m.docs_out_text !== 0, image: !!m.docs_out_image, audio: !!m.docs_out_audio, video: !!m.docs_out_video }
+    docsOut: { text: m.docs_out_text !== 0, image: !!m.docs_out_image, audio: !!m.docs_out_audio, video: !!m.docs_out_video },
+    docsHidden: !!m.docs_hidden, docsBadge: m.docs_badge || '', docsGroup: m.docs_group || '', docsSummary: m.docs_summary || '',
+    docsLatency: m.docs_latency || '', docsThinking: m.docs_thinking || '', docsEffort: m.docs_effort || '',
+    docsTrainCutoff: m.docs_train_cutoff || '', docsStatus: m.docs_status || '', docsReleased: m.docs_released || '', docsRetired: m.docs_retired || '',
+    docsIds: Array.isArray(m.docs_ids) ? m.docs_ids : [], docsPlatforms: Array.isArray(m.docs_platforms) ? m.docs_platforms : [],
+    docsPriceCacheWrite: m.docs_price_cache_write ?? null, docsPriceCacheRead: m.docs_price_cache_read ?? null, docsPriceBatch: m.docs_price_batch || '',
+    docsNotes: m.docs_notes || '', docsLinks: Array.isArray(m.docs_links) ? m.docs_links : [],
+    docsResources: Array.isArray(m.docs_resources) ? m.docs_resources : [], docsReference: Array.isArray(m.docs_reference) ? m.docs_reference : [],
+    docsNotice: m.docs_notice || '', docsNoticeAction: m.docs_notice_action || '', docsNoticeUrl: m.docs_notice_url || '',
+    docsActionLabel: m.docs_action_label || ''
   };
 }
 
@@ -127,6 +136,15 @@ export function roleLimit(key, isAdmin, fallback) {
   return Number.isFinite(shared) && shared >= 0 ? shared : Number(fallback) || 0;
 }
 
+export const PROBE_TIMEOUT = 8000;
+
+export async function timedFetch(url, opts, ms = PROBE_TIMEOUT) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms);
+  try { return await fetch(url, { ...opts, signal: ctl.signal }); }
+  finally { clearTimeout(timer); }
+}
+
 export async function detectContextLength(prov, internal) {
   const { spec, base, key } = providerSpec(prov);
   const headers = { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) };
@@ -134,7 +152,7 @@ export async function detectContextLength(prov, internal) {
   const asInt = (v) => { const n = parseInt(v); return Number.isFinite(n) && n > 0 ? n : 0; };
   try {
     if (spec.protocol === 'ollama') {
-      const r = await fetch(root + '/api/show', { method: 'POST', headers, body: JSON.stringify({ model: internal }) });
+      const r = await timedFetch(root + '/api/show', { method: 'POST', headers, body: JSON.stringify({ model: internal }) });
       if (!r.ok) return 0;
       const json = await r.json();
       const info = json.model_info || {};
@@ -147,7 +165,7 @@ export async function detectContextLength(prov, internal) {
         : [root + '/props'];
       for (const url of propsUrls) {
         try {
-          const r = await fetch(url, { headers });
+          const r = await timedFetch(url, { headers });
           if (!r.ok) continue;
           const json = await r.json();
           const ctx = asInt(json?.default_generation_settings?.n_ctx)
@@ -157,7 +175,7 @@ export async function detectContextLength(prov, internal) {
         } catch {}
       }
       try {
-        const r = await fetch(base + '/models', { headers });
+        const r = await timedFetch(base + '/models', { headers });
         if (r.ok) {
           const json = await r.json();
           const list = Array.isArray(json.data) ? json.data : [];
@@ -168,7 +186,7 @@ export async function detectContextLength(prov, internal) {
       } catch {}
       return 0;
     }
-    const r = await fetch(root + '/api/v0/models', { headers: { 'Content-Type': 'application/json' } });
+    const r = await timedFetch(root + '/api/v0/models', { headers: { 'Content-Type': 'application/json' } });
     if (!r.ok) return 0;
     const json = await r.json();
     const list = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);

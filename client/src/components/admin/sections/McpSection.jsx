@@ -1,103 +1,176 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../../api.js';
-import { SegPick, Switch } from '../widgets.jsx';
-import { Plus, Trash, Pencil, Plug, Refresh } from '../../icons.jsx';
+import { useAdmin } from '../store.jsx';
+import { Card, Rows, ToggleRow, Fields, Field, Input, Area, Seg, Btn, IconBtn, Acts, Table, Badge, Switch, Empty, Dialog, Note } from '../ui.jsx';
+import { Plus, Trash, Pencil, Refresh, Plug } from '../../icons.jsx';
 import { t } from '../../../i18n.jsx';
 
+const BLANK = { name: '', transport: 'stdio', command: '', args: '', url: '', headers: '', enabled: true };
+
 export default function McpSection() {
-  const [servers, setServers] = useState([]);
-  const [edit, setEdit] = useState(null);
+  const { confirm } = useAdmin();
+  const [servers, setServers] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
 
   useEffect(() => {
-    (async () => { try { const d = await api.get('/api/admin/mcp'); setServers(d.servers || []); } catch {} })();
+    let alive = true;
+    (async () => {
+      try { const d = await api.get('/api/admin/mcp'); if (alive) setServers(d.servers || []); }
+      catch { if (alive) setServers([]); }
+    })();
+    return () => { alive = false; };
   }, []);
 
-  async function save(sv) {
+  async function save() {
+    setError('');
+    setBusy('save');
     try {
-      if (sv.id) { const r = await api.patch('/api/admin/mcp/' + sv.id, sv); setServers(list => list.map(x => x.id === sv.id ? r.server : x)); }
-      else { const r = await api.post('/api/admin/mcp', sv); setServers(list => [...list, r.server]); if (r.warning) alert(t('Server saved, but connecting failed: ') + r.warning); }
-      setEdit(null);
-    } catch (e) { alert(e.message || t('Could not save server.')); }
+      if (draft.id) {
+        const r = await api.patch('/api/admin/mcp/' + draft.id, draft);
+        setServers(list => list.map(x => (x.id === draft.id ? r.server : x)));
+      } else {
+        const r = await api.post('/api/admin/mcp', draft);
+        setServers(list => [...list, r.server]);
+      }
+      setDraft(null);
+    } catch (e) { setError(e.message || t('Could not reach that server.')); }
+    finally { setBusy(''); }
   }
-  async function remove(id) { try { await api.del('/api/admin/mcp/' + id); setServers(list => list.filter(x => x.id !== id)); } catch {} }
-  async function toggle(sv) { try { const r = await api.patch('/api/admin/mcp/' + sv.id, { enabled: !sv.enabled }); setServers(list => list.map(x => x.id === sv.id ? r.server : x)); } catch {} }
+
+  async function toggle(sv) {
+    try {
+      const r = await api.patch('/api/admin/mcp/' + sv.id, { enabled: !sv.enabled });
+      setServers(list => list.map(x => (x.id === sv.id ? r.server : x)));
+    } catch {}
+  }
+
   async function refresh(id) {
     setBusy(id);
-    try { const r = await api.post('/api/admin/mcp/' + id + '/refresh'); setServers(list => list.map(x => x.id === id ? r.server : x)); } catch {}
-    setBusy('');
+    try {
+      const r = await api.post('/api/admin/mcp/' + id + '/refresh');
+      setServers(list => list.map(x => (x.id === id ? r.server : x)));
+    } catch {}
+    finally { setBusy(''); }
   }
+
+  function del(sv) {
+    confirm({
+      title: t('Remove server'),
+      message: t('“{name}” and its tools stop being offered to every model on this workspace.', { name: sv.name }),
+      confirm: t('Remove server'),
+      onConfirm: async () => {
+        try { await api.del('/api/admin/mcp/' + sv.id); setServers(list => list.filter(x => x.id !== sv.id)); } catch {}
+      }
+    });
+  }
+
+  const stdio = draft && draft.transport !== 'http';
+  const valid = draft && draft.name.trim() && (stdio ? draft.command.trim() : draft.url.trim());
+  const anyError = servers?.some(s => s.error);
 
   return (
     <>
-      <div className="admin-section-head">
-        <div><div className="muted-note">{t("Connect MCP (Model Context Protocol) servers running on this machine or your network. Their tools are exposed to every model with tool calling, prefixed mcp_. Everything stays local, no cloud relay is involved.")}</div></div>
-        <button className="btn primary" onClick={() => setEdit({ name: '', transport: 'stdio', command: '', args: '', url: '', headers: '', enabled: true })}><Plus style={{ width: 15 }} /> {t("Add server")}</button>
-      </div>
-      {edit && (
-        <div className="fn-editor">
-          <div className="field"><label>{t("Server name")}</label>
-            <input value={edit.name} onChange={(e) => setEdit(x => ({ ...x, name: e.target.value }))} placeholder={t("Filesystem")} />
-          </div>
-          <div className="field"><label>{t("Transport")}</label>
-            <SegPick value={edit.transport === 'http' ? 'http' : 'stdio'} options={[['stdio', 'stdio (local command)'], ['http', 'HTTP']]}
-              onChange={(v) => setEdit(x => ({ ...x, transport: v }))} />
-          </div>
-          {edit.transport !== 'http' && (
-            <>
-              <div className="field"><label>{t("Command")}</label>
-                <input value={edit.command} onChange={(e) => setEdit(x => ({ ...x, command: e.target.value }))} placeholder={t("npx")} />
-              </div>
-              <div className="field"><label>{t("Arguments")}</label>
-                <input value={edit.args} onChange={(e) => setEdit(x => ({ ...x, args: e.target.value }))} placeholder={t("-y @modelcontextprotocol/server-filesystem /home/me/docs")} />
-                <div className="muted-note">{t("The command is spawned by this server and speaks MCP over stdio.")}</div>
-              </div>
-            </>
-          )}
-          {edit.transport === 'http' && (
-            <>
-              <div className="field"><label>{t("URL")}</label>
-                <input value={edit.url} onChange={(e) => setEdit(x => ({ ...x, url: e.target.value }))} placeholder={t("http://localhost:8931/mcp")} />
-              </div>
-              <div className="field"><label>{t("Headers")}</label>
-                <textarea rows={2} value={edit.headers} onChange={(e) => setEdit(x => ({ ...x, headers: e.target.value }))} placeholder={'Authorization: Bearer …'} />
-                <div className="muted-note">{t("Optional, one Name: value pair per line.")}</div>
-              </div>
-            </>
-          )}
-          <div className="med-toggle-card">
-            <label className="inline-toggle"><span>{t("Enabled")}</span><Switch on={edit.enabled} label={t("Enabled")} onToggle={() => setEdit(x => ({ ...x, enabled: !x.enabled }))} /></label>
-          </div>
-          <div className="editor-actions">
-            <button className="btn" onClick={() => setEdit(null)}>{t("Cancel")}</button>
-            <button className="btn primary" onClick={() => save(edit)}>{t("Save server")}</button>
-          </div>
-        </div>
+      <Card title={t('Servers')} flush
+        sub={t('Tools from every enabled server are exposed to any model with tool calling, prefixed with mcp_. Servers run on this machine or your network; nothing is relayed through a third party. Members can attach HTTP servers of their own under Settings.')}
+        actions={<Btn kind="primary" size="sm" onClick={() => { setDraft({ ...BLANK }); setError(''); }}>
+          <Plus /> {t('Add server')}
+        </Btn>}
+        foot={anyError
+          ? <span className="cp-err">{t('One or more servers failed to connect. Reconnect to see the error, or check that the command or URL is still reachable.')}</span>
+          : null}>
+        {servers == null && <Empty icon={Plug} title={t('Loading')} />}
+        {servers != null && servers.length === 0 && (
+          <Empty icon={Plug} title={t('No servers attached')}>
+            {t('An MCP server gives models capabilities this app does not ship with: filesystem access, a browser, or your own internal APIs.')}
+          </Empty>
+        )}
+        {servers != null && servers.length > 0 && (
+          <Table head={[
+            { label: t('Name'), fit: true },
+            { label: t('Transport'), fit: true, mono: true },
+            { label: t('Target'), mono: true },
+            { label: t('Tools'), num: true, fit: true },
+            { label: t('State'), fit: true },
+            { label: t('Enabled'), fit: true },
+            { label: '', fit: true }
+          ]}>
+            {servers.map(sv => (
+              <tr key={sv.id}>
+                <td>{sv.name}</td>
+                <td className="mono dim">{sv.transport === 'http' ? 'http' : 'stdio'}</td>
+                <td className="mono dim wrap">{sv.transport === 'http' ? sv.url : [sv.command, sv.args].filter(Boolean).join(' ')}</td>
+                <td className="num mono">{sv.tools?.length ?? sv.toolCount ?? 0}</td>
+                <td className="fit">
+                  {sv.error
+                    ? <Badge tone="bad">{t('error')}</Badge>
+                    : sv.enabled ? <Badge tone="good">{t('connected')}</Badge> : <Badge>{t('off')}</Badge>}
+                </td>
+                <td className="fit"><Switch on={sv.enabled} label={t('Enabled')} onToggle={() => toggle(sv)} /></td>
+                <td className="acts">
+                  <Acts end>
+                    <IconBtn label={t('Reconnect')} disabled={busy === sv.id} onClick={() => refresh(sv.id)}><Refresh /></IconBtn>
+                    <IconBtn label={t('Edit')} onClick={() => { setDraft({ ...sv }); setError(''); }}><Pencil /></IconBtn>
+                    <IconBtn kind="danger" label={t('Remove')} onClick={() => del(sv)}><Trash /></IconBtn>
+                  </Acts>
+                </td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </Card>
+
+      {draft && (
+        <Dialog title={draft.id ? t('Edit server') : t('Add server')} onClose={() => setDraft(null)}
+          foot={<>
+            <Btn onClick={() => setDraft(null)}>{t('Cancel')}</Btn>
+            <Btn kind="primary" disabled={!valid || busy === 'save'} onClick={save}>
+              {busy === 'save' ? t('Connecting…') : t('Save and connect')}
+            </Btn>
+          </>}>
+          <Fields>
+            <Field label={t('Name')} hint={t('Shown to admins only. Tool names come from the server itself.')}>
+              <Input value={draft.name} placeholder={t('filesystem')}
+                onChange={(e) => setDraft(d => ({ ...d, name: e.target.value }))} />
+            </Field>
+            <Field label={t('Transport')}
+              hint={t('stdio spawns a local process from this server. HTTP connects to an endpoint that is already listening.')}>
+              <Seg value={stdio ? 'stdio' : 'http'} label={t('Transport')}
+                onChange={(v) => setDraft(d => ({ ...d, transport: v }))}
+                options={[{ value: 'stdio', label: t('stdio') }, { value: 'http', label: t('HTTP') }]} />
+            </Field>
+            {stdio ? (
+              <>
+                <Field label={t('Command')}>
+                  <Input mono value={draft.command} placeholder="npx"
+                    onChange={(e) => setDraft(d => ({ ...d, command: e.target.value }))} />
+                </Field>
+                <Field label={t('Arguments')} hint={t('Passed to the command as written, split on spaces.')}>
+                  <Input mono value={draft.args} placeholder="-y @modelcontextprotocol/server-filesystem /home/me/docs"
+                    onChange={(e) => setDraft(d => ({ ...d, args: e.target.value }))} />
+                </Field>
+              </>
+            ) : (
+              <>
+                <Field label={t('URL')}>
+                  <Input mono value={draft.url} placeholder="http://localhost:8931/mcp"
+                    onChange={(e) => setDraft(d => ({ ...d, url: e.target.value }))} />
+                </Field>
+                <Field label={t('Headers')} optional hint={t('One Name: value pair per line.')}>
+                  <Area mono rows={3} value={draft.headers} placeholder="Authorization: Bearer …"
+                    onChange={(e) => setDraft(d => ({ ...d, headers: e.target.value }))} />
+                </Field>
+              </>
+            )}
+          </Fields>
+          <Rows>
+            <ToggleRow label={t('Expose these tools to models')} on={draft.enabled}
+              onToggle={() => setDraft(d => ({ ...d, enabled: !d.enabled }))} />
+          </Rows>
+          {error && <Note tone="bad">{error}</Note>}
+        </Dialog>
       )}
-      <div className="fn-list">
-        {servers.length === 0 && !edit && <div className="muted-note">{t("No MCP servers yet.")}</div>}
-        {servers.map(sv => (
-          <div key={sv.id} className="fn-card">
-            <div className="fn-card-main">
-              <div className="fn-card-title">
-                <Plug style={{ width: 15 }} /> {sv.name}
-                <span className={'mcp-status ' + (sv.status || 'new')}>{sv.status === 'connected' ? `${(sv.tools || []).length} tool${(sv.tools || []).length === 1 ? '' : 's'}` : sv.status === 'error' ? 'error' : 'not connected'}</span>
-              </div>
-              <div className="fn-card-desc">
-                {sv.transport === 'http' ? sv.url : `${sv.command} ${sv.args || ''}`.trim()}
-                {sv.status === 'error' && sv.error ? `, ${sv.error}` : ''}
-                {sv.status === 'connected' && (sv.tools || []).length ? `, ${(sv.tools || []).map(t => t.name).slice(0, 6).join(', ')}${(sv.tools || []).length > 6 ? '…' : ''}` : ''}
-              </div>
-            </div>
-            <div className="fn-card-actions">
-              <button className="icon-btn" title={t("Reconnect and refresh tools")} disabled={busy === sv.id} onClick={() => refresh(sv.id)}><Refresh style={{ width: 15, opacity: busy === sv.id ? .4 : 1 }} /></button>
-              <Switch on={sv.enabled} label={t("Enabled")} title={t("Enabled")} onToggle={() => toggle(sv)} />
-              <button className="icon-btn" title={t("Edit")} aria-label={t("Edit")} onClick={() => setEdit({ ...sv })}><Pencil style={{ width: 15 }} /></button>
-              <button className="icon-btn" title={t("Delete")} aria-label={t("Delete")} onClick={() => remove(sv.id)}><Trash style={{ width: 15 }} /></button>
-            </div>
-          </div>
-        ))}
-      </div>
     </>
   );
 }

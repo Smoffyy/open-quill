@@ -8,7 +8,6 @@
 Anthropic-inspired design, artifacts, a real code sandbox. Nothing leaves your machine unless you say so.
 
 [![Latest Stable Release](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FSmoffyy%2Fopen-quill%2Freleases%2Flatest&query=%24.name&label=stable&labelColor=1f1f1e&color=d97757)](https://github.com/Smoffyy/open-quill/releases/latest)
-[![Latest Beta Release](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FSmoffyy%2Fopen-quill%2Freleases&query=%24%5B0%5D.name&label=beta&labelColor=1f1f1e&color=8a7f77)](https://github.com/Smoffyy/open-quill/releases)
 [![CI](https://img.shields.io/github/actions/workflow/status/Smoffyy/open-quill/ci.yml?branch=dev&label=CI&labelColor=1f1f1e&logo=githubactions&logoColor=f4f3ee)](https://github.com/Smoffyy/open-quill/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-8a7f77?labelColor=1f1f1e)](LICENSE)
 [![Follow on X](https://img.shields.io/badge/%40openquilldev-1f1f1e?logo=x&logoColor=f4f3ee)](https://x.com/openquilldev)
@@ -99,7 +98,7 @@ The Admin Panel is in the profile menu, bottom-left of the sidebar.
 
 ### Interface
 
-- Anthropic-style design with a serif assistant voice (Newsreader) and Open Sans for your own messages
+- Anthropic-style design with a serif assistant voice (Literata) and Open Sans for your own messages
 - Two complete UI presets, Anthropic and OpenAI, switchable live, plus light/dark modes and selectable palettes
 - Token-by-token streaming with a fade-in reveal, smart autoscroll and a jump-to-bottom control
 - Auto-generated chat titles, hover-to-copy code blocks, branching conversations and side-by-side branch comparison
@@ -134,7 +133,7 @@ The Admin Panel is in the profile menu, bottom-left of the sidebar.
 
 The [`docs/`](docs/README.md) folder is a full user guide covering chatting and branching, the composer, models and reasoning, personas and styles, organizing chats, artifacts and the sandbox, settings, keyboard shortcuts, privacy, and a complete admin reference. **Start at [docs/README.md](docs/README.md).**
 
-Building *on* Open Quill instead? [CLAUDE.md](CLAUDE.md) covers the architecture and [RELEASING.md](RELEASING.md) covers versioning, tagging and cutting a release.
+Building *on* Open Quill instead? [AGENTS.md](AGENTS.md) covers the architecture and how versions are cut.
 
 ---
 
@@ -181,15 +180,18 @@ See [docs/privacy-security.md](docs/privacy-security.md) for incognito chats, 2F
 
 From **Open Quill 27** onward the project uses year-based versioning: the major number increments annually.
 
-| Channel | Where | What to expect |
-| --- | --- | --- |
-| **Stable** | [Releases](https://github.com/Smoffyy/open-quill/releases/latest), marked *Latest* | Packaged with the client already built. What most people want |
-| **Beta** | [Releases](https://github.com/Smoffyy/open-quill/releases), marked *Pre-release* | Cut from `dev` as features land, versioned like `27.1.0-beta.3`. Expect the occasional rough edge |
-| **Bleeding edge** | The [`dev`](https://github.com/Smoffyy/open-quill/tree/dev) branch | Built from source. Expect breakage, and report issues with a commit hash |
+Most people want a **[release](https://github.com/Smoffyy/open-quill/releases/latest)**: packaged with the client already built, and what **Settings → Version** reports you are running.
 
-**Settings → Version** tells you which you are on: a bare version like `27.1.0` is a release, anything with a tail is not.
+If you want changes as they land, run the **[`dev`](https://github.com/Smoffyy/open-quill/tree/dev)** branch instead and pull every so often to pick up the latest:
 
-Maintaining a fork or cutting your own builds? [RELEASING.md](RELEASING.md) documents the whole process.
+```bash
+git checkout dev
+git pull
+npm run install:all
+npm run build
+```
+
+Expect the occasional rough edge, and quote a commit hash rather than a version when you report something.
 
 ---
 

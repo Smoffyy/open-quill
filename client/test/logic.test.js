@@ -9,9 +9,14 @@ import { parseSteps, lastSentence, thoughtSeconds } from '../src/lib/reasoning.j
 import { hasMath, isolateDisplayMath, wrapMathEnvironments } from '../src/lib/mathjs.js';
 import { hasToolCall, previewOf, buildTree, collapseRuns } from '../src/lib/threadmeta.js';
 import { scanTools } from '../src/toolproto.js';
-import { STATUS_DELAY_DEFAULT, STATUS_DELAY_MAX, statusDelayMs, statusDelaySecs } from '../src/lib/status.js';
-import { paletteFor, palettesFor, themeValue, paletteById, DEFAULT_DARK, DEFAULT_LIGHT, presetOf } from '../src/lib/palettes.js';
+import { extractHeadings, buildOutline } from '../src/lib/outline.js';
+import {
+  docsConfig, docsTree, docsSearch, parseDocsPath, docsPath, fmtTokens, fmtPrice,
+  priceRange, bulletLines, publicModelId, docsModels
+} from '../src/lib/modeldocs.js';
+import { paletteFor, palettesFor, themeValue, paletteById, DEFAULT_DARK, DEFAULT_LIGHT, presetOf, nextTheme } from '../src/lib/palettes.js';
 import { scrollInsideMenu } from '../src/lib/anchor.js';
+import { nextFitSize, FIT_MIN, FIT_PASSES } from '../src/lib/fittext.js';
 import { clampPx, knobAt, knobRaw, knobTravel, overshoot, stretchFor, squashFor, stretchOrigin, nearestIndex, slideFor, DRAG_SLOP, STRETCH_PX, SLIDE_BASE, SLIDE_SPAN } from '../src/lib/dragsteps.js';
 import { cellRand, cellRamp, cellAlpha, headColumn, fadeTrail, stampTrail, parseRgb, hotMix, CELL, CELL_GAP, TRAIL_DECAY, HEAD_WHITE } from '../src/lib/cellfield.js';
 import {
@@ -25,6 +30,15 @@ import {
   buildTree as buildFileTree, findMatches, countFiles, allDirPaths, ancestorDirs
 } from '../src/lib/artifacts.js';
 import { dirOf, baseName as fileBaseName } from '../src/lib/files.js';
+import { folderOf, groupRows, planMove } from '../src/lib/modelfolders.js';
+import { isInside, anyMounted, asRefList } from '../src/lib/dismiss.js';
+import { createSocketClient, retryDelay, socketUrl, RETRY_BASE, RETRY_MAX } from '../src/lib/wsclient.js';
+import { draftKey } from '../src/lib/drafts.js';
+import { isFileWrite, fileFrom, mergeCall, supersededFile } from '../src/lib/livetools.js';
+import { createLru } from '../src/lib/lru.js';
+import { parseRoute, shouldResetPath, pathForChat, pathForProject } from '../src/lib/route.js';
+import { revealChunk, revealPeriod, hasMarker } from '../src/lib/turnstream.js';
+import { dispatchWs, handlers, isSpaceFrame } from '../src/lib/wsmessages.js';
 
 const ev = (o) => ({ key: '', code: '', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...o });
 
@@ -897,24 +911,10 @@ test('the thinking budget preset matches the shape llama.cpp expects', () => {
   assert.equal('extra_body' in out, false);
 });
 
-test('the progress-line delay clamps to a whole number of seconds in range', () => {
-  assert.equal(statusDelaySecs(undefined), STATUS_DELAY_DEFAULT);
-  assert.equal(statusDelaySecs(null), STATUS_DELAY_DEFAULT);
-  assert.equal(statusDelaySecs(''), STATUS_DELAY_DEFAULT);
-  assert.equal(statusDelaySecs('nonsense'), STATUS_DELAY_DEFAULT);
-  assert.equal(statusDelaySecs(0), 0, 'zero is instant, not absent');
-  assert.equal(statusDelaySecs('0'), 0);
-  assert.equal(statusDelaySecs(-4), 0);
-  assert.equal(statusDelaySecs(99), STATUS_DELAY_MAX);
-  assert.equal(statusDelaySecs(4.6), 5);
-  assert.equal(statusDelayMs(3), 3000);
-  assert.equal(statusDelayMs(0), 0);
-});
-
 test('a palette resolves to a theme plus an optional palette attribute', () => {
   assert.equal(paletteFor('system', 'anthropic', true).id, 'anthropic-2026q3');
   assert.equal(paletteFor('system', 'anthropic', false).id, 'anthropic-light');
-  assert.equal(paletteFor('system', 'openai', true).id, 'openai-2024q1');
+  assert.equal(paletteFor('system', 'openai', true).id, 'openai-2025');
   assert.equal(paletteFor('anthropic-2026q3', 'anthropic').theme, 'anthropic');
   assert.equal(paletteFor('anthropic-2026q3', 'anthropic').palette, '2026q3');
   assert.equal(paletteFor('anthropic-2025q2', 'anthropic').palette, '', 'the older dark carries no palette attribute');
@@ -923,13 +923,13 @@ test('a palette resolves to a theme plus an optional palette attribute', () => {
 test('legacy theme values still land on the preset default', () => {
   for (const legacy of ['dark', 'oled', 'anthropic', 'openai']) {
     assert.equal(paletteFor(legacy, 'anthropic').id, 'anthropic-2026q3', legacy);
-    assert.equal(paletteFor(legacy, 'openai').id, 'openai-2024q1', legacy);
+    assert.equal(paletteFor(legacy, 'openai').id, 'openai-2025', legacy);
   }
   assert.equal(paletteFor('light', 'openai').id, 'openai-light');
 });
 
 test('a palette from the other preset falls back by darkness, never breaks', () => {
-  assert.equal(paletteFor('anthropic-2026q3', 'openai').id, 'openai-2024q1');
+  assert.equal(paletteFor('anthropic-2026q3', 'openai').id, 'openai-2025');
   assert.equal(paletteFor('anthropic-light', 'openai').id, 'openai-light');
   assert.equal(paletteFor('openai-2024q1', 'anthropic').id, 'anthropic-2026q3');
   assert.equal(paletteFor('nonsense', 'anthropic', true).id, 'anthropic-2026q3');
@@ -944,7 +944,18 @@ test('the theme picker only ever offers its own preset a value it can select', (
     }
   }
   assert.equal(palettesFor('anthropic').length, 4);
-  assert.equal(palettesFor('openai').length, 2);
+  assert.equal(palettesFor('openai').length, 3);
+});
+
+test('the 2025 openai palette is a token override, not a new theme value', () => {
+  const p = paletteFor('openai-2025', 'openai');
+  assert.equal(p.id, 'openai-2025');
+  assert.equal(p.theme, 'openai', 'a new data-theme would silently drop every rule scoped to the old one');
+  assert.equal(p.palette, '2025');
+  assert.ok(p.dark);
+  assert.equal(themeValue('openai-2025', 'openai'), 'openai-2025', 'the picker can select it');
+  assert.equal(paletteFor('openai-2025', 'anthropic').id, 'anthropic-2026q3', 'falls back by darkness under the other preset');
+  assert.deepEqual(palettesFor('openai').map(x => x.id), ['openai-light', 'openai-2024q1', 'openai-2025']);
 });
 
 test('the legacy palette is a distinct anthropic dark, not the default', () => {
@@ -952,7 +963,7 @@ test('the legacy palette is a distinct anthropic dark, not the default', () => {
   assert.equal(leg.theme, 'anthropic');
   assert.equal(leg.palette, 'legacy');
   assert.notEqual(paletteFor('dark', 'anthropic').id, 'anthropic-legacy', 'legacy is opt-in, never the default');
-  assert.equal(paletteFor('anthropic-legacy', 'openai').id, 'openai-2024q1', 'falls back by darkness under the other preset');
+  assert.equal(paletteFor('anthropic-legacy', 'openai').id, 'openai-2025', 'falls back by darkness under the other preset');
   const ids = palettesFor('anthropic').map(p => p.id);
   assert.deepEqual(ids, ['anthropic-light', 'anthropic-legacy', 'anthropic-2025q2', 'anthropic-2026q3']);
 });
@@ -1042,58 +1053,938 @@ test('revealSpeedMs clamps anything unreadable to the default interval', async (
   assert.equal(revealSpeedMs(9999), 100);
 });
 
-
-// --- version display ------------------------------------------------------
-// The version string is the npm version verbatim: it is also the git tag and the
-// GitHub release title, so nothing here may add or assume a "v" prefix. The
-// channel is whatever the release was named, not a fixed vocabulary.
-
-test('parseVersion splits a release and a prerelease tail', async () => {
-  const { parseVersion } = await import('../src/lib/appversion.js');
-  assert.deepEqual(parseVersion('27.1.0'), { full: '27.1.0', base: '27.1.0', channel: '', build: '', year: '' });
-  const b = parseVersion('27.1.0-beta.3');
-  assert.equal(b.base, '27.1.0');
-  assert.equal(b.channel, 'beta');
-  assert.equal(b.build, '3');
+test('nextFitSize returns null when the text already fits', () => {
+  assert.equal(nextFitSize(20, 200, 120, 12), null);
+  assert.equal(nextFitSize(20, 200, 200, 12), null);
 });
 
-test('parseVersion drops a stray v so an old-style tag still reads consistently', async () => {
-  const { parseVersion } = await import('../src/lib/appversion.js');
-  assert.equal(parseVersion('v27.1.0-beta.2').full, '27.1.0-beta.2');
-  assert.equal(parseVersion('v27.0.0').base, '27.0.0');
+test('nextFitSize shrinks by the overflow ratio', () => {
+  assert.equal(nextFitSize(20, 180, 200, 12), 18);
+  assert.equal(nextFitSize(20, 150, 200, 12), 15);
 });
 
-test('parseVersion accepts a channel nobody has thought of yet', async () => {
-  const { parseVersion } = await import('../src/lib/appversion.js');
-  for (const [s, channel, build] of [
-    ['2027.0.0-cascade.2', 'cascade', '2'],
-    ['27.2.0-developer.1', 'developer', '1'],
-    ['27.2.0-rc1', 'rc', '1'],
-    ['27.2.0-preview', 'preview', ''],
-    ['27.2.0-beta.3.1', 'beta', '3.1'],
-  ]) {
-    const p = parseVersion(s);
-    assert.equal(p.channel, channel, s);
-    assert.equal(p.build, build, s);
+test('nextFitSize stops at the floor', () => {
+  assert.equal(nextFitSize(20, 10, 1000, 12), 12);
+  assert.equal(nextFitSize(12, 10, 1000, 12), null);
+});
+
+test('nextFitSize converges within FIT_PASSES when glyph rounding overshoots', () => {
+  // real text does not scale perfectly linearly; model a 2px rounding overshoot
+  const ideal = 200, avail = 182, base = 20;
+  const widthAt = (size) => ideal * (size / base) + 2;
+  let size = base, natural = ideal;
+  for (let i = 0; i < FIT_PASSES; i++) {
+    const next = nextFitSize(size, avail, natural, base * FIT_MIN);
+    if (!next) break;
+    size = next;
+    natural = widthAt(size);
+  }
+  assert.ok(natural <= avail, 'expected fit, got ' + natural + ' in ' + avail);
+  assert.ok(size > base * FIT_MIN, 'should not have needed the floor');
+});
+
+test('nextFitSize is safe on unmeasured elements', () => {
+  assert.equal(nextFitSize(0, 100, 200, 10), null);
+  assert.equal(nextFitSize(20, 0, 200, 10), null);
+  assert.equal(nextFitSize(20, 100, NaN, 10), null);
+});
+
+test('nextFitSize treats a missing floor as no floor', () => {
+  assert.equal(nextFitSize(20, 50, 200, 0), 5);
+});
+
+/* ---------- admin model folders ---------- */
+
+const inFolder = (id, name) => ({ id, in_more_models: 1, more_models_label: name });
+const loose = (id) => ({ id, in_more_models: 0, more_models_label: 'More models' });
+
+test('folderOf only reports a folder when the row is actually in one', () => {
+  assert.equal(folderOf(inFolder('a', 'Fast')), 'Fast');
+  assert.equal(folderOf(loose('b')), null);
+  // A label without the flag is stale data, not membership.
+  assert.equal(folderOf({ id: 'c', in_more_models: 0, more_models_label: 'Fast' }), null);
+  // A blank or whitespace label cannot name a folder.
+  assert.equal(folderOf({ id: 'd', in_more_models: 1, more_models_label: '  ' }), null);
+  assert.equal(folderOf(undefined), null);
+});
+
+test('groupRows draws one header per folder even when members are separated', () => {
+  const rows = [inFolder('a', 'Fast'), loose('b'), inFolder('c', 'Fast')];
+  const out = groupRows(rows);
+  assert.deepEqual(out.map(e => e.kind), ['folder', 'model']);
+  assert.equal(out[0].name, 'Fast');
+  assert.deepEqual(out[0].models.map(m => m.id), ['a', 'c']);
+});
+
+test('groupRows keeps a folder at the position of its first member', () => {
+  const rows = [loose('a'), inFolder('b', 'Slow'), loose('c')];
+  const out = groupRows(rows);
+  assert.deepEqual(out.map(e => e.key), ['a', 'f:Slow', 'c']);
+});
+
+test('groupRows appends folders that hold nothing yet, and never twice', () => {
+  const out = groupRows([inFolder('a', 'Fast')], ['New', 'Fast']);
+  assert.deepEqual(out.map(e => e.name), ['Fast', 'New']);
+  assert.deepEqual(out[1].models, []);
+});
+
+test('planMove drops a row before or after the row it was dropped on', () => {
+  const models = [loose('a'), loose('b'), loose('c')];
+  assert.deepEqual(planMove(models, ['c'], { targetId: 'a' }).order.map(m => m.id), ['c', 'a', 'b']);
+  assert.deepEqual(planMove(models, ['c'], { targetId: 'a', after: true }).order.map(m => m.id), ['a', 'c', 'b']);
+});
+
+test('planMove onto a folder header lands after that folder last member', () => {
+  const models = [inFolder('a', 'Fast'), inFolder('b', 'Fast'), loose('c')];
+  const plan = planMove(models, ['c'], { folder: 'Fast' });
+  assert.deepEqual(plan.order.map(m => m.id), ['a', 'b', 'c']);
+  assert.deepEqual(plan.patch, { in_more_models: 1, more_models_label: 'Fast' });
+  assert.equal(plan.needsPatch, true);
+});
+
+test('planMove taking a row out of a folder clears membership', () => {
+  const models = [inFolder('a', 'Fast'), loose('b')];
+  const plan = planMove(models, ['a'], { folder: null });
+  assert.deepEqual(plan.patch, { in_more_models: 0 });
+  assert.equal(plan.needsPatch, true);
+});
+
+test('planMove reorders within a folder without rewriting the label', () => {
+  const models = [inFolder('a', 'Fast'), inFolder('b', 'Fast')];
+  const plan = planMove(models, ['b'], { folder: 'Fast', targetId: 'a' });
+  assert.deepEqual(plan.order.map(m => m.id), ['b', 'a']);
+  assert.equal(plan.needsPatch, false);
+});
+
+test('planMove keeps a multi-row selection together and in order', () => {
+  const models = [loose('a'), loose('b'), loose('c'), loose('d')];
+  const plan = planMove(models, ['a', 'c'], { targetId: 'd', after: true });
+  assert.deepEqual(plan.order.map(m => m.id), ['b', 'd', 'a', 'c']);
+});
+
+/* ---------- dismiss (outside click / Escape) ---------- */
+
+const elWith = (kids = [], match = null) => {
+  const el = {
+    kids,
+    contains: (t) => el === t || kids.includes(t),
+    closest: (sel) => (match === sel ? el : null)
+  };
+  return el;
+};
+
+test('isInside: a target inside any of the refs counts as inside', () => {
+  const child = elWith();
+  const a = elWith([child]);
+  const b = elWith();
+  assert.equal(isInside(child, [{ current: a }, { current: b }], ''), true);
+  assert.equal(isInside(child, [{ current: b }], ''), false);
+});
+
+test('isInside: the element itself is inside, not only its children', () => {
+  const a = elWith();
+  assert.equal(isInside(a, [{ current: a }], ''), true);
+});
+
+test('isInside: unattached refs and a null target are simply not inside', () => {
+  assert.equal(isInside(null, [{ current: null }], ''), false);
+  assert.equal(isInside(elWith(), [{ current: null }, null, undefined], ''), false);
+});
+
+test('isInside: the selector escape hatch covers a panel portalled out of the ref tree', () => {
+  const portalled = elWith([], '.model-submenu');
+  assert.equal(isInside(portalled, [{ current: elWith() }], ''), false);
+  assert.equal(isInside(portalled, [{ current: elWith() }], '.model-submenu'), true);
+});
+
+test('anyMounted gates the handler until a ref has attached', () => {
+  // Without this the first mousedown after opening a menu closes it again,
+  // because nothing is mounted yet to compare the click against.
+  assert.equal(anyMounted([{ current: null }]), false);
+  assert.equal(anyMounted([{ current: null }, { current: elWith() }]), true);
+  assert.equal(anyMounted([]), false);
+});
+
+test('asRefList accepts a single ref or a list', () => {
+  const r = { current: null };
+  assert.deepEqual(asRefList(r), [r]);
+  assert.deepEqual(asRefList([r]), [r]);
+});
+
+/* ---------- websocket client ---------- */
+
+function fakeSockets() {
+  const made = [];
+  class FakeWS {
+    constructor(url) {
+      this.url = url;
+      this.readyState = 0;
+      this.sent = [];
+      made.push(this);
+    }
+    open() { this.readyState = 1; if (this.onopen) this.onopen(); }
+    recv(data) { if (this.onmessage) this.onmessage({ data }); }
+    send(s) { this.sent.push(s); }
+    close() {
+      if (this.readyState === 3) return;
+      this.readyState = 3;
+      if (this.onclose) this.onclose();
+    }
+  }
+  return { made, FakeWS };
+}
+
+function fakeTimers() {
+  let seq = 0;
+  const jobs = new Map();
+  return {
+    api: {
+      set: (fn, ms) => { const id = ++seq; jobs.set(id, { fn, ms }); return id; },
+      clear: (id) => { jobs.delete(id); }
+    },
+    pending: () => jobs.size,
+    runAll: () => { const all = [...jobs.values()]; jobs.clear(); all.forEach(j => j.fn()); }
+  };
+}
+
+test('socket client: an unexpected drop reconnects with backoff', () => {
+  const { made, FakeWS } = fakeSockets();
+  const timers = fakeTimers();
+  const c = createSocketClient({ url: 'ws://x/ws', WebSocketImpl: FakeWS, timers: timers.api });
+  c.connect();
+  made[0].open();
+  assert.equal(c.isOpen(), true);
+  made[0].close();
+  assert.equal(timers.pending(), 1, 'a retry is queued');
+  timers.runAll();
+  assert.equal(made.length, 2, 'it opened a fresh socket');
+});
+
+test('socket client: close() stays closed and never reconnects', () => {
+  // The regression this guards: close() used to hang up the socket and let its
+  // own onclose queue a retry, so every remount left a live socket nobody owned.
+  const { made, FakeWS } = fakeSockets();
+  const timers = fakeTimers();
+  const c = createSocketClient({ url: 'ws://x/ws', WebSocketImpl: FakeWS, timers: timers.api });
+  c.connect();
+  made[0].open();
+  c.close();
+  assert.equal(timers.pending(), 0, 'no retry was queued');
+  timers.runAll();
+  assert.equal(made.length, 1, 'no second socket was ever created');
+  assert.equal(c.isOpen(), false);
+});
+
+test('socket client: a close while still connecting hangs up rather than leaking', () => {
+  const { made, FakeWS } = fakeSockets();
+  const timers = fakeTimers();
+  const c = createSocketClient({ url: 'ws://x/ws', WebSocketImpl: FakeWS, timers: timers.api });
+  c.connect();
+  c.close();
+  made[0].open();
+  assert.equal(made[0].readyState, 3, 'the late open closed itself');
+  assert.equal(timers.pending(), 0);
+});
+
+test('socket client: frames stop being delivered once closed', () => {
+  const { made, FakeWS } = fakeSockets();
+  const timers = fakeTimers();
+  const seen = [];
+  const c = createSocketClient({ url: 'ws://x/ws', WebSocketImpl: FakeWS, timers: timers.api, onMessage: (m) => seen.push(m) });
+  c.connect();
+  made[0].open();
+  made[0].recv('{"type":"a"}');
+  c.close();
+  made[0].recv('{"type":"b"}');
+  assert.deepEqual(seen, [{ type: 'a' }]);
+});
+
+test('socket client: an unparseable frame is dropped, not thrown', () => {
+  const { made, FakeWS } = fakeSockets();
+  const timers = fakeTimers();
+  const seen = [];
+  const c = createSocketClient({ url: 'ws://x/ws', WebSocketImpl: FakeWS, timers: timers.api, onMessage: (m) => seen.push(m) });
+  c.connect();
+  made[0].open();
+  made[0].recv('not json');
+  made[0].recv('{"ok":1}');
+  assert.deepEqual(seen, [{ ok: 1 }]);
+});
+
+test('socket client: shouldReconnect false skips the retry but keeps the client usable', () => {
+  const { made, FakeWS } = fakeSockets();
+  const timers = fakeTimers();
+  let live = false;
+  const c = createSocketClient({ url: 'ws://x/ws', WebSocketImpl: FakeWS, timers: timers.api, shouldReconnect: () => live });
+  c.connect();
+  made[0].open();
+  made[0].close();
+  timers.runAll();
+  assert.equal(made.length, 1, 'signed out, so no reconnect');
+  live = true;
+  c.connect();
+  assert.equal(made.length, 2);
+});
+
+test('socket client: connect() is idempotent while a socket is live', () => {
+  const { made, FakeWS } = fakeSockets();
+  const timers = fakeTimers();
+  const c = createSocketClient({ url: 'ws://x/ws', WebSocketImpl: FakeWS, timers: timers.api });
+  c.connect();
+  c.connect();
+  made[0].open();
+  c.connect();
+  assert.equal(made.length, 1);
+});
+
+test('socket client: send reports failure and reopens a dead socket', () => {
+  const { made, FakeWS } = fakeSockets();
+  const timers = fakeTimers();
+  const c = createSocketClient({ url: 'ws://x/ws', WebSocketImpl: FakeWS, timers: timers.api, shouldReconnect: () => true });
+  c.connect();
+  made[0].open();
+  assert.equal(c.send({ a: 1 }), true);
+  assert.deepEqual(made[0].sent, ['{"a":1}']);
+  made[0].close();
+  assert.equal(c.send({ b: 2 }), false, 'nothing to send on');
+});
+
+test('retryDelay backs off geometrically and then holds at the ceiling', () => {
+  assert.equal(retryDelay(0), RETRY_BASE);
+  assert.equal(retryDelay(1), RETRY_BASE * 2);
+  assert.ok(retryDelay(20) === RETRY_MAX);
+});
+
+test('socketUrl upgrades to wss on a secure page', () => {
+  assert.equal(socketUrl({ protocol: 'http:', host: 'localhost:5173' }), 'ws://localhost:5173/ws');
+  assert.equal(socketUrl({ protocol: 'https:', host: 'x.dev' }), 'wss://x.dev/ws');
+});
+
+/* ---------- drafts ---------- */
+
+test('draftKey namespaces per chat and has one slot for the unsaved new chat', () => {
+  assert.equal(draftKey('abc'), 'oq-draft-abc');
+  assert.equal(draftKey(null), 'oq-draft-new');
+  assert.notEqual(draftKey('a'), draftKey('b'));
+});
+
+/* ---------- live tool rows ---------- */
+
+test('isFileWrite only claims the two tools that actually write a file', () => {
+  assert.equal(isFileWrite({ tool: 'create_file', path: 'a.py' }), true);
+  assert.equal(isFileWrite({ tool: 'str_replace', path: 'a.py' }), true);
+  assert.equal(isFileWrite({ tool: 'bash', path: 'a.py' }), false);
+  assert.equal(isFileWrite({ tool: 'create_file' }), false, 'no path yet, nothing to preview');
+  assert.equal(isFileWrite(null), false);
+});
+
+test('fileFrom normalises a partial live call into a preview record', () => {
+  assert.deepEqual(fileFrom({ tool: 'create_file', path: 'a.py' }),
+    { path: 'a.py', content: '', tool: 'create_file', oldStr: null });
+  assert.deepEqual(fileFrom({ tool: 'str_replace', path: 'a.py', content: 'x', oldStr: 'y' }),
+    { path: 'a.py', content: 'x', tool: 'str_replace', oldStr: 'y' });
+});
+
+test('mergeCall updates a row in place instead of overwriting the one before it', () => {
+  let rows = mergeCall([], 0, { tool: 'create_file', path: 'a.py' });
+  rows = mergeCall(rows, 1, { tool: 'create_file', path: 'b.py' });
+  assert.equal(rows.length, 2);
+  rows = mergeCall(rows, 0, { tool: 'create_file', path: 'a.py', content: 'more' });
+  assert.equal(rows.length, 2, 'still two rows');
+  assert.equal(rows[0].call.content, 'more');
+  assert.deepEqual(rows.map(r => r.index), [0, 1], 'kept in index order');
+});
+
+test('mergeCall keeps rows sorted even when indexes arrive out of order', () => {
+  let rows = mergeCall([], 2, { tool: 'bash' });
+  rows = mergeCall(rows, 0, { tool: 'bash' });
+  rows = mergeCall(rows, 1, { tool: 'bash' });
+  assert.deepEqual(rows.map(r => r.index), [0, 1, 2]);
+});
+
+test('mergeCall clears the whole step on a null call', () => {
+  const rows = mergeCall([], 0, { tool: 'bash' });
+  assert.deepEqual(mergeCall(rows, 0, null), []);
+  assert.deepEqual(mergeCall(rows, undefined, { tool: 'bash' }), [], 'no index means no row');
+});
+
+test('supersededFile commits a finished create_file exactly once', () => {
+  const prev = { tool: 'create_file', path: 'a.py', content: 'body' };
+  // moved on to a different file
+  assert.deepEqual(supersededFile(prev, { tool: 'create_file', path: 'b.py' }), { path: 'a.py', text: 'body' });
+  // the step ended
+  assert.deepEqual(supersededFile(prev, null), { path: 'a.py', text: 'body' });
+  // still writing the same file
+  assert.equal(supersededFile(prev, { tool: 'create_file', path: 'a.py', content: 'body+' }), null);
+});
+
+test('supersededFile ignores a str_replace, which is not a whole-file write', () => {
+  assert.equal(supersededFile({ tool: 'str_replace', path: 'a.py', content: 'x' }, null), null);
+  assert.equal(supersededFile(null, null), null);
+});
+
+test('socket client: the DEFAULT timers reconnect for real', async () => {
+  // Guards a browser-only failure node cannot see directly: `{ set: setTimeout }`
+  // detaches the timer from `window` and throws "Illegal invocation" on call, which
+  // silently disables every reconnect. Exercising the default path keeps the
+  // wrappers in place.
+  const { made, FakeWS } = fakeSockets();
+  const c = createSocketClient({ url: 'ws://x/ws', WebSocketImpl: FakeWS });
+  c.connect();
+  made[0].open();
+  made[0].close();
+  await new Promise(r => { setTimeout(r, RETRY_BASE + 250); });
+  assert.equal(made.length, 2, 'the real timer fired and reopened the socket');
+  c.close();
+});
+
+/* ---------- bounded chat cache ---------- */
+
+test('lru evicts the least recently used once past its limit', () => {
+  const c = createLru(3);
+  c.set('a', 1); c.set('b', 2); c.set('c', 3);
+  c.set('d', 4);
+  assert.equal(c.has('a'), false, 'oldest went');
+  assert.deepEqual(c.keys(), ['b', 'c', 'd']);
+  assert.equal(c.size, 3);
+});
+
+test('lru counts a re-set as fresh use, so it is not the next evicted', () => {
+  const c = createLru(3);
+  c.set('a', 1); c.set('b', 2); c.set('c', 3);
+  c.set('a', 9);
+  c.set('d', 4);
+  assert.equal(c.has('a'), true, 'a was touched, so b went instead');
+  assert.equal(c.has('b'), false);
+  assert.equal(c.get('a'), 9);
+});
+
+test('lru merge lets a chat arrive in pieces without wiping the earlier ones', () => {
+  const c = createLru(3);
+  c.merge('x', { chat: { id: 'x' } });
+  c.merge('x', { messages: [1, 2] });
+  c.merge('x', { files: ['a.py'] });
+  assert.deepEqual(c.get('x'), { chat: { id: 'x' }, messages: [1, 2], files: ['a.py'] });
+});
+
+test('lru merge overwrites only the keys it is given', () => {
+  const c = createLru(3);
+  c.merge('x', { messages: [1], files: ['a'] });
+  c.merge('x', { messages: [1, 2] });
+  assert.deepEqual(c.get('x'), { messages: [1, 2], files: ['a'] });
+});
+
+test('lru ignores a missing key rather than caching under undefined', () => {
+  const c = createLru(3);
+  c.set(null, 1); c.set('', 2); c.merge(undefined, { a: 1 });
+  assert.equal(c.size, 0);
+});
+
+/* ---------- routes ---------- */
+
+test('parseRoute reads each screen off the path', () => {
+  assert.deepEqual(parseRoute('/'), { view: 'home' });
+  assert.deepEqual(parseRoute('/spaces'), { view: 'spaces' });
+  assert.deepEqual(parseRoute('/spaces/'), { view: 'spaces' });
+  assert.deepEqual(parseRoute('/projects'), { view: 'projects', id: null });
+  assert.deepEqual(parseRoute('/project/abc'), { view: 'project', id: 'abc' });
+  assert.deepEqual(parseRoute('/chat/xyz'), { view: 'chat', id: 'xyz' });
+});
+
+test('parseRoute sends a member away from the admin-only screens', () => {
+  assert.deepEqual(parseRoute('/admin', { isAdmin: true }), { view: 'admin' });
+  assert.deepEqual(parseRoute('/admin'), { view: 'home', replace: '/' });
+  assert.deepEqual(parseRoute('/playground'), { view: 'home', replace: '/' });
+  assert.deepEqual(parseRoute('/playground', { isAdmin: true }), { view: 'playground' });
+});
+
+test('parseRoute decodes an id and survives a malformed one', () => {
+  assert.equal(parseRoute('/chat/a%20b').id, 'a b');
+  assert.equal(parseRoute('/chat/100%').id, '100%', 'a stray percent is kept, not thrown on');
+});
+
+test('parseRoute does not mistake a lookalike path for a screen', () => {
+  assert.deepEqual(parseRoute('/administrator'), { view: 'home' });
+  assert.deepEqual(parseRoute('/chatter'), { view: 'home' });
+  assert.deepEqual(parseRoute(''), { view: 'home' });
+  assert.deepEqual(parseRoute(null), { view: 'home' });
+});
+
+test('shouldResetPath only claims the paths its own screen owns', () => {
+  assert.equal(shouldResetPath('admin', '/admin'), true);
+  assert.equal(shouldResetPath('admin', '/chat/x'), false, 'user navigated away, leave the URL alone');
+  assert.equal(shouldResetPath('projects', '/project/a'), true);
+  assert.equal(shouldResetPath('projects', '/projects'), true);
+  assert.equal(shouldResetPath('spaces', '/spaces'), true);
+  assert.equal(shouldResetPath('home', '/'), false);
+});
+
+test('path builders round-trip through parseRoute', () => {
+  assert.equal(parseRoute(pathForChat('c1')).id, 'c1');
+  assert.equal(parseRoute(pathForProject('p1')).id, 'p1');
+  assert.deepEqual(parseRoute(pathForProject(null)), { view: 'projects', id: null });
+});
+
+/* ---------- reveal (typewriter) ---------- */
+
+test('revealChunk catches up fast on a big backlog and eases into a readable pace', () => {
+  assert.equal(revealChunk(3000, false), 1000, 'a third while far behind');
+  assert.equal(revealChunk(600, false), 100, 'a sixth in the middle band');
+  assert.equal(revealChunk(90, false), 10, 'a ninth once close');
+});
+
+test('revealChunk always advances, so the reveal cannot stall short of the text', () => {
+  for (const remaining of [1, 2, 3, 5, 17, 240, 241, 1200, 1201]) {
+    const n = revealChunk(remaining, false);
+    assert.ok(n >= 1, `remaining=${remaining} advanced by ${n}`);
+    assert.ok(n <= remaining, `remaining=${remaining} did not overshoot`);
   }
 });
 
-test('parseVersion ignores build metadata and refuses nothing at all', async () => {
-  const { parseVersion } = await import('../src/lib/appversion.js');
-  assert.equal(parseVersion('27.1.0+sha.abc').base, '27.1.0');
-  for (const v of [null, undefined, '', '   ']) assert.equal(parseVersion(v), null, String(v));
+test('revealChunk with animation off shows everything at once', () => {
+  assert.equal(revealChunk(5000, true), 5000);
+  assert.equal(revealChunk(1, true), 1);
 });
 
-test('formatVersion reads as words, and leaves a plain release alone', async () => {
-  const { formatVersion } = await import('../src/lib/appversion.js');
-  assert.equal(formatVersion('27.1.0-beta.3'), '27.1.0 Beta 3');
-  assert.equal(formatVersion('27.1.0'), '27.1.0');
-  assert.equal(formatVersion('2027.0.0-cascade.2'), '2027.0.0 Cascade 2');
-  assert.equal(formatVersion('27.2.0-preview'), '27.2.0 Preview');
-  assert.equal(formatVersion(''), '');
+test('revealChunk converges: repeated application always reaches the end', () => {
+  let shown = 0;
+  const total = 5000;
+  let ticks = 0;
+  while (shown < total && ticks < 1000) { shown += revealChunk(total - shown, false); ticks++; }
+  assert.equal(shown, total);
+  assert.ok(ticks < 100, `converged in ${ticks} ticks`);
 });
 
-test('formatVersion takes the channel wording from its caller', async () => {
-  const { formatVersion } = await import('../src/lib/appversion.js');
-  assert.equal(formatVersion('27.2.0-rc.1', () => 'Release candidate'), '27.2.0 Release candidate 1');
+test('revealPeriod stays inside the band where it reads as typing', () => {
+  assert.equal(revealPeriod(0), 8, 'never a zero-delay interval');
+  assert.equal(revealPeriod(-5), 8);
+  assert.equal(revealPeriod(40), 40);
+  assert.equal(revealPeriod(5000), 100);
+  assert.equal(revealPeriod(undefined), 8);
+});
+
+test('hasMarker spots the transcript markers that must not be drawn a character at a time', () => {
+  assert.equal(hasMarker('text [[OQR:abc]] more'), true);
+  assert.equal(hasMarker('\n\n[[OQT:0]]\n'), true);
+  assert.equal(hasMarker('ordinary prose'), false);
+  assert.equal(hasMarker(''), false);
+});
+
+/* ---------- websocket frame handlers ---------- */
+
+function wsCtx(activeKey = 'c1') {
+  const recs = new Map();
+  const calls = [];
+  const log = (name) => (...a) => { calls.push([name, ...a]); };
+  const ctx = {
+    activeKey: () => activeKey,
+    calls,
+    recs,
+    refs: {
+      activeIdRef: { current: activeKey },
+      currentIdRef: { current: 'model-1' },
+      ledgerOpenRef: { current: false },
+      compareRef: { current: null },
+      nextTurnPending: { current: false },
+      refreshSeq: { current: 0 }
+    },
+    mirror: {
+      recFor: (id) => {
+        if (!recs.has(id)) recs.set(id, { content: '', reasoning: '', liveCalls: [] });
+        return recs.get(id);
+      },
+      peek: (id) => recs.get(id),
+      dropRec: (id) => { recs.delete(id); calls.push(['dropRec', id]); },
+      syncBusy: log('syncBusy'),
+      resumeRec: (id, patch) => { recs.set(id, patch); calls.push(['resumeRec', id]); }
+    },
+    stream: {
+      donePending: { current: false },
+      setQueued: log('setQueued'),
+      begin: log('begin'),
+      clear: log('clear'),
+      markDone: () => { calls.push(['markDone']); return true; },
+      pushContent: (full, delta) => { calls.push(['pushContent', full]); return /\[\[OQ[RT]:/.test(delta); },
+      pushReasoning: log('pushReasoning'),
+      setSegments: log('setSegments')
+    },
+    meta: {
+      setPromptTokens: log('setPromptTokens'), setRoute: log('setRoute'), setStatus: log('setStatus'),
+      setTelemetry: log('setTelemetry'), setSteers: log('setSteers'), reset: log('metaReset')
+    },
+    tools: {
+      fileRef: { current: null }, clearFile: log('clearFile'), clear: log('toolsClear'),
+      setRows: log('setRows'), setCall: log('setCall'), apply: () => null, appendToFile: log('appendToFile')
+    },
+    set: {
+      files: log('setFiles'), pendingFiles: log('setPendingFiles'), chats: log('setChats'),
+      errors: log('setErrors'), compacting: log('setCompacting'), hasSummary: log('setHasSummary'),
+      ended: log('setEnded'), endedReason: log('setEndedReason'), canContinue: log('setCanContinue')
+    },
+    actions: {
+      finalize: log('finalize'), finalizeBackground: log('finalizeBackground'), syncView: log('syncView'),
+      loadModels: log('loadModels'), loadAppConfig: log('loadAppConfig'), loadBudget: log('loadBudget'),
+      loadLedger: log('loadLedger'), refreshSpacesPending: log('refreshSpacesPending')
+    }
+  };
+  return ctx;
+}
+const did = (ctx, name) => ctx.calls.some(c => c[0] === name);
+
+test('dispatchWs reports an unknown frame rather than silently dropping it', () => {
+  const ctx = wsCtx();
+  assert.equal(dispatchWs({ type: 'content', chatId: 'c1', text: 'hi' }, ctx), true);
+  assert.equal(dispatchWs({ type: 'not_a_real_frame' }, ctx), false);
+  assert.equal(dispatchWs(null, ctx), false);
+  assert.equal(dispatchWs({}, ctx), false);
+});
+
+test('every frame the server can send has a handler', () => {
+  // Kept in step with server/lib/ws: adding a frame type there without one here
+  // is exactly the bug this catches.
+  const SENT = ['session_revoked', 'config', 'resume', 'files', 'tool_live', 'tool_live_delta',
+    'tool_exec', 'tool', 'compacting', 'compacted', 'ctx_rolling', 'title', 'chat_ended',
+    'routed', 'queued', 'status', 'prompt_size', 'telemetry', 'steered', 'start',
+    'reasoning', 'content', 'error', 'done'];
+  for (const type of SENT) assert.ok(handlers[type], 'no handler for ' + type);
+});
+
+test('a frame for a background chat updates the mirror but never the view', () => {
+  const ctx = wsCtx('c1');
+  dispatchWs({ type: 'content', chatId: 'c2', text: 'hello' }, ctx);
+  assert.equal(ctx.recs.get('c2').content, 'hello', 'the mirror accumulated it');
+  assert.equal(did(ctx, 'pushContent'), false, 'but the visible stream was untouched');
+});
+
+test('the same frame for the active chat does reach the view', () => {
+  const ctx = wsCtx('c1');
+  dispatchWs({ type: 'content', chatId: 'c1', text: 'hello' }, ctx);
+  assert.equal(ctx.recs.get('c1').content, 'hello');
+  assert.equal(did(ctx, 'pushContent'), true);
+});
+
+test('content carrying a tool marker retires the live tool rows', () => {
+  const ctx = wsCtx('c1');
+  dispatchWs({ type: 'content', chatId: 'c1', text: '\n\n[[OQR:eyJ9]]\n' }, ctx);
+  assert.equal(did(ctx, 'setCall'), true);
+  assert.equal(did(ctx, 'setRows'), true);
+});
+
+test('ordinary content leaves the live tool rows alone', () => {
+  const ctx = wsCtx('c1');
+  dispatchWs({ type: 'content', chatId: 'c1', text: 'just prose' }, ctx);
+  assert.equal(did(ctx, 'setCall'), false);
+});
+
+test('a new turn commits a previous one whose reveal had not caught up', () => {
+  const ctx = wsCtx('c1');
+  ctx.stream.donePending.current = true;
+  ctx.refs.nextTurnPending.current = true;
+  dispatchWs({ type: 'start', chatId: 'c1', messageId: 'a1' }, ctx);
+  assert.equal(did(ctx, 'finalize'), true, 'the stranded turn was committed');
+  assert.equal(ctx.refs.nextTurnPending.current, false, 'and it does not also trigger the queue');
+  assert.equal(did(ctx, 'begin'), true);
+});
+
+test('a new turn with nothing pending does not commit anything', () => {
+  const ctx = wsCtx('c1');
+  dispatchWs({ type: 'start', chatId: 'c1', messageId: 'a1' }, ctx);
+  assert.equal(did(ctx, 'finalize'), false);
+  assert.equal(did(ctx, 'begin'), true);
+});
+
+test('start resets the record so a retry does not inherit the last attempt', () => {
+  const ctx = wsCtx('c1');
+  const rec = ctx.mirror.recFor('c1');
+  rec.content = 'old'; rec.reasoning = 'old'; rec.done = true; rec.steers = ['x'];
+  dispatchWs({ type: 'start', chatId: 'c1', messageId: 'a2' }, ctx);
+  assert.equal(rec.content, '');
+  assert.equal(rec.reasoning, '');
+  assert.equal(rec.done, false);
+  assert.deepEqual(rec.steers, []);
+  assert.equal(rec.assistantId, 'a2');
+});
+
+test('an error after text has streamed keeps the text instead of discarding it', () => {
+  const ctx = wsCtx('c1');
+  ctx.mirror.recFor('c1').content = 'half a reply';
+  dispatchWs({ type: 'error', chatId: 'c1', error: 'boom' }, ctx);
+  assert.equal(did(ctx, 'finalize'), true, 'committed');
+  assert.equal(did(ctx, 'clear'), false, 'not thrown away');
+  assert.equal(did(ctx, 'setErrors'), true);
+});
+
+test('an error before any text clears the stream instead of committing nothing', () => {
+  const ctx = wsCtx('c1');
+  ctx.mirror.recFor('c1');
+  dispatchWs({ type: 'error', chatId: 'c1', error: 'boom' }, ctx);
+  assert.equal(did(ctx, 'finalize'), false);
+  assert.equal(did(ctx, 'clear'), true);
+  assert.equal(did(ctx, 'dropRec'), true);
+});
+
+test('an error in a background chat is finalized there, not on screen', () => {
+  const ctx = wsCtx('c1');
+  ctx.mirror.recFor('c2').content = 'text';
+  dispatchWs({ type: 'error', chatId: 'c2', error: 'boom' }, ctx);
+  assert.equal(did(ctx, 'finalizeBackground'), true);
+  assert.equal(did(ctx, 'finalize'), false);
+});
+
+test('done on a background chat finalizes it without touching the view', () => {
+  const ctx = wsCtx('c1');
+  dispatchWs({ type: 'done', chatId: 'c2', messageId: 'a1' }, ctx);
+  assert.equal(did(ctx, 'finalizeBackground'), true);
+  assert.equal(did(ctx, 'setCanContinue'), false);
+  assert.equal(did(ctx, 'syncBusy'), true, 'the sidebar busy dot still updates');
+});
+
+test('done records the message id a pending model comparison was waiting for', () => {
+  const ctx = wsCtx('c1');
+  ctx.refs.compareRef.current = { chatId: 'c1', messageId: null, remaining: ['m2'] };
+  dispatchWs({ type: 'done', chatId: 'c1', messageId: 'a9' }, ctx);
+  assert.equal(ctx.refs.compareRef.current.messageId, 'a9');
+  assert.equal(ctx.refs.nextTurnPending.current, true);
+});
+
+test('done does not overwrite a comparison id that is already set', () => {
+  const ctx = wsCtx('c1');
+  ctx.refs.compareRef.current = { chatId: 'c1', messageId: 'first', remaining: [] };
+  dispatchWs({ type: 'done', chatId: 'c1', messageId: 'a9' }, ctx);
+  assert.equal(ctx.refs.compareRef.current.messageId, 'first');
+});
+
+test('reasoning segments accumulate per index, not into one blob', () => {
+  const ctx = wsCtx('c1');
+  dispatchWs({ type: 'reasoning', chatId: 'c1', seg: 0, text: 'aa' }, ctx);
+  dispatchWs({ type: 'reasoning', chatId: 'c1', seg: 1, text: 'bb' }, ctx);
+  dispatchWs({ type: 'reasoning', chatId: 'c1', seg: 0, text: 'cc' }, ctx);
+  assert.deepEqual(ctx.recs.get('c1').reasonSegs, ['aacc', 'bb']);
+});
+
+test('unsegmented reasoning marks the turn as thinking only while no text has arrived', () => {
+  const ctx = wsCtx('c1');
+  dispatchWs({ type: 'reasoning', chatId: 'c1', text: 'hmm' }, ctx);
+  assert.equal(ctx.recs.get('c1').phase, 'thinking');
+  ctx.recs.get('c1').content = 'answer';
+  dispatchWs({ type: 'reasoning', chatId: 'c1', text: ' more' }, ctx);
+  assert.equal(ctx.recs.get('c1').reasoning, 'hmm more');
+});
+
+test('status of generating clears the prefill readout rather than showing a phase', () => {
+  const ctx = wsCtx('c1');
+  dispatchWs({ type: 'status', chatId: 'c1', phase: 'prefill', pct: 40 }, ctx);
+  assert.equal(ctx.recs.get('c1').status.pct, 40);
+  dispatchWs({ type: 'status', chatId: 'c1', phase: 'generating' }, ctx);
+  assert.equal(ctx.recs.get('c1').status, null);
+});
+
+test('a space frame goes out as an event and refreshes only for membership changes', () => {
+  const ctx = wsCtx();
+  assert.equal(isSpaceFrame('space_invite'), true);
+  assert.equal(isSpaceFrame('done'), false);
+  dispatchWs({ type: 'space_message' }, ctx);
+  assert.equal(did(ctx, 'refreshSpacesPending'), false);
+  dispatchWs({ type: 'space_invite' }, ctx);
+  assert.equal(did(ctx, 'refreshSpacesPending'), true);
+});
+
+test('resume rebuilds every turn and only syncs the view when one is on screen', () => {
+  const ctx = wsCtx('c1');
+  dispatchWs({ type: 'resume', turns: [{ chatId: 'c2', content: 'x' }] }, ctx);
+  assert.equal(did(ctx, 'resumeRec'), true);
+  assert.equal(did(ctx, 'syncView'), false, 'nothing resumed for the chat on screen');
+  const ctx2 = wsCtx('c1');
+  dispatchWs({ type: 'resume', turns: [{ chatId: 'c1', content: 'x', promptTokens: 42 }] }, ctx2);
+  assert.equal(did(ctx2, 'syncView'), true);
+  assert.equal(did(ctx2, 'setPromptTokens'), true);
+});
+
+test('resume ignores a malformed turn instead of throwing away the batch', () => {
+  const ctx = wsCtx('c1');
+  dispatchWs({ type: 'resume', turns: [null, { chatId: null }, { chatId: 'c1', content: 'ok' }] }, ctx);
+  assert.equal(ctx.calls.filter(c => c[0] === 'resumeRec').length, 1);
+});
+
+test('a files frame for another chat is ignored', () => {
+  const ctx = wsCtx('c1');
+  ctx.refs.activeIdRef.current = 'c1';
+  dispatchWs({ type: 'files', chatId: 'c2', files: [{ path: 'a.py' }] }, ctx);
+  assert.equal(did(ctx, 'setFiles'), false);
+  dispatchWs({ type: 'files', chatId: 'c1', files: [{ path: 'a.py' }] }, ctx);
+  assert.equal(did(ctx, 'setFiles'), true);
+});
+
+test('a file that has landed on disk retires its live preview', () => {
+  const ctx = wsCtx('c1');
+  ctx.tools.fileRef.current = { path: 'a.py' };
+  dispatchWs({ type: 'files', chatId: 'c1', files: [{ path: 'a.py' }] }, ctx);
+  assert.equal(did(ctx, 'clearFile'), true);
+});
+
+test('a preview of a file that has not landed yet is left running', () => {
+  const ctx = wsCtx('c1');
+  ctx.tools.fileRef.current = { path: 'b.py' };
+  dispatchWs({ type: 'files', chatId: 'c1', files: [{ path: 'a.py' }] }, ctx);
+  assert.equal(did(ctx, 'clearFile'), false);
+});
+
+test('chat_ended marks the sidebar row even when the chat is not on screen', () => {
+  const ctx = wsCtx('c1');
+  dispatchWs({ type: 'chat_ended', chatId: 'c2', reason: 'done here' }, ctx);
+  assert.equal(did(ctx, 'setChats'), true);
+  assert.equal(did(ctx, 'setEnded'), false, 'but the banner is only for the open chat');
+});
+
+/* ---------- light/dark toggle ---------- */
+
+test('nextTheme from a dark palette goes to light and remembers which dark it was', () => {
+  const r = nextTheme({ themePref: DEFAULT_DARK.anthropic, preset: 'anthropic', prefersDark: true, lastDark: '' });
+  assert.equal(r.theme, DEFAULT_LIGHT.anthropic);
+  assert.equal(r.remember, DEFAULT_DARK.anthropic, 'so coming back restores this one');
+});
+
+test('nextTheme from light returns the remembered dark palette, not just the default', () => {
+  const other = palettesFor('anthropic').find(p => p.dark && p.id !== DEFAULT_DARK.anthropic);
+  if (!other) return; // only one dark palette for this preset
+  const r = nextTheme({ themePref: DEFAULT_LIGHT.anthropic, preset: 'anthropic', prefersDark: false, lastDark: other.id });
+  assert.equal(r.theme, other.id);
+  assert.equal(r.remember, null);
+});
+
+test('nextTheme falls back to the preset default when nothing is remembered', () => {
+  const r = nextTheme({ themePref: DEFAULT_LIGHT.anthropic, preset: 'anthropic', prefersDark: false, lastDark: '' });
+  assert.equal(r.theme, DEFAULT_DARK.anthropic);
+});
+
+test('nextTheme ignores a remembered palette belonging to the other preset', () => {
+  // Switching preset must not drag the old preset's palette across; ~40 rules are
+  // scoped to the existing data-theme values.
+  const r = nextTheme({ themePref: DEFAULT_LIGHT.openai, preset: 'openai', prefersDark: false, lastDark: DEFAULT_DARK.anthropic });
+  assert.equal(r.theme, DEFAULT_DARK.openai);
+});
+
+test('nextTheme round-trips: dark to light and back lands where it started', () => {
+  const start = DEFAULT_DARK.anthropic;
+  const toLight = nextTheme({ themePref: start, preset: 'anthropic', prefersDark: true, lastDark: '' });
+  const back = nextTheme({ themePref: toLight.theme, preset: 'anthropic', prefersDark: false, lastDark: toLight.remember });
+  assert.equal(back.theme, start);
+});
+
+test('extractHeadings pulls ATX headings with their level and source order', () => {
+  const md = '# Title\n\nintro\n\n## Section A\ntext\n\n### Deep\n\n## Section B';
+  const hs = extractHeadings(md);
+  assert.deepEqual(hs.map(h => [h.level, h.text, h.li]), [
+    [1, 'Title', 0], [2, 'Section A', 1], [3, 'Deep', 2], [2, 'Section B', 3]
+  ]);
+});
+
+test('extractHeadings ignores hash lines inside fenced code', () => {
+  const md = '## Real\n\n```bash\n# not a heading\n```\n\n## Also real';
+  assert.deepEqual(extractHeadings(md).map(h => h.text), ['Real', 'Also real']);
+});
+
+test('extractHeadings strips inline markdown from the heading text', () => {
+  const md = '## The `run` **tool** and [a link](http://x)';
+  assert.equal(extractHeadings(md)[0].text, 'The run tool and a link');
+});
+
+test('extractHeadings returns nothing when there are no headings', () => {
+  assert.deepEqual(extractHeadings('just a paragraph, no hashes'), []);
+  assert.deepEqual(extractHeadings(''), []);
+});
+
+test('buildOutline flattens only assistant answers, tagged by message id', () => {
+  const msgs = [
+    { id: 'u1', role: 'user', content: '# not mine' },
+    { id: 'a1', role: 'assistant', content: '## One\n\n## Two' },
+    { id: 'a2', role: 'assistant', content: 'no headings here' },
+    { id: 'a3', role: 'assistant', content: '### Three' },
+  ];
+  assert.deepEqual(buildOutline(msgs), [
+    { mid: 'a1', li: 0, level: 2, text: 'One' },
+    { mid: 'a1', li: 1, level: 2, text: 'Two' },
+    { mid: 'a3', li: 0, level: 3, text: 'Three' },
+  ]);
+});
+
+const DOCS_MODELS = [
+  { id: 'a', displayName: 'Sonata', description: 'Everyday', docsIds: [{ label: 'Chat', value: 'sonata-1' }] },
+  { id: 'b', displayName: 'Aria', description: 'Quick', docsGroup: 'Legacy models', docsIds: [] },
+  { id: 'c', displayName: 'Cadence', description: 'Old', docsGroup: 'Legacy models', docsIds: [] },
+  { id: 'd', displayName: 'Router', kind: 'router', docsIds: [] },
+  { id: 'e', displayName: 'Hidden', docsHidden: true, docsIds: [] }
+];
+
+test('docsModels drops routers, hidden entries and removed rows', () => {
+  assert.deepEqual(docsModels(DOCS_MODELS).map(m => m.id), ['a', 'b', 'c']);
+  assert.deepEqual(docsModels(null), []);
+});
+
+test('docsTree keeps ungrouped models at the top and folds the rest by label', () => {
+  const tree = docsTree(DOCS_MODELS, docsConfig(null));
+  assert.deepEqual(tree.models.top.map(m => m.id), ['a']);
+  assert.equal(tree.models.groups.length, 1);
+  assert.equal(tree.models.groups[0].label, 'Legacy models');
+  assert.deepEqual(tree.models.groups[0].models.map(m => m.id), ['b', 'c']);
+});
+
+test('docsTree hides a custom section that has no pages', () => {
+  const cfg = docsConfig({ sections: [{ id: 'g', label: 'Guides', pages: [] }, { id: 'h', label: 'Help', pages: [{ id: 'p', title: 'P' }] }] });
+  assert.deepEqual(docsTree(DOCS_MODELS, cfg).sections.map(s => s.id), ['h']);
+});
+
+test('docsSearch matches a group by its own label, and returns null for an empty query', () => {
+  const tree = docsTree(DOCS_MODELS, docsConfig(null));
+  assert.equal(docsSearch(tree, '  '), null);
+  const hit = docsSearch(tree, 'legacy');
+  assert.deepEqual(hit.models.top, []);
+  assert.deepEqual(hit.models.groups[0].models.map(m => m.id), ['b', 'c']);
+});
+
+test('a docs path round-trips through parseDocsPath', () => {
+  for (const target of [{ kind: 'overview', id: null }, { kind: 'model', id: 'a b/c' }, { kind: 'page', id: 'pricing' }]) {
+    const parsed = parseDocsPath(docsPath(target));
+    assert.equal(parsed.kind, target.kind);
+    assert.equal(parsed.id, target.id);
+  }
+});
+
+test('parseDocsPath falls back to the overview for anything else', () => {
+  assert.equal(parseDocsPath('/docs').kind, 'overview');
+  assert.equal(parseDocsPath('/chat/x').kind, 'overview');
+  assert.equal(parseDocsPath('/docs/m/%E0%A4%A').id, '%E0%A4%A');
+});
+
+test('fmtTokens shortens to K and M and drops a trailing zero', () => {
+  assert.equal(fmtTokens(1000000), '1M');
+  assert.equal(fmtTokens(1500000), '1.5M');
+  assert.equal(fmtTokens(128000), '128K');
+  assert.equal(fmtTokens(512), '512');
+  assert.equal(fmtTokens(0), '');
+  assert.equal(fmtTokens(null), '');
+});
+
+test('fmtPrice keeps integers bare and trims float noise', () => {
+  assert.equal(fmtPrice(2), '$2');
+  assert.equal(fmtPrice(0.2), '$0.2');
+  assert.equal(fmtPrice(2.5), '$2.5');
+  assert.equal(fmtPrice(null), '');
+  assert.equal(fmtPrice(''), '');
+});
+
+test('priceRange keeps whichever half is set', () => {
+  assert.equal(priceRange({ priceIn: 2, priceOut: 10 }), '$2 / $10');
+  assert.equal(priceRange({ priceIn: 2, priceOut: null }), '$2');
+  assert.equal(priceRange({ priceIn: null, priceOut: null }), '');
+});
+
+test('bulletLines strips list markers and blank lines', () => {
+  assert.deepEqual(bulletLines('- one\n\n* two\n  three  '), ['one', 'two', 'three']);
+  assert.deepEqual(bulletLines(''), []);
+});
+
+test('publicModelId uses the first identifier an admin entered, never the catalog row id', () => {
+  assert.equal(publicModelId(DOCS_MODELS[0]), 'sonata-1');
+  assert.equal(publicModelId(DOCS_MODELS[1]), '');
 });
