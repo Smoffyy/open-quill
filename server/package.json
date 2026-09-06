@@ -1,6 +1,6 @@
 {
   "name": "open-quill-server",
-  "version": "27.1.0",
+  "version": "27.2.0",
   "private": true,
   "type": "module",
   "main": "index.js",
@@ -14,9 +14,16 @@
     "better-sqlite3-multiple-ciphers": "^13.0.3",
     "cookie": "^2.0.1",
     "express": "^5.2.1",
+    "framer-motion": "^13.2.0",
     "jsonwebtoken": "^9.0.3",
-    "multer": "^2.2.0",
-    "pdfjs-dist": "^6.2.108",
+    "lucide-react": "^1.40.0",
+    "multer": "^2.3.0",
+    "pdfjs-dist": "^6.3.289",
+    "react-hot-toast": "^2.6.0",
     "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "tailwindcss": "^4.3.3"
   }
 }

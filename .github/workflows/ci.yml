@@ -38,8 +38,13 @@ jobs:
           cd server
           find . -name node_modules -prune -o -name '*.js' -print0 | xargs -0 -n1 node --check
 
+      # --quiet prints errors only. The exhaustive-deps warnings are deliberate:
+      # hooks keyed on a narrower dependency than they read, reading the rest through
+      # refs, which is what keeps the socket from reconnecting on every render. They
+      # stay visible in an editor and in a local "npm run lint", where they are signal
+      # rather than 48 lines of annotated noise on a step that passed.
       - name: Lint
-        run: npm run lint
+        run: npm run lint -- --quiet
 
       - name: Build client
         run: npm run build

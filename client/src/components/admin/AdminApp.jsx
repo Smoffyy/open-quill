@@ -1,222 +1,235 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { AdminProvider, useAdmin } from './store.jsx';
-import { NAV_GROUPS, SECTIONS, sectionById } from './nav.jsx';
-import { ConfirmDialog } from './widgets.jsx';
-import { Chevron, Search } from '../icons.jsx';
-import DashboardSection from './sections/DashboardSection.jsx';
-import ModelsSection from './sections/ModelsSection.jsx';
-import ProvidersSection from './sections/ProvidersSection.jsx';
-import AppearanceSection from './sections/AppearanceSection.jsx';
-import HomeScreenSection from './sections/HomeScreenSection.jsx';
-import MembersSection from './sections/MembersSection.jsx';
-import WebSearchSection from './sections/WebSearchSection.jsx';
-import VoiceSection from './sections/VoiceSection.jsx';
-import MemorySection from './sections/MemorySection.jsx';
-import MembankSection from './sections/MembankSection.jsx';
-import SkillsSection from './sections/SkillsSection.jsx';
-import McpSection from './sections/McpSection.jsx';
-import SafetySection from './sections/SafetySection.jsx';
-import FeedbackSection from './sections/FeedbackSection.jsx';
-import LimitsSection from './sections/LimitsSection.jsx';
-import AuditSection from './sections/AuditSection.jsx';
-import AnalyticsSection from './sections/AnalyticsSection.jsx';
-import DatabasesSection from './sections/DatabasesSection.jsx';
-import PrivacySection from './sections/PrivacySection.jsx';
+import { NAV, SECTIONS, sectionMeta } from './nav.jsx';
+import { Confirm, SaveState } from './ui.jsx';
+import { PublishState } from './publish.jsx';
+import { Search, X, Cube } from '../icons.jsx';
 import { t } from '../../i18n.jsx';
 import { BRAND_ICON } from '../../lib/brand.js';
 
-const SECTION_COMPONENTS = {
-  dashboard: DashboardSection,
+import OverviewSection from './sections/OverviewSection.jsx';
+import ModelsSection from './sections/ModelsSection.jsx';
+import ProvidersSection from './sections/ProvidersSection.jsx';
+import SearchSection from './sections/SearchSection.jsx';
+import VoiceSection from './sections/VoiceSection.jsx';
+import MemorySection from './sections/MemorySection.jsx';
+import FilesSection from './sections/FilesSection.jsx';
+import SkillsSection from './sections/SkillsSection.jsx';
+import McpSection from './sections/McpSection.jsx';
+import InterfaceSection from './sections/InterfaceSection.jsx';
+import LauncherSection from './sections/LauncherSection.jsx';
+import MembersSection from './sections/MembersSection.jsx';
+import GuardrailsSection from './sections/GuardrailsSection.jsx';
+import NetworkSection from './sections/NetworkSection.jsx';
+import QuotasSection from './sections/QuotasSection.jsx';
+import UsageSection from './sections/UsageSection.jsx';
+import RatingsSection from './sections/RatingsSection.jsx';
+import EventsSection from './sections/EventsSection.jsx';
+import StorageSection from './sections/StorageSection.jsx';
+import { useDismiss } from '../../lib/dismiss.js';
+
+const VIEWS = {
+  __proto__: null,
+  overview: OverviewSection,
   models: ModelsSection,
   providers: ProvidersSection,
-  appearance: AppearanceSection,
-  homescreen: HomeScreenSection,
-  members: MembersSection,
-  websearch: WebSearchSection,
+  search: SearchSection,
   voice: VoiceSection,
   memory: MemorySection,
-  membank: MembankSection,
+  files: FilesSection,
   skills: SkillsSection,
   mcp: McpSection,
-  safety: SafetySection,
-  privacy: PrivacySection,
-  feedback: FeedbackSection,
-  limits: LimitsSection,
-  audit: AuditSection,
-  analytics: AnalyticsSection,
-  databases: DatabasesSection
+  interface: InterfaceSection,
+  launcher: LauncherSection,
+  members: MembersSection,
+  guardrails: GuardrailsSection,
+  network: NetworkSection,
+  quotas: QuotasSection,
+  usage: UsageSection,
+  ratings: RatingsSection,
+  events: EventsSection,
+  storage: StorageSection
 };
 
-function DiscoverModal() {
-  const A = useAdmin();
-  const { discover, setDiscover } = A;
-  if (!discover) return null;
+const MAX_HITS = 12;
+
+function isMac() {
+  const hint = navigator.userAgentData?.platform || navigator.platform || navigator.userAgent || '';
+  return /mac/i.test(hint);
+}
+
+function Finder() {
+  const { catalog, setSection, openModel } = useAdmin();
+  const { models } = catalog;
+  const [q, setQ] = useState('');
+  const [cursor, setCursor] = useState(0);
+  const boxRef = useRef(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  useDismiss(!!q, () => setQ(''), boxRef, { escape: false });
+
+  const needle = q.trim().toLowerCase();
+  const hits = useMemo(() => {
+    if (!needle) return [];
+    const rows = [];
+    for (const sec of SECTIONS) {
+      if ([t(sec.title), t(sec.group), t(sec.find)].join(' ').toLowerCase().includes(needle)) {
+        rows.push({ key: 's:' + sec.id, Icon: sec.Icon, label: t(sec.title), hint: t(sec.group), go: () => setSection(sec.id) });
+      }
+      // A setting is findable by its own name, landing on the section that holds it.
+      for (const entry of (sec.index || [])) {
+        const label = t(entry);
+        if (!label.toLowerCase().includes(needle)) continue;
+        rows.push({ key: 's:' + sec.id + ':' + entry, Icon: sec.Icon, label, hint: t(sec.title), go: () => setSection(sec.id) });
+      }
+    }
+    const ms = models
+      .filter(m => (m.display_name || '').toLowerCase().includes(needle) || (m.internal_name || '').toLowerCase().includes(needle))
+      .slice(0, 5)
+      .map(m => ({
+        key: 'm:' + m.id,
+        Icon: Cube,
+        label: m.display_name || m.internal_name || t('Untitled'),
+        hint: t('model'),
+        go: () => openModel(m.id)
+      }));
+    return [...rows.slice(0, MAX_HITS), ...ms];
+  }, [needle, models, openModel, setSection]);
+
+  useEffect(() => { setCursor(0); }, [needle]);
+
+  function run(i) {
+    const hit = hits[i];
+    if (!hit) return;
+    hit.go();
+    setQ('');
+    inputRef.current?.blur();
+  }
+
   return (
-    <div className="overlay sp-overlay" onMouseDown={(e) => e.target.classList.contains('sp-overlay') && setDiscover(null)}>
-      <div className="sp-modal" style={{ maxHeight: '80vh' }}>
-        <div className="sp-head">
-          <div>
-            <h3>{t("Discover models")}</h3>
-            <div className="muted-note">{t("Models your backend currently exposes. Add the ones you want, added models can be hidden or deleted like any other.")}</div>
-          </div>
-          <button className="modal-close" style={{ position: 'static' }} onClick={() => setDiscover(null)} aria-label={t('Close')}>✕</button>
-        </div>
-        <div className="discover-list">
-          {discover.loading && <div className="muted-note" style={{ padding: 14 }}>{t('Reaching the backend…')}</div>}
-          {discover.error && <div className="dz-err">{discover.error}</div>}
-          {!discover.loading && !discover.error && discover.list.length === 0 && <div className="muted-note" style={{ padding: 14 }}>{t("No models returned by the backend.")}</div>}
-          {discover.list.map(x => (
-            <div key={x.id} className="discover-row">
-              <span className="discover-id">{x.id}</span>
-              {x.added
-                ? <span className="discover-added">{t("Added")} ✓</span>
-                : <button className="btn" disabled={x.busy} onClick={() => A.addDiscovered(x.id)}>{x.busy ? t('Adding…') : t('Add')}</button>}
-            </div>
+    <div className="cp-find" ref={boxRef}>
+      <Search />
+      <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)} type="search"
+        placeholder={t('Find a section or model')} aria-label={t('Find a section or model')}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') { setQ(''); e.currentTarget.blur(); }
+          else if (e.key === 'ArrowDown') { e.preventDefault(); setCursor(c => (c + 1) % Math.max(1, hits.length)); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setCursor(c => (c - 1 + hits.length) % Math.max(1, hits.length)); }
+          else if (e.key === 'Enter') { e.preventDefault(); run(cursor); }
+        }} />
+      <kbd>{isMac() ? '⌘K' : 'Ctrl K'}</kbd>
+      {!!needle && (
+        <div className="cp-menu">
+          {hits.length === 0 && <div className="cp-menu-empty">{t('Nothing matches “{q}”', { q })}</div>}
+          {hits.map((h, i) => (
+            <button key={h.key} type="button" className={'cp-menu-item' + (i === cursor ? ' on' : '')}
+              onMouseEnter={() => setCursor(i)} onClick={() => run(i)}>
+              <h.Icon />
+              <span>{h.label}</span>
+              <em>{h.hint}</em>
+            </button>
           ))}
         </div>
-        <div className="sp-foot">
-          <button className="btn ghost" onClick={() => A.openDiscover(discover.providerId)} disabled={discover.loading}>{t("Refresh")}</button>
-          <button className="btn primary" onClick={() => setDiscover(null)}>{t("Done")}</button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
 
 function Shell() {
-  const A = useAdmin();
-  const { section, setSection, models, users, cfg, pub, publishing, pubFlash, ask, setAsk, onClose, keepScroll } = A;
-  const [navQ, setNavQ] = useState('');
-  const navRef = useRef(null);
-  const bodyRef = useRef(null);
+  const { section, setSection, catalog, members, onClose, ask, setAsk, keepScroll, workspace } = useAdmin();
+  const scrollRef = useRef(null);
+  const meta = sectionMeta(section);
+  const View = VIEWS[section] || OverviewSection;
+
+  useEffect(() => keepScroll('cp:' + section, scrollRef.current), [section, keepScroll]);
 
   useEffect(() => {
-    function onKey(e) {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        navRef.current?.focus();
-        navRef.current?.select();
-      }
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+    const esc = (e) => {
+      if (e.key !== 'Escape') return;
+      if (document.querySelector('.cp-overlay')) return;
+      if (e.target.closest('input, textarea, select')) return;
+      onClose();
+    };
+    document.addEventListener('keydown', esc);
+    return () => document.removeEventListener('keydown', esc);
+  }, [onClose]);
 
-  useEffect(() => keepScroll('section:' + section, bodyRef.current), [section, keepScroll]);
-
-  const meta = sectionById(section);
-  const activeGroup = NAV_GROUPS.find(g => g.id === meta.groupId) || NAV_GROUPS[0];
-  const nq = navQ.trim().toLowerCase();
-  const sectionMatches = nq ? SECTIONS.filter(s => [s.label, s.group, s.keywords].filter(Boolean).map(v => v + ' ' + t(v)).join(' ').toLowerCase().includes(nq)) : null;
-  const modelMatches = nq ? models.filter(m => (m.display_name || '').toLowerCase().includes(nq) || (m.internal_name || '').toLowerCase().includes(nq)).slice(0, 5) : [];
-  const jumpOpen = nq.length > 0;
-
-  function pickSection(id) {
-    setSection(id);
-    setNavQ('');
-  }
-  function pickModel(m) {
-    A.setSelModel(m.id);
-    setSection('models');
-    setNavQ('');
-  }
-  function pickFirst() {
-    if (sectionMatches?.length) pickSection(sectionMatches[0].id);
-    else if (modelMatches.length) pickModel(modelMatches[0]);
-  }
-
-  const Section = SECTION_COMPONENTS[section] || DashboardSection;
-  const showPublish = section !== 'dashboard' && section !== 'databases';
+  const counts = { models: catalog.models.length, members: members.members.length, providers: catalog.providers.length };
 
   return (
-    <div className="oqa">
-      <header className="oqa-header">
-        <button className="oqa-back" onClick={onClose}><Chevron style={{ transform: 'rotate(90deg)', width: 16 }} /></button>
-        <button className="oqa-brand" onClick={() => setSection('dashboard')}>
-          <img className="oqa-brand-icon" src={cfg.appIcon || BRAND_ICON} alt="" />
-          <div className="oqa-brand-text">
-            <span className="oqa-brand-name">{cfg.appName || 'open-quill'}</span>
-            <span className="oqa-brand-sub">{t("Control Center")}</span>
+    <div className="cp-scrim" role="dialog" aria-modal="true" aria-label={t('Control panel')}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="cp">
+        <header className="cp-top">
+          <div className="cp-mark">
+            <img src={workspace.config.appIcon || BRAND_ICON} alt="" />
+            <b>{workspace.config.appName || 'open-quill'}</b>
+            <span>{t('Admin')}</span>
           </div>
-        </button>
-        <nav className="oqa-toptabs">
-          <button className={'oqa-toptab' + (section === 'dashboard' ? ' active' : '')} onClick={() => setSection('dashboard')}>
-            {t('Dashboard')}
-          </button>
-          {NAV_GROUPS.filter(g => g.label).map(g => (
-            <button key={g.id} className={'oqa-toptab' + (activeGroup.id === g.id ? ' active' : '')} onClick={() => setSection(g.items[0].id)}>
-              {t(g.label)}
+          <div className="cp-top-spacer" />
+          <Finder />
+          <div className="cp-top-acts">
+            <PublishState />
+            <button type="button" className="cp-exit" onClick={onClose} title={t('Close')} aria-label={t('Close')}>
+              <X />
             </button>
-          ))}
-        </nav>
-        <div className="oqa-jump">
-          <Search className="oqa-jump-icon" />
-          <input ref={navRef} value={navQ} onChange={(e) => setNavQ(e.target.value)} placeholder={t("Jump to anything… (Ctrl K)")}
-            onKeyDown={(e) => { if (e.key === 'Enter') pickFirst(); if (e.key === 'Escape') { setNavQ(''); e.target.blur(); } }} />
-          {jumpOpen && (
-            <div className="oqa-jump-pop">
-              <div className="oqa-group-label">{sectionMatches.length || modelMatches.length ? t('Matches') : t('No matches')}</div>
-              {sectionMatches.map(({ id, label, Icon, group }) => (
-                <button key={id} className={'oqa-tab' + (section === id ? ' active' : '')} onClick={() => pickSection(id)}>
-                  <Icon /> <span>{t(label)}</span>{group && <span className="oqa-tab-hint">{t(group)}</span>}
-                </button>
-              ))}
-              {modelMatches.map(m => (
-                <button key={m.id} className="oqa-tab" onClick={() => pickModel(m)}>
-                  {m.static_icon ? <img className="oqa-tab-mico" src={m.static_icon} alt="" /> : <span className="oqa-tab-mico noicon">{(m.display_name || '?').trim().charAt(0).toUpperCase()}</span>}
-                  <span>{m.display_name || m.internal_name || 'Untitled'}</span><span className="oqa-tab-hint">{t("Model")}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        {showPublish && (
-          <div className="oqa-status">
-            {pubFlash
-              ? <span className="saved-flash">{t("Pushed to all clients")} ✓</span>
-              : pub.dirty
-                ? <span className="pub-note dirty">{t("Unpublished draft changes")}</span>
-                : <span className="pub-note">{pub.published ? t('Clients are up to date') : t('Nothing published yet')}</span>}
           </div>
-        )}
-        {showPublish && (
-          <button className={'btn primary push-btn' + (pub.dirty ? ' dirty' : '')} onClick={A.publish} disabled={publishing || (!pub.dirty && pub.published)}>
-            {publishing ? t('Pushing…') : t('Push to all clients')}
-          </button>
-        )}
-      </header>
-      <div className="oqa-shell">
-        {activeGroup.items.length > 1 && (
-          <nav className="oqa-rail">
-            <div className="oqa-group-label">{t(activeGroup.label)}</div>
-            {activeGroup.items.map(({ id, label, Icon }) => (
-              <button key={id} className={'oqa-tab' + (section === id ? ' active' : '')} onClick={() => setSection(id)}>
-                <Icon /> <span>{t(label)}</span>
-                {id === 'models' && models.length > 0 && <span className="oqa-tab-count">{models.length}</span>}
-                {id === 'members' && users.length > 0 && <span className="oqa-tab-count">{users.length}</span>}
-              </button>
+        </header>
+
+        <div className="cp-body">
+          <nav className="cp-rail" aria-label={t('Sections')}>
+            {NAV.map(g => (
+              <div key={g.group} style={{ display: 'contents' }}>
+                <div className="cp-rail-group">{t(g.group)}</div>
+                {g.items.map(({ id, label, Icon }) => (
+                  <button key={id} type="button" className={'cp-rail-item' + (section === id ? ' on' : '')}
+                    aria-current={section === id ? 'page' : undefined} onClick={() => setSection(id)}>
+                    <Icon />
+                    <span>{t(label)}</span>
+                    {counts[id] > 0 && <span className="cp-rail-count">{counts[id]}</span>}
+                  </button>
+                ))}
+              </div>
             ))}
           </nav>
-        )}
-        <div className="oqa-main">
-          <div className="oqa-pagehead">
-            <h1>{t(meta.label)}</h1>
-            <span className="oqa-desc">{t(meta.desc)}</span>
-          </div>
-          <div ref={bodyRef} className={'oqa-body' + (section === 'models' && models.length ? ' fill' : '')}>
-            <Section />
-          </div>
+
+          <main className="cp-view">
+            <div className="cp-head">
+              <div className="cp-head-main">
+                <h1>{t(meta.title)}</h1>
+                <p>{t(meta.blurb)}</p>
+              </div>
+              <div className="cp-head-acts">
+                {meta.saves === 'workspace' && <SaveState state={workspace.saveState} />}
+              </div>
+            </div>
+            <div ref={scrollRef} className="cp-scroll">
+              <div className="cp-page"><View /></div>
+            </div>
+          </main>
         </div>
+
+        <Confirm ask={ask} onClose={() => setAsk(null)} />
       </div>
-      <DiscoverModal />
-      <ConfirmDialog ask={ask} onClose={() => setAsk(null)} />
     </div>
   );
 }
 
-export default function AdminApp({ user, onClose, modelId }) {
+export default function AdminApp({ user, onClose }) {
   return (
-    <AdminProvider user={user} onClose={onClose} modelId={modelId}>
+    <AdminProvider user={user} onClose={onClose}>
       <Shell />
     </AdminProvider>
   );

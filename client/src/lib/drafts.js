@@ -39,10 +39,16 @@ export function useDrafts(skipRef) {
     timer.current = setTimeout(flush, DEBOUNCE_MS);
   };
 
+  // Only the draft being cleared is dropped. Clearing one chat used to cancel the
+  // pending timer whatever it held, so sending in chat A right after typing in
+  // chat B threw away B's unsaved text.
   const clear = (id) => {
-    clearTimeout(timer.current);
-    timer.current = null;
-    pending.current = null;
+    const p = pending.current;
+    if (p && p.id === id) {
+      clearTimeout(timer.current);
+      timer.current = null;
+      pending.current = null;
+    }
     try { localStorage.removeItem(draftKey(id)); } catch {}
   };
 

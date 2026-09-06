@@ -1,145 +1,100 @@
-import { useState, useEffect, useRef } from 'react';
-import { api } from '../api.js';
-import { Pencil, Fork, Star, Compact, Sliders, Pin, Copy, FileText } from './icons.jsx';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { Trash, Star, Chevron, Box, Stop, Download } from './icons.jsx';
 import { t } from '../i18n.jsx';
 
-export default function ChatMenu({ chat, modelId, pinned = [], pins = [], onUnpinFile, onOpenPersonas, onJump, onCopyConversation, onClose, onRename, onFork, onToggleStar, onToggleArchive, onInstructionsSaved }) {
-  const ref = useRef(null);
-  const [instr, setInstr] = useState(chat.instructions || '');
-  const [ctx, setCtx] = useState(null);
-  const [savedTick, setSavedTick] = useState(false);
-  const [inspect, setInspect] = useState(null);
-  const [inspectOpen, setInspectOpen] = useState(false);
-  const saveTimer = useRef(null);
-  const baseInstr = useRef(chat.instructions || '');
+export function ChatMenu({ chat, at, projects = [], busy = false, anchorRef, onStopChat, onToggleStar, onMoveToProject, onDelete, onClose }) {
+  const [pos, setPos] = useState({ ...at, ready: false });
+  const [subOpen, setSubOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => { setPos({ ...at, ready: false }); setSubOpen(false); }, [at]);
 
   useEffect(() => {
-    const h = (e) => {
-      if (inspectOpen || !ref.current) return;
-      const scope = ref.current.closest('.chat-name-wrap') || ref.current;
-      if (!scope.contains(e.target)) onClose();
+    const away = (e) => {
+      if (anchorRef && anchorRef.current && anchorRef.current.contains(e.target)) return;
+      if (menuRef.current && menuRef.current.contains(e.target)) return;
+      onClose();
     };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [onClose, inspectOpen]);
+    const esc = (e) => { if (e.key === 'Escape') onClose(); };
+    const onScroll = (e) => {
+      if (menuRef.current && menuRef.current.contains(e.target)) return;
+      if (anchorRef && anchorRef.current && e.target && typeof e.target.contains === 'function' && e.target.contains(anchorRef.current)) onClose();
+    };
+    document.addEventListener('mousedown', away);
+    document.addEventListener('keydown', esc);
+    window.addEventListener('resize', onClose);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', away);
+      document.removeEventListener('keydown', esc);
+      window.removeEventListener('resize', onClose);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [anchorRef, onClose]);
 
-  useEffect(() => {
-    let on = true;
-    const q = modelId ? '?modelId=' + encodeURIComponent(modelId) : '';
-    api.get('/api/chats/' + chat.id + '/context' + q).then(d => { if (on) setCtx(d); }).catch(() => {});
-    return () => { on = false; };
-  }, [chat.id, modelId]);
+  useLayoutEffect(() => {
+    if (pos.ready || !menuRef.current) return;
+    const pad = 8;
+    const mr = menuRef.current.getBoundingClientRect();
+    let top = pos.top;
+    let left = pos.left;
+    if (top + mr.height > window.innerHeight - pad) top = Math.max(pad, pos.anchorTop - mr.height - 6);
+    if (top + mr.height > window.innerHeight - pad) top = Math.max(pad, window.innerHeight - mr.height - pad);
+    left = Math.min(Math.max(pad, left), window.innerWidth - mr.width - pad);
+    setPos(p => ({ ...p, top, left, ready: true }));
+  }, [pos, subOpen]);
 
-  async function openInspect() {
-    setInspectOpen(true); setInspect(null);
-    try { const q = modelId ? '?modelId=' + encodeURIComponent(modelId) : ''; setInspect(await api.get('/api/chats/' + chat.id + '/inspect' + q)); }
-    catch { setInspect({ error: true }); }
-  }
+  const stop = (fn) => (e) => { e.stopPropagation(); fn(); onClose(); };
+  const exportAs = (format) => () => window.open('/api/chats/' + chat.id + '/export?format=' + format, '_blank');
 
-  function changeInstr(v) {
-    setInstr(v);
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(async () => {
-      try { await api.patch('/api/chats/' + chat.id, { instructions: v }); baseInstr.current = v; onInstructionsSaved?.(v); setSavedTick(true); setTimeout(() => setSavedTick(false), 1200); } catch {}
-    }, 500);
-  }
-  useEffect(() => () => { if (saveTimer.current) clearTimeout(saveTimer.current); }, []);
-
-  const pct = ctx && ctx.limit ? ctx.pct : 0;
-  const meterClass = pct >= 90 ? 'over' : pct >= 70 ? 'warn' : '';
-
-  return (
-    <div className="chat-menu-pop" ref={ref}>
-      <div className="cmp-actions">
-        <button onClick={() => { onClose(); onRename?.(); }}><Pencil style={{ width: 15 }} /> {t("Rename")}</button>
-        <button onClick={() => { onClose(); onToggleStar?.(); }}><Star style={{ width: 15 }} /> {chat.starred ? t('Unstar') : t('Star')}</button>
-        {onToggleArchive && <button onClick={() => { onClose(); onToggleArchive(); }}><FileText style={{ width: 15 }} /> {chat.archived ? t('Unarchive') : t('Archive')}</button>}
-        <button onClick={() => { onClose(); onFork?.(); }}><Fork style={{ width: 15 }} /> {t("Fork chat")}</button>
-        <button onClick={() => { onClose(); onCopyConversation?.(); }}><Copy style={{ width: 15 }} /> {t("Copy all")}</button>
-        {onOpenPersonas && <button onClick={() => { onClose(); onOpenPersonas(); }}><Star style={{ width: 15 }} /> {t("Personas")}</button>}
-      </div>
-      {pinned.length > 0 && (
-        <div className="cmp-sec">
-          <div className="cmp-label"><Pin style={{ width: 14 }} /> Pinned ({pinned.length})</div>
-          <div className="cmp-pins">
-            {pinned.map(m => (
-              <button key={m.id} className="cmp-pin" onClick={() => onJump?.(m.id)}>
-                <span className="cmp-pin-role">{m.role === 'user' ? 'You' : 'AI'}</span>
-                <span className="cmp-pin-text">{(typeof m.content === 'string' ? m.content : '').replace(/\s+/g, ' ').trim().slice(0, 80) || '(no text)'}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+  return createPortal(
+    <div className="chat-menu" ref={menuRef} role="menu" aria-label={t('Chat options')}
+      style={{ top: pos.top, left: pos.left, visibility: pos.ready ? undefined : 'hidden' }}>
+      {busy && onStopChat && (
+        <button onClick={stop(() => onStopChat(chat.id))}>
+          <Stop style={{ width: 20 }} /> {t('Stop generating')}
+        </button>
       )}
-      {pins.length > 0 && (
-        <div className="cmp-sec">
-          <div className="cmp-label"><Pin style={{ width: 14 }} /> Pinned files ({pins.length})</div>
-          <div className="cmp-note">{t("Kept in context every turn for this chat.")}</div>
-          <div className="cmp-pinfiles">
-            {pins.map(p => (
-              <div key={p.url} className="cmp-pinfile">
-                <FileText style={{ width: 14 }} />
-                <span className="cmp-pinfile-name">{p.name}</span>
-                <button className="cmp-pinfile-x" title={t("Unpin")} onClick={() => onUnpinFile?.(p.url)}>✕</button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      <div className="cmp-sec">
-        <div className="cmp-label"><Sliders style={{ width: 14 }} /> {t("Chat instructions")}</div>
-        <div className="cmp-note">{t("Added to the system prompt for this chat only, on top of your global instructions.")}</div>
-        <textarea className="cmp-instr" value={instr} maxLength={8000} rows={4}
-          placeholder={t("e.g. Answer as a senior code reviewer. Be terse.")}
-          onChange={(e) => changeInstr(e.target.value)} />
-        <div className="cmp-saved">{savedTick ? t('Saved') : ''}</div>
-      </div>
-      <div className="cmp-sec">
-        <div className="cmp-label"><Compact style={{ width: 14 }} /> {t("Context window")}</div>
-        {ctx ? (
-          ctx.limit ? (
-            <>
-              <div className={'cmp-meter ' + meterClass}><span style={{ width: pct + '%' }} /></div>
-              <div className="cmp-note">{ctx.used.toLocaleString()} / {ctx.limit.toLocaleString()} tokens ({pct}%){ctx.hasSummary ? ' · older turns compacted' : ''}{ctx.rolling && pct >= 100 ? ' · rolling window active' : ctx.rolling ? ' · rolling window' : ''}</div>
-            </>
-          ) : (
-            <div className="cmp-note">~{ctx.used.toLocaleString()} tokens in context. No window limit set for this model.</div>
-          )
-        ) : <div className="cmp-note">{t("Measuring…")}</div>}
-      </div>
-      <div className="cmp-sec">
-        <button className="cmp-inspect-btn" onClick={openInspect}><Compact style={{ width: 14 }} /> {t("Inspect context")}</button>
-      </div>
-      {inspectOpen && (
-        <div className="ctx-inspect-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setInspectOpen(false); }}>
-          <div className="ctx-inspect">
-            <div className="ctx-inspect-head">
-              <div>{t("Context inspector")}</div>
-              <button className="ctx-x" onClick={() => setInspectOpen(false)}>✕</button>
+      <button onClick={stop(() => onToggleStar(chat.id))}>
+        <Star style={{ width: 20 }} /> {chat.starred ? t('Unstar chat') : t('Star chat')}
+      </button>
+      {onMoveToProject && (
+        <div className="cm-sub">
+          <button onClick={(e) => { e.stopPropagation(); setSubOpen(s => !s); setPos(p => ({ ...p, ready: false })); }}>
+            <Box style={{ width: 20 }} /> {t('Add to project')}
+            <Chevron style={{ width: 13, marginLeft: 'auto', transform: subOpen ? 'rotate(90deg)' : 'none' }} />
+          </button>
+          {subOpen && (
+            <div className="cm-sublist">
+              {chat.projectId && <button onClick={stop(() => onMoveToProject(chat.id, null))}>{t('Remove from project')}</button>}
+              {projects.length === 0 && <div className="cm-empty">{t('No projects yet')}</div>}
+              {projects.map(p => (
+                <button key={p.id} className={p.id === chat.projectId ? 'on' : ''} onClick={stop(() => onMoveToProject(chat.id, p.id))}>
+                  <Box style={{ width: 15 }} /> {p.name}
+                </button>
+              ))}
             </div>
-            {!inspect ? <div className="cmp-note" style={{ padding: 16 }}>{t("Building…")}</div> : inspect.error ? <div className="cmp-note" style={{ padding: 16 }}>{t("Could not load context.")}</div> : (
-              <div className="ctx-inspect-body">
-                <div className="ctx-summary">
-                  <span><b>{inspect.totalTokens.toLocaleString()}</b> tokens{inspect.limit ? ` / ${inspect.limit.toLocaleString()} (${inspect.pct}%)` : ''}</span>
-                </div>
-                <div className="ctx-flags">
-                  {inspect.flags.memoryBank && <span className="ctx-flag">{t("Memory bank on")}</span>}
-                  {inspect.flags.webSearch && <span className="ctx-flag">{t("Web search available")}</span>}
-                  {inspect.flags.summary && <span className="ctx-flag">{t("Older turns compacted")}</span>}
-                </div>
-                <div className="ctx-segs">
-                  {inspect.segments.map(s => (
-                    <div key={s.index} className={'ctx-seg role-' + s.role}>
-                      <div className="ctx-seg-head"><span className="ctx-role">{s.role}</span><span className="ctx-seg-meta">{s.tokens.toLocaleString()} tok · {s.chars.toLocaleString()} ch{s.hasImages ? ' · img' : ''}</span></div>
-                      <div className="ctx-seg-prev">{s.preview || '(empty)'}{s.chars > 600 ? '…' : ''}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          )}
         </div>
       )}
-    </div>
-  );
+      <button onClick={stop(exportAs('md'))}>
+        <Download style={{ width: 20 }} /> {t('Export as Markdown')}
+      </button>
+      <button onClick={stop(exportAs('json'))}>
+        <Download style={{ width: 20 }} /> {t('Export as JSON')}
+      </button>
+      <button className="danger" onClick={stop(() => onDelete(chat.id))}>
+        <Trash style={{ width: 20 }} /> {t('Delete chat')}
+      </button>
+    </div>, document.body);
+}
+
+export function menuAtButton(el) {
+  const r = el.getBoundingClientRect();
+  return { top: r.bottom + 6, left: r.left, anchorTop: r.top };
+}
+
+export function menuAtPointer(e) {
+  return { top: e.clientY + 4, left: e.clientX, anchorTop: e.clientY };
 }

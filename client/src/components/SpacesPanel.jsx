@@ -4,6 +4,7 @@ import Markdown from './Markdown.jsx';
 import { Plus, Chevron, Users, Trash, Send, Gear, Check, Logout } from './icons.jsx';
 import { t } from '../i18n.jsx';
 import { focusUnlessTouch } from '../lib/touch.js';
+import { useDismiss } from '../lib/dismiss.js';
 
 function timeAgo(ts) {
   const s = Math.floor((Date.now() - ts) / 1000);
@@ -21,12 +22,7 @@ function InviteSearch({ spaceId, onInvited }) {
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-  useEffect(() => {
-    if (!open) return;
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [open]);
+  useDismiss(open, () => setOpen(false), ref);
   useEffect(() => {
     if (!q.trim() || q.trim().length < 2) { setResults([]); return; }
     let on = true;
@@ -174,7 +170,16 @@ function SpaceChat({ space, user, models, onChanged, onClose }) {
     try { setMessages(await api.get('/api/spaces/' + space.id + '/messages')); } catch {}
   }, [space.id]);
 
-  useEffect(() => { load(); pollRef.current = setInterval(load, 4000); return () => clearInterval(pollRef.current); }, [load]);
+  useEffect(() => {
+    const tick = () => { if (!document.hidden) load(); };
+    tick();
+    pollRef.current = setInterval(tick, 4000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      clearInterval(pollRef.current);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [load]);
 
   useEffect(() => {
     const h = (e) => {

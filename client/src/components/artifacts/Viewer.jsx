@@ -4,9 +4,10 @@ import { api } from '../../api.js';
 import { copyText } from '../../clipboard.js';
 import Markdown from '../Markdown.jsx';
 import FileChip from './FileChip.jsx';
-import { Download, Check, ChevDown, Chevron, Search, X, Down } from '../icons.jsx';
+import { Download, Check, ChevDown, Chevron, Search, X, Down, Eye, CodeTag } from '../icons.jsx';
 import { t } from '../../i18n.jsx';
 import { buildPreviewDoc } from '../../lib/preview.js';
+import { SegSlide } from '../settingsui.jsx';
 import {
   PREVIEW_HTML, PREVIEW_MD, IMAGE_EXT, EXT_LANG, baseName, extOf, escHtml,
   diffLines, stableLineDiff, collapseRuns, splitHighlightedLines, markLine, findMatches
@@ -296,6 +297,14 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
       <div className="art-vhead">
         <div className="art-vtitle">
           {canBack && <button className="art-back" onClick={onBack} title={t("Back to files")}><Chevron style={{ width: 16, transform: 'rotate(180deg)' }} /></button>}
+          {canPreview && showText && !isLive && (
+            <SegSlide value={previewOn ? 'preview' : 'code'} label={t('View')} className="compact"
+              onPick={(v) => setMode(v)}
+              options={[
+                { v: 'preview', label: <Eye style={{ width: 15 }} />, title: t('Preview') },
+                { v: 'code', label: <CodeTag style={{ width: 15 }} />, title: t('Code') }
+              ]} />
+          )}
           <span className="art-vname">{crumbs[crumbs.length - 1]}</span>
           <span className="art-vkind">{isLive ? (liveEdit ? t('editing…') : (liveText && liveText.length ? t('writing…') : t('creating…'))) : ext.toUpperCase()}</span>
           {!isLive && stale && <span className="art-vkind">v{viewing} of {current}</span>}
@@ -308,11 +317,6 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
               {menu && (
                 <div className="art-menu" onMouseLeave={() => setMenu(false)}>
                   <a className="art-menu-item" href={`/api/chats/${chatId}/download?path=${encodeURIComponent(path)}${stale ? '&v=' + viewing : ''}`}>Download as {ext.toUpperCase()}</a>
-                  {canPreview && showText && (
-                    <button className="art-menu-item" onClick={() => { setMenu(false); setMode(mode === 'preview' ? 'code' : 'preview'); }}>
-                      {mode === 'preview' ? t('Code') : t('Preview')}
-                    </button>
-                  )}
                   {showText && !previewOn && <button className="art-menu-item" onClick={() => { setMenu(false); setSearch(true); }}>{t('Find in file')}</button>}
                   {isCode && (
                     <button className="art-menu-item" onClick={() => { setMenu(false); setWrap(w => { localStorage.setItem('oq-art-wrap', w ? '0' : '1'); return !w; }); }}>

@@ -5,4 +5,4 @@ export { makeEmitter } from './emitter.js';
 export { normalizeMessages } from './wire.js';
 export { streamCompletion } from './stream.js';
 export { oneShot } from './oneshot.js';
-export { stripThink, generateTitle, summarizeConversation } from './summarize.js';
+export { stripThink, generateTitle, summarizeConversation, resolveTitleModel } from './summarize.js';

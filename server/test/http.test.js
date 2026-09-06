@@ -31,6 +31,7 @@ const PASSWORD = 'integration-password';
 const START_TIMEOUT_MS = 30000;
 
 let child = null;
+let readyMs = 0;
 let PORT = 0;
 let ORIGIN = '';
 let cookie = '';
@@ -76,7 +77,7 @@ function request(method, pathname, opts = {}) {
       });
     });
     req.on('error', reject);
-    req.setTimeout(15000, () => req.destroy(new Error(`timed out: ${method} ${pathname}`)));
+    req.setTimeout(opts.timeoutMs || 15000, () => req.destroy(new Error(`timed out: ${method} ${pathname}`)));
     if (payload !== undefined) req.write(payload);
     req.end();
   });
@@ -114,6 +115,30 @@ function exchange(headers, send, { frames = 1, timeoutMs = 8000 } = {}) {
   });
 }
 
+function listen(headers, want, { timeoutMs = 6000 } = {}) {
+  const got = [];
+  let ws = null;
+  const ready = new Promise((resolve, reject) => {
+    ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`, { headers });
+    ws.on('open', resolve);
+    ws.on('error', reject);
+    ws.on('unexpected-response', (_q, res) => reject(new Error('handshake ' + res.statusCode)));
+    ws.on('message', (raw) => { try { const m = JSON.parse(raw); if (want(m)) got.push(m); } catch {} });
+  });
+  return {
+    ready,
+    frames: got,
+    settle: () => new Promise(r => { setTimeout(r, 400); }),
+    waitFor: (n = 1) => new Promise((resolve) => {
+      const started = Date.now();
+      const tick = setInterval(() => {
+        if (got.length >= n || Date.now() - started > timeoutMs) { clearInterval(tick); resolve(got); }
+      }, 50);
+    }),
+    close: () => { try { ws.terminate(); } catch {} }
+  };
+}
+
 function startServer() {
   return new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, ['index.js'], {
@@ -142,11 +167,28 @@ function removeDb() {
   fs.rmSync(DB_DIR, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
 }
 
+// Listening is not the same as answering: anything that blocks the event loop during
+// startup leaves the port open and every request queued behind it. Wait for a real
+// response, and remember how long it took so the test below can hold that line.
+async function waitForReady() {
+  const started = Date.now();
+  const deadline = started + START_TIMEOUT_MS;
+  for (;;) {
+    try {
+      const res = await request('GET', '/api/auth/context', { timeoutMs: 2000 });
+      if (res.status === 200) return Date.now() - started;
+    } catch {}
+    if (Date.now() >= deadline) throw new Error(`server listened but never answered within ${START_TIMEOUT_MS}ms`);
+    await new Promise(r => { setTimeout(r, 50); });
+  }
+}
+
 before(async () => {
   removeDb();
   PORT = await freePort();
   ORIGIN = `http://127.0.0.1:${PORT}`;
   child = await startServer();
+  readyMs = await waitForReady();
 
   // The first account created on a fresh database becomes owner+admin.
   const res = await request('POST', '/api/auth/register', {
@@ -164,6 +206,14 @@ after(async () => {
     await Promise.race([gone, new Promise(r => { setTimeout(r, 5000); })]);
   }
   removeDb();
+});
+
+// The regression this guards: host detection ran synchronously on the main thread right
+// after listen, so a machine with a full toolchain installed could not answer anything for
+// as long as it took to spawn every probe. CI has more runtimes than a laptop and blew past
+// the 15s request timeout. Detection now runs in a worker, so this should be immediate.
+test('the server answers as soon as it is listening', () => {
+  assert.ok(readyMs < 10000, `server took ${readyMs}ms to answer its first request; startup must not block the event loop`);
 });
 
 test('the app answers and serves its policy header', async () => {
@@ -390,12 +440,114 @@ test('uploads need a session, except the icon the sign-in screen shows', async (
   assert.equal((await request('GET', '/uploads/brand.png')).status, 404, 'not public until it is the icon');
   const set = await browser('PATCH', '/api/admin/app-config', { body: { appIcon: '/uploads/brand.png' } });
   assert.equal(set.status, 200);
+  // An admin edit only stages the value, so the icon is not public on the strength
+  // of a draft: it has to be published first.
+  assert.equal((await request('GET', '/uploads/brand.png')).status, 404, 'a staged icon is still private');
+  assert.equal((await browser('POST', '/api/admin/models/publish', { body: {} })).status, 200);
   assert.equal((await request('GET', '/uploads/brand.png')).status, 200, 'now the login screen can load it');
   assert.equal((await request('GET', '/uploads/attachment.png')).status, 404, 'and only that one file');
 
   // the exemption follows the setting rather than being latched on first use
   await browser('PATCH', '/api/admin/app-config', { body: { appIcon: '' } });
+  await browser('POST', '/api/admin/models/publish', { body: {} });
   assert.equal((await request('GET', '/uploads/brand.png')).status, 404, 'unset the icon and it is private again');
+});
+
+test('admin edits stage until they are published', async () => {
+  // Staged: the panel reads its own draft back, but nothing live has moved yet.
+  await browser('PATCH', '/api/admin/settings', { body: { voiceMicEnabled: true } });
+  const staged = await browser('GET', '/api/admin/settings');
+  assert.equal(staged.json.voiceMicEnabled, true, 'the panel sees its own draft');
+
+  const state = await browser('GET', '/api/admin/models/publish-state');
+  assert.equal(state.json.staged, true, 'the draft is reported as staged');
+  assert.equal(state.json.dirty, true, 'and that alone marks the draft dirty');
+
+  // The admin previews their own draft; the published value is what everyone else
+  // reads, which the public app-icon test above exercises from a signed-out caller.
+  await browser('PATCH', '/api/admin/app-config', { body: { appName: 'Staged Name' } });
+  assert.equal((await browser('GET', '/api/app-config')).json.appName, 'Staged Name', 'an admin previews the draft');
+
+  assert.equal((await browser('POST', '/api/admin/models/publish', { body: {} })).status, 200);
+  assert.equal((await browser('GET', '/api/admin/models/publish-state')).json.staged, false, 'publishing clears the staging area');
+  assert.equal((await browser('GET', '/api/app-config')).json.appName, 'Staged Name', 'and the value survives as the live one');
+});
+
+test('a staged app-config edit can be taken back before it is published', async () => {
+  const cfg = (await browser('GET', '/api/app-config')).json;
+  const live = { uiPreset: cfg.uiPreset, appFont: cfg.appFont, appName: cfg.appName };
+  const other = live.uiPreset === 'openai' ? 'anthropic' : 'openai';
+
+  await browser('PATCH', '/api/admin/app-config', { body: { appName: 'Typo Name', uiPreset: other, appFont: 'sourceserif' } });
+  const staged = (await browser('GET', '/api/app-config')).json;
+  assert.equal(staged.appName, 'Typo Name', 'the admin previews the staged name');
+  assert.equal(staged.uiPreset, other, 'and the staged preset');
+  assert.equal((await browser('GET', '/api/admin/models/publish-state')).json.staged, true);
+
+  await browser('PATCH', '/api/admin/app-config', { body: live });
+  const back = (await browser('GET', '/api/app-config')).json;
+  assert.equal(back.appName, live.appName, 'the name draft is gone, not still holding the edit');
+  assert.equal(back.uiPreset, live.uiPreset, 'and so is the preset draft');
+  assert.equal(back.appFont, live.appFont);
+});
+
+test('deleting a space tells the other members', async () => {
+  const guestEmail = 'space-guest@test.local';
+  const reg = await request('POST', '/api/auth/register', {
+    origin: ORIGIN, secFetchSite: 'same-origin', body: { email: guestEmail, password: PASSWORD }
+  });
+  assert.equal(reg.status, 200, `guest registration failed: ${reg.text}`);
+  const guestCookie = String(reg.headers['set-cookie']?.[0] || '').split(';')[0];
+  const guest = (method, pathname, opts = {}) =>
+    request(method, pathname, { origin: ORIGIN, secFetchSite: 'same-origin', cookie: guestCookie, ...opts });
+
+  const me = await guest('GET', '/api/me');
+  const guestId = me.json?.user?.id;
+  assert.ok(guestId, 'the guest has an id');
+
+  const space = (await browser('POST', '/api/spaces', { body: { name: 'Shared' } })).json;
+  assert.ok(space?.id, 'space created');
+
+  assert.equal((await browser('POST', `/api/spaces/${space.id}/invite`, { body: { userId: guestId } })).status, 200);
+  assert.equal((await guest('POST', `/api/spaces/${space.id}/respond`, { body: { accept: true } })).status, 200);
+  assert.equal((await guest('GET', '/api/spaces')).json.length, 1, 'the guest can see it');
+
+  const sock = listen({ Cookie: guestCookie, Origin: ORIGIN }, m => m.type === 'space_deleted');
+  await sock.ready;
+  await sock.settle();
+
+  assert.equal((await browser('DELETE', `/api/spaces/${space.id}`)).status, 200);
+  const frames = await sock.waitFor(1);
+  sock.close();
+
+  assert.equal(frames.length, 1, 'the guest is told the space is gone');
+  assert.equal(frames[0].spaceId, space.id);
+  assert.equal((await guest('GET', '/api/spaces')).json.length, 0, 'and it really is gone');
+});
+
+test('the space list is scoped to its member and newest first', async () => {
+  const before = (await browser('GET', '/api/spaces')).json.length;
+  const a = (await browser('POST', '/api/spaces', { body: { name: 'Alpha' } })).json;
+  await new Promise(r => { setTimeout(r, 5); });
+  const b = (await browser('POST', '/api/spaces', { body: { name: 'Beta' } })).json;
+
+  const mine = (await browser('GET', '/api/spaces')).json;
+  assert.equal(mine.length, before + 2);
+  assert.equal(mine[0].id, b.id, 'newest first');
+  assert.equal(mine.filter(s => s.id === a.id).length, 1, 'no duplicate rows per membership');
+
+  const stranger = await request('GET', '/api/spaces', { origin: ORIGIN, secFetchSite: 'same-origin' });
+  assert.equal(stranger.status, 401, 'a signed-out caller gets nothing');
+
+  assert.equal((await browser('DELETE', `/api/spaces/${a.id}`)).status, 200);
+  assert.equal((await browser('DELETE', `/api/spaces/${b.id}`)).status, 200);
+});
+
+test('a space owner can only remove somebody who is actually in the space', async () => {
+  const space = (await browser('POST', '/api/spaces', { body: { name: 'Solo' } })).json;
+  const missing = await browser('DELETE', `/api/spaces/${space.id}/members/not-a-real-user`);
+  assert.equal(missing.status, 404, 'removing a non-member is a miss, not a silent no-op');
+  assert.equal((await browser('DELETE', `/api/spaces/${space.id}`)).status, 200);
 });
 
 test('unknown routes answer in the right language', async () => {
@@ -431,4 +583,91 @@ test('release metadata is served to members only', async () => {
     assert.match(icon.headers['content-type'] || '', /^image\//, 'served as an image');
     assert.equal(icon.headers['x-content-type-options'], 'nosniff');
   }
+});
+
+test('scheduled tasks round-trip and normalise a hostile schedule', async () => {
+  assert.equal((await request('GET', '/api/tasks')).status, 401, 'tasks need a session');
+
+  const empty = await browser('GET', '/api/tasks');
+  assert.equal(empty.status, 200);
+  assert.deepEqual(empty.json.tasks, []);
+
+  const made = await browser('POST', '/api/tasks', {
+    body: { title: '  Daily briefing  ', prompt: 'What needs my attention?', schedule: { kind: 'weekdays', hour: 99, minute: -1 } }
+  });
+  assert.equal(made.status, 200, made.text);
+  assert.equal(made.json.title, 'Daily briefing', 'the title is trimmed at the boundary');
+  assert.deepEqual(made.json.schedule, { kind: 'weekdays', hour: 23, minute: 0 }, 'out-of-range fields are clamped, not stored');
+  assert.ok(made.json.nextRun > Date.now(), 'an enabled task is scheduled forward');
+  const id = made.json.id;
+
+  const off = await browser('PATCH', `/api/tasks/${id}`, { body: { enabled: false } });
+  assert.equal(off.status, 200);
+  assert.equal(off.json.enabled, false);
+  assert.equal(off.json.nextRun, 0, 'a disabled task stops being due');
+
+  const junk = await browser('PATCH', `/api/tasks/${id}`, { body: { schedule: 'not-an-object', title: '' } });
+  assert.equal(junk.status, 200, 'a nonsense schedule is normalised rather than rejected with a 500');
+  assert.equal(junk.json.schedule.kind, 'daily');
+  assert.equal(junk.json.title, 'New task');
+
+  assert.equal((await browser('POST', `/api/tasks/${id}/run`)).status, 200);
+  assert.equal((await browser('DELETE', `/api/tasks/${id}`)).status, 200);
+  assert.equal((await browser('GET', '/api/tasks')).json.tasks.length, 0);
+  assert.equal((await browser('PATCH', '/api/tasks/nope', { body: {} })).status, 404, 'an unknown id is a miss, not a crash');
+});
+
+test('the artifacts library answers for a member and refuses a stranger', async () => {
+  assert.equal((await request('GET', '/api/artifacts')).status, 401);
+  const res = await browser('GET', '/api/artifacts');
+  assert.equal(res.status, 200);
+  assert.ok(Array.isArray(res.json.artifacts), 'always an array, even with no chats');
+  const capped = await browser('GET', '/api/artifacts?limit=9999&q=' + encodeURIComponent('x'.repeat(500)));
+  assert.equal(capped.status, 200, 'an oversized limit and query are clamped at the boundary');
+});
+
+test('skills round-trip, reject a bad name and stay scoped to their owner', async () => {
+  assert.equal((await request('GET', '/api/skills')).status, 401, 'skills need a session');
+
+  const empty = await browser('GET', '/api/skills');
+  assert.equal(empty.status, 200);
+  assert.deepEqual(empty.json.skills.filter(s => s.scope === 'user'), []);
+
+  const made = await browser('POST', '/api/skills', {
+    body: { name: '  Brand Voice!  ', description: 'Keeps drafts in my voice', body: '# Brand voice\n\nUse this when writing.' }
+  });
+  assert.equal(made.status, 200, made.text);
+  assert.equal(made.json.name, 'brand-voice', 'the name is normalised at the boundary');
+  assert.equal(made.json.enabled, true);
+  assert.equal(made.json.editable, true);
+  assert.match(made.json.file, /^---\nname: brand-voice\n/, 'the SKILL.md is rebuilt from the stored fields');
+  const id = made.json.id;
+
+  assert.equal((await browser('POST', '/api/skills', { body: { name: 'brand voice', body: 'x' } })).status, 400,
+    'a duplicate name is refused rather than shadowing the first');
+  assert.equal((await browser('POST', '/api/skills', { body: { name: 'a', body: 'x' } })).status, 400,
+    'a one-character name is refused');
+  assert.equal((await browser('POST', '/api/skills', { body: { name: 'ok-name', body: '  ' } })).status, 400,
+    'empty instructions are refused');
+
+  const uploaded = await browser('POST', '/api/skills', {
+    body: { file: '---\nname: from-file\ndescription: Parsed out of the upload\n---\n\n# From file\n' }
+  });
+  assert.equal(uploaded.status, 200, uploaded.text);
+  assert.equal(uploaded.json.name, 'from-file');
+  assert.equal(uploaded.json.description, 'Parsed out of the upload', 'frontmatter wins over anything the client sends');
+
+  const off = await browser('PATCH', `/api/skills/${id}`, { body: { enabled: false } });
+  assert.equal(off.status, 200);
+  assert.equal(off.json.enabled, false);
+  assert.equal(off.json.name, 'brand-voice', 'an enable-only patch does not revalidate the name');
+
+  assert.equal((await browser('PATCH', '/api/skills/nope', { body: { enabled: false } })).status, 404,
+    'an unknown id is a miss, not a crash');
+  assert.equal((await browser('DELETE', '/api/skills/nope')).status, 404);
+
+  assert.equal((await browser('DELETE', `/api/skills/${id}`)).status, 200);
+  assert.equal((await browser('DELETE', `/api/skills/${uploaded.json.id}`)).status, 200);
+  const after = await browser('GET', '/api/skills');
+  assert.equal(after.json.skills.filter(s => s.scope === 'user').length, 0);
 });

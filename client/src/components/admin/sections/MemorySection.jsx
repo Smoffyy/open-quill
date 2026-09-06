@@ -1,27 +1,38 @@
 import { useAdmin } from '../store.jsx';
-import { Card, AutosaveNote, SettingRow } from '../widgets.jsx';
+import { Card, Rows, ToggleRow, Field, Area } from '../ui.jsx';
 import { t } from '../../../i18n.jsx';
 
 export default function MemorySection() {
-  const A = useAdmin();
-  const { settings, setSettings, settingsSave } = A;
+  const { workspace } = useAdmin();
+  const { settings, set } = workspace;
+  const mem = !!settings.memoryEnabled;
+
   return (
     <>
-      <Card title={t("User memory")} sub={t("Each user gets a compact long-term memory built from their own chats. Users can view, edit, disable, or clear it in Settings → Memory.")}>
-        <SettingRow label={t("Enable user memory")} note={t("When on, memory is injected into the system prompt for users who keep it enabled, and refreshed in the background at most every few hours using the model they are chatting with.")}
-          on={!!settings.memoryEnabled} onToggle={() => setSettings(s => ({ ...s, memoryEnabled: !s.memoryEnabled }))} />
-        {settings.memoryEnabled && (
-          <div className="field" style={{ borderBottom: 0, marginBottom: 0 }}><label>{t("Memory update prompt")}</label>
-            <textarea rows={6} value={settings.memoryPrompt ?? ''} onChange={(e) => setSettings(s => ({ ...s, memoryPrompt: e.target.value }))} />
-            <div className="muted-note">{t("The instructions used when the model rewrites a user's memory from recent conversations. Clearing the field restores the default.")}</div>
-          </div>
+      <Card title={t('Long-term memory')}
+        sub={t('A short profile built from each member’s own chats and prepended to their system prompt. Members can read, edit, or clear theirs under Settings, and opt out entirely.')}>
+        <Rows>
+          <ToggleRow label={t('Build and inject memory')} on={mem} onToggle={() => set('memoryEnabled', !mem)}
+            note={t('Refreshed in the background at most once every few hours, using whichever model that member is chatting with.')} />
+        </Rows>
+        {mem && (
+          <Field label={t('Rewrite prompt')}
+            hint={t('Sent to the model when it rewrites a memory. Clear the field to restore the built-in prompt.')}>
+            <Area rows={7} value={settings.memoryPrompt ?? ''}
+              placeholder={t('Instructions for rewriting a member’s memory from their recent conversations.')}
+              onChange={(e) => set('memoryPrompt', e.target.value)} />
+          </Field>
         )}
       </Card>
-      <Card title={t("Past-chat search")} sub={t("Gives models chat_search and chat_view tools to look things up in the user's own previous conversations.")}>
-        <SettingRow last label={t("Enable chat history search")} note={t("Only the requesting user's chats are searchable, and never the conversation currently in progress. Requires a model with tool calling.")}
-          on={!!settings.chatSearchEnabled} onToggle={() => setSettings(s => ({ ...s, chatSearchEnabled: !s.chatSearchEnabled }))} />
+
+      <Card title={t('Chat history tools')}
+        sub={t('Adds chat_search and chat_view so a model can look things up in earlier conversations.')}>
+        <Rows>
+          <ToggleRow label={t('Search past chats')} on={!!settings.chatSearchEnabled}
+            onToggle={() => set('chatSearchEnabled', !settings.chatSearchEnabled)}
+            note={t('Scoped to the requesting member’s own chats, and never the conversation in progress. Requires a model with tool calling.')} />
+        </Rows>
       </Card>
-      <AutosaveNote status={settingsSave} live />
     </>
   );
 }

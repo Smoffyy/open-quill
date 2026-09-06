@@ -50,4 +50,12 @@ export function useKeybinds(user, kbHandlers, setChordHint) {
       clearTimeout(pendingTimer);
     };
   }, [user, kbHandlers, setChordHint]);
+
+  // The same actions, reachable without a key press, so anything that already
+  // knows a command by name can run it.
+  useEffect(() => {
+    const run = (e) => { kbHandlers.current[e.detail?.id]?.(); };
+    window.addEventListener('oq-command', run);
+    return () => window.removeEventListener('oq-command', run);
+  }, [kbHandlers]);
 }

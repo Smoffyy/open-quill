@@ -368,7 +368,9 @@ export function copyFile(chatId, rel, newRel, maxBytes = 0) {
   fs.cpSync(src, dst, { recursive: true, force: true });
   const created = [];
   const stamp = (r) => { const v = bumpVersion(chatId, r); if (isText(r)) { try { saveSnapshot(chatId, r, v, fs.readFileSync(resolveSafe(chatId, r), 'utf8')); } catch {} } created.push(r); };
-  if (fs.statSync(dst).isDirectory()) { for (const f of list(chatId, { all: true })) if (f.path === newRel || f.path.startsWith(newRel + '/')) stamp(f.path); }
+  // Scoped to the copy: this used to walk and stat every file in the sandbox and
+  // then filter, which on a large workspace is the whole tree for one directory.
+  if (fs.statSync(dst).isDirectory()) { for (const f of list(chatId, { all: true, under: newRel })) stamp(f.path); }
   else stamp(newRel);
   return { ok: true, path: newRel, from: rel, count: created.length };
 }
@@ -469,15 +471,24 @@ export function extractZip(chatId, rel, dest, budget = 0) {
   let total = 0, skipped = 0, deps = 0;
   const base = String(dest || '').replace(/^\/+|\/+$/g, '');
   const created = [];
+  // Counts every entry written, not just the ones that end up listed. Files inside
+  // node_modules/dist/.git are hidden from listings, so `created` never grew for
+  // them and the entry cap did not apply: a zip of a project folder with its
+  // dependencies would write hundreds of thousands of files, bounded only by the
+  // byte cap.
+  let written = 0;
   for (const e of entries) {
-    if (created.length >= MAX_ENTRIES || total + e.data.length > MAX_TOTAL) { skipped++; continue; }
+    if (written >= MAX_ENTRIES || total + e.data.length > MAX_TOTAL) { skipped++; continue; }
     const rel2 = (base ? base + '/' : '') + e.name;
     const isDep = rel2.split('/').slice(0, -1).some(isIgnoredDir);
-    total += e.data.length;
     try {
       const outP = resolveSafe(chatId, rel2);
       fs.mkdirSync(path.dirname(outP), { recursive: true });
       fs.writeFileSync(outP, e.data);
+      // Only counted once the bytes are actually on disk, so an entry that failed
+      // to write does not eat the budget.
+      total += e.data.length;
+      written++;
       if (isDep) deps++;
       else { const v = bumpVersion(chatId, rel2); if (isText(rel2)) saveSnapshot(chatId, rel2, v, e.data.toString('utf8')); created.push(rel2); }
     } catch {}

@@ -1,66 +1,113 @@
 import { useState } from 'react';
 import { useAdmin } from '../store.jsx';
-import { Trash } from '../../icons.jsx';
-import { Switch } from '../widgets.jsx';
+import { Card, Rows, ToggleRow, Input, Seg, IconBtn, Acts, Table, Badge, Empty, fmtMoney } from '../ui.jsx';
+import { Trash, Users } from '../../icons.jsx';
 import { t } from '../../../i18n.jsx';
 
 export default function MembersSection() {
-  const A = useAdmin();
-  const { users, setUsers, user } = A;
+  const { members: M, workspace, user } = useAdmin();
+  const { members, setRole, setBudget, remove } = M;
   const [q, setQ] = useState('');
-  const [role, setRole] = useState('all');
-  const adminCount = users.filter(u => u.isAdmin || u.isOwner).length;
-  const mq = q.trim().toLowerCase();
-  const shownUsers = users.filter(u => {
-    const isAdm = !!(u.isAdmin || u.isOwner);
-    if (role === 'admins' && !isAdm) return false;
-    if (role === 'users' && isAdm) return false;
-    if (mq && !((u.displayName || '').toLowerCase().includes(mq) || (u.email || '').toLowerCase().includes(mq))) return false;
-    return true;
+  const [role, setRoleFilter] = useState('all');
+  const [drafts, setDrafts] = useState({});
+
+  const admins = members.filter(u => u.isAdmin || u.isOwner).length;
+  const needle = q.trim().toLowerCase();
+  const shown = members.filter(u => {
+    const isAdmin = !!(u.isAdmin || u.isOwner);
+    if (role === 'admins' && !isAdmin) return false;
+    if (role === 'members' && isAdmin) return false;
+    if (!needle) return true;
+    return (u.displayName || '').toLowerCase().includes(needle) || (u.email || '').toLowerCase().includes(needle);
   });
+
+  function commitBudget(id, value) {
+    setBudget(id, value);
+    setDrafts(d => { const n = { ...d }; delete n[id]; return n; });
+  }
+
   return (
     <>
-      <div className="field row">
-        <div>
-          <label>{t("Allow new accounts")}</label>
-          <div className="muted-note">{t("When off, the sign-in screen stops offering account creation and the server refuses new registrations. Existing members are unaffected.")}</div>
+      <Card title={t('Registration')}>
+        <Rows>
+          <ToggleRow label={t('Accept new sign-ups')} on={workspace.config.allowSignups !== false}
+            onToggle={() => workspace.setCfg('allowSignups', workspace.config.allowSignups === false)}
+            note={t('Off, the sign-in screen stops offering account creation and the server refuses registrations. Existing members keep working.')} />
+        </Rows>
+      </Card>
+
+      <div className="cp-toolbar">
+        <div className="cp-toolbar-find">
+          <Input value={q} type="search" placeholder={t('Filter by name or email')} aria-label={t('Filter by name or email')}
+            onChange={(e) => setQ(e.target.value)} />
         </div>
-        <Switch on={A.cfg.allowSignups !== false} label={t("Allow new accounts")} onToggle={() => A.setCfg(c => ({ ...c, allowSignups: c.allowSignups === false }))} />
+        <Seg value={role} label={t('Role filter')} onChange={setRoleFilter}
+          options={[
+            { value: 'all', label: t('All'), badge: members.length },
+            { value: 'admins', label: t('Admins'), badge: admins },
+            { value: 'members', label: t('Members'), badge: members.length - admins }
+          ]} />
       </div>
-      <div className="mem-toolbar">
-        <input className="mem-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("Search by name or email…")} />
-        <div className="seg">
-          {[['all', `All (${users.length})`], ['admins', `Admins (${adminCount})`], ['users', `Users (${users.length - adminCount})`]].map(([v, l]) => (
-            <button key={v} className={role === v ? 'on' : ''} onClick={() => setRole(v)}>{l}</button>
-          ))}
-        </div>
-      </div>
-      {shownUsers.length === 0 && <div className="muted-note">{t("No members match.")}</div>}
-      {shownUsers.map(u => (
-        <div className="user-row" key={u.id}>
-          <div className="avatar">{(u.displayName || u.email)[0].toUpperCase()}</div>
-          <div className="u-main">
-            <div className="u-name">{u.displayName}{u.isOwner && <span className="badge">{t("Top admin")}</span>}{u.twoFactor && <span className="badge" title={t("Two-factor enabled")}>{t("2FA")}</span>}{u.id === user?.id && !u.isOwner && <span className="you-tag">you</span>}</div>
-            <div className="u-email">{u.email}{typeof u.monthSpend === 'number' && u.monthSpend > 0 ? ` · $${u.monthSpend.toFixed(u.monthSpend < 0.01 ? 4 : 2)} this month` : ''}</div>
-          </div>
-          <div className="u-budget" title={t("Monthly budget override ($). Blank uses the role default.")}>
-            <span className="u-budget-prefix">$</span>
-            <input type="number" min="0" step="any" placeholder={t("role default")}
-              value={u.budget == null ? '' : u.budget}
-              onChange={(e) => setUsers(us => us.map(x => x.id === u.id ? { ...x, budget: e.target.value === '' ? null : e.target.value } : x))}
-              onBlur={(e) => A.saveBudget(u.id, e.target.value)} />
-          </div>
-          {!u.isOwner && (
-            <div className="seg">
-              <button className={u.isAdmin ? '' : 'on'} onClick={() => A.setRole(u.id, false)}>{t("User")}</button>
-              <button className={u.isAdmin ? 'on' : ''} onClick={() => A.setRole(u.id, true)}>{t("Admin")}</button>
-            </div>
+
+      <Card title={t('Accounts')} flush
+        sub={t('A blank cap falls back to the role default set in Quotas. Removing an account deletes everything it owns.')}>
+        {shown.length === 0
+          ? <Empty icon={Users} title={t('No accounts match')}>{t('Clear the filter to see everyone who has signed in.')}</Empty>
+          : (
+            <Table head={[
+              { label: t('Member') },
+              { label: t('Email'), mono: true },
+              { label: t('Spent this month'), num: true, fit: true },
+              { label: t('Cap $/month'), width: '140px' },
+              { label: t('Role'), fit: true },
+              { label: '', fit: true }
+            ]}>
+              {shown.map(u => {
+                const draft = drafts[u.id];
+                const value = draft !== undefined ? draft : (u.budget == null ? '' : u.budget);
+                return (
+                  <tr key={u.id}>
+                    <td>
+                      <span className="cp-inline">
+                        {u.displayName}
+                        <span className="cp-badges">
+                          {u.isOwner && <Badge tone="on">{t('owner')}</Badge>}
+                          {u.twoFactor && <Badge>{t('2fa')}</Badge>}
+                          {u.id === user?.id && <Badge>{t('you')}</Badge>}
+                        </span>
+                      </span>
+                    </td>
+                    <td className="mono dim">{u.email}</td>
+                    <td className="num mono">{u.monthSpend > 0 ? fmtMoney(u.monthSpend) : <span className="dim">—</span>}</td>
+                    <td>
+                      <Input type="number" min="0" step="any" placeholder={t('default')} value={value}
+                        aria-label={t('Cap $/month')}
+                        onChange={(e) => setDrafts(d => ({ ...d, [u.id]: e.target.value }))}
+                        onBlur={(e) => commitBudget(u.id, e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }} />
+                    </td>
+                    <td className="fit">
+                      {u.isOwner
+                        ? <span className="dim">{t('owner')}</span>
+                        : (
+                          <Seg value={u.isAdmin ? 'admin' : 'member'} label={t('Role')}
+                            onChange={(v) => setRole(u.id, v === 'admin')}
+                            options={[{ value: 'member', label: t('member') }, { value: 'admin', label: t('admin') }]} />
+                        )}
+                    </td>
+                    <td className="acts">
+                      <Acts end>
+                        {!u.isOwner && u.id !== user?.id && (
+                          <IconBtn kind="danger" label={t('Remove member')} onClick={() => remove(u.id, u.email)}><Trash /></IconBtn>
+                        )}
+                      </Acts>
+                    </td>
+                  </tr>
+                );
+              })}
+            </Table>
           )}
-          {!u.isOwner && u.id !== user?.id && (
-            <button className="btn danger" onClick={() => A.removeUser(u.id)}><Trash style={{ width: 15 }} /></button>
-          )}
-        </div>
-      ))}
+      </Card>
     </>
   );
 }

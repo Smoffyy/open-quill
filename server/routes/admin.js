@@ -99,26 +99,19 @@ export default function registerAdminRoutes(app) {
     const days = USAGE_WINDOWS.has(Number(req.query.days)) ? Number(req.query.days) : 30;
     const since = now() - days * 24 * 60 * 60 * 1000;
     const nameById = new Map(db.users.all().map(u => [u.id, u.display_name || u.email]));
-    const byUser = new Map(), byModel = new Map(), byDay = new Map();
-    let tp = 0, tc = 0, tcost = 0, gens = 0;
-    for (const r of db.usage.since(since)) {
-      gens++; const p = r.prompt || 0, c = r.completion || 0, cost = r.cost || 0;
-      tp += p; tc += c; tcost += cost;
-      const uk = r.user_id || 'unknown';
-      const ue = byUser.get(uk) || { userId: uk, name: nameById.get(uk) || 'Unknown', prompt: 0, completion: 0, cost: 0, count: 0 };
-      ue.prompt += p; ue.completion += c; ue.cost += cost; ue.count++; byUser.set(uk, ue);
-      const mk = r.model_id || 'unknown';
-      const me = byModel.get(mk) || { modelId: mk, name: r.model_name || 'Unknown', prompt: 0, completion: 0, cost: 0, count: 0 };
-      me.prompt += p; me.completion += c; me.cost += cost; me.count++; if (r.model_name) me.name = r.model_name; byModel.set(mk, me);
-      const dk = new Date(r.created_at || 0).toISOString().slice(0, 10);
-      const de = byDay.get(dk) || { day: dk, prompt: 0, completion: 0, cost: 0 };
-      de.prompt += p; de.completion += c; de.cost += cost; byDay.set(dk, de);
-    }
+    const { totals, byUser, byModel, byDay } = db.usage.report(since);
     res.json({
-      totals: { prompt: tp, completion: tc, total: tp + tc, cost: tcost, generations: gens, users: byUser.size },
-      users: [...byUser.values()].sort((a, b) => b.cost - a.cost || (b.prompt + b.completion) - (a.prompt + a.completion)),
-      models: [...byModel.values()].sort((a, b) => (b.prompt + b.completion) - (a.prompt + a.completion)),
-      daily: [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day)).slice(-90),
+      totals: {
+        prompt: totals.prompt, completion: totals.completion, total: totals.prompt + totals.completion,
+        cost: totals.cost, generations: totals.count, users: totals.users
+      },
+      users: byUser
+        .map(r => ({ ...r, name: nameById.get(r.userId) || 'Unknown' }))
+        .sort((a, b) => b.cost - a.cost || (b.prompt + b.completion) - (a.prompt + a.completion)),
+      models: byModel
+        .map(r => ({ ...r, name: r.name || 'Unknown' }))
+        .sort((a, b) => (b.prompt + b.completion) - (a.prompt + a.completion)),
+      daily: byDay.slice(-90),
       window: days
     });
   });

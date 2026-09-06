@@ -39,4 +39,4 @@ Open **Settings** from the profile menu (bottom-left) or `Ctrl+,`. It's organize
 
 ## About
 
-App name/icon, version, release channel, and release notes.
+App name/icon, version, and release notes.

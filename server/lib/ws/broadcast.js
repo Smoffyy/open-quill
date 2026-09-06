@@ -39,6 +39,15 @@ export function killSessionSockets(sessionId) {
 }
 
 export function broadcastToUser(userId, payload) {
+  broadcastToUsers([userId], payload);
+}
+
+export function broadcastToUsers(userIds, payload, excludeUserId) {
+  const ids = userIds instanceof Set ? userIds : new Set(userIds || []);
+  if (!ids.size) return;
   const msg = JSON.stringify(payload);
-  for (const [sock, st] of clients.entries()) if (st.userId === userId) send(sock, msg);
+  for (const [sock, st] of clients.entries()) {
+    if (!ids.has(st.userId) || st.userId === excludeUserId) continue;
+    send(sock, msg);
+  }
 }

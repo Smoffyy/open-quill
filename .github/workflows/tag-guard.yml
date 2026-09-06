@@ -1,10 +1,5 @@
 name: Tag guard
 
-# A tag is the version string exactly: 27.1.0, 27.1.0-beta.3. No "v" prefix.
-# Release and Pre-release only trigger on that bare form, so a "v"-prefixed tag
-# would otherwise do nothing at all and look like the release simply failed to
-# appear. This fires on exactly the mistake and says how to undo it.
-
 on:
   push:
     tags:
@@ -24,17 +19,16 @@ jobs:
           echo "::error::Tag $TAG has a \"v\" prefix. Tags are the version string exactly, with no prefix."
           cat <<EOF
 
-          Open Quill tags are bare version strings: 27.1.0, 27.1.0-beta.3.
-          Neither Release nor Pre-release triggers on "$TAG", so nothing was published.
+          Open Quill tags are bare version strings: 27.0.0.
 
-          To fix:
+          You should not need to tag by hand at all. Releases are drafted by the
+          Release workflow when dev is merged into stable, and publishing that draft
+          is what creates the tag.
+
+          To remove this one:
 
             git tag -d "$TAG"
             git push origin ":refs/tags/$TAG"
-            git tag "$BARE"
-            git push origin "$BARE"
 
-          The root .npmrc sets tag-version-prefix= so "npm version" already
-          produces the bare form. See RELEASING.md.
           EOF
           exit 1

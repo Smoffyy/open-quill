@@ -1,22 +1,34 @@
 import { spawn } from 'child_process';
-import { getSetting, setSetting, uid } from './db.js';
+import { db, getSetting, setSetting, uid } from './db.js';
 
-const PROTOCOL_VERSION = '2024-11-05';
+const PROTOCOL_VERSION = '2025-06-18';
 const CALL_TIMEOUT = 30000;
 const INIT_TIMEOUT = 15000;
+const NOTIFY_TIMEOUT = 5000;
 const RESULT_CAP = 60000;
+export const USER_SERVER_LIMIT = 10;
 
 export function slugify(s) {
   return String(s || '').toLowerCase().trim().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 24) || 'server';
 }
 
-export function list() {
-  const raw = getSetting('mcp_servers', []);
+// A server belongs either to the workspace (userId null, admin-managed) or to one user.
+// Both stores hold the same shape and share every transport path below; what differs is
+// where the list lives and what a user is allowed to configure.
+export function list(userId = null) {
+  const raw = userId ? (db.users.byId(userId) || {}).mcp_servers : getSetting('mcp_servers', []);
   return Array.isArray(raw) ? raw : [];
 }
-function save(arr) { setSetting('mcp_servers', arr); }
-export function getEnabled() { return list().filter(s => s.enabled); }
-export function byId(id) { return list().find(s => s.id === id) || null; }
+function save(arr, userId = null) {
+  if (userId) db.users.update(userId, { mcp_servers: arr });
+  else setSetting('mcp_servers', arr);
+}
+export function getEnabled(userId = null) {
+  const workspace = list().filter(s => s.enabled);
+  if (!userId) return workspace;
+  return [...workspace, ...list(userId).filter(s => s.enabled)];
+}
+export function byId(id, userId = null) { return list(userId).find(s => s.id === id) || null; }
 
 function parseHeaders(raw) {
   const out = {};
@@ -27,12 +39,17 @@ function parseHeaders(raw) {
   return out;
 }
 
-function validate(b, existingId) {
+function validate(b, existingId, userId = null) {
   const name = String(b.name || '').trim().slice(0, 60);
   if (!name) return { error: 'Server name is required.' };
   let slug = slugify(b.slug || name);
-  if (list().some(s => s.slug === slug && s.id !== existingId)) slug = slug.slice(0, 20) + '_' + Math.random().toString(36).slice(2, 5);
+  // Tool names are mcp_<slug>_<tool>, and a user's servers share one namespace with the
+  // workspace ones, so a collision across the two stores would hide a tool entirely.
+  const taken = userId ? [...list(), ...list(userId)] : list();
+  if (taken.some(s => s.slug === slug && s.id !== existingId)) slug = slug.slice(0, 20) + '_' + Math.random().toString(36).slice(2, 5);
   const transport = b.transport === 'http' ? 'http' : 'stdio';
+  // stdio spawns a process on the host. That is an admin power, never a user one.
+  if (userId && transport !== 'http') return { error: 'You can only add HTTP servers. Ask an admin to add a local command server.' };
   const out = {
     name, slug, transport,
     command: String(b.command || '').trim().slice(0, 500),
@@ -46,33 +63,35 @@ function validate(b, existingId) {
   return out;
 }
 
-export function create(b) {
-  const v = validate(b);
+export function create(b, userId = null) {
+  if (userId && list(userId).length >= USER_SERVER_LIMIT) return { error: 'You have reached the connector limit.' };
+  const v = validate(b, undefined, userId);
   if (v.error) return v;
   const server = { id: uid(), ...v, tools: [], status: 'new', error: '', created_at: Date.now() };
-  save([...list(), server]);
+  save([...list(userId), server], userId);
   return { server };
 }
 
-export function update(id, b) {
-  const cur = byId(id);
+export function update(id, b, userId = null) {
+  const cur = byId(id, userId);
   if (!cur) return { error: 'Server not found.' };
-  const v = validate({ ...cur, ...b }, id);
+  const v = validate({ ...cur, ...b }, id, userId);
   if (v.error) return v;
   const server = { ...cur, ...v };
-  save(list().map(s => s.id === id ? server : s));
+  save(list(userId).map(s => s.id === id ? server : s), userId);
   disconnect(id);
   return { server };
 }
 
-export function remove(id) {
+export function remove(id, userId = null) {
+  if (userId && !byId(id, userId)) return { error: 'Server not found.' };
   disconnect(id);
-  save(list().filter(s => s.id !== id));
+  save(list(userId).filter(s => s.id !== id), userId);
   return { ok: true };
 }
 
-function patchServer(id, patch) {
-  save(list().map(s => s.id === id ? { ...s, ...patch } : s));
+function patchServer(id, patch, userId = null) {
+  save(list(userId).map(s => s.id === id ? { ...s, ...patch } : s), userId);
 }
 
 const stdioClients = new Map();
@@ -112,13 +131,18 @@ function stdioClient(server) {
       }
     }
   });
-  proc.on('error', () => {});
-  proc.on('exit', () => {
-    const detail = client.stderr.trim().slice(-500);
-    const err = new Error('MCP server process exited.' + (detail ? ' ' + detail : ''));
+  const fail = (err) => {
     for (const { reject, timer } of client.pending.values()) { clearTimeout(timer); reject(err); }
     client.pending.clear();
     if (stdioClients.get(server.id) === client) stdioClients.delete(server.id);
+  };
+  proc.stdin.on('error', () => {});
+  proc.on('error', (e) => fail(new Error(e?.code === 'ENOENT'
+    ? `Could not start the MCP server: "${server.command}" was not found.`
+    : `Could not start the MCP server: ${e?.message || e}`)));
+  proc.on('exit', () => {
+    const detail = client.stderr.trim().slice(-500);
+    fail(new Error('MCP server process exited.' + (detail ? ' ' + detail : '')));
   });
   stdioClients.set(server.id, client);
   return client;
@@ -170,36 +194,40 @@ function parseHttpBody(text, contentType) {
   try { return JSON.parse(text); } catch { return null; }
 }
 
-async function httpRequest(server, method, params, sessionId, timeoutMs) {
+function httpHeaders(server, session) {
+  const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream' };
+  if (session?.protocolVersion) headers['MCP-Protocol-Version'] = session.protocolVersion;
+  if (session?.sessionId) headers['Mcp-Session-Id'] = session.sessionId;
+  return { ...headers, ...parseHeaders(server.headers) };
+}
+
+async function httpRequest(server, method, params, session, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const headers = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json, text/event-stream',
-      ...parseHeaders(server.headers)
-    };
-    if (sessionId) headers['Mcp-Session-Id'] = sessionId;
     const res = await fetch(server.url, {
-      method: 'POST', headers, signal: controller.signal,
+      method: 'POST', headers: httpHeaders(server, session), signal: controller.signal,
       body: JSON.stringify({ jsonrpc: '2.0', id: Date.now() + Math.floor(Math.random() * 1000), method, params: params || {} })
     });
-    const newSession = res.headers.get('mcp-session-id') || sessionId || null;
+    const newSession = res.headers.get('mcp-session-id') || session?.sessionId || null;
     const text = await res.text();
     if (!res.ok) throw new Error(`MCP HTTP ${res.status}: ${text.slice(0, 200)}`);
     const msg = parseHttpBody(text, res.headers.get('content-type'));
     if (!msg) throw new Error('MCP server returned an unreadable response.');
     if (msg.error) throw new Error(msg.error.message || 'MCP error');
     return { result: msg.result, sessionId: newSession };
+  } catch (e) {
+    if (e?.name === 'AbortError') throw new Error('MCP request timed out.', { cause: e });
+    throw e;
   } finally { clearTimeout(timer); }
 }
 
-async function httpNotify(server, method, sessionId) {
+async function httpNotify(server, method, session) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), NOTIFY_TIMEOUT);
   try {
-    const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream', ...parseHeaders(server.headers) };
-    if (sessionId) headers['Mcp-Session-Id'] = sessionId;
-    await fetch(server.url, { method: 'POST', headers, body: JSON.stringify({ jsonrpc: '2.0', method, params: {} }) });
-  } catch {}
+    await fetch(server.url, { method: 'POST', headers: httpHeaders(server, session), signal: controller.signal, body: JSON.stringify({ jsonrpc: '2.0', method, params: {} }) });
+  } catch {} finally { clearTimeout(timer); }
 }
 
 async function httpEnsureSession(server) {
@@ -210,9 +238,9 @@ async function httpEnsureSession(server) {
     capabilities: {},
     clientInfo: { name: 'open-quill', version: '1.0.0' }
   }, null, INIT_TIMEOUT);
-  void result;
-  await httpNotify(server, 'notifications/initialized', sessionId);
-  const session = { sessionId };
+  const negotiated = typeof result?.protocolVersion === 'string' && result.protocolVersion ? result.protocolVersion : PROTOCOL_VERSION;
+  const session = { sessionId, protocolVersion: negotiated };
+  await httpNotify(server, 'notifications/initialized', session);
   httpSessions.set(server.id, session);
   return session;
 }
@@ -224,7 +252,7 @@ async function rpc(server, method, params, timeoutMs = CALL_TIMEOUT) {
   }
   try {
     const session = await httpEnsureSession(server);
-    const { result } = await httpRequest(server, method, params, session.sessionId, timeoutMs);
+    const { result } = await httpRequest(server, method, params, session, timeoutMs);
     return result;
   } catch (e) {
     httpSessions.delete(server.id);
@@ -232,8 +260,8 @@ async function rpc(server, method, params, timeoutMs = CALL_TIMEOUT) {
   }
 }
 
-export async function refreshTools(id) {
-  const server = byId(id);
+export async function refreshTools(id, userId = null) {
+  const server = byId(id, userId);
   if (!server) return { error: 'Server not found.' };
   try {
     const result = await rpc(server, 'tools/list', {});
@@ -242,11 +270,11 @@ export async function refreshTools(id) {
       description: String(t.description || '').slice(0, 800),
       inputSchema: t.inputSchema && typeof t.inputSchema === 'object' ? t.inputSchema : { type: 'object', properties: {} }
     })).filter(t => t.name);
-    patchServer(id, { tools, status: 'connected', error: '', refreshed_at: Date.now() });
-    return { server: byId(id) };
+    patchServer(id, { tools, status: 'connected', error: '', refreshed_at: Date.now() }, userId);
+    return { server: byId(id, userId) };
   } catch (e) {
-    patchServer(id, { status: 'error', error: String(e.message || e).slice(0, 400) });
-    return { server: byId(id), error: String(e.message || e) };
+    patchServer(id, { status: 'error', error: String(e.message || e).slice(0, 400) }, userId);
+    return { server: byId(id, userId), error: String(e.message || e) };
   }
 }
 
@@ -259,14 +287,33 @@ function sanitizeSchema(schema) {
   };
 }
 
-export function toolSchemas() {
+// Function names are capped at 64 characters. Truncating alone let two long tool
+// names on one server collapse into the same string: the model was handed two
+// identical function names and every call resolved to whichever came first, so
+// the other tool was silently unreachable. A short digest of the full name keeps
+// them distinct within the cap.
+export const MCP_NAME_MAX = 64;
+
+function digest(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0).toString(36).slice(0, 4).padStart(4, '0');
+}
+
+export function mcpToolName(slug, toolName) {
+  const full = `mcp_${slug}_${toolName}`;
+  if (full.length <= MCP_NAME_MAX) return full;
+  return full.slice(0, MCP_NAME_MAX - 5) + '_' + digest(full);
+}
+
+export function toolSchemas(userId = null) {
   const out = [];
-  for (const server of getEnabled()) {
+  for (const server of getEnabled(userId)) {
     for (const t of (server.tools || [])) {
       out.push({
         type: 'function',
         function: {
-          name: `mcp_${server.slug}_${t.name}`.slice(0, 64),
+          name: mcpToolName(server.slug, t.name),
           description: `[MCP: ${server.name}] ${t.description || ''}`.slice(0, 1000),
           parameters: sanitizeSchema(t.inputSchema)
         }
@@ -276,30 +323,36 @@ export function toolSchemas() {
   return out;
 }
 
-export function isMcpTool(name) { return typeof name === 'string' && name.startsWith('mcp_') && !!resolveTool(name); }
+export function isMcpTool(name, userId = null) { return typeof name === 'string' && name.startsWith('mcp_') && !!resolveTool(name, userId); }
 
-function resolveTool(name) {
-  for (const server of getEnabled()) {
+function resolveTool(name, userId = null) {
+  for (const server of getEnabled(userId)) {
     const prefix = `mcp_${server.slug}_`;
     if (name.startsWith(prefix)) {
       const toolName = name.slice(prefix.length);
-      const t = (server.tools || []).find(x => `mcp_${server.slug}_${x.name}`.slice(0, 64) === name || x.name === toolName);
+      // Matched through the same builder the schema used, so a name that had to be
+      // shortened still resolves. The bare-name fallback covers a model that
+      // answers with the tool's own name rather than the prefixed one.
+      const t = (server.tools || []).find(x => mcpToolName(server.slug, x.name) === name || x.name === toolName);
       if (t) return { server, tool: t };
     }
   }
   return null;
 }
 
-export function promptFor() {
-  const servers = getEnabled().filter(s => (s.tools || []).length);
+export function promptFor(userId = null) {
+  const servers = getEnabled(userId).filter(s => (s.tools || []).length);
   if (!servers.length) return '';
   let p = '## MCP Connectors\nExternal tools are available through MCP servers connected by the admin. Their names are prefixed with `mcp_`. Call them like any other function when they fit the task.\n';
-  for (const s of servers) p += `\n${s.name}: ${(s.tools || []).map(t => `mcp_${s.slug}_${t.name}`).join(', ')}`;
+  // Through the same builder as the schema: the prompt used to spell out the full
+  // name while the schema carried a shortened one, so the model was told to call
+  // something that did not exist.
+  for (const s of servers) p += `\n${s.name}: ${(s.tools || []).map(t => mcpToolName(s.slug, t.name)).join(', ')}`;
   return p;
 }
 
-export async function execTool(call) {
-  const resolved = resolveTool(call.tool);
+export async function execTool(call, userId = null) {
+  const resolved = resolveTool(call.tool, userId);
   if (!resolved) return { ok: false, tool: call.tool, error: 'Unknown MCP tool.' };
   const { server, tool } = resolved;
   const args = { ...call };

@@ -12,6 +12,14 @@
   --text-faint: #6f6e66;
   --accent: #d97757;
   --on-accent: #ffffff;
+  --primary: var(--text);
+  --on-primary: var(--bg);
+  --link: var(--search-hit);
+  --danger: #e5484d;
+  --success: #4caf7d;
+  --warning: #e2b03f;
+  --diff-add: #3fb950;
+  --diff-del: #f85149;
   --user-bubble: #2f2f2c;
   --composer-bg: var(--surface);
   --composer-hover: rgba(255, 255, 255, .08);
@@ -23,10 +31,11 @@
   --hover-soft: #ffffff14;
   --hover-mid: #ffffff1f;
   --hover: var(--hover-soft);
-  --font-serif: 'Newsreader Variable';
+  --font-serif: 'Literata Variable';
   --font-sans: 'Open Sans';
-  --prose-weight: 420;
-  --prose-strong: 615;
+  --prose-weight: 400;
+  --prose-strong: 600;
+  --greeting-weight: 290;
   --radius: 14px;
   --attach-size: 104px;
   --attach-radius: 12px;
@@ -55,6 +64,9 @@
   --sidebar: #f7f7f4;
   --surface: #ffffff;
   --surface-2: #efeee7;
+  --modal-line: rgba(0, 0, 0, .07);
+  --modal-fill: rgba(0, 0, 0, .04);
+  --modal-active: rgba(0, 0, 0, .07);
   --surface-hover: #efeeeb;
   --border: #dddddd;
   --border-soft: #00000014;
@@ -91,6 +103,8 @@
   --composer-hover: rgba(0, 0, 0, .06);
 }
 :root[data-theme="light"] .code-wrap { background: #1f1f1d; }
+:root[data-theme="light"] .tb-cmd code.hljs,
+:root[data-theme="light"] .tb-cmd code.hljs * { color: var(--text); }
 /* Wherever the wrap takes an opaque background of its own, the sticky bar has to
    take the same one, or it goes back to being see-through. */
 
@@ -182,7 +196,7 @@
   --pop-shadow: 0 4px 14px rgba(0, 0, 0, .25), 0 12px 32px rgba(0, 0, 0, .3);
   --cmdk-active: #2c2c2a;
 }
-:root[data-theme="anthropic"][data-palette="legacy"] .greeting { color: rgba(255, 255, 255, .8); font-weight: 470; font-size: 40px; }
+:root[data-theme="anthropic"][data-palette="legacy"] .greeting { color: rgba(255, 255, 255, .8); }
 :root[data-theme="anthropic"][data-palette="legacy"] .composer { border-color: var(--border); box-shadow: none; }
 :root[data-theme="anthropic"][data-palette="legacy"] .composer:focus-within { border-color: var(--border); box-shadow: none; }
 :root[data-theme="anthropic"][data-palette="legacy"] .plus-menu,
@@ -316,8 +330,7 @@
 :root[data-theme="anthropic"] .nav-item:active { background: var(--sidebar-hover); }
 :root[data-theme="anthropic"] .send { color: #fff; }
 :root[data-theme="anthropic"] .composer .mic,
-:root[data-theme="anthropic"] .mdocs-btn { color: var(--text); }
-:root[data-theme="anthropic"] .greeting { color: var(--sidebar-text); font-weight: 390; }
+:root[data-theme="anthropic"] .greeting { color: var(--sidebar-text); font-weight: var(--greeting-weight, 390); }
 :root[data-theme="anthropic"] .composer { border-color: transparent; box-shadow: 0 4px 20px rgba(0, 0, 0, .035), 0 0 0 1px rgba(225, 224, 217, .15); }
 :root[data-theme="anthropic"] .composer:focus-within { border-color: transparent; box-shadow: 0 4px 20px rgba(0, 0, 0, .075), 0 0 0 1px rgba(225, 224, 217, .3); }
 :root[data-theme="anthropic"] .composer textarea::placeholder { color: var(--sidebar-label); }
@@ -359,6 +372,6 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: none; ba
 input, textarea { font-family: inherit; color: inherit; }
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: var(--hover-mid); border-radius: 9px; }
-::-webkit-scrollbar-thumb:hover { background: #ffffff30; }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--text) 19%, transparent); }
 ::-webkit-scrollbar-track { background: transparent; }
 

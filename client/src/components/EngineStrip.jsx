@@ -5,7 +5,7 @@ import { t } from '../i18n.jsx';
 const num = (n) => Number(n || 0).toLocaleString();
 const rate = (n) => {
   const v = Number(n || 0);
-  if (!v) return '—';
+  if (!v) return '-';
   return (v >= 100 ? Math.round(v) : Math.round(v * 10) / 10) + ' tok/s';
 };
 

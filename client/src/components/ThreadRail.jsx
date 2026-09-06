@@ -1,17 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { t } from '../i18n.jsx';
 
-const TICK = 5;
+const TICK = 3;
 const GAP_MAX = 6;
 const GAP_MIN = 1;
+const HUMP_SIGMA = 2.2;
+const HUMP_MIN = 0.7;
+const HUMP_MAX = 1.7;
 
-const Tick = React.memo(function Tick({ index, cls, label, on }) {
+const Tick = React.memo(function Tick({ index, cls, label, on, scale }) {
+  const style = { height: TICK };
+  if (scale != null) style.transform = `scaleX(${scale})`;
   return (
     <button
       type="button"
       data-i={index}
       className={cls}
-      style={{ height: TICK }}
+      style={style}
       aria-label={label}
       aria-current={on ? 'true' : undefined}
     />
@@ -69,6 +74,15 @@ function ThreadRail({ items, scrollRef, matches, onJump }) {
     return -1;
   }, [items, visible]);
 
+  const scales = useMemo(() => {
+    if (firstVisible < 0) return null;
+    return items.map((_, i) => {
+      const d = i - firstVisible;
+      const hump = Math.exp(-(d * d) / (2 * HUMP_SIGMA * HUMP_SIGMA));
+      return HUMP_MIN + (HUMP_MAX - HUMP_MIN) * hump;
+    });
+  }, [items, firstVisible]);
+
   useEffect(() => {
     const list = listRef.current;
     if (!list || firstVisible < 0) return;
@@ -107,7 +121,7 @@ function ThreadRail({ items, scrollRef, matches, onJump }) {
           if (it.pinned) cls.push('is-pinned');
           if (it.excluded) cls.push('is-out');
           if (matches && matches.has(it.id)) cls.push('is-match');
-          return <Tick key={it.id} index={i} cls={cls.join(' ')} label={labels[i]} on={on} />;
+          return <Tick key={it.id} index={i} cls={cls.join(' ')} label={labels[i]} on={on} scale={scales ? scales[i] : null} />;
         })}
       </div>
       {hover !== null && items[hover] && (

@@ -16,7 +16,7 @@ export {
   bundleZip, zipAll, extractZip, importBuffer
 } from './sandbox/files.js';
 export { zipBuffer } from './sandbox/zip.js';
-export { hostEnvInfo } from './sandbox/hostenv.js';
+export { hostEnvInfo, primeHostEnv } from './sandbox/hostenv.js';
 export { bash, winTranslate } from './sandbox/shell.js';
 export { execTool, unknownToolError } from './sandbox/exec.js';
 export { screenCommand, normalizeRel } from './lib/sandboxguard.js';
