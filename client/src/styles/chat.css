@@ -92,7 +92,7 @@
 .model-trigger:hover { background: var(--composer-hover, var(--surface-hover)); color: var(--text); }
 .plus:active, .mic:active, .model-trigger:active { background: var(--pop-hover, var(--hover-mid)); }
 .plus.on, .mic.on, .model-trigger.on { background: var(--pop-hover, var(--hover-mid)); color: var(--text); }
-.mt-label { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.mt-label { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; }
 .model-trigger .ext { color: var(--text); flex-shrink: 0; }
 .model-menu {
   position: absolute; bottom: 42px; right: 0; min-width: 269.6px; background: var(--pop-bg); border: 0;

@@ -169,6 +169,8 @@
    20px of top padding; this skin's is an 8px pill, so it keeps its own. */
 [data-preset="openai"] .composer .attach-row { margin-top: 0; padding: 0 0 8px; }
 
+[data-preset="openai"] .lib-overlay { z-index: 35; }
+
 [data-preset="openai"] .composer-wrap.floating {
   position: absolute; bottom: 0; left: 0; right: 0; z-index: 30;
   max-width: none;
