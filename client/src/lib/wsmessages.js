@@ -125,6 +125,15 @@ export const handlers = {
     ctx.set.chats(cs => cs.map(c => c.id === m.chatId ? { ...c, title: m.title } : c));
   },
 
+  // A scheduled or manually-run task creates its chat entirely server-side, so the
+  // sidebar has never heard of it until this arrives.
+  task_started(m, ctx) {
+    ctx.set.chats(cs => (cs.some(c => c.id === m.chatId)
+      ? cs
+      : [{ id: m.chatId, title: m.title || 'New chat', updated_at: Date.now(), starred: false }, ...cs]));
+    ctx.actions.taskStarted(m);
+  },
+
   chat_ended(m, ctx) {
     ctx.set.chats(cs => cs.map(c => c.id === m.chatId ? { ...c, ended: true } : c));
     if (!isActive(ctx, m.chatId)) return;

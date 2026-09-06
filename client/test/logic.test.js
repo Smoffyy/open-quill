@@ -1624,7 +1624,7 @@ function wsCtx(activeKey = 'c1') {
     actions: {
       finalize: log('finalize'), finalizeBackground: log('finalizeBackground'), syncView: log('syncView'),
       loadModels: log('loadModels'), loadAppConfig: log('loadAppConfig'), loadBudget: log('loadBudget'),
-      loadLedger: log('loadLedger'), refreshSpacesPending: log('refreshSpacesPending')
+      loadLedger: log('loadLedger'), refreshSpacesPending: log('refreshSpacesPending'), taskStarted: log('taskStarted')
     }
   };
   return ctx;
@@ -1645,7 +1645,7 @@ test('every frame the server can send has a handler', () => {
   const SENT = ['session_revoked', 'config', 'resume', 'files', 'tool_live', 'tool_live_delta',
     'tool_exec', 'tool', 'compacting', 'compacted', 'ctx_rolling', 'title', 'chat_ended',
     'routed', 'queued', 'status', 'prompt_size', 'telemetry', 'steered', 'start',
-    'reasoning', 'content', 'error', 'done'];
+    'reasoning', 'content', 'error', 'done', 'task_started'];
   for (const type of SENT) assert.ok(handlers[type], 'no handler for ' + type);
 });
 
@@ -1834,6 +1834,19 @@ test('chat_ended marks the sidebar row even when the chat is not on screen', () 
   dispatchWs({ type: 'chat_ended', chatId: 'c2', reason: 'done here' }, ctx);
   assert.equal(did(ctx, 'setChats'), true);
   assert.equal(did(ctx, 'setEnded'), false, 'but the banner is only for the open chat');
+});
+
+test('task_started inserts a chat the sidebar has never seen, once', () => {
+  const ctx = wsCtx('c1');
+  dispatchWs({ type: 'task_started', chatId: 'c9', title: 'Daily briefing' }, ctx);
+  assert.equal(did(ctx, 'taskStarted'), true);
+  const updater = ctx.calls.find(c => c[0] === 'setChats')[1];
+  const inserted = updater([{ id: 'c1', title: 'Other chat' }]);
+  assert.equal(inserted.length, 2);
+  assert.equal(inserted[0].id, 'c9');
+  assert.equal(inserted[0].title, 'Daily briefing');
+  // A duplicate frame for a chat already in the list must not add a second row.
+  assert.deepEqual(updater(inserted), inserted);
 });
 
 /* ---------- light/dark toggle ---------- */

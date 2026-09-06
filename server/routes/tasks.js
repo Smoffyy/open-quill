@@ -1,6 +1,7 @@
 import { db, uid, now } from '../db.js';
 import { authMiddleware } from '../auth.js';
 import { normalizeSchedule, nextRun, describe } from '../lib/tasks.js';
+import { fireTask } from '../lib/taskrunner.js';
 
 const TITLE_MAX = 160;
 const PROMPT_MAX = 8000;
@@ -80,9 +81,10 @@ export default function registerTaskRoutes(app) {
 
   app.post('/api/tasks/:id/run', authMiddleware, (req, res) => {
     const t = own(req, res); if (!t) return;
+    const r = fireTask(t);
+    if (r.error) return res.status(400).json({ error: r.error });
     const at = now();
-    const patch = { last_run: at, updated_at: at, next_run: t.enabled === 0 ? 0 : nextRun(t.schedule, at) };
-    if (typeof req.body?.chatId === 'string') patch.last_chat_id = req.body.chatId.slice(0, 64);
-    res.json({ task: view(db.tasks.update(t.id, patch)), prompt: t.prompt || '', modelId: t.model_id || '' });
+    const patch = { last_run: at, updated_at: at, next_run: t.enabled === 0 ? 0 : nextRun(t.schedule, at), last_chat_id: r.chatId };
+    res.json({ chatId: r.chatId, task: view(db.tasks.update(t.id, patch)) });
   });
 }

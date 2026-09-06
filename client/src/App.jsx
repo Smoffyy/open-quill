@@ -302,10 +302,8 @@ export default function App() {
     try {
       const r = await api.post('/api/tasks/' + task.id + '/run', {});
       setLibPage(null);
-      newChat();
-      setInput(r.prompt || '');
-      setFocusTick(n => n + 1);
-    } catch { toast(t('Could not run the task.')); }
+      await openChat(r.chatId);
+    } catch (e) { toast(e?.message || t('Could not run the task.')); }
   }, []);
   const sidebarCombo = React.useMemo(() => {
     const c = resolveKeybinds(user?.prefs).toggleSidebar;
@@ -675,7 +673,8 @@ export default function App() {
       loadAppConfig: () => loadAppConfig(),
       loadBudget: () => loadBudget(),
       loadLedger: () => loadLedger(),
-      refreshSpacesPending: () => refreshSpacesPending()
+      refreshSpacesPending: () => refreshSpacesPending(),
+      taskStarted: (m) => toast(t('Running scheduled task "{title}"', { title: m.title || t('New chat') }), { icon: 'info' })
     }
   };
 
