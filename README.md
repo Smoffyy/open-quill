@@ -9,7 +9,7 @@ Anthropic-inspired design, artifacts, a real code sandbox. Nothing leaves your m
 
 [![Latest Stable Release](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FSmoffyy%2Fopen-quill%2Freleases%2Flatest&query=%24.name&label=stable&labelColor=1f1f1e&color=d97757)](https://github.com/Smoffyy/open-quill/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/Smoffyy/open-quill/ci.yml?branch=dev&label=CI&labelColor=1f1f1e&logo=githubactions&logoColor=f4f3ee)](https://github.com/Smoffyy/open-quill/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-8a7f77?labelColor=1f1f1e)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-7193f5?labelColor=1f1f1e)](LICENSE)
 [![Follow on X](https://img.shields.io/badge/%40openquilldev-1f1f1e?logo=x&logoColor=f4f3ee)](https://x.com/openquilldev)
 
 [Quick start](#quick-start) · [Features](#features) · [Documentation](#documentation) · [Configuration](#configuration) · [Privacy](#privacy) · [Releases](#releases--versioning)
@@ -52,14 +52,14 @@ Anthropic-inspired design, artifacts, a real code sandbox. Nothing leaves your m
 
 Pick one.
 
-**From a release** &nbsp;·&nbsp; fastest, the client is already built &nbsp;·&nbsp; [download](https://github.com/Smoffyy/open-quill/releases/latest)
+**From a release** · fastest, the client is already built · [download](https://github.com/Smoffyy/open-quill/releases/latest)
 
 ```bash
 cd server && npm install && cd ..
 npm start                 # serves on http://localhost:3001
 ```
 
-**From source** &nbsp;·&nbsp; the `stable` or `dev` branch
+**From source** · the `stable` or `dev` branch
 
 ```bash
 npm run install:all
@@ -67,7 +67,7 @@ npm run build             # builds the client into client/dist
 npm start                 # serves on http://localhost:3001
 ```
 
-**Development** &nbsp;·&nbsp; hot reload, for working on Open Quill
+**Development** · hot reload, for working on Open Quill
 
 ```bash
 npm run install:all
