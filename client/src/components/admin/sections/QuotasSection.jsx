@@ -1,9 +1,9 @@
 import { useAdmin } from '../store.jsx';
-import { Card, Rows, ToggleRow, Fields, Field, Input } from '../ui.jsx';
+import { Card, Rows, Row, ToggleRow, Fields, Field, Input, Seg, Select } from '../ui.jsx';
 import { t } from '../../../i18n.jsx';
 
 export default function QuotasSection() {
-  const { workspace } = useAdmin();
+  const { workspace, catalog } = useAdmin();
   const { settings, set } = workspace;
 
   // Every quota is the same control, so the whole page is a table of them.
@@ -61,6 +61,33 @@ export default function QuotasSection() {
             onToggle={() => set('modelQueue', !settings.modelQueue)}
             note={t('Requests for the same model still run together. A request for a different model waits for the current one to finish instead of forcing a swap mid-reply.')} />
         </Rows>
+      </Card>
+
+      <Card title={t('Chat titles')}
+        sub={t('Names a new chat from its first exchange. Off by default so a metered provider is never billed for something nobody asked for.')}>
+        <Rows>
+          <ToggleRow label={t('Generate titles automatically')} on={!!settings.autoTitleEnabled}
+            onToggle={() => set('autoTitleEnabled', !settings.autoTitleEnabled)} />
+        </Rows>
+        {!!settings.autoTitleEnabled && (
+          <Rows>
+            <Row label={t('Route through')}
+              note={t('The chatting model needs no extra setup, but a metered one is billed for every title. A dedicated model keeps the cost fixed and predictable, whichever model a chat actually uses.')}>
+              <Seg value={settings.autoTitleModelMode || 'current'} label={t('Route through')}
+                onChange={(v) => set('autoTitleModelMode', v)}
+                options={[{ value: 'current', label: t('Chatting model') }, { value: 'specific', label: t('Dedicated model') }]} />
+            </Row>
+            {settings.autoTitleModelMode === 'specific' && (
+              <Fields cols={2}>
+                <Field label={t('Model')} hint={t('If this model is deleted, titling falls back to the chatting model.')}>
+                  <Select value={settings.autoTitleModelId || ''} onChange={(v) => set('autoTitleModelId', v)} label={t('Model')}
+                    options={[{ value: '', label: t('Choose a model') },
+                      ...catalog.models.map(m => ({ value: m.id, label: m.display_name || m.internal_name }))]} />
+                </Field>
+              </Fields>
+            )}
+          </Rows>
+        )}
       </Card>
     </>
   );

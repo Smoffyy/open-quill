@@ -1,5 +1,5 @@
 import { db, uid, now, getSetting } from '../../db.js';
-import { buildMessages, streamCompletion, generateTitle, stripThink } from '../../llm/index.js';
+import { buildMessages, streamCompletion, generateTitle, resolveTitleModel, stripThink } from '../../llm/index.js';
 import { buildTools, toCall, cutOffOf, livePreview, resolveToolName, SANDBOX_READONLY } from '../../tools/index.js';
 import { announcedMoreWork, MAX_CONTINUES, CONTINUE_INSTRUCTION } from '../continuation.js';
 import * as websearch from '../../websearch.js';
@@ -629,14 +629,14 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
 
   const fresh = db.chats.byId(chat.id);
   const cleanContent = stripToolSyntax(content).trim();
-  if (cleanContent && fresh && fresh.title === 'New chat') {
+  if (getSetting('auto_title_enabled', '0') === '1' && cleanContent && fresh && fresh.title === 'New chat') {
     let lastUser = null;
     for (let i = history.length - 1; i >= 0; i--) if (history[i].role === 'user') { lastUser = history[i]; break; }
     const lastUserText = lastUser && (Array.isArray(lastUser.content)
       ? (lastUser.content.find(p => p.type === 'text')?.text || 'Image')
       : lastUser.content);
     if (lastUserText) {
-      generateTitle(model, lastUserText, cleanContent).then((title) => {
+      generateTitle(resolveTitleModel(model), lastUserText, cleanContent).then((title) => {
         db.chats.update(chat.id, { title });
         safeSend(JSON.stringify({ type: 'title', chatId: chat.id, title }));
       }).catch(() => {});

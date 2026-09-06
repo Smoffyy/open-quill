@@ -72,9 +72,9 @@ export const NAV = [
       find: tk('egress privacy offline local only allowlist firewall'),
       index: [tk('Block public internet'), tk('Host allowlist'), tk('Connection log')] },
     { id: 'quotas', label: tk('Quotas'), Icon: Gear, title: tk('Quotas'), saves: 'workspace',
-      blurb: tk('Upload ceilings, sandbox storage, request queueing, and spend caps.'),
-      find: tk('limits budgets caps uploads sandbox queue sessions'),
-      index: [tk('Attachments'), tk('Sandbox storage'), tk('Scheduling'), tk('Spend caps'), tk('Sessions')] }
+      blurb: tk('Upload ceilings, sandbox storage, request queueing, spend caps, and automatic chat titles.'),
+      find: tk('limits budgets caps uploads sandbox queue sessions chat titles auto-title'),
+      index: [tk('Attachments'), tk('Sandbox storage'), tk('Scheduling'), tk('Spend caps'), tk('Sessions'), tk('Chat titles')] }
   ] },
   { group: tk('Records'), items: [
     { id: 'usage', label: tk('Usage'), Icon: Wave, title: tk('Usage'),

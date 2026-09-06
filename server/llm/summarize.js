@@ -1,4 +1,11 @@
+import { db, getSetting } from '../db.js';
 import { oneShot } from './oneshot.js';
+
+export function resolveTitleModel(chattingModel) {
+  if (getSetting('auto_title_model_mode', 'current') !== 'specific') return chattingModel;
+  const id = getSetting('auto_title_model_id', '');
+  return (id && db.models.byId(id)) || chattingModel;
+}
 
 export function stripThink(model, raw) {
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

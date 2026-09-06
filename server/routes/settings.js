@@ -62,7 +62,10 @@ export const SETTING_FIELDS = {
   safetyReasonEnabled: { key: 'safety_reason_enabled', bool: true },
   memoryEnabled: { key: 'memory_enabled', bool: true },
   memoryPrompt: { key: 'memory_prompt', text: 24000, fallback: DEFAULT_MEMORY_PROMPT },
-  chatSearchEnabled: { key: 'chat_search_enabled', bool: true }
+  chatSearchEnabled: { key: 'chat_search_enabled', bool: true },
+  autoTitleEnabled: { key: 'auto_title_enabled', bool: true },
+  autoTitleModelMode: { key: 'auto_title_model_mode', enum: ['current', 'specific'], def: 'current' },
+  autoTitleModelId: { key: 'auto_title_model_id', text: 64, trim: true }
 };
 
 export function coerceSetting(spec, raw) {
@@ -149,7 +152,10 @@ export default function registerSettingsRoutes(app) {
       safetyReasonEnabled: draftGet('safety_reason_enabled', '0') === '1',
       memoryEnabled: draftGet('memory_enabled', '0') === '1',
       memoryPrompt: draftGet('memory_prompt', DEFAULT_MEMORY_PROMPT),
-      chatSearchEnabled: draftGet('chat_search_enabled', '0') === '1'
+      chatSearchEnabled: draftGet('chat_search_enabled', '0') === '1',
+      autoTitleEnabled: draftGet('auto_title_enabled', '0') === '1',
+      autoTitleModelMode: draftGet('auto_title_model_mode', 'current') === 'specific' ? 'specific' : 'current',
+      autoTitleModelId: draftGet('auto_title_model_id', '')
     }));
 
   app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
