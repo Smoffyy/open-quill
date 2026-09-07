@@ -26,11 +26,13 @@ const NAV_GROUPS = [
     { id: 'keybinds', label: tk('Keybinds'), Icon: Keyboard },
     { id: 'memory', label: tk('Memory'), Icon: Brain, needs: 'memoryFeature' },
     { id: 'usage', label: tk('Usage'), Icon: Clock },
-    { id: 'version', label: tk('Version'), Icon: Info },
   ] },
   { label: tk('Customize'), items: [
     { id: 'skills', label: tk('Skills'), Icon: SkillIcon },
     { id: 'mcp', label: tk('MCP'), Icon: Plug },
+  ] },
+  { label: tk('About'), items: [
+    { id: 'version', label: tk('Version'), Icon: Info },
   ] },
 ];
 

@@ -14,7 +14,6 @@ export function parseRoute(pathname, opts = {}) {
   const named = (
     /^\/admin(\/|$)/.test(p) ? 'admin' :
     /^\/playground(\/|$)/.test(p) ? 'playground' :
-    /^\/spaces(\/|$)/.test(p) ? 'spaces' :
     /^\/docs(\/|$)/.test(p) ? 'docs' :
     null
   );
@@ -45,7 +44,6 @@ function decodeStrict(s) {
 const OWNS = {
   admin: /^\/admin(\/|$)/,
   playground: /^\/playground(\/|$)/,
-  spaces: /^\/spaces(\/|$)/,
   docs: /^\/docs(\/|$)/,
   projects: /^\/projects?(\/|$)|^\/project\//
 };

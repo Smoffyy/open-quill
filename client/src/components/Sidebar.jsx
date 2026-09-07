@@ -204,7 +204,7 @@ function ChatRow({ c, active, showTrash, projects = [], onMoveToProject, onOpen,
 function Sidebar({
   user, chats, onSearch, chatsLoaded = true, activeId, appName, appIcon, onNew, onOpen, onDelete, onToggleStar,
   collapsed, onToggle, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview,
-  onSpaces, spacesPending = 0, projects = [], onProjects, onOpenProject, onNewProject, onMoveToProject, mobileOpen = false, onMobileClose,
+  projects = [], onProjects, onOpenProject, onNewProject, onMoveToProject, mobileOpen = false, onMobileClose,
   onArtifacts, onScheduled, onCustomize, onModelDocs, showModelDocs = true, onVersion, dest = null,
   docs = null, busyChats = [], onStopChat
 }) {

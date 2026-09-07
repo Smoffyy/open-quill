@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **More language support** - added Deutsch, Español (México), Japanese, Korean, and Russian to the interface.
 
-
+### Removed
+- **Spaces** - the shared, multi-user chat rooms feature has been removed along with its server routes, database tables, and client panel.
 
 ---
 

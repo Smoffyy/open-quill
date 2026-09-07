@@ -8,7 +8,6 @@ import { resolveModelOrDefault } from '../lib/models.js';
 import { budgetStatus } from '../lib/budget.js';
 import { updateUserMemory } from '../lib/memory.js';
 import { killSessionSockets } from '../lib/ws/index.js';
-import { removeUserFromSpaces } from '../lib/spaces.js';
 
 const isHttps = (req) =>
   !!req.socket?.encrypted || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
@@ -380,7 +379,6 @@ export default function registerAuthRoutes(app) {
     const u = req.user;
     if (u.is_owner) return res.status(403).json({ error: 'The owner account cannot be deleted.' });
     purgeUserChats(u.id);
-    removeUserFromSpaces(u.id);
     db.sessions.removeWhere('user_id', u.id);
     db.users.removeById(u.id);
     logAudit(req, 'account.delete', { type: 'user', id: u.id, meta: { email: u.email } });

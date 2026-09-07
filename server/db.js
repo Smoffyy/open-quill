@@ -171,20 +171,6 @@ usageCol.spendSinceByUser = (since) => {
   return out;
 };
 
-const spacesCol = collection('spaces');
-const spacesByMemberStmt = sdb.prepare(`
-  SELECT DISTINCT s.data AS data, s.updated_at AS updated_at
-  FROM spaces s, json_each(json_extract(s.data,'$.members')) m
-  WHERE json_type(s.data,'$.members') = 'array'
-    AND json_extract(m.value,'$.userId') IS ?
-  ORDER BY s.updated_at DESC`);
-spacesCol.byMember = userId =>
-  spacesByMemberStmt.all(userId ?? null).map(r => JSON.parse(r.data));
-
-const spaceMessagesCol = collection('space_messages');
-const spMsgBySpaceStmt = sdb.prepare('SELECT data FROM space_messages WHERE space_id=? ORDER BY created_at');
-spaceMessagesCol.bySpace = spaceId => spMsgBySpaceStmt.all(spaceId).map(r => JSON.parse(r.data));
-
 const sessionsCol = collection('sessions');
 const sessionsByUserStmt = sdb.prepare('SELECT data FROM sessions WHERE user_id=? ORDER BY last_seen DESC');
 sessionsCol.byUser = userId => sessionsByUserStmt.all(userId).map(r => JSON.parse(r.data));
@@ -266,8 +252,6 @@ export const db = {
   models: collection('models'),
   folders: collection('folders'),
   usage: usageCol,
-  spaces: spacesCol,
-  spaceMessages: spaceMessagesCol,
   sessions: sessionsCol,
   audit: auditCol,
   projects: projectsCol,

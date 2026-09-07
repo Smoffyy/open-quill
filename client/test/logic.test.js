@@ -38,7 +38,7 @@ import { isFileWrite, fileFrom, mergeCall, supersededFile } from '../src/lib/liv
 import { createLru } from '../src/lib/lru.js';
 import { parseRoute, shouldResetPath, pathForChat, pathForProject } from '../src/lib/route.js';
 import { revealChunk, revealPeriod, hasMarker } from '../src/lib/turnstream.js';
-import { dispatchWs, handlers, isSpaceFrame } from '../src/lib/wsmessages.js';
+import { dispatchWs, handlers } from '../src/lib/wsmessages.js';
 
 const ev = (o) => ({ key: '', code: '', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...o });
 
@@ -1484,8 +1484,6 @@ test('lru ignores a missing key rather than caching under undefined', () => {
 
 test('parseRoute reads each screen off the path', () => {
   assert.deepEqual(parseRoute('/'), { view: 'home' });
-  assert.deepEqual(parseRoute('/spaces'), { view: 'spaces' });
-  assert.deepEqual(parseRoute('/spaces/'), { view: 'spaces' });
   assert.deepEqual(parseRoute('/projects'), { view: 'projects', id: null });
   assert.deepEqual(parseRoute('/project/abc'), { view: 'project', id: 'abc' });
   assert.deepEqual(parseRoute('/chat/xyz'), { view: 'chat', id: 'xyz' });
@@ -1515,7 +1513,6 @@ test('shouldResetPath only claims the paths its own screen owns', () => {
   assert.equal(shouldResetPath('admin', '/chat/x'), false, 'user navigated away, leave the URL alone');
   assert.equal(shouldResetPath('projects', '/project/a'), true);
   assert.equal(shouldResetPath('projects', '/projects'), true);
-  assert.equal(shouldResetPath('spaces', '/spaces'), true);
   assert.equal(shouldResetPath('home', '/'), false);
 });
 
@@ -1624,7 +1621,7 @@ function wsCtx(activeKey = 'c1') {
     actions: {
       finalize: log('finalize'), finalizeBackground: log('finalizeBackground'), syncView: log('syncView'),
       loadModels: log('loadModels'), loadAppConfig: log('loadAppConfig'), loadBudget: log('loadBudget'),
-      loadLedger: log('loadLedger'), refreshSpacesPending: log('refreshSpacesPending'), taskStarted: log('taskStarted')
+      loadLedger: log('loadLedger'), taskStarted: log('taskStarted')
     }
   };
   return ctx;
@@ -1777,16 +1774,6 @@ test('status of generating clears the prefill readout rather than showing a phas
   assert.equal(ctx.recs.get('c1').status.pct, 40);
   dispatchWs({ type: 'status', chatId: 'c1', phase: 'generating' }, ctx);
   assert.equal(ctx.recs.get('c1').status, null);
-});
-
-test('a space frame goes out as an event and refreshes only for membership changes', () => {
-  const ctx = wsCtx();
-  assert.equal(isSpaceFrame('space_invite'), true);
-  assert.equal(isSpaceFrame('done'), false);
-  dispatchWs({ type: 'space_message' }, ctx);
-  assert.equal(did(ctx, 'refreshSpacesPending'), false);
-  dispatchWs({ type: 'space_invite' }, ctx);
-  assert.equal(did(ctx, 'refreshSpacesPending'), true);
 });
 
 test('resume rebuilds every turn and only syncs the view when one is on screen', () => {

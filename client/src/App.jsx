@@ -40,7 +40,6 @@ import ChatsOverview from './components/ChatsOverview.jsx';
 import ArtifactsLibrary from './components/ArtifactsLibrary.jsx';
 import ScheduledTasks from './components/ScheduledTasks.jsx';
 import Tip from './components/Tip.jsx';
-import SpacesPanel from './components/SpacesPanel.jsx';
 import ProjectsPanel from './components/ProjectsPanel.jsx';
 import { ChatMenu, menuAtButton } from './components/ChatMenu.jsx';
 import PersonasModal from './components/PersonasModal.jsx';
@@ -122,8 +121,8 @@ export default function App() {
     return fallback;
   }, [modelById]);
   const sidebarFns = useRef({});
-  const sbNewChat = useCallback((...a) => { setLibPage(null); setChatsOverview(false); setShowSpaces(false); setDocsTarget(null); sidebarFns.current.newChat(...a); }, []);
-  const sbOpenChat = useCallback((...a) => { setLibPage(null); setChatsOverview(false); setShowSpaces(false); setDocsTarget(null); sidebarFns.current.openChat(...a); }, []);
+  const sbNewChat = useCallback((...a) => { setLibPage(null); setChatsOverview(false); setDocsTarget(null); sidebarFns.current.newChat(...a); }, []);
+  const sbOpenChat = useCallback((...a) => { setLibPage(null); setChatsOverview(false); setDocsTarget(null); sidebarFns.current.openChat(...a); }, []);
   const sbDeleteChat = useCallback((...a) => sidebarFns.current.deleteChat(...a), []);
   const sbToggleStar = useCallback((...a) => sidebarFns.current.toggleStar(...a), []);
   const sbLogout = useCallback((...a) => sidebarFns.current.logout(...a), []);
@@ -131,12 +130,10 @@ export default function App() {
   const navTo = useCallback((to) => {
     setMobileDrawer(false);
     setChatsOverview(to === 'chats');
-    setShowSpaces(to === 'spaces');
     setDocsTarget(null);
     if (to !== 'projects') { setShowProjects(false); setProjectOpenId(null); }
     setLibPage(to === 'artifacts' || to === 'scheduled' ? to : null);
-    if (to === 'spaces') history.pushState({}, '', '/spaces');
-    else if (to !== 'projects' && (shouldResetPath('spaces', location.pathname) || shouldResetPath('projects', location.pathname) || shouldResetPath('docs', location.pathname))) history.pushState({}, '', '/');
+    if (to !== 'projects' && (shouldResetPath('projects', location.pathname) || shouldResetPath('docs', location.pathname))) history.pushState({}, '', '/');
   }, []);
   const sbProjects = useCallback(() => { navTo('projects'); sidebarFns.current.openProjects(null); }, [navTo]);
   const sbOpenProject = useCallback((id) => { navTo('projects'); sidebarFns.current.openProjects(id); }, [navTo]);
@@ -166,7 +163,6 @@ export default function App() {
   const onChangelogCb = useCallback(() => { setMobileDrawer(false); setShowChangelog(true); }, []);
   const onLicenseCb = useCallback(() => { setMobileDrawer(false); setShowLicense(true); }, []);
   const onChatsOverviewCb = useCallback(() => navTo('chats'), [navTo]);
-  const onSpacesCb = useCallback(() => navTo('spaces'), [navTo]);
   const onArtifactsCb = useCallback(() => navTo('artifacts'), [navTo]);
   const onScheduledCb = useCallback(() => navTo('scheduled'), [navTo]);
   const closeArtifacts = useCallback(() => setArtifactsOpen(false), []);
@@ -309,8 +305,6 @@ export default function App() {
     const c = resolveKeybinds(user?.prefs).toggleSidebar;
     return c ? comboKeys(c).join('+') : '';
   }, [user?.prefs]);
-  const [showSpaces, setShowSpaces] = useState(false);
-  const [spacesPending, setSpacesPending] = useState(0);
   const [projects, setProjects] = useState([]);
   const [showProjects, setShowProjects] = useState(false);
   const [projectOpenId, setProjectOpenId] = useState(null);
@@ -482,7 +476,7 @@ export default function App() {
       return () => mq.removeEventListener?.('change', h);
     }
   }, [user, cfg?.uiPreset]);
-  useEffect(() => { if (user) { loadModels(); loadChats(); loadAppConfig(); loadBudget(); connect(); openFromUrl(); refreshSpacesPending(); loadProjects(); } }, [!!user]);
+  useEffect(() => { if (user) { loadModels(); loadChats(); loadAppConfig(); loadBudget(); connect(); openFromUrl(); loadProjects(); } }, [!!user]);
   async function loadBudget() { try { setBudget(await api.get('/api/me/budget')); } catch {} }
   async function loadProjects() { try { setProjects(await api.get('/api/projects')); } catch {} }
 
@@ -539,11 +533,10 @@ export default function App() {
     if (r.replace) history.replaceState({}, '', r.replace);
     const onProjects = r.view === 'project' || r.view === 'projects';
     // Every view flag is written on every route change. The branches used to
-    // return early, so going Back into Spaces from a project left the projects
-    // panel mounted underneath it.
+    // return early, so going Back into a project from another view left the
+    // projects panel mounted underneath it.
     setShowAdmin(r.view === 'admin');
     setShowPlayground(r.view === 'playground');
-    setShowSpaces(r.view === 'spaces');
     setDocsTarget(r.view === 'docs' ? parseDocsPath(location.pathname) : null);
     setShowProjects(onProjects);
     if (r.view === 'docs') return;
@@ -576,7 +569,6 @@ export default function App() {
     const active = activeId ? chats.find(c => c.id === activeId) : null;
     document.title = active ? `${active.title || t('Untitled chat')} - ${appName}` : `New chat - ${appName}`;
   }, [activeId, chats, cfg.appName, incognito]);
-  async function refreshSpacesPending() { try { const l = await api.get('/api/spaces'); setSpacesPending(l.filter(s => s.myStatus === 'invited').length); } catch {} }
   async function exportAllChats() { window.open('/api/chats/export-all', '_blank'); }
   async function importChatsFile(file) {
     try {
@@ -673,7 +665,6 @@ export default function App() {
       loadAppConfig: () => loadAppConfig(),
       loadBudget: () => loadBudget(),
       loadLedger: () => loadLedger(),
-      refreshSpacesPending: () => refreshSpacesPending(),
       taskStarted: (m) => toast(t('Running scheduled task "{title}"', { title: m.title || t('New chat') }), { icon: 'info' })
     }
   };
@@ -1353,7 +1344,6 @@ export default function App() {
     { id: 'chats', label: t('Browse all chats'), keywords: 'overview history search', action: () => setChatsOverview(true) },
     { id: 'search', label: t('Search chats'), shortcut: comboLabel(kb.searchChats), keywords: 'find message text', action: () => setShowSearch(true) },
     { id: 'shortcuts', label: t('Keyboard shortcuts'), shortcut: comboLabel(kb.shortcuts), keywords: 'keys help hotkeys', action: () => setShowShortcuts(true) },
-    { id: 'spaces', label: t('Open Spaces'), keywords: 'group chat invite users', action: () => { history.pushState({}, '', '/spaces'); setShowSpaces(true); } },
     { id: 'projects', label: t('Open Projects'), keywords: 'project workspace organize', action: () => openProjects(null) },
     { id: 'incognito', label: incognito ? t('Exit incognito') : t('Start incognito chat'), shortcut: comboLabel(kb.toggleIncognito), keywords: 'private ghost', action: () => toggleIncognito() },
     { id: 'modeldocs', label: t('Model docs'), keywords: 'models compare docs catalog capabilities', action: onDocsCb },
@@ -1391,7 +1381,7 @@ export default function App() {
       <a className="skip-link" href="#oq-composer">{t('Skip to message input')}</a>
       <AppBackground bg={activeBg} />
       <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName} appIcon={cfg.appIcon} onSearch={onSearchCb}
-        dest={showProjects ? 'projects' : showSpaces ? 'spaces' : chatsOverview ? 'chats' : libPage}
+        dest={showProjects ? 'projects' : chatsOverview ? 'chats' : libPage}
         onArtifacts={onArtifactsCb} onScheduled={onScheduledCb}
         onCustomize={onSkillsCb} onModelDocs={onDocsCb} showModelDocs={cfg.modelDocs !== false} onVersion={onVersionCb}
         docs={docsTarget ? {
@@ -1405,7 +1395,6 @@ export default function App() {
         onSettings={onSettingsCb} onAdmin={onAdminCb} onPlayground={onPlaygroundCb}
         onCredits={onCreditsCb} onChangelog={onChangelogCb} onLicense={onLicenseCb} onLogout={sbLogout} version={cfg.version}
         onChatsOverview={onChatsOverviewCb}
-        onSpaces={onSpacesCb} spacesPending={spacesPending}
         projects={projects} onProjects={sbProjects} onOpenProject={sbOpenProject} onNewProject={sbNewProject} onMoveToProject={sbMoveToProject}
         busyChats={busyChats} onStopChat={stopChat} />
 
@@ -1697,7 +1686,6 @@ export default function App() {
       <Lightbox />
       {showAdmin && <React.Suspense fallback={null}><AdminPanel user={user} onClose={() => { setShowAdmin(false); if (shouldResetPath('admin', location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
       {showPlayground && <React.Suspense fallback={null}><Playground onClose={() => { setShowPlayground(false); if (shouldResetPath('playground', location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
-      {showSpaces && <SpacesPanel user={user} onClose={() => { setShowSpaces(false); refreshSpacesPending(); if (shouldResetPath('spaces', location.pathname)) history.pushState({}, '', '/'); }} />}
       {showProjects && <ProjectsPanel openId={projectOpenId} composerProps={composerProps}
         startCreate={projectCreate} onCreateHandled={() => setProjectCreate(false)}
         onClose={() => { setShowProjects(false); setProjectOpenId(null); if (shouldResetPath('projects', location.pathname)) history.pushState({}, '', '/'); }}

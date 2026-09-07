@@ -41,4 +41,4 @@ See [Keyboard Shortcuts](keyboard-shortcuts.md) for the complete list.
 
 ## Ending and organizing a chat
 
-The chat header menu (**…**) offers Rename, Star, Archive, Fork, Copy all, per-chat instructions, pinned messages/files, and **Inspect context**, a full breakdown of exactly what gets sent to the model on the next turn (every segment, its role, token count, and a preview). See [Organizing Your Chats](organizing-chats.md) for folders, projects, spaces, and search.
+The chat header menu (**…**) offers Rename, Star, Archive, Fork, Copy all, per-chat instructions, pinned messages/files, and **Inspect context**, a full breakdown of exactly what gets sent to the model on the next turn (every segment, its role, token count, and a preview). See [Organizing Your Chats](organizing-chats.md) for folders, projects, and search.

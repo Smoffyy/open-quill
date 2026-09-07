@@ -26,7 +26,6 @@ import registerPlaygroundRoutes from './routes/playground.js';
 import registerSettingsRoutes from './routes/settings.js';
 import registerAdminRoutes from './routes/admin.js';
 import registerMediaRoutes from './routes/media.js';
-import registerSpaceRoutes from './routes/spaces.js';
 import registerMiscRoutes from './routes/misc.js';
 import registerThemeRoutes from './routes/theme.js';
 import { localOnlyMiddleware } from './lib/localonly.js';
@@ -75,7 +74,6 @@ registerPlaygroundRoutes(app);
 registerSettingsRoutes(app);
 registerAdminRoutes(app);
 registerMediaRoutes(app);
-registerSpaceRoutes(app);
 registerThemeRoutes(app);
 registerMiscRoutes(app);
 

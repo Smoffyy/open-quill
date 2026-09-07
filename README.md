@@ -123,7 +123,7 @@ The Admin Panel is in the profile menu, bottom-left of the sidebar.
 | **Code sandbox** | A real shell and file toolset scoped to that workspace, so the assistant can scaffold, install, build, run and test |
 | **Web search** | Optional, backed by your own SearXNG instance |
 | **Connectors (MCP)** | Model Context Protocol servers as local subprocesses or remote endpoints |
-| **Projects and Spaces** | Group chats, share files and instructions across a body of work |
+| **Projects** | Group chats, share files and instructions across a body of work |
 | **Memory** | An editable, per-user memory assembled from recent conversations |
 | **Voice** | Speech-to-text and text-to-speech against an endpoint you configure |
 
@@ -178,7 +178,9 @@ See [docs/privacy-security.md](docs/privacy-security.md) for incognito chats, 2F
 
 ## Releases & versioning
 
-From **Open Quill 27** onward the project uses year-based versioning: the major number increments annually.
+Version numbers are not tied to the calendar. The major number carries over from the **27** line. Minor numbers add features, patch numbers fix things.
+
+Every major line also carries a codename, shown next to the number in **Settings → Version**.
 
 Most people want a **[release](https://github.com/Smoffyy/open-quill/releases/latest)**: packaged with the client already built, and what **Settings → Version** reports you are running.
 
