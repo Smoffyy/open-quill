@@ -8,10 +8,8 @@ let sunsetCheckedVersion = -1;
 const SUNSET_INTERVAL_MS = 60000;
 
 export function applySunsets() {
-  const version = db.models.version();
-  if (version === sunsetCheckedVersion && Date.now() - sunsetCheckedAt < SUNSET_INTERVAL_MS) return;
+  if (db.models.version() === sunsetCheckedVersion && Date.now() - sunsetCheckedAt < SUNSET_INTERVAL_MS) return;
   sunsetCheckedAt = Date.now();
-  sunsetCheckedVersion = version;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   for (const m of db.models.all()) {
@@ -33,6 +31,7 @@ export function applySunsets() {
       }
     }
   }
+  sunsetCheckedVersion = db.models.version();
 }
 
 export function shapePublic(m) {

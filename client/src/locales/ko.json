@@ -2404,5 +2404,8 @@
   "“{name}” is removed and its model moves back to the top level. Nothing is deleted.": "“{name}”이(가) 제거되고 해당 모델은 최상위 수준으로 돌아갑니다. 삭제되는 것은 없습니다.",
   "“{name}” is removed and its {n} models move back to the top level. Nothing is deleted.": "“{name}”이(가) 제거되고 해당 모델 {n}개는 최상위 수준으로 돌아갑니다. 삭제되는 것은 없습니다.",
   "← All projects": "← 모든 프로젝트",
-  "About": "정보"
+  "About": "정보",
+  "Add all {n}": "{n}개 모두 추가",
+  "Adding {done} of {total}…": "{total}개 중 {done}개 추가 중…",
+  "{n} of {total} could not be added.": "{total}개 중 {n}개를 추가하지 못했습니다."
 }

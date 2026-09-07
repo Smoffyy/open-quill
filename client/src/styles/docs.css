@@ -415,7 +415,6 @@
   border: 0.8px solid var(--dk-ring); transition: background .12s ease;
 }
 a.mdoc-tile:hover, button.mdoc-tile:hover { background: var(--dk-fill-hover); }
-.mdoc-tile-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .mdoc-tile-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .mdoc-tile-title {
   display: flex; align-items: center; gap: 8px;

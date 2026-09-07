@@ -195,11 +195,16 @@ test('the server answers as soon as it is listening', () => {
 test('the app answers and serves its policy header', async () => {
   const root = await request('GET', '/');
   assert.equal(root.status, 200);
-  assert.ok(root.headers['content-security-policy'], 'app HTML carries the local-only policy');
+  const csp = root.headers['content-security-policy'];
+  assert.ok(csp, 'app HTML carries the local-only policy');
+  assert.match(csp, /(^|; )default-src 'self'(;|$)/);
+  assert.match(csp, /(^|; )connect-src [^;]*'self'/);
   assert.equal(root.headers['x-content-type-options'], 'nosniff');
+  assert.equal(root.headers['referrer-policy'], 'same-origin');
 
   const ctx = await request('GET', '/api/auth/context');
   assert.equal(ctx.status, 200);
+  assert.equal(ctx.headers['content-security-policy'], undefined, 'the policy is for documents, not the JSON API');
   assert.equal(ctx.headers['cache-control'], 'no-store', 'authenticated JSON must not be cached');
   assert.equal(ctx.json.firstRun, false);
   // deliberately limited to branding plus the two booleans the sign-in screen needs

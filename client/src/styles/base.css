@@ -309,8 +309,6 @@
 :root[data-theme="anthropic"] .pj-cap,
 :root[data-theme="anthropic"] .pj-empty { color: var(--sidebar-label); }
 :root[data-theme="anthropic"] .chat-row,
-:root[data-theme="anthropic"] .folder-name,
-:root[data-theme="anthropic"] .folder-count,
 :root[data-theme="anthropic"] .nav-item,
 :root[data-theme="anthropic"] .nav-label { color: var(--sidebar-text); }
 :root[data-theme="anthropic"] .chat-row.active,
@@ -319,11 +317,7 @@
 :root[data-theme="anthropic"] .chat-row:hover .row-ctrl,
 :root[data-theme="anthropic"] .nav-item:hover,
 :root[data-theme="anthropic"] .nav-item:hover .nav-label,
-:root[data-theme="anthropic"] .nav-item:hover svg,
-:root[data-theme="anthropic"] .folder-head:hover,
-:root[data-theme="anthropic"] .folder-head:hover .folder-name,
-:root[data-theme="anthropic"] .folder-head:hover .folder-count,
-:root[data-theme="anthropic"] .folder-head:hover svg { color: #f9f9f7; }
+:root[data-theme="anthropic"] .nav-item:hover svg { color: #f9f9f7; }
 :root[data-theme="anthropic"] .chat-row.active,
 :root[data-theme="anthropic"] .chat-row:hover,
 :root[data-theme="anthropic"] .nav-item:hover,
@@ -347,8 +341,7 @@
 :root[data-theme="anthropic"] .sidebar-head-actions,
 :root[data-theme="anthropic"] .nav-item svg,
 :root[data-theme="anthropic"] .brand,
-:root[data-theme="anthropic"] .sidebar .icon-btn,
-:root[data-theme="anthropic"] .folder-head svg { color: var(--sidebar-icon); }
+:root[data-theme="anthropic"] .sidebar .icon-btn { color: var(--sidebar-icon); }
 /* anthropic: model name + description in the dropdown */
 :root[data-theme="anthropic"] .model-trigger { color: var(--model-name); }
 :root[data-theme="anthropic"] .mo-desc { color: var(--mo-desc); opacity: 1; }

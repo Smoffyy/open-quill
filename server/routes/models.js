@@ -9,6 +9,7 @@ import { sanitizeKwargs } from '../lib/kwargs.js';
 import { broadcastConfig, broadcastAdminConfig } from '../lib/ws/index.js';
 import { ROUTE_MATCHERS } from '../lib/router.js';
 import { DOCS_MODEL_STR, DOCS_MODEL_BOOL, DOCS_MODEL_INT, DOCS_MODEL_FLOAT, DOCS_BADGES, sanitizePairs, sanitizeCards, sanitizeDocsLinks, sanitizeStrList } from '../lib/modeldocs.js';
+import { listLogos } from '../lib/logos.js';
 
 function sanitizeRouterRules(raw) {
   const list = Array.isArray(raw) ? raw : [];
@@ -39,6 +40,8 @@ export default function registerModelRoutes(app) {
 
   app.get('/api/admin/models', authMiddleware, adminOnly, (req, res) =>
     res.json(db.models.all().sort((a, b) => a.sort_order - b.sort_order)));
+
+  app.get('/api/admin/logos', authMiddleware, adminOnly, (req, res) => res.json({ logos: listLogos() }));
 
   app.get('/api/admin/discover-models', authMiddleware, adminOnly, async (req, res) => {
     try {

@@ -2404,5 +2404,8 @@
   "“{name}” is removed and its model moves back to the top level. Nothing is deleted.": "«{name}» удаляется, а его модель возвращается на верхний уровень. Ничего не удаляется.",
   "“{name}” is removed and its {n} models move back to the top level. Nothing is deleted.": "«{name}» удаляется, а его модели ({n}) возвращаются на верхний уровень. Ничего не удаляется.",
   "← All projects": "← Все проекты",
-  "About": "О программе"
+  "About": "О программе",
+  "Add all {n}": "Добавить все {n}",
+  "Adding {done} of {total}…": "Добавлено {done} из {total}…",
+  "{n} of {total} could not be added.": "Не удалось добавить {n} из {total}."
 }

@@ -59,10 +59,6 @@ export function setHidden(doc, elId, hidden, breakpoint) {
   return setPath(doc, path, hidden ? true : '');
 }
 
-export function setOrder(doc, itemId, order) {
-  return setPath(doc, ['elements', itemId, 'order'], Number.isFinite(order) ? order : '');
-}
-
 // A drag drops one item at an index; every sibling is then renumbered so the
 // stored orders stay dense and readable in the tree.
 export function reorder(doc, items, fromId, toIndex) {
@@ -108,16 +104,6 @@ export function removeNode(doc, slot, id) {
   if (!doc.slots) return doc;
   if (list.length) doc.slots[slot] = list;
   else delete doc.slots[slot];
-  return doc;
-}
-
-export function moveNode(doc, slot, id, toIndex) {
-  const list = (doc.slots?.[slot] || []).slice();
-  const i = list.findIndex(n => n.id === id);
-  if (i === -1) return doc;
-  const [n] = list.splice(i, 1);
-  list.splice(Math.max(0, Math.min(list.length, toIndex)), 0, n);
-  doc.slots[slot] = list;
   return doc;
 }
 

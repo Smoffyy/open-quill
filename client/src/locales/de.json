@@ -2404,5 +2404,8 @@
   "“{name}” is removed and its model moves back to the top level. Nothing is deleted.": "„{name}“ wird entfernt und sein Modell wandert zurück auf die oberste Ebene. Nichts wird gelöscht.",
   "“{name}” is removed and its {n} models move back to the top level. Nothing is deleted.": "„{name}“ wird entfernt und seine {n} Modelle wandern zurück auf die oberste Ebene. Nichts wird gelöscht.",
   "← All projects": "← Alle Projekte",
-  "About": "Über"
+  "About": "Über",
+  "Add all {n}": "Alle {n} hinzufügen",
+  "Adding {done} of {total}…": "{done} von {total} werden hinzugefügt…",
+  "{n} of {total} could not be added.": "{n} von {total} konnten nicht hinzugefügt werden."
 }

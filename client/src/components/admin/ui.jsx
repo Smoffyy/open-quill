@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Check, Copy, X } from '../icons.jsx';
 import { Switch, SegSlide, SelectRow } from '../settingsui.jsx';
 import { t } from '../../i18n.jsx';
+import { logoFor, useLogos } from '../../lib/logos.js';
 
 export { Switch };
 
@@ -184,13 +185,22 @@ export function Tabs({ items, value, onChange, label, panelId }) {
 
 /* ---------- data display ---------- */
 
+export function Logo({ name, size }) {
+  const hit = logoFor(name, useLogos());
+  if (!hit) return null;
+  const style = size ? { width: size, height: size } : undefined;
+  if (hit.color) return <img className="cp-logo" src={hit.src} alt="" aria-hidden="true" style={style} />;
+  const url = `url("${hit.src}")`;
+  return <span className="cp-logo mask" aria-hidden="true" style={{ ...style, maskImage: url, WebkitMaskImage: url }} />;
+}
+
 export function Badge({ tone, children }) {
   return <span className={'cp-badge' + (tone ? ' ' + tone : '')}>{children}</span>;
 }
 
-export function Table({ head, children, empty, fixed }) {
+export function Table({ head, children, empty, fixed, scroll }) {
   return (
-    <div className="cp-table-wrap">
+    <div className={'cp-table-wrap' + (scroll ? ' scroll' : '')}>
       <table className={'cp-table' + (fixed ? ' fixed' : '')}>
         <thead><tr>{head.map((h, i) => (
           <th key={i} scope="col" style={h.width ? { width: h.width } : undefined}

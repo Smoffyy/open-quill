@@ -2404,5 +2404,8 @@
   "“{name}” is removed and its model moves back to the top level. Nothing is deleted.": "「{name}」は削除され、そのモデルはトップレベルに戻ります。何も削除されません。",
   "“{name}” is removed and its {n} models move back to the top level. Nothing is deleted.": "「{name}」は削除され、その{n}件のモデルはトップレベルに戻ります。何も削除されません。",
   "← All projects": "← すべてのプロジェクト",
-  "About": "概要"
+  "About": "概要",
+  "Add all {n}": "{n} 件すべてを追加",
+  "Adding {done} of {total}…": "{total} 件中 {done} 件を追加中…",
+  "{n} of {total} could not be added.": "{total} 件中 {n} 件を追加できませんでした。"
 }

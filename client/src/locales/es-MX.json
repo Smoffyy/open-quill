@@ -2404,5 +2404,8 @@
   "“{name}” goes back to exactly what members are running. A version is saved first, and it lands as one undo step.": "“{name}” vuelve exactamente a lo que están usando los miembros. Primero se guarda una versión, y esto queda como un solo paso de deshacer.",
   "“{name}” is removed and its model moves back to the top level. Nothing is deleted.": "“{name}” se elimina y su modelo vuelve al nivel superior. No se elimina nada.",
   "“{name}” is removed and its {n} models move back to the top level. Nothing is deleted.": "“{name}” se elimina y sus {n} modelos vuelven al nivel superior. No se elimina nada.",
-  "About": "Acerca de"
+  "About": "Acerca de",
+  "Add all {n}": "Agregar los {n}",
+  "Adding {done} of {total}…": "Agregando {done} de {total}…",
+  "{n} of {total} could not be added.": "No se pudieron agregar {n} de {total}."
 }

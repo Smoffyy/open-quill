@@ -76,7 +76,3 @@ export function startTaskScheduler(intervalMs = POLL_MS) {
   timer = setInterval(runDueTasks, intervalMs);
   if (timer.unref) timer.unref();
 }
-
-export function stopTaskScheduler() {
-  if (timer) { clearInterval(timer); timer = null; }
-}

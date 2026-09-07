@@ -528,7 +528,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                   </div>
                   <div className="vh-id">
                     <div className="vh-name">{cfg?.appName || 'open-quill'}</div>
-                    <div className="vh-version">{t("Version")} {vp ? vp.full : ', '}</div>
+                    <div className="vh-version">{t("Version")} {vp ? vp.full : '—'}</div>
                     {channel && <div className="vh-channel">{channel} channel</div>}
                   </div>
                 </div>
@@ -536,7 +536,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                   <div className="vh-list">
                     <div className="vh-li">
                       <span className="vh-li-k">{t("Release")}</span>
-                      <span className="vh-li-v">{vp.base || ', '}</span>
+                      <span className="vh-li-v">{vp.base || '—'}</span>
                     </div>
 
                     {release?.codename && (

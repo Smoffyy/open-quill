@@ -116,7 +116,9 @@ export default function Overlay({ selection, onSelect, interact, tool = 'all' })
   const docRef = useRef(doc);
   const applyRef = useRef(apply);
   const endStrokeRef = useRef(endStroke);
+  const detachResize = useRef(null);
   useEffect(() => { docRef.current = doc; applyRef.current = apply; endStrokeRef.current = endStroke; }, [doc, apply, endStroke]);
+  useEffect(() => () => detachResize.current?.(), []);
 
   // Rectangles follow the app: a sidebar that collapses or a menu that opens
   // moves the outline with it instead of leaving it stranded.
@@ -287,6 +289,7 @@ export default function Overlay({ selection, onSelect, interact, tool = 'all' })
     if (!selRect) return;
     e.preventDefault();
     e.stopPropagation();
+    detachResize.current?.();
     const from = { x: e.clientX, y: e.clientY, w: selRect.width, h: selRect.height };
     const path = stylePath(selection.id);
     const onMove = (ev) => {
@@ -299,11 +302,18 @@ export default function Overlay({ selection, onSelect, interact, tool = 'all' })
       }, { coalesce: 'resize.' + selection.id });
     };
     const onUp = () => {
+      detachResize.current?.();
+    };
+    detachResize.current = () => {
+      detachResize.current = null;
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      endStrokeRef.current();
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
   };
 
   return (

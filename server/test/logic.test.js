@@ -32,6 +32,8 @@ import { PROVIDER_TYPES, isProviderType, providerSpec } from '../providers.js';
 import { slideWithCounter, trimMode } from '../lib/ctxwindow.js';
 import { sameOrigin, sameOriginGuard, requestHost } from '../lib/origin.js';
 import { SETTING_FIELDS, coerceSetting } from '../routes/settings.js';
+import { localOnlyCsp } from '../lib/localonly.js';
+import { runQueued } from '../lib/queue.js';
 import { isText } from '../sandbox/ignore.js';
 import { announcedMoreWork } from '../lib/continuation.js';
 import { openFence, seamFor, steerInstruction } from '../lib/steer.js';
@@ -2267,4 +2269,115 @@ test('per-model docs lists drop empty rows and cap their length', () => {
   assert.deepEqual(sanitizeCards([{ desc: 'no title' }, { title: 'T', desc: 'D', url: 'U' }]), [{ title: 'T', desc: 'D', url: 'U' }]);
   assert.deepEqual(sanitizeStrList(['  a ', '', 'b']), ['a', 'b']);
   assert.deepEqual(sanitizeStrList('not an array'), []);
+});
+
+// --- the content security policy ---------------------------------------------
+
+const cspReq = (headers = {}, encrypted = false) => ({ socket: { encrypted }, headers: { host: 'localhost:3001', ...headers } });
+const cspMap = (req) => new Map(localOnlyCsp(req).split('; ').map(d => {
+  const [name, ...sources] = d.split(' ');
+  return [name, sources];
+}));
+
+test('the policy names every directive that keeps the page on this origin', () => {
+  const csp = cspMap(cspReq());
+  for (const d of ['default-src', 'base-uri', 'form-action', 'frame-ancestors', 'object-src',
+    'script-src', 'style-src', 'img-src', 'media-src', 'font-src', 'worker-src', 'child-src', 'connect-src']) {
+    assert.ok(csp.has(d), `missing directive: ${d}`);
+  }
+  assert.deepEqual(csp.get('default-src'), ["'self'"]);
+  assert.deepEqual(csp.get('object-src'), ["'none'"]);
+});
+
+test('no directive admits a source that is not this origin', () => {
+  const allowed = new Set(["'self'", "'none'", "'unsafe-inline'", "'wasm-unsafe-eval'", 'data:', 'blob:']);
+  for (const [name, sources] of cspMap(cspReq())) {
+    for (const src of sources) {
+      if (allowed.has(src)) continue;
+      assert.match(src, /^wss?:[/][/]localhost:3001$/, `${name} allows an off-origin source: ${src}`);
+    }
+  }
+});
+
+test('script-src allows wasm but never eval', () => {
+  const script = cspMap(cspReq()).get('script-src');
+  assert.ok(script.includes("'wasm-unsafe-eval'"), 'the local tokenizer needs wasm');
+  assert.ok(!script.includes("'unsafe-eval'"));
+});
+
+test('connect-src follows the scheme the page was served over', () => {
+  assert.ok(cspMap(cspReq()).get('connect-src').includes('ws://localhost:3001'));
+  assert.ok(cspMap(cspReq({}, true)).get('connect-src').includes('wss://localhost:3001'));
+  assert.ok(cspMap(cspReq({ 'x-forwarded-proto': 'https, http' })).get('connect-src').includes('wss://localhost:3001'));
+});
+
+test('connect-src covers both the proxy host and the real one, without repeating either', () => {
+  const sources = cspMap(cspReq({ 'x-forwarded-host': 'quill.example' })).get('connect-src');
+  assert.deepEqual(sources, ["'self'", 'ws://quill.example', 'ws://localhost:3001']);
+  assert.deepEqual(cspMap(cspReq({ 'x-forwarded-host': 'localhost:3001' })).get('connect-src'), ["'self'", 'ws://localhost:3001']);
+});
+
+test('a host that would break out of the directive is dropped, not escaped', () => {
+  for (const host of ['evil.test; script-src *', 'evil.test *', "a'self'", 'ev	il.test']) {
+    const csp = localOnlyCsp(cspReq({ host }));
+    assert.ok(!csp.includes('evil.test'), `hostile host survived: ${host}`);
+    assert.ok(!csp.includes('*'), `wildcard reached the policy via: ${host}`);
+  }
+});
+
+// --- the one-model-at-a-time queue -------------------------------------------
+
+const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
+
+test('with the queue off a turn runs straight away', async () => {
+  let waited = 0;
+  assert.equal(await runQueued(false, 'a', () => { waited++; }, () => 'ran'), 'ran');
+  assert.equal(waited, 0);
+});
+
+test('turns on the same model do not wait for each other', async () => {
+  const first = deferred();
+  let waited = 0;
+  const a = runQueued(true, 'a', () => { waited++; }, () => first.promise);
+  const b = runQueued(true, 'a', () => { waited++; }, () => 'b');
+  assert.equal(await b, 'b', 'the second turn must not block behind the first');
+  assert.equal(waited, 0);
+  first.resolve('a');
+  await a;
+});
+
+test('a turn on another model waits, is told it is waiting, and then runs', async () => {
+  const first = deferred();
+  const waits = [];
+  let bStarted = false;
+  const a = runQueued(true, 'a', () => waits.push('a'), () => first.promise);
+  const b = runQueued(true, 'b', () => waits.push('b'), () => { bStarted = true; return 'b'; });
+  await Promise.resolve();
+  assert.deepEqual(waits, ['b'], 'only the queued turn is told it is waiting');
+  assert.equal(bStarted, false);
+  first.resolve('a');
+  assert.equal(await a, 'a');
+  assert.equal(await b, 'b');
+});
+
+test('everything queued for the same model is released together', async () => {
+  const first = deferred();
+  const held = deferred();
+  const a = runQueued(true, 'a', () => {}, () => first.promise);
+  const running = [];
+  const b1 = runQueued(true, 'b', () => {}, () => { running.push('b1'); return held.promise; });
+  const b2 = runQueued(true, 'b', () => {}, () => { running.push('b2'); return held.promise; });
+  const c = runQueued(true, 'c', () => {}, () => 'c');
+  first.resolve('a');
+  await a;
+  await Promise.resolve();
+  assert.deepEqual(running, ['b1', 'b2'], 'both turns for the next model start, not just one');
+  held.resolve('held');
+  await Promise.all([b1, b2]);
+  assert.equal(await c, 'c', 'the model behind them is not stranded');
+});
+
+test('a turn that throws still hands the queue on', async () => {
+  await assert.rejects(runQueued(true, 'a', () => {}, () => { throw new Error('boom'); }), /boom/);
+  assert.equal(await runQueued(true, 'b', () => { assert.fail('nothing should be holding the queue'); }, () => 'b'), 'b');
 });
