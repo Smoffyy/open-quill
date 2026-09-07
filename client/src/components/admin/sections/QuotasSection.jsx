@@ -64,7 +64,7 @@ export default function QuotasSection() {
       </Card>
 
       <Card title={t('Chat titles')}
-        sub={t('Names a new chat from its first exchange. Off by default so a metered provider is never billed for something nobody asked for.')}>
+        sub={t('Names a new chat from its first exchange. On by default when every connection runs on your own machine, and off when one is metered, so a paid provider is never billed for something nobody asked for.')}>
         <Rows>
           <ToggleRow label={t('Generate titles automatically')} on={!!settings.autoTitleEnabled}
             onToggle={() => set('autoTitleEnabled', !settings.autoTitleEnabled)} />

@@ -1,4 +1,4 @@
-import { db, uid, now, getSetting } from '../db.js';
+import { db, uid, now, getSetting, setSetting } from '../db.js';
 import { hash, check, sign, publicUser, authMiddleware, sessionFromRequest, createSession, revokeSession, revokeOtherSessions, sessionMaxAgeSeconds } from '../auth.js';
 import { oneShot, stripThink } from '../llm/index.js';
 import { randomSecret, verifyTotp, otpauthUri, makeRecoveryCodes, hashRecovery } from '../totp.js';
@@ -132,6 +132,7 @@ export default function registerAuthRoutes(app) {
     }
     if (db.users.byEmail(email)) { keys.forEach(noteLoginFail); return res.status(409).json({ error: 'An account with that email already exists.' }); }
     const u = db.users.insert({ id: uid(), email, password_hash: await hash(pw), display_name: '', is_admin: isFirst ? 1 : 0, is_owner: isFirst ? 1 : 0, prefs: {}, created_at: now() });
+    if (isFirst) setSetting('setup_complete', '0');
     logAudit(req, 'user.register', { type: 'user', id: u.id, meta: { email, owner: isFirst } });
     const sid = createSession(u, req);
     setCookie(req, res, sign(u, sid));

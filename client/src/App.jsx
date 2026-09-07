@@ -21,7 +21,7 @@ import { presetOf, nextTheme } from './lib/palettes.js';
 import Disclaimer from './components/Disclaimer.jsx';
 import { ThemeProvider } from './lib/theme/store.jsx';
 import ThemeSlot from './components/builder/ThemeSlot.jsx';
-import FirstRun from './components/builder/FirstRun.jsx';
+const SetupGuide = React.lazy(() => import('./components/setup/SetupGuide.jsx'));
 const BuildMode = React.lazy(() => import('./components/builder/BuildMode.jsx'));
 
 import Message from './components/Message.jsx';
@@ -556,12 +556,11 @@ export default function App() {
   }
   async function loadChats() { try { setChats(await api.get('/api/chats')); } catch {} finally { setChatsLoaded(true); } }
   async function loadAppConfig() { try { applyCfg(await api.get('/api/app-config')); } catch {} }
-  const [presetPicked, setPresetPicked] = useState(false);
-  // Activating a layout is what sets the base preset now, so the first-run
-  // picker hands back here only to dismiss itself and re-read the config.
-  const onPresetChosen = useCallback(() => {
-    setPresetPicked(true);
+  const [setupDone, setSetupDone] = useState(false);
+  const onSetupDone = useCallback(() => {
+    setSetupDone(true);
     loadAppConfig();
+    loadModels();
   }, []);
   useEffect(() => {
     const appName = cfg.appName || 'open-quill';
@@ -1658,8 +1657,10 @@ export default function App() {
 
       {showSettings && <React.Suspense fallback={null}><SettingsModal user={user} cfg={cfg} initialTab={settingsTab} onClose={onSettingsClosed} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile}
         onTrySkill={(sk) => { newChat(); setInput('/' + sk.name + ' '); setFocusTick(n => n + 1); }} /></React.Suspense>}
-      {user?.isAdmin && cfg.uiPresetChosen === false && !presetPicked && (
-        <FirstRun onDone={onPresetChosen} />
+      {user?.isAdmin && cfg.setupComplete === false && !setupDone && (
+        <React.Suspense fallback={null}>
+          <SetupGuide appName={cfg.appName || 'open-quill'} onDone={onSetupDone} />
+        </React.Suspense>
       )}
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} onChatsChanged={() => loadChats()} />}
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} onOpen={(id) => openChat(id)} />}

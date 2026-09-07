@@ -23,6 +23,7 @@ import {
   cutOffError, CHAT_SEARCH_PROMPT
 } from '../prompts.js';
 import { noteToolCall, classifyToolError } from '../toolstats.js';
+import { autoTitleEnabled } from '../autotitle.js';
 import { openFence, seamFor, steerInstruction } from '../steer.js';
 import { createLoopGuard, STUCK_NOTE } from '../loopguard.js';
 
@@ -629,7 +630,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
 
   const fresh = db.chats.byId(chat.id);
   const cleanContent = stripToolSyntax(content).trim();
-  if (getSetting('auto_title_enabled', '0') === '1' && cleanContent && fresh && fresh.title === 'New chat') {
+  if (autoTitleEnabled() && cleanContent && fresh && fresh.title === 'New chat') {
     let lastUser = null;
     for (let i = history.length - 1; i >= 0; i--) if (history[i].role === 'user') { lastUser = history[i]; break; }
     const lastUserText = lastUser && (Array.isArray(lastUser.content)

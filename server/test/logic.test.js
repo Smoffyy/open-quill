@@ -28,7 +28,7 @@ import { looksTextual, isZipOfficeDoc } from '../lib/extract.js';
 import { releaseCandidates, parseManifest } from '../lib/release.js';
 import { remapBrandPath } from '../lib/brand.js';
 import { samplingParams, parseStop } from '../llm/sampling.js';
-import { PROVIDER_TYPES, isProviderType, providerSpec } from '../providers.js';
+import { PROVIDER_TYPES, isProviderType, providerSpec, isLocalType } from '../providers.js';
 import { slideWithCounter, trimMode } from '../lib/ctxwindow.js';
 import { sameOrigin, sameOriginGuard, requestHost } from '../lib/origin.js';
 import { SETTING_FIELDS, coerceSetting } from '../routes/settings.js';
@@ -2380,4 +2380,28 @@ test('everything queued for the same model is released together', async () => {
 test('a turn that throws still hands the queue on', async () => {
   await assert.rejects(runQueued(true, 'a', () => {}, () => { throw new Error('boom'); }), /boom/);
   assert.equal(await runQueued(true, 'b', () => { assert.fail('nothing should be holding the queue'); }, () => 'b'), 'b');
+});
+
+// --- which connections run on this machine -----------------------------------
+
+test('every provider type is classed as local or metered, and none is missed', () => {
+  const local = Object.keys(PROVIDER_TYPES).filter(isLocalType).sort();
+  assert.deepEqual(local, ['llamacpp', 'lmstudio', 'ollama', 'vllm']);
+  for (const [key, spec] of Object.entries(PROVIDER_TYPES)) {
+    assert.equal(isLocalType(key), !!spec.local, key);
+    assert.equal(typeof spec.defaultBaseUrl, 'string', key);
+  }
+});
+
+test('a local type keeps no key, and a metered one demands one', () => {
+  for (const [key, spec] of Object.entries(PROVIDER_TYPES)) {
+    if (spec.local) assert.equal(spec.keyOptional, true, key + ' runs here, so it cannot need a key');
+    else assert.equal(spec.keyOptional, false, key + ' is hosted, so it has to ask for one');
+  }
+});
+
+test('an unknown type is not local, whatever it is called', () => {
+  for (const bad of ['', 'constructor', '__proto__', 'toString', 'nope']) {
+    assert.equal(isLocalType(bad), false, bad);
+  }
 });

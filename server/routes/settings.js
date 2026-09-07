@@ -10,6 +10,7 @@ import { draftGet, draftSet } from '../lib/draft.js';
 import { DEFAULT_MEMORY_PROMPT } from '../lib/memory.js';
 import { DEFAULT_SAFETY_PROMPT, SAFETY_REASON_SUFFIX, resolveSafetyModel, parseSafetyVerdict } from '../lib/safety.js';
 import { broadcastAdminConfig } from '../lib/ws/index.js';
+import { autoTitleDefault } from '../lib/autotitle.js';
 
 const domainList = (v) => JSON.stringify([...new Set(
   String(v ?? '').slice(0, 20000)
@@ -153,7 +154,7 @@ export default function registerSettingsRoutes(app) {
       memoryEnabled: draftGet('memory_enabled', '0') === '1',
       memoryPrompt: draftGet('memory_prompt', DEFAULT_MEMORY_PROMPT),
       chatSearchEnabled: draftGet('chat_search_enabled', '0') === '1',
-      autoTitleEnabled: draftGet('auto_title_enabled', '0') === '1',
+      autoTitleEnabled: draftGet('auto_title_enabled', autoTitleDefault()) === '1',
       autoTitleModelMode: draftGet('auto_title_model_mode', 'current') === 'specific' ? 'specific' : 'current',
       autoTitleModelId: draftGet('auto_title_model_id', '')
     }));
@@ -169,6 +170,13 @@ export default function registerSettingsRoutes(app) {
     }
     logAudit(req, 'settings.stage', { meta: { fields: applied } });
     broadcastAdminConfig();
+    res.json({ ok: true });
+  });
+
+  app.post('/api/admin/setup-complete', authMiddleware, adminOnly, (req, res) => {
+    const done = req.body?.done === false ? '0' : '1';
+    setSetting('setup_complete', done);
+    logAudit(req, done === '1' ? 'setup.complete' : 'setup.replay');
     res.json({ ok: true });
   });
 
