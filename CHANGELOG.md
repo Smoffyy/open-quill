@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [27.2.1] - TBD
+## [27.3.0] - TBD
 ### Added
 - **More language support** - added Deutsch, Español (México), Japanese, Korean, and Russian to the interface.
 
