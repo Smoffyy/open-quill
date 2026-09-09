@@ -1,4 +1,5 @@
 import { paletteFor } from './lib/palettes.js';
+import { resolveReveal } from './lib/reveal.js';
 
 export function prefersDark() {
   return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -29,6 +30,11 @@ export function applyPrefs(prefs, preset) {
   const cursorStyle = prefs?.cursorStyle || (p === 'openai' ? 'circle' : 'block');
   root.setAttribute('data-cursor', cursorOn ? (cursorStyle === 'circle' ? 'circle' : 'block') : 'off');
   root.setAttribute('data-oled', prefs?.oledShift ? 'on' : 'off');
+  // The thread's motion as a whole, not only how text is revealed: the entrance
+  // of a sent message, where the thread rests while a reply is written and how
+  // the avatar follows it all belong to the same choice, and the ones that are
+  // pure CSS read it from here rather than being threaded through as props.
+  root.setAttribute('data-motion', resolveReveal(prefs, p));
   const blink = Math.max(150, Math.min(2000, parseInt(prefs?.cursorBlinkMs) || 500));
   const pulse = Math.max(300, Math.min(4000, parseInt(prefs?.cursorPulseMs) || 1000));
   root.style.setProperty('--caret-blink', blink + 'ms');

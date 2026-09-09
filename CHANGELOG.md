@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [27.4.0] - TBD
+### Added
+- **A reply now arrives the way it reads: a new Text reveal setting called Modern, on by default** - the thread was already close to how the Anthropic interface behaves while a model is writing; this is the rest of it, measured frame by frame against a recording of the real thing rather than guessed. Sending a message carries it to the top of the thread over about a third of a second and leaves it there, with the room below already reserved, so the reply is written into open space instead of pushing the conversation around. Every word that lands together fades in on one clock, which makes the tail of the text a soft gradient a few words long, stepping by however much arrived at once rather than sliding evenly word by word. The avatar under the reply glides down as lines land instead of stepping. The word beside it crossfades when the model changes what it is doing, rather than swapping. Under it all, text is handed over as fast as it arrives, in flushes rather than a letter at a time.
+- **The previous behaviour is kept, as Legacy** - the same setting still offers the reveal that walks the text a letter at a time, at the speed you set, with the avatar's single catch-up slide. Nothing about it changed; it is only named now. `Instant` is unchanged too, and the OpenAI preset still renders exactly what the server sends, as chatgpt.com does.
+
+### Changed
+- **The thread stops chasing the bottom by a line at a time** - following the bottom eased towards it, which is right when a paragraph lands at once and wrong when a single line does: the last thing in the reply was dragged down and pulled back a tenth of a second later, once per line. A move of a line or less is now followed exactly, in the frame it lands, and only larger jumps are eased.
+- **Sending scrolls, rather than jumping** - the thread used to arrive at its new position; it now travels there, on the curve the browser uses for its own smooth scrolling.
+
+### Fixed
+- **A code block being written no longer throws the thread down the screen and back** - a block halfway through its first render measures a couple of hundred pixels taller than it settles at, and a view anchored to the bottom of the document answers a bad frame like that by lurching. While there is reserved room the view is placed by the newest message instead, and the room is taken at once but given back only when a second frame agrees, so a single wrong measurement costs nothing.
+- **The avatar no longer shivers under a code block** - it followed the reply by animating to each new position, which is correct while the thread is still, and wrong three times over otherwise: against the scroll once the thread is long enough to follow the bottom, against a closing fence re-rendering the block above it, and against a highlight finishing after the render that measured it. It glides only when it is the one thing that moved, and rides with the text the rest of the time.
+
+---
+
 ## [27.3.1] - 2026-09-09
 ### Added
 - **A project has one workspace, shared by every chat in it** - open a second conversation about the same project and the code from the first one is already there: same directory, same files, same version history. Files attached to the project are ordinary files in that workspace, so `view`, `search`, `bash` and the editing tools reach them like anything else, and anything the assistant writes is there for the next chat. Deleting a chat no longer takes its work with it; only deleting the project removes the workspace. Loose chats outside a project keep a workspace of their own, exactly as before.

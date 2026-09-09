@@ -379,18 +379,23 @@ export default function App() {
   const selectingRef = useRef(false);
   const hasSelectionRef = useRef(false);
   const canFollow = useCallback(() => !selectingRef.current && !hasSelectionRef.current, []);
+  // `modern` is the whole of the thread's motion, `legacy` the reveal that walks
+  // the text a slice at a time; `instant` is neither.
+  const revealStyle = resolveReveal(user?.prefs, cfg.uiPreset === 'openai' ? 'openai' : 'anthropic');
+  const modernMotion = revealStyle === 'modern';
   const {
     scrollRef, stick, showJump,
     scrollBottom, pinToBottom, onScroll, onWheel, onTouchMove, jumpDown, resetJump,
-    startFollow, stopFollow
-  } = useThreadScroll({ canFollow });
-  const animate = resolveReveal(user?.prefs, cfg.uiPreset === 'openai' ? 'openai' : 'anthropic') === 'typewriter';
+    startFollow, stopFollow, syncPad, smoothPending, gliding
+  } = useThreadScroll({ canFollow, modern: modernMotion });
+  const animate = revealStyle === 'legacy';
   const revealMs = revealSpeedMs(user?.prefs?.revealMs);
   // finalize is redefined every render; the hook reads it through a ref so the
   // reveal timer always calls the current one.
   const finalizeRef = useRef(null);
   const stream = useTurnStream({
     animate,
+    batch: modernMotion,
     speedMs: revealMs,
     onRevealComplete: () => finalizeRef.current?.(),
     onFollowStart: startFollow,
@@ -488,9 +493,12 @@ export default function App() {
   useEffect(() => { syncView(); }, [activeId, incognito]);
   useLayoutEffect(() => {
     const el = scrollRef.current;
-    if (!el || !stick.current) return;
+    if (!el || !stick.current || gliding()) return;
+    // Mid-send the reserved room is deliberately not there yet: the message
+    // lands where it was written and the glide that follows carries it up.
+    if (!smoothPending() && syncPad(true)) return;
     el.scrollTop = el.scrollHeight;
-  }, [activeId, messages]);
+  }, [activeId, messages, syncPad, smoothPending, gliding]);
   useEffect(() => {
     const down = (e) => { if (scrollRef.current && scrollRef.current.contains(e.target)) selectingRef.current = true; };
     const up = () => { selectingRef.current = false; };
@@ -1589,6 +1597,7 @@ export default function App() {
                       onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onDelete={deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
                       showSpeed={showMsgSpeed}
                       showIcon={msg.role === 'assistant' && (cfg.uiPreset === 'openai' || (lastA && msg.id === lastA.id))}
+                      modern={modernMotion}
                       preset={cfg.uiPreset === 'openai' ? 'openai' : 'anthropic'} />
                     );
                   });

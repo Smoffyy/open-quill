@@ -1999,7 +1999,6 @@
   "Type a command…": "명령 입력…",
   "Type at least 2 characters to search across all your conversations.": "모든 대화에서 검색하려면 최소 2자 이상 입력하세요.",
   "Type to queue a message…": "입력하여 메시지를 대기열에 추가…",
-  "Typewriter": "타자기",
   "Typography": "타이포그래피",
   "URL": "URL",
   "Unarchive": "보관 해제",
@@ -2475,5 +2474,8 @@
   "Setup": "설치",
   "Skip setup": "설치 건너뛰기",
   "Working…": "처리 중…",
-  "Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.": "어떤 파일이든 추가할 수 있습니다. 이 프로젝트의 모든 채팅이 이 작업 공간을 공유하며 그 안의 파일을 읽고 편집하고 실행할 수 있습니다."
+  "Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.": "어떤 파일이든 추가할 수 있습니다. 이 프로젝트의 모든 채팅이 이 작업 공간을 공유하며 그 안의 파일을 읽고 편집하고 실행할 수 있습니다.",
+  "Modern": "모던",
+  "Legacy": "클래식",
+  "Words fade in as they arrive and your message rises to the top.": "단어가 도착할 때마다 서서히 나타나고 보낸 메시지는 맨 위로 올라갑니다."
 }

@@ -32,6 +32,14 @@ export function revealPeriod(ms) {
   return Math.max(8, Math.min(100, ms || 0));
 }
 
+// How long text waits to be handed over when the reveal is a fade rather than a
+// walk. Not a delay for its own sake: every word that lands in the same flush
+// fades on the same clock, so the tail of a reply steps by however much arrived
+// together instead of sliding evenly word by word. That unevenness is the
+// difference between text being written and text being animated, and it is
+// what a hosted model's chunky deltas give you for free.
+export const BATCH_MS = 90;
+
 // The transcript markers for a tool result and a reasoning break. Text carrying
 // one must appear whole: revealing `[[OQR:` a character at a time would draw the
 // raw marker before the parser could turn it into a card.
@@ -67,8 +75,10 @@ export function useTurnStream(opts = {}) {
   useEffect(() => { shown.current = content.length; }, [content]);
 
   const animate = useRef(!!opts.animate);
+  const batch = useRef(!!opts.batch);
   const speed = useRef(opts.speedMs || 0);
   animate.current = !!opts.animate;
+  batch.current = !!opts.batch;
   speed.current = opts.speedMs || 0;
 
   const cb = useRef(opts);
@@ -89,13 +99,18 @@ export function useTurnStream(opts = {}) {
         if (donePending.current) cb.current.onRevealComplete?.();
         return;
       }
-      const instant = !animate.current || speed.current <= 0;
+      if (!animate.current) {
+        shown.current = full.length;
+        setContent(full);
+        return;
+      }
+      const instant = speed.current <= 0;
       setContent(prev => {
         const next = full.slice(0, prev.length + revealChunk(full.length - prev.length, instant));
         shown.current = next.length;
         return next;
       });
-    }, revealPeriod(speed.current));
+    }, animate.current ? revealPeriod(speed.current) : BATCH_MS);
   }, [stopTimer]);
 
   // A new turn on the active chat.
@@ -122,7 +137,7 @@ export function useTurnStream(opts = {}) {
       setContent(full);
       return true;
     }
-    if (!animate.current) {
+    if (!animate.current && !batch.current) {
       setContent(full);
       shown.current = full.length;
     }
@@ -171,7 +186,8 @@ export function useTurnStream(opts = {}) {
   // of waiting for a tick that has nothing left to show.
   const markDone = useCallback(() => {
     donePending.current = true;
-    return !animate.current || shown.current >= target.current.length;
+    if (animate.current || batch.current) return shown.current >= target.current.length;
+    return true;
   }, []);
 
   // Hand the finished text over and reset. The caller owns what happens to it.

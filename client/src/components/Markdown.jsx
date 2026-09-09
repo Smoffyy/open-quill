@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import { BASE_MACROS, CODE_SPLIT, KATEX_OPTIONS, ensureKatex, hasMath, isolateDisplayMath, katexPlugin, katexVersion, subscribeKatex, wrapMathEnvironments } from '../lib/mathjs.js';
 import CodeBlock from './CodeBlock.jsx';
+import { rehypeRevealWords } from '../lib/revealwords.js';
 import ToolCard from './ToolCard.jsx';
 import ReasoningBlock from './ReasoningBlock.jsx';
 
@@ -227,15 +228,18 @@ const mdComponents = {
   }
 };
 
-const MarkdownBlock = React.memo(function MarkdownBlock({ text }) {
+const MarkdownBlock = React.memo(function MarkdownBlock({ text, reveal }) {
   const prepared = React.useMemo(() => guardBlock(text), [text]);
   const needsMath = React.useMemo(() => hasMath(prepared), [prepared]);
   const mathReady = React.useSyncExternalStore(subscribeKatex, katexVersion, katexVersion);
   React.useEffect(() => { if (needsMath && !katexPlugin()) ensureKatex(); }, [needsMath, mathReady]);
   const rehypePlugins = React.useMemo(() => {
     const plugin = needsMath ? katexPlugin() : null;
-    return plugin ? [[plugin, { ...KATEX_OPTIONS, macros: { ...BASE_MACROS } }]] : [];
-  }, [needsMath, mathReady]);
+    const list = plugin ? [[plugin, { ...KATEX_OPTIONS, macros: { ...BASE_MACROS } }]] : [];
+    // Last, so every other plugin still sees whole text nodes.
+    if (reveal) list.push(rehypeRevealWords);
+    return list;
+  }, [needsMath, mathReady, reveal]);
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
@@ -420,7 +424,7 @@ function ProgressiveBlocks({ blocks }) {
   return shown.map((b, i) => <MarkdownBlock key={i} text={b} />);
 }
 
-function Markdown({ children, streaming }) {
+function Markdown({ children, streaming, reveal }) {
   if (typeof children !== 'string') {
     return <MarkdownBlock text={children} />;
   }
@@ -430,7 +434,7 @@ function Markdown({ children, streaming }) {
   if (!streaming && (text.length > PROGRESSIVE_SIZE_TRIGGER || blocks.length > PROGRESSIVE_BLOCK_TRIGGER)) {
     return <ProgressiveBlocks blocks={blocks} />;
   }
-  return blocks.map((b, i) => <MarkdownBlock key={i} text={b} />);
+  return blocks.map((b, i) => <MarkdownBlock key={i} text={b} reveal={reveal} />);
 }
 
 export default React.memo(Markdown);

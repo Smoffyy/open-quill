@@ -165,7 +165,8 @@ const REVEAL_STOPS = [
 // safe on its own, since resolveReveal falls a retired value back to the default.
 const REVEAL_STYLE_OPTS = [
   { v: 'instant', label: tk('Instant'), note: tk('Text appears the moment it arrives.') },
-  { v: 'typewriter', label: tk('Typewriter'), note: tk('Letters type out one after another.') },
+  { v: 'modern', label: tk('Modern'), note: tk('Words fade in as they arrive and your message rises to the top.') },
+  { v: 'legacy', label: tk('Legacy'), note: tk('Letters type out one after another.') },
 ];
 
 function Toggle({ prefs, setPref, k, label, desc }) {
@@ -184,7 +185,7 @@ function formatReleased(s) {
 
 function presetDefaults(isOpenai, fallbackTheme) {
   return {
-    revealStyle: 'typewriter', autoscroll: true, theme: fallbackTheme || 'system', density: 'comfortable',
+    revealStyle: 'modern', autoscroll: true, theme: fallbackTheme || 'system', density: 'comfortable',
     streamCursor: isOpenai, cursorStyle: isOpenai ? 'circle' : 'block',
     cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40, themeFade: true,
     oledShift: false,
@@ -623,7 +624,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                       options={REVEAL_STYLE_OPTS.map(o => ({ v: o.v, label: t(o.label) }))} />
                   </SetRow>
                 )}
-                {style === 'typewriter' && !noReveal && (
+                {style === 'legacy' && !noReveal && (
                   <SetRow label={t("Reveal speed")} desc={t("How quickly text appears once it has arrived, not how fast the model replies.")}>
                     <SegSlide label={t("Reveal speed")} value={REVEAL_STOPS.some(o => o.v === rv) ? rv : -1} onPick={(v) => setPref('revealMs', v)}
                       options={REVEAL_STOPS.map(o => ({ v: o.v, label: t(o.label) })).concat(REVEAL_STOPS.some(o => o.v === rv) ? [] : [{ v: -1, label: rv + ' ms' }])} />

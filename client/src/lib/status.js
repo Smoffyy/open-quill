@@ -18,12 +18,13 @@ export function useStatusLabel(status, enabled = true) {
     const timer = setTimeout(() => setShow(true), wait);
     return () => clearTimeout(timer);
   }, [wait, enabled]);
-  if (!enabled || !status || !show) return { show: false, label: '', detail: '' };
+  if (!enabled || !status || !show) return { show: false, key: '', label: '', detail: '' };
 
   if (status.phase === 'waiting') {
     const secs = Math.round((status.ms || 0) / 1000);
     return {
       show: true,
+      key: 'waiting',
       label: t('Waiting for the backend'),
       detail: t('Nothing back yet after {n}s. A local server loading a model can take a while.', { n: secs })
     };
@@ -53,5 +54,8 @@ export function useStatusLabel(status, enabled = true) {
   if (cached > 0) parts.push(`${Math.round((cached / total) * 100)}% ${t('reused')}`);
   if (eta >= 2) parts.push(`~${eta}s ${t('left')}`);
 
-  return { show: true, label, detail: parts.join(' · ') };
+  // The caption crossfades on `key`, not on `label`: the counters inside a
+  // label move every couple of hundred milliseconds and swapping the word each
+  // time they do would read as a flicker rather than a change of state.
+  return { show: true, key: generating ? 'generating' : reusingCache ? 'cache' : 'prompt', label, detail: parts.join(' · ') };
 }

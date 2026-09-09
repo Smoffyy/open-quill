@@ -1999,7 +1999,6 @@
   "Type a command…": "Befehl eingeben…",
   "Type at least 2 characters to search across all your conversations.": "Geben Sie mindestens 2 Zeichen ein, um alle Ihre Unterhaltungen zu durchsuchen.",
   "Type to queue a message…": "Tippen, um eine Nachricht in die Warteschlange zu stellen…",
-  "Typewriter": "Schreibmaschine",
   "Typography": "Typografie",
   "URL": "URL",
   "Unarchive": "Aus dem Archiv holen",
@@ -2475,5 +2474,8 @@
   "Setup": "Einrichtung",
   "Skip setup": "Einrichtung überspringen",
   "Working…": "Wird ausgeführt…",
-  "Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.": "Fügen Sie beliebige Dateien hinzu. Jeder Chat in diesem Projekt teilt sich diesen Arbeitsbereich und kann dessen Inhalt lesen, bearbeiten und ausführen."
+  "Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.": "Fügen Sie beliebige Dateien hinzu. Jeder Chat in diesem Projekt teilt sich diesen Arbeitsbereich und kann dessen Inhalt lesen, bearbeiten und ausführen.",
+  "Modern": "Modern",
+  "Legacy": "Klassisch",
+  "Words fade in as they arrive and your message rises to the top.": "Wörter blenden sich beim Eintreffen ein und Ihre Nachricht rückt nach oben."
 }

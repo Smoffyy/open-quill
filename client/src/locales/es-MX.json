@@ -832,7 +832,6 @@
   "Type a command…": "Escribe un comando…",
   "Type at least 2 characters to search across all your conversations.": "Escribe al menos 2 caracteres para buscar en todas tus conversaciones.",
   "Type to queue a message…": "Escribe para poner un mensaje en cola…",
-  "Typewriter": "Máquina de escribir",
   "URL": "URL",
   "Unarchive": "Desarchivar",
   "Unknown OS": "Sistema operativo desconocido",
@@ -2475,5 +2474,8 @@
   "Setup": "Configuración",
   "Skip setup": "Omitir configuración",
   "Working…": "Trabajando…",
-  "Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.": "Añade cualquier archivo. Todos los chats de este proyecto comparten este espacio de trabajo y pueden leer, editar y ejecutar lo que hay en él."
+  "Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.": "Añade cualquier archivo. Todos los chats de este proyecto comparten este espacio de trabajo y pueden leer, editar y ejecutar lo que hay en él.",
+  "Modern": "Moderno",
+  "Legacy": "Clásico",
+  "Words fade in as they arrive and your message rises to the top.": "Las palabras aparecen gradualmente al llegar y tu mensaje sube al principio."
 }

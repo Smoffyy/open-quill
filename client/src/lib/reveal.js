@@ -1,12 +1,15 @@
 // How a streaming reply appears. Pure and import-free so it is unit-testable and
 // so App.jsx and SettingsModal cannot disagree about the resolution rules.
 
-export const REVEAL_STYLES = ['instant', 'typewriter'];
+export const REVEAL_STYLES = ['instant', 'modern', 'legacy'];
 
-// The legacy prefs, before this was a single named style: `typewriter` (and
-// before that `animations`) was a boolean, so off meant everything at once.
+// The prefs before this was a single named style: `typewriter` (and before that
+// `animations`) was a boolean, so off meant everything at once. On means the
+// current animated reveal, not the one that happened to ship that year, which
+// is also how the retired `typewriter` value lands on `modern` rather than on
+// the style that inherited its behaviour.
 export function legacyRevealStyle(prefs) {
-  return (prefs?.typewriter ?? prefs?.animations) !== false ? 'typewriter' : 'instant';
+  return (prefs?.typewriter ?? prefs?.animations) !== false ? 'modern' : 'instant';
 }
 
 // The OpenAI preset renders tokens exactly as the server sends them, matching
@@ -23,7 +26,8 @@ export function resolveReveal(prefs, preset) {
   return legacyRevealStyle(prefs);
 }
 
-// The interval the reveal loop in App.jsx waits between slices.
+// The interval the reveal loop in App.jsx waits between slices. Only `legacy`
+// walks the text a slice at a time; the others hand over what has arrived.
 export function revealSpeedMs(v) {
   const n = parseInt(v);
   return v == null || isNaN(n) ? 40 : Math.max(0, Math.min(100, n));
