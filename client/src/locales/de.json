@@ -78,7 +78,6 @@
   "Adaptive": "Adaptiv",
   "Add": "Hinzufügen",
   "Add MCP servers of your own. Their tools reach every model you use that has tool calling, and nobody else on this workspace can see them. Local command servers are added by an admin.": "Fügen Sie eigene MCP-Server hinzu. Ihre Tools erreichen jedes von Ihnen genutzte Modell mit Tool-Aufrufen, und niemand sonst in diesem Workspace kann sie sehen. Lokale Befehlsserver werden von einem Administrator hinzugefügt.",
-  "Add PDFs or text documents, chats in this project can search and read them.": "Fügen Sie PDFs oder Textdokumente hinzu, Chats in diesem Projekt können sie durchsuchen und lesen.",
   "Add connection": "Verbindung hinzufügen",
   "Add connector": "Connector hinzufügen",
   "Add files": "Dateien hinzufügen",
@@ -2475,5 +2474,6 @@
   "That step did not finish. You can set it up later in Admin.": "Dieser Schritt wurde nicht abgeschlossen. Du kannst ihn später im Admin-Bereich einrichten.",
   "Setup": "Einrichtung",
   "Skip setup": "Einrichtung überspringen",
-  "Working…": "Wird ausgeführt…"
+  "Working…": "Wird ausgeführt…",
+  "Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.": "Fügen Sie beliebige Dateien hinzu. Jeder Chat in diesem Projekt teilt sich diesen Arbeitsbereich und kann dessen Inhalt lesen, bearbeiten und ausführen."
 }

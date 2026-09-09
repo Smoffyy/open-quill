@@ -31,13 +31,15 @@ const MAX_STEERS = 6;
 const TELEMETRY_MS = 220;
 const SILENT_MS = 2500;
 
+const projectNameOf = (row) => (row && row.project_id ? String((db.projects.byId(row.project_id) || {}).name || '') : '');
+
 export async function maybeCompact(ws, chat, model, extended, sandboxOn) {
   const threshold = compactThreshold(model, await modelCtx(model));
   if (threshold === Infinity) return;
   let guard = 0;
   while (guard++ < 3) {
     const fresh = db.chats.byId(chat.id);
-    const sandboxP = sandboxOn ? sandboxPromptFor(chat.id) : null;
+    const sandboxP = sandboxOn ? sandboxPromptFor(sandbox.wsKey(fresh), projectNameOf(fresh)) : null;
     const convo = buildMessages(model, chatHistory(chat, model), extended, sandboxP, fresh.summary, promptVars(chat.user_id), instrFor(fresh));
     if ((await exactTokens(chat.id, model, convo)) < threshold) return;
     if (!(await compactStep(ws, chat, model))) return;
@@ -64,11 +66,11 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   const mcpSchemas = model.mcp_allowed ? mcp.toolSchemas(mcpUser) : [];
   const mcpOn = mcpSchemas.length > 0;
   const endChatOn = !!model.end_chat_allowed;
-  const projFilesOn = !!chatRow.project_id && projectfiles.list(chatRow.project_id).length > 0;
-  const projRow = projFilesOn ? db.projects.byId(chatRow.project_id) : null;
+  const space = projectfiles.workspaceFor(chatRow);
+  const projectName = projectNameOf(chatRow);
   const longReminderOn = !!model.long_convo_reminder;
   let conversationEnded = false;
-  const toolsOn = sandboxOn || webSearchOn || membankOn || chatSearchOn || skillsOn || mcpOn || endChatOn || projFilesOn;
+  const toolsOn = sandboxOn || webSearchOn || membankOn || chatSearchOn || skillsOn || mcpOn || endChatOn;
   const withStyle = (instr) => {
     if (!styleText) return instr;
     const block = 'The user selected a response style for this conversation. Apply it consistently to every reply:\n' + styleText;
@@ -76,14 +78,13 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   };
   const toolsP = () => {
     const parts = [];
-    if (sandboxOn) parts.push(sandboxPromptFor(chat.id));
+    if (sandboxOn) parts.push(sandboxPromptFor(space, projectName));
     if (webSearchOn) { parts.push(websearch.webSearchConfig().prompt); parts.push(websearch.webSearchToolPrompt()); }
     if (membankOn) parts.push(membank.promptFor(getSetting('membank_prompt', '')));
     if (chatSearchOn) parts.push(CHAT_SEARCH_PROMPT);
     if (skillsOn) parts.push(skillsys.promptFor(userSkills));
     if (mcpOn) parts.push(mcp.promptFor(mcpUser));
     if (endChatOn) parts.push(endChatPromptFor(model));
-    if (projFilesOn) parts.push(projectfiles.promptFor(chatRow.project_id, projRow ? projRow.name : ''));
     if (longReminderOn) parts.push(longConvoReminderFor(chat.id));
     return parts.filter(Boolean).join('\n\n') || null;
   };
@@ -118,7 +119,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   };
   safeSend(JSON.stringify({ type: 'start', chatId: chat.id, messageId: assistantId }));
 
-  const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, projFilesOn, hostEnv: sandboxOn ? sandbox.hostEnvInfo() : null }) : [];
+  const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, hostEnv: sandboxOn ? sandbox.hostEnvInfo() : null }) : [];
   const toolNameSet = new Set(tools.map(t => t && t.function && t.function.name).filter(Boolean));
   const canonicalize = (call) => {
     if (!sandboxOn || !call.tool || toolNameSet.has(call.tool)) return call;
@@ -133,11 +134,6 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       db.chats.update(chat.id, { ended: 1, ended_at: now(), ended_reason: reason });
       conversationEnded = true;
       return { payload: { ok: true, ended: true }, formatted: 'end_conversation \u2192 The conversation has been permanently ended. Do not produce any further tool calls; finish your reply now.', hide: false };
-    }
-    if (call.tool === 'pf_search' || call.tool === 'pf_view') {
-      if (!projFilesOn) return null;
-      const r = await projectfiles.execTool(chatRow.project_id, call);
-      return { payload: projectfiles.resultPayload(call, r), formatted: projectfiles.formatResult(call, r), hide: false };
     }
     if (call.tool === 'chat_search' || call.tool === 'chat_view') {
       if (!chatSearchOn) return null;
@@ -168,7 +164,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     // for this chat, which during tool execution is this one. Handing its signal
     // to the sandbox is what lets a stop kill a running command instead of
     // waiting out its timeout.
-    const r = await sandbox.execTool(chat.id, call, sandboxCap, stepController ? stepController.signal : null);
+    const r = await sandbox.execTool(space, call, sandboxCap, stepController ? stepController.signal : null);
     return { payload: resultPayload(call, r), formatted: formatToolResult(call, r), hide: false };
   };
 
@@ -574,7 +570,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           content += block; contentSinceReason = true;
           safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: block }));
         }
-        if (mayChangeFiles(call.tool)) safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
+        if (mayChangeFiles(call.tool)) safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(space) }));
         toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: formatted });
       }
       if (liveSent) safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live: null }));

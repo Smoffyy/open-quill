@@ -12,6 +12,34 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let SKILLS_CACHE = null;
 
+const PROJECT_MARKERS = [
+  { file: 'package.json', deps: 'node_modules', how: 'npm install', what: 'Node.js' },
+  { file: 'requirements.txt', deps: '.venv', how: 'pip install -r requirements.txt', what: 'Python' },
+  { file: 'pyproject.toml', deps: '.venv', how: 'pip install -e .', what: 'Python' },
+  { file: 'Cargo.toml', deps: 'target', how: 'cargo build', what: 'Rust' },
+  { file: 'go.mod', deps: '', how: 'go build ./...', what: 'Go' },
+  { file: 'pom.xml', deps: 'target', how: 'mvn package', what: 'Java' },
+  { file: 'build.gradle', deps: 'build', how: 'gradle build', what: 'Java' },
+  { file: 'Gemfile', deps: '', how: 'bundle install', what: 'Ruby' },
+  { file: 'composer.json', deps: 'vendor', how: 'composer install', what: 'PHP' },
+  { file: 'Makefile', deps: '', how: 'make', what: 'make' }
+];
+
+function workspaceStateSection(ws, files) {
+  const at = (rel) => { try { return fs.existsSync(path.join(sandbox.dirFor(ws), ...rel.split('/'))); } catch { return false; } };
+  const L = [];
+  const roots = PROJECT_MARKERS.filter(m => files.some(f => f.path === m.file));
+  for (const m of roots) {
+    const installed = m.deps ? at(m.deps) : null;
+    L.push(`- \`${m.file}\` at the root: this is a ${m.what} project.` + (m.deps
+      ? (installed ? ` \`${m.deps}/\` exists, so its dependencies are already installed — do not reinstall them.` : ` \`${m.deps}/\` is missing, so nothing is installed yet; run \`${m.how}\` before running the code.`)
+      : ` Build or run it with \`${m.how}\`.`));
+  }
+  if (at('.git')) L.push('- This workspace is a git repository. `git status`, `git diff` and `git log` work in `bash`; commit only when the user asks.');
+  if (!L.length) return '';
+  return '## What is already set up here\n' + L.join('\n');
+}
+
 function hostEnvSection() {
   const env = sandbox.hostEnvInfo();
   const L = [];
@@ -55,7 +83,7 @@ const BOUNDARY_SECTION = [
   'If a task genuinely needs something outside the workspace, say so plainly in your reply. Never retry a blocked call with a different spelling.'
 ].join('\n');
 
-export function sandboxPromptFor(chatId) {
+export function sandboxPromptFor(ws, projectName = '') {
   if (SKILLS_CACHE === null) {
     try { SKILLS_CACHE = fs.readFileSync(path.join(__dirname, '..', 'skills', 'sandbox.md'), 'utf8'); }
     catch { SKILLS_CACHE = ''; }
@@ -63,10 +91,13 @@ export function sandboxPromptFor(chatId) {
   let p = SKILLS_CACHE;
   p += '\n\n' + hostEnvSection();
   p += '\n\n' + BOUNDARY_SECTION;
+  if (projectName) p += `\n\n## This workspace belongs to a project\nIt is the shared workspace of the project "${String(projectName).slice(0, 80)}". Every chat in that project opens this same directory: files another conversation left are here, and anything you write stays for the next one. Documents the user attached to the project are ordinary files in it, so \`view\`, \`search\` and \`bash\` reach them like any other file.`;
   // Rule 3 of the skill already covers imitation tool text; this is not repeated
   // here. Everything below is state the skill cannot know: what is on disk now.
-  const { files, hidden } = sandbox.list(chatId, { withHidden: true });
+  const { files, hidden } = sandbox.list(ws, { withHidden: true });
   if (!files.length && !hidden) return p + '\n\n## Current workspace\nThe workspace is empty. Create what you need with `create_file`. There is nothing to read yet, so do not call `view` on files that do not exist.';
+  const state = workspaceStateSection(ws, files);
+  if (state) p += '\n\n' + state;
   const LIST_CAP = 200, INLINE_CAP = 12;
   p += '\n\n## Current workspace files\nThis is what is on disk RIGHT NOW, after every edit made so far. It is the truth: edit these, never an older version you remember. `vN` is the version number and increases on every change.\n';
   for (const f of files.slice(0, LIST_CAP)) p += `- ${f.path} (v${f.v}, ${f.size} bytes)\n`;
@@ -77,7 +108,7 @@ export function sandboxPromptFor(chatId) {
   for (const f of files) {
     if (inlined >= INLINE_CAP || budget <= 0) break;
     if (f.ext === 'zip' || !sandbox.isText(f.path)) continue;
-    const txt = sandbox.readText(chatId, f.path) || '';
+    const txt = sandbox.readText(ws, f.path) || '';
     if (txt.length > 8000 || txt.length > budget) {
       p += `\n### ${f.path} (v${f.v}), ${f.size} bytes, too large to inline; use the \`view\` tool to read it.\n`;
       continue;
@@ -166,7 +197,11 @@ export function formatToolResult(rawCall, r) {
     return `${head} → ERROR: ${r.error}` + (r.output ? `\n${r.output}` : '') + where;
   }
   switch (call.tool) {
-    case 'bash': case 'run': case 'shell': return `$ ${call.cmd ?? call.command ?? ''}\n${r.output || '(no output)'}\n(exit ${r.exit ?? 0}${r.cwd != null ? `, cwd: ${r.cwd || '.'}` : ''})` + (r.note ? `\nNOTE: ${r.note}` : '');
+    case 'bash': case 'run': case 'shell': {
+      const body = r.output || '(no output)';
+      const err = (r.stderr && !body.includes(r.stderr)) ? `\n--- stderr ---\n${r.stderr}` : '';
+      return `$ ${call.cmd ?? call.command ?? ''}\n${body}${err}\n(exit ${r.exit ?? 0}${r.cwd != null ? `, cwd: ${r.cwd || '.'}` : ''})` + (r.note ? `\nNOTE: ${r.note}` : '');
+    }
     case 'create_file': case 'write_file': return (r.unchanged ? `${head} → unchanged (already v${r.v}, identical content, no write needed)` : `${head} → created (v${r.v}, ${r.bytes} bytes, +${r.adds ?? 0}/-${r.dels ?? 0})`) + (r.note ? `\nNOTE: ${r.note}` : '');
     case 'str_replace': case 'edit_file': return `${head} → edited (now v${r.v}, +${r.adds ?? 0}/-${r.dels ?? 0}${r.replaced > 1 ? `, ${r.replaced} occurrences` : ''})` + (r.note ? `\nNOTE: ${r.note}` : '');
     case 'insert_lines': return `${head} → inserted ${r.adds} line(s) (now v${r.v})`;

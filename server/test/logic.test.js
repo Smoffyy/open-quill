@@ -18,7 +18,7 @@ import { trimInTurn, compactThreshold, estimateTokens, textTokens, makeTokenCoun
 import { scanTools } from '../toolproto.js';
 import { isContextOverflowError } from '../lib/llamacpp.js';
 import { sanitizeDoc, blankLayoutDoc, normalizeStoreForTest, docDiffCount } from '../lib/theme.js';
-import { winTranslate } from '../sandbox.js';
+import { winTranslate, wsKey, projectKey, isProjectKey, execTool, childEnv } from '../sandbox.js';
 import { screenCommand, normalizeRel, compileSearchPattern } from '../lib/sandboxguard.js';
 import { resolveToolName, makeToolResolver, nearestTool, SANDBOX_TOOLS } from '../tools/aliases.js';
 import { isPrivateAddress, hostAllowed } from '../lib/egress.js';
@@ -2403,5 +2403,71 @@ test('a local type keeps no key, and a metered one demands one', () => {
 test('an unknown type is not local, whatever it is called', () => {
   for (const bad of ['', 'constructor', '__proto__', 'toString', 'nope']) {
     assert.equal(isLocalType(bad), false, bad);
+  }
+});
+
+test('a chat in a project opens the project workspace, a loose chat its own', () => {
+  const loose = { id: 'chat-abc', project_id: null };
+  const inProject = { id: 'chat-abc', project_id: 'proj-1' };
+  assert.equal(wsKey(loose), 'chat-abc');
+  assert.equal(wsKey(inProject), projectKey('proj-1'));
+  assert.equal(wsKey({ id: 'chat-abc', project_id: 'proj-2' }), projectKey('proj-2'));
+  assert.notEqual(wsKey(inProject), wsKey(loose));
+});
+
+test('every chat in one project lands in the same workspace', () => {
+  const a = wsKey({ id: 'chat-1', project_id: 'p' });
+  const b = wsKey({ id: 'chat-2', project_id: 'p' });
+  assert.equal(a, b);
+});
+
+test('a project workspace is recognised as one and a chat workspace is not', () => {
+  assert.equal(isProjectKey(projectKey('p1')), true);
+  assert.equal(isProjectKey(wsKey({ id: 'chat-abc', project_id: null })), false);
+  assert.equal(isProjectKey(''), false);
+});
+
+test('a project id cannot escape its workspace directory name', () => {
+  const BACKSLASH = String.fromCharCode(92);
+  for (const bad of ['../../etc', 'a/b', '..' + BACKSLASH + '..' + BACKSLASH + 'x', 'p:1*?']) {
+    const key = projectKey(bad);
+    assert.ok(!key.includes('/') && !key.includes(BACKSLASH) && !key.includes('..'), key);
+  }
+});
+
+test('clearing the workspace is refused inside a project', async () => {
+  const r = await execTool(projectKey('p1'), { tool: 'clear_sandbox' });
+  assert.equal(r.ok, false);
+  assert.match(r.error, /project/i);
+});
+
+test('a command never inherits the server secrets', () => {
+  const saved = { ...process.env };
+  Object.assign(process.env, {
+    DB_ENCRYPTION_KEY: 'super-secret',
+    OPENAI_API_KEY: 'sk-leak',
+    ANTHROPIC_API_KEY: 'sk-leak2',
+    SESSION_SECRET: 'nope',
+    OQ_ADMIN_PASSWORD: 'hunter2',
+    SOME_TOKEN: 'tok',
+    JAVA_HOME: '/opt/java',
+    LD_LIBRARY_PATH: '/opt/lib'
+  });
+  try {
+    const env = childEnv('/ws/root', 'sub');
+    const seen = Object.keys(env);
+    for (const leaked of ['DB_ENCRYPTION_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'SESSION_SECRET', 'OQ_ADMIN_PASSWORD', 'SOME_TOKEN']) {
+      assert.ok(!seen.includes(leaked), leaked + ' reached the child');
+    }
+    for (const v of Object.values(env)) {
+      assert.ok(!String(v).includes('super-secret') && !String(v).includes('sk-leak') && !String(v).includes('hunter2'));
+    }
+    assert.equal(env.JAVA_HOME, '/opt/java');
+    assert.equal(env.LD_LIBRARY_PATH, '/opt/lib');
+    assert.equal(env.OQ_WORKSPACE, '/ws/root');
+    assert.equal(env.CI, '1');
+  } finally {
+    for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
+    Object.assign(process.env, saved);
   }
 });

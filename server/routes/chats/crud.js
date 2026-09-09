@@ -20,7 +20,7 @@ export default function registerCrudRoutes(app) {
       const urls = attachmentUrlsOf(c.id);
       db.messages.removeWhere('chat_id', c.id);
       db.chats.removeById(c.id);
-      sandbox.remove(c.id);
+      if (!c.project_id) sandbox.remove(c.id);
       purgeUnreferencedUploads(urls);
     }
     res.json({ ok: true });

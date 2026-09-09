@@ -6,7 +6,7 @@ export function purgeUserChats(userId) {
   const rows = db.chats.byUser(userId);
   if (!rows.length) return 0;
   const chatIds = new Set(rows.map(c => c.id));
-  for (const id of chatIds) { try { sandbox.remove(id); } catch {} }
+  for (const c of rows) { if (!c.project_id) { try { sandbox.remove(c.id); } catch {} } }
   const urls = attachmentUrlsOf(chatIds);
   tx(() => {
     for (const id of chatIds) db.messages.removeWhere('chat_id', id);

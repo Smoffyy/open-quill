@@ -8,15 +8,50 @@ import { pickShell, missingCommandHint } from './hostenv.js';
 import { screenCommand, normalizeRel } from '../lib/sandboxguard.js';
 
 const OUT_CAP = 20000;
+const ERR_CAP = 4000;
 function capOut(s) { s = String(s ?? ''); return s.length > OUT_CAP ? s.slice(0, OUT_CAP) + `\n… [output truncated at ${OUT_CAP} characters]` : s; }
 
+const ENV_KEEP = new Set([
+  'path', 'pathext', 'home', 'userprofile', 'homedrive', 'homepath', 'lang', 'lc_all', 'lc_ctype', 'tz', 'term',
+  'systemroot', 'systemdrive', 'windir', 'comspec', 'os', 'username', 'user', 'logname', 'hostname', 'shell',
+  'programfiles', 'programfiles(x86)', 'programw6432', 'programdata', 'commonprogramfiles', 'allusersprofile',
+  'localappdata', 'appdata', 'public', 'temp', 'tmp', 'tmpdir',
+  'number_of_processors', 'processor_architecture', 'processor_identifier',
+  'java_home', 'jdk_home', 'maven_home', 'm2_home', 'gradle_home', 'gopath', 'goroot', 'gomodcache',
+  'cargo_home', 'rustup_home', 'nvm_dir', 'pyenv_root', 'virtual_env', 'conda_prefix', 'pythonpath',
+  'dotnet_root', 'android_home', 'android_sdk_root', 'msystem', 'mingw_prefix',
+  'ld_library_path', 'dyld_library_path', 'pkg_config_path', 'sdkman_dir'
+]);
+const ENV_SECRETISH = /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|SESSION|COOKIE|SALT|PRIVATE)/i;
+
+export function childEnv(base, baseRel) {
+  const out = { __proto__: null };
+  for (const [k, v] of Object.entries(process.env)) {
+    if (!ENV_KEEP.has(k.toLowerCase())) continue;
+    if (ENV_SECRETISH.test(k)) continue;
+    if (typeof v === 'string') out[k] = v;
+  }
+  out.OQ_WORKSPACE = base;
+  out.OQ_WORKSPACE_REL = baseRel || '.';
+  out.PWD = base;
+  out.CI = '1';
+  out.NO_COLOR = '1';
+  out.PIP_DISABLE_PIP_VERSION_CHECK = '1';
+  out.NPM_CONFIG_FUND = 'false';
+  out.NPM_CONFIG_AUDIT = 'false';
+  out.NPM_CONFIG_UPDATE_NOTIFIER = 'false';
+  return out;
+}
+
 const CWD_MARK = '__OQ_CWD__';
-function wrapCommand(base, cmd) {
+function wrapCommand(base, cmd, cpuSeconds) {
   if (process.platform === 'win32') {
     return `cd /d "${base}" & ( ${cmd} ) & set "__oq_ec=!errorlevel!" & echo ${CWD_MARK}!CD!& exit /b !__oq_ec!`;
   }
   const quoted = "'" + String(base).replace(/'/g, `'\\''`) + "'";
-  return `cd ${quoted} || exit 1\n${cmd}\n__oq_ec=$?\nprintf '\\n${CWD_MARK}%s\\n' "$PWD"\nexit $__oq_ec`;
+  return `ulimit -t ${cpuSeconds} 2>/dev/null || true
+ulimit -f 8388608 2>/dev/null || true
+cd ${quoted} || exit 1\n${cmd}\n__oq_ec=$?\nprintf '\\n${CWD_MARK}%s\\n' "$PWD"\nexit $__oq_ec`;
 }
 
 const WIN_REWRITES = [
@@ -200,19 +235,21 @@ export function bash(chatId, cmd, timeoutMs = 60000, workdir, signal = null) {
   const win = process.platform === 'win32';
   const shell = pickShell();
   const xlat = win ? winTranslate(cmd) : { cmd: String(cmd), notes: [] };
-  const wrapped = wrapCommand(base, xlat.cmd);
+  const wrapped = wrapCommand(base, xlat.cmd, Math.max(5, Math.ceil(timeoutMs / 1000) + 30));
 
   return new Promise((resolve) => {
     let child;
     try {
-      if (win) child = spawn(shell, ['/d', '/s', '/v:on', '/c', `"${wrapped}"`], { cwd: base, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, windowsVerbatimArguments: true });
-      else child = spawn(shell, ['-c', wrapped], { cwd: base, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+      const env = childEnv(base, baseRel);
+      if (win) child = spawn(shell, ['/d', '/s', '/v:on', '/c', `"${wrapped}"`], { cwd: base, env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, windowsVerbatimArguments: true });
+      else child = spawn(shell, ['-c', wrapped], { cwd: base, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
     } catch (e) { resolve({ ok: false, output: '', error: String(e.message || e), exit: null }); return; }
 
     const MAX = 12 * 1024 * 1024;
     const HEAD_KEEP = OUT_CAP + 2000;
     const TAIL_KEEP = 4096;
     let head = '', tail = '', chars = 0, size = 0, killed = false, timedOut = false, settled = false;
+    let errText = '';
     // stdout and stderr are interleaved into one transcript, and a chunk boundary can
     // land in the middle of a multi-byte character. Decoding each Buffer on its own
     // turned those into U+FFFD, so any non-ASCII program output came back mangled; one
@@ -223,6 +260,7 @@ export function bash(chatId, cmd, timeoutMs = 60000, workdir, signal = null) {
       size += b.length;
       const s = decoders[which].write(b);
       if (s) {
+        if (which === 'err' && errText.length < ERR_CAP) errText += s.slice(0, ERR_CAP - errText.length);
         chars += s.length;
         if (head.length < HEAD_KEEP) head += s.slice(0, HEAD_KEEP - head.length);
         tail = tail.length + s.length > TAIL_KEEP ? (tail + s).slice(-TAIL_KEEP) : tail + s;
@@ -301,7 +339,7 @@ export function bash(chatId, cmd, timeoutMs = 60000, workdir, signal = null) {
       if (notFound) hinted += '\n\nHINT: ' + missingCommandHint();
       else if (unixFlavoured) hinted += '\n\nHINT: `find`, `sort` and `more` exist on Windows but they are the WINDOWS commands, not the Unix ones. Windows `find` searches file contents for a literal string and does not understand `-name`, `-type`, `-exec` or `.` as a starting directory. Do not retry it with different flags. Use the dedicated file tools instead: `find` for name patterns (e.g. {"pattern": "**/*.java"}), `search` for text inside files, and `list_files` for the tree. They work identically on every OS.';
       else if (badSlash) hinted += '\n\nHINT: this is almost always cmd.exe reading a `/` inside a path as a switch, not a separator. `mkdir a/b`, `del x/y.txt` and similar fail this way even though `cd`, this app\'s file tools, and every real interpreter accept forward slashes fine. Rewrite the path with backslashes (`mkdir a\\b`) or, better, use the dedicated file tools (make_dir, create_file, delete_file, copy_file, move_file) which take forward-slash paths on every OS.';
-      return done({ ok: false, output: hinted, exit, error: `Exited with code ${exit}`, cwd });
+      return done({ ok: false, output: hinted, stderr: errText.trim() || undefined, exit, error: `Exited with code ${exit}`, cwd });
     });
   });
 }

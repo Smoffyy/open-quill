@@ -186,7 +186,7 @@ export function initWs(server) {
         const sandboxCap = roleLimit('sandbox_limit_mb', !!u.is_admin, u.is_admin ? 1024 : 256) * 1024 * 1024;
         const userSandbox = !!msg.sandbox;
         if (!!chat.sandbox !== userSandbox) db.chats.update(chat.id, { sandbox: userSandbox ? 1 : 0 });
-        const sandboxOn = userSandbox;
+        const sandboxOn = userSandbox || !!chat.project_id;
         const webSearchOn = !!msg.webSearch && websearch.webSearchAvailable() && model.web_search_allowed !== 0;
         ensureChain(chat.id);
 
@@ -214,11 +214,11 @@ export function initWs(server) {
               try {
                 const fname = path.basename(a.url || '');
                 const src = fname ? path.join(UPLOADS, fname) : '';
-                if (src && fs.existsSync(src)) sandbox.importBuffer(chat.id, path.basename(a.name || fname || 'file'), fs.readFileSync(src), sandboxCap);
+                if (src && fs.existsSync(src)) sandbox.importBuffer(sandbox.wsKey(chat), path.basename(a.name || fname || 'file'), fs.readFileSync(src), sandboxCap);
                 else console.warn('[sandbox import] upload not found for', a.name, '->', src);
               } catch (e) { console.warn('[sandbox import] failed for', a && a.name, e.message); }
             }
-            safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(chat.id) }));
+            safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(sandbox.wsKey(chat)) }));
           }
         }
 

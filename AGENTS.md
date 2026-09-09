@@ -1,6 +1,6 @@
 ## Open Quill
 
-Self-hosted chat interface for local and cloud LLMs. Express 5 + encrypted SQLite server, React 19 + Vite client, WebSocket streaming, per-chat file sandbox. Package name is `open-quill`; the repo folder may be named differently.
+Self-hosted chat interface for local and cloud LLMs. Express 5 + encrypted SQLite server, React 19 + Vite client, WebSocket streaming, per-workspace file sandbox. Package name is `open-quill`; the repo folder may be named differently.
 
 `dev` is the working branch, `stable` is release; PRs target `dev`.
 
@@ -69,7 +69,7 @@ Dependency direction is **routes to lib**; `lib/ws/` never imports from `routes/
 - Untrusted keys index lookup tables declared with `__proto__: null` (`SETTING_FIELDS` in `routes/settings.js` is the pattern: coerce and cap once at the boundary). WS handlers sit outside Express's error handler, so they type-check ids themselves.
 - User-supplied regex runs in a killable worker (`sandbox/regexsearch.worker.js`); `lib/sandboxguard.js` rejects catastrophic-backtracking shapes before compiling.
 
-**Sandbox** (`server/sandbox/`, dispatch table in `exec.js`): per-chat versioned virtual filesystem plus a bash tool. `lib/sandboxguard.js` (`normalizeRel`, `screenCommand`) is the enforced boundary, rejecting absolute/UNC/home paths, `..` escapes and a fixed list of host-admin commands. Both are pure and tested; the false-positive set (ordinary build commands must keep working) matters as much as the false-negative one. Wrong tool and argument names are *resolved* through `tools/aliases.js` rather than rejected, so a small model does not burn its turn budget on a typo; a truncated tool call is refused before dispatch, never partially applied.
+**Sandbox** (`server/sandbox/`, dispatch table in `exec.js`): a versioned virtual filesystem plus a bash tool. Every sandbox function takes a workspace key, not a chat id: `wsKey(chatRow)` in `sandbox/paths.js` returns the project's shared workspace when the chat belongs to one and the chat's own otherwise, so a project's chats share one directory and its attached files are ordinary files in it. `bash` runs with an explicit environment allowlist, never this process's own. `lib/sandboxguard.js` (`normalizeRel`, `screenCommand`) is the enforced boundary, rejecting absolute/UNC/home paths, `..` escapes and a fixed list of host-admin commands. Both are pure and tested; the false-positive set (ordinary build commands must keep working) matters as much as the false-negative one. Wrong tool and argument names are *resolved* through `tools/aliases.js` rather than rejected, so a small model does not burn its turn budget on a typo; a truncated tool call is refused before dispatch, never partially applied.
 
 **Turns and streaming** (`lib/ws/`): a turn belongs to the chat, not the socket, so `live.js` tracks by `chatId` and a mid-reply reload resumes. `stops` (a `Set`) is the durable "user asked to stop", checked everywhere the agentic loop in `turn.js` could continue; the per-step `AbortController` in `aborts` only cancels the current step.
 
