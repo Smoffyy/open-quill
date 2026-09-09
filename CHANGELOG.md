@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [27.3.1] - TBD
+## [27.3.1] - 2026-09-09
 ### Added
 - **A project has one workspace, shared by every chat in it** - open a second conversation about the same project and the code from the first one is already there: same directory, same files, same version history. Files attached to the project are ordinary files in that workspace, so `view`, `search`, `bash` and the editing tools reach them like anything else, and anything the assistant writes is there for the next chat. Deleting a chat no longer takes its work with it; only deleting the project removes the workspace. Loose chats outside a project keep a workspace of their own, exactly as before.
 - **The assistant is told what the workspace already has** - a `package.json` with no `node_modules` next to it now says so in the prompt, along with which command installs it, and the same for Python, Rust, Go, Java, Ruby, PHP and make projects, plus whether the workspace is a git repository. It reads what was already walked, so it costs nothing, and it replaces the three or four probing shell commands a model otherwise spends before it can start.
