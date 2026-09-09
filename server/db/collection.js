@@ -5,8 +5,6 @@ export const MIRROR = {
   messages: { chat_id: o => o.chat_id ?? null, parent_id: o => o.parent_id ?? null, created_at: o => o.created_at ?? 0 },
   models: { sort_order: o => o.sort_order ?? 0, enabled: o => o.enabled ?? 0 },
   usage: { user_id: o => o.user_id ?? null, model_id: o => o.model_id ?? null, created_at: o => o.created_at ?? 0 },
-  spaces: { owner_id: o => o.owner_id ?? null, created_at: o => o.created_at ?? 0, updated_at: o => o.updated_at ?? 0 },
-  space_messages: { space_id: o => o.space_id ?? null, created_at: o => o.created_at ?? 0 },
   sessions: { user_id: o => o.user_id ?? null, last_seen: o => o.last_seen ?? 0, created_at: o => o.created_at ?? 0 },
   audit: { ts: o => o.ts ?? 0, actor_id: o => o.actor_id ?? null },
   projects: { user_id: o => o.user_id ?? null, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 },

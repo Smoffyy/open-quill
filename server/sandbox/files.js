@@ -8,6 +8,8 @@ import { compileSearchPattern } from '../lib/sandboxguard.js';
 import { runRegexSearch } from './regexsearch.js';
 import { looksTextual } from '../lib/extract.js';
 
+const byName = new Intl.Collator(undefined, { numeric: true }).compare;
+
 function walkFiles(chatId, { includeIgnored = false, under = '', countHidden = false } = {}) {
   const root = dirFor(chatId);
   const start = under ? resolveSafe(chatId, under) : root;
@@ -56,7 +58,7 @@ export function list(chatId, opts = {}) {
     let size = 0; try { size = fs.statSync(files[i]).size; } catch {}
     out[i] = { path: rel, ext: extOf(rel), size, v: meta[rel]?.v || 1 };
   }
-  out.sort((a, b) => a.path.localeCompare(b.path));
+  out.sort((a, b) => byName(a.path, b.path));
   return opts.withHidden ? { files: out, hidden } : out;
 }
 
@@ -183,27 +185,33 @@ function bigrams(s) {
   return out;
 }
 
-function dice(a, b) {
-  if (!a.size || !b.size) return 0;
-  let shared = 0, total = 0;
-  for (const n of a.values()) total += n;
+function dice(a, aTotal, b) {
+  if (!aTotal || !b.size) return 0;
+  let shared = 0, total = aTotal;
   for (const [g, n] of b) { total += n; shared += Math.min(n, a.get(g) || 0); }
   return (2 * shared) / total;
 }
+
+const SIM_MIN = 0.4;
 
 function nearestRegion(text, oldStr) {
   const fileLines = text.split('\n');
   const first = normEol(oldStr).split('\n').map(l => l.trim()).find(Boolean);
   if (!first) return null;
   const want = bigrams(first.slice(0, 200));
+  let wantTotal = 0;
+  for (const n of want.values()) wantTotal += n;
   let best = -1, score = 0;
   for (let i = 0; i < fileLines.length; i++) {
     const t = fileLines[i].trim();
     if (!t) continue;
-    const s = t === first ? 1 : dice(want, bigrams(t.slice(0, 200)));
-    if (s > score) { score = s; best = i; }
+    if (t === first) { score = 1; best = i; break; }
+    const len = Math.min(t.length, 200) - 1;
+    if (len < 1 || (2 * Math.min(wantTotal, len)) / (wantTotal + len) <= score) continue;
+    const sim = dice(want, wantTotal, bigrams(t.slice(0, 200)));
+    if (sim > score) { score = sim; best = i; }
   }
-  if (best < 0 || score < 0.4) return null;
+  if (best < 0 || score < SIM_MIN) return null;
   const from = Math.max(0, best - 2), to = Math.min(fileLines.length - 1, best + 4);
   return fileLines.slice(from, to + 1).map((l, k) => `${from + k + 1}\t${l}`).join('\n');
 }
@@ -260,6 +268,7 @@ export function strReplace(chatId, rel, oldStr, newStr, replaceAll = false) {
 export function insertLines(chatId, rel, atLine, content) {
   const p = resolveSafe(chatId, rel);
   if (!fs.existsSync(p)) return { ok: false, error: `File not found: ${rel}` };
+  if (fs.statSync(p).isDirectory()) return { ok: false, error: `${rel} is a directory` };
   const text = fs.readFileSync(p, 'utf8');
   const lines = text.split('\n');
   const insert = String(content ?? '').split('\n');
@@ -280,7 +289,7 @@ export function treeString(chatId, under, includeIgnored, cap = 400) {
   const walk = (dir, prefix) => {
     let entries;
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-    entries.sort((a, b) => (Number(b.isDirectory()) - Number(a.isDirectory())) || a.name.localeCompare(b.name));
+    entries.sort((a, b) => (Number(b.isDirectory()) - Number(a.isDirectory())) || byName(a.name, b.name));
     for (const e of entries) {
       if (shown >= cap) return;
       const abs = path.join(dir, e.name);
@@ -342,12 +351,18 @@ export function renameFile(chatId, rel, newRel) {
   const src = resolveSafe(chatId, rel);
   const dst = resolveSafe(chatId, newRel);
   if (!fs.existsSync(src)) return { ok: false, error: `Not found: ${rel}` };
+  if (fs.existsSync(dst) && !samePath(src, dst)) return { ok: false, error: `${newRel} already exists. Delete it first, or pick another name.` };
   const before = fs.statSync(src).isDirectory() ? list(chatId, { all: true, under: rel }).map(f => f.path) : null;
   fs.mkdirSync(path.dirname(dst), { recursive: true });
   fs.renameSync(src, dst);
   if (before) for (const oldRel of before) moveVersion(chatId, oldRel, newRel + oldRel.slice(rel.length));
   else moveVersion(chatId, rel, newRel);
   return { ok: true, path: newRel, from: rel };
+}
+
+function samePath(a, b) {
+  if (a === b) return true;
+  try { return fs.realpathSync.native(a) === fs.realpathSync.native(b); } catch { return false; }
 }
 
 function dirEntrySize(p) {
@@ -446,8 +461,8 @@ export function findFiles(chatId, pattern, includeIgnored = false) {
 }
 
 export function bundleZip(chatId, name, paths, includeIgnored = false) {
-  const all = list(chatId, { all: includeIgnored });
-  const picked = (paths && paths.length ? paths : all.map(f => f.path)).filter(p => p && !p.endsWith('.zip'));
+  const picked = (paths && paths.length ? paths : list(chatId, { all: includeIgnored }).map(f => f.path))
+    .filter(p => p && !p.endsWith('.zip'));
   const entries = [];
   for (const rel of picked) { try { const abs = resolveSafe(chatId, rel); if (fs.existsSync(abs) && !fs.statSync(abs).isDirectory()) entries.push({ name: rel, data: fs.readFileSync(abs) }); } catch {} }
   if (!entries.length) return { ok: false, error: 'No files to bundle.' };

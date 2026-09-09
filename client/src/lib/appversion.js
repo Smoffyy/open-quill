@@ -3,7 +3,7 @@
 // "27.1.0-beta.3", "27.1.0-cascade.2". Never prefixed with "v".
 //
 // Import-free on purpose, so node --test can cover it. The translated channel
-// wording lives in lib/channel.js, which layers i18n on top of formatVersion.
+// wording lives in lib/channel.js, which layers i18n on top of the channel word.
 
 // The prerelease tail is whatever the release was named, not a fixed vocabulary:
 // beta, rc, alpha, dev, preview, cascade, developer. Anything alphabetic is a
@@ -42,13 +42,4 @@ export function parseVersion(v) {
 export function capitalize(word) {
   const s = String(word || '');
   return s ? s[0].toUpperCase() + s.slice(1) : '';
-}
-
-// The human form, for places that show a version inline rather than in a labelled
-// field: "27.1.0-beta.3" reads as "27.1.0 Beta 3", "27.1.0" stays "27.1.0".
-// labelFor translates the channel word; without one it is simply capitalized.
-export function formatVersion(v, labelFor = capitalize) {
-  const p = parseVersion(v);
-  if (!p) return '';
-  return [p.base, p.channel ? labelFor(p.channel) : '', p.build].filter(Boolean).join(' ');
 }

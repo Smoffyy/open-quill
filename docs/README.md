@@ -12,7 +12,7 @@ This is the user guide for Open Quill, covering everything the interface can do.
 | [The Composer](composer.md) | Attachments, dictation, slash commands, the "+" menu, steering/queueing, voice calls |
 | [Models & Reasoning](models.md) | Picking a model, extended thinking, kwargs, context gauge, engine telemetry |
 | [Personas, Styles & Prompts](personas-styles-prompts.md) | Personas, response styles, saved prompts, Improve Prompt |
-| [Organizing Your Chats](organizing-chats.md) | Folders, projects, spaces, search, pins, export/import |
+| [Organizing Your Chats](organizing-chats.md) | Folders, projects, search, pins, export/import |
 | [Artifacts & Sandbox](artifacts-sandbox.md) | The per-chat file workspace: versions, previews, downloads |
 | [Settings](settings.md) | Every tab in the Settings modal, field by field |
 | [Keyboard Shortcuts](keyboard-shortcuts.md) | The full default keymap and how to rebind it |

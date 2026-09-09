@@ -5,7 +5,6 @@ import * as mcp from '../mcp.js';
 import { logAudit } from '../lib/audit.js';
 import { purgeUserChats } from '../lib/purge.js';
 import { monthStartMs } from '../lib/budget.js';
-import { removeUserFromSpaces } from '../lib/spaces.js';
 import * as dataroot from '../lib/dataroot.js';
 import { toolStatsReport } from '../lib/toolstats.js';
 import { USAGE_WINDOWS } from './auth.js';
@@ -160,7 +159,6 @@ export default function registerAdminRoutes(app) {
     if (u.is_owner) return res.status(403).json({ error: 'The top admin cannot be removed.' });
     if (u.id === req.user.id) return res.status(403).json({ error: 'You cannot remove your own account here.' });
     purgeUserChats(u.id);
-    removeUserFromSpaces(u.id);
     db.sessions.removeWhere('user_id', u.id);
     db.users.removeById(u.id);
     logAudit(req, 'user.delete', { type: 'user', id: u.id, meta: { email: u.email } });

@@ -15,6 +15,10 @@ export default function OverviewSection() {
   const [usage, setUsage] = useState(null);
   const [events, setEvents] = useState(null);
 
+  async function replaySetup() {
+    try { await api.post('/api/admin/setup-complete', { done: false }); } catch {}
+  }
+
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -65,7 +69,9 @@ export default function OverviewSection() {
           <Btn onClick={createModel}><Plus /> {t('Add model')}</Btn>
           <Btn onClick={() => setSection('providers')}><Sliders /> {t('Connections')}</Btn>
           <Btn onClick={() => setSection('members')}><Users /> {t('Members')}</Btn>
+          <Btn onClick={replaySetup}>{t('Run the setup guide')}</Btn>
         </Acts>
+        <div className="cp-hint">{t('The guide walks through the layout, a connection, models and prices. Reopen this page after starting it.')}</div>
       </Card>
 
       <Card title={t('Recent admin events')} flush

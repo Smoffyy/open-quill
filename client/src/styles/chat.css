@@ -478,9 +478,9 @@
   background: #ffffff !important;
   background-color: #ffffff !important;
 }
-.assistant-body table, .bubble-user table, .art-md table, .doc-body table, .bc-col-body table, .spc-msg-body table { display: block; width: max-content; max-width: 100%; overflow-x: auto; border-collapse: collapse; margin: 14px 0; font-size: .9em; line-height: 1.5; font-family: var(--font-sans); }
-.assistant-body table th, .assistant-body table td, .bubble-user table th, .bubble-user table td, .art-md table th, .art-md table td, .doc-body table th, .doc-body table td, .bc-col-body table th, .bc-col-body table td, .spc-msg-body table th, .spc-msg-body table td { border: 1px solid var(--border-soft); padding: 7px 12px; text-align: left; vertical-align: top; }
-.assistant-body table thead th, .bubble-user table thead th, .art-md table thead th, .doc-body table thead th, .bc-col-body table thead th, .spc-msg-body table thead th { background: var(--surface-2); font-weight: 600; font-size: .95em; color: var(--text); }
+.assistant-body table, .bubble-user table, .art-md table, .doc-body table, .bc-col-body table { display: block; width: max-content; max-width: 100%; overflow-x: auto; border-collapse: collapse; margin: 14px 0; font-size: .9em; line-height: 1.5; font-family: var(--font-sans); }
+.assistant-body table th, .assistant-body table td, .bubble-user table th, .bubble-user table td, .art-md table th, .art-md table td, .doc-body table th, .doc-body table td, .bc-col-body table th, .bc-col-body table td { border: 1px solid var(--border-soft); padding: 7px 12px; text-align: left; vertical-align: top; }
+.assistant-body table thead th, .bubble-user table thead th, .art-md table thead th, .doc-body table thead th, .bc-col-body table thead th { background: var(--surface-2); font-weight: 600; font-size: .95em; color: var(--text); }
 .assistant-body table tbody tr:nth-child(even) td, .art-md table tbody tr:nth-child(even) td, .doc-body table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--surface-2) 40%, transparent); }
 .assistant-body table code, .bubble-user table code { white-space: nowrap; }
 
@@ -531,15 +531,8 @@
 .co-card.selected { outline: 2px solid var(--text); }
 .co-check { position: absolute; top: 8px; right: 8px; width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; background: var(--panel); color: var(--on-primary); z-index: 2; }
 .co-check.on { background: var(--pop-blue); border-color: var(--pop-blue); }
-
-.pj-file-list { display: flex; flex-direction: column; gap: 2px; }
 .pj-file-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; font-size: 12.5px; color: var(--text); }
 .pj-file-row:hover { background: var(--hover); }
-.pj-file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pj-file-size { font-size: 11px; color: var(--text-muted); }
-.pj-file-del { display: none; padding: 2px 6px; border-radius: 6px; color: var(--text-muted); font-size: 11px; }
-.pj-file-row:hover .pj-file-del { display: inline-flex; }
-.pj-file-del:hover { color: var(--danger); background: var(--hover); }
 
 .topbar-model { margin-right: 10px; }
 .chatctl-panel { width: 340px; flex-shrink: 0; border-left: 1px solid var(--border-soft); background: var(--panel); display: flex; flex-direction: column; height: 100%; }

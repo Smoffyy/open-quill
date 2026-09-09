@@ -89,12 +89,6 @@ export const TOKEN_GROUPS = [
   }
 ];
 
-export const TOKEN_INDEX = (() => {
-  const m = new Map();
-  for (const g of TOKEN_GROUPS) for (const tok of g.tokens) m.set(g.id + '.' + tok.id, { ...tok, group: g.id, kind: tok.kind || g.kind });
-  return m;
-})();
-
 // Values an element control can borrow from the global palette. Picking one
 // writes var(--token) rather than a literal, so a later token change follows.
 export function tokenRefs(kind) {
@@ -336,9 +330,6 @@ export const ELEMENTS = [
   { id: 'modelDocsRow', label: tk('Model docs sidebar item'), cat: 'panels', sel: '.dnav-item', parent: 'modelDocs', caps: CTRL },
   { id: 'modelDocsCard', label: tk('Model docs card'), cat: 'panels', sel: '.mdoc-card, .mdoc-tile', parent: 'modelDocs', caps: ALL },
   { id: 'modelDocsStats', label: tk('Model docs stat strip'), cat: 'panels', sel: '.mdoc-stats', parent: 'modelDocs', caps: ALL },
-  { id: 'spaceChat', label: tk('Space conversation'), cat: 'panels', sel: '.spc-chat', caps: ALL },
-  { id: 'spaceMsg', label: tk('Space message'), cat: 'panels', sel: '.spc-msg', parent: 'spaceChat', caps: ALL },
-  { id: 'spaceMember', label: tk('Space member row'), cat: 'panels', sel: '.spc-member-row', caps: ALL },
   { id: 'branchTree', label: tk('Branch map'), cat: 'panels', sel: '.bt-modal', caps: ALL },
   { id: 'branchNode', label: tk('Branch node'), cat: 'panels', sel: '.bt-node', parent: 'branchTree', caps: CTRL },
   { id: 'callPanel', label: tk('Voice panel'), cat: 'panels', sel: '.callpanel', caps: ALL },
@@ -372,10 +363,6 @@ export const ELEMENT_INDEX = (() => {
   for (const el of ELEMENTS) m.set(el.id, el);
   return m;
 })();
-
-export function elementsByCategory() {
-  return CATEGORIES.map(c => ({ ...c, items: ELEMENTS.filter(e => e.cat === c.id) })).filter(c => c.items.length);
-}
 
 // The tree is built from the parent links rather than from the DOM, so it reads
 // the same whether or not a branch happens to be on screen right now.
@@ -499,19 +486,6 @@ export function migrateDoc(raw) {
     slots: d.slots && typeof d.slots === 'object' ? d.slots : {},
     css: typeof d.css === 'string' ? d.css : ''
   };
-}
-
-export function elementConfig(doc, id) {
-  return (doc?.elements && doc.elements[id]) || null;
-}
-
-export function docIsEmpty(doc) {
-  if (!doc) return true;
-  return !Object.keys(doc.elements || {}).length
-    && !Object.keys(doc.content || {}).length
-    && !Object.keys(doc.slots || {}).length
-    && !Object.values(doc.tokens || {}).some(g => Object.keys(g || {}).length)
-    && !(doc.css || '').trim();
 }
 
 /* ---------------------------------------------------------------------------

@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAdmin } from '../store.jsx';
-import { Card, Fields, Field, Input, Select, Btn, IconBtn, Acts, Badge, KV, Empty, Dialog, Table, fmtInt } from '../ui.jsx';
+import { Card, Fields, Field, Input, Select, Btn, IconBtn, Acts, Badge, KV, Empty, Dialog, Table, Logo, fmtInt } from '../ui.jsx';
 import { Cube, Plus, Trash, Sliders } from '../../icons.jsx';
 import { api } from '../../../api.js';
 import { t } from '../../../i18n.jsx';
+import { modelIconFor, useLogos } from '../../../lib/logos.js';
 
 function Engine({ e }) {
   const rows = [];
@@ -21,9 +22,15 @@ function Engine({ e }) {
 
 function Discover({ providerId, onClose, onAdded }) {
   const [state, setState] = useState({ loading: true, error: '', list: [] });
+  const [bulk, setBulk] = useState(null);
+  const [bulkError, setBulkError] = useState('');
+  const files = useLogos();
+  const alive = useRef(true);
+  useEffect(() => () => { alive.current = false; }, []);
 
   const load = useCallback(async () => {
     setState({ loading: true, error: '', list: [] });
+    setBulkError('');
     try {
       const r = await api.get('/api/admin/discover-models?provider=' + encodeURIComponent(providerId));
       setState({ loading: false, error: '', list: r.models || [] });
@@ -34,21 +41,59 @@ function Discover({ providerId, onClose, onAdded }) {
 
   useEffect(() => { load(); }, [load]);
 
+  const mark = (id, patch) => setState(s => ({ ...s, list: s.list.map(x => (x.id === id ? { ...x, ...patch } : x)) }));
+
+  const createModel = useCallback((id) => {
+    const icon = modelIconFor(id, files);
+    return api.post('/api/admin/models', {
+      display_name: id, internal_name: id, provider_id: providerId,
+      ...(icon ? { static_icon: icon, generating_icon: icon, thinking_icon: icon } : {})
+    });
+  }, [files, providerId]);
+
   async function add(id) {
-    setState(s => ({ ...s, list: s.list.map(x => (x.id === id ? { ...x, busy: true } : x)) }));
+    mark(id, { busy: true });
     try {
-      await api.post('/api/admin/models', { display_name: id, internal_name: id, provider_id: providerId });
-      setState(s => ({ ...s, list: s.list.map(x => (x.id === id ? { ...x, added: true, busy: false } : x)) }));
+      await createModel(id);
+      mark(id, { added: true, busy: false });
       onAdded();
     } catch {
-      setState(s => ({ ...s, list: s.list.map(x => (x.id === id ? { ...x, busy: false } : x)) }));
+      mark(id, { busy: false });
     }
   }
+
+  async function addAll() {
+    const pending = state.list.filter(x => !x.added);
+    if (!pending.length) return;
+    setBulkError('');
+    setBulk({ done: 0, total: pending.length });
+    let done = 0;
+    let failed = 0;
+    for (const x of pending) {
+      if (!alive.current) return;
+      mark(x.id, { busy: true });
+      try { await createModel(x.id); mark(x.id, { added: true, busy: false }); }
+      catch { failed++; mark(x.id, { busy: false }); }
+      done++;
+      if (!alive.current) return;
+      setBulk({ done, total: pending.length });
+    }
+    setBulk(null);
+    if (failed) setBulkError(t('{n} of {total} could not be added.', { n: failed, total: pending.length }));
+    onAdded();
+  }
+
+  const remaining = state.list.filter(x => !x.added).length;
 
   return (
     <Dialog title={t('Models this backend reports')} onClose={onClose}
       foot={<>
-        <Btn onClick={load} disabled={state.loading}>{t('Refresh')}</Btn>
+        <Btn onClick={load} disabled={state.loading || !!bulk}>{t('Refresh')}</Btn>
+        {remaining > 0 && (
+          <Btn onClick={addAll} disabled={!!bulk}>
+            {bulk ? t('Adding {done} of {total}…', { done: bulk.done, total: bulk.total }) : t('Add all {n}', { n: remaining })}
+          </Btn>
+        )}
         <div className="cp-spacer" />
         <Btn kind="primary" onClick={onClose}>{t('Done')}</Btn>
       </>}>
@@ -57,18 +102,19 @@ function Discover({ providerId, onClose, onAdded }) {
       </p>
       {state.loading && <Empty icon={Cube} title={t('Asking the backend')} />}
       {state.error && <div className="cp-err">{state.error}</div>}
+      {bulkError && <div className="cp-err">{bulkError}</div>}
       {!state.loading && !state.error && state.list.length === 0 && (
         <Empty icon={Cube} title={t('Nothing reported')}>{t('The backend answered but listed no models.')}</Empty>
       )}
       {state.list.length > 0 && (
-        <Table head={[{ label: t('Model id'), mono: true }, { label: '', fit: true }]}>
+        <Table scroll head={[{ label: t('Model id'), mono: true }, { label: '', fit: true }]}>
           {state.list.map(x => (
             <tr key={x.id}>
-              <td className="mono">{x.id}</td>
+              <td className="mono"><span className="cp-logo-row"><Logo name={x.id} />{x.id}</span></td>
               <td className="acts">
                 {x.added
                   ? <Badge tone="good">{t('added')}</Badge>
-                  : <Btn size="sm" disabled={x.busy} onClick={() => add(x.id)}>{x.busy ? t('Adding…') : t('Add')}</Btn>}
+                  : <Btn size="sm" disabled={x.busy || !!bulk} onClick={() => add(x.id)}>{x.busy ? t('Adding…') : t('Add')}</Btn>}
               </td>
             </tr>
           ))}
@@ -109,7 +155,7 @@ export default function ProvidersSection() {
         const attached = models.filter(m => (m.provider_id || providers[0]?.id) === p.id).length;
         return (
           <Card key={p.id}
-            title={p.name || t('Connection {n}', { n: i + 1 })}
+            title={<span className="cp-logo-row"><Logo name={[p.name, p.type]} size={18} />{p.name || t('Connection {n}', { n: i + 1 })}</span>}
             sub={t('{type} · {n} models bound', { type: type.label || p.type, n: attached })}
             actions={<>
               {state && !state.busy && (state.ok

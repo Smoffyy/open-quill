@@ -47,9 +47,3 @@ export function promoteDraft(key) {
   delSetting(PREFIX + key);
   return true;
 }
-
-export function discardDrafts() {
-  const keys = draftKeys();
-  for (const key of keys) delSetting(PREFIX + key);
-  return keys;
-}

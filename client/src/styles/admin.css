@@ -343,15 +343,6 @@
 
 /* ---------- card ---------- */
 
-.cp-subcard {
-  border: 1px solid var(--cp-line);
-  border-radius: var(--cp-r);
-  padding: var(--cp-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--cp-4);
-}
-
 .cp-card {
   border: 1px solid var(--cp-line);
   border-radius: var(--cp-r);
@@ -381,6 +372,16 @@
   margin: var(--cp-1) 0 0;
 }
 .cp-card-head .cp-acts { flex-shrink: 0; }
+
+.cp-logo { width: 16px; height: 16px; flex: none; border-radius: 3px; }
+.cp-logo.mask {
+  background: currentColor;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-position: center; mask-position: center;
+  -webkit-mask-size: contain; mask-size: contain;
+}
+.cp-logo-row { display: inline-flex; align-items: center; gap: var(--cp-2); min-width: 0; }
+.cp-table .cp-logo-row { vertical-align: middle; }
 .cp-card-body { padding: var(--cp-5); }
 .cp-card-body > *:not(:first-child) { margin-top: var(--cp-5); }
 .cp-card-foot {
@@ -478,8 +479,6 @@
 
 /* A field whose control sits beside a button, e.g. an id with a copy action. */
 .cp-inline { display: flex; align-items: center; gap: var(--cp-2); min-width: 0; }
-.cp-pairlist { display: flex; flex-direction: column; gap: var(--cp-2); }
-.cp-pairrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) auto; align-items: center; gap: var(--cp-2); }
 .cp-inline > :first-child { flex: 1; min-width: 0; }
 /* Inside a form field the neighbouring button matches the input it sits beside;
    in a table cell the row's own compact height already governs both. */
@@ -662,6 +661,9 @@
   border: 1px solid var(--cp-line);
   border-radius: var(--cp-r);
 }
+.cp-table-wrap.scroll { overflow: auto; max-height: min(48vh, 420px); scrollbar-width: thin; }
+.cp-table-wrap.scroll th { position: sticky; top: 0; z-index: 1; }
+
 .cp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .cp-table.fixed { table-layout: fixed; }
 /* Not sticky: the wrapper owns the horizontal scroll, which makes it the

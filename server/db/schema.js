@@ -64,7 +64,11 @@ CREATE INDEX IF NOT EXISTS idx_toolstats_ts ON toolstats(ts);`,
 CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id, next_run);`,
 
   `CREATE TABLE IF NOT EXISTS skills (id TEXT PRIMARY KEY, user_id TEXT, name TEXT, updated_at INTEGER, created_at INTEGER, data TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE);
-CREATE INDEX IF NOT EXISTS idx_skills_user ON skills(user_id, name);`
+CREATE INDEX IF NOT EXISTS idx_skills_user ON skills(user_id, name);`,
+
+  // Spaces (shared multi-user chat rooms) was removed as a feature; drop the tables it left behind.
+  `DROP TABLE IF EXISTS space_messages;
+DROP TABLE IF EXISTS spaces;`
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length + 1;

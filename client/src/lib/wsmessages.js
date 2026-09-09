@@ -264,24 +264,10 @@ export const handlers = {
   }
 };
 
-// Space frames are broadcast to a panel that may not be mounted, so they go out
-// as a DOM event rather than through App's state.
-export function isSpaceFrame(type) {
-  return typeof type === 'string' && type.startsWith('space_');
-}
-
-const SPACE_REFRESH = new Set(['space_invite', 'space_updated', 'space_removed', 'space_deleted']);
-
-export function handleSpaceFrame(m, ctx) {
-  try { window.dispatchEvent(new CustomEvent('oq-space', { detail: m })); } catch {}
-  if (SPACE_REFRESH.has(m.type)) ctx.actions.refreshSpacesPending();
-}
-
 // Returns whether the frame was recognised, which the tests assert on so an
 // unhandled type cannot be added without noticing.
 export function dispatchWs(m, ctx) {
   if (!m || typeof m.type !== 'string') return false;
-  if (isSpaceFrame(m.type)) { handleSpaceFrame(m, ctx); return true; }
   const fn = handlers[m.type];
   if (!fn) return false;
   fn(m, ctx);

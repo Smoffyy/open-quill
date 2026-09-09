@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [27.3.0] - 2026-09-08
+### Added
+- **A setup guide the first time an owner signs in** - a seven-step walkthrough instead of a bare screen: what the app is, naming the workspace and deciding who may create an account, a starting layout, connecting a model, picking which of the models that connection reports to keep, prices if the connection is a paid one, and a short orientation at the end. Connection types are split into the ones that run on your own machine and the ones that bill per message, each with its vendor mark, and the address is prefilled with what that kind of server normally uses. Every step can be skipped, the whole guide can be skipped, and nothing it sets is permanent. Admin, Overview has a button to run it again.
+- **Chats name themselves when your models are local** - automatic chat titles are now on by default when every connection runs on your own machine, and off as soon as one of them bills per message. The setting itself is unchanged and still wins once you touch it; only the default now reads the connections rather than always being off, since a title costs nothing on a local model and real money on a metered one.
+- **Vendor logos in the admin panel** - each connection under Providers, and each model in the list a backend reports when you press Discover, now carries the mark of whoever made it. Matching is by keyword, so `qwen3-next-80b` finds Qwen and `codellama-13b` finds Meta; a name that matches nothing simply gets no icon rather than a wrong one. Adding a logo is dropping an SVG into `client/public/assets`: the file name is itself the keyword, and a short alias table covers the cases where the mark is named after the vendor rather than the model family. Dot, dash, underscore and space are interchangeable throughout, so one `llama-cpp.svg` answers to `llama.cpp`, `llama cpp` and `llamacpp` alike. A file ending in `-color` keeps its own palette; any other file is drawn in the surrounding text colour, so one file reads correctly on every theme, light and dark.
+- **A model added from Discover arrives wearing its own logo** - adding `qwen3.5-4b` from the list a backend reports now sets the Qwen mark as its static, generating and thinking icon, rather than leaving the entry blank for someone to fill in by hand. Only discovery does this; a model created any other way is untouched. A single-colour mark works here too: an embedded SVG resolves its colour against the scheme each theme declares, so it stays dark on the light theme and light on the rest.
+- **Add every model a backend reports, in one press** - the Discover dialog has an Add all button that walks the list one at a time, counting up as it goes, and says how many failed if any did. Models already in the catalogue are skipped, and the long lists a hosted API returns now scroll inside the dialog under a header that stays put.
+- **More language support** - added Deutsch, Español (México), Japanese, Korean, and Russian to the interface.
+
+### Fixed
+- **Renaming a sandbox file onto an existing one is refused instead of overwriting it** - the rename went straight to the filesystem, which silently replaced whatever was already at that name on Linux and macOS and failed with a raw system error on Windows. It now answers with a sentence saying the name is taken, while a rename that only changes letter case still works.
+- **Inserting lines into a folder gives a real answer** - `insert_lines` was the one file tool that did not check whether the path named a directory, so the model got a raw `EISDIR` where every neighbouring tool says "that is a directory".
+- **A resize in the theme builder always lets go** - dragging a handle attached pointer listeners that were only removed on a clean release. A drag interrupted by the browser, or one still in flight when the builder closed, left them attached and writing into a document nobody was looking at. The drag now also ends on cancel and on close, and each resize is its own undo step instead of merging with the one before it.
+- **The version panel shows a dash for a version it cannot read** - two placeholders had been mangled into a stray comma and space.
+- **Retiring a model no longer makes every later request rescan the catalogue** - the sweep that applies a sunset date recorded the table version before it ran, and its own writes changed that version, so the check that should have skipped the work never matched again until a minute had passed.
+
+### Changed
+- **Sandbox file lists sort the way a file browser does** - `file2` now comes before `file10`, and the comparison is prepared once rather than rebuilt for every pair, which is what a five-thousand-file workspace was paying for on each listing.
+- **A failed `str_replace` finds the nearest text without scoring every line** - the "did you mean this?" hint compared the search text against every line in the file, building a fresh index for each one. Lines that cannot beat the best match on length alone are now skipped before that work happens.
+- **Bundling named files no longer walks the whole workspace** - `bundle_zip` listed and measured every file in the chat even when it had been given the exact paths to include.
+
+### Internal
+- **The content security policy is covered by tests** - it is one of the three mechanisms that keep this app off the network, and the only one nothing verified: a weakened directive would not have failed a build, a lint or any other test. Its directive list, the origins it derives from a proxy header, and its refusal to let a hostile `Host` inject anything into itself are now checked, along with the header actually reaching a page and staying off the JSON API.
+- **The one-model-at-a-time queue is covered by tests** - the piece that decides when a turn waits for another model to finish had no test of its own, and a mistake there strands a reply with no error to show for it. Acquiring, releasing a whole group of waiting turns at once, and handing the queue on after a turn throws are all checked now.
+
+### Removed
+- **Spaces** - the shared, multi-user chat rooms feature has been removed along with its server routes, database tables, and client panel.
+- **Dead code** - about 240 lines of stylesheet for screens that no longer exist (the previous admin page layout, the old artifacts, projects and users panels), three unused icons, and a dozen unreferenced helpers across the theme document, drafts, task scheduler and version modules.
+
+---
+
 ## [27.2.0] - 2026-09-01
 
 ### Fixed

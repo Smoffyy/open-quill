@@ -11,7 +11,7 @@ const indexes = (sdb) =>
 
 const EXPECTED_TABLES = [
   'users', 'folders', 'chats', 'messages', 'models', 'usage', 'settings',
-  'spaces', 'space_messages', 'sessions', 'audit', 'projects', 'feedback',
+  'sessions', 'audit', 'projects', 'feedback',
   'toolstats', 'tasks', 'skills'
 ];
 
@@ -38,11 +38,24 @@ test('a database part-way through the migrations catches up from where it is', (
   const sdb = fresh();
   sdb.exec(SCHEMA);
   sdb.pragma('user_version = 1');
-  assert.equal(tables(sdb).has('spaces'), false, 'spaces arrives in a later migration');
+  assert.equal(tables(sdb).has('skills'), false, 'skills arrives in a later migration');
 
   assert.equal(migrate(sdb), LATEST_VERSION);
-  assert.ok(tables(sdb).has('spaces'));
   assert.ok(tables(sdb).has('skills'));
+  sdb.close();
+});
+
+test('the removed spaces feature leaves its tables dropped at the current version', () => {
+  const sdb = fresh();
+  sdb.exec(SCHEMA);
+  sdb.pragma('user_version = 1');
+  sdb.exec(MIGRATIONS[0]);
+  sdb.exec(MIGRATIONS[1]);
+  assert.ok(tables(sdb).has('spaces'), 'spaces existed once, mid-migration');
+
+  assert.equal(migrate(sdb), LATEST_VERSION);
+  assert.equal(tables(sdb).has('spaces'), false);
+  assert.equal(tables(sdb).has('space_messages'), false);
   sdb.close();
 });
 

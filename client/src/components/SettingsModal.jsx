@@ -26,11 +26,13 @@ const NAV_GROUPS = [
     { id: 'keybinds', label: tk('Keybinds'), Icon: Keyboard },
     { id: 'memory', label: tk('Memory'), Icon: Brain, needs: 'memoryFeature' },
     { id: 'usage', label: tk('Usage'), Icon: Clock },
-    { id: 'version', label: tk('Version'), Icon: Info },
   ] },
   { label: tk('Customize'), items: [
     { id: 'skills', label: tk('Skills'), Icon: SkillIcon },
     { id: 'mcp', label: tk('MCP'), Icon: Plug },
+  ] },
+  { label: tk('About'), items: [
+    { id: 'version', label: tk('Version'), Icon: Info },
   ] },
 ];
 
@@ -526,7 +528,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                   </div>
                   <div className="vh-id">
                     <div className="vh-name">{cfg?.appName || 'open-quill'}</div>
-                    <div className="vh-version">{t("Version")} {vp ? vp.full : ', '}</div>
+                    <div className="vh-version">{t("Version")} {vp ? vp.full : '—'}</div>
                     {channel && <div className="vh-channel">{channel} channel</div>}
                   </div>
                 </div>
@@ -534,7 +536,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
                   <div className="vh-list">
                     <div className="vh-li">
                       <span className="vh-li-k">{t("Release")}</span>
-                      <span className="vh-li-v">{vp.base || ', '}</span>
+                      <span className="vh-li-v">{vp.base || '—'}</span>
                     </div>
 
                     {release?.codename && (
