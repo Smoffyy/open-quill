@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
 import Composer from './Composer.jsx';
-import { Box, Search, Plus, ChevDown, Star, Dots, Trash, Pencil, X, FileText } from './icons.jsx';
+import { Box, Search, Plus, ChevDown, Chevron, Star, Dots, Trash, Pencil, X, FileText } from './icons.jsx';
 import { t } from '../i18n.jsx';
 import { focusUnlessTouch } from '../lib/touch.js';
 import { useDismiss } from '../lib/dismiss.js';
@@ -58,16 +58,70 @@ function CreateModal({ onClose, onCreate }) {
   );
 }
 
+function buildFileTree(files) {
+  const root = { dirs: new Map(), files: [] };
+  for (const f of files) {
+    const parts = String(f.name || '').split('/');
+    let node = root;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const seg = parts[i];
+      if (!node.dirs.has(seg)) node.dirs.set(seg, { dirs: new Map(), files: [] });
+      node = node.dirs.get(seg);
+    }
+    node.files.push({ ...f, base: parts[parts.length - 1] });
+  }
+  return root;
+}
+
+function countFiles(node) {
+  let n = node.files.length;
+  for (const d of node.dirs.values()) n += countFiles(d);
+  return n;
+}
+
+function FileTree({ node, prefix, depth, closed, onToggle, onRemove, fmtSize }) {
+  const rows = [];
+  for (const [seg, child] of [...node.dirs.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const dirPath = prefix ? prefix + '/' + seg : seg;
+    const isClosed = closed.has(dirPath);
+    rows.push(
+      <div key={'d:' + dirPath}>
+        <button type="button" className="pj-row pj-row-dir" style={{ paddingLeft: 8 + depth * 12 }} onClick={() => onToggle(dirPath)}>
+          <Chevron className={'pj-row-chev' + (isClosed ? '' : ' open')} style={{ width: 12 }} />
+          <span className="pj-row-name">{seg}</span>
+          <span className="pj-row-meta">{countFiles(child)}</span>
+        </button>
+        {!isClosed && (
+          <FileTree node={child} prefix={dirPath} depth={depth + 1} closed={closed} onToggle={onToggle} onRemove={onRemove} fmtSize={fmtSize} />
+        )}
+      </div>
+    );
+  }
+  for (const f of node.files) {
+    rows.push(
+      <div key={'f:' + f.name} className="pj-row" style={{ paddingLeft: 8 + depth * 12 }} title={f.name}>
+        <FileText className="pj-row-icon" style={{ width: 13 }} />
+        <span className="pj-row-name">{f.base}</span>
+        <span className="pj-row-meta">{fmtSize(f.size)}</span>
+        <button type="button" className="ft-del" title={t('Remove')} onClick={() => onRemove(f.name)}>✕</button>
+      </div>
+    );
+  }
+  return <>{rows}</>;
+}
+
 function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onChanged, onDeleted }) {
   const [project, setProject] = useState(null);
   const [editingInstr, setEditingInstr] = useState(false);
   const [instr, setInstr] = useState('');
   const [menu, setMenu] = useState(false);
   const [pjFiles, setPjFiles] = useState([]);
+  const [pjCap, setPjCap] = useState(0);
+  const [closedDirs, setClosedDirs] = useState(() => new Set());
   const [fileBusy, setFileBusy] = useState(false);
   const fileInputRef = useRef(null);
   const loadFiles = useCallback(async () => {
-    try { const d = await api.get('/api/projects/' + id + '/files'); setPjFiles(d.files || []); } catch {}
+    try { const d = await api.get('/api/projects/' + id + '/files'); setPjFiles(d.files || []); setPjCap(d.cap || 0); } catch {}
   }, [id]);
   useEffect(() => { loadFiles(); }, [loadFiles]);
   async function uploadFiles(list) {
@@ -80,16 +134,17 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
         const r = await fetch('/api/projects/' + id + '/files', { method: 'POST', body: fd, credentials: 'include' });
         const d = await r.json();
         if (!r.ok) toast(d.error || t('Upload failed.'));
-        else setPjFiles(d.files || []);
+        else { setPjFiles(d.files || []); setPjCap(d.cap || 0); }
       } catch { toast(t('Upload failed.')); }
     }
     setFileBusy(false);
   }
   async function removeFile(name) {
-    try { const d = await api.del('/api/projects/' + id + '/files/' + encodeURIComponent(name)); setPjFiles(d.files || []); } catch {}
+    try { const d = await api.del('/api/projects/' + id + '/files?path=' + encodeURIComponent(name)); setPjFiles(d.files || []); setPjCap(d.cap || 0); } catch {}
   }
-  const fmtSize = (n) => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
-  const capPct = Math.min(100, Math.round(pjFiles.reduce((n, f) => n + (f.size || 0), 0) / (20 * 1048576) * 100));
+  const fmtSize = (n) => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : (n >= 1024 ? Math.round(n / 1024) + ' KB' : (n || 0) + ' B');
+  const capPct = pjCap ? Math.min(100, Math.round(pjFiles.reduce((n, f) => n + (f.size || 0), 0) / pjCap * 100)) : 0;
+  const toggleDir = (p) => setClosedDirs(prev => { const next = new Set(prev); if (next.has(p)) next.delete(p); else next.add(p); return next; });
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState('');
   const menuRef = useRef(null);
@@ -188,25 +243,20 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
             <div className="pj-card-head">
               <span>Files{pjFiles.length ? ` (${pjFiles.length})` : ''}</span>
               <button className="pj-card-add" disabled={fileBusy} onClick={() => fileInputRef.current?.click()}><Plus style={{ width: 16 }} /></button>
-              <input ref={fileInputRef} type="file" multiple hidden accept=".pdf,.txt,.md,.markdown,.csv,.tsv,.json,.js,.ts,.jsx,.tsx,.py,.html,.css,.xml,.yaml,.yml,.log,.ini,.toml,.sh,.bat,.sql,.java,.c,.cpp,.h,.rs,.go,.rb,.php"
+              <input ref={fileInputRef} type="file" multiple hidden
                 onChange={(e) => { uploadFiles([...(e.target.files || [])]); e.target.value = ''; }} />
             </div>
             <div className="pj-cap">{t("{pct}% of project capacity used").replace('{pct}', capPct)}</div>
             {pjFiles.length === 0 ? (
               <div className="pj-files-empty" onClick={() => fileInputRef.current?.click()} style={{ cursor: 'pointer' }}>
                 <FileText style={{ width: 30 }} />
-                <span>{fileBusy ? t('Uploading…') : t('Add PDFs or text documents, chats in this project can search and read them.')}</span>
+                <span>{fileBusy ? t('Uploading…') : t('Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.')}</span>
               </div>
             ) : (
-              <div className="pj-file-grid">
-                {pjFiles.map(f => (
-                  <div key={f.name} className="pj-file-tile" title={f.name}>
-                    <span className="ft-name">{f.name}</span>
-                    <span className="ft-meta">{fmtSize(f.size)}</span>
-                    <button className="ft-del" title={t("Remove")} onClick={() => removeFile(f.name)}>✕</button>
-                  </div>
-                ))}
-                {fileBusy && <div className="pj-file-tile"><span className="ft-name">{t("Uploading…")}</span></div>}
+              <div className="pj-file-tree">
+                <FileTree node={buildFileTree(pjFiles)} prefix="" depth={0} closed={closedDirs}
+                  onToggle={toggleDir} onRemove={removeFile} fmtSize={fmtSize} />
+                {fileBusy && <div className="pj-row"><span className="pj-row-name">{t("Uploading…")}</span></div>}
               </div>
             )}
           </div>

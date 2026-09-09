@@ -148,20 +148,7 @@ export function endConversationSchema() {
   }, []);
 }
 
-export function projectFilesSchemas() {
-  return [
-    fn('pf_search', "Search across the documents the user attached to this project. Returns matching lines with file names and line numbers.", {
-      query: str('Text to search for (case-insensitive).')
-    }, ['query']),
-    fn('pf_view', 'Read a project document by name, optionally a specific line range.', {
-      name: str('The file name exactly as listed in the system prompt.'),
-      from: int('Optional 1-based line to start from (default 1).'),
-      lines: int('Optional number of lines to return (default 200, max 400).')
-    }, ['name'])
-  ];
-}
-
-export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, projFilesOn, hostEnv = null }) {
+export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, hostEnv = null }) {
   const out = [];
   if (sandboxOn) out.push(...sandboxToolSchemas(hostEnv));
   if (webSearchOn) out.push(webSearchSchema());
@@ -169,7 +156,6 @@ export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, sk
   if (chatSearchOn) out.push(...chatSearchSchemas());
   if (skillsOn) out.push(skillSchema());
   if (endChatOn) out.push(endConversationSchema());
-  if (projFilesOn) out.push(...projectFilesSchemas());
   if (mcpSchemas && mcpSchemas.length) out.push(...mcpSchemas);
   return out;
 }

@@ -7,6 +7,17 @@ export const META_DIR = path.join(SANDBOX_ROOT, '.meta');
 
 export const safeId = (chatId) => String(chatId).replace(/[^a-zA-Z0-9_-]/g, '');
 
+const PROJECT_PREFIX = 'p-';
+
+export function projectKey(projectId) { return PROJECT_PREFIX + safeId(projectId); }
+export function isProjectKey(key) { return String(key || '').startsWith(PROJECT_PREFIX); }
+
+export function wsKey(chat) {
+  if (!chat) return '';
+  if (typeof chat === 'string') return safeId(chat);
+  return chat.project_id ? projectKey(chat.project_id) : safeId(chat.id);
+}
+
 export function dirFor(chatId) { return path.join(SANDBOX_ROOT, safeId(chatId)); }
 
 export function resolveSafe(chatId, rel) {

@@ -78,7 +78,6 @@
   "Adaptive": "적응형",
   "Add": "추가",
   "Add MCP servers of your own. Their tools reach every model you use that has tool calling, and nobody else on this workspace can see them. Local command servers are added by an admin.": "직접 MCP 서버를 추가하세요. 해당 서버의 도구는 도구 호출을 지원하는 모든 모델에서 사용할 수 있으며, 이 워크스페이스의 다른 사람에게는 보이지 않습니다. 로컬 명령 서버는 관리자만 추가할 수 있습니다.",
-  "Add PDFs or text documents, chats in this project can search and read them.": "PDF나 텍스트 문서를 추가하면 이 프로젝트의 채팅에서 검색하고 읽을 수 있습니다.",
   "Add connection": "연결 추가",
   "Add connector": "커넥터 추가",
   "Add files": "파일 추가",
@@ -2475,5 +2474,6 @@
   "That step did not finish. You can set it up later in Admin.": "해당 단계가 완료되지 않았습니다. 나중에 관리자 화면에서 설정할 수 있습니다.",
   "Setup": "설치",
   "Skip setup": "설치 건너뛰기",
-  "Working…": "처리 중…"
+  "Working…": "처리 중…",
+  "Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.": "어떤 파일이든 추가할 수 있습니다. 이 프로젝트의 모든 채팅이 이 작업 공간을 공유하며 그 안의 파일을 읽고 편집하고 실행할 수 있습니다."
 }

@@ -78,7 +78,6 @@
   "Adaptive": "Адаптивный",
   "Add": "Добавить",
   "Add MCP servers of your own. Their tools reach every model you use that has tool calling, and nobody else on this workspace can see them. Local command servers are added by an admin.": "Добавляйте собственные MCP-серверы. Их инструменты доступны любой используемой вами модели с поддержкой вызова инструментов, и никто другой в этом рабочем пространстве их не увидит. Локальные серверы-команды добавляет администратор.",
-  "Add PDFs or text documents, chats in this project can search and read them.": "Добавьте PDF или текстовые документы — чаты в этом проекте смогут искать в них и читать их.",
   "Add connection": "Добавить подключение",
   "Add connector": "Добавить коннектор",
   "Add files": "Добавить файлы",
@@ -2475,5 +2474,6 @@
   "That step did not finish. You can set it up later in Admin.": "Этот шаг не завершился. Настроить можно позже в разделе администрирования.",
   "Setup": "Настройка",
   "Skip setup": "Пропустить настройку",
-  "Working…": "Выполняется…"
+  "Working…": "Выполняется…",
+  "Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.": "Добавьте любой файл. Все чаты этого проекта используют общее рабочее пространство и могут читать, изменять и запускать то, что в нём есть."
 }

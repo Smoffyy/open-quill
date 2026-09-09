@@ -78,7 +78,6 @@
   "Adaptive": "自動調整",
   "Add": "追加",
   "Add MCP servers of your own. Their tools reach every model you use that has tool calling, and nobody else on this workspace can see them. Local command servers are added by an admin.": "独自のMCPサーバーを追加できます。そのツールは、ツール呼び出しに対応する使用中のすべてのモデルから利用でき、このワークスペースの他のメンバーには表示されません。ローカルコマンドサーバーは管理者が追加します。",
-  "Add PDFs or text documents, chats in this project can search and read them.": "PDFやテキスト文書を追加すると、このプロジェクト内のチャットから検索・読み取りできます。",
   "Add connection": "接続を追加",
   "Add connector": "コネクタを追加",
   "Add files": "ファイルを追加",
@@ -2475,5 +2474,6 @@
   "That step did not finish. You can set it up later in Admin.": "その手順は完了しませんでした。後で管理画面から設定できます。",
   "Setup": "セットアップ",
   "Skip setup": "セットアップをスキップ",
-  "Working…": "処理中…"
+  "Working…": "処理中…",
+  "Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.": "どんなファイルでも追加できます。このプロジェクトのすべてのチャットがこのワークスペースを共有し、その中身を読み取り、編集し、実行できます。"
 }

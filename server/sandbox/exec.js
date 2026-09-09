@@ -6,6 +6,7 @@ import {
   overCap, capError, dirSize
 } from './files.js';
 import { bash } from './shell.js';
+import { isProjectKey } from './paths.js';
 
 const CONTENT_KEYS = ['content', 'text', 'file_text', 'contents', 'body', 'data', 'code', 'source', 'file_content', 'value'];
 const NOT_CONTENT = new Set([
@@ -118,6 +119,7 @@ const HANDLERS = {
   },
 
   clear_sandbox(chatId) {
+    if (isProjectKey(chatId)) return { ok: false, error: 'This workspace belongs to a project and is shared with its other chats, so it cannot be cleared from here. Delete specific files with delete_file, or clear the project from its Files panel.' };
     return clearAll(chatId);
   }
 };

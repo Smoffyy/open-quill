@@ -204,6 +204,18 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .pj-card-sub { margin-top: 4px; font-size: 13px; line-height: 17px; color: var(--text-faint); cursor: text; white-space: pre-wrap; }
 .pj-instr-edit { width: 100%; margin-top: 10px; min-height: 110px; resize: vertical; padding: 8px 12px; background: color-mix(in srgb, var(--text) 5%, transparent); border: 0; border-radius: 8px; color: var(--text); font-size: 14px; line-height: 20px; font-family: var(--font-sans); outline: none; }
 .pj-cap { margin-top: 8px; font-size: 12px; line-height: 17px; color: var(--text-faint); }
+.pj-file-tree { margin-top: 12px; display: flex; flex-direction: column; }
+.pj-row { position: relative; display: flex; align-items: center; gap: 6px; width: 100%; min-height: 26px; padding: 3px 26px 3px 8px; border-radius: 6px; text-align: left; color: var(--text); }
+.pj-row:hover { background: var(--surface-hover); }
+.pj-row-icon, .pj-row-chev { flex: none; color: var(--text-faint); }
+.pj-row-chev { transition: transform var(--fx-t, .12s); }
+.pj-row-chev.open { transform: rotate(90deg); }
+.pj-row-name { flex: 1; min-width: 0; font-size: 13px; line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pj-row-dir .pj-row-name { font-weight: 500; }
+.pj-row-meta { flex: none; font-size: 11px; color: var(--text-faint); }
+.pj-row .ft-del { position: absolute; top: 50%; right: 4px; transform: translateY(-50%); opacity: 0; padding: 2px 4px; border-radius: 5px; color: var(--text-faint); transition: opacity var(--fx-t, .12s), color var(--fx-t, .12s); }
+.pj-row:hover .ft-del { opacity: 1; }
+.pj-row .ft-del:hover { color: var(--danger); }
 .pj-file-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
 .pj-file-tile { position: relative; height: 120px; padding: 12px; border-radius: 10px; background: var(--surface-2); text-align: left; display: flex; flex-direction: column; gap: 4px; transition: background var(--fx-t, .14s); }
 .pj-file-tile:hover { background: var(--surface-hover); }

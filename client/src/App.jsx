@@ -1207,7 +1207,7 @@ export default function App() {
   const activeChat = activeId ? chats.find(c => c.id === activeId) : null;
   const activeProject = activeChat?.projectId ? projects.find(p => p.id === activeChat.projectId) : null;
   const sandboxAllowed = incognito ? false : (model ? model.sandboxAllowed !== false : true);
-  const sandboxOn = sandboxAllowed && sandbox;
+  const sandboxOn = sandboxAllowed && (sandbox || !!currentProject);
   const webSearchAvailable = !incognito && !!cfg.webSearchAvailable && (model ? model.webSearchAllowed !== false : true);
   const webSearchOn = webSearchAvailable && webSearch;
   const empty = !activeId && messages.length === 0 && !callOpen;

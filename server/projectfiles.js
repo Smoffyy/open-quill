@@ -1,140 +1,79 @@
 import fs from 'fs';
 import path from 'path';
 import { dataPath } from './lib/dataroot.js';
-import { extractPdf } from './lib/extract.js';
+import { list as wsList, importBuffer, readBuffer, remove as wsRemove } from './sandbox/files.js';
+import { wsKey, projectKey } from './sandbox/paths.js';
 
-const ROOT = dataPath('projectfiles');
+const LEGACY_ROOT = dataPath('projectfiles');
 
-const TEXT_EXT = new Set(['txt', 'md', 'markdown', 'csv', 'tsv', 'json', 'js', 'ts', 'jsx', 'tsx', 'py', 'html', 'css', 'xml', 'yaml', 'yml', 'log', 'ini', 'toml', 'sh', 'bat', 'sql', 'java', 'c', 'cpp', 'h', 'rs', 'go', 'rb', 'php']);
-const MAX_FILE = 25 * 1024 * 1024;
-const MAX_FILES = 40;
-
-
-function dirFor(projectId) {
+function legacyDir(projectId) {
   const safe = String(projectId || '').replace(/[^a-zA-Z0-9-]/g, '');
-  if (!safe) return null;
-  return path.join(ROOT, safe);
-}
-function safeName(name) {
-  const base = path.basename(String(name || '')).replace(/[\\/:*?"<>|]/g, '_').slice(0, 120);
-  return base && !base.startsWith('.') ? base : null;
-}
-function extOf(name) { return (name.split('.').pop() || '').toLowerCase(); }
-function cachePath(dir, name) { return path.join(dir, '.cache-' + name + '.txt'); }
-
-export function list(projectId) {
-  const dir = dirFor(projectId);
-  if (!dir || !fs.existsSync(dir)) return [];
-  return fs.readdirSync(dir)
-    .filter(f => !f.startsWith('.'))
-    .map(f => {
-      let st; try { st = fs.statSync(path.join(dir, f)); } catch { return null; }
-      return st && st.isFile() ? { name: f, size: st.size, mtime: st.mtimeMs } : null;
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.name.localeCompare(b.name));
+  return safe ? path.join(LEGACY_ROOT, safe) : null;
 }
 
-export function saveUpload(projectId, originalName, buffer) {
-  const dir = dirFor(projectId);
-  const name = safeName(originalName);
-  if (!dir || !name) return { error: 'Invalid file name.' };
-  const ext = extOf(name);
-  if (ext !== 'pdf' && !TEXT_EXT.has(ext)) return { error: `Unsupported file type ".${ext}". Upload PDFs or plain-text files.` };
-  if (buffer.length > MAX_FILE) return { error: 'File is too large (max 25 MB).' };
-  if (list(projectId).length >= MAX_FILES) return { error: `A project can hold at most ${MAX_FILES} files.` };
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, name), buffer);
-  try { fs.rmSync(cachePath(dir, name), { force: true }); } catch {}
-  return { file: { name, size: buffer.length } };
+export function migrate(projectId) {
+  const dir = legacyDir(projectId);
+  if (!dir || !fs.existsSync(dir)) return 0;
+  const ws = projectKey(projectId);
+  let have;
+  try { have = new Set(wsList(ws).map(f => f.path)); } catch { return 0; }
+  let moved = 0;
+  for (const name of fs.readdirSync(dir)) {
+    if (name.startsWith('.')) continue;
+    const src = path.join(dir, name);
+    try { if (!fs.statSync(src).isFile()) continue; } catch { continue; }
+    if (have.has(name)) continue;
+    let buf;
+    try { buf = fs.readFileSync(src); } catch { continue; }
+    if (importBuffer(ws, name, buf).ok) moved++;
+  }
+  try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+  return moved;
 }
 
-export function remove(projectId, name) {
-  const dir = dirFor(projectId);
-  const n = safeName(name);
-  if (!dir || !n) return { error: 'Invalid file.' };
-  try { fs.rmSync(path.join(dir, n), { force: true }); } catch {}
-  try { fs.rmSync(cachePath(dir, n), { force: true }); } catch {}
-  return { ok: true };
+function slugOf(chat) {
+  const s = String(chat.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+  return s || 'chat-' + String(chat.id).slice(0, 8);
+}
+
+export function adoptChatWorkspace(chat) {
+  if (!chat || !chat.project_id) return 0;
+  const from = wsKey(chat.id);
+  const to = projectKey(chat.project_id);
+  if (from === to) return 0;
+  let mine;
+  try { mine = wsList(from); } catch { return 0; }
+  if (!mine.length) { try { wsRemove(from); } catch {} return 0; }
+  const taken = new Set(wsList(to).map(f => f.path));
+  const slug = slugOf(chat);
+  let moved = 0;
+  for (const f of mine) {
+    const dest = taken.has(f.path) ? `${slug}/${f.path}` : f.path;
+    if (taken.has(dest)) continue;
+    let buf;
+    try { buf = readBuffer(from, f.path); } catch { continue; }
+    if (!buf || !importBuffer(to, dest, buf).ok) continue;
+    taken.add(dest);
+    moved++;
+  }
+  if (moved === mine.length) { try { wsRemove(from); } catch {} }
+  return moved;
+}
+
+export function workspaceFor(chat) {
+  if (chat && chat.project_id) {
+    migrate(chat.project_id);
+    adoptChatWorkspace(chat);
+  }
+  return wsKey(chat);
+}
+
+export function workspaceOfProject(projectId) {
+  migrate(projectId);
+  return projectKey(projectId);
 }
 
 export function removeAll(projectId) {
-  const dir = dirFor(projectId);
+  const dir = legacyDir(projectId);
   if (dir) { try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} }
-  return { ok: true };
-}
-
-async function textOf(projectId, name) {
-  const dir = dirFor(projectId);
-  const n = safeName(name);
-  if (!dir || !n) return null;
-  const p = path.join(dir, n);
-  if (!fs.existsSync(p)) return null;
-  if (extOf(n) === 'pdf') {
-    const cp = cachePath(dir, n);
-    try {
-      if (fs.existsSync(cp) && fs.statSync(cp).mtimeMs >= fs.statSync(p).mtimeMs) return fs.readFileSync(cp, 'utf8');
-    } catch {}
-    let text;
-    try { text = await extractPdf(fs.readFileSync(p)); }
-    catch (e) { text = `[Could not extract text from this PDF: ${e.message}]`; }
-    try { fs.writeFileSync(cachePath(dir, n), text); } catch {}
-    return text;
-  }
-  try { return fs.readFileSync(p, 'utf8'); } catch { return null; }
-}
-
-export function promptFor(projectId, projectName) {
-  const files = list(projectId);
-  if (!files.length) return '';
-  let p = `## Project files\nThe user attached reference documents to this project ("${(projectName || 'Project').slice(0, 80)}"). Consult them with the tools below whenever they could be relevant \u2014 they are the authoritative source for questions about their contents.\n\nFiles:\n`;
-  for (const f of files) p += `- ${f.name} (${f.size > 1048576 ? (f.size / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(f.size / 1024)) + ' KB'})\n`;
-  p += '\nUse `pf_search` to find passages across all project files, and `pf_view` to read a specific file (optionally a line range).';
-  return p;
-}
-
-export async function execTool(projectId, call) {
-  if (call.tool === 'pf_search') {
-    const q = String(call.query || '').trim().toLowerCase();
-    if (!q) return { ok: false, error: 'Empty query.' };
-    const hits = [];
-    for (const f of list(projectId)) {
-      const text = await textOf(projectId, f.name);
-      if (!text) continue;
-      const lines = text.split('\n');
-      for (let i = 0; i < lines.length && hits.length < 30; i++) {
-        if (lines[i].toLowerCase().includes(q)) {
-          hits.push({ file: f.name, line: i + 1, text: lines[i].trim().slice(0, 300) });
-        }
-      }
-      if (hits.length >= 30) break;
-    }
-    return { ok: true, query: call.query, count: hits.length, hits };
-  }
-  if (call.tool === 'pf_view') {
-    const text = await textOf(projectId, call.name);
-    if (text == null) return { ok: false, error: `No project file named "${call.name}".` };
-    const lines = text.split('\n');
-    const from = Math.max(1, parseInt(call.from) || 1);
-    const count = Math.min(400, Math.max(1, parseInt(call.lines) || 200));
-    const slice = lines.slice(from - 1, from - 1 + count);
-    return { ok: true, name: safeName(call.name), total: lines.length, from, to: from - 1 + slice.length, text: slice.join('\n').slice(0, 60000) };
-  }
-  return { ok: false, error: 'Unknown project-file tool.' };
-}
-
-export function formatResult(call, r) {
-  if (!r.ok) return `${call.tool} \u2192 ERROR: ${r.error}`;
-  if (call.tool === 'pf_search') {
-    return `pf_search "${call.query}" \u2192 ${r.count} hit(s)` + (r.hits.length ? '\n' + r.hits.map(h => `${h.file}:${h.line}: ${h.text}`).join('\n') : '');
-  }
-  return `pf_view ${r.name} (lines ${r.from}-${r.to} of ${r.total}) \u2192\n${r.text}`;
-}
-
-export function resultPayload(call, r) {
-  const o = { ok: !!r.ok };
-  if (r.error) o.error = r.error;
-  if (r.count != null) o.count = r.count;
-  if (r.name) { o.name = r.name; o.total = r.total; }
-  return o;
 }

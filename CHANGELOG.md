@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [27.3.1] - TBD
+### Added
+- **A project has one workspace, shared by every chat in it** - open a second conversation about the same project and the code from the first one is already there: same directory, same files, same version history. Files attached to the project are ordinary files in that workspace, so `view`, `search`, `bash` and the editing tools reach them like anything else, and anything the assistant writes is there for the next chat. Deleting a chat no longer takes its work with it; only deleting the project removes the workspace. Loose chats outside a project keep a workspace of their own, exactly as before.
+- **The assistant is told what the workspace already has** - a `package.json` with no `node_modules` next to it now says so in the prompt, along with which command installs it, and the same for Python, Rust, Go, Java, Ruby, PHP and make projects, plus whether the workspace is a git repository. It reads what was already walked, so it costs nothing, and it replaces the three or four probing shell commands a model otherwise spends before it can start.
+- **The project files panel is a workspace browser** - a flat grid of tiles could not show `src/app.py` as anything but a long string, so the panel is a collapsible tree: folders carry a file count and fold away, files show their real size down to bytes, and the capacity figure is the actual per-role sandbox limit rather than a fixed 20 MB that was never the number being enforced.
+- **The shell states its own contract** - the workspace instructions now spell out what every `bash` call guarantees: stdout and stderr interleaved in the order they happened, the real exit code, the resulting directory, a 60 second default limit, roughly 20,000 characters of output, and a terminal that can never prompt.
+
+### Fixed
+- **Asking about a file attached to a project no longer answers that it does not exist** - the file names were listed in the system prompt without saying where they lived, so a chat with the sandbox on read them as workspace files and reached for `view`, which correctly reported nothing there. They are workspace files now, so the tool it reached for is the right one.
+- **Work a project chat had already done comes with it** - a chat that predates project workspaces kept its files in a workspace of its own, which nothing read any more once its project got one. Those files are folded into the project's workspace the next time the chat is opened, keeping their paths where those are free and moving under the chat's name where two conversations used the same one, so a merge never overwrites one chat's work with another's.
+- **A failed command's error survives a long transcript** - stderr is captured separately as well as in the transcript, and when a command fails and its error was pushed out by the truncation, it is repeated on its own under the output instead of being lost.
+
+### Changed
+- **Commands no longer inherit the server's environment** - `bash` ran with every variable this process holds, which includes the database encryption key and each provider API key: one `env` or `set` printed all of them into a tool result. The child now gets an explicit list instead, covering what a toolchain needs (`PATH`, `JAVA_HOME`, `GOPATH`, `VIRTUAL_ENV`, `LD_LIBRARY_PATH` and their neighbours on every OS) and nothing that looks like a credential, plus `OQ_WORKSPACE`, `CI=1` and `NO_COLOR=1` so tools behave non-interactively.
+- **A runaway command is capped, not just timed out** - on Linux and macOS each call runs under a CPU-time limit matched to its own timeout and a file-size limit, so a spin loop or a runaway write is stopped by the operating system rather than held until the wall clock runs out. Windows keeps the existing timeout and process-tree kill.
+- **The project's files are fetched rather than pinned to the prompt** - a project no longer spends context on a file list that grows with every upload. Files attached to a chat are unaffected and stay in context as before.
+- **Clearing the workspace is refused inside a project** - `clear_sandbox` deletes every file in a workspace, which in a project means the documents the user attached and every other chat's work, from one conversation and with no confirmation. It now says so and points at deleting named files instead. A loose chat's own workspace still clears normally.
+- **A project takes any kind of file** - the upload picker offered PDFs and a fixed list of text extensions, which was right when a project held reference documents and wrong now that it holds a workspace. It accepts anything, up to 100 MB a file, and counts against the same storage limit as the sandbox rather than a separate one.
+- **The artifacts list shows a project's files once** - every chat in a project sees the same workspace, so browsing artifacts no longer repeats them per conversation.
+
+---
+
 ## [27.3.0] - 2026-09-08
 ### Added
 - **A setup guide the first time an owner signs in** - a seven-step walkthrough instead of a bare screen: what the app is, naming the workspace and deciding who may create an account, a starting layout, connecting a model, picking which of the models that connection reports to keep, prices if the connection is a paid one, and a short orientation at the end. Connection types are split into the ones that run on your own machine and the ones that bill per message, each with its vendor mark, and the address is prefilled with what that kind of server normally uses. Every step can be skipped, the whole guide can be skipped, and nothing it sets is permanent. Admin, Overview has a button to run it again.

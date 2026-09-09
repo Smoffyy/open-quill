@@ -1,14 +1,19 @@
+import path from 'path';
 import multer from 'multer';
 import { db, uid, now } from '../db.js';
 import { authMiddleware } from '../auth.js';
+import { roleLimit } from '../lib/models.js';
+import * as sandbox from '../sandbox.js';
 import * as projectfiles from '../projectfiles.js';
+
+const capFor = (user) => roleLimit('sandbox_limit_mb', !!user.is_admin, user.is_admin ? 1024 : 256) * 1024 * 1024;
 
 function projectView(p) {
   const chats = db.chats.byUser(p.user_id).filter(c => c.project_id === p.id);
   return { id: p.id, name: p.name, description: p.description || '', instructions: p.instructions || '', starred: !!p.starred, updated_at: p.updated_at, created_at: p.created_at, chatCount: chats.length };
 }
 
-const projectUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+const projectUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
 export default function registerProjectRoutes(app) {
   app.get('/api/projects', authMiddleware, (req, res) => {
@@ -44,32 +49,40 @@ export default function registerProjectRoutes(app) {
     res.json(projectView(db.projects.byId(p.id)));
   });
 
+  const fileView = (ws) => sandbox.list(ws).map(f => ({ name: f.path, size: f.size, v: f.v }));
+
   app.get('/api/projects/:id/files', authMiddleware, (req, res) => {
     const pr = db.projects.byId(req.params.id);
     if (!pr || pr.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
-    res.json({ files: projectfiles.list(pr.id) });
+    res.json({ files: fileView(projectfiles.workspaceOfProject(pr.id)), cap: capFor(req.user) });
   });
 
   app.post('/api/projects/:id/files', authMiddleware, projectUpload.single('file'), (req, res) => {
     const pr = db.projects.byId(req.params.id);
     if (!pr || pr.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     if (!req.file) return res.status(400).json({ error: 'No file received.' });
-    const r = projectfiles.saveUpload(pr.id, req.file.originalname, req.file.buffer);
-    if (r.error) return res.status(400).json({ error: r.error });
-    res.json({ file: r.file, files: projectfiles.list(pr.id) });
+    const ws = projectfiles.workspaceOfProject(pr.id);
+    const name = path.basename(String(req.file.originalname || 'file')).replace(/[\\/:*?"<>|]/g, '_').slice(0, 120);
+    if (!name || name.startsWith('.')) return res.status(400).json({ error: 'Invalid file name.' });
+    const r = sandbox.importBuffer(ws, name, req.file.buffer, capFor(req.user));
+    if (!r.ok) return res.status(400).json({ error: r.error });
+    res.json({ file: { name, size: req.file.buffer.length }, files: fileView(ws), cap: capFor(req.user) });
   });
 
-  app.delete('/api/projects/:id/files/:name', authMiddleware, (req, res) => {
+  app.delete('/api/projects/:id/files', authMiddleware, (req, res) => {
     const pr = db.projects.byId(req.params.id);
     if (!pr || pr.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
-    projectfiles.remove(pr.id, req.params.name);
-    res.json({ files: projectfiles.list(pr.id) });
+    const ws = projectfiles.workspaceOfProject(pr.id);
+    const rel = String(req.query.path || '');
+    if (rel) sandbox.deleteFile(ws, rel);
+    res.json({ files: fileView(ws), cap: capFor(req.user) });
   });
 
   app.delete('/api/projects/:id', authMiddleware, (req, res) => {
     const p = db.projects.byId(req.params.id);
     if (!p || p.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     try { projectfiles.removeAll(p.id); } catch {}
+    try { sandbox.remove(sandbox.projectKey(p.id)); } catch {}
     for (const c of db.chats.byUser(req.user.id)) { if (c.project_id === p.id) db.chats.update(c.id, { project_id: null }); }
     db.projects.removeById(p.id);
     res.json({ ok: true });
