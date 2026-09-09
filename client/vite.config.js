@@ -6,6 +6,7 @@ const isLocaleChunk = (id) => typeof id === 'string' && id.includes('/locales/')
 export default defineConfig({
   plugins: [react()],
   build: {
+    chunkSizeWarningLimit: 800,
     modulePreload: {
       resolveDependencies: (_file, deps) => deps.filter(d => !d.includes('/locale-')),
     },
