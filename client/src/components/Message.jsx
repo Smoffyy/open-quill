@@ -278,18 +278,19 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   // start offset, so a push that arrives mid-glide bends the motion instead of
   // restarting it.
   //
-  // Only while the thread is standing still, which is the whole of a reply that
-  // still fits the room reserved under the newest message. Once the thread is
-  // long enough to be scrolling after the bottom, the scroll is already carrying
-  // the avatar down with the text and a glide on top of that is two animations
-  // for one movement, which reads as a shiver rather than a slide.
+  // Only while the thread is standing still, which it is whenever it is not
+  // scrolling after the bottom: a reply that still fits its reserved room, and
+  // equally one the reader has scrolled up from to read. While it is following,
+  // the scroll already carries the avatar down with the text, and a glide on top
+  // of that is two animations for one movement, which reads as a shiver rather
+  // than a slide.
   const glideIcon = React.useCallback(() => {
     const el = iconRef.current;
     if (!el) return;
     const top = el.offsetTop;
     const was = iconSlide.current;
     iconSlide.current = { top, done: false };
-    if (was === null || !el.closest('.thread[data-pinned]')) return;
+    if (was === null || !el.closest('.thread[data-still]')) return;
     const delta = was.top - top;
     // Only a push downwards, and only a small one. A glide is right when the
     // avatar is the single thing that moved, which is what a line landing at the

@@ -15,12 +15,6 @@ const FOLLOW_MAX_DT = 80;
 // and following the bottom is ordinary again.
 const TOP_GAP = 56;
 const BASE_PAD = 96;
-// Following the bottom by easing exists to absorb the jump a whole paragraph
-// makes when a fast model catches up. A single line arriving is not that: eased,
-// it drags the reply's last element down and pulls it back over the next tenth
-// of a second, once per line, which is a shiver rather than a scroll. Anything
-// this size or under is followed exactly, in the frame it lands.
-const FOLLOW_SNAP = 60;
 // The glide that carries a sent message to the top: Chrome's own smooth-scroll
 // shape, measured. About 17ms per square root pixel, easing out, and it never
 // runs past its resting place on the way.
@@ -50,7 +44,26 @@ export function useThreadScroll(opts = {}) {
   const padH = useRef(-1);
   const lastWant = useRef(0);
   const glideRaf = useRef(0);
+  const still = useRef(null);
   const [showJump, setShowJump] = useState(false);
+
+  // Whether the thread is holding still, which is not the same question as
+  // whether it is pinned. There is reserved room under the newest message, or
+  // the reader has scrolled away from the bottom, or they are dragging a
+  // selection: in all three the view is frozen and whatever the reply pushes
+  // down is free to animate its own way there. Only while the thread is actually
+  // scrolling after the bottom is an animation on top of it two movements for
+  // one. Published on the element so a message can read it without every message
+  // subscribing to the scroll.
+  const setStill = useCallback((v) => {
+    if (still.current === v) return;
+    const el = scrollRef.current;
+    const thread = el && el.querySelector('.thread');
+    if (!thread) { still.current = null; return; }
+    still.current = v;
+    if (v) thread.dataset.still = '1';
+    else delete thread.dataset.still;
+  }, []);
 
   // Cheap enough to run on every scroll and every follow frame, and it has to:
   // the spacer is only correct if it is recomputed before anything reads
@@ -70,7 +83,7 @@ export function useThreadScroll(opts = {}) {
     const thread = el.querySelector('.thread');
     if (!thread) return false;
     if (!modern.current) {
-      if (padH.current !== -1) { padH.current = -1; thread.style.removeProperty('--turn-pad'); delete thread.dataset.pinned; }
+      if (padH.current !== -1) { padH.current = -1; thread.style.removeProperty('--turn-pad'); still.current = null; delete thread.dataset.still; }
       return false;
     }
     const pad = thread.querySelector(':scope > .thread-pad');
@@ -98,11 +111,6 @@ export function useThreadScroll(opts = {}) {
     if (Math.abs(want - padH.current) >= 1) {
       padH.current = want;
       thread.style.setProperty('--turn-pad', want + 'px');
-      // While there is reserved room left, the newest message is holding still
-      // and anything under it may animate its own way down. Once the room is
-      // spent the thread itself is moving and a second animation only fights it.
-      if (want > BASE_PAD) thread.dataset.pinned = '1';
-      else delete thread.dataset.pinned;
     }
     const pinned = want > BASE_PAD;
     if (!pinned || !hold || !anchor || !stick.current || glideRaf.current) return pinned;
@@ -207,22 +215,45 @@ export function useThreadScroll(opts = {}) {
     setShowJump(false);
   }, []);
 
-  const follow = useCallback(function tick() {
+  const followStep = useCallback((dt) => {
     const el = scrollRef.current;
+    if (!el) return;
+    if (!stick.current) { setStill(true); return; }
+    if (performance.now() < smoothUntil.current) { setStill(false); return; }
+    if (canFollow && !canFollow()) { setStill(true); return; }
+    if (syncPad(true)) { setStill(true); return; }
+    setStill(false);
+    // Landing on the bottom rather than easing towards it. Easing looks like
+    // smoothing and reads as a shiver: the reply's last line and the avatar
+    // under it drop by however much just arrived and climb back over the next
+    // tenth of a second, once per flush, because the content moved and the view
+    // had not caught up. Landing on it is invisible, since the view moves by
+    // exactly what the content did. Legacy keeps the eased follow it has had.
+    const bottom = el.scrollHeight - el.clientHeight;
+    const diff = bottom - el.scrollTop;
+    if (diff <= 0.5) return;
+    programmatic.current = true;
+    el.scrollTop = modern.current ? bottom : el.scrollTop + Math.max(1, diff * (1 - Math.exp(-dt / FOLLOW_TAU)));
+  }, [canFollow, syncPad, setStill]);
+
+  // Called from a layout effect, so it runs in the same commit that put the new
+  // text on the page and before the browser paints it. A frame loop cannot do
+  // that: it measures before React commits, so it is always following the text
+  // as it was, and the reply's last line and the avatar under it drop by
+  // whatever just arrived and climb back a frame later. Once per flush, that is
+  // the shiver.
+  const followNow = useCallback(() => followStep(FOLLOW_MAX_DT), [followStep]);
+
+  // The loop stays as the backstop for the layout changes no commit announces:
+  // a code block's highlighting landing, an image decoding, an error card
+  // unfolding over a quarter of a second.
+  const follow = useCallback(function tick() {
     const now = performance.now();
     const dt = Math.min(FOLLOW_MAX_DT, now - (followTs.current || now));
     followTs.current = now;
-    if (el && stick.current && now >= smoothUntil.current && (!canFollow || canFollow()) && !syncPad(true)) {
-      const target = el.scrollHeight - el.clientHeight;
-      const diff = target - el.scrollTop;
-      if (diff > 0.5) {
-        programmatic.current = true;
-        const eased = Math.max(1, diff * (1 - Math.exp(-dt / FOLLOW_TAU)));
-        el.scrollTop = el.scrollTop + (modern.current && diff <= FOLLOW_SNAP ? diff : eased);
-      }
-    }
+    followStep(dt);
     followRaf.current = requestAnimationFrame(tick);
-  }, [canFollow, syncPad]);
+  }, [followStep]);
 
   const startFollow = useCallback(() => {
     cancelAnimationFrame(followRaf.current);
@@ -246,6 +277,6 @@ export function useThreadScroll(opts = {}) {
   return useMemo(() => ({
     scrollRef, stick, programmatic, showJump,
     scrollBottom, pinToBottom, onScroll, onWheel, onTouchMove, jumpDown, resetJump,
-    startFollow, stopFollow, syncPad, smoothPending, gliding
-  }), [showJump, scrollBottom, pinToBottom, onScroll, onWheel, onTouchMove, jumpDown, resetJump, startFollow, stopFollow, syncPad, smoothPending, gliding]);
+    startFollow, stopFollow, followNow, syncPad, smoothPending, gliding
+  }), [showJump, scrollBottom, pinToBottom, onScroll, onWheel, onTouchMove, jumpDown, resetJump, startFollow, stopFollow, followNow, syncPad, smoothPending, gliding]);
 }

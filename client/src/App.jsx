@@ -386,7 +386,7 @@ export default function App() {
   const {
     scrollRef, stick, showJump,
     scrollBottom, pinToBottom, onScroll, onWheel, onTouchMove, jumpDown, resetJump,
-    startFollow, stopFollow, syncPad, smoothPending, gliding
+    startFollow, stopFollow, followNow, syncPad, smoothPending, gliding
   } = useThreadScroll({ canFollow, modern: modernMotion });
   const animate = revealStyle === 'legacy';
   const revealMs = revealSpeedMs(user?.prefs?.revealMs);
@@ -491,6 +491,11 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPop);
   }, []);
   useEffect(() => { syncView(); }, [activeId, incognito]);
+  // The streamed text lands here, before the browser paints it, so the thread
+  // follows the content in the frame it arrives rather than the frame after.
+  useLayoutEffect(() => {
+    if (streaming) followNow();
+  }, [streaming, dispContent, dispReason, dispSegs, liveCall, liveCalls, phase, followNow]);
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el || !stick.current || gliding()) return;
