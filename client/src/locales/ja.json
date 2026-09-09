@@ -1999,7 +1999,6 @@
   "Type a command…": "コマンドを入力…",
   "Type at least 2 characters to search across all your conversations.": "すべての会話を検索するには2文字以上入力してください。",
   "Type to queue a message…": "メッセージをキューに追加するには入力…",
-  "Typewriter": "タイプライター",
   "Typography": "タイポグラフィ",
   "URL": "URL",
   "Unarchive": "アーカイブを解除",
@@ -2475,5 +2474,8 @@
   "Setup": "セットアップ",
   "Skip setup": "セットアップをスキップ",
   "Working…": "処理中…",
-  "Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.": "どんなファイルでも追加できます。このプロジェクトのすべてのチャットがこのワークスペースを共有し、その中身を読み取り、編集し、実行できます。"
+  "Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.": "どんなファイルでも追加できます。このプロジェクトのすべてのチャットがこのワークスペースを共有し、その中身を読み取り、編集し、実行できます。",
+  "Modern": "モダン",
+  "Legacy": "クラシック",
+  "Words fade in as they arrive and your message rises to the top.": "単語は届くたびにフェードインし、あなたのメッセージは上部へ移動します。"
 }

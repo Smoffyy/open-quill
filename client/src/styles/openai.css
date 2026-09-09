@@ -380,7 +380,6 @@
 :root[data-preset="openai"] :is(input, textarea, select) {
   transition: box-shadow 0s, background-color 0s;
 }
-:root[data-preset="openai"] .reveal-char { animation: cl-chunk-in .4s linear both; }
 :root[data-preset="openai"] .send { animation: cl-chunk-in .12s ease-out both; }
 :root[data-preset="openai"] .msg-icon img.spin,
 :root[data-preset="openai"] .msg-icon img.pulse,

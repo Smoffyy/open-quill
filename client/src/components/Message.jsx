@@ -116,15 +116,34 @@ function Attachments({ items, pins, onTogglePinFile }) {
   );
 }
 
-function StatusCaption({ label, detail }) {
+const CAPTION_SWAP_MS = 220;
+// Further than this in one step is not a line landing, it is a block appearing.
+const ICON_GLIDE_MAX = 160;
+
+// One state's word fades out where the next one fades in, in place, the way the
+// caption above a reply changes while it is being written. `swapKey` is what
+// counts as a change: the numbers inside a label move constantly and are not a
+// new state.
+function StatusCaption({ swapKey, label, detail }) {
   const [mounted, setMounted] = useState(!!label);
   const [visible, setVisible] = useState(false);
   const [text, setText] = useState(label || '');
+  const [prev, setPrev] = useState('');
   const [title, setTitle] = useState(detail || '');
   const shown = useRef(false);
+  const lastKey = useRef(swapKey || '');
+  const lastText = useRef(label || '');
   const hideTimer = useRef(null);
+  const swapTimer = useRef(null);
   useEffect(() => {
     if (label) {
+      if (lastKey.current && swapKey && swapKey !== lastKey.current) {
+        setPrev(lastText.current);
+        clearTimeout(swapTimer.current);
+        swapTimer.current = setTimeout(() => setPrev(''), CAPTION_SWAP_MS);
+      }
+      lastKey.current = swapKey || '';
+      lastText.current = label;
       setText(label);
       setTitle(detail || '');
       if (!shown.current) {
@@ -137,15 +156,20 @@ function StatusCaption({ label, detail }) {
     } else if (shown.current) {
       shown.current = false;
       setVisible(false);
-      hideTimer.current = setTimeout(() => setMounted(false), 220);
+      hideTimer.current = setTimeout(() => setMounted(false), CAPTION_SWAP_MS);
     }
-  }, [label, detail]);
-  useEffect(() => () => clearTimeout(hideTimer.current), []);
+  }, [swapKey, label, detail]);
+  useEffect(() => () => { clearTimeout(hideTimer.current); clearTimeout(swapTimer.current); }, []);
   if (!mounted) return null;
-  return <span className={'msg-icon-status' + (visible ? ' show' : '')} title={title || undefined}>{text}</span>;
+  return (
+    <span className={'msg-icon-status' + (visible ? ' show' : '')} title={title || undefined}>
+      {prev && <span className="mis-word out" key={'p' + prev}>{prev}</span>}
+      <span className="mis-word" key={'c' + text}>{text}</span>
+    </span>
+  );
 }
 
-const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name, nameHoverOnly, statusLabel, statusDetail }, ref) {
+const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name, nameHoverOnly, crossfade, statusKey, statusLabel, statusDetail }, ref) {
   const base = model?.staticIcon || '';
   const map = {
     static: base,
@@ -161,7 +185,7 @@ const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, nam
     <div ref={ref} className={'msg-icon' + (below ? ' below' : '') + (name ? ' with-name' : '')}>
       {base && <img src={src} className={cls} style={{ width: sz, height: sz }} alt="" />}
       {name && <span className={'msg-icon-name' + (nameHoverOnly ? ' hover-reveal' : '')}>{name}</span>}
-      <StatusCaption label={statusLabel} detail={statusDetail} />
+      <StatusCaption swapKey={crossfade ? statusKey : null} label={statusLabel} detail={statusDetail} />
     </div>
   );
 });
@@ -207,7 +231,7 @@ function SteerChips({ notes }) {
   );
 }
 
-function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, statusDelay = true, showSpeed = false, preset = 'anthropic' }) {
+function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, statusDelay = true, showSpeed = false, preset = 'anthropic', modern = false }) {
   if (chatEnded) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onFork = null; onDelete = null; }
   if (!chatId) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onFork = null; onTogglePin = null; }
   const [typing, setTyping] = useState(false);
@@ -247,28 +271,82 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
 
   const pos = model?.iconPosition || 'below';
   const iconRef = useRef(null);
-  const iconSlide = useRef({ top: null, done: false });
+  const iconSlide = useRef(null);
+  // The avatar sits under the reply and is pushed down every time a line lands.
+  // Left alone it would step; a FLIP on each layout change turns the steps into
+  // one continuous glide. The transform still running is folded into the next
+  // start offset, so a push that arrives mid-glide bends the motion instead of
+  // restarting it.
+  //
+  // Only while the thread is standing still, which it is whenever it is not
+  // scrolling after the bottom: a reply that still fits its reserved room, and
+  // equally one the reader has scrolled up from to read. While it is following,
+  // the scroll already carries the avatar down with the text, and a glide on top
+  // of that is two animations for one movement, which reads as a shiver rather
+  // than a slide.
+  const glideIcon = React.useCallback(() => {
+    const el = iconRef.current;
+    if (!el) return;
+    const top = el.offsetTop;
+    const was = iconSlide.current;
+    iconSlide.current = { top, done: false };
+    if (was === null || !el.closest('.thread[data-still]')) return;
+    const delta = was.top - top;
+    // Only a push downwards, and only a small one. A glide is right when the
+    // avatar is the single thing that moved, which is what a line landing at the
+    // end of the reply does to it. A closing fence re-rendering as a code block
+    // moves everything below it at once and can move it upwards; gliding then
+    // has the avatar drift away from the text it belongs to instead of with it.
+    if (delta > -0.5 || delta < -ICON_GLIDE_MAX) return;
+    const now = new DOMMatrixReadOnly(getComputedStyle(el).transform).m42;
+    el.style.transition = 'none';
+    el.style.transform = `translateY(${now + delta}px)`;
+    void el.offsetHeight;
+    el.style.transition = 'transform .6s cubic-bezier(.16,1,.3,1)';
+    el.style.transform = 'translateY(0px)';
+  }, []);
+
   useLayoutEffect(() => {
     const el = iconRef.current;
-    if (pos !== 'below' || !streaming || !el) { iconSlide.current = { top: null, done: false }; return; }
-    const state = iconSlide.current;
-    const top = el.offsetTop;
-    if (state.top === null) {
-      state.top = top;
+    if (pos !== 'below' || !streaming || !el) {
+      iconSlide.current = null;
+      if (el) { el.style.transition = ''; el.style.transform = ''; }
       return;
     }
-    if (state.done) return;
-    const delta = state.top - top;
-    if (Math.abs(delta) > 0.5) {
+    if (!modern) {
+      // The one the legacy motion has always had: a single catch-up slide the
+      // first time the reply pushes the avatar, then it rides with the text.
+      const top = el.offsetTop;
+      const was = iconSlide.current;
+      if (was === null) { iconSlide.current = { top, done: false }; return; }
+      if (was.done) return;
+      const step = was.top - top;
+      if (Math.abs(step) <= 0.5) return;
+      was.done = true;
       el.style.transition = 'none';
-      el.style.transform = `translateY(${delta}px)`;
+      el.style.transform = `translateY(${step}px)`;
       requestAnimationFrame(() => {
         el.style.transition = 'transform .6s cubic-bezier(.16,1,.3,1)';
         el.style.transform = '';
       });
-      state.done = true;
+      return;
     }
-  }, [pos, streaming, msg.content, msg.reasoning, phase, liveCall, liveCalls]);
+    glideIcon();
+  }, [pos, streaming, modern, glideIcon, msg.content, msg.reasoning, phase, liveCall, liveCalls]);
+
+  // A code block's highlighting, a lazily loaded image, a tool card opening: all
+  // of them move the avatar without a render of this component, which would
+  // leave the measurement above a whole block out of date and turn the next line
+  // that lands into a jump. Watching the body catches the move where it happens.
+  useLayoutEffect(() => {
+    const el = iconRef.current;
+    if (!modern || pos !== 'below' || !streaming || !el || typeof ResizeObserver === 'undefined') return;
+    const body = el.parentElement;
+    if (!body) return;
+    const ro = new ResizeObserver(glideIcon);
+    ro.observe(body);
+    return () => ro.disconnect();
+  }, [modern, pos, streaming, glideIcon]);
 
   const [fb, setFb] = useState(msg.feedback || 0);
   useEffect(() => { setFb(msg.feedback || 0); }, [msg.id]);
@@ -338,7 +416,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   const showStatus = streaming && !msg.content && !msg.reasoning && !liveRows.length && statusInfo.show;
   const icon = showIt ? <ModelIcon ref={iconRef} model={model} phase={iconPhase} below={pos === 'below'} name={pos === 'left' ? null : (hasName ? model.displayName : null)}
     nameHoverOnly={pos !== 'left' && hasName && !showName}
-    statusLabel={showStatus ? statusInfo.label : null} statusDetail={statusInfo.detail} /> : null;
+    crossfade={modern} statusKey={statusInfo.key} statusLabel={showStatus ? statusInfo.label : null} statusDetail={statusInfo.detail} /> : null;
 
   async function rate(r) {
     const next = fb === r ? 0 : r;
@@ -355,7 +433,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
         <div className={'assistant-body' + (streaming ? ' streaming' : '') + (streaming && typing ? ' typing' : '') + (streaming && phase === 'thinking' ? ' thinking' : '') + (textEntered ? ' text-enter' : '')}>
           {msg.content ? (
             <ReasonSegs.Provider value={segCtx}>
-              <Markdown streaming={streaming}>{msg.content}</Markdown>
+              <Markdown streaming={streaming} reveal={modern && streaming}>{msg.content}</Markdown>
             </ReasonSegs.Provider>
           ) : null}
           {streaming && liveRows.length > 0 && (

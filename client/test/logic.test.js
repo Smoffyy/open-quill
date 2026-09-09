@@ -1019,13 +1019,17 @@ test('highlighting is identical with the cache bypassed, so the streaming path c
 test('resolveReveal prefers the named style and falls back to the legacy booleans', async () => {
   const { resolveReveal } = await import('../src/lib/reveal.js');
   assert.equal(resolveReveal({ revealStyle: 'instant' }, 'anthropic'), 'instant');
-  assert.equal(resolveReveal({ revealStyle: 'typewriter' }, 'anthropic'), 'typewriter');
-  assert.equal(resolveReveal({}, 'anthropic'), 'typewriter');
-  assert.equal(resolveReveal(null, 'anthropic'), 'typewriter');
+  assert.equal(resolveReveal({ revealStyle: 'modern' }, 'anthropic'), 'modern');
+  assert.equal(resolveReveal({ revealStyle: 'legacy' }, 'anthropic'), 'legacy');
+  // `typewriter` is retired: it resolves to the current default, not to the
+  // style that inherited its behaviour.
+  assert.equal(resolveReveal({ revealStyle: 'typewriter' }, 'anthropic'), 'modern');
+  assert.equal(resolveReveal({}, 'anthropic'), 'modern');
+  assert.equal(resolveReveal(null, 'anthropic'), 'modern');
   assert.equal(resolveReveal({ typewriter: false }, 'anthropic'), 'instant');
   assert.equal(resolveReveal({ animations: false }, 'anthropic'), 'instant');
   // The named style wins over a stale pre-split boolean sitting beside it.
-  assert.equal(resolveReveal({ typewriter: false, revealStyle: 'typewriter' }, 'anthropic'), 'typewriter');
+  assert.equal(resolveReveal({ typewriter: false, revealStyle: 'legacy' }, 'anthropic'), 'legacy');
 });
 
 test('a retired or unknown style resolves to the default reveal, never to nothing', async () => {
@@ -1033,7 +1037,7 @@ test('a retired or unknown style resolves to the default reveal, never to nothin
   // 'fade' shipped briefly and was removed; a pref still holding it must keep
   // revealing rather than silently degrade to instant.
   for (const v of ['fade', 'glide', 'blur', 'sparkle', '', 0, {}]) {
-    assert.equal(resolveReveal({ revealStyle: v }, 'anthropic'), 'typewriter', String(v));
+    assert.equal(resolveReveal({ revealStyle: v }, 'anthropic'), 'modern', String(v));
   }
   // ...unless the legacy boolean genuinely said off.
   assert.equal(resolveReveal({ revealStyle: 'fade', typewriter: false }, 'anthropic'), 'instant');

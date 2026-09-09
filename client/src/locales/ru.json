@@ -1999,7 +1999,6 @@
   "Type a command…": "Введите команду…",
   "Type at least 2 characters to search across all your conversations.": "Введите не менее 2 символов, чтобы искать по всем вашим разговорам.",
   "Type to queue a message…": "Введите, чтобы поставить сообщение в очередь…",
-  "Typewriter": "Печатная машинка",
   "Typography": "Типографика",
   "URL": "URL",
   "Unarchive": "Разархивировать",
@@ -2475,5 +2474,8 @@
   "Setup": "Настройка",
   "Skip setup": "Пропустить настройку",
   "Working…": "Выполняется…",
-  "Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.": "Добавьте любой файл. Все чаты этого проекта используют общее рабочее пространство и могут читать, изменять и запускать то, что в нём есть."
+  "Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.": "Добавьте любой файл. Все чаты этого проекта используют общее рабочее пространство и могут читать, изменять и запускать то, что в нём есть.",
+  "Modern": "Современный",
+  "Legacy": "Классический",
+  "Words fade in as they arrive and your message rises to the top.": "Слова плавно появляются по мере поступления, а ваше сообщение поднимается наверх."
 }

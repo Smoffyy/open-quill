@@ -242,7 +242,7 @@
   0%, 15% { background: color-mix(in srgb, var(--accent, #d97757) 22%, transparent); }
   100% { background: transparent; }
 }
-.thread-pad { height: 96px; }
+.thread-pad { height: var(--turn-pad, 96px); }
 
 .msg { margin-bottom: 0; }
 .msg.user { display: flex; justify-content: flex-end; margin-top: 24px; margin-bottom: 4px; }
@@ -294,9 +294,20 @@
 .assistant-body a { color: var(--link); }
 
 @keyframes text-enter-fade { from { opacity: 0; } to { opacity: 1; } }
+/* The first block of a reply rises and settles just past its resting place;
+   every block after it only fades, so the bounce reads as the reply arriving
+   rather than as each paragraph arriving. */
 @keyframes text-enter-bounce { 0% { transform: translateY(14px); } 60% { transform: translateY(-3px); } 100% { transform: translateY(0); } }
 .assistant-body.text-enter > :first-child { animation: text-enter-fade 0.6s ease-out both, text-enter-bounce .5s cubic-bezier(.34,1.56,.64,1) both; }
-@media (prefers-reduced-motion: reduce) { .assistant-body.text-enter > :first-child { animation: none; } }
+
+/* One word, one ramp, started when the word arrives. The tail of a reply
+   therefore reads as a soft gradient rather than a hard edge. */
+.rv-word { animation: text-enter-fade .35s linear both; }
+:root[data-motion="modern"] .msg.user.enter .bubble-user { animation: text-enter-fade .18s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .assistant-body.text-enter > :first-child,
+  .rv-word, :root[data-motion="modern"] .msg.user.enter .bubble-user { animation: none; }
+}
 
 .msg-icon { display: inline-flex; align-items: center; gap: 9px; margin-bottom: 8px; }
 .msg-icon.below { margin-bottom: 0; margin-top: 12px; }
@@ -331,10 +342,6 @@
 .action-btn:hover { background: var(--ghost-hover, var(--surface-hover)); color: var(--text); }
 .action-btn svg { width: 16px; height: 16px; }
 
-/* streaming char reveal */
-.reveal-char { display: inline; animation: charUp .32s ease both; }
-@keyframes charUp { from { opacity: 0; transform: translateY(0.32em); } to { opacity: 1; transform: translateY(0); } }
-.stream-text { white-space: pre-wrap; word-break: break-word; }
 
 /* ---------- reasoning ---------- */
 .reasoning { margin: 0 0 6px; padding-left: 8px; }

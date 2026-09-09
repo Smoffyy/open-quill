@@ -854,19 +854,29 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .ws-chars::before { content: '·'; margin: 0 6px; color: var(--text-faint); }
 
 /* ---------- model status while waiting, shown beside the avatar ---------- */
+/* Two words share one grid cell so the outgoing state fades out exactly where
+   the incoming one fades in. The shimmer lives on the word rather than on the
+   wrapper: `background-clip: text` and a fading child do not compose. */
 .msg-icon-status {
-  font-family: var(--font-sans); font-size: 12px; cursor: default;
+  display: inline-grid; font-family: var(--font-sans); font-size: 12px; cursor: default;
   font-variant-numeric: tabular-nums;
-  background-image: linear-gradient(100deg, var(--text-faint) 40%, var(--text) 50%, var(--text-faint) 60%);
-  background-size: 200% 100%; background-position-x: 180%;
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  animation: msg-status-shimmer 1.8s linear infinite;
   opacity: 0; transition: opacity var(--fx-a, .22s) ease;
 }
 .msg-icon-status.show { opacity: 1; }
+.mis-word {
+  grid-area: 1 / 1; justify-self: start; white-space: nowrap;
+  background-image: linear-gradient(100deg, var(--text-faint) 40%, var(--text) 50%, var(--text-faint) 60%);
+  background-size: 200% 100%; background-position-x: 180%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: msg-status-shimmer 1.8s linear infinite, mis-word-in .22s ease both;
+}
+.mis-word.out { animation: msg-status-shimmer 1.8s linear infinite, mis-word-out .22s ease both; }
 @keyframes msg-status-shimmer { to { background-position-x: -20%; } }
+@keyframes mis-word-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mis-word-out { from { opacity: 1; } to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .msg-icon-status { animation: none; background: none; -webkit-text-fill-color: currentColor; color: var(--text-faint); }
+  .mis-word { animation: none; background: none; -webkit-text-fill-color: currentColor; color: var(--text-faint); }
+  .mis-word.out { display: none; }
 }
 
 /* ---- chord hint ---- */

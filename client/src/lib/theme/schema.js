@@ -221,7 +221,7 @@ export const ELEMENTS = [
   { id: 'reasoning', label: tk('Reasoning block'), cat: 'thread', sel: '.reasoning', parent: 'message', caps: ALL },
   { id: 'toolLine', label: tk('Tool call'), cat: 'thread', sel: '.tool-line', parent: 'message', caps: ALL },
   { id: 'userCol', label: tk('Your message column'), cat: 'thread', sel: '.user-col', parent: 'message', caps: ALL },
-  { id: 'streamText', label: tk('Streaming text'), cat: 'thread', sel: '.stream-text', parent: 'assistantBody', caps: TEXTY },
+  { id: 'streamText', label: tk('Streaming text'), cat: 'thread', sel: '.rv-word', parent: 'assistantBody', caps: TEXTY },
   { id: 'msgSpeed', label: tk('Speed chip'), cat: 'thread', sel: '.msg-speed', parent: 'message', caps: BOX.concat(['type']) },
   { id: 'branchNav', label: tk('Branch switcher'), cat: 'thread', sel: '.branch-nav', parent: 'message', caps: ALL },
   { id: 'editBox', label: tk('Message edit box'), cat: 'thread', sel: '.edit-box', parent: 'message', caps: ALL },
