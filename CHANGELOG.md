@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [27.3.1] - TBD
+### Added
+
+### Fixed
+
+### Changed
+
+### Internal
+
+### Removed
+
+---
+
 ## [27.3.0] - 2026-09-08
 ### Added
 - **A setup guide the first time an owner signs in** - a seven-step walkthrough instead of a bare screen: what the app is, naming the workspace and deciding who may create an account, a starting layout, connecting a model, picking which of the models that connection reports to keep, prices if the connection is a paid one, and a short orientation at the end. Connection types are split into the ones that run on your own machine and the ones that bill per message, each with its vendor mark, and the address is prefilled with what that kind of server normally uses. Every step can be skipped, the whole guide can be skipped, and nothing it sets is permanent. Admin, Overview has a button to run it again.
