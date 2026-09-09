@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [27.3.0] - TBD
+## [27.3.0] - 2026-09-08
 ### Added
 - **A setup guide the first time an owner signs in** - a seven-step walkthrough instead of a bare screen: what the app is, naming the workspace and deciding who may create an account, a starting layout, connecting a model, picking which of the models that connection reports to keep, prices if the connection is a paid one, and a short orientation at the end. Connection types are split into the ones that run on your own machine and the ones that bill per message, each with its vendor mark, and the address is prefilled with what that kind of server normally uses. Every step can be skipped, the whole guide can be skipped, and nothing it sets is permanent. Admin, Overview has a button to run it again.
 - **Chats name themselves when your models are local** - automatic chat titles are now on by default when every connection runs on your own machine, and off as soon as one of them bills per message. The setting itself is unchanged and still wins once you touch it; only the default now reads the connections rather than always being off, since a title costs nothing on a local model and real money on a metered one.
