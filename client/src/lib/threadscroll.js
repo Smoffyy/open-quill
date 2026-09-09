@@ -25,6 +25,16 @@ const GLIDE_MAX = 520;
 // keeps a sticking thread pinned to the bottom.
 const SMOOTH_MS = GLIDE_MAX + 160;
 
+// Scroll offsets are kept on the device-pixel grid. Following the content
+// exactly would re-rasterise every glyph on the screen at a new sub-pixel offset
+// each time a line lands, which is the text shimmering while it is written.
+// Landing on the grid keeps the phase fixed, and the fraction of a pixel the
+// bottom gives up for it cannot be seen.
+function snapScroll(v) {
+  const dpr = window.devicePixelRatio || 1;
+  return Math.round(v * dpr) / dpr;
+}
+
 export function useThreadScroll(opts = {}) {
   const canFollow = opts.canFollow;
   // The modern thread motion: the newest message pinned to the top, the glide
@@ -115,13 +125,18 @@ export function useThreadScroll(opts = {}) {
     const pinned = want > BASE_PAD;
     if (!pinned || !hold || !anchor || !stick.current || glideRaf.current) return pinned;
     const shift = anchor.getBoundingClientRect().top - el.getBoundingClientRect().top - TOP_GAP;
-    if (Math.abs(shift) > 0.5) { programmatic.current = true; el.scrollTop += shift; }
+    if (Math.abs(shift) > 0.5) { programmatic.current = true; el.scrollTop = snapScroll(el.scrollTop + shift); }
     return true;
   }, []);
 
+  // Unconditional, because the claim `pinToBottom` stakes before React commits
+  // outlives the glide it was staking it for. A send with nowhere to scroll to,
+  // which is every first message in a chat, takes the early exit below without
+  // ever starting one, and the claim was then left standing for its full worst
+  // case: two thirds of a second in which the thread counts as moving, the reply
+  // begins, and its first line pushes the avatar down with no glide on it.
   const endGlide = useCallback(() => {
-    if (!glideRaf.current) return;
-    cancelAnimationFrame(glideRaf.current);
+    if (glideRaf.current) cancelAnimationFrame(glideRaf.current);
     glideRaf.current = 0;
     smoothUntil.current = 0;
   }, []);
@@ -229,11 +244,22 @@ export function useThreadScroll(opts = {}) {
     // tenth of a second, once per flush, because the content moved and the view
     // had not caught up. Landing on it is invisible, since the view moves by
     // exactly what the content did. Legacy keeps the eased follow it has had.
-    const bottom = el.scrollHeight - el.clientHeight;
-    const diff = bottom - el.scrollTop;
-    if (diff <= 0.5) return;
+    if (!modern.current) {
+      const diff = el.scrollHeight - el.clientHeight - el.scrollTop;
+      if (diff > 0.5) { programmatic.current = true; el.scrollTop += Math.max(1, diff * (1 - Math.exp(-dt / FOLLOW_TAU))); }
+      return;
+    }
+    // Measured off the thread rather than derived from scrollHeight, which is
+    // rounded to a whole pixel: a line of code is 22.75 of them, so the target
+    // grows by 22 or 23 while the content grows by 22.75 and the newest line
+    // lands a little either side of where it belongs, once per line, for as long
+    // as the reply is being written.
+    const thread = el.querySelector('.thread');
+    if (!thread) return;
+    const over = thread.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom;
+    if (over <= 0.5) return;
     programmatic.current = true;
-    el.scrollTop = modern.current ? bottom : el.scrollTop + Math.max(1, diff * (1 - Math.exp(-dt / FOLLOW_TAU)));
+    el.scrollTop = snapScroll(el.scrollTop + over);
   }, [canFollow, syncPad, setStill]);
 
   // Called from a layout effect, so it runs in the same commit that put the new
