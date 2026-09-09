@@ -92,6 +92,25 @@ jobs:
             server client/dist \
             -x "server/node_modules/*" "server/data/*"
 
+      - name: Changelog section for this version
+        run: |
+          awk -v v="$VERSION" '
+            !found { if (index($0, "## [" v "]") == 1) found = 1; next }
+            index($0, "## [") == 1 || index($0, "---") == 1 { exit }
+            { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/section.md"
+
+          if ! grep -q "[^[:space:]]" "$RUNNER_TEMP/section.md"; then
+            echo "::error::CHANGELOG.md has no usable section for $VERSION, so the release notes would carry only the generated list."
+            exit 1
+          fi
+
+          {
+            echo "## What's new in $VERSION"
+            echo
+            cat "$RUNNER_TEMP/section.md"
+          } > "$RUNNER_TEMP/release-notes.md"
+
       - name: Draft the GitHub release
         uses: softprops/action-gh-release@v2
         with:
@@ -101,6 +120,7 @@ jobs:
           draft: true
           prerelease: false
           generate_release_notes: true
+          body_path: ${{ runner.temp }}/release-notes.md
           files: out/*.zip
 
       - name: Clean up
