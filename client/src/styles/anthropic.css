@@ -130,13 +130,96 @@
 }
 :root[data-preset="anthropic"] .profile-btn .plan::before { content: "·"; margin-right: 4px; }
 
+:root[data-preset="anthropic"] .center-wrap .composer-wrap { max-width: 640px; }
 :root[data-preset="anthropic"] .center-wrap .composer,
-:root[data-preset="anthropic"] .composer { padding: 14px; }
-:root[data-preset="anthropic"] .composer textarea { padding: 6px 0 0 6px; }
-:root[data-preset="anthropic"] .center-wrap .composer textarea { min-height: 46px; }
-:root[data-preset="anthropic"] .composer-bar { margin-top: 12px; height: 32px; }
-:root[data-preset="anthropic"] .composer-left { gap: 4px; padding-left: 2px; }
-:root[data-preset="anthropic"] .composer-right { gap: 4px; padding-right: 2px; }
+:root[data-preset="anthropic"] .composer {
+  padding: 8px; border-width: 0; border-radius: 14px;
+  transition: background-color .2s var(--cl-ease-std, cubic-bezier(.4, 0, .2, 1)),
+              border-color .2s var(--cl-ease-std, cubic-bezier(.4, 0, .2, 1)),
+              box-shadow .2s var(--cl-ease-std, cubic-bezier(.4, 0, .2, 1)),
+              opacity .2s var(--cl-ease-std, cubic-bezier(.4, 0, .2, 1));
+}
+:root[data-preset="anthropic"] .app.has-bg .composer {
+  transition: background-color .5s ease, backdrop-filter .5s ease,
+              box-shadow .2s var(--cl-ease-std, cubic-bezier(.4, 0, .2, 1));
+}
+:root[data-preset="anthropic"] .composer textarea {
+  padding: 5px 8px; font-size: 16px; line-height: 22px; min-height: 32px;
+}
+:root[data-preset="anthropic"] .center-wrap .composer textarea { min-height: 43px; }
+:root[data-preset="anthropic"] .composer-bar { margin-top: 8px; height: 32px; }
+:root[data-preset="anthropic"] .composer-left { gap: 4px; padding-left: 0; }
+:root[data-preset="anthropic"] .composer-right { gap: 4px; padding-right: 0; }
+
+:root[data-preset="anthropic"] .composer .model-trigger {
+  height: 32px; gap: 4px; padding: 0 8px; border-radius: 8px;
+  font-size: 13px; font-weight: 400; line-height: 18px;
+}
+:root[data-preset="anthropic"] .composer .plus,
+:root[data-preset="anthropic"] .composer .mic,
+:root[data-preset="anthropic"] .composer .send,
+:root[data-preset="anthropic"] .composer .model-trigger {
+  transition: background .06s var(--cl-ease-std, cubic-bezier(.4, 0, .2, 1)),
+              color .06s var(--cl-ease-std, cubic-bezier(.4, 0, .2, 1)),
+              opacity .06s var(--cl-ease-std, cubic-bezier(.4, 0, .2, 1)),
+              transform .45s var(--cl-ease-squish);
+}
+:root[data-preset="anthropic"] .composer .plus:active,
+:root[data-preset="anthropic"] .composer .mic:active,
+:root[data-preset="anthropic"] .composer .send:not(:disabled):active,
+:root[data-preset="anthropic"] .composer .model-trigger:active { transform: scale(.975); }
+:root[data-preset="anthropic"] .composer .plus:active,
+:root[data-preset="anthropic"] .composer .mic:active,
+:root[data-preset="anthropic"] .composer .model-trigger:active {
+  background: var(--composer-hover, var(--surface-hover));
+}
+:root[data-preset="anthropic"] .composer-right:has(.send:not(.ghost)) .mic { display: none; }
+:root[data-preset="anthropic"] .composer .send.enter { background: transparent; color: var(--text); }
+:root[data-preset="anthropic"] .composer .send.enter:hover { background: var(--composer-hover, var(--surface-hover)); }
+@media (prefers-reduced-motion: reduce) {
+  :root[data-preset="anthropic"] .composer .plus:active,
+  :root[data-preset="anthropic"] .composer .mic:active,
+  :root[data-preset="anthropic"] .composer .send:not(:disabled):active,
+  :root[data-preset="anthropic"] .composer .model-trigger:active { transform: none; }
+}
+
+/* In a thread the bar collapses into the text row: the plus sits left of the
+   caret and the send right of it, on one 32px line. A second line of text
+   drops the bar back under the text, which is what .ml already means. */
+:root[data-preset="anthropic"] .active-composer .composer:not(.ml) {
+  display: flex; flex-wrap: wrap; align-items: center; row-gap: 8px;
+}
+:root[data-preset="anthropic"] .active-composer .composer:not(.ml) > * { flex: 0 0 100%; }
+:root[data-preset="anthropic"] .active-composer .composer:not(.ml) > textarea {
+  order: 1; flex: 1 1 auto; width: auto; min-width: 0;
+}
+:root[data-preset="anthropic"] .active-composer .composer:not(.ml) .composer-bar { display: contents; }
+:root[data-preset="anthropic"] .active-composer .composer:not(.ml) .composer-left { flex: 0 0 auto; }
+:root[data-preset="anthropic"] .active-composer .composer:not(.ml) .composer-right { order: 2; flex: 0 0 auto; }
+
+/* The model picker leaves the bar in a thread and sits under the composer,
+   opposite the disclaimer. */
+:root[data-preset="anthropic"] .active-composer .composer .model-select {
+  position: absolute; top: calc(100% + 8px); right: 8px; z-index: 2;
+}
+:root[data-preset="anthropic"] .active-composer .composer .model-trigger {
+  height: 24px; padding: 0 6px; border-radius: 6px;
+}
+:root[data-preset="anthropic"] .active-composer .disclaimer {
+  min-height: 40px; padding: 12px 152px 11px 16px;
+  text-align: left; font-size: 13px; line-height: 17px;
+}
+@media (max-width: 768px) {
+  :root[data-preset="anthropic"] .active-composer .composer .model-select { position: static; }
+  :root[data-preset="anthropic"] .active-composer .composer .model-trigger { height: 32px; padding: 0 8px; border-radius: 8px; }
+  :root[data-preset="anthropic"] .active-composer .disclaimer {
+    min-height: 0; padding: 8px 0; text-align: center; font-size: 12px; line-height: 16px;
+  }
+}
+:root[data-preset="anthropic"] .active-composer .composer-stack::before {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: 48px;
+  background: linear-gradient(to top, var(--bg), transparent); pointer-events: none;
+}
 
 .tip-host { display: contents; }
 .tip {
@@ -501,6 +584,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
   --cl-ease-hover: cubic-bezier(.165, .84, .44, 1);
   --cl-ease-std: cubic-bezier(.4, 0, .2, 1);
   --cl-ease-spring: cubic-bezier(.34, 1.3, .64, 1);
+  --cl-ease-squish: linear(0 0%, .2459 7.14286%, .6526 14.2857%, .9468 21.4286%, 1.0764 28.5714%, 1.0915 35.7143%, 1.0585 42.8571%, 1.0219 50%, .9993 57.1429%, .9914 64.2857%, .9921 71.4286%, .9957 78.5714%, .9988 85.7143%, 1.0004 92.8571%, 1 100%);
 }
 :root[data-preset="anthropic"] :is(
   button, a, .nav-item, .chat-row, .icon-btn, .modal-tab, .set-row,

@@ -6,7 +6,7 @@ import { api } from '../api.js';
 import { toast } from '../toast.js';
 import { useAttachments } from '../lib/attachments.js';
 import { useDictation } from '../lib/dictation.js';
-import { Plus, Mic, Wave, Up, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer, Screenshot, Plug, Puzzle, Telescope, SkillIcon, ImageIcon, Copy, Folder } from './icons.jsx';
+import { Plus, Mic, Wave, Up, Enter, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer, Screenshot, Plug, Puzzle, Telescope, SkillIcon, ImageIcon, Copy, Folder } from './icons.jsx';
 import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
 import { extLabel } from '../lib/files.js';
 import { t, fmtDate } from '../i18n.jsx';
@@ -92,7 +92,7 @@ export default function Composer({
   removedModel = null, skills = [], onToggleSkill = null, onManageSkills = null,
   queueCount = 0, onQueue, onSteer, canSteer = false,
   compareIds = [], onSetCompare, hideModelPicker = false, chipsBelow = false, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
-  ctxGauge = null
+  ctxGauge = null, enterSend = false
 }) {
   const composerPlaceholder = useThemeText('composer.placeholder', t('How can I help you today?'));
   const ta = useRef(null);
@@ -677,7 +677,9 @@ export default function Composer({
           ) : safetyChecking ? (
             <button key="send" className={'send' + (safetyVerbose ? ' checking' : ' quiet')} disabled title={safetyVerbose ? t('Safety check…') : undefined}><Up style={{ width: 20, height: 20 }} /></button>
           ) : canSend ? (
-            <button key="send" className="send" onClick={doSend} disabled={uploading}><Up style={{ width: 20, height: 20 }} /></button>
+            <button key="send" className={'send' + (enterSend ? ' enter' : '')} onClick={doSend} disabled={uploading}>
+              {enterSend ? <Enter style={{ width: 20, height: 20 }} /> : <Up style={{ width: 20, height: 20 }} />}
+            </button>
           ) : voiceCall ? (
             <Tip label={callActive ? t("End call") : t("Start a voice call")}><button key="call" className={'mic call' + (callActive ? ' on' : '')} onClick={onStartCall} aria-label={callActive ? t("End call") : t("Start a voice call")} aria-pressed={callActive}>{callActive ? <X style={{ width: 18, height: 18 }} /> : <Wave style={{ width: 20, height: 20 }} />}</button></Tip>
           ) : (

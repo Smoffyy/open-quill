@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [27.5.0] - 2026-09-10
+### Added
+- **The playground can run two models against the same prompt, side by side** - pick a second model next to the first and one run fires both, with the replies in adjacent columns and each one's own numbers under it. "Keep this one" promotes a column into the thread, so the conversation carries on from whichever answer was better and the next turn compares from there. It is the case the playground existed for: a release candidate next to the model it is meant to replace, same system prompt, same samplers, same question.
+- **What a run actually cost is now on screen rather than implied** - time to first token, output tokens, throughput, prompt tokens and total time, as five tiles under the reply and a summary line above the box. A reply that has not started yet says so, with the clock running, instead of showing an empty editable box for twenty seconds.
+- **Four starter probes on the empty screen** - baseline, instruction following, structured output and a reasoning trap, each one click into the message box. They are the checks a new model gets first, so they no longer have to be retyped from memory.
+- **A full-width system prompt editor** - the rail is narrow on purpose and a real system prompt is not; "Full editor" opens it in a large monospace sheet with the line and character count, closing on Esc or Done. The rail's own box is taller and reports its size too.
+- **Sampling presets, and a seed you can roll** - Precise, Balanced, Creative and None write the sampler block in one click, and the active one is highlighted only while nothing else is set, so a stray field cannot hide behind a preset name. The seed field has a randomise button.
+- **The session survives a reload** - model, comparison model, overrides, system prompt and the conversation are kept, so refreshing in the middle of a twenty-second run does not throw the run away.
+- **Copy buttons where they were missing** - any message, the whole transcript as JSON, the system prompt, and the exact request that was sent.
+
+### Changed
+- **The playground's throughput figure was measuring the wrong thing** - it divided output tokens by the whole wall clock, so a model that thought for twenty seconds and then wrote eighty tokens in two was reported at 3.6 tok/s rather than 40. Time to first token and generation speed are now separate numbers, which is the difference between a slow model and a slow start.
+- **The settings rail is organised rather than stacked** - Prompt, Sampling, Limits, Kwargs and Reasoning are collapsible sections, each carrying a count of how many of its fields differ from the saved model. A sampler that is not being sent reads "off" beside its own value instead of a truncated "not sent · 204…", and clearing one back to off is a click.
+- **The request preview is a panel beside the conversation** - it was at the bottom of the rail, below everything else, which meant scrolling past every sampler to read what had just been sent.
+- **The model picker groups models under the provider they run on**, and says on the row when one is marked unavailable.
+
+- **Updated the Anthropic theme's message box** - more accurate input bar.
+- **Updated the Anthropic theme's thread layout** - the bar folds into the text line, with the plus to the left of the caret and the send button to the right, on one 48px row; a second line of text drops the controls back under the text and the box grows upward from 48px. The model picker leaves the box and sits under it, opposite the disclaimer, which is now left-aligned at 13px. Above the box a 48px fade carries the conversation under it instead of ending at a hard edge. Send in a thread is the return glyph rather than the filled arrow, which is kept for the greeting. Narrow screens keep the picker in the bar and the disclaimer centred. The OpenAI preset is untouched.
+
+---
+
 ## [27.4.1] - 2026-09-09
 ### Fixed
 - **Turning Auto-scroll off now turns it off** - the setting was written, saved and read back, and nothing in the thread ever asked for it: the view followed the reply to the bottom exactly as it does with the setting on. With it off, a sent message still climbs to the top and the reply is still written into the room reserved under it, avatar gliding down as lines land; what stops is the thread chasing the bottom once the reply outgrows that room. The view then stays where you left it and the jump-to-bottom button appears, while opening a chat, sending a message and the jump button all still take you there.

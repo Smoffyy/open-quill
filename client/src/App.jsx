@@ -1250,6 +1250,7 @@ export default function App() {
     removedModel: activeId ? chatRemovedModel : null,
     skills, onToggleSkill: toggleSkill, onManageSkills: () => onSkillsCb(),
     hideModelPicker: cfg.uiPreset === 'openai',
+    enterSend: cfg.uiPreset !== 'openai',
     chipsBelow: cfg.uiPreset === 'openai',
     models, currentId, onSelect: pickModel, extended, onToggleExtended: () => setExtended(e => !e),
     reasoningEffort, onSetEffort: setReasoningEffort, kwargValues, onSetKwarg: setKwarg,
@@ -1494,7 +1495,7 @@ export default function App() {
             </div>
             <ThemeSlot name="composer.above" />
             <div className="composer-wrap">
-              <Composer {...composerProps} autoFocus modelUp focusKey={focusTick} />
+              <Composer {...composerProps} autoFocus modelUp enterSend={false} focusKey={focusTick} />
             </div>
             <div className="qp-slot">
               {incognito ? (
