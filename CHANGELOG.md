@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [27.4.1] - TBD
+## [27.4.1] - 2026-09-09
 ### Fixed
 - **Turning Auto-scroll off now turns it off** - the setting was written, saved and read back, and nothing in the thread ever asked for it: the view followed the reply to the bottom exactly as it does with the setting on. With it off, a sent message still climbs to the top and the reply is still written into the room reserved under it, avatar gliding down as lines land; what stops is the thread chasing the bottom once the reply outgrows that room. The view then stays where you left it and the jump-to-bottom button appears, while opening a chat, sending a message and the jump button all still take you there.
 - **A setting is saved the moment you flip it** - every change waited 450ms for the typing debounce that the name and instructions boxes need, so a switch flipped and a window closed inside that window was applied to the page but never persisted. Closing the window already flushed the pending save; now a switch, a segment or a picker commits immediately and only the two speed sliders, which fire on every step of a drag, still wait. Saves are also sent one at a time, so two switches flipped in quick succession cannot land out of order and put the first one back.
