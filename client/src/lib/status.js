@@ -51,7 +51,7 @@ export function useStatusLabel(status, enabled = true) {
   const parts = [];
   if (hasProgress) parts.push(`${compact(processed)} / ${compact(total)} ${t('tokens')}`);
   if (pct !== null && hasProgress && !reusingCache) parts.push(`${pct}%`);
-  if (cached > 0) parts.push(`${Math.round((cached / total) * 100)}% ${t('reused')}`);
+  if (cached > 0 && hasProgress) parts.push(`${Math.round((cached / total) * 100)}% ${t('reused')}`);
   if (eta >= 2) parts.push(`~${eta}s ${t('left')}`);
 
   // The caption crossfades on `key`, not on `label`: the counters inside a

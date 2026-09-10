@@ -192,15 +192,15 @@ export default function Composer({
     if (uploading) return;
     if (blockSend || budgetBlock || safetyFlagged || safetyChecking || conversationEnded) return;
     if (steering) {
-      const t = value.trim();
-      if (!t) return;
-      onSteer(t);
+      const text = value.trim();
+      if (!text) return;
+      onSteer(text);
       onChange('');
       return;
     }
     if (streaming) {
-      const t = value.trim();
-      if (!t && files.length === 0) return;
+      const text = value.trim();
+      if (!text && files.length === 0) return;
       if (!onQueue) return;
       let attachments = [];
       if (files.length) {
@@ -210,7 +210,7 @@ export default function Composer({
         setUploading(false);
         clearFiles();
       }
-      onQueue(t, attachments);
+      onQueue(text, attachments);
       onChange('');
       return;
     }

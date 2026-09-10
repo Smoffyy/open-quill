@@ -383,11 +383,12 @@ export default function App() {
   // the text a slice at a time; `instant` is neither.
   const revealStyle = resolveReveal(user?.prefs, cfg.uiPreset === 'openai' ? 'openai' : 'anthropic');
   const modernMotion = revealStyle === 'modern';
+  const autoscroll = user?.prefs?.autoscroll !== false;
   const {
     scrollRef, stick, showJump,
     scrollBottom, pinToBottom, onScroll, onWheel, onTouchMove, jumpDown, resetJump,
     startFollow, stopFollow, followNow, syncPad, smoothPending, gliding
-  } = useThreadScroll({ canFollow, modern: modernMotion });
+  } = useThreadScroll({ canFollow, modern: modernMotion, autoscroll });
   const animate = revealStyle === 'legacy';
   const revealMs = revealSpeedMs(user?.prefs?.revealMs);
   // finalize is redefined every render; the hook reads it through a ref so the
@@ -579,7 +580,7 @@ export default function App() {
     const appName = cfg.appName || 'open-quill';
     if (incognito) { document.title = t('Incognito chat - {app}', { app: appName }); return; }
     const active = activeId ? chats.find(c => c.id === activeId) : null;
-    document.title = active ? `${active.title || t('Untitled chat')} - ${appName}` : `New chat - ${appName}`;
+    document.title = active ? `${active.title || t('Untitled chat')} - ${appName}` : `${t('New chat')} - ${appName}`;
   }, [activeId, chats, cfg.appName, incognito]);
   async function exportAllChats() { window.open('/api/chats/export-all', '_blank'); }
   async function importChatsFile(file) {
@@ -1669,7 +1670,7 @@ export default function App() {
       )}
 
 
-      {showSettings && <React.Suspense fallback={null}><SettingsModal user={user} cfg={cfg} initialTab={settingsTab} onClose={onSettingsClosed} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile}
+      {showSettings && <React.Suspense fallback={null}><SettingsModal user={user} cfg={cfg} modelId={currentId} initialTab={settingsTab} onClose={onSettingsClosed} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile}
         onTrySkill={(sk) => { newChat(); setInput('/' + sk.name + ' '); setFocusTick(n => n + 1); }} /></React.Suspense>}
       {user?.isAdmin && cfg.setupComplete === false && !setupDone && (
         <React.Suspense fallback={null}>

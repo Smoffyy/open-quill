@@ -1174,5 +1174,8 @@
   "Discourage the model from looping. DRY is llama.cpp only.": "抑制模型重复啰嗦。DRY 仅适用于 llama.cpp。",
   "Experimental": "实验性",
   "XTC and Mirostat change how tokens are picked. Leave off unless you are deliberately tuning.": "XTC 和 Mirostat 会改变 token 的选取方式。除非刻意调优，否则请保持关闭。",
-  "About": "关于"
+  "About": "关于",
+  "3+ days ago": "3 天前及更早",
+  "7+ days ago": "7 天前及更早",
+  "Deleted {n} chat(s)": "已删除 {n} 个对话"
 }

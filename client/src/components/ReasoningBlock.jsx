@@ -4,6 +4,8 @@ import { copyText } from '../clipboard.js';
 import { t } from '../i18n.jsx';
 import { parseSteps, lastSentence, thoughtSeconds, LINE_HOLD_MS } from '../lib/reasoning.js';
 
+const COLLAPSE_MS = 560;
+
 function thoughtLabel(ms) {
   const secs = thoughtSeconds(ms);
   if (!secs) return t('Thought process');
@@ -16,6 +18,8 @@ export default function ReasoningBlock({ text, live, durationMs = 0, preset = 'a
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [line, setLine] = useState({ cur: '', prev: '' });
+  const rootRef = useRef(null);
+  const animTimer = useRef(null);
   const peekRef = useRef(null);
   const nextLine = useRef('');
   const lineAt = useRef(0);
@@ -46,6 +50,12 @@ export default function ReasoningBlock({ text, live, durationMs = 0, preset = 'a
   }, [text, rolling, live]);
 
   useEffect(() => () => { if (lineTimer.current) clearTimeout(lineTimer.current); }, []);
+
+  useEffect(() => () => {
+    clearTimeout(animTimer.current);
+    const host = rootRef.current && rootRef.current.closest('.msg');
+    if (host) delete host.dataset.rbAnim;
+  }, []);
 
   useEffect(() => {
     if (!line.prev) return;
@@ -100,11 +110,17 @@ export default function ReasoningBlock({ text, live, durationMs = 0, preset = 'a
 
   const toggle = () => {
     try { window.dispatchEvent(new CustomEvent('oq-release-scroll')); } catch {}
+    const host = rootRef.current && rootRef.current.closest('.msg');
+    if (host) {
+      host.dataset.rbAnim = '1';
+      clearTimeout(animTimer.current);
+      animTimer.current = setTimeout(() => { delete host.dataset.rbAnim; }, COLLAPSE_MS);
+    }
     setOpen(o => !o);
   };
 
   return (
-    <div className={'reasoning' + (open ? ' open' : '') + (live ? ' live' : '') + (carded ? ' carded' : '') + (rolling ? ' rolling' : '')}>
+    <div ref={rootRef} className={'reasoning' + (open ? ' open' : '') + (live ? ' live' : '') + (carded ? ' carded' : '') + (rolling ? ' rolling' : '')}>
       <button className={'reasoning-head' + (open ? ' open' : '') + (live ? ' live' : '')}
         onClick={toggle} aria-expanded={open}>
         {live && !rolling && <Bulb className="rb-icon" />}

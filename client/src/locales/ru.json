@@ -2477,5 +2477,8 @@
   "Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.": "Добавьте любой файл. Все чаты этого проекта используют общее рабочее пространство и могут читать, изменять и запускать то, что в нём есть.",
   "Modern": "Современный",
   "Legacy": "Классический",
-  "Words fade in as they arrive and your message rises to the top.": "Слова плавно появляются по мере поступления, а ваше сообщение поднимается наверх."
+  "Words fade in as they arrive and your message rises to the top.": "Слова плавно появляются по мере поступления, а ваше сообщение поднимается наверх.",
+  "3+ days ago": "3+ дн. назад",
+  "7+ days ago": "7+ дн. назад",
+  "Deleted {n} chat(s)": "Удалено чатов: {n}"
 }
