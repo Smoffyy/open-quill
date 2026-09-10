@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [27.4.1] - TBD
+
+
+---
+
 ## [27.4.0] - 2026-09-09
 ### Added
 - **A reply now arrives the way it reads: a new Text reveal setting called Modern, on by default** - the thread was already close to how the Anthropic interface behaves while a model is writing; this is the rest of it, measured frame by frame against a recording of the real thing rather than guessed. Sending a message carries it to the top of the thread over about a third of a second and leaves it there, with the room below already reserved, so the reply is written into open space instead of pushing the conversation around. Every word that lands together fades in on one clock, which makes the tail of the text a soft gradient a few words long, stepping by however much arrived at once rather than sliding evenly word by word. The avatar under the reply glides down as lines land instead of stepping. The word beside it crossfades when the model changes what it is doing, rather than swapping. Under it all, text is handed over as fast as it arrives, in flushes rather than a letter at a time.
