@@ -2508,15 +2508,5 @@
   "Copy transcript as JSON": "Скопировать переписку как JSON",
   "Ctrl+Enter": "Ctrl+Enter",
   "Copy request": "Скопировать запрос",
-  "Esc to close": "Esc — закрыть",
-  "Precise": "Точная",
-  "Near-deterministic, for regression checks": "Почти детерминированная, для проверки регрессий",
-  "Balanced": "Сбалансированная",
-  "What most chats run with": "То, с чем работает большинство чатов",
-  "Creative": "Творческая",
-  "Loosest sampling the model is likely to ship with": "Самая свободная выборка, с которой модель, скорее всего, выйдет",
-  "First token": "Первый токен",
-  "Throughput": "Пропускная способность",
-  "Total": "Всего",
-  "Router": "Маршрутизатор"
+  "Esc to close": "Esc — закрыть"
 }

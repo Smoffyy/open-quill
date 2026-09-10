@@ -2508,15 +2508,5 @@
   "Copy transcript as JSON": "履歴を JSON でコピー",
   "Ctrl+Enter": "Ctrl+Enter",
   "Copy request": "リクエストをコピー",
-  "Esc to close": "Esc で閉じる",
-  "Precise": "厳密",
-  "Near-deterministic, for regression checks": "ほぼ決定論的。回帰確認向け",
-  "Balanced": "バランス",
-  "What most chats run with": "ほとんどのチャットで使われる設定",
-  "Creative": "創造的",
-  "Loosest sampling the model is likely to ship with": "このモデルが出荷時に採るであろう最も緩いサンプリング",
-  "First token": "最初のトークン",
-  "Throughput": "スループット",
-  "Total": "合計",
-  "Router": "ルーター"
+  "Esc to close": "Esc で閉じる"
 }

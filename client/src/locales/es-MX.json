@@ -2508,15 +2508,5 @@
   "Copy transcript as JSON": "Copiar la conversación como JSON",
   "Ctrl+Enter": "Ctrl+Enter",
   "Copy request": "Copiar solicitud",
-  "Esc to close": "Esc para cerrar",
-  "Precise": "Preciso",
-  "Near-deterministic, for regression checks": "Casi determinista, para pruebas de regresión",
-  "Balanced": "Equilibrado",
-  "What most chats run with": "Con lo que corre la mayoría de los chats",
-  "Creative": "Creativo",
-  "Loosest sampling the model is likely to ship with": "El muestreo más suelto con el que probablemente salga el modelo",
-  "First token": "Primer token",
-  "Throughput": "Rendimiento",
-  "Total": "Total",
-  "Router": "Enrutador"
+  "Esc to close": "Esc para cerrar"
 }

@@ -499,14 +499,24 @@
 @keyframes micPulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 
 .call-dock { display: flex; justify-content: center; padding: 0 0 30px; }
+/* The orb floats over the end of the thread rather than taking a row of its
+   own, which would shorten the thread by its whole height for as long as the
+   call is up. The OpenAI composer already floats over the thread, so there the
+   dock stays in flow. */
+.composer-wrap:not(.floating) .call-dock { position: absolute; left: 0; right: 0; bottom: 100%; pointer-events: none; }
+.composer-wrap:not(.floating) .call-dock > * { pointer-events: auto; }
+/* the orb lands where the jump button sits, so lift it by the dock's height */
+.main:has(.call-dock) .to-bottom { transform: translate(-50%, -122px); }
 .call-orb-wrap { position: relative; width: 92px; height: 92px; display: grid; place-items: center;
   transform: scale(.2); opacity: 0; transform-origin: center; will-change: transform, opacity;
   transition: transform .32s cubic-bezier(.34, 1.3, .64, 1), opacity .22s ease, filter var(--fx-t, .3s) ease; }
+.call-orb-wrap::before { content: ''; position: absolute; inset: -24px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(84, 104, 236, .42), rgba(84, 104, 236, .3) 62%, rgba(84, 104, 236, .1) 80%, rgba(84, 104, 236, 0) 100%); }
 .call-dock.shown .call-orb-wrap { transform: scale(1); opacity: 1; }
-.call-orb { width: 92px; height: 92px; border-radius: 50%; will-change: transform;
-  filter: drop-shadow(0 6px 22px rgba(84, 104, 236, .4)); }
+.call-orb { position: relative; z-index: 1; width: 92px; height: 92px; border-radius: 50%; will-change: transform; }
 .call-orb-wrap.speaking { cursor: pointer; }
-.call-orb-wrap.speaking .call-orb { filter: drop-shadow(0 6px 30px rgba(110, 130, 245, .62)); }
+.call-orb-wrap.speaking::before { inset: -32px;
+  background: radial-gradient(closest-side, rgba(110, 130, 245, .62), rgba(110, 130, 245, .42) 58%, rgba(110, 130, 245, .14) 80%, rgba(110, 130, 245, 0) 100%); }
 .call-dock.shown .call-orb-wrap.error, .call-dock.shown .call-orb-wrap.connecting { filter: brightness(.82); }
 
 .queued-chip { display: flex; align-items: center; gap: 7px; padding: 5px 10px 9px; font-size: 12.5px; color: var(--text-muted); }

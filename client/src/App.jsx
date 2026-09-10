@@ -1461,10 +1461,7 @@ export default function App() {
                 <Ghost />
               </button>
               {artifactsBtn}
-            </>}
-            items={[
-              user?.isAdmin && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, disabled: streaming || queued, onClick: () => { setArtifactsOpen(false); setCtlOpen(o => !o); } }
-            ]} />
+            </>} />
         )}
         {empty && !incognito && cfg.uiPreset === 'openai' && (
           <div className="home-topbar">

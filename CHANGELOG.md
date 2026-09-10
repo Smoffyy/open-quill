@@ -26,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Updated the Anthropic theme's message box** - more accurate input bar.
 - **Updated the Anthropic theme's thread layout** - the bar folds into the text line, with the plus to the left of the caret and the send button to the right, on one 48px row; a second line of text drops the controls back under the text and the box grows upward from 48px. The model picker leaves the box and sits under it, opposite the disclaimer, which is now left-aligned at 13px. Above the box a 48px fade carries the conversation under it instead of ending at a hard edge. Send in a thread is the return glyph rather than the filled arrow, which is kept for the greeting. Narrow screens keep the picker in the bar and the disclaimer centred. The OpenAI preset is untouched.
 
+### Fixed
+- **The voice orb no longer sits on a faint square** - the orb's glow was a `drop-shadow` filter, which puts the canvas on its own rectangular compositing layer, and against a dark thread the edges of that rectangle showed as a box roughly twice the orb's size. The halo is now a radial gradient painted behind the canvas, so it is round, it needs no compositing layer, and it reaches the drawn circle's edge rather than stopping at the canvas box.
+- **A call no longer takes a strip of the conversation with it** - the voice orb sat in a row of its own above the message box, so starting a call shortened the thread by the orb's full height and left a blank band the width of the window where the last lines had been, cut off flat at the top. The orb now floats over the end of the thread instead of reserving room, so starting and ending a call moves nothing: the conversation keeps its full height and reads to the bottom, and only the orb itself is over it. Tapping the orb to interrupt still works, and the rest of that area stays clickable and selectable.
+- **The greeting screen no longer shows a three dot menu** - its only entry was the admin chat controls, which need a chat to act on, so on the greeting it opened a menu that could do nothing. The dots appear once a chat is open; the incognito button stays where it was.
+
 ---
 
 ## [27.4.1] - 2026-09-09

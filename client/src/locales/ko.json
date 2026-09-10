@@ -2508,15 +2508,5 @@
   "Copy transcript as JSON": "대화를 JSON으로 복사",
   "Ctrl+Enter": "Ctrl+Enter",
   "Copy request": "요청 복사",
-  "Esc to close": "Esc로 닫기",
-  "Precise": "정밀",
-  "Near-deterministic, for regression checks": "거의 결정적. 회귀 확인용",
-  "Balanced": "균형",
-  "What most chats run with": "대부분의 대화가 쓰는 설정",
-  "Creative": "창의적",
-  "Loosest sampling the model is likely to ship with": "이 모델이 출시될 때 쓸 법한 가장 느슨한 샘플링",
-  "First token": "첫 토큰",
-  "Throughput": "처리량",
-  "Total": "합계",
-  "Router": "라우터"
+  "Esc to close": "Esc로 닫기"
 }
