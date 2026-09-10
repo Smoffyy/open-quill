@@ -1174,5 +1174,8 @@
   "Discourage the model from looping. DRY is llama.cpp only.": "Dissuade le modèle de tourner en boucle. DRY est réservé à llama.cpp.",
   "Experimental": "Expérimental",
   "XTC and Mirostat change how tokens are picked. Leave off unless you are deliberately tuning.": "XTC et Mirostat changent la façon dont les tokens sont choisis. Laissez-les désactivés sauf réglage délibéré.",
-  "About": "À propos"
+  "About": "À propos",
+  "3+ days ago": "Il y a 3+ jours",
+  "7+ days ago": "Il y a 7+ jours",
+  "Deleted {n} chat(s)": "{n} conversation(s) supprimée(s)"
 }

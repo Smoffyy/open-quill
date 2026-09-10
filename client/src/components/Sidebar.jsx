@@ -289,8 +289,8 @@ function Sidebar({
     }
     const g = [
       { key: 'recent', label: '', items: [] },
-      { key: 'd3', label: '3+ days ago', items: [] },
-      { key: 'd7', label: '7+ days ago', items: [] },
+      { key: 'd3', label: t('3+ days ago'), items: [] },
+      { key: 'd7', label: t('7+ days ago'), items: [] },
     ];
     for (const c of capped) {
       const age = nowMs - (c.updated_at || nowMs);

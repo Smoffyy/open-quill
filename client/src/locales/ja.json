@@ -2477,5 +2477,8 @@
   "Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.": "どんなファイルでも追加できます。このプロジェクトのすべてのチャットがこのワークスペースを共有し、その中身を読み取り、編集し、実行できます。",
   "Modern": "モダン",
   "Legacy": "クラシック",
-  "Words fade in as they arrive and your message rises to the top.": "単語は届くたびにフェードインし、あなたのメッセージは上部へ移動します。"
+  "Words fade in as they arrive and your message rises to the top.": "単語は届くたびにフェードインし、あなたのメッセージは上部へ移動します。",
+  "3+ days ago": "3日以上前",
+  "7+ days ago": "7日以上前",
+  "Deleted {n} chat(s)": "{n}件のチャットを削除しました"
 }

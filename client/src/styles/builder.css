@@ -678,13 +678,13 @@
 :root[data-oq-stage="thread"] .main > .home-topbar { display: none; }
 :root[data-oq-stage="thread"] .main > .center-wrap > *:not(.composer-wrap) { display: none; }
 :root[data-oq-stage="thread"] .main > .center-wrap { flex: 0 0 auto; padding-top: 0; }
-.bx-stage-scroll { order: -1; flex: 1; min-height: 0; overflow-y: auto; }
+.bx-stage-scroll { order: -1; flex: 1; min-height: 0; overflow: hidden auto; }
 :root[data-oq-stage="states"] .main > .center-wrap,
 :root[data-oq-stage="states"] .main > .scroll-area:not(.bx-stage-scroll) { display: none; }
 .bx-stage-states {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden auto;
   display: flex;
   flex-direction: column;
   align-items: flex-start;

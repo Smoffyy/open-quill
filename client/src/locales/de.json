@@ -2477,5 +2477,8 @@
   "Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.": "Fügen Sie beliebige Dateien hinzu. Jeder Chat in diesem Projekt teilt sich diesen Arbeitsbereich und kann dessen Inhalt lesen, bearbeiten und ausführen.",
   "Modern": "Modern",
   "Legacy": "Klassisch",
-  "Words fade in as they arrive and your message rises to the top.": "Wörter blenden sich beim Eintreffen ein und Ihre Nachricht rückt nach oben."
+  "Words fade in as they arrive and your message rises to the top.": "Wörter blenden sich beim Eintreffen ein und Ihre Nachricht rückt nach oben.",
+  "3+ days ago": "Vor 3+ Tagen",
+  "7+ days ago": "Vor 7+ Tagen",
+  "Deleted {n} chat(s)": "{n} Chat(s) gelöscht"
 }

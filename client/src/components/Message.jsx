@@ -290,7 +290,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
     const top = el.offsetTop;
     const was = iconSlide.current;
     iconSlide.current = { top, done: false };
-    if (was === null || !el.closest('.thread[data-still]')) return;
+    if (was === null || !el.closest('.thread[data-still]') || el.closest('.msg[data-rb-anim]')) return;
     const delta = was.top - top;
     // Only a push downwards, and only a small one. A glide is right when the
     // avatar is the single thing that moved, which is what a line landing at the

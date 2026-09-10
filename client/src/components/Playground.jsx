@@ -299,7 +299,7 @@ export default function Playground({ onClose }) {
         {railOpen && (
           <aside className="pg-rail">
             <div className="pg-group">{t('Prompt')}</div>
-            <Field label="System prompt" changed={changedKeys.includes('system_prompt')} onReset={() => revert('system_prompt')}
+            <Field label={t('System prompt')} changed={changedKeys.includes('system_prompt')} onReset={() => revert('system_prompt')}
               note={t('Sent as the system message. Nothing else is added, so what you see here is what the model gets.')}>
               <textarea className="pg-ta" rows={7} value={merged.system_prompt || ''} spellCheck={false}
                 onChange={(e) => set('system_prompt', e.target.value)} />

@@ -37,6 +37,8 @@ function snapScroll(v) {
 
 export function useThreadScroll(opts = {}) {
   const canFollow = opts.canFollow;
+  const auto = useRef(opts.autoscroll !== false);
+  auto.current = opts.autoscroll !== false;
   // The modern thread motion: the newest message pinned to the top, the glide
   // that puts it there, and a single line followed exactly rather than eased.
   const modern = useRef(!!opts.modern);
@@ -56,6 +58,12 @@ export function useThreadScroll(opts = {}) {
   const glideRaf = useRef(0);
   const still = useRef(null);
   const [showJump, setShowJump] = useState(false);
+
+  const setJump = useCallback((v) => {
+    if (v === jumpRef.current) return;
+    jumpRef.current = v;
+    setShowJump(v);
+  }, []);
 
   // Whether the thread is holding still, which is not the same question as
   // whether it is pinned. There is reserved room under the newest message, or
@@ -206,9 +214,8 @@ export function useThreadScroll(opts = {}) {
     if (top < lastTop.current - 1) stick.current = false;
     else if (dist < AT_BOTTOM) stick.current = true;
     lastTop.current = top;
-    const jump = dist > JUMP_DISTANCE && !stick.current;
-    if (jump !== jumpRef.current) { jumpRef.current = jump; setShowJump(jump); }
-  }, [syncPad]);
+    setJump(dist > JUMP_DISTANCE && (!stick.current || !auto.current));
+  }, [syncPad, setJump]);
 
   const onScroll = useCallback(() => {
     if (scrollRaf.current) return;
@@ -219,24 +226,28 @@ export function useThreadScroll(opts = {}) {
   const onTouchMove = useCallback(() => { touchDrag.current = true; onScroll(); }, [onScroll]);
 
   const jumpDown = useCallback(() => {
-    jumpRef.current = false;
-    setShowJump(false);
+    setJump(false);
     pinToBottom(true);
-  }, [pinToBottom]);
+  }, [pinToBottom, setJump]);
 
   const resetJump = useCallback(() => {
     stick.current = true;
-    jumpRef.current = false;
-    setShowJump(false);
-  }, []);
+    setJump(false);
+  }, [setJump]);
 
   const followStep = useCallback((dt) => {
     const el = scrollRef.current;
     if (!el) return;
+    if (!auto.current) setJump(el.scrollHeight - el.scrollTop - el.clientHeight > JUMP_DISTANCE);
     if (!stick.current) { setStill(true); return; }
     if (performance.now() < smoothUntil.current) { setStill(false); return; }
     if (canFollow && !canFollow()) { setStill(true); return; }
     if (syncPad(true)) { setStill(true); return; }
+    if (!auto.current) {
+      setStill(true);
+      if (!glideRaf.current) stick.current = false;
+      return;
+    }
     setStill(false);
     // Landing on the bottom rather than easing towards it. Easing looks like
     // smoothing and reads as a shiver: the reply's last line and the avatar
@@ -260,7 +271,7 @@ export function useThreadScroll(opts = {}) {
     if (over <= 0.5) return;
     programmatic.current = true;
     el.scrollTop = snapScroll(el.scrollTop + over);
-  }, [canFollow, syncPad, setStill]);
+  }, [canFollow, syncPad, setStill, setJump]);
 
   // Called from a layout effect, so it runs in the same commit that put the new
   // text on the page and before the browser paints it. A frame loop cannot do
@@ -295,10 +306,10 @@ export function useThreadScroll(opts = {}) {
   useEffect(() => () => { stopFollow(); cancelAnimationFrame(glideRaf.current); }, [stopFollow]);
 
   useEffect(() => {
-    const release = () => { stick.current = false; jumpRef.current = true; setShowJump(true); };
+    const release = () => { stick.current = false; setJump(true); };
     window.addEventListener('oq-release-scroll', release);
     return () => window.removeEventListener('oq-release-scroll', release);
-  }, []);
+  }, [setJump]);
 
   return useMemo(() => ({
     scrollRef, stick, programmatic, showJump,

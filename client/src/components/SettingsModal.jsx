@@ -183,17 +183,20 @@ function formatReleased(s) {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
+const TYPING_SAVE_MS = 450;
+const DRAGGED_PREFS = new Set(['cursorBlinkMs', 'cursorPulseMs', 'revealMs']);
+
 function presetDefaults(isOpenai, fallbackTheme) {
   return {
     revealStyle: 'modern', autoscroll: true, theme: fallbackTheme || 'system', density: 'comfortable',
     streamCursor: isOpenai, cursorStyle: isOpenai ? 'circle' : 'block',
-    cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40, themeFade: true,
+    cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40,
     oledShift: false,
     threadRail: true, threadFind: true, branchMap: true, threadOutline: true, msgKeys: true, readWidth: 'normal', keybinds: {}
   };
 }
 
-export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdated, onDeleted, onExportChats, onImportChats, onTrySkill }) {
+export default function SettingsModal({ user, cfg, modelId, initialTab, onClose, onUpdated, onDeleted, onExportChats, onImportChats, onTrySkill }) {
   const [tab, setTab] = useState(initialTab || 'general');
   const { lang: i18nLang, setLang: setAppLang, langs } = useI18n();
   const [name, setName] = useState(user.displayName);
@@ -313,33 +316,37 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
   nameRef.current = name;
   prefsRef.current = prefs;
 
+  const saving = useRef(false);
   async function flushSave() {
     if (saveTimer.current) { clearTimeout(saveTimer.current); saveTimer.current = null; }
-    if (!pendingSave.current) return;
+    if (!pendingSave.current || saving.current) return;
     pendingSave.current = false;
+    saving.current = true;
     try {
       const { user: u } = await api.patch('/api/me', {
         displayName: nameRef.current, prefs: prefsRef.current, instructions: instrRef.current
       });
       onUpdated(u);
     } catch {}
+    saving.current = false;
+    if (pendingSave.current) flushSave();
   }
   flushSaveRef.current = flushSave;
 
   // Touches only refs, so it is genuinely stable and can be depended on honestly
   // rather than omitted from a deps array. The timer goes through the ref too, so
   // a flush queued by one render is always run by the current implementation.
-  const scheduleSave = useCallback(() => {
+  const scheduleSave = useCallback((delay = TYPING_SAVE_MS) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     pendingSave.current = true;
-    saveTimer.current = setTimeout(() => flushSaveRef.current?.(), 450);
+    saveTimer.current = setTimeout(() => flushSaveRef.current?.(), delay);
   }, []);
   function changeName(v) { setName(v); scheduleSave(); }
   function changeInstructions(v) { setInstructions(v); instrRef.current = v; scheduleSave(); }
 
   async function clearChats() {
     setClearMsg('');
-    try { const r = await api.del('/api/me/chats'); setConfirmClear(false); setClearMsg(`Deleted ${r.deleted || 0} chat${r.deleted === 1 ? '' : 's'}.`); setTimeout(() => { location.href = '/'; }, 700); }
+    try { const r = await api.del('/api/me/chats'); setConfirmClear(false); setClearMsg(t('Deleted {n} chat(s)', { n: r.deleted || 0 })); setTimeout(() => { location.href = '/'; }, 700); }
     catch { setClearMsg(t('Could not delete chats.')); }
   }
   async function deleteAccount() {
@@ -354,16 +361,35 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
   // effects there are the wrong shape even where they currently survive it. The
   // updaters below only compute the next value; this effect reacts to it.
   const prefsMounted = useRef(false);
+  const lastPref = useRef('');
   useEffect(() => {
     // The first run is the state we were constructed with, not a change the user
     // made. Saving it would persist the merged defaults for someone who had none.
     if (!prefsMounted.current) { prefsMounted.current = true; return; }
     applyPrefs(prefs);
-    scheduleSave();
+    scheduleSave(DRAGGED_PREFS.has(lastPref.current) ? TYPING_SAVE_MS : 0);
   }, [prefs, scheduleSave]);
 
-  function setPref(k, v) { setPrefs(p => ({ ...p, [k]: v })); }
+  function setPref(k, v) { lastPref.current = k; setPrefs(p => ({ ...p, [k]: v })); }
+  const seenPrefs = useRef(user.prefs || {});
+  useEffect(() => {
+    const incoming = user.prefs || {};
+    const seen = seenPrefs.current;
+    seenPrefs.current = incoming;
+    const same = (a, b) => a === b
+      || (!!a && !!b && typeof a === 'object' && typeof b === 'object' && JSON.stringify(a) === JSON.stringify(b));
+    const changed = Object.keys(incoming).filter(k => !same(incoming[k], seen[k]));
+    if (!changed.length) return;
+    setPrefs(p => {
+      const add = changed.filter(k => !same(incoming[k], p[k]));
+      if (!add.length) return p;
+      const next = { ...p };
+      for (const k of add) next[k] = incoming[k];
+      return next;
+    });
+  }, [user.prefs]);
   function resetPrefs() {
+    lastPref.current = '';
     const isOpenai = document.documentElement.getAttribute('data-preset') === 'openai';
     const applied = document.documentElement.getAttribute('data-theme');
     const fallbackTheme = (applied === 'anthropic' || applied === 'openai' || applied === 'oled') ? 'dark' : (applied || 'system');
@@ -392,8 +418,7 @@ export default function SettingsModal({ user, cfg, initialTab, onClose, onUpdate
     if (memBusy) return;
     setMemBusy(true);
     try {
-      const modelId = user?.prefs?.lastModelId || '';
-      const r = await api.post('/api/me/memory/refresh', { modelId });
+      const r = await api.post('/api/me/memory/refresh', { modelId: modelId || '' });
       setMemory(r.memory || '');
       onUpdated?.({ ...user, memory: r.memory || '' });
     } catch (e) { alert(e.message || t('Could not update memory.')); }
