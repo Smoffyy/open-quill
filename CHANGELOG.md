@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [27.5.1] - TBD
+
+
+---
+
 ## [27.5.0] - 2026-09-10
 ### Added
 - **The playground can run two models against the same prompt, side by side** - pick a second model next to the first and one run fires both, with the replies in adjacent columns and each one's own numbers under it. "Keep this one" promotes a column into the thread, so the conversation carries on from whichever answer was better and the next turn compares from there. It is the case the playground existed for: a release candidate next to the model it is meant to replace, same system prompt, same samplers, same question.
