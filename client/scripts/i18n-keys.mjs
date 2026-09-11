@@ -35,12 +35,14 @@ const EXTRA_KEYS = [
   'Temperature', 'Top P', 'Top K', 'Min P', 'Repetition penalty', 'Presence penalty',
   'Frequency penalty', 'Max tokens', 'Context window', 'Seed', 'System prompt',
   'Extended-mode trigger', 'Standard-mode trigger',
+  'Router', 'Unavailable',
 ];
 
 const TABLE_SCANS = [
   { file: 'components/ShortcutsModal.jsx', re: /title:\s*'((?:[^'\\]|\\.)*)'/g },
   { file: 'components/ShortcutsModal.jsx', re: /\[\s*'((?:[^'\\]|\\.)*)'\s*,\s*\[/g },
   { file: 'lib/keybinds.js', re: /\b(?:label|group):\s*'((?:[^'\\]|\\.)*)'/g },
+  { file: 'lib/playground.js', re: /\b(?:label|hint):\s*'((?:[^'\\]|\\.)*)'/g },
 ];
 
 function walk(dir, keys) {

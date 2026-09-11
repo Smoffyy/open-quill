@@ -1250,6 +1250,7 @@ export default function App() {
     removedModel: activeId ? chatRemovedModel : null,
     skills, onToggleSkill: toggleSkill, onManageSkills: () => onSkillsCb(),
     hideModelPicker: cfg.uiPreset === 'openai',
+    enterSend: cfg.uiPreset !== 'openai',
     chipsBelow: cfg.uiPreset === 'openai',
     models, currentId, onSelect: pickModel, extended, onToggleExtended: () => setExtended(e => !e),
     reasoningEffort, onSetEffort: setReasoningEffort, kwargValues, onSetKwarg: setKwarg,
@@ -1460,10 +1461,7 @@ export default function App() {
                 <Ghost />
               </button>
               {artifactsBtn}
-            </>}
-            items={[
-              user?.isAdmin && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, disabled: streaming || queued, onClick: () => { setArtifactsOpen(false); setCtlOpen(o => !o); } }
-            ]} />
+            </>} />
         )}
         {empty && !incognito && cfg.uiPreset === 'openai' && (
           <div className="home-topbar">
@@ -1494,7 +1492,7 @@ export default function App() {
             </div>
             <ThemeSlot name="composer.above" />
             <div className="composer-wrap">
-              <Composer {...composerProps} autoFocus modelUp focusKey={focusTick} />
+              <Composer {...composerProps} autoFocus modelUp enterSend={false} focusKey={focusTick} />
             </div>
             <div className="qp-slot">
               {incognito ? (

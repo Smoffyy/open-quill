@@ -27,6 +27,7 @@ import Viewer from '../src/components/artifacts/Viewer.jsx';
 import Composer from '../src/components/Composer.jsx';
 import ModelDropdown from '../src/components/ModelDropdown.jsx';
 import ModelDocs from '../src/components/ModelDocs.jsx';
+import Playground from '../src/components/Playground.jsx';
 import DocsNav from '../src/components/DocsNav.jsx';
 import { docsConfig, docsTree, docsModels } from '../src/lib/modeldocs.js';
 import { AdminProvider } from '../src/components/admin/store.jsx';
@@ -104,6 +105,8 @@ const composerProps = {
 cases.push(['Composer:idle', () => React.createElement(Composer, composerProps)]);
 cases.push(['Composer:streaming', () => React.createElement(Composer, { ...composerProps, streaming: true, canSteer: true, onSteer: noop, onQueue: noop })]);
 cases.push(['Composer:slash', () => React.createElement(Composer, { ...composerProps, value: '/', savedPrompts: [{ id: 'p1', title: 'Review', text: 'Review this' }] })]);
+
+cases.push(['Playground:cold', () => React.createElement(Playground, { onClose: noop })]);
 
 const artFiles = [
   { path: 'src/main.js', ext: 'js', v: 2, size: 900 },

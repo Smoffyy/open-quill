@@ -16,6 +16,7 @@ export const Menu = (p) => <I {...p}><path d="M4 7h16M4 12h12M4 17h16" /></I>;
 export const Mic = (p) => <I {...p}><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></I>;
 export const Wave = (p) => <svg viewBox="0 0 24 24" fill="currentColor" {...p}><rect x="3" y="9" width="2" height="6" rx="1"/><rect x="7" y="6" width="2" height="12" rx="1"/><rect x="11" y="4" width="2" height="16" rx="1"/><rect x="15" y="7" width="2" height="10" rx="1"/><rect x="19" y="10" width="2" height="4" rx="1"/></svg>;
 export const Up = (p) => <I {...p}><path d="M12 19V5M5 12l7-7 7 7" /></I>;
+export const Enter = (p) => <I {...p}><path d="M9 10 5 14l4 4" /><path d="M19 6v4a4 4 0 0 1-4 4H5" /></I>;
 export const Stop = (p) => <svg viewBox="0 0 24 24" fill="currentColor" {...p}><rect x="7" y="7" width="10" height="10" rx="2" /></svg>;
 export const Copy = (p) => <I {...p}><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></I>;
 export const ThumbUp = (p) => <I {...p}><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1zM7 11l4-7a2 2 0 0 1 2 1v4h5a2 2 0 0 1 2 2l-1.5 7a2 2 0 0 1-2 1H7" /></I>;
