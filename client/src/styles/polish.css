@@ -18,6 +18,14 @@
 .ts-assistant { display: flex; flex-direction: column; gap: 10px; }
 .ts-assistant .skeleton { height: 15px; border-radius: 7px; }
 
+/* Card entrances. Each of these already carries a staggered inline
+   animation-delay, so `both` is what holds the card back until its turn. */
+@keyframes oq-card-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.pj-card-tile, .co-card, .sc-item { animation: oq-card-in .24s var(--ease-out, cubic-bezier(.22, 1, .36, 1)) both; }
+@media (prefers-reduced-motion: reduce) {
+  .pj-card-tile, .co-card, .sc-item { animation: none; }
+}
+
 /* message entrance (toggle in settings) */
 
 /* message density */
@@ -147,6 +155,8 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .co-card::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: .8px; background: var(--modal-line, var(--border-soft)); }
 .co-card:last-child::after { display: none; }
 .co-card:hover { background: var(--hover-soft); }
+.co-card-skel { pointer-events: none; cursor: default; }
+.co-card-skel .skeleton { height: 13px; }
 
 .co-title { font-size: 14px; line-height: 20px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
 .co-preview, .co-fade { display: none; }

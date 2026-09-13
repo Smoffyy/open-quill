@@ -59,7 +59,7 @@ export default function DocsNav({
       <div className="dnav-head">
         <button className="dnav-brand" onClick={onExit} title={appName || t('Back')}>
           <Chevron className="dnav-brand-back" aria-hidden="true" />
-          <img className="dnav-brand-ic" src={appIcon || BRAND_ICON} alt="" />
+          <img className="dnav-brand-ic" src={appIcon || BRAND_ICON} alt="" aria-hidden="true" />
           <b className="dnav-brand-name">{appName || 'open-quill'}</b>
         </button>
       </div>

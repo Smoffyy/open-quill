@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
 import { t } from '../i18n.jsx';
+import { useSkeleton } from '../lib/skeleton.js';
 
 function timeAgo(ts) {
   const s = Math.floor((Date.now() - ts) / 1000);
@@ -16,6 +17,7 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
   const [chats, setChats] = useState([]);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
+  const showSkeleton = useSkeleton(loading);
   const [tab, setTab] = useState('all');
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
@@ -145,6 +147,11 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
       <div className="co-body" ref={bodyRef} onScroll={onScroll}>
         {chats.length === 0 && !loading && <div className="art-empty">{tab === 'archived' ? t('No archived chats.') : t('No chats yet.')}</div>}
         <div className="co-grid">
+          {showSkeleton && chats.length === 0 && Array.from({ length: 9 }).map((_, i) => (
+            <div key={'skel' + i} className="co-card co-card-skel" aria-hidden="true">
+              <span className="skeleton" style={{ width: (38 + ((i * 29) % 40)) + '%' }} />
+            </div>
+          ))}
           {chats.map((c, i) => (
             <button key={c.id} className={'co-card' + (selecting && selected.has(c.id) ? ' selected' : '')} style={{ animationDelay: (i % 18) * 22 + 'ms' }} onClick={() => clickCard(c)}>
               {selecting && <span className={'co-check' + (selected.has(c.id) ? ' on' : '')}>{selected.has(c.id) ? '✓' : ''}</span>}
@@ -155,7 +162,7 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
             </button>
           ))}
         </div>
-        {loading && <div className="co-loading"><span className="skeleton" style={{ width: 120, height: 12 }} /></div>}
+        {showSkeleton && <div className="co-loading"><span className="skeleton" style={{ width: 120, height: 12 }} /></div>}
         {!hasMore && chats.length > 0 && <div className="co-end">{t("That's all of them.")}</div>}
       </div>
     </div>

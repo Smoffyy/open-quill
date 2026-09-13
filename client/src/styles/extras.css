@@ -147,6 +147,8 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .pj-tile-name { font-size: 14px; font-weight: 500; line-height: 20px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pj-tile-desc { margin-top: 8px; font-size: 14px; line-height: 20px; color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .pj-tile-time { position: absolute; left: 16px; bottom: 16px; font-size: 13px; line-height: 17px; color: var(--text-faint); }
+.pj-tile-skel { pointer-events: none; cursor: default; gap: 12px; }
+.pj-tile-skel .skeleton { height: 13px; }
 
 .pj-create-overlay { z-index: 320; }
 .pj-create { width: min(520px, 92vw); background: var(--menu-bg); border: 0; border-radius: 12px; padding: 24px; box-shadow: 0 8px 32px rgba(0, 0, 0, .28); font-family: var(--font-sans); }
@@ -189,6 +191,8 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .pj-composer { margin-top: 36px; }
 .pj-chats { margin-top: 24px; display: flex; flex-direction: column; }
 .pj-chats-head { font-size: 14px; line-height: 20px; font-weight: 400; color: var(--text-faint); margin-bottom: 8px; }
+.pj-name-skel { width: min(280px, 55%); height: 24px; border-radius: 8px; }
+.pj-row-skel { height: 15px; margin-bottom: 14px; }
 .pj-empty { border: 0; border-radius: 12px; padding: 28px; text-align: center; color: var(--text-faint); font-size: 14px; line-height: 20px; margin-top: 14px; }
 .pj-chat-row { text-align: left; height: 49.6px; padding: 0 4px; display: flex; flex-direction: column; justify-content: center; border-radius: 8px; transition: background var(--fx-t, .12s); }
 .pj-chat-row:hover { background: var(--surface-hover); }

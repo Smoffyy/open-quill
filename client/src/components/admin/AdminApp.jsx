@@ -174,7 +174,7 @@ function Shell() {
       <div className="cp">
         <header className="cp-top">
           <div className="cp-mark">
-            <img src={workspace.config.appIcon || BRAND_ICON} alt="" />
+            <img src={workspace.config.appIcon || BRAND_ICON} alt="" aria-hidden="true" />
             <b>{workspace.config.appName || 'open-quill'}</b>
             <span>{t('Admin')}</span>
           </div>

@@ -1514,10 +1514,17 @@ test('parseRoute decodes an id and survives a malformed one', () => {
 });
 
 test('parseRoute does not mistake a lookalike path for a screen', () => {
-  assert.deepEqual(parseRoute('/administrator'), { view: 'home' });
-  assert.deepEqual(parseRoute('/chatter'), { view: 'home' });
+  assert.deepEqual(parseRoute('/administrator'), { view: 'notfound' });
+  assert.deepEqual(parseRoute('/chatter'), { view: 'notfound' });
   assert.deepEqual(parseRoute(''), { view: 'home' });
   assert.deepEqual(parseRoute(null), { view: 'home' });
+});
+
+test('parseRoute answers notfound for a path no screen claims', () => {
+  assert.deepEqual(parseRoute('/nope'), { view: 'notfound' });
+  assert.deepEqual(parseRoute('/chat'), { view: 'notfound' }, 'a chat needs an id');
+  assert.deepEqual(parseRoute('/project'), { view: 'notfound' });
+  assert.deepEqual(parseRoute('/admin', { isAdmin: true }), { view: 'admin' }, 'a real screen still wins');
 });
 
 test('shouldResetPath only claims the paths its own screen owns', () => {

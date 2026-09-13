@@ -6,6 +6,7 @@ import { Box, Search, Plus, ChevDown, Chevron, Star, Dots, Trash, Pencil, X, Fil
 import { t } from '../i18n.jsx';
 import { focusUnlessTouch } from '../lib/touch.js';
 import { useDismiss } from '../lib/dismiss.js';
+import { useSkeleton } from '../lib/skeleton.js';
 
 function updatedLabel(ts) {
   const d = new Date(ts);
@@ -112,6 +113,7 @@ function FileTree({ node, prefix, depth, closed, onToggle, onRemove, fmtSize }) 
 
 function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onChanged, onDeleted }) {
   const [project, setProject] = useState(null);
+  const showSkeleton = useSkeleton(!project);
   const [editingInstr, setEditingInstr] = useState(false);
   const [instr, setInstr] = useState('');
   const [menu, setMenu] = useState(false);
@@ -154,7 +156,16 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
   }, [id]);
   useEffect(() => { load(); }, [load]);
   useDismiss(menu, () => setMenu(false), menuRef);
-  if (!project) return <div className="pj-detail" />;
+  if (!project) return !showSkeleton ? null : (
+    <div className="pj-detail" aria-hidden="true">
+      <div className="pj-main">
+        <div className="pj-title-row"><span className="skeleton pj-name-skel" /></div>
+        <div className="pj-chats">
+          {[64, 48, 56].map((w, i) => <span key={i} className="skeleton pj-row-skel" style={{ width: w + '%' }} />)}
+        </div>
+      </div>
+    </div>
+  );
 
   async function patch(body) {
     const p = await api.patch('/api/projects/' + id, body);
@@ -268,6 +279,7 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
 
 export default function ProjectsPanel({ openId, composerProps, onClose, onOpenChat, onStartChat, onOpenProject, startCreate = false, onCreateHandled }) {
   const [projects, setProjects] = useState(null);
+  const showSkeleton = useSkeleton(projects === null);
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('updated');
   const [creating, setCreating] = useState(false);
@@ -310,12 +322,22 @@ export default function ProjectsPanel({ openId, composerProps, onClose, onOpenCh
               <Search style={{ width: 16 }} />
               <input value={q} placeholder={t("Search projects...")} onChange={(e) => setQ(e.target.value)} />
             </div>
-            {projects === null ? null : list.length === 0 ? (
+            {projects === null ? (showSkeleton &&
+              <div className="pj-grid" aria-hidden="true">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="pj-card-tile pj-tile-skel">
+                    <div className="pj-tile-top"><span className="skeleton" style={{ width: '52%' }} /></div>
+                    <span className="skeleton" style={{ width: '78%' }} />
+                    <span className="skeleton" style={{ width: '34%' }} />
+                  </div>
+                ))}
+              </div>
+            ) : list.length === 0 ? (
               <div className="co-end">{q.trim() ? t('No projects match your search.') : t('No projects yet, create one to get started.')}</div>
             ) : (
               <div className="pj-grid">
                 {list.map((p, i) => (
-                  <button key={p.id} className="pj-card-tile" style={{ animationDelay: (i * 26) + 'ms' }} onClick={() => openDetail(p.id)}>
+                  <button key={p.id} className="pj-card-tile" style={{ animationDelay: (i % 18) * 26 + 'ms' }} onClick={() => openDetail(p.id)}>
                     <div className="pj-tile-top">
                       <span className="pj-tile-icon"><Box style={{ width: 17 }} /></span>
                       <div className="pj-tile-name">{p.name}</div>

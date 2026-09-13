@@ -76,7 +76,7 @@ function RasterCrop({ file, onDone, onCancel }) {
         <Btn kind="primary" disabled={!img || busy} onClick={apply}>{t('Use image')}</Btn>
       </>}>
       <div style={{ display: 'grid', placeItems: 'center', padding: '4px 0 18px' }}>
-        {preview && <img src={preview} alt="" style={{ width: 128, height: 128 }} />}
+        {preview && <img src={preview} alt={t('Preview of the image being cropped')} style={{ width: 128, height: 128 }} />}
       </div>
       {error && <div style={{ marginBottom: 14 }}><Note tone="bad">{error}</Note></div>}
       <Fields>
@@ -187,7 +187,7 @@ function VectorCrop({ file, onDone, onCancel }) {
         <Btn kind="primary" disabled={!out || busy} onClick={() => apply(false)}>{t('Use crop')}</Btn>
       </>}>
       <div style={{ display: 'grid', placeItems: 'center', padding: '4px 0 18px' }}>
-        {preview && <img src={preview} alt="" style={{ width: 128, height: 128 }} />}
+        {preview && <img src={preview} alt={t('Preview of the image being cropped')} style={{ width: 128, height: 128 }} />}
       </div>
       {error
         ? <Note tone="bad">{error}</Note>
@@ -227,7 +227,7 @@ export function ImagePicker({ value, fallback, onChange, hint }) {
             width: 48, height: 48, borderRadius: 10, display: 'grid', placeItems: 'center',
             border: '1px solid var(--border-soft)', background: 'var(--surface-2)', overflow: 'hidden', flexShrink: 0
           }}>
-          {shown ? <img src={shown} alt="" style={{ width: 32, height: 32, objectFit: 'contain' }} /> : <span className="cp-hint">{t('none')}</span>}
+          {shown ? <img src={shown} alt={t('Current image')} style={{ width: 32, height: 32, objectFit: 'contain' }} /> : <span className="cp-hint">{t('none')}</span>}
         </button>
         <div className="cp-acts">
           <Btn size="sm" onClick={() => ref.current?.click()}>{value ? t('Replace') : t('Upload')}</Btn>

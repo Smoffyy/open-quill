@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [27.5.1] - TBD
+### Added
+- **A 404 page** - an unknown address used to render the home screen silently. It now says the page does not exist, shows the path, and offers a new chat or a search.
+- **Privacy & security in the profile menu** - opens `docs/privacy-security.md`, alongside Credits, Changelog and Licensing.
+- **Support contact** (Admin, Interface) - an email or https link for whoever runs the instance, shown on the 404 page. Empty by default.
+- **`robots.txt` and an `X-Robots-Tag: noindex` header** - a self-hosted instance reachable from the internet no longer risks being indexed.
+- **Open Graph and Twitter card tags, and `favicon.ico`** - both local, no remote assets.
+
+### Changed
+- **Every view sets the browser tab title** - admin, playground, docs, projects, artifacts, scheduled tasks and all-chats were all stuck on the last chat's title.
+- **The sign-in form marks which field is wrong** - errors are announced to screen readers, the offending input is outlined and flagged `aria-invalid`, and typing clears it. The form is a real `<form>`, so password managers and Enter behave natively.
+- **Buttons that wait say so** - signing in, creating an account and verifying a code show a spinner and a label instead of only greying out.
+- **Decorative icons are hidden from screen readers**, and image previews in the admin panel have real alt text.
+
+### Fixed
+- **Pressing a control in the message box no longer drags its label with it** - the press animation scaled the whole button, so the plus, the model name, the microphone and the call button all shifted and shrank under the cursor and snapped back on release. The squish now belongs to the fill behind the control rather than the control itself: the highlight moves and resizes, the glyph and the model name stay exactly where they are. Hover, the open-menu state and the call button's red tint are unchanged, and reduced motion still turns the press off entirely.
+- **Switching chats no longer flashes text in the wrong place** - a swapped-in conversation painted before its markdown, maths and fonts had settled, so lines appeared briefly misplaced and then jumped into position. The thread is now held invisible for a beat while the new messages lay out and the scroll settles at the bottom, then fades in over 450ms rather than snapping on. A chat whose maths has not been typeset yet holds until the typesetter is ready instead of showing its own source for a frame, capped so a component that never loads cannot leave the thread hidden. The loading skeleton is unaffected and still appears for a chat that is not cached yet, and reduced motion drops the fade.
+- **Reloading a chat no longer flashes the greeting first** - which conversation a URL means was worked out one step too late, after the screen had already been drawn, so refreshing on a chat painted the full "Good evening" home screen, centred message box and all, before replacing it with the conversation. The address is now read before the first frame, so a reload lands on the conversation and the home screen is only drawn when the address actually means home. Projects and the reference did the same thing and are fixed with it.
+- **Switching between Artifacts, Scheduled and Projects no longer flashes what was behind them** - the library overlay faded in from fully transparent, so the greeting, the chat you came from or the previous tab showed through for the length of the fade. The overlay is now opaque from the first frame and the fade is gone.
+- **A long reply no longer jumps the thread for a frame while it is written** - a code block in the reply being written arrives below the viewport, and the containment that lets a long thread skip the code blocks it is not showing was being applied to it too, so the block was laid out at its 220px placeholder height, the thread followed the bottom down to it, and the frame that measured it for real dropped the thread back. Measured at 230px up and 138px back, one frame wide. The recent messages are now exempt from that containment, as they already were from the per-message kind, and the thread waits for a second measurement before following a jump large enough to be a bad one. The room a turn reserves under the newest message is also given back over that turn and never taken again until the next message, so a wrong measurement cannot grow it either.
+- **Attachments survive leaving the message box** - images and files were held inside the composer, so opening a chat, a menu or a library page threw them away while the typed text came back. They are now kept per chat alongside the text draft and restored on return, including after closing the tab. Incognito keeps nothing.
+
+### Changed
+- **Lists no longer sit blank while they load** - the artifacts library, scheduled tasks, the projects grid, a project's own page and the all-chats view each drew nothing at all until their contents arrived and then dropped the finished list in at once. Each now shows a placeholder in the shape of what is coming, so the page has its layout from the first frame and fills in rather than appearing.
+- **Placeholders wait before appearing** - the artifacts library, scheduled tasks, the projects grid, a project's page and the all-chats view drew their skeleton the instant they opened, so a list that arrived immediately flashed a placeholder first. They now wait the same 100ms a chat does and show nothing if the contents beat it.
+- **The scroll after sending is smoother** - the glide that carries a sent message to the top started at full speed from a standstill, re-aimed at a resting place that moves under it as the reply's placeholder lands, and left the view off the pixel grid on every frame, so the text rasterised at a new sub-pixel offset the whole way down. It now leaves and arrives at rest, chases the moving resting place instead of snapping to it, and lands each frame on the grid.
+- **Cards fade in as they arrive** - the project tiles, the all-chats rows and the keyboard shortcut list were each already asking to appear one after another, but the animation they were asking for was never written, so the staggering did nothing. They now rise and fade in turn, the projects grid no longer times its stagger off an uncapped count that would have taken over a second on a long list, and opening the library pages fades rather than snapping. Reduced motion turns all of it off.
+
+---
+
 ## [27.5.0] - 2026-09-10
 ### Added
 - **The playground can run two models against the same prompt, side by side** - pick a second model next to the first and one run fires both, with the replies in adjacent columns and each one's own numbers under it. "Keep this one" promotes a column into the thread, so the conversation carries on from whichever answer was better and the next turn compares from there. It is the case the playground existed for: a release candidate next to the model it is meant to replace, same system prompt, same samplers, same question.

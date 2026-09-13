@@ -113,6 +113,12 @@ export default function InterfaceSection() {
           <Field label={t('Icon')} hint={t('PNG, SVG, JPEG, or GIF. SVG stays vector through the crop.')}>
             <ImagePicker value={config.appIcon} fallback={BRAND_ICON} onChange={(v) => setCfg('appIcon', v)} />
           </Field>
+          <Field label={t('Support contact')}
+            hint={t('Who to reach about this instance. An email address or an https link. Shown on the 404 page; leave empty to hide it.')}>
+            <Input value={config.supportContact || ''}
+              placeholder="admin@example.com"
+              onChange={(e) => setCfg('supportContact', e.target.value)} />
+          </Field>
         </Fields>
       </Card>
 

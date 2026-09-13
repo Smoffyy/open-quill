@@ -28,6 +28,17 @@ Client-only extras live in `client/`: `npm run dead:css` is an **advisory** unus
 
 CI (`.github/workflows/ci.yml`, Node 24) runs, in order: server syntax check, `lint --quiet`, build, `i18n:check`, `smoke`, `check:release`, `test:client`, `cd server && npm test`. All must stay green.
 
+## Not a marketing site
+
+open-quill is login-walled software someone runs on their own machine, not a public page, and the usual launch checklist inverts here:
+
+- **No crawling, no indexing.** `client/public/robots.txt` disallows everything and `server/index.js` sets `X-Robots-Tag: noindex, nofollow, noarchive, noimageindex` on every response. An instance exposed to the internet must not end up in a search index. There is deliberately **no sitemap.xml**.
+- **No analytics, ever.** Any script, pixel or beacon breaks the everything-is-local rule below and `npm run build` fails on it. Per-instance numbers already exist and stay local: `lib/audit.js`, `lib/toolstats.js` and the admin Usage section.
+- **No cookie banner.** The only cookie is the session, which is strictly necessary and therefore consent-exempt. A banner would ask for permission that is not required.
+- **No terms page.** The software is MIT and self-hosted; `LICENSE` and `CREDITS.md` are surfaced through `DocModal` and that is the whole obligation.
+- **Meta tags are for unfurls, not ranking.** `client/index.html` carries one static title, description and Open Graph block so a pasted instance URL previews in a chat app. Per-view titles are set at runtime by the `document.title` effect in `App.jsx`, which every view must extend when it is added.
+- **Contact is per-instance.** `support_contact` (Admin, Interface, Identity) is whoever runs *this* server, not a vendor address, and is empty by default.
+
 ## The everything-is-local rule
 
 Nothing may reach the network that the user did not configure. Fonts, KaTeX and highlight.js are bundled npm deps, never CDN. Three mechanisms enforce this and none may be weakened:
@@ -90,6 +101,10 @@ Dependency direction is **routes to lib**; `lib/ws/` never imports from `routes/
 
 `lib/brand.js` exists in both a client and a server copy and they must agree; model rows store icon paths, so moving files needs a `LEGACY` entry in the server copy.
 
+**Routing** (`lib/route.js`): `parseRoute` is a whitelist. A path no screen claims returns `{ view: 'notfound' }`, which `App.jsx` renders as the `NotFound` overlay, so a mistyped URL says so instead of quietly showing home. Adding a screen means adding its pattern here, or it 404s.
+
+**Accessibility**: an `<img>` that repeats adjacent text is `alt="" aria-hidden="true"`, never a restated label; an image carrying its own meaning (an upload, an attachment, a preview) gets real `alt`. A form reports failure through one `role="alert"` node that stays mounted so it is announced when filled, marks the offending field `aria-invalid` with `aria-describedby` pointing at that node, and clears both on the next keystroke; `Login.jsx` is the pattern. A submit that waits swaps its label and shows `.btn-spin` rather than only going disabled.
+
 **Two UI presets**, everything hanging off `data-preset="anthropic"|"openai"` on `<html>` (registry `lib/palettes.js`):
 1. Anthropic is the default codebase, written plain with no preset-specific CSS.
 2. Every OpenAI rule lives in `styles/openai.css`, scoped `[data-preset="openai"]`.
@@ -98,6 +113,8 @@ Dependency direction is **routes to lib**; `lib/ws/` never imports from `routes/
 5. A palette must not introduce a new `data-theme` value, and no preset may make a user preference inert.
 
 **Theme builder** (`lib/theme/`, `components/builder/`) is a configuration layer *above* the two presets: `theme.basePreset` drives `data-preset`, so the rules above still hold. A theme is one JSON document (`schema.js`); `css.js` compiles it into a single `<style id="oq-theme-style">` appended last, and nothing else in the client knows a theme exists. Elements are found by CSS selector (`ELEMENTS` in `schema.js`), so styling a component never requires touching it; only reordering (`data-oq-item`), editable text (`useThemeText`) and inserted nodes (`ThemeSlot`) need a component to opt in. Generated rules carry a `:root:root:root` prefix to outweigh palette rules, `!important` is reserved for hiding, and every style value is whitelisted twice: `STYLE_PROPS` in `server/lib/theme.js` at the write boundary and `safeValue()` in `css.js` before it reaches a stylesheet. Tokens naming an existing app variable emit only when set, since emitting a default would flatten the preset.
+
+**Breakpoints**: 768px is the phone/tablet line the sidebar and composer already key on, 480px the narrow-phone line where rows stack. Reach for those two before inventing a third; the admin panel's wider steps (1180/1040/1000/900/820) exist for its own multi-column tables. Every screen must survive 400px wide.
 
 **Performance and CSS**: long threads use occlusion (`content-visibility`) rather than virtualization, gated by content size, never on `.msg` itself (it clips the avatar). Highlighting, KaTeX and locale chunks are lazy and local. Never `overflow-y: auto` alone, it makes the other axis `auto` too; use `overflow: hidden auto`. Sticky bars must be opaque. Wide content scrolls in its own container, never the page body.
 

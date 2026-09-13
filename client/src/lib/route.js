@@ -29,7 +29,8 @@ export function parseRoute(pathname, opts = {}) {
   const chat = p.match(/^\/chat\/(.+)$/);
   if (chat) return { view: 'chat', id: decodeStrict(chat[1]) };
 
-  return { view: 'home' };
+  if (p === '/' || p === '') return { view: 'home' };
+  return { view: 'notfound' };
 }
 
 // A hand-edited URL can carry a stray percent, and decodeURIComponent throws on

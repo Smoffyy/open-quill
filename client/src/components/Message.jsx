@@ -183,7 +183,7 @@ const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, nam
   const sz = model?.iconSize > 0 ? model.iconSize : 40;
   return (
     <div ref={ref} className={'msg-icon' + (below ? ' below' : '') + (name ? ' with-name' : '')}>
-      {base && <img src={src} className={cls} style={{ width: sz, height: sz }} alt="" />}
+      {base && <img src={src} className={cls} style={{ width: sz, height: sz }} alt="" aria-hidden="true" />}
       {name && <span className={'msg-icon-name' + (nameHoverOnly ? ' hover-reveal' : '')}>{name}</span>}
       <StatusCaption swapKey={crossfade ? statusKey : null} label={statusLabel} detail={statusDetail} />
     </div>
@@ -468,7 +468,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
                 <div className="retry-menu-label">{t("Retry with")}</div>
                 {models.map(mm => (
                   <button key={mm.id} role="menuitem" className={mm.id === currentId ? 'on' : ''} onClick={() => { setRetryMenu(false); onRegenerateWith(msg.id, mm.id); }}>
-                    {mm.staticIcon && <img src={mm.staticIcon} alt="" />}{mm.displayName}{mm.id === currentId && <Check style={{ width: 13, marginLeft: 'auto' }} />}
+                    {mm.staticIcon && <img src={mm.staticIcon} alt="" aria-hidden="true" />}{mm.displayName}{mm.id === currentId && <Check style={{ width: 13, marginLeft: 'auto' }} />}
                   </button>
                 ))}
               </div>, document.body)}

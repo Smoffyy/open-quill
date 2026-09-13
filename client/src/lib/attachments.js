@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { attachKey, peekAttachments, readAttachments, writeAttachments, dropAttachments } from './attachdrafts.js';
 
 const DEFAULT_GLOW = 'var(--text)';
 
@@ -25,7 +26,12 @@ function dominantColor(url) {
   });
 }
 
-export function useAttachments({ visionSupported }) {
+const hydrate = (list) => list.map(f => ({
+  ...f,
+  preview: f.type && f.type.startsWith('image/') ? URL.createObjectURL(f.file) : null
+}));
+
+export function useAttachments({ visionSupported, draftId }) {
   const [files, setFiles] = useState([]);
   const [dragActive, setDragActive] = useState(false);
   const [glow, setGlow] = useState(DEFAULT_GLOW);
@@ -34,7 +40,35 @@ export function useAttachments({ visionSupported }) {
   const filesRef = useRef(files);
   filesRef.current = files;
 
+  const persist = draftId !== undefined;
+  const key = attachKey(draftId);
+  const restoredKey = useRef(null);
+
   useEffect(() => () => filesRef.current.forEach(f => f.preview && URL.revokeObjectURL(f.preview)), []);
+
+  useLayoutEffect(() => {
+    if (!persist) return;
+    const swap = (list) => {
+      filesRef.current.forEach(f => f.preview && URL.revokeObjectURL(f.preview));
+      const next = hydrate(list);
+      filesRef.current = next;
+      setFiles(next);
+      const img = [...next].reverse().find(f => f.preview);
+      setGlow(DEFAULT_GLOW);
+      if (img) dominantColor(img.preview).then(c => c && setGlow(c));
+    };
+    const hit = peekAttachments(key);
+    if (hit) { restoredKey.current = key; swap(hit); return; }
+    let live = true;
+    restoredKey.current = null;
+    readAttachments(key).then(list => { if (!live) return; restoredKey.current = key; swap(list); });
+    return () => { live = false; };
+  }, [persist, key]);
+
+  useEffect(() => {
+    if (!persist || restoredKey.current !== key) return;
+    writeAttachments(key, files);
+  }, [persist, key, files]);
 
   function addFiles(list) {
     let picked = Array.from(list || []);
@@ -67,8 +101,10 @@ export function useAttachments({ visionSupported }) {
 
   function clearFiles() {
     filesRef.current.forEach(f => f.preview && URL.revokeObjectURL(f.preview));
+    filesRef.current = [];
     setFiles([]);
     setGlow(DEFAULT_GLOW);
+    if (persist) dropAttachments(key);
   }
 
   useEffect(() => {

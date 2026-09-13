@@ -32,6 +32,7 @@ const ModelDocs = React.lazy(() => import('./components/ModelDocs.jsx'));
 const AdminPanel = React.lazy(() => import('./components/AdminPanel.jsx'));
 const Playground = React.lazy(() => import('./components/Playground.jsx'));
 import DocModal from './components/DocModal.jsx';
+import NotFound from './components/NotFound.jsx';
 import ArtifactsPanel from './components/ArtifactsPanel.jsx';
 import ChatControls from './components/ChatControls.jsx';
 import ModelDropdown from './components/ModelDropdown.jsx';
@@ -65,6 +66,7 @@ import { createLru } from './lib/lru.js';
 import { useTurnMeta, liveLedgerTokens } from './lib/turnmeta.js';
 import { useTurnStream } from './lib/turnstream.js';
 import { parseRoute, shouldResetPath, pathForChat, pathForProject } from './lib/route.js';
+import { hasMath, katexPlugin, ensureKatex } from './lib/mathjs.js';
 import { docsConfig, docsTree, docsPath, parseDocsPath } from './lib/modeldocs.js';
 import { useDocsEdit } from './lib/docsedit.js';
 import { useSocket } from './lib/socket.js';
@@ -73,10 +75,12 @@ import { toast } from './toast.js';
 import { copyText } from './clipboard.js';
 import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork, Panel, Copy, Check, Star, Telescope, TextIcon, Expand } from './components/icons.jsx';
 import { BRAND_ICON } from './lib/brand.js';
+import { SKELETON_DELAY } from './lib/skeleton.js';
 
-const SKELETON_DELAY = 100;
+const THREAD_SWAP_DELAY = 90;
+const THREAD_SWAP_MAX = 600;
 const HEAVY_THREAD_CHARS = 40000;
-const DEFAULT_CFG = { appName: 'open-quill', disclaimer: tk('Assistants can make mistakes, double-check responses.'), greetings: [tk('How can I help you?')], appIcon: '', quickPrompts: [], version: '' };
+const DEFAULT_CFG = { appName: 'open-quill', disclaimer: tk('Assistants can make mistakes, double-check responses.'), greetings: [tk('How can I help you?')], appIcon: '', supportContact: '', quickPrompts: [], version: '' };
 
 export default function App() {
   const [user, setUser] = useState(undefined);
@@ -162,6 +166,7 @@ export default function App() {
   const onCreditsCb = useCallback(() => { setMobileDrawer(false); setShowCredits(true); }, []);
   const onChangelogCb = useCallback(() => { setMobileDrawer(false); setShowChangelog(true); }, []);
   const onLicenseCb = useCallback(() => { setMobileDrawer(false); setShowLicense(true); }, []);
+  const onPrivacyCb = useCallback(() => { setMobileDrawer(false); setShowPrivacy(true); }, []);
   const onChatsOverviewCb = useCallback(() => navTo('chats'), [navTo]);
   const onArtifactsCb = useCallback(() => navTo('artifacts'), [navTo]);
   const onScheduledCb = useCallback(() => navTo('scheduled'), [navTo]);
@@ -229,6 +234,8 @@ export default function App() {
   const [showCredits, setShowCredits] = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
   const [showLicense, setShowLicense] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [notFound, setNotFound] = useState(() => parseRoute(location.pathname).view === 'notfound');
   const [focusTick, setFocusTick] = useState(0);
   const [cfg, setCfg] = useState(DEFAULT_CFG);
   const docsCfg = useMemo(() => docsConfig(cfg.modelDocsConfig), [cfg.modelDocsConfig]);
@@ -409,6 +416,26 @@ export default function App() {
   } = stream;
   const [threadLoading, setThreadLoading] = useState(false);
   const skelTimer = useRef(null);
+  const [threadSwap, setThreadSwap] = useState(false);
+  const swapTimer = useRef(null);
+  const swapSeq = useRef(0);
+  // The floor covers layout settling; waitFor covers a lazy chunk the first
+  // render would otherwise paint without. The cap is what keeps a chunk that
+  // never arrives from leaving the thread hidden for good.
+  const holdThread = useCallback((waitFor) => {
+    clearTimeout(swapTimer.current);
+    const seq = ++swapSeq.current;
+    setThreadSwap(true);
+    const after = (ms) => new Promise(r => { setTimeout(r, ms); });
+    const floor = new Promise(r => { swapTimer.current = setTimeout(r, THREAD_SWAP_DELAY); });
+    const chunk = waitFor ? Promise.race([Promise.resolve(waitFor).catch(() => null), after(THREAD_SWAP_MAX)]) : null;
+    Promise.all([floor, chunk]).then(() => { if (seq === swapSeq.current) setThreadSwap(false); });
+  }, []);
+  const releaseThread = useCallback(() => {
+    swapSeq.current++;
+    clearTimeout(swapTimer.current);
+    setThreadSwap(false);
+  }, []);
   const showMsgSpeed = !!user?.prefs?.msgSpeed;
   const showCtxGauge = !!user?.prefs?.ctxGauge;
   const statusDelay = statusDelayEnabled(user?.prefs?.statusDelay);
@@ -416,6 +443,9 @@ export default function App() {
 
   const activeIdRef = useRef(null);
   const currentIdRef = useRef(null);
+  // openFromUrl only runs once the session resolves, an effect too late to stop
+  // the greeting painting over a /chat/:id reload. The path already knows.
+  const bootView = useRef(parseRoute(location.pathname).view);
   const incognitoRef = useRef(false);
   useEffect(() => { incognitoRef.current = incognito; }, [incognito]);
   const { saveDraft, loadDraft, clearDraft, flushDraft } = useDrafts(incognitoRef);
@@ -455,6 +485,7 @@ export default function App() {
   useEffect(() => () => {
     stream.stopTimer();
     clearTimeout(skelTimer.current);
+    clearTimeout(swapTimer.current);
   }, []);
 
   useEffect(() => {
@@ -543,16 +574,19 @@ export default function App() {
     else if (!activeId && !incognito && m && user?.prefs?.webSearchDefault && cfg.webSearchAvailable) setWebSearch(true);
   }, [currentId, activeId, models, incognito, cfg.webSearchAvailable, user?.prefs?.webSearchDefault]);
   function openFromUrl() {
+    bootView.current = 'home';
     const r = parseRoute(location.pathname, { isAdmin: !!user?.isAdmin });
     if (r.replace) history.replaceState({}, '', r.replace);
     const onProjects = r.view === 'project' || r.view === 'projects';
     // Every view flag is written on every route change. The branches used to
     // return early, so going Back into a project from another view left the
     // projects panel mounted underneath it.
+    setNotFound(r.view === 'notfound');
     setShowAdmin(r.view === 'admin');
     setShowPlayground(r.view === 'playground');
     setDocsTarget(r.view === 'docs' ? parseDocsPath(location.pathname) : null);
     setShowProjects(onProjects);
+    if (r.view === 'notfound') return;
     if (r.view === 'docs') return;
     if (onProjects) { setProjectOpenId(r.id ?? null); return; }
     if (r.view !== 'home' && r.view !== 'chat') return;
@@ -578,10 +612,21 @@ export default function App() {
   }, []);
   useEffect(() => {
     const appName = cfg.appName || 'open-quill';
-    if (incognito) { document.title = t('Incognito chat - {app}', { app: appName }); return; }
-    const active = activeId ? chats.find(c => c.id === activeId) : null;
-    document.title = active ? `${active.title || t('Untitled chat')} - ${appName}` : `${t('New chat')} - ${appName}`;
-  }, [activeId, chats, cfg.appName, incognito]);
+    const head = (
+      notFound ? t('Page not found')
+      : showAdmin ? t('Admin')
+      : showPlayground ? t('Playground')
+      : docsTarget ? t('Docs')
+      : showProjects ? (projects.find(p => p.id === projectOpenId)?.name || t('Projects'))
+      : libPage === 'artifacts' ? t('Artifacts')
+      : libPage === 'scheduled' ? t('Scheduled tasks')
+      : chatsOverview ? t('All chats')
+      : incognito ? t('Incognito chat')
+      : activeId ? ((chats.find(c => c.id === activeId)?.title) || t('Untitled chat'))
+      : t('New chat')
+    );
+    document.title = `${head} - ${appName}`;
+  }, [activeId, chats, cfg.appName, incognito, notFound, showAdmin, showPlayground, docsTarget, showProjects, projectOpenId, projects, libPage, chatsOverview]);
   async function exportAllChats() { window.open('/api/chats/export-all', '_blank'); }
   async function importChatsFile(file) {
     try {
@@ -917,6 +962,12 @@ export default function App() {
     if (!on) { setThreadLoading(false); return; }
     skelTimer.current = setTimeout(() => { if (onDelay) onDelay(); setThreadLoading(true); }, SKELETON_DELAY);
   }
+  // Markdown renders maths as its own source text until the KaTeX chunk lands,
+  // so a thread that needs it is not ready to be looked at yet.
+  function mathReady(msgs) {
+    if (katexPlugin()) return null;
+    return (msgs || []).some(m => hasMath(m.content)) ? ensureKatex() : null;
+  }
   async function openChat(id, push = true) {
     setMobileDrawer(false);
     if (incognito) setIncognito(false);
@@ -925,7 +976,9 @@ export default function App() {
     setActiveId(id);
     const seq = ++openSeq.current;
     const cached = chatCache.current.get(id);
+    const swapping = id !== activeIdRef.current;
     if (cached) {
+      if (swapping) holdThread(mathReady(cached.messages));
       setMessages(cached.messages || []);
       applyChatMeta(cached.chat || {});
       applyLastModel(cached.messages || []);
@@ -952,6 +1005,7 @@ export default function App() {
       if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { chat, messages }); return; }
       armSkeleton(false);
       refreshSeq.current++;
+      if (!cached) holdThread(mathReady(messages));
       setMessages(prev => (cached && prev.length === messages.length)
         ? messages.map((sm, i) => { const pm = prev[i]; return { ...sm, _k: (pm && pm.role === sm.role) ? (pm._k || pm.id) : sm.id }; })
         : messages);
@@ -961,7 +1015,7 @@ export default function App() {
       if (!cached) pinToBottom(false, 30);
       try { const f = await api.get('/api/chats/' + id + '/files'); if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { files: f.files || [] }); return; } setFiles(f.files || []); setArtifactsOpen((f.files || []).length > 0 && artifactsOpenRef.current); cacheChat(id, { files: f.files || [] }); }
       catch { if (seq === openSeq.current && activeIdRef.current === id && !cached) setFiles([]); }
-    } catch { if (seq === openSeq.current) { armSkeleton(false); if (!cached) { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); } } }
+    } catch { if (seq === openSeq.current) { armSkeleton(false); releaseThread(); if (!cached) { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); } } }
   }
   function newChat(fromPop) {
     setMobileDrawer(false);
@@ -969,6 +1023,7 @@ export default function App() {
     setShowProjects(false);
     setCurrentProject(null);
     armSkeleton(false);
+    releaseThread();
     setActiveId(null); setMessages([]); setInput('');
     resetChatView();
     setChatEnded(false); setChatEndedReason('');
@@ -1224,7 +1279,8 @@ export default function App() {
   const sandboxOn = sandboxAllowed && (sandbox || !!currentProject);
   const webSearchAvailable = !incognito && !!cfg.webSearchAvailable && (model ? model.webSearchAllowed !== false : true);
   const webSearchOn = webSearchAvailable && webSearch;
-  const empty = !activeId && messages.length === 0 && !callOpen;
+  const booting = bootView.current !== 'home';
+  const empty = !activeId && messages.length === 0 && !callOpen && !booting;
   const bgInChat = user?.prefs?.modelBgInChat !== false;
   const modelHasBg = !incognito && !!(model?.bgEnabled && model?.bgImage);
   const activeBg = computeActiveBg(models, currentId, activeId, messages.length, incognito, user?.prefs);
@@ -1237,6 +1293,7 @@ export default function App() {
 
   const composerProps = {
     placeholder: activeId && !incognito ? t('Write a message...') : undefined,
+    draftId: incognito ? undefined : activeId,
     projects,
     onSetProject: activeId ? (p) => moveChatToProject(activeId, p.id) : null,
     value: input, onChange: (v) => { if (safetyFlagged) { setSafetyFlagged(false); setSafetyReason(''); } setInput(v); saveDraft(activeId, v); }, onSend: send, onStop: stop, streaming: streaming || queued, stopping,
@@ -1370,6 +1427,7 @@ export default function App() {
     { id: 'changelog', label: t('View changelog'), keywords: 'updates version', action: () => setShowChangelog(true) },
     { id: 'credits', label: t('View credits'), keywords: 'about', action: () => setShowCredits(true) },
     { id: 'license', label: t('View licensing'), keywords: 'legal', action: () => setShowLicense(true) },
+    { id: 'privacy', label: t('View privacy & security'), keywords: 'legal data incognito gdpr cookies', action: () => setShowPrivacy(true) },
     { id: 'logout', label: t('Log out'), keywords: 'sign out exit', action: () => logout() }
   ];
 
@@ -1407,7 +1465,7 @@ export default function App() {
         collapsed={collapsed && !docsTarget} onToggle={onToggleSidebarCb}
         mobileOpen={mobileDrawer} onMobileClose={onMobileCloseCb}
         onSettings={onSettingsCb} onAdmin={onAdminCb} onPlayground={onPlaygroundCb}
-        onCredits={onCreditsCb} onChangelog={onChangelogCb} onLicense={onLicenseCb} onLogout={sbLogout} version={cfg.version}
+        onCredits={onCreditsCb} onChangelog={onChangelogCb} onLicense={onLicenseCb} onPrivacy={onPrivacyCb} onLogout={sbLogout} version={cfg.version}
         onChatsOverview={onChatsOverviewCb}
         projects={projects} onProjects={sbProjects} onOpenProject={sbOpenProject} onNewProject={sbNewProject} onMoveToProject={sbMoveToProject}
         busyChats={busyChats} onStopChat={stopChat} />
@@ -1424,6 +1482,12 @@ export default function App() {
       <div className={'main' + (incognito ? ' incognito' : '')} data-incognito={incognito ? 'on' : undefined}>
         <Toaster />
         <ThemeSlot name="main.top" />
+        {notFound && (
+          <NotFound appName={cfg.appName} appIcon={cfg.appIcon} path={location.pathname}
+            contact={cfg.supportContact}
+            onHome={() => { setNotFound(false); sbNewChat(); }}
+            onSearch={() => setShowSearch(true)} />
+        )}
         {docsTarget && (
           <div className="lib-overlay mdoc-overlay" role="region" aria-label={t('Model docs')}>
             <React.Suspense fallback={null}>
@@ -1486,7 +1550,7 @@ export default function App() {
                       line = nm ? part + ', ' + nm : part;
                     }
                     return model?.staticIcon
-                      ? <><img src={model.staticIcon} alt="" style={{ objectFit: 'contain' }} /> {line}</>
+                      ? <><img src={model.staticIcon} alt="" aria-hidden="true" style={{ objectFit: 'contain' }} /> {line}</>
                       : line;
                   })()}
             </div>
@@ -1526,7 +1590,7 @@ export default function App() {
                   )}
                   <button className="chat-name ct-name" disabled={!activeId} title={t('Rename chat')}
                     onClick={() => { setRenameVal(activeChat?.title || ''); setRenaming(true); }}>
-                    <span className="ct-title">{activeChat?.title || t('New chat')}</span>
+                    <span className="ct-title">{activeChat?.title || (booting ? '' : t('New chat'))}</span>
                   </button>
                   <button className="chat-name ct-caret" ref={titleChevRef} disabled={!activeId}
                     title={t('Chat options')} aria-label={t('Chat options')} aria-haspopup="menu" aria-expanded={!!titleMenu}
@@ -1569,7 +1633,7 @@ export default function App() {
             </div>
             {findOpen && user?.prefs?.threadFind !== false && <ThreadFind scrollRef={scrollRef} revision={findRevision} onMatches={onFindMatches} onClose={closeFind} />}
             <div className="scroll-area" id="oq-thread" ref={scrollRef} onScroll={onScroll} onWheel={onWheel} onTouchMove={onTouchMove}>
-              <div className={'thread' + (ledgerOpen ? ' ledger-on' : '') + (heavyThread ? ' virt' : '') + (findOpen ? ' finding' : '')}
+              <div className={'thread' + (ledgerOpen ? ' ledger-on' : '') + (heavyThread ? ' virt' : '') + (findOpen ? ' finding' : '') + (threadSwap ? ' swapping' : '')}
                 role="log" aria-label={t('Conversation')} aria-live="polite" aria-relevant="additions text" aria-busy={streaming ? 'true' : 'false'}>
                 {ledgerOpen && <LedgerBar ledger={ledger} liveUsed={ledgerTokens.used} live={streaming} />}
                 {threadLoading && messages.length === 0 && <ThreadSkeleton />}
@@ -1636,7 +1700,7 @@ export default function App() {
                   </div>
                 ))}
                 {queued && !streaming && (
-                  <div className="msg assistant"><div className="queue-wait"><img src={BRAND_ICON} className="pulse think-dot" alt="" /> {t("Waiting for queue…")}</div></div>
+                  <div className="msg assistant"><div className="queue-wait"><img src={BRAND_ICON} className="pulse think-dot" alt="" aria-hidden="true" /> {t("Waiting for queue…")}</div></div>
                 )}
                 {compacting && <CompactingBar />}
                 <div className="thread-pad" />
@@ -1707,6 +1771,7 @@ export default function App() {
         onOpenProject={(id) => { setProjectOpenId(id); history.replaceState({}, '', pathForProject(id)); loadProjects(); }} />}
       {showCredits && <DocModal title={t("Credits")} name="credits" serif onClose={() => setShowCredits(false)} />}
       {showLicense && <DocModal title={t("Licensing")} name="license" onClose={() => setShowLicense(false)} />}
+      {showPrivacy && <DocModal title={t("Privacy & security")} name="privacy" onClose={() => setShowPrivacy(false)} />}
       {showChangelog && <DocModal title={t("Changelog")} name="changelog" onClose={() => setShowChangelog(false)} />}
       {cmdkOpen && <CommandPalette commands={commands} onClose={() => setCmdkOpen(false)} />}
     </div>

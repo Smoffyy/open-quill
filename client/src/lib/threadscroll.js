@@ -5,31 +5,19 @@ const AT_BOTTOM = 24;
 const FOLLOW_TAU = 85;
 const FOLLOW_MAX_DT = 80;
 
-// A sent message climbs to the top of the thread and stays there while the
-// reply is written under it, which only works if there is somewhere to scroll
-// to. The bottom spacer grows to exactly the room the newest exchange is short
-// of a screen, so "scroll to the bottom" and "put the newest message at the
-// top" are the same position; as the reply fills that room the spacer gives it
-// back, and the message holds still without anything having to hold it. Once
-// the reply is taller than a screen the spacer is back to its resting height
-// and following the bottom is ordinary again.
 const TOP_GAP = 56;
 const BASE_PAD = 96;
-// The glide that carries a sent message to the top: Chrome's own smooth-scroll
-// shape, measured. About 17ms per square root pixel, easing out, and it never
-// runs past its resting place on the way.
+
 const GLIDE_PER_PX = 17;
-const GLIDE_MIN = 180;
-const GLIDE_MAX = 520;
-// The follow loop stands aside for a glide, and so does the layout effect that
-// keeps a sticking thread pinned to the bottom.
+const GLIDE_MIN = 200;
+const GLIDE_MAX = 560;
+const GLIDE_GOAL_TAU = 70;
+const OVER_CONFIRM = 120;
+const OVER_CONFIRM_MS = 26;
+const glideEase = (p) => p * p * (3 - 2 * p);
+
 const SMOOTH_MS = GLIDE_MAX + 160;
 
-// Scroll offsets are kept on the device-pixel grid. Following the content
-// exactly would re-rasterise every glyph on the screen at a new sub-pixel offset
-// each time a line lands, which is the text shimmering while it is written.
-// Landing on the grid keeps the phase fixed, and the fraction of a pixel the
-// bottom gives up for it cannot be seen.
 function snapScroll(v) {
   const dpr = window.devicePixelRatio || 1;
   return Math.round(v * dpr) / dpr;
@@ -39,8 +27,7 @@ export function useThreadScroll(opts = {}) {
   const canFollow = opts.canFollow;
   const auto = useRef(opts.autoscroll !== false);
   auto.current = opts.autoscroll !== false;
-  // The modern thread motion: the newest message pinned to the top, the glide
-  // that puts it there, and a single line followed exactly rather than eased.
+
   const modern = useRef(!!opts.modern);
   modern.current = !!opts.modern;
   const scrollRef = useRef(null);
@@ -55,7 +42,10 @@ export function useThreadScroll(opts = {}) {
   const smoothUntil = useRef(0);
   const padH = useRef(-1);
   const lastWant = useRef(0);
+  const padTurn = useRef(-1);
+  const padSpent = useRef(false);
   const glideRaf = useRef(0);
+  const overSeen = useRef(0);
   const still = useRef(null);
   const [showJump, setShowJump] = useState(false);
 
@@ -65,14 +55,6 @@ export function useThreadScroll(opts = {}) {
     setShowJump(v);
   }, []);
 
-  // Whether the thread is holding still, which is not the same question as
-  // whether it is pinned. There is reserved room under the newest message, or
-  // the reader has scrolled away from the bottom, or they are dragging a
-  // selection: in all three the view is frozen and whatever the reply pushes
-  // down is free to animate its own way there. Only while the thread is actually
-  // scrolling after the bottom is an animation on top of it two movements for
-  // one. Published on the element so a message can read it without every message
-  // subscribing to the scroll.
   const setStill = useCallback((v) => {
     if (still.current === v) return;
     const el = scrollRef.current;
@@ -83,18 +65,6 @@ export function useThreadScroll(opts = {}) {
     else delete thread.dataset.still;
   }, []);
 
-  // Cheap enough to run on every scroll and every follow frame, and it has to:
-  // the spacer is only correct if it is recomputed before anything reads
-  // scrollHeight. Returns whether there is reserved room left, which is the
-  // same question as whether the newest message is still pinned.
-  //
-  // `hold` asks it to place the view as well as measure it. While the room is
-  // there the view is positioned by the message rather than by the bottom, and
-  // that is not a preference: a code block halfway through its first render
-  // measures a couple of hundred pixels too tall for one frame, and a view
-  // anchored to the bottom answers that by throwing the whole thread down the
-  // screen and pulling it back. Anchored to the message, the same bad frame
-  // costs nothing.
   const syncPad = useCallback((hold) => {
     const el = scrollRef.current;
     if (!el) return false;
@@ -108,24 +78,28 @@ export function useThreadScroll(opts = {}) {
     if (!pad) return false;
     const users = thread.querySelectorAll(':scope > .msg.user');
     const anchor = users[users.length - 1];
+    if (users.length !== padTurn.current) {
+      padTurn.current = users.length;
+      padSpent.current = false;
+      padH.current = -1;
+    }
     let want = BASE_PAD;
     if (anchor) {
       const below = pad.getBoundingClientRect().top - anchor.getBoundingClientRect().top;
       want = Math.max(BASE_PAD, Math.round(el.clientHeight - TOP_GAP - below));
     }
-    // A block halfway through its first render can measure a couple of hundred
-    // pixels too tall, and a spacer that believes it shrinks the room out from
-    // under the message: the view hits the bottom of a document that is briefly
-    // too short and the whole thread lurches. Taking room is immediate, giving
-    // it back waits for a second frame to say the same thing. A frame's worth of
-    // room too much costs nothing, because the view is placed by the message.
-    if (padH.current >= 0 && want < padH.current) {
+
+    if (padSpent.current) {
+      want = BASE_PAD;
+      lastWant.current = want;
+    } else if (padH.current >= 0 && want < padH.current) {
       const confirmed = Math.max(want, lastWant.current);
       lastWant.current = want;
       want = Math.min(padH.current, confirmed);
     } else {
       lastWant.current = want;
     }
+    if (want <= BASE_PAD) padSpent.current = true;
     if (Math.abs(want - padH.current) >= 1) {
       padH.current = want;
       thread.style.setProperty('--turn-pad', want + 'px');
@@ -137,12 +111,6 @@ export function useThreadScroll(opts = {}) {
     return true;
   }, []);
 
-  // Unconditional, because the claim `pinToBottom` stakes before React commits
-  // outlives the glide it was staking it for. A send with nowhere to scroll to,
-  // which is every first message in a chat, takes the early exit below without
-  // ever starting one, and the claim was then left standing for its full worst
-  // case: two thirds of a second in which the thread counts as moving, the reply
-  // begins, and its first line pushes the avatar down with no glide on it.
   const endGlide = useCallback(() => {
     if (glideRaf.current) cancelAnimationFrame(glideRaf.current);
     glideRaf.current = 0;
@@ -158,20 +126,22 @@ export function useThreadScroll(opts = {}) {
     const run = Math.max(GLIDE_MIN, Math.min(GLIDE_MAX, Math.round(Math.sqrt(dist) * GLIDE_PER_PX)));
     const t0 = performance.now();
     smoothUntil.current = t0 + run + 60;
-    // The resting place is read again every frame: the reply's own placeholder
-    // arrives mid-glide and the spacer gives back exactly as much room, so a
-    // target captured at the start is stale before the glide lands on it.
+    let goal = el.scrollHeight - el.clientHeight;
+    let last = t0;
     const step = () => {
       const live = scrollRef.current;
       if (!live) { glideRaf.current = 0; smoothUntil.current = 0; return; }
-      const dt = performance.now() - t0;
-      const goal = live.scrollHeight - live.clientHeight;
+      const now = performance.now();
+      const dt = now - t0;
+      const rest = live.scrollHeight - live.clientHeight;
+      goal += (rest - goal) * (1 - Math.exp(-Math.min(FOLLOW_MAX_DT, now - last) / GLIDE_GOAL_TAU));
+      last = now;
       programmatic.current = true;
-      if (dt >= run) { live.scrollTop = goal; endGlide(); return; }
-      live.scrollTop = from + (goal - from) * (1 - Math.pow(1 - dt / run, 2.2));
+      if (dt >= run) { live.scrollTop = snapScroll(rest); endGlide(); return; }
+      live.scrollTop = snapScroll(from + (goal - from) * glideEase(dt / run));
       glideRaf.current = requestAnimationFrame(step);
     };
-    step();
+    glideRaf.current = requestAnimationFrame(step);
   }, [endGlide, syncPad]);
 
   const scrollBottom = useCallback((smooth) => {
@@ -186,12 +156,9 @@ export function useThreadScroll(opts = {}) {
     el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
   }, [glide, endGlide, syncPad]);
 
-  // Claimed before React commits, not when the timer fires: the layout effect
-  // that keeps a sticking thread at the bottom runs in between, and it has to
-  // know the jump it is about to make is the start of a glide, not the end of
-  // one.
   const pinToBottom = useCallback((smooth, delay = 0) => {
     stick.current = true;
+    padTurn.current = -1;
     if (smooth) smoothUntil.current = performance.now() + delay + SMOOTH_MS;
     if (delay > 0) setTimeout(() => scrollBottom(smooth), delay);
     else scrollBottom(smooth);
@@ -249,41 +216,30 @@ export function useThreadScroll(opts = {}) {
       return;
     }
     setStill(false);
-    // Landing on the bottom rather than easing towards it. Easing looks like
-    // smoothing and reads as a shiver: the reply's last line and the avatar
-    // under it drop by however much just arrived and climb back over the next
-    // tenth of a second, once per flush, because the content moved and the view
-    // had not caught up. Landing on it is invisible, since the view moves by
-    // exactly what the content did. Legacy keeps the eased follow it has had.
+
     if (!modern.current) {
       const diff = el.scrollHeight - el.clientHeight - el.scrollTop;
       if (diff > 0.5) { programmatic.current = true; el.scrollTop += Math.max(1, diff * (1 - Math.exp(-dt / FOLLOW_TAU))); }
       return;
     }
-    // Measured off the thread rather than derived from scrollHeight, which is
-    // rounded to a whole pixel: a line of code is 22.75 of them, so the target
-    // grows by 22 or 23 while the content grows by 22.75 and the newest line
-    // lands a little either side of where it belongs, once per line, for as long
-    // as the reply is being written.
+
     const thread = el.querySelector('.thread');
     if (!thread) return;
     const over = thread.getBoundingClientRect().bottom - el.getBoundingClientRect().bottom;
-    if (over <= 0.5) return;
+    if (over <= 0.5) { overSeen.current = 0; return; }
+
+    if (over > OVER_CONFIRM) {
+      const now = performance.now();
+      if (!overSeen.current) { overSeen.current = now; return; }
+      if (now - overSeen.current < OVER_CONFIRM_MS) return;
+    }
+    overSeen.current = 0;
     programmatic.current = true;
     el.scrollTop = snapScroll(el.scrollTop + over);
   }, [canFollow, syncPad, setStill, setJump]);
 
-  // Called from a layout effect, so it runs in the same commit that put the new
-  // text on the page and before the browser paints it. A frame loop cannot do
-  // that: it measures before React commits, so it is always following the text
-  // as it was, and the reply's last line and the avatar under it drop by
-  // whatever just arrived and climb back a frame later. Once per flush, that is
-  // the shiver.
   const followNow = useCallback(() => followStep(FOLLOW_MAX_DT), [followStep]);
 
-  // The loop stays as the backstop for the layout changes no commit announces:
-  // a code block's highlighting landing, an image decoding, an error card
-  // unfolding over a quarter of a second.
   const follow = useCallback(function tick() {
     const now = performance.now();
     const dt = Math.min(FOLLOW_MAX_DT, now - (followTs.current || now));

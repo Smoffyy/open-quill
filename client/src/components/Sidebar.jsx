@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import Tip from './Tip.jsx';
 import { ChatMenu, menuAtButton, menuAtPointer } from './ChatMenu.jsx';
 import DocsNav from './DocsNav.jsx';
-import { Plus, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, Chevron, ChevDown, Box, Compact, Sliders, Check, Artifact, Briefcase, ModelDocs, Info, Clock, ArrowOut, QuickTask, Sparkles, Paper } from './icons.jsx';
+import { Plus, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, Chevron, ChevDown, Box, Compact, Sliders, Check, Artifact, Briefcase, ModelDocs, Info, Clock, ArrowOut, QuickTask, Sparkles, Paper, Ghost } from './icons.jsx';
 import { t } from '../i18n.jsx';
 import { useThemeText } from '../lib/theme/store.jsx';
 import ThemeSlot from './builder/ThemeSlot.jsx';
@@ -142,7 +142,7 @@ function SectionHead({ id, label, folded, onToggle, children }) {
   );
 }
 
-function ProfileMenu({ user, anchorRef, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, onClose }) {
+function ProfileMenu({ user, anchorRef, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onPrivacy, onLogout, onClose }) {
   const ref = useRef(null);
   const [pos, setPos] = useState(null);
   useLayoutEffect(() => {
@@ -165,6 +165,7 @@ function ProfileMenu({ user, anchorRef, onSettings, onAdmin, onPlayground, onCre
       <button onClick={onCredits}><Heart /> {t('Credits')}</button>
       <button onClick={onChangelog}><Sparkles /> {t('Changelog')}</button>
       <button onClick={onLicense}><Paper /> {t('Licensing')}</button>
+      <button onClick={onPrivacy}><Ghost /> {t('Privacy & security')}</button>
       <hr />
       <button onClick={onLogout}><Logout /> {t('Log out')}</button>
     </div>, document.body
@@ -203,7 +204,7 @@ function ChatRow({ c, active, showTrash, projects = [], onMoveToProject, onOpen,
 
 function Sidebar({
   user, chats, onSearch, chatsLoaded = true, activeId, appName, appIcon, onNew, onOpen, onDelete, onToggleStar,
-  collapsed, onToggle, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onLogout, version, onChatsOverview,
+  collapsed, onToggle, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onPrivacy, onLogout, version, onChatsOverview,
   projects = [], onProjects, onOpenProject, onNewProject, onMoveToProject, mobileOpen = false, onMobileClose,
   onArtifacts, onScheduled, onCustomize, onModelDocs, showModelDocs = true, onVersion, dest = null,
   docs = null, busyChats = [], onStopChat
@@ -438,6 +439,7 @@ function Sidebar({
           onCredits={() => { setMenu(false); onCredits(); }}
           onChangelog={() => { setMenu(false); onChangelog(); }}
           onLicense={() => { setMenu(false); onLicense(); }}
+          onPrivacy={() => { setMenu(false); onPrivacy(); }}
           onLogout={onLogout} onClose={() => setMenu(false)} />}
         <button className="profile-btn" ref={profileBtnRef} onClick={() => setMenu(m => !m)}
           aria-haspopup="menu" aria-expanded={menu}>
