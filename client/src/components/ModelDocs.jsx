@@ -156,7 +156,7 @@ function TileRows({ rows, onChange }) {
 function modIcon(m, cls) {
   const src = m.docsIcon || m.staticIcon;
   return src
-    ? <img className={cls} src={src} alt="" />
+    ? <img className={cls} src={src} alt="" aria-hidden="true" />
     : <span className={cls + ' noicon'}>{(m.displayName || '?').trim().charAt(0).toUpperCase()}</span>;
 }
 

@@ -37,6 +37,16 @@
 .login .back { display: block; width: 100%; margin-top: 12px; font-size: 13px; color: var(--text-muted); font-family: var(--font-sans); background: transparent; }
 .login .back:hover { color: var(--text); }
 .login .err { color: var(--danger); font-size: 13px; margin-bottom: 10px; font-family: var(--font-sans); text-align: center; }
+.login .err:empty { margin-bottom: 0; }
+.login input.bad { border-color: var(--danger); }
+.login input.bad:focus { border-color: var(--danger); }
+.login .primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.btn-spin {
+  width: 14px; height: 14px; flex: none; border-radius: 50%;
+  border: 2px solid color-mix(in srgb, currentColor 30%, transparent); border-top-color: currentColor;
+  animation: spin .8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) { .btn-spin { animation-duration: 2.4s; } }
 .login .login-note { margin-top: 12px; font-size: 12.5px; color: var(--text-faint); font-family: var(--font-sans); text-align: center; }
 .login .sub { margin-top: 26px; font-size: 15px; color: var(--text-muted); }
 .login .byline { margin-top: 10px; font-size: 12px; letter-spacing: 1px; color: var(--text-faint); font-family: var(--font-sans); }
@@ -45,3 +55,31 @@
   .login-card { padding: 28px 18px; }
 }
 
+
+.notfound { position: absolute; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: var(--bg); color: var(--text); overflow: hidden auto; padding: 24px; }
+.nf-card { width: 100%; max-width: 460px; text-align: center; }
+.nf-mark { width: 34px; height: 34px; opacity: .65; }
+.nf-code { margin-top: 18px; font-family: var(--font-sans); font-size: 13px; letter-spacing: 2px; font-weight: 600; color: var(--text-faint); }
+.nf-title { margin: 10px 0 0; font-family: var(--font-serif); font-size: 30px; line-height: 1.2; font-weight: 500; color: var(--text); }
+.nf-sub { margin: 12px 0 0; font-size: 15px; line-height: 22px; color: var(--text-muted); }
+.nf-path {
+  margin: 18px auto 0; max-width: 100%; padding: 7px 12px; border-radius: 8px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  font-family: var(--font-mono, monospace); font-size: 12.5px; line-height: 18px; color: var(--text-faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nf-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 24px; }
+.nf-actions button { display: inline-flex; align-items: center; gap: 7px; padding: 10px 16px; border-radius: 9px; font-family: var(--font-sans); font-size: 14px; font-weight: 500; transition: background var(--fx-t, .15s), color var(--fx-t, .15s); }
+.nf-actions svg { width: 16px; height: 16px; flex-shrink: 0; }
+.nf-primary { background: var(--primary); color: var(--on-primary); }
+.nf-primary:hover { background: color-mix(in srgb, var(--primary) 86%, var(--on-primary)); }
+.nf-ghost { background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border); }
+.nf-ghost:hover { color: var(--text); background: var(--surface-hover); }
+.nf-contact { margin: 22px 0 0; font-family: var(--font-sans); font-size: 12.5px; line-height: 18px; color: var(--text-faint); }
+.nf-contact a { color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px; }
+.nf-contact a:hover { color: var(--text); }
+@media (max-width: 480px) {
+  .nf-title { font-size: 24px; }
+  .nf-actions { flex-direction: column; }
+  .nf-actions button { width: 100%; justify-content: center; }
+}

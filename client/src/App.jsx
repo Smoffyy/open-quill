@@ -32,6 +32,7 @@ const ModelDocs = React.lazy(() => import('./components/ModelDocs.jsx'));
 const AdminPanel = React.lazy(() => import('./components/AdminPanel.jsx'));
 const Playground = React.lazy(() => import('./components/Playground.jsx'));
 import DocModal from './components/DocModal.jsx';
+import NotFound from './components/NotFound.jsx';
 import ArtifactsPanel from './components/ArtifactsPanel.jsx';
 import ChatControls from './components/ChatControls.jsx';
 import ModelDropdown from './components/ModelDropdown.jsx';
@@ -79,7 +80,7 @@ import { SKELETON_DELAY } from './lib/skeleton.js';
 const THREAD_SWAP_DELAY = 90;
 const THREAD_SWAP_MAX = 600;
 const HEAVY_THREAD_CHARS = 40000;
-const DEFAULT_CFG = { appName: 'open-quill', disclaimer: tk('Assistants can make mistakes, double-check responses.'), greetings: [tk('How can I help you?')], appIcon: '', quickPrompts: [], version: '' };
+const DEFAULT_CFG = { appName: 'open-quill', disclaimer: tk('Assistants can make mistakes, double-check responses.'), greetings: [tk('How can I help you?')], appIcon: '', supportContact: '', quickPrompts: [], version: '' };
 
 export default function App() {
   const [user, setUser] = useState(undefined);
@@ -165,6 +166,7 @@ export default function App() {
   const onCreditsCb = useCallback(() => { setMobileDrawer(false); setShowCredits(true); }, []);
   const onChangelogCb = useCallback(() => { setMobileDrawer(false); setShowChangelog(true); }, []);
   const onLicenseCb = useCallback(() => { setMobileDrawer(false); setShowLicense(true); }, []);
+  const onPrivacyCb = useCallback(() => { setMobileDrawer(false); setShowPrivacy(true); }, []);
   const onChatsOverviewCb = useCallback(() => navTo('chats'), [navTo]);
   const onArtifactsCb = useCallback(() => navTo('artifacts'), [navTo]);
   const onScheduledCb = useCallback(() => navTo('scheduled'), [navTo]);
@@ -232,6 +234,8 @@ export default function App() {
   const [showCredits, setShowCredits] = useState(false);
   const [showChangelog, setShowChangelog] = useState(false);
   const [showLicense, setShowLicense] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [notFound, setNotFound] = useState(() => parseRoute(location.pathname).view === 'notfound');
   const [focusTick, setFocusTick] = useState(0);
   const [cfg, setCfg] = useState(DEFAULT_CFG);
   const docsCfg = useMemo(() => docsConfig(cfg.modelDocsConfig), [cfg.modelDocsConfig]);
@@ -577,10 +581,12 @@ export default function App() {
     // Every view flag is written on every route change. The branches used to
     // return early, so going Back into a project from another view left the
     // projects panel mounted underneath it.
+    setNotFound(r.view === 'notfound');
     setShowAdmin(r.view === 'admin');
     setShowPlayground(r.view === 'playground');
     setDocsTarget(r.view === 'docs' ? parseDocsPath(location.pathname) : null);
     setShowProjects(onProjects);
+    if (r.view === 'notfound') return;
     if (r.view === 'docs') return;
     if (onProjects) { setProjectOpenId(r.id ?? null); return; }
     if (r.view !== 'home' && r.view !== 'chat') return;
@@ -606,10 +612,21 @@ export default function App() {
   }, []);
   useEffect(() => {
     const appName = cfg.appName || 'open-quill';
-    if (incognito) { document.title = t('Incognito chat - {app}', { app: appName }); return; }
-    const active = activeId ? chats.find(c => c.id === activeId) : null;
-    document.title = active ? `${active.title || t('Untitled chat')} - ${appName}` : `${t('New chat')} - ${appName}`;
-  }, [activeId, chats, cfg.appName, incognito]);
+    const head = (
+      notFound ? t('Page not found')
+      : showAdmin ? t('Admin')
+      : showPlayground ? t('Playground')
+      : docsTarget ? t('Docs')
+      : showProjects ? (projects.find(p => p.id === projectOpenId)?.name || t('Projects'))
+      : libPage === 'artifacts' ? t('Artifacts')
+      : libPage === 'scheduled' ? t('Scheduled tasks')
+      : chatsOverview ? t('All chats')
+      : incognito ? t('Incognito chat')
+      : activeId ? ((chats.find(c => c.id === activeId)?.title) || t('Untitled chat'))
+      : t('New chat')
+    );
+    document.title = `${head} - ${appName}`;
+  }, [activeId, chats, cfg.appName, incognito, notFound, showAdmin, showPlayground, docsTarget, showProjects, projectOpenId, projects, libPage, chatsOverview]);
   async function exportAllChats() { window.open('/api/chats/export-all', '_blank'); }
   async function importChatsFile(file) {
     try {
@@ -1410,6 +1427,7 @@ export default function App() {
     { id: 'changelog', label: t('View changelog'), keywords: 'updates version', action: () => setShowChangelog(true) },
     { id: 'credits', label: t('View credits'), keywords: 'about', action: () => setShowCredits(true) },
     { id: 'license', label: t('View licensing'), keywords: 'legal', action: () => setShowLicense(true) },
+    { id: 'privacy', label: t('View privacy & security'), keywords: 'legal data incognito gdpr cookies', action: () => setShowPrivacy(true) },
     { id: 'logout', label: t('Log out'), keywords: 'sign out exit', action: () => logout() }
   ];
 
@@ -1447,7 +1465,7 @@ export default function App() {
         collapsed={collapsed && !docsTarget} onToggle={onToggleSidebarCb}
         mobileOpen={mobileDrawer} onMobileClose={onMobileCloseCb}
         onSettings={onSettingsCb} onAdmin={onAdminCb} onPlayground={onPlaygroundCb}
-        onCredits={onCreditsCb} onChangelog={onChangelogCb} onLicense={onLicenseCb} onLogout={sbLogout} version={cfg.version}
+        onCredits={onCreditsCb} onChangelog={onChangelogCb} onLicense={onLicenseCb} onPrivacy={onPrivacyCb} onLogout={sbLogout} version={cfg.version}
         onChatsOverview={onChatsOverviewCb}
         projects={projects} onProjects={sbProjects} onOpenProject={sbOpenProject} onNewProject={sbNewProject} onMoveToProject={sbMoveToProject}
         busyChats={busyChats} onStopChat={stopChat} />
@@ -1464,6 +1482,12 @@ export default function App() {
       <div className={'main' + (incognito ? ' incognito' : '')} data-incognito={incognito ? 'on' : undefined}>
         <Toaster />
         <ThemeSlot name="main.top" />
+        {notFound && (
+          <NotFound appName={cfg.appName} appIcon={cfg.appIcon} path={location.pathname}
+            contact={cfg.supportContact}
+            onHome={() => { setNotFound(false); sbNewChat(); }}
+            onSearch={() => setShowSearch(true)} />
+        )}
         {docsTarget && (
           <div className="lib-overlay mdoc-overlay" role="region" aria-label={t('Model docs')}>
             <React.Suspense fallback={null}>
@@ -1526,7 +1550,7 @@ export default function App() {
                       line = nm ? part + ', ' + nm : part;
                     }
                     return model?.staticIcon
-                      ? <><img src={model.staticIcon} alt="" style={{ objectFit: 'contain' }} /> {line}</>
+                      ? <><img src={model.staticIcon} alt="" aria-hidden="true" style={{ objectFit: 'contain' }} /> {line}</>
                       : line;
                   })()}
             </div>
@@ -1676,7 +1700,7 @@ export default function App() {
                   </div>
                 ))}
                 {queued && !streaming && (
-                  <div className="msg assistant"><div className="queue-wait"><img src={BRAND_ICON} className="pulse think-dot" alt="" /> {t("Waiting for queue…")}</div></div>
+                  <div className="msg assistant"><div className="queue-wait"><img src={BRAND_ICON} className="pulse think-dot" alt="" aria-hidden="true" /> {t("Waiting for queue…")}</div></div>
                 )}
                 {compacting && <CompactingBar />}
                 <div className="thread-pad" />
@@ -1747,6 +1771,7 @@ export default function App() {
         onOpenProject={(id) => { setProjectOpenId(id); history.replaceState({}, '', pathForProject(id)); loadProjects(); }} />}
       {showCredits && <DocModal title={t("Credits")} name="credits" serif onClose={() => setShowCredits(false)} />}
       {showLicense && <DocModal title={t("Licensing")} name="license" onClose={() => setShowLicense(false)} />}
+      {showPrivacy && <DocModal title={t("Privacy & security")} name="privacy" onClose={() => setShowPrivacy(false)} />}
       {showChangelog && <DocModal title={t("Changelog")} name="changelog" onClose={() => setShowChangelog(false)} />}
       {cmdkOpen && <CommandPalette commands={commands} onClose={() => setCmdkOpen(false)} />}
     </div>

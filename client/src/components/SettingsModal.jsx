@@ -550,7 +550,7 @@ export default function SettingsModal({ user, cfg, modelId, initialTab, onClose,
               <div className="vh">
                 <div className="vh-top">
                   <div className="vh-badge">
-                    {icon ? <img src={icon} alt="" /> : <img className="vh-badge-fallback" src={BRAND_ICON} alt="" />}
+                    {icon ? <img src={icon} alt="" aria-hidden="true" /> : <img className="vh-badge-fallback" src={BRAND_ICON} alt="" aria-hidden="true" />}
                   </div>
                   <div className="vh-id">
                     <div className="vh-name">{cfg?.appName || 'open-quill'}</div>

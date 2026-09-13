@@ -222,7 +222,7 @@ export default function ModelEditor({ model: m, models, providers, providerTypes
             <Chevron style={{ transform: 'rotate(180deg)' }} /> {t('All models')}
           </Btn>
           <div className="cp-editor-id">
-            {m.static_icon && <img src={m.static_icon} alt="" />}
+            {m.static_icon && <img src={m.static_icon} alt="" aria-hidden="true" />}
             <b>{m.display_name || t('Untitled')}</b>
             <span className="cp-badges">
               {!!m.is_default && <Badge tone="on">{t('default')}</Badge>}

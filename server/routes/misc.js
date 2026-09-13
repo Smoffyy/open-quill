@@ -13,7 +13,7 @@ import { sanitizeDocsConfig } from '../lib/modeldocs.js';
 const APP_FONTS = new Set(['literata', 'newsreader', 'sourceserif', 'sans']);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DOCS = { __proto__: null, credits: 'CREDITS.md', changelog: 'CHANGELOG.md', license: 'LICENSE' };
+const DOCS = { __proto__: null, credits: 'CREDITS.md', changelog: 'CHANGELOG.md', license: 'LICENSE', privacy: 'docs/privacy-security.md' };
 const ICON_TYPES = { __proto__: null, '.png': 'image/png', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
 
 const text = (v, cap) => String(v ?? '').slice(0, cap);
@@ -32,6 +32,7 @@ export default function registerMiscRoutes(app) {
     };
     if ('appName' in b) put('app_name', text(b.appName, 120).trim() || 'open-quill');
     if ('disclaimer' in b) put('disclaimer', text(b.disclaimer, 500));
+    if ('supportContact' in b) put('support_contact', text(b.supportContact, 200).trim());
     if ('greetings' in b) {
       const list = (Array.isArray(b.greetings) ? b.greetings : []).map(g => text(g, 200).trim()).filter(Boolean).slice(0, 40);
       put('greetings', JSON.stringify(list.length ? list : ['How can I help you?']));

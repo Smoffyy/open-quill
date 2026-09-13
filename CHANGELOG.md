@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [27.5.1] - TBD
+### Added
+- **A 404 page** - an unknown address used to render the home screen silently. It now says the page does not exist, shows the path, and offers a new chat or a search.
+- **Privacy & security in the profile menu** - opens `docs/privacy-security.md`, alongside Credits, Changelog and Licensing.
+- **Support contact** (Admin, Interface) - an email or https link for whoever runs the instance, shown on the 404 page. Empty by default.
+- **`robots.txt` and an `X-Robots-Tag: noindex` header** - a self-hosted instance reachable from the internet no longer risks being indexed.
+- **Open Graph and Twitter card tags, and `favicon.ico`** - both local, no remote assets.
+
+### Changed
+- **Every view sets the browser tab title** - admin, playground, docs, projects, artifacts, scheduled tasks and all-chats were all stuck on the last chat's title.
+- **The sign-in form marks which field is wrong** - errors are announced to screen readers, the offending input is outlined and flagged `aria-invalid`, and typing clears it. The form is a real `<form>`, so password managers and Enter behave natively.
+- **Buttons that wait say so** - signing in, creating an account and verifying a code show a spinner and a label instead of only greying out.
+- **Decorative icons are hidden from screen readers**, and image previews in the admin panel have real alt text.
+
 ### Fixed
 - **Pressing a control in the message box no longer drags its label with it** - the press animation scaled the whole button, so the plus, the model name, the microphone and the call button all shifted and shrank under the cursor and snapped back on release. The squish now belongs to the fill behind the control rather than the control itself: the highlight moves and resizes, the glyph and the model name stay exactly where they are. Hover, the open-menu state and the call button's red tint are unchanged, and reduced motion still turns the press off entirely.
 - **Switching chats no longer flashes text in the wrong place** - a swapped-in conversation painted before its markdown, maths and fonts had settled, so lines appeared briefly misplaced and then jumped into position. The thread is now held invisible for a beat while the new messages lay out and the scroll settles at the bottom, then fades in over 450ms rather than snapping on. A chat whose maths has not been typeset yet holds until the typesetter is ready instead of showing its own source for a frame, capped so a component that never loads cannot leave the thread hidden. The loading skeleton is unaffected and still appears for a chat that is not cached yet, and reduced motion drops the fade.
