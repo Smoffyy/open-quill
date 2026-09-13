@@ -210,11 +210,7 @@
 .thread.virt > .msg:not(:nth-last-child(-n+8)) .msg-attachments { contain-intrinsic-size: auto 84px; }
 .thread.virt > .msg:not(:nth-last-child(-n+8)) .reasoning-collapse { contain-intrinsic-size: auto 0; }
 
-/* A single pasted script can be one 100,000px message with hundreds of code
-   blocks, which per-message occlusion cannot help while any of it is on screen.
-   Each block carries its own containment so the browser skips the ones off
-   screen even within one message. */
-.thread.virt .code-wrap { content-visibility: auto; contain-intrinsic-size: auto 220px; }
+.thread.virt > .msg:not(:nth-last-child(-n+8)) .code-wrap { content-visibility: auto; contain-intrinsic-size: auto 220px; }
 
 .skip-link {
   position: absolute;
