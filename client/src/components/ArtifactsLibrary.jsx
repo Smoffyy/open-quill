@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api.js';
-import LibraryPage, { LibraryEmpty } from './LibraryPage.jsx';
+import LibraryPage, { LibraryEmpty, LibraryGridSkeleton } from './LibraryPage.jsx';
 import { Plus, ChevDown, Paper } from './icons.jsx';
 import { t } from '../i18n.jsx';
 
@@ -55,7 +55,7 @@ export default function ArtifactsLibrary({ onSearch, onNew, onOpen }) {
         </button>
         <button className="lib-primary" onClick={onNew}><Plus /> {t('New artifact')}</button>
       </>}>
-      {loading ? null : shown.length === 0 ? (
+      {loading ? <LibraryGridSkeleton /> : shown.length === 0 ? (
         <LibraryEmpty icon={<Paper />} line={t('No artifacts yet.')} />
       ) : (
         <div className="lib-grid">{shown.map(i => (

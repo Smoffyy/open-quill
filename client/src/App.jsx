@@ -65,6 +65,7 @@ import { createLru } from './lib/lru.js';
 import { useTurnMeta, liveLedgerTokens } from './lib/turnmeta.js';
 import { useTurnStream } from './lib/turnstream.js';
 import { parseRoute, shouldResetPath, pathForChat, pathForProject } from './lib/route.js';
+import { hasMath, katexPlugin, ensureKatex } from './lib/mathjs.js';
 import { docsConfig, docsTree, docsPath, parseDocsPath } from './lib/modeldocs.js';
 import { useDocsEdit } from './lib/docsedit.js';
 import { useSocket } from './lib/socket.js';
@@ -75,6 +76,8 @@ import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge,
 import { BRAND_ICON } from './lib/brand.js';
 
 const SKELETON_DELAY = 100;
+const THREAD_SWAP_DELAY = 90;
+const THREAD_SWAP_MAX = 600;
 const HEAVY_THREAD_CHARS = 40000;
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: tk('Assistants can make mistakes, double-check responses.'), greetings: [tk('How can I help you?')], appIcon: '', quickPrompts: [], version: '' };
 
@@ -409,6 +412,26 @@ export default function App() {
   } = stream;
   const [threadLoading, setThreadLoading] = useState(false);
   const skelTimer = useRef(null);
+  const [threadSwap, setThreadSwap] = useState(false);
+  const swapTimer = useRef(null);
+  const swapSeq = useRef(0);
+  // The floor covers layout settling; waitFor covers a lazy chunk the first
+  // render would otherwise paint without. The cap is what keeps a chunk that
+  // never arrives from leaving the thread hidden for good.
+  const holdThread = useCallback((waitFor) => {
+    clearTimeout(swapTimer.current);
+    const seq = ++swapSeq.current;
+    setThreadSwap(true);
+    const after = (ms) => new Promise(r => { setTimeout(r, ms); });
+    const floor = new Promise(r => { swapTimer.current = setTimeout(r, THREAD_SWAP_DELAY); });
+    const chunk = waitFor ? Promise.race([Promise.resolve(waitFor).catch(() => null), after(THREAD_SWAP_MAX)]) : null;
+    Promise.all([floor, chunk]).then(() => { if (seq === swapSeq.current) setThreadSwap(false); });
+  }, []);
+  const releaseThread = useCallback(() => {
+    swapSeq.current++;
+    clearTimeout(swapTimer.current);
+    setThreadSwap(false);
+  }, []);
   const showMsgSpeed = !!user?.prefs?.msgSpeed;
   const showCtxGauge = !!user?.prefs?.ctxGauge;
   const statusDelay = statusDelayEnabled(user?.prefs?.statusDelay);
@@ -416,6 +439,9 @@ export default function App() {
 
   const activeIdRef = useRef(null);
   const currentIdRef = useRef(null);
+  // openFromUrl only runs once the session resolves, an effect too late to stop
+  // the greeting painting over a /chat/:id reload. The path already knows.
+  const bootView = useRef(parseRoute(location.pathname).view);
   const incognitoRef = useRef(false);
   useEffect(() => { incognitoRef.current = incognito; }, [incognito]);
   const { saveDraft, loadDraft, clearDraft, flushDraft } = useDrafts(incognitoRef);
@@ -455,6 +481,7 @@ export default function App() {
   useEffect(() => () => {
     stream.stopTimer();
     clearTimeout(skelTimer.current);
+    clearTimeout(swapTimer.current);
   }, []);
 
   useEffect(() => {
@@ -543,6 +570,7 @@ export default function App() {
     else if (!activeId && !incognito && m && user?.prefs?.webSearchDefault && cfg.webSearchAvailable) setWebSearch(true);
   }, [currentId, activeId, models, incognito, cfg.webSearchAvailable, user?.prefs?.webSearchDefault]);
   function openFromUrl() {
+    bootView.current = 'home';
     const r = parseRoute(location.pathname, { isAdmin: !!user?.isAdmin });
     if (r.replace) history.replaceState({}, '', r.replace);
     const onProjects = r.view === 'project' || r.view === 'projects';
@@ -917,6 +945,12 @@ export default function App() {
     if (!on) { setThreadLoading(false); return; }
     skelTimer.current = setTimeout(() => { if (onDelay) onDelay(); setThreadLoading(true); }, SKELETON_DELAY);
   }
+  // Markdown renders maths as its own source text until the KaTeX chunk lands,
+  // so a thread that needs it is not ready to be looked at yet.
+  function mathReady(msgs) {
+    if (katexPlugin()) return null;
+    return (msgs || []).some(m => hasMath(m.content)) ? ensureKatex() : null;
+  }
   async function openChat(id, push = true) {
     setMobileDrawer(false);
     if (incognito) setIncognito(false);
@@ -925,7 +959,9 @@ export default function App() {
     setActiveId(id);
     const seq = ++openSeq.current;
     const cached = chatCache.current.get(id);
+    const swapping = id !== activeIdRef.current;
     if (cached) {
+      if (swapping) holdThread(mathReady(cached.messages));
       setMessages(cached.messages || []);
       applyChatMeta(cached.chat || {});
       applyLastModel(cached.messages || []);
@@ -952,6 +988,7 @@ export default function App() {
       if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { chat, messages }); return; }
       armSkeleton(false);
       refreshSeq.current++;
+      if (!cached) holdThread(mathReady(messages));
       setMessages(prev => (cached && prev.length === messages.length)
         ? messages.map((sm, i) => { const pm = prev[i]; return { ...sm, _k: (pm && pm.role === sm.role) ? (pm._k || pm.id) : sm.id }; })
         : messages);
@@ -961,7 +998,7 @@ export default function App() {
       if (!cached) pinToBottom(false, 30);
       try { const f = await api.get('/api/chats/' + id + '/files'); if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { files: f.files || [] }); return; } setFiles(f.files || []); setArtifactsOpen((f.files || []).length > 0 && artifactsOpenRef.current); cacheChat(id, { files: f.files || [] }); }
       catch { if (seq === openSeq.current && activeIdRef.current === id && !cached) setFiles([]); }
-    } catch { if (seq === openSeq.current) { armSkeleton(false); if (!cached) { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); } } }
+    } catch { if (seq === openSeq.current) { armSkeleton(false); releaseThread(); if (!cached) { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); } } }
   }
   function newChat(fromPop) {
     setMobileDrawer(false);
@@ -969,6 +1006,7 @@ export default function App() {
     setShowProjects(false);
     setCurrentProject(null);
     armSkeleton(false);
+    releaseThread();
     setActiveId(null); setMessages([]); setInput('');
     resetChatView();
     setChatEnded(false); setChatEndedReason('');
@@ -1224,7 +1262,8 @@ export default function App() {
   const sandboxOn = sandboxAllowed && (sandbox || !!currentProject);
   const webSearchAvailable = !incognito && !!cfg.webSearchAvailable && (model ? model.webSearchAllowed !== false : true);
   const webSearchOn = webSearchAvailable && webSearch;
-  const empty = !activeId && messages.length === 0 && !callOpen;
+  const booting = bootView.current !== 'home';
+  const empty = !activeId && messages.length === 0 && !callOpen && !booting;
   const bgInChat = user?.prefs?.modelBgInChat !== false;
   const modelHasBg = !incognito && !!(model?.bgEnabled && model?.bgImage);
   const activeBg = computeActiveBg(models, currentId, activeId, messages.length, incognito, user?.prefs);
@@ -1526,7 +1565,7 @@ export default function App() {
                   )}
                   <button className="chat-name ct-name" disabled={!activeId} title={t('Rename chat')}
                     onClick={() => { setRenameVal(activeChat?.title || ''); setRenaming(true); }}>
-                    <span className="ct-title">{activeChat?.title || t('New chat')}</span>
+                    <span className="ct-title">{activeChat?.title || (booting ? '' : t('New chat'))}</span>
                   </button>
                   <button className="chat-name ct-caret" ref={titleChevRef} disabled={!activeId}
                     title={t('Chat options')} aria-label={t('Chat options')} aria-haspopup="menu" aria-expanded={!!titleMenu}
@@ -1569,7 +1608,7 @@ export default function App() {
             </div>
             {findOpen && user?.prefs?.threadFind !== false && <ThreadFind scrollRef={scrollRef} revision={findRevision} onMatches={onFindMatches} onClose={closeFind} />}
             <div className="scroll-area" id="oq-thread" ref={scrollRef} onScroll={onScroll} onWheel={onWheel} onTouchMove={onTouchMove}>
-              <div className={'thread' + (ledgerOpen ? ' ledger-on' : '') + (heavyThread ? ' virt' : '') + (findOpen ? ' finding' : '')}
+              <div className={'thread' + (ledgerOpen ? ' ledger-on' : '') + (heavyThread ? ' virt' : '') + (findOpen ? ' finding' : '') + (threadSwap ? ' swapping' : '')}
                 role="log" aria-label={t('Conversation')} aria-live="polite" aria-relevant="additions text" aria-busy={streaming ? 'true' : 'false'}>
                 {ledgerOpen && <LedgerBar ledger={ledger} liveUsed={ledgerTokens.used} live={streaming} />}
                 {threadLoading && messages.length === 0 && <ThreadSkeleton />}

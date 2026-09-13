@@ -145,6 +145,11 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
       <div className="co-body" ref={bodyRef} onScroll={onScroll}>
         {chats.length === 0 && !loading && <div className="art-empty">{tab === 'archived' ? t('No archived chats.') : t('No chats yet.')}</div>}
         <div className="co-grid">
+          {loading && chats.length === 0 && Array.from({ length: 9 }).map((_, i) => (
+            <div key={'skel' + i} className="co-card co-card-skel" aria-hidden="true">
+              <span className="skeleton" style={{ width: (38 + ((i * 29) % 40)) + '%' }} />
+            </div>
+          ))}
           {chats.map((c, i) => (
             <button key={c.id} className={'co-card' + (selecting && selected.has(c.id) ? ' selected' : '')} style={{ animationDelay: (i % 18) * 22 + 'ms' }} onClick={() => clickCard(c)}>
               {selecting && <span className={'co-check' + (selected.has(c.id) ? ' on' : '')}>{selected.has(c.id) ? '✓' : ''}</span>}

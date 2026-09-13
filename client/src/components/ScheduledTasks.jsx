@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import LibraryPage, { LibraryEmpty } from './LibraryPage.jsx';
+import LibraryPage, { LibraryEmpty, LibraryListSkeleton } from './LibraryPage.jsx';
 import { ChevDown, Clock, Sun, Chat, Compact, Bulb, Telescope, Trash, Check } from './icons.jsx';
 import { api } from '../api.js';
 import { toast } from '../toast.js';
@@ -69,7 +69,7 @@ export default function ScheduledTasks({ onSearch, onRunTask }) {
         </button>
         <button className="lib-primary" onClick={() => create(STARTERS[0])}>{t('New task')} <ChevDown /></button>
       </>}>
-      {loading ? null : shown.length === 0 ? (
+      {loading ? <LibraryListSkeleton /> : shown.length === 0 ? (
         <LibraryEmpty icon={<Clock />} line={t('No scheduled tasks yet.')} />
       ) : (
         <div className="sched-list">

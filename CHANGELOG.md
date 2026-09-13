@@ -8,7 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [27.5.1] - TBD
+### Fixed
+- **Pressing a control in the message box no longer drags its label with it** - the press animation scaled the whole button, so the plus, the model name, the microphone and the call button all shifted and shrank under the cursor and snapped back on release. The squish now belongs to the fill behind the control rather than the control itself: the highlight moves and resizes, the glyph and the model name stay exactly where they are. Hover, the open-menu state and the call button's red tint are unchanged, and reduced motion still turns the press off entirely.
+- **Switching chats no longer flashes text in the wrong place** - a swapped-in conversation painted before its markdown, maths and fonts had settled, so lines appeared briefly misplaced and then jumped into position. The thread is now held invisible for a beat while the new messages lay out and the scroll settles at the bottom, then fades in over 220ms rather than snapping on. A chat whose maths has not been typeset yet holds until the typesetter is ready instead of showing its own source for a frame, capped so a component that never loads cannot leave the thread hidden. The loading skeleton is unaffected and still appears for a chat that is not cached yet, and reduced motion drops the fade.
+- **Reloading a chat no longer flashes the greeting first** - which conversation a URL means was worked out one step too late, after the screen had already been drawn, so refreshing on a chat painted the full "Good evening" home screen, centred message box and all, before replacing it with the conversation. The address is now read before the first frame, so a reload lands on the conversation and the home screen is only drawn when the address actually means home. Projects and the reference did the same thing and are fixed with it.
 
+### Changed
+- **Lists no longer sit blank while they load** - the artifacts library, scheduled tasks, the projects grid, a project's own page and the all-chats view each drew nothing at all until their contents arrived and then dropped the finished list in at once. Each now shows a placeholder in the shape of what is coming, so the page has its layout from the first frame and fills in rather than appearing.
+- **Cards fade in as they arrive** - the project tiles, the all-chats rows and the keyboard shortcut list were each already asking to appear one after another, but the animation they were asking for was never written, so the staggering did nothing. They now rise and fade in turn, the projects grid no longer times its stagger off an uncapped count that would have taken over a second on a long list, and opening the library pages fades rather than snapping. Reduced motion turns all of it off.
 
 ---
 

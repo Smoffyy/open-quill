@@ -154,7 +154,16 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
   }, [id]);
   useEffect(() => { load(); }, [load]);
   useDismiss(menu, () => setMenu(false), menuRef);
-  if (!project) return <div className="pj-detail" />;
+  if (!project) return (
+    <div className="pj-detail" aria-hidden="true">
+      <div className="pj-main">
+        <div className="pj-title-row"><span className="skeleton pj-name-skel" /></div>
+        <div className="pj-chats">
+          {[64, 48, 56].map((w, i) => <span key={i} className="skeleton pj-row-skel" style={{ width: w + '%' }} />)}
+        </div>
+      </div>
+    </div>
+  );
 
   async function patch(body) {
     const p = await api.patch('/api/projects/' + id, body);
@@ -310,12 +319,22 @@ export default function ProjectsPanel({ openId, composerProps, onClose, onOpenCh
               <Search style={{ width: 16 }} />
               <input value={q} placeholder={t("Search projects...")} onChange={(e) => setQ(e.target.value)} />
             </div>
-            {projects === null ? null : list.length === 0 ? (
+            {projects === null ? (
+              <div className="pj-grid" aria-hidden="true">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="pj-card-tile pj-tile-skel">
+                    <div className="pj-tile-top"><span className="skeleton" style={{ width: '52%' }} /></div>
+                    <span className="skeleton" style={{ width: '78%' }} />
+                    <span className="skeleton" style={{ width: '34%' }} />
+                  </div>
+                ))}
+              </div>
+            ) : list.length === 0 ? (
               <div className="co-end">{q.trim() ? t('No projects match your search.') : t('No projects yet, create one to get started.')}</div>
             ) : (
               <div className="pj-grid">
                 {list.map((p, i) => (
-                  <button key={p.id} className="pj-card-tile" style={{ animationDelay: (i * 26) + 'ms' }} onClick={() => openDetail(p.id)}>
+                  <button key={p.id} className="pj-card-tile" style={{ animationDelay: (i % 18) * 26 + 'ms' }} onClick={() => openDetail(p.id)}>
                     <div className="pj-tile-top">
                       <span className="pj-tile-icon"><Box style={{ width: 17 }} /></span>
                       <div className="pj-tile-name">{p.name}</div>

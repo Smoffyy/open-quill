@@ -164,23 +164,48 @@
               opacity .06s var(--cl-ease-std, cubic-bezier(.4, 0, .2, 1)),
               transform .45s var(--cl-ease-squish);
 }
-:root[data-preset="anthropic"] .composer .plus:active,
-:root[data-preset="anthropic"] .composer .mic:active,
-:root[data-preset="anthropic"] .composer .send:not(:disabled):active,
-:root[data-preset="anthropic"] .composer .model-trigger:active { transform: scale(.975); }
-:root[data-preset="anthropic"] .composer .plus:active,
-:root[data-preset="anthropic"] .composer .mic:active,
-:root[data-preset="anthropic"] .composer .model-trigger:active {
+:root[data-preset="anthropic"] .composer .send:not(:disabled):active { transform: scale(.975); }
+
+:root[data-preset="anthropic"] .composer .plus,
+:root[data-preset="anthropic"] .composer .mic,
+:root[data-preset="anthropic"] .composer .model-trigger {
+  position: relative; isolation: isolate; background: none;
+}
+:root[data-preset="anthropic"] .composer .plus::before,
+:root[data-preset="anthropic"] .composer .mic::before,
+:root[data-preset="anthropic"] .composer .model-trigger::before {
+  content: ''; position: absolute; inset: 0; z-index: -1;
+  border-radius: inherit; background: transparent;
+  transition: background .06s var(--cl-ease-std, cubic-bezier(.4, 0, .2, 1)),
+              transform .45s var(--cl-ease-squish);
+}
+:root[data-preset="anthropic"] .composer .plus:hover::before,
+:root[data-preset="anthropic"] .composer .mic:hover::before,
+:root[data-preset="anthropic"] .composer .model-trigger:hover::before {
   background: var(--composer-hover, var(--surface-hover));
+}
+:root[data-preset="anthropic"] .composer .plus.on::before,
+:root[data-preset="anthropic"] .composer .mic.on::before,
+:root[data-preset="anthropic"] .composer .model-trigger.on::before {
+  background: var(--pop-hover, var(--hover-mid));
+}
+:root[data-preset="anthropic"] .composer .mic.call.on:hover::before {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+:root[data-preset="anthropic"] .composer .plus:active::before,
+:root[data-preset="anthropic"] .composer .mic:active::before,
+:root[data-preset="anthropic"] .composer .model-trigger:active::before {
+  background: var(--composer-hover, var(--surface-hover));
+  transform: scale(.975);
 }
 :root[data-preset="anthropic"] .composer-right:has(.send:not(.ghost)) .mic { display: none; }
 :root[data-preset="anthropic"] .composer .send.enter { background: transparent; color: var(--text); }
 :root[data-preset="anthropic"] .composer .send.enter:hover { background: var(--composer-hover, var(--surface-hover)); }
 @media (prefers-reduced-motion: reduce) {
-  :root[data-preset="anthropic"] .composer .plus:active,
-  :root[data-preset="anthropic"] .composer .mic:active,
   :root[data-preset="anthropic"] .composer .send:not(:disabled):active,
-  :root[data-preset="anthropic"] .composer .model-trigger:active { transform: none; }
+  :root[data-preset="anthropic"] .composer .plus:active::before,
+  :root[data-preset="anthropic"] .composer .mic:active::before,
+  :root[data-preset="anthropic"] .composer .model-trigger:active::before { transform: none; }
 }
 
 /* In a thread the bar collapses into the text row: the plus sits left of the
@@ -312,6 +337,10 @@ body.resizing-x .side-resize-grip { opacity: 1; }
   display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .lib-card-meta { font-size: 13px; line-height: 17px; color: var(--text-faint); font-family: var(--font-sans); }
+.lib-card-skel { pointer-events: none; }
+.lib-card-skel .lib-card-preview { display: flex; flex-direction: column; gap: 10px; }
+.lib-card-skel .skeleton { height: 11px; }
+.lib-card-skel .lib-card-foot .skeleton { height: 14px; }
 
 .sched-rule { height: 1px; margin: 32px 0; border-top: 1px dashed var(--border); }
 .sched-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px 40px; }
@@ -341,7 +370,6 @@ body.resizing-x .side-resize-grip { opacity: 1; }
   position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column;
   background: var(--bg);
 }
-@media (prefers-reduced-motion: reduce) { .lib-overlay { animation: none; } }
 
 :root { --focus-ring: #5598e7; }
 
@@ -463,6 +491,11 @@ body.resizing-x .side-resize-grip { opacity: 1; }
   display: flex; align-items: flex-start; gap: 12px; padding: 12px; border-radius: 12px;
   background: var(--surface); transition: background var(--fx-t, .15s) ease;
 }
+.lib-list-skel { display: flex; flex-direction: column; gap: 4px; }
+.lib-row-skel { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border-radius: 12px; background: var(--surface); }
+.lib-row-skel-ic { width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0; }
+.lib-row-skel-body { display: flex; flex-direction: column; gap: 9px; flex: 1; min-width: 0; padding-top: 2px; }
+.lib-row-skel-body .skeleton { height: 13px; }
 .sched-item.off { opacity: .55; }
 .sched-item:hover { background: var(--surface-hover); }
 .sched-item-acts { display: flex; align-items: center; gap: 2px; margin-left: auto; flex-shrink: 0; }

@@ -14,6 +14,40 @@ export function LibraryTabs({ value, onChange, tabs }) {
   );
 }
 
+export function LibraryGridSkeleton({ count = 8 }) {
+  return (
+    <div className="lib-grid" aria-hidden="true">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="lib-card lib-card-skel">
+          <div className="lib-card-preview">
+            {[92, 74, 86, 58].map((w, j) => <span key={j} className="skeleton" style={{ width: w + '%' }} />)}
+          </div>
+          <div className="lib-card-foot">
+            <span className="skeleton" style={{ width: '62%' }} />
+            <span className="skeleton" style={{ width: '40%' }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function LibraryListSkeleton({ count = 6 }) {
+  return (
+    <div className="lib-list-skel" aria-hidden="true">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="lib-row-skel">
+          <span className="skeleton lib-row-skel-ic" />
+          <span className="lib-row-skel-body">
+            <span className="skeleton" style={{ width: (44 + ((i * 37) % 30)) + '%' }} />
+            <span className="skeleton" style={{ width: (58 + ((i * 23) % 32)) + '%' }} />
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function LibraryEmpty({ icon, line, children }) {
   return (
     <div className="lib-empty">
