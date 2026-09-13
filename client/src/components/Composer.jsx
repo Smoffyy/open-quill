@@ -92,7 +92,7 @@ export default function Composer({
   removedModel = null, skills = [], onToggleSkill = null, onManageSkills = null,
   queueCount = 0, onQueue, onSteer, canSteer = false,
   compareIds = [], onSetCompare, hideModelPicker = false, chipsBelow = false, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
-  ctxGauge = null, enterSend = false
+  ctxGauge = null, enterSend = false, draftId
 }) {
   const composerPlaceholder = useThemeText('composer.placeholder', t('How can I help you today?'));
   const ta = useRef(null);
@@ -106,7 +106,7 @@ export default function Composer({
   const {
     files, dragActive, glow, upErr, setUpErr,
     pickFiles, onPaste, removeFile, clearFiles
-  } = useAttachments({ visionSupported });
+  } = useAttachments({ visionSupported, draftId });
 
   const [plusMenu, setPlusMenu] = useState(false);
   const [plusDown, setPlusDown] = useState(false);

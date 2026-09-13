@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import LibraryPage, { LibraryEmpty, LibraryGridSkeleton } from './LibraryPage.jsx';
 import { Plus, ChevDown, Paper } from './icons.jsx';
 import { t } from '../i18n.jsx';
+import { useSkeleton } from '../lib/skeleton.js';
 
 const KB = 1024;
 const sizeLabel = (n) => (n >= KB * KB ? (n / (KB * KB)).toFixed(1) + ' MB' : n >= KB ? Math.round(n / KB) + ' KB' : n + ' B');
@@ -27,6 +28,7 @@ export default function ArtifactsLibrary({ onSearch, onNew, onOpen }) {
   const [filter, setFilter] = useState('all');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const showSkeleton = useSkeleton(loading);
 
   useEffect(() => {
     let live = true;
@@ -55,7 +57,7 @@ export default function ArtifactsLibrary({ onSearch, onNew, onOpen }) {
         </button>
         <button className="lib-primary" onClick={onNew}><Plus /> {t('New artifact')}</button>
       </>}>
-      {loading ? <LibraryGridSkeleton /> : shown.length === 0 ? (
+      {loading ? (showSkeleton ? <LibraryGridSkeleton /> : null) : shown.length === 0 ? (
         <LibraryEmpty icon={<Paper />} line={t('No artifacts yet.')} />
       ) : (
         <div className="lib-grid">{shown.map(i => (

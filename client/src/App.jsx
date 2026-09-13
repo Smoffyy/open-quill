@@ -74,8 +74,8 @@ import { toast } from './toast.js';
 import { copyText } from './clipboard.js';
 import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork, Panel, Copy, Check, Star, Telescope, TextIcon, Expand } from './components/icons.jsx';
 import { BRAND_ICON } from './lib/brand.js';
+import { SKELETON_DELAY } from './lib/skeleton.js';
 
-const SKELETON_DELAY = 100;
 const THREAD_SWAP_DELAY = 90;
 const THREAD_SWAP_MAX = 600;
 const HEAVY_THREAD_CHARS = 40000;
@@ -1276,6 +1276,7 @@ export default function App() {
 
   const composerProps = {
     placeholder: activeId && !incognito ? t('Write a message...') : undefined,
+    draftId: incognito ? undefined : activeId,
     projects,
     onSetProject: activeId ? (p) => moveChatToProject(activeId, p.id) : null,
     value: input, onChange: (v) => { if (safetyFlagged) { setSafetyFlagged(false); setSafetyReason(''); } setInput(v); saveDraft(activeId, v); }, onSend: send, onStop: stop, streaming: streaming || queued, stopping,

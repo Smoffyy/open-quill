@@ -6,6 +6,7 @@ import { Box, Search, Plus, ChevDown, Chevron, Star, Dots, Trash, Pencil, X, Fil
 import { t } from '../i18n.jsx';
 import { focusUnlessTouch } from '../lib/touch.js';
 import { useDismiss } from '../lib/dismiss.js';
+import { useSkeleton } from '../lib/skeleton.js';
 
 function updatedLabel(ts) {
   const d = new Date(ts);
@@ -112,6 +113,7 @@ function FileTree({ node, prefix, depth, closed, onToggle, onRemove, fmtSize }) 
 
 function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onChanged, onDeleted }) {
   const [project, setProject] = useState(null);
+  const showSkeleton = useSkeleton(!project);
   const [editingInstr, setEditingInstr] = useState(false);
   const [instr, setInstr] = useState('');
   const [menu, setMenu] = useState(false);
@@ -154,7 +156,7 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
   }, [id]);
   useEffect(() => { load(); }, [load]);
   useDismiss(menu, () => setMenu(false), menuRef);
-  if (!project) return (
+  if (!project) return !showSkeleton ? null : (
     <div className="pj-detail" aria-hidden="true">
       <div className="pj-main">
         <div className="pj-title-row"><span className="skeleton pj-name-skel" /></div>
@@ -277,6 +279,7 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
 
 export default function ProjectsPanel({ openId, composerProps, onClose, onOpenChat, onStartChat, onOpenProject, startCreate = false, onCreateHandled }) {
   const [projects, setProjects] = useState(null);
+  const showSkeleton = useSkeleton(projects === null);
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('updated');
   const [creating, setCreating] = useState(false);
@@ -319,7 +322,7 @@ export default function ProjectsPanel({ openId, composerProps, onClose, onOpenCh
               <Search style={{ width: 16 }} />
               <input value={q} placeholder={t("Search projects...")} onChange={(e) => setQ(e.target.value)} />
             </div>
-            {projects === null ? (
+            {projects === null ? (showSkeleton &&
               <div className="pj-grid" aria-hidden="true">
                 {Array.from({ length: 4 }).map((_, i) => (
                   <div key={i} className="pj-card-tile pj-tile-skel">

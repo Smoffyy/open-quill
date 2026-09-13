@@ -234,7 +234,7 @@
 /* ---------- messages ---------- */
 .scroll-area { container-type: inline-size; }
 .scroll-area { flex: 1; overflow: hidden auto; scroll-behavior: auto; scrollbar-gutter: stable both-edges; }
-.thread { max-width: var(--reading-max, 808px); margin: 0 auto; padding: 12px 36px 0; min-height: 100%; transition: opacity .22s var(--ease-out, cubic-bezier(.22, 1, .36, 1)); }
+.thread { max-width: var(--reading-max, 808px); margin: 0 auto; padding: 12px 36px 0; min-height: 100%; transition: opacity .45s var(--ease-out, cubic-bezier(.22, 1, .36, 1)); }
 .thread.swapping { opacity: 0; visibility: hidden; transition: none; }
 @media (prefers-reduced-motion: reduce) { .thread { transition: none; } }
 :root[data-read="wide"] { --reading-max: 1080px; }

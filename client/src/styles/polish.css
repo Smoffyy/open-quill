@@ -22,10 +22,8 @@
    animation-delay, so `both` is what holds the card back until its turn. */
 @keyframes oq-card-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .pj-card-tile, .co-card, .sc-item { animation: oq-card-in .24s var(--ease-out, cubic-bezier(.22, 1, .36, 1)) both; }
-.lib-overlay { animation: oq-fade-in .18s var(--ease-out, cubic-bezier(.22, 1, .36, 1)) both; }
-@keyframes oq-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .pj-card-tile, .co-card, .sc-item, .lib-overlay { animation: none; }
+  .pj-card-tile, .co-card, .sc-item { animation: none; }
 }
 
 /* message entrance (toggle in settings) */

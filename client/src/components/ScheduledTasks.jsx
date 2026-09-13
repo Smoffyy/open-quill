@@ -4,6 +4,7 @@ import { ChevDown, Clock, Sun, Chat, Compact, Bulb, Telescope, Trash, Check } fr
 import { api } from '../api.js';
 import { toast } from '../toast.js';
 import { t, tk } from '../i18n.jsx';
+import { useSkeleton } from '../lib/skeleton.js';
 
 const STARTERS = [
   { id: 'briefing', Icon: Sun, title: tk('Daily briefing'), desc: tk('What needs your attention today across calendar, email, and messages.'), when: tk('Weekdays at 8:00 AM'), schedule: { kind: 'weekdays', hour: 8, minute: 0 } },
@@ -24,6 +25,7 @@ export default function ScheduledTasks({ onSearch, onRunTask }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState('next');
+  const showSkeleton = useSkeleton(loading);
 
   const load = useCallback(() => {
     api.get('/api/tasks')
@@ -69,7 +71,7 @@ export default function ScheduledTasks({ onSearch, onRunTask }) {
         </button>
         <button className="lib-primary" onClick={() => create(STARTERS[0])}>{t('New task')} <ChevDown /></button>
       </>}>
-      {loading ? <LibraryListSkeleton /> : shown.length === 0 ? (
+      {loading ? (showSkeleton ? <LibraryListSkeleton /> : null) : shown.length === 0 ? (
         <LibraryEmpty icon={<Clock />} line={t('No scheduled tasks yet.')} />
       ) : (
         <div className="sched-list">
