@@ -99,7 +99,6 @@
   "Branch into new chat": "Créer une branche dans une nouvelle conversation",
   "Branch map": "Carte des branches",
   "Browse all chats": "Parcourir toutes les conversations",
-  "Build": "Build",
   "Building…": "Construction…",
   "Bundled": "Archivé",
   "Bundling": "Archivage",
@@ -114,7 +113,6 @@
   "Change role": "Changer le rôle",
   "Change your password and manage two-factor authentication.": "Changez votre mot de passe et gérez l'authentification à deux facteurs.",
   "Changelog": "Journal des modifications",
-  "Channel": "Canal",
   "Chat": "Conversation",
   "Chat controls": "Réglages de la conversation",
   "Chat controls (admin)": "Réglages de la conversation (admin)",
@@ -137,7 +135,6 @@
   "Close panel": "Fermer le panneau",
   "Close split": "Fermer l'affichage divisé",
   "Code": "Code",
-  "Codename": "Nom de code",
   "Collapse": "Réduire",
   "Collapse sidebar": "Réduire la barre latérale",
   "Comfortable": "Confortable",
@@ -620,7 +617,6 @@
   "Refresh": "Actualiser",
   "Regenerate recovery codes": "Régénérer les codes de récupération",
   "Relaxed": "Détendu",
-  "Release": "Version",
   "Release candidate": "Version candidate",
   "Released": "Publié le",
   "Remove": "Retirer",
@@ -1169,5 +1165,8 @@
   "About": "À propos",
   "3+ days ago": "Il y a 3+ jours",
   "7+ days ago": "Il y a 7+ jours",
-  "Deleted {n} chat(s)": "{n} conversation(s) supprimée(s)"
+  "Deleted {n} chat(s)": "{n} conversation(s) supprimée(s)",
+  "Release notes": "Notes de version",
+  "Copy details": "Copier les détails",
+  "Version details copied": "Détails de version copiés"
 }

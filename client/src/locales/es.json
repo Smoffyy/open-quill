@@ -99,7 +99,6 @@
   "Branch into new chat": "Ramificar en un chat nuevo",
   "Branch map": "Mapa de ramas",
   "Browse all chats": "Explorar todos los chats",
-  "Build": "Compilación",
   "Building…": "Construyendo…",
   "Bundled": "Empaquetado",
   "Bundling": "Empaquetando",
@@ -114,7 +113,6 @@
   "Change role": "Cambiar el rol",
   "Change your password and manage two-factor authentication.": "Cambia tu contraseña y gestiona la autenticación de dos factores.",
   "Changelog": "Registro de cambios",
-  "Channel": "Canal",
   "Chat": "Chat",
   "Chat controls": "Controles del chat",
   "Chat controls (admin)": "Controles del chat (admin)",
@@ -137,7 +135,6 @@
   "Close panel": "Cerrar panel",
   "Close split": "Cerrar vista dividida",
   "Code": "Código",
-  "Codename": "Nombre en clave",
   "Collapse": "Contraer",
   "Collapse sidebar": "Contraer barra lateral",
   "Comfortable": "Cómoda",
@@ -620,7 +617,6 @@
   "Refresh": "Actualizar",
   "Regenerate recovery codes": "Regenerar códigos de recuperación",
   "Relaxed": "Relajado",
-  "Release": "Versión",
   "Release candidate": "Candidata a versión final",
   "Released": "Publicado",
   "Remove": "Quitar",
@@ -1169,5 +1165,8 @@
   "About": "Acerca de",
   "3+ days ago": "Hace 3+ días",
   "7+ days ago": "Hace 7+ días",
-  "Deleted {n} chat(s)": "Se eliminaron {n} chat(s)"
+  "Deleted {n} chat(s)": "Se eliminaron {n} chat(s)",
+  "Release notes": "Notas de la versión",
+  "Copy details": "Copiar detalles",
+  "Version details copied": "Detalles de la versión copiados"
 }

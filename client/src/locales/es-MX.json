@@ -99,7 +99,6 @@
   "Branch into new chat": "Ramificar en un chat nuevo",
   "Branch map": "Mapa de ramas",
   "Browse all chats": "Explorar todos los chats",
-  "Build": "Compilación",
   "Building…": "Construyendo…",
   "Bundled": "Empaquetado",
   "Bundling": "Empaquetando",
@@ -114,7 +113,6 @@
   "Change role": "Cambiar el rol",
   "Change your password and manage two-factor authentication.": "Cambia tu contraseña y gestiona la autenticación de dos factores.",
   "Changelog": "Registro de cambios",
-  "Channel": "Canal",
   "Chat": "Chat",
   "Chat controls": "Controles del chat",
   "Chat controls (admin)": "Controles del chat (admin)",
@@ -137,7 +135,6 @@
   "Close panel": "Cerrar panel",
   "Close split": "Cerrar vista dividida",
   "Code": "Código",
-  "Codename": "Nombre en clave",
   "Collapse": "Contraer",
   "Collapse sidebar": "Contraer barra lateral",
   "Comfortable": "Cómoda",
@@ -620,7 +617,6 @@
   "Refresh": "Actualizar",
   "Regenerate recovery codes": "Regenerar códigos de recuperación",
   "Relaxed": "Relajado",
-  "Release": "Versión",
   "Release candidate": "Candidata a versión final",
   "Released": "Publicado",
   "Remove": "Quitar",
@@ -2533,5 +2529,8 @@
   "Preview of the image being cropped": "Vista previa de la imagen que se está recortando",
   "Current image": "Imagen actual",
   "Support contact": "Contacto de soporte",
-  "Who to reach about this instance. An email address or an https link. Shown on the 404 page; leave empty to hide it.": "A quién contactar sobre esta instancia. Un correo electrónico o un enlace https. Se muestra en la página 404; déjalo vacío para ocultarlo."
+  "Who to reach about this instance. An email address or an https link. Shown on the 404 page; leave empty to hide it.": "A quién contactar sobre esta instancia. Un correo electrónico o un enlace https. Se muestra en la página 404; déjalo vacío para ocultarlo.",
+  "Release notes": "Notas de la versión",
+  "Copy details": "Copiar detalles",
+  "Version details copied": "Detalles de la versión copiados"
 }

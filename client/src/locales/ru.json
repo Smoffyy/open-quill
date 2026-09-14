@@ -261,7 +261,6 @@
   "Browse skills": "Просмотреть навыки",
   "Browser": "Браузер",
   "Browser policy": "Политика браузера",
-  "Build": "Сборка",
   "Build and inject memory": "Сформировать и внедрить память",
   "Build mode": "Режим конструктора",
   "Builder panels": "Панели конструктора",
@@ -297,7 +296,6 @@
   "Change role": "Изменить роль",
   "Change your password and manage two-factor authentication.": "Измените пароль и управляйте двухфакторной аутентификацией.",
   "Changelog": "Журнал изменений",
-  "Channel": "Канал",
   "Chat": "Чат",
   "Chat controls": "Управление чатом",
   "Chat controls (admin)": "Управление чатом (администратор)",
@@ -351,7 +349,6 @@
   "Code block": "Блок кода",
   "Code block header": "Заголовок блока кода",
   "Code text": "Текст кода",
-  "Codename": "Кодовое имя",
   "Collapse": "Свернуть",
   "Collapse all folders": "Свернуть все папки",
   "Collapse button": "Кнопка свёртывания",
@@ -1454,7 +1451,6 @@
   "Regenerate recovery codes": "Перегенерировать коды восстановления",
   "Registration": "Регистрация",
   "Relaxed": "Свободно",
-  "Release": "Выпуск",
   "Release candidate": "Кандидат в релиз",
   "Released": "Выпущено",
   "Reliable knowledge cutoff": "Достоверная дата отсечения знаний",
@@ -2533,5 +2529,8 @@
   "Preview of the image being cropped": "Предпросмотр обрезаемого изображения",
   "Current image": "Текущее изображение",
   "Support contact": "Контакт поддержки",
-  "Who to reach about this instance. An email address or an https link. Shown on the 404 page; leave empty to hide it.": "К кому обращаться по поводу этого экземпляра. Адрес электронной почты или ссылка https. Показывается на странице 404; оставьте пустым, чтобы скрыть."
+  "Who to reach about this instance. An email address or an https link. Shown on the 404 page; leave empty to hide it.": "К кому обращаться по поводу этого экземпляра. Адрес электронной почты или ссылка https. Показывается на странице 404; оставьте пустым, чтобы скрыть.",
+  "Release notes": "Примечания к выпуску",
+  "Copy details": "Скопировать сведения",
+  "Version details copied": "Сведения о версии скопированы"
 }

@@ -1733,6 +1733,7 @@ export default function App() {
 
 
       {showSettings && <React.Suspense fallback={null}><SettingsModal user={user} cfg={cfg} modelId={currentId} initialTab={settingsTab} onClose={onSettingsClosed} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile}
+        onChangelog={() => { setShowSettings(false); setShowChangelog(true); }}
         onTrySkill={(sk) => { newChat(); setInput('/' + sk.name + ' '); setFocusTick(n => n + 1); }} /></React.Suspense>}
       {user?.isAdmin && cfg.setupComplete === false && !setupDone && (
         <React.Suspense fallback={null}>

@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [27.5.2] - TBD
+### Changed
+- **Settings, Version is rebuilt** - the release number is now drawn from the release folder that answered, scaled to fit, so a release no longer needs a hand-made icon. The codename, version, channel and date sit on one line instead of a list that repeated the version twice, and the release notes get their own section with Changelog and Copy details buttons.
+
+### Removed
+- **Per-release icons** - `release/<major>/icon.png` and the `icon` field in `release.json` are gone, along with the `/api/release/icon` route.
+
 ### Fixed
 - **The message box no longer jitters while you type a long line** - in a thread the bar sits beside the text until a second line appears, which widens the box by the width of the bar. The height was measured at the narrow width and applied at the wide one, so every keystroke around the wrap point flipped the layout back and forth. The wrap is now decided at the narrow width and the height measured at the width that decision produces.
 

@@ -261,7 +261,6 @@
   "Browse skills": "スキルを見る",
   "Browser": "ブラウザ",
   "Browser policy": "ブラウザポリシー",
-  "Build": "ビルド",
   "Build and inject memory": "メモリを生成して挿入",
   "Build mode": "ビルドモード",
   "Builder panels": "ビルダーパネル",
@@ -297,7 +296,6 @@
   "Change role": "ロールを変更",
   "Change your password and manage two-factor authentication.": "パスワードの変更と二要素認証の管理を行います。",
   "Changelog": "更新履歴",
-  "Channel": "チャンネル",
   "Chat": "チャット",
   "Chat controls": "チャットコントロール",
   "Chat controls (admin)": "チャットコントロール(管理者)",
@@ -351,7 +349,6 @@
   "Code block": "コードブロック",
   "Code block header": "コードブロックのヘッダー",
   "Code text": "コードテキスト",
-  "Codename": "コードネーム",
   "Collapse": "折りたたむ",
   "Collapse all folders": "すべてのフォルダを折りたたむ",
   "Collapse button": "折りたたみボタン",
@@ -1454,7 +1451,6 @@
   "Regenerate recovery codes": "リカバリーコードを再生成",
   "Registration": "登録",
   "Relaxed": "リラックス",
-  "Release": "リリース",
   "Release candidate": "リリース候補",
   "Released": "リリース済み",
   "Reliable knowledge cutoff": "信頼できる知識のカットオフ",
@@ -2533,5 +2529,8 @@
   "Preview of the image being cropped": "切り抜き中の画像のプレビュー",
   "Current image": "現在の画像",
   "Support contact": "サポート連絡先",
-  "Who to reach about this instance. An email address or an https link. Shown on the 404 page; leave empty to hide it.": "このインスタンスに関する問い合わせ先。メールアドレスまたは https のリンク。404 ページに表示されます。非表示にするには空のままにします。"
+  "Who to reach about this instance. An email address or an https link. Shown on the 404 page; leave empty to hide it.": "このインスタンスに関する問い合わせ先。メールアドレスまたは https のリンク。404 ページに表示されます。非表示にするには空のままにします。",
+  "Release notes": "リリースノート",
+  "Copy details": "詳細をコピー",
+  "Version details copied": "バージョン情報をコピーしました"
 }

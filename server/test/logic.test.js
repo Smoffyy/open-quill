@@ -1585,8 +1585,8 @@ test('releaseCandidates refuses anything that is not a dotted number', () => {
 
 test('parseManifest keeps the known fields and warns about the rest', () => {
   const warns = [];
-  const m = parseManifest('{"codename":"Cascade","released":"2026-08-16","icon":"icon.png"}', (w) => warns.push(w));
-  assert.deepEqual(m, { codename: 'Cascade', released: '2026-08-16', icon: 'icon.png' });
+  const m = parseManifest('{"codename":"Cascade","released":"2026-08-16"}', (w) => warns.push(w));
+  assert.deepEqual(m, { codename: 'Cascade', released: '2026-08-16' });
   assert.deepEqual(warns, []);
 });
 
@@ -1602,15 +1602,6 @@ test('parseManifest drops a malformed date rather than showing it raw', () => {
   const m = parseManifest('{"released":"16/08/2026"}', (w) => warns.push(w));
   assert.equal(m.released, '');
   assert.match(warns[0], /YYYY-MM-DD/);
-});
-
-test('parseManifest refuses an icon that tries to leave the release folder', () => {
-  for (const icon of ['../../../etc/passwd', '/etc/hosts', 'sub/dir/icon.png', 'icon.exe', 'icon']) {
-    const warns = [];
-    const m = parseManifest(JSON.stringify({ icon }), (w) => warns.push(w));
-    assert.equal(m.icon, '', icon);
-    assert.equal(warns.length, 1, icon);
-  }
 });
 
 test('parseManifest survives a file that is not JSON at all', () => {
