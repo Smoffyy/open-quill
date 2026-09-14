@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [27.5.2] - TBD
+
+---
+
 ## [27.5.1] - 2026-09-13
 ### Added
 - **A 404 page** - an unknown address used to render the home screen silently. It now says the page does not exist, shows the path, and offers a new chat or a search.
