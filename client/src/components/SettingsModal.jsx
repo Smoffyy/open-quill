@@ -16,6 +16,7 @@ import { legacyRevealStyle, resolveReveal, revealSpeedMs } from '../lib/reveal.j
 import { parseVersion } from '../lib/appversion.js';
 import { channelLabel } from '../lib/channel.js';
 import { copyText } from '../clipboard.js';
+import { Skel, SkelLines, SkelRows, SkelStats } from './Skeleton.jsx';
 import { toast } from '../toast.js';
 
 const NAV_GROUPS = [
@@ -253,14 +254,14 @@ function VersionPanel({ cfg, release, onChangelog }) {
           {copied ? <Check style={{ width: 14, verticalAlign: '-2px' }} /> : <Copy style={{ width: 14, verticalAlign: '-2px' }} />} {t("Copy details")}
         </button>
       </div>
-      {release && (
-        <div className="vh-notes">
-          <div className="vh-notes-h">{t("Release notes")}</div>
-          {notes
+      <div className="vh-notes" aria-busy={!release || undefined}>
+        <div className="vh-notes-h">{t("Release notes")}</div>
+        {!release
+          ? <Skel when><SkelLines className="vh-notes-skel" count={6} /></Skel>
+          : notes
             ? <div className="version-desc"><Markdown>{notes}</Markdown></div>
             : <div className="vh-empty">{t("No release notes for this build.")}</div>}
-        </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -759,7 +760,7 @@ export default function SettingsModal({ user, cfg, modelId, initialTab, onClose,
                   options={[{ v: '7', label: t('7 days') }, { v: '30', label: t('30 days') }, { v: '90', label: t('90 days') }, { v: 'all', label: t('All time') }]} />
               </div>
               {usageErr && <div className="dz-err">{usageErr}</div>}
-              {!usageData && !usageErr && <div className="muted-note">{t("Loading…")}</div>}
+              {!usageData && !usageErr && <Skel when><SkelStats count={3} /></Skel>}
               {usageData && (
                 <>
                   <div className="usage-tiles">
@@ -856,7 +857,7 @@ export default function SettingsModal({ user, cfg, modelId, initialTab, onClose,
                 <div className="me-section-h">{t("Active sessions")}</div>
                 <div className="sec-note">{t("Devices signed in to your account. Sessions expire after 30 days idle.")}</div>
                 {sessionErr && <div className="dz-err">{sessionErr}</div>}
-                {!sessions && !sessionErr && <div className="muted-note">{t("Loading…")}</div>}
+                {!sessions && !sessionErr && <Skel when><SkelRows count={3} /></Skel>}
                 {sessions && (
                   <>
                     {sessions.map(s => (

@@ -87,6 +87,7 @@ export default function App() {
   const userRef = useRef(undefined);
   useEffect(() => { userRef.current = user; }, [user]);
   const [models, setModels] = useState([]);
+  const [modelsReady, setModelsReady] = useState(false);
   const [currentId, setCurrentId] = useState(null);
   const [chatRemovedModel, setChatRemovedModel] = useState(null);
   const modelsRef = useRef([]);
@@ -313,6 +314,7 @@ export default function App() {
     return c ? comboKeys(c).join('+') : '';
   }, [user?.prefs]);
   const [projects, setProjects] = useState([]);
+  const [projectsReady, setProjectsReady] = useState(false);
   const [showProjects, setShowProjects] = useState(false);
   const [projectOpenId, setProjectOpenId] = useState(null);
   const [projectCreate, setProjectCreate] = useState(false);
@@ -515,7 +517,7 @@ export default function App() {
   }, [user, cfg?.uiPreset]);
   useEffect(() => { if (user) { loadModels(); loadChats(); loadAppConfig(); loadBudget(); connect(); openFromUrl(); loadProjects(); } }, [!!user]);
   async function loadBudget() { try { setBudget(await api.get('/api/me/budget')); } catch {} }
-  async function loadProjects() { try { setProjects(await api.get('/api/projects')); } catch {} }
+  async function loadProjects() { try { setProjects(await api.get('/api/projects')); } catch {} finally { setProjectsReady(true); } }
 
   useEffect(() => {
     const onPop = () => openFromUrl();
@@ -597,10 +599,12 @@ export default function App() {
   }
 
   async function loadModels() {
-    const m = await api.get('/api/models');
-    setModels(m);
-    // keep the user's current pick; on first load (login) fall back to the default model, else the first
-    setCurrentId(id => id && m.find(x => x.id === id) ? id : (m.find(x => x.isDefault)?.id || m[0]?.id || null));
+    try {
+      const m = await api.get('/api/models');
+      setModels(m);
+      // keep the user's current pick; on first load (login) fall back to the default model, else the first
+      setCurrentId(id => id && m.find(x => x.id === id) ? id : (m.find(x => x.isDefault)?.id || m[0]?.id || null));
+    } finally { setModelsReady(true); }
   }
   async function loadChats() { try { setChats(await api.get('/api/chats')); } catch {} finally { setChatsLoaded(true); } }
   async function loadAppConfig() { try { applyCfg(await api.get('/api/app-config')); } catch {} }
@@ -1309,7 +1313,7 @@ export default function App() {
     hideModelPicker: cfg.uiPreset === 'openai',
     enterSend: cfg.uiPreset !== 'openai',
     chipsBelow: cfg.uiPreset === 'openai',
-    models, currentId, onSelect: pickModel, extended, onToggleExtended: () => setExtended(e => !e),
+    models, modelsReady, currentId, onSelect: pickModel, extended, onToggleExtended: () => setExtended(e => !e),
     reasoningEffort, onSetEffort: setReasoningEffort, kwargValues, onSetKwarg: setKwarg,
     visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin, budget,
     modelHasBg, bgInChat, onToggleBgInChat: () => updatePref('modelBgInChat', !bgInChat),
@@ -1433,7 +1437,7 @@ export default function App() {
 
   const modelPicker = (
     <div className="topbar-model tbm-flex">
-      <ModelDropdown models={models} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} kwargValues={kwargValues} onSetKwarg={setKwarg} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
+      <ModelDropdown models={models} modelsReady={modelsReady} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} kwargValues={kwargValues} onSetKwarg={setKwarg} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
 
       {ctxGaugeEl}
     </div>
@@ -1452,7 +1456,7 @@ export default function App() {
     <div className={'app' + (incognito ? ' app-incognito' : '') + (bgVisible ? ' has-bg' : '') + (collapsed && !docsTarget ? ' sb-collapsed' : '')}>
       <a className="skip-link" href="#oq-composer">{t('Skip to message input')}</a>
       <AppBackground bg={activeBg} />
-      <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} activeId={activeId} appName={cfg.appName} appIcon={cfg.appIcon} onSearch={onSearchCb}
+      <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} projectsReady={projectsReady} activeId={activeId} appName={cfg.appName} appIcon={cfg.appIcon} onSearch={onSearchCb}
         dest={showProjects ? 'projects' : chatsOverview ? 'chats' : libPage}
         onArtifacts={onArtifactsCb} onScheduled={onScheduledCb}
         onCustomize={onSkillsCb} onModelDocs={onDocsCb} showModelDocs={cfg.modelDocs !== false} onVersion={onVersionCb}
@@ -1774,7 +1778,7 @@ export default function App() {
       {showLicense && <DocModal title={t("Licensing")} name="license" onClose={() => setShowLicense(false)} />}
       {showPrivacy && <DocModal title={t("Privacy & security")} name="privacy" onClose={() => setShowPrivacy(false)} />}
       {showChangelog && <DocModal title={t("Changelog")} name="changelog" onClose={() => setShowChangelog(false)} />}
-      {cmdkOpen && <CommandPalette commands={commands} onClose={() => setCmdkOpen(false)} />}
+      {cmdkOpen && <CommandPalette commands={commands} ready={modelsReady && chatsLoaded} onClose={() => setCmdkOpen(false)} />}
     </div>
     {user?.isAdmin && <React.Suspense fallback={null}><BuildMode /></React.Suspense>}
     </ThemeProvider>

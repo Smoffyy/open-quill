@@ -70,7 +70,6 @@
   "Artifacts": "产物",
   "Artifacts panel": "产物面板",
   "Asks the current model to refresh this memory from your latest conversations.": "让当前模型根据你最近的对话刷新这段记忆。",
-  "Assembling…": "正在组装…",
   "Assistant": "助手",
   "Assistant message": "助手消息",
   "Assistant reply, editable": "助手回复，可编辑",
@@ -99,7 +98,6 @@
   "Branch into new chat": "分支为新对话",
   "Branch map": "分支图",
   "Browse all chats": "浏览所有对话",
-  "Building…": "正在构建…",
   "Bundled": "已打包",
   "Bundling": "正在打包",
   "Burning the midnight oil": "深夜还在忙",
@@ -432,7 +430,6 @@
   "Listed files": "已列出文件",
   "Listing files": "正在列出文件",
   "Loaded skill": "已加载技能",
-  "Loading diff…": "正在加载差异…",
   "Loading skill": "正在加载技能",
   "Loading…": "正在加载…",
   "Log out": "退出登录",
@@ -1168,5 +1165,6 @@
   "Deleted {n} chat(s)": "已删除 {n} 个对话",
   "Release notes": "版本说明",
   "Copy details": "复制详情",
-  "Version details copied": "已复制版本详情"
+  "Version details copied": "已复制版本详情",
+  "Loading placeholder": "加载占位符"
 }

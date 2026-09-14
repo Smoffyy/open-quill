@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [27.5.2] - TBD
+### Added
+- **Loading placeholders everywhere** - every panel, modal and menu that waits on data now shows a placeholder shaped like the content that is coming: a table, a stat row, a settings list, paragraph lines or menu items. They use the same delay as the chat placeholder, so a fast load still shows nothing at all.
+
 ### Changed
 - **Settings, Version is rebuilt** - the release number is now drawn from the release folder that answered, scaled to fit, so a release no longer needs a hand-made icon. The codename, version, channel and date sit on one line instead of a list that repeated the version twice, and the release notes get their own section with Changelog and Copy details buttons.
 

@@ -70,7 +70,6 @@
   "Artifacts": "Artefacts",
   "Artifacts panel": "Panneau des artefacts",
   "Asks the current model to refresh this memory from your latest conversations.": "Demande au modèle actuel d'actualiser cette mémoire à partir de vos dernières conversations.",
-  "Assembling…": "Assemblage…",
   "Assistant": "Assistant",
   "Assistant message": "Message de l'assistant",
   "Assistant reply, editable": "Réponse de l'assistant, modifiable",
@@ -99,7 +98,6 @@
   "Branch into new chat": "Créer une branche dans une nouvelle conversation",
   "Branch map": "Carte des branches",
   "Browse all chats": "Parcourir toutes les conversations",
-  "Building…": "Construction…",
   "Bundled": "Archivé",
   "Bundling": "Archivage",
   "Burning the midnight oil": "Encore debout à cette heure",
@@ -432,7 +430,6 @@
   "Listed files": "Fichiers listés",
   "Listing files": "Liste des fichiers",
   "Loaded skill": "Compétence chargée",
-  "Loading diff…": "Chargement des différences…",
   "Loading skill": "Chargement de la compétence",
   "Loading…": "Chargement…",
   "Log out": "Se déconnecter",
@@ -1168,5 +1165,6 @@
   "Deleted {n} chat(s)": "{n} conversation(s) supprimée(s)",
   "Release notes": "Notes de version",
   "Copy details": "Copier les détails",
-  "Version details copied": "Détails de version copiés"
+  "Version details copied": "Détails de version copiés",
+  "Loading placeholder": "Espace réservé de chargement"
 }

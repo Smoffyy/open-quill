@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { t } from '../i18n.jsx';
 import { SetRow, SegSlide } from './settingsui.jsx';
 import { Download, Upload } from './icons.jsx';
+import { Skel, SkelRows } from './Skeleton.jsx';
 import {
   KEYBIND_ACTIONS, KEYBIND_GROUPS, KEYBIND_PREF, KEYBIND_PRESETS,
   activePresetId, comboFromEvent, comboKeys, customKeybinds, exportKeybinds,
@@ -15,6 +16,7 @@ function Keys({ combo }) {
 }
 
 export default function KeybindsPanel({ prefs, setPref }) {
+  const ready = !!prefs;
   const [recording, setRecording] = useState('');
   const [msg, setMsg] = useState('');
   const importRef = useRef(null);
@@ -90,8 +92,9 @@ export default function KeybindsPanel({ prefs, setPref }) {
           onPick={(v) => { if (v !== 'custom') setPref(KEYBIND_PREF, presetBinds(v)); }}
           options={KEYBIND_PRESETS.map(p => ({ v: p.id, label: t(p.label) })).concat(preset ? [] : [{ v: 'custom', label: t('Custom') }])} />
       </SetRow>
-      <div className="kb-panel">
-        {KEYBIND_GROUPS.map(group => {
+      <div className="kb-panel" aria-busy={!ready || undefined}>
+        {!ready && <Skel when><SkelRows count={6} /></Skel>}
+        {ready && KEYBIND_GROUPS.map(group => {
           const rows = KEYBIND_ACTIONS.filter(a => a.group === group);
           if (!rows.length) return null;
           return (

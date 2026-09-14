@@ -3,6 +3,7 @@ import { api } from '../../../api.js';
 import { Card, Fields, Field, Input, Seg, Btn, IconBtn, Acts, Table, Stats, Empty, fmtInt, fmtMoney } from '../ui.jsx';
 import { Plus, Trash, Wave } from '../../icons.jsx';
 import { t, tk } from '../../../i18n.jsx';
+import { Skel, SkelStats } from '../../Skeleton.jsx';
 
 const TOP_ROWS = 30;
 const TOP_TOOLS = 40;
@@ -195,7 +196,7 @@ export default function UsageSection() {
       </div>
 
       {!usage
-        ? <Empty icon={Wave} title={t('Loading')} />
+        ? <Skel when><SkelStats count={4} /></Skel>
         : (
           <Stats items={[
             { k: t('Tokens'), v: fmtInt(usage.totals.total) },

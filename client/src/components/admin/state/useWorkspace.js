@@ -40,6 +40,7 @@ export function useWorkspace() {
   const [settings, setSettings] = useState(SETTINGS_DEFAULTS);
   const [config, setConfig] = useState(CONFIG_DEFAULTS);
   const [lanes, setLanes] = useState({ settings: 'idle', config: 'idle' });
+  const [ready, setReady] = useState(false);
 
   const saved = useRef({ settings: SETTINGS_DEFAULTS, config: CONFIG_DEFAULTS });
   const timers = useRef({});
@@ -90,6 +91,7 @@ export function useWorkspace() {
       saved.current.config = next;
       setConfig(next);
     } catch {}
+    setReady(true);
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -129,5 +131,5 @@ export function useWorkspace() {
   const set = useCallback((key, value) => setSettings(s => (s[key] === value ? s : { ...s, [key]: value })), []);
   const setCfg = useCallback((key, value) => setConfig(c => (c[key] === value ? c : { ...c, [key]: value })), []);
 
-  return { settings, setSettings, set, config, setConfig, setCfg, saveState, reload: load };
+  return { settings, setSettings, set, config, setConfig, setCfg, saveState, ready, reload: load };
 }

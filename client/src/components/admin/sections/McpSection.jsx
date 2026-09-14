@@ -4,6 +4,7 @@ import { useAdmin } from '../store.jsx';
 import { Card, Rows, ToggleRow, Fields, Field, Input, Area, Seg, Btn, IconBtn, Acts, Table, Badge, Switch, Empty, Dialog, Note } from '../ui.jsx';
 import { Plus, Trash, Pencil, Refresh, Plug } from '../../icons.jsx';
 import { t } from '../../../i18n.jsx';
+import { Skel, SkelRows } from '../../Skeleton.jsx';
 
 const BLANK = { name: '', transport: 'stdio', command: '', args: '', url: '', headers: '', enabled: true };
 
@@ -80,7 +81,7 @@ export default function McpSection() {
         foot={anyError
           ? <span className="cp-err">{t('One or more servers failed to connect. Reconnect to see the error, or check that the command or URL is still reachable.')}</span>
           : null}>
-        {servers == null && <Empty icon={Plug} title={t('Loading')} />}
+        <Skel when={servers == null}><SkelRows count={3} /></Skel>
         {servers != null && servers.length === 0 && (
           <Empty icon={Plug} title={t('No servers attached')}>
             {t('An MCP server gives models capabilities this app does not ship with: filesystem access, a browser, or your own internal APIs.')}

@@ -4,6 +4,7 @@ import { useAdmin } from '../store.jsx';
 import { Card, Rows, ToggleRow, Fields, Field, Input, Area, Btn, IconBtn, Acts, Table, Switch, Empty, Dialog, Note } from '../ui.jsx';
 import { Plus, Trash, Pencil, Bulb } from '../../icons.jsx';
 import { t } from '../../../i18n.jsx';
+import { Skel, SkelRows } from '../../Skeleton.jsx';
 
 const BLANK = { name: '', description: '', content: '', enabled: true };
 
@@ -66,7 +67,7 @@ export default function SkillsSection() {
         actions={<Btn kind="primary" size="sm" onClick={() => { setDraft({ ...BLANK }); setError(''); }}>
           <Plus /> {t('New skill')}
         </Btn>}>
-        {skills == null && <Empty icon={Bulb} title={t('Loading')} />}
+        <Skel when={skills == null}><SkelRows count={4} /></Skel>
         {skills != null && skills.length === 0 && (
           <Empty icon={Bulb} title={t('No skills defined')}>
             {t('A skill is a written procedure the model pulls in on demand, so the instructions cost nothing until they are needed.')}

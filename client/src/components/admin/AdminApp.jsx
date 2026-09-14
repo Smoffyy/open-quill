@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { AdminProvider, useAdmin } from './store.jsx';
 import { NAV, SECTIONS, sectionMeta } from './nav.jsx';
-import { Confirm, SaveState } from './ui.jsx';
+import { Confirm, SaveState, SectionSkeleton } from './ui.jsx';
 import { PublishState } from './publish.jsx';
 import { Search, X, Cube } from '../icons.jsx';
 import { t } from '../../i18n.jsx';
 import { BRAND_ICON } from '../../lib/brand.js';
+import { useSkeleton } from '../../lib/skeleton.js';
 
 import OverviewSection from './sections/OverviewSection.jsx';
 import ModelsSection from './sections/ModelsSection.jsx';
@@ -167,6 +168,7 @@ function Shell() {
   }, [onClose]);
 
   const counts = { models: catalog.models.length, members: members.members.length, providers: catalog.providers.length };
+  const showSkeleton = useSkeleton(!workspace.ready);
 
   return (
     <div className="cp-scrim" role="dialog" aria-modal="true" aria-label={t('Control panel')}
@@ -216,7 +218,9 @@ function Shell() {
               </div>
             </div>
             <div ref={scrollRef} className="cp-scroll">
-              <div className="cp-page"><View /></div>
+              <div className="cp-page" aria-busy={!workspace.ready || undefined}>
+                {workspace.ready ? <View /> : (showSkeleton && <SectionSkeleton />)}
+              </div>
             </div>
           </main>
         </div>

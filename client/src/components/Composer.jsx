@@ -83,7 +83,7 @@ function ActiveChip({ icon, label, onRemove }) {
 }
 
 export default function Composer({
-  value, onChange, onSend, onStop, streaming, stopping = false, models,
+  value, onChange, onSend, onStop, streaming, stopping = false, models, modelsReady = true,
   currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, onOpenProject, projects = [], onSetProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
   voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall, callActive = false,
   safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
@@ -535,7 +535,7 @@ export default function Composer({
                     </button>
                     {sub.isOpen('styles') && (
                       <PmSub className="styles" onMouseEnter={() => sub.hoverOpen('styles')} onMouseLeave={sub.hoverClose}>
-                        <StyleSubmenu styles={styles} styleId={styleId} currentId={currentId} onSaveStyles={onSaveStyles}
+                        <StyleSubmenu styles={styles} stylesReady={modelsReady} styleId={styleId} currentId={currentId} onSaveStyles={onSaveStyles}
                           onSelect={(id) => { onSelectStyle && onSelectStyle(id); closePlusMenu(); }} />
                       </PmSub>
                     )}
@@ -661,7 +661,7 @@ export default function Composer({
         </div>
         <div className="composer-right">
           {ctxGauge}
-          {!hideModelPicker && <ModelDropdown models={models} currentId={currentId} onSelect={onSelect}
+          {!hideModelPicker && <ModelDropdown models={models} modelsReady={modelsReady} currentId={currentId} onSelect={onSelect}
             extended={extended} onToggleExtended={onToggleExtended} up={modelUp} isAdmin={canUseUnavailable}
             reasoningEffort={reasoningEffort} onSetEffort={onSetEffort}
             kwargValues={kwargValues} onSetKwarg={onSetKwarg}

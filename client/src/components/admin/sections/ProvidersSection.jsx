@@ -5,6 +5,7 @@ import { Cube, Plus, Trash, Sliders } from '../../icons.jsx';
 import { api } from '../../../api.js';
 import { t } from '../../../i18n.jsx';
 import { modelIconFor, useLogos } from '../../../lib/logos.js';
+import { Skel, SkelRows } from '../../Skeleton.jsx';
 
 function Engine({ e }) {
   const rows = [];
@@ -100,7 +101,7 @@ function Discover({ providerId, onClose, onAdded }) {
       <p className="cp-hint" style={{ marginTop: 0 }}>
         {t('Adding one creates a catalog entry bound to this provider. It behaves like any other entry afterwards, so you can rename, hide, or delete it.')}
       </p>
-      {state.loading && <Empty icon={Cube} title={t('Asking the backend')} />}
+      <Skel when={state.loading}><SkelRows count={5} /></Skel>
       {state.error && <div className="cp-err">{state.error}</div>}
       {bulkError && <div className="cp-err">{bulkError}</div>}
       {!state.loading && !state.error && state.list.length === 0 && (

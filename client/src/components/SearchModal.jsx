@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { Search, Star } from './icons.jsx';
 import { useFocusTrap } from '../lib/focus.js';
 import { t } from '../i18n.jsx';
+import { Skel, SkelMenu } from './Skeleton.jsx';
 
 export default function SearchModal({ onClose, onOpen }) {
   const [q, setQ] = useState('');
@@ -51,6 +52,7 @@ export default function SearchModal({ onClose, onOpen }) {
         </div>
         <div className="search-body" role="listbox" aria-label={t("Search results")}>
           {q.trim().length < 2 && <div className="search-empty">{t("Type at least 2 characters to search across all your conversations.")}</div>}
+          {q.trim().length >= 2 && loading && results.length === 0 && <Skel when><SkelMenu count={5} icons={false} /></Skel>}
           {q.trim().length >= 2 && !loading && results.length === 0 && <div className="search-empty">{t("No matches.")}</div>}
           {results.map((r, i) => (
             <button key={r.id} role="option" aria-selected={i === active} className={'search-row' + (i === active ? ' active' : '')} onMouseEnter={() => setActive(i)} onClick={() => pick(r)}>

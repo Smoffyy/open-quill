@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api.js';
 import { t } from '../i18n.jsx';
+import { Skel, SkelLines } from './Skeleton.jsx';
 
 export default function SummaryModal({ chatId, onClose, onChanged }) {
   const [text, setText] = useState('');
@@ -18,7 +19,7 @@ export default function SummaryModal({ chatId, onClose, onChanged }) {
       <div className="summary-modal">
         <div className="sm-head"><h3>{t("Conversation memory")}</h3><button className="modal-close" style={{ position: 'static' }} onClick={onClose} aria-label={t('Close')}>✕</button></div>
         <p className="muted-note" style={{ margin: '0 0 10px' }}>{t("Older messages were compacted into this summary, which is fed to the model as context on every turn. You can edit or clear it.")}</p>
-        {loading ? <div className="art-empty">{t("Loading…")}</div> : (
+        {loading ? <Skel when><SkelLines className="summary-skel" count={7} /></Skel> : (
           <textarea className="summary-text" value={text} onChange={e => setText(e.target.value)} placeholder={t("No summary yet.")} />
         )}
         <div className="edit-actions" style={{ marginTop: 12 }}>

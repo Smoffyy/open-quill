@@ -180,9 +180,7 @@
   "Artifacts panel": "Artifacts-Panel",
   "Artifacts toolbar": "Artifacts-Symbolleiste",
   "Ask an admin to add a model to get started.": "Bitten Sie einen Administrator, ein Modell hinzuzufügen, um zu beginnen.",
-  "Asking the backend": "Backend wird angefragt",
   "Asks the current model to refresh this memory from your latest conversations.": "Bittet das aktuelle Modell, dieses Gedächtnis anhand Ihrer letzten Unterhaltungen zu aktualisieren.",
-  "Assembling…": "Wird zusammengestellt…",
   "Assistant": "Assistent",
   "Assistant avatar": "Avatar des Assistenten",
   "Assistant message": "Nachricht des Assistenten",
@@ -264,7 +262,6 @@
   "Build and inject memory": "Gedächtnis erstellen und einspeisen",
   "Build mode": "Bearbeitungsmodus",
   "Builder panels": "Builder-Panels",
-  "Building…": "Wird erstellt…",
   "Bundled": "Gebündelt",
   "Bundling": "Wird gebündelt",
   "Burning the midnight oil": "Arbeitet bis spät in die Nacht",
@@ -951,9 +948,7 @@
   "Load {n} more": "{n} weitere laden",
   "Loaded": "Geladen",
   "Loaded skill": "Geladener Skill",
-  "Loading": "Wird geladen",
   "Loading conversation": "Unterhaltung wird geladen",
-  "Loading diff…": "Vergleich wird geladen…",
   "Loading skeleton": "Ladeplatzhalter",
   "Loading skill": "Skill wird geladen",
   "Loading…": "Wird geladen…",
@@ -2412,7 +2407,6 @@
   "Nobody else can sign up. You can invite people later by turning this back on.": "Niemand sonst kann sich registrieren. Du kannst später Personen einladen, indem du das wieder aktivierst.",
   "Anyone who can reach this server": "Jeder, der diesen Server erreicht",
   "Good on a machine only you can reach. Risky if this address is open to a network you do not control.": "Gut auf einem Rechner, den nur du erreichst. Riskant, wenn diese Adresse in einem Netzwerk offen ist, das du nicht kontrollierst.",
-  "Loading layouts…": "Layouts werden geladen…",
   "Every layout is a starting point, not a fixed skin. Nothing here is permanent.": "Jedes Layout ist ein Ausgangspunkt, kein festes Design. Nichts davon ist endgültig.",
   "A connection is one address the app talks to. Pick the kind you are running, then say where it is.": "Eine Verbindung ist eine Adresse, mit der die App spricht. Wähle die Art aus, die du betreibst, und gib dann an, wo sie liegt.",
   "On this machine": "Auf diesem Rechner",
@@ -2532,5 +2526,6 @@
   "Who to reach about this instance. An email address or an https link. Shown on the 404 page; leave empty to hide it.": "Ansprechpartner für diese Instanz. Eine E-Mail-Adresse oder ein https-Link. Wird auf der 404-Seite angezeigt; leer lassen, um ihn auszublenden.",
   "Release notes": "Versionshinweise",
   "Copy details": "Details kopieren",
-  "Version details copied": "Versionsdetails kopiert"
+  "Version details copied": "Versionsdetails kopiert",
+  "Loading placeholder": "Ladeplatzhalter"
 }

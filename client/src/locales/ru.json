@@ -180,9 +180,7 @@
   "Artifacts panel": "Панель артефактов",
   "Artifacts toolbar": "Панель инструментов артефактов",
   "Ask an admin to add a model to get started.": "Попросите администратора добавить модель, чтобы начать.",
-  "Asking the backend": "Запрос к бэкенду",
   "Asks the current model to refresh this memory from your latest conversations.": "Просит текущую модель обновить эту память на основе ваших последних разговоров.",
-  "Assembling…": "Сборка…",
   "Assistant": "Ассистент",
   "Assistant avatar": "Аватар ассистента",
   "Assistant message": "Сообщение ассистента",
@@ -264,7 +262,6 @@
   "Build and inject memory": "Сформировать и внедрить память",
   "Build mode": "Режим конструктора",
   "Builder panels": "Панели конструктора",
-  "Building…": "Сборка…",
   "Bundled": "Встроено",
   "Bundling": "Сборка",
   "Burning the midnight oil": "Работает допоздна",
@@ -951,9 +948,7 @@
   "Load {n} more": "Загрузить ещё {n}",
   "Loaded": "Загружено",
   "Loaded skill": "Навык загружен",
-  "Loading": "Загрузка",
   "Loading conversation": "Загрузка разговора",
-  "Loading diff…": "Загрузка сравнения…",
   "Loading skeleton": "Заглушка загрузки",
   "Loading skill": "Загрузка навыка",
   "Loading…": "Загрузка…",
@@ -2412,7 +2407,6 @@
   "Nobody else can sign up. You can invite people later by turning this back on.": "Больше никто не сможет зарегистрироваться. Позже можно снова включить это и приглашать людей.",
   "Anyone who can reach this server": "Любой, кто может достучаться до этого сервера",
   "Good on a machine only you can reach. Risky if this address is open to a network you do not control.": "Подходит для машины, доступной только вам. Рискованно, если этот адрес открыт в сети, которую вы не контролируете.",
-  "Loading layouts…": "Загрузка макетов…",
   "Every layout is a starting point, not a fixed skin. Nothing here is permanent.": "Каждый макет — отправная точка, а не фиксированное оформление. Ничто здесь не окончательно.",
   "A connection is one address the app talks to. Pick the kind you are running, then say where it is.": "Подключение — это один адрес, с которым общается приложение. Выберите тип, который вы запустили, и укажите, где он находится.",
   "On this machine": "На этой машине",
@@ -2532,5 +2526,6 @@
   "Who to reach about this instance. An email address or an https link. Shown on the 404 page; leave empty to hide it.": "К кому обращаться по поводу этого экземпляра. Адрес электронной почты или ссылка https. Показывается на странице 404; оставьте пустым, чтобы скрыть.",
   "Release notes": "Примечания к выпуску",
   "Copy details": "Скопировать сведения",
-  "Version details copied": "Сведения о версии скопированы"
+  "Version details copied": "Сведения о версии скопированы",
+  "Loading placeholder": "Заполнитель загрузки"
 }

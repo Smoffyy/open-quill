@@ -5,6 +5,7 @@ import { Card, Btn, Acts, Table, Stats, Badge, Empty, Note, KV, fmtInt, fmtMoney
 import { PublishState } from '../publish.jsx';
 import { Plus, Sliders, Users, Clock } from '../../icons.jsx';
 import { t } from '../../../i18n.jsx';
+import { Skel, SkelTable } from '../../Skeleton.jsx';
 
 const RECENT_EVENTS = 8;
 const USAGE_DAYS = 30;
@@ -76,7 +77,7 @@ export default function OverviewSection() {
 
       <Card title={t('Recent admin events')} flush
         actions={<Btn size="sm" onClick={() => setSection('events')}>{t('Open event log')}</Btn>}>
-        {!events && <Empty icon={Clock} title={t('Loading')} />}
+        <Skel when={!events}><SkelTable cols={3} rows={5} /></Skel>
         {events && events.length === 0 && (
           <Empty icon={Clock} title={t('Nothing recorded')}>{t('Sensitive admin actions appear here as they happen.')}</Empty>
         )}

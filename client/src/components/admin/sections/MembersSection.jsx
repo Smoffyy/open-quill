@@ -3,10 +3,11 @@ import { useAdmin } from '../store.jsx';
 import { Card, Rows, ToggleRow, Input, Seg, IconBtn, Acts, Table, Badge, Empty, fmtMoney } from '../ui.jsx';
 import { Trash, Users } from '../../icons.jsx';
 import { t } from '../../../i18n.jsx';
+import { Skel, SkelTable } from '../../Skeleton.jsx';
 
 export default function MembersSection() {
   const { members: M, workspace, user } = useAdmin();
-  const { members, setRole, setBudget, remove } = M;
+  const { members, ready, setRole, setBudget, remove } = M;
   const [q, setQ] = useState('');
   const [role, setRoleFilter] = useState('all');
   const [drafts, setDrafts] = useState({});
@@ -51,7 +52,9 @@ export default function MembersSection() {
 
       <Card title={t('Accounts')} flush
         sub={t('A blank cap falls back to the role default set in Quotas. Removing an account deletes everything it owns.')}>
-        {shown.length === 0
+        {!ready
+          ? <Skel when><SkelTable cols={4} rows={6} /></Skel>
+          : shown.length === 0
           ? <Empty icon={Users} title={t('No accounts match')}>{t('Clear the filter to see everyone who has signed in.')}</Empty>
           : (
             <Table head={[

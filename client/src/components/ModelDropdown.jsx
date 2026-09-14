@@ -7,6 +7,7 @@ import { clampPx, overshoot, stretchFor, squashFor, stretchOrigin, slideFor, DRA
 import { paintCells, fadeTrail, stampTrail, headColumn, CELL, CELL_FPS, CELL_SPEED } from '../lib/cellfield.js';
 import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues, isRange, clampToRange, rangeStep, kwargVisible, gateSourceIds } from '../kwargs.js';
 import { useDismiss } from '../lib/dismiss.js';
+import { Skel, SkelMenu } from './Skeleton.jsx';
 
 const CAP_ICONS = [
   { key: 'capText', label: tk('Text-Only'), Icon: TextIcon },
@@ -380,7 +381,7 @@ function MoreGroup({ label, items, renderOpt, openKey, setOpenKey }) {
   );
 }
 
-export default function ModelDropdown({ models, currentId, onSelect, extended, onToggleExtended, up, modelHasBg, bgInChat, onToggleBgInChat, reasoningEffort, onSetEffort, kwargValues, onSetKwarg, isAdmin = false }) {
+export default function ModelDropdown({ models, modelsReady = true, currentId, onSelect, extended, onToggleExtended, up, modelHasBg, bgInChat, onToggleBgInChat, reasoningEffort, onSetEffort, kwargValues, onSetKwarg, isAdmin = false }) {
   const [open, setOpen] = useState(false);
   const [openSub, setOpenSub] = useState(null);
   const [place, setPlace] = useState({ shift: 0, left: null, maxH: 0, sheet: false, ready: false });
@@ -527,7 +528,7 @@ export default function ModelDropdown({ models, currentId, onSelect, extended, o
       {open && (
         <div ref={menuRef} className={'model-menu' + (place.sheet ? '' : ' up')} style={menuStyle}>
           <div className="model-main-list" ref={listRef} style={listMaxH ? { maxHeight: listMaxH, overflow: 'hidden auto' } : undefined}>
-            {hasModels ? main.map(renderOpt) : (
+            {!modelsReady ? <Skel when><SkelMenu count={5} /></Skel> : hasModels ? main.map(renderOpt) : (
               <div className="model-opt model-empty">
                 <div className="mo-main">
                   <div className="mo-name">{t('No models available')}</div>

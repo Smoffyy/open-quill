@@ -4,6 +4,7 @@ import { toast } from '../toast.js';
 import { Check, Trash, Sparkles } from './icons.jsx';
 import { t } from '../i18n.jsx';
 import { tk } from '../i18n.jsx';
+import { Skel, SkelMenu } from './Skeleton.jsx';
 
 export const STYLE_PRESETS = [
   { id: 'normal', name: tk('Normal'), desc: tk('Default responses') },
@@ -17,7 +18,7 @@ export function styleNameFor(styleId, styles = []) {
   return s ? s.name : 'Normal';
 }
 
-export default function StyleSubmenu({ styles = [], styleId = 'normal', onSelect, onSaveStyles, currentId }) {
+export default function StyleSubmenu({ styles = [], stylesReady = true, styleId = 'normal', onSelect, onSaveStyles, currentId }) {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [prompt, setPrompt] = useState('');
@@ -89,7 +90,8 @@ export default function StyleSubmenu({ styles = [], styleId = 'normal', onSelect
           {p.id === styleId && <Check style={{ width: 14 }} />}
         </button>
       ))}
-      {styles.length > 0 && <div className="style-menu-label">{t("Your styles")}</div>}
+      {!stylesReady && <Skel when><SkelMenu count={2} icons={false} /></Skel>}
+      {stylesReady && styles.length > 0 && <div className="style-menu-label">{t("Your styles")}</div>}
       {styles.map(x => (
         <button key={x.id} className={'style-item' + (x.id === styleId ? ' active' : '')} onClick={() => onSelect?.(x.id)}>
           <span className="style-item-name">{x.name}</span>

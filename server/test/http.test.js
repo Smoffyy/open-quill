@@ -489,7 +489,8 @@ test('release metadata is served to members only', async () => {
   assert.equal(rel.status, 200);
   assert.equal(typeof rel.json.version, 'string');
   assert.equal(typeof rel.json.codename, 'string');
-  assert.equal(rel.json.line, '27', 'the badge is told which release folder answered');
+  assert.ok(rel.json.line, 'the badge is told which release folder answered');
+  assert.ok(rel.json.version.startsWith(rel.json.line), 'and that folder is one this version resolves to');
   assert.equal(typeof rel.json.notes, 'string');
 
   // the notes are the reason this moved off /api/app-config, which every page load fetches

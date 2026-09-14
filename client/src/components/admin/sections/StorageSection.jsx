@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../../api.js';
 import { useAdmin } from '../store.jsx';
-import { Card, Field, Input, Btn, IconBtn, Acts, Table, Badge, KV, Empty, Note, fmtBytes } from '../ui.jsx';
-import { Trash, Box } from '../../icons.jsx';
+import { Card, Field, Input, Btn, IconBtn, Acts, Table, Badge, KV, Note, SectionSkeleton, fmtBytes } from '../ui.jsx';
+import { Trash } from '../../icons.jsx';
 import { t } from '../../../i18n.jsx';
+import { Skel } from '../../Skeleton.jsx';
 
 const NAME_MAX = 40;
 const DEFAULT_DB = 'default';
@@ -60,7 +61,7 @@ export default function StorageSection() {
     });
   }
 
-  if (!data && !error) return <Empty icon={Box} title={t('Loading')} />;
+  if (!data && !error) return <Skel when><SectionSkeleton shape="stats" /></Skel>;
 
   const list = data?.databases || [];
   const restartNeeded = data?.requiresRestart;

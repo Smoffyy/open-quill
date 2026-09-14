@@ -4,9 +4,11 @@ import { t } from '../../../i18n.jsx';
 
 export function useMembers({ confirm }) {
   const [members, setMembers] = useState([]);
+  const [ready, setReady] = useState(false);
 
   const load = useCallback(async () => {
     try { setMembers(await api.get('/api/admin/users')); } catch {}
+    setReady(true);
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -36,5 +38,5 @@ export function useMembers({ confirm }) {
     });
   }, [confirm]);
 
-  return { members, setRole, setBudget, remove, reload: load };
+  return { members, ready, setRole, setBudget, remove, reload: load };
 }

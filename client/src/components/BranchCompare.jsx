@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import Markdown from './Markdown.jsx';
 import { X } from './icons.jsx';
 import { t } from '../i18n.jsx';
+import { Skel, SkelLines } from './Skeleton.jsx';
 
 export default function BranchCompare({ chatId, messageId, onSelect, onClose }) {
   const [data, setData] = useState(null);
@@ -32,7 +33,7 @@ export default function BranchCompare({ chatId, messageId, onSelect, onClose }) 
           <button className="bc-x" onClick={onClose} title={t("Close")} aria-label={t("Close")}><X style={{ width: 14 }} /></button>
         </div>
         {err ? <div className="bc-empty">{t("Could not load versions.")}</div>
-          : !data ? <div className="bc-empty">{t("Loading…")}</div>
+          : !data ? <Skel when><SkelLines className="bc-skel" count={6} /></Skel>
           : sibs.length < 2 ? <div className="bc-empty">{t("This message has only one version.")}</div>
           : (
             <div className="bc-cols" style={{ gridTemplateColumns: `repeat(${sibs.length}, minmax(260px, 1fr))` }}>
