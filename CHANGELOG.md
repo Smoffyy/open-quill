@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [27.5.2] - TBD
+### Fixed
+- **The message box no longer jitters while you type a long line** - in a thread the bar sits beside the text until a second line appears, which widens the box by the width of the bar. The height was measured at the narrow width and applied at the wide one, so every keystroke around the wrap point flipped the layout back and forth. The wrap is now decided at the narrow width and the height measured at the width that decision produces.
 
 ---
 

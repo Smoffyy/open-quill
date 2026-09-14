@@ -135,19 +135,25 @@ export default function Composer({
     const el = ta.current; if (!el) return;
     cancelAnimationFrame(fitRaf.current);
     const MAX = 280;
+    const host = el.parentElement;
     if ((el.value ? el.value.length : 0) > 4000) {
       el.style.overflowY = 'auto';
       el.style.height = MAX + 'px';
+      if (host) host.classList.add('ml');
       setMultiline(m => (m === true ? m : true));
       grewOnce.current = true;
       return;
     }
     const prev = el.offsetHeight;
     el.style.height = 'auto';
+    const setMl = (on) => { if (host) host.classList.toggle('ml', on); };
+    setMl(false);
+    const ml = el.scrollHeight > 44;
+    setMl(ml);
     const raw = el.scrollHeight;
     const measured = Math.min(raw, MAX);
     el.style.overflowY = raw > MAX ? 'auto' : 'hidden';
-    setMultiline(m => { const ml = measured > 44; return m === ml ? m : ml; });
+    setMultiline(m => (m === ml ? m : ml));
     if (!animate || !grewOnce.current || Math.abs(prev - measured) < 1) {
       el.style.height = measured + 'px';
       grewOnce.current = true;
