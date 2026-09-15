@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="client/public/brand/starburst.svg" alt="Open Quill" width="120"/>
+<img src="client/public/brand/mark.svg" alt="Open Quill" width="120"/>
 
 # Open Quill
 
