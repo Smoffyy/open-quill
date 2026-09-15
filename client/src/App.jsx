@@ -1247,6 +1247,22 @@ export default function App() {
     queueRec(activeId, currentId);
   }, [streaming, activeId, currentId]);
 
+  const editAssistantMessage = useCallback(async (messageId, newContent) => {
+    if (streaming || !activeId) return;
+    let before = null;
+    setMessages(ms => ms.map(m => {
+      if (m.id !== messageId) return m;
+      before = m.content;
+      return { ...m, content: newContent };
+    }));
+    try {
+      await api.patch('/api/chats/' + activeId + '/messages/' + messageId, { content: newContent });
+    } catch {
+      if (before !== null) setMessages(ms => ms.map(m => m.id === messageId ? { ...m, content: before } : m));
+      toast(t('Could not save these changes.'));
+    }
+  }, [streaming, activeId]);
+
   // Deliberately does NOT finalize. finalize() refetches the thread, and the
   // server only writes the assistant row once it has unwound the turn — going
   // early replaced the in-progress message with a thread that does not contain
@@ -1666,7 +1682,7 @@ export default function App() {
                       status={msg._streaming ? modelStatus : null}
                       statusDelay={statusDelay}
                       streaming={!!msg._streaming} phase={msg._streaming ? ((modelById.get(currentId)?.hideThinking && phase === 'thinking') ? 'generating' : phase) : 'static'} liveCall={msg._streaming ? liveCall : null} liveCalls={msg._streaming ? liveCalls : EMPTY_CALLS}
-                      onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onDelete={deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
+                      onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onEditAssistant={editAssistantMessage} onDelete={deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
                       showSpeed={showMsgSpeed}
                       showIcon={msg.role === 'assistant' && (cfg.uiPreset === 'openai' || (lastA && msg.id === lastA.id))}
                       modern={modernMotion}

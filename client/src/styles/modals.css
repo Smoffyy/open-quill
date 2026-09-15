@@ -87,10 +87,12 @@
 /* ---- version (about) ---- */
 .vh { max-width: 560px; }
 .vh-top { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; padding: 4px 0 20px; }
-.vh-badge { width: 84px; height: 84px; border-radius: 19px; flex-shrink: 0; display: grid; place-items: center;
+.vh-badge { position: relative; width: 84px; height: 84px; border-radius: 19px; flex-shrink: 0; display: grid; place-items: center;
   background: linear-gradient(160deg, var(--surface-hover), var(--surface-2));
   border: 1px solid var(--border-soft); box-shadow: 0 2px 10px #00000026; }
-.vh-badge-num { width: 70px; height: 56px; overflow: visible; }
+.vh-badge-wm { position: absolute; inset: 0; z-index: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
+.vh-badge-wm img { position: absolute; right: -34px; bottom: -38px; width: 112px; height: 112px; object-fit: contain; opacity: .13; }
+.vh-badge-num { position: relative; z-index: 1; width: 70px; height: 56px; overflow: visible; }
 .vh-badge-num text { font-family: var(--font-serif); font-size: 40px; font-weight: 600; fill: var(--text);
   letter-spacing: -.02em; font-variant-numeric: lining-nums; }
 .vh-id { min-width: 0; }

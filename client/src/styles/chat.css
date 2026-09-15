@@ -51,7 +51,7 @@
 .send.checking { animation: sendChecking 1.1s ease-in-out infinite; }
 .send.quiet:disabled { opacity: 1; }
 @keyframes sendChecking { 0%, 100% { opacity: .4; } 50% { opacity: .85; } }
-.safety-checking { display: flex; align-items: center; gap: 7px; padding: 2px 4px 8px; font-size: 12.5px; font-weight: 600; background: linear-gradient(90deg, var(--text-muted) 30%, var(--text) 50%, var(--text-muted) 70%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 2.2s linear infinite; }
+.safety-checking { display: flex; align-items: center; gap: 7px; padding: 2px 4px 8px; font-size: 12.5px; font-weight: 600; }
 .unavail-banner.safety-banner .unavail-msg strong { color: var(--danger); }
 .unavail-banner.ended-banner .unavail-msg strong { color: var(--text); }
 .action-btn.fb.on { color: var(--pop-blue); }
@@ -424,6 +424,13 @@
 }
 @keyframes rbLineIn { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
 @keyframes rbLineOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-7px); } }
+.rb-line.shimmer { --shimmer-from: var(--text-faint); --shimmer-to: var(--text-muted);
+  animation: rbLineIn .34s var(--ease-out) both, shimmer 2.2s linear infinite; }
+.rb-line.out.shimmer { animation: rbLineOut .34s var(--ease-out) both, shimmer 2.2s linear infinite; }
+.reasoning-head:hover .rb-line.shimmer { --shimmer-from: var(--text-muted); --shimmer-to: var(--text); }
+@media (prefers-reduced-motion: reduce) {
+  .rb-line.shimmer, .rb-line.out.shimmer { animation: none; background-image: none; color: inherit; }
+}
 /* The ticker is a generating indicator: a settled reasoning block that is merely
    being re-rendered (opening an old chat) must not replay it. */
 .reasoning:not(.live) .rb-line { animation: none; }

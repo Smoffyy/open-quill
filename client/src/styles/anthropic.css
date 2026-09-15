@@ -198,7 +198,6 @@
   background: var(--composer-hover, var(--surface-hover));
   transform: scale(.975);
 }
-:root[data-preset="anthropic"] .composer-right:has(.send:not(.ghost)) .mic { display: none; }
 :root[data-preset="anthropic"] .composer .send.enter { background: transparent; color: var(--text); }
 :root[data-preset="anthropic"] .composer .send.enter:hover { background: var(--composer-hover, var(--surface-hover)); }
 @media (prefers-reduced-motion: reduce) {

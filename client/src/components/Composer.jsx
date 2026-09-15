@@ -442,8 +442,8 @@ export default function Composer({
         onChange={(e) => onChange(e.target.value)} onKeyDown={key} onPaste={onPaste} />
       <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}
         {...(FILE_ACCEPT ? { accept: (visionSupported ? 'image/*,' : '') + FILE_ACCEPT } : {})} />
-      {safetyChecking && safetyVerbose && <div className="safety-checking">{t("Safety check…")}</div>}
-      {improving && <div className="safety-checking">{t("Improving prompt…")}</div>}
+      {safetyChecking && safetyVerbose && <div className="safety-checking shimmer">{t("Safety check…")}</div>}
+      {improving && <div className="safety-checking shimmer">{t("Improving prompt…")}</div>}
       {compareIds.length > 0 && (
         <div className="queued-chip compare-chip">
           <span className="queued-label">{t("Compare:")}</span>

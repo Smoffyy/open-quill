@@ -18,6 +18,7 @@ import { channelLabel } from '../lib/channel.js';
 import { copyText } from '../clipboard.js';
 import { Skel, SkelLines, SkelRows, SkelStats } from './Skeleton.jsx';
 import { toast } from '../toast.js';
+import { BRAND_ICON } from '../lib/brand.js';
 
 const NAV_GROUPS = [
   { label: tk('Settings'), items: [
@@ -186,7 +187,7 @@ function formatReleased(s) {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
-function VersionBadge({ label }) {
+function VersionBadge({ label, icon }) {
   const textRef = useRef(null);
   const [box, setBox] = useState(null);
   useEffect(() => {
@@ -207,6 +208,7 @@ function VersionBadge({ label }) {
       <svg className="vh-badge-num" viewBox={box || undefined} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
         <text ref={textRef} x="0" y="0" dominantBaseline="text-before-edge">{label}</text>
       </svg>
+      <span className="vh-badge-wm" aria-hidden="true"><img src={icon} alt="" /></span>
     </div>
   );
 }
@@ -237,7 +239,7 @@ function VersionPanel({ cfg, release, onChangelog }) {
   return (
     <div className="vh">
       <div className="vh-top">
-        {line && <VersionBadge label={line} />}
+        {line && <VersionBadge label={line} icon={cfg?.appIcon || BRAND_ICON} />}
         <div className="vh-id">
           <div className="vh-name">{appName}</div>
           <div className="vh-meta">

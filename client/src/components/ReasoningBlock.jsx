@@ -80,10 +80,11 @@ export default function ReasoningBlock({ text, live, durationMs = 0, preset = 'a
 
   if (!text) return null;
 
+  const shim = live ? ' shimmer' : '';
   const headLine = rolling && line.cur ? (
     <span className="rb-lines">
-      {line.prev && <span className="rb-line out" key={'p' + line.prev}>{line.prev}</span>}
-      <span className="rb-line" key={'c' + line.cur}>{line.cur}</span>
+      {line.prev && <span className={'rb-line out' + shim} key={'p' + line.prev}>{line.prev}</span>}
+      <span className={'rb-line' + shim} key={'c' + line.cur}>{line.cur}</span>
     </span>
   ) : null;
 
@@ -93,7 +94,7 @@ export default function ReasoningBlock({ text, live, durationMs = 0, preset = 'a
       <div className={'reasoning live' + (rolling ? ' rolling' : ' carded')}>
         <div className="reasoning-head static live">
           {!rolling && <Bulb className="rb-icon" />}
-          {headLine || <span className="rb-label">{t("Thinking…")}</span>}
+          {headLine || <span className="rb-label shimmer">{t("Thinking…")}</span>}
         </div>
       </div>
     );
@@ -124,7 +125,7 @@ export default function ReasoningBlock({ text, live, durationMs = 0, preset = 'a
       <button className={'reasoning-head' + (open ? ' open' : '') + (live ? ' live' : '')}
         onClick={toggle} aria-expanded={open}>
         {live && !rolling && <Bulb className="rb-icon" />}
-        {headLine || <span className="rb-label">{label}</span>}
+        {headLine || <span className={'rb-label' + shim}>{label}</span>}
         <Chevron className="chev" />
       </button>
       {carded && (

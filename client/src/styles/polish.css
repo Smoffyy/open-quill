@@ -1,7 +1,6 @@
 /* ---------- UI/UX polish batch ---------- */
 /* skeleton loaders */
 .skeleton { display: inline-block; height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--surface-2) 25%, color-mix(in srgb, var(--surface-2) 80%, var(--text-faint)) 37%, var(--surface-2) 63%); background-size: 400% 100%; animation: shimmer 1.4s ease infinite; }
-@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
 .chat-skel { padding: 10px 10px; }
 .chats-empty { color: var(--text-faint); font-size: 13px; padding: 8px 10px; }
 .art-skel { display: flex; flex-direction: column; gap: 11px; padding: 20px 18px; }
@@ -207,9 +206,6 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 .actions { transform: translateY(3px); transition: opacity var(--fx-t, .18s) ease, transform var(--fx-t, .2s) var(--ease-out); }
 .msg.assistant:hover .actions, .msg.user:hover .actions { transform: none; }
 
-/* thinking label shimmer while live */
-.reasoning-head.live .rb-label { background: linear-gradient(90deg, var(--text-muted) 30%, var(--text) 50%, var(--text-muted) 70%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 2.2s linear infinite; }
-@keyframes shimmer { from { background-position: 180% 0; } to { background-position: -20% 0; } }
 
 /* scroll-to-bottom pop */
 .to-bottom { transition: transform var(--fx-t, .16s) var(--ease-out), background var(--fx-t, .15s) ease; }

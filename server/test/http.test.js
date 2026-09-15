@@ -327,6 +327,47 @@ test('profile input is validated rather than stored as sent', async () => {
 });
 
 // Express 5 leaves req.body undefined when nothing parsed one, and handlers read it directly.
+test('an assistant message is edited in place; a user message is refused', async () => {
+  const imported = await browser('POST', '/api/chats/import', {
+    body: { title: 'edit target', messages: [{ role: 'user', content: 'the question' }, { role: 'assistant', content: 'the first answer' }] }
+  });
+  assert.equal(imported.status, 200);
+  assert.equal(imported.json.imported, 1);
+
+  const list = await browser('GET', '/api/chats');
+  const chats = Array.isArray(list.json) ? list.json : list.json.chats;
+  const target = chats.find(c => c.title === 'edit target');
+  assert.ok(target, 'imported chat should be listed');
+
+  const before = await browser('GET', `/api/chats/${target.id}`);
+  const user = before.json.messages.find(m => m.role === 'user');
+  const assistant = before.json.messages.find(m => m.role === 'assistant');
+  assert.ok(user && assistant);
+
+  const ok = await browser('PATCH', `/api/chats/${target.id}/messages/${assistant.id}`, { body: { content: 'a corrected answer' } });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.json.content, 'a corrected answer');
+
+  const after = await browser('GET', `/api/chats/${target.id}`);
+  assert.equal(after.json.messages.find(m => m.id === assistant.id).content, 'a corrected answer');
+  assert.equal(after.json.messages.length, before.json.messages.length, 'editing must not branch');
+
+  const refused = await browser('PATCH', `/api/chats/${target.id}/messages/${user.id}`, { body: { content: 'rewritten' } });
+  assert.equal(refused.status, 400, 'a user edit has to go through the ws edit frame so the turn reruns');
+  const stillThere = await browser('GET', `/api/chats/${target.id}`);
+  assert.equal(stillThere.json.messages.find(m => m.id === user.id).content, 'the question');
+
+  for (const bad of [{ content: '' }, { content: '   ' }, { content: 42 }, { content: null }]) {
+    const r = await browser('PATCH', `/api/chats/${target.id}/messages/${assistant.id}`, { body: bad });
+    assert.equal(r.status, 400, JSON.stringify(bad));
+  }
+  const unchanged = await browser('GET', `/api/chats/${target.id}`);
+  assert.equal(unchanged.json.messages.find(m => m.id === assistant.id).content, 'a corrected answer');
+
+  const missing = await browser('PATCH', `/api/chats/${target.id}/messages/nope`, { body: { content: 'x' } });
+  assert.equal(missing.status, 404);
+});
+
 test('a write with no body is a clean no-op, not a 500', async () => {
   const chat = await browser('POST', '/api/chats', { body: {} });
   assert.equal(chat.status, 200);
