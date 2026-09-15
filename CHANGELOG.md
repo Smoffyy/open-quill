@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Source Serif** - Literata replaces it as the serif everywhere; an existing Source Serif choice, in settings or in a saved theme, now reads as Literata.
 
 ### Fixed
+- **Model docs opens over whatever you were looking at** - opening it from Projects, Artifacts, Scheduled or All chats left that screen mounted on top, so the sidebar switched to the docs but the main area did not. Going Back into the docs from one of those screens did the same.
 - **Editing a message puts the cursor at the end** - it opened with the caret before the first character, so typing ran into the front of the message. Long messages also scroll to the caret now.
 - **The Projects heading uses the theme heading font** - it was sans while Artifacts and Scheduled were serif.
 - **The message box no longer jitters while you type a long line** - in a thread the bar sits beside the text until a second line appears, which widens the box by the width of the bar. The height was measured at the narrow width and applied at the wide one, so every keystroke around the wrap point flipped the layout back and forth. The wrap is now decided at the narrow width and the height measured at the width that decision produces.

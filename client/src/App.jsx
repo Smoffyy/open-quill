@@ -135,10 +135,10 @@ export default function App() {
   const navTo = useCallback((to) => {
     setMobileDrawer(false);
     setChatsOverview(to === 'chats');
-    setDocsTarget(null);
+    setDocsTarget(to === 'docs' ? { kind: 'overview', id: null } : null);
     if (to !== 'projects') { setShowProjects(false); setProjectOpenId(null); }
     setLibPage(to === 'artifacts' || to === 'scheduled' ? to : null);
-    if (to !== 'projects' && (shouldResetPath('projects', location.pathname) || shouldResetPath('docs', location.pathname))) history.pushState({}, '', '/');
+    if (to !== 'projects' && to !== 'docs' && (shouldResetPath('projects', location.pathname) || shouldResetPath('docs', location.pathname))) history.pushState({}, '', '/');
   }, []);
   const sbProjects = useCallback(() => { navTo('projects'); sidebarFns.current.openProjects(null); }, [navTo]);
   const sbOpenProject = useCallback((id) => { navTo('projects'); sidebarFns.current.openProjects(id); }, [navTo]);
@@ -150,10 +150,9 @@ export default function App() {
   const onSkillsCb = useCallback(() => { setMobileDrawer(false); setSettingsTab('skills'); setShowSettings(true); }, []);
   const onVersionCb = useCallback(() => { setMobileDrawer(false); setSettingsTab('version'); setShowSettings(true); }, []);
   const onDocsCb = useCallback(() => {
-    setMobileDrawer(false);
+    navTo('docs');
     history.pushState({}, '', '/docs');
-    setDocsTarget({ kind: 'overview', id: null });
-  }, []);
+  }, [navTo]);
   const onDocsNav = useCallback((target) => {
     history.pushState({}, '', docsPath(target));
     setDocsTarget(target);
@@ -588,6 +587,8 @@ export default function App() {
     setShowPlayground(r.view === 'playground');
     setDocsTarget(r.view === 'docs' ? parseDocsPath(location.pathname) : null);
     setShowProjects(onProjects);
+    setLibPage(null);
+    setChatsOverview(false);
     if (r.view === 'notfound') return;
     if (r.view === 'docs') return;
     if (onProjects) { setProjectOpenId(r.id ?? null); return; }
