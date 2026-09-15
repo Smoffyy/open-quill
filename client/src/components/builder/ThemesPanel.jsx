@@ -5,6 +5,7 @@ import { useTheme } from '../../lib/theme/store.jsx';
 import { toast } from '../../toast.js';
 import { Dialog, Confirm, Text } from './controls.jsx';
 import { Copy, Trash, Download, Upload, Pencil, Check, Clock, Refresh } from '../icons.jsx';
+import { Skel, SkelRows } from '../Skeleton.jsx';
 
 /* Theme management. A theme is a document plus a name; the builder edits
    whichever one is active, and Publish is what moves the admin's staged store
@@ -13,10 +14,12 @@ import { Copy, Trash, Download, Upload, Pencil, Check, Clock, Refresh } from '..
 export function useThemes() {
   const { reload } = useTheme();
   const [list, setList] = useState({ themes: [], activeId: '', publishedActiveId: '' });
+  const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try { setList(await api.get('/api/admin/themes')); } catch {}
+    setReady(true);
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -35,7 +38,7 @@ export function useThemes() {
   }, [load]);
 
   return {
-    list, busy, reload: load,
+    list, ready, busy, reload: load,
     create: (body) => run(() => api.post('/api/admin/themes', body), () => reload()),
     rename: (id, name) => run(() => api.patch('/api/admin/themes/' + id, { name })),
     activate: (id) => run(() => api.post(`/api/admin/themes/${id}/activate`, {}), () => reload()),
@@ -63,7 +66,7 @@ export default function ThemesPanel({ compact }) {
   const [historyFor, setHistoryFor] = useState(null);
   const file = useRef(null);
 
-  const { list } = themes;
+  const { list, ready } = themes;
 
   const exportTheme = async (id, name) => {
     try {
@@ -102,7 +105,8 @@ export default function ThemesPanel({ compact }) {
         <input ref={file} type="file" accept="application/json,.json" hidden onChange={onImport} />
       </div>
 
-      <div className="bx-theme-list">
+      <div className="bx-theme-list" aria-busy={!ready || undefined}>
+        {!ready && <Skel when><SkelRows count={4} /></Skel>}
         {list.themes.map(th => {
           const active = th.id === list.activeId;
           return (

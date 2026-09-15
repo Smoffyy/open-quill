@@ -351,6 +351,7 @@ export const ELEMENTS = [
   { id: 'toast', label: tk('Notification'), cat: 'feedback', sel: '.toast', caps: ALL },
   { id: 'toaster', label: tk('Notification stack'), cat: 'feedback', sel: '.toaster', caps: ['layout', 'spacing', 'responsive'] },
   { id: 'toastMsg', label: tk('Notification text'), cat: 'feedback', sel: '.toast-msg', parent: 'toast', caps: TEXTY },
+  { id: 'skeleton', label: tk('Loading placeholder'), cat: 'feedback', sel: '.skeleton', caps: BOX },
   { id: 'toastIcon', label: tk('Notification icon'), cat: 'feedback', sel: '.toast-ico', parent: 'toast', caps: BOX },
   { id: 'skeleton', label: tk('Loading skeleton'), cat: 'feedback', sel: '.skeleton', caps: BOX },
   { id: 'ctxGauge', label: tk('Context gauge'), cat: 'feedback', sel: '.ctx-gauge', caps: BOX },

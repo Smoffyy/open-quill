@@ -4,6 +4,7 @@ import { stripToolSyntax } from '../../lib/history.js';
 import { ensureChain, childrenOf, activePath, leafUnder, sortedMsgs } from '../../lib/tree.js';
 
 const PREVIEW_MAX = 140;
+const CONTENT_MAX = 200000;
 
 function previewText(content) {
   const raw = stripToolSyntax(content || '');
@@ -143,8 +144,15 @@ export default function registerMessageRoutes(app) {
     const patch = {};
     if ('pinned' in req.body) patch.pinned = req.body.pinned ? 1 : 0;
     if ('excluded' in req.body) patch.excluded = req.body.excluded ? 1 : 0;
+    if ('content' in req.body) {
+      if (m.role !== 'assistant') return res.status(400).json({ error: 'only an assistant message can be edited in place' });
+      if (typeof req.body.content !== 'string') return res.status(400).json({ error: 'content must be a string' });
+      const next = req.body.content.slice(0, CONTENT_MAX).trim();
+      if (!next) return res.status(400).json({ error: 'content cannot be empty' });
+      patch.content = next;
+    }
     const saved = db.messages.update(m.id, patch);
-    res.json({ ok: true, pinned: !!(saved || m).pinned, excluded: !!(saved || m).excluded });
+    res.json({ ok: true, pinned: !!(saved || m).pinned, excluded: !!(saved || m).excluded, content: (saved || m).content });
   });
 
   app.delete('/api/chats/:id/messages/:mid', authMiddleware, (req, res) => {

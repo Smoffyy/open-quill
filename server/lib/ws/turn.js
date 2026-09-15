@@ -97,6 +97,28 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   const assistantId = uid();
   const assistantParent = (db.chats.byId(chat.id) || {}).active_leaf || null;
   let content = '', reasoning = '', usage = null, lastStepCompletion = 0;
+  let checkpointed = false;
+  const checkpoint = () => {
+    if (!content.trim() && !reasoning.trim()) return;
+    const row = {
+      content, reasoning,
+      reasoning_segs: reasonSegs.length ? reasonSegs : null,
+      reasoning_seg_ms: reasonSegs.length ? segMs : null,
+      truncated: 1
+    };
+    try {
+      if (checkpointed) { db.messages.update(assistantId, row); return; }
+      db.messages.insert({
+        id: assistantId, chat_id: chat.id, role: 'assistant', model_id: model.id,
+        model_name: model.display_name || '', model_icon: model.static_icon || '',
+        parent_id: assistantParent, extended: !!extended,
+        reasoning_effort: model.reasoning_effort_level || null,
+        kwarg_values: model.kwarg_values || null, created_at: now(), ...row
+      });
+      db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
+      checkpointed = true;
+    } catch (e) { console.warn('[turn] checkpoint failed', e.message); }
+  };
   const addStepUsage = (stepUsage) => {
     if (!stepUsage) return;
     if (!usage) usage = { prompt: 0, completion: 0, total: 0 };
@@ -590,6 +612,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: STUCK_NOTE }));
         break;
       }
+      checkpoint();
     }
   } catch (err) {
     if (err.name !== 'AbortError') {
@@ -617,7 +640,9 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   const truncated = (lastFinish === 'length' || hitCap || wasStopped) && !conversationEnded;
   const hasOutput = !!(content.trim() || reasoning.trim());
   if (hasOutput || usageRec) {
-    db.messages.insert({ id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, reasoning_segs: reasonSegs.length ? reasonSegs : null, reasoning_seg_ms: reasonSegs.length ? segMs : null, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: usageRec, speed, reasoning_ms: reasonMs || null, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, kwarg_values: model.kwarg_values || null, steers: steerNotes.length ? steerNotes.slice(0, MAX_STEERS) : null, truncated: truncated || null, created_at: now() });
+    const finalRow = { id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, reasoning_segs: reasonSegs.length ? reasonSegs : null, reasoning_seg_ms: reasonSegs.length ? segMs : null, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: usageRec, speed, reasoning_ms: reasonMs || null, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, kwarg_values: model.kwarg_values || null, steers: steerNotes.length ? steerNotes.slice(0, MAX_STEERS) : null, truncated: truncated || null, created_at: now() };
+    if (checkpointed) db.messages.update(assistantId, finalRow);
+    else db.messages.insert(finalRow);
     db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
   } else {
     db.chats.update(chat.id, { updated_at: now() });

@@ -172,7 +172,7 @@ function ProfileMenu({ user, anchorRef, onSettings, onAdmin, onPlayground, onCre
   );
 }
 
-function ChatRow({ c, active, showTrash, projects = [], onMoveToProject, onOpen, onDelete, onToggleStar, busyIds, onStopChat }) {
+function ChatRow({ c, active, showTrash, projects = [], projectsReady = true, onMoveToProject, onOpen, onDelete, onToggleStar, busyIds, onStopChat }) {
   const busy = !!(busyIds && busyIds.has(c.id));
   const [menu, setMenu] = useState(null);
   const btnRef = useRef(null);
@@ -195,7 +195,7 @@ function ChatRow({ c, active, showTrash, projects = [], onMoveToProject, onOpen,
         <button className="row-ctrl" ref={btnRef} title={t("Options")} aria-label={t("Options")} aria-expanded={!!menu} aria-haspopup="menu"
           onClick={(e) => { e.stopPropagation(); const at = menuAtButton(e.currentTarget); setMenu(m => m ? null : at); }}><DotsV /></button>
       )}
-      {menu && <ChatMenu chat={c} at={menu} projects={projects} busy={busy} anchorRef={btnRef}
+      {menu && <ChatMenu chat={c} at={menu} projects={projects} projectsReady={projectsReady} busy={busy} anchorRef={btnRef}
         onStopChat={onStopChat} onToggleStar={onToggleStar} onMoveToProject={onMoveToProject}
         onDelete={onDelete} onClose={() => setMenu(null)} />}
     </div>
@@ -205,7 +205,7 @@ function ChatRow({ c, active, showTrash, projects = [], onMoveToProject, onOpen,
 function Sidebar({
   user, chats, onSearch, chatsLoaded = true, activeId, appName, appIcon, onNew, onOpen, onDelete, onToggleStar,
   collapsed, onToggle, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onPrivacy, onLogout, version, onChatsOverview,
-  projects = [], onProjects, onOpenProject, onNewProject, onMoveToProject, mobileOpen = false, onMobileClose,
+  projects = [], projectsReady = true, onProjects, onOpenProject, onNewProject, onMoveToProject, mobileOpen = false, onMobileClose,
   onArtifacts, onScheduled, onCustomize, onModelDocs, showModelDocs = true, onVersion, dest = null,
   docs = null, busyChats = [], onStopChat
 }) {
@@ -301,7 +301,7 @@ function Sidebar({
     }
     return g;
   })();
-  const rowProps = { onOpen, onDelete, onToggleStar, busyIds, onStopChat, projects, onMoveToProject };
+  const rowProps = { onOpen, onDelete, onToggleStar, busyIds, onStopChat, projects, projectsReady, onMoveToProject };
   const row = (c) => <ChatRow key={c.id} c={c} active={c.id === activeId} showTrash={showTrash} {...rowProps} />;
 
   return (

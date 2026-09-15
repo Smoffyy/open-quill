@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { api } from '../api.js';
 import { applyPrefs, getUserFont, setUserFont, currentPreset } from '../prefs.js';
 import { palettesFor, themeValue } from '../lib/palettes.js';
-import { Gear, Chat, Info, Clock, Download, Upload, Shield, Trash, Brain, Refresh, Keyboard, Search, SkillIcon, Plug, Palette } from './icons.jsx';
+import { Gear, Chat, Info, Clock, Download, Upload, Shield, Trash, Brain, Refresh, Keyboard, Search, SkillIcon, Plug, Palette, FileText, Copy, Check } from './icons.jsx';
 import Markdown from './Markdown.jsx';
 import KeybindsPanel from './KeybindsPanel.jsx';
 import SkillsSection from './SkillsSection.jsx';
@@ -13,9 +13,12 @@ import { menuStyleOf, useAnchoredMenu } from '../lib/anchor.js';
 import { createPortal } from 'react-dom';
 import { SetRow, SwitchRow, SegSlide, SelectRow, RangeRow } from './settingsui.jsx';
 import { legacyRevealStyle, resolveReveal, revealSpeedMs } from '../lib/reveal.js';
-import { BRAND_ICON } from '../lib/brand.js';
 import { parseVersion } from '../lib/appversion.js';
 import { channelLabel } from '../lib/channel.js';
+import { copyText } from '../clipboard.js';
+import { Skel, SkelLines, SkelRows, SkelStats } from './Skeleton.jsx';
+import { toast } from '../toast.js';
+import { BRAND_ICON } from '../lib/brand.js';
 
 const NAV_GROUPS = [
   { label: tk('Settings'), items: [
@@ -56,6 +59,7 @@ const SETTINGS_INDEX = {
   skills: [tk('Browse'), tk('Add'), tk('Create with the assistant'), tk('Write skill instructions'), tk('Upload a skill')],
   mcp: [tk('Add server'), tk('Server name'), tk('URL'), tk('Headers'), tk('From this workspace')],
   usage: [tk('Usage window'), tk('By model')],
+  version: [tk('Release notes'), tk('Changelog'), tk('Copy details')],
 };
 
 function Marked({ text, needle }) {
@@ -183,6 +187,87 @@ function formatReleased(s) {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
+function VersionBadge({ label, icon }) {
+  const textRef = useRef(null);
+  const [box, setBox] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    const measure = () => {
+      if (!alive || !textRef.current) return;
+      try {
+        const b = textRef.current.getBBox();
+        if (b.width && b.height) setBox(`${b.x} ${b.y} ${b.width} ${b.height}`);
+      } catch { }
+    };
+    measure();
+    document.fonts?.ready.then(measure).catch(() => { });
+    return () => { alive = false; };
+  }, [label]);
+  return (
+    <div className="vh-badge">
+      <svg className="vh-badge-num" viewBox={box || undefined} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+        <text ref={textRef} x="0" y="0" dominantBaseline="text-before-edge">{label}</text>
+      </svg>
+      <span className="vh-badge-wm" aria-hidden="true"><img src={icon} alt="" /></span>
+    </div>
+  );
+}
+
+function VersionPanel({ cfg, release, onChangelog }) {
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef(null);
+  useEffect(() => () => clearTimeout(copyTimer.current), []);
+
+  const appName = cfg?.appName || 'open-quill';
+  const vp = parseVersion(release?.version || cfg?.version || '');
+  const line = release?.line || (vp ? vp.base.split('.')[0] : '');
+  const channel = channelLabel(vp?.channel);
+  const released = formatReleased(release?.released);
+  const notes = (release?.notes || '').trim();
+
+  async function copyDetails() {
+    const head = `${appName} ${vp ? vp.full : ''}`.trim();
+    const lines = [release?.codename ? `${head} (${release.codename})` : head];
+    if (release?.released) lines.push(`Released ${release.released}`);
+    if (!await copyText(lines.join('\n'))) return;
+    setCopied(true);
+    clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => setCopied(false), 1400);
+    toast(t('Version details copied'), { icon: 'copy' });
+  }
+
+  return (
+    <div className="vh">
+      <div className="vh-top">
+        {line && <VersionBadge label={line} icon={cfg?.appIcon || BRAND_ICON} />}
+        <div className="vh-id">
+          <div className="vh-name">{appName}</div>
+          <div className="vh-meta">
+            {release?.codename && <span className="vh-code">{release.codename}</span>}
+            <span>{t("Version")} {vp ? vp.full : '—'}</span>
+            {channel && <span className="vh-pill">{channel}{vp.build ? ' ' + vp.build : ''}</span>}
+          </div>
+          {released && <div className="vh-sub">{t("Released")} {released}</div>}
+        </div>
+      </div>
+      <div className="vh-actions">
+        <button className="btn ghost" onClick={onChangelog}><FileText style={{ width: 14, verticalAlign: '-2px' }} /> {t("Changelog")}</button>
+        <button className="btn ghost" onClick={copyDetails}>
+          {copied ? <Check style={{ width: 14, verticalAlign: '-2px' }} /> : <Copy style={{ width: 14, verticalAlign: '-2px' }} />} {t("Copy details")}
+        </button>
+      </div>
+      <div className="vh-notes" aria-busy={!release || undefined}>
+        <div className="vh-notes-h">{t("Release notes")}</div>
+        {!release
+          ? <Skel when><SkelLines className="vh-notes-skel" count={6} /></Skel>
+          : notes
+            ? <div className="version-desc"><Markdown>{notes}</Markdown></div>
+            : <div className="vh-empty">{t("No release notes for this build.")}</div>}
+      </div>
+    </div>
+  );
+}
+
 const TYPING_SAVE_MS = 450;
 const DRAGGED_PREFS = new Set(['cursorBlinkMs', 'cursorPulseMs', 'revealMs']);
 
@@ -196,7 +281,7 @@ function presetDefaults(isOpenai, fallbackTheme) {
   };
 }
 
-export default function SettingsModal({ user, cfg, modelId, initialTab, onClose, onUpdated, onDeleted, onExportChats, onImportChats, onTrySkill }) {
+export default function SettingsModal({ user, cfg, modelId, initialTab, onClose, onUpdated, onDeleted, onExportChats, onImportChats, onTrySkill, onChangelog }) {
   const [tab, setTab] = useState(initialTab || 'general');
   const { lang: i18nLang, setLang: setAppLang, langs } = useI18n();
   const [name, setName] = useState(user.displayName);
@@ -541,70 +626,7 @@ export default function SettingsModal({ user, cfg, modelId, initialTab, onClose,
               </SetRow>
             </>
           )}
-          {tab === 'version' && (() => {
-            const vp = parseVersion(release?.version || cfg?.version || '');
-            const icon = release?.hasIcon ? '/api/release/icon' : (cfg?.appIcon || '');
-            const notes = (release?.notes || '').trim();
-            const channel = channelLabel(vp?.channel);
-            return (
-              <div className="vh">
-                <div className="vh-top">
-                  <div className="vh-badge">
-                    {icon ? <img src={icon} alt="" aria-hidden="true" /> : <img className="vh-badge-fallback" src={BRAND_ICON} alt="" aria-hidden="true" />}
-                  </div>
-                  <div className="vh-id">
-                    <div className="vh-name">{cfg?.appName || 'open-quill'}</div>
-                    <div className="vh-version">{t("Version")} {vp ? vp.full : '—'}</div>
-                    {channel && <div className="vh-channel">{channel} channel</div>}
-                  </div>
-                </div>
-                {vp && (
-                  <div className="vh-list">
-                    <div className="vh-li">
-                      <span className="vh-li-k">{t("Release")}</span>
-                      <span className="vh-li-v">{vp.base || '—'}</span>
-                    </div>
-
-                    {release?.codename && (
-                      <div className="vh-li">
-                        <span className="vh-li-k">{t("Codename")}</span>
-                        <span className="vh-li-v">{release.codename}</span>
-                      </div>
-                    )}
-
-                    <div className="vh-li">
-                      <span className="vh-li-k">{t("Channel")}</span>
-                      <span className="vh-li-v">{channel || 'Stable'}</span>
-                    </div>
-
-                    {vp.build && (
-                      <div className="vh-li">
-                        <span className="vh-li-k">{t("Build")}</span>
-                        <span className="vh-li-v">{vp.build}</span>
-                      </div>
-                    )}
-
-                    {release?.released && (
-                      <div className="vh-li">
-                        <span className="vh-li-k">{t("Released")}</span>
-                        <span className="vh-li-v">{formatReleased(release.released)}</span>
-                      </div>
-                    )}
-
-                    {notes && (
-                      <div className="version-desc" style={{ marginTop: 14 }}>
-                        <Markdown>{notes}</Markdown>
-                      </div>
-                    )}
-
-                    {release && !notes && (
-                      <div className="vh-empty">{t("No release notes for this build.")}</div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
+          {tab === 'version' && <VersionPanel cfg={cfg} release={release} onChangelog={onChangelog} />}
           {tab === 'keybinds' && <KeybindsPanel prefs={prefs} setPref={setPref} />}
           {tab === 'interface' && (() => {
             const rv = revealSpeedMs(prefs.revealMs);
@@ -628,7 +650,6 @@ export default function SettingsModal({ user, cfg, modelId, initialTab, onClose,
                       { v: 'default', label: t('Theme default') },
                       { v: 'literata', label: 'Literata', font: "'Literata Variable', serif" },
                       { v: 'newsreader', label: 'Newsreader', font: "'Newsreader Variable', serif" },
-                      { v: 'sourceserif', label: 'Source Serif', font: "'Source Serif 4 Variable', serif" },
                       { v: 'sans', label: 'Open Sans', font: "'Open Sans', sans-serif" }
                     ]} />
                 </SetRow>
@@ -740,7 +761,7 @@ export default function SettingsModal({ user, cfg, modelId, initialTab, onClose,
                   options={[{ v: '7', label: t('7 days') }, { v: '30', label: t('30 days') }, { v: '90', label: t('90 days') }, { v: 'all', label: t('All time') }]} />
               </div>
               {usageErr && <div className="dz-err">{usageErr}</div>}
-              {!usageData && !usageErr && <div className="muted-note">{t("Loading…")}</div>}
+              {!usageData && !usageErr && <Skel when><SkelStats count={3} /></Skel>}
               {usageData && (
                 <>
                   <div className="usage-tiles">
@@ -837,7 +858,7 @@ export default function SettingsModal({ user, cfg, modelId, initialTab, onClose,
                 <div className="me-section-h">{t("Active sessions")}</div>
                 <div className="sec-note">{t("Devices signed in to your account. Sessions expire after 30 days idle.")}</div>
                 {sessionErr && <div className="dz-err">{sessionErr}</div>}
-                {!sessions && !sessionErr && <div className="muted-note">{t("Loading…")}</div>}
+                {!sessions && !sessionErr && <Skel when><SkelRows count={3} /></Skel>}
                 {sessions && (
                   <>
                     {sessions.map(s => (

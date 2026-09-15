@@ -5,6 +5,7 @@ import { t } from '../../i18n.jsx';
 import { useTheme } from '../../lib/theme/store.jsx';
 import { logoFor, modelIconFor, useLogos } from '../../lib/logos.js';
 import { Chat, Check, Cube, Gauge, Gear, Plug, Sliders, Terminal } from '../icons.jsx';
+import { Skel, SkelRows } from '../Skeleton.jsx';
 
 const KNOWN_SWATCH = new Set(['anthropic', 'openai', 'blank']);
 
@@ -84,7 +85,7 @@ function LayoutStep({ chosen, onChoose }) {
       .catch(() => {});
     return () => { live = false; };
   }, []);
-  if (!themes.length) return <p className="sg-note">{t('Loading layouts…')}</p>;
+  if (!themes.length) return <Skel when><SkelRows count={3} /></Skel>;
   return (
     <>
       <p className="sg-lede">{t('Every layout is a starting point, not a fixed skin. Nothing here is permanent.')}</p>

@@ -7,7 +7,6 @@ import { APP_VERSION } from './server/lib/appversion.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RELEASE_DIR = path.join(__dirname, 'release');
 const CHANGELOG = path.join(__dirname, 'CHANGELOG.md');
-const ICON_MAX = 500 * 1024;
 
 const errors = [];
 const warnings = [];
@@ -54,7 +53,7 @@ for (const name of candidates) {
 
 if (candidates.length && !found) {
   errors.push(`no release folder for ${version}. Tried: ${candidates.map(c => `release/${c}/`).join(', ')}`);
-  errors.push('Create one with release.json, notes.md and an icon, or Settings > Version renders blank.');
+  errors.push('Create one with release.json and notes.md, or Settings > Version renders blank.');
 }
 
 if (found) {
@@ -73,17 +72,6 @@ if (found) {
     if (!manifest.released) {
       if (final) errors.push(`release/${found.name}/release.json needs a "released" date before ${base} is published.`);
       else warnings.push(`release/${found.name}/release.json has no "released" date yet. Set one before merging into stable.`);
-    }
-
-    if (!manifest.icon) {
-      warnings.push(`release/${found.name}/release.json sets no icon, so the panel falls back to the app icon.`);
-    } else {
-      const icon = path.join(found.dir, manifest.icon);
-      let st = null;
-      try { st = fs.statSync(icon); } catch { }
-      if (!st || !st.isFile()) errors.push(`release/${found.name}/${manifest.icon} is named in release.json but missing on disk.`);
-      else if (st.size > ICON_MAX) errors.push(`release/${found.name}/${manifest.icon} is ${(st.size / 1024 / 1024).toFixed(1)} MB. It renders at 84px — resize it to 256px (max ${ICON_MAX / 1024} KB).`);
-      else notes.push(`icon ${(st.size / 1024).toFixed(0)} KB`);
     }
   }
 

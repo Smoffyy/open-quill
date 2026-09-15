@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api.js';
 import { t } from '../i18n.jsx';
+import { Skel, SkelRows } from './Skeleton.jsx';
 
 export default function ContextInspector({ chatId, modelId, onClose }) {
   const [data, setData] = useState(null);
@@ -27,7 +28,7 @@ export default function ContextInspector({ chatId, modelId, onClose }) {
           <div>{t("Context inspector")}</div>
           <button className="ctx-x" onClick={onClose} aria-label={t('Close')}>✕</button>
         </div>
-        {!data ? <div className="cmp-note" style={{ padding: 16 }}>{t("Building…")}</div>
+        {!data ? <Skel when><SkelRows className="ctx-skel" count={6} /></Skel>
           : data.error ? <div className="cmp-note" style={{ padding: 16 }}>{t("Could not load context.")}</div> : (
           <div className="ctx-inspect-body">
             <div className="ctx-summary">

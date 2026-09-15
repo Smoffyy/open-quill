@@ -3,11 +3,13 @@ import { api } from '../api.js';
 import { Plus, Plug } from './icons.jsx';
 import McpCard from './McpCard.jsx';
 import { t } from '../i18n.jsx';
+import { Skel, SkelRows } from './Skeleton.jsx';
 
 const blank = () => ({ name: '', url: '', headers: '', enabled: true });
 
 export default function UserMcpSection() {
   const [servers, setServers] = useState([]);
+  const [ready, setReady] = useState(false);
   const [limit, setLimit] = useState(0);
   const [edit, setEdit] = useState(null);
   const [editError, setEditError] = useState('');
@@ -16,6 +18,7 @@ export default function UserMcpSection() {
   useEffect(() => {
     (async () => {
       try { const d = await api.get('/api/mcp'); setServers(d.servers || []); setLimit(d.limit || 0); } catch {}
+      setReady(true);
     })();
   }, []);
 
@@ -85,7 +88,9 @@ export default function UserMcpSection() {
           </div>
         )}
 
-        {mine.length === 0 && !edit && (
+        {!ready && !edit && <Skel when><SkelRows count={3} /></Skel>}
+
+        {ready && mine.length === 0 && !edit && (
           <div className="mcp-empty">
             <span className="mcp-empty-icon"><Plug style={{ width: 20 }} /></span>
             <div className="mcp-empty-title">{t("No connectors of your own")}</div>

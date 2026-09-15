@@ -4,6 +4,7 @@ import { useAdmin } from '../store.jsx';
 import { Card, Rows, ToggleRow, Field, Area, Btn, Table, Stats, Badge, Empty, Note, fmtAgo, fmtInt } from '../ui.jsx';
 import { Eye } from '../../icons.jsx';
 import { t } from '../../../i18n.jsx';
+import { Skel, SkelTable } from '../../Skeleton.jsx';
 
 const POLL_MS = 5000;
 
@@ -83,7 +84,9 @@ export default function NetworkSection() {
           { k: t('Blocked'), v: fmtInt(log?.blocked ?? 0) }
         ]} />
         {!blocking && <Note tone="warn">{t('The block is off, so nothing is being restricted. Attempts are still recorded below.')}</Note>}
-        {log && !entries.length
+        {log == null
+          ? <Skel when><SkelTable cols={4} rows={5} /></Skel>
+          : !entries.length
           ? <Empty icon={Eye} title={t('No outbound attempts')}>{t('Nothing has tried to leave this machine since the server started.')}</Empty>
           : (
             <Table head={[

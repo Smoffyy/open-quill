@@ -7,6 +7,7 @@ import { Search, X, ChevDown, Chevron, Plus, Trash, Info, Wand, FileText, Upload
 import { Switch } from './settingsui.jsx';
 import { t, tk } from '../i18n.jsx';
 import { useAnchoredMenu, menuStyleOf } from '../lib/anchor.js';
+import { Skel, SkelTable } from './Skeleton.jsx';
 
 const STARTERS = [
   { name: 'brand-voice', description: tk('Keep every draft in your own voice: tone, vocabulary and the phrases you never use.'), body: '# Brand voice\n\nUse this skill whenever you write anything the user will send or publish.\n\n## Tone\n\n- Plain, direct sentences. No filler openings.\n- Prefer the active voice.\n\n## Never\n\n- Never open with "Great question".\n- Never use em dashes.\n' },
@@ -301,7 +302,7 @@ export default function SkillsSection({ onTrySkill }) {
       </div>
 
       <div className="sk-table-wrap">
-        {loading ? null : shown.length === 0 ? (
+        {loading ? <Skel when><SkelTable cols={3} rows={5} /></Skel> : shown.length === 0 ? (
           <div className="sk-empty">{needle ? t('Nothing matches that.') : t('No skills yet.')}</div>
         ) : (
           <table className="sk-table">

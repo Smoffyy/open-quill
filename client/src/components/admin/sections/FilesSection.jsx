@@ -4,6 +4,7 @@ import { useAdmin } from '../store.jsx';
 import { Card, Rows, ToggleRow, Field, Input, Area, Btn, IconBtn, Acts, Table, Empty, fmtInt, fmtBytes } from '../ui.jsx';
 import { Trash, Pencil, Check, X, FileText, Upload } from '../../icons.jsx';
 import { t } from '../../../i18n.jsx';
+import { Skel, SkelTable } from '../../Skeleton.jsx';
 
 const MAX_FILE_MB = 25;
 
@@ -11,6 +12,7 @@ export default function FilesSection() {
   const { workspace } = useAdmin();
   const { settings, set } = workspace;
   const [files, setFiles] = useState([]);
+  const [ready, setReady] = useState(false);
   const [renaming, setRenaming] = useState(null);
   const [name, setName] = useState('');
   const [error, setError] = useState('');
@@ -21,6 +23,7 @@ export default function FilesSection() {
     let alive = true;
     (async () => {
       try { const d = await api.get('/api/admin/membank'); if (alive) setFiles(d.files || []); } catch {}
+      if (alive) setReady(true);
     })();
     return () => { alive = false; };
   }, []);
@@ -97,7 +100,9 @@ export default function FilesSection() {
         <input ref={picker} type="file" multiple hidden onChange={upload} />
         <datalist id="cp-folders">{folders.map(f => <option key={f} value={f} />)}</datalist>
 
-        {files.length === 0
+        {!ready
+          ? <Skel when><SkelTable cols={5} rows={5} /></Skel>
+          : files.length === 0
           ? <Empty icon={FileText} title={t('No files')}>{t('Anything uploaded here is readable by every model on demand, without being pasted into a chat.')}</Empty>
           : (
             <Table head={[

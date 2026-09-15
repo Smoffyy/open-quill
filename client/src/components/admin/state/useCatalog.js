@@ -22,6 +22,7 @@ export function useCatalog({ confirm }) {
   const [publishError, setPublishError] = useState('');
   const [saveState, setSaveState] = useState('idle');
   const [probe, setProbe] = useState({});
+  const [ready, setReady] = useState(false);
 
   const modelsRef = useRef([]);
   const providersRef = useRef([]);
@@ -66,6 +67,7 @@ export function useCatalog({ confirm }) {
 
   const reload = useCallback(async () => {
     await Promise.all([loadModels(), loadProviders()]);
+    setReady(true);
     readDraft();
   }, [loadModels, loadProviders, readDraft]);
 
@@ -228,7 +230,7 @@ export function useCatalog({ confirm }) {
   }, []);
 
   return {
-    models, providers, providerTypes, selected, setSelected,
+    models, providers, providerTypes, ready, selected, setSelected,
     draft, publishing, publish, publishError, saveState,
     patchModel, bulkPatch, createModel, copyModels, removeModels, reorderModels,
     addProvider, patchProvider, removeProvider, probeProvider, probe,

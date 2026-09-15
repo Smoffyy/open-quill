@@ -4,6 +4,7 @@ import { buildTree, collapseRuns } from '../lib/threadmeta.js';
 import { useFocusTrap } from '../lib/focus.js';
 import { X, Fork } from './icons.jsx';
 import { t } from '../i18n.jsx';
+import { Skel, SkelLines } from './Skeleton.jsx';
 
 const RUN_HEAD = 2;
 const RUN_TAIL = 2;
@@ -132,7 +133,7 @@ export default function BranchTree({ chatId, onSelect, onJump, onClose, onChange
         </div>
         <div className="bt-body">
           {err && <div className="bt-empty">{err}</div>}
-          {!err && !data && <div className="bt-empty">{t('Loading…')}</div>}
+          {!err && !data && <Skel when><SkelLines className="bt-skel" count={6} /></Skel>}
           {data && !roots.length && <div className="bt-empty">{t('Nothing here yet.')}</div>}
           {roots.map(r => <Segment key={r.id} node={r} active={data.activeLeaf} onSelect={pick} onMenu={openMenu} depth={0} />)}
         </div>

@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [27.5.2] - 2026-09-15
+### Added
+- **Edit an assistant message** - under the three dots on a reply. It rewrites that message in place rather than branching or regenerating, and the corrected text is what the model is given as history from then on. User messages are unchanged: editing one still branches and reruns the turn.
+- **Loading placeholders everywhere** - every panel, modal and menu that waits on data now shows a placeholder shaped like the content that is coming: a table, a stat row, a settings list, paragraph lines or menu items. They use the same delay as the chat placeholder, so a fast load still shows nothing at all.
+
+### Changed
+- **The microphone stays put while you type** - in the Anthropic preset the send button now replaces the call button and leaves dictation alone, which is how the OpenAI preset already behaved.
+- **The reasoning preview only shows whole thoughts** - it no longer surfaces quotations, interjections or hedged fragments. A sentence wrapped in quotes is skipped for the one before it, stray quote marks are dropped, an opening `Well,` or `so` is trimmed and the thought recapitalised, and anything under four words is passed over. A closing quote after the full stop no longer defeats the sentence split.
+- **The reasoning preview shimmers** - the rolling one-line thought gets the same sweep as the `Thinking…` label, a rung fainter so it sits on its own colour. The effect is now one shared `.shimmer` utility taking `--shimmer-from`/`--shimmer-to`, and `@keyframes shimmer`, which was declared twice, is declared once.
+- **A new logo** - the seven-petal starburst is replaced by a five-petal pinwheel with swept blades. The generating state pulses its petals in sequence and the thinking state turns one petal at a time and holds. `/brand/starburst*.svg` are now `/brand/mark*.svg`; a model row still pointing at an old path is remapped on read. Favicon, PWA and maskable icons were redrawn from it, and the Version square in Settings carries the mark as a cropped watermark behind the release number.
+- **Settings, Version is rebuilt** - the release number is now drawn from the release folder that answered, scaled to fit, so a release no longer needs a hand-made icon. The codename, version, channel and date sit on one line instead of a list that repeated the version twice, and the release notes get their own section with Changelog and Copy details buttons.
+- **The message box resizes smoothly** - growing and shrinking with the text is animated instead of snapping.
+- **Your own messages bounce in** - the same entrance the first block of a reply uses.
+
+### Removed
+- **Per-release icons** - `release/<major>/icon.png` and the `icon` field in `release.json` are gone, along with the `/api/release/icon` route.
+- **Source Serif** - Literata replaces it as the serif everywhere; an existing Source Serif choice, in settings or in a saved theme, now reads as Literata.
+
+### Fixed
+- **A long tool run is no longer lost if the turn dies** - the assistant's reply was only written to the database once the whole turn finished, so a server restart or crash part way through a sandbox job threw away everything it had done. The reply is now saved at every step boundary, which for a tool run means after each file it writes, and is marked continuable so a turn that never finished can be picked up. A browser refresh already resumed from the live turn and still does.
+- **A file being written no longer sits blank** - when the model streamed the file body before the path, the row showed `Creating` with an empty placeholder and never updated until the whole write finished, so a long script was indistinguishable from a stall. The already-streamed body was being discarded, and the unchanging preview meant the server stopped sending updates. The row now carries a line count that climbs as the file is written.
+- **Model docs opens over whatever you were looking at** - opening it from Projects, Artifacts, Scheduled or All chats left that screen mounted on top, so the sidebar switched to the docs but the main area did not. Going Back into the docs from one of those screens did the same.
+- **Editing a message puts the cursor at the end** - it opened with the caret before the first character, so typing ran into the front of the message. Long messages also scroll to the caret now.
+- **The Projects heading uses the theme heading font** - it was sans while Artifacts and Scheduled were serif.
+- **The message box no longer jitters while you type a long line** - in a thread the bar sits beside the text until a second line appears, which widens the box by the width of the bar. The height was measured at the narrow width and applied at the wide one, so every keystroke around the wrap point flipped the layout back and forth. The wrap is now decided at the narrow width and the height measured at the width that decision produces.
+
+---
+
 ## [27.5.1] - 2026-09-13
 ### Added
 - **A 404 page** - an unknown address used to render the home screen silently. It now says the page does not exist, shows the path, and offers a new chat or a search.

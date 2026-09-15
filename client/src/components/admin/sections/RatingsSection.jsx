@@ -3,6 +3,7 @@ import { api } from '../../../api.js';
 import { Card, Btn, Seg, Table, Stats, Badge, Empty, fmtInt, fmtAgo } from '../ui.jsx';
 import { Star } from '../../icons.jsx';
 import { t } from '../../../i18n.jsx';
+import { Skel, SkelTable } from '../../Skeleton.jsx';
 
 const PAGE = 50;
 
@@ -49,7 +50,7 @@ export default function RatingsSection() {
           <Btn size="sm" disabled={offset === 0} onClick={() => load(Math.max(0, offset - PAGE))}>{t('Newer')}</Btn>
           <Btn size="sm" disabled={(rows || []).length < PAGE} onClick={() => load(offset + PAGE)}>{t('Older')}</Btn>
         </>}>
-        {rows == null && <Empty icon={Star} title={t('Loading')} />}
+        <Skel when={rows == null}><SkelTable cols={4} rows={6} /></Skel>
         {rows != null && shown.length === 0 && (
           <Empty icon={Star} title={t('Nothing rated')}>{t('Ratings members leave on replies show up here.')}</Empty>
         )}

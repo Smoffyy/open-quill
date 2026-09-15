@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { copyText } from '../clipboard.js';
 import { useFocusTrap } from '../lib/focus.js';
 import { t } from '../i18n.jsx';
+import { Skel, SkelRows } from './Skeleton.jsx';
 
 const COLORS = ['var(--text)', '#6c8ebf', '#b48ead', '#a3be8c', '#d08770', '#8fa1b3'];
 
@@ -59,7 +60,7 @@ export default function PromptLedger({ chatId, modelId, onClose }) {
         <h2>{t('What gets sent')}</h2>
         <div className="hint">{t('The exact prompt this conversation would send right now, in order, with what each part costs.')}</div>
         {err && <div className="err">{err}</div>}
-        {!data && !err && <div className="muted-note">{t('Assembling…')}</div>}
+        {!data && !err && <Skel when><SkelRows count={5} /></Skel>}
         {data && (
           <>
             <div className="pl-bar">

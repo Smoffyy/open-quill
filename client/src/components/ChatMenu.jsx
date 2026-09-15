@@ -2,8 +2,9 @@ import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Trash, Star, Chevron, Box, Stop, Download } from './icons.jsx';
 import { t } from '../i18n.jsx';
+import { Skel, SkelMenu } from './Skeleton.jsx';
 
-export function ChatMenu({ chat, at, projects = [], busy = false, anchorRef, onStopChat, onToggleStar, onMoveToProject, onDelete, onClose }) {
+export function ChatMenu({ chat, at, projects = [], projectsReady = true, busy = false, anchorRef, onStopChat, onToggleStar, onMoveToProject, onDelete, onClose }) {
   const [pos, setPos] = useState({ ...at, ready: false });
   const [subOpen, setSubOpen] = useState(false);
   const menuRef = useRef(null);
@@ -68,7 +69,8 @@ export function ChatMenu({ chat, at, projects = [], busy = false, anchorRef, onS
           {subOpen && (
             <div className="cm-sublist">
               {chat.projectId && <button onClick={stop(() => onMoveToProject(chat.id, null))}>{t('Remove from project')}</button>}
-              {projects.length === 0 && <div className="cm-empty">{t('No projects yet')}</div>}
+              {!projectsReady && <Skel when><SkelMenu count={3} /></Skel>}
+              {projectsReady && projects.length === 0 && <div className="cm-empty">{t('No projects yet')}</div>}
               {projects.map(p => (
                 <button key={p.id} className={p.id === chat.projectId ? 'on' : ''} onClick={stop(() => onMoveToProject(chat.id, p.id))}>
                   <Box style={{ width: 15 }} /> {p.name}

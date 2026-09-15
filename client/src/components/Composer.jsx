@@ -83,7 +83,7 @@ function ActiveChip({ icon, label, onRemove }) {
 }
 
 export default function Composer({
-  value, onChange, onSend, onStop, streaming, stopping = false, models,
+  value, onChange, onSend, onStop, streaming, stopping = false, models, modelsReady = true,
   currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, onOpenProject, projects = [], onSetProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
   voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall, callActive = false,
   safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
@@ -129,32 +129,37 @@ export default function Composer({
   useDismiss(plusMenu, () => setPlusMenu(false), plusRef);
 
   const grewOnce = useRef(false);
-  const fitRaf = useRef(0);
   const fitWidth = useRef(0);
   const fit = useCallback((animate) => {
     const el = ta.current; if (!el) return;
-    cancelAnimationFrame(fitRaf.current);
     const MAX = 280;
+    const host = el.parentElement;
     if ((el.value ? el.value.length : 0) > 4000) {
       el.style.overflowY = 'auto';
       el.style.height = MAX + 'px';
+      if (host) host.classList.add('ml');
       setMultiline(m => (m === true ? m : true));
       grewOnce.current = true;
       return;
     }
     const prev = el.offsetHeight;
     el.style.height = 'auto';
+    const setMl = (on) => { if (host) host.classList.toggle('ml', on); };
+    setMl(false);
+    const ml = el.scrollHeight > 44;
+    setMl(ml);
     const raw = el.scrollHeight;
     const measured = Math.min(raw, MAX);
     el.style.overflowY = raw > MAX ? 'auto' : 'hidden';
-    setMultiline(m => { const ml = measured > 44; return m === ml ? m : ml; });
+    setMultiline(m => (m === ml ? m : ml));
     if (!animate || !grewOnce.current || Math.abs(prev - measured) < 1) {
       el.style.height = measured + 'px';
       grewOnce.current = true;
       return;
     }
     el.style.height = prev + 'px';
-    fitRaf.current = requestAnimationFrame(() => { if (ta.current) ta.current.style.height = measured + 'px'; });
+    void el.offsetHeight;
+    el.style.height = measured + 'px';
   }, []);
   useEffect(() => { fit(true); }, [value, fit]);
   useEffect(() => {
@@ -175,7 +180,6 @@ export default function Composer({
     return () => {
       window.removeEventListener('resize', onResize);
       if (ro) ro.disconnect();
-      cancelAnimationFrame(fitRaf.current);
     };
   }, [fit]);
   useEffect(() => { if (autoFocus || focusKey !== undefined) focusUnlessTouch(ta.current); }, [autoFocus, focusKey]);
@@ -438,8 +442,8 @@ export default function Composer({
         onChange={(e) => onChange(e.target.value)} onKeyDown={key} onPaste={onPaste} />
       <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}
         {...(FILE_ACCEPT ? { accept: (visionSupported ? 'image/*,' : '') + FILE_ACCEPT } : {})} />
-      {safetyChecking && safetyVerbose && <div className="safety-checking">{t("Safety check…")}</div>}
-      {improving && <div className="safety-checking">{t("Improving prompt…")}</div>}
+      {safetyChecking && safetyVerbose && <div className="safety-checking shimmer">{t("Safety check…")}</div>}
+      {improving && <div className="safety-checking shimmer">{t("Improving prompt…")}</div>}
       {compareIds.length > 0 && (
         <div className="queued-chip compare-chip">
           <span className="queued-label">{t("Compare:")}</span>
@@ -529,7 +533,7 @@ export default function Composer({
                     </button>
                     {sub.isOpen('styles') && (
                       <PmSub className="styles" onMouseEnter={() => sub.hoverOpen('styles')} onMouseLeave={sub.hoverClose}>
-                        <StyleSubmenu styles={styles} styleId={styleId} currentId={currentId} onSaveStyles={onSaveStyles}
+                        <StyleSubmenu styles={styles} stylesReady={modelsReady} styleId={styleId} currentId={currentId} onSaveStyles={onSaveStyles}
                           onSelect={(id) => { onSelectStyle && onSelectStyle(id); closePlusMenu(); }} />
                       </PmSub>
                     )}
@@ -655,7 +659,7 @@ export default function Composer({
         </div>
         <div className="composer-right">
           {ctxGauge}
-          {!hideModelPicker && <ModelDropdown models={models} currentId={currentId} onSelect={onSelect}
+          {!hideModelPicker && <ModelDropdown models={models} modelsReady={modelsReady} currentId={currentId} onSelect={onSelect}
             extended={extended} onToggleExtended={onToggleExtended} up={modelUp} isAdmin={canUseUnavailable}
             reasoningEffort={reasoningEffort} onSetEffort={onSetEffort}
             kwargValues={kwargValues} onSetKwarg={onSetKwarg}

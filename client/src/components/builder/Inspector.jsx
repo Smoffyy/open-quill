@@ -13,7 +13,6 @@ const FONT_STACKS = [
   { value: 'var(--font-sans)', label: 'Body font' },
   { value: "'Literata Variable', serif", label: 'Literata' },
   { value: "'Newsreader Variable', serif", label: 'Newsreader' },
-  { value: "'Source Serif 4 Variable', serif", label: 'Source Serif' },
   { value: "'Open Sans', sans-serif", label: 'Open Sans' },
   { value: 'ui-monospace, monospace', label: 'Monospace' },
   { value: 'system-ui, sans-serif', label: 'System' }

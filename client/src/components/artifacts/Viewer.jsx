@@ -12,6 +12,7 @@ import {
   PREVIEW_HTML, PREVIEW_MD, IMAGE_EXT, EXT_LANG, baseName, extOf, escHtml,
   diffLines, stableLineDiff, collapseRuns, splitHighlightedLines, markLine, findMatches
 } from '../../lib/artifacts.js';
+import { Skel, SkelLines } from '../Skeleton.jsx';
 
 const HL_MAX_LINES = 5000;
 const AUTO_HL_MAX_LINES = 1200;
@@ -362,7 +363,7 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
       <div className="art-vbody" ref={bodyRef} onScroll={onBodyScroll} onWheel={onBodyWheel} onTouchStart={onBodyTouchStart} onTouchMove={onBodyTouchMove}>
         {liveEdit && (
           baseText == null
-            ? <div className="art-skel">{Array.from({ length: 14 }).map((_, i) => <span key={i} className="skeleton" style={{ width: (32 + ((i * 53) % 58)) + '%' }} />)}</div>
+            ? <Skel when><SkelLines className="art-skel" count={14} /></Skel>
             : renderDiffRows(liveRows, true)
         )}
         {!liveEdit && showText && !diff && previewOn && (
@@ -383,13 +384,11 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
         )}
         {!fromStream && !committed && <div className="art-empty"><div className="art-empty-spin" />{t("This file is still being written…")}</div>}
         {!fromStream && committed && !data && (
-          <div className="art-skel">
-            {Array.from({ length: 16 }).map((_, i) => <span key={i} className="skeleton" style={{ width: (32 + ((i * 53) % 58)) + '%' }} />)}
-          </div>
+          <Skel when><SkelLines className="art-skel" count={16} /></Skel>
         )}
         {!fromStream && committed && data?.error && <div className="art-empty">{t("Couldn't load this file.")}</div>}
         {!fromStream && data && data.text != null && diff && (
-          prev == null ? <div className="art-empty">{t("Loading diff…")}</div>
+          prev == null ? <Skel when><SkelLines className="art-skel" count={12} /></Skel>
             : diffRows == null ? <div className="art-empty">{t("File too large to diff.")}</div>
               : renderDiffRows(diffRows, false)
         )}

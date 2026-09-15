@@ -4,6 +4,7 @@ import { useAdmin } from '../store.jsx';
 import { Card, Rows, Row, ToggleRow, Fields, Field, Area, Select, Seg, Btn, Table, Empty, fmtAgo } from '../ui.jsx';
 import { Shield } from '../../icons.jsx';
 import { t } from '../../../i18n.jsx';
+import { Skel, SkelTable } from '../../Skeleton.jsx';
 
 export default function GuardrailsSection() {
   const { workspace, catalog, confirm } = useAdmin();
@@ -87,7 +88,7 @@ export default function GuardrailsSection() {
       <Card title={t('Refusal log')}
         sub={total ? t('{n} prompts refused. Use these to tune the prompt and spot false positives.', { n: total }) : t('Prompts the screening model refused.')}
         actions={log && log.length ? <Btn size="sm" kind="danger" onClick={clearLog}>{t('Clear log')}</Btn> : null}>
-        {log == null && <Empty icon={Shield} title={t('Loading')} />}
+        <Skel when={log == null}><SkelTable cols={3} rows={5} /></Skel>
         {log != null && log.length === 0 && (
           <Empty icon={Shield} title={t('Nothing refused')}>{t('Prompts that the screening model turns down will be listed here with the reason it gave.')}</Empty>
         )}

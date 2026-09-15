@@ -231,9 +231,9 @@ function SteerChips({ notes }) {
   );
 }
 
-function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, statusDelay = true, showSpeed = false, preset = 'anthropic', modern = false }) {
-  if (chatEnded) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onFork = null; onDelete = null; }
-  if (!chatId) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onFork = null; onTogglePin = null; }
+function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onEditAssistant, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, statusDelay = true, showSpeed = false, preset = 'anthropic', modern = false }) {
+  if (chatEnded) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onEditAssistant = null; onFork = null; onDelete = null; }
+  if (!chatId) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onEditAssistant = null; onFork = null; onTogglePin = null; }
   const [typing, setTyping] = useState(false);
   const typingTimer = useRef(null);
   useEffect(() => {
@@ -268,6 +268,17 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
     return () => window.removeEventListener('oq-msg-edit', h);
   }, [onEdit, msg.id, msg.content]);
   function saveEdit() { const v = draft.trim(); setEditing(false); if (v && v !== msg.content) onEdit?.(msg.id, v); }
+  function saveAssistantEdit() { const v = draft.trim(); setEditing(false); if (v && v !== msg.content) onEditAssistant?.(msg.id, v); }
+  const editRef = useRef(null);
+  useEffect(() => {
+    if (!editing) return;
+    const el = editRef.current;
+    if (!el) return;
+    const end = el.value.length;
+    el.focus();
+    el.setSelectionRange(end, end);
+    el.scrollTop = el.scrollHeight;
+  }, [editing]);
 
   const pos = model?.iconPosition || 'below';
   const iconRef = useRef(null);
@@ -371,7 +382,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
           {editing ? (
             <>
               <div className="edit-box" data-value={draft + ' '}>
-                <textarea value={draft} autoFocus rows={1} cols={1} onChange={(e) => setDraft(e.target.value)}
+                <textarea ref={editRef} value={draft} rows={1} cols={1} onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit(); if (e.key === 'Escape') setEditing(false); }} />
               </div>
               <div className="edit-actions">
@@ -431,7 +442,18 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
       <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} durationMs={msg.reasoningMs || 0} preset={preset} collapsible={model?.reasoningCollapsible !== false} />
       {(msg.content || streaming) && (
         <div className={'assistant-body' + (streaming ? ' streaming' : '') + (streaming && typing ? ' typing' : '') + (streaming && phase === 'thinking' ? ' thinking' : '') + (textEntered ? ' text-enter' : '')}>
-          {msg.content ? (
+          {editing ? (
+            <>
+              <div className="edit-box" data-value={draft + ' '}>
+                <textarea ref={editRef} value={draft} rows={1} cols={1} onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveAssistantEdit(); if (e.key === 'Escape') setEditing(false); }} />
+              </div>
+              <div className="edit-actions">
+                <button className="btn ghost" onClick={() => setEditing(false)}>{t("Cancel")}</button>
+                <button className="btn primary" onClick={saveAssistantEdit}>{t("Save")}</button>
+              </div>
+            </>
+          ) : msg.content ? (
             <ReasonSegs.Provider value={segCtx}>
               <Markdown streaming={streaming} reveal={modern && streaming}>{msg.content}</Markdown>
             </ReasonSegs.Provider>
@@ -449,7 +471,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
           <button className="action-btn" onClick={doCopy} title={t("Copy what's written so far")} aria-label={t("Copy what's written so far")}>{copied ? <Check /> : <Copy />}</button>
         </div>
       )}
-      {!streaming && msg.content && (
+      {!streaming && msg.content && !editing && (
         <div className="actions">
           <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
           {chatId && !String(msg.id).startsWith('inc-') && (
@@ -476,6 +498,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
           <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
           {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")} aria-label={t("Compare versions")}><Columns /></button>}
           <MoreMenu items={[
+            onEditAssistant && !String(msg.id).startsWith('inc-') && { label: t('Edit'), icon: <Pencil style={{ width: 15 }} />, run: startEdit },
             onFork && { label: t('Branch'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
             onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
             onDelete && chatId && !String(msg.id).startsWith('inc-') && { label: t('Delete'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }

@@ -3,6 +3,7 @@ import { Card, Fields, Field, Input, Select, Btn, Table, Empty } from '../ui.jsx
 import { api } from '../../../api.js';
 import { Download, Clock } from '../../icons.jsx';
 import { t } from '../../../i18n.jsx';
+import { Skel, SkelTable } from '../../Skeleton.jsx';
 
 const PAGE = 60;
 
@@ -78,7 +79,9 @@ export default function EventsSection() {
             {state.loading ? t('Loading…') : t('Load {n} more', { n: PAGE })}
           </Btn>
           : null}>
-        {state.entries.length === 0 && !state.loading
+        {state.entries.length === 0 && state.loading
+          ? <Skel when><SkelTable cols={5} rows={6} /></Skel>
+          : state.entries.length === 0
           ? <Empty icon={Clock} title={t('No matching events')}>{t('Widen the filters, or wait for the next admin action to be recorded.')}</Empty>
           : (
             <Table head={[

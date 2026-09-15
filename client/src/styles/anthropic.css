@@ -198,7 +198,6 @@
   background: var(--composer-hover, var(--surface-hover));
   transform: scale(.975);
 }
-:root[data-preset="anthropic"] .composer-right:has(.send:not(.ghost)) .mic { display: none; }
 :root[data-preset="anthropic"] .composer .send.enter { background: transparent; color: var(--text); }
 :root[data-preset="anthropic"] .composer .send.enter:hover { background: var(--composer-hover, var(--surface-hover)); }
 @media (prefers-reduced-motion: reduce) {
@@ -633,7 +632,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 ):active {
   transition-duration: 0s;
 }
-:root[data-preset="anthropic"] :is(input, textarea, select) {
+:root[data-preset="anthropic"] :is(input, textarea, select):not(.composer textarea) {
   transition: box-shadow 0s, background-color 0s;
 }
 :root[data-preset="anthropic"] :is(.nav-item, .chat-row, .icon-btn, .profile-btn, .profile-apps, .lib-pill, .lib-primary, .lib-icon-btn, .lib-tab, .sched-card):is(:hover, :active, .on, .active, :focus-visible) {

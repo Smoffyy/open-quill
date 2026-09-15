@@ -215,6 +215,7 @@
 .tl-diff .add { color: var(--diff-add); }
 .tl-diff .del { color: var(--diff-del); }
 .tl-note { color: var(--text-muted); font-size: 12px; opacity: .85; }
+.tl-diff.live .add { opacity: .75; font-variant-numeric: tabular-nums; }
 .tl-err { color: var(--danger); font-size: 12px; }
 .tool-line.clickable { cursor: pointer; border-radius: 7px; padding: 2px 5px; margin: 18px -5px 18px 3px; transition: background var(--fx-t, .14s); }
 .tool-line.clickable:hover { background: var(--surface-2); }

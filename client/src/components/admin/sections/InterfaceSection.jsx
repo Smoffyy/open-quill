@@ -9,7 +9,7 @@ import { Palette, Sparkles, Eye } from '../../icons.jsx';
 import { toast } from '../../../toast.js';
 
 const PRESETS = [['anthropic', tk('Anthropic')], ['openai', tk('OpenAI')]];
-const FONTS = [['literata', tk('Literata')], ['newsreader', tk('Newsreader')], ['sourceserif', tk('Source Serif')], ['sans', tk('Open Sans')]];
+const FONTS = [['literata', tk('Literata')], ['newsreader', tk('Newsreader')], ['sans', tk('Open Sans')]];
 const PRESET_FONT = { __proto__: null, openai: 'sans', anthropic: 'literata' };
 const BUILD_KEY = 'oq-build-mode';
 

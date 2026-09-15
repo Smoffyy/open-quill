@@ -4,6 +4,7 @@ import { Check, Copy, X } from '../icons.jsx';
 import { Switch, SegSlide, SelectRow } from '../settingsui.jsx';
 import { t } from '../../i18n.jsx';
 import { logoFor, useLogos } from '../../lib/logos.js';
+import { SkelLines, SkelRows, SkelTable, SkelStats } from '../Skeleton.jsx';
 
 export { Switch };
 
@@ -239,6 +240,33 @@ export function Empty({ icon: Icon, title, children, actions }) {
       {children && <p>{children}</p>}
       {actions && <div className="cp-acts">{actions}</div>}
     </div>
+  );
+}
+
+export function CardSkeleton({ children }) {
+  return (
+    <section className="cp-card cp-card-skel" aria-hidden="true">
+      <div className="cp-card-head">
+        <div>
+          <span className="skeleton" style={{ width: 148, height: 14 }} />
+          <span className="skeleton" style={{ width: 260, height: 10, marginTop: 9 }} />
+        </div>
+      </div>
+      <div className="cp-card-body">{children}</div>
+    </section>
+  );
+}
+
+export function SectionSkeleton({ shape = 'rows' }) {
+  const body = shape === 'table' ? <SkelTable cols={3} rows={6} />
+    : shape === 'lines' ? <SkelLines count={6} />
+      : <SkelRows count={4} />;
+  return (
+    <>
+      {shape === 'stats' && <SkelStats count={4} />}
+      <CardSkeleton>{shape === 'stats' ? <SkelTable cols={3} rows={5} /> : body}</CardSkeleton>
+      {shape === 'rows' && <CardSkeleton><SkelRows count={3} /></CardSkeleton>}
+    </>
   );
 }
 

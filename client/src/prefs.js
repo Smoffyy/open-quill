@@ -43,8 +43,8 @@ export function applyPrefs(prefs, preset) {
   applyUserFont();
 }
 
-export const APP_FONTS = new Set(['literata', 'newsreader', 'sourceserif', 'sans']);
-const LEGACY_FONT_IDS = { __proto__: null, serif: 'literata' };
+export const APP_FONTS = new Set(['literata', 'newsreader', 'sans']);
+const LEGACY_FONT_IDS = { __proto__: null, serif: 'literata', sourceserif: 'literata' };
 
 export function appFontId(v) {
   const id = LEGACY_FONT_IDS[v] || v;
@@ -56,10 +56,9 @@ export const USER_FONTS = {
   __proto__: null,
   literata: { stack: "'Literata Variable'", weight: 400, strong: 600, greeting: 290 },
   newsreader: { stack: "'Newsreader Variable'", weight: 420, strong: 615, greeting: 390 },
-  sourceserif: { stack: "'Source Serif 4 Variable'", weight: 465, strong: 680, greeting: 390 },
   sans: { stack: "'Open Sans'", weight: 400, strong: 600, greeting: 390 },
 };
-const LEGACY_USER_FONT_IDS = { __proto__: null, serif: 'sourceserif' };
+const LEGACY_USER_FONT_IDS = { __proto__: null, serif: 'literata', sourceserif: 'literata' };
 
 function userFontId(v) {
   const id = LEGACY_USER_FONT_IDS[v] || v;

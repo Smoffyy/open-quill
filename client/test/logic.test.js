@@ -5,7 +5,7 @@ import {
   keybindIndex, keybindConflicts, leaderCombo, chordMenu, presetBinds, activePresetId,
   exportKeybinds, importKeybinds, KEYBIND_ACTIONS, KEYBIND_BY_ID, DEFAULT_LEADER
 } from '../src/lib/keybinds.js';
-import { parseSteps, lastSentence, thoughtSeconds } from '../src/lib/reasoning.js';
+import { parseSteps, lastSentence, refineSentence, thoughtSeconds } from '../src/lib/reasoning.js';
 import { hasMath, isolateDisplayMath, wrapMathEnvironments } from '../src/lib/mathjs.js';
 import { hasToolCall, previewOf, buildTree, collapseRuns } from '../src/lib/threadmeta.js';
 import { scanTools } from '../src/toolproto.js';
@@ -220,7 +220,7 @@ test('lastSentence does not treat a dotted filename as a sentence end', () => {
 });
 
 test('lastSentence does not treat a decimal point as a sentence end', () => {
-  assert.equal(lastSentence('The value is 0.5 meters. Done here.'), 'Done here.');
+  assert.equal(lastSentence('The value is 0.5 meters. Done here.'), 'The value is 0.5 meters.');
 });
 
 test('lastSentence yields nothing until the first sentence closes', () => {
@@ -242,10 +242,42 @@ test('lastSentence strips markdown decoration so the header reads as plain prose
 });
 
 test('lastSentence truncates a very long sentence rather than overflowing the header', () => {
-  const long = 'x'.repeat(400) + '.';
+  const long = ('the quick brown fox jumps over the lazy dog ').repeat(12).trim() + '.';
   const out = lastSentence(long);
   assert.ok(out.length <= 151, out.length);
   assert.ok(out.endsWith('…'));
+});
+
+test('the preview never shows a quotation', () => {
+  assert.equal(lastSentence('I checked the config. "Well maybe its this."'), 'I checked the config.');
+  assert.equal(lastSentence('The user asked for "dark mode" in the settings.'),
+    'The user asked for dark mode in the settings.');
+  assert.equal(lastSentence('He said "no." Then I moved on.'), 'Then I moved on.',
+    'a closing quote after the stop must not defeat the split');
+  assert.equal(lastSentence("Done with alpha.py's functions."), "Done with alpha.py's functions.",
+    'an apostrophe is not a quote mark');
+});
+
+test('the preview only shows a complete thought, never a fragment or an interjection', () => {
+  for (const frag of ['Okay.', 'Hmm.', 'Right.', 'Done here.', 'Let me check.', 'Well maybe its this.']) {
+    assert.equal(lastSentence(frag), '', frag);
+  }
+  assert.equal(lastSentence('Checked the router file already. Okay.'), 'Checked the router file already.');
+});
+
+test('a hedging opener is dropped and the thought recapitalised, but only on a word boundary', () => {
+  assert.equal(lastSentence('Well, I should check the config file first.'), 'I should check the config file first.');
+  assert.equal(lastSentence('so i need to open the router file next.'), 'I need to open the router file next.');
+  assert.equal(lastSentence('Wellington is the capital of New Zealand.'), 'Wellington is the capital of New Zealand.');
+  assert.equal(lastSentence('Sorting it out now.'), 'Sorting it out now.');
+});
+
+test('refineSentence carries no stray control characters in its patterns', async () => {
+  const src = await import('node:fs').then(fs => fs.readFileSync(new URL('../src/lib/reasoning.js', import.meta.url), 'utf8'));
+  const bad = [...src].filter(c => c.charCodeAt(0) < 9 || (c.charCodeAt(0) > 13 && c.charCodeAt(0) < 32));
+  assert.deepEqual(bad, [], 'a literal control byte here silently breaks the pattern it sits in');
+  assert.equal(refineSentence(''), '');
+  assert.equal(refineSentence(null), '');
 });
 
 test('lastSentence has no regex lookbehind (parse-time fatal on Safari < 16.4)', async () => {

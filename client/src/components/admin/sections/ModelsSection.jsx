@@ -8,6 +8,7 @@ import {
 import { Cube, Plus, Copy, Trash, Star, Eye, EyeOff, Chevron, Folder, Pencil, DotsV } from '../../icons.jsx';
 import { folderOf, groupRows, planMove } from '../../../lib/modelfolders.js';
 import { t, tk } from '../../../i18n.jsx';
+import { Skel, SkelTable } from '../../Skeleton.jsx';
 
 const SORT_KEY = 'oq-model-sort';
 const FOLD_KEY = 'oq-model-folded';
@@ -267,6 +268,8 @@ export default function ModelsSection() {
         onDelete={() => removeModels([model.id], () => setSelected(null))} />
     );
   }
+
+  if (!catalog.ready) return <Skel when><SkelTable cols={4} rows={7} /></Skel>;
 
   if (!models.length) {
     return (
