@@ -15,7 +15,7 @@ const prop = (k) => k.replace(KEBAB, (c) => '-' + c.toLowerCase());
 function safeValue(v) {
   const s = String(v ?? '').trim();
   if (!s || /[<>{};]|url\s*\(|@import|expression\s*\(|javascript:/i.test(s)) return '';
-  return s.slice(0, 240);
+  return s.replace(/'Source Serif 4 Variable'/g, "'Literata Variable'").slice(0, 240);
 }
 
 function declarations(style) {

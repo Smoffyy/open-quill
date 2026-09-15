@@ -459,7 +459,7 @@ test('a staged app-config edit can be taken back before it is published', async 
   const live = { uiPreset: cfg.uiPreset, appFont: cfg.appFont, appName: cfg.appName };
   const other = live.uiPreset === 'openai' ? 'anthropic' : 'openai';
 
-  await browser('PATCH', '/api/admin/app-config', { body: { appName: 'Typo Name', uiPreset: other, appFont: 'sourceserif' } });
+  await browser('PATCH', '/api/admin/app-config', { body: { appName: 'Typo Name', uiPreset: other, appFont: 'newsreader' } });
   const staged = (await browser('GET', '/api/app-config')).json;
   assert.equal(staged.appName, 'Typo Name', 'the admin previews the staged name');
   assert.equal(staged.uiPreset, other, 'and the staged preset');

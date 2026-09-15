@@ -377,7 +377,7 @@
 ):active {
   transition-duration: 0s;
 }
-:root[data-preset="openai"] :is(input, textarea, select) {
+:root[data-preset="openai"] :is(input, textarea, select):not(.composer textarea) {
   transition: box-shadow 0s, background-color 0s;
 }
 :root[data-preset="openai"] .send { animation: cl-chunk-in .12s ease-out both; }

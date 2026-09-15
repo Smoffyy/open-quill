@@ -10,7 +10,7 @@ import { egressLog, clearEgressLog } from '../lib/egress.js';
 import { releaseInfo } from '../lib/release.js';
 import { sanitizeDocsConfig } from '../lib/modeldocs.js';
 
-const APP_FONTS = new Set(['literata', 'newsreader', 'sourceserif', 'sans']);
+const APP_FONTS = new Set(['literata', 'newsreader', 'sans']);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DOCS = { __proto__: null, credits: 'CREDITS.md', changelog: 'CHANGELOG.md', license: 'LICENSE', privacy: 'docs/privacy-security.md' };

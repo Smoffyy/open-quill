@@ -124,7 +124,7 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .app.sb-collapsed .pj-overview { left: 58px; }
 @media (max-width: 768px) { .pj-overview { left: 0; } }
 .pj-head { width: 100%; max-width: 832px; margin: 0 auto; padding: 32px 0 20px; }
-.pj-head h2 { font-family: var(--font-sans); font-size: 24px; font-weight: 500; line-height: 32px; margin: 0; color: var(--text); }
+.pj-head h2 { font-family: var(--font-serif); font-size: 24px; font-weight: 500; line-height: 32px; margin: 0; color: var(--text); }
 .pj-head-actions { display: flex; align-items: center; gap: 12px; }
 .pj-sort { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px; font-size: 14px; color: var(--text-muted); background: transparent; border: 0; transition: background var(--fx-t, .15s); }
 .pj-sort:hover { background: var(--surface-hover); }

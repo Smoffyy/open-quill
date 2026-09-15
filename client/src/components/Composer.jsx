@@ -129,11 +129,9 @@ export default function Composer({
   useDismiss(plusMenu, () => setPlusMenu(false), plusRef);
 
   const grewOnce = useRef(false);
-  const fitRaf = useRef(0);
   const fitWidth = useRef(0);
   const fit = useCallback((animate) => {
     const el = ta.current; if (!el) return;
-    cancelAnimationFrame(fitRaf.current);
     const MAX = 280;
     const host = el.parentElement;
     if ((el.value ? el.value.length : 0) > 4000) {
@@ -160,7 +158,8 @@ export default function Composer({
       return;
     }
     el.style.height = prev + 'px';
-    fitRaf.current = requestAnimationFrame(() => { if (ta.current) ta.current.style.height = measured + 'px'; });
+    void el.offsetHeight;
+    el.style.height = measured + 'px';
   }, []);
   useEffect(() => { fit(true); }, [value, fit]);
   useEffect(() => {
@@ -181,7 +180,6 @@ export default function Composer({
     return () => {
       window.removeEventListener('resize', onResize);
       if (ro) ro.disconnect();
-      cancelAnimationFrame(fitRaf.current);
     };
   }, [fit]);
   useEffect(() => { if (autoFocus || focusKey !== undefined) focusUnlessTouch(ta.current); }, [autoFocus, focusKey]);

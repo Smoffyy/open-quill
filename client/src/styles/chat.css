@@ -18,9 +18,10 @@
 .composer textarea {
   width: 100%; display: block; background: none; border: none; outline: none; resize: none; font-family: var(--font-sans);
   font-size: 15px; line-height: 20px; color: var(--text); max-height: 378px; min-height: 20px;
-  padding: 0 0 0 4px; transition: height var(--fx-t, .16s) cubic-bezier(.22, 1, .36, 1);
+  padding: 0 0 0 4px; transition: height var(--fx-fit, .16s) cubic-bezier(.22, 1, .36, 1);
 }
 .composer textarea::placeholder { color: var(--text-faint); }
+@media (prefers-reduced-motion: reduce) { .composer textarea { transition: none; } }
 .composer-bar { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
 .composer-left, .composer-right { display: flex; align-items: center; gap: 8px; }
 .plus { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; color: var(--text); position: relative; }
@@ -305,7 +306,7 @@
 /* One word, one ramp, started when the word arrives. The tail of a reply
    therefore reads as a soft gradient rather than a hard edge. */
 .rv-word { animation: text-enter-fade .35s linear both; }
-:root[data-motion="modern"] .msg.user.enter .bubble-user { animation: text-enter-fade .18s ease-out both; }
+:root[data-motion="modern"] .msg.user.enter .bubble-user { animation: text-enter-fade .6s ease-out both, text-enter-bounce .5s cubic-bezier(.34,1.56,.64,1) both; }
 @media (prefers-reduced-motion: reduce) {
   .assistant-body.text-enter > :first-child,
   .rv-word, :root[data-motion="modern"] .msg.user.enter .bubble-user { animation: none; }
