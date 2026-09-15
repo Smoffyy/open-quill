@@ -24,7 +24,16 @@ export function livePreview(name, argsText) {
     return live;
   }
   const path = get('path');
-  if (!p.path || !p.path.closed || !path) return { tool, ...partial(path) };
+  if (!p.path || !p.path.closed || !path) {
+    const body = get('content') ?? get('new_str');
+    const live = { tool, ...partial(path) };
+    if (body != null) {
+      const text = String(body);
+      live.bytes = text.length;
+      live.lines = text ? text.split('\n').length : 0;
+    }
+    return live;
+  }
   if (tool === 'create_file') return { tool, path: String(path), content: String(get('content') ?? ''), oldStr: null };
   return { tool, path: String(path), content: String(get('new_str') ?? ''), oldStr: p.old_str && p.old_str.closed ? String(get('old_str')) : null };
 }

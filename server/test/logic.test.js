@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { livePreview } from '../tools/preview.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -2464,4 +2465,36 @@ test('a command never inherits the server secrets', () => {
     for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
     Object.assign(process.env, saved);
   }
+});
+
+test('livePreview reports write progress before the path has arrived', () => {
+  const a = livePreview('create_file', '{"content":"use std;\nfn a(');
+  assert.equal(a.tool, 'create_file');
+  assert.equal(a.path, undefined, 'a path that has not closed is never reported as real');
+  assert.equal(a.lines, 2);
+  assert.equal(a.bytes, 14);
+
+  const b = livePreview('create_file', '{"content":"' + 'x'.repeat(900) + '\na\nb');
+  assert.ok(b.bytes > a.bytes, 'the counter has to climb, that is the whole point');
+  assert.equal(b.lines, 3);
+});
+
+test('livePreview still prefers a real path once it closes', () => {
+  const live = livePreview('create_file', '{"content":"body","path":"src/f.rs"}');
+  assert.equal(live.path, 'src/f.rs');
+  assert.equal(live.content, 'body');
+  assert.equal(live.bytes, undefined, 'progress fields are only for the pathless window');
+  assert.equal(live.lines, undefined);
+});
+
+test('livePreview keeps showing a path that is still streaming', () => {
+  assert.equal(livePreview('create_file', '{"path":"src/fi').partialPath, 'src/fi');
+  assert.equal(livePreview('create_file', '{"path":"src/f.rs","content":"x').path, 'src/f.rs');
+});
+
+test('a growing write changes the live key, so frames keep flowing', () => {
+  const keyOf = (args) => JSON.stringify(livePreview('create_file', args));
+  const one = keyOf('{"content":"aaa');
+  const two = keyOf('{"content":"aaabbb');
+  assert.notEqual(one, two, 'an unchanging key is what froze the row at "Creating"');
 });

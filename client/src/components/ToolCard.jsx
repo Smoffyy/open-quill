@@ -221,6 +221,11 @@ function ToolLine({ call, result, note, diff }) {
       <Icon style={{ width: 20 }} className="tl-icon" />
       <span className="tl-verb">{verb}</span>
       {target ? <Target target={target} /> : pending ? <NamePending /> : null}
+      {pending && !diff && call.lines > 0 && (
+        <span className="tl-diff live" aria-live="polite">
+          <span className="add">+{call.lines}</span>
+        </span>
+      )}
       {diff}
       {note && <span className="tl-note">{note}</span>}
       {failed && <span className="tl-err">{result.error}</span>}
