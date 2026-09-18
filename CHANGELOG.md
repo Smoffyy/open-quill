@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [27.5.3] - 2026-09-25
+
+
+---
+
 ## [27.5.2] - 2026-09-15
 ### Added
 - **Edit an assistant message** - under the three dots on a reply. It rewrites that message in place rather than branching or regenerating, and the corrected text is what the model is given as history from then on. User messages are unchanged: editing one still branches and reruns the turn.

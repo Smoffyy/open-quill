@@ -1,6 +1,6 @@
 {
   "name": "open-quill-server",
-  "version": "27.5.2",
+  "version": "27.5.3",
   "private": true,
   "type": "module",
   "main": "index.js",
@@ -14,12 +14,12 @@
     "better-sqlite3-multiple-ciphers": "^13.0.3",
     "cookie": "^2.0.1",
     "express": "^5.2.1",
-    "framer-motion": "^13.2.0",
+    "framer-motion": "^13.4.0",
     "jsonwebtoken": "^9.0.3",
-    "lucide-react": "^1.45.0",
-    "multer": "^2.3.0",
+    "lucide-react": "^1.47.0",
+    "multer": "^2.4.0",
     "pdfjs-dist": "^6.3.289",
-    "react-hot-toast": "^2.6.0",
+    "react-hot-toast": "^2.6.1",
     "ws": "^8.21.3"
   },
   "devDependencies": {
