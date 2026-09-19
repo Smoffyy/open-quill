@@ -95,7 +95,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   let base = buildMessages(model, history, extended, toolsP(), chatRow.summary, promptVars(chat.user_id), withStyle(instrFor(chatRow)));
   let inTurn = []; // assistant/tool exchanges accumulated during this response
   const assistantId = uid();
-  const assistantParent = (db.chats.byId(chat.id) || {}).active_leaf || null;
+  const assistantParent = chatRow.active_leaf || null;
   let content = '', reasoning = '', usage = null, lastStepCompletion = 0;
   let checkpointed = false;
   const checkpoint = () => {

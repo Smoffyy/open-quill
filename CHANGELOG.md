@@ -8,7 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [27.5.3] - 2026-09-25
+### Added
+- **The greeting screen now has the same "more" menu as an open chat**, with Personas in it.
 
+### Fixed
+- **A shell command could still reach a single-segment absolute path** like `/secrets.txt` unflagged by the sandbox guard, which only caught absolute paths of two or more segments.
+- **The model dropdown recomputed its full list and group filtering on every render**, including while closed and mid-stream, instead of only when open.
+- **A turn re-fetched the chat row from the database twice in a row** with no write in between.
+- **Extracting a zip walked the sandbox workspace twice** to check the storage cap before doing it a third time for the byte budget.
+- **The theme style sanitizer let a CSS comment terminator or a backslash escape through** as the last check before a value reaches the stylesheet.
 
 ---
 

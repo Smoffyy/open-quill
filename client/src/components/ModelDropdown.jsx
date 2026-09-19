@@ -17,6 +17,9 @@ const CAP_ICONS = [
 
 const EDGE = 10;
 const GAP = 6;
+const EMPTY_ARR = [];
+const EMPTY_SET = new Set();
+
 function fullHeight(el) {
   if (!el) return 0;
   const s = el.style;
@@ -465,17 +468,17 @@ export default function ModelDropdown({ models, modelsReady = true, currentId, o
     else if (id === 'effort' && onSetEffort) onSetEffort(value);
   };
   const ownKwargs = kwDefs.filter(d => !d.parentId);
-  const shownKwargs = kwDefs.filter(d => kwargVisible(kwDefs, kwActive, d));
-  const shownIds = new Set(shownKwargs.map(d => d.id));
   const gates = gateSourceIds(kwDefs, kwActive);
   const chips = ownKwargs
     .filter(d => kwargVisible(kwDefs, kwActive, d) && !gates.has(d.id))
     .map(d => kwargChip(d, kwActive[d.id]))
     .filter(Boolean)
     .slice(0, 2);
-  const main = models.filter(m => !m.inMoreModels);
+  const shownKwargs = open ? kwDefs.filter(d => kwargVisible(kwDefs, kwActive, d)) : EMPTY_ARR;
+  const shownIds = open ? new Set(shownKwargs.map(d => d.id)) : EMPTY_SET;
+  const main = open ? models.filter(m => !m.inMoreModels) : EMPTY_ARR;
   const groups = [];
-  {
+  if (open) {
     const seen = new Map();
     for (const m of models) {
       if (!m.inMoreModels) continue;

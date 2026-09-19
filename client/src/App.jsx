@@ -1546,7 +1546,10 @@ export default function App() {
                 <Ghost />
               </button>
               {artifactsBtn}
-            </>} />
+            </>}
+            items={[
+              { id: 'personas', icon: <Star />, label: t('Personas'), onClick: () => setPersonasOpen(true) },
+            ]} />
         )}
         {empty && !incognito && cfg.uiPreset === 'openai' && (
           <div className="home-topbar">

@@ -88,7 +88,7 @@ function absoluteKind(value) {
     const seg = v.slice(1).split('/').filter(Boolean);
     if (!seg.length) return 'the filesystem root';
     if (SYSTEM_ROOTS.has(seg[0]) || SYSTEM_ROOTS.has(seg[0].toLowerCase())) return 'a system directory';
-    if (seg.length >= 2) return 'an absolute path';
+    return 'an absolute path';
   }
   return null;
 }
