@@ -21,16 +21,16 @@ import { presetOf, nextTheme } from './lib/palettes.js';
 import Disclaimer from './components/Disclaimer.jsx';
 import { ThemeProvider } from './lib/theme/store.jsx';
 import ThemeSlot from './components/builder/ThemeSlot.jsx';
-const SetupGuide = React.lazy(() => import('./components/setup/SetupGuide.jsx'));
-const BuildMode = React.lazy(() => import('./components/builder/BuildMode.jsx'));
+import SetupGuide from './components/setup/SetupGuide.jsx';
+import BuildMode from './components/builder/BuildMode.jsx';
 
 import Message from './components/Message.jsx';
 import TopbarActions from './components/TopbarActions.jsx';
-const SettingsModal = React.lazy(() => import('./components/SettingsModal.jsx'));
-const PromptLedger = React.lazy(() => import('./components/PromptLedger.jsx'));
-const ModelDocs = React.lazy(() => import('./components/ModelDocs.jsx'));
-const AdminPanel = React.lazy(() => import('./components/AdminPanel.jsx'));
-const Playground = React.lazy(() => import('./components/Playground.jsx'));
+import SettingsModal from './components/SettingsModal.jsx';
+import PromptLedger from './components/PromptLedger.jsx';
+import ModelDocs from './components/ModelDocs.jsx';
+import AdminPanel from './components/AdminPanel.jsx';
+import Playground from './components/Playground.jsx';
 import DocModal from './components/DocModal.jsx';
 import NotFound from './components/NotFound.jsx';
 import ArtifactsPanel from './components/ArtifactsPanel.jsx';
@@ -70,7 +70,7 @@ import { hasMath, katexPlugin, ensureKatex } from './lib/mathjs.js';
 import { docsConfig, docsTree, docsPath, parseDocsPath } from './lib/modeldocs.js';
 import { useDocsEdit } from './lib/docsedit.js';
 import { useSocket } from './lib/socket.js';
-const BranchTree = React.lazy(() => import('./components/BranchTree.jsx'));
+import BranchTree from './components/BranchTree.jsx';
 import { toast } from './toast.js';
 import { copyText } from './clipboard.js';
 import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork, Panel, Copy, Check, Star, Telescope, TextIcon, Expand } from './components/icons.jsx';
@@ -1511,11 +1511,9 @@ export default function App() {
         )}
         {docsTarget && (
           <div className="lib-overlay mdoc-overlay" role="region" aria-label={t('Model docs')}>
-            <React.Suspense fallback={null}>
-              <ModelDocs target={docsTarget} appName={cfg.appName || 'open-quill'} edit={docsEdit}
-                isAdmin={!!user?.isAdmin} onNavigate={onDocsNav} onExit={onDocsExit}
-                onTry={(id) => { pickModel(id); onDocsExit(); }} />
-            </React.Suspense>
+            <ModelDocs target={docsTarget} appName={cfg.appName || 'open-quill'} edit={docsEdit}
+              isAdmin={!!user?.isAdmin} onNavigate={onDocsNav} onExit={onDocsExit}
+              onTry={(id) => { pickModel(id); onDocsExit(); }} />
           </div>
         )}
         {libPage && (
@@ -1756,22 +1754,18 @@ export default function App() {
       )}
 
 
-      {showSettings && <React.Suspense fallback={null}><SettingsModal user={user} cfg={cfg} modelId={currentId} initialTab={settingsTab} onClose={onSettingsClosed} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile}
+      {showSettings && <SettingsModal user={user} cfg={cfg} modelId={currentId} initialTab={settingsTab} onClose={onSettingsClosed} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile}
         onChangelog={() => { setShowSettings(false); setShowChangelog(true); }}
-        onTrySkill={(sk) => { newChat(); setInput('/' + sk.name + ' '); setFocusTick(n => n + 1); }} /></React.Suspense>}
+        onTrySkill={(sk) => { newChat(); setInput('/' + sk.name + ' '); setFocusTick(n => n + 1); }} />}
       {user?.isAdmin && cfg.setupComplete === false && !setupDone && (
-        <React.Suspense fallback={null}>
-          <SetupGuide appName={cfg.appName || 'open-quill'} onDone={onSetupDone} />
-        </React.Suspense>
+        <SetupGuide appName={cfg.appName || 'open-quill'} onDone={onSetupDone} />
       )}
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} onChatsChanged={() => loadChats()} />}
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} onOpen={(id) => openChat(id)} />}
       {inspectOpen && activeId && <ContextInspector chatId={activeId} modelId={currentId} onClose={() => setInspectOpen(false)} />}
       {personasOpen && <PersonasModal personas={user?.personas || []} models={models} currentId={currentId} onApply={applyPersona} onSave={savePersonas} onClose={() => setPersonasOpen(false)} />}
       {ledgerPrompt && activeId && (
-        <React.Suspense fallback={null}>
-          <PromptLedger chatId={activeId} modelId={currentId} onClose={() => setLedgerPrompt(false)} />
-        </React.Suspense>
+        <PromptLedger chatId={activeId} modelId={currentId} onClose={() => setLedgerPrompt(false)} />
       )}
       {chordHint && (
         <div className="chord-hint" role="status">
@@ -1785,10 +1779,10 @@ export default function App() {
         </div>
       )}
       {showShortcuts && <ShortcutsModal prefs={user?.prefs} onClose={() => setShowShortcuts(false)} onCustomize={() => { setShowShortcuts(false); setSettingsTab('keybinds'); setShowSettings(true); }} />}
-      {treeOpen && activeId && user?.prefs?.branchMap !== false && <React.Suspense fallback={null}><BranchTree chatId={activeId} onSelect={selectBranch} onJump={jumpToMessage} onClose={() => setTreeOpen(false)} onChanged={async () => { await refreshMessages(activeId); setTimeout(() => scrollBottom(false), 20); toast(t('Message copied into this branch')); }} /></React.Suspense>}
+      {treeOpen && activeId && user?.prefs?.branchMap !== false && <BranchTree chatId={activeId} onSelect={selectBranch} onJump={jumpToMessage} onClose={() => setTreeOpen(false)} onChanged={async () => { await refreshMessages(activeId); setTimeout(() => scrollBottom(false), 20); toast(t('Message copied into this branch')); }} />}
       <Lightbox />
-      {showAdmin && <React.Suspense fallback={null}><AdminPanel user={user} onClose={() => { setShowAdmin(false); if (shouldResetPath('admin', location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
-      {showPlayground && <React.Suspense fallback={null}><Playground onClose={() => { setShowPlayground(false); if (shouldResetPath('playground', location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
+      {showAdmin && <AdminPanel user={user} onClose={() => { setShowAdmin(false); if (shouldResetPath('admin', location.pathname)) history.pushState({}, '', '/'); }} />}
+      {showPlayground && <Playground onClose={() => { setShowPlayground(false); if (shouldResetPath('playground', location.pathname)) history.pushState({}, '', '/'); }} />}
       {showProjects && <ProjectsPanel openId={projectOpenId} composerProps={composerProps}
         startCreate={projectCreate} onCreateHandled={() => setProjectCreate(false)}
         onClose={() => { setShowProjects(false); setProjectOpenId(null); if (shouldResetPath('projects', location.pathname)) history.pushState({}, '', '/'); }}
@@ -1800,7 +1794,7 @@ export default function App() {
       {showChangelog && <DocModal title={t("Changelog")} name="changelog" onClose={() => setShowChangelog(false)} />}
       {cmdkOpen && <CommandPalette commands={commands} ready={modelsReady && chatsLoaded} onClose={() => setCmdkOpen(false)} />}
     </div>
-    {user?.isAdmin && <React.Suspense fallback={null}><BuildMode /></React.Suspense>}
+    {user?.isAdmin && <BuildMode />}
     </ThemeProvider>
   );
 }

@@ -6,6 +6,7 @@ import { api } from '../api.js';
 import { toast } from '../toast.js';
 import { useAttachments } from '../lib/attachments.js';
 import { useDictation } from '../lib/dictation.js';
+import { captureScreenshot, screenshotSupported, isCaptureCancel } from '../lib/screenshot.js';
 import { Plus, Mic, Wave, Up, Enter, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer, Screenshot, Plug, Puzzle, Telescope, SkillIcon, ImageIcon, Copy, Folder } from './icons.jsx';
 import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
 import { extLabel } from '../lib/files.js';
@@ -105,7 +106,7 @@ export default function Composer({
   const { dictating, transcribing, toggleDictation } = useDictation({ sttEngine, valueRef, onChange });
   const {
     files, dragActive, glow, upErr, setUpErr,
-    pickFiles, onPaste, removeFile, clearFiles
+    addFiles, pickFiles, onPaste, removeFile, clearFiles
   } = useAttachments({ visionSupported, draftId });
 
   const [plusMenu, setPlusMenu] = useState(false);
@@ -115,6 +116,18 @@ export default function Composer({
   useEffect(() => { if (!plusMenu) closeSubs(); }, [plusMenu, closeSubs]);
   // Picking something in a submenu is the end of that errand, so the whole menu goes away.
   const closePlusMenu = useCallback(() => { closeSubs(); setPlusMenu(false); }, [closeSubs]);
+  const [capturing, setCapturing] = useState(false);
+  const [captureAvailable] = useState(() => screenshotSupported());
+  const canScreenshot = visionSupported && captureAvailable;
+  const onScreenshot = useCallback(() => {
+    closePlusMenu();
+    const shot = captureScreenshot();
+    setCapturing(true);
+    shot
+      .then(file => { addFiles([file]); focusUnlessTouch(ta.current); })
+      .catch(err => { if (!isCaptureCancel(err)) toast(t('The upload failed.')); })
+      .finally(() => setCapturing(false));
+  }, [addFiles, closePlusMenu]);
   const [showReason, setShowReason] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
 
@@ -467,7 +480,8 @@ export default function Composer({
                   <span className="pm-label">{visionSupported ? t('Add files or photos') : t('Add files')}</span>
                   <span className="pm-shortcut">{/mac/i.test(navigator.platform) ? '⌘U' : t('Ctrl+U')}</span>
                 </button>
-                <button className="pm-item" disabled title={t('Not available yet')}>
+                <button className="pm-item" onClick={onScreenshot} disabled={!canScreenshot || capturing}
+                  title={canScreenshot ? undefined : t('Not available yet')}>
                   <Screenshot />
                   <span className="pm-label">{t('Take a screenshot')}</span>
                 </button>

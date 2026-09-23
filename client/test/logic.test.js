@@ -1097,6 +1097,24 @@ test('revealSpeedMs clamps anything unreadable to the default interval', async (
   assert.equal(revealSpeedMs(9999), 100);
 });
 
+test('a cancelled screen capture is not treated as a failure', async () => {
+  const { isCaptureCancel } = await import('../src/lib/screenshot.js');
+  for (const name of ['NotAllowedError', 'AbortError', 'NotFoundError']) {
+    assert.equal(isCaptureCancel({ name }), true, name);
+  }
+  for (const name of ['NotReadableError', 'TypeError', 'anything']) {
+    assert.equal(isCaptureCancel({ name }), false, name);
+  }
+  assert.equal(isCaptureCancel(null), false);
+  assert.equal(isCaptureCancel(undefined), false);
+});
+
+test('a screenshot file name is timestamped and png', async () => {
+  const { screenshotName } = await import('../src/lib/screenshot.js');
+  const name = screenshotName(new Date(2026, 8, 22, 9, 5, 3));
+  assert.equal(name, 'screenshot-20260922-090503.png');
+});
+
 test('nextFitSize returns null when the text already fits', () => {
   assert.equal(nextFitSize(20, 200, 120, 12), null);
   assert.equal(nextFitSize(20, 200, 200, 12), null);
@@ -1685,6 +1703,9 @@ test('dispatchWs reports an unknown frame rather than silently dropping it', () 
   assert.equal(dispatchWs({ type: 'not_a_real_frame' }, ctx), false);
   assert.equal(dispatchWs(null, ctx), false);
   assert.equal(dispatchWs({}, ctx), false);
+  for (const type of ['__proto__', 'constructor', 'toString', 'hasOwnProperty', 'valueOf']) {
+    assert.equal(dispatchWs({ type }, ctx), false, 'inherited key ' + type + ' is not a frame');
+  }
 });
 
 test('every frame the server can send has a handler', () => {

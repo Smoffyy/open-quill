@@ -9,9 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [27.5.3] - 2026-09-25
 ### Added
+- **Take a screenshot** - the composer's "+" menu item now works. It uses the browser's screen-capture picker to grab a still of a screen, window or tab, then attaches the frame as a PNG like any other image. It is enabled only when the current model can read images and the browser supports capture; cancelling the picker is silent.
 - **The greeting screen now has the same "more" menu as an open chat**, with Personas in it.
 
+### Changed
+- **Panels and modals open instantly.** The eight interface surfaces that were code-split behind `React.lazy` (Settings, Admin, Playground, Model docs, Prompt ledger, Branch tree, Setup guide, Build mode) are now part of the main bundle, so opening one no longer waits on a separate chunk fetch. The heavy on-demand libraries (KaTeX, highlight.js languages, locale packs) stay lazy, since bundling those would only slow first paint.
+
 ### Fixed
+- **A websocket frame whose type collided with an Object prototype key** (`__proto__`, `constructor`, `toString`) was matched against the inherited member of the client frame-handler table instead of being rejected, throwing or being wrongly reported as handled. The handler table now has a null prototype, so only real frame types dispatch.
 - **A shell command could still reach a single-segment absolute path** like `/secrets.txt` unflagged by the sandbox guard, which only caught absolute paths of two or more segments.
 - **The model dropdown recomputed its full list and group filtering on every render**, including while closed and mid-stream, instead of only when open.
 - **A turn re-fetched the chat row from the database twice in a row** with no write in between.

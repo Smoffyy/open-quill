@@ -21,6 +21,7 @@ import { EMPTY_CALLS, mergeCall } from './livetools.js';
 const isActive = (ctx, chatId) => chatId === ctx.activeKey();
 
 export const handlers = {
+  __proto__: null,
   session_revoked() {
     location.href = '/';
   },
