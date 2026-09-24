@@ -91,3 +91,5 @@ export const Puzzle = (p) => <I {...p}><path d="M10.4 4.2a1.8 1.8 0 0 1 3.2 0c0 
 export const Telescope = (p) => <I {...p}><circle cx="10.6" cy="10.6" r="6.4"/><path d="m15.2 15.2 5.4 5.4M8.2 8.2l4.8 4.8"/></I>;
 export const ArrowOut = (p) => <I {...p}><path d="M8.4 15.6 15.6 8.4M9.6 8.4h6v6"/></I>;
 export const QuickTask = (p) => <I {...p}><rect x="3.6" y="4.6" width="16.8" height="14.8" rx="2.4"/><path d="M15.4 4.6v14.8"/></I>;
+export const Speaker = (p) => <I {...p}><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></I>;
+export const SpeakerOff = (p) => <I {...p}><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M22 9l-6 6M16 9l6 6"/></I>;

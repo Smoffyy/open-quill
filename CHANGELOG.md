@@ -11,11 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Take a screenshot** - the composer's "+" menu item now works. It uses the browser's screen-capture picker to grab a still of a screen, window or tab, then attaches the frame as a PNG like any other image. It is enabled only when the current model can read images and the browser supports capture; cancelling the picker is silent.
 - **The greeting screen now has the same "more" menu as an open chat**, with Personas in it.
+- **Read aloud** - a speaker button in the assistant message action bar (after Copy) reads the reply using the browser's Speech Synthesis API. Clicking it again stops playback.
 
 ### Changed
 - **Panels and modals open instantly.** The eight interface surfaces that were code-split behind `React.lazy` (Settings, Admin, Playground, Model docs, Prompt ledger, Branch tree, Setup guide, Build mode) are now part of the main bundle, so opening one no longer waits on a separate chunk fetch. The heavy on-demand libraries (KaTeX, highlight.js languages, locale packs) stay lazy, since bundling those would only slow first paint.
+- **User message action bar** - the "more" menu (three dots) now sits to the left of the retry button instead of at the far right.
 
 ### Fixed
+- **Inline math with `$1$`, `$2$` etc. rendered as plain text.** The dollar-sign heuristic treated a number immediately followed by the closing `$` as a currency amount and escaped it, which cascaded and broke all subsequent math pairing in the paragraph.
+- **Inline math with spaces around the content failed to render.** `$ \frac{1}{2} $` (spaces after `$` and before `$`) was rejected by the whitespace guard even though backslashes, carets and underscores inside proved it was math.
+- **Bare LaTeX commands outside any `$` delimiters now auto-wrap.** When a model outputs `2\sqrt{6}` or `\alpha + \beta` without dollar signs, the renderer wraps the expression in inline math so KaTeX can render it.
 - **A websocket frame whose type collided with an Object prototype key** (`__proto__`, `constructor`, `toString`) was matched against the inherited member of the client frame-handler table instead of being rejected, throwing or being wrongly reported as handled. The handler table now has a null prototype, so only real frame types dispatch.
 - **A shell command could still reach a single-segment absolute path** like `/secrets.txt` unflagged by the sandbox guard, which only caught absolute paths of two or more segments.
 - **The model dropdown recomputed its full list and group filtering on every render**, including while closed and mid-stream, instead of only when open.

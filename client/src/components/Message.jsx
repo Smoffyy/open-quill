@@ -6,7 +6,7 @@ import { openLightbox } from '../lightbox.js';
 import ReasoningBlock from './ReasoningBlock.jsx';
 import BranchCompare from './BranchCompare.jsx';
 import ToolCard from './ToolCard.jsx';
-import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash, Dots, Steer } from './icons.jsx';
+import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash, Dots, Steer, Speaker, SpeakerOff } from './icons.jsx';
 import { api } from '../api.js';
 import { extLabel } from '../lib/files.js';
 import { useStatusLabel } from '../lib/status.js';
@@ -248,6 +248,24 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   if (streaming && msg.content) textEnteredRef.current = true;
   const textEntered = textEnteredRef.current;
   const [copied, setCopied] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const utterRef = useRef(null);
+  function toggleSpeak() {
+    if (speaking) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+      return;
+    }
+    const clean = (msg.content || '').replace(/\[\[OQ(?:R:[A-Za-z0-9+/=]+|T:\d+)\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
+    if (!clean) return;
+    const u = new SpeechSynthesisUtterance(clean);
+    u.onend = () => setSpeaking(false);
+    u.onerror = () => setSpeaking(false);
+    utterRef.current = u;
+    setSpeaking(true);
+    window.speechSynthesis.speak(u);
+  }
+  useEffect(() => () => { if (speaking) window.speechSynthesis.cancel(); }, []);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [retryMenu, setRetryMenu] = useState(false);
@@ -398,14 +416,14 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
               {(() => { const t = fmtTime(msg.created_at); return t ? <span className="msg-time" data-full={t.full}>{t.short}</span> : null; })()}
               <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
               {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")} aria-label={t("Compare versions")}><Columns /></button>}
-              {onRegenerate && <button className="action-btn" onClick={() => onRegenerate(msg.id)} title={t("Retry")} aria-label={t("Retry")}><Retry /></button>}
-              {onEdit && <button className="action-btn" onClick={startEdit} title={t("Edit")} aria-label={t("Edit")}><Pencil /></button>}
-              <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
               <MoreMenu items={[
                 onFork && { label: t('Branch'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
                 onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
                 onDelete && chatId && { label: t('Delete'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
               ]} />
+              {onRegenerate && <button className="action-btn" onClick={() => onRegenerate(msg.id)} title={t("Retry")} aria-label={t("Retry")}><Retry /></button>}
+              {onEdit && <button className="action-btn" onClick={startEdit} title={t("Edit")} aria-label={t("Edit")}><Pencil /></button>}
+              <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
             </div>
           )}
           {compare && chatId && <BranchCompare chatId={chatId} messageId={msg.id} onSelect={onSelectBranch} onClose={() => setCompare(false)} />}
@@ -474,6 +492,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
       {!streaming && msg.content && !editing && (
         <div className="actions">
           <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
+          <button className={'action-btn' + (speaking ? ' on' : '')} onClick={toggleSpeak} title={speaking ? t("Stop speaking") : t("Read aloud")} aria-label={speaking ? t("Stop speaking") : t("Read aloud")} aria-pressed={speaking}>{speaking ? <SpeakerOff /> : <Speaker />}</button>
           {chatId && !String(msg.id).startsWith('inc-') && (
             <button className={'action-btn' + (fb === 1 ? ' on' : '')} onClick={() => rate(1)} title={t("Good response")} aria-label={t("Good response")} aria-pressed={fb === 1}><ThumbUp /></button>
           )}
