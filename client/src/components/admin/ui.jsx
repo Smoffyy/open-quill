@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useId } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Copy, X } from '../icons.jsx';
-import { Switch, SegSlide, SelectRow } from '../settingsui.jsx';
+import { Check, Copy, X } from '../ui/icons.jsx';
+import { Switch, SegSlide, SelectRow } from '../ui/controls.jsx';
 import { t } from '../../i18n.jsx';
 import { logoFor, useLogos } from '../../lib/logos.js';
-import { SkelLines, SkelRows, SkelTable, SkelStats } from '../Skeleton.jsx';
+import { SkelLines, SkelRows, SkelTable, SkelStats } from '../ui/Skeleton.jsx';
+import { useFocusTrap } from '../../lib/focus.js';
+import { useLayer } from '../../lib/dismiss.js';
 
 export { Switch };
 
@@ -306,42 +308,10 @@ export function SaveState({ state }) {
 
 /* ---------- overlays ---------- */
 
-const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
-const FIRST_FIELD = 'input:not([disabled]), textarea:not([disabled]), select:not([disabled])';
-
 export function Dialog({ title, size, onClose, foot, children }) {
   const box = useRef(null);
   const titleId = useId();
-
-  // Opening focus and restoring it belong to the dialog's lifetime, not to the
-  // identity of onClose. Callers pass an inline arrow, so folding these into the
-  // key-handler effect below would re-focus the first field on every keystroke.
-  useEffect(() => {
-    const restoreTo = document.activeElement;
-    // A form dialog opens on its first field; one without fields falls back to
-    // its first control, so focus is never left outside the dialog.
-    const open = box.current?.querySelector(FIRST_FIELD) || box.current?.querySelector(FOCUSABLE);
-    open?.focus();
-    return () => {
-      if (restoreTo && typeof restoreTo.focus === 'function' && document.contains(restoreTo)) restoreTo.focus();
-    };
-  }, []);
-
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === 'Escape') { e.stopPropagation(); onClose(); return; }
-      if (e.key !== 'Tab' || !box.current) return;
-      const items = [...box.current.querySelectorAll(FOCUSABLE)].filter(el => el.offsetParent !== null);
-      if (!items.length) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      const on = document.activeElement;
-      if (e.shiftKey && (on === first || !box.current.contains(on))) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && on === last) { e.preventDefault(); first.focus(); }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  useFocusTrap(box, onClose, { field: true });
 
   return createPortal(
     <div className="cp-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -380,16 +350,14 @@ export function Confirm({ ask, onClose }) {
 // A menu anchored to a point rather than an element — the models list opens one
 // on right-click. Clicking away, resizing or Escape all dismiss it.
 export function PointMenu({ at, onClose, width = 250, anchorEl, children }) {
+  useLayer(true, () => onClose());
   useEffect(() => {
     const away = (e) => { if (anchorEl && anchorEl.contains(e.target)) return; onClose(); };
-    const esc = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('mousedown', away);
     window.addEventListener('resize', away);
-    window.addEventListener('keydown', esc);
     return () => {
       window.removeEventListener('mousedown', away);
       window.removeEventListener('resize', away);
-      window.removeEventListener('keydown', esc);
     };
   }, [onClose, anchorEl]);
 

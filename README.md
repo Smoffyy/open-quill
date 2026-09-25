@@ -46,7 +46,7 @@ Anthropic-inspired design, artifacts, a real code sandbox. Nothing leaves your m
 | Requirement | Version | Notes |
 | --- | --- | --- |
 | [Node.js](https://nodejs.org/en/download/) | `22.23.2` or newer | CI builds and tests on Node 24 |
-| An OpenAI-compatible model server | any | [llama.cpp](https://github.com/ggml-org/llama.cpp) at `http://localhost:8080/v1` by default |
+| An OpenAI-compatible model server | any | [llama.cpp](https://github.com/ggml-org/llama.cpp) works out of the box; the first provider points at `http://localhost:9931`, change it in **Admin Panel → Providers** |
 
 ### 2. Install and run
 
@@ -103,7 +103,7 @@ The Admin Panel is in the profile menu, bottom-left of the sidebar.
 - Token-by-token streaming with a fade-in reveal, smart autoscroll and a jump-to-bottom control
 - Auto-generated chat titles, hover-to-copy code blocks, branching conversations and side-by-side branch comparison
 - Full keyboard navigation with rebindable shortcuts, a command palette and in-thread search
-- English, Spanish, Chinese, French and Portuguese
+- Ten interface languages: English, German, Spanish (Spain and Mexico), French, Portuguese, Russian, Japanese, Korean and Simplified Chinese
 
 ### Models and reasoning
 

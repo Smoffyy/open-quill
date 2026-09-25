@@ -1,0 +1,32 @@
+.attach-row { display: flex; flex-wrap: wrap; gap: 12px; padding: 0 0 14px; }
+.attach-chip { position: relative; width: var(--attach-size); height: var(--attach-size); flex: 0 0 auto; }
+.attach-chip.image img { width: 100%; height: 100%; object-fit: contain; background: var(--composer-bg); border-radius: var(--attach-radius); border: 0.8px solid var(--pop-ring, var(--border)); display: block; }
+.attach-file { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; background: var(--composer-bg); border: 0.8px solid var(--pop-ring, var(--border)); border-radius: var(--attach-radius); padding: 8px 10px; overflow: hidden; }
+.attach-file svg { color: var(--text-muted); flex-shrink: 0; }
+.attach-name { font-size: 12px; line-height: 18px; letter-spacing: -.01em; color: var(--text); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; overflow-wrap: break-word; }
+.attach-foot { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.attach-type { display: inline-flex; align-items: center; height: 18px; padding: 0 4px; border-radius: 4px; background: color-mix(in srgb, var(--surface-2) 70%, transparent); border: 0.8px solid var(--pop-ring, var(--border)); font-size: 11px; line-height: 13px; font-weight: 500; color: var(--sidebar-text, var(--text-muted)); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.attach-x { position: absolute; top: -8px; left: -8px; width: 20px; height: 20px; border-radius: 50%; background: color-mix(in srgb, var(--surface-2) 90%, transparent); border: 0.8px solid var(--pop-ring, var(--border)); color: var(--text-muted); display: grid; place-items: center; font-size: 10px; opacity: 0; transition: opacity var(--fx-t, .12s), color var(--fx-t, .12s), transform var(--fx-t, .12s); }
+.attach-chip:hover .attach-x, .attach-x:focus-visible { opacity: 1; }
+.attach-x:hover { color: var(--text); }
+.attach-x svg { width: 10px; height: 10px; }
+.att { display: block; border-radius: 11px; text-decoration: none; transition: transform var(--fx-t, .12s) ease; }
+
+.att.image img { max-width: 230px; max-height: 230px; border-radius: 11px; border: 1px solid var(--border); display: block; }
+.att.file { position: relative; width: var(--attach-size); height: var(--attach-size); flex: 0 0 auto; background: var(--input-bg); border: 1px solid var(--border); border-radius: var(--attach-radius); color: var(--text); overflow: hidden; }
+.att.file.pinned-file { border-color: var(--text); }
+.att.file svg { color: var(--text-muted); flex-shrink: 0; }
+.att-link { display: flex; flex-direction: column; justify-content: space-between; gap: 6px; height: 100%; padding: 9px 10px; color: inherit; text-decoration: none; }
+.att-name { font-size: 11.5px; line-height: 1.28; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; }
+.att-foot { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.att-type { font-size: 10px; font-weight: 600; color: var(--text-faint); letter-spacing: .05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.att-pin { position: absolute; top: 5px; right: 5px; width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; background: var(--menu-bg); border: 1px solid var(--border); color: var(--text-faint); opacity: 0; transition: opacity var(--fx-t, .12s), color var(--fx-t, .12s); }
+.att.file:hover .att-pin, .att-pin.on, .att-pin:focus-visible { opacity: 1; }
+.att-pin:hover { color: var(--text); }
+.att-pin.on { color: var(--pop-blue); }
+.drop-overlay { position: fixed; inset: 0; z-index: 400; display: grid; place-items: center; pointer-events: none; background: rgba(0, 0, 0, .55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: dropOverlayIn .12s ease; }
+.drop-overlay::before { content: ''; position: absolute; inset: 8px; border: 2px solid var(--pop-blue); border-radius: 16px; box-shadow: 0 0 24px 2px color-mix(in srgb, var(--pop-blue) 45%, transparent); }
+.drop-overlay-content { position: relative; display: flex; flex-direction: column; align-items: center; }
+.drop-overlay-icons { display: flex; align-items: center; gap: 18px; color: var(--pop-blue); margin-bottom: 12px; }
+.drop-overlay-icons svg { width: 22px; height: 22px; }
+.drop-overlay-text { color: var(--pop-blue); font-family: var(--font-sans); font-size: 14px; font-weight: 600; letter-spacing: .01em; }

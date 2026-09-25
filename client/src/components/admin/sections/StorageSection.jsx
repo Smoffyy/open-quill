@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { api } from '../../../api.js';
+import { api } from '../../../lib/api.js';
 import { useAdmin } from '../store.jsx';
 import { Card, Field, Input, Btn, IconBtn, Acts, Table, Badge, KV, Note, SectionSkeleton, fmtBytes } from '../ui.jsx';
-import { Trash } from '../../icons.jsx';
+import { Trash } from '../../ui/icons.jsx';
 import { t } from '../../../i18n.jsx';
-import { Skel } from '../../Skeleton.jsx';
+import { Skel } from '../../ui/Skeleton.jsx';
 
 const NAME_MAX = 40;
 const DEFAULT_DB = 'default';

@@ -4,7 +4,7 @@ import { WebSocketServer } from 'ws';
 import { db, uid, now, getSetting } from '../../db.js';
 import { sessionFromRequest } from '../../auth.js';
 import { buildMessages, streamCompletion } from '../../llm/index.js';
-import * as websearch from '../../websearch.js';
+import * as websearch from '../websearch.js';
 import * as sandbox from '../../sandbox.js';
 import { UPLOADS } from '../uploads.js';
 import { ensureChain, activePath } from '../tree.js';

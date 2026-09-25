@@ -1,10 +1,10 @@
 import { db, uid, getSetting, setSetting } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
 import { oneShot } from '../llm/index.js';
-import { PROVIDER_TYPES, getProviders, typesForClient, isProviderType } from '../providers.js';
+import { PROVIDER_TYPES, getProviders, typesForClient, isProviderType } from '../lib/providers.js';
 import { llamaEngine } from '../lib/llamacpp.js';
-import * as membank from '../membank.js';
-import * as websearch from '../websearch.js';
+import * as referenceFiles from '../lib/referencefiles.js';
+import * as websearch from '../lib/websearch.js';
 import { logAudit } from '../lib/audit.js';
 import { draftGet, draftSet } from '../lib/draft.js';
 import { DEFAULT_MEMORY_PROMPT } from '../lib/memory.js';
@@ -120,7 +120,7 @@ export default function registerSettingsRoutes(app) {
       modelQueue: draftGet('model_queue', '0') === '1',
       membankEnabled: draftGet('membank_enabled', '0') === '1',
       membankHideTools: draftGet('membank_hide_tools', '0') === '1',
-      membankPrompt: draftGet('membank_prompt', membank.DEFAULT_PROMPT),
+      membankPrompt: draftGet('membank_prompt', referenceFiles.DEFAULT_PROMPT),
       webSearchEnabled: draftGet('web_search_enabled', '0') === '1',
       webSearchEngine: draftGet('web_search_engine', 'searxng'),
       searxngUrl: draftGet('searxng_url', ''),

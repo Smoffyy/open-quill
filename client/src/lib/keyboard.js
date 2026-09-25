@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { CHORD_TIMEOUT, chordMenu, comboFromEvent, keybindIndex, resolveKeybinds } from './keybinds.js';
+import { hasOpenLayer, isModalOpen } from './dismiss.js';
 
 export function isTypingTarget(el) {
   return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
@@ -17,9 +18,10 @@ export function useKeybinds(user, kbHandlers, setChordHint) {
     const clearPending = () => { pending = null; clearTimeout(pendingTimer); pendingTimer = null; setChordHint(null); };
     const onKey = (e) => {
       const combo = comboFromEvent(e);
-      if (!combo) return;
+      if (!combo || e.defaultPrevented) return;
+      if (combo === 'Escape' && !pending && hasOpenLayer()) return;
       const typing = isTypingTarget(document.activeElement);
-      const overlay = !!document.querySelector('.overlay');
+      const overlay = isModalOpen();
       if (pending) {
         const chord = index.chords.get(pending)?.get(combo);
         clearPending();

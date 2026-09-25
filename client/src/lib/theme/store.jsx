@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { api } from '../../api.js';
+import { api } from '../api.js';
 import { docToCss, injectCss, clearCss } from './css.js';
 import { emptyDoc, migrateDoc, fillPlaceholders, CONTENT_INDEX } from './schema.js';
 

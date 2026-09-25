@@ -1,7 +1,7 @@
 import { db } from '../db.js';
 import { authMiddleware } from '../auth.js';
 import * as sandbox from '../sandbox.js';
-import { workspaceFor } from '../projectfiles.js';
+import { workspaceFor } from '../lib/projectfiles.js';
 
 const wsOf = (c) => workspaceFor(c);
 

@@ -1,5 +1,5 @@
 import { authMiddleware } from '../auth.js';
-import * as mcp from '../mcp.js';
+import * as mcp from '../lib/mcp.js';
 
 // A user sees the workspace servers an admin configured (read-only, so they know what is
 // already available and which slugs are taken) alongside their own, which they manage.

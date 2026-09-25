@@ -4,7 +4,7 @@ import multer from 'multer';
 import { getSetting } from '../db.js';
 import { extractPdf } from '../lib/extract.js';
 import { authMiddleware, adminOnly } from '../auth.js';
-import * as membank from '../membank.js';
+import * as referenceFiles from '../lib/referencefiles.js';
 import { diskStore } from '../lib/uploads.js';
 import { roleLimit } from '../lib/models.js';
 
@@ -97,30 +97,30 @@ export default function registerMediaRoutes(app) {
   });
 
   app.get('/api/admin/membank', authMiddleware, adminOnly, async (req, res) => {
-    try { await membank.ensureIndexedAll(); } catch {}
-    res.json({ files: membank.list(), enabled: getSetting('membank_enabled', '0') === '1' });
+    try { await referenceFiles.ensureIndexedAll(); } catch {}
+    res.json({ files: referenceFiles.list(), enabled: getSetting('membank_enabled', '0') === '1' });
   });
   app.post('/api/admin/membank', authMiddleware, adminOnly, membankUpload.array('files', 20), async (req, res) => {
     let saved = 0;
-    for (const f of (req.files || [])) { try { await membank.saveUpload(f.originalname, f.buffer); saved++; } catch {} }
-    res.json({ files: membank.list(), saved });
+    for (const f of (req.files || [])) { try { await referenceFiles.saveUpload(f.originalname, f.buffer); saved++; } catch {} }
+    res.json({ files: referenceFiles.list(), saved });
   });
   app.delete('/api/admin/membank/:name', authMiddleware, adminOnly, (req, res) => {
-    membank.remove(req.params.name);
-    res.json({ files: membank.list() });
+    referenceFiles.remove(req.params.name);
+    res.json({ files: referenceFiles.list() });
   });
   app.patch('/api/admin/membank/:name', authMiddleware, adminOnly, (req, res) => {
     if ('folder' in req.body && !('name' in req.body)) {
-      membank.setFileMeta(req.params.name, { folder: req.body.folder });
-      return res.json({ files: membank.list() });
+      referenceFiles.setFileMeta(req.params.name, { folder: req.body.folder });
+      return res.json({ files: referenceFiles.list() });
     }
-    const r = membank.rename(req.params.name, req.body.name);
+    const r = referenceFiles.rename(req.params.name, req.body.name);
     if (!r.ok) return res.status(400).json({ error: r.error });
-    if ('folder' in req.body) membank.setFileMeta(req.body.name, { folder: req.body.folder });
-    res.json({ files: membank.list() });
+    if ('folder' in req.body) referenceFiles.setFileMeta(req.body.name, { folder: req.body.folder });
+    res.json({ files: referenceFiles.list() });
   });
   app.put('/api/admin/membank/order', authMiddleware, adminOnly, (req, res) => {
-    const r = membank.reorder(req.body.items);
+    const r = referenceFiles.reorder(req.body.items);
     if (!r.ok) return res.status(400).json({ error: r.error });
     res.json({ files: r.files });
   });

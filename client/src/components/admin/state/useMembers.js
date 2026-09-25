@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { api } from '../../../api.js';
+import { api } from '../../../lib/api.js';
 import { t } from '../../../i18n.jsx';
 
 export function useMembers({ confirm }) {

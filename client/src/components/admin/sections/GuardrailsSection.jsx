@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { api } from '../../../api.js';
+import { api } from '../../../lib/api.js';
 import { useAdmin } from '../store.jsx';
 import { Card, Rows, Row, ToggleRow, Fields, Field, Area, Select, Seg, Btn, Table, Empty, fmtAgo } from '../ui.jsx';
-import { Shield } from '../../icons.jsx';
+import { Shield } from '../../ui/icons.jsx';
 import { t } from '../../../i18n.jsx';
-import { Skel, SkelTable } from '../../Skeleton.jsx';
+import { Skel, SkelTable } from '../../ui/Skeleton.jsx';
 
 export default function GuardrailsSection() {
   const { workspace, catalog, confirm } = useAdmin();

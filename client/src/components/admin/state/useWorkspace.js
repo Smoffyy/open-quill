@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { api } from '../../../api.js';
-import { appFontId } from '../../../prefs.js';
+import { api } from '../../../lib/api.js';
+import { appFontId } from '../../../lib/prefs.js';
 
 export const SETTINGS_DEFAULTS = {
   uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256,

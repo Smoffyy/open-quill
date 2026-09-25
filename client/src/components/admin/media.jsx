@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { api } from '../../api.js';
+import { api } from '../../lib/api.js';
 import { Dialog, Btn, Field, Fields, Seg, Note } from './ui.jsx';
-import { QP_ICON_LIST, QpIcon } from '../../qpIcons.jsx';
+import { QP_ICON_LIST, QpIcon } from '../ui/quickPromptIcons.jsx';
 import { t, tk } from '../../i18n.jsx';
 import { useDismiss } from '../../lib/dismiss.js';
 

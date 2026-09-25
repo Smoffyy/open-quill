@@ -1,0 +1,161 @@
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { Chevron, Bulb, Copy, Check, CheckCircle, Clock } from '../ui/icons.jsx';
+import { copyText } from '../../lib/clipboard.js';
+import { t } from '../../i18n.jsx';
+import { parseSteps, lastSentence, thoughtSeconds, LINE_HOLD_MS } from '../../lib/reasoning.js';
+
+const COLLAPSE_MS = 560;
+
+function thoughtLabel(ms) {
+  const secs = thoughtSeconds(ms);
+  if (!secs) return t('Thought process');
+  if (secs < 60) return secs === 1 ? t('Thought for 1 second') : t('Thought for {n} seconds', { n: secs });
+  const mins = Math.round(secs / 60);
+  return mins === 1 ? t('Thought for 1 minute') : t('Thought for {n} minutes', { n: mins });
+}
+
+export default function ReasoningBlock({ text, live, durationMs = 0, preset = 'anthropic', collapsible = true }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [line, setLine] = useState({ cur: '', prev: '' });
+  const rootRef = useRef(null);
+  const animTimer = useRef(null);
+  const peekRef = useRef(null);
+  const nextLine = useRef('');
+  const lineAt = useRef(0);
+  const lineTimer = useRef(null);
+  const steps = useMemo(() => parseSteps(text), [text]);
+  const rolling = preset !== 'openai';
+
+  useEffect(() => {
+    if (!rolling) return;
+    const s = lastSentence(text);
+    if (!s) return;
+    if (!lineAt.current) lineAt.current = Date.now();
+    nextLine.current = s;
+    const show = () => {
+      lineTimer.current = null;
+      lineAt.current = Date.now();
+      setLine(l => (l.cur === nextLine.current ? l : { cur: nextLine.current, prev: l.cur }));
+    };
+    if (!live) {
+      if (lineTimer.current) { clearTimeout(lineTimer.current); lineTimer.current = null; }
+      show();
+      return;
+    }
+    if (lineTimer.current) return;
+    const wait = LINE_HOLD_MS - (Date.now() - lineAt.current);
+    if (wait <= 0) show();
+    else lineTimer.current = setTimeout(show, wait);
+  }, [text, rolling, live]);
+
+  useEffect(() => () => { if (lineTimer.current) clearTimeout(lineTimer.current); }, []);
+
+  useEffect(() => () => {
+    clearTimeout(animTimer.current);
+    const host = rootRef.current && rootRef.current.closest('.msg');
+    if (host) delete host.dataset.rbAnim;
+  }, []);
+
+  useEffect(() => {
+    if (!line.prev) return;
+    const timer = setTimeout(() => setLine(l => (l.prev ? { cur: l.cur, prev: '' } : l)), 420);
+    return () => clearTimeout(timer);
+  }, [line]);
+
+  useEffect(() => {
+    if (!live || open) return;
+    const raf = requestAnimationFrame(() => {
+      const el = peekRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [text, live, open]);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1400);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
+  if (!text) return null;
+
+  const shim = live ? ' shimmer' : '';
+  const headLine = rolling && line.cur ? (
+    <span className="rb-lines">
+      {line.prev && <span className={'rb-line out' + shim} key={'p' + line.prev}>{line.prev}</span>}
+      <span className={'rb-line' + shim} key={'c' + line.cur}>{line.cur}</span>
+    </span>
+  ) : null;
+
+  if (!collapsible) {
+    if (!live) return null;
+    return (
+      <div className={'reasoning live' + (rolling ? ' rolling' : ' carded')}>
+        <div className="reasoning-head static live">
+          {!rolling && <Bulb className="rb-icon" />}
+          {headLine || <span className="rb-label shimmer">{t("Thinking…")}</span>}
+        </div>
+      </div>
+    );
+  }
+
+  const carded = live && !rolling;
+  const peeking = carded && !open;
+  const label = live ? t("Thinking…") : thoughtLabel(durationMs);
+
+  const doCopy = async (e) => {
+    e.stopPropagation();
+    if (await copyText(text)) setCopied(true);
+  };
+
+  const toggle = () => {
+    try { window.dispatchEvent(new CustomEvent('oq-release-scroll')); } catch {}
+    const host = rootRef.current && rootRef.current.closest('.msg');
+    if (host) {
+      host.dataset.rbAnim = '1';
+      clearTimeout(animTimer.current);
+      animTimer.current = setTimeout(() => { delete host.dataset.rbAnim; }, COLLAPSE_MS);
+    }
+    setOpen(o => !o);
+  };
+
+  return (
+    <div ref={rootRef} className={'reasoning' + (open ? ' open' : '') + (live ? ' live' : '') + (carded ? ' carded' : '') + (rolling ? ' rolling' : '')}>
+      <button className={'reasoning-head' + (open ? ' open' : '') + (live ? ' live' : '')}
+        onClick={toggle} aria-expanded={open}>
+        {live && !rolling && <Bulb className="rb-icon" />}
+        {headLine || <span className={'rb-label' + shim}>{label}</span>}
+        <Chevron className="chev" />
+      </button>
+      {carded && (
+        <div className={'rb-peek' + (peeking ? ' shown' : '')}>
+          <div className="rb-peek-in" ref={peekRef}>{text}</div>
+        </div>
+      )}
+      <div className={'reasoning-collapse' + (open ? ' open' : '')}>
+        <div className="rb-inner">
+          <div className="rb-steps" role="list">
+            {steps.map((lines, i) => (
+              <div className="rb-step" role="listitem" key={i}>
+                {rolling && <Clock className="rb-node" />}
+                {lines.map((l, j) => <div className="rb-p" key={j}>{l}</div>)}
+              </div>
+            ))}
+            {rolling && !live && (
+              <div className="rb-step rb-done" role="listitem">
+                <CheckCircle className="rb-node" />
+                <div className="rb-p">{t('Done')}</div>
+              </div>
+            )}
+          </div>
+          {!live && (
+            <button className="rb-copy" onClick={doCopy} title={copied ? t('Copied') : t('Copy')} aria-label={t('Copy')}>
+              {copied ? <Check /> : <Copy />}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

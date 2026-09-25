@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { api } from '../../../api.js';
+import { api } from '../../../lib/api.js';
 import { useAdmin } from '../store.jsx';
 import { Card, Rows, ToggleRow, Field, Input, Area, Btn, IconBtn, Acts, Table, Empty, fmtInt, fmtBytes } from '../ui.jsx';
-import { Trash, Pencil, Check, X, FileText, Upload } from '../../icons.jsx';
+import { Trash, Pencil, Check, X, FileText, Upload } from '../../ui/icons.jsx';
 import { t } from '../../../i18n.jsx';
-import { Skel, SkelTable } from '../../Skeleton.jsx';
+import { Skel, SkelTable } from '../../ui/Skeleton.jsx';
 
 const MAX_FILE_MB = 25;
 
@@ -33,7 +33,7 @@ export default function FilesSection() {
     e.target.value = '';
     if (!list.length) return;
     setError('');
-    try { const r = await api.uploadMembank(list); setFiles(r.files || []); }
+    try { const r = await api.uploadReferenceFiles(list); setFiles(r.files || []); }
     catch (err) { setError(err?.message || t('The upload failed.')); }
   }
 
@@ -123,7 +123,7 @@ export default function FilesSection() {
                         onChange={(e) => setName(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') commitRename(f.name);
-                          if (e.key === 'Escape') { setRenaming(null); setError(''); }
+                          if (e.key === 'Escape') { e.preventDefault(); setRenaming(null); setError(''); }
                         }} />
                       : <span className="mono">{f.name}</span>}
                   </td>

@@ -1,5 +1,5 @@
 import { db, getSetting, setSetting } from '../db.js';
-import { resolveProvider, providerSpec } from '../providers.js';
+import { resolveProvider, providerSpec } from './providers.js';
 import { publicKwargDefs } from './kwargs.js';
 import { llamaContext } from './llamacpp.js';
 

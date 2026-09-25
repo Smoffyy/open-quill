@@ -2,8 +2,9 @@ import { useState, useRef, useEffect, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { t } from '../../i18n.jsx';
 import { tokenRefs } from '../../lib/theme/schema.js';
-import { X, Check, Refresh } from '../icons.jsx';
+import { X, Check, Refresh } from '../ui/icons.jsx';
 import { useDismiss } from '../../lib/dismiss.js';
+import { useFocusTrap } from '../../lib/focus.js';
 
 /* Controls are deliberately plain: a label, a widget, and a reset affordance
    that appears only once the value has been touched. An admin should be able to
@@ -261,14 +262,11 @@ export function BoxSides({ label, value, onChange, base, max = 80 }) {
 
 export function Dialog({ title, onClose, wide, foot, children }) {
   const id = useId();
-  useEffect(() => {
-    const esc = (e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
-    document.addEventListener('keydown', esc, true);
-    return () => document.removeEventListener('keydown', esc, true);
-  }, [onClose]);
+  const box = useRef(null);
+  useFocusTrap(box, onClose, { field: true });
   return createPortal(
     <div className="bx-scrim" data-oq-builder="" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={'bx-dialog' + (wide ? ' wide' : '')} role="dialog" aria-modal="true" aria-labelledby={id}>
+      <div ref={box} className={'bx-dialog' + (wide ? ' wide' : '')} role="dialog" aria-modal="true" aria-labelledby={id}>
         <header className="bx-dialog-head">
           <h3 id={id}>{title}</h3>
           <button type="button" className="bx-icon" onClick={onClose} aria-label={t('Close')}><X /></button>

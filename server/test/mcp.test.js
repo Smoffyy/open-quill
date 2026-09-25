@@ -42,13 +42,11 @@ process.stdin.on('data', c => {
 `);
 
 // Set before the graph that opens the database loads, so these never touch real data; each
-// file gets its own process. Removed here, not in `after`: the connection stays open for
-// the life of the process and Windows will not unlink a held file.
 process.env.OPEN_QUILL_DB = 'oqmcptest';
 fs.rmSync(DB_DIR, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
-const { db, uid, setSetting } = await import('../db.js');
+const { db, uid, setSetting, closeDb } = await import('../db.js');
 const { installEgressGuard } = await import('../lib/egress.js');
-const mcp = await import('../mcp.js');
+const mcp = await import('../lib/mcp.js');
 
 const NODE = process.execPath;
 const TOKEN = 'Authorization: Bearer fixture-token';
@@ -104,6 +102,8 @@ after(async () => {
   mcp.shutdown();
   await new Promise(r => { httpServer.close(r); });
   fs.rmSync(path.dirname(FIXTURE), { recursive: true, force: true });
+  closeDb();
+  fs.rmSync(DB_DIR, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
 });
 
 test('a server is validated before anything is spawned', () => {

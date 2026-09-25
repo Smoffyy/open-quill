@@ -1,13 +1,13 @@
 import { getSetting } from '../db.js';
 import { authMiddleware } from '../auth.js';
-import * as userskills from '../userskills.js';
-import * as skillsys from '../skillsys.js';
+import * as userskills from '../lib/userskills.js';
+import * as workspaceSkills from '../lib/workspaceskills.js';
 import { buildSkillFile, skillLines, CONTENT_MAX } from '../lib/skillfile.js';
 
 const WORKSPACE = 'Workspace';
 
 function workspaceView() {
-  return skillsys.list().map(s => ({
+  return workspaceSkills.list().map(s => ({
     id: s.id,
     name: s.name,
     description: s.description || '',

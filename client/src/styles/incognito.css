@@ -1,0 +1,14 @@
+.incognito-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 18px; position: relative; z-index: 30;
+
+}
+.incog-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.incognito-title { display: flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 600; color: #ece8e2; }
+.incognito-close {
+  display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px;
+  color: #b9b4ac; font-size: 15px; transition: background var(--fx-t, .15s) ease, color var(--fx-t, .15s) ease;
+}
+.incognito-close:hover { background: #ffffff14; color: #fff; }
+.incognito-close:disabled { opacity: .4; pointer-events: none; }
+.incognito-note { margin-top: 16px; font-size: 13px; color: #9b958c; text-align: center; }

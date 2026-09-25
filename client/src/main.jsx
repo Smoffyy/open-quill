@@ -6,7 +6,7 @@ import { ensureKatex } from './lib/mathjs.js';
 import './styles/app.css';
 import App from './App.jsx';
 import { getLang, loadLang, useI18n } from './i18n.jsx';
-import { applyUserFont } from './prefs.js';
+import { applyUserFont } from './lib/prefs.js';
 
 applyUserFont();
 

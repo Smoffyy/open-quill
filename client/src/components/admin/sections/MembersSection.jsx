@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useAdmin } from '../store.jsx';
 import { Card, Rows, ToggleRow, Input, Seg, IconBtn, Acts, Table, Badge, Empty, fmtMoney } from '../ui.jsx';
-import { Trash, Users } from '../../icons.jsx';
+import { Trash, Users } from '../../ui/icons.jsx';
 import { t } from '../../../i18n.jsx';
-import { Skel, SkelTable } from '../../Skeleton.jsx';
+import { Skel, SkelTable } from '../../ui/Skeleton.jsx';
 
 export default function MembersSection() {
   const { members: M, workspace, user } = useAdmin();

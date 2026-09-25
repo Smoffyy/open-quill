@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { api } from '../../../api.js';
+import { api } from '../../../lib/api.js';
 import { useAdmin } from '../store.jsx';
 import { Card, Rows, Row, ToggleRow, Fields, Field, Input, Seg, Btn, Note, Badge, Acts } from '../ui.jsx';
 import { ImagePicker } from '../media.jsx';
 import { t, tk } from '../../../i18n.jsx';
 import { BRAND_ICON } from '../../../lib/brand.js';
-import { Palette, Sparkles, Eye } from '../../icons.jsx';
-import { toast } from '../../../toast.js';
+import { Palette, Sparkles, Eye } from '../../ui/icons.jsx';
+import { toast } from '../../../lib/toast.js';
 
 const PRESETS = [['anthropic', tk('Anthropic')], ['openai', tk('OpenAI')]];
 const FONTS = [['literata', tk('Literata')], ['newsreader', tk('Newsreader')], ['sans', tk('Open Sans')]];

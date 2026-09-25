@@ -16,7 +16,7 @@ import { parseSkillFile, buildSkillFile, normalizeName, validate } from '../lib/
 import { cutOffError } from '../lib/prompts.js';
 import { makeToolTextFilter, makeEmitter } from '../llm/emitter.js';
 import { trimInTurn, compactThreshold, estimateTokens, textTokens, makeTokenCounter, truncateForRollingCtx, FALLBACK_CTX } from '../lib/convo.js';
-import { scanTools } from '../toolproto.js';
+import { scanTools } from '../lib/toolproto.js';
 import { isContextOverflowError } from '../lib/llamacpp.js';
 import { sanitizeDoc, blankLayoutDoc, normalizeStoreForTest, docDiffCount } from '../lib/theme.js';
 import { winTranslate, wsKey, projectKey, isProjectKey, execTool, childEnv } from '../sandbox.js';
@@ -29,7 +29,7 @@ import { looksTextual, isZipOfficeDoc } from '../lib/extract.js';
 import { releaseCandidates, parseManifest } from '../lib/release.js';
 import { remapBrandPath } from '../lib/brand.js';
 import { samplingParams, parseStop } from '../llm/sampling.js';
-import { PROVIDER_TYPES, isProviderType, providerSpec, isLocalType } from '../providers.js';
+import { PROVIDER_TYPES, isProviderType, providerSpec, isLocalType } from '../lib/providers.js';
 import { slideWithCounter, trimMode } from '../lib/ctxwindow.js';
 import { sameOrigin, sameOriginGuard, requestHost } from '../lib/origin.js';
 import { SETTING_FIELDS, coerceSetting } from '../routes/settings.js';
@@ -45,7 +45,7 @@ import { bash } from '../sandbox/shell.js';
 import { wireToolCalls, normalizeMessages } from '../llm/wire.js';
 import { unzipBuffer, zipBuffer } from '../sandbox/zip.js';
 import * as sandboxFiles from '../sandbox/files.js';
-import { mcpToolName, MCP_NAME_MAX } from '../mcp.js';
+import { mcpToolName, MCP_NAME_MAX } from '../lib/mcp.js';
 import { normalizeSchedule, nextRun, isDue } from '../lib/tasks.js';
 
 const asReq = (headers = {}, method = 'POST', localAddress = '10.0.0.5') =>
@@ -2005,9 +2005,18 @@ test('the client and server copies of the tool protocol stay byte-identical', ()
   // makes is stored one way and drawn another, so the copies are compared here.
   const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
   const repo = path.dirname(root);
-  const server = fs.readFileSync(path.join(root, 'toolproto.js'), 'utf8');
-  const client = fs.readFileSync(path.join(repo, 'client', 'src', 'toolproto.js'), 'utf8');
-  assert.equal(client, server, 'client/src/toolproto.js and server/toolproto.js must be kept identical');
+  const read = (p) => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
+  const server = read(path.join(root, 'lib', 'toolproto.js'));
+  const client = read(path.join(repo, 'client', 'src', 'lib', 'toolproto.js'));
+  assert.equal(client, server, 'client/src/lib/toolproto.js and server/lib/toolproto.js must be kept identical');
+});
+
+test('the client and server agree on the brand icon paths', async () => {
+  const server = await import('../lib/brand.js');
+  const client = await import('../../client/src/lib/brand.js');
+  for (const key of ['BRAND_ICON', 'BRAND_GENERATING', 'BRAND_THINKING']) {
+    assert.equal(client[key], server[key], `${key} differs between client/src/lib/brand.js and server/lib/brand.js`);
+  }
 });
 
 /* ---------- theme documents ---------- */

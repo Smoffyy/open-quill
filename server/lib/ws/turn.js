@@ -2,13 +2,13 @@ import { db, uid, now, getSetting } from '../../db.js';
 import { buildMessages, streamCompletion, generateTitle, resolveTitleModel, stripThink } from '../../llm/index.js';
 import { buildTools, toCall, cutOffOf, livePreview, resolveToolName, SANDBOX_READONLY } from '../../tools/index.js';
 import { announcedMoreWork, MAX_CONTINUES, CONTINUE_INSTRUCTION } from '../continuation.js';
-import * as websearch from '../../websearch.js';
+import * as websearch from '../websearch.js';
 import * as sandbox from '../../sandbox.js';
-import * as membank from '../../membank.js';
-import * as skillsys from '../../skillsys.js';
-import * as userskills from '../../userskills.js';
-import * as mcp from '../../mcp.js';
-import * as projectfiles from '../../projectfiles.js';
+import * as referenceFiles from '../referencefiles.js';
+import * as workspaceSkills from '../workspaceskills.js';
+import * as userskills from '../userskills.js';
+import * as mcp from '../mcp.js';
+import * as projectfiles from '../projectfiles.js';
 import { stripToolSyntax } from '../history.js';
 import { modelCtx } from '../models.js';
 import {
@@ -56,12 +56,12 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   await maybeCompact(ws, chat, model, extended, sandboxOn);
   const history = chatHistory(chat, model);
   const chatRow = db.chats.byId(chat.id) || chat;
-  const membankOn = getSetting('membank_enabled', '0') === '1' && membank.count() > 0;
+  const membankOn = getSetting('membank_enabled', '0') === '1' && referenceFiles.count() > 0;
   const membankHideTools = getSetting('membank_hide_tools', '0') === '1';
-  if (membankOn) { try { await membank.ensureIndexedAll(); } catch {} }
+  if (membankOn) { try { await referenceFiles.ensureIndexedAll(); } catch {} }
   const chatSearchOn = !!model.chat_search_allowed && getSetting('chat_search_enabled', '0') === '1';
   const userSkills = chatRow.user_id ? userskills.enabledFor(chatRow.user_id).map(s => ({ name: s.name, description: s.description, content: s.body })) : [];
-  const skillsOn = !!model.skills_allowed && (skillsys.getEnabled().length + userSkills.length) > 0;
+  const skillsOn = !!model.skills_allowed && (workspaceSkills.getEnabled().length + userSkills.length) > 0;
   const mcpUser = chatRow.user_id || null;
   const mcpSchemas = model.mcp_allowed ? mcp.toolSchemas(mcpUser) : [];
   const mcpOn = mcpSchemas.length > 0;
@@ -80,9 +80,9 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     const parts = [];
     if (sandboxOn) parts.push(sandboxPromptFor(space, projectName));
     if (webSearchOn) { parts.push(websearch.webSearchConfig().prompt); parts.push(websearch.webSearchToolPrompt()); }
-    if (membankOn) parts.push(membank.promptFor(getSetting('membank_prompt', '')));
+    if (membankOn) parts.push(referenceFiles.promptFor(getSetting('membank_prompt', '')));
     if (chatSearchOn) parts.push(CHAT_SEARCH_PROMPT);
-    if (skillsOn) parts.push(skillsys.promptFor(userSkills));
+    if (skillsOn) parts.push(workspaceSkills.promptFor(userSkills));
     if (mcpOn) parts.push(mcp.promptFor(mcpUser));
     if (endChatOn) parts.push(endChatPromptFor(model));
     if (longReminderOn) parts.push(longConvoReminderFor(chat.id));
@@ -164,8 +164,8 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     }
     if (call.tool === 'skill_view') {
       if (!skillsOn) return null;
-      const r = skillsys.execTool(call, userSkills);
-      return { payload: skillsys.resultPayload(call, r), formatted: skillsys.formatResult(call, r), hide: false };
+      const r = workspaceSkills.execTool(call, userSkills);
+      return { payload: workspaceSkills.resultPayload(call, r), formatted: workspaceSkills.formatResult(call, r), hide: false };
     }
     if (mcpOn && mcp.isMcpTool(call.tool, mcpUser)) {
       const r = await mcp.execTool(call, mcpUser);
@@ -178,8 +178,8 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     }
     if (call.tool === 'mb_view' || call.tool === 'mb_search') {
       if (!membankOn) return null;
-      const r = membank.execTool(call);
-      return { payload: membank.resultPayload(call, r), formatted: membank.formatResult(call, r), hide: membankHideTools };
+      const r = referenceFiles.execTool(call);
+      return { payload: referenceFiles.resultPayload(call, r), formatted: referenceFiles.formatResult(call, r), hide: membankHideTools };
     }
     if (!sandboxOn || !resolveToolName(call.tool, true)) return null;
     // The step's own controller: the stop handler aborts whatever is registered

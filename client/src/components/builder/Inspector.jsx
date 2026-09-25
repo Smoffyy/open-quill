@@ -6,7 +6,7 @@ import { setPath, getPath, stylePath, resetElement, setHidden, elementEditCount,
 import { ANIMATIONS, EASINGS } from '../../lib/theme/css.js';
 import { Group, Field, Text, Area, Select, Toggle, Num, Color, Seg, BoxSides, parseValue } from './controls.jsx';
 import { findElementNode } from './Overlay.jsx';
-import { Trash, Copy, Refresh } from '../icons.jsx';
+import { Trash, Copy, Refresh } from '../ui/icons.jsx';
 
 const FONT_STACKS = [
   { value: 'var(--font-serif)', label: 'Heading font' },

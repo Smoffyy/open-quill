@@ -265,7 +265,7 @@ export const ELEMENTS = [
   { id: 'menu', label: tk('Menu'), cat: 'chrome', sel: '.popover, .plus-menu, .chat-menu, .more-menu, .model-menu, .rl-menu, .retry-menu, .art-menu, .pj-menu, .sk-menu, .qp-iconmenu, .spc-mention-menu', caps: ALL },
   { id: 'menuItem', label: tk('Menu item'), cat: 'chrome', sel: '.popover button, .pm-item, .chat-menu button, .model-opt, .art-menu-item', parent: 'menu', caps: CTRL },
   { id: 'menuLabel', label: tk('Menu section label'), cat: 'chrome', sel: '.pm-label, .art-menu-label, .retry-menu-label, .style-menu-label', parent: 'menu', caps: TEXTY },
-  { id: 'menuHead', label: tk('Menu header'), cat: 'chrome', sel: '.pm-head, .rl-menu-head', parent: 'menu', caps: ALL },
+  { id: 'menuHead', label: tk('Menu header'), cat: 'chrome', sel: '.persona-head, .rl-menu-head', parent: 'menu', caps: ALL },
   { id: 'menuShortcut', label: tk('Menu shortcut'), cat: 'chrome', sel: '.pm-shortcut', parent: 'menuItem', caps: BOX.concat(['type']) },
   { id: 'menuDivider', label: tk('Menu divider'), cat: 'chrome', sel: '.pm-divider, .popover hr', parent: 'menu', caps: BOX },
   { id: 'menuAccount', label: tk('Menu account line'), cat: 'chrome', sel: '.pm-account', parent: 'menu', caps: TEXTY },

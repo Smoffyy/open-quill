@@ -88,8 +88,8 @@ jobs:
         run: |
           mkdir -p out
           zip -r "out/open-quill-${VERSION}.zip" \
-            package.json package-lock.json README.md LICENSE CREDITS.md AGENTS.md \
-            server client/dist \
+            package.json package-lock.json README.md LICENSE CREDITS.md AGENTS.md CHANGELOG.md \
+            server client/dist release docs \
             -x "server/node_modules/*" "server/data/*"
 
       - name: Changelog section for this version

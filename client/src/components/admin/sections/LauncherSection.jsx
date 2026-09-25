@@ -1,7 +1,7 @@
 import { useAdmin } from '../store.jsx';
 import { Card, Input, Btn, IconBtn, Acts, Table, Empty } from '../ui.jsx';
 import { GlyphPicker } from '../media.jsx';
-import { Plus, Trash, Chat } from '../../icons.jsx';
+import { Plus, Trash, Chat } from '../../ui/icons.jsx';
 import { t } from '../../../i18n.jsx';
 
 const MAX_PROMPTS = 8;

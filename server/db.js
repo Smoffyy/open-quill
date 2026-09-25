@@ -296,6 +296,13 @@ export function settingKeysWithPrefix(prefix) {
 }
 
 function checkpoint() { try { sdb.pragma('wal_checkpoint(TRUNCATE)'); } catch {} }
+
+export function closeDb() {
+  if (!sdb.open) return;
+  checkpoint();
+  sdb.close();
+}
+
 process.on('exit', checkpoint);
 process.on('SIGINT', () => { checkpoint(); process.exit(0); });
 process.on('SIGTERM', () => { checkpoint(); process.exit(0); });

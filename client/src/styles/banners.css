@@ -1,0 +1,15 @@
+.unavail-bg { position: absolute; inset: 0; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 20px; z-index: 0; }
+.unavail-banner { position: relative; z-index: 1; padding: 12px 18px; font-size: 13.5px; }
+.unavail-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.unavail-msg { color: var(--text); }
+.unavail-msg strong { font-weight: 700; }
+.unavail-learn { color: var(--text); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; transition: opacity var(--fx-t, .12s); }
+.unavail-learn:hover { opacity: .7; }
+.unavail-reason { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--border-soft); color: var(--text-muted); font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+.budget-banner.warn .unavail-msg strong { color: #d98a1f; }
+.budget-banner.over .unavail-msg strong { color: var(--danger); }
+
+.removed-banner .unavail-msg strong { color: var(--danger); }
+.sunset-banner.pill { margin: 7px 7px 3px; padding: 10px 15px; border-radius: 13px; border: 1px solid color-mix(in srgb, var(--danger) 32%, transparent); }
+.sunset-msg { display: inline-flex; align-items: center; gap: 10px; }
+.sunset-msg svg { width: 17px; height: 17px; flex-shrink: 0; opacity: .9; }

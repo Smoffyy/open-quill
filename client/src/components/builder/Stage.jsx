@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import Message from '../Message.jsx';
-import ToolCard from '../ToolCard.jsx';
-import { ChatMenu, menuAtButton } from '../ChatMenu.jsx';
+import Message from '../chat/Message.jsx';
+import ToolCard from '../chat/ToolCard.jsx';
+import { ChatMenu, menuAtButton } from '../sidebar/ChatMenu.jsx';
 import { t, tk } from '../../i18n.jsx';
-import { toast } from '../../toast.js';
+import { toast } from '../../lib/toast.js';
 import { BRAND_ICON, BRAND_GENERATING, BRAND_THINKING } from '../../lib/brand.js';
-import { DotsV, Ghost, Info, Gauge } from '../icons.jsx';
+import { DotsV, Ghost, Info, Gauge, X } from '../ui/icons.jsx';
 
 /* Most of an interface only exists while something is happening. There are no
    messages until someone sends one, no chats in a new workspace, no menu until
@@ -305,7 +305,7 @@ function SampleAttachment() {
           <div className="attach-name">release-notes.md</div>
           <div className="attach-foot"><span className="attach-type">MD</span></div>
         </div>
-        <button type="button" className="attach-x" title={t('Remove')}>{'✕'}</button>
+        <button type="button" className="attach-x" title={t('Remove')} aria-label={t('Remove')}><X /></button>
       </div>
     </div>, host);
 }

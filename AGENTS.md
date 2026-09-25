@@ -15,7 +15,7 @@ Run from the repo root unless noted.
 | `npm start` | Production server on `:3001`, serves `client/dist` |
 | `npm run build` | `vite build` then `check-local.mjs` (fails on any off-origin URL in the bundle) |
 | `npm run lint` / `lint:fix` | ESLint over the whole repo (flat config at root) |
-| `npm run test:client` | `client/test/logic.test.js` |
+| `npm run test:client` | `node --test` in `client/`, every `client/test/*.test.js` |
 | `npm run smoke` | SSR-renders every admin section and modal, catching runtime-only prop bugs |
 | `npm run i18n:check` | Missing/orphaned translation keys (`-- --json` for machine output) |
 | `npm run i18n:sync` | Prune orphans, merge a translation patch, scaffold a new language |
@@ -65,13 +65,17 @@ server/
   llm/            provider-agnostic completion pipeline; import from llm/index.js only
   tools/          tool schemas, arg parsing, text-fallback call parsing, name aliasing
   sandbox.js      barrel; impl in sandbox/ (paths, meta, ignore, files, shell, exec, zip, hostenv)
-  lib/            shared logic (appconfig, convo, ctxwindow, prompts, router, memory, tasks, theme, ...)
+  lib/            shared logic and services (appconfig, convo, ctxwindow, prompts, router, memory, tasks, theme,
+                  mcp, providers, pricing, websearch, totp, projectfiles, userskills, workspaceskills,
+                  referencefiles, toolproto, ...)
   lib/ws/         broadcast, live (in-flight turns), turn (agentic loop), connection
   routes/         one default-exported register(app) per resource
   test/           http.test.js (real server) + logic/mcp/schema/usage tests (pure)
 ```
 
-Dependency direction is **routes to lib**; `lib/ws/` never imports from `routes/`.
+Dependency direction is **routes to lib**; `lib/ws/` never imports from `routes/`. Only the entry point, the database, auth and the sandbox barrel live at the server root; anything else is a `lib/` module. `lib/referencefiles.js` is the admin "Reference files" store; its settings keys, data folder and `/api/admin/membank` routes keep the older "membank" name because they are stored and wire formats. `lib/workspaceskills.js` (admin skills, in settings) and `lib/userskills.js` (per-member skills, in the database) share name and size rules from `lib/skillfile.js`.
+
+`db.js` exports `closeDb()`; a test that opens its own database closes it and removes the folder in `after()`, so a test run leaves nothing under `server/data/databases/`.
 
 **Security invariants**:
 - `lib/origin.js` (`sameOrigin`) is the single "did this come from our own UI" check, used by HTTP writes and the WS handshake. It leads with `Sec-Fetch-Site`, not `Origin` vs `Host`, because a naive host comparison breaks behind the Vite dev proxy and any reverse proxy. Test both `npm run dev` and `npm start` when touching it.
@@ -88,6 +92,28 @@ Dependency direction is **routes to lib**; `lib/ws/` never imports from `routes/
 
 ## Client
 
+**Layout**:
+
+```
+client/src/
+  main.jsx, App.jsx, i18n.jsx   entry, root component, translation runtime (+ locales/)
+  lib/                          hooks and pure logic, including api, prefs, toast, clipboard
+  styles/                       one stylesheet per feature, imported in order by app.css
+  components/
+    ui/          shared primitives: icons, Tip, Dialog, CloseButton, controls (rows, switch,
+                 segmented control, select, range), Skeleton, Toaster, ChordHint
+    sidebar/     Sidebar, ChatMenu, DocsNav
+    chat/        the open conversation: Message, Markdown, ToolCard, ChatTopbar, Greeting,
+                 ChatError, QueuedMessages, thread navigation, ledger, call panel
+    composer/    Composer, ModelDropdown, StyleMenu
+    dialogs/     modal windows opened from anywhere (search, command palette, shortcuts, ...)
+    settings/    SettingsModal and one component per tab
+    pages/       full views: projects, scheduled, all chats, model docs, playground, login
+    artifacts/, admin/, builder/, setup/   feature areas
+```
+
+The admin panel, playground, model docs, setup guide and build mode are `React.lazy` chunks, so members never download them; a stylesheet only one of them uses is imported by that component, not by `app.css`.
+
 `client/src/App.jsx` holds top-level state, WS wiring and routing. Its state lives in `client/src/lib/`, one hook per concern; App wires them together and owns the ordering between them, nothing more:
 
 - `turnstream`: the assistant message being written (received text, revealed text, reveal timer); `revealChunk`/`revealPeriod` are pure and tested.
@@ -97,20 +123,21 @@ Dependency direction is **routes to lib**; `lib/ws/` never imports from `routes/
 - `wsmessages`: one handler per server frame, `dispatchWs(m, ctx)`. Two protocol rules live here: a frame for a background chat updates the mirror, and only a frame for `activeKey()` touches the view. It cannot import `i18n.jsx` (`node --test` cannot parse JSX), so translated strings arrive through `ctx.text` and `ctx.actions`.
 - `socket`/`wsclient`: socket lifecycle apart from React. A `close()` must stay closed; letting `onclose` schedule a retry leaks a live socket on every remount, and App is keyed by language.
 - `threadscroll` owns scroll, where `stick` means "at bottom, wants to stay".
-- `dismiss` (`useDismiss`) is the one outside-click/Escape implementation, `submenu` (`useSubmenus`) holds one open id per menu so "only one submenu open" is structural, `anchor` portals menus that can leave their container, `route` has the pure `parseRoute` and path builders, `lru` the bounded chat cache.
+- `dismiss` (`useDismiss`, `useLayer`) is the one outside-click/Escape implementation. Every surface Escape can close (menu, dialog, full-screen view) registers a layer, and only the most recently opened layer hears the key, so Escape closes a dropdown before the dialog it sits in. A field that owns Escape itself (a rename input cancelling) calls `preventDefault` and no layer closes. Modal layers pause background shortcuts through `isModalOpen()`; never test for an `.overlay` element instead. Every modal renders through `components/ui/Dialog.jsx` (dialog semantics, focus trap and restore via `lib/focus.js`, backdrop click, Escape). `submenu` (`useSubmenus`) holds one open id per menu so "only one submenu open" is structural, `anchor` portals menus that can leave their container, `route` has the pure `parseRoute` and path builders, `lru` the bounded chat cache.
 
-`lib/brand.js` exists in both a client and a server copy and they must agree; model rows store icon paths, so moving files needs a `LEGACY` entry in the server copy.
+`lib/brand.js` and `lib/toolproto.js` exist in both a client and a server copy and must agree (a server test compares them); model rows store icon paths, so moving files needs a `LEGACY` entry in the server copy.
 
-**Routing** (`lib/route.js`): `parseRoute` is a whitelist. A path no screen claims returns `{ view: 'notfound' }`, which `App.jsx` renders as the `NotFound` overlay, so a mistyped URL says so instead of quietly showing home. Adding a screen means adding its pattern here, or it 404s.
+**Routing** (`lib/route.js`): screens with an address are `/`, `/chat/:id`, `/projects`, `/project/:id`, `/artifacts`, `/scheduled`, `/docs/...`, `/admin` and `/playground`. Sidebar chats, projects and New are real links: a plain click is handled in place, any modified or middle click is left to the browser. `parseRoute` is a whitelist. A path no screen claims returns `{ view: 'notfound' }`, which `App.jsx` renders as the `NotFound` overlay, so a mistyped URL says so instead of quietly showing home. Adding a screen means adding its pattern here, or it 404s.
 
 **Accessibility**: an `<img>` that repeats adjacent text is `alt="" aria-hidden="true"`, never a restated label; an image carrying its own meaning (an upload, an attachment, a preview) gets real `alt`. A form reports failure through one `role="alert"` node that stays mounted so it is announced when filled, marks the offending field `aria-invalid` with `aria-describedby` pointing at that node, and clears both on the next keystroke; `Login.jsx` is the pattern. A submit that waits swaps its label and shows `.btn-spin` rather than only going disabled.
 
 **Two UI presets**, everything hanging off `data-preset="anthropic"|"openai"` on `<html>` (registry `lib/palettes.js`):
-1. Anthropic is the default codebase, written plain with no preset-specific CSS.
-2. Every OpenAI rule lives in `styles/openai.css`, scoped `[data-preset="openai"]`.
-3. `app.css` imports `openai.css` **last** on purpose so equal-specificity ties go to it. Do not reorder.
-4. Components are never forked; branch inline on `cfg.uiPreset === 'openai'` for *behavior* only.
-5. A palette must not introduce a new `data-theme` value, and no preset may make a user preference inert.
+1. The feature stylesheets are preset-neutral and unscoped. `base.css` holds only design tokens (per palette, on `:root[data-theme]`), resets and utilities such as `.sr-only` and the one scrollbar style.
+2. Every Anthropic-only rule lives in `styles/anthropic.css`, scoped `[data-preset="anthropic"]` or to an Anthropic palette; every OpenAI rule lives in `styles/openai.css`, scoped `[data-preset="openai"]`.
+3. `app.css` imports `anthropic.css` then `openai.css` **last** on purpose so equal-specificity ties go to them. Do not reorder. A new feature gets its own stylesheet imported before them; do not add a general "extras" or "polish" file.
+4. Scrollbars are styled once in `base.css`. Setting `scrollbar-width` or `scrollbar-color` on an element makes Chromium drop that style for native bars, so use only `scrollbar-width: none`, to hide one.
+5. Components are never forked; branch inline on `cfg.uiPreset === 'openai'` for *behavior* only.
+6. A palette must not introduce a new `data-theme` value, and no preset may make a user preference inert.
 
 **Theme builder** (`lib/theme/`, `components/builder/`) is a configuration layer *above* the two presets: `theme.basePreset` drives `data-preset`, so the rules above still hold. A theme is one JSON document (`schema.js`); `css.js` compiles it into a single `<style id="oq-theme-style">` appended last, and nothing else in the client knows a theme exists. Elements are found by CSS selector (`ELEMENTS` in `schema.js`), so styling a component never requires touching it; only reordering (`data-oq-item`), editable text (`useThemeText`) and inserted nodes (`ThemeSlot`) need a component to opt in. Generated rules carry a `:root:root:root` prefix to outweigh palette rules, `!important` is reserved for hiding, and every style value is whitelisted twice: `STYLE_PROPS` in `server/lib/theme.js` at the write boundary and `safeValue()` in `css.js` before it reaches a stylesheet. Tokens naming an existing app variable emit only when set, since emitting a default would flatten the preset.
 
@@ -132,7 +159,7 @@ Dependency direction is **routes to lib**; `lib/ws/` never imports from `routes/
 
 ## Adding a feature
 
-1. Build it plain, in the Anthropic look, first.
+1. Build it plain, in the Anthropic look, first, with its styles in a stylesheet of its own. Rules only the Anthropic preset needs go in `anthropic.css`.
 2. Add `openai.css` rules only if the OpenAI skin needs different visuals.
 3. Branch on `cfg.uiPreset` only for different behavior.
 4. Verify both presets, light and dark; preset switching is live under Admin, Interface.

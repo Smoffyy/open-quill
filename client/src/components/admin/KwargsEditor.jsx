@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { Fields, Field, Input, Select, Seg, Switch, Btn, Badge, Empty, Note, Table } from './ui.jsx';
-import { Plus, Copy, Trash, Chevron, Up, Down } from '../icons.jsx';
+import { Plus, Copy, Trash, Chevron, Up, Down } from '../ui/icons.jsx';
 import { t, tk } from '../../i18n.jsx';
 import {
   KWARG_TARGETS, KWARG_CONTROLS, KWARG_TYPES, KWARG_PRESETS,
   blankKwarg, newKwargId, controlOf, defaultValueOf, isBoolPair,
   kwargValuesArr, kwargValuesStr, resolveKwargValues, kwargPayload,
   isRange, rangeStep, clampToRange, allNumeric
-} from '../../kwargs.js';
+} from '../../lib/kwargs.js';
 
 const CONTROL_NOTE = {
   __proto__: null,

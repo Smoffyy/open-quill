@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { transcribeBlob } from '../voice.js';
-import { toast } from '../toast.js';
+import { transcribeBlob } from './voice.js';
+import { toast } from './toast.js';
 import { t } from '../i18n.jsx';
 
 function warn(msg) { try { toast(msg, { icon: 'info', kind: 'warn', duration: 4200 }); } catch {} }

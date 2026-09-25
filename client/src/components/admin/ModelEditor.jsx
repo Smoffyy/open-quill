@@ -1,14 +1,15 @@
 import { useState, useEffect, useId } from 'react';
-import { api } from '../../api.js';
+import { api } from '../../lib/api.js';
 import {
   Card, Rows, Row, ToggleRow, Fields, Field, Inline, Acts, Input, Area, Select, Seg, Range,
   Switch, Btn, IconBtn, Badge, Note, Empty, Table, Tabs, CopyBtn, SaveState
 } from './ui.jsx';
 import { ImagePicker } from './media.jsx';
 import KwargsEditor from './KwargsEditor.jsx';
-import { Chevron, Copy, Trash, Star, Eye, EyeOff, Plus, Up, Down, X } from '../icons.jsx';
+import { Chevron, Copy, Trash, Star, Eye, EyeOff, Plus, Up, Down, X } from '../ui/icons.jsx';
 import { t, tk } from '../../i18n.jsx';
 import { BRAND_ICON, BRAND_GENERATING, BRAND_THINKING } from '../../lib/brand.js';
+import { useLayer } from '../../lib/dismiss.js';
 
 const TABS = [
   ['general', tk('General')],
@@ -182,11 +183,7 @@ export default function ModelEditor({ model: m, models, providers, providerTypes
 
   const set = (k, v) => onChange({ ...m, [k]: v });
 
-  useEffect(() => {
-    const esc = (e) => { if (e.key === 'Escape' && !e.target.closest('input, textarea, select')) onBack(); };
-    document.addEventListener('keydown', esc);
-    return () => document.removeEventListener('keydown', esc);
-  }, [onBack]);
+  useLayer(true, (e) => { if (!e?.target?.closest?.('input, textarea, select')) onBack(); });
 
   useEffect(() => {
     let alive = true;

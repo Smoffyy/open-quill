@@ -48,7 +48,7 @@
           if (t !== 'anthropic' || !PAL_BG[pal]) pal = null;
           document.documentElement.setAttribute('data-theme', t);
           if (pal) document.documentElement.setAttribute('data-palette', pal);
-          var bg = (pal && PAL_BG[pal]) || BG[t] || BG.anthropic;
+          var bg = (pal && PAL_BG[pal]) || (t === 'light' && preset === 'openai' ? '#fcfcfc' : BG[t]) || BG.anthropic;
           document.documentElement.style.background = bg;
           var meta = document.querySelector('meta[name="theme-color"]:not([media])');
           if (!meta) { meta = document.createElement('meta'); meta.setAttribute('name', 'theme-color'); document.head.appendChild(meta); }
@@ -60,7 +60,7 @@
         }
       })();
     </script>
-    <style>html{background:#1a1a19}html[data-theme="light"]{background:#f4f3ee}html[data-theme="anthropic"]{background:#1a1a19}html[data-theme="anthropic"][data-palette="2026q3"]{background:#151515}html[data-theme="anthropic"][data-palette="legacy"]{background:#1f1f1e}html[data-theme="oled"]{background:#000}html[data-theme="openai"]{background:#000}</style>
+    <style>html{background:#1a1a19}html[data-theme="light"]{background:#f4f3ee}html[data-preset="openai"][data-theme="light"]{background:#fcfcfc}html[data-theme="anthropic"]{background:#1a1a19}html[data-theme="anthropic"][data-palette="2026q3"]{background:#151515}html[data-theme="anthropic"][data-palette="legacy"]{background:#1f1f1e}html[data-theme="oled"]{background:#000}html[data-theme="openai"]{background:#000}</style>
   </head>
   <body>
     <div id="root"></div>

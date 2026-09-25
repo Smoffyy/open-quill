@@ -1,4 +1,4 @@
-import * as toolproto from '../toolproto.js';
+import * as toolproto from './toolproto.js';
 
 export function decodeOqr(b64) {
   try { return JSON.parse(Buffer.from(b64, 'base64').toString('utf8')); } catch { return null; }
