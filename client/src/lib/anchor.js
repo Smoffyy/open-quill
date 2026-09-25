@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect } from 'react';
+import { useDismiss } from './dismiss.js';
 
 export const MENU_EDGE = 8;
 export const MENU_GAP = 6;
@@ -19,26 +20,17 @@ export function useAnchoredMenu(open, setOpen, btnRef, menuRef, opts) {
   const minW = (opts && opts.minWidth) || 0;
   const gap = (opts && typeof opts.gap === 'number') ? opts.gap : MENU_GAP;
   const [pos, setPos] = useState(null);
+  useDismiss(open, () => setOpen(false), [menuRef, btnRef]);
   useEffect(() => {
     if (!open) { setPos(null); return; }
-    const away = (e) => {
-      if (menuRef.current && menuRef.current.contains(e.target)) return;
-      if (btnRef.current && btnRef.current.contains(e.target)) return;
-      setOpen(false);
-    };
     const close = () => setOpen(false);
-    const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
     const onScroll = (e) => {
       if (scrollInsideMenu(menuRef.current, e.target)) return;
       if (btnRef.current && e.target && typeof e.target.contains === 'function' && e.target.contains(btnRef.current)) setOpen(false);
     };
-    document.addEventListener('mousedown', away);
-    document.addEventListener('keydown', esc);
     window.addEventListener('resize', close);
     window.addEventListener('scroll', onScroll, true);
     return () => {
-      document.removeEventListener('mousedown', away);
-      document.removeEventListener('keydown', esc);
       window.removeEventListener('resize', close);
       window.removeEventListener('scroll', onScroll, true);
     };

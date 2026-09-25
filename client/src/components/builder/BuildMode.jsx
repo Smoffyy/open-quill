@@ -10,8 +10,8 @@ import Inspector from './Inspector.jsx';
 import { LayersPanel, LibraryPanel, TokensPanel, ContentPanel } from './Panels.jsx';
 import ThemesPanel, { useThemes } from './ThemesPanel.jsx';
 import { Saved, Confirm } from './controls.jsx';
-import { toast } from '../../toast.js';
-import { Panel, Palette, Box, TextIcon, Sparkles, Retry, X, Eye, Check, Keyboard, Refresh, Download } from '../icons.jsx';
+import { toast } from '../../lib/toast.js';
+import { Panel, Palette, Box, TextIcon, Sparkles, Retry, X, Eye, Check, Keyboard, Refresh, Download } from '../ui/icons.jsx';
 import '../../styles/builder.css';
 
 const TABS = [

@@ -1,3 +1,86 @@
+:root[data-theme="anthropic"][data-palette="legacy"] .greeting { color: rgba(255, 255, 255, .8); }
+/* The preset draws the composer outline as an inset ring rather than a border, so
+   the light palette needs one of its own or it loses its edge entirely. */
+:root[data-preset="anthropic"][data-theme="light"] .composer { border-color: transparent; box-shadow: 0 4px 20px rgba(0, 0, 0, .035), inset 0 0 0 1px rgba(0, 0, 0, .1); }
+:root[data-preset="anthropic"][data-theme="light"] .composer:hover { border-color: transparent; box-shadow: 0 4px 20px rgba(0, 0, 0, .035), inset 0 0 0 1px rgba(0, 0, 0, .2); }
+:root[data-preset="anthropic"][data-theme="light"] .composer:focus-within { border-color: transparent; box-shadow: 0 4px 20px rgba(0, 0, 0, .075), inset 0 0 0 1px rgba(0, 0, 0, .2); }
+:root[data-theme="anthropic"][data-palette="legacy"] .composer { border-color: transparent; box-shadow: inset 0 0 0 1px var(--border); }
+:root[data-theme="anthropic"][data-palette="legacy"] .composer:hover,
+:root[data-theme="anthropic"][data-palette="legacy"] .composer:focus-within { border-color: transparent; box-shadow: inset 0 0 0 1px var(--border); }
+:root[data-theme="anthropic"][data-palette="legacy"] .plus-menu,
+:root[data-theme="anthropic"][data-palette="legacy"] .pm-sub,
+:root[data-theme="anthropic"][data-palette="legacy"] .slash-menu { border: 1px solid var(--pop-border); }
+:root[data-theme="anthropic"][data-palette="2026q3"] .chat-row.active { background: #0b0b0b; }
+:root[data-theme="anthropic"][data-palette="2026q3"] .composer { box-shadow: 0 4px 20px rgba(0, 0, 0, .035), inset 0 0 0 1px rgba(255, 255, 255, .1); }
+:root[data-theme="anthropic"][data-palette="2026q3"] .composer:hover { box-shadow: 0 4px 20px rgba(0, 0, 0, .035), inset 0 0 0 1px rgba(255, 255, 255, .2); }
+:root[data-theme="anthropic"][data-palette="2026q3"] .composer:focus-within { box-shadow: 0 4px 20px rgba(0, 0, 0, .075), inset 0 0 0 1px rgba(255, 255, 255, .2); }
+:root[data-theme="anthropic"][data-palette="2026q3"] .greeting { color: var(--text); }
+:root[data-theme="anthropic"][data-palette="2026q3"] .quick-prompt { background: #20201f; }
+:root[data-theme="anthropic"][data-palette="2026q3"] .quick-prompt:hover,
+:root[data-theme="anthropic"][data-palette="2026q3"] .quick-prompt:focus-visible { background: #262625; }
+:root[data-theme="anthropic"][data-palette="2026q3"] .unavail-bg { background: #151515; }
+:root[data-theme="anthropic"] .cmdk,
+:root[data-theme="anthropic"] .search-modal { border-color: var(--pop-ring); }
+:root[data-theme="anthropic"] .plus-menu,
+:root[data-theme="anthropic"] .pm-sub,
+:root[data-theme="anthropic"] .slash-menu { border: 0; }
+/* anthropic: sidebar saved-chat + label text */
+:root[data-theme="anthropic"] .section-label { color: var(--sidebar-label); }
+:root[data-theme="anthropic"] .sidebar { border-right-color: rgba(255, 255, 255, .1); }
+:root[data-theme="anthropic"] .rl-group { color: var(--sidebar-label); }
+:root[data-theme="anthropic"] .pj-tile-desc,
+:root[data-theme="anthropic"] .pj-name,
+:root[data-theme="anthropic"] .pj-desc,
+:root[data-theme="anthropic"] .pj-card-head { color: var(--sidebar-text); }
+:root[data-theme="anthropic"] .pj-tile-time,
+:root[data-theme="anthropic"] .pj-card-sub,
+:root[data-theme="anthropic"] .pj-cap,
+:root[data-theme="anthropic"] .pj-empty { color: var(--sidebar-label); }
+:root[data-theme="anthropic"] .chat-row,
+:root[data-theme="anthropic"] .nav-item,
+:root[data-theme="anthropic"] .nav-label { color: var(--sidebar-text); }
+:root[data-theme="anthropic"] .chat-row.active,
+:root[data-theme="anthropic"] .chat-row:hover,
+:root[data-theme="anthropic"] .chat-row:hover .title,
+:root[data-theme="anthropic"] .chat-row:hover .row-ctrl,
+:root[data-theme="anthropic"] .nav-item:hover,
+:root[data-theme="anthropic"] .nav-item:hover .nav-label,
+:root[data-theme="anthropic"] .nav-item:hover svg { color: #f9f9f7; }
+:root[data-theme="anthropic"] .chat-row.active,
+:root[data-theme="anthropic"] .chat-row:hover,
+:root[data-theme="anthropic"] .nav-item:hover,
+:root[data-theme="anthropic"] .nav-item:active { background: var(--sidebar-hover); }
+:root[data-theme="anthropic"] .send { color: #fff; }
+:root[data-theme="anthropic"] .composer .mic,
+:root[data-theme="anthropic"] .greeting { color: var(--sidebar-text); font-weight: var(--greeting-weight, 390); }
+:root[data-theme="anthropic"] .composer { border-color: transparent; box-shadow: 0 4px 20px rgba(0, 0, 0, .035), inset 0 0 0 1px rgba(225, 224, 217, .15); }
+:root[data-theme="anthropic"] .composer:hover { border-color: transparent; box-shadow: 0 4px 20px rgba(0, 0, 0, .035), inset 0 0 0 1px rgba(225, 224, 217, .3); }
+:root[data-theme="anthropic"] .composer:focus-within { border-color: transparent; box-shadow: 0 4px 20px rgba(0, 0, 0, .075), inset 0 0 0 1px rgba(225, 224, 217, .3); }
+:root[data-theme="anthropic"] .composer textarea::placeholder { color: var(--sidebar-label); }
+:root[data-theme="anthropic"] .disclaimer { color: var(--sidebar-label); }
+:root[data-theme="anthropic"] .action-btn,
+:root[data-theme="anthropic"] .msg-time { color: var(--sidebar-label); }
+:root[data-theme="anthropic"] .action-btn:hover { color: var(--text); }
+:root[data-theme="anthropic"] .profile-btn .name { color: var(--sidebar-text); }
+:root[data-theme="anthropic"] .profile-btn .plan { color: var(--sidebar-label); }
+:root[data-theme="anthropic"] .profile-btn .avatar { background: var(--sidebar-text); color: var(--sidebar); }
+:root[data-theme="anthropic"] ::selection { background: #3d3d3d; color: #fff; }
+:root[data-theme="anthropic"] ::-moz-selection { background: #3d3d3d; color: #fff; }
+/* anthropic: sidebar icons */
+:root[data-theme="anthropic"] .sidebar-head-actions,
+:root[data-theme="anthropic"] .nav-item svg,
+:root[data-theme="anthropic"] .brand,
+:root[data-theme="anthropic"] .sidebar .icon-btn { color: var(--sidebar-icon); }
+/* anthropic: model name + description in the dropdown */
+:root[data-theme="anthropic"] .model-trigger { color: var(--model-name); }
+:root[data-theme="anthropic"] .mo-desc { color: var(--mo-desc); opacity: 1; }
+:root[data-theme="anthropic"] .model-trigger .ext { color: var(--sidebar-label); }
+:root[data-theme="anthropic"] .quick-prompt { background: #313130; }
+:root[data-theme="anthropic"] .quick-prompt:hover,
+:root[data-theme="anthropic"] .quick-prompt:focus-visible { background: var(--surface-hover); }
+/* anthropic: disabled model banner */
+:root[data-theme="anthropic"] .unavail-bg { background: #1a1a19; }
+
 :root {
   --cl-row-h: 32px;
   --cl-row-gap: .5px;
@@ -374,6 +457,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 
 :root[data-preset="anthropic"] .nav-item:focus-visible,
 :root[data-preset="anthropic"] .chat-row:focus-visible,
+:root[data-preset="anthropic"] .chat-row:has(> .row-link:focus-visible),
 :root[data-preset="anthropic"] .icon-btn:focus-visible,
 :root[data-preset="anthropic"] .profile-btn:focus-visible,
 .profile-apps:focus-visible,
@@ -563,7 +647,13 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 :root[data-preset="anthropic"] .modal-tab:hover { background: var(--cl-hover); }
 :root[data-preset="anthropic"] .modal-tab.active { background: var(--modal-active); }
 
-:root[data-preset="anthropic"] .modal-main { padding: 24px 24px 40px; }
+:root[data-preset="anthropic"] .modal-body { padding: 0 24px 40px; }
+@media (max-width: 768px) {
+  :root[data-preset="anthropic"] .modal-body { padding: 4px 18px 24px; }
+}
+:root[data-preset="anthropic"] .modal .modal-title { font-size: 15px; line-height: 20px; font-weight: 500; letter-spacing: 0; }
+:root[data-preset="anthropic"] .modal-body > .hint { display: none; }
+:root[data-preset="anthropic"] .modal-body > .hint:first-child + .me-section-h { margin-top: 4px; }
 :root[data-preset="anthropic"] .set-row,
 :root[data-preset="anthropic"] .modal-main .field { padding: 12px 0; gap: 24px; }
 :root[data-preset="anthropic"] .modal-main :is(.set-row, .field) {
@@ -571,12 +661,9 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 }
 :root[data-preset="anthropic"] .modal-main :is(.set-row, .field):first-child,
 :root[data-preset="anthropic"] .modal-main .me-section-h + :is(.set-row, .field),
-:root[data-preset="anthropic"] .modal-main h2 + :is(.set-row, .field),
 :root[data-preset="anthropic"] .modal-main .hint + :is(.set-row, .field) {
   border-top: 0;
 }
-:root[data-preset="anthropic"] .modal-main > h2,
-:root[data-preset="anthropic"] .modal-main > h2 + .hint { display: none; }
 :root[data-preset="anthropic"] .modal-main textarea { min-height: 88px; }
 :root[data-preset="anthropic"] .set-row-title { font-weight: 400; }
 :root[data-preset="anthropic"] .modal-main .field.row > label,
@@ -640,13 +727,11 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 }
 :root[data-preset="anthropic"] .sidebar-head-actions .icon-btn:hover { background: none; }
 
-.modal-main-flush { padding: 0 !important; display: flex; flex-direction: column; min-height: 0; }
-
 .sk-head {
   display: flex; align-items: center; gap: 12px; flex-shrink: 0;
   height: 56px; padding: 0 56px 0 16px;
 }
-.modal .modal-main .sk-title, .sk-title { flex: 1; min-width: 0; margin: 0; padding-left: 12px; font-family: var(--font-sans); font-size: 15px; line-height: 20px; font-weight: 500; color: var(--text); }
+.modal .modal-main .sk-title, .sk-title { flex: 1; min-width: 0; margin: 0; padding-left: 8px; font-family: var(--font-sans); font-size: 15px; line-height: 20px; font-weight: 500; color: var(--text); }
 .sk-back {
   display: inline-flex; align-items: center; gap: 8px; flex: 1; min-width: 0;
   height: 32px; padding: 0 8px; margin-left: 4px; border-radius: 8px;
@@ -691,7 +776,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 .sk-search-x svg { width: 14px; height: 14px; }
 .sk-search-x:hover { background: var(--cl-hover); color: var(--text); }
 
-.sk-table-wrap { flex: 1; min-height: 0; overflow: hidden auto; padding: 0 16px 8px; }
+.sk-table-wrap { flex: 1; min-height: 0; overflow: hidden auto; padding: 0 12px 8px; }
 .sk-table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; }
 .sk-table th {
   height: 32px; padding: 0 12px; text-align: left;

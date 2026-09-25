@@ -419,7 +419,7 @@
 :root[data-preset="openai"][data-theme="light"] .overlay,
 :root[data-preset="openai"][data-theme="light"] .ctx-inspect-overlay,
 :root[data-preset="openai"][data-theme="light"] .bc-overlay,
-:root[data-preset="openai"][data-theme="light"] .pm-overlay,
+:root[data-preset="openai"][data-theme="light"] .persona-overlay,
 :root[data-preset="openai"][data-theme="light"] .preset-scrim,
 :root[data-preset="openai"][data-theme="light"] .drop-overlay { background: rgba(0, 0, 0, .32); }
 
@@ -475,7 +475,7 @@
 [data-preset="openai"] .overlay,
 [data-preset="openai"] .ctx-inspect-overlay,
 [data-preset="openai"] .bc-overlay,
-[data-preset="openai"] .pm-overlay { background: rgba(0, 0, 0, .45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+[data-preset="openai"] .persona-overlay { background: rgba(0, 0, 0, .45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 [data-preset="openai"] .rail-open { display: none; }
 [data-preset="openai"] .sidebar.collapsed { width: 58px; }
 [data-preset="openai"] .sidebar.collapsed .chats { display: none; }

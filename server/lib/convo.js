@@ -1,6 +1,6 @@
 import { db, getSetting } from '../db.js';
 import { oneShot, stripThink, summarizeConversation } from '../llm/index.js';
-import { resolveProvider } from '../providers.js';
+import { resolveProvider } from './providers.js';
 import { activePath } from './tree.js';
 import { historyText } from './history.js';
 import { isTextLike, readUploadText, readImageDataUri } from './uploads.js';

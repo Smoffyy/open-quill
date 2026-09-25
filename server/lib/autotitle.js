@@ -1,5 +1,5 @@
 import { getSetting } from '../db.js';
-import { allProvidersLocal } from '../providers.js';
+import { allProvidersLocal } from './providers.js';
 
 export function autoTitleDefault() {
   return allProvidersLocal() ? '1' : '0';

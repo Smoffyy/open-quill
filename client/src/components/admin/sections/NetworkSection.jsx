@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { api } from '../../../api.js';
+import { api } from '../../../lib/api.js';
 import { useAdmin } from '../store.jsx';
 import { Card, Rows, ToggleRow, Field, Area, Btn, Table, Stats, Badge, Empty, Note, fmtAgo, fmtInt } from '../ui.jsx';
-import { Eye } from '../../icons.jsx';
+import { Eye } from '../../ui/icons.jsx';
 import { t } from '../../../i18n.jsx';
-import { Skel, SkelTable } from '../../Skeleton.jsx';
+import { Skel, SkelTable } from '../../ui/Skeleton.jsx';
 
 const POLL_MS = 5000;
 

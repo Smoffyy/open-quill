@@ -1,6 +1,6 @@
 {
   "name": "open-quill",
-  "version": "27.5.2",
+  "version": "27.5.3",
   "private": true,
   "type": "module",
   "description": "Local Anthropic-style chat UI for OpenAI-compatible servers",
@@ -25,7 +25,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "concurrently": "^10.0.5",
-    "eslint": "^10.10.0",
+    "eslint": "^10.11.0",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.12.0"

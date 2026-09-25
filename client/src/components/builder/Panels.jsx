@@ -11,7 +11,7 @@ import {
 } from '../../lib/theme/ops.js';
 import { Group, Field, Text, Color, Num, Select } from './controls.jsx';
 import { PlaceholderChips } from './Inspector.jsx';
-import { Eye, EyeOff, Search, Trash, Plus, ChevDown } from '../icons.jsx';
+import { Eye, EyeOff, Search, Trash, Plus, ChevDown } from '../ui/icons.jsx';
 
 /* ---------------------------------------------------------------------------
    Layers

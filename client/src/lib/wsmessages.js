@@ -1,4 +1,4 @@
-import { voiceEmit } from '../voice.js';
+import { voiceEmit } from './voice.js';
 import { EMPTY_CALLS, mergeCall } from './livetools.js';
 
 // The server's stream, one handler per frame type. This was a 165-line if-chain
@@ -21,6 +21,7 @@ import { EMPTY_CALLS, mergeCall } from './livetools.js';
 const isActive = (ctx, chatId) => chatId === ctx.activeKey();
 
 export const handlers = {
+  __proto__: null,
   session_revoked() {
     location.href = '/';
   },

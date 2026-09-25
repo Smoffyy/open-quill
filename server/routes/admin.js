@@ -1,7 +1,7 @@
 import { db, now } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
-import * as skillsys from '../skillsys.js';
-import * as mcp from '../mcp.js';
+import * as workspaceSkills from '../lib/workspaceskills.js';
+import * as mcp from '../lib/mcp.js';
 import { logAudit } from '../lib/audit.js';
 import { purgeUserChats } from '../lib/purge.js';
 import { monthStartMs } from '../lib/budget.js';
@@ -10,21 +10,21 @@ import { toolStatsReport } from '../lib/toolstats.js';
 import { USAGE_WINDOWS } from './auth.js';
 
 export default function registerAdminRoutes(app) {
-  app.get('/api/admin/skills', authMiddleware, adminOnly, (req, res) => res.json({ skills: skillsys.list() }));
+  app.get('/api/admin/skills', authMiddleware, adminOnly, (req, res) => res.json({ skills: workspaceSkills.list() }));
   app.post('/api/admin/skills', authMiddleware, adminOnly, (req, res) => {
-    const r = skillsys.create(req.body || {});
+    const r = workspaceSkills.create(req.body || {});
     if (r.error) return res.status(400).json({ error: r.error });
     logAudit(req, 'skill.create', { meta: { name: r.skill.name } });
     res.json(r);
   });
   app.patch('/api/admin/skills/:id', authMiddleware, adminOnly, (req, res) => {
-    const r = skillsys.update(req.params.id, req.body || {});
+    const r = workspaceSkills.update(req.params.id, req.body || {});
     if (r.error) return res.status(400).json({ error: r.error });
     logAudit(req, 'skill.update', { meta: { name: r.skill.name } });
     res.json(r);
   });
   app.delete('/api/admin/skills/:id', authMiddleware, adminOnly, (req, res) => {
-    skillsys.remove(req.params.id);
+    workspaceSkills.remove(req.params.id);
     logAudit(req, 'skill.delete', { meta: { id: req.params.id } });
     res.json({ ok: true });
   });

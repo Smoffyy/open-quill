@@ -1,4 +1,4 @@
-import { resolveProvider, providerSpec } from '../providers.js';
+import { resolveProvider, providerSpec } from '../lib/providers.js';
 
 export function modelProvider(model) {
   return providerSpec(resolveProvider(model?.provider_id));

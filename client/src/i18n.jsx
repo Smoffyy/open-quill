@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { relativeParts } from './lib/relativetime.js';
 
 const meta = import.meta.glob('./locales/*.json', { eager: true, import: '_meta' });
 const loaders = import.meta.glob('./locales/*.json');
@@ -86,6 +87,13 @@ export function fmtDate(value, opts) {
 export function fmtDateTime(value, opts) {
   const d = value instanceof Date ? value : new Date(value);
   return d.toLocaleString(lang, opts);
+}
+
+export function fmtRelative(value, now = Date.now()) {
+  const parts = relativeParts(value, now);
+  if (!parts) return '';
+  try { return new Intl.RelativeTimeFormat(lang, { numeric: 'auto' }).format(parts.value, parts.unit); }
+  catch { return fmtDate(value); }
 }
 
 export function useI18n() {

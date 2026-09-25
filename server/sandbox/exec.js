@@ -109,8 +109,9 @@ const HANDLERS = {
 
   extract_zip(chatId, call, { rel, missing, maxBytes }) {
     if (missing) return missingArg('extract_zip', 'path', 'It is the relative path of a .zip already in your workspace.');
-    if (overCap(chatId, 0, maxBytes)) return capError(maxBytes);
-    const budget = maxBytes ? Math.max(0, maxBytes - dirSize(chatId)) : 0;
+    const used = dirSize(chatId);
+    if (maxBytes && maxBytes > 0 && used > maxBytes) return capError(maxBytes);
+    const budget = maxBytes ? Math.max(0, maxBytes - used) : 0;
     return extractZip(chatId, rel, argText(call, 'dest', 'destination'), budget);
   },
 

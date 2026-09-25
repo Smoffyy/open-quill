@@ -1,4 +1,4 @@
-import { DEFAULT_STOP_MAX } from '../providers.js';
+import { DEFAULT_STOP_MAX } from '../lib/providers.js';
 
 export function parseStop(value, max = DEFAULT_STOP_MAX) {
   const lines = Array.isArray(value) ? value : String(value ?? '').split('\n');

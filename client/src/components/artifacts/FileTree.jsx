@@ -1,4 +1,4 @@
-import { FileText, Download, ChevDown, Folder } from '../icons.jsx';
+import { FileText, Download, ChevDown, Folder } from '../ui/icons.jsx';
 import { t } from '../../i18n.jsx';
 import { baseName, extOf, fmtSize, countFiles, EXT_COLOR } from '../../lib/artifacts.js';
 

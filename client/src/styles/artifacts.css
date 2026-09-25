@@ -348,6 +348,9 @@
 .summary-modal { width: min(620px, 94vw); max-height: 86vh; background: var(--modal-bg); border: 1px solid var(--border); border-radius: 16px; padding: 22px 24px; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,.28); }
 .sm-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .sm-head h3 { margin: 0; font-size: 18px; }
+.sm-head .sm-close { position: static; }
+.sm-note { margin: 0 0 10px; }
+.sm-actions { margin-top: 12px; }
 .summary-text { flex: 1; min-height: 240px; resize: vertical; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; line-height: 1.55; }
 .summary-text:focus { outline: none; border-color: var(--text); }
 

@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import '../../styles/setup.css';
-import { api } from '../../api.js';
+import { api } from '../../lib/api.js';
 import { t } from '../../i18n.jsx';
 import { useTheme } from '../../lib/theme/store.jsx';
 import { logoFor, modelIconFor, useLogos } from '../../lib/logos.js';
-import { Chat, Check, Cube, Gauge, Gear, Plug, Sliders, Terminal } from '../icons.jsx';
-import { Skel, SkelRows } from '../Skeleton.jsx';
+import { Chat, Check, Cube, Gauge, Gear, Plug, Sliders, Terminal } from '../ui/icons.jsx';
+import { Skel, SkelRows } from '../ui/Skeleton.jsx';
 
 const KNOWN_SWATCH = new Set(['anthropic', 'openai', 'blank']);
 

@@ -1,7 +1,7 @@
 import { db, uid, now, getSetting, setSetting } from '../db.js';
 import { hash, check, sign, publicUser, authMiddleware, sessionFromRequest, createSession, revokeSession, revokeOtherSessions, sessionMaxAgeSeconds } from '../auth.js';
 import { oneShot, stripThink } from '../llm/index.js';
-import { randomSecret, verifyTotp, otpauthUri, makeRecoveryCodes, hashRecovery } from '../totp.js';
+import { randomSecret, verifyTotp, otpauthUri, makeRecoveryCodes, hashRecovery } from '../lib/totp.js';
 import { logAudit, clientIp } from '../lib/audit.js';
 import { purgeUserChats } from '../lib/purge.js';
 import { resolveModelOrDefault } from '../lib/models.js';

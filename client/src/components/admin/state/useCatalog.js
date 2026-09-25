@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { api } from '../../../api.js';
+import { api } from '../../../lib/api.js';
 import { t } from '../../../i18n.jsx';
 
 const SAVE_DELAY = 450;

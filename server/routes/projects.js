@@ -4,7 +4,7 @@ import { db, uid, now } from '../db.js';
 import { authMiddleware } from '../auth.js';
 import { roleLimit } from '../lib/models.js';
 import * as sandbox from '../sandbox.js';
-import * as projectfiles from '../projectfiles.js';
+import * as projectfiles from '../lib/projectfiles.js';
 
 const capFor = (user) => roleLimit('sandbox_limit_mb', !!user.is_admin, user.is_admin ? 1024 : 256) * 1024 * 1024;
 

@@ -3,8 +3,8 @@ import { contextBudget, slideToFit, countExact } from '../../lib/ctxwindow.js';
 import { authMiddleware } from '../../auth.js';
 import { buildMessages } from '../../llm/index.js';
 import { applyPromptVars } from '../../llm/provider.js';
-import * as membank from '../../membank.js';
-import * as websearch from '../../websearch.js';
+import * as referenceFiles from '../../lib/referencefiles.js';
+import * as websearch from '../../lib/websearch.js';
 import { modelCtx } from '../../lib/models.js';
 import {
   chatHistory, historyRows, estimateTokens, calibratedTokens, calibRatio, messageTokens,
@@ -95,8 +95,8 @@ export default function registerInspectRoutes(app) {
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const model = pickModel(req.query.modelId);
     if (!model) return res.json({ segments: [], totalTokens: 0 });
-    const membankOn = getSetting('membank_enabled', '0') === '1' && membank.count() > 0;
-    const memP = membankOn ? membank.promptFor(getSetting('membank_prompt', '')) : '';
+    const membankOn = getSetting('membank_enabled', '0') === '1' && referenceFiles.count() > 0;
+    const memP = membankOn ? referenceFiles.promptFor(getSetting('membank_prompt', '')) : '';
     const convo = buildMessages(model, chatHistory(c, model), false, memP || null, c.summary, promptVars(c.user_id), instrFor(c));
     const segments = convo.map((m, i) => {
       const txt = typeof m.content === 'string' ? m.content : (m.content || []).map(p => p.type === 'text' ? p.text : '[image]').join('\n');
@@ -115,8 +115,8 @@ export default function registerInspectRoutes(app) {
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const model = pickModel(req.query.modelId);
     if (!model) return res.json({ sections: [], messages: [], total: 0 });
-    const membankOn = getSetting('membank_enabled', '0') === '1' && membank.count() > 0;
-    const memP = membankOn ? membank.promptFor(getSetting('membank_prompt', '')) : '';
+    const membankOn = getSetting('membank_enabled', '0') === '1' && referenceFiles.count() > 0;
+    const memP = membankOn ? referenceFiles.promptFor(getSetting('membank_prompt', '')) : '';
     const instructions = instrFor(c);
     const rows = historyRows(c, model);
     const convo = buildMessages(model, chatHistory(c, model), false, memP || null, c.summary, promptVars(c.user_id), instructions);

@@ -50,7 +50,7 @@
 .sg-step-dot svg { width: 12px; height: 12px; }
 .sg-step-label { white-space: nowrap; }
 
-.sg-body { flex: 1; min-height: 0; overflow: hidden auto; padding: 26px 28px; scrollbar-width: thin; }
+.sg-body { flex: 1; min-height: 0; overflow: hidden auto; padding: 26px 28px; }
 .sg-title { font-family: var(--font-serif); font-size: 23px; font-weight: 500; margin: 0 0 8px; color: var(--text); }
 .sg-lede { margin: 0 0 18px; font-size: 14px; line-height: 1.6; color: var(--text-muted); max-width: 62ch; }
 .sg-note { margin: 16px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--text-faint); max-width: 62ch; }
@@ -168,7 +168,6 @@
   overflow: hidden auto;
   border: 1px solid var(--border-soft);
   border-radius: 11px;
-  scrollbar-width: thin;
 }
 .sg-row {
   display: flex; align-items: center; gap: 10px;

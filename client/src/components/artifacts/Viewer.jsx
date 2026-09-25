@@ -1,18 +1,18 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 import { ensureLanguage, hljsVersion, knowsLanguage, rawHighlight, subscribeHljs } from '../../lib/hljs.js';
-import { api } from '../../api.js';
-import { copyText } from '../../clipboard.js';
-import Markdown from '../Markdown.jsx';
+import { api } from '../../lib/api.js';
+import { copyText } from '../../lib/clipboard.js';
+import Markdown from '../chat/Markdown.jsx';
 import FileChip from './FileChip.jsx';
-import { Download, Check, ChevDown, Chevron, Search, X, Down, Eye, CodeTag } from '../icons.jsx';
+import { Download, Check, ChevDown, Chevron, Search, X, Down, Eye, CodeTag } from '../ui/icons.jsx';
 import { t } from '../../i18n.jsx';
 import { buildPreviewDoc } from '../../lib/preview.js';
-import { SegSlide } from '../settingsui.jsx';
+import { SegSlide } from '../ui/controls.jsx';
 import {
   PREVIEW_HTML, PREVIEW_MD, IMAGE_EXT, EXT_LANG, baseName, extOf, escHtml,
   diffLines, stableLineDiff, collapseRuns, splitHighlightedLines, markLine, findMatches
 } from '../../lib/artifacts.js';
-import { Skel, SkelLines } from '../Skeleton.jsx';
+import { Skel, SkelLines } from '../ui/Skeleton.jsx';
 
 const HL_MAX_LINES = 5000;
 const AUTO_HL_MAX_LINES = 1200;

@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, Fields, Field, Input, Select, Btn, Table, Empty } from '../ui.jsx';
-import { api } from '../../../api.js';
-import { Download, Clock } from '../../icons.jsx';
+import { api } from '../../../lib/api.js';
+import { Download, Clock } from '../../ui/icons.jsx';
 import { t } from '../../../i18n.jsx';
-import { Skel, SkelTable } from '../../Skeleton.jsx';
+import { Skel, SkelTable } from '../../ui/Skeleton.jsx';
 
 const PAGE = 60;
 

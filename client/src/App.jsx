@@ -1,56 +1,55 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
-import { api } from './api.js';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
+import { api, SESSION_EXPIRED } from './lib/api.js';
 import { t, tk } from './i18n.jsx';
-import { applyPrefs, prefersDark, appFontId } from './prefs.js';
-import { kwargValuesArr, defaultValueOf } from './kwargs.js';
-import Login from './components/Login.jsx';
-import Sidebar from './components/Sidebar.jsx';
-import AppBackground from './components/AppBackground.jsx';
-import Composer from './components/Composer.jsx';
-import QuickPrompts from './components/QuickPrompts.jsx';
-import CompactingBar from './components/CompactingBar.jsx';
-import EngineStrip from './components/EngineStrip.jsx';
-import CtxGauge from './components/CtxGauge.jsx';
-import ContextInspector from './components/ContextInspector.jsx';
-import LedgerBar from './components/LedgerBar.jsx';
-import ThreadSkeleton from './components/ThreadSkeleton.jsx';
-import SummaryModal from './components/SummaryModal.jsx';
-import CommandPalette from './components/CommandPalette.jsx';
+import { applyPrefs, prefersDark, appFontId, takeSettingsToReopen } from './lib/prefs.js';
+import { kwargValuesArr, defaultValueOf } from './lib/kwargs.js';
+import Login from './components/pages/Login.jsx';
+import Sidebar from './components/sidebar/Sidebar.jsx';
+import AppBackground from './components/chat/AppBackground.jsx';
+import Composer from './components/composer/Composer.jsx';
+import QuickPrompts from './components/chat/QuickPrompts.jsx';
+import CompactingBar from './components/chat/CompactingBar.jsx';
+import EngineStrip from './components/chat/EngineStrip.jsx';
+import CtxGauge from './components/chat/CtxGauge.jsx';
+import ContextInspector from './components/dialogs/ContextInspector.jsx';
+import LedgerBar from './components/chat/LedgerBar.jsx';
+import ThreadSkeleton from './components/chat/ThreadSkeleton.jsx';
+import SummaryModal from './components/dialogs/SummaryModal.jsx';
+import CommandPalette from './components/dialogs/CommandPalette.jsx';
 import { computeActiveBg } from './lib/appbg.js';
 import { presetOf, nextTheme } from './lib/palettes.js';
-import Disclaimer from './components/Disclaimer.jsx';
+import Disclaimer from './components/chat/Disclaimer.jsx';
 import { ThemeProvider } from './lib/theme/store.jsx';
 import ThemeSlot from './components/builder/ThemeSlot.jsx';
-const SetupGuide = React.lazy(() => import('./components/setup/SetupGuide.jsx'));
-const BuildMode = React.lazy(() => import('./components/builder/BuildMode.jsx'));
 
-import Message from './components/Message.jsx';
-import TopbarActions from './components/TopbarActions.jsx';
-const SettingsModal = React.lazy(() => import('./components/SettingsModal.jsx'));
-const PromptLedger = React.lazy(() => import('./components/PromptLedger.jsx'));
-const ModelDocs = React.lazy(() => import('./components/ModelDocs.jsx'));
-const AdminPanel = React.lazy(() => import('./components/AdminPanel.jsx'));
-const Playground = React.lazy(() => import('./components/Playground.jsx'));
-import DocModal from './components/DocModal.jsx';
-import NotFound from './components/NotFound.jsx';
-import ArtifactsPanel from './components/ArtifactsPanel.jsx';
-import ChatControls from './components/ChatControls.jsx';
-import ModelDropdown from './components/ModelDropdown.jsx';
-import CallPanel from './components/CallPanel.jsx';
-import ChatsOverview from './components/ChatsOverview.jsx';
-import ArtifactsLibrary from './components/ArtifactsLibrary.jsx';
-import ScheduledTasks from './components/ScheduledTasks.jsx';
-import Tip from './components/Tip.jsx';
-import ProjectsPanel from './components/ProjectsPanel.jsx';
-import { ChatMenu, menuAtButton } from './components/ChatMenu.jsx';
-import PersonasModal from './components/PersonasModal.jsx';
-import SearchModal from './components/SearchModal.jsx';
-import Toaster from './components/Toaster.jsx';
-import Lightbox from './components/Lightbox.jsx';
-import ShortcutsModal from './components/ShortcutsModal.jsx';
-import ThreadRail from './components/ThreadRail.jsx';
-import ThreadFind from './components/ThreadFind.jsx';
-import Outline from './components/Outline.jsx';
+import Message from './components/chat/Message.jsx';
+import TopbarActions from './components/chat/TopbarActions.jsx';
+import SettingsModal from './components/settings/SettingsModal.jsx';
+import PromptLedger from './components/dialogs/PromptLedger.jsx';
+import DocModal from './components/dialogs/DocModal.jsx';
+import NotFound from './components/pages/NotFound.jsx';
+import ArtifactsPanel from './components/artifacts/ArtifactsPanel.jsx';
+import ChatControls from './components/chat/ChatControls.jsx';
+import ModelDropdown from './components/composer/ModelDropdown.jsx';
+import CallPanel from './components/chat/CallPanel.jsx';
+import ChatsOverview from './components/pages/ChatsOverview.jsx';
+import ArtifactsLibrary from './components/artifacts/ArtifactsLibrary.jsx';
+import ScheduledTasks from './components/pages/ScheduledTasks.jsx';
+import Tip from './components/ui/Tip.jsx';
+import ProjectsPanel from './components/pages/ProjectsPanel.jsx';
+import PersonasModal from './components/dialogs/PersonasModal.jsx';
+import SearchModal from './components/dialogs/SearchModal.jsx';
+import Toaster from './components/ui/Toaster.jsx';
+import Lightbox from './components/dialogs/Lightbox.jsx';
+import ShortcutsModal from './components/dialogs/ShortcutsModal.jsx';
+import ThreadRail from './components/chat/ThreadRail.jsx';
+import ThreadFind from './components/chat/ThreadFind.jsx';
+import ChatTopbar from './components/chat/ChatTopbar.jsx';
+import Greeting from './components/chat/Greeting.jsx';
+import ChatError from './components/chat/ChatError.jsx';
+import QueuedMessages from './components/chat/QueuedMessages.jsx';
+import ChordHint from './components/ui/ChordHint.jsx';
+import Outline from './components/chat/Outline.jsx';
 import { buildOutline } from './lib/outline.js';
 import { railItems } from './lib/threadmeta.js';
 import { useDrafts } from './lib/drafts.js';
@@ -58,6 +57,7 @@ import { statusDelayEnabled } from './lib/status.js';
 import { resolveReveal, revealSpeedMs } from './lib/reveal.js';
 import { comboKeys, comboLabel, resolveKeybinds } from './lib/keybinds.js';
 import { useKeybinds, isTypingTarget } from './lib/keyboard.js';
+import { hasOpenLayer } from './lib/dismiss.js';
 import { useThreadScroll } from './lib/threadscroll.js';
 import { useGenMirror } from './lib/genmirror.js';
 import { useLiveTools, EMPTY_CALLS } from './lib/livetools.js';
@@ -65,21 +65,31 @@ import { dispatchWs } from './lib/wsmessages.js';
 import { createLru } from './lib/lru.js';
 import { useTurnMeta, liveLedgerTokens } from './lib/turnmeta.js';
 import { useTurnStream } from './lib/turnstream.js';
-import { parseRoute, shouldResetPath, pathForChat, pathForProject } from './lib/route.js';
+import { parseRoute, shouldResetPath, pathForChat, pathForProject, pathForLibrary, LIBRARY_PAGES } from './lib/route.js';
 import { hasMath, katexPlugin, ensureKatex } from './lib/mathjs.js';
 import { docsConfig, docsTree, docsPath, parseDocsPath } from './lib/modeldocs.js';
 import { useDocsEdit } from './lib/docsedit.js';
 import { useSocket } from './lib/socket.js';
-const BranchTree = React.lazy(() => import('./components/BranchTree.jsx'));
-import { toast } from './toast.js';
-import { copyText } from './clipboard.js';
-import { Down, ChevDown, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork, Panel, Copy, Check, Star, Telescope, TextIcon, Expand } from './components/icons.jsx';
+import BranchTree from './components/chat/BranchTree.jsx';
+import { toast } from './lib/toast.js';
+import { copyText } from './lib/clipboard.js';
+import { Down, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork, Panel, Copy, Star, Telescope, TextIcon, Expand } from './components/ui/icons.jsx';
 import { BRAND_ICON } from './lib/brand.js';
 import { SKELETON_DELAY } from './lib/skeleton.js';
+
+const SetupGuide = lazy(() => import('./components/setup/SetupGuide.jsx'));
+const BuildMode = lazy(() => import('./components/builder/BuildMode.jsx'));
+const ModelDocs = lazy(() => import('./components/pages/ModelDocs.jsx'));
+const AdminPanel = lazy(() => import('./components/admin/AdminApp.jsx'));
+const Playground = lazy(() => import('./components/pages/Playground.jsx'));
 
 const THREAD_SWAP_DELAY = 90;
 const THREAD_SWAP_MAX = 600;
 const HEAVY_THREAD_CHARS = 40000;
+function warn(message) {
+  toast(message || t('Could not save these changes.'), { icon: 'info', kind: 'warn' });
+}
+
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: tk('Assistants can make mistakes, double-check responses.'), greetings: [tk('How can I help you?')], appIcon: '', supportContact: '', quickPrompts: [], version: '' };
 
 export default function App() {
@@ -137,8 +147,13 @@ export default function App() {
     setChatsOverview(to === 'chats');
     setDocsTarget(to === 'docs' ? { kind: 'overview', id: null } : null);
     if (to !== 'projects') { setShowProjects(false); setProjectOpenId(null); }
-    setLibPage(to === 'artifacts' || to === 'scheduled' ? to : null);
-    if (to !== 'projects' && to !== 'docs' && (shouldResetPath('projects', location.pathname) || shouldResetPath('docs', location.pathname))) history.pushState({}, '', '/');
+    const library = LIBRARY_PAGES.includes(to);
+    setLibPage(library ? to : null);
+    if (library) {
+      if (location.pathname !== pathForLibrary(to)) history.pushState({}, '', pathForLibrary(to));
+    } else if (to !== 'projects' && to !== 'docs' && ['projects', 'docs', ...LIBRARY_PAGES].some(v => shouldResetPath(v, location.pathname))) {
+      history.pushState({}, '', '/');
+    }
   }, []);
   const sbProjects = useCallback(() => { navTo('projects'); sidebarFns.current.openProjects(null); }, [navTo]);
   const sbOpenProject = useCallback((id) => { navTo('projects'); sidebarFns.current.openProjects(id); }, [navTo]);
@@ -146,9 +161,10 @@ export default function App() {
   const onSearchCb = useCallback(() => setCmdkOpen(true), []);
   const onToggleSidebarCb = useCallback(() => setCollapsed(c => !c), []);
   const onMobileCloseCb = useCallback(() => setMobileDrawer(false), []);
-  const onSettingsCb = useCallback(() => { setMobileDrawer(false); setSettingsTab('general'); setShowSettings(true); }, []);
-  const onSkillsCb = useCallback(() => { setMobileDrawer(false); setSettingsTab('skills'); setShowSettings(true); }, []);
-  const onVersionCb = useCallback(() => { setMobileDrawer(false); setSettingsTab('version'); setShowSettings(true); }, []);
+  const openSettings = useCallback((tab = 'general', opts) => { setMobileDrawer(false); setSettings({ tab, ...opts }); }, []);
+  const onSettingsCb = useCallback(() => openSettings('general'), [openSettings]);
+  const onSkillsCb = useCallback(() => openSettings('skills'), [openSettings]);
+  const onVersionCb = useCallback(() => openSettings('version'), [openSettings]);
   const onDocsCb = useCallback(() => {
     navTo('docs');
     history.pushState({}, '', '/docs');
@@ -210,8 +226,7 @@ export default function App() {
   };
   const [collapsed, setCollapsed] = useState(false);
   const [mobileDrawer, setMobileDrawer] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [settingsTab, setSettingsTab] = useState('general');
+  const [settings, setSettings] = useState(null);
   const kbHandlers = useRef({});
   const [chordHint, setChordHint] = useState(null);
   const turnMeta = useTurnMeta();
@@ -227,7 +242,7 @@ export default function App() {
     try { await api.patch('/api/skills/' + sk.id, { enabled: !sk.enabled }); loadSkills(); }
     catch { toast(t('Could not update the skill.')); }
   }, [loadSkills]);
-  const onSettingsClosed = useCallback(() => { setShowSettings(false); loadSkills(); }, [loadSkills]);
+  const onSettingsClosed = useCallback(() => { setSettings(null); loadSkills(); }, [loadSkills]);
   useEffect(() => { loadSkills(); }, [loadSkills]);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showPlayground, setShowPlayground] = useState(false);
@@ -275,14 +290,10 @@ export default function App() {
   const [stopping, setStopping] = useState(false);
   const [compacting, setCompacting] = useState(false);
   const [hasSummary, setHasSummary] = useState(false);
-  const [titleMenu, setTitleMenu] = useState(null);
   const [showSearch, setShowSearch] = useState(false);
   const [chatPins, setChatPins] = useState([]);
   const [personasOpen, setPersonasOpen] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [renameVal, setRenameVal] = useState('');
   const [inspectOpen, setInspectOpen] = useState(false);
-  const titleChevRef = useRef(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [artifactsOpen, setArtifactsOpen] = useState(false);
@@ -333,7 +344,7 @@ export default function App() {
     root.toggleAttribute('data-oq-focus', focusMode);
     if (!focusMode) return undefined;
     const esc = (e) => {
-      if (e.key !== 'Escape' || isTypingTarget(document.activeElement) || document.querySelector('.overlay')) return;
+      if (e.key !== 'Escape' || e.defaultPrevented || isTypingTarget(document.activeElement) || hasOpenLayer()) return;
       setFocusMode(false);
     };
     document.addEventListener('keydown', esc);
@@ -374,7 +385,6 @@ export default function App() {
   const ledgerDefaultApplied = useRef(false);
   const [ledger, setLedger] = useState(null);
   const [chatErrors, setChatErrors] = useState({});
-  const [errorCopied, setErrorCopied] = useState(false);
 
   const handleWsRef = useRef(null);
   const onWsMessage = useCallback((m) => handleWsRef.current?.(m), []);
@@ -490,6 +500,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const expired = () => { if (userRef.current) window.location.reload(); };
+    window.addEventListener(SESSION_EXPIRED, expired);
+    return () => window.removeEventListener(SESSION_EXPIRED, expired);
+  }, []);
+  useEffect(() => {
     api.get('/api/me').then(({ user }) => setUser(user)).catch(() => {
       setUser(null);
       api.get('/api/auth/context').then(c => {
@@ -514,7 +529,12 @@ export default function App() {
       return () => mq.removeEventListener?.('change', h);
     }
   }, [user, cfg?.uiPreset]);
-  useEffect(() => { if (user) { loadModels(); loadChats(); loadAppConfig(); loadBudget(); connect(); openFromUrl(); loadProjects(); } }, [!!user]);
+  useEffect(() => {
+    if (!user) return;
+    loadModels(); loadChats(); loadAppConfig(); loadBudget(); connect(); openFromUrl(); loadProjects();
+    const tab = takeSettingsToReopen();
+    if (tab) openSettings(tab);
+  }, [!!user]);
   async function loadBudget() { try { setBudget(await api.get('/api/me/budget')); } catch {} }
   async function loadProjects() { try { setProjects(await api.get('/api/projects')); } catch {} finally { setProjectsReady(true); } }
 
@@ -587,9 +607,9 @@ export default function App() {
     setShowPlayground(r.view === 'playground');
     setDocsTarget(r.view === 'docs' ? parseDocsPath(location.pathname) : null);
     setShowProjects(onProjects);
-    setLibPage(null);
+    setLibPage(LIBRARY_PAGES.includes(r.view) ? r.view : null);
     setChatsOverview(false);
-    if (r.view === 'notfound') return;
+    if (r.view === 'notfound' || LIBRARY_PAGES.includes(r.view)) return;
     if (r.view === 'docs') return;
     if (onProjects) { setProjectOpenId(r.id ?? null); return; }
     if (r.view !== 'home' && r.view !== 'chat') return;
@@ -632,7 +652,7 @@ export default function App() {
     );
     document.title = `${head} - ${appName}`;
   }, [activeId, chats, cfg.appName, incognito, notFound, showAdmin, showPlayground, docsTarget, showProjects, projectOpenId, projects, libPage, chatsOverview]);
-  async function exportAllChats() { window.open('/api/chats/export-all', '_blank'); }
+  function exportAllChats() { window.open('/api/chats/export-all', '_blank'); }
   async function importChatsFile(file) {
     try {
       const json = JSON.parse(await file.text());
@@ -689,7 +709,13 @@ export default function App() {
     if (!id) return;
     setLedger(l => l ? { ...l, messages: l.messages.map(m => m.id === messageId ? { ...m, excluded } : m) } : l);
     setMessages(ms => ms.map(m => m.id === messageId ? { ...m, excluded } : m));
-    try { await api.patch('/api/chats/' + id + '/messages/' + messageId, { excluded }); } catch {}
+    try { await api.patch('/api/chats/' + id + '/messages/' + messageId, { excluded }); }
+    catch {
+      setMessages(ms => ms.map(m => m.id === messageId ? { ...m, excluded: !excluded } : m));
+      loadLedger();
+      warn();
+      return;
+    }
     loadLedger();
     toast(excluded ? t('Message dropped from context') : t('Message back in context'), { icon: 'info' });
   }, [loadLedger]);
@@ -836,7 +862,10 @@ export default function App() {
   const togglePin = useCallback((messageId, pinned) => {
     if (!activeId) return;
     setMessages(ms => ms.map(m => m.id === messageId ? { ...m, pinned } : m));
-    api.patch('/api/chats/' + activeId + '/messages/' + messageId, { pinned }).catch(() => {});
+    api.patch('/api/chats/' + activeId + '/messages/' + messageId, { pinned }).catch(() => {
+      setMessages(ms => ms.map(m => m.id === messageId ? { ...m, pinned: !pinned } : m));
+      warn();
+    });
     toast(pinned ? t('Message pinned, kept in context') : t('Message unpinned'), { icon: 'pin' });
   }, [activeId]);
   const togglePinFile = useCallback(async (att) => {
@@ -848,10 +877,9 @@ export default function App() {
         : await api.post('/api/chats/' + activeId + '/pins', { name: att.name, url: att.url, type: att.type || '' });
       setChatPins(r.pins || []);
       toast(isPinned ? t('File unpinned from chat') : t('File pinned, kept in context'), { icon: 'pin' });
-    } catch {}
+    } catch { warn(); }
   }, [activeId, chatPins]);
   function jumpToMessage(id, opts) {
-    setTitleMenu(null);
     stick.current = false;
     requestAnimationFrame(() => {
       const el = document.querySelector('[data-mid="' + id + '"]');
@@ -876,12 +904,14 @@ export default function App() {
   }, [stick]);
   async function copyConversation() {
     const text = messages.filter(m => m.role === 'user' || m.role === 'assistant')
-      .map(m => (m.role === 'user' ? 'You' : t('Assistant')) + ':\n' + (typeof m.content === 'string' ? m.content : '')).join('\n\n');
-    try { await navigator.clipboard.writeText(text); toast(t('Conversation copied'), { icon: 'copy' }); } catch {}
+      .map(m => (m.role === 'user' ? t('You') : t('Assistant')) + ':\n' + (typeof m.content === 'string' ? m.content : '')).join('\n\n');
+    if (await copyText(text)) toast(t('Conversation copied'), { icon: 'copy' });
   }
   async function saveSavedPrompts(list) {
+    const before = user?.savedPrompts || [];
     setUser(u => ({ ...u, savedPrompts: list }));
-    try { await api.put('/api/me/prompts', { prompts: list }); } catch {}
+    try { await api.put('/api/me/prompts', { prompts: list }); }
+    catch { setUser(u => ({ ...u, savedPrompts: before })); warn(); }
   }
   function savePromptFromInput(title) {
     const text = (input || '').trim();
@@ -892,23 +922,27 @@ export default function App() {
   }
   function deleteSavedPrompt(id) { saveSavedPrompts((user?.savedPrompts || []).filter(p => p.id !== id)); }
   async function savePersonas(list) {
+    const before = user?.personas || [];
     setUser(u => ({ ...u, personas: list }));
-    try { await api.put('/api/me/personas', { personas: list }); } catch {}
+    try { await api.put('/api/me/personas', { personas: list }); }
+    catch { setUser(u => ({ ...u, personas: before })); warn(); }
   }
   async function applyPersona(p) {
     if (!p) return;
     if (p.modelId && models.find(m => m.id === p.modelId)) setCurrentId(p.modelId);
     if (activeId) {
-      try { await api.patch('/api/chats/' + activeId, { instructions: p.instructions || '' }); } catch {}
+      try { await api.patch('/api/chats/' + activeId, { instructions: p.instructions || '' }); }
+      catch { warn(); return; }
     }
     toast(t('Applied persona: {name}', { name: p.name }), { icon: 'star' });
   }
-  function commitRename() {
-    const t = renameVal.trim();
-    setRenaming(false);
-    if (!activeId || !t) return;
-    setChats(cs => cs.map(c => c.id === activeId ? { ...c, title: t } : c));
-    api.patch('/api/chats/' + activeId, { title: t }).catch(() => {});
+  function renameChat(title) {
+    const id = activeId;
+    const before = chats.find(c => c.id === id)?.title;
+    if (!id || !title || title === before) return;
+    const setTitle = (v) => setChats(cs => cs.map(c => c.id === id ? { ...c, title: v } : c));
+    setTitle(title);
+    api.patch('/api/chats/' + id, { title }).catch(() => { setTitle(before); warn(); });
   }
 
   function stepFocus(delta) {
@@ -1001,7 +1035,6 @@ export default function App() {
     setCanContinue(false); setQueue([]);
     flushDraft();
     setInput(loadDraft(id));
-    setTitleMenu(null);
     if (push) history.pushState({}, '', pathForChat(id));
     else history.replaceState({}, '', pathForChat(id));
     if (cached) pinToBottom(false, 30);
@@ -1071,7 +1104,8 @@ export default function App() {
     }
   }
   async function deleteChat(id) {
-    await api.del('/api/chats/' + id);
+    try { await api.del('/api/chats/' + id); }
+    catch { warn(t('Could not delete that chat.')); return; }
     chatCache.current.delete(id);
     setChats(cs => cs.filter(c => c.id !== id));
     if (id === activeId) newChat();
@@ -1081,13 +1115,14 @@ export default function App() {
     if (!id || streamingRef.current || queuedRef.current) return;
     setMessages(ms => ms.filter(m => m.id !== messageId));
     try { await api.del('/api/chats/' + id + '/messages/' + messageId); await refreshMessages(id); }
-    catch { refreshMessages(id); }
+    catch { refreshMessages(id); warn(); }
   }, []);
   function toggleStar(id) {
     const cur = chats.find(c => c.id === id);
     const next = !cur?.starred;
-    setChats(cs => cs.map(c => c.id === id ? { ...c, starred: next } : c));
-    api.patch('/api/chats/' + id, { starred: next }).catch(() => {});
+    const setStarred = (v) => setChats(cs => cs.map(c => c.id === id ? { ...c, starred: v } : c));
+    setStarred(next);
+    api.patch('/api/chats/' + id, { starred: next }).catch(() => { setStarred(!next); warn(); });
   }
 
   function moveChatToProject(chatId, projectId) {
@@ -1097,7 +1132,7 @@ export default function App() {
     setChats(cs => cs.map(c => c.id === chatId ? { ...c, projectId: target } : c));
     api.patch('/api/chats/' + chatId, { projectId: target || '' })
       .then(() => loadProjects())
-      .catch(() => setChats(cs => cs.map(c => c.id === chatId ? { ...c, projectId: prev } : c)));
+      .catch(() => { setChats(cs => cs.map(c => c.id === chatId ? { ...c, projectId: prev } : c)); warn(); });
   }
 
   async function send(attachments = [], overrideText, opts = {}) {
@@ -1144,7 +1179,9 @@ export default function App() {
 
     let chatId = activeIdRef.current;
     if (!chatId) {
-      const c = await api.post('/api/chats');
+      let c;
+      try { c = await api.post('/api/chats'); }
+      catch { warn(t('Could not start a new chat.')); return; }
       chatId = c.id; setActiveId(chatId); activeIdRef.current = chatId;
       setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false }, ...cs]);
       history.pushState({}, '', pathForChat(chatId));
@@ -1165,7 +1202,9 @@ export default function App() {
     if (!currentId) return;
     const text = (rawText || '').trim();
     if (!text && attachments.length === 0) return;
-    const c = await api.post('/api/chats', { projectId: project.id });
+    let c;
+    try { c = await api.post('/api/chats', { projectId: project.id }); }
+    catch { warn(t('Could not start a new chat.')); return; }
     setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false, projectId: project.id }, ...cs]);
     setShowProjects(false); setProjectOpenId(null);
     setCurrentProject(project);
@@ -1193,10 +1232,17 @@ export default function App() {
   function clearChatProject() {
     if (!activeId || !currentProject) { setCurrentProject(null); return; }
     const pid = currentProject.id;
+    const project = currentProject;
+    const id = activeId;
     setCurrentProject(null);
-    setChats(cs => cs.map(c => c.id === activeId ? { ...c, projectId: null } : c));
-    api.patch('/api/chats/' + activeId, { projectId: '' }).catch(() => {});
+    setChats(cs => cs.map(c => c.id === id ? { ...c, projectId: null } : c));
     setProjects(ps => ps.map(p => p.id === pid ? { ...p, chatCount: Math.max(0, (p.chatCount || 1) - 1) } : p));
+    api.patch('/api/chats/' + id, { projectId: '' }).catch(() => {
+      setCurrentProject(project);
+      setChats(cs => cs.map(c => c.id === id ? { ...c, projectId: pid } : c));
+      setProjects(ps => ps.map(p => p.id === pid ? { ...p, chatCount: (p.chatCount || 0) + 1 } : p));
+      warn();
+    });
   }
   function openProjects(id = null) {
     setMobileDrawer(false);
@@ -1283,11 +1329,16 @@ export default function App() {
     if (chatId === activeKey()) { stop(); return; }
     wsSend({ type: 'stop', chatId });
   }, []);
-  async function logout() { await api.post('/api/auth/logout'); location.href = '/'; }
+  async function logout() {
+    try { await api.post('/api/auth/logout'); }
+    catch { warn(t('Could not sign out.')); return; }
+    location.href = '/';
+  }
   function updatePref(key, value) {
-    const prefs = { ...(user?.prefs || {}), [key]: value };
+    const before = user?.prefs || {};
+    const prefs = { ...before, [key]: value };
     setUser(u => ({ ...u, prefs }));
-    api.patch('/api/me', { prefs }).catch(() => {});
+    api.patch('/api/me', { prefs }).catch(() => { setUser(u => ({ ...u, prefs: before })); warn(); });
   }
 
   if (user === undefined) return <div style={{ height: '100%', background: 'var(--bg)' }} />;
@@ -1326,7 +1377,8 @@ export default function App() {
     styles: user?.styles || [], styleId, onSelectStyle: setStyleId, onSaveStyles: saveStyles,
     conversationEnded: chatEnded, endedReason: chatEndedReason,
     removedModel: activeId ? chatRemovedModel : null,
-    skills, onToggleSkill: toggleSkill, onManageSkills: () => onSkillsCb(),
+    skills, onToggleSkill: toggleSkill, onManageSkills: (mode) => openSettings('skills', { browse: mode === 'browse' }),
+    onManageConnectors: () => openSettings('mcp'), attachCombo: comboLabel(resolveKeybinds(user?.prefs).attachFiles),
     hideModelPicker: cfg.uiPreset === 'openai',
     enterSend: cfg.uiPreset !== 'openai',
     chipsBelow: cfg.uiPreset === 'openai',
@@ -1373,7 +1425,7 @@ export default function App() {
     searchChats: () => setShowSearch(true),
     newChat: () => newChat(),
     shortcuts: () => setShowShortcuts(x => !x),
-    openSettings: () => { setSettingsTab('general'); setShowSettings(true); },
+    openSettings: () => openSettings('general'),
     toggleIncognito: () => { toggleIncognito(); },
     toggleTheme: () => {
       const next = nextTheme({
@@ -1439,9 +1491,9 @@ export default function App() {
     { id: 'projects', label: t('Open Projects'), keywords: 'project workspace organize', action: () => openProjects(null) },
     { id: 'incognito', label: incognito ? t('Exit incognito') : t('Start incognito chat'), shortcut: comboLabel(kb.toggleIncognito), keywords: 'private ghost', action: () => toggleIncognito() },
     { id: 'modeldocs', label: t('Model docs'), keywords: 'models compare docs catalog capabilities', action: onDocsCb },
-    { id: 'settings', label: t('Open settings'), shortcut: comboLabel(kb.openSettings), keywords: 'preferences account theme', action: () => { setSettingsTab('general'); setShowSettings(true); } },
+    { id: 'settings', label: t('Open settings'), shortcut: comboLabel(kb.openSettings), keywords: 'preferences account theme', action: () => openSettings('general') },
     { id: 'promptledger', label: t('What gets sent'), keywords: 'prompt inspect context debug tokens', action: () => { if (activeId) setLedgerPrompt(true); } },
-    { id: 'keybinds', label: t('Customize shortcuts'), keywords: 'keybinds hotkeys keys remap', action: () => { setSettingsTab('keybinds'); setShowSettings(true); } },
+    { id: 'keybinds', label: t('Customize shortcuts'), keywords: 'keybinds hotkeys keys remap', action: () => openSettings('keybinds') },
     ...(user?.isAdmin ? [{ id: 'admin', label: t('Open admin panel'), keywords: 'models users connection providers', action: () => { history.pushState({}, '', '/admin'); setShowAdmin(true); } }] : []),
     ...(user?.isAdmin ? [{ id: 'build', label: t('Enter build mode'), keywords: 'theme builder design layout customise interface', action: () => { try { localStorage.setItem('oq-build-mode', '1'); } catch {} window.location.reload(); } }] : []),
     ...(user?.isAdmin ? [{ id: 'playground', label: t('Open playground'), keywords: 'test model tune sampling kwargs prompt', action: () => { history.pushState({}, '', '/playground'); setShowPlayground(true); } }] : []),
@@ -1511,11 +1563,11 @@ export default function App() {
         )}
         {docsTarget && (
           <div className="lib-overlay mdoc-overlay" role="region" aria-label={t('Model docs')}>
-            <React.Suspense fallback={null}>
+            <Suspense fallback={null}>
               <ModelDocs target={docsTarget} appName={cfg.appName || 'open-quill'} edit={docsEdit}
                 isAdmin={!!user?.isAdmin} onNavigate={onDocsNav} onExit={onDocsExit}
                 onTry={(id) => { pickModel(id); onDocsExit(); }} />
-            </React.Suspense>
+            </Suspense>
           </div>
         )}
         {libPage && (
@@ -1537,16 +1589,19 @@ export default function App() {
           </div>
         )}
         {empty && (
-          <button className="mobile-menu-btn empty-menu" onClick={() => setMobileDrawer(true)} title={t("Menu")}><Menu style={{ width: 20 }} /></button>
+          <button className="mobile-menu-btn empty-menu" onClick={() => setMobileDrawer(true)} title={t("Menu")} aria-label={t("Menu")}><Menu style={{ width: 20 }} /></button>
         )}
         {!incognito && empty && (
           <TopbarActions className="home-actions"
             leading={<>
-              <button className="paper-btn" onClick={toggleIncognito} title={t("Incognito chat, not saved")} disabled={streaming || queued}>
+              <button className="paper-btn" onClick={toggleIncognito} title={t("Incognito chat, not saved")} aria-label={t("Incognito chat, not saved")} disabled={streaming || queued}>
                 <Ghost />
               </button>
               {artifactsBtn}
-            </>} />
+            </>}
+            items={[
+              { id: 'personas', icon: <Star />, label: t('Personas'), onClick: () => setPersonasOpen(true) },
+            ]} />
         )}
         {empty && !incognito && cfg.uiPreset === 'openai' && (
           <div className="home-topbar">
@@ -1556,25 +1611,8 @@ export default function App() {
         {empty ? (
           <div className="center-wrap">
             <ThemeSlot name="home.above" />
-            <div className="greeting">
-              {incognito
-                ? (cfg.uiPreset === 'openai'
-                    ? <span className="incog-title">{t("Temporary Chat")}</span>
-                    : <><Ghost style={{ width: 44 }} /> {t(incognitoGreeting)}</>)
-                : (() => {
-                    let line;
-                    if (cfg.greetingsChosen && greeting) line = t(greeting);
-                    else {
-                      const h = new Date().getHours();
-                      const part = h < 5 ? t('Working late') : h < 12 ? t('Good morning') : h < 17 ? t('Good afternoon') : h < 22 ? t('Good evening') : t('Burning the midnight oil');
-                      const nm = (user?.displayName || '').split(' ')[0];
-                      line = nm ? part + ', ' + nm : part;
-                    }
-                    return model?.staticIcon
-                      ? <><img src={model.staticIcon} alt="" aria-hidden="true" style={{ objectFit: 'contain' }} /> {line}</>
-                      : line;
-                  })()}
-            </div>
+            <Greeting incognito={incognito} preset={cfg.uiPreset} incognitoLine={incognitoGreeting}
+              greeting={cfg.greetingsChosen ? greeting : null} userName={user?.displayName} icon={model?.staticIcon || ''} />
             <ThemeSlot name="composer.above" />
             <div className="composer-wrap">
               <Composer {...composerProps} autoFocus modelUp enterSend={false} focusKey={focusTick} />
@@ -1590,50 +1628,17 @@ export default function App() {
           </div>
         ) : (
           <>
-            <div className="topbar">
-              {cfg.uiPreset === 'openai' && modelPicker}
-              <button className="mobile-menu-btn" onClick={() => setMobileDrawer(true)} title={t("Menu")}><Menu style={{ width: 20 }} /></button>
-              {renaming ? (
-                <input className="chat-rename" autoFocus value={renameVal}
-                  onFocus={(e) => e.target.select()}
-                  onChange={(e) => setRenameVal(e.target.value)}
-                  onBlur={commitRename}
-                  onKeyDown={(e) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenaming(false); }} />
-              ) : (
-                <div className="chat-name-wrap">
-                  {activeProject && (
-                    <>
-                      <button className="ct-crumb" onClick={() => { setProjectOpenId(activeProject.id); setShowProjects(true); history.pushState({}, '', pathForProject(activeProject.id)); }}>
-                        {activeProject.name}
-                      </button>
-                      <span className="ct-sep">/</span>
-                    </>
-                  )}
-                  <button className="chat-name ct-name" disabled={!activeId} title={t('Rename chat')}
-                    onClick={() => { setRenameVal(activeChat?.title || ''); setRenaming(true); }}>
-                    <span className="ct-title">{activeChat?.title || (booting ? '' : t('New chat'))}</span>
-                  </button>
-                  <button className="chat-name ct-caret" ref={titleChevRef} disabled={!activeId}
-                    title={t('Chat options')} aria-label={t('Chat options')} aria-haspopup="menu" aria-expanded={!!titleMenu}
-                    onClick={(e) => { const at = menuAtButton(e.currentTarget); setTitleMenu(m => m ? null : at); }}>
-                    <ChevDown />
-                  </button>
-                  {titleMenu && activeId && (
-                    <ChatMenu
-                      chat={{ id: activeId, title: activeChat?.title || t('New chat'), starred: !!activeChat?.starred, projectId: activeChat?.projectId || null }}
-                      at={titleMenu} projects={projects} busy={busyChats.includes(activeId)} anchorRef={titleChevRef}
-                      onStopChat={stopChat}
-                      onToggleStar={toggleStar}
-                      onMoveToProject={moveChatToProject}
-                      onDelete={deleteChat}
-                      onClose={() => setTitleMenu(null)} />
-                  )}
-                </div>
-              )}
+            <ChatTopbar
+              lead={cfg.uiPreset === 'openai' ? modelPicker : null}
+              chat={activeChat} chatId={activeId} project={activeProject} booting={booting}
+              projects={projects} busy={busyChats.includes(activeId)}
+              onOpenMenu={() => setMobileDrawer(true)} onOpenProject={openProjects} onRename={renameChat}
+              onStopChat={stopChat} onToggleStar={toggleStar} onMoveToProject={moveChatToProject} onDelete={deleteChat}
+              actions={
               <TopbarActions
                 leading={<>
                   {!incognito && (
-                    <button className="paper-btn" onClick={toggleIncognito} title={t("Incognito chat, not saved")} disabled={streaming || queued}>
+                    <button className="paper-btn" onClick={toggleIncognito} title={t("Incognito chat, not saved")} aria-label={t("Incognito chat, not saved")} disabled={streaming || queued}>
                       <Ghost />
                     </button>
                   )}
@@ -1651,7 +1656,7 @@ export default function App() {
                   activeId && messages.length > 0 && { id: 'focus', icon: <Expand />, label: focusMode ? t('Exit focus mode') : t('Focus mode'), active: focusMode, onClick: () => setFocusMode(o => !o) },
                   activeId && { id: 'ledger', icon: <Gauge />, label: t('Context ledger'), active: ledgerOpen, onClick: () => setLedgerOpen(o => !o) },
                 ]} />
-            </div>
+              } />
             {findOpen && user?.prefs?.threadFind !== false && <ThreadFind scrollRef={scrollRef} revision={findRevision} onMatches={onFindMatches} onClose={closeFind} />}
             <div className="scroll-area" id="oq-thread" ref={scrollRef} onScroll={onScroll} onWheel={onWheel} onTouchMove={onTouchMove}>
               <div className={'thread' + (ledgerOpen ? ' ledger-on' : '') + (heavyThread ? ' virt' : '') + (findOpen ? ' finding' : '') + (threadSwap ? ' swapping' : '')}
@@ -1691,35 +1696,8 @@ export default function App() {
                     );
                   });
                 })()}
-                {chatErrors[activeKey()] && (
-                  <div className="chat-error" role="alert">
-                    <div className="chat-error-main">
-                      <span className="chat-error-title">{t('Something went wrong')}</span>
-                      <span className="chat-error-text">{chatErrors[activeKey()]}</span>
-                    </div>
-                    <div className="chat-error-actions">
-                      <button className="chat-error-copy" title={errorCopied ? t('Copied') : t('Copy')}
-                        onClick={async () => { if (await copyText(chatErrors[activeKey()])) { setErrorCopied(true); setTimeout(() => setErrorCopied(false), 1400); } }}>
-                        {errorCopied ? <Check style={{ width: 15 }} /> : <Copy style={{ width: 15 }} />}
-                      </button>
-                      <button className="chat-error-x" title={t('Dismiss')} onClick={() => dismissError()}><X style={{ width: 15 }} /></button>
-                    </div>
-                  </div>
-                )}
-                {queuedList.map(q => (
-                  <div key={q.id} className="queue-ghost">
-                    <div className="msg user ghost">
-                      <div className="bubble-user"><div className="ghost-text">{q.text}</div></div>
-                      <div className="ghost-row">
-                        <span className="ghost-note">{t("Queued")}</span>
-                        <button className="ghost-remove" onClick={() => setQueue(l => l.filter(x => x.id !== q.id))}><X style={{ width: 12 }} /> {t("Remove from queue")}</button>
-                      </div>
-                    </div>
-                    <div className="msg assistant ghost">
-                      <div className="ghost-placeholder"><span /><span /><span /></div>
-                    </div>
-                  </div>
-                ))}
+                {chatErrors[activeKey()] && <ChatError message={chatErrors[activeKey()]} onDismiss={() => dismissError()} />}
+                <QueuedMessages items={queuedList} onRemove={(id) => setQueue(l => l.filter(x => x.id !== id))} />
                 {queued && !streaming && (
                   <div className="msg assistant"><div className="queue-wait"><img src={BRAND_ICON} className="pulse think-dot" alt="" aria-hidden="true" /> {t("Waiting for queue…")}</div></div>
                 )}
@@ -1730,7 +1708,7 @@ export default function App() {
             {user?.prefs?.threadRail !== false && <ThreadRail items={railList} scrollRef={scrollRef} matches={findMatches} onJump={railJump} />}
             {outlineOpen && outline.length > 0 && user?.prefs?.threadOutline !== false && <Outline items={outline} onJump={outlineJump} onClose={() => setOutlineOpen(false)} />}
             {showJump && <button className="to-bottom" onClick={jumpDown} title={t('Jump to latest')} aria-label={t('Jump to latest')}><Down style={{ width: 17 }} /></button>}
-            <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')} style={{ maxWidth: cfg.uiPreset === 'openai' ? undefined : 'var(--reading-max, 808px)', margin: '0 auto', width: '100%', padding: '0 20px' }}>
+            <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')}>
               {user?.prefs?.engineStrip === true && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
               {callDock}
               <Composer {...composerProps} focusKey={focusTick} />
@@ -1753,39 +1731,27 @@ export default function App() {
       )}
 
 
-      {showSettings && <React.Suspense fallback={null}><SettingsModal user={user} cfg={cfg} modelId={currentId} initialTab={settingsTab} onClose={onSettingsClosed} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile}
-        onChangelog={() => { setShowSettings(false); setShowChangelog(true); }}
-        onTrySkill={(sk) => { newChat(); setInput('/' + sk.name + ' '); setFocusTick(n => n + 1); }} /></React.Suspense>}
+      {settings && <SettingsModal user={user} cfg={cfg} modelId={currentId} initialTab={settings.tab} browseSkills={!!settings.browse} onClose={onSettingsClosed} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile}
+        onChangelog={() => { setSettings(null); setShowChangelog(true); }}
+        onTrySkill={(sk) => { newChat(); setInput('/' + sk.name + ' '); setFocusTick(n => n + 1); }} />}
       {user?.isAdmin && cfg.setupComplete === false && !setupDone && (
-        <React.Suspense fallback={null}>
-          <SetupGuide appName={cfg.appName || 'open-quill'} onDone={onSetupDone} />
-        </React.Suspense>
+        <Suspense fallback={null}><SetupGuide appName={cfg.appName || 'open-quill'} onDone={onSetupDone} /></Suspense>
       )}
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} onChatsChanged={() => loadChats()} />}
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} onOpen={(id) => openChat(id)} />}
       {inspectOpen && activeId && <ContextInspector chatId={activeId} modelId={currentId} onClose={() => setInspectOpen(false)} />}
       {personasOpen && <PersonasModal personas={user?.personas || []} models={models} currentId={currentId} onApply={applyPersona} onSave={savePersonas} onClose={() => setPersonasOpen(false)} />}
       {ledgerPrompt && activeId && (
-        <React.Suspense fallback={null}>
-          <PromptLedger chatId={activeId} modelId={currentId} onClose={() => setLedgerPrompt(false)} />
-        </React.Suspense>
+        <PromptLedger chatId={activeId} modelId={currentId} onClose={() => setLedgerPrompt(false)} />
       )}
-      {chordHint && (
-        <div className="chord-hint" role="status">
-          <div className="chord-hint-head">{comboKeys(chordHint.head).map((k, i) => <kbd key={i}>{k}</kbd>)}<span>{t('then…')}</span></div>
-          <div className="chord-hint-list">
-            {chordHint.items.map(({ action, key }) => (
-              <div className="chord-hint-item" key={action.id}><kbd>{comboKeys(key).join('')}</kbd><span>{t(action.label)}</span></div>
-            ))}
-            {!chordHint.items.length && <div className="chord-hint-item muted">{t('No chords bound yet.')}</div>}
-          </div>
-        </div>
-      )}
-      {showShortcuts && <ShortcutsModal prefs={user?.prefs} onClose={() => setShowShortcuts(false)} onCustomize={() => { setShowShortcuts(false); setSettingsTab('keybinds'); setShowSettings(true); }} />}
-      {treeOpen && activeId && user?.prefs?.branchMap !== false && <React.Suspense fallback={null}><BranchTree chatId={activeId} onSelect={selectBranch} onJump={jumpToMessage} onClose={() => setTreeOpen(false)} onChanged={async () => { await refreshMessages(activeId); setTimeout(() => scrollBottom(false), 20); toast(t('Message copied into this branch')); }} /></React.Suspense>}
+      {chordHint && <ChordHint hint={chordHint} />}
+      {showShortcuts && <ShortcutsModal prefs={user?.prefs} onClose={() => setShowShortcuts(false)} onCustomize={() => { setShowShortcuts(false); openSettings('keybinds'); }} />}
+      {treeOpen && activeId && user?.prefs?.branchMap !== false && <BranchTree chatId={activeId} onSelect={selectBranch} onJump={jumpToMessage} onClose={() => setTreeOpen(false)} onChanged={async () => { await refreshMessages(activeId); setTimeout(() => scrollBottom(false), 20); toast(t('Message copied into this branch')); }} />}
       <Lightbox />
-      {showAdmin && <React.Suspense fallback={null}><AdminPanel user={user} onClose={() => { setShowAdmin(false); if (shouldResetPath('admin', location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
-      {showPlayground && <React.Suspense fallback={null}><Playground onClose={() => { setShowPlayground(false); if (shouldResetPath('playground', location.pathname)) history.pushState({}, '', '/'); }} /></React.Suspense>}
+      <Suspense fallback={null}>
+        {showAdmin && <AdminPanel user={user} onClose={() => { setShowAdmin(false); if (shouldResetPath('admin', location.pathname)) history.pushState({}, '', '/'); }} />}
+        {showPlayground && <Playground onClose={() => { setShowPlayground(false); if (shouldResetPath('playground', location.pathname)) history.pushState({}, '', '/'); }} />}
+      </Suspense>
       {showProjects && <ProjectsPanel openId={projectOpenId} composerProps={composerProps}
         startCreate={projectCreate} onCreateHandled={() => setProjectCreate(false)}
         onClose={() => { setShowProjects(false); setProjectOpenId(null); if (shouldResetPath('projects', location.pathname)) history.pushState({}, '', '/'); }}
@@ -1797,7 +1763,7 @@ export default function App() {
       {showChangelog && <DocModal title={t("Changelog")} name="changelog" onClose={() => setShowChangelog(false)} />}
       {cmdkOpen && <CommandPalette commands={commands} ready={modelsReady && chatsLoaded} onClose={() => setCmdkOpen(false)} />}
     </div>
-    {user?.isAdmin && <React.Suspense fallback={null}><BuildMode /></React.Suspense>}
+    {user?.isAdmin && <Suspense fallback={null}><BuildMode /></Suspense>}
     </ThemeProvider>
   );
 }

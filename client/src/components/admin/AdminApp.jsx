@@ -1,9 +1,10 @@
+import '../../styles/admin.css';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { AdminProvider, useAdmin } from './store.jsx';
 import { NAV, SECTIONS, sectionMeta } from './nav.jsx';
 import { Confirm, SaveState, SectionSkeleton } from './ui.jsx';
 import { PublishState } from './publish.jsx';
-import { Search, X, Cube } from '../icons.jsx';
+import { Search, X, Cube } from '../ui/icons.jsx';
 import { t } from '../../i18n.jsx';
 import { BRAND_ICON } from '../../lib/brand.js';
 import { useSkeleton } from '../../lib/skeleton.js';
@@ -28,6 +29,7 @@ import RatingsSection from './sections/RatingsSection.jsx';
 import EventsSection from './sections/EventsSection.jsx';
 import StorageSection from './sections/StorageSection.jsx';
 import { useDismiss } from '../../lib/dismiss.js';
+import { useFocusTrap } from '../../lib/focus.js';
 
 const VIEWS = {
   __proto__: null,
@@ -156,22 +158,14 @@ function Shell() {
 
   useEffect(() => keepScroll('cp:' + section, scrollRef.current), [section, keepScroll]);
 
-  useEffect(() => {
-    const esc = (e) => {
-      if (e.key !== 'Escape') return;
-      if (document.querySelector('.cp-overlay')) return;
-      if (e.target.closest('input, textarea, select')) return;
-      onClose();
-    };
-    document.addEventListener('keydown', esc);
-    return () => document.removeEventListener('keydown', esc);
-  }, [onClose]);
+  const scrimRef = useRef(null);
+  useFocusTrap(scrimRef, (e) => { if (!e?.target?.closest?.('input, textarea, select')) onClose(); }, { initial: scrimRef });
 
   const counts = { models: catalog.models.length, members: members.members.length, providers: catalog.providers.length };
   const showSkeleton = useSkeleton(!workspace.ready);
 
   return (
-    <div className="cp-scrim" role="dialog" aria-modal="true" aria-label={t('Control panel')}
+    <div className="cp-scrim" ref={scrimRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={t('Control panel')}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="cp">
         <header className="cp-top">

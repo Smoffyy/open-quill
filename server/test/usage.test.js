@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -9,7 +9,12 @@ const DB_DIR = path.join(SERVER_ROOT, 'data', 'databases', 'oqusagetest');
 
 process.env.OPEN_QUILL_DB = 'oqusagetest';
 fs.rmSync(DB_DIR, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
-const { db, uid } = await import('../db.js');
+const { db, uid, closeDb } = await import('../db.js');
+
+after(() => {
+  closeDb();
+  fs.rmSync(DB_DIR, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+});
 
 const DAY = 24 * 60 * 60 * 1000;
 const T0 = Date.UTC(2026, 0, 15, 12, 0, 0);

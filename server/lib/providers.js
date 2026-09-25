@@ -1,0 +1,93 @@
+import { getSetting } from '../db.js';
+
+// Null prototype on purpose: these are looked up by a key that comes straight off the
+// wire, and an inherited "constructor" or "toString" would otherwise answer truthy and
+// be accepted as a real provider type.
+export const PROVIDER_TYPES = {
+  __proto__: null,
+  llamacpp: {
+    label: 'llama.cpp server', defaultBaseUrl: 'http://localhost:9931', local: true, protocol: 'openai', keyOptional: true,
+    samplers: ['temperature', 'top_p', 'top_k', 'min_p', 'repetition_penalty', 'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens', 'stop',
+      'dry_multiplier', 'dry_base', 'dry_allowed_length', 'dry_penalty_last_n', 'xtc_probability', 'xtc_threshold', 'mirostat', 'mirostat_tau', 'mirostat_eta'],
+    remap: { repetition_penalty: 'repeat_penalty' }, timingsPerToken: true, promptProgress: true, stopMax: 8
+  },
+  lmstudio: {
+    label: 'LM Studio', defaultBaseUrl: 'http://localhost:1234/v1', local: true, protocol: 'openai', keyOptional: true,
+    samplers: ['temperature', 'top_p', 'top_k', 'min_p', 'repetition_penalty', 'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens', 'stop'],
+    remap: { repetition_penalty: 'repeat_penalty' }
+  },
+  vllm: {
+    label: 'vLLM', defaultBaseUrl: 'http://localhost:8000/v1', local: true, protocol: 'openai', keyOptional: true,
+    samplers: ['temperature', 'top_p', 'top_k', 'min_p', 'repetition_penalty', 'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens', 'stop'],
+    remap: {}
+  },
+  ollama: {
+    label: 'Ollama', defaultBaseUrl: 'http://localhost:11434', local: true, protocol: 'ollama', keyOptional: true,
+    samplers: ['temperature', 'top_p', 'top_k', 'min_p', 'repetition_penalty', 'seed', 'max_tokens', 'stop'],
+    remap: { repetition_penalty: 'repeat_penalty', max_tokens: 'num_predict' }
+  },
+  openai: {
+    label: 'OpenAI API', defaultBaseUrl: 'https://api.openai.com/v1', protocol: 'openai', keyOptional: false,
+    samplers: ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens', 'stop'],
+    remap: {}
+  },
+  openrouter: {
+    label: 'OpenRouter', defaultBaseUrl: 'https://openrouter.ai/api/v1', protocol: 'openai', keyOptional: false,
+    samplers: ['temperature', 'top_p', 'top_k', 'min_p', 'repetition_penalty', 'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens', 'stop'],
+    remap: {}
+  },
+  moonshot: {
+    label: 'Moonshot AI (Kimi)', defaultBaseUrl: 'https://api.moonshot.ai/v1', protocol: 'openai', keyOptional: false,
+    samplers: ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'max_tokens', 'stop'],
+    remap: {}
+  },
+  mistral: {
+    label: 'Mistral', defaultBaseUrl: 'https://api.mistral.ai/v1', protocol: 'openai', keyOptional: false,
+    samplers: ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens', 'stop'],
+    remap: { seed: 'random_seed' }
+  },
+  meta: {
+    label: 'Meta (Llama API)', defaultBaseUrl: 'https://api.llama.com/compat/v1', protocol: 'openai', keyOptional: false,
+    samplers: ['temperature', 'top_p', 'repetition_penalty', 'frequency_penalty', 'presence_penalty', 'max_tokens', 'stop'],
+    remap: {}
+  }
+};
+
+export const DEFAULT_STOP_MAX = 4;
+
+export function isProviderType(type) {
+  return typeof type === 'string' && Object.hasOwn(PROVIDER_TYPES, type);
+}
+
+export function typesForClient() {
+  const out = {};
+  for (const [k, v] of Object.entries(PROVIDER_TYPES)) out[k] = { label: v.label, defaultBaseUrl: v.defaultBaseUrl, keyOptional: v.keyOptional, local: !!v.local, samplers: v.samplers, stopMax: v.stopMax || DEFAULT_STOP_MAX };
+  return out;
+}
+
+export const isLocalType = (type) => !!PROVIDER_TYPES[type]?.local;
+
+export function getProviders() {
+  const list = getSetting('providers', null);
+  if (Array.isArray(list) && list.length) return list;
+  const base = getSetting('api_base_url') || 'http://localhost:1234/v1';
+  const key = getSetting('api_key') || '';
+  return [{ id: 'legacy', name: 'Default', type: 'lmstudio', base_url: base, api_key: key }];
+}
+
+export function resolveProvider(providerId) {
+  const list = getProviders();
+  return list.find(p => p.id === providerId) || list[0];
+}
+
+export function providerSpec(provider) {
+  const spec = (isProviderType(provider?.type) && PROVIDER_TYPES[provider.type]) || PROVIDER_TYPES.llamacpp;
+  let base = (provider?.base_url || spec.defaultBaseUrl).replace(/\/+$/, '');
+  if (spec.protocol === 'openai' && !/\/v\d+$/.test(base)) base += '/v1';
+  return { spec, base, key: provider?.api_key || '' };
+}
+
+export function allProvidersLocal() {
+  const list = getProviders();
+  return list.length > 0 && list.every(p => isLocalType(p.type));
+}

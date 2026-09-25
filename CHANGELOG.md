@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [27.5.3] - 2026-09-25
+### Added
+- **Take a screenshot** - the composer's "+" menu item now works. It uses the browser's screen-capture picker to grab a still of a screen, window or tab, then attaches the frame as a PNG like any other image. It is hidden when the browser cannot capture, and disabled with "This model can't read images." when the current model cannot; cancelling the picker is silent.
+- **The greeting screen now has the same "more" menu as an open chat**, with Personas in it.
+- **Read aloud** - a speaker button in the assistant message action bar (after Copy) reads the reply using the browser's Speech Synthesis API. Clicking it again stops playback.
+- **Real links in the sidebar** - chats, projects and New are links, so middle click, Ctrl/Cmd click and "Open in new tab" work. A plain click still switches in place.
+- **Artifacts and Scheduled have their own address** - `/artifacts` and `/scheduled` survive a reload and work with Back and Forward.
+- **Settings search jumps to the setting** - picking a result opens its tab, scrolls to it and highlights it briefly.
+
+### Changed
+- **Panels and modals open instantly.** Settings, Prompt ledger and Branch tree are part of the main bundle, so opening one no longer waits on a separate chunk fetch. The admin panel, Playground, Model docs, Setup guide and Build mode stay `React.lazy` chunks so members never download them, which halves the main bundle (1205 kB to 646 kB). The heavy on-demand libraries (KaTeX, highlight.js languages, locale packs) stay lazy, since bundling those would only slow first paint.
+- **User message action bar** - the "more" menu (three dots) now sits to the left of the retry button instead of at the far right.
+- **Escape closes one thing at a time** - every menu, dialog and full-screen view registers a layer, and only the most recently opened one hears the key, so Escape closes a dropdown before the dialog it sits in. Keyboard shortcuts are paused while a dialog is open, and a field that uses Escape itself (cancelling a rename) no longer closes its dialog.
+- **Every modal shares one dialog** - focus is trapped inside and returned to the control that opened it, the backdrop and Escape behave the same everywhere, and screen readers announce each one as a dialog with its title.
+- **Settings keeps its header in place** - the title and tabs stay put while only the tab body scrolls, and all panes share the same padding. Changing the language reopens Settings where you were after the reload.
+- **Failed changes undo themselves** - starring, renaming, pinning, moving a chat out of a project, saved prompts, personas and preferences roll back with a message if the server rejects them, instead of showing a state that was never saved. Deleting a chat, starting one and signing out report failures too.
+- **An expired session reloads to the sign-in screen** instead of leaving every request failing silently.
+- **Add connector opens the MCP settings** directly.
+- **Forms in Settings follow the sign-in pattern** - the password form is a real form that password managers recognise, marks the wrong field and announces the error, and sessions show "Active 5 minutes ago" style times. Sliders and icon buttons have labels, and notifications are announced to screen readers.
+- **Code layout** - client components are grouped into `ui/`, `sidebar/`, `chat/`, `composer/`, `dialogs/`, `settings/`, `pages/` and `artifacts/`, and loose helpers moved into `lib/`. The Settings modal is split into one component per tab. Loose server modules moved into `server/lib/`; the reference files and workspace skills stores are now `lib/referencefiles.js` and `lib/workspaceskills.js`, with stored keys and routes unchanged. Stylesheets are one per feature, with every Anthropic-only rule in `anthropic.css`.
+- **Tests** - the client suite is split into one file per module and discovered by `node --test`. New tests cover Escape layering and check that the client and server brand constants agree. Server tests that open their own database now close and remove it.
+- **The release zip includes `CHANGELOG.md`, `release/` and `docs/`.**
+
+### Removed
+- **Research and Add plugins** from the composer's "+" menu; neither did anything.
+- **A duplicate "Attach files" row** in the keyboard shortcuts list.
+- **Unused server dependencies** - `framer-motion`, `lucide-react`, `react-hot-toast`, `tailwindcss` and `@tailwindcss/vite`.
+
+### Fixed
+- **Inline math with `$1$`, `$2$` etc. rendered as plain text.** The dollar-sign heuristic treated a number immediately followed by the closing `$` as a currency amount and escaped it, which cascaded and broke all subsequent math pairing in the paragraph.
+- **Inline math with spaces around the content failed to render.** `$ \frac{1}{2} $` (spaces after `$` and before `$`) was rejected by the whitespace guard even though backslashes, carets and underscores inside proved it was math.
+- **Bare LaTeX commands outside any `$` delimiters now auto-wrap.** When a model outputs `2\sqrt{6}` or `\alpha + \beta` without dollar signs, the renderer wraps the expression in inline math so KaTeX can render it.
+- **A websocket frame whose type collided with an Object prototype key** (`__proto__`, `constructor`, `toString`) was matched against the inherited member of the client frame-handler table instead of being rejected, throwing or being wrongly reported as handled. The handler table now has a null prototype, so only real frame types dispatch.
+- **A shell command could still reach a single-segment absolute path** like `/secrets.txt` unflagged by the sandbox guard, which only caught absolute paths of two or more segments.
+- **The model dropdown recomputed its full list and group filtering on every render**, including while closed and mid-stream, instead of only when open.
+- **A turn re-fetched the chat row from the database twice in a row** with no write in between.
+- **Extracting a zip walked the sandbox workspace twice** to check the storage cap before doing it a third time for the byte budget.
+- **The theme style sanitizer let a CSS comment terminator or a backslash escape through** as the last check before a value reaches the stylesheet.
+- **The prompt ledger's layout was broken** - its rows did not line up and the header could not be reached by keyboard.
+- **Search result titles lost the space between words** where a match was highlighted.
+- **The spacing under the usage summary in Settings was missing**, and the Security tab had a gap above "Update password" and no space before "this device".
+- **The System theme was saved as whichever theme it resolved to**, so it stopped following the operating system after the next save.
+- **The OpenAI preset flashed a darker background on load** in light mode.
+
+---
+
 ## [27.5.2] - 2026-09-15
 ### Added
 - **Edit an assistant message** - under the three dots on a reply. It rewrites that message in place rather than branching or regenerating, and the corrected text is what the model is given as history from then on. User messages are unchanged: editing one still branches and reruns the turn.

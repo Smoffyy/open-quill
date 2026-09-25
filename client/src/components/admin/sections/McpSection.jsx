@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { api } from '../../../api.js';
+import { api } from '../../../lib/api.js';
 import { useAdmin } from '../store.jsx';
 import { Card, Rows, ToggleRow, Fields, Field, Input, Area, Seg, Btn, IconBtn, Acts, Table, Badge, Switch, Empty, Dialog, Note } from '../ui.jsx';
-import { Plus, Trash, Pencil, Refresh, Plug } from '../../icons.jsx';
+import { Plus, Trash, Pencil, Refresh, Plug } from '../../ui/icons.jsx';
 import { t } from '../../../i18n.jsx';
-import { Skel, SkelRows } from '../../Skeleton.jsx';
+import { Skel, SkelRows } from '../../ui/Skeleton.jsx';
 
 const BLANK = { name: '', transport: 'stdio', command: '', args: '', url: '', headers: '', enabled: true };
 

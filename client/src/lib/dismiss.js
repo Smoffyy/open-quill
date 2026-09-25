@@ -29,6 +29,47 @@ export function asRefList(refs) {
   return Array.isArray(refs) ? refs : [refs];
 }
 
+const layers = [];
+let listening = false;
+
+export function pushLayer(close, modal = false) {
+  const layer = { close, modal };
+  layers.push(layer);
+  return () => {
+    const i = layers.indexOf(layer);
+    if (i !== -1) layers.splice(i, 1);
+  };
+}
+
+export function handleLayerKey(e) {
+  if (e.key !== 'Escape' || e.defaultPrevented || !layers.length) return false;
+  e.preventDefault();
+  layers[layers.length - 1].close.current?.(e);
+  return true;
+}
+
+export function hasOpenLayer() {
+  return layers.length > 0;
+}
+
+export function isModalOpen() {
+  return layers.some(l => l.modal);
+}
+
+export function useLayer(enabled, onEscape, opts = {}) {
+  const close = useRef(onEscape);
+  close.current = onEscape;
+  const modal = !!opts.modal;
+  useEffect(() => {
+    if (!enabled) return undefined;
+    if (!listening && typeof window !== 'undefined' && window.addEventListener) {
+      window.addEventListener('keydown', handleLayerKey);
+      listening = true;
+    }
+    return pushLayer(close, modal);
+  }, [enabled, modal]);
+}
+
 /**
  * @param enabled    whether the surface is open; nothing is bound while false
  * @param onDismiss  called on an outside pointer-down or Escape
@@ -47,6 +88,8 @@ export function useDismiss(enabled, onDismiss, refs, opts = {}) {
   const list = useRef(refs);
   list.current = refs;
 
+  useLayer(enabled && escape, () => cb.current());
+
   useEffect(() => {
     if (!enabled) return undefined;
     const away = (e) => {
@@ -54,12 +97,7 @@ export function useDismiss(enabled, onDismiss, refs, opts = {}) {
       if (!anyMounted(all)) return;
       if (!isInside(e.target, all, selector)) cb.current();
     };
-    const esc = (e) => { if (e.key === 'Escape') cb.current(); };
     document.addEventListener('mousedown', away);
-    if (escape) document.addEventListener('keydown', esc);
-    return () => {
-      document.removeEventListener('mousedown', away);
-      if (escape) document.removeEventListener('keydown', esc);
-    };
-  }, [enabled, escape, selector]);
+    return () => document.removeEventListener('mousedown', away);
+  }, [enabled, selector]);
 }

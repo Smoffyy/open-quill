@@ -1,7 +1,7 @@
 import { db, uid, now, tx, getSetting, setSetting } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
-import { getProviders, resolveProvider, providerSpec } from '../providers.js';
-import { matchPreset, presetList, setCustomPresets, getCustomPresets } from '../pricing.js';
+import { getProviders, resolveProvider, providerSpec } from '../lib/providers.js';
+import { matchPreset, presetList, setCustomPresets, getCustomPresets } from '../lib/pricing.js';
 import { logAudit } from '../lib/audit.js';
 import { promoteDrafts, hasDrafts } from '../lib/draft.js';
 import { draftModels, publicModels, detectContextLength, timedFetch } from '../lib/models.js';

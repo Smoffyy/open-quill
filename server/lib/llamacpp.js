@@ -1,4 +1,4 @@
-import { resolveProvider, providerSpec } from '../providers.js';
+import { resolveProvider, providerSpec } from './providers.js';
 import { wireToolCalls } from '../llm/wire.js';
 
 const CACHE_MS = 5 * 60 * 1000;

@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { t } from '../i18n.jsx';
-import { api } from '../api.js';
+import { api } from './api.js';
 import { docsModels, docsConfig, docsModelPatch } from './modeldocs.js';
 
 export function useDocsEdit(models, cfg, { onSaved } = {}) {

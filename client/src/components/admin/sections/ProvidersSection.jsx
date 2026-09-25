@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAdmin } from '../store.jsx';
 import { Card, Fields, Field, Input, Select, Btn, IconBtn, Acts, Badge, KV, Empty, Dialog, Table, Logo, fmtInt } from '../ui.jsx';
-import { Cube, Plus, Trash, Sliders } from '../../icons.jsx';
-import { api } from '../../../api.js';
+import { Cube, Plus, Trash, Sliders } from '../../ui/icons.jsx';
+import { api } from '../../../lib/api.js';
 import { t } from '../../../i18n.jsx';
 import { modelIconFor, useLogos } from '../../../lib/logos.js';
-import { Skel, SkelRows } from '../../Skeleton.jsx';
+import { Skel, SkelRows } from '../../ui/Skeleton.jsx';
 
 function Engine({ e }) {
   const rows = [];

@@ -1,7 +1,9 @@
 /* ---------- empty / greeting ---------- */
 .center-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: calc(30vh + 12px) 24px 24px; }
 .greeting { display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 38px; line-height: 47.5px; margin-bottom: 36px; color: var(--text); font-family: var(--font-serif); text-align: center; }
-.greeting img { width: 44px; height: 44px; }
+.greeting img { width: 44px; height: 44px; object-fit: contain; }
+.active-composer { width: 100%; margin: 0 auto; padding: 0 20px; }
+:root[data-preset="anthropic"] .active-composer { max-width: var(--reading-max, 808px); }
 .composer-wrap { width: 100%; max-width: 672px; position: relative; z-index: 2; }
 .chip { display: flex; align-items: center; gap: 7px; padding: 8px 14px; background: var(--surface); border: 1px solid var(--border-soft); border-radius: 11px; font-size: 14px; color: #d9d8d0; transition: background var(--fx-t, .15s); }
 .chip:hover { background: var(--surface-hover); }
@@ -102,7 +104,6 @@
 }
 .model-menu.up { bottom: auto; top: 44px; transform-origin: top right; }
 .model-opt { display: flex; align-items: center; gap: 8px; padding: 6px 10px 7px; border-radius: 8px; width: 100%; text-align: left; transition: background var(--fx-t, .12s); }
-.model-main-list { scrollbar-width: thin; }
 .model-main-list::-webkit-scrollbar { width: 6px; }
 .model-opt:hover { background: var(--pop-hover); }
 .model-opt.model-empty { cursor: default; }
@@ -187,7 +188,7 @@
 .model-submenu.up.left { transform-origin: bottom right; }
 .model-submenu::before { content: ''; position: absolute; top: 0; bottom: 0; left: -14px; width: 14px; }
 .model-submenu.left::before { left: auto; right: -14px; }
-.model-submenu.pinned { position: fixed; right: auto; bottom: auto; z-index: 90; scrollbar-width: thin; }
+.model-submenu.pinned { position: fixed; right: auto; bottom: auto; z-index: 90; }
 .model-submenu.pinned::-webkit-scrollbar { width: 6px; }
 .model-submenu.pinned.flip { transform-origin: top right; }
 .model-submenu.pinned.flip::before { left: auto; right: -14px; }
@@ -369,7 +370,6 @@
   margin: 4px 0 0; padding: 0;
   color: var(--text-faint); font-family: var(--font-sans); font-size: 15px; line-height: 1.72;
   max-height: 620px; overflow: hidden auto; overscroll-behavior: contain;
-  scrollbar-width: thin; scrollbar-color: var(--hover-mid) transparent;
 }
 .rb-steps::-webkit-scrollbar { width: 8px; }
 .rb-steps::-webkit-scrollbar-thumb { background: var(--hover-mid); border-radius: 999px; }
@@ -483,13 +483,8 @@
 .code-wrap pre { margin: 0; padding: 14px; overflow-x: auto; }
 .code-wrap pre code { font-family: monospace; font-size: 14px; line-height: 1.625; background: none; padding: 0; color: var(--code-text, #eaecf0); }
 
-/* Force white streaming cursor for both block and circle types on OLED theme */
-:root[data-theme="oled"][data-cursor="block"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after,
-:root[data-theme="oled"][data-cursor="circle"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after,
 :root[data-theme="openai"][data-cursor="block"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after,
 :root[data-theme="openai"][data-cursor="circle"] .assistant-body.streaming > *:last-child:not(pre):not(.code-wrap):not(.tool-live)::after,
-:root[data-theme="oled"][data-cursor="block"] .streaming::after,
-:root[data-theme="oled"][data-cursor="circle"] .streaming::after,
 :root[data-theme="openai"][data-cursor="block"] .streaming::after,
 :root[data-theme="openai"][data-cursor="circle"] .streaming::after {
   background: #ffffff !important;

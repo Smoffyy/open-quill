@@ -78,7 +78,7 @@
 .chats-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
 .chats { flex: 1; overflow: hidden auto; padding: 0 8px 12px; }
 
-.chats { scrollbar-width: thin; scrollbar-color: rgba(225, 224, 217, .35) transparent;
+.chats {
   border-top: .8px solid transparent; transition: border-color var(--fx-t, .15s) cubic-bezier(.4, 0, .2, 1);
 }
 /* The fade is painted over the list rather than masked onto it, and stops short of
@@ -90,7 +90,6 @@
 .chats-wrap::before { top: 0; background: linear-gradient(to bottom, var(--sidebar), transparent); }
 .chats-wrap::after { bottom: 0; background: linear-gradient(to top, var(--sidebar), transparent); }
 .chats.scrolled { border-top-color: color-mix(in srgb, var(--text) 10%, transparent); }
-:root[data-theme="light"] .chats { scrollbar-color: rgba(60, 58, 52, .3) transparent; }
 .chat-row {
   display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 32px 6px 8px; margin-bottom: 1px;
   border-radius: 8px; color: var(--text-muted); font-size: 14px; line-height: 20px; cursor: pointer;
@@ -106,6 +105,14 @@
 .chat-row .row-ctrl:hover { background: var(--hover-mid); color: var(--text); }
 .chat-row .row-ctrl.shift-del { opacity: 1; color: var(--danger); }
 .chat-row { position: relative; }
+a.chat-row, a.nav-item { color: inherit; text-decoration: none; }
+.chat-row .row-link {
+  display: flex; align-items: center; gap: inherit; flex: 1; min-width: 0; align-self: stretch;
+  color: inherit; text-decoration: none;
+}
+.chat-row .row-link:focus-visible { outline: none; }
+.chat-row:has(> .row-link:focus-visible) { outline: 2px solid color-mix(in srgb, var(--text) 62%, transparent); outline-offset: 2px; }
+.chat-row:focus-within .row-ctrl { opacity: 1; }
 .chat-row .row-busy {
   width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
   background: var(--text);

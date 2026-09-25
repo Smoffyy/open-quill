@@ -39,8 +39,8 @@ const EXTRA_KEYS = [
 ];
 
 const TABLE_SCANS = [
-  { file: 'components/ShortcutsModal.jsx', re: /title:\s*'((?:[^'\\]|\\.)*)'/g },
-  { file: 'components/ShortcutsModal.jsx', re: /\[\s*'((?:[^'\\]|\\.)*)'\s*,\s*\[/g },
+  { file: 'components/dialogs/ShortcutsModal.jsx', re: /title:\s*'((?:[^'\\]|\\.)*)'/g },
+  { file: 'components/dialogs/ShortcutsModal.jsx', re: /\[\s*'((?:[^'\\]|\\.)*)'\s*,\s*\[/g },
   { file: 'lib/keybinds.js', re: /\b(?:label|group):\s*'((?:[^'\\]|\\.)*)'/g },
   { file: 'lib/playground.js', re: /\b(?:label|hint):\s*'((?:[^'\\]|\\.)*)'/g },
 ];

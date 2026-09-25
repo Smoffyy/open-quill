@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { t } from '../../i18n.jsx';
-import { api } from '../../api.js';
+import { api } from '../../lib/api.js';
 import { useTheme } from '../../lib/theme/store.jsx';
-import { toast } from '../../toast.js';
+import { toast } from '../../lib/toast.js';
 import { Dialog, Confirm, Text } from './controls.jsx';
-import { Copy, Trash, Download, Upload, Pencil, Check, Clock, Refresh } from '../icons.jsx';
-import { Skel, SkelRows } from '../Skeleton.jsx';
+import { Copy, Trash, Download, Upload, Pencil, Check, Clock, Refresh } from '../ui/icons.jsx';
+import { Skel, SkelRows } from '../ui/Skeleton.jsx';
 
 /* Theme management. A theme is a document plus a name; the builder edits
    whichever one is active, and Publish is what moves the admin's staged store

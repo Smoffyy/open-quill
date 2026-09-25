@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { api } from '../../../api.js';
+import { api } from '../../../lib/api.js';
 import { Card, Fields, Field, Input, Seg, Btn, IconBtn, Acts, Table, Stats, Empty, fmtInt, fmtMoney } from '../ui.jsx';
-import { Plus, Trash, Wave } from '../../icons.jsx';
+import { Plus, Trash, Wave } from '../../ui/icons.jsx';
 import { t, tk } from '../../../i18n.jsx';
-import { Skel, SkelStats } from '../../Skeleton.jsx';
+import { Skel, SkelStats } from '../../ui/Skeleton.jsx';
 
 const TOP_ROWS = 30;
 const TOP_TOOLS = 40;

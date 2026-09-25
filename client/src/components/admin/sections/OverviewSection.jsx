@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { api } from '../../../api.js';
+import { api } from '../../../lib/api.js';
 import { useAdmin } from '../store.jsx';
 import { Card, Btn, Acts, Table, Stats, Badge, Empty, Note, KV, fmtInt, fmtMoney, fmtAgo } from '../ui.jsx';
 import { PublishState } from '../publish.jsx';
-import { Plus, Sliders, Users, Clock } from '../../icons.jsx';
+import { Plus, Sliders, Users, Clock } from '../../ui/icons.jsx';
 import { t } from '../../../i18n.jsx';
-import { Skel, SkelTable } from '../../Skeleton.jsx';
+import { Skel, SkelTable } from '../../ui/Skeleton.jsx';
 
 const RECENT_EVENTS = 8;
 const USAGE_DAYS = 30;

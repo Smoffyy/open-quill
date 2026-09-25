@@ -1,4 +1,4 @@
-import { Panel, Cube, Sliders, Users, Chat, Globe, Mic, Brain, FileText, Bulb, Plug, Shield, Eye, Wave, Star, Box, Gear, Clock, Palette } from '../icons.jsx';
+import { Panel, Cube, Sliders, Users, Chat, Globe, Mic, Brain, FileText, Bulb, Plug, Shield, Eye, Wave, Star, Box, Gear, Clock, Palette } from '../ui/icons.jsx';
 import { tk } from '../../i18n.jsx';
 
 /* Each section declares everything the shell needs to render it:
