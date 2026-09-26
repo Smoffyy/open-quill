@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [27.5.4] - 2026-10-02
+
+
+---
+
 ## [27.5.3] - 2026-09-25
 ### Added
 - **Take a screenshot** - the composer's "+" menu item now works. It uses the browser's screen-capture picker to grab a still of a screen, window or tab, then attaches the frame as a PNG like any other image. It is hidden when the browser cannot capture, and disabled with "This model can't read images." when the current model cannot; cancelling the picker is silent.
