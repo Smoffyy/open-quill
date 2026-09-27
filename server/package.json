@@ -1,6 +1,6 @@
 {
   "name": "open-quill-server",
-  "version": "27.5.4",
+  "version": "27.6.0",
   "private": true,
   "type": "module",
   "main": "index.js",
@@ -17,6 +17,6 @@
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.4.0",
     "pdfjs-dist": "^6.3.289",
-    "ws": "^8.21.3"
+    "ws": "^8.22.0"
   }
 }

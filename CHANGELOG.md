@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [27.5.4] - 2026-10-02
+## [27.6.0] - 2026-10-02
 ### Changed
 - **Admin Models tab rebuilt** - a list and an inspector side by side. Select one model or many (checkboxes, Ctrl, Shift, Ctrl+A); every field then edits the whole selection at once.
 - **Mixed values** - a field that differs across the selection is marked "Mixed"; pick any model's value to apply it to all.
