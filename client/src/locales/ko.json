@@ -2564,5 +2564,15 @@
   "Text: this model reads and writes text": "텍스트: 이 모델은 텍스트를 읽고 씁니다",
   "Vision: this model can read the images you attach": "비전: 이 모델은 첨부한 이미지를 읽을 수 있습니다",
   "Reasoning: this model thinks before it answers": "추론: 이 모델은 답하기 전에 생각합니다",
-  "Model badge": "모델 배지"
+  "Model badge": "모델 배지",
+  "Auto": "자동",
+  "Earned by routers, which pick a model for each message.": "메시지마다 모델을 고르는 라우터에 붙습니다.",
+  "Earned when web search is on for the workspace and allowed for this model.": "워크스페이스에서 웹 검색이 켜져 있고 이 모델에 허용되면 붙습니다.",
+  "Earned while Sandbox tools are allowed.": "샌드박스 도구가 허용된 동안 붙습니다.",
+  "Long context": "긴 컨텍스트",
+  "Earned with a context window of 100K tokens or more.": "컨텍스트 창이 100K 토큰 이상이면 붙습니다.",
+  "Auto: picks the best model for each message": "자동: 메시지마다 가장 알맞은 모델을 고릅니다",
+  "Web search: this model can look things up online": "웹 검색: 이 모델은 온라인에서 찾아볼 수 있습니다",
+  "Code: this model can run code and work with files": "코드: 이 모델은 코드를 실행하고 파일을 다룰 수 있습니다",
+  "Long context: holds about {n} tokens": "긴 컨텍스트: 약 {n} 토큰을 담을 수 있습니다"
 }

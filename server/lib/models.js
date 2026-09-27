@@ -35,7 +35,7 @@ export function applySunsets() {
   sunsetCheckedVersion = db.models.version();
 }
 
-export function shapePublic(m) {
+export function shapePublic(m, ctx = badgeContext()) {
   return {
     id: m.id, displayName: m.display_name, description: m.description,
     kind: m.kind === 'router' ? 'router' : 'model',
@@ -52,7 +52,7 @@ export function shapePublic(m) {
     unavailable: !!m.unavailable, unavailableReason: m.unavailable_reason || '',
     sunsetAt: m.sunset_at || '',
     bgEnabled: !!m.bg_enabled, bgImage: m.bg_image || '',
-    badges: badgesOf(m),
+    badges: badgesOf(m, ctx),
     priceIn: m.cost_in ?? null, priceOut: m.cost_out ?? null,
     docsFeatured: !!m.docs_featured, docsIntelligence: m.docs_intelligence || 0, docsSpeed: m.docs_speed || 0,
     docsMaxOutput: m.docs_max_output || 0, docsCutoff: m.docs_cutoff || '', docsBody: m.docs_body || '', docsImage: m.docs_image || '', docsIcon: m.docs_icon || '',
@@ -72,16 +72,21 @@ export function shapePublic(m) {
 
 const shapeCache = { draft: null, published: null };
 
-function shapeList(rows) {
-  return rows.filter(m => m.enabled).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).map(shapePublic);
+function badgeContext() {
+  return { webSearch: getSetting('web_search_enabled', '0') === '1' };
+}
+
+function shapeList(rows, ctx) {
+  return rows.filter(m => m.enabled).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).map(m => shapePublic(m, ctx));
 }
 
 export function draftModels() {
   applySunsets();
   const version = db.models.version();
-  if (shapeCache.draft && shapeCache.draft.version === version) return shapeCache.draft.list;
-  const list = shapeList(db.models.all());
-  shapeCache.draft = { version, list };
+  const ctx = badgeContext();
+  if (shapeCache.draft && shapeCache.draft.version === version && shapeCache.draft.web === ctx.webSearch) return shapeCache.draft.list;
+  const list = shapeList(db.models.all(), ctx);
+  shapeCache.draft = { version, web: ctx.webSearch, list };
   return list;
 }
 
@@ -89,9 +94,10 @@ export function publicModels() {
   applySunsets();
   const snap = getSetting('published_models', null);
   if (!Array.isArray(snap)) return draftModels();
-  if (shapeCache.published && shapeCache.published.snap === snap) return shapeCache.published.list;
-  const list = shapeList(snap);
-  shapeCache.published = { snap, list };
+  const ctx = badgeContext();
+  if (shapeCache.published && shapeCache.published.snap === snap && shapeCache.published.web === ctx.webSearch) return shapeCache.published.list;
+  const list = shapeList(snap, ctx);
+  shapeCache.published = { snap, web: ctx.webSearch, list };
   return list;
 }
 

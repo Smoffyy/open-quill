@@ -2564,5 +2564,15 @@
   "Text: this model reads and writes text": "Текст: модель читает и пишет текст",
   "Vision: this model can read the images you attach": "Зрение: модель понимает прикреплённые изображения",
   "Reasoning: this model thinks before it answers": "Рассуждения: модель думает перед ответом",
-  "Model badge": "Значок модели"
+  "Model badge": "Значок модели",
+  "Auto": "Авто",
+  "Earned by routers, which pick a model for each message.": "Есть у маршрутизаторов, которые выбирают модель для каждого сообщения.",
+  "Earned when web search is on for the workspace and allowed for this model.": "Появляется, когда веб-поиск включён в рабочем пространстве и разрешён для этой модели.",
+  "Earned while Sandbox tools are allowed.": "Есть, пока разрешены инструменты песочницы.",
+  "Long context": "Длинный контекст",
+  "Earned with a context window of 100K tokens or more.": "Появляется при окне контекста от 100K токенов.",
+  "Auto: picks the best model for each message": "Авто: выбирает лучшую модель для каждого сообщения",
+  "Web search: this model can look things up online": "Веб-поиск: модель умеет искать в интернете",
+  "Code: this model can run code and work with files": "Код: модель умеет запускать код и работать с файлами",
+  "Long context: holds about {n} tokens": "Длинный контекст: вмещает около {n} токенов"
 }

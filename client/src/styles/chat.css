@@ -121,6 +121,8 @@
 .mo-badge svg { width: 13px; height: 13px; }
 .mo-badge b { font-weight: 600; }
 .mo-badge[data-badge="vision"] { color: var(--pop-blue); border-color: color-mix(in srgb, var(--pop-blue) 45%, transparent); background: color-mix(in srgb, var(--pop-blue) 12%, transparent); }
+.mo-badge[data-badge="web"] { color: color-mix(in srgb, var(--success) 78%, var(--pop-text)); border-color: color-mix(in srgb, var(--success) 45%, transparent); background: color-mix(in srgb, var(--success) 12%, transparent); }
+.mo-badge[data-badge="auto"] { color: color-mix(in srgb, var(--accent) 80%, var(--pop-text)); border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .mo-badge[data-badge="reasoning"] { color: color-mix(in srgb, var(--warning) 68%, var(--pop-text)); border-color: color-mix(in srgb, var(--warning) 45%, transparent); background: color-mix(in srgb, var(--warning) 12%, transparent); }
 .model-opt .mo-desc { font-size: 13px; line-height: 17px; color: var(--mo-desc); font-family: var(--font-sans); margin-top: 0; }
 .model-opt .check { color: var(--pop-blue); width: 20px; height: 20px; align-self: center; margin-top: 0; flex-shrink: 0; }

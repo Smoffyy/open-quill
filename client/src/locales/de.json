@@ -2564,5 +2564,15 @@
   "Text: this model reads and writes text": "Text: Dieses Modell liest und schreibt Text",
   "Vision: this model can read the images you attach": "Vision: Dieses Modell kann angehängte Bilder lesen",
   "Reasoning: this model thinks before it answers": "Reasoning: Dieses Modell denkt nach, bevor es antwortet",
-  "Model badge": "Modellabzeichen"
+  "Model badge": "Modellabzeichen",
+  "Auto": "Auto",
+  "Earned by routers, which pick a model for each message.": "Erhalten Router, die für jede Nachricht ein Modell wählen.",
+  "Earned when web search is on for the workspace and allowed for this model.": "Wird vergeben, wenn die Websuche im Arbeitsbereich an und für dieses Modell erlaubt ist.",
+  "Earned while Sandbox tools are allowed.": "Wird vergeben, solange Sandbox-Werkzeuge erlaubt sind.",
+  "Long context": "Langer Kontext",
+  "Earned with a context window of 100K tokens or more.": "Wird ab einem Kontextfenster von 100K Tokens vergeben.",
+  "Auto: picks the best model for each message": "Auto: wählt für jede Nachricht das beste Modell",
+  "Web search: this model can look things up online": "Websuche: Dieses Modell kann online nachschlagen",
+  "Code: this model can run code and work with files": "Code: Dieses Modell kann Code ausführen und mit Dateien arbeiten",
+  "Long context: holds about {n} tokens": "Langer Kontext: fasst etwa {n} Tokens"
 }

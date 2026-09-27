@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevDown, Chevron, Bulb, Eye, Info } from '../ui/icons.jsx';
+import { Check, ChevDown, Chevron, Bulb, Eye, Info, Globe, Terminal, FileText, Wand } from '../ui/icons.jsx';
 import Tip from '../ui/Tip.jsx';
-import { t, tk } from '../../i18n.jsx';
+import { t } from '../../i18n.jsx';
 import { Switch } from '../ui/controls.jsx';
 import { clampPx, overshoot, stretchFor, squashFor, stretchOrigin, slideFor, DRAG_SLOP } from '../../lib/dragsteps.js';
 import { paintCells, fadeTrail, stampTrail, headColumn, CELL, CELL_FPS, CELL_SPEED } from '../../lib/cellfield.js';
@@ -12,9 +12,16 @@ import { Skel, SkelMenu } from '../ui/Skeleton.jsx';
 
 const BADGE_ICONS = {
   __proto__: null,
-  text: { tip: tk('Text: this model reads and writes text'), glyph: 'T' },
-  vision: { tip: tk('Vision: this model can read the images you attach'), Icon: Eye },
-  reasoning: { tip: tk('Reasoning: this model thinks before it answers'), Icon: Bulb }
+  auto: { tip: () => t('Auto: picks the best model for each message'), Icon: Wand },
+  text: { tip: () => t('Text: this model reads and writes text'), glyph: 'T' },
+  vision: { tip: () => t('Vision: this model can read the images you attach'), Icon: Eye },
+  reasoning: { tip: () => t('Reasoning: this model thinks before it answers'), Icon: Bulb },
+  web: { tip: () => t('Web search: this model can look things up online'), Icon: Globe },
+  code: { tip: () => t('Code: this model can run code and work with files'), Icon: Terminal },
+  long: {
+    tip: (m) => t('Long context: holds about {n} tokens', { n: new Intl.NumberFormat(undefined, { notation: 'compact' }).format(m.numCtx || 0) }),
+    Icon: FileText
+  }
 };
 
 const EDGE = 10;
@@ -46,16 +53,17 @@ function viewport() {
   };
 }
 
-function Badges({ ids }) {
-  const shown = (ids || []).filter(id => BADGE_ICONS[id]);
+function Badges({ m }) {
+  const shown = (m.badges || []).filter(id => BADGE_ICONS[id]);
   if (!shown.length) return null;
   return (
     <span className="mo-badges">
       {shown.map(id => {
         const { tip, glyph, Icon } = BADGE_ICONS[id];
+        const label = tip(m);
         return (
-          <Tip key={id} label={t(tip)}>
-            <span className="mo-badge" data-badge={id} role="img" aria-label={t(tip)}>
+          <Tip key={id} label={label}>
+            <span className="mo-badge" data-badge={id} role="img" aria-label={label}>
               {Icon ? <Icon /> : <b aria-hidden="true">{glyph}</b>}
             </span>
           </Tip>
@@ -481,7 +489,7 @@ export default function ModelDropdown({ models, modelsReady = true, currentId, o
       <div className="mo-main">
         <div className="mo-name">
           <span className="mo-name-text">{m.displayName}</span>
-          <Badges ids={m.badges} />
+          <Badges m={m} />
           {m.unavailable && <span className="mo-unavail"><span className="mo-unavail-dot">ⓘ</span> {t("Currently unavailable")}</span>}
         </div>
         {m.description && <div className="mo-desc">{m.description}</div>}

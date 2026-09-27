@@ -1,3 +1,4 @@
+import { useAdmin } from '../../store.jsx';
 import { Card, Rows, Fields, Btn, Range } from '../../ui.jsx';
 import { ImagePicker } from '../../media.jsx';
 import { useEditor, useField, useChange, Revert, Slot, Line, Flag, Choice, TextField, When } from '../bind.jsx';
@@ -46,13 +47,19 @@ function Size() {
 
 const BADGE_TEXT = {
   __proto__: null,
+  auto: [tk('Auto'), tk('Earned by routers, which pick a model for each message.')],
   text: [tk('Text'), tk('Earned by every model, since all of them read and write text.')],
   vision: [tk('Vision'), tk('Earned once Image input is on under Tools.')],
-  reasoning: [tk('Reasoning'), tk('Earned once the model reasons: a thinking kwarg, think tags or a prompt token switch.')]
+  reasoning: [tk('Reasoning'), tk('Earned once the model reasons: a thinking kwarg, think tags or a prompt token switch.')],
+  web: [tk('Web search'), tk('Earned when web search is on for the workspace and allowed for this model.')],
+  code: [tk('Code'), tk('Earned while Sandbox tools are allowed.')],
+  long: [tk('Long context'), tk('Earned with a context window of 100K tokens or more.')]
 };
 
 function Badges() {
   const { models, edit } = useEditor();
+  const { workspace } = useAdmin();
+  const ctx = { webSearch: !!workspace.settings.webSearchEnabled };
   const change = useChange('badges_off');
   const label = t('Badges');
   return (
@@ -63,8 +70,8 @@ function Badges() {
       </div>
       <div className="mc-chips" role="group" aria-label={label}>
         {BADGES.map(({ id, supported }) => {
-          const able = models.filter(supported);
-          const shown = able.filter(m => badgesOf(m).includes(id));
+          const able = models.filter(m => supported(m, ctx));
+          const shown = able.filter(m => badgesOf(m, ctx).includes(id));
           const all = able.length > 0 && shown.length === able.length;
           const [name, hint] = BADGE_TEXT[id];
           return (
@@ -72,7 +79,7 @@ function Badges() {
               aria-pressed={all ? true : shown.length ? 'mixed' : false}
               className={'mc-chip' + (shown.length && !all ? ' part' : '')}
               onClick={() => edit(m => {
-                if (!supported(m)) return null;
+                if (!supported(m, ctx)) return null;
                 const off = new Set(Array.isArray(m.badges_off) ? m.badges_off : []);
                 if (all) off.add(id); else off.delete(id);
                 return { badges_off: BADGES.map(b => b.id).filter(b => off.has(b)) };

@@ -79,7 +79,7 @@ cases.push(['Login:firstrun', () => React.createElement(Login, { onLogin: noop, 
 // A model carrying every kwarg control shape, so the editor's range branch and the
 // user-facing slider are both actually rendered rather than only compiled.
 const kwargModel = {
-  ...plain, id: 'm3', display_name: 'Tuned', badges: ['text', 'reasoning'], kwargs: [
+  ...plain, id: 'm3', display_name: 'Tuned', badges: ['text', 'reasoning', 'web', 'code', 'long'], numCtx: 131072, kwargs: [
     { id: 'b', name: 'thinking_budget_tokens', label: 'Thinking budget', target: 'body', type: 'number', min: 1024, max: 8192, step: 1024, default: '1024', values: [], showIf: { id: 'think', value: 'true' } },
     { id: 'think', name: 'enable_thinking', label: 'Extended thinking', values: ['false', 'true'], default: 'false' },
     { id: 'eff', name: 'reasoning_effort', values: ['low', 'medium', 'high'], default: 'medium' },

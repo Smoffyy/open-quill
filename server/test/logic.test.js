@@ -2021,13 +2021,19 @@ test('client/src/lib/badges.js and server/lib/badges.js are the same file', () =
 });
 
 test('badges follow what a model supports, minus the ones an admin switched off', () => {
-  assert.deepEqual(badgesOf({ has_vision: 0 }), ['text']);
-  assert.deepEqual(badgesOf({ has_vision: 1 }), ['text', 'vision'], 'every model reads and writes text; vision is added on top');
-  assert.deepEqual(badgesOf({ has_vision: 1, kwargs: [{ name: 'enable_thinking' }] }), ['text', 'vision', 'reasoning']);
-  assert.deepEqual(badgesOf({ has_reasoning: 1, badges_off: ['text'] }), ['reasoning']);
-  assert.deepEqual(badgesOf({ reasoning_collapsible: 0 }), ['text', 'reasoning']);
-  assert.deepEqual(badgesOf({ kwargs: [{ name: 'top_k' }] }), ['text'], 'an unrelated kwarg is not reasoning');
-  assert.deepEqual(badgesOf({ kind: 'router', has_vision: 1 }), [], 'a router answers with other models, so it has no badges of its own');
+  const plain = { sandbox_allowed: 0 };
+  assert.deepEqual(badgesOf(plain), ['text']);
+  assert.deepEqual(badgesOf({ ...plain, has_vision: 1 }), ['text', 'vision'], 'every model reads and writes text; vision is added on top');
+  assert.deepEqual(badgesOf({ ...plain, has_vision: 1, kwargs: [{ name: 'enable_thinking' }] }), ['text', 'vision', 'reasoning']);
+  assert.deepEqual(badgesOf({ ...plain, has_reasoning: 1, badges_off: ['text'] }), ['reasoning']);
+  assert.deepEqual(badgesOf({ ...plain, reasoning_collapsible: 0 }), ['text', 'reasoning']);
+  assert.deepEqual(badgesOf({ ...plain, kwargs: [{ name: 'top_k' }] }), ['text'], 'an unrelated kwarg is not reasoning');
+  assert.deepEqual(badgesOf({}), ['text', 'code'], 'the sandbox is allowed unless switched off');
+  assert.deepEqual(badgesOf({ ...plain }, { webSearch: true }), ['text', 'web'], 'web search is on per model unless switched off');
+  assert.deepEqual(badgesOf({ ...plain, web_search_allowed: 1 }), ['text'], 'but only once the workspace has web search');
+  assert.deepEqual(badgesOf({ ...plain, num_ctx: 131072 }), ['text', 'long']);
+  assert.deepEqual(badgesOf({ ...plain, num_ctx: 32768 }), ['text']);
+  assert.deepEqual(badgesOf({ kind: 'router', has_vision: 1, num_ctx: 200000 }, { webSearch: true }), ['auto'], 'a router only says it routes');
   assert.deepEqual(sanitizeBadgesOff(['reasoning', 'bogus', 'text', 'text', 3]), ['text', 'reasoning']);
   assert.deepEqual(sanitizeBadgesOff('text'), []);
 });

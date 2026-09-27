@@ -2564,5 +2564,15 @@
   "Text: this model reads and writes text": "テキスト: このモデルはテキストを読み書きします",
   "Vision: this model can read the images you attach": "ビジョン: このモデルは添付した画像を読み取れます",
   "Reasoning: this model thinks before it answers": "推論: このモデルは回答前に考えます",
-  "Model badge": "モデルのバッジ"
+  "Model badge": "モデルのバッジ",
+  "Auto": "自動",
+  "Earned by routers, which pick a model for each message.": "メッセージごとにモデルを選ぶルーターに付きます。",
+  "Earned when web search is on for the workspace and allowed for this model.": "ワークスペースで Web 検索がオンで、このモデルで許可されていると付きます。",
+  "Earned while Sandbox tools are allowed.": "サンドボックスツールが許可されている間に付きます。",
+  "Long context": "長いコンテキスト",
+  "Earned with a context window of 100K tokens or more.": "コンテキストウィンドウが 100K トークン以上で付きます。",
+  "Auto: picks the best model for each message": "自動: メッセージごとに最適なモデルを選びます",
+  "Web search: this model can look things up online": "Web 検索: このモデルはオンラインで調べられます",
+  "Code: this model can run code and work with files": "コード: このモデルはコードを実行し、ファイルを扱えます",
+  "Long context: holds about {n} tokens": "長いコンテキスト: 約 {n} トークンを保持できます"
 }

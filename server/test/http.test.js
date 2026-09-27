@@ -525,11 +525,18 @@ test('the catalog edits, copies and removes models in batches', async () => {
   await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: a, badges_off: ['text', 'nope'] }] } });
   let row = (await browser('GET', '/api/admin/models')).json.find(m => m.id === a);
   assert.deepEqual(row.badges_off, ['text'], 'unknown badge ids are dropped');
-  assert.deepEqual((await browser('GET', '/api/models')).json.find(m => m.id === a).badges, [], 'a switched-off badge leaves the picker');
+  assert.deepEqual((await browser('GET', '/api/models')).json.find(m => m.id === a).badges, ['code'], 'a switched-off badge leaves the picker');
   await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: a, badges_off: null }] } });
   row = (await browser('GET', '/api/admin/models')).json.find(m => m.id === a);
   assert.equal('badges_off' in row, false, 'switching every badge back on leaves no field behind, so a revert matches the published row');
-  assert.deepEqual((await browser('GET', '/api/models')).json.find(m => m.id === a).badges, ['text']);
+  assert.deepEqual((await browser('GET', '/api/models')).json.find(m => m.id === a).badges, ['text', 'code']);
+
+  await browser('PATCH', '/api/admin/settings', { body: { webSearchEnabled: true } });
+  await browser('POST', '/api/admin/models/publish', { body: {} });
+  assert.deepEqual((await browser('GET', '/api/models')).json.find(m => m.id === a).badges, ['text', 'web', 'code'], 'switching web search on for the workspace refreshes the cached badges');
+  await browser('PATCH', '/api/admin/settings', { body: { webSearchEnabled: false } });
+  await browser('POST', '/api/admin/models/publish', { body: {} });
+  assert.deepEqual((await browser('GET', '/api/models')).json.find(m => m.id === a).badges, ['text', 'code']);
 
   const copies = (await browser('POST', '/api/admin/models/duplicate', { body: { ids: [a] } })).json.ids;
   assert.equal(copies.length, 1);
