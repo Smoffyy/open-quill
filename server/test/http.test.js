@@ -495,6 +495,69 @@ test('admin edits stage until they are published', async () => {
   assert.equal((await browser('GET', '/api/app-config')).json.appName, 'Staged Name', 'and the value survives as the live one');
 });
 
+test('the catalog edits, copies and removes models in batches', async () => {
+  const a = (await browser('POST', '/api/admin/models', { body: { display_name: 'Batch A', internal_name: 'batch-a' } })).json.id;
+  const b = (await browser('POST', '/api/admin/models', { body: { display_name: 'Batch B', internal_name: 'batch-b' } })).json.id;
+  await browser('POST', '/api/admin/models/publish', { body: {} });
+
+  const edit = await browser('PATCH', '/api/admin/models', { body: { rows: [
+    { id: a, system_prompt: 'Shared prompt', temperature: '0.4' },
+    { id: b, system_prompt: 'Shared prompt', temperature: '' }
+  ] } });
+  assert.equal(edit.status, 200);
+  const rows = (await browser('GET', '/api/admin/models')).json;
+  const ra = rows.find(m => m.id === a), rb = rows.find(m => m.id === b);
+  assert.equal(ra.system_prompt, 'Shared prompt');
+  assert.equal(rb.system_prompt, 'Shared prompt');
+  assert.equal(ra.temperature, 0.4, 'values are sanitized exactly as a single edit is');
+  assert.equal(rb.temperature, null);
+
+  const state = (await browser('GET', '/api/admin/models/publish-state')).json;
+  assert.deepEqual([...state.changed].sort(), [a, b].sort(), 'only the edited rows are reported as unpublished');
+  assert.equal(state.live[a].system_prompt, '', 'the published copy of each changed row comes along for diffing');
+  assert.ok(state.order.indexOf(a) < state.order.indexOf(b), 'and so does the published order');
+
+  const missing = await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: a, description: 'x' }, { id: 'nope' }] } });
+  assert.equal(missing.status, 404, 'an unknown id rejects the whole batch');
+  assert.notEqual((await browser('GET', '/api/admin/models')).json.find(m => m.id === a).description, 'x', 'and nothing in it was applied');
+  assert.equal((await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: a, is_default: true }, { id: b, is_default: true }] } })).status, 400);
+
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: a, badges_off: ['text', 'nope'] }] } });
+  let row = (await browser('GET', '/api/admin/models')).json.find(m => m.id === a);
+  assert.deepEqual(row.badges_off, ['text'], 'unknown badge ids are dropped');
+  assert.deepEqual((await browser('GET', '/api/models')).json.find(m => m.id === a).badges, [], 'a switched-off badge leaves the picker');
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: a, badges_off: null }] } });
+  row = (await browser('GET', '/api/admin/models')).json.find(m => m.id === a);
+  assert.equal('badges_off' in row, false, 'switching every badge back on leaves no field behind, so a revert matches the published row');
+  assert.deepEqual((await browser('GET', '/api/models')).json.find(m => m.id === a).badges, ['text']);
+
+  const copies = (await browser('POST', '/api/admin/models/duplicate', { body: { ids: [a] } })).json.ids;
+  assert.equal(copies.length, 1);
+  const order = (await browser('GET', '/api/admin/models')).json.map(m => m.id);
+  assert.equal(order.indexOf(copies[0]), order.indexOf(a) + 1, 'a copy lands right after its source');
+  const copy = (await browser('GET', '/api/admin/models')).json.find(m => m.id === copies[0]);
+  assert.equal(copy.system_prompt, 'Shared prompt', 'and carries every field');
+  assert.equal(copy.temperature, 0.4);
+
+  assert.equal((await browser('POST', '/api/admin/models/remove', { body: { ids: [a, b, copies[0]] } })).json.count, 3);
+  const left = (await browser('GET', '/api/admin/models')).json.map(m => m.id);
+  assert.ok(![a, b, copies[0]].some(id => left.includes(id)));
+  await browser('POST', '/api/admin/models/publish', { body: {} });
+});
+
+test('model folders persist on their own, empty or not', async () => {
+  await browser('POST', '/api/admin/models/publish', { body: {} });
+  assert.deepEqual((await browser('GET', '/api/admin/models/folders')).json.folders, []);
+  const put = await browser('PUT', '/api/admin/models/folders', { body: { folders: ['  Fast ', 'Archive', 'Fast', '', 7, 'x'.repeat(90)] } });
+  assert.equal(put.status, 200);
+  assert.deepEqual(put.json.folders, ['Archive', 'Fast', 'x'.repeat(60)], 'names are trimmed, capped, deduplicated and sorted');
+  assert.deepEqual((await browser('GET', '/api/admin/models/folders')).json.folders, put.json.folders, 'and read back unchanged');
+  assert.equal((await browser('GET', '/api/admin/models/publish-state')).json.dirty, false, 'an empty folder is not a catalog change');
+  const added = await browser('POST', '/api/admin/models/folders/add', { body: { folders: ['Fast', 'Zeta'] } });
+  assert.deepEqual(added.json.folders, ['Archive', 'Fast', 'x'.repeat(60), 'Zeta'], 'adding only ever unions, so it cannot bring back a folder another admin removed');
+  await browser('PUT', '/api/admin/models/folders', { body: { folders: [] } });
+});
+
 test('a staged app-config edit can be taken back before it is published', async () => {
   const cfg = (await browser('GET', '/api/app-config')).json;
   const live = { uiPreset: cfg.uiPreset, appFont: cfg.appFont, appName: cfg.appName };

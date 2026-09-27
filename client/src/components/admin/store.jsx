@@ -31,14 +31,14 @@ export function AdminProvider({ user, onClose, children }) {
   const workspace = useWorkspace();
   const members = useMembers({ confirm });
 
-  const { setSelected } = catalog;
+  const { setSelection } = catalog;
 
   // Opening a model is always "show the models page with this one open", so the
   // finder, the overview and every list action go through one call.
   const openModel = useCallback((id) => {
-    setSelected(id);
+    setSelection([id]);
     setSection('models');
-  }, [setSelected, setSection]);
+  }, [setSelection, setSection]);
 
   // Each section keeps its own scroll offset, so flipping between them does not
   // dump the admin back at the top of a long page.

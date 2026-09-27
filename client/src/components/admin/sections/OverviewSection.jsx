@@ -67,7 +67,7 @@ export default function OverviewSection() {
 
       <Card title={t('Set up')} sub={t('The three things a workspace needs before members can chat.')}>
         <Acts>
-          <Btn onClick={createModel}><Plus /> {t('Add model')}</Btn>
+          <Btn onClick={async () => openModel(await createModel())}><Plus /> {t('Add model')}</Btn>
           <Btn onClick={() => setSection('providers')}><Sliders /> {t('Connections')}</Btn>
           <Btn onClick={() => setSection('members')}><Users /> {t('Members')}</Btn>
           <Btn onClick={replaySetup}>{t('Run the setup guide')}</Btn>

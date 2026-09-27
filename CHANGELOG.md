@@ -8,7 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [27.5.4] - 2026-10-02
+### Changed
+- **Admin Models tab rebuilt** - a list and an inspector side by side. Select one model or many (checkboxes, Ctrl, Shift, Ctrl+A); every field then edits the whole selection at once.
+- **Mixed values** - a field that differs across the selection is marked "Mixed"; pick any model's value to apply it to all.
+- **Bulk prompt edits** - differing prompts can be replaced, prepended, appended or find-and-replaced across the selection.
+- **Right-click menus** - on models (edit names, duplicate, move to folder, delete), folders (rename, select, remove) and empty list space (new folder, select all, restore order). The "⋯" button, Shift+F10, F2 and Delete reach the same actions.
+- **Batch rename** - every selected name gets its own caret; typing, Backspace, arrows, Home/End, Ctrl+A and paste apply to all, clicking a name moves its caret, Enter saves, Escape cancels.
+- **Folders** - created and renamed inline in the list, and kept on the server for every admin until removed, even when empty; drag rows or folders to reorder, drop below the last row to leave a folder, or use Alt+Up/Down.
+- **Tabs follow the model** - routers show only General, Appearance and Routing; Reasoning and Request controls appear once configured; "More" lists them with checkmarks and toggles them per model (remembered in this browser) when a model does not use them yet. Voice, web search and past-chat search settings show only when enabled for the workspace. Model or router is now chosen under General.
+- **Grouped and dependent settings** - sandbox, web search and thought display are single three-level dropdowns; other tools and picker badges are toggle chips. Settings that depend on another (default, down reason, compaction, DRY/XTC/Mirostat, tool-call limit, thinking logo, picker logo, badge collapse, backdrop URL) show only once it is on.
+- **Model badges** - shown as small squares right after the name in the model picker (a neutral T for text, a blue eye for vision, an amber lightbulb for reasoning) with a description on hover. A model earns each badge from what it supports, so turning on image input or a thinking control adds the badge automatically; admins can switch individual badges off. "Collapse into one" is gone.
+- **Unpublished changes** - each changed setting is outlined with an X that reverts it to the published value, tabs count their changes, and models with draft changes are flagged and filterable in the list.
 
+### Added
+- `PATCH /api/admin/models` (batched edits in one transaction), `POST /api/admin/models/duplicate`, `POST /api/admin/models/remove`, `GET`/`PUT /api/admin/models/folders` and `POST /api/admin/models/folders/add`, a `badges` list on public models (replacing `capText`, `capVision`, `capReasoning` and `capCompact`), and changed ids, their published copies and the published order in publish state.
+
+### Fixed
+- Context "headroom" is a share of the window, not a token count, and the trim strategy now shows its saved value.
+- Moving a model out of a folder no longer leaves a stale folder label that marks it unpublished.
 
 ---
 

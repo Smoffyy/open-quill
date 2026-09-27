@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevDown, Chevron, ImageIcon, Brain, Info, TextIcon } from '../ui/icons.jsx';
+import { Check, ChevDown, Chevron, Bulb, Eye, Info } from '../ui/icons.jsx';
+import Tip from '../ui/Tip.jsx';
 import { t, tk } from '../../i18n.jsx';
 import { Switch } from '../ui/controls.jsx';
 import { clampPx, overshoot, stretchFor, squashFor, stretchOrigin, slideFor, DRAG_SLOP } from '../../lib/dragsteps.js';
@@ -9,11 +10,12 @@ import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, k
 import { useDismiss } from '../../lib/dismiss.js';
 import { Skel, SkelMenu } from '../ui/Skeleton.jsx';
 
-const CAP_ICONS = [
-  { key: 'capText', label: tk('Text-Only'), Icon: TextIcon },
-  { key: 'capVision', label: tk('Vision'), Icon: ImageIcon },
-  { key: 'capReasoning', label: tk('Reasoning'), Icon: Brain }
-];
+const BADGE_ICONS = {
+  __proto__: null,
+  text: { tip: tk('Text: this model reads and writes text'), glyph: 'T' },
+  vision: { tip: tk('Vision: this model can read the images you attach'), Icon: Eye },
+  reasoning: { tip: tk('Reasoning: this model thinks before it answers'), Icon: Bulb }
+};
 
 const EDGE = 10;
 const GAP = 6;
@@ -44,31 +46,21 @@ function viewport() {
   };
 }
 
-function CapRow({ m }) {
-  const active = CAP_ICONS.filter(c => m[c.key]);
-  if (!active.length) return null;
+function Badges({ ids }) {
+  const shown = (ids || []).filter(id => BADGE_ICONS[id]);
+  if (!shown.length) return null;
   return (
-    <div className="mo-caps">
-      {active.map(({ key, label, Icon }) => (
-        <span key={key} className="mo-cap-ic" title={t(label)}>
-          <Icon style={{ width: 12, height: 12 }} />
-          <span className="mo-cap-lbl">{t(label)}</span>
-        </span>
-      ))}
-    </div>
-  );
-}
-function CapInfo({ m }) {
-  const active = CAP_ICONS.filter(c => m[c.key]);
-  if (!active.length) return null;
-  return (
-    <span className="mo-capinfo">
-      <Info style={{ width: 14, height: 14 }} />
-      <span className="mo-capinfo-pop">
-        {active.map(({ key, label, Icon }) => (
-          <span key={key} className="mo-capinfo-item"><Icon style={{ width: 12, height: 12 }} /> {t(label)}</span>
-        ))}
-      </span>
+    <span className="mo-badges">
+      {shown.map(id => {
+        const { tip, glyph, Icon } = BADGE_ICONS[id];
+        return (
+          <Tip key={id} label={t(tip)}>
+            <span className="mo-badge" data-badge={id} role="img" aria-label={t(tip)}>
+              {Icon ? <Icon /> : <b aria-hidden="true">{glyph}</b>}
+            </span>
+          </Tip>
+        );
+      })}
     </span>
   );
 }
@@ -488,15 +480,14 @@ export default function ModelDropdown({ models, modelsReady = true, currentId, o
       {m.dropdownIcon !== false && m.staticIcon && <img className="mo-icon" src={m.staticIcon} alt="" aria-hidden="true" />}
       <div className="mo-main">
         <div className="mo-name">
-          {m.displayName}
+          <span className="mo-name-text">{m.displayName}</span>
+          <Badges ids={m.badges} />
           {m.unavailable && <span className="mo-unavail"><span className="mo-unavail-dot">ⓘ</span> {t("Currently unavailable")}</span>}
         </div>
         {m.description && <div className="mo-desc">{m.description}</div>}
-        {!m.capCompact && <CapRow m={m} />}
       </div>
       <span className="mo-side">
         {m.id === currentId && <Check className="check" />}
-        {m.capCompact && <CapInfo m={m} />}
       </span>
     </button>
   );

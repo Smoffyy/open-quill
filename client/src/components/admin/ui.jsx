@@ -14,9 +14,9 @@ export { Switch };
 
 // Every page is a stack of cards. A card owns its own padding and internal
 // rhythm so a section never reaches for an inline margin.
-export function Card({ title, sub, actions, foot, flush, children }) {
+export function Card({ title, sub, actions, foot, flush, className, children }) {
   return (
-    <section className="cp-card">
+    <section className={'cp-card' + (className ? ' ' + className : '')}>
       {(title || sub || actions) && (
         <div className="cp-card-head">
           <div>
@@ -370,8 +370,8 @@ export function PointMenu({ at, onClose, width = 250, anchorEl, children }) {
     </div>, document.body);
 }
 
-export function MenuItem({ tone, sub, active, children, ...rest }) {
-  const cls = ['cp-menu-item', tone, sub && 'sub', active && 'on'].filter(Boolean).join(' ');
+export function MenuItem({ tone, sub, active, className, children, ...rest }) {
+  const cls = ['cp-menu-item', tone, sub && 'sub', active && 'on', className].filter(Boolean).join(' ');
   return <button type="button" role="menuitem" className={cls} {...rest}>{children}</button>;
 }
 

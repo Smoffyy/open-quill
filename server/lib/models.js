@@ -1,4 +1,5 @@
 import { db, getSetting, setSetting } from '../db.js';
+import { badgesOf } from './badges.js';
 import { resolveProvider, providerSpec } from './providers.js';
 import { publicKwargDefs } from './kwargs.js';
 import { llamaContext } from './llamacpp.js';
@@ -51,7 +52,7 @@ export function shapePublic(m) {
     unavailable: !!m.unavailable, unavailableReason: m.unavailable_reason || '',
     sunsetAt: m.sunset_at || '',
     bgEnabled: !!m.bg_enabled, bgImage: m.bg_image || '',
-    capVision: !!m.cap_vision, capReasoning: !!m.cap_reasoning, capText: !!m.cap_text, capCompact: !!m.cap_compact,
+    badges: badgesOf(m),
     priceIn: m.cost_in ?? null, priceOut: m.cost_out ?? null,
     docsFeatured: !!m.docs_featured, docsIntelligence: m.docs_intelligence || 0, docsSpeed: m.docs_speed || 0,
     docsMaxOutput: m.docs_max_output || 0, docsCutoff: m.docs_cutoff || '', docsBody: m.docs_body || '', docsImage: m.docs_image || '', docsIcon: m.docs_icon || '',

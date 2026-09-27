@@ -6,6 +6,7 @@ import { logAudit } from '../lib/audit.js';
 import { promoteDrafts, hasDrafts } from '../lib/draft.js';
 import { draftModels, publicModels, detectContextLength, timedFetch } from '../lib/models.js';
 import { sanitizeKwargs } from '../lib/kwargs.js';
+import { sanitizeBadgesOff } from '../lib/badges.js';
 import { broadcastConfig, broadcastAdminConfig } from '../lib/ws/index.js';
 import { ROUTE_MATCHERS } from '../lib/router.js';
 import { DOCS_MODEL_STR, DOCS_MODEL_BOOL, DOCS_MODEL_INT, DOCS_MODEL_FLOAT, DOCS_BADGES, sanitizePairs, sanitizeCards, sanitizeDocsLinks, sanitizeStrList } from '../lib/modeldocs.js';
@@ -33,6 +34,84 @@ function sanitizeStop(raw) {
     if (out.length >= 8) break;
   }
   return out.join('\n');
+}
+
+function modelPatch(b, cur) {
+  const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'call_prompt', 'end_chat_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id', 'bg_image', 'effort_kwarg', 'effort_default', ...DOCS_MODEL_STR];
+  const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'show_name', 'skills_allowed', 'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'long_convo_reminder', 'effort_enabled', 'effort_admin_only', 'hide_thinking', ...DOCS_MODEL_BOOL];
+  const patch = {};
+  for (const k of str) if (k in b) patch[k] = b[k];
+  for (const k of bool) if (k in b) patch[k] = b[k] ? 1 : 0;
+  if ('sunset_at' in b) {
+    const v = String(b.sunset_at || '').trim();
+    patch.sunset_at = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '';
+  }
+  if ('sunset_action' in b) {
+    const v = String(b.sunset_action || '');
+    patch.sunset_action = v === 'unavailable' ? 'unavailable' : 'hide';
+  }
+  if ('docs_badge' in patch) patch.docs_badge = DOCS_BADGES.has(patch.docs_badge) ? patch.docs_badge : '';
+  if ('docs_ids' in b) patch.docs_ids = sanitizePairs(b.docs_ids);
+  if ('docs_platforms' in b) patch.docs_platforms = sanitizeStrList(b.docs_platforms);
+  if ('docs_links' in b) patch.docs_links = sanitizeDocsLinks(b.docs_links);
+  if ('docs_resources' in b) patch.docs_resources = sanitizeCards(b.docs_resources);
+  if ('docs_reference' in b) patch.docs_reference = sanitizeCards(b.docs_reference);
+  if ('kind' in b) patch.kind = b.kind === 'router' ? 'router' : 'model';
+  if ('router_default' in b) patch.router_default = String(b.router_default || '');
+  if ('router_rules' in b) patch.router_rules = sanitizeRouterRules(b.router_rules);
+  if ('kwargs' in b) patch.kwargs = sanitizeKwargs(b.kwargs);
+  if ('badges_off' in b) patch.badges_off = badgesOff(b.badges_off);
+  if ('effort_levels' in b) {
+    const arr = Array.isArray(b.effort_levels) ? b.effort_levels : String(b.effort_levels || '').split(',');
+    const clean = arr.map(s => String(s).trim().toLowerCase()).filter(Boolean).slice(0, 8);
+    patch.effort_levels = clean.length ? clean : ['low', 'medium', 'high'];
+  }
+  if ('agent_steps' in b) patch.agent_steps = Math.max(0, parseInt(b.agent_steps) || 0);
+  if ('num_ctx' in b) patch.num_ctx = Math.max(0, parseInt(b.num_ctx) || 0);
+  if ('recent_window' in b) patch.recent_window = Math.max(1, parseInt(b.recent_window) || 4);
+  if ('icon_size' in b) patch.icon_size = Math.max(0, Math.min(80, parseInt(b.icon_size) || 0));
+  if ('summary_padding' in b) patch.summary_padding = Math.max(0.03, Math.min(0.6, parseFloat(b.summary_padding) || 0.125));
+  if ('ctx_trim_mode' in b) patch.ctx_trim_mode = b.ctx_trim_mode === 'cache' ? 'cache' : 'retain';
+  if ('stop' in b) patch.stop = sanitizeStop(b.stop);
+  const numF = ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'repetition_penalty', 'min_p', 'cost_in', 'cost_out',
+    'dry_multiplier', 'dry_base', 'xtc_probability', 'xtc_threshold', 'mirostat_tau', 'mirostat_eta', ...DOCS_MODEL_FLOAT];
+  const numI = ['top_k', 'seed', 'max_tokens', ...DOCS_MODEL_INT,
+    'dry_allowed_length', 'dry_penalty_last_n', 'mirostat'];
+  for (const k of numF) if (k in b) { const v = b[k]; patch[k] = (v === '' || v == null || isNaN(Number(v))) ? null : Number(v); }
+  for (const k of numI) if (k in b) { const v = b[k]; patch[k] = (v === '' || v == null || isNaN(parseInt(v))) ? null : parseInt(v); }
+  if ('internal_name' in patch && !('cost_in' in b) && !('cost_out' in b) && cur.cost_in == null && cur.cost_out == null) {
+    const preset = matchPreset(patch.internal_name);
+    if (preset) { patch.cost_in = preset.in; patch.cost_out = preset.out; }
+  }
+  return patch;
+}
+
+const MAX_BATCH = 500;
+
+function badgesOff(raw) {
+  const list = sanitizeBadgesOff(raw);
+  return list.length ? list : undefined;
+}
+const MAX_FOLDERS = 200;
+const FOLDER_NAME = 60;
+
+function sanitizeFolders(raw) {
+  const out = [];
+  for (const v of Array.isArray(raw) ? raw : []) {
+    const name = typeof v === 'string' ? v.trim().slice(0, FOLDER_NAME) : '';
+    if (name && !out.includes(name)) out.push(name);
+    if (out.length >= MAX_FOLDERS) break;
+  }
+  return out.sort((a, b) => a.localeCompare(b));
+}
+
+function idList(raw) {
+  return new Set((Array.isArray(raw) ? raw : []).slice(0, MAX_BATCH).filter(id => typeof id === 'string'));
+}
+
+function applyPatch(cur, patch) {
+  if (patch.is_default === 1) for (const other of db.models.all()) if (other.id !== cur.id && other.is_default) db.models.update(other.id, { is_default: 0 });
+  db.models.update(cur.id, patch);
 }
 
 export default function registerModelRoutes(app) {
@@ -96,7 +175,7 @@ export default function registerModelRoutes(app) {
       in_more_models: b.in_more_models ? 1 : 0, more_models_label: b.more_models_label || 'More models',
       unavailable: b.unavailable ? 1 : 0, unavailable_reason: b.unavailable_reason || '',
       bg_enabled: b.bg_enabled ? 1 : 0, bg_image: b.bg_image || '',
-      cap_vision: b.cap_vision ? 1 : 0, cap_reasoning: b.cap_reasoning ? 1 : 0, cap_text: b.cap_text ? 1 : 0, cap_compact: b.cap_compact ? 1 : 0,
+      badges_off: badgesOff(b.badges_off),
       static_icon: b.static_icon || '', generating_icon: b.generating_icon || '', thinking_icon: b.thinking_icon || '',
       icon_position: b.icon_position || (getSetting('ui_preset', '') === 'openai' ? 'left' : 'below'),
       temperature: null, top_p: null, presence_penalty: null, frequency_penalty: null, repetition_penalty: null, min_p: null, top_k: null, seed: null,
@@ -111,57 +190,56 @@ export default function registerModelRoutes(app) {
   app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
     const cur = db.models.byId(req.params.id);
     if (!cur) return res.status(404).json({ error: 'not found' });
-    const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'call_prompt', 'end_chat_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id', 'bg_image', 'effort_kwarg', 'effort_default', ...DOCS_MODEL_STR];
-    const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'cap_vision', 'cap_reasoning', 'cap_text', 'cap_compact', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'show_name', 'skills_allowed', 'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'long_convo_reminder', 'effort_enabled', 'effort_admin_only', 'hide_thinking', ...DOCS_MODEL_BOOL];
-    const patch = {};
-    for (const k of str) if (k in req.body) patch[k] = req.body[k];
-    for (const k of bool) if (k in req.body) patch[k] = req.body[k] ? 1 : 0;
-    if ('sunset_at' in req.body) {
-      const v = String(req.body.sunset_at || '').trim();
-      patch.sunset_at = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '';
-    }
-    if ('sunset_action' in req.body) {
-      const v = String(req.body.sunset_action || '');
-      patch.sunset_action = v === 'unavailable' ? 'unavailable' : 'hide';
-    }
-    if ('docs_badge' in patch) patch.docs_badge = DOCS_BADGES.has(patch.docs_badge) ? patch.docs_badge : '';
-    if ('docs_ids' in req.body) patch.docs_ids = sanitizePairs(req.body.docs_ids);
-    if ('docs_platforms' in req.body) patch.docs_platforms = sanitizeStrList(req.body.docs_platforms);
-    if ('docs_links' in req.body) patch.docs_links = sanitizeDocsLinks(req.body.docs_links);
-    if ('docs_resources' in req.body) patch.docs_resources = sanitizeCards(req.body.docs_resources);
-    if ('docs_reference' in req.body) patch.docs_reference = sanitizeCards(req.body.docs_reference);
-    if ('kind' in req.body) patch.kind = req.body.kind === 'router' ? 'router' : 'model';
-    if ('router_default' in req.body) patch.router_default = String(req.body.router_default || '');
-    if ('router_rules' in req.body) patch.router_rules = sanitizeRouterRules(req.body.router_rules);
-    if ('kwargs' in req.body) patch.kwargs = sanitizeKwargs(req.body.kwargs);
-    if ('effort_levels' in req.body) {
-      const arr = Array.isArray(req.body.effort_levels) ? req.body.effort_levels : String(req.body.effort_levels || '').split(',');
-      const clean = arr.map(s => String(s).trim().toLowerCase()).filter(Boolean).slice(0, 8);
-      patch.effort_levels = clean.length ? clean : ['low', 'medium', 'high'];
-    }
-    if ('agent_steps' in req.body) patch.agent_steps = Math.max(0, parseInt(req.body.agent_steps) || 0);
-    if ('num_ctx' in req.body) patch.num_ctx = Math.max(0, parseInt(req.body.num_ctx) || 0);
-    if ('recent_window' in req.body) patch.recent_window = Math.max(1, parseInt(req.body.recent_window) || 4);
-    if ('icon_size' in req.body) patch.icon_size = Math.max(0, Math.min(80, parseInt(req.body.icon_size) || 0));
-    if ('summary_padding' in req.body) patch.summary_padding = Math.max(0.03, Math.min(0.6, parseFloat(req.body.summary_padding) || 0.125));
-    if ('ctx_trim_mode' in req.body) patch.ctx_trim_mode = req.body.ctx_trim_mode === 'cache' ? 'cache' : 'retain';
-    if ('stop' in req.body) patch.stop = sanitizeStop(req.body.stop);
-    const numF = ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'repetition_penalty', 'min_p', 'cost_in', 'cost_out',
-      'dry_multiplier', 'dry_base', 'xtc_probability', 'xtc_threshold', 'mirostat_tau', 'mirostat_eta', ...DOCS_MODEL_FLOAT];
-    const numI = ['top_k', 'seed', 'max_tokens', ...DOCS_MODEL_INT,
-      'dry_allowed_length', 'dry_penalty_last_n', 'mirostat'];
-    for (const k of numF) if (k in req.body) { const v = req.body[k]; patch[k] = (v === '' || v == null || isNaN(Number(v))) ? null : Number(v); }
-    for (const k of numI) if (k in req.body) { const v = req.body[k]; patch[k] = (v === '' || v == null || isNaN(parseInt(v))) ? null : parseInt(v); }
-    if ('internal_name' in patch && !('cost_in' in req.body) && !('cost_out' in req.body) && cur.cost_in == null && cur.cost_out == null) {
-      const preset = matchPreset(patch.internal_name);
-      if (preset) { patch.cost_in = preset.in; patch.cost_out = preset.out; }
-    }
-    // only one model can be the login default
-    if (patch.is_default === 1) for (const other of db.models.all()) if (other.id !== cur.id && other.is_default) db.models.update(other.id, { is_default: 0 });
-    db.models.update(cur.id, patch);
+    const patch = modelPatch(req.body || {}, cur);
+    tx(() => applyPatch(cur, patch));
     logAudit(req, 'model.update', { type: 'model', id: cur.id, meta: { fields: Object.keys(patch) } });
     broadcastAdminConfig();
     res.json({ ok: true });
+  });
+
+  app.patch('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows.slice(0, MAX_BATCH) : null;
+    if (!rows) return res.status(400).json({ error: 'rows must be an array' });
+    const plan = [];
+    for (const row of rows) {
+      const cur = row && typeof row === 'object' ? db.models.byId(row.id) : undefined;
+      if (!cur) return res.status(404).json({ error: 'not found', id: row?.id ?? null });
+      plan.push([cur, modelPatch(row, cur)]);
+    }
+    if (plan.filter(([, p]) => p.is_default === 1).length > 1) return res.status(400).json({ error: 'only one model can be the default' });
+    tx(() => { for (const [cur, patch] of plan) applyPatch(cur, patch); });
+    logAudit(req, 'model.update', { type: 'model', meta: { ids: plan.map(([c]) => c.id), fields: [...new Set(plan.flatMap(([, p]) => Object.keys(p)))] } });
+    broadcastAdminConfig();
+    res.json({ ok: true, count: plan.length });
+  });
+
+  app.post('/api/admin/models/duplicate', authMiddleware, adminOnly, (req, res) => {
+    const ids = idList(req.body?.ids);
+    const all = db.models.all().sort((a, b) => a.sort_order - b.sort_order);
+    const made = [];
+    const order = [];
+    for (const m of all) {
+      order.push(m);
+      if (!ids.has(m.id)) continue;
+      const copy = { ...m, id: uid(), display_name: (m.display_name || 'Model') + ' copy', is_default: 0 };
+      made.push(copy);
+      order.push(copy);
+    }
+    tx(() => {
+      for (const c of made) db.models.insert(c);
+      order.forEach((m, i) => db.models.update(m.id, { sort_order: i }));
+    });
+    for (const c of made) logAudit(req, 'model.create', { type: 'model', id: c.id, meta: { displayName: c.display_name, internalName: c.internal_name } });
+    broadcastAdminConfig();
+    res.json({ ids: made.map(c => c.id) });
+  });
+
+  app.post('/api/admin/models/remove', authMiddleware, adminOnly, (req, res) => {
+    const gone = db.models.all().filter(m => idList(req.body?.ids).has(m.id));
+    db.models.removeByIds(gone.map(m => m.id));
+    for (const m of gone) logAudit(req, 'model.delete', { type: 'model', id: m.id, meta: { displayName: m.display_name } });
+    broadcastAdminConfig();
+    res.json({ ok: true, count: gone.length });
   });
 
   app.delete('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
@@ -206,6 +284,28 @@ export default function registerModelRoutes(app) {
     res.json({ numCtx, ok: !!numCtx });
   });
 
+  app.get('/api/admin/models/folders', authMiddleware, adminOnly, (req, res) => {
+    res.json({ folders: sanitizeFolders(getSetting('model_folders', [])) });
+  });
+
+  app.put('/api/admin/models/folders', authMiddleware, adminOnly, (req, res) => {
+    const folders = sanitizeFolders(req.body?.folders);
+    setSetting('model_folders', folders);
+    logAudit(req, 'model.folders', { meta: { count: folders.length } });
+    broadcastAdminConfig();
+    res.json({ folders });
+  });
+
+  app.post('/api/admin/models/folders/add', authMiddleware, adminOnly, (req, res) => {
+    const have = sanitizeFolders(getSetting('model_folders', []));
+    const folders = sanitizeFolders([...have, ...(Array.isArray(req.body?.folders) ? req.body.folders : [])]);
+    if (folders.length !== have.length) {
+      setSetting('model_folders', folders);
+      broadcastAdminConfig();
+    }
+    res.json({ folders });
+  });
+
   app.post('/api/admin/models/reorder', authMiddleware, adminOnly, (req, res) => {
     const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
     tx(() => ids.forEach((id, i) => db.models.update(id, { sort_order: i })));
@@ -231,7 +331,12 @@ export default function registerModelRoutes(app) {
     const snap = getSetting('published_models', null);
     const published = Array.isArray(snap);
     const staged = hasDrafts();
-    const dirty = !published || staged || JSON.stringify(snap) !== JSON.stringify(db.models.all());
-    res.json({ published, dirty, staged, publishedAt: getSetting('published_at', null) });
+    const liveRows = new Map((published ? snap : []).map(m => [m.id, m]));
+    const rows = db.models.all();
+    const changed = rows.filter(m => JSON.stringify(liveRows.get(m.id)) !== JSON.stringify(m)).map(m => m.id);
+    const dirty = !published || staged || changed.length > 0 || rows.length !== liveRows.size;
+    const live = Object.fromEntries(changed.map(id => [id, liveRows.get(id) || null]));
+    const order = [...liveRows.values()].sort((a, b) => a.sort_order - b.sort_order).map(m => m.id);
+    res.json({ published, dirty, staged, changed, live, order, publishedAt: getSetting('published_at', null) });
   });
 }
