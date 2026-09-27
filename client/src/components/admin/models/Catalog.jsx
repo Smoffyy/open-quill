@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useAdmin } from '../store.jsx';
 import { Btn, IconBtn, Input, Select, PointMenu, MenuItem, clampToViewport } from '../ui.jsx';
 import { Plus, Folder, Chevron, Star, EyeOff, Cube, Pencil, Copy, Trash, DotsV, Retry } from '../../ui/icons.jsx';
+import { ModelMark } from '../../ui/Weave.jsx';
 import { t, tk } from '../../../i18n.jsx';
 import {
   layout, displayOrder, folderOf, folderPatch, folderNames, planMove, nudge, rangeIds, matches, STATUS,
@@ -383,7 +384,7 @@ export default function Catalog() {
           <Tick state={on ? 'on' : ''} />
         </span>
         {m.static_icon
-          ? <img className="mc-row-icon" src={m.static_icon} alt="" aria-hidden="true" />
+          ? <ModelMark src={m.static_icon} className="mc-row-icon" still />
           : <span className="mc-row-icon blank" aria-hidden="true"><Cube /></span>}
         <span className="mc-row-text">
           {editing ? <NameEdit c={editing} /> : <span className="mc-row-name">{m.display_name || t('Untitled')}</span>}

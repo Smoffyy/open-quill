@@ -1147,5 +1147,10 @@
   "Clear the memory? This can't be undone.": "Effacer la mémoire ? Cette action est irréversible.",
   "Yes, clear memory": "Oui, effacer la mémoire",
   "Active {when}": "Active {when}",
-  "Signed in {when}": "Connecté le {when}"
+  "Signed in {when}": "Connecté le {when}",
+  "Modern set": "Jeu moderne",
+  "Animated, changes shape with each state": "Animé, change de forme selon l’état",
+  "Legacy set": "Jeu classique",
+  "The original mark, same as the app icon": "La marque d’origine, identique à l’icône de l’app",
+  "Built-in mark": "Marque intégrée"
 }

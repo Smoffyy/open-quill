@@ -5,7 +5,7 @@ import ToolCard from '../chat/ToolCard.jsx';
 import { ChatMenu, menuAtButton } from '../sidebar/ChatMenu.jsx';
 import { t, tk } from '../../i18n.jsx';
 import { toast } from '../../lib/toast.js';
-import { BRAND_ICON, BRAND_GENERATING, BRAND_THINKING } from '../../lib/brand.js';
+import { MODEL_WEAVE } from '../../lib/brand.js';
 import { DotsV, Ghost, Info, Gauge, X } from '../ui/icons.jsx';
 
 /* Most of an interface only exists while something is happening. There are no
@@ -57,9 +57,9 @@ const SAMPLE_MODEL = {
   iconPosition: 'below',
   iconSize: 40,
   showName: true,
-  staticIcon: BRAND_ICON,
-  generatingIcon: BRAND_GENERATING,
-  thinkingIcon: BRAND_THINKING
+  staticIcon: MODEL_WEAVE,
+  generatingIcon: MODEL_WEAVE,
+  thinkingIcon: MODEL_WEAVE
 };
 
 const SAMPLE_CALL = { tool: 'view', path: 'server/lib/worker.js' };

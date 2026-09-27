@@ -3,6 +3,7 @@ import { t } from '../../i18n.jsx';
 import { api } from '../../lib/api.js';
 import Markdown from '../chat/Markdown.jsx';
 import Tip from '../ui/Tip.jsx';
+import { ModelMark } from '../ui/Weave.jsx';
 import { Copy, Check, ArrowOut, Chevron, Info, Pencil, Trash, Plus, X } from '../ui/icons.jsx';
 import {
   fmtTokens, fmtPrice, priceRange, bulletLines, modalityLabel,
@@ -156,7 +157,7 @@ function TileRows({ rows, onChange }) {
 function modIcon(m, cls) {
   const src = m.docsIcon || m.staticIcon;
   return src
-    ? <img className={cls} src={src} alt="" aria-hidden="true" />
+    ? <ModelMark src={src} className={cls} />
     : <span className={cls + ' noicon'}>{(m.displayName || '?').trim().charAt(0).toUpperCase()}</span>;
 }
 

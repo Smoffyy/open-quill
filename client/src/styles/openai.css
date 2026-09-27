@@ -132,7 +132,7 @@
 }
 
 [data-preset="openai"] .greeting { font-size: 28px; line-height: normal; font-weight: 600; font-family: var(--font-sans); gap: 10px; margin-bottom: 26px; }
-[data-preset="openai"] .greeting img { display: none; }
+[data-preset="openai"] .greeting .greeting-icon { display: none; }
 [data-preset="openai"] .center-wrap { justify-content: center; padding-top: 24px; padding-bottom: 24px; }
 
 [data-preset="openai"] .composer-wrap { max-width: 808px; }
@@ -482,7 +482,7 @@
 [data-preset="openai"] .sidebar.collapsed .sidebar-head { padding: 16px 0 10px; }
 [data-preset="openai"] .sidebar.collapsed .nav-item { padding: 9px; width: auto; height: auto; }
 [data-preset="openai"] .field label { font-size: 13px; line-height: normal; color: var(--text-muted); }
-[data-preset="openai"] .greeting img { width: 30px; height: 30px; }
+[data-preset="openai"] .greeting .greeting-icon { width: 30px; height: 30px; }
 
 @media (max-width: 768px) {
   [data-preset="openai"] .model-menu, [data-preset="openai"] .model-menu.up {

@@ -4,6 +4,8 @@ import { Dialog, Btn, Field, Fields, Seg, Note } from './ui.jsx';
 import { QP_ICON_LIST, QpIcon } from '../ui/quickPromptIcons.jsx';
 import { t, tk } from '../../i18n.jsx';
 import { useDismiss } from '../../lib/dismiss.js';
+import Weave from '../ui/Weave.jsx';
+import { MODEL_WEAVE } from '../../lib/brand.js';
 
 function Slider({ label, min, max, step, value, onChange }) {
   return (
@@ -204,7 +206,7 @@ function VectorCrop({ file, onDone, onCancel }) {
   );
 }
 
-export function ImagePicker({ value, fallback, onChange, hint }) {
+export function ImagePicker({ value, fallback, onChange, hint, state }) {
   const ref = useRef(null);
   const [raster, setRaster] = useState(null);
   const [vector, setVector] = useState(null);
@@ -227,7 +229,7 @@ export function ImagePicker({ value, fallback, onChange, hint }) {
             width: 48, height: 48, borderRadius: 10, display: 'grid', placeItems: 'center',
             border: '1px solid var(--border-soft)', background: 'var(--surface-2)', overflow: 'hidden', flexShrink: 0
           }}>
-          {shown ? <img src={shown} alt={t('Current image')} style={{ width: 32, height: 32, objectFit: 'contain' }} /> : <span className="cp-hint">{t('none')}</span>}
+          {shown === MODEL_WEAVE ? <Weave state={state} style={{ width: 32, height: 32 }} /> : shown ? <img src={shown} alt={t('Current image')} style={{ width: 32, height: 32, objectFit: 'contain' }} /> : <span className="cp-hint">{t('none')}</span>}
         </button>
         <div className="cp-acts">
           <Btn size="sm" onClick={() => ref.current?.click()}>{value ? t('Replace') : t('Upload')}</Btn>

@@ -4,7 +4,7 @@ import Database from 'better-sqlite3-multiple-ciphers';
 import { DATA_ROOT, dataPath } from './lib/dataroot.js';
 import { migrate } from './db/schema.js';
 import { makeCollection, bumpTable } from './db/collection.js';
-import { BRAND_ICON, BRAND_GENERATING, BRAND_THINKING, BRAND_ICON_FIELDS, remapBrandPath } from './lib/brand.js';
+import { BRAND_ICON, BRAND_GENERATING, BRAND_THINKING, BRAND_ICON_FIELDS, MODEL_WEAVE, remapBrandPath } from './lib/brand.js';
 
 const DATA_DIR = DATA_ROOT;
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -317,7 +317,7 @@ if (!getSetting('seeded')) {
     internal_name: 'local-model', system_prompt: 'You are a helpful assistant.', provider_id: pid,
     has_reasoning: 0, reasoning_token: '', non_reasoning_token: '',
     in_more_models: 0, more_models_label: 'More models',
-    static_icon: BRAND_ICON, generating_icon: BRAND_GENERATING, thinking_icon: BRAND_THINKING, icon_position: 'below', sort_order: 0, enabled: 1
+    static_icon: MODEL_WEAVE, generating_icon: MODEL_WEAVE, thinking_icon: MODEL_WEAVE, icon_position: 'below', sort_order: 0, enabled: 1
   });
   setSetting('seeded', '1');
 }
@@ -334,6 +334,15 @@ if (!getSetting('brand_paths_v2')) {
   const icon = getSetting('app_icon', '');
   if (icon && remapBrandPath(icon) !== icon) setSetting('app_icon', remapBrandPath(icon));
   setSetting('brand_paths_v2', '1');
+}
+
+if (!getSetting('model_weave_v1')) {
+  for (const m of db.models.all()) {
+    if (m.static_icon === BRAND_ICON && m.generating_icon === BRAND_GENERATING && m.thinking_icon === BRAND_THINKING) {
+      db.models.update(m.id, { static_icon: MODEL_WEAVE, generating_icon: MODEL_WEAVE, thinking_icon: MODEL_WEAVE });
+    }
+  }
+  setSetting('model_weave_v1', '1');
 }
 
 export default db;

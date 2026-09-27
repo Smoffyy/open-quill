@@ -1,19 +1,54 @@
+import { useState } from 'react';
 import { useAdmin } from '../../store.jsx';
-import { Card, Rows, Fields, Btn, Range } from '../../ui.jsx';
+import { Card, Rows, Fields, Btn, Range, PointMenu, MenuItem, clampToViewport } from '../../ui.jsx';
 import { ImagePicker } from '../../media.jsx';
 import { useEditor, useField, useChange, Revert, Slot, Line, Flag, Choice, TextField, When } from '../bind.jsx';
-import { reasons } from '../../../../lib/modelcatalog.js';
 import { BADGES, badgesOf } from '../../../../lib/badges.js';
 import { t, tk } from '../../../../i18n.jsx';
-import { BRAND_ICON, BRAND_GENERATING, BRAND_THINKING } from '../../../../lib/brand.js';
+import { MODEL_WEAVE, BRAND_ICON, BRAND_GENERATING, BRAND_THINKING } from '../../../../lib/brand.js';
+import { ModelMark } from '../../../ui/Weave.jsx';
 
 const MOTIONS = [
   ['none', tk('none')], ['spin', tk('spin')], ['pulse', tk('breathe')],
   ['bounce', tk('bounce')], ['wobble', tk('wobble')], ['fade', tk('fade')]
 ];
 const DEFAULT_SIZE = 40;
+const MARK_SETS = [
+  { id: 'modern', label: tk('Modern set'), hint: tk('Animated, changes shape with each state'), icons: { static_icon: MODEL_WEAVE, generating_icon: MODEL_WEAVE, thinking_icon: MODEL_WEAVE } },
+  { id: 'legacy', label: tk('Legacy set'), hint: tk('The original mark, same as the app icon'), icons: { static_icon: BRAND_ICON, generating_icon: BRAND_GENERATING, thinking_icon: BRAND_THINKING } }
+];
+const MARK_MENU_W = 260;
+const MARK_MENU_H = 130;
 
-function Icon({ k, label, fallback, motion }) {
+function BuiltInMark() {
+  const { edit } = useEditor();
+  const [menu, setMenu] = useState(null);
+  return (
+    <>
+      <Btn size="sm" aria-haspopup="menu" aria-expanded={!!menu}
+        onClick={(e) => {
+          if (menu) { setMenu(null); return; }
+          const r = e.currentTarget.getBoundingClientRect();
+          setMenu({ at: clampToViewport(r.right - MARK_MENU_W, r.bottom + 4, MARK_MENU_W, MARK_MENU_H), el: e.currentTarget });
+        }}>
+        {t('Use the built-in mark')}
+      </Btn>
+      {menu && (
+        <PointMenu at={menu.at} width={MARK_MENU_W} anchorEl={menu.el} onClose={() => setMenu(null)}>
+          <div className="cp-menu-empty">{t('Built-in mark')}</div>
+          {MARK_SETS.map(set => (
+            <MenuItem key={set.id} onClick={() => { setMenu(null); edit(set.icons); }}>
+              <ModelMark src={set.icons.static_icon} className="mc-mark-opt" />
+              <span className="mc-menu-two"><b>{t(set.label)}</b><small>{t(set.hint)}</small></span>
+            </MenuItem>
+          ))}
+        </PointMenu>
+      )}
+    </>
+  );
+}
+
+function Icon({ k, label, fallback, motion, state }) {
   const { edit } = useEditor();
   const { value, mixed } = useField(k);
   const base = useField('static_icon');
@@ -21,7 +56,7 @@ function Icon({ k, label, fallback, motion }) {
     <Slot label={label} k={k}>
       <div className="mc-stack">
         <ImagePicker value={mixed ? '' : value} fallback={fallback && !base.mixed ? (base.value || '') : ''}
-          onChange={(v) => edit({ [k]: v })} />
+          onChange={(v) => edit({ [k]: v })} state={state} />
         {motion && (
           <Choice k={motion} label={t('Motion')} fallback="none"
             options={MOTIONS.map(([v, l]) => ({ value: v, label: t(l) }))} />
@@ -102,13 +137,11 @@ export default function Appearance() {
       <Card title={t('Logo')} sub={t('Shown in the picker and beside replies. The other states fall back to the static logo.')}
         actions={anyIcon
           ? <Btn size="sm" onClick={() => edit({ static_icon: '', generating_icon: '', thinking_icon: '' })}>{t('Clear all three')}</Btn>
-          : <Btn size="sm" onClick={() => edit({ static_icon: BRAND_ICON, generating_icon: BRAND_GENERATING, thinking_icon: BRAND_THINKING })}>{t('Use the built-in mark')}</Btn>}>
+          : <BuiltInMark />}>
         <Fields cols={3}>
           <Icon k="static_icon" label={t('Static')} />
-          <Icon k="generating_icon" label={t('While generating')} fallback motion="generating_anim" />
-          <When test={reasons} keep={['thinking_icon', 'thinking_anim']}>
-            <Icon k="thinking_icon" label={t('While thinking')} fallback motion="thinking_anim" />
-          </When>
+          <Icon k="generating_icon" label={t('While generating')} fallback motion="generating_anim" state="generating" />
+          <Icon k="thinking_icon" label={t('While thinking')} fallback motion="thinking_anim" state="thinking" />
         </Fields>
         <Rows>
           <Size />

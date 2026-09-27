@@ -9,6 +9,7 @@ import { paintCells, fadeTrail, stampTrail, headColumn, CELL, CELL_FPS, CELL_SPE
 import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues, isRange, clampToRange, rangeStep, kwargVisible, gateSourceIds } from '../../lib/kwargs.js';
 import { useDismiss } from '../../lib/dismiss.js';
 import { Skel, SkelMenu } from '../ui/Skeleton.jsx';
+import { ModelMark } from '../ui/Weave.jsx';
 
 const BADGE_ICONS = {
   __proto__: null,
@@ -485,7 +486,7 @@ export default function ModelDropdown({ models, modelsReady = true, currentId, o
   const renderOpt = (m) => (
     <button key={m.id} type="button" className={'model-opt' + (m.unavailable ? ' unavail' : '')} onClick={() => { onSelect(m.id); setOpenSub(null); setOpen(false); }}
       title={m.unavailable ? (m.displayName + ' is currently unavailable.') : undefined}>
-      {m.dropdownIcon !== false && m.staticIcon && <img className="mo-icon" src={m.staticIcon} alt="" aria-hidden="true" />}
+      {m.dropdownIcon !== false && <ModelMark src={m.staticIcon} className="mo-icon" still />}
       <div className="mo-main">
         <div className="mo-name">
           <span className="mo-name-text">{m.displayName}</span>

@@ -2574,5 +2574,10 @@
   "Auto: picks the best model for each message": "자동: 메시지마다 가장 알맞은 모델을 고릅니다",
   "Web search: this model can look things up online": "웹 검색: 이 모델은 온라인에서 찾아볼 수 있습니다",
   "Code: this model can run code and work with files": "코드: 이 모델은 코드를 실행하고 파일을 다룰 수 있습니다",
-  "Long context: holds about {n} tokens": "긴 컨텍스트: 약 {n} 토큰을 담을 수 있습니다"
+  "Long context: holds about {n} tokens": "긴 컨텍스트: 약 {n} 토큰을 담을 수 있습니다",
+  "Modern set": "모던 세트",
+  "Animated, changes shape with each state": "애니메이션되며 상태마다 모양이 바뀝니다",
+  "Legacy set": "클래식 세트",
+  "The original mark, same as the app icon": "앱 아이콘과 같은 원래 마크",
+  "Built-in mark": "기본 제공 마크"
 }

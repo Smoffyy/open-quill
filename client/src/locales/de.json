@@ -2574,5 +2574,10 @@
   "Auto: picks the best model for each message": "Auto: wählt für jede Nachricht das beste Modell",
   "Web search: this model can look things up online": "Websuche: Dieses Modell kann online nachschlagen",
   "Code: this model can run code and work with files": "Code: Dieses Modell kann Code ausführen und mit Dateien arbeiten",
-  "Long context: holds about {n} tokens": "Langer Kontext: fasst etwa {n} Tokens"
+  "Long context: holds about {n} tokens": "Langer Kontext: fasst etwa {n} Tokens",
+  "Modern set": "Modernes Set",
+  "Animated, changes shape with each state": "Animiert, ändert die Form je nach Zustand",
+  "Legacy set": "Klassisches Set",
+  "The original mark, same as the app icon": "Das ursprüngliche Zeichen, wie das App-Symbol",
+  "Built-in mark": "Integriertes Zeichen"
 }

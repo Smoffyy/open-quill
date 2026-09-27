@@ -2574,5 +2574,10 @@
   "Auto: picks the best model for each message": "Авто: выбирает лучшую модель для каждого сообщения",
   "Web search: this model can look things up online": "Веб-поиск: модель умеет искать в интернете",
   "Code: this model can run code and work with files": "Код: модель умеет запускать код и работать с файлами",
-  "Long context: holds about {n} tokens": "Длинный контекст: вмещает около {n} токенов"
+  "Long context: holds about {n} tokens": "Длинный контекст: вмещает около {n} токенов",
+  "Modern set": "Современный набор",
+  "Animated, changes shape with each state": "Анимированный, меняет форму в каждом состоянии",
+  "Legacy set": "Классический набор",
+  "The original mark, same as the app icon": "Исходный знак, как у значка приложения",
+  "Built-in mark": "Встроенный знак"
 }

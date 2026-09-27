@@ -2041,7 +2041,7 @@ test('badges follow what a model supports, minus the ones an admin switched off'
 test('the client and server agree on the brand icon paths', async () => {
   const server = await import('../lib/brand.js');
   const client = await import('../../client/src/lib/brand.js');
-  for (const key of ['BRAND_ICON', 'BRAND_GENERATING', 'BRAND_THINKING']) {
+  for (const key of ['BRAND_ICON', 'BRAND_GENERATING', 'BRAND_THINKING', 'MODEL_WEAVE']) {
     assert.equal(client[key], server[key], `${key} differs between client/src/lib/brand.js and server/lib/brand.js`);
   }
 });

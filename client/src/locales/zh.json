@@ -1147,5 +1147,10 @@
   "Clear the memory? This can't be undone.": "要清除记忆吗？此操作无法撤销。",
   "Yes, clear memory": "是，清除记忆",
   "Active {when}": "上次活动：{when}",
-  "Signed in {when}": "登录于 {when}"
+  "Signed in {when}": "登录于 {when}",
+  "Modern set": "现代套装",
+  "Animated, changes shape with each state": "动画效果，随状态改变形状",
+  "Legacy set": "经典套装",
+  "The original mark, same as the app icon": "原始标志，与应用图标相同",
+  "Built-in mark": "内置标志"
 }

@@ -1147,5 +1147,10 @@
   "Clear the memory? This can't be undone.": "¿Borrar la memoria? Esto no se puede deshacer.",
   "Yes, clear memory": "Sí, borrar la memoria",
   "Active {when}": "Activa {when}",
-  "Signed in {when}": "Sesión iniciada el {when}"
+  "Signed in {when}": "Sesión iniciada el {when}",
+  "Modern set": "Conjunto moderno",
+  "Animated, changes shape with each state": "Animado, cambia de forma según el estado",
+  "Legacy set": "Conjunto clásico",
+  "The original mark, same as the app icon": "La marca original, igual que el icono de la app",
+  "Built-in mark": "Marca integrada"
 }

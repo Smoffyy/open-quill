@@ -2,6 +2,7 @@ import { useState, useEffect, useId, useMemo } from 'react';
 import { useAdmin } from '../store.jsx';
 import { Btn, IconBtn, Tabs, SaveState, Empty, PointMenu, MenuItem, clampToViewport } from '../ui.jsx';
 import { X, Cube, ChevDown, Check } from '../../ui/icons.jsx';
+import { ModelMark } from '../../ui/Weave.jsx';
 import { t, tk } from '../../../i18n.jsx';
 import { tabsFor, tabChanges } from '../../../lib/modelcatalog.js';
 import { EditorProvider } from './bind.jsx';
@@ -60,7 +61,7 @@ function Title({ models, changed }) {
     return (
       <div className="mc-title">
         {m.static_icon
-          ? <img src={m.static_icon} alt="" aria-hidden="true" />
+          ? <ModelMark src={m.static_icon} className="mc-title-icon" />
           : <span className="mc-row-icon blank" aria-hidden="true"><Cube /></span>}
         <div>
           <b>{m.display_name || t('Untitled')}</b>
