@@ -2284,7 +2284,6 @@
   "{n} tokens total": "合計{n}トークン",
   "{n} unpublished changes": "未公開の変更が{n}件",
   "{n} with admin": "管理者権限を持つメンバー{n}人",
-  "{n}px. 40 is the default, 26 matches the older layout.": "{n}px。既定は40、26は旧レイアウトに合わせた値です。",
   "{pct}% of project capacity used": "プロジェクト容量の{pct}%を使用中",
   "{preset} base": "{preset}ベース",
   "{shown} of {total} entries": "{total}件中{shown}件",
@@ -2579,5 +2578,6 @@
   "Animated, changes shape with each state": "アニメーションし、状態ごとに形が変わります",
   "Legacy set": "クラシックセット",
   "The original mark, same as the app icon": "アプリアイコンと同じ元のマーク",
-  "Built-in mark": "組み込みマーク"
+  "Built-in mark": "組み込みマーク",
+  "{n}px. 50 is the default, 40 matches the older layout.": "{n}px。既定は50、40は旧レイアウトに合わせた値です。"
 }

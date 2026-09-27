@@ -2284,7 +2284,6 @@
   "{n} tokens total": "токенов всего: {n}",
   "{n} unpublished changes": "неопубликованных изменений: {n}",
   "{n} with admin": "с правами администратора: {n}",
-  "{n}px. 40 is the default, 26 matches the older layout.": "{n} px. 40 — значение по умолчанию, 26 соответствует старому макету.",
   "{pct}% of project capacity used": "использовано {pct}% ёмкости проекта",
   "{preset} base": "База {preset}",
   "{shown} of {total} entries": "{shown} из {total} записей",
@@ -2579,5 +2578,6 @@
   "Animated, changes shape with each state": "Анимированный, меняет форму в каждом состоянии",
   "Legacy set": "Классический набор",
   "The original mark, same as the app icon": "Исходный знак, как у значка приложения",
-  "Built-in mark": "Встроенный знак"
+  "Built-in mark": "Встроенный знак",
+  "{n}px. 50 is the default, 40 matches the older layout.": "{n} px. 50 — значение по умолчанию, 40 соответствует старому макету."
 }

@@ -55,7 +55,7 @@ const SAMPLE_MODEL = {
   id: 'oq-stage-model',
   displayName: 'Sample model',
   iconPosition: 'below',
-  iconSize: 40,
+  iconSize: 50,
   showName: true,
   staticIcon: MODEL_WEAVE,
   generatingIcon: MODEL_WEAVE,

@@ -2284,7 +2284,6 @@
   "{n} tokens total": "{n} Tokens insgesamt",
   "{n} unpublished changes": "{n} unveröffentlichte Änderungen",
   "{n} with admin": "{n} mit Administrator",
-  "{n}px. 40 is the default, 26 matches the older layout.": "{n} px. 40 ist der Standard, 26 entspricht dem älteren Layout.",
   "{pct}% of project capacity used": "{pct}% der Projektkapazität genutzt",
   "{preset} base": "{preset}-Basis",
   "{shown} of {total} entries": "{shown} von {total} Einträgen",
@@ -2579,5 +2578,6 @@
   "Animated, changes shape with each state": "Animiert, ändert die Form je nach Zustand",
   "Legacy set": "Klassisches Set",
   "The original mark, same as the app icon": "Das ursprüngliche Zeichen, wie das App-Symbol",
-  "Built-in mark": "Integriertes Zeichen"
+  "Built-in mark": "Integriertes Zeichen",
+  "{n}px. 50 is the default, 40 matches the older layout.": "{n} px. 50 ist der Standard, 40 entspricht dem älteren Layout."
 }

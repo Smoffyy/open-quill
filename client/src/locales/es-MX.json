@@ -2286,7 +2286,6 @@
   "{n} tokens": "{n} tokens",
   "{n} unpublished changes": "{n} cambios sin publicar",
   "{n} with admin": "{n} con administración",
-  "{n}px. 40 is the default, 26 matches the older layout.": "{n}px. 40 es el valor predeterminado, 26 coincide con el diseño anterior.",
   "{preset} base": "Base de {preset}",
   "{shown} of {total} entries": "{shown} de {total} entradas",
   "{type} · {n} models bound": "{type} · {n} modelos vinculados",
@@ -2579,5 +2578,6 @@
   "Animated, changes shape with each state": "Animado, cambia de forma según el estado",
   "Legacy set": "Conjunto clásico",
   "The original mark, same as the app icon": "La marca original, igual al ícono de la app",
-  "Built-in mark": "Marca integrada"
+  "Built-in mark": "Marca integrada",
+  "{n}px. 50 is the default, 40 matches the older layout.": "{n}px. 50 es el valor predeterminado, 40 coincide con el diseño anterior."
 }

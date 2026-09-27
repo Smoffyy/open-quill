@@ -181,7 +181,7 @@ const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, nam
   if (!base && !name && !statusLabel) return null;
   const anim = phase === 'generating' ? (model?.generatingAnim || 'none') : phase === 'thinking' ? (model?.thinkingAnim || 'none') : '';
   const cls = anim === 'none' ? '' : anim;
-  const sz = model?.iconSize > 0 ? model.iconSize : 40;
+  const sz = model?.iconSize > 0 ? model.iconSize : 50;
   return (
     <div ref={ref} className={'msg-icon' + (below ? ' below' : '') + (name ? ' with-name' : '')}>
       {base && <ModelMark src={src} state={phase} className={cls} style={{ width: sz, height: sz }} />}
@@ -538,7 +538,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   );
 
   if (pos === 'left') {
-    const gutter = model?.iconSize > 0 ? model.iconSize : 40;
+    const gutter = model?.iconSize > 0 ? model.iconSize : 50;
     return (
       <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant icon-left' + (streaming ? ' streaming-msg' : '') + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
         {icon && <div className="il-avatar" style={{ left: -(gutter + 14) }}>{icon}</div>}

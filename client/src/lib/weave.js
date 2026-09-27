@@ -17,9 +17,9 @@
 // says where dot number i belongs in one particular shape. There is one form
 // per state:
 //
-//   idle        braid   a hoop with three strands plaited around it, tumbling
-//   thinking    glass   an hourglass that dots pour through, glowing at the waist
-//   generating  ribbon  a figure-eight ribbon with bright streaks racing along it
+//   idle        braid   a loose swarm of fireflies drifting in place, blinking
+//   thinking    glass   three dots hopping in sequence, like a loading beat
+//   generating  ribbon  three bright dots chasing each other around a ring
 //
 // Switching state never swaps images. Each dot slides from where the old form
 // puts it to where the new form puts it, so the mark visibly folds from one
@@ -152,9 +152,9 @@ const STRANDS = 3;
 // a morph also blends speed: the ribbon spins up as it appears.
 export const WEAVE_STATES = {
   __proto__: null,
-  idle: { braid: 1, ribbon: 0, glass: 0, spin: 0.2, stream: 0.1 },
-  thinking: { braid: 0, ribbon: 0, glass: 1, spin: 0.2, stream: 0.18 },
-  generating: { braid: 0, ribbon: 1, glass: 0, spin: 0.45, stream: 0.55 }
+  idle: { braid: 1, ribbon: 0, glass: 0, spin: 0.06, stream: 0 },
+  thinking: { braid: 0, ribbon: 0, glass: 1, spin: 0, stream: 0 },
+  generating: { braid: 0, ribbon: 1, glass: 0, spin: 0, stream: 0.55 }
 };
 
 export const WEAVE_KEYS = Object.keys(WEAVE_STATES.idle);
@@ -190,18 +190,16 @@ function frac(v) {
   return v - Math.floor(v);
 }
 
-// A comet tail. `behind` is how far a dot trails the head along a path (0 at
-// the head), `length` how long the tail is. Returns 1 at the head falling to 0
-// at the end of the tail, squared so the head is sharp and the tail soft.
-function comet(behind, length) {
-  return behind < length ? (1 - behind / length) ** 2 : 0;
+// A deterministic pseudo-random value in [0, 1) for a given number, so the
+// same dot index always gets the same scatter, phase or twinkle offset.
+function hash(v) {
+  return frac(Math.sin(v * 12.9898 + 4.1414) * 43758.5453);
 }
 
 // Places a point built in a form's own coordinates into the shared view.
 //
 //   tilt   the form's own lean about the x axis, chosen per form so its best
-//          side faces the viewer (the braid's hoop is tipped back to show its
-//          ring, the hourglass stands nearly upright)
+//          side faces the viewer
 //   view   the shared rotation for this frame: a turn about the vertical axis
 //          by the integrated spin, then a gently rocking lean toward the
 //          viewer. Built once per frame in `projectWeave`.
@@ -219,73 +217,55 @@ function pose(v, x, y, z, tilt, view) {
   v.depth = Math.max(0, Math.min(1, (v.z + 1) / 2));
 }
 
-// Idle. A hoop of radius 0.68 with three strands plaited around it.
+// Idle. A loose swarm of fireflies drifting in place inside a radius-0.72
+// ball, each one blinking on its own schedule.
 //
-// `a` walks around the hoop. `ph` is each strand's angle around the hoop's
-// tube: offset by a third of a turn per strand so the three interleave, and
-// advanced by 3a so each strand wraps the tube three times per lap, which is
-// what makes it read as a braid. Adding `flow` to `ph` makes the plait roll
-// slowly around the tube.
+// The three hashes off each dot's own index give it a fixed spot in the ball
+// (`th`/`cz` an even spread over the sphere, `rr` a cube root of a uniform
+// hash so dots fill the volume evenly rather than clumping at the centre) and
+// its own small wander and twinkle phase, so nothing reads as synchronized.
 //
-// The tube radius is 0.2, so dots stay within 0.88 of the centre. The hoop is
-// tipped back by -1.05 rad so it is seen as a ring rather than edge on; the
-// shared tumble then turns it through its edge-on moment now and then, which
-// is intended.
-//
-// A single soft glint travels around the hoop every seven seconds or so.
-function braidAt(v, u, s, time, flow, view) {
-  const L = frac(u + flow * 0.25);
-  const a = L * TAU;
-  const ph = (s * TAU) / STRANDS + 3 * a + flow * TAU;
-  const rad = 0.68 + 0.2 * Math.cos(ph);
-  pose(v, rad * Math.cos(a), rad * Math.sin(a), 0.2 * Math.sin(ph), -1.05, view);
-  v.hot = 0.7 * comet(frac(time * 0.14 - L), 0.14);
+// `tw` is a per-dot oscillator; raising it to a high power keeps a firefly
+// dark most of the time and bright only in a short pulse.
+function braidAt(v, i, time, view) {
+  const h1 = hash(i + 0.1), h2 = hash(i * 1.7 + 0.2), h3 = hash(i * 2.3 + 0.3);
+  const th = h1 * TAU, cz = h2 * 2 - 1, sq = Math.sqrt(1 - cz * cz), rr = 0.72 * Math.cbrt(h3);
+  const x = rr * sq * Math.cos(th) + 0.1 * Math.sin(time * 0.5 + h1 * 9);
+  const y = rr * cz + 0.1 * Math.sin(time * 0.43 + h2 * 9);
+  const z = rr * sq * Math.sin(th) + 0.1 * Math.sin(time * 0.37 + h3 * 9);
+  pose(v, x, y, z, 0, view);
+  const tw = 0.5 + 0.5 * Math.sin(time * (0.7 + h2) + h3 * 20);
+  v.fade = 0.25 + 0.75 * tw ** 3;
+  v.hot = tw ** 12;
+}
+
+// Generating. Flat, not posed: three small dots chasing each other around a
+// fixed ring, each dot a tight golden-angle disc scattered from its strand's
+// dots so it reads as a soft blob rather than a single point.
+function ribbonAt(v, u, s, j, time, flow) {
+  const base = s * (TAU / STRANDS) + flow * TAU;
+  const th = j * GOLDEN;
+  const rr = 0.05 * Math.sqrt(u);
+  v.x = 0.55 * Math.cos(base) + rr * Math.cos(th);
+  v.y = 0.55 * Math.sin(base) + rr * Math.sin(th);
+  v.z = 0;
+  v.depth = 0.85;
+  v.hot = 0.6;
   v.fade = 1;
 }
 
-// Generating. A figure-eight ribbon in 3D: x = sin a, y = sin 2a traces the
-// eight, and z = cos 3a lifts and dips it so the loops pass in front of and
-// behind each other.
-//
-// The three strands are three parallel lines a little apart in y (`lift`),
-// with the gap breathing so the ribbon twists as it goes. `sc` swells the
-// whole shape with two sines multiplied together, which gives an irregular,
-// speech-like pulse rather than a steady beat.
-//
-// Dots stream along the path at the state's `stream` speed, and three bright
-// streaks, a third of a lap apart, race along it slightly faster than the
-// dots so they read as energy moving through the ribbon.
-function ribbonAt(v, u, s, time, flow, view) {
-  const L = frac(u + flow);
-  const a = L * TAU;
-  const sc = 1 + 0.06 * Math.sin(time * 6.3) * Math.sin(time * 1.9);
-  const lift = (s - 1) * 0.1 * (0.7 + 0.3 * Math.sin(2 * a + time * 3));
-  pose(v, 0.95 * Math.sin(a) * sc, (0.55 * Math.sin(2 * a) + lift) * sc, 0.6 * Math.cos(3 * a) * sc, 0, view);
-  let streak = 0;
-  for (let c = 0; c < 3; c++) streak = Math.max(streak, comet(frac(frac(time * 0.38 + c / 3) - L), 0.14));
-  v.hot = streak;
+// Thinking. Flat, not posed: three dots hopping in turn, the classic loading
+// beat, each one a small golden-angle disc scattered from its strand's dots.
+function glassAt(v, u, s, j, time) {
+  const bounce = Math.max(0, Math.sin(time * 3 - s * 0.9));
+  const th = j * GOLDEN;
+  const rr = 0.09 * Math.sqrt(u);
+  v.x = (s - 1) * 0.35 + rr * Math.cos(th);
+  v.y = -0.15 + bounce * 0.28 + rr * Math.sin(th);
+  v.z = 0;
+  v.depth = 0.85;
+  v.hot = bounce * 0.6;
   v.fade = 1;
-}
-
-// Thinking. Two cones point to point, with dots pouring from the top through
-// the narrow waist and out of the bottom, like sand in an hourglass.
-//
-// `L` is how far a dot has fallen, 0 at the top rim and 1 at the bottom. The
-// radius shrinks linearly toward the waist and grows again after it, never
-// reaching zero (0.05) so the waist stays a visible neck. Each dot sits at its
-// own angle around the axis, spread with the golden angle so the cones fill
-// evenly instead of forming stripes, and the whole thing slowly turns.
-//
-// Dots glow as they squeeze through the waist, and fade in at the top and out
-// at the bottom so there is no visible jump when a dot wraps back to the top.
-function glassAt(v, u, s, j, time, flow, view) {
-  const L = frac(u + flow);
-  const y = 0.76 - 1.52 * L;
-  const r = 0.05 + (0.6 * Math.abs(y)) / 0.76;
-  const th = j * GOLDEN * 3 + s * 2.1 + time * 0.4;
-  pose(v, r * Math.cos(th), y, r * Math.sin(th), -0.15, view);
-  v.hot = Math.exp(-((y / 0.12) ** 2));
-  v.fade = Math.max(0, Math.min(1, L / 0.06, (1 - L) / 0.06));
 }
 
 // Every form, as [key in WEAVE_STATES, slot]. The slot picks the function in
@@ -326,9 +306,9 @@ export function projectWeave(n, p, clock, out = []) {
     let x = 0, y = 0, z = 0, depth = 0, hot = 0, fade = 0;
     for (const [key, k] of active) {
       const v = slots[k];
-      if (k === 0) braidAt(v, u, s, time, flow, view);
-      else if (k === 1) ribbonAt(v, u, s, time, flow, view);
-      else glassAt(v, u, s, j, time, flow, view);
+      if (k === 0) braidAt(v, i, time, view);
+      else if (k === 1) ribbonAt(v, u, s, j, time, flow);
+      else glassAt(v, u, s, j, time);
       const w = p[key] / total;
       x += v.x * w; y += v.y * w; z += v.z * w;
       depth += v.depth * w; hot += v.hot * w; fade += v.fade * w;

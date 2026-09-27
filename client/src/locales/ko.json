@@ -2284,7 +2284,6 @@
   "{n} tokens total": "총 토큰 {n}개",
   "{n} unpublished changes": "게시되지 않은 변경 사항 {n}개",
   "{n} with admin": "관리자 권한 {n}명",
-  "{n}px. 40 is the default, 26 matches the older layout.": "{n}px. 기본값은 40이며, 26은 이전 레이아웃과 일치합니다.",
   "{pct}% of project capacity used": "프로젝트 용량의 {pct}% 사용됨",
   "{preset} base": "{preset} 기반",
   "{shown} of {total} entries": "전체 {total}개 항목 중 {shown}개",
@@ -2579,5 +2578,6 @@
   "Animated, changes shape with each state": "애니메이션되며 상태마다 모양이 바뀝니다",
   "Legacy set": "클래식 세트",
   "The original mark, same as the app icon": "앱 아이콘과 같은 원래 마크",
-  "Built-in mark": "기본 제공 마크"
+  "Built-in mark": "기본 제공 마크",
+  "{n}px. 50 is the default, 40 matches the older layout.": "{n}px. 기본값은 50이며, 40은 이전 레이아웃과 일치합니다."
 }

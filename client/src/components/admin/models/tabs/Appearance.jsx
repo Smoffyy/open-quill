@@ -12,7 +12,7 @@ const MOTIONS = [
   ['none', tk('none')], ['spin', tk('spin')], ['pulse', tk('breathe')],
   ['bounce', tk('bounce')], ['wobble', tk('wobble')], ['fade', tk('fade')]
 ];
-const DEFAULT_SIZE = 40;
+const DEFAULT_SIZE = 50;
 const MARK_SETS = [
   { id: 'modern', label: tk('Modern set'), hint: tk('Animated, changes shape with each state'), icons: { static_icon: MODEL_WEAVE, generating_icon: MODEL_WEAVE, thinking_icon: MODEL_WEAVE } },
   { id: 'legacy', label: tk('Legacy set'), hint: tk('The original mark, same as the app icon'), icons: { static_icon: BRAND_ICON, generating_icon: BRAND_GENERATING, thinking_icon: BRAND_THINKING } }
@@ -72,7 +72,7 @@ function Size() {
   const size = mixed ? DEFAULT_SIZE : (Number(value) || DEFAULT_SIZE);
   return (
     <Line label={t('Size beside replies')} k="icon_size"
-      note={mixed ? t('Differs across the selection.') : t('{n}px. 40 is the default, 26 matches the older layout.', { n: size })} wide>
+      note={mixed ? t('Differs across the selection.') : t('{n}px. 50 is the default, 40 matches the older layout.', { n: size })} wide>
       <Range min="14" max="64" value={size} label={t('Size beside replies')}
         onChange={(e) => edit({ icon_size: parseInt(e.target.value, 10) })} />
       <Btn size="sm" disabled={!mixed && !Number(value)} onClick={() => edit({ icon_size: 0 })}>{t('Reset')}</Btn>
