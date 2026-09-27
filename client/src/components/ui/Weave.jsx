@@ -29,6 +29,9 @@ import { MODEL_WEAVE } from '../../lib/brand.js';
 
 const TAU = Math.PI * 2;
 
+// A poke (see `poke` below) fades from 1 to 0 over about a third of a second.
+const POKE_DECAY = 3;
+
 // Every mounted mark, animating or not. Used to repaint paused marks when the
 // theme changes and to re-evaluate them when reduced motion is toggled.
 const mounted = new Set();
@@ -104,13 +107,17 @@ function readColors(o) {
 //
 // The base dot radius is 5% of that radius, but never below 0.85 device
 // pixels, so tiny marks (the 20px picker icon) still have visible dots.
+//
+// `o.poke` is 1 right after a click and decays to 0 (see `tick`); while it is
+// above 0 the whole mark swells and every dot brightens, as a purely visual
+// "poked" reaction with no effect on the shape or state underneath.
 function paint(o) {
   const { ctx, canvas } = o;
   if (!ctx || !canvas.width) return;
   if (o.colorsAt !== palette) readColors(o);
   const w = canvas.width;
   const h = canvas.height;
-  const r = Math.min(w, h) * 0.38;
+  const r = Math.min(w, h) * 0.38 * (1 + 0.22 * o.poke);
   const cx = w / 2;
   const cy = h / 2;
   const dot = Math.max(0.85 * o.dpr, r * 0.05);
@@ -123,8 +130,8 @@ function paint(o) {
     const d = proj[i];
     const x = cx + d.x * r;
     const y = cy + d.y * r;
-    const rad = dot * d.size;
-    ctx.globalAlpha = d.alpha;
+    const rad = dot * d.size * (1 + 0.5 * o.poke);
+    ctx.globalAlpha = Math.min(1, d.alpha + 0.55 * o.poke);
     ctx.beginPath();
     ctx.arc(x, y, rad, 0, TAU);
     ctx.fill();
@@ -150,10 +157,24 @@ function tick(now) {
     o.clock.angle += o.cur.spin * dt;
     o.clock.flow += o.cur.stream * dt;
     o.clock.time += dt;
+    const wasPoked = o.poke > 0;
+    if (wasPoked) o.poke = Math.max(0, o.poke - dt * POKE_DECAY);
     paint(o);
+    if (wasPoked && !o.poke) sync(o);
   }
   raf = live.size ? requestAnimationFrame(tick) : 0;
   if (!raf) last = 0;
+}
+
+// A click or tap on the mark: a purely decorative "poke" that swells and
+// brightens it for a moment (see `paint`) and settles back on its own,
+// regardless of whether the mark is otherwise animating. Skipped under
+// reduced motion, same as every other animation here.
+function poke(o) {
+  if (!o || reduced()) return;
+  o.poke = 1;
+  live.add(o);
+  if (!raf) raf = requestAnimationFrame(tick);
 }
 
 // Puts a mark in or out of the shared loop to match its current situation,
@@ -224,7 +245,7 @@ export default function Weave({ state = 'idle', still = false, className = '', s
       cur: weaveState('idle'), target, still, visible: true,
       // Random starting clocks, so two marks side by side are not in lockstep.
       clock: { time: Math.random() * 10, angle: Math.random() * TAU, flow: Math.random() },
-      color: '', colorsAt: -1
+      color: '', colorsAt: -1, poke: 0
     };
     canvas.__weave = o;
     inst.current = o;
@@ -253,7 +274,10 @@ export default function Weave({ state = 'idle', still = false, className = '', s
     settle(o);
   }, [state, still]);
 
-  return <canvas ref={ref} className={'weave' + (className ? ' ' + className : '')} style={style} aria-hidden="true" />;
+  return (
+    <canvas ref={ref} className={'weave' + (className ? ' ' + className : '')} style={style}
+      aria-hidden="true" onClick={() => poke(inst.current)} />
+  );
 }
 
 // Renders whatever a model's icon field holds. `MODEL_WEAVE` becomes the
