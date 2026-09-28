@@ -16,7 +16,7 @@ Some models expose extra request parameters directly in the picker, as a toggle,
 
 ## Per-chat overrides
 
-The chat menu's **Chat Controls** section lets you override a model's system prompt and sampling parameters (temperature, top-p/top-k, min-p, max tokens, frequency/presence/repeat penalty) just for that chat, each individually resettable back to the model's default, or all at once.
+The chat menu's **Chat Controls** section lets you override a model's system prompt and sampling parameters (temperature, top-p/top-k, min-p, max tokens, frequency/presence/repeat penalty) just for that chat, each individually resettable back to the model's default, or all at once. A system prompt override replaces the model's own text but keeps its `<tools>` and `<context>` blocks, so tools keep their instructions.
 
 ## Context and speed readouts
 

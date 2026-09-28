@@ -1,6 +1,6 @@
 import { useAdmin } from '../../store.jsx';
 import { Card, Rows, Fields } from '../../ui.jsx';
-import { Flag, NumberField, LongText, Levels, Chips, When } from '../bind.jsx';
+import { Flag, NumberField, Levels, Chips, When } from '../bind.jsx';
 import { t } from '../../../../i18n.jsx';
 import { LEVELS, usesTools } from '../../../../lib/modelcatalog.js';
 
@@ -33,12 +33,8 @@ export default function Tools() {
             <Levels label={t('Web search')} level={LEVELS.web} options={access}
               note={t('Lets members search the web from this model.')} />
           )}
-          <Chips label={t('Other tools')} note={t('Each one the model may call. Hover a tool for what it does.')} items={extras} />
+          <Chips label={t('Other tools')} note={t('Each one the model may call. Hover a tool for what it does. Turning one on adds its instructions to the system prompt, where you can edit them.')} items={extras} />
         </Rows>
-        <When k="end_chat_allowed" keep="end_chat_prompt">
-          <LongText k="end_chat_prompt" rows={4} label={t('When to end')}
-            placeholder={t('End the conversation only when the member says goodbye.')} />
-        </When>
       </Card>
 
       <When test={m => usesTools(m, { webSearch, chatSearch })} keep={['agent_steps', 'hide_tool_calls']}>

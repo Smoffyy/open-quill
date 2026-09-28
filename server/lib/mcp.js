@@ -340,15 +340,11 @@ function resolveTool(name, userId = null) {
   return null;
 }
 
-export function promptFor(userId = null) {
-  const servers = getEnabled(userId).filter(s => (s.tools || []).length);
-  if (!servers.length) return '';
-  let p = '## MCP Connectors\nExternal tools are available through MCP servers connected by the admin. Their names are prefixed with `mcp_`. Call them like any other function when they fit the task.\n';
-  // Through the same builder as the schema: the prompt used to spell out the full
-  // name while the schema carried a shortened one, so the model was told to call
-  // something that did not exist.
-  for (const s of servers) p += `\n${s.name}: ${(s.tools || []).map(t => mcpToolName(s.slug, t.name)).join(', ')}`;
-  return p;
+export function toolsText(userId = null) {
+  return getEnabled(userId)
+    .filter(s => (s.tools || []).length)
+    .map(s => `- ${s.name}: ${(s.tools || []).map(t => mcpToolName(s.slug, t.name)).join(', ')}`)
+    .join('\n');
 }
 
 export async function execTool(call, userId = null) {

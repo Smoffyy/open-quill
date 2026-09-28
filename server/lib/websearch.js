@@ -9,23 +9,13 @@ export function webSearchConfig() {
     engine: getSetting('web_search_engine', 'searxng'),
     url: (getSetting('searxng_url', '') || '').trim().replace(/\/$/, ''),
     count: Math.max(1, Math.min(20, parseInt(getSetting('web_search_count', '5')) || 5)),
-    domains,
-    prompt: getSetting('web_search_prompt', DEFAULT_WS_PROMPT)
+    domains
   };
 }
-
-export const DEFAULT_WS_PROMPT = `You have access to a web_search tool that fetches live results from the internet. Only use it when the user explicitly asks you to look something up, or when answering accurately requires information that is not in your training data or may be out of date (for example recent events, current prices, release dates, or niche facts you are unsure about). Do not search for things you already know with confidence.
-
-Before each web_search call, first tell the user in one short natural sentence what you are about to look up. For example "I'll look for the latest iPhone release date." or "Let me search for current pricing on that." Then emit the tool call. You may call the tool more than once in a single response to follow up or refine a query, announcing each search the same way. After searching, base your answer on the retrieved pages and cite the source URLs you relied on.`;
 
 export function webSearchAvailable() {
   const c = webSearchConfig();
   return c.enabled && !!c.url;
-}
-
-export function webSearchToolPrompt() {
-  return `## Web search tool
-The \`web_search\` function is available. Call it with a focused \`query\` (and an optional \`count\`, capped by the server). Results come back as page contents with their URLs. Issue follow-up searches to refine when needed, and base your answer on the retrieved pages, citing the source URLs you relied on.`;
 }
 
 function hostOf(u) { try { return new URL(u).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; } }

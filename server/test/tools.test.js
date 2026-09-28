@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { evaluate, runCalculator, formatNumber } from '../lib/calculator.js';
-import { applyMemoryOp, sanitizeMemories, legacyMemories, memoryPromptFor, userMemoryOn, MEMORY_MAX_ITEMS, MEMORY_MAX_CHARS } from '../lib/memory.js';
+import { applyMemoryOp, sanitizeMemories, legacyMemories, userMemoryOn, MEMORY_MAX_ITEMS, MEMORY_MAX_CHARS } from '../lib/memory.js';
 import { buildTools } from '../tools/index.js';
 
 test('calculator follows operator precedence and associativity', () => {
@@ -94,11 +94,6 @@ test('legacy memory text becomes one entry per line', () => {
   assert.deepEqual(out.map(m => m.text), ['Name is Sam', 'Uses Vim', 'Lives in Oslo']);
   assert.equal(new Set(out.map(m => m.id)).size, 3);
   assert.ok(out.every(m => m.created_at === 7));
-});
-
-test('memory prompt states whether memory is on', () => {
-  assert.match(memoryPromptFor(true), /User Memory: True/);
-  assert.match(memoryPromptFor(false), /User Memory: False/);
 });
 
 test('memory and calculator schemas are only offered when enabled', () => {

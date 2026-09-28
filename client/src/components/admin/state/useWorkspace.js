@@ -6,8 +6,8 @@ export const SETTINGS_DEFAULTS = {
   uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256,
   modelQueue: false,
   webSearchEnabled: false, webSearchEngine: 'searxng', searxngUrl: '', webSearchCount: 5,
-  webSearchDomains: '', webSearchPrompt: '',
-  membankEnabled: false, membankHideTools: false, membankPrompt: '',
+  webSearchDomains: '',
+  membankEnabled: false, membankHideTools: false,
   budgetUser: 0, budgetAdmin: 0, budgetWarnFraction: 0.8, budgetEnforce: false,
   sessionTtlDays: 30, maxSessions: 0,
   voiceMicEnabled: false, voiceCallEnabled: false,
@@ -18,6 +18,14 @@ export const SETTINGS_DEFAULTS = {
   safetyVerbose: true, safetyReasonEnabled: false,
   chatSearchEnabled: false
 };
+
+export function promptFeaturesOf(settings) {
+  return {
+    webSearch: !!settings?.webSearchEnabled,
+    chatSearch: !!settings?.chatSearchEnabled,
+    referenceFiles: !!settings?.membankEnabled
+  };
+}
 
 export const CONFIG_DEFAULTS = {
   appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [],

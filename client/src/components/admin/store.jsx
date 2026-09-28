@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { resolveSection, DEFAULT_SECTION } from './nav.jsx';
 import { useCatalog } from './state/useCatalog.js';
-import { useWorkspace } from './state/useWorkspace.js';
+import { useWorkspace, promptFeaturesOf } from './state/useWorkspace.js';
 import { useMembers } from './state/useMembers.js';
 
 const Ctx = createContext(null);
@@ -27,8 +27,10 @@ export function AdminProvider({ user, onClose, children }) {
 
   const confirm = useCallback((spec) => setAsk(spec), []);
 
-  const catalog = useCatalog({ confirm });
   const workspace = useWorkspace();
+  const features = useRef(null);
+  features.current = promptFeaturesOf(workspace.settings);
+  const catalog = useCatalog({ confirm, features });
   const members = useMembers({ confirm });
 
   const { setSelection } = catalog;

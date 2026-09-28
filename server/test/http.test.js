@@ -514,7 +514,7 @@ test('the catalog edits, copies and removes models in batches', async () => {
 
   const state = (await browser('GET', '/api/admin/models/publish-state')).json;
   assert.deepEqual([...state.changed].sort(), [a, b].sort(), 'only the edited rows are reported as unpublished');
-  assert.equal(state.live[a].system_prompt, '', 'the published copy of each changed row comes along for diffing');
+  assert.match(state.live[a].system_prompt, /^<context>\n[\s\S]*<tools>\n<tool name="sandbox">/, 'the published copy of each changed row comes along for diffing, with the blocks a new model starts with');
   assert.ok(state.order.indexOf(a) < state.order.indexOf(b), 'and so does the published order');
 
   const missing = await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: a, description: 'x' }, { id: 'nope' }] } });
@@ -537,6 +537,17 @@ test('the catalog edits, copies and removes models in batches', async () => {
   await browser('PATCH', '/api/admin/settings', { body: { webSearchEnabled: false } });
   await browser('POST', '/api/admin/models/publish', { body: {} });
   assert.deepEqual((await browser('GET', '/api/models')).json.find(m => m.id === a).badges, ['text', 'code']);
+
+  const promptOf = async (id) => (await browser('GET', '/api/admin/models')).json.find(m => m.id === id).system_prompt;
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: b, calculator_allowed: true }] } });
+  assert.match(await promptOf(b), /^Shared prompt\n\n<tools>\n<tool name="calculator">\n/, 'turning a tool on writes its block into the system prompt');
+  await browser('PATCH', '/api/admin/settings', { body: { chatSearchEnabled: true } });
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: b, chat_search_allowed: true }] } });
+  assert.match(await promptOf(b), /<tool name="chat_search">[\s\S]*<tool name="calculator">/, 'blocks keep a stable order');
+  await browser('PATCH', '/api/admin/settings', { body: { chatSearchEnabled: false } });
+  assert.doesNotMatch(await promptOf(b), /chat_search/, 'turning a workspace feature off removes its block from every model');
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: b, calculator_allowed: false }] } });
+  assert.equal(await promptOf(b), 'Shared prompt', 'and turning the last tool off leaves the prompt as it was');
 
   const copies = (await browser('POST', '/api/admin/models/duplicate', { body: { ids: [a] } })).json.ids;
   assert.equal(copies.length, 1);
@@ -726,4 +737,30 @@ test('memories round-trip and reject bad input', async () => {
   await browser('POST', '/api/me/memories', { body: { text: 'Lives in Oslo' } });
   assert.equal((await browser('DELETE', '/api/me/memories')).status, 200);
   assert.deepEqual((await browser('GET', '/api/me/memories')).json.memories, []);
+});
+
+test('the prompt a chat sends is the model prompt with its blocks filled in', async () => {
+  const id = (await browser('POST', '/api/admin/models', { body: { display_name: 'Blocks', internal_name: 'blocks', system_prompt: 'Base for {{currentUser}}.' } })).json.id;
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id, sandbox_allowed: false, memory_allowed: true, calculator_allowed: true }] } });
+  await browser('PATCH', '/api/me', { body: { instructions: 'Answer tersely.', prefs: { memoryEnabled: true } } });
+  await browser('POST', '/api/me/memories', { body: { text: 'Uses Rust' } });
+  const chat = (await browser('POST', '/api/chats', { body: {} })).json;
+
+  const sent = (await browser('GET', `/api/chats/${chat.id}/prompt?modelId=${id}`)).json;
+  const system = sent.raw.find(m => m.role === 'system').content;
+  assert.match(system, /^Base for [^{}\n]+\.\n\n<context>\n<section name="user_instructions">\n[^\n]+\nAnswer tersely\.\n<\/section>/);
+  assert.match(system, /<section name="user_memory">\n[^\n]+\n- \[[a-z0-9]+\] Uses Rust\n<\/section>/);
+  assert.match(system, /<tools>\n<tool name="memory">\nUser Memory: True\n/);
+  assert.match(system, /<tool name="calculator">/);
+  assert.doesNotMatch(system, /\{\{|<section name="chat_instructions">|<tool name="sandbox">/, 'empty sections, off tools and raw variables are left out');
+  assert.deepEqual(sent.sections.map(s => s.name), ['Model system prompt', 'Context: user_instructions', 'Context: user_memory', 'Tool: memory', 'Tool: calculator']);
+
+  await browser('PATCH', '/api/me', { body: { prefs: { memoryEnabled: false } } });
+  const off = (await browser('GET', `/api/chats/${chat.id}/prompt?modelId=${id}`)).json.raw.find(m => m.role === 'system').content;
+  assert.match(off, /User Memory: False/);
+  assert.doesNotMatch(off, /Uses Rust/, 'memories are not shown while memory is off');
+
+  await browser('DELETE', '/api/me/memories');
+  await browser('PATCH', '/api/me', { body: { instructions: '', prefs: {} } });
+  await browser('POST', '/api/admin/models/remove', { body: { ids: [id] } });
 });

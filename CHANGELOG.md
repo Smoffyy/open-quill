@@ -22,19 +22,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Built-in mark** - "Use the built-in mark" now asks for the Modern set (the new animated mark) or the Legacy set (the original mark, same as the app icon).
 - **Memory is a list of entries** - instead of one block of text rewritten in the background, memory is a set of short facts. Once a member turns memory on, Settings, Memory lists each entry with who saved it and when, and members can add, edit (Enter saves, Escape cancels) or delete entries, or clear them all. An existing memory is split into one entry per line the first time it is read, and chat exports and imports carry the entries.
 - **Memory is a per-member setting** - the admin "Build and inject memory" switch is gone. Memory is off by default, and each member turns it on or off under Settings, Memory, which is now always shown. The admin Memory section is renamed Chat history and keeps only past-chat search.
+- **The system prompt is the whole prompt** - nothing is appended to a model's system prompt behind the scenes any more. Turning a tool on in the Tools tab writes its instructions into the prompt as a `<tool name="...">` block inside `<tools>`, and turning it off removes the block. Member context (their instructions, memories, project and chat instructions, pinned files, response style, the conversation summary and conversation timing) sits in `<section name="...">` blocks inside `<context>`. Every block can be edited, and live data such as the workspace file list or the member's memories comes in through `{{variables}}` listed in the Prompts tab. A block whose tool is off for the chat, or whose variables are all empty, is not sent.
+- **Existing models are converted once** - on first start, every model's prompt (draft and published) gets the blocks for what it already has on. A customised web search prompt, reference-files preamble or per-model "When to end" note is carried into its block.
+- **Voice-call prompts and per-chat overrides** replace only the text outside the blocks, so tools keep their instructions during a call or an override.
+- **What gets sent** lists the rendered prompt block by block, and now counts tool blocks in the context readouts.
 
 ### Added
 - **Memory tool** - a `memory` tool (add, update or delete by id) lets a model save facts about the member that later chats can use. Turn it on per model with the Memory chip under Tools. It only runs for members with "Use memory in chats" on, and the tools prompt says `User Memory: True` or `User Memory: False` so the model knows whether it can save anything.
 - **Calculator tool** - a `calculator` tool evaluates a math expression exactly (operators, powers, factorials, parentheses, constants and common functions such as sqrt, log, trig, round, min and max). It is a small parser on the server with no `eval`. Turn it on per model with the Calculator chip under Tools.
 - **Hide tool calls** - a per-model toggle in the Tools tab's Agent loop card, shown once the model has any tool. Members see only the reply, while the model still gets every result and later turns still know which tools ran.
 - `GET`/`POST`/`DELETE /api/me/memories` and `PUT`/`DELETE /api/me/memories/:id`, plus `memory_allowed`, `calculator_allowed` and `hide_tool_calls` on models.
+- **Missing blocks** - when a tool is on but its block was deleted from the system prompt, the Prompts tab lists it with a Restore button.
 - **Animated model mark** - a new default model icon, separate from the app icon and drawn live in the browser.
 - `PATCH /api/admin/models` (batched edits in one transaction), `POST /api/admin/models/duplicate`, `POST /api/admin/models/remove`, `GET`/`PUT /api/admin/models/folders` and `POST /api/admin/models/folders/add`, a `badges` list on public models (replacing `capText`, `capVision`, `capReasoning` and `capCompact`), and changed ids, their published copies and the published order in publish state.
 
 ### Removed
+- **Separate prompt settings** - the Search section's "Tool instructions", the Reference files "Preamble" and a model's "When to end" field are gone; their text now lives in each model's blocks.
 - **Background memory rewrite** - the model no longer rewrites a member's memory every few hours, so "Update now" and the admin "Rewrite prompt" are gone, as are `/api/me/memory` and `/api/me/memory/refresh`.
 
 ### Fixed
+- A project's instructions now reach the model in every chat of that project; they were saved but never sent.
 - Context "headroom" is a share of the window, not a token count, and the trim strategy now shows its saved value.
 - Moving a model out of a folder no longer leaves a stale folder label that marks it unpublished.
 

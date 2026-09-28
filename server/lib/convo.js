@@ -5,9 +5,7 @@ import { activePath } from './tree.js';
 import { historyText } from './history.js';
 import { isTextLike, readUploadText, readImageDataUri } from './uploads.js';
 import { modelCtx } from './models.js';
-import { pinnedFilesPrompt } from './prompts.js';
 import { llamaTokenCount, isLlamaCpp } from './llamacpp.js';
-import { memoryBlock } from './memory.js';
 
 export const STYLE_PRESETS = {
   __proto__: null,
@@ -337,23 +335,4 @@ export function promptVars(userId) {
   try { dt = now.toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' }); }
   catch { dt = now.toString(); }
   return { currentUser: name, currentDateTime: dt };
-}
-
-export function combinedInstructions(chat) {
-  const userId = chat && chat.user_id;
-  const u = userId ? db.users.byId(userId) : null;
-  const parts = [];
-  const ui = (u && u.instructions) ? u.instructions : '';
-  if (ui && ui.trim()) parts.push(ui.trim());
-  const mem = memoryBlock(u);
-  if (mem) parts.push(mem);
-  if (chat && chat.instructions && chat.instructions.trim()) parts.push(chat.instructions.trim());
-  return parts.join('\n\n');
-}
-
-export function instrFor(chat) {
-  const base = combinedInstructions(chat);
-  let pinned;
-  try { pinned = pinnedFilesPrompt(chat); } catch { pinned = ''; }
-  return pinned ? (base ? base + '\n\n' + pinned : pinned) : base;
 }

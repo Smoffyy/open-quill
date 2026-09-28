@@ -3,13 +3,12 @@ import { authMiddleware, adminOnly } from '../auth.js';
 import { oneShot } from '../llm/index.js';
 import { PROVIDER_TYPES, getProviders, typesForClient, isProviderType } from '../lib/providers.js';
 import { llamaEngine } from '../lib/llamacpp.js';
-import * as referenceFiles from '../lib/referencefiles.js';
-import * as websearch from '../lib/websearch.js';
 import { logAudit } from '../lib/audit.js';
 import { draftGet, draftSet } from '../lib/draft.js';
 import { DEFAULT_SAFETY_PROMPT, SAFETY_REASON_SUFFIX, resolveSafetyModel, parseSafetyVerdict } from '../lib/safety.js';
 import { broadcastAdminConfig } from '../lib/ws/index.js';
 import { autoTitleDefault } from '../lib/autotitle.js';
+import { draftFeatures, syncAllModels } from '../lib/systemprompt.js';
 
 const domainList = (v) => JSON.stringify([...new Set(
   String(v ?? '').slice(0, 20000)
@@ -27,7 +26,6 @@ export const SETTING_FIELDS = {
   searxngUrl: { key: 'searxng_url', text: 500, trim: true },
   webSearchCount: { key: 'web_search_count', int: [1, 20], def: 5 },
   webSearchDomains: { key: 'web_search_domains', map: domainList },
-  webSearchPrompt: { key: 'web_search_prompt', text: 16000 },
   uploadLimitAdminMb: { key: 'upload_limit_mb_admin', num: [0, 4096], def: 8 },
   uploadLimitUserMb: { key: 'upload_limit_mb_user', num: [0, 4096], def: 8 },
   sandboxLimitAdminMb: { key: 'sandbox_limit_mb_admin', num: [0, 1048576], def: 1024 },
@@ -35,7 +33,6 @@ export const SETTING_FIELDS = {
   modelQueue: { key: 'model_queue', bool: true },
   membankEnabled: { key: 'membank_enabled', bool: true },
   membankHideTools: { key: 'membank_hide_tools', bool: true },
-  membankPrompt: { key: 'membank_prompt', text: 16000 },
   budgetUser: { key: 'budget_user', num: [0, 1e9], def: 0 },
   budgetAdmin: { key: 'budget_admin', num: [0, 1e9], def: 0 },
   budgetWarnFraction: { key: 'budget_warn_fraction', num: [0.1, 0.99], def: 0.8 },
@@ -117,13 +114,11 @@ export default function registerSettingsRoutes(app) {
       modelQueue: draftGet('model_queue', '0') === '1',
       membankEnabled: draftGet('membank_enabled', '0') === '1',
       membankHideTools: draftGet('membank_hide_tools', '0') === '1',
-      membankPrompt: draftGet('membank_prompt', referenceFiles.DEFAULT_PROMPT),
       webSearchEnabled: draftGet('web_search_enabled', '0') === '1',
       webSearchEngine: draftGet('web_search_engine', 'searxng'),
       searxngUrl: draftGet('searxng_url', ''),
       webSearchCount: parseInt(draftGet('web_search_count', '5')) || 5,
       webSearchDomains: (() => { try { const d = JSON.parse(draftGet('web_search_domains', '[]')); return Array.isArray(d) ? d.join('\n') : ''; } catch { return ''; } })(),
-      webSearchPrompt: draftGet('web_search_prompt', websearch.DEFAULT_WS_PROMPT),
       budgetUser: Number(draftGet('budget_user', 0)) || 0,
       budgetAdmin: Number(draftGet('budget_admin', 0)) || 0,
       budgetWarnFraction: Number(draftGet('budget_warn_fraction', 0.8)) || 0.8,
@@ -157,12 +152,15 @@ export default function registerSettingsRoutes(app) {
   app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
     const b = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
     const applied = [];
+    const before = draftFeatures();
     for (const field of Object.keys(b)) {
       const spec = SETTING_FIELDS[field];
       if (!spec) continue;
       draftSet(spec.key, coerceSetting(spec, b[field]));
       applied.push(field);
     }
+    const after = draftFeatures();
+    if (Object.keys(after).some(k => after[k] !== before[k])) syncAllModels(before, after);
     logAudit(req, 'settings.stage', { meta: { fields: applied } });
     broadcastAdminConfig();
     res.json({ ok: true });

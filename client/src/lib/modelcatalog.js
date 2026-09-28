@@ -180,7 +180,7 @@ export const TAB_FIELDS = {
     'unavailable', 'unavailable_reason', 'sunset_at', 'sunset_action', 'cost_in', 'cost_out'],
   prompts: ['system_prompt', 'call_prompt'],
   tools: ['has_vision', 'sandbox_allowed', 'sandbox_auto', 'web_search_allowed', 'web_search_auto', 'skills_allowed',
-    'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'end_chat_prompt', 'memory_allowed', 'calculator_allowed', 'agent_steps', 'hide_tool_calls'],
+    'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'memory_allowed', 'calculator_allowed', 'agent_steps', 'hide_tool_calls'],
   reasoning: ['reasoning_collapsible', 'hide_thinking', 'think_open', 'think_close', 'has_reasoning', 'reasoning_token', 'non_reasoning_token'],
   context: ['num_ctx', 'summary_padding', 'recent_window', 'enable_summaries', 'ctx_trim_mode', 'long_convo_reminder'],
   sampling: ['stop', 'temperature', 'top_p', 'top_k', 'min_p', 'max_tokens', 'seed', 'repetition_penalty', 'presence_penalty',

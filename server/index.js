@@ -32,12 +32,14 @@ import { localOnlyMiddleware } from './lib/localonly.js';
 import { installEgressGuard } from './lib/egress.js';
 import { sameOriginGuard } from './lib/origin.js';
 import { uploadHeaders, isPublicUpload } from './lib/uploads.js';
+import { migratePromptBlocks } from './lib/systemprompt.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || '127.0.0.1';
 
 installEgressGuard();
+migratePromptBlocks();
 
 const app = express();
 app.disable('x-powered-by');

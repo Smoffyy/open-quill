@@ -107,19 +107,9 @@ export function changeMemory(userId, op) {
   return r;
 }
 
-export function memoryBlock(u) {
+export function memoriesText(u) {
   if (!userMemoryOn(u)) return '';
-  const list = memoriesOf(u.id);
-  if (!list.length) return '';
-  return 'Things you remember about this user from earlier conversations (id in brackets; the user can view, edit and delete these at any time):\n'
-    + list.map(m => `- [${m.id}] ${m.text}`).join('\n');
-}
-
-export function memoryPromptFor(enabled) {
-  if (!enabled) {
-    return '## User memory\nUser Memory: False\nThe user has turned memory off in their settings, so the `memory` tool is not available in this conversation and nothing is remembered between chats. Do not try to save, update or recall memories. If the user asks you to remember something, tell them they can turn memory on under Settings, Memory.';
-  }
-  return '## User memory\nUser Memory: True\nYou have a `memory` tool that keeps short facts about this user across all of their conversations. Save things that will still matter in a future chat: their name and role, ongoing projects, preferences, the tools and languages they use, and standing instructions. Save something when the user asks you to remember it. Do not save one-off details, anything already saved, anything the user asks you not to keep, or secrets such as passwords and keys. Write each entry as one short, self-contained sentence. When a saved fact changes, `update` it by id; when it is wrong or the user asks you to forget it, `delete` it. Your saved memories are listed with their ids under "Things you remember about this user". Mention briefly when you save or change a memory. The user can view, edit and delete every entry under Settings, Memory.';
+  return memoriesOf(u.id).map(m => `- [${m.id}] ${m.text}`).join('\n');
 }
 
 export function memoryToolResult(call, r) {

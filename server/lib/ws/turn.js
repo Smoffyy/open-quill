@@ -6,101 +6,61 @@ import * as websearch from '../websearch.js';
 import * as sandbox from '../../sandbox.js';
 import * as referenceFiles from '../referencefiles.js';
 import * as workspaceSkills from '../workspaceskills.js';
-import * as userskills from '../userskills.js';
 import * as mcp from '../mcp.js';
 import * as projectfiles from '../projectfiles.js';
 import { stripToolSyntax } from '../history.js';
 import { modelCtx } from '../models.js';
 import {
   chatHistory, estimateTokens, makeTokenCounter, updateCalib, truncateForRollingCtx, rollingCtxFor,
-  compactStep, compactThreshold, promptVars, instrFor, exactTokens, trimInTurn
+  compactStep, compactThreshold, exactTokens, trimInTurn
 } from '../convo.js';
 import { isContextOverflowError, parseOverflow, isLlamaCpp, learnImageCost, imageTokenCost, countImages } from '../llamacpp.js';
 import { contextBudget, slideToFit, noteRealCtx, shrinkByRatio, countExact } from '../ctxwindow.js';
 import {
-  sandboxPromptFor, cleanCall, resultPayload, formatToolResult, runChatSearchTool,
-  formatChatSearchResult, chatSearchPayload, endChatPromptFor, longConvoReminderFor,
-  cutOffError, CHAT_SEARCH_PROMPT
+  cleanCall, resultPayload, formatToolResult, runChatSearchTool, formatChatSearchResult, chatSearchPayload, cutOffError
 } from '../prompts.js';
 import { noteToolCall, classifyToolError } from '../toolstats.js';
 import { autoTitleEnabled } from '../autotitle.js';
 import { openFence, seamFor, steerInstruction } from '../steer.js';
 import { createLoopGuard, STUCK_NOTE } from '../loopguard.js';
-import { userMemoryOn, memoryPromptFor, changeMemory, memoryToolResult } from '../memory.js';
-import { runCalculator, formatCalculatorResult, CALCULATOR_PROMPT } from '../calculator.js';
+import { changeMemory, memoryToolResult } from '../memory.js';
+import { toolState, systemPrompt } from '../systemprompt.js';
+import { runCalculator, formatCalculatorResult } from '../calculator.js';
 
 const MAX_STEERS = 6;
 const TELEMETRY_MS = 220;
 const SILENT_MS = 2500;
 
-const projectNameOf = (row) => (row && row.project_id ? String((db.projects.byId(row.project_id) || {}).name || '') : '');
-
-export async function maybeCompact(ws, chat, model, extended, sandboxOn) {
+export async function maybeCompact(ws, chat, model, extended, flags, opts = {}) {
   const threshold = compactThreshold(model, await modelCtx(model));
   if (threshold === Infinity) return;
   let guard = 0;
   while (guard++ < 3) {
-    const fresh = db.chats.byId(chat.id);
-    const sandboxP = sandboxOn ? sandboxPromptFor(sandbox.wsKey(fresh), projectNameOf(fresh)) : null;
-    const convo = buildMessages(model, chatHistory(chat, model), extended, sandboxP, fresh.summary, promptVars(chat.user_id), instrFor(fresh));
+    const convo = buildMessages(model, chatHistory(chat, model), extended, systemPrompt(chat, model, flags, opts).text);
     if ((await exactTokens(chat.id, model, convo)) < threshold) return;
     if (!(await compactStep(ws, chat, model))) return;
   }
 }
 
 export async function runCompletion(ws, state, safeSend, chat, model, extended, sandboxOn, sandboxCap = 0, webSearchOn = false, callMode = false, styleText = '') {
-  if (callMode && (model.call_prompt || '').trim()) model = { ...model, system_prompt: model.call_prompt };
   {
     const cRow0 = db.chats.byId(chat.id) || chat;
     if (cRow0.gen_params && typeof cRow0.gen_params === 'object') model = { ...model, ...cRow0.gen_params };
-    if ((cRow0.system_override || '').trim()) model = { ...model, system_prompt: cRow0.system_override };
   }
-  await maybeCompact(ws, chat, model, extended, sandboxOn);
+  const flags = toolState(chat, model, { sandboxOn, webSearchOn });
+  const promptOpts = { styleText, callMode };
+  await maybeCompact(ws, chat, model, extended, flags, promptOpts);
   const history = chatHistory(chat, model);
   const chatRow = db.chats.byId(chat.id) || chat;
-  const membankOn = getSetting('membank_enabled', '0') === '1' && referenceFiles.count() > 0;
+  const { membankOn, chatSearchOn, skillsOn, userSkills, mcpSchemas, mcpOn, mcpUser, endChatOn, memoryOn, calculatorOn, toolsOn } = flags;
   const membankHideTools = getSetting('membank_hide_tools', '0') === '1';
   if (membankOn) { try { await referenceFiles.ensureIndexedAll(); } catch {} }
-  const chatSearchOn = !!model.chat_search_allowed && getSetting('chat_search_enabled', '0') === '1';
-  const userSkills = chatRow.user_id ? userskills.enabledFor(chatRow.user_id).map(s => ({ name: s.name, description: s.description, content: s.body })) : [];
-  const skillsOn = !!model.skills_allowed && (workspaceSkills.getEnabled().length + userSkills.length) > 0;
-  const mcpUser = chatRow.user_id || null;
-  const mcpSchemas = model.mcp_allowed ? mcp.toolSchemas(mcpUser) : [];
-  const mcpOn = mcpSchemas.length > 0;
-  const endChatOn = !!model.end_chat_allowed;
-  const memoryAllowed = !!model.memory_allowed && !!chatRow.user_id;
-  const memoryOn = memoryAllowed && userMemoryOn(db.users.byId(chatRow.user_id));
-  const calculatorOn = !!model.calculator_allowed;
   const hideTools = !!model.hide_tool_calls;
   const space = projectfiles.workspaceFor(chatRow);
-  const projectName = projectNameOf(chatRow);
-  const longReminderOn = !!model.long_convo_reminder;
   let conversationEnded = false;
-  const toolsOn = sandboxOn || webSearchOn || membankOn || chatSearchOn || skillsOn || mcpOn || endChatOn || memoryOn || calculatorOn;
-  const withStyle = (instr) => {
-    if (!styleText) return instr;
-    const block = 'The user selected a response style for this conversation. Apply it consistently to every reply:\n' + styleText;
-    return instr ? instr + '\n\n' + block : block;
-  };
-  const toolsP = () => {
-    const parts = [];
-    if (sandboxOn) parts.push(sandboxPromptFor(space, projectName));
-    if (webSearchOn) { parts.push(websearch.webSearchConfig().prompt); parts.push(websearch.webSearchToolPrompt()); }
-    if (membankOn) parts.push(referenceFiles.promptFor(getSetting('membank_prompt', '')));
-    if (chatSearchOn) parts.push(CHAT_SEARCH_PROMPT);
-    if (skillsOn) parts.push(workspaceSkills.promptFor(userSkills));
-    if (memoryAllowed) parts.push(memoryPromptFor(memoryOn));
-    if (calculatorOn) parts.push(CALCULATOR_PROMPT);
-    if (mcpOn) parts.push(mcp.promptFor(mcpUser));
-    if (endChatOn) parts.push(endChatPromptFor(model));
-    if (longReminderOn) parts.push(longConvoReminderFor(chat.id));
-    return parts.filter(Boolean).join('\n\n') || null;
-  };
-  const rebuildBase = () => {
-    const row = db.chats.byId(chat.id) || chat;
-    return buildMessages(model, chatHistory(chat, model), extended, toolsP(), row.summary, promptVars(chat.user_id), withStyle(instrFor(row)));
-  };
-  let base = buildMessages(model, history, extended, toolsP(), chatRow.summary, promptVars(chat.user_id), withStyle(instrFor(chatRow)));
+  const systemText = () => systemPrompt(chat, model, flags, promptOpts).text;
+  const rebuildBase = () => buildMessages(model, chatHistory(chat, model), extended, systemText());
+  let base = buildMessages(model, history, extended, systemText());
   let inTurn = []; // assistant/tool exchanges accumulated during this response
   const assistantId = uid();
   const assistantParent = chatRow.active_leaf || null;

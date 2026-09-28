@@ -12,8 +12,6 @@ fs.mkdirSync(CACHE_DIR, { recursive: true });
 const TEXT_CAP = 200000;
 const TEXT_EXT = new Set(['.txt', '.md', '.markdown', '.csv', '.tsv', '.json', '.js', '.jsx', '.ts', '.tsx', '.py', '.lua', '.html', '.htm', '.css', '.xml', '.yml', '.yaml', '.sh', '.c', '.cpp', '.h', '.hpp', '.java', '.rb', '.go', '.rs', '.php', '.sql', '.ini', '.cfg', '.conf', '.log', '.rst', '.toml', '.env', '.gitignore']);
 
-export const DEFAULT_PROMPT = 'The admin has provided reference files below. Treat their contents as trusted, authoritative context. When a question relates to them, READ the relevant file (or just the needed lines) before answering instead of guessing or searching the web.';
-
 function safe(name) {
   const base = path.basename(String(name || ''));
   if (!base || base === '.' || base === '..' || base.startsWith('.')) return null;
@@ -159,18 +157,14 @@ export function rename(oldName, newName) {
   return { ok: true, name: b.base };
 }
 
-export function promptFor(introOverride) {
-  const files = list();
-  if (!files.length) return '';
-  const intro = (introOverride && String(introOverride).trim()) || DEFAULT_PROMPT;
-  let p = '## Memory Bank\n' + intro + '\n\nAvailable files:\n';
+export function filesText() {
+  let p = '';
   let curFolder = null;
-  for (const f of files) {
+  for (const f of list()) {
     if ((f.folder || '') !== curFolder) { curFolder = f.folder || ''; if (curFolder) p += `[${curFolder}]\n`; }
     p += `- ${f.name}${f.readable ? ` (${f.lines} lines, ${f.size} bytes)` : ` (${f.size} bytes, not readable as text)`}\n`;
   }
-  p += '\nUse the `mb_view` function to read a file (pass `path`, and optional `start`/`end` line numbers to read only a slice) and `mb_search` to search across all files (pass `query`). Read only what you need, do not pull entire large files if a line range suffices.';
-  return p;
+  return p.trimEnd();
 }
 
 export function execTool(call) {

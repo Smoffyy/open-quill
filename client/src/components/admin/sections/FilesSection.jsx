@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../../../lib/api.js';
 import { useAdmin } from '../store.jsx';
-import { Card, Rows, ToggleRow, Field, Input, Area, Btn, IconBtn, Acts, Table, Empty, fmtInt, fmtBytes } from '../ui.jsx';
+import { Card, Rows, ToggleRow, Input, Btn, IconBtn, Acts, Table, Empty, fmtInt, fmtBytes } from '../ui.jsx';
 import { Trash, Pencil, Check, X, FileText, Upload } from '../../ui/icons.jsx';
 import { t } from '../../../i18n.jsx';
 import { Skel, SkelTable } from '../../ui/Skeleton.jsx';
@@ -82,15 +82,11 @@ export default function FilesSection() {
         <Rows>
           <ToggleRow label={t('Expose the file set')} on={!!settings.membankEnabled}
             onToggle={() => set('membankEnabled', !settings.membankEnabled)}
-            note={t('Adds a listing of these files to every system prompt, plus the mb_view and mb_search tools for reading them.')} />
+            note={t('Adds a reference_files block to every model’s system prompt, with the file listing and the mb_view and mb_search tools. Edit its wording in each model’s Prompts tab.')} />
           <ToggleRow label={t('Hide reads from members')} on={!!settings.membankHideTools}
             onToggle={() => set('membankHideTools', !settings.membankHideTools)}
             note={t('The model still reads files, but the tool steps are not shown in the reply.')} />
         </Rows>
-        <Field label={t('Preamble')}
-          hint={t('Placed above the file listing in the system prompt. The names and tool instructions are appended for you.')}>
-          <Area rows={5} value={settings.membankPrompt ?? ''} onChange={(e) => set('membankPrompt', e.target.value)} />
-        </Field>
       </Card>
 
       <Card title={t('Files')} flush

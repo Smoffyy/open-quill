@@ -137,7 +137,7 @@ test('a stdio server connects, advertises its tools and runs them', async () => 
   const echo = mcp.toolSchemas().find(s => s.function.name === `mcp_${sv.slug}_echo`);
   assert.deepEqual(echo.function.parameters.required, ['text']);
   assert.match(echo.function.description, /^\[MCP: Fixture ok\]/);
-  assert.match(mcp.promptFor(), new RegExp(`Fixture ok: mcp_${sv.slug}_echo`));
+  assert.match(mcp.toolsText(), new RegExp(`Fixture ok: mcp_${sv.slug}_echo`));
 
   const ok = await mcp.execTool({ tool: `mcp_${sv.slug}_echo`, text: 'hi' });
   assert.equal(ok.ok, true, ok.error);

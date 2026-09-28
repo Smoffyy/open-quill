@@ -12,7 +12,8 @@ import { resolveModel, roleLimit } from '../models.js';
 import { applyKwargs } from '../kwargs.js';
 import { budgetStatus } from '../budget.js';
 import { runQueued } from '../queue.js';
-import { promptVars, styleTextFor } from '../convo.js';
+import { styleTextFor } from '../convo.js';
+import { systemPrompt } from '../systemprompt.js';
 
 import { clients, requestedKwargs } from './broadcast.js';
 import { runCompletion } from './turn.js';
@@ -132,7 +133,7 @@ export function initWs(server) {
           if (!history.length || history[history.length - 1].role !== 'user') {
             safeSend(JSON.stringify({ type: 'error', error: 'Nothing to send.' })); safeSend(JSON.stringify({ type: 'done' })); return;
           }
-          const messages = buildMessages(model, history, !!msg.extended, null, null, promptVars(u.id));
+          const messages = buildMessages(model, history, !!msg.extended, systemPrompt(null, model, {}, { userId: u.id }).text);
           const assistantId = 'inc-' + uid();
           const controller = new AbortController();
           state.aborts.set('incognito', controller);

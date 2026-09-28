@@ -1,16 +1,11 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { db } from '../db.js';
 import * as sandbox from '../sandbox.js';
 import { canonicalTool } from '../tools/aliases.js';
 import { activePath } from './tree.js';
 import { stripToolSyntax } from './history.js';
 import { isTextLike, readUploadText } from './uploads.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-let SKILLS_CACHE = null;
 
 const PROJECT_MARKERS = [
   { file: 'package.json', deps: 'node_modules', how: 'npm install', what: 'Node.js' },
@@ -32,7 +27,7 @@ function workspaceStateSection(ws, files) {
   for (const m of roots) {
     const installed = m.deps ? at(m.deps) : null;
     L.push(`- \`${m.file}\` at the root: this is a ${m.what} project.` + (m.deps
-      ? (installed ? ` \`${m.deps}/\` exists, so its dependencies are already installed — do not reinstall them.` : ` \`${m.deps}/\` is missing, so nothing is installed yet; run \`${m.how}\` before running the code.`)
+      ? (installed ? ` \`${m.deps}/\` exists, so its dependencies are already installed; do not reinstall them.` : ` \`${m.deps}/\` is missing, so nothing is installed yet; run \`${m.how}\` before running the code.`)
       : ` Build or run it with \`${m.how}\`.`));
   }
   if (at('.git')) L.push('- This workspace is a git repository. `git status`, `git diff` and `git log` work in `bash`; commit only when the user asks.');
@@ -40,14 +35,13 @@ function workspaceStateSection(ws, files) {
   return '## What is already set up here\n' + L.join('\n');
 }
 
-function hostEnvSection() {
+export function sandboxHostText() {
   const env = sandbox.hostEnvInfo();
   const L = [];
-  L.push('## Host environment (READ THIS BEFORE EVERY bash CALL)');
   L.push(`- Operating system: **${env.osName}** (${env.arch}). Shell used by \`bash\`: \`${env.shellName}\`.`);
   if (env.interpreters.length) {
     L.push('- Programs installed on this host. These are the ONLY ones you may invoke:');
-    for (const i of env.interpreters) L.push(`  - \`${i.name}\` — ${i.label}, ${i.version}${i.run ? ` (e.g. \`${i.run}\`)` : ''}`);
+    for (const i of env.interpreters) L.push(`  - \`${i.name}\`: ${i.label}, ${i.version}${i.run ? ` (e.g. \`${i.run}\`)` : ''}`);
   } else {
     L.push('- **No language runtimes were detected on this host.** Do not assume `node`, `python`, `npm` or a compiler exist. Do everything with the file tools, and tell the user if a task genuinely needs a runtime that is missing.');
   }
@@ -59,49 +53,28 @@ function hostEnvSection() {
   if (!env.unix) {
     L.push('- This is **cmd.exe on Windows, not a Unix shell.** `find`, `sort` and `more` exist but are the Windows commands with different syntax, not the Unix ones.');
     L.push('- Unix FLAGS fail, even on commands that do exist: `mkdir -p`, `rm -rf`, `cp -r`, `ls -la`. Plain `mkdir a\\b` already creates parent folders.');
-    L.push('- **In a `bash` command, cmd.exe\'s own builtins (`mkdir`, `del`, `copy`, `move`, `ren`, `rmdir`, `dir`, `type`) do NOT accept forward slashes as path separators — they read `/` as the start of a switch.** `mkdir src/main/java` fails with "The syntax of the command is incorrect." even though forward slashes work fine in `cd`, in every real interpreter, and in this app\'s own file tools. In `bash`, write these paths with backslashes: `mkdir src\\main\\java`. This is auto-corrected for you when it can be, but do not rely on that — write backslashes for these commands the first time. This does NOT apply to the `path` argument of `create_file`, `make_dir`, `view` and the other file tools, which always take forward slashes on every OS.');
+    L.push('- **In a `bash` command, cmd.exe\'s own builtins (`mkdir`, `del`, `copy`, `move`, `ren`, `rmdir`, `dir`, `type`) do NOT accept forward slashes as path separators; they read `/` as the start of a switch.** `mkdir src/main/java` fails with "The syntax of the command is incorrect." even though forward slashes work fine in `cd`, in every real interpreter, and in this app\'s own file tools. In `bash`, write these paths with backslashes: `mkdir src\\main\\java`. This is auto-corrected for you when it can be, but do not rely on that; write backslashes for these commands the first time. This does NOT apply to the `path` argument of `create_file`, `make_dir`, `view` and the other file tools, which always take forward slashes on every OS.');
     L.push('- cmd.exe mangles quotes and newlines in long one-liners. To run real logic, write a script file with `create_file` and then run that file, instead of a `-c "..."` one-liner.');
   } else {
     L.push('- Standard Unix utilities are available, but the file tools are still preferred for file work because their results are structured, versioned, and shown to the user.');
   }
-  L.push('- **Your shell working directory PERSISTS across `bash` calls.** After `cd sub`, every later command already runs in `sub` until you `cd` elsewhere. The current directory comes back as `cwd` with every result — read it.');
-  L.push('- **So do not re-issue the same `cd` on every call.** `cd myproject && ...` twice in a row is the single most common way to get stuck here: the second one looks for `myproject/myproject`, fails with "the system cannot find the path specified", and repeating it can never work. If you want a command to run somewhere specific regardless of where the shell is, pass `workdir` instead: `{"cmd": "npm test", "workdir": "myproject"}`. `workdir` is always relative to the workspace root, so it is safe to repeat.');
   return L.join('\n');
 }
 
-const BOUNDARY_SECTION = [
-  '## The workspace boundary is enforced',
-  'You are confined to one folder. The harness checks this, so a violating call simply fails and wastes a turn. Get it right the first time.',
-  '',
-  '- **Every path is relative to the workspace root**: `src/app.py`, `data/in.csv`, `out.txt`.',
-  '- Rejected in tool arguments AND in shell commands: `/etc/passwd`, `/usr/local/bin`, `C:\\Users\\...`, `\\\\server\\share`, `~/notes.txt`, `../../secret`.',
-  '- There is no `/tmp`. Put scratch files inside the workspace, e.g. `tmp/scratch.txt`.',
-  '- `cd` may only move into folders inside the workspace.',
-  '- Host administration is blocked and cannot be worked around: `sudo`, `su`, `runas`, `shutdown`, `systemctl`, `service`, `reg`, `regedit`, `diskpart`, `format`, `mount`, `netsh`, `net`, `schtasks`, `crontab`, `taskkill`, `chown`, `icacls`, system package managers (`apt`, `apt-get`, `yum`, `dnf`, `pacman`, `brew`, `choco`, `winget`), `docker`, `kubectl`, `ssh`, `telnet`, `nc`.',
-  '- Project-local installs are fine and encouraged: `npm install`, `pip install`, `cargo build` and the like, run inside the workspace.',
-  '',
-  'If a task genuinely needs something outside the workspace, say so plainly in your reply. Never retry a blocked call with a different spelling.'
-].join('\n');
-
-export function sandboxPromptFor(ws, projectName = '') {
-  if (SKILLS_CACHE === null) {
-    try { SKILLS_CACHE = fs.readFileSync(path.join(__dirname, '..', 'skills', 'sandbox.md'), 'utf8'); }
-    catch { SKILLS_CACHE = ''; }
-  }
-  let p = SKILLS_CACHE;
-  p += '\n\n' + hostEnvSection();
-  p += '\n\n' + BOUNDARY_SECTION;
-  if (projectName) p += `\n\n## This workspace belongs to a project\nIt is the shared workspace of the project "${String(projectName).slice(0, 80)}". Every chat in that project opens this same directory: files another conversation left are here, and anything you write stays for the next one. Documents the user attached to the project are ordinary files in it, so \`view\`, \`search\` and \`bash\` reach them like any other file.`;
-  // Rule 3 of the skill already covers imitation tool text; this is not repeated
-  // here. Everything below is state the skill cannot know: what is on disk now.
+export function sandboxWorkspaceText(ws, projectName = '') {
+  const out = [];
+  if (projectName) out.push(`## This workspace belongs to a project\nIt is the shared workspace of the project "${String(projectName).slice(0, 80)}". Every chat in that project opens this same directory: files another conversation left are here, and anything you write stays for the next one. Documents the user attached to the project are ordinary files in it, so \`view\`, \`search\` and \`bash\` reach them like any other file.`);
   const { files, hidden } = sandbox.list(ws, { withHidden: true });
-  if (!files.length && !hidden) return p + '\n\n## Current workspace\nThe workspace is empty. Create what you need with `create_file`. There is nothing to read yet, so do not call `view` on files that do not exist.';
+  if (!files.length && !hidden) {
+    out.push('## Current workspace\nThe workspace is empty. Create what you need with `create_file`. There is nothing to read yet, so do not call `view` on files that do not exist.');
+    return out.join('\n\n');
+  }
   const state = workspaceStateSection(ws, files);
-  if (state) p += '\n\n' + state;
+  if (state) out.push(state);
   const LIST_CAP = 200, INLINE_CAP = 12;
-  p += '\n\n## Current workspace files\nThis is what is on disk RIGHT NOW, after every edit made so far. It is the truth: edit these, never an older version you remember. `vN` is the version number and increases on every change.\n';
+  let p = '## Current workspace files\nThis is what is on disk RIGHT NOW, after every edit made so far. It is the truth: edit these, never an older version you remember. `vN` is the version number and increases on every change.\n';
   for (const f of files.slice(0, LIST_CAP)) p += `- ${f.path} (v${f.v}, ${f.size} bytes)\n`;
-  if (files.length > LIST_CAP) p += `- … and ${files.length - LIST_CAP} more file(s). The list is truncated to protect context; use \`list_files\`, \`find\` or \`search\` to reach anything not shown here.\n`;
+  if (files.length > LIST_CAP) p += `- ... and ${files.length - LIST_CAP} more file(s). The list is truncated to protect context; use \`list_files\`, \`find\` or \`search\` to reach anything not shown here.\n`;
   if (hidden) p += `\n(${hidden} file(s) inside dependency or build folders (node_modules, .venv, target, dist, and similar) and anything matched by .gitignore are hidden from this listing to keep context clean. They still exist on disk and your commands use them normally; pass \`all: true\` to \`list_files\`/\`find\` to see them, or reference them by exact path.)\n`;
   p += '\n## Latest file contents (a sample; use `view` for anything not shown)\n';
   let budget = 40000, inlined = 0;
@@ -116,10 +89,8 @@ export function sandboxPromptFor(ws, projectName = '') {
     p += `\n### ${f.path} (v${f.v})\n\`\`\`${f.ext || ''}\n${txt}\n\`\`\`\n`;
     budget -= txt.length; inlined++;
   }
-  // Last thing before the user's turn, so it is the most recent instruction a
-  // small model sees. Short on purpose: the rules are stated once, above.
-  p += '\n---\nREMINDER: the files above are the current truth — edit those, with `str_replace`, using relative paths. Real tool calls only: no pasted files, no invented output. Keep going until the task is done.';
-  return p;
+  out.push(p.trimEnd());
+  return out.join('\n\n');
 }
 
 const BASH_TOOLS = new Set(['bash', 'run', 'shell']);
@@ -290,13 +261,6 @@ export function chatSearchPayload(call, r) {
   return o;
 }
 
-export function endChatPromptFor(model) {
-  let p = '## Ending conversations\nYou have an `end_conversation` tool. Calling it PERMANENTLY closes this chat: the user cannot reply, edit, regenerate, or branch it afterwards. When you decide to end a conversation, first clearly explain to the user in your reply why the conversation is being ended, and only then call the tool with a short `reason`. Never call it silently or without explanation, and never mention it as a threat.';
-  const extra = String(model.end_chat_prompt || '').trim();
-  if (extra) p += '\n\nAdditional instructions from the administrator about when to end conversations:\n' + extra;
-  return p;
-}
-
 export function fmtDuration(ms) {
   const m = Math.floor(ms / 60000);
   if (m < 1) return 'under a minute';
@@ -307,32 +271,24 @@ export function fmtDuration(ms) {
   return `${d} day${d === 1 ? '' : 's'}${h % 24 ? ` ${h % 24} h` : ''}`;
 }
 
-export function longConvoReminderFor(chatId) {
+export function conversationTiming(chatId) {
   const msgs = activePath(chatId).filter(m => m.role === 'user' || m.role === 'assistant');
   if (!msgs.length) return '';
   const first = msgs[0].created_at || Date.now();
   const last = msgs[msgs.length - 1].created_at || Date.now();
   const nowTs = Date.now();
   const gap = nowTs - last;
-  const fresh = gap < 3 * 60 * 60 * 1000;
-  let p = '## Long conversation awareness\n';
-  p += `This conversation started ${fmtDuration(nowTs - first)} ago (${new Date(first).toLocaleString()}). `;
-  p += `It contains ${msgs.length} messages. The previous message was ${fmtDuration(gap)} ago (${new Date(last).toLocaleString()}). Current time: ${new Date(nowTs).toLocaleString()}.\n`;
-  if (fresh && msgs.length >= 20) {
-    p += 'This has been a long continuous session. If the moment is natural (a task just finished, a stopping point was reached), you may gently suggest the user take a short break, without being pushy or repeating the suggestion every message.';
-  } else {
-    p += 'Use these timestamps for temporal awareness. If the session becomes very long and continuous, you may gently suggest a short break at a natural stopping point \u2014 at most once in a while, never repeatedly.';
+  let p = `This conversation started ${fmtDuration(nowTs - first)} ago (${new Date(first).toLocaleString()}). `;
+  p += `It contains ${msgs.length} messages. The previous message was ${fmtDuration(gap)} ago (${new Date(last).toLocaleString()}). Current time: ${new Date(nowTs).toLocaleString()}.`;
+  if (gap < 3 * 60 * 60 * 1000 && msgs.length >= 20) {
+    p += '\nThis has been a long continuous session. If the moment is natural (a task just finished, a stopping point was reached), you may gently suggest the user take a short break, without being pushy or repeating the suggestion every message.';
   }
   return p;
 }
 
-export const CHAT_SEARCH_PROMPT = "## Past conversations\nYou can search the user's other conversations in this app with `chat_search` (pass `query`) and read one with `chat_view` (pass `chat_id`). Use these when the user refers to something discussed in a previous chat instead of saying you have no memory of it.";
-
-export function pinnedFilesPrompt(chat) {
+export function pinnedFilesText(chat) {
   const pins = Array.isArray(chat?.pinned_files) ? chat.pinned_files : [];
-  if (!pins.length) return '';
-  const blocks = pins.map(a => (isTextLike(a)
+  return pins.map(a => (isTextLike(a)
     ? `--- Pinned file: ${a.name} ---\n${readUploadText(a.url)}`
-    : `[Pinned file: ${a.name} (not readable as text)]`));
-  return 'The user has pinned the following file(s) to this conversation. Keep their contents available as context for every turn:\n\n' + blocks.join('\n\n');
+    : `[Pinned file: ${a.name} (not readable as text)]`)).join('\n\n');
 }

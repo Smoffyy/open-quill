@@ -170,4 +170,3 @@ export function formatCalculatorResult(r) {
   return r.ok ? `calculator "${r.expression}" → ${r.result}` : `calculator "${r.expression}" → ERROR: ${r.error}`;
 }
 
-export const CALCULATOR_PROMPT = '## Calculator\nUse the `calculator` tool for any arithmetic you cannot do with certainty in your head (multi-digit multiplication, division, percentages, powers, roots, logarithms, trigonometry, unit arithmetic). Put the whole calculation in one expression, then use the returned value exactly.';

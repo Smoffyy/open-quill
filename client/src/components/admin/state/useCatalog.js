@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../../lib/api.js';
 import { t } from '../../../i18n.jsx';
+import { touchesBlocks, syncModelPrompt } from '../../../lib/promptblocks.js';
 
 const SAVE_DELAY = 450;
 const SAVED_LINGER = 1800;
 const ECHO_WINDOW = 1200;
 const REFOCUS_RETRY = 2500;
 
-export function useCatalog({ confirm }) {
+export function useCatalog({ confirm, features }) {
   const [models, setModels] = useState([]);
   const [providers, setProviders] = useState([]);
   const [providerTypes, setProviderTypes] = useState({});
@@ -142,7 +143,12 @@ export function useCatalog({ confirm }) {
     const patches = new Map();
     for (const id of ids) {
       const m = modelsRef.current.find(x => x.id === id);
-      const p = m && per(m);
+      let p = m && per(m);
+      if (p && touchesBlocks(p)) {
+        const next = { ...m, ...p };
+        const text = syncModelPrompt(m, next, features?.current || {});
+        if (text !== (next.system_prompt ?? '')) p = { ...p, system_prompt: text };
+      }
       if (p && Object.keys(p).length) patches.set(id, p);
     }
     if (!patches.size) return;
@@ -161,7 +167,7 @@ export function useCatalog({ confirm }) {
     settle('saving');
     clearTimeout(flushTimer.current);
     flushTimer.current = setTimeout(flush, SAVE_DELAY);
-  }, [flush, settle]);
+  }, [flush, settle, features]);
 
   const createModel = useCallback(async () => {
     await flush();
