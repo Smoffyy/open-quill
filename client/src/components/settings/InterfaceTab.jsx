@@ -101,7 +101,7 @@ export default function InterfaceTab({ prefs, setPref, cfg }) {
       <div className="me-section-h">{t("Navigation")}</div>
       <div className="sec-note">{t("Tools for moving around a long conversation. Turn any off for a bare view.")}</div>
       <SwitchRow label={t("Conversation map")} desc={t("A rail down the right edge with one mark per turn. Click a mark to jump.")}
-        on={prefs.threadRail !== false} onToggle={() => setPref('threadRail', prefs.threadRail === false)} />
+        on={prefs.threadRail === true} onToggle={() => setPref('threadRail', prefs.threadRail !== true)} />
       <SwitchRow label={t("Find in conversation")} desc={t("Search the open chat from the header. Off gives Ctrl+F back to the browser.")}
         on={prefs.threadFind !== false} onToggle={() => setPref('threadFind', prefs.threadFind === false)} />
       <SwitchRow label={t("Branch map")} desc={t("A header button showing the whole conversation, every branch included.")}

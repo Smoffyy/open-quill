@@ -1628,6 +1628,7 @@ export default function App() {
             </>}
             items={[
               { id: 'personas', icon: <Star />, label: t('Personas'), onClick: () => setPersonasOpen(true) },
+              user?.isAdmin && !incognito && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => { setArtifactsOpen(false); setCtlOpen(o => !o); } },
             ]} />
         )}
         {empty && !incognito && cfg.uiPreset === 'openai' && (
@@ -1732,7 +1733,7 @@ export default function App() {
                 <div className="thread-pad" />
               </div>
             </div>
-            {user?.prefs?.threadRail !== false && <ThreadRail items={railList} scrollRef={scrollRef} matches={findMatches} onJump={railJump} />}
+            {user?.prefs?.threadRail === true && <ThreadRail items={railList} scrollRef={scrollRef} matches={findMatches} onJump={railJump} />}
             {outlineOpen && outline.length > 0 && user?.prefs?.threadOutline !== false && <Outline items={outline} onJump={outlineJump} onClose={() => setOutlineOpen(false)} />}
             {showJump && <button className="to-bottom" onClick={jumpDown} title={t('Jump to latest')} aria-label={t('Jump to latest')}><Down style={{ width: 17 }} /></button>}
             <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')}>

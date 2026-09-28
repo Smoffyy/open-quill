@@ -228,9 +228,14 @@ function Row({ msg, index, streaming, onChange, onRole, onDelete, onRerun, onPic
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    if (streaming) {
+      const next = Math.min(el.scrollHeight, 520);
+      if (next > el.clientHeight) el.style.height = next + 'px';
+      return;
+    }
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 520) + 'px';
-  }, [text, editing]);
+  }, [text, editing, streaming]);
   const roles = ['user', 'assistant', 'system'];
   const editable = !multi && !streaming;
   return (

@@ -8,7 +8,7 @@
   box-shadow: 0 0 0 1px var(--border-soft);
   display: flex; flex-direction: column;
 }
-.artifacts.viewing { width: 50vw; }
+.artifacts.viewing { width: 40vw; }
 .artifacts.full { position: fixed; inset: 0; width: 100vw; max-width: none; height: auto; margin: 0; border-radius: 0; z-index: 120; box-shadow: none; }
 .artifacts.full .art-resizer { display: none; }
 
