@@ -1731,7 +1731,7 @@ export default function App() {
       )}
 
 
-      {settings && <SettingsModal user={user} cfg={cfg} modelId={currentId} initialTab={settings.tab} browseSkills={!!settings.browse} onClose={onSettingsClosed} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile}
+      {settings && <SettingsModal user={user} cfg={cfg} initialTab={settings.tab} browseSkills={!!settings.browse} onClose={onSettingsClosed} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile}
         onChangelog={() => { setSettings(null); setShowChangelog(true); }}
         onTrySkill={(sk) => { newChat(); setInput('/' + sk.name + ' '); setFocusTick(n => n + 1); }} />}
       {user?.isAdmin && cfg.setupComplete === false && !setupDone && (

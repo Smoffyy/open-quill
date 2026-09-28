@@ -4,7 +4,6 @@ import { applyKwargs } from './kwargs.js';
 import { budgetStatus } from './budget.js';
 import { runQueued } from './queue.js';
 import { ensureChain } from './tree.js';
-import { maybeUpdateMemory } from './memory.js';
 import { isRouter, resolveRouted } from './router.js';
 import { isDue, nextRun } from './tasks.js';
 import { runCompletion } from './ws/turn.js';
@@ -48,8 +47,7 @@ export function fireTask(task) {
   const queueOn = getSetting('model_queue', '0') === '1';
   runQueued(queueOn, model.id, () => {}, () => runCompletion(ws, state, send, chat, model, false, false, 0, false, false, ''))
     .catch(err => console.error('[tasks] run failed for', task.id, err))
-    .finally(() => live.endTurn(chat.id))
-    .then(() => { try { maybeUpdateMemory(user.id, model); } catch {} });
+    .finally(() => live.endTurn(chat.id));
 
   return { chatId: chat.id };
 }

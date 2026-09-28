@@ -138,6 +138,12 @@ export function cleanCall(call) {
   if (call.replace_all === true || call.replace_all === 'true') o.replace_all = true;
   if (call.regex === true || call.regex === 'true') o.regex = true;
   if (call.all === true || call.all === 'true') o.all = true;
+  if (o.tool === 'memory') {
+    if (call.action != null) o.action = String(call.action).toLowerCase();
+    if (call.id != null) o.id = String(call.id).slice(0, 32);
+    if (call.text != null) o.text = String(call.text).slice(0, 500);
+  }
+  if (o.tool === 'calculator' && call.expression != null) o.expression = String(call.expression).slice(0, 500);
   return o;
 }
 

@@ -6,7 +6,7 @@ import { logAudit, clientIp } from '../lib/audit.js';
 import { purgeUserChats } from '../lib/purge.js';
 import { resolveModelOrDefault } from '../lib/models.js';
 import { budgetStatus } from '../lib/budget.js';
-import { updateUserMemory } from '../lib/memory.js';
+import { memoriesOf, changeMemory, setMemories } from '../lib/memory.js';
 import { killSessionSockets } from '../lib/ws/index.js';
 
 const isHttps = (req) =>
@@ -193,28 +193,28 @@ export default function registerAuthRoutes(app) {
     } catch (e) { res.status(502).json({ error: 'Could not reach the model to generate the style.' }); }
   });
 
-  app.get('/api/me/memory', authMiddleware, (req, res) => {
-    const u = db.users.byId(req.user.id);
-    res.json({ memory: u?.memory || '', updatedAt: u?.memory_updated_at || 0 });
+  const bodyText = (req) => (typeof req.body?.text === 'string' ? req.body.text : '');
+  app.get('/api/me/memories', authMiddleware, (req, res) => {
+    res.json({ memories: memoriesOf(req.user.id) });
   });
-  app.put('/api/me/memory', authMiddleware, (req, res) => {
-    const memory = String(req.body?.memory || '').slice(0, 6000);
-    db.users.update(req.user.id, { memory, memory_updated_at: Date.now() });
-    res.json({ memory });
+  app.post('/api/me/memories', authMiddleware, (req, res) => {
+    const r = changeMemory(req.user.id, { action: 'add', text: bodyText(req), source: 'user' });
+    if (!r.ok) return res.status(400).json({ error: r.error });
+    res.json({ memory: r.item, memories: memoriesOf(req.user.id) });
   });
-  app.delete('/api/me/memory', authMiddleware, (req, res) => {
-    db.users.update(req.user.id, { memory: '', memory_updated_at: 0 });
-    res.json({ ok: true });
+  app.put('/api/me/memories/:id', authMiddleware, (req, res) => {
+    const r = changeMemory(req.user.id, { action: 'update', id: req.params.id, text: bodyText(req), source: 'user' });
+    if (!r.ok) return res.status(/^No memory/.test(r.error) ? 404 : 400).json({ error: r.error });
+    res.json({ memory: r.item, memories: memoriesOf(req.user.id) });
   });
-  app.post('/api/me/memory/refresh', authMiddleware, async (req, res) => {
-    if (getSetting('memory_enabled', '0') !== '1') return res.status(403).json({ error: 'Memory is disabled by the admin.' });
-    const model = resolveModelOrDefault(String(req.body?.modelId || ''), !!req.user.is_admin);
-    if (!model) return res.status(400).json({ error: 'No model available to update memory.' });
-    try {
-      const memory = await updateUserMemory(req.user.id, model);
-      if (memory == null) return res.status(502).json({ error: 'The model returned nothing. Try again.' });
-      res.json({ memory, updatedAt: Date.now() });
-    } catch { res.status(502).json({ error: 'Could not reach the model to update memory.' }); }
+  app.delete('/api/me/memories/:id', authMiddleware, (req, res) => {
+    const r = changeMemory(req.user.id, { action: 'delete', id: req.params.id });
+    if (!r.ok) return res.status(404).json({ error: r.error });
+    res.json({ memories: memoriesOf(req.user.id) });
+  });
+  app.delete('/api/me/memories', authMiddleware, (req, res) => {
+    setMemories(req.user.id, []);
+    res.json({ memories: [] });
   });
 
   app.post('/api/improve-prompt', authMiddleware, async (req, res) => {

@@ -12,7 +12,6 @@ import { resolveModel, roleLimit } from '../models.js';
 import { applyKwargs } from '../kwargs.js';
 import { budgetStatus } from '../budget.js';
 import { runQueued } from '../queue.js';
-import { maybeUpdateMemory } from '../memory.js';
 import { promptVars, styleTextFor } from '../convo.js';
 
 import { clients, requestedKwargs } from './broadcast.js';
@@ -232,7 +231,6 @@ export function initWs(server) {
             () => { liveSend(JSON.stringify({ type: 'queued', chatId: chat.id })); },
             () => runCompletion(liveWs, liveState, liveSend, chat, model, !!msg.extended, sandboxOn, sandboxCap, webSearchOn, !!msg.call, styleText));
         } finally { live.endTurn(chat.id); }
-        maybeUpdateMemory(u.id, model);
       } catch (err) {
         console.error('[ws chat]', err);
         const send = ownsTurn ? liveSend : safeSend;

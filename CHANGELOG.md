@@ -20,10 +20,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Model badges** - shown as small squares right after the name in the model picker (a neutral T for text, a blue eye for vision, an amber lightbulb for reasoning, a green globe for web search, a terminal for code, a document for a 100K+ context window, and an accent wand on routers) with a description on hover. A model earns each badge from what it supports, so turning on image input, a thinking control or workspace web search adds the badge automatically; admins can switch individual badges off. "Collapse into one" is gone.
 - **Unpublished changes** - each changed setting is outlined with an X that reverts it to the published value, tabs count their changes, and models with draft changes are flagged and filterable in the list.
 - **Built-in mark** - "Use the built-in mark" now asks for the Modern set (the new animated mark) or the Legacy set (the original mark, same as the app icon).
+- **Memory is a list of entries** - instead of one block of text rewritten in the background, memory is a set of short facts. Once a member turns memory on, Settings, Memory lists each entry with who saved it and when, and members can add, edit (Enter saves, Escape cancels) or delete entries, or clear them all. An existing memory is split into one entry per line the first time it is read, and chat exports and imports carry the entries.
+- **Memory is a per-member setting** - the admin "Build and inject memory" switch is gone. Memory is off by default, and each member turns it on or off under Settings, Memory, which is now always shown. The admin Memory section is renamed Chat history and keeps only past-chat search.
 
 ### Added
+- **Memory tool** - a `memory` tool (add, update or delete by id) lets a model save facts about the member that later chats can use. Turn it on per model with the Memory chip under Tools. It only runs for members with "Use memory in chats" on, and the tools prompt says `User Memory: True` or `User Memory: False` so the model knows whether it can save anything.
+- **Calculator tool** - a `calculator` tool evaluates a math expression exactly (operators, powers, factorials, parentheses, constants and common functions such as sqrt, log, trig, round, min and max). It is a small parser on the server with no `eval`. Turn it on per model with the Calculator chip under Tools.
+- **Hide tool calls** - a per-model toggle in the Tools tab's Agent loop card, shown once the model has any tool. Members see only the reply, while the model still gets every result and later turns still know which tools ran.
+- `GET`/`POST`/`DELETE /api/me/memories` and `PUT`/`DELETE /api/me/memories/:id`, plus `memory_allowed`, `calculator_allowed` and `hide_tool_calls` on models.
 - **Animated model mark** - a new default model icon, separate from the app icon and drawn live in the browser.
 - `PATCH /api/admin/models` (batched edits in one transaction), `POST /api/admin/models/duplicate`, `POST /api/admin/models/remove`, `GET`/`PUT /api/admin/models/folders` and `POST /api/admin/models/folders/add`, a `badges` list on public models (replacing `capText`, `capVision`, `capReasoning` and `capCompact`), and changed ids, their published copies and the published order in publish state.
+
+### Removed
+- **Background memory rewrite** - the model no longer rewrites a member's memory every few hours, so "Update now" and the admin "Rewrite prompt" are gone, as are `/api/me/memory` and `/api/me/memory/refresh`.
 
 ### Fixed
 - Context "headroom" is a share of the window, not a token count, and the trim strategy now shows its saved value.

@@ -37,7 +37,7 @@ import GuardrailsSection from '../src/components/admin/sections/GuardrailsSectio
 import LauncherSection from '../src/components/admin/sections/LauncherSection.jsx';
 import McpSection from '../src/components/admin/sections/McpSection.jsx';
 import MembersSection from '../src/components/admin/sections/MembersSection.jsx';
-import MemorySection from '../src/components/admin/sections/MemorySection.jsx';
+import ChatHistorySection from '../src/components/admin/sections/ChatHistorySection.jsx';
 import ModelsSection from '../src/components/admin/sections/ModelsSection.jsx';
 import Catalog from '../src/components/admin/models/Catalog.jsx';
 import Inspector from '../src/components/admin/models/Inspector.jsx';
@@ -180,7 +180,7 @@ cases.push(['DocsNav:editing', () => React.createElement(DocsNav, {
 const ADMIN_SECTIONS = [
   ['Interface', InterfaceSection], ['Events', EventsSection], ['Files', FilesSection],
   ['Guardrails', GuardrailsSection], ['Launcher', LauncherSection], ['Mcp', McpSection],
-  ['Members', MembersSection], ['Memory', MemorySection], ['Models', ModelsSection],
+  ['Members', MembersSection], ['Chat history', ChatHistorySection], ['Models', ModelsSection],
   ['Network', NetworkSection], ['Overview', OverviewSection], ['Providers', ProvidersSection],
   ['Quotas', QuotasSection], ['Ratings', RatingsSection], ['Search', SearchSection],
   ['Skills', SkillsSection], ['Storage', StorageSection], ['Usage', UsageSection],

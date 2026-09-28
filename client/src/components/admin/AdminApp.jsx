@@ -14,7 +14,7 @@ import ModelsSection from './sections/ModelsSection.jsx';
 import ProvidersSection from './sections/ProvidersSection.jsx';
 import SearchSection from './sections/SearchSection.jsx';
 import VoiceSection from './sections/VoiceSection.jsx';
-import MemorySection from './sections/MemorySection.jsx';
+import ChatHistorySection from './sections/ChatHistorySection.jsx';
 import FilesSection from './sections/FilesSection.jsx';
 import SkillsSection from './sections/SkillsSection.jsx';
 import McpSection from './sections/McpSection.jsx';
@@ -38,7 +38,7 @@ const VIEWS = {
   providers: ProvidersSection,
   search: SearchSection,
   voice: VoiceSection,
-  memory: MemorySection,
+  history: ChatHistorySection,
   files: FilesSection,
   skills: SkillsSection,
   mcp: McpSection,

@@ -1,0 +1,35 @@
+.mem-add { display: flex; gap: 8px; align-items: stretch; }
+.mem-add input { flex: 1; min-width: 0; }
+.mem-add .btn { flex-shrink: 0; white-space: nowrap; }
+.mem-err { font-size: 12px; color: var(--danger); font-family: var(--font-sans); line-height: 1.5; }
+.mem-err:empty { display: none; }
+.mem-err:not(:empty) { margin-top: 6px; }
+
+.mem-list {
+  list-style: none; margin: 12px 0 0; padding: 0;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--card-bg); overflow: hidden;
+}
+.mem-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 10px 10px 14px; }
+.mem-item + .mem-item { border-top: 1px solid var(--border-soft); }
+.mem-item.editing { flex-direction: column; align-items: stretch; gap: 0; padding: 10px; }
+.mem-body { flex: 1; min-width: 0; }
+.mem-text { font-size: 14px; line-height: 1.5; color: var(--text); font-family: var(--font-sans); overflow-wrap: anywhere; }
+.mem-meta { font-size: 12px; line-height: 1.5; color: var(--text-faint); font-family: var(--font-sans); margin-top: 2px; }
+.mem-acts { display: flex; gap: 2px; flex-shrink: 0; opacity: .7; transition: opacity var(--fx-t, .15s) ease; }
+.mem-item:hover .mem-acts, .mem-item:focus-within .mem-acts { opacity: 1; }
+.mem-btn {
+  display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px;
+  color: var(--text-muted); transition: background var(--fx-t, .15s) ease, color var(--fx-t, .15s) ease;
+}
+.mem-btn svg { width: 15px; height: 15px; }
+.mem-btn:hover { background: var(--hover-mid); color: var(--text); }
+.mem-btn.danger:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 13%, transparent); }
+.field textarea.mem-edit { min-height: 56px; }
+
+@media (hover: none) {
+  .mem-acts { opacity: 1; }
+}
+
+@media (max-width: 480px) {
+  .mem-add { flex-direction: column; }
+}

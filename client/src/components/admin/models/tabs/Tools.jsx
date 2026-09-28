@@ -17,6 +17,8 @@ export default function Tools() {
     ['skills_allowed', t('Skills'), t('Offers the skills defined under Tools.')],
     ['mcp_allowed', t('MCP tools'), t('Exposes tools from every enabled MCP server.')],
     ...(chatSearch ? [['chat_search_allowed', t('Past-chat search'), t('Lets the model search the member’s own earlier chats.')]] : []),
+    ['memory_allowed', t('Memory'), t('Lets the model save, update and delete facts about the member. Only works for members with memory turned on.')],
+    ['calculator_allowed', t('Calculator'), t('Lets the model evaluate math expressions exactly instead of computing them itself.')],
     ['end_chat_allowed', t('End conversation'), t('Lets the model close a chat for good. Ended chats cannot be reopened.')]
   ];
 
@@ -39,8 +41,12 @@ export default function Tools() {
         </When>
       </Card>
 
-      <When test={m => usesTools(m, { webSearch, chatSearch })} keep="agent_steps">
+      <When test={m => usesTools(m, { webSearch, chatSearch })} keep={['agent_steps', 'hide_tool_calls']}>
         <Card title={t('Agent loop')}>
+          <Rows>
+            <Flag k="hide_tool_calls" label={t('Hide tool calls')}
+              note={t('Members see only the reply, not the tool calls made while writing it. The model still gets every result.')} />
+          </Rows>
           <Fields cols={2}>
             <NumberField k="agent_steps" min="0" zeroBlank label={t('Tool calls per turn')} placeholder={t('unlimited')}
               hint={t('Blank is unlimited. A ceiling stops runaway agent loops.')} />

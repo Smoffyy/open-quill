@@ -52,7 +52,7 @@ export function revokeSession(id) { db.sessions.removeById(id); }
 export function revokeOtherSessions(userId, keepId) { db.sessions.removeByIds(db.sessions.byUser(userId).filter(s => s.id !== keepId).map(s => s.id)); }
 
 export function publicUser(u) {
-  return { id: u.id, email: u.email, displayName: u.display_name || (u.email || '').split('@')[0], isAdmin: !!u.is_admin, isOwner: !!u.is_owner, twoFactor: !!u.totp_enabled, prefs: u.prefs || {}, instructions: u.instructions || '', savedPrompts: Array.isArray(u.saved_prompts) ? u.saved_prompts : [], personas: Array.isArray(u.personas) ? u.personas : [], styles: Array.isArray(u.styles) ? u.styles : [], memory: u.memory || '', memoryUpdatedAt: u.memory_updated_at || 0 };
+  return { id: u.id, email: u.email, displayName: u.display_name || (u.email || '').split('@')[0], isAdmin: !!u.is_admin, isOwner: !!u.is_owner, twoFactor: !!u.totp_enabled, prefs: u.prefs || {}, instructions: u.instructions || '', savedPrompts: Array.isArray(u.saved_prompts) ? u.saved_prompts : [], personas: Array.isArray(u.personas) ? u.personas : [], styles: Array.isArray(u.styles) ? u.styles : [] };
 }
 
 function resolveToken(token) {

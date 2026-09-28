@@ -1,6 +1,7 @@
 import { db, uid, now, tx } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
 import { activePath } from '../../lib/tree.js';
+import { memoriesOf, sanitizeMemories, legacyMemories, newMemoryId, MEMORY_MAX_ITEMS } from '../../lib/memory.js';
 
 export default function registerTransferRoutes(app) {
   app.get('/api/chats/export-all', authMiddleware, (req, res) => {
@@ -15,7 +16,7 @@ export default function registerTransferRoutes(app) {
       profile: (() => {
         const u = db.users.byId(req.user.id) || {};
         return {
-          instructions: u.instructions || '', memory: u.memory || '',
+          instructions: u.instructions || '', memories: memoriesOf(req.user.id),
           styles: Array.isArray(u.styles) ? u.styles : [],
           personas: Array.isArray(u.personas) ? u.personas : [],
           savedPrompts: Array.isArray(u.saved_prompts) ? u.saved_prompts : [],
@@ -39,7 +40,8 @@ export default function registerTransferRoutes(app) {
       const pf = body.profile;
       const patch = {};
       if (typeof pf.instructions === 'string' && pf.instructions.trim() && !(u.instructions || '').trim()) patch.instructions = pf.instructions.slice(0, 8000);
-      if (typeof pf.memory === 'string' && pf.memory.trim() && !(u.memory || '').trim()) patch.memory = pf.memory.slice(0, 6000);
+      const incoming = Array.isArray(pf.memories) ? sanitizeMemories(pf.memories)
+        : (typeof pf.memory === 'string' ? legacyMemories(pf.memory, Date.now()) : []);
       const mergeById = (mine, theirs, cap) => {
         const out = Array.isArray(mine) ? [...mine] : [];
         const seen = new Set(out.map(x => x && x.id));
@@ -51,6 +53,19 @@ export default function registerTransferRoutes(app) {
       patch.styles = mergeById(u.styles, pf.styles, 30);
       patch.personas = mergeById(u.personas, pf.personas, 50);
       patch.saved_prompts = mergeById(u.saved_prompts, pf.savedPrompts, 100);
+      if (incoming.length) {
+        const mem = memoriesOf(req.user.id);
+        const texts = new Set(mem.map(m => m.text.toLowerCase()));
+        const ids = new Set(mem.map(m => m.id));
+        for (const m of incoming) {
+          if (mem.length >= MEMORY_MAX_ITEMS) break;
+          if (texts.has(m.text.toLowerCase())) continue;
+          const id = ids.has(m.id) ? newMemoryId(ids) : m.id;
+          mem.push({ ...m, id });
+          ids.add(id); texts.add(m.text.toLowerCase());
+        }
+        patch.memories = mem;
+      }
       if (pf.prefs && typeof pf.prefs === 'object') patch.prefs = { ...pf.prefs, ...(u.prefs || {}) };
       db.users.update(req.user.id, patch);
     }

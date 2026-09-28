@@ -7,7 +7,6 @@ import * as referenceFiles from '../lib/referencefiles.js';
 import * as websearch from '../lib/websearch.js';
 import { logAudit } from '../lib/audit.js';
 import { draftGet, draftSet } from '../lib/draft.js';
-import { DEFAULT_MEMORY_PROMPT } from '../lib/memory.js';
 import { DEFAULT_SAFETY_PROMPT, SAFETY_REASON_SUFFIX, resolveSafetyModel, parseSafetyVerdict } from '../lib/safety.js';
 import { broadcastAdminConfig } from '../lib/ws/index.js';
 import { autoTitleDefault } from '../lib/autotitle.js';
@@ -61,8 +60,6 @@ export const SETTING_FIELDS = {
   safetyPrompt: { key: 'safety_prompt', text: 24000, fallback: DEFAULT_SAFETY_PROMPT },
   safetyVerbose: { key: 'safety_verbose', bool: true },
   safetyReasonEnabled: { key: 'safety_reason_enabled', bool: true },
-  memoryEnabled: { key: 'memory_enabled', bool: true },
-  memoryPrompt: { key: 'memory_prompt', text: 24000, fallback: DEFAULT_MEMORY_PROMPT },
   chatSearchEnabled: { key: 'chat_search_enabled', bool: true },
   autoTitleEnabled: { key: 'auto_title_enabled', bool: true },
   autoTitleModelMode: { key: 'auto_title_model_mode', enum: ['current', 'specific'], def: 'current' },
@@ -151,8 +148,6 @@ export default function registerSettingsRoutes(app) {
       safetyPrompt: draftGet('safety_prompt', DEFAULT_SAFETY_PROMPT),
       safetyVerbose: draftGet('safety_verbose', '1') === '1',
       safetyReasonEnabled: draftGet('safety_reason_enabled', '0') === '1',
-      memoryEnabled: draftGet('memory_enabled', '0') === '1',
-      memoryPrompt: draftGet('memory_prompt', DEFAULT_MEMORY_PROMPT),
       chatSearchEnabled: draftGet('chat_search_enabled', '0') === '1',
       autoTitleEnabled: draftGet('auto_title_enabled', autoTitleDefault()) === '1',
       autoTitleModelMode: draftGet('auto_title_model_mode', 'current') === 'specific' ? 'specific' : 'current',

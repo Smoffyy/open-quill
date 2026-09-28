@@ -1,4 +1,4 @@
-import { Panel, Cube, Sliders, Users, Chat, Globe, Mic, Brain, FileText, Bulb, Plug, Shield, Eye, Wave, Star, Box, Gear, Clock, Palette } from '../ui/icons.jsx';
+import { Panel, Cube, Sliders, Users, Chat, Globe, Mic, FileText, Bulb, Plug, Shield, Eye, Wave, Star, Box, Gear, Clock, Palette } from '../ui/icons.jsx';
 import { tk } from '../../i18n.jsx';
 
 /* Each section declares everything the shell needs to render it:
@@ -31,10 +31,10 @@ export const NAV = [
       blurb: tk('Dictation and hands-free calls, with pluggable speech-to-text and text-to-speech endpoints.'),
       find: tk('stt tts whisper speech microphone call kokoro piper'),
       index: [tk('Dictation'), tk('Calls'), tk('Speech to text'), tk('Text to speech'), tk('Rate')] },
-    { id: 'memory', label: tk('Memory'), Icon: Brain, title: tk('Memory'), saves: 'workspace',
-      blurb: tk('Per-user long-term memory, and tools for searching a user’s own past chats.'),
-      find: tk('remember history recall chat search'),
-      index: [tk('Long-term memory'), tk('Chat history tools'), tk('Search past chats')] },
+    { id: 'history', label: tk('Chat history'), Icon: Chat, title: tk('Chat history'), saves: 'workspace',
+      blurb: tk('Tools for searching a member’s own past chats.'),
+      find: tk('history recall chat search past conversations'),
+      index: [tk('Chat history tools'), tk('Search past chats')] },
     { id: 'files', label: tk('Reference files'), Icon: FileText, title: tk('Reference files'), saves: 'workspace',
       blurb: tk('A shared file set every model can list, read, and search on demand.'),
       find: tk('memory bank documents knowledge upload pdf markdown'),

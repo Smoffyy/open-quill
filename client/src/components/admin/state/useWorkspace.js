@@ -16,7 +16,7 @@ export const SETTINGS_DEFAULTS = {
   voiceTtsVoice: 'alloy', voiceTtsSpeed: 1,
   safetyEnabled: false, safetyModelMode: 'current', safetyModelId: '', safetyPrompt: '',
   safetyVerbose: true, safetyReasonEnabled: false,
-  memoryEnabled: false, memoryPrompt: '', chatSearchEnabled: false
+  chatSearchEnabled: false
 };
 
 export const CONFIG_DEFAULTS = {

@@ -26,6 +26,8 @@ import { noteToolCall, classifyToolError } from '../toolstats.js';
 import { autoTitleEnabled } from '../autotitle.js';
 import { openFence, seamFor, steerInstruction } from '../steer.js';
 import { createLoopGuard, STUCK_NOTE } from '../loopguard.js';
+import { userMemoryOn, memoryPromptFor, changeMemory, memoryToolResult } from '../memory.js';
+import { runCalculator, formatCalculatorResult, CALCULATOR_PROMPT } from '../calculator.js';
 
 const MAX_STEERS = 6;
 const TELEMETRY_MS = 220;
@@ -66,11 +68,15 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   const mcpSchemas = model.mcp_allowed ? mcp.toolSchemas(mcpUser) : [];
   const mcpOn = mcpSchemas.length > 0;
   const endChatOn = !!model.end_chat_allowed;
+  const memoryAllowed = !!model.memory_allowed && !!chatRow.user_id;
+  const memoryOn = memoryAllowed && userMemoryOn(db.users.byId(chatRow.user_id));
+  const calculatorOn = !!model.calculator_allowed;
+  const hideTools = !!model.hide_tool_calls;
   const space = projectfiles.workspaceFor(chatRow);
   const projectName = projectNameOf(chatRow);
   const longReminderOn = !!model.long_convo_reminder;
   let conversationEnded = false;
-  const toolsOn = sandboxOn || webSearchOn || membankOn || chatSearchOn || skillsOn || mcpOn || endChatOn;
+  const toolsOn = sandboxOn || webSearchOn || membankOn || chatSearchOn || skillsOn || mcpOn || endChatOn || memoryOn || calculatorOn;
   const withStyle = (instr) => {
     if (!styleText) return instr;
     const block = 'The user selected a response style for this conversation. Apply it consistently to every reply:\n' + styleText;
@@ -83,6 +89,8 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     if (membankOn) parts.push(referenceFiles.promptFor(getSetting('membank_prompt', '')));
     if (chatSearchOn) parts.push(CHAT_SEARCH_PROMPT);
     if (skillsOn) parts.push(workspaceSkills.promptFor(userSkills));
+    if (memoryAllowed) parts.push(memoryPromptFor(memoryOn));
+    if (calculatorOn) parts.push(CALCULATOR_PROMPT);
     if (mcpOn) parts.push(mcp.promptFor(mcpUser));
     if (endChatOn) parts.push(endChatPromptFor(model));
     if (longReminderOn) parts.push(longConvoReminderFor(chat.id));
@@ -141,7 +149,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   };
   safeSend(JSON.stringify({ type: 'start', chatId: chat.id, messageId: assistantId }));
 
-  const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, hostEnv: sandboxOn ? sandbox.hostEnvInfo() : null }) : [];
+  const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, memoryOn, calculatorOn, hostEnv: sandboxOn ? sandbox.hostEnvInfo() : null }) : [];
   const toolNameSet = new Set(tools.map(t => t && t.function && t.function.name).filter(Boolean));
   const canonicalize = (call) => {
     if (!sandboxOn || !call.tool || toolNameSet.has(call.tool)) return call;
@@ -149,6 +157,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     if (canon && toolNameSet.has(canon)) call.tool = canon;
     return call;
   };
+  const oqrBlock = (call, result) => '\n\n[[OQR:' + Buffer.from(JSON.stringify(hideTools ? { call: cleanCall(call), result, hidden: true } : { call: cleanCall(call), result }), 'utf8').toString('base64') + ']]\n';
   const runToolCall = async (call) => {
     if (call.tool === 'end_conversation') {
       if (!endChatOn) return null;
@@ -161,6 +170,16 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       if (!chatSearchOn) return null;
       const r = runChatSearchTool(chat.user_id, chat.id, call);
       return { payload: chatSearchPayload(call, r), formatted: formatChatSearchResult(call, r), hide: false };
+    }
+    if (call.tool === 'memory') {
+      if (!memoryOn) return null;
+      const r = changeMemory(chat.user_id, { action: call.action, id: call.id, text: call.text, source: 'assistant' });
+      return { ...memoryToolResult(call, r), hide: false };
+    }
+    if (call.tool === 'calculator') {
+      if (!calculatorOn) return null;
+      const r = runCalculator(call);
+      return { payload: r, formatted: formatCalculatorResult(r), hide: false };
     }
     if (call.tool === 'skill_view') {
       if (!skillsOn) return null;
@@ -422,6 +441,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
               return;
             }
             if (e.type === 'tool_call_delta') {
+              if (hideTools) return;
               const live = livePreview(e.name, e.argsText);
               if (!live || !live.tool) return;
               const isFile = (live.tool === 'create_file' || live.tool === 'str_replace') && live.path;
@@ -557,8 +577,8 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           const msg = cutOffError(call.tool, cut, stepFinish === 'length');
           stepFailKinds.add(call.tool + ':' + classifyToolError(msg));
           noteToolCall(model, call.tool, false, msg);
-          safeSend(JSON.stringify({ type: 'tool_exec', chatId: chat.id, call: cleanCall(call) }));
-          const block = '\n\n[[OQR:' + Buffer.from(JSON.stringify({ call: cleanCall(call), result: { ok: false, error: msg } }), 'utf8').toString('base64') + ']]\n';
+          if (!hideTools) safeSend(JSON.stringify({ type: 'tool_exec', chatId: chat.id, call: cleanCall(call) }));
+          const block = oqrBlock(call, { ok: false, error: msg });
           content += block; contentSinceReason = true;
           safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: block }));
           toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: `${call.tool} → ERROR: ${msg}` });
@@ -568,7 +588,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: `${call.tool} \u2192 ERROR: the conversation has been ended; no further tools may run.` });
           continue;
         }
-        safeSend(JSON.stringify({ type: 'tool_exec', chatId: chat.id, call: cleanCall(call) }));
+        if (!hideTools) safeSend(JSON.stringify({ type: 'tool_exec', chatId: chat.id, call: cleanCall(call) }));
         let out;
         try { out = await runToolCall(call); }
         catch (e) { out = { payload: { ok: false, error: String(e.message || e).slice(0, 400) }, formatted: `${call.tool} → ERROR: ${String(e.message || e).slice(0, 400)}`, hide: false }; }
@@ -588,7 +608,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           if (n >= 2) formatted += `\n(NOTE: this identical call has failed ${n} times. Do not repeat it. Change the arguments or approach, or tell the user why it cannot be done.)`;
         } else { stepOk++; callFails.delete(sig); }
         if (!out.hide) {
-          const block = '\n\n[[OQR:' + Buffer.from(JSON.stringify({ call: cleanCall(call), result: out.payload }), 'utf8').toString('base64') + ']]\n';
+          const block = oqrBlock(call, out.payload);
           content += block; contentSinceReason = true;
           safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: block }));
         }

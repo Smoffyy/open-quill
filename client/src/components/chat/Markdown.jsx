@@ -99,13 +99,13 @@ function transformTools(text) {
 
   spans.sort((a, b) => a.start - b.start);
   let out = '', cursor = 0, ri = 0;
-  const emit = (call, result) => { if (call && call.tool) out += '```toolcall\n' + b64encode(JSON.stringify({ call, result: result ?? null })) + '\n```'; };
+  const emit = (call, result, hidden) => { if (!hidden && call && call.tool) out += '```toolcall\n' + b64encode(JSON.stringify({ call, result: result ?? null })) + '\n```'; };
   for (const s of spans) {
     if (s.start < cursor) continue;
     out += text.slice(cursor, s.start);
-    if (s.kind === 'block') { const r = results[ri]; emit((r && r.call) || s.call, r && r.result); ri++; }
+    if (s.kind === 'block') { const r = results[ri]; emit((r && r.call) || s.call, r && r.result, r && r.hidden); ri++; }
     else if (s.kind === 'live') { emit(s.call, null); }
-    else if (s.kind === 'oqr') { if (s.ri >= ri) { const r = results[s.ri]; emit(r && r.call, r && r.result); ri = s.ri + 1; } }
+    else if (s.kind === 'oqr') { if (s.ri >= ri) { const r = results[s.ri]; emit(r && r.call, r && r.result, r && r.hidden); ri = s.ri + 1; } }
     else if (s.kind === 'oqt') { out += '```reasonseg\n' + s.seg + '\n```'; }
     cursor = s.end;
   }

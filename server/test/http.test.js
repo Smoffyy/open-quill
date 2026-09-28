@@ -697,3 +697,33 @@ test('skills round-trip, reject a bad name and stay scoped to their owner', asyn
   const after = await browser('GET', '/api/skills');
   assert.equal(after.json.skills.filter(s => s.scope === 'user').length, 0);
 });
+
+test('memories round-trip and reject bad input', async () => {
+  assert.equal((await request('GET', '/api/me/memories')).status, 401, 'memories need a session');
+
+  const empty = await browser('GET', '/api/me/memories');
+  assert.equal(empty.status, 200);
+  assert.deepEqual(empty.json.memories, []);
+
+  const made = await browser('POST', '/api/me/memories', { body: { text: '  Works   in Python ' } });
+  assert.equal(made.status, 200, made.text);
+  assert.equal(made.json.memory.text, 'Works in Python', 'whitespace is collapsed at the boundary');
+  assert.equal(made.json.memory.source, 'user');
+  const id = made.json.memory.id;
+
+  const again = await browser('POST', '/api/me/memories', { body: { text: 'works in python' } });
+  assert.equal(again.json.memories.length, 1, 'a duplicate is not stored twice');
+  assert.equal((await browser('POST', '/api/me/memories', { body: { text: '   ' } })).status, 400);
+  assert.equal((await browser('POST', '/api/me/memories', { body: { text: { $gt: '' } } })).status, 400);
+
+  const edited = await browser('PUT', `/api/me/memories/${id}`, { body: { text: 'Works in Rust' } });
+  assert.equal(edited.status, 200, edited.text);
+  assert.equal(edited.json.memories[0].text, 'Works in Rust');
+  assert.equal((await browser('PUT', '/api/me/memories/nope12', { body: { text: 'x' } })).status, 404);
+  assert.equal((await browser('DELETE', '/api/me/memories/nope12')).status, 404);
+
+  assert.equal((await browser('DELETE', `/api/me/memories/${id}`)).status, 200);
+  await browser('POST', '/api/me/memories', { body: { text: 'Lives in Oslo' } });
+  assert.equal((await browser('DELETE', '/api/me/memories')).status, 200);
+  assert.deepEqual((await browser('GET', '/api/me/memories')).json.memories, []);
+});

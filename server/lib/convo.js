@@ -1,4 +1,4 @@
-import { db, getSetting } from '../db.js';
+import { db } from '../db.js';
 import { oneShot, stripThink, summarizeConversation } from '../llm/index.js';
 import { resolveProvider } from './providers.js';
 import { activePath } from './tree.js';
@@ -7,6 +7,7 @@ import { isTextLike, readUploadText, readImageDataUri } from './uploads.js';
 import { modelCtx } from './models.js';
 import { pinnedFilesPrompt } from './prompts.js';
 import { llamaTokenCount, isLlamaCpp } from './llamacpp.js';
+import { memoryBlock } from './memory.js';
 
 export const STYLE_PRESETS = {
   __proto__: null,
@@ -338,21 +339,13 @@ export function promptVars(userId) {
   return { currentUser: name, currentDateTime: dt };
 }
 
-function userMemoryBlock(u) {
-  if (getSetting('memory_enabled', '0') !== '1') return '';
-  if (!u || u.prefs?.memoryEnabled === false) return '';
-  const mem = (u.memory || '').trim();
-  if (!mem) return '';
-  return 'Things you remember about this user from earlier conversations (the user can view and edit this memory at any time):\n' + mem;
-}
-
 export function combinedInstructions(chat) {
   const userId = chat && chat.user_id;
   const u = userId ? db.users.byId(userId) : null;
   const parts = [];
   const ui = (u && u.instructions) ? u.instructions : '';
   if (ui && ui.trim()) parts.push(ui.trim());
-  const mem = userMemoryBlock(u);
+  const mem = memoryBlock(u);
   if (mem) parts.push(mem);
   if (chat && chat.instructions && chat.instructions.trim()) parts.push(chat.instructions.trim());
   return parts.join('\n\n');
