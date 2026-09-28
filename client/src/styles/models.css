@@ -467,11 +467,12 @@
 .cp-field.mc-changed > .mc-field-head { color: var(--mc-change); }
 .cp-field.mc-changed > .cp-input,
 .cp-field.mc-changed > .cp-area,
+.cp-field.mc-changed > .mc-mirror-wrap > .cp-area,
 .cp-field.mc-changed > .cp-select .set-select-trigger {
   border-color: var(--mc-change);
   box-shadow: 0 0 0 1px var(--mc-change);
 }
-.cp-field.mc-changed:not(:has(> .cp-input, > .cp-area, > .cp-select)) {
+.cp-field.mc-changed:not(:has(> .cp-input, > .cp-area, > .cp-select, > .mc-mirror-wrap)) {
   outline: 1.5px solid var(--mc-change);
   outline-offset: 6px;
   border-radius: var(--cp-r-sm);
@@ -502,3 +503,13 @@
   .mc-inspector-bar > .cp-acts { margin-left: 0; flex-wrap: wrap; }
   .mc-trio, .mc-pair { flex-direction: column; }
 }
+
+.mc-mirror-wrap { position: relative; }
+.mc-mirror-input { color: transparent; -webkit-text-fill-color: transparent; caret-color: var(--cp-ink); }
+.mc-mirror-input::placeholder { -webkit-text-fill-color: var(--cp-faint); }
+.mc-mirror {
+  position: absolute; box-sizing: border-box; overflow: hidden; pointer-events: none;
+  white-space: pre-wrap; overflow-wrap: break-word; color: var(--cp-ink);
+}
+.mc-mirror .mc-dim { opacity: .42; transition: opacity var(--fx-t, .15s) ease; }
+.mc-mirror .mc-stale { opacity: .2; }

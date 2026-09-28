@@ -91,8 +91,8 @@ export function Input({ mono, ...rest }) {
   return <input className={'cp-input' + (mono ? ' mono' : '')} {...rest} />;
 }
 
-export function Area({ mono, rows = 5, ...rest }) {
-  return <textarea className={'cp-area' + (mono ? ' mono' : '')} rows={rows} {...rest} />;
+export function Area({ mono, rows = 5, className, ...rest }) {
+  return <textarea className={['cp-area', mono && 'mono', className].filter(Boolean).join(' ')} rows={rows} {...rest} />;
 }
 
 export function Select({ value, onChange, options, disabled, label }) {

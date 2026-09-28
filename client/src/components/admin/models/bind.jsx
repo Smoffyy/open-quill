@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, useRef } from 'react';
+import { createContext, useContext, useMemo, useState, useRef, useLayoutEffect } from 'react';
 import { useAdmin } from '../store.jsx';
 import { Input, Area, Select, Switch, Btn, PointMenu, MenuItem, clampToViewport } from '../ui.jsx';
 import { ChevDown, Plus, X } from '../../ui/icons.jsx';
@@ -326,10 +326,32 @@ export function Choice({ k, label, hint, options, fallback, row, note, solo }) {
   return <Slot label={label} k={k} hint={hint}>{control}</Slot>;
 }
 
-export function LongText({ k, label, hint, placeholder, rows = 6, mono, counter, inserts }) {
+function syncMirror(ta, m) {
+  if (!ta || !m) return;
+  const cs = getComputedStyle(ta);
+  Object.assign(m.style, {
+    top: cs.borderTopWidth, left: cs.borderLeftWidth, width: ta.clientWidth + 'px', height: ta.clientHeight + 'px',
+    padding: cs.padding, fontFamily: cs.fontFamily, fontSize: cs.fontSize, fontWeight: cs.fontWeight,
+    lineHeight: cs.lineHeight, letterSpacing: cs.letterSpacing, tabSize: cs.tabSize
+  });
+  m.scrollTop = ta.scrollTop;
+}
+
+export function LongText({ k, label, hint, placeholder, rows = 6, mono, counter, inserts, mirror }) {
   const { edit, models } = useEditor();
   const { value, mixed } = useField(k);
   const ref = useRef(null);
+  const mirrorRef = useRef(null);
+  const [caret, setCaret] = useState(null);
+  const mirrored = !!mirror && !mixed;
+  useLayoutEffect(() => { if (mirrored) syncMirror(ref.current, mirrorRef.current); });
+  useLayoutEffect(() => {
+    const ta = ref.current;
+    if (!mirrored || !ta || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(() => syncMirror(ta, mirrorRef.current));
+    ro.observe(ta);
+    return () => ro.disconnect();
+  }, [mirrored]);
   if (mixed) return <BulkText k={k} label={label} hint={hint} rows={rows} mono={mono} count={models.length} />;
   const text = value ?? '';
 
@@ -347,8 +369,23 @@ export function LongText({ k, label, hint, placeholder, rows = 6, mono, counter,
 
   return (
     <Slot label={label} k={k} hint={hint}>
-      <Area ref={ref} mono={mono} rows={rows} value={text} placeholder={placeholder} aria-label={label}
-        onChange={(e) => edit({ [k]: e.target.value })} />
+      {mirrored ? (
+        <div className="mc-mirror-wrap">
+          <Area ref={ref} mono={mono} rows={rows} value={text} placeholder={placeholder} aria-label={label}
+            className="mc-mirror-input"
+            onChange={(e) => edit({ [k]: e.target.value })}
+            onSelect={(e) => setCaret(e.target.selectionStart)}
+            onBlur={() => setCaret(null)}
+            onScroll={(e) => { if (mirrorRef.current) mirrorRef.current.scrollTop = e.target.scrollTop; }} />
+          <div className="mc-mirror" ref={mirrorRef} aria-hidden="true">
+            {mirror(text, caret).map((seg, i) => (seg.tone ? <span key={i} className={'mc-' + seg.tone}>{seg.text}</span> : seg.text))}
+            {'\u200b'}
+          </div>
+        </div>
+      ) : (
+        <Area ref={ref} mono={mono} rows={rows} value={text} placeholder={placeholder} aria-label={label}
+          onChange={(e) => edit({ [k]: e.target.value })} />
+      )}
       {(counter || inserts) && (
         <div className="mc-text-foot">
           {counter && (

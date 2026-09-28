@@ -3,7 +3,8 @@ import { Card, Rows, Row, Btn } from '../../ui.jsx';
 import { LongText, useEditor } from '../bind.jsx';
 import { t, tk } from '../../../../i18n.jsx';
 import { promptFeaturesOf } from '../../state/useWorkspace.js';
-import { missingBlocks, addBlocks } from '../../../../lib/promptblocks.js';
+import { missingBlocks, addBlocks, eligibleBlocks } from '../../../../lib/promptblocks.js';
+import { promptSegments } from '../../../../lib/promptview.js';
 
 const DATE = '{{currentDateTime}}';
 const USER = '{{currentUser}}';
@@ -38,6 +39,8 @@ export default function Prompts() {
   const calls = !!workspace.settings.voiceCallEnabled || models.some(m => m.call_prompt);
   const features = promptFeaturesOf(workspace.settings);
   const missing = [...new Set(models.flatMap(m => missingBlocks(m.system_prompt || '', m, features)))];
+  const eligible = eligibleBlocks(models[0], features);
+  const mirror = (text, caret) => promptSegments(text, { eligible, caret });
 
   function restore(ids) {
     const want = new Set(ids);
@@ -51,7 +54,7 @@ export default function Prompts() {
     <>
       <Card title={t('System prompt')}
         sub={t('Sent at the start of every conversation, exactly as written here. Turning a tool on adds its instructions as a <tool> block inside <tools>, and the member’s context sits in <section> blocks inside <context>. Every block can be edited. A tool block is only sent when that tool is on for the chat, and a block whose variables are all empty is left out.')}>
-        <LongText k="system_prompt" mono rows={18} counter label={t('System prompt')}
+        <LongText k="system_prompt" mono rows={18} counter label={t('System prompt')} mirror={mirror}
           placeholder={t('You are a helpful assistant…')}
           inserts={[[t('date'), DATE], [t('user'), USER]]} />
       </Card>
