@@ -2,7 +2,7 @@
 
 Self-hosted chat interface for local and cloud LLMs. Express 5 + encrypted SQLite server, React 19 + Vite client, WebSocket streaming, per-workspace file sandbox. Package name is `open-quill`; the repo folder may be named differently.
 
-`dev` is the working branch, `stable` is release; PRs target `dev`.
+`dev` is the working branch, `main` is release; PRs target `dev`.
 
 ## Commands
 
@@ -157,7 +157,7 @@ The admin panel, playground, model docs, setup guide and build mode are `React.l
 
 - ESLint: `react-hooks/exhaustive-deps` is a warning on purpose (hooks key on a narrower dependency and read the rest through refs, which is what keeps the socket from reconnecting on every render). React Compiler rules are off.
 - Hooks must never sit below an early return. `Message.jsx` returns early for user messages, so assistant-only hooks still go above that branch.
-- A release needs `release/<major>/` with `release.json` and `notes.md`, a matching `CHANGELOG.md` entry, and identical versions in the root, `server/` and `client/` `package.json` plus their lockfiles. `npm run check:release` verifies all of it; a PR into `stable` also fails unless the version was bumped.
+- A release needs `release/<major>/` with `release.json` and `notes.md`, a matching `CHANGELOG.md` entry, and identical versions in the root, `server/` and `client/` `package.json` plus their lockfiles. `npm run check:release` verifies all of it; a PR into `main` also fails unless the version was bumped.
 
 ## Adding a feature
 

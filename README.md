@@ -59,7 +59,7 @@ cd server && npm install && cd ..
 npm start                 # serves on http://localhost:3001
 ```
 
-**From source** · the `stable` or `dev` branch
+**From source** · the `main` or `dev` branch
 
 ```bash
 npm run install:all
@@ -203,7 +203,7 @@ Expect the occasional rough edge, and quote a commit hash rather than a version 
 - **[Issues](https://github.com/Smoffyy/open-quill/issues)**: bugs. Include the version from Settings → Version, or a commit hash if you are on `dev`.
 - **[@smoffyyx on X](https://x.com/smoffyyx)**: my own account, and where release notes, feature previews and development updates get posted as they happen.
 
-Pull requests target **`dev`**, never `stable`. Before opening one, run `npm run lint`, `npm test` in `server/`, and `npm run build`. CI runs all three and must stay green.
+Pull requests target **`dev`**, never `main`. Before opening one, run `npm run lint`, `npm test` in `server/`, and `npm run build`. CI runs all three and must stay green.
 
 > [!IMPORTANT]
 > Open Quill is not enterprise software and is not trying to be. It is a community-built interface meant to be customized, modified and configured however you prefer.
