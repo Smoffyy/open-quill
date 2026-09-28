@@ -103,8 +103,10 @@ function sniffUpload(url) {
 }
 
 const READ_CACHE_MAX = 64;
+const READ_CACHE_CHARS = 64 * 1024 * 1024;
 const textCache = new Map();
 const imageCache = new Map();
+const cacheChars = new Map([[textCache, 0], [imageCache, 0]]);
 
 function cacheGet(store, key, mtime, size) {
   const hit = store.get(key);
@@ -114,9 +116,19 @@ function cacheGet(store, key, mtime, size) {
   return hit.value;
 }
 
+function cacheDrop(store, key) {
+  const hit = store.get(key);
+  if (!hit) return;
+  store.delete(key);
+  cacheChars.set(store, cacheChars.get(store) - hit.value.length);
+}
+
 function cacheSet(store, key, mtime, size, value) {
+  cacheDrop(store, key);
+  if (value.length > READ_CACHE_CHARS) return value;
   store.set(key, { mtime, size, value });
-  if (store.size > READ_CACHE_MAX) store.delete(store.keys().next().value);
+  cacheChars.set(store, cacheChars.get(store) + value.length);
+  while (store.size > READ_CACHE_MAX || cacheChars.get(store) > READ_CACHE_CHARS) cacheDrop(store, store.keys().next().value);
   return value;
 }
 
@@ -134,9 +146,7 @@ export function readUploadText(url) {
     const st = fs.statSync(p);
     const cached = cacheGet(textCache, p, st.mtimeMs, st.size);
     if (cached !== undefined) return cached;
-    let t = fs.readFileSync(p, 'utf8');
-    if (t.length > 20000) t = t.slice(0, 20000) + '\n... [truncated]';
-    return cacheSet(textCache, p, st.mtimeMs, st.size, t);
+    return cacheSet(textCache, p, st.mtimeMs, st.size, fs.readFileSync(p, 'utf8'));
   } catch { return ''; }
 }
 

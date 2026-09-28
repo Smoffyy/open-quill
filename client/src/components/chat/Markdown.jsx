@@ -6,6 +6,7 @@ import { BASE_MACROS, CODE_SPLIT, KATEX_OPTIONS, ensureKatex, hasMath, isolateDi
 import CodeBlock from './CodeBlock.jsx';
 import { rehypeRevealWords } from '../../lib/revealwords.js';
 import ToolCard from './ToolCard.jsx';
+import { b64decode } from '../../lib/oqr.js';
 import ReasoningBlock from './ReasoningBlock.jsx';
 
 export const ReasonSegs = React.createContext(null);
@@ -17,14 +18,6 @@ function b64encode(str) {
     let bin = '';
     for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
     return btoa(bin);
-  } catch { return ''; }
-}
-function b64decode(b64) {
-  try {
-    const bin = atob(b64);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    return new TextDecoder().decode(bytes);
   } catch { return ''; }
 }
 

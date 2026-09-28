@@ -12,6 +12,7 @@ import { ROUTE_MATCHERS } from '../lib/router.js';
 import { DOCS_MODEL_STR, DOCS_MODEL_BOOL, DOCS_MODEL_INT, DOCS_MODEL_FLOAT, DOCS_BADGES, sanitizePairs, sanitizeCards, sanitizeDocsLinks, sanitizeStrList } from '../lib/modeldocs.js';
 import { listLogos } from '../lib/logos.js';
 import { syncedPrompt, draftFeatures } from '../lib/systemprompt.js';
+import { sanitizeConsultModels } from '../lib/consult.js';
 import { touchesBlocks, addBlocks, eligibleBlocks } from '../lib/promptblocks.js';
 
 function sanitizeRouterRules(raw) {
@@ -40,7 +41,7 @@ function sanitizeStop(raw) {
 
 function modelPatch(b, cur) {
   const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'call_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id', 'bg_image', 'effort_kwarg', 'effort_default', ...DOCS_MODEL_STR];
-  const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'show_name', 'skills_allowed', 'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'memory_allowed', 'calculator_allowed', 'hide_tool_calls', 'long_convo_reminder', 'effort_enabled', 'effort_admin_only', 'hide_thinking', ...DOCS_MODEL_BOOL];
+  const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'show_name', 'skills_allowed', 'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'memory_allowed', 'calculator_allowed', 'hide_tool_calls', 'todo_allowed', 'ask_user_allowed', 'consult_allowed', 'consult_images', 'long_convo_reminder', 'effort_enabled', 'effort_admin_only', 'hide_thinking', ...DOCS_MODEL_BOOL];
   const patch = {};
   for (const k of str) if (k in b) patch[k] = b[k];
   for (const k of bool) if (k in b) patch[k] = b[k] ? 1 : 0;
@@ -63,6 +64,7 @@ function modelPatch(b, cur) {
   if ('router_rules' in b) patch.router_rules = sanitizeRouterRules(b.router_rules);
   if ('kwargs' in b) patch.kwargs = sanitizeKwargs(b.kwargs);
   if ('badges_off' in b) patch.badges_off = badgesOff(b.badges_off);
+  if ('consult_models' in b) patch.consult_models = sanitizeConsultModels(b.consult_models);
   if ('effort_levels' in b) {
     const arr = Array.isArray(b.effort_levels) ? b.effort_levels : String(b.effort_levels || '').split(',');
     const clean = arr.map(s => String(s).trim().toLowerCase()).filter(Boolean).slice(0, 8);
@@ -176,7 +178,7 @@ export default function registerModelRoutes(app) {
       sandbox_auto: b.sandbox_auto ? 1 : 0, sandbox_allowed: b.sandbox_allowed === false ? 0 : 1, dropdown_icon: 'dropdown_icon' in b ? (b.dropdown_icon === false ? 0 : 1) : (getSetting('ui_preset', '') === 'openai' ? 0 : 1), is_default: 0, agent_steps: Number.isInteger(b.agent_steps) ? Math.max(0, b.agent_steps) : 0,
       web_search_auto: b.web_search_auto ? 1 : 0, web_search_allowed: b.web_search_allowed === false ? 0 : 1,
       skills_allowed: b.skills_allowed ? 1 : 0, mcp_allowed: b.mcp_allowed ? 1 : 0, chat_search_allowed: b.chat_search_allowed ? 1 : 0,
-      end_chat_allowed: b.end_chat_allowed ? 1 : 0, memory_allowed: b.memory_allowed ? 1 : 0, calculator_allowed: b.calculator_allowed ? 1 : 0, hide_tool_calls: b.hide_tool_calls ? 1 : 0, long_convo_reminder: b.long_convo_reminder ? 1 : 0,
+      end_chat_allowed: b.end_chat_allowed ? 1 : 0, memory_allowed: b.memory_allowed ? 1 : 0, calculator_allowed: b.calculator_allowed ? 1 : 0, todo_allowed: b.todo_allowed ? 1 : 0, ask_user_allowed: b.ask_user_allowed ? 1 : 0, consult_allowed: b.consult_allowed ? 1 : 0, consult_images: b.consult_images ? 1 : 0, consult_models: sanitizeConsultModels(b.consult_models), hide_tool_calls: b.hide_tool_calls ? 1 : 0, long_convo_reminder: b.long_convo_reminder ? 1 : 0,
       enable_summaries: b.enable_summaries ? 1 : 0, num_ctx: parseInt(b.num_ctx) || 0, summary_padding: typeof b.summary_padding === "number" ? b.summary_padding : 0.125, recent_window: parseInt(b.recent_window) > 0 ? parseInt(b.recent_window) : 4,
       in_more_models: b.in_more_models ? 1 : 0, more_models_label: b.more_models_label || 'More models',
       unavailable: b.unavailable ? 1 : 0, unavailable_reason: b.unavailable_reason || '',

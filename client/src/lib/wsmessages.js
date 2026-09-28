@@ -48,6 +48,7 @@ export const handlers = {
         status: turn.status || null,
         promptTokens: turn.promptTokens || 0
       });
+      if (turn.ask) ctx.actions.setAsk?.(turn.chatId, turn.ask);
       if (isActive(ctx, turn.chatId) && turn.promptTokens > 0) ctx.meta.setPromptTokens(turn.promptTokens);
     }
     ctx.mirror.syncBusy();
@@ -247,8 +248,17 @@ export const handlers = {
     ctx.set.errors(prev => ({ ...prev, [m.chatId]: String(m.error || ctx.text.modelError) }));
   },
 
+  ask(m, ctx) {
+    if (m.chatId && m.question) ctx.actions.setAsk?.(m.chatId, m.question);
+  },
+
+  asked(m, ctx) {
+    if (m.chatId) ctx.actions.setAsk?.(m.chatId, null);
+  },
+
   done(m, ctx) {
     voiceEmit({ type: 'done', chatId: m.chatId });
+    ctx.actions.setAsk?.(m.chatId, null);
     ctx.mirror.recFor(m.chatId).done = true;
     ctx.mirror.syncBusy();
     ctx.actions.loadBudget();

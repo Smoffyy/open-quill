@@ -233,6 +233,39 @@ export function Chips({ label, note, items }) {
   );
 }
 
+export function ModelPicks({ k, label, note, candidates, empty }) {
+  const { models, editEach } = useEditor();
+  const change = useChange(k);
+  const listOf = (m) => (Array.isArray(m[k]) ? m[k] : []);
+  function toggle(id, all) {
+    editEach(m => (m.id === id ? null : { [k]: all ? listOf(m).filter(x => x !== id) : [...new Set([...listOf(m), id])] }));
+  }
+  return (
+    <div className={'cp-row mc-chip-row' + (change.changed ? ' mc-changed' : '')}>
+      <div className="cp-row-main">
+        <span className="cp-row-label"><span className="mc-label">{label}<Revert change={change} label={label} /></span></span>
+        {note && <div className="cp-row-note">{note}</div>}
+      </div>
+      {candidates.length ? (
+        <div className="mc-chips" role="group" aria-label={label}>
+          {candidates.map(c => {
+            const owners = models.filter(m => m.id !== c.id);
+            const on = owners.filter(m => listOf(m).includes(c.id)).length;
+            const all = owners.length > 0 && on === owners.length;
+            return (
+              <button key={c.id} type="button" aria-pressed={all ? true : on ? 'mixed' : false}
+                className={'mc-chip' + (on && !all ? ' part' : '')} title={c.description || undefined}
+                onClick={() => toggle(c.id, all)}>
+                {c.display_name || c.internal_name}
+              </button>
+            );
+          })}
+        </div>
+      ) : <div className="cp-row-note">{empty}</div>}
+    </div>
+  );
+}
+
 export function CardMark({ label, k }) {
   const change = useChange(k);
   return <Label text={label} k={k} change={change} />;

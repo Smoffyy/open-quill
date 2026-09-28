@@ -9,6 +9,8 @@ import * as userskills from './userskills.js';
 import * as mcp from './mcp.js';
 import * as projectfiles from './projectfiles.js';
 import { userMemoryOn, memoriesText } from './memory.js';
+import { todosOf, todoText } from './todo.js';
+import { consultTargets, consultTargetsText } from './consult.js';
 import { sandboxHostText, sandboxWorkspaceText, conversationTiming, pinnedFilesText } from './prompts.js';
 import { promptVars } from './convo.js';
 
@@ -43,7 +45,7 @@ export function syncAllModels(before, after) {
   return changed;
 }
 
-export function toolState(chat, model, { sandboxOn = false, webSearchOn = false } = {}) {
+export function toolState(chat, model, { sandboxOn = false, webSearchOn = false, canAsk = false } = {}) {
   const userId = chat?.user_id || null;
   const membankOn = getSetting('membank_enabled', '0') === '1' && referenceFiles.count() > 0;
   const chatSearchOn = !!model.chat_search_allowed && getSetting('chat_search_enabled', '0') === '1';
@@ -52,13 +54,19 @@ export function toolState(chat, model, { sandboxOn = false, webSearchOn = false 
   const mcpSchemas = model.mcp_allowed ? mcp.toolSchemas(userId) : [];
   const mcpOn = mcpSchemas.length > 0;
   const endChatOn = !!model.end_chat_allowed;
+  const user = userId ? db.users.byId(userId) : null;
   const memoryAllowed = !!model.memory_allowed && !!userId;
-  const memoryOn = memoryAllowed && userMemoryOn(db.users.byId(userId));
+  const memoryOn = memoryAllowed && userMemoryOn(user);
   const calculatorOn = !!model.calculator_allowed;
-  const toolsOn = sandboxOn || webSearchOn || membankOn || chatSearchOn || skillsOn || mcpOn || endChatOn || memoryOn || calculatorOn;
+  const todoOn = !!model.todo_allowed && !!chat?.id;
+  const askUserOn = !!model.ask_user_allowed && !!chat?.id && canAsk;
+  const consultWith = model.consult_allowed ? consultTargets(model, !!user?.is_admin) : [];
+  const consultOn = consultWith.length > 0;
+  const toolsOn = sandboxOn || webSearchOn || membankOn || chatSearchOn || skillsOn || mcpOn || endChatOn || memoryOn
+    || calculatorOn || todoOn || askUserOn || consultOn;
   return {
     sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, userSkills, mcpSchemas, mcpOn, mcpUser: userId,
-    endChatOn, memoryAllowed, memoryOn, calculatorOn, toolsOn
+    endChatOn, memoryAllowed, memoryOn, calculatorOn, todoOn, askUserOn, consultOn, consultWith, toolsOn
   };
 }
 
@@ -66,7 +74,8 @@ function activeBlocks(model, state) {
   const on = [
     ['sandbox', state.sandboxOn], ['web_search', state.webSearchOn], ['reference_files', state.membankOn],
     ['chat_search', state.chatSearchOn], ['skills', state.skillsOn], ['mcp', state.mcpOn],
-    ['memory', state.memoryAllowed], ['calculator', state.calculatorOn], ['end_conversation', state.endChatOn]
+    ['memory', state.memoryAllowed], ['calculator', state.calculatorOn], ['todo', state.todoOn],
+    ['ask_user', state.askUserOn], ['consult_model', state.consultOn], ['end_conversation', state.endChatOn]
   ];
   const out = new Set(SECTION_IDS);
   if (model.long_convo_reminder) out.add(blockId('section', 'conversation_time'));
@@ -94,7 +103,9 @@ export function systemPrompt(chat, model, state, { userId = null, styleText = ''
     sandboxWorkspace: () => (row ? sandboxWorkspaceText(projectfiles.workspaceFor(row), String(project?.name || '')) : ''),
     referenceFiles: () => referenceFiles.filesText(),
     skills: () => workspaceSkills.skillsText(state.userSkills),
-    mcpTools: () => mcp.toolsText(state.mcpUser)
+    mcpTools: () => mcp.toolsText(state.mcpUser),
+    todoList: () => todoText(row ? todosOf(row.id) : []),
+    consultModels: () => consultTargetsText(model, state.consultWith || [])
   };
   const override = callMode && (model.call_prompt || '').trim() ? model.call_prompt
     : (row?.system_override || '').trim() ? row.system_override : null;

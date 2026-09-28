@@ -115,6 +115,16 @@ export function cleanCall(call) {
     if (call.text != null) o.text = String(call.text).slice(0, 500);
   }
   if (o.tool === 'calculator' && call.expression != null) o.expression = String(call.expression).slice(0, 500);
+  if (o.tool === 'ask_user') {
+    if (call.question != null) o.question = String(call.question).slice(0, 500);
+    if (Array.isArray(call.options)) o.options = call.options.slice(0, 6).map(x => String(x ?? '').slice(0, 120));
+    if (call.multiple === true || call.multiple === 'true') o.multiple = true;
+  }
+  if (o.tool === 'consult_model') {
+    if (call.model != null) o.model = String(call.model).slice(0, 120);
+    if (call.question != null) o.question = String(call.question).slice(0, 4000);
+    if (call.include_images === true || call.include_images === 'true') o.include_images = true;
+  }
   return o;
 }
 

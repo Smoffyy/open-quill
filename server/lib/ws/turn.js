@@ -26,6 +26,10 @@ import { createLoopGuard, STUCK_NOTE } from '../loopguard.js';
 import { changeMemory, memoryToolResult } from '../memory.js';
 import { toolState, systemPrompt } from '../systemprompt.js';
 import { runCalculator, formatCalculatorResult } from '../calculator.js';
+import { runTodo } from '../todo.js';
+import { runAskUser, formatAskUser } from '../askuser.js';
+import { waitForAnswer } from './live.js';
+import { runConsult, formatConsult } from '../consult.js';
 
 const MAX_STEERS = 6;
 const TELEMETRY_MS = 220;
@@ -47,12 +51,15 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     const cRow0 = db.chats.byId(chat.id) || chat;
     if (cRow0.gen_params && typeof cRow0.gen_params === 'object') model = { ...model, ...cRow0.gen_params };
   }
-  const flags = toolState(chat, model, { sandboxOn, webSearchOn });
+  const flags = toolState(chat, model, { sandboxOn, webSearchOn, canAsk: !!state?.interactive });
   const promptOpts = { styleText, callMode };
   await maybeCompact(ws, chat, model, extended, flags, promptOpts);
   const history = chatHistory(chat, model);
   const chatRow = db.chats.byId(chat.id) || chat;
-  const { membankOn, chatSearchOn, skillsOn, userSkills, mcpSchemas, mcpOn, mcpUser, endChatOn, memoryOn, calculatorOn, toolsOn } = flags;
+  const {
+    membankOn, chatSearchOn, skillsOn, userSkills, mcpSchemas, mcpOn, mcpUser, endChatOn, memoryOn, calculatorOn,
+    todoOn, askUserOn, consultOn, consultWith, toolsOn
+  } = flags;
   const membankHideTools = getSetting('membank_hide_tools', '0') === '1';
   if (membankOn) { try { await referenceFiles.ensureIndexedAll(); } catch {} }
   const hideTools = !!model.hide_tool_calls;
@@ -109,7 +116,8 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   };
   safeSend(JSON.stringify({ type: 'start', chatId: chat.id, messageId: assistantId }));
 
-  const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, memoryOn, calculatorOn, hostEnv: sandboxOn ? sandbox.hostEnvInfo() : null }) : [];
+  const consultNames = consultOn ? consultWith.map(t => t.display_name || t.internal_name) : [];
+  const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, memoryOn, calculatorOn, todoOn, askUserOn, consultNames, hostEnv: sandboxOn ? sandbox.hostEnvInfo() : null }) : [];
   const toolNameSet = new Set(tools.map(t => t && t.function && t.function.name).filter(Boolean));
   const canonicalize = (call) => {
     if (!sandboxOn || !call.tool || toolNameSet.has(call.tool)) return call;
@@ -117,7 +125,8 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     if (canon && toolNameSet.has(canon)) call.tool = canon;
     return call;
   };
-  const oqrBlock = (call, result) => '\n\n[[OQR:' + Buffer.from(JSON.stringify(hideTools ? { call: cleanCall(call), result, hidden: true } : { call: cleanCall(call), result }), 'utf8').toString('base64') + ']]\n';
+  const hidden = (tool) => hideTools && tool !== 'ask_user';
+  const oqrBlock = (call, result) => '\n\n[[OQR:' + Buffer.from(JSON.stringify(hidden(call.tool) ? { call: cleanCall(call), result, hidden: true } : { call: cleanCall(call), result }), 'utf8').toString('base64') + ']]\n';
   const runToolCall = async (call) => {
     if (call.tool === 'end_conversation') {
       if (!endChatOn) return null;
@@ -140,6 +149,25 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       if (!calculatorOn) return null;
       const r = runCalculator(call);
       return { payload: r, formatted: formatCalculatorResult(r), hide: false };
+    }
+    if (call.tool === 'todo') {
+      if (!todoOn) return null;
+      return { ...runTodo(chat.id, call), hide: false };
+    }
+    if (call.tool === 'ask_user') {
+      if (!askUserOn) return null;
+      const r = runAskUser(call);
+      if (!r.ok) return { payload: r, formatted: formatAskUser(r), hide: false };
+      safeSend(JSON.stringify({ type: 'ask', chatId: chat.id, question: { question: r.question, options: r.options, multiple: r.multiple } }));
+      const a = await waitForAnswer(chat.id, stepController ? stepController.signal : null);
+      safeSend(JSON.stringify({ type: 'asked', chatId: chat.id }));
+      const payload = { ...r, answer: a.answer || '', skipped: !!a.skipped, stopped: !!a.stopped, timedOut: !!a.timedOut };
+      return { payload, formatted: formatAskUser(payload), hide: false };
+    }
+    if (call.tool === 'consult_model') {
+      if (!consultOn) return null;
+      const r = await runConsult({ model, targets: consultWith, call, chatId: chat.id, userId: chat.user_id, signal: stepController ? stepController.signal : null });
+      return { payload: r, formatted: formatConsult(r), hide: false };
     }
     if (call.tool === 'skill_view') {
       if (!skillsOn) return null;
@@ -548,7 +576,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: `${call.tool} \u2192 ERROR: the conversation has been ended; no further tools may run.` });
           continue;
         }
-        if (!hideTools) safeSend(JSON.stringify({ type: 'tool_exec', chatId: chat.id, call: cleanCall(call) }));
+        if (!hidden(call.tool)) safeSend(JSON.stringify({ type: 'tool_exec', chatId: chat.id, call: cleanCall(call) }));
         let out;
         try { out = await runToolCall(call); }
         catch (e) { out = { payload: { ok: false, error: String(e.message || e).slice(0, 400) }, formatted: `${call.tool} → ERROR: ${String(e.message || e).slice(0, 400)}`, hide: false }; }

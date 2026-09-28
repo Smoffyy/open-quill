@@ -11,6 +11,32 @@ export const steers = new Map();
 // the next step. This set is the durable answer to "the user asked me to stop",
 // and the agentic loop checks it at every point it could otherwise continue.
 export const stops = new Set();
+const asks = new Map();
+export const ASK_TIMEOUT_MS = 30 * 60 * 1000;
+
+export function waitForAnswer(chatId, signal, timeoutMs = ASK_TIMEOUT_MS) {
+  return new Promise((resolve) => {
+    const finish = (r) => {
+      if (asks.get(chatId)?.finish !== finish) return;
+      asks.delete(chatId);
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', onAbort);
+      resolve(r);
+    };
+    const onAbort = () => finish({ stopped: true });
+    const timer = setTimeout(() => finish({ timedOut: true }), timeoutMs);
+    asks.get(chatId)?.finish({ stopped: true });
+    asks.set(chatId, { finish });
+    if (signal) { if (signal.aborted) onAbort(); else signal.addEventListener('abort', onAbort, { once: true }); }
+  });
+}
+
+export function answerQuestion(chatId, answer) {
+  const pending = asks.get(chatId);
+  if (!pending) return false;
+  pending.finish(answer);
+  return true;
+}
 
 export function beginTurn(userId, chatId, modelId) {
   if (!chatId) return null;
@@ -26,6 +52,7 @@ export function beginTurn(userId, chatId, modelId) {
     steers: [],
     status: null,
     promptTokens: 0,
+    ask: null,
     startedAt: Date.now()
   };
   turns.set(chatId, rec);
@@ -34,6 +61,7 @@ export function beginTurn(userId, chatId, modelId) {
 
 export function endTurn(chatId) {
   if (!chatId) return;
+  asks.get(chatId)?.finish({ stopped: true });
   turns.delete(chatId);
   aborts.delete(chatId);
   steers.delete(chatId);
@@ -63,7 +91,8 @@ export function snapshotsFor(userId) {
       live: rec.live,
       steers: rec.steers.slice(),
       status: rec.status,
-      promptTokens: rec.promptTokens
+      promptTokens: rec.promptTokens,
+      ask: rec.ask
     });
   }
   return out;
@@ -109,6 +138,12 @@ export function record(m) {
       rec.status = m.phase === 'generating'
         ? null
         : { phase: m.phase, processed: m.processed, total: m.total, cache: m.cache, pct: m.pct, ms: m.ms };
+      break;
+    case 'ask':
+      rec.ask = m.question || null;
+      break;
+    case 'asked':
+      rec.ask = null;
       break;
     case 'steered':
       if (Array.isArray(m.notes)) rec.steers = [...rec.steers, ...m.notes];

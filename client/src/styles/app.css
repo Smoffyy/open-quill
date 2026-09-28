@@ -21,5 +21,6 @@
 @import './docs.css';
 @import './weave.css';
 @import './memory.css';
+@import './agenttools.css';
 @import './anthropic.css';
 @import './openai.css';

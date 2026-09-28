@@ -7,6 +7,8 @@ import Login from './components/pages/Login.jsx';
 import Sidebar from './components/sidebar/Sidebar.jsx';
 import AppBackground from './components/chat/AppBackground.jsx';
 import Composer from './components/composer/Composer.jsx';
+import AgentPanel from './components/composer/AgentPanel.jsx';
+import { planRecords, groupPlans } from './lib/agentpanel.js';
 import QuickPrompts from './components/chat/QuickPrompts.jsx';
 import CompactingBar from './components/chat/CompactingBar.jsx';
 import EngineStrip from './components/chat/EngineStrip.jsx';
@@ -203,6 +205,14 @@ export default function App() {
   const [safetyChecking, setSafetyChecking] = useState(false);
   const [safetyReason, setSafetyReason] = useState('');
   const [chatEnded, setChatEnded] = useState(false);
+  const [asks, setAsks] = useState({});
+  const setAsk = useCallback((chatId, q) => setAsks(a => {
+    if (q) return { ...a, [chatId]: q };
+    if (!(chatId in a)) return a;
+    const next = { ...a };
+    delete next[chatId];
+    return next;
+  }), []);
   const [ctlOpen, setCtlOpen] = useState(false);
   const [chatGenParams, setChatGenParams] = useState(null);
   const [chatSysOverride, setChatSysOverride] = useState('');
@@ -451,6 +461,11 @@ export default function App() {
   const showCtxGauge = !!user?.prefs?.ctxGauge;
   const statusDelay = statusDelayEnabled(user?.prefs?.statusDelay);
   const ledgerTokens = liveLedgerTokens({ streaming, promptTokens: livePrompt, telemetry, ledgerOpen });
+  const planRecs = useMemo(() => planRecords(streaming ? messages.filter(m => m.id !== assistantIdRef.current) : messages), [messages, streaming]);
+  const livePlanRecs = useMemo(() => (streaming && dispContent ? planRecords([{ role: 'assistant', content: dispContent }]) : []), [streaming, dispContent]);
+  const plans = useMemo(() => groupPlans([...planRecs, ...livePlanRecs]), [planRecs, livePlanRecs]);
+  const pendingAsk = activeId ? asks[activeId] || null : null;
+  const question = useMemo(() => (pendingAsk ? { ...pendingAsk, id: activeId + ':' + pendingAsk.question } : null), [pendingAsk, activeId]);
 
   const activeIdRef = useRef(null);
   const currentIdRef = useRef(null);
@@ -754,6 +769,7 @@ export default function App() {
       loadAppConfig: () => loadAppConfig(),
       loadBudget: () => loadBudget(),
       loadLedger: () => loadLedger(),
+      setAsk: (chatId, q) => setAsk(chatId, q),
       taskStarted: (m) => toast(t('Running scheduled task "{title}"', { title: m.title || t('New chat') }), { icon: 'info' })
     }
   };
@@ -1135,7 +1151,18 @@ export default function App() {
       .catch(() => { setChats(cs => cs.map(c => c.id === chatId ? { ...c, projectId: prev } : c)); warn(); });
   }
 
+  function answerQuestion(answer) {
+    const chatId = activeIdRef.current;
+    if (!chatId || !asks[chatId]) return false;
+    const skip = answer == null;
+    if (!skip && !String(answer).trim()) return false;
+    if (!wsSend(skip ? { type: 'answer', chatId, skip: true } : { type: 'answer', chatId, text: String(answer).trim() })) return false;
+    setAsk(chatId, null);
+    return true;
+  }
+
   async function send(attachments = [], overrideText, opts = {}) {
+    if (overrideText == null && pendingAsk && answerQuestion(input)) { setInput(''); clearDraft(activeId); return; }
     if ((streaming || queued) && !opts.fromQueue) return;
     if (safetyChecking) return;
     if (safetyFlagged) return;
@@ -1368,7 +1395,7 @@ export default function App() {
     draftId: incognito ? undefined : activeId,
     projects,
     onSetProject: activeId ? (p) => moveChatToProject(activeId, p.id) : null,
-    value: input, onChange: (v) => { if (safetyFlagged) { setSafetyFlagged(false); setSafetyReason(''); } setInput(v); saveDraft(activeId, v); }, onSend: send, onStop: stop, streaming: streaming || queued, stopping,
+    value: input, onChange: (v) => { if (safetyFlagged) { setSafetyFlagged(false); setSafetyReason(''); } setInput(v); saveDraft(activeId, v); }, onSend: send, onStop: stop, streaming: (streaming || queued) && !pendingAsk, stopping,
     queueCount: queuedList.length,
     onQueue: (t, atts) => setQueue(l => [...l, { id: 'q' + Date.now() + Math.random().toString(36).slice(2, 7), text: t, attachments: atts || [] }]),
     onSteer: steer, canSteer: streaming && !!activeId && !incognito && user?.prefs?.steering === true,
@@ -1711,7 +1738,8 @@ export default function App() {
             <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')}>
               {user?.prefs?.engineStrip === true && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
               {callDock}
-              <Composer {...composerProps} focusKey={focusTick} />
+              <Composer {...composerProps} focusKey={focusTick}
+                panel={!incognito && (plans.plan || question) ? <AgentPanel plan={plans.plan} previousPlan={plans.previousPlan} question={question} onAnswer={answerQuestion} onSkip={() => answerQuestion(null)} /> : null} />
               <Disclaimer text={cfg.disclaimer} />
             </div>
           </>

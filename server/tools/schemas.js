@@ -162,7 +162,41 @@ export function calculatorSchema() {
   }, ['expression']);
 }
 
-export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, memoryOn = false, calculatorOn = false, hostEnv = null }) {
+export function todoSchema() {
+  return fn('todo', 'Write the checklist for the current task. Every call replaces the whole list, so send every item each time with its current status. Keep exactly one item in_progress while working.', {
+    items: {
+      type: 'array',
+      description: 'The complete list, in order.',
+      items: {
+        type: 'object',
+        properties: {
+          content: str('What the step is, in a few words.'),
+          status: { type: 'string', enum: ['pending', 'in_progress', 'completed'], description: 'The step\'s current status.' }
+        },
+        required: ['content', 'status'],
+        additionalProperties: false
+      }
+    }
+  }, ['items']);
+}
+
+export function askUserSchema() {
+  return fn('ask_user', 'Show the user a question with clickable options and wait for their answer, which comes back as the result. Your reply then continues.', {
+    question: str('One clear question.'),
+    options: { type: 'array', items: { type: 'string' }, description: 'Between 2 and 6 short, distinct answers the user can click.' },
+    multiple: bool('Optional. If true, the user can pick more than one option before sending.')
+  }, ['question', 'options']);
+}
+
+export function consultModelSchema(names = []) {
+  return fn('consult_model', 'Send one self-contained question to another model and get its answer back. It sees only what you send, not this conversation.', {
+    model: names.length ? { type: 'string', enum: names, description: 'Which model to ask.' } : str('Which model to ask.'),
+    question: str('The full question, with all the context the other model needs.'),
+    include_images: bool('Optional. If true, also send the images from the user\'s latest message.')
+  }, ['model', 'question']);
+}
+
+export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, memoryOn = false, calculatorOn = false, todoOn = false, askUserOn = false, consultNames = [], hostEnv = null }) {
   const out = [];
   if (sandboxOn) out.push(...sandboxToolSchemas(hostEnv));
   if (webSearchOn) out.push(webSearchSchema());
@@ -171,6 +205,9 @@ export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, sk
   if (skillsOn) out.push(skillSchema());
   if (memoryOn) out.push(memorySchema());
   if (calculatorOn) out.push(calculatorSchema());
+  if (todoOn) out.push(todoSchema());
+  if (askUserOn) out.push(askUserSchema());
+  if (consultNames.length) out.push(consultModelSchema(consultNames));
   if (endChatOn) out.push(endConversationSchema());
   if (mcpSchemas && mcpSchemas.length) out.push(...mcpSchemas);
   return out;

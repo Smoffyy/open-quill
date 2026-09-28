@@ -54,7 +54,7 @@ function wsCtx(activeKey = 'c1') {
     actions: {
       finalize: log('finalize'), finalizeBackground: log('finalizeBackground'), syncView: log('syncView'),
       loadModels: log('loadModels'), loadAppConfig: log('loadAppConfig'), loadBudget: log('loadBudget'),
-      loadLedger: log('loadLedger'), taskStarted: log('taskStarted')
+      loadLedger: log('loadLedger'), taskStarted: log('taskStarted'), setAsk: log('setAsk')
     }
   };
   return ctx;
@@ -271,4 +271,20 @@ test('task_started inserts a chat the sidebar has never seen, once', () => {
   assert.equal(inserted[0].title, 'Daily briefing');
   // A duplicate frame for a chat already in the list must not add a second row.
   assert.deepEqual(updater(inserted), inserted);
+});
+
+test('a question the model is waiting on is tracked per chat until it is answered or the turn ends', () => {
+  const ctx = wsCtx();
+  const q = { question: 'Which parser?', options: ['clap', 'argh'], multiple: false };
+  dispatchWs({ type: 'ask', chatId: 'c2', question: q }, ctx);
+  assert.deepEqual(ctx.calls.find(c => c[0] === 'setAsk'), ['setAsk', 'c2', q], 'a background chat keeps its question too');
+  ctx.calls.length = 0;
+  dispatchWs({ type: 'asked', chatId: 'c2' }, ctx);
+  assert.deepEqual(ctx.calls.find(c => c[0] === 'setAsk'), ['setAsk', 'c2', null]);
+  ctx.calls.length = 0;
+  dispatchWs({ type: 'done', chatId: 'c1' }, ctx);
+  assert.deepEqual(ctx.calls.find(c => c[0] === 'setAsk'), ['setAsk', 'c1', null], 'a finished turn leaves no question behind');
+  ctx.calls.length = 0;
+  dispatchWs({ type: 'resume', turns: [{ chatId: 'c3', content: '', ask: q }] }, ctx);
+  assert.deepEqual(ctx.calls.find(c => c[0] === 'setAsk'), ['setAsk', 'c3', q], 'a reload brings the open question back');
 });

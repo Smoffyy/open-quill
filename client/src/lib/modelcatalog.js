@@ -8,7 +8,8 @@ export const FLAGS = new Set([
   'has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon',
   'is_default', 'enable_summaries', 'unavailable',
   'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'show_name', 'skills_allowed',
-  'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'memory_allowed', 'calculator_allowed', 'hide_tool_calls', 'long_convo_reminder', 'effort_enabled',
+  'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'memory_allowed', 'calculator_allowed', 'hide_tool_calls', 'todo_allowed', 'ask_user_allowed',
+  'consult_allowed', 'consult_images', 'long_convo_reminder', 'effort_enabled',
   'effort_admin_only', 'hide_thinking'
 ]);
 
@@ -180,7 +181,8 @@ export const TAB_FIELDS = {
     'unavailable', 'unavailable_reason', 'sunset_at', 'sunset_action', 'cost_in', 'cost_out'],
   prompts: ['system_prompt', 'call_prompt'],
   tools: ['has_vision', 'sandbox_allowed', 'sandbox_auto', 'web_search_allowed', 'web_search_auto', 'skills_allowed',
-    'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'memory_allowed', 'calculator_allowed', 'agent_steps', 'hide_tool_calls'],
+    'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'memory_allowed', 'calculator_allowed', 'todo_allowed', 'ask_user_allowed', 'consult_allowed',
+    'consult_models', 'consult_images', 'agent_steps', 'hide_tool_calls'],
   reasoning: ['reasoning_collapsible', 'hide_thinking', 'think_open', 'think_close', 'has_reasoning', 'reasoning_token', 'non_reasoning_token'],
   context: ['num_ctx', 'summary_padding', 'recent_window', 'enable_summaries', 'ctx_trim_mode', 'long_convo_reminder'],
   sampling: ['stop', 'temperature', 'top_p', 'top_k', 'min_p', 'max_tokens', 'seed', 'repetition_penalty', 'presence_penalty',
@@ -247,5 +249,6 @@ export const LEVELS = {
 export function usesTools(m, { webSearch = false, chatSearch = false } = {}) {
   return flagOn(m, 'sandbox_allowed') || (webSearch && flagOn(m, 'web_search_allowed'))
     || flagOn(m, 'skills_allowed') || flagOn(m, 'mcp_allowed') || (chatSearch && flagOn(m, 'chat_search_allowed'))
-    || flagOn(m, 'end_chat_allowed') || flagOn(m, 'memory_allowed') || flagOn(m, 'calculator_allowed');
+    || flagOn(m, 'end_chat_allowed') || flagOn(m, 'memory_allowed') || flagOn(m, 'calculator_allowed') || flagOn(m, 'todo_allowed')
+    || flagOn(m, 'ask_user_allowed') || flagOn(m, 'consult_allowed');
 }

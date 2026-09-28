@@ -78,7 +78,7 @@ export function initWs(server) {
     clients.set(ws, { userId: u.id, sessionId: r.sessionId || null, isAdmin: !!u.is_admin, aborts: new Map(), steers: new Map(), stops: new Set() });
     const safeSend = (s) => { if (ws.readyState === 1) { try { ws.send(s); } catch {} } };
     const liveSend = (s) => live.sendLive(u.id, s);
-    const liveState = { aborts: live.aborts, steers: live.steers, stops: live.stops };
+    const liveState = { aborts: live.aborts, steers: live.steers, stops: live.stops, interactive: true };
     const liveWs = { readyState: 1, send: liveSend };
     {
       const pending = live.snapshotsFor(u.id);
@@ -104,6 +104,13 @@ export function initWs(server) {
         if (own.stops) own.stops.add(msg.chatId);
         const c = own.aborts.get(msg.chatId);
         if (c) { c.abort(); own.aborts.delete(msg.chatId); }
+        return;
+      }
+      if (msg.type === 'answer') {
+        if (!ownsChat(msg.chatId)) return;
+        if (msg.skip === true) { live.answerQuestion(msg.chatId, { skipped: true }); return; }
+        const text = typeof msg.text === 'string' ? msg.text.trim().slice(0, 4000) : '';
+        if (text) live.answerQuestion(msg.chatId, { answer: text });
         return;
       }
       if (msg.type === 'steer') {

@@ -1728,6 +1728,15 @@ test('historyText reports failures and keeps a single-call turn readable', () =>
   assert.ok(out.includes('1 failed'), out);
 });
 
+test('historyText keeps the answers to questions asked during a turn', () => {
+  const asked = oqr({ tool: 'ask_user', question: 'Which parser?' }, { ok: true, question: 'Which parser?', options: ['clap', 'argh'], answer: 'clap' });
+  const out = historyText('Before I start:' + asked + 'Using clap.');
+  assert.ok(out.includes('[Answers the user gave to your questions in this turn: "Which parser?" → clap.]'), out);
+  assert.equal(out.includes('Tools already run'), false, 'a question alone is not reported as tool activity');
+  const both = historyText(asked + oqr({ tool: 'bash', cmd: 'cargo add clap' }, { ok: true }));
+  assert.ok(both.includes('Tools already run in this turn: bash') && both.includes('"Which parser?" → clap'), both);
+});
+
 test('historyText leaves a turn with no tool activity completely alone', () => {
   const plain = 'Just a normal reply with no tools.';
   assert.equal(historyText(plain), plain);

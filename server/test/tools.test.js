@@ -110,3 +110,76 @@ test('memory is off until the member turns it on', () => {
   assert.equal(userMemoryOn({ prefs: { memoryEnabled: 'true' } }), false);
   assert.equal(userMemoryOn({ prefs: { memoryEnabled: true } }), true);
 });
+
+test('todo items are cleaned, statuses normalised and the list capped', async () => {
+  const { sanitizeTodos, todoText, TODO_MAX_ITEMS } = await import('../lib/todo.js');
+  const r = sanitizeTodos([{ content: '  Write   tests ', status: 'done' }, { content: 'Ship', status: 'In Progress' }, { content: 'Plan' }, { content: '' }, 'Loose string']);
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.items, [
+    { content: 'Write tests', status: 'completed' },
+    { content: 'Ship', status: 'in_progress' },
+    { content: 'Plan', status: 'pending' },
+    { content: 'Loose string', status: 'pending' }
+  ]);
+  assert.equal(todoText(r.items), '[x] Write tests\n[>] Ship\n[ ] Plan\n[ ] Loose string');
+  assert.equal(todoText([]), '(empty)');
+  assert.equal(sanitizeTodos(JSON.stringify([{ content: 'a', status: 'pending' }])).items.length, 1, 'a JSON string from a small model still parses');
+  assert.equal(sanitizeTodos('not a list').ok, false);
+  assert.equal(sanitizeTodos(Array.from({ length: TODO_MAX_ITEMS + 1 }, (_, i) => ({ content: 'x' + i }))).ok, false);
+});
+
+test('ask_user needs a question and 2 to 6 distinct options', async () => {
+  const { runAskUser, formatAskUser } = await import('../lib/askuser.js');
+  const ok = runAskUser({ question: ' Which   database? ', options: ['SQLite', 'Postgres', 'sqlite', ''] });
+  assert.deepEqual(ok, { ok: true, question: 'Which database?', options: ['SQLite', 'Postgres'], multiple: false });
+  const multi = runAskUser({ question: 'Which features?', options: ['Auth', 'Search'], multiple: true });
+  assert.equal(multi.multiple, true);
+  assert.match(formatAskUser({ ...multi, answer: 'Auth, Search' }), /the user answered: Auth, Search$/);
+  assert.match(formatAskUser({ ...multi, skipped: true }), /skipped the question/);
+  assert.match(formatAskUser({ ...multi, stopped: true }), /stopped the reply/);
+  assert.match(formatAskUser({ ...multi, timedOut: true }), /no answer came/);
+  assert.deepEqual(runAskUser({ question: 'Q', options: 'Yes\nNo' }).options, ['Yes', 'No'], 'newline-separated options are accepted');
+  assert.equal(runAskUser({ question: 'Q', options: ['Only one'] }).ok, false);
+  assert.equal(runAskUser({ question: 'Q', options: ['1', '2', '3', '4', '5', '6', '7'] }).ok, false);
+  assert.equal(runAskUser({ question: '', options: ['a', 'b'] }).ok, false);
+});
+
+test('consult targets are sanitised and only admin-chosen models resolve', async () => {
+  const { sanitizeConsultModels, consultTargetsText } = await import('../lib/consult.js');
+  assert.deepEqual(sanitizeConsultModels(['a', 'a', 7, '', 'b', { id: 'c' }]), ['a', 'b']);
+  assert.deepEqual(sanitizeConsultModels('a'), []);
+  const text = consultTargetsText({ consult_images: 1 }, [
+    { display_name: 'Vision', has_vision: 1, description: 'Sees   things' },
+    { display_name: 'Big', has_vision: 0 }
+  ]);
+  assert.equal(text, '- Vision (can see images): Sees things\n- Big');
+  assert.equal(consultTargetsText({ consult_images: 0 }, [{ display_name: 'Vision', has_vision: 1 }]), '- Vision', 'image support is only advertised when forwarding is on');
+});
+
+test('the new tools are offered only when enabled', () => {
+  const names = (o) => buildTools(o).map(s => s.function.name);
+  assert.deepEqual(names({ todoOn: true, askUserOn: true, consultNames: ['Vision'] }), ['todo', 'ask_user', 'consult_model']);
+  const consult = buildTools({ consultNames: ['Vision', 'Big'] })[0];
+  assert.deepEqual(consult.function.parameters.properties.model.enum, ['Vision', 'Big']);
+});
+
+test('a pending question resolves with the answer, a skip, a stop or a timeout', async () => {
+  const live = await import('../lib/ws/live.js');
+  const answered = live.waitForAnswer('chat-a', null, 5000);
+  assert.equal(live.answerQuestion('chat-a', { answer: 'clap' }), true);
+  assert.deepEqual(await answered, { answer: 'clap' });
+  assert.equal(live.answerQuestion('chat-a', { answer: 'late' }), false, 'nothing is waiting any more');
+
+  const ctl = new AbortController();
+  const stopped = live.waitForAnswer('chat-b', ctl.signal, 5000);
+  ctl.abort();
+  assert.deepEqual(await stopped, { stopped: true });
+
+  assert.deepEqual(await live.waitForAnswer('chat-c', null, 10), { timedOut: true });
+
+  const first = live.waitForAnswer('chat-d', null, 5000);
+  const second = live.waitForAnswer('chat-d', null, 5000);
+  assert.deepEqual(await first, { stopped: true }, 'a newer question replaces an older one');
+  live.answerQuestion('chat-d', { skipped: true });
+  assert.deepEqual(await second, { skipped: true });
+});

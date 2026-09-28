@@ -764,3 +764,23 @@ test('the prompt a chat sends is the model prompt with its blocks filled in', as
   await browser('PATCH', '/api/me', { body: { instructions: '', prefs: {} } });
   await browser('POST', '/api/admin/models/remove', { body: { ids: [id] } });
 });
+
+test('consult settings are admin-only, sanitised and add their block', async () => {
+  const asker = (await browser('POST', '/api/admin/models', { body: { display_name: 'Asker', internal_name: 'asker' } })).json.id;
+  const helper = (await browser('POST', '/api/admin/models', { body: { display_name: 'Helper', internal_name: 'helper', description: 'Sees images' } })).json.id;
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: asker, consult_allowed: true, consult_models: [helper, helper, 7, ''], consult_images: true }] } });
+  const row = (await browser('GET', '/api/admin/models')).json.find(m => m.id === asker);
+  assert.deepEqual(row.consult_models, [helper], 'ids are deduplicated and non-strings dropped');
+  assert.match(row.system_prompt, /<tool name="consult_model">[\s\S]*\{\{consultModels\}\}/);
+  assert.equal((await request('PATCH', '/api/admin/models', { origin: ORIGIN, secFetchSite: 'same-origin', body: { rows: [{ id: asker, consult_models: [] }] } })).status, 401, 'nobody without a session can change them');
+  await browser('POST', '/api/admin/models/publish', { body: {} });
+  const pub = (await browser('GET', '/api/models')).json.find(m => m.id === asker);
+  assert.equal(JSON.stringify(pub).includes('consult'), false, 'the member-facing catalog never carries the consult settings');
+
+  const chat = (await browser('POST', '/api/chats', { body: {} })).json;
+  const system = (await browser('GET', `/api/chats/${chat.id}/prompt?modelId=${asker}`)).json.raw.find(m => m.role === 'system').content;
+  assert.match(system, /<tool name="consult_model">[\s\S]*Models you can consult:\n- Helper: Sees images\n<\/tool>/);
+
+  await browser('POST', '/api/admin/models/remove', { body: { ids: [asker, helper] } });
+  await browser('POST', '/api/admin/models/publish', { body: {} });
+});

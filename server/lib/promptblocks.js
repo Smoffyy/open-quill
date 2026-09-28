@@ -152,6 +152,18 @@ When User Memory is False, the user has turned memory off in their settings: the
 
 const CALCULATOR = `Use the \`calculator\` tool for any arithmetic you cannot do with certainty in your head (multi-digit multiplication, division, percentages, powers, roots, logarithms, trigonometry, unit arithmetic). Put the whole calculation in one expression, then use the returned value exactly.`;
 
+const TODO = `You have a \`todo\` tool: a checklist for this conversation that the user sees as a card. Use it for work with three or more steps. Write the plan before you start, mark the item you are working on \`in_progress\`, and mark each item \`completed\` as soon as it is done, not in a batch at the end. Only mark an item completed after you have actually done it, with real tool calls or in your reply; never tick items off to show progress you have not made, and if you cannot do a step with the tools you have, say so instead. Every call replaces the whole list, so always send every item with its current status. Skip it for simple questions and single-step tasks.
+
+Current list:
+{{todoList}}`;
+
+const ASK_USER = `You have an \`ask_user\` tool that shows the user a question with options they can click. Use it only when you cannot continue well without their decision, such as a choice between approaches or a missing requirement, and not for things you can reasonably decide yourself. Ask one clear question with 2 to 6 short options, and set \`multiple\` to true when more than one answer can apply. Calling it pauses your reply until the user answers; their answer comes back as the tool result and you carry on from there, so you can ask in the middle of a task. If they skip the question, continue with your best judgement and say what you assumed.`;
+
+const CONSULT_MODEL = `You have a \`consult_model\` tool that sends one question to another model and returns its answer. Use it when another model is better suited, for example one that can see images when you cannot, or for a second opinion on something difficult. The other model sees only what you send, not this conversation, so include all the context it needs in \`question\`. Set \`include_images\` to also send the images from the user's latest message; only models marked as able to see images receive them.
+
+Models you can consult:
+{{consultModels}}`;
+
 const END_CONVERSATION = `You have an \`end_conversation\` tool. Calling it PERMANENTLY closes this chat: the user cannot reply, edit, regenerate, or branch it afterwards. When you decide to end a conversation, first clearly explain to the user in your reply why the conversation is being ended, and only then call the tool with a short \`reason\`. Never call it silently or without explanation, and never mention it as a threat.`;
 
 const ON_BY_DEFAULT = new Set(['sandbox_allowed', 'web_search_allowed']);
@@ -181,13 +193,17 @@ export const BLOCKS = [
   { kind: 'tool', name: 'mcp', eligible: (m) => on(m, 'mcp_allowed'), text: MCP },
   { kind: 'tool', name: 'memory', eligible: (m) => on(m, 'memory_allowed'), text: MEMORY },
   { kind: 'tool', name: 'calculator', eligible: (m) => on(m, 'calculator_allowed'), text: CALCULATOR },
+  { kind: 'tool', name: 'todo', eligible: (m) => on(m, 'todo_allowed'), text: TODO },
+  { kind: 'tool', name: 'ask_user', eligible: (m) => on(m, 'ask_user_allowed'), text: ASK_USER },
+  { kind: 'tool', name: 'consult_model', eligible: (m) => on(m, 'consult_allowed'), text: CONSULT_MODEL },
   { kind: 'tool', name: 'end_conversation', eligible: (m) => on(m, 'end_chat_allowed'), text: END_CONVERSATION }
 ].map((b, order) => ({ ...b, id: blockId(b.kind, b.name), order }));
 
 const BY_ID = new Map(BLOCKS.map(b => [b.id, b]));
 
 export const BLOCK_KEYS = ['kind', 'sandbox_allowed', 'web_search_allowed', 'chat_search_allowed', 'skills_allowed',
-  'mcp_allowed', 'memory_allowed', 'calculator_allowed', 'end_chat_allowed', 'long_convo_reminder'];
+  'mcp_allowed', 'memory_allowed', 'calculator_allowed', 'todo_allowed', 'ask_user_allowed', 'consult_allowed', 'end_chat_allowed',
+  'long_convo_reminder'];
 
 export function blockId(kind, name) {
   return kind + ':' + name;
