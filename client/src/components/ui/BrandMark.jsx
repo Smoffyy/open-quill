@@ -1,6 +1,6 @@
-import { BRAND_ICON } from '../../lib/brand.js';
+import { ModelMark } from './Weave.jsx';
+import { BRAND_FRAME, MODEL_WEAVE } from '../../lib/brand.js';
 
-export default function BrandMark({ src, className = '' }) {
-  if (src && src !== BRAND_ICON) return <img src={src} className={className || undefined} alt="" aria-hidden="true" />;
-  return <span className={'brand-mark' + (className ? ' ' + className : '')} aria-hidden="true" />;
+export default function BrandMark({ src, className = '', state = 'idle', still = false }) {
+  return <ModelMark src={src || MODEL_WEAVE} at={BRAND_FRAME} state={state} still={still} className={'brand-mark' + (className ? ' ' + className : '')} />;
 }

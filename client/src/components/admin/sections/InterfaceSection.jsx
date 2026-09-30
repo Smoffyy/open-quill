@@ -4,7 +4,7 @@ import { useAdmin } from '../store.jsx';
 import { Card, Rows, Row, ToggleRow, Fields, Field, Input, Seg, Btn, Note, Badge, Acts } from '../ui.jsx';
 import { ImagePicker } from '../media.jsx';
 import { t, tk } from '../../../i18n.jsx';
-import { BRAND_APP_ICON } from '../../../lib/brand.js';
+import { MODEL_WEAVE } from '../../../lib/brand.js';
 import { Palette, Sparkles, Eye } from '../../ui/icons.jsx';
 import { toast } from '../../../lib/toast.js';
 
@@ -111,7 +111,7 @@ export default function InterfaceSection() {
               onChange={(e) => setCfg('appName', e.target.value)} />
           </Field>
           <Field label={t('Icon')} hint={t('PNG, SVG, JPEG, or GIF. SVG stays vector through the crop.')}>
-            <ImagePicker value={config.appIcon} fallback={BRAND_APP_ICON} onChange={(v) => setCfg('appIcon', v)} />
+            <ImagePicker value={config.appIcon} fallback={MODEL_WEAVE} onChange={(v) => setCfg('appIcon', v)} />
           </Field>
           <Field label={t('Support contact')}
             hint={t('Who to reach about this instance. An email address or an https link. Shown on the 404 page; leave empty to hide it.')}>

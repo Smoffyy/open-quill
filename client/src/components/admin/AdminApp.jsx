@@ -170,7 +170,7 @@ function Shell() {
       <div className="cp">
         <header className="cp-top">
           <div className="cp-mark">
-            <BrandMark src={workspace.config.appIcon} />
+            <BrandMark src={workspace.config.appIcon} still />
             <b>{workspace.config.appName || 'open-quill'}</b>
             <span>{t('Admin')}</span>
           </div>

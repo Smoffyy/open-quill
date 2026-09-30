@@ -110,7 +110,7 @@
   min-width: 0;
   flex-shrink: 0;
 }
-.cp-mark img, .cp-mark .brand-mark { width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0; }
+.cp-mark .brand-mark { width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0; }
 .cp-mark b {
   font-size: 14px;
   font-weight: 600;

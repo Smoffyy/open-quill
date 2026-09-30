@@ -1727,7 +1727,7 @@ export default function App() {
                 {chatErrors[activeKey()] && <ChatError message={chatErrors[activeKey()]} onDismiss={() => dismissError()} />}
                 <QueuedMessages items={queuedList} onRemove={(id) => setQueue(l => l.filter(x => x.id !== id))} />
                 {queued && !streaming && (
-                  <div className="msg assistant"><div className="queue-wait"><BrandMark className="pulse think-dot" /> {t("Waiting for queue…")}</div></div>
+                  <div className="msg assistant"><div className="queue-wait"><BrandMark className="think-dot" state="thinking" /> {t("Waiting for queue…")}</div></div>
                 )}
                 {compacting && <CompactingBar />}
                 <div className="thread-pad" />

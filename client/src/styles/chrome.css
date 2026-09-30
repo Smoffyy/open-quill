@@ -19,7 +19,7 @@
 .login { height: 100%; display: flex; align-items: center; justify-content: center; background: var(--bg); color: var(--text); overflow: hidden auto; padding: 24px 0; }
 .login-card { width: 100%; max-width: 420px; padding: 40px 24px; text-align: center; }
 .login-logo { display: flex; align-items: center; gap: 9px; justify-content: center; font-size: 22px; font-weight: 600; margin-bottom: 38px; color: var(--text); }
-.login-logo img, .login-logo .brand-mark { width: 26px; height: 26px; }
+.login-logo .brand-mark { width: 26px; height: 26px; }
 .login h1 { font-size: 40px; line-height: 1.12; margin: 0 0 30px; font-weight: 500; color: var(--text); }
 .login h1 b { font-weight: 700; }
 .login-box { background: var(--card-bg, var(--surface)); border: 1px solid var(--border); border-radius: 14px; padding: 22px; box-shadow: 0 1px 3px #0000000f; text-align: left; }
