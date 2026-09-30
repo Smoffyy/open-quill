@@ -270,7 +270,6 @@
 .cp-menu-item > .mc-menu-two { display: flex; flex-direction: column; gap: 1px; padding: var(--cp-1) 0; white-space: normal; }
 .mc-menu-two b { font-weight: 500; }
 .mc-menu-two small { font-size: 11.5px; color: var(--cp-faint); }
-.cp-menu-item > .mc-mark-opt { width: 20px; height: 20px; flex-shrink: 0; object-fit: contain; }
 .cp-menu-item.mc-menu-check:disabled { opacity: 1; cursor: default; }
 .cp-menu-item.mc-menu-check:disabled .mc-check { opacity: .55; }
 .cp-menu-item > .mc-check { display: grid; place-items: center; flex: 0 0 15px; width: 15px; height: 15px; color: var(--cp-ink); }

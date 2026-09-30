@@ -8,7 +8,7 @@ import { channelLabel } from '../../lib/channel.js';
 import { copyText } from '../../lib/clipboard.js';
 import { Skel, SkelLines } from '../ui/Skeleton.jsx';
 import { toast } from '../../lib/toast.js';
-import { BRAND_ICON } from '../../lib/brand.js';
+import BrandMark from '../ui/BrandMark.jsx';
 
 // The server hands back a plain YYYY-MM-DD. Splitting it by hand rather than passing it to
 // Date() keeps it off the UTC-parsing path, which would render the day before east of Greenwich.
@@ -41,7 +41,7 @@ function VersionBadge({ label, icon }) {
       <svg className="vh-badge-num" viewBox={box || undefined} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
         <text ref={textRef} x="0" y="0" dominantBaseline="text-before-edge">{label}</text>
       </svg>
-      <span className="vh-badge-wm" aria-hidden="true"><img src={icon} alt="" /></span>
+      <span className="vh-badge-wm" aria-hidden="true"><BrandMark src={icon} still /></span>
     </div>
   );
 }
@@ -78,7 +78,7 @@ export default function VersionTab({ cfg, onChangelog }) {
   return (
     <div className="vh">
       <div className="vh-top">
-        {line && <VersionBadge label={line} icon={cfg?.appIcon || BRAND_ICON} />}
+        {line && <VersionBadge label={line} icon={cfg?.appIcon} />}
         <div className="vh-id">
           <div className="vh-name">{appName}</div>
           <div className="vh-meta">

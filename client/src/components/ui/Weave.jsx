@@ -231,7 +231,7 @@ function fit(o, cssW, cssH) {
 // All per-mark state lives in a plain object `o` rather than React state, so
 // animating never re-renders the component. The first effect creates it and
 // wires the observers; the second feeds prop changes into it.
-export default function Weave({ state = 'idle', still = false, className = '', style }) {
+export default function Weave({ state = 'idle', still = false, className = '', style, at = null }) {
   const ref = useRef(null);
   const inst = useRef(null);
 
@@ -244,7 +244,7 @@ export default function Weave({ state = 'idle', still = false, className = '', s
       // is morph into its state. See the note at the top of this file.
       cur: weaveState('idle'), target, still, visible: true,
       // Random starting clocks, so two marks side by side are not in lockstep.
-      clock: { time: Math.random() * 10, angle: Math.random() * TAU, flow: Math.random() },
+      clock: at ? { time: at.time, angle: at.angle, flow: 0 } : { time: Math.random() * 10, angle: Math.random() * TAU, flow: Math.random() },
       color: '', colorsAt: -1, poke: 0
     };
     canvas.__weave = o;
@@ -285,8 +285,8 @@ export default function Weave({ state = 'idle', still = false, className = '', s
 // model icon is shown so the built-in mark works in every place an uploaded
 // logo does. Both are decorative (the model name is always next to them), so
 // neither is announced to screen readers.
-export function ModelMark({ src, state, still, className, style }) {
+export function ModelMark({ src, state, still, className, style, at }) {
   if (!src) return null;
-  if (src === MODEL_WEAVE) return <Weave state={state} still={still} className={className} style={style} />;
+  if (src === MODEL_WEAVE) return <Weave state={state} still={still} className={className} style={style} at={at} />;
   return <img src={src} className={className || undefined} style={style} alt="" aria-hidden="true" />;
 }

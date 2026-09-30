@@ -1,50 +1,23 @@
-import { useState } from 'react';
 import { useAdmin } from '../../store.jsx';
-import { Card, Rows, Fields, Btn, Range, PointMenu, MenuItem, clampToViewport } from '../../ui.jsx';
+import { Card, Rows, Fields, Btn, Range } from '../../ui.jsx';
 import { ImagePicker } from '../../media.jsx';
 import { useEditor, useField, useChange, Revert, Slot, Line, Flag, Choice, TextField, When } from '../bind.jsx';
 import { BADGES, badgesOf } from '../../../../lib/badges.js';
 import { t, tk } from '../../../../i18n.jsx';
-import { MODEL_WEAVE, BRAND_ICON, BRAND_GENERATING, BRAND_THINKING } from '../../../../lib/brand.js';
-import { ModelMark } from '../../../ui/Weave.jsx';
+import { MODEL_WEAVE } from '../../../../lib/brand.js';
 
 const MOTIONS = [
   ['none', tk('none')], ['spin', tk('spin')], ['pulse', tk('breathe')],
   ['bounce', tk('bounce')], ['wobble', tk('wobble')], ['fade', tk('fade')]
 ];
 const DEFAULT_SIZE = 50;
-const MARK_SETS = [
-  { id: 'modern', label: tk('Modern set'), hint: tk('Animated, changes shape with each state'), icons: { static_icon: MODEL_WEAVE, generating_icon: MODEL_WEAVE, thinking_icon: MODEL_WEAVE } },
-  { id: 'legacy', label: tk('Legacy set'), hint: tk('The original mark, same as the app icon'), icons: { static_icon: BRAND_ICON, generating_icon: BRAND_GENERATING, thinking_icon: BRAND_THINKING } }
-];
-const MARK_MENU_W = 260;
-const MARK_MENU_H = 130;
 
 function BuiltInMark() {
   const { edit } = useEditor();
-  const [menu, setMenu] = useState(null);
   return (
-    <>
-      <Btn size="sm" aria-haspopup="menu" aria-expanded={!!menu}
-        onClick={(e) => {
-          if (menu) { setMenu(null); return; }
-          const r = e.currentTarget.getBoundingClientRect();
-          setMenu({ at: clampToViewport(r.right - MARK_MENU_W, r.bottom + 4, MARK_MENU_W, MARK_MENU_H), el: e.currentTarget });
-        }}>
-        {t('Use the built-in mark')}
-      </Btn>
-      {menu && (
-        <PointMenu at={menu.at} width={MARK_MENU_W} anchorEl={menu.el} onClose={() => setMenu(null)}>
-          <div className="cp-menu-empty">{t('Built-in mark')}</div>
-          {MARK_SETS.map(set => (
-            <MenuItem key={set.id} onClick={() => { setMenu(null); edit(set.icons); }}>
-              <ModelMark src={set.icons.static_icon} className="mc-mark-opt" />
-              <span className="mc-menu-two"><b>{t(set.label)}</b><small>{t(set.hint)}</small></span>
-            </MenuItem>
-          ))}
-        </PointMenu>
-      )}
-    </>
+    <Btn size="sm" onClick={() => edit({ static_icon: MODEL_WEAVE, generating_icon: MODEL_WEAVE, thinking_icon: MODEL_WEAVE })}>
+      {t('Use the built-in mark')}
+    </Btn>
   );
 }
 

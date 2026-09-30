@@ -4,7 +4,7 @@ import Database from 'better-sqlite3-multiple-ciphers';
 import { DATA_ROOT, dataPath } from './lib/dataroot.js';
 import { migrate } from './db/schema.js';
 import { makeCollection, bumpTable } from './db/collection.js';
-import { BRAND_ICON, BRAND_GENERATING, BRAND_THINKING, BRAND_ICON_FIELDS, MODEL_WEAVE, remapBrandPath } from './lib/brand.js';
+import { BRAND_ICON_FIELDS, LEGACY_MARK_SET, MODEL_WEAVE, remapBrandPath, retireLegacyMark } from './lib/brand.js';
 
 const DATA_DIR = DATA_ROOT;
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -338,11 +338,24 @@ if (!getSetting('brand_paths_v2')) {
 
 if (!getSetting('model_weave_v1')) {
   for (const m of db.models.all()) {
-    if (m.static_icon === BRAND_ICON && m.generating_icon === BRAND_GENERATING && m.thinking_icon === BRAND_THINKING) {
+    if (m.static_icon === LEGACY_MARK_SET[0] && m.generating_icon === LEGACY_MARK_SET[1] && m.thinking_icon === LEGACY_MARK_SET[2]) {
       db.models.update(m.id, { static_icon: MODEL_WEAVE, generating_icon: MODEL_WEAVE, thinking_icon: MODEL_WEAVE });
     }
   }
   setSetting('model_weave_v1', '1');
+}
+
+if (!getSetting('legacy_mark_v1')) {
+  for (const m of db.models.all()) {
+    const patch = {};
+    for (const f of BRAND_ICON_FIELDS) {
+      const next = retireLegacyMark(m[f]);
+      if (next !== m[f]) patch[f] = next;
+    }
+    if (Object.keys(patch).length) db.models.update(m.id, patch);
+  }
+  if (LEGACY_MARK_SET.includes(getSetting('app_icon', ''))) setSetting('app_icon', '');
+  setSetting('legacy_mark_v1', '1');
 }
 
 export default db;

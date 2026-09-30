@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { t } from '../../i18n.jsx';
 import { Chevron, Search, Plus, Trash } from '../ui/icons.jsx';
-import { BRAND_ICON } from '../../lib/brand.js';
+import BrandMark from '../ui/BrandMark.jsx';
 import { docsSearch } from '../../lib/modeldocs.js';
 
 function Item({ label, active, indent = false, onClick }) {
@@ -59,7 +59,7 @@ export default function DocsNav({
       <div className="dnav-head">
         <button className="dnav-brand" onClick={onExit} title={appName || t('Back')}>
           <Chevron className="dnav-brand-back" aria-hidden="true" />
-          <img className="dnav-brand-ic" src={appIcon || BRAND_ICON} alt="" aria-hidden="true" />
+          <BrandMark className="dnav-brand-ic" src={appIcon} still />
           <b className="dnav-brand-name">{appName || 'open-quill'}</b>
         </button>
       </div>
