@@ -510,7 +510,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
                 <div className="retry-menu-label">{t("Retry with")}</div>
                 {models.map(mm => (
                   <button key={mm.id} role="menuitem" className={mm.id === currentId ? 'on' : ''} onClick={() => { setRetryMenu(false); onRegenerateWith(msg.id, mm.id); }}>
-                    <ModelMark src={mm.staticIcon} still />{mm.displayName}{mm.id === currentId && <Check style={{ width: 13, marginLeft: 'auto' }} />}
+                    <ModelMark src={mm.staticIcon} />{mm.displayName}{mm.id === currentId && <Check style={{ width: 13, marginLeft: 'auto' }} />}
                   </button>
                 ))}
               </div>, document.body)}

@@ -1586,7 +1586,6 @@
   "Duplicated.": "Dupliqué.",
   "Renaming, deleting, importing, exporting and version history all live inside build mode, next to the design you are working on.": "Le renommage, la suppression, l’importation, l’exportation et l’historique des versions se trouvent dans le mode création, à côté du design sur lequel vous travaillez.",
   "Used in the browser tab, the sidebar, and the greeting.": "Utilisée dans l’onglet du navigateur, la barre latérale et l’écran d’accueil.",
-  "PNG, SVG, JPEG, or GIF. SVG stays vector through the crop.": "PNG, SVG, JPEG ou GIF. Le SVG reste vectoriel lors du recadrage.",
   "Support contact": "Contact du support",
   "Who to reach about this instance. An email address or an https link. Shown on the 404 page; leave empty to hide it.": "Qui contacter au sujet de cette instance. Une adresse e-mail ou un lien https. Affiché sur la page 404 ; laissez vide pour le masquer.",
   "Adds an entry at the foot of the sidebar. Admins edit every page from inside the reference itself.": "Ajoute une entrée au bas de la barre latérale. Les administrateurs modifient chaque page depuis la référence elle-même.",
@@ -2633,5 +2632,6 @@
   "Loosest sampling the model is likely to ship with": "L’échantillonnage le plus libre que le modèle est susceptible d’utiliser",
   "First token": "Premier jeton",
   "Throughput": "Débit",
-  "Total": "Total"
+  "Total": "Total",
+  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG, SVG, JPEG, GIF ou WebP. Le SVG reste vectoriel lors du recadrage et les images animées gardent leur mouvement."
 }

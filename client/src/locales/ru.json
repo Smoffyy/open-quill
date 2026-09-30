@@ -1224,7 +1224,6 @@
   "Overrides apply to this chat only, on top of the model's own settings.": "Переопределения применяются только к этому чату, поверх собственных настроек модели.",
   "Overrides the theme's default font, on this device only.": "Переопределяет шрифт темы по умолчанию только на этом устройстве.",
   "Overview": "Обзор",
-  "PNG, SVG, JPEG, or GIF. SVG stays vector through the crop.": "PNG, SVG, JPEG или GIF. SVG остаётся векторным после обрезки.",
   "Padding": "Внутренний отступ",
   "Page settings": "Настройки страницы",
   "Page title": "Заголовок страницы",
@@ -2633,5 +2632,6 @@
   "Pick one or more, then send. Or type your own below.": "Выберите один или несколько вариантов и отправьте. Или напишите свой ответ ниже.",
   "Answer: {answer}": "Ответ: {answer}",
   "Skipped": "Пропущено",
-  "Skip": "Пропустить"
+  "Skip": "Пропустить",
+  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG, SVG, JPEG, GIF или WebP. SVG остаётся векторным после обрезки, а анимированные изображения сохраняют движение."
 }

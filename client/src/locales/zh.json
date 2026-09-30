@@ -1586,7 +1586,6 @@
   "Duplicated.": "已复制。",
   "Renaming, deleting, importing, exporting and version history all live inside build mode, next to the design you are working on.": "重命名、删除、导入、导出和版本历史都在构建模式中，就在你正在设计的内容旁边。",
   "Used in the browser tab, the sidebar, and the greeting.": "用于浏览器标签页、侧边栏和问候语。",
-  "PNG, SVG, JPEG, or GIF. SVG stays vector through the crop.": "PNG、SVG、JPEG 或 GIF。SVG 在裁剪后仍保持矢量。",
   "Support contact": "支持联系方式",
   "Who to reach about this instance. An email address or an https link. Shown on the 404 page; leave empty to hide it.": "就此实例应联系谁。可以是邮箱地址或 https 链接。显示在 404 页面上；留空则隐藏。",
   "Adds an entry at the foot of the sidebar. Admins edit every page from inside the reference itself.": "在侧边栏底部添加一个入口。管理员可在参考页面内直接编辑每个页面。",
@@ -2633,5 +2632,6 @@
   "Loosest sampling the model is likely to ship with": "模型可能采用的最宽松的采样",
   "First token": "首个 token",
   "Throughput": "吞吐量",
-  "Total": "总计"
+  "Total": "总计",
+  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG、SVG、JPEG、GIF 或 WebP。SVG 在裁剪后仍保持矢量，动态图片会保留动画。"
 }

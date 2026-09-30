@@ -1224,7 +1224,6 @@
   "Overrides apply to this chat only, on top of the model's own settings.": "재정의는 모델 자체 설정 위에 이 채팅에만 적용됩니다.",
   "Overrides the theme's default font, on this device only.": "이 기기에서만 테마의 기본 글꼴을 재정의합니다.",
   "Overview": "개요",
-  "PNG, SVG, JPEG, or GIF. SVG stays vector through the crop.": "PNG, SVG, JPEG 또는 GIF. SVG는 자르기 후에도 벡터로 유지됩니다.",
   "Padding": "패딩",
   "Page settings": "페이지 설정",
   "Page title": "페이지 제목",
@@ -2633,5 +2632,6 @@
   "Pick one or more, then send. Or type your own below.": "하나 이상 골라 보내세요. 아래에 직접 입력해도 됩니다.",
   "Answer: {answer}": "답변: {answer}",
   "Skipped": "건너뜀",
-  "Skip": "건너뛰기"
+  "Skip": "건너뛰기",
+  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG, SVG, JPEG, GIF 또는 WebP. SVG는 자르기 후에도 벡터로 유지되고, 움직이는 이미지는 움직임을 유지합니다."
 }

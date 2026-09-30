@@ -1224,7 +1224,6 @@
   "Overrides apply to this chat only, on top of the model's own settings.": "上書きはこのチャットのみに適用され、モデル自体の設定に追加されます。",
   "Overrides the theme's default font, on this device only.": "このデバイスに限りテーマの既定フォントを上書きします。",
   "Overview": "概要",
-  "PNG, SVG, JPEG, or GIF. SVG stays vector through the crop.": "PNG、SVG、JPEG、GIFに対応。SVGは切り抜き後もベクターのままです。",
   "Padding": "パディング",
   "Page settings": "ページ設定",
   "Page title": "ページタイトル",
@@ -2633,5 +2632,6 @@
   "Pick one or more, then send. Or type your own below.": "1 つ以上選んで送信してください。下に自分で入力することもできます。",
   "Answer: {answer}": "回答: {answer}",
   "Skipped": "スキップ済み",
-  "Skip": "スキップ"
+  "Skip": "スキップ",
+  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG、SVG、JPEG、GIF、WebPに対応。SVGは切り抜き後もベクターのままで、アニメーション画像は動きを保ちます。"
 }

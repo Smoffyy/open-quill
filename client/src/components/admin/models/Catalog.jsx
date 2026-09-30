@@ -384,7 +384,7 @@ export default function Catalog() {
           <Tick state={on ? 'on' : ''} />
         </span>
         {m.static_icon
-          ? <ModelMark src={m.static_icon} className="mc-row-icon" still />
+          ? <ModelMark src={m.static_icon} className="mc-row-icon" />
           : <span className="mc-row-icon blank" aria-hidden="true"><Cube /></span>}
         <span className="mc-row-text">
           {editing ? <NameEdit c={editing} /> : <span className="mc-row-name">{m.display_name || t('Untitled')}</span>}

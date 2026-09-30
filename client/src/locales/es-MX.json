@@ -1734,7 +1734,6 @@
   "Output pricing": "Precio de salida",
   "Overlay scrim": "Velo de superposición",
   "Overview": "Resumen",
-  "PNG, SVG, JPEG, or GIF. SVG stays vector through the crop.": "PNG, SVG, JPEG o GIF. El SVG se mantiene vectorial durante el recorte.",
   "Padding": "Relleno",
   "Page settings": "Ajustes de la página",
   "Page title": "Título de la página",
@@ -2633,5 +2632,6 @@
   "Pick one or more, then send. Or type your own below.": "Elige una o varias y envía. O escribe la tuya abajo.",
   "Answer: {answer}": "Respuesta: {answer}",
   "Skipped": "Omitida",
-  "Skip": "Omitir"
+  "Skip": "Omitir",
+  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG, SVG, JPEG, GIF o WebP. El SVG se mantiene vectorial durante el recorte y las imágenes animadas conservan su movimiento."
 }

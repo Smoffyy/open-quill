@@ -6,6 +6,7 @@ import { t, tk } from '../../i18n.jsx';
 import { useDismiss } from '../../lib/dismiss.js';
 import Weave from '../ui/Weave.jsx';
 import { MODEL_WEAVE } from '../../lib/brand.js';
+import { isAnimatedImage, ANIMATION_SNIFF_BYTES } from '../../lib/animatedimage.js';
 
 function Slider({ label, min, max, step, value, onChange }) {
   return (
@@ -217,7 +218,7 @@ export function ImagePicker({ value, fallback, onChange, hint, state }) {
     e.target.value = '';
     if (!f) return;
     if (f.type === 'image/svg+xml' || /\.svg$/i.test(f.name || '')) { setVector(f); return; }
-    if (f.type === 'image/gif') { const { url } = await api.upload(f); onChange(url); return; }
+    if (isAnimatedImage(await f.slice(0, ANIMATION_SNIFF_BYTES).arrayBuffer())) { const { url } = await api.upload(f); onChange(url); return; }
     setRaster(f);
   }
 
@@ -238,7 +239,7 @@ export function ImagePicker({ value, fallback, onChange, hint, state }) {
       </div>
       {hint && <div className="cp-hint">{hint}</div>}
       <input ref={ref} type="file" hidden onChange={pick}
-        accept=".png,.svg,.jpg,.jpeg,.gif,image/png,image/svg+xml,image/jpeg,image/gif" />
+        accept=".png,.svg,.jpg,.jpeg,.gif,.webp,image/png,image/svg+xml,image/jpeg,image/gif,image/webp" />
       {raster && <RasterCrop file={raster} onCancel={() => setRaster(null)} onDone={(url) => { setRaster(null); onChange(url); }} />}
       {vector && <VectorCrop file={vector} onCancel={() => setVector(null)} onDone={(url) => { setVector(null); onChange(url); }} />}
     </div>

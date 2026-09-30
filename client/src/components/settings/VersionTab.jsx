@@ -41,7 +41,7 @@ function VersionBadge({ label, icon }) {
       <svg className="vh-badge-num" viewBox={box || undefined} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
         <text ref={textRef} x="0" y="0" dominantBaseline="text-before-edge">{label}</text>
       </svg>
-      <span className="vh-badge-wm" aria-hidden="true"><BrandMark src={icon} still /></span>
+      <span className="vh-badge-wm" aria-hidden="true"><BrandMark src={icon} /></span>
     </div>
   );
 }

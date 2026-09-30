@@ -1224,7 +1224,6 @@
   "Overrides apply to this chat only, on top of the model's own settings.": "Überschreibungen gelten nur für diesen Chat, zusätzlich zu den eigenen Einstellungen des Modells.",
   "Overrides the theme's default font, on this device only.": "Überschreibt die Standardschrift des Themes, nur auf diesem Gerät.",
   "Overview": "Übersicht",
-  "PNG, SVG, JPEG, or GIF. SVG stays vector through the crop.": "PNG, SVG, JPEG oder GIF. SVG bleibt beim Zuschneiden vektoriell.",
   "Padding": "Innenabstand",
   "Page settings": "Seiteneinstellungen",
   "Page title": "Seitentitel",
@@ -2633,5 +2632,6 @@
   "Pick one or more, then send. Or type your own below.": "Wähle eine oder mehrere und sende sie ab. Oder schreib unten deine eigene Antwort.",
   "Answer: {answer}": "Antwort: {answer}",
   "Skipped": "Übersprungen",
-  "Skip": "Überspringen"
+  "Skip": "Überspringen",
+  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG, SVG, JPEG, GIF oder WebP. SVG bleibt beim Zuschneiden vektoriell, und animierte Bilder bleiben in Bewegung."
 }

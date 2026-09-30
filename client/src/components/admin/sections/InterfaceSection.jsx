@@ -110,7 +110,7 @@ export default function InterfaceSection() {
             <Input value={config.appName} placeholder="open-quill"
               onChange={(e) => setCfg('appName', e.target.value)} />
           </Field>
-          <Field label={t('Icon')} hint={t('PNG, SVG, JPEG, or GIF. SVG stays vector through the crop.')}>
+          <Field label={t('Icon')} hint={t('PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.')}>
             <ImagePicker value={config.appIcon} fallback={MODEL_WEAVE} onChange={(v) => setCfg('appIcon', v)} />
           </Field>
           <Field label={t('Support contact')}
