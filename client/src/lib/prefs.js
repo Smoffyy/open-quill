@@ -1,5 +1,6 @@
 import { paletteFor } from './palettes.js';
 import { resolveReveal } from './reveal.js';
+import { syncFavicon } from './favicon.js';
 
 export function prefersDark() {
   return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -41,6 +42,7 @@ export function applyPrefs(prefs, preset) {
   root.style.setProperty('--caret-cycle', (blink * 2) + 'ms');
   root.style.setProperty('--caret-pulse', pulse + 'ms');
   applyUserFont();
+  syncFavicon();
 }
 
 export const APP_FONTS = new Set(['literata', 'newsreader', 'sans']);

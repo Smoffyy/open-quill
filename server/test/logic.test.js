@@ -27,7 +27,7 @@ import { resolveRouted, ruleMatches, routerRules, modelLabel } from '../lib/rout
 import { preferredChild } from '../lib/tree.js';
 import { looksTextual, isZipOfficeDoc } from '../lib/extract.js';
 import { releaseCandidates, parseManifest } from '../lib/release.js';
-import { remapBrandPath } from '../lib/brand.js';
+import { remapBrandPath, retireLegacyMark } from '../lib/brand.js';
 import { badgesOf, sanitizeBadgesOff } from '../lib/badges.js';
 import { samplingParams, parseStop } from '../llm/sampling.js';
 import { PROVIDER_TYPES, isProviderType, providerSpec, isLocalType } from '../lib/providers.js';
@@ -1629,6 +1629,15 @@ test('remapBrandPath leaves an operator upload alone', () => {
   assert.equal(remapBrandPath('constructor'), 'constructor', 'the table is null-prototyped');
 });
 
+test('retireLegacyMark moves the retired legacy set to the weave and nothing else', () => {
+  for (const v of ['/brand/mark.svg', '/brand/mark-generating.svg', '/brand/mark-thinking.svg']) {
+    assert.equal(retireLegacyMark(v), 'builtin:weave', v);
+  }
+  for (const v of ['/uploads/mine.png', 'builtin:weave', '/brand/app-icon.svg', '/brand/mark.svg?v=2', '', null, undefined, 42]) {
+    assert.equal(retireLegacyMark(v), v, String(v));
+  }
+});
+
 // --- continuing a turn the model ended too early -------------------------
 // A step with no tool call ends the turn. When the model announced the next
 // step and then stopped without taking it, that is a stall, not an answer.
@@ -2050,7 +2059,7 @@ test('badges follow what a model supports, minus the ones an admin switched off'
 test('the client and server agree on the brand icon paths', async () => {
   const server = await import('../lib/brand.js');
   const client = await import('../../client/src/lib/brand.js');
-  for (const key of ['BRAND_ICON', 'BRAND_GENERATING', 'BRAND_THINKING', 'MODEL_WEAVE']) {
+  for (const key of ['BRAND_ICON', 'BRAND_APP_ICON', 'BRAND_FAVICON_DARK', 'BRAND_FAVICON_LIGHT', 'MODEL_WEAVE']) {
     assert.equal(client[key], server[key], `${key} differs between client/src/lib/brand.js and server/lib/brand.js`);
   }
 });

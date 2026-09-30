@@ -76,7 +76,8 @@ import BranchTree from './components/chat/BranchTree.jsx';
 import { toast } from './lib/toast.js';
 import { copyText } from './lib/clipboard.js';
 import { Down, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork, Panel, Copy, Star, Telescope, TextIcon, Expand } from './components/ui/icons.jsx';
-import { BRAND_ICON } from './lib/brand.js';
+import { setCustomFavicon } from './lib/favicon.js';
+import BrandMark from './components/ui/BrandMark.jsx';
 import { SKELETON_DELAY } from './lib/skeleton.js';
 
 const SetupGuide = lazy(() => import('./components/setup/SetupGuide.jsx'));
@@ -529,6 +530,7 @@ export default function App() {
         try { localStorage.setItem('oq-preset', preset); } catch {}
         document.documentElement.setAttribute('data-font', appFontId(c.appFont));
         applyPrefs(null, preset);
+        setCustomFavicon(c.appIcon);
       }).catch(() => {});
     });
   }, []);
@@ -685,9 +687,7 @@ export default function App() {
     try { localStorage.setItem('oq-preset', preset); } catch {}
     applyPrefs(userRef.current?.prefs, preset);
     document.documentElement.setAttribute('data-font', appFontId(c.appFont));
-    let link = document.querySelector('link[rel="icon"]');
-    if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
-    link.href = c.appIcon || BRAND_ICON;
+    setCustomFavicon(c.appIcon);
   }
 
   function wsSend(obj) {
@@ -1727,7 +1727,7 @@ export default function App() {
                 {chatErrors[activeKey()] && <ChatError message={chatErrors[activeKey()]} onDismiss={() => dismissError()} />}
                 <QueuedMessages items={queuedList} onRemove={(id) => setQueue(l => l.filter(x => x.id !== id))} />
                 {queued && !streaming && (
-                  <div className="msg assistant"><div className="queue-wait"><img src={BRAND_ICON} className="pulse think-dot" alt="" aria-hidden="true" /> {t("Waiting for queue…")}</div></div>
+                  <div className="msg assistant"><div className="queue-wait"><BrandMark className="pulse think-dot" /> {t("Waiting for queue…")}</div></div>
                 )}
                 {compacting && <CompactingBar />}
                 <div className="thread-pad" />

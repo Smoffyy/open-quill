@@ -1,8 +1,12 @@
 <div align="center">
 
-<img src="client/public/brand/mark.svg" alt="Open Quill" width="120"/>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="press-kit/lockup/lockup-stacked-on-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="press-kit/lockup/lockup-stacked-on-light.svg">
+  <img src="press-kit/lockup/lockup-stacked-on-light.svg" alt="Open Quill" width="350">
+</picture>
 
-# Open Quill
+---
 
 **A self-hosted chat interface for local and cloud LLMs.**<br/>
 Anthropic-inspired design, artifacts, a real code sandbox. Nothing leaves your machine unless you say so.

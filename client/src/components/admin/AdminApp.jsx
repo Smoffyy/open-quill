@@ -6,7 +6,7 @@ import { Confirm, SaveState, SectionSkeleton } from './ui.jsx';
 import { PublishState } from './publish.jsx';
 import { Search, X, Cube } from '../ui/icons.jsx';
 import { t } from '../../i18n.jsx';
-import { BRAND_ICON } from '../../lib/brand.js';
+import BrandMark from '../ui/BrandMark.jsx';
 import { useSkeleton } from '../../lib/skeleton.js';
 
 import OverviewSection from './sections/OverviewSection.jsx';
@@ -170,7 +170,7 @@ function Shell() {
       <div className="cp">
         <header className="cp-top">
           <div className="cp-mark">
-            <img src={workspace.config.appIcon || BRAND_ICON} alt="" aria-hidden="true" />
+            <BrandMark src={workspace.config.appIcon} />
             <b>{workspace.config.appName || 'open-quill'}</b>
             <span>{t('Admin')}</span>
           </div>
