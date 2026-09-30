@@ -2633,5 +2633,11 @@
   "Answer: {answer}": "Ответ: {answer}",
   "Skipped": "Пропущено",
   "Skip": "Пропустить",
-  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG, SVG, JPEG, GIF или WebP. SVG остаётся векторным после обрезки, а анимированные изображения сохраняют движение."
+  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG, SVG, JPEG, GIF или WebP. SVG остаётся векторным после обрезки, а анимированные изображения сохраняют движение.",
+  "Plan finished": "План выполнен",
+  "Plan cancelled": "План отменён",
+  "Cancelled": "Отменено",
+  "Could not save this file.": "Не удалось сохранить этот файл.",
+  "Edit {name}": "Редактировать {name}",
+  "Discard unsaved changes?": "Отменить несохранённые изменения?"
 }

@@ -2633,5 +2633,11 @@
   "Answer: {answer}": "Antwort: {answer}",
   "Skipped": "Übersprungen",
   "Skip": "Überspringen",
-  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG, SVG, JPEG, GIF oder WebP. SVG bleibt beim Zuschneiden vektoriell, und animierte Bilder bleiben in Bewegung."
+  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG, SVG, JPEG, GIF oder WebP. SVG bleibt beim Zuschneiden vektoriell, und animierte Bilder bleiben in Bewegung.",
+  "Plan finished": "Plan abgeschlossen",
+  "Plan cancelled": "Plan abgebrochen",
+  "Cancelled": "Abgebrochen",
+  "Could not save this file.": "Diese Datei konnte nicht gespeichert werden.",
+  "Edit {name}": "{name} bearbeiten",
+  "Discard unsaved changes?": "Nicht gespeicherte Änderungen verwerfen?"
 }

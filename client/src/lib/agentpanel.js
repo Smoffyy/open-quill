@@ -1,6 +1,9 @@
 import { oqrRecords } from './oqr.js';
 
 const stepKey = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+const finished = (it) => it.status === 'completed' || it.status === 'cancelled';
+
+const isClosedPlan = (items) => !items.length || items.every(finished);
 
 export function planRecords(messages) {
   const out = [];
@@ -25,17 +28,21 @@ const shape = (plan) => (plan ? {
   key: plan.key,
   items: plan.items,
   done: plan.items.filter(it => it.status === 'completed').length,
-  total: plan.items.length
+  total: plan.items.filter(it => it.status !== 'cancelled').length
 } : null);
 
 export function groupPlans(records) {
   let current = null, previous = null;
   (records || []).forEach((items, i) => {
     if (isNewPlan(current?.items, items)) {
-      previous = current;
+      previous = current || previous;
       current = { key: 'p' + i, items };
     } else {
       current = { ...current, items };
+    }
+    if (isClosedPlan(items)) {
+      if (items.length) previous = current;
+      current = null;
     }
   });
   return { plan: shape(current), previousPlan: shape(previous) };

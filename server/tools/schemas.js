@@ -163,15 +163,15 @@ export function calculatorSchema() {
 }
 
 export function todoSchema() {
-  return fn('todo', 'Write the checklist for the current task. Every call replaces the whole list, so send every item each time with its current status. Keep exactly one item in_progress while working.', {
+  return fn('todo', 'Write the plan for a multi-step task. The user sees it as a checklist. Every call replaces the whole list, so send every item each time with its current status. Keep exactly one item in_progress while working. Mark a step cancelled to drop it. The plan closes and disappears once every step is completed or cancelled; send an empty list to cancel the whole plan.', {
     items: {
       type: 'array',
-      description: 'The complete list, in order.',
+      description: 'The complete list, in order. An empty list cancels and closes the plan.',
       items: {
         type: 'object',
         properties: {
           content: str('What the step is, in a few words.'),
-          status: { type: 'string', enum: ['pending', 'in_progress', 'completed'], description: 'The step\'s current status.' }
+          status: { type: 'string', enum: ['pending', 'in_progress', 'completed', 'cancelled'], description: 'The step\'s current status. Use cancelled for a step that is no longer needed.' }
         },
         required: ['content', 'status'],
         additionalProperties: false

@@ -156,7 +156,8 @@ function resultNote(call, res) {
     case 'skill_view': return res.name ? res.name : null;
     case 'memory': return call.text ? (res.duplicate ? t('already saved') : null) : (res.text ? `"${res.text}"` : null);
     case 'calculator': return res.result != null ? '= ' + res.result : null;
-    case 'todo': return res.total != null ? t('{done} of {total} done', { done: res.done, total: res.total }) : null;
+    case 'todo': return res.closed === 'finished' ? t('Plan finished') : res.closed === 'cancelled' ? t('Plan cancelled')
+      : res.total != null ? t('{done} of {total} done', { done: res.done, total: res.total }) : null;
     case 'ask_user': return res.answer ? t('Answer: {answer}', { answer: res.answer }) : res.skipped ? t('Skipped') : null;
     case 'extract_zip': return res.files ? plural(res.files.length, '{n} file', '{n} files') : null;
     case 'bundle_zip': return res.count != null ? plural(res.count, '{n} file', '{n} files') : null;

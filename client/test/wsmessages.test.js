@@ -288,3 +288,15 @@ test('a question the model is waiting on is tracked per chat until it is answere
   dispatchWs({ type: 'resume', turns: [{ chatId: 'c3', content: '', ask: q }] }, ctx);
   assert.deepEqual(ctx.calls.find(c => c[0] === 'setAsk'), ['setAsk', 'c3', q], 'a reload brings the open question back');
 });
+
+test('a stopped turn is committed at once, without waiting for the reveal to catch up', () => {
+  const ctx = wsCtx('c1');
+  ctx.stream.markDone = () => { ctx.calls.push(['markDone']); return false; };
+  dispatchWs({ type: 'done', chatId: 'c1', messageId: 'a1', truncated: true, stopped: true }, ctx);
+  assert.equal(did(ctx, 'finalize'), true);
+  assert.equal(ctx.recs.get('c1').truncated, true, 'the committed message keeps its cut-off flag');
+  const slow = wsCtx('c1');
+  slow.stream.markDone = () => false;
+  dispatchWs({ type: 'done', chatId: 'c1', messageId: 'a2' }, slow);
+  assert.equal(did(slow, 'finalize'), false, 'a finished turn still waits for its reveal');
+});

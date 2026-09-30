@@ -2633,5 +2633,11 @@
   "First token": "Primeiro token",
   "Throughput": "Vazão",
   "Total": "Total",
-  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG, SVG, JPEG, GIF ou WebP. O SVG continua vetorial durante o recorte e as imagens animadas mantêm o movimento."
+  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG, SVG, JPEG, GIF ou WebP. O SVG continua vetorial durante o recorte e as imagens animadas mantêm o movimento.",
+  "Plan finished": "Plano concluído",
+  "Plan cancelled": "Plano cancelado",
+  "Cancelled": "Cancelado",
+  "Could not save this file.": "Não foi possível salvar este arquivo.",
+  "Edit {name}": "Editar {name}",
+  "Discard unsaved changes?": "Descartar as alterações não salvas?"
 }

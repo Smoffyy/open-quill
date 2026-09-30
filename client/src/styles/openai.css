@@ -497,6 +497,7 @@
   [data-preset="openai"] .shortcuts-modal,
   [data-preset="openai"] .cmdk,
   [data-preset="openai"] .pj-create,
+  [data-preset="openai"] .pj-file-dialog,
   [data-preset="openai"] .summary-modal {
     width: 100% !important; max-width: 100% !important; border-radius: 22px 22px 0 0 !important;
  margin: 0 !important;

@@ -37,6 +37,8 @@
 .ap-item.in_progress .ap-text { font-weight: 600; }
 .ap-item.completed .ap-mark { border-color: var(--success); background: var(--success); color: var(--bg); }
 .ap-item.completed .ap-text { color: var(--text-muted); text-decoration: line-through; text-decoration-color: var(--text-faint); }
+.ap-item.cancelled .ap-mark { border-style: dashed; }
+.ap-item.cancelled .ap-text { color: var(--text-faint); text-decoration: line-through; text-decoration-color: var(--text-faint); }
 .ap-text { min-width: 0; overflow-wrap: anywhere; }
 
 .ap-question { padding: 10px 14px 4px; }

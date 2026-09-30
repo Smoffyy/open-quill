@@ -794,7 +794,7 @@ export default function App() {
     if (out.content || out.reasoning) {
       setMessages(ms => ms.some(m => m.id === id)
         ? ms
-        : [...ms, { id, role: 'assistant', content: out.content, reasoning: out.reasoning, model_id: mid }]);
+        : [...ms, { id, role: 'assistant', content: out.content, reasoning: out.reasoning, model_id: mid, truncated: !!(r && r.truncated) }]);
     }
     clearLive();
     if (stick.current && !selectingRef.current && !hasSelectionRef.current) setTimeout(() => scrollBottom(false), 0);
@@ -1194,7 +1194,7 @@ export default function App() {
     if (incognito) {
       const history = [...messages
         .filter(m => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
-        .map(m => ({ role: m.role, content: m.content })),
+        .map(m => ({ role: m.role, content: m.content, truncated: !!m.truncated })),
         { role: 'user', content: text }];
       if (!wsSend({ type: 'incognito', modelId: currentId, extended, reasoningEffort, kwargValues, messages: history })) return;
       queueRec('incognito', currentId);

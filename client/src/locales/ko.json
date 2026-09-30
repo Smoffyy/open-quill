@@ -2633,5 +2633,11 @@
   "Answer: {answer}": "답변: {answer}",
   "Skipped": "건너뜀",
   "Skip": "건너뛰기",
-  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG, SVG, JPEG, GIF 또는 WebP. SVG는 자르기 후에도 벡터로 유지되고, 움직이는 이미지는 움직임을 유지합니다."
+  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG, SVG, JPEG, GIF 또는 WebP. SVG는 자르기 후에도 벡터로 유지되고, 움직이는 이미지는 움직임을 유지합니다.",
+  "Plan finished": "계획 완료",
+  "Plan cancelled": "계획 취소됨",
+  "Cancelled": "취소됨",
+  "Could not save this file.": "이 파일을 저장할 수 없습니다.",
+  "Edit {name}": "{name} 편집",
+  "Discard unsaved changes?": "저장하지 않은 변경 사항을 버릴까요?"
 }

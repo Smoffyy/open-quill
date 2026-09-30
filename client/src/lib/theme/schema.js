@@ -322,7 +322,7 @@ export const ELEMENTS = [
   { id: 'projectCard', label: tk('Project card'), cat: 'panels', sel: '.pj-card', parent: 'projects', caps: ALL },
   { id: 'projectDetail', label: tk('Project page'), cat: 'panels', sel: '.pj-detail', caps: ALL },
   { id: 'projectChatRow', label: tk('Project chat row'), cat: 'panels', sel: '.pj-chat-row', parent: 'projectDetail', caps: CTRL },
-  { id: 'projectFileRow', label: tk('Project file row'), cat: 'panels', sel: '.pj-file-row', parent: 'projectDetail', caps: CTRL },
+  { id: 'projectFileRow', label: tk('Project file row'), cat: 'panels', sel: '.pj-file-tree .pj-row', parent: 'projectDetail', caps: CTRL },
   { id: 'chatsOverview', label: tk('All chats page'), cat: 'panels', sel: '.chats-overview', caps: ALL },
   { id: 'chatsOverviewCard', label: tk('All chats card'), cat: 'panels', sel: '.co-card', parent: 'chatsOverview', caps: ALL },
   { id: 'modelDocs', label: tk('Model docs page'), cat: 'panels', sel: '.mdoc-page', caps: ALL },

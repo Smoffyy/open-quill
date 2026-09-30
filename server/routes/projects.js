@@ -5,6 +5,13 @@ import { authMiddleware } from '../auth.js';
 import { roleLimit } from '../lib/models.js';
 import * as sandbox from '../sandbox.js';
 import * as projectfiles from '../lib/projectfiles.js';
+import { fileInfo, sendDownload, restoreVersion, saveText } from '../lib/workspacefiles.js';
+
+function ownProject(req, res) {
+  const p = db.projects.byId(req.params.id);
+  if (!p || p.user_id !== req.user.id) { res.status(404).json({ error: 'not found' }); return null; }
+  return p;
+}
 
 const capFor = (user) => roleLimit('sandbox_limit_mb', !!user.is_admin, user.is_admin ? 1024 : 256) * 1024 * 1024;
 
@@ -52,14 +59,12 @@ export default function registerProjectRoutes(app) {
   const fileView = (ws) => sandbox.list(ws).map(f => ({ name: f.path, size: f.size, v: f.v }));
 
   app.get('/api/projects/:id/files', authMiddleware, (req, res) => {
-    const pr = db.projects.byId(req.params.id);
-    if (!pr || pr.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+    const pr = ownProject(req, res); if (!pr) return;
     res.json({ files: fileView(projectfiles.workspaceOfProject(pr.id)), cap: capFor(req.user) });
   });
 
   app.post('/api/projects/:id/files', authMiddleware, projectUpload.single('file'), (req, res) => {
-    const pr = db.projects.byId(req.params.id);
-    if (!pr || pr.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+    const pr = ownProject(req, res); if (!pr) return;
     if (!req.file) return res.status(400).json({ error: 'No file received.' });
     const ws = projectfiles.workspaceOfProject(pr.id);
     const name = path.basename(String(req.file.originalname || 'file')).replace(/[\\/:*?"<>|]/g, '_').slice(0, 120);
@@ -70,12 +75,37 @@ export default function registerProjectRoutes(app) {
   });
 
   app.delete('/api/projects/:id/files', authMiddleware, (req, res) => {
-    const pr = db.projects.byId(req.params.id);
-    if (!pr || pr.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+    const pr = ownProject(req, res); if (!pr) return;
     const ws = projectfiles.workspaceOfProject(pr.id);
     const rel = String(req.query.path || '');
     if (rel) sandbox.deleteFile(ws, rel);
     res.json({ files: fileView(ws), cap: capFor(req.user) });
+  });
+
+  app.get('/api/projects/:id/file', authMiddleware, (req, res) => {
+    const pr = ownProject(req, res); if (!pr) return;
+    const r = fileInfo(projectfiles.workspaceOfProject(pr.id), String(req.query.path || ''), parseInt(req.query.v), `/api/projects/${pr.id}`);
+    res.status(r.status).json(r.body);
+  });
+
+  app.put('/api/projects/:id/file', authMiddleware, (req, res) => {
+    const pr = ownProject(req, res); if (!pr) return;
+    const ws = projectfiles.workspaceOfProject(pr.id);
+    const r = saveText(ws, String(req.body?.path || ''), req.body?.text, req.body?.v, capFor(req.user));
+    if (r.status === 200) db.projects.update(pr.id, { updated_at: now() });
+    res.status(r.status).json(r.status === 200 ? { ...r.body, files: fileView(ws), cap: capFor(req.user) } : r.body);
+  });
+
+  app.get('/api/projects/:id/download', authMiddleware, (req, res) => {
+    const pr = ownProject(req, res); if (!pr) return;
+    sendDownload(res, projectfiles.workspaceOfProject(pr.id), String(req.query.path || ''), parseInt(req.query.v));
+  });
+
+  app.post('/api/projects/:id/restore', authMiddleware, (req, res) => {
+    const pr = ownProject(req, res); if (!pr) return;
+    const ws = projectfiles.workspaceOfProject(pr.id);
+    const r = restoreVersion(ws, String(req.body?.path || ''), parseInt(req.body?.v));
+    res.status(r.status).json(r.status === 200 ? { ...r.body, files: fileView(ws), cap: capFor(req.user) } : r.body);
   });
 
   app.delete('/api/projects/:id', authMiddleware, (req, res) => {

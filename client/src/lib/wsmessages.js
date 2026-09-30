@@ -259,7 +259,9 @@ export const handlers = {
   done(m, ctx) {
     voiceEmit({ type: 'done', chatId: m.chatId });
     ctx.actions.setAsk?.(m.chatId, null);
-    ctx.mirror.recFor(m.chatId).done = true;
+    const rec = ctx.mirror.recFor(m.chatId);
+    rec.done = true;
+    rec.truncated = !!(m.truncated || m.stopped);
     ctx.mirror.syncBusy();
     ctx.actions.loadBudget();
     if (!isActive(ctx, m.chatId)) { ctx.actions.finalizeBackground(m.chatId); return; }
@@ -271,7 +273,7 @@ export const handlers = {
     const cmp = ctx.refs.compareRef.current;
     if (cmp && cmp.chatId === m.chatId && !cmp.messageId && m.messageId) cmp.messageId = m.messageId;
     ctx.refs.nextTurnPending.current = true;
-    if (ctx.stream.markDone()) ctx.actions.finalize();
+    if (ctx.stream.markDone() || m.stopped) ctx.actions.finalize();
   }
 };
 

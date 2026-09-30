@@ -1,4 +1,5 @@
-import { db } from '../db.js';
+import { activePath } from './tree.js';
+import { decodeOqr } from './history.js';
 
 export const TODO_MAX_ITEMS = 30;
 export const TODO_MAX_CHARS = 200;
@@ -7,9 +8,12 @@ const STATUS = {
   __proto__: null,
   pending: 'pending', todo: 'pending', open: 'pending', not_started: 'pending',
   in_progress: 'in_progress', inprogress: 'in_progress', active: 'in_progress', doing: 'in_progress', started: 'in_progress',
-  completed: 'completed', complete: 'completed', done: 'completed', finished: 'completed'
+  completed: 'completed', complete: 'completed', done: 'completed', finished: 'completed',
+  cancelled: 'cancelled', canceled: 'cancelled', cancel: 'cancelled', skipped: 'cancelled', skip: 'cancelled',
+  dropped: 'cancelled', removed: 'cancelled', abandoned: 'cancelled', obsolete: 'cancelled', wont_do: 'cancelled'
 };
-const MARK = { pending: '[ ]', in_progress: '[>]', completed: '[x]' };
+const MARK = { pending: '[ ]', in_progress: '[>]', completed: '[x]', cancelled: '[-]' };
+const OQR = /\[\[OQR:([A-Za-z0-9+/=]+)\]\]/g;
 
 function parseList(raw) {
   if (Array.isArray(raw)) return raw;
@@ -19,34 +23,55 @@ function parseList(raw) {
 
 export function sanitizeTodos(raw) {
   const list = parseList(raw);
-  if (!list) return { ok: false, error: 'items must be an array of {"content": "...", "status": "pending" | "in_progress" | "completed"}.' };
+  if (!list) return { ok: false, error: 'items must be an array of {"content": "...", "status": "pending" | "in_progress" | "completed" | "cancelled"}.' };
   if (list.length > TODO_MAX_ITEMS) return { ok: false, error: `The list can hold at most ${TODO_MAX_ITEMS} items. Merge or drop some.` };
   const items = [];
   for (const x of list) {
     const content = String((x && typeof x === 'object' ? x.content ?? x.text ?? x.title : x) ?? '').replace(/\s+/g, ' ').trim().slice(0, TODO_MAX_CHARS);
     if (!content) continue;
-    const key = String(x && typeof x === 'object' ? x.status ?? '' : '').toLowerCase().replace(/[\s-]+/g, '_');
+    const key = String(x && typeof x === 'object' ? x.status ?? '' : '').toLowerCase().replace(/[\s-]+/g, '_').replace(/'/g, '');
     items.push({ content, status: STATUS[key] || 'pending' });
   }
   return { ok: true, items };
 }
 
+export function planClosure(items) {
+  if (!items.length || items.every(t => t.status === 'cancelled')) return 'cancelled';
+  return items.every(t => t.status === 'completed' || t.status === 'cancelled') ? 'finished' : null;
+}
+
+export function latestTodos(messages) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role !== 'assistant' || !m.content || !m.content.includes('[[OQR:')) continue;
+    const recs = [...m.content.matchAll(OQR)].map(x => decodeOqr(x[1]));
+    for (let j = recs.length - 1; j >= 0; j--) {
+      const d = recs[j];
+      if (!d || !d.call || d.call.tool !== 'todo' || !d.result || !d.result.ok || !Array.isArray(d.result.items)) continue;
+      return planClosure(d.result.items) ? [] : d.result.items;
+    }
+  }
+  return [];
+}
+
 export function todosOf(chatId) {
-  const c = chatId ? db.chats.byId(chatId) : null;
-  return Array.isArray(c?.todos) ? c.todos : [];
+  return chatId ? latestTodos(activePath(chatId)) : [];
 }
 
 export function todoText(items) {
-  return items.length ? items.map(t => `${MARK[t.status]} ${t.content}`).join('\n') : '(empty)';
+  return items.length ? items.map(t => `${MARK[t.status] || MARK.pending} ${t.content}`).join('\n') : '(empty)';
 }
 
-export function runTodo(chatId, call) {
+export function runTodo(call) {
   const r = sanitizeTodos(call.items);
   if (!r.ok) return { payload: { ok: false, error: r.error }, formatted: `todo → ERROR: ${r.error}` };
-  db.chats.update(chatId, { todos: r.items });
   const done = r.items.filter(t => t.status === 'completed').length;
-  return {
-    payload: { ok: true, items: r.items, done, total: r.items.length },
-    formatted: `todo → saved ${r.items.length} item(s), ${done} completed:\n${todoText(r.items)}`
-  };
+  const total = r.items.filter(t => t.status !== 'cancelled').length;
+  const closed = planClosure(r.items);
+  const payload = { ok: true, items: r.items, done, total };
+  if (closed) payload.closed = closed;
+  const summary = closed === 'finished' ? 'every step is finished, so the plan is closed and hidden from the user'
+    : closed === 'cancelled' ? 'the plan is cancelled, closed and hidden from the user'
+      : `saved ${r.items.length} item(s), ${done} completed`;
+  return { payload, formatted: `todo → ${summary}${r.items.length ? `:\n${todoText(r.items)}` : '.'}` };
 }

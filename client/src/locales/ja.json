@@ -2633,5 +2633,11 @@
   "Answer: {answer}": "回答: {answer}",
   "Skipped": "スキップ済み",
   "Skip": "スキップ",
-  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG、SVG、JPEG、GIF、WebPに対応。SVGは切り抜き後もベクターのままで、アニメーション画像は動きを保ちます。"
+  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG、SVG、JPEG、GIF、WebPに対応。SVGは切り抜き後もベクターのままで、アニメーション画像は動きを保ちます。",
+  "Plan finished": "計画完了",
+  "Plan cancelled": "計画を中止",
+  "Cancelled": "中止",
+  "Could not save this file.": "このファイルを保存できませんでした。",
+  "Edit {name}": "{name} を編集",
+  "Discard unsaved changes?": "保存されていない変更を破棄しますか？"
 }

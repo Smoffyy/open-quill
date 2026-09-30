@@ -66,7 +66,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   const space = projectfiles.workspaceFor(chatRow);
   let conversationEnded = false;
   const systemText = () => systemPrompt(chat, model, flags, promptOpts).text;
-  const rebuildBase = () => buildMessages(model, chatHistory(chat, model), extended, systemText());
+  const rebuildBase = () => buildMessages(model, chatHistory(chat, model, assistantId), extended, systemText());
   let base = buildMessages(model, history, extended, systemText());
   let inTurn = []; // assistant/tool exchanges accumulated during this response
   const assistantId = uid();
@@ -152,7 +152,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     }
     if (call.tool === 'todo') {
       if (!todoOn) return null;
-      return { ...runTodo(chat.id, call), hide: false };
+      return { ...runTodo(call), hide: false };
     }
     if (call.tool === 'ask_user') {
       if (!askUserOn) return null;
@@ -655,7 +655,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   } else {
     db.chats.update(chat.id, { updated_at: now() });
   }
-  safeSend(JSON.stringify({ type: 'done', chatId: chat.id, messageId: (hasOutput || usageRec) ? assistantId : null, truncated }));
+  safeSend(JSON.stringify({ type: 'done', chatId: chat.id, messageId: (hasOutput || usageRec) ? assistantId : null, truncated, stopped: wasStopped }));
 
   const fresh = db.chats.byId(chat.id);
   const cleanContent = stripToolSyntax(content).trim();

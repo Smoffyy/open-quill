@@ -51,7 +51,7 @@ test('status changes and small edits update the plan; a different list starts a 
 
 test('only the plan right before the current one is kept', async () => {
   const { groupPlans } = await import('../src/lib/agentpanel.js');
-  const g = groupPlans([[step('One')], [step('Two')], [step('Three')], [step('Three', 'completed')]]);
+  const g = groupPlans([[step('One')], [step('Two')], [step('Three'), step('Four')], [step('Three', 'completed'), step('Four')]]);
   assert.equal(g.plan.items[0].content, 'Three');
   assert.equal(g.plan.done, 1);
   assert.equal(g.previousPlan.items[0].content, 'Two');
@@ -62,4 +62,29 @@ test('a plan in the reply still being written shows up straight away', () => {
   const state = agentPanelState([asst(todo([step('Old A'), step('Old B')]))], { liveContent: 'Starting. ' + todo([step('New A'), step('New B')]) });
   assert.equal(state.plan.items[0].content, 'New A');
   assert.equal(state.previousPlan.items[0].content, 'Old A');
+});
+
+test('a plan closes once every step is completed or cancelled, and an empty list cancels it', async () => {
+  const { groupPlans } = await import('../src/lib/agentpanel.js');
+  const open = [step('Scaffold', 'completed'), step('Write code', 'in_progress'), step('Test')];
+  const finished = [step('Scaffold', 'completed'), step('Write code', 'completed'), step('Test', 'cancelled')];
+  const done = groupPlans([open, finished]);
+  assert.equal(done.plan, null);
+  assert.deepEqual(done.previousPlan.items, finished);
+  assert.equal(done.previousPlan.total, 2, 'a cancelled step does not count towards the total');
+  assert.equal(done.previousPlan.done, 2);
+  const cancelled = groupPlans([open, []]);
+  assert.equal(cancelled.plan, null);
+  assert.deepEqual(cancelled.previousPlan.items, open, 'the cancelled plan is kept in its last state');
+  const next = groupPlans([open, [], [step('Other')]]);
+  assert.equal(next.plan.items[0].content, 'Other');
+  assert.deepEqual(next.previousPlan.items, open);
+  assert.deepEqual(groupPlans([[]]), { plan: null, previousPlan: null });
+});
+
+test('a cancelled step stays in the open plan', async () => {
+  const { groupPlans } = await import('../src/lib/agentpanel.js');
+  const g = groupPlans([[step('A', 'completed'), step('B', 'cancelled'), step('C', 'in_progress')]]);
+  assert.equal(g.plan.total, 2);
+  assert.equal(g.plan.items[1].status, 'cancelled');
 });

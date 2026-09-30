@@ -2633,5 +2633,11 @@
   "First token": "首个 token",
   "Throughput": "吞吐量",
   "Total": "总计",
-  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG、SVG、JPEG、GIF 或 WebP。SVG 在裁剪后仍保持矢量，动态图片会保留动画。"
+  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG、SVG、JPEG、GIF 或 WebP。SVG 在裁剪后仍保持矢量，动态图片会保留动画。",
+  "Plan finished": "计划已完成",
+  "Plan cancelled": "计划已取消",
+  "Cancelled": "已取消",
+  "Could not save this file.": "无法保存此文件。",
+  "Edit {name}": "编辑 {name}",
+  "Discard unsaved changes?": "放弃未保存的更改？"
 }

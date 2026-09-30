@@ -12,7 +12,7 @@ import { resolveModel, roleLimit } from '../models.js';
 import { applyKwargs } from '../kwargs.js';
 import { budgetStatus } from '../budget.js';
 import { runQueued } from '../queue.js';
-import { styleTextFor } from '../convo.js';
+import { styleTextFor, CUT_NOTE } from '../convo.js';
 import { systemPrompt } from '../systemprompt.js';
 
 import { clients, requestedKwargs } from './broadcast.js';
@@ -136,7 +136,7 @@ export function initWs(server) {
           const history = (Array.isArray(msg.messages) ? msg.messages : [])
             .filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
             .slice(-MAX_INCOGNITO_TURNS)
-            .map(m => ({ role: m.role, content: m.content.slice(0, MAX_CONTENT) }));
+            .map(m => ({ role: m.role, content: m.content.slice(0, MAX_CONTENT) + (m.role === 'assistant' && m.truncated === true ? '\n\n' + CUT_NOTE : '') }));
           if (!history.length || history[history.length - 1].role !== 'user') {
             safeSend(JSON.stringify({ type: 'error', error: 'Nothing to send.' })); safeSend(JSON.stringify({ type: 'done' })); return;
           }
@@ -155,7 +155,8 @@ export function initWs(server) {
             });
           } catch (err) { if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', chatId: 'incognito', error: String(err.message || err) })); }
           state.aborts.delete('incognito');
-          safeSend(JSON.stringify({ type: 'done', chatId: 'incognito', messageId: assistantId }));
+          if (state.stops) state.stops.delete('incognito');
+          safeSend(JSON.stringify({ type: 'done', chatId: 'incognito', messageId: assistantId, stopped: controller.signal.aborted }));
         } catch (err) {
           state.aborts.delete('incognito');
           safeSend(JSON.stringify({ type: 'error', chatId: 'incognito', error: String(err.message || err) }));

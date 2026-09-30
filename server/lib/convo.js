@@ -37,12 +37,15 @@ export function historyRows(chat, model) {
   }));
 }
 
-export function chatHistory(chat, model) {
-  return historyRows(chat, model).filter(r => !r.summarized && !r.excluded).map(r => r.msg);
+export function chatHistory(chat, model, skipId = null) {
+  return historyRows(chat, model).filter(r => !r.summarized && !r.excluded && r.id !== skipId).map(r => r.msg);
 }
+
+export const CUT_NOTE = '[This reply was cut off here before it was finished.]';
 
 function historyMessage(m, model) {
   let text = historyText(m.content || '').replace(/\n{3,}/g, '\n\n');
+  if (m.role === 'assistant' && m.truncated) text = (text.trim() ? text.trimEnd() + '\n\n' : '') + CUT_NOTE;
   const atts = m.attachments || [];
   const images = [];
   if (atts.length) {

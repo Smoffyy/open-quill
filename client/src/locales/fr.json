@@ -2633,5 +2633,11 @@
   "First token": "Premier jeton",
   "Throughput": "Débit",
   "Total": "Total",
-  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG, SVG, JPEG, GIF ou WebP. Le SVG reste vectoriel lors du recadrage et les images animées gardent leur mouvement."
+  "PNG, SVG, JPEG, GIF, or WebP. SVG stays vector through the crop, and animated images keep moving.": "PNG, SVG, JPEG, GIF ou WebP. Le SVG reste vectoriel lors du recadrage et les images animées gardent leur mouvement.",
+  "Plan finished": "Plan terminé",
+  "Plan cancelled": "Plan annulé",
+  "Cancelled": "Annulé",
+  "Could not save this file.": "Impossible d'enregistrer ce fichier.",
+  "Edit {name}": "Modifier {name}",
+  "Discard unsaved changes?": "Abandonner les modifications non enregistrées ?"
 }

@@ -58,6 +58,9 @@ function request(method, pathname, opts = {}) {
     payload = JSON.stringify(opts.body);
     headers['Content-Type'] = 'application/json';
     headers['Content-Length'] = Buffer.byteLength(payload);
+  } else if (opts.raw !== undefined) {
+    payload = opts.raw;
+    headers['Content-Length'] = payload.length;
   }
   // Origin and Sec-Fetch-Site are forbidden header names in a browser, which is the point:
   // only the browser may set them. node:http lets us reproduce exactly what it would send.
@@ -652,6 +655,38 @@ test('scheduled tasks round-trip and normalise a hostile schedule', async () => 
   assert.equal((await browser('DELETE', `/api/tasks/${id}`)).status, 200);
   assert.equal((await browser('GET', '/api/tasks')).json.tasks.length, 0);
   assert.equal((await browser('PATCH', '/api/tasks/nope', { body: {} })).status, 404, 'an unknown id is a miss, not a crash');
+});
+
+test('a project file opens, saves as a new version, refuses a stale save and restores', async () => {
+  const project = (await browser('POST', '/api/projects', { body: { name: 'Files probe' } })).json;
+  const base = '/api/projects/' + project.id;
+  const boundary = 'oqprobe' + Date.now();
+  const raw = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="notes.md"\r\nContent-Type: text/markdown\r\n\r\n# One\r\n--${boundary}--\r\n`);
+  const up = await browser('POST', base + '/files', { raw, headers: { 'Content-Type': 'multipart/form-data; boundary=' + boundary } });
+  assert.equal(up.status, 200);
+
+  const opened = await browser('GET', base + '/file?path=notes.md');
+  assert.equal(opened.status, 200);
+  assert.equal(opened.json.text, '# One');
+  const saved = await browser('PUT', base + '/file', { body: { path: 'notes.md', text: '# Two', v: opened.json.v } });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.json.v, opened.json.v + 1);
+  assert.ok(saved.json.files.some(f => f.name === 'notes.md'), 'the project file list comes back in its own shape');
+
+  const stale = await browser('PUT', base + '/file', { body: { path: 'notes.md', text: '# Lost', v: opened.json.v } });
+  assert.equal(stale.status, 409, 'a save based on an older version is refused, not silently overwritten');
+  assert.equal((await browser('PUT', base + '/file', { body: { path: 'missing.md', text: 'x' } })).status, 404, 'saving never creates a file');
+  assert.equal((await browser('PUT', base + '/file', { body: { path: 'notes.md', text: 42 } })).status, 400);
+
+  const restored = await browser('POST', base + '/restore', { body: { path: 'notes.md', v: opened.json.v } });
+  assert.equal(restored.status, 200);
+  assert.equal((await browser('GET', base + '/file?path=notes.md')).json.text, '# One');
+  const dl = await browser('GET', base + '/download?path=notes.md');
+  assert.equal(dl.text, '# One');
+  assert.match(dl.headers['content-disposition'] || '', /attachment; filename="notes.md"/);
+
+  assert.equal((await request('GET', base + '/file?path=notes.md')).status, 401);
+  await browser('DELETE', base);
 });
 
 test('the artifacts library answers for a member and refuses a stranger', async () => {

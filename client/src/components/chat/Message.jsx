@@ -490,7 +490,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
           <button className="action-btn" onClick={doCopy} title={t("Copy what's written so far")} aria-label={t("Copy what's written so far")}>{copied ? <Check /> : <Copy />}</button>
         </div>
       )}
-      {!streaming && msg.content && !editing && (
+      {!streaming && (msg.content || msg.truncated) && !editing && (
         <div className="actions">
           <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
           <button className={'action-btn' + (speaking ? ' on' : '')} onClick={toggleSpeak} title={speaking ? t("Stop speaking") : t("Read aloud")} aria-label={speaking ? t("Stop speaking") : t("Read aloud")} aria-pressed={speaking}>{speaking ? <SpeakerOff /> : <Speaker />}</button>
@@ -540,7 +540,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   if (pos === 'left') {
     const gutter = model?.iconSize > 0 ? model.iconSize : 50;
     return (
-      <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant icon-left' + (streaming ? ' streaming-msg' : '') + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
+      <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant icon-left' + (streaming ? ' streaming-msg' : '') + (msg._enter ? ' enter' : '') + (!streaming && (msg.content || msg.truncated) ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
         {icon && <div className="il-avatar" style={{ left: -(gutter + 14) }}>{icon}</div>}
         {hasName && <div className={'assistant-name' + (showName ? '' : ' hover-reveal')}>{model.displayName}</div>}
         {inner}
@@ -549,7 +549,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   }
 
   return (
-    <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant' + (streaming ? ' streaming-msg' : '') + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
+    <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant' + (streaming ? ' streaming-msg' : '') + (msg._enter ? ' enter' : '') + (!streaming && (msg.content || msg.truncated) ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
       {pos === 'above' && icon}
       {inner}
       {pos === 'below' && icon}

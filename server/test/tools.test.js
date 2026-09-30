@@ -128,6 +128,28 @@ test('todo items are cleaned, statuses normalised and the list capped', async ()
   assert.equal(sanitizeTodos(Array.from({ length: TODO_MAX_ITEMS + 1 }, (_, i) => ({ content: 'x' + i }))).ok, false);
 });
 
+test('todo steps can be cancelled and the plan closes when nothing is left to do', async () => {
+  const { sanitizeTodos, runTodo, latestTodos, todoText } = await import('../lib/todo.js');
+  assert.equal(sanitizeTodos([{ content: 'a', status: 'Canceled' }, { content: 'b', status: "won't do" }]).items.every(t => t.status === 'cancelled'), true);
+  const open = runTodo({ items: [{ content: 'Build', status: 'completed' }, { content: 'Lint', status: 'cancelled' }, { content: 'Test', status: 'in_progress' }] });
+  assert.equal(open.payload.closed, undefined);
+  assert.equal(open.payload.total, 2);
+  assert.match(open.formatted, /\[-\] Lint/);
+  const finished = runTodo({ items: [{ content: 'Build', status: 'completed' }, { content: 'Lint', status: 'cancelled' }] });
+  assert.equal(finished.payload.closed, 'finished');
+  assert.equal(runTodo({ items: [] }).payload.closed, 'cancelled');
+  assert.equal(runTodo({ items: [{ content: 'x', status: 'cancelled' }] }).payload.closed, 'cancelled');
+  const rec = (payload) => '[[OQR:' + Buffer.from(JSON.stringify({ call: { tool: 'todo' }, result: payload }), 'utf8').toString('base64') + ']]';
+  const thread = [
+    { role: 'assistant', content: rec(open.payload) },
+    { role: 'user', content: 'go on' },
+    { role: 'assistant', content: 'no tools' }
+  ];
+  assert.equal(todoText(latestTodos(thread)), '[x] Build\n[-] Lint\n[>] Test');
+  assert.deepEqual(latestTodos([...thread, { role: 'assistant', content: rec(finished.payload) }]), [], 'a closed plan leaves the prompt empty');
+  assert.deepEqual(latestTodos([]), []);
+});
+
 test('ask_user needs a question and 2 to 6 distinct options', async () => {
   const { runAskUser, formatAskUser } = await import('../lib/askuser.js');
   const ok = runAskUser({ question: ' Which   database? ', options: ['SQLite', 'Postgres', 'sqlite', ''] });

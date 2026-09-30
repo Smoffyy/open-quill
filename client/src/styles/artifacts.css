@@ -112,6 +112,20 @@
 .art-btn.copy { display: inline-flex; align-items: center; gap: 5px; height: 28px; font-family: var(--font-sans); font-size: 14px; line-height: 20px; color: var(--text); background: transparent; padding: 0 10px; border-radius: 7px 0 0 7px; transition: background var(--fx-t, .12s); }
 .art-btn.caret { background: transparent; height: 28px; padding: 0 4px; border-radius: 0 7px 7px 0; border-left: 1px solid var(--border-soft); color: var(--text); display: grid; place-items: center; transition: background var(--fx-t, .12s); }
 .art-btn.copy:hover, .art-btn.caret:hover { background: var(--hover-mid); color: var(--text); }
+.art-btn.text { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 7px; font-family: var(--font-sans); font-size: 14px; color: var(--text); background: var(--surface-hover); transition: background var(--fx-t, .12s), opacity var(--fx-t, .12s); }
+.art-btn.text:hover { background: var(--hover-mid); }
+.art-btn.text.solid { background: var(--text); color: var(--bg); font-weight: 600; }
+.art-btn.text.solid:hover { opacity: .88; }
+.art-btn.text:disabled { opacity: .5; pointer-events: none; }
+.art-edit { display: flex; flex-direction: column; height: 100%; }
+.art-editor {
+  flex: 1; width: 100%; min-height: 0; box-sizing: border-box; padding: 8px 14px; margin: 0; border: 0; outline: none; resize: none;
+  background: transparent; color: var(--text); font-family: var(--font-mono, monospace); font-size: 14px; line-height: 22px;
+  white-space: pre; overflow-wrap: normal; overflow: auto; tab-size: 4;
+}
+.art-editor.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+.art-edit-error { flex-shrink: 0; padding: 0 14px; font-size: 13px; color: var(--danger); }
+.art-edit-error:not(:empty) { padding: 8px 14px; border-top: 1px solid var(--border-soft); }
 .art-menu { position: absolute; top: 38px; right: 0; background: var(--menu-bg); border: 1px solid var(--border); border-radius: 10px; padding: 5px; min-width: 170px; box-shadow: 0 10px 30px #00000050; z-index: 5; }
 .art-menu-item { display: block; padding: 8px 10px; border-radius: 7px; font-size: 13px; color: var(--text); }
 .art-menu-item:hover { background: var(--surface-hover); }

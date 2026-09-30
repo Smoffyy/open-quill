@@ -5,6 +5,7 @@ import { t, tk } from '../../i18n.jsx';
 const STATUS = {
   completed: tk('Done'),
   in_progress: tk('In progress'),
+  cancelled: tk('Cancelled'),
   pending: tk('Not started')
 };
 
@@ -34,13 +35,10 @@ function Steps({ items }) {
 }
 
 function Plan({ plan }) {
-  const complete = plan.done === plan.total;
-  const [pinned, setPinned] = useState(null);
-  useEffect(() => { setPinned(null); }, [complete]);
-  const open = pinned ?? !complete;
+  const [open, setOpen] = useState(true);
   return (
     <section className={'ap-plan ap-enter' + (open ? ' open' : '')}>
-      <button type="button" className="ap-plan-head" aria-expanded={open} onClick={() => setPinned(!open)}>
+      <button type="button" className="ap-plan-head" aria-expanded={open} onClick={() => setOpen(!open)}>
         <ListChecks className="ap-ic" aria-hidden="true" />
         <span className="ap-title">{t('Plan')}</span>
         <span className="ap-count">{t('{done} of {total} done', { done: plan.done, total: plan.total })}</span>
