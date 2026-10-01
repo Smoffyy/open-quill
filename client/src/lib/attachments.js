@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { ownsDrop } from './dropfiles.js';
 import { attachKey, peekAttachments, readAttachments, writeAttachments, dropAttachments } from './attachdrafts.js';
+import { isVisionImage, previewKind } from './filepreview.js';
 
 const DEFAULT_GLOW = 'var(--text)';
 
@@ -29,7 +30,7 @@ function dominantColor(url) {
 
 const hydrate = (list) => list.map(f => ({
   ...f,
-  preview: f.type && f.type.startsWith('image/') ? URL.createObjectURL(f.file) : null
+  preview: previewKind(f.name, f.type) === 'image' ? URL.createObjectURL(f.file) : null
 }));
 
 export function useAttachments({ visionSupported, draftId }) {
@@ -73,12 +74,12 @@ export function useAttachments({ visionSupported, draftId }) {
 
   function addFiles(list) {
     let picked = Array.from(list || []);
-    if (!visionSupported) picked = picked.filter(f => !f.type.startsWith('image/'));
+    if (!visionSupported) picked = picked.filter(f => !isVisionImage(f.type));
     if (!picked.length) return;
     setUpErr('');
     const mapped = picked.map(file => ({
       id: Math.random().toString(36).slice(2), file, name: file.name, type: file.type, size: file.size,
-      preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
+      preview: previewKind(file.name, file.type) === 'image' ? URL.createObjectURL(file) : null
     }));
     setFiles(fs => [...fs, ...mapped]);
     const lastImg = [...mapped].reverse().find(f => f.preview);

@@ -19,7 +19,7 @@ function projectView(p, counts = db.chats.projectCounts(p.user_id)) {
 }
 
 const PROJECT_LIMIT = 500;
-const projectUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
+const projectUpload = multer({ storage: multer.memoryStorage(), defParamCharset: 'utf8', limits: { fileSize: 100 * 1024 * 1024 } });
 
 export default function registerProjectRoutes(app) {
   app.get('/api/projects', authMiddleware, (req, res) => {

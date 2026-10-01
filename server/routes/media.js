@@ -1,28 +1,14 @@
-import fs from 'fs';
-import path from 'path';
 import multer from 'multer';
 import { getSetting } from '../db.js';
-import { extractPdf } from '../lib/extract.js';
 import { authMiddleware, adminOnly } from '../auth.js';
 import * as referenceFiles from '../lib/referencefiles.js';
-import { diskStore } from '../lib/uploads.js';
+import { diskStore, ensureSidecars, uploadPreview } from '../lib/uploads.js';
 import { roleLimit } from '../lib/models.js';
 
-const upload = multer({ storage: diskStore, limits: { fileSize: 8 * 1024 * 1024 } });
-const membankUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
-const voiceUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
+const upload = multer({ storage: diskStore, defParamCharset: 'utf8', limits: { fileSize: 8 * 1024 * 1024 } });
+const membankUpload = multer({ storage: multer.memoryStorage(), defParamCharset: 'utf8', limits: { fileSize: 25 * 1024 * 1024 } });
+const voiceUpload = multer({ storage: multer.memoryStorage(), defParamCharset: 'utf8', limits: { fileSize: 25 * 1024 * 1024 } });
 const voiceUrl = (base, p) => String(base || '').trim().replace(/\/+$/, '') + p;
-
-// PDF text is pulled out once, here, and written beside the upload. Everything that
-// later reads an attachment (chatHistory -> buildMessages) is synchronous, so the
-// extraction has to have happened before the model ever asks for it.
-async function extractSidecar(diskPath, name) {
-  if (path.extname(String(name || '')).toLowerCase() !== '.pdf') return;
-  try {
-    const text = await extractPdf(fs.readFileSync(diskPath));
-    if (text && text.trim()) fs.writeFileSync(diskPath + '.txt', text);
-  } catch {}
-}
 
 export default function registerMediaRoutes(app) {
   app.post('/api/admin/upload', authMiddleware, adminOnly, (req, res) => {
@@ -37,7 +23,7 @@ export default function registerMediaRoutes(app) {
   const uploaderFor = (mb) => {
     let mw = uploaders.get(mb);
     if (!mw) {
-      mw = multer({ storage: diskStore, limits: { fileSize: mb * 1024 * 1024 } }).array('files', 10);
+      mw = multer({ storage: diskStore, defParamCharset: 'utf8', limits: { fileSize: mb * 1024 * 1024 } }).array('files', 10);
       if (uploaders.size > 16) uploaders.clear();
       uploaders.set(mb, mw);
     }
@@ -48,10 +34,19 @@ export default function registerMediaRoutes(app) {
     const mb = Math.max(1, roleLimit('upload_limit_mb', !!req.user.is_admin, 8) || 8);
     uploaderFor(mb)(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? `That file is too large (max ${mb} MB).` : 'Upload failed.' });
-      const files = req.files || [];
-      await Promise.all(files.map(f => extractSidecar(f.path, f.originalname)));
-      res.json({ files: files.map(f => ({ url: `/uploads/${f.filename}`, name: f.originalname, type: f.mimetype, size: f.size })) });
+      const files = (req.files || []).map(f => ({ url: `/uploads/${f.filename}`, name: f.originalname, type: f.mimetype, size: f.size }));
+      await ensureSidecars(files);
+      res.json({ files });
     });
+  });
+
+  app.get('/api/uploads/:file/text', authMiddleware, async (req, res) => {
+    const file = String(req.params.file || '');
+    const a = { url: '/uploads/' + file, name: file };
+    await ensureSidecars([a]);
+    const r = uploadPreview(a);
+    if (!r) return res.status(404).json({ error: 'not found' });
+    res.json(r);
   });
 
   app.post('/api/voice/transcribe', authMiddleware, voiceUpload.single('audio'), async (req, res) => {

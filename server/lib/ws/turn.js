@@ -31,6 +31,7 @@ import { runAskUser, formatAskUser } from '../askuser.js';
 import { waitForAnswer } from './live.js';
 import { runConsult, formatConsult } from '../consult.js';
 import { recordUsage } from '../budget.js';
+import { ensureChatSidecars } from '../uploads.js';
 
 const MAX_STEERS = 6;
 const TELEMETRY_MS = 220;
@@ -56,6 +57,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   }
   const flags = toolState(chat, model, { sandboxOn, webSearchOn, canAsk: !!state?.interactive });
   const promptOpts = { styleText, callMode };
+  await ensureChatSidecars(chat.id);
   await maybeCompact(ws, chat, model, extended, flags, promptOpts);
   const history = chatHistory(chat, model);
   const chatRow = db.chats.byId(chat.id) || chat;

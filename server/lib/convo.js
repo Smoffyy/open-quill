@@ -3,7 +3,8 @@ import { oneShot, stripThink, summarizeConversation } from '../llm/index.js';
 import { resolveProvider } from './providers.js';
 import { activePath } from './tree.js';
 import { historyText } from './history.js';
-import { isTextLike, readUploadText, readImageDataUri } from './uploads.js';
+import { isTextLike, readUploadText, readImageDataUri, imageKind, imageMime } from './uploads.js';
+import { isDocumentName } from './extract.js';
 import { modelCtx } from './models.js';
 import { llamaTokenCount, isLlamaCpp } from './llamacpp.js';
 
@@ -51,15 +52,17 @@ function historyMessage(m, model) {
   if (atts.length) {
     const notes = [];
     for (const a of atts) {
-      const isImage = a.type && a.type.startsWith('image/');
-      if (isImage && model.has_vision) { const uri = readImageDataUri(a); if (uri) images.push(uri); }
-      else if (isImage) notes.push(`[Attached image: ${a.name} — this model cannot see images, so tell the user you cannot view it.]`);
+      const kind = imageKind(a);
+      if (kind === 'vision' && model.has_vision) { const uri = readImageDataUri(a); if (uri) images.push(uri); }
+      else if (kind === 'other' && model.has_vision) notes.push(`[Attached image: ${a.name} - its format (${imageMime(a)}) cannot be passed to the model, so you cannot view it. Ask the user for a PNG, JPEG, GIF or WebP copy.]`);
+      else if (kind) notes.push(`[Attached image: ${a.name} — this model cannot see images, so tell the user you cannot view it.]`);
       else if (isTextLike(a)) {
         const body = readUploadText(a.url);
         notes.push(body
           ? `--- Attached file: ${a.name} ---\n${body}`
           : `[Attached file: ${a.name} — the file is empty or could not be read.]`);
-      } else notes.push(`[Attached file: ${a.name} — this is a binary format the server cannot read as text, so its contents are not available to you. Say so rather than guessing what it contains.]`);
+      } else if (isDocumentName(a.name)) notes.push(`[Attached file: ${a.name} - no readable text could be extracted from this document (it may be scanned images only, password protected, or damaged), so its contents are not available to you. Say so rather than guessing what it contains.]`);
+      else notes.push(`[Attached file: ${a.name}${a.type ? ` (${a.type})` : ''} - this is a binary format the server cannot read as text, so its contents are not available to you. Say so rather than guessing what it contains.]`);
     }
     if (notes.length) text = (text ? text + '\n\n' : '') + notes.join('\n\n');
   }
@@ -225,7 +228,7 @@ async function enrichForSummary(model, rows) {
     const notes = [];
     let changed = false;
     for (const a of atts) {
-      const isImage = a.type && a.type.startsWith('image/');
+      const isImage = imageKind(a) === 'vision';
       if (!isImage) continue;
       let d = typeof a.summary_desc === 'string' ? a.summary_desc : '';
       if (!d) {

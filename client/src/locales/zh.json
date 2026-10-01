@@ -2748,5 +2748,10 @@
   "Everything an editor can do, plus publishing releases, restoring old versions and discarding anyone’s changes.": "拥有编辑者的全部权限，另外还能发布版本、恢复旧版本并放弃任何人的更改。",
   "Owner": "所有者",
   "Everything, including making and removing publishers. There is exactly one owner.": "拥有全部权限，包括任命和撤销发布者。所有者有且只有一位。",
-  "The role could not be changed.": "无法更改角色。"
+  "The role could not be changed.": "无法更改角色。",
+  "Open file {name}": "打开文件 {name}",
+  "Showing the beginning of this file. Download it to see everything.": "正在显示此文件的开头部分。下载后可查看完整内容。",
+  "No preview is available for this file.": "此文件无法预览。",
+  "Document": "文档",
+  "Extracted text": "提取的文本"
 }

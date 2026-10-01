@@ -2748,5 +2748,10 @@
   "Everything an editor can do, plus publishing releases, restoring old versions and discarding anyone’s changes.": "エディターができることに加えて、リリースの公開、古いバージョンの復元、誰の変更でも破棄できます。",
   "Owner": "オーナー",
   "Everything, including making and removing publishers. There is exactly one owner.": "パブリッシャーの任命と解除を含め、すべてできます。オーナーは常に 1 人です。",
-  "The role could not be changed.": "ロールを変更できませんでした。"
+  "The role could not be changed.": "ロールを変更できませんでした。",
+  "Open file {name}": "ファイル {name} を開く",
+  "Showing the beginning of this file. Download it to see everything.": "このファイルの冒頭を表示しています。すべてを見るにはダウンロードしてください。",
+  "No preview is available for this file.": "このファイルのプレビューはありません。",
+  "Document": "ドキュメント",
+  "Extracted text": "抽出されたテキスト"
 }

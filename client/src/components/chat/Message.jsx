@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from 're
 import { createPortal } from 'react-dom';
 import Markdown, { ReasonSegs } from './Markdown.jsx';
 import { copyText } from '../../lib/clipboard.js';
-import { openLightbox } from '../../lib/lightbox.js';
+import { openFilePreview, previewKind } from '../../lib/filepreview.js';
 import ReasoningBlock from './ReasoningBlock.jsx';
 import BranchCompare from './BranchCompare.jsx';
 import ToolCard from './ToolCard.jsx';
@@ -97,17 +97,17 @@ function Attachments({ items, pins, onTogglePinFile }) {
   const pinnedUrls = new Set((pins || []).map(p => p.url));
   return (
     <div className="msg-attachments">
-      {items.map((a, i) => a.type && a.type.startsWith('image/') ? (
-        <button key={i} className="att image" onClick={() => openLightbox(a.url, a.name)} aria-label={t('Open image {name}', { name: a.name })}><img src={a.url} alt={a.name} loading="lazy" decoding="async" /></button>
+      {items.map((a, i) => previewKind(a.name, a.type) === 'image' ? (
+        <button key={i} className="att image" onClick={() => openFilePreview(a)} aria-label={t('Open image {name}', { name: a.name })}><img src={a.url} alt={a.name} loading="lazy" decoding="async" /></button>
       ) : (
         <div key={i} className={'att file' + (pinnedUrls.has(a.url) ? ' pinned-file' : '')}>
-          <a className="att-link" href={a.url} target="_blank" rel="noreferrer" title={a.name}>
+          <button type="button" className="att-link" onClick={() => openFilePreview(a)} title={a.name} aria-label={t('Open file {name}', { name: a.name })}>
             <span className="att-name">{a.name}</span>
             <span className="att-foot">
               <FileText style={{ width: 13 }} />
               <span className="att-type">{extLabel(a.name)}</span>
             </span>
-          </a>
+          </button>
           {onTogglePinFile && (
             <button className={'att-pin' + (pinnedUrls.has(a.url) ? ' on' : '')} title={pinnedUrls.has(a.url) ? t('Unpin from chat') : t('Pin to chat (keep in context)')} aria-label={pinnedUrls.has(a.url) ? t('Unpin from chat') : t('Pin to chat')} aria-pressed={pinnedUrls.has(a.url)} onClick={() => onTogglePinFile(a)}><Pin style={{ width: 13 }} /></button>
           )}

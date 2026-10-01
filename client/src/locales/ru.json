@@ -2748,5 +2748,10 @@
   "Everything an editor can do, plus publishing releases, restoring old versions and discarding anyone’s changes.": "Всё, что может редактор, а также публикация выпусков, восстановление старых версий и отмена чужих изменений.",
   "Owner": "Владелец",
   "Everything, including making and removing publishers. There is exactly one owner.": "Всё, включая назначение и снятие публикаторов. Владелец всегда один.",
-  "The role could not be changed.": "Не удалось изменить роль."
+  "The role could not be changed.": "Не удалось изменить роль.",
+  "Open file {name}": "Открыть файл {name}",
+  "Showing the beginning of this file. Download it to see everything.": "Показано начало этого файла. Скачайте его, чтобы увидеть всё.",
+  "No preview is available for this file.": "Для этого файла нет предпросмотра.",
+  "Document": "Документ",
+  "Extracted text": "Извлечённый текст"
 }

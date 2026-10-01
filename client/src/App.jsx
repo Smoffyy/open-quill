@@ -46,6 +46,7 @@ import SearchModal from './components/dialogs/SearchModal.jsx';
 import Toaster from './components/ui/Toaster.jsx';
 import ConfirmHost from './components/ui/ConfirmHost.jsx';
 import Lightbox from './components/dialogs/Lightbox.jsx';
+import FilePreview from './components/dialogs/FilePreview.jsx';
 import ShortcutsModal from './components/dialogs/ShortcutsModal.jsx';
 import ThreadRail from './components/chat/ThreadRail.jsx';
 import ThreadFind from './components/chat/ThreadFind.jsx';
@@ -1841,6 +1842,7 @@ export default function App() {
       {showShortcuts && <ShortcutsModal prefs={user?.prefs} onClose={() => setShowShortcuts(false)} onCustomize={() => { setShowShortcuts(false); openSettings('keybinds'); }} />}
       {treeOpen && activeId && user?.prefs?.branchMap !== false && <BranchTree chatId={activeId} onSelect={selectBranch} onJump={jumpToMessage} onClose={() => setTreeOpen(false)} onChanged={async () => { await refreshMessages(activeId); setTimeout(() => scrollBottom(false), 20); toast(t('Message copied into this branch')); }} />}
       <Lightbox />
+      <FilePreview />
       <Suspense fallback={null}>
         {showAdmin && <AdminPanel user={user} onClose={() => { setShowAdmin(false); if (shouldResetPath('admin', location.pathname)) history.pushState({}, '', '/'); }} />}
         {showPlayground && <Playground onClose={() => { setShowPlayground(false); if (shouldResetPath('playground', location.pathname)) history.pushState({}, '', '/'); }} />}

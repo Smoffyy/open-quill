@@ -2748,5 +2748,10 @@
   "Everything an editor can do, plus publishing releases, restoring old versions and discarding anyone’s changes.": "Todo lo que hace un editor, además de publicar versiones, restaurar versiones antiguas y descartar cambios de cualquiera.",
   "Owner": "Propietario",
   "Everything, including making and removing publishers. There is exactly one owner.": "Todo, incluido nombrar y retirar publicadores. Hay exactamente un propietario.",
-  "The role could not be changed.": "No se pudo cambiar el rol."
+  "The role could not be changed.": "No se pudo cambiar el rol.",
+  "Open file {name}": "Abrir archivo {name}",
+  "Showing the beginning of this file. Download it to see everything.": "Se muestra el principio de este archivo. Descárgalo para verlo completo.",
+  "No preview is available for this file.": "No hay vista previa disponible para este archivo.",
+  "Document": "Documento",
+  "Extracted text": "Texto extraído"
 }

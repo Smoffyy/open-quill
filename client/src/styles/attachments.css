@@ -16,7 +16,7 @@
 .att.file { position: relative; width: var(--attach-size); height: var(--attach-size); flex: 0 0 auto; background: var(--input-bg); border: 1px solid var(--border); border-radius: var(--attach-radius); color: var(--text); overflow: hidden; }
 .att.file.pinned-file { border-color: var(--text); }
 .att.file svg { color: var(--text-muted); flex-shrink: 0; }
-.att-link { display: flex; flex-direction: column; justify-content: space-between; gap: 6px; height: 100%; padding: 9px 10px; color: inherit; text-decoration: none; }
+.att-link { display: flex; flex-direction: column; justify-content: space-between; gap: 6px; width: 100%; height: 100%; padding: 9px 10px; color: inherit; text-decoration: none; text-align: left; font: inherit; background: none; border: 0; cursor: pointer; }
 .att-name { font-size: 11.5px; line-height: 1.28; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; }
 .att-foot { display: flex; align-items: center; gap: 5px; min-width: 0; }
 .att-type { font-size: 10px; font-weight: 600; color: var(--text-faint); letter-spacing: .05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

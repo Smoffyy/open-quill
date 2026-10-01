@@ -489,6 +489,50 @@ test('uploads need a session, except the icon the sign-in screen shows', async (
   assert.equal((await request('GET', '/uploads/brand.png')).status, 404, 'unset the icon and it is private again');
 });
 
+test('a chat upload keeps its UTF-8 name and any format previews as the text the model reads', async () => {
+  const boundary = 'oqattach' + Date.now();
+  const part = (name, type, body) => Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="files"; filename="${name}"\r\nContent-Type: ${type}\r\n\r\n`, 'utf8'),
+    body, Buffer.from('\r\n')
+  ]);
+  const raw = Buffer.concat([
+    part('résumé 履歴.rtf', 'application/rtf', Buffer.from('{\\rtf1\\ansi{\\fonttbl{\\f0 Arial;}}Hello\\par World}')),
+    part('Main.hx', 'application/octet-stream', Buffer.from('class Main { static function main() {} }\n')),
+    part('notes.txt', 'text/plain', Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('wide text', 'utf16le')])),
+    Buffer.from(`--${boundary}--\r\n`)
+  ]);
+  const up = await browser('POST', '/api/upload', { raw, headers: { 'Content-Type': 'multipart/form-data; boundary=' + boundary } });
+  assert.equal(up.status, 200);
+  const [rtf, hx, wide] = up.json.files;
+  assert.equal(rtf.name, 'résumé 履歴.rtf', 'a non-ASCII file name is not mangled into latin1');
+  const text = async (f) => (await browser('GET', '/api/uploads/' + f.url.split('/').pop() + '/text')).json.text;
+  assert.equal(await text(rtf), 'Hello\nWorld');
+  assert.equal(await text(hx), 'class Main { static function main() {} }\n');
+  assert.equal(await text(wide), 'wide text');
+  assert.equal((await browser('GET', '/api/uploads/missing.pdf/text')).status, 404);
+});
+
+test('reference files read any text extension, convert documents and accept dotfile names', async () => {
+  const boundary = 'oqref' + Date.now();
+  const part = (name, body) => Buffer.concat([Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="files"; filename="${name}"\r\nContent-Type: application/octet-stream\r\n\r\n`), Buffer.from(body), Buffer.from('\r\n')]);
+  const raw = Buffer.concat([
+    part('Main.hx', 'class Main {}\nfunction a() {}\n'),
+    part('brief.rtf', '{\\rtf1\\ansi First\\par Second}'),
+    part('.editorconfig', 'root = true\n'),
+    Buffer.from(`--${boundary}--\r\n`)
+  ]);
+  const up = await browser('POST', '/api/admin/membank', { raw, headers: { 'Content-Type': 'multipart/form-data; boundary=' + boundary } });
+  assert.equal(up.status, 200);
+  assert.equal(up.json.saved, 3);
+  const byName = Object.fromEntries(up.json.files.map(f => [f.name, f]));
+  assert.equal(byName['Main.hx'].readable, true, 'an extension no list knows is still text');
+  assert.equal(byName['Main.hx'].lines, 3);
+  assert.equal(byName['brief.rtf'].readable, true);
+  assert.equal(byName['brief.rtf'].lines, 2, 'RTF is counted as its converted text, not its markup');
+  assert.equal(byName['.editorconfig'].readable, true);
+  for (const name of Object.keys(byName)) await browser('DELETE', '/api/admin/membank/' + encodeURIComponent(name));
+});
+
 test('admin edits stage until they are published', async () => {
   // Staged: the panel reads its own draft back, but nothing live has moved yet.
   await browser('PATCH', '/api/admin/settings', { body: { voiceMicEnabled: true } });

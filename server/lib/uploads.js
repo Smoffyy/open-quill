@@ -3,7 +3,7 @@ import path from 'path';
 import multer from 'multer';
 import { db, uid, getSetting } from '../db.js';
 import { dataPath } from './dataroot.js';
-import { looksTextual } from './extract.js';
+import { looksTextual, extractDocument, isRtf } from './extract.js';
 
 export const UPLOADS = dataPath('uploads');
 fs.mkdirSync(UPLOADS, { recursive: true });
@@ -26,7 +26,19 @@ export const diskStore = multer.diskStorage({
 });
 
 const TEXT_EXT = new Set(['.txt', '.md', '.markdown', '.csv', '.tsv', '.json', '.js', '.jsx', '.ts', '.tsx', '.py', '.lua', '.html', '.css', '.xml', '.yml', '.yaml', '.sh', '.c', '.cpp', '.h', '.java', '.rb', '.go', '.rs', '.php', '.sql', '.ini', '.cfg', '.log']);
-const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp' };
+const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.tif': 'image/tiff', '.tiff': 'image/tiff', '.avif': 'image/avif', '.heic': 'image/heic', '.heif': 'image/heif' };
+const VISION_MIME = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+
+export function imageMime(a) {
+  if (a?.type && a.type.startsWith('image/')) return a.type;
+  return MIME[path.extname(a?.name || '').toLowerCase()] || null;
+}
+
+export function imageKind(a) {
+  const mime = imageMime(a);
+  if (!mime || mime === 'image/svg+xml') return null;
+  return VISION_MIME.has(mime) ? 'vision' : 'other';
+}
 
 // Only these are ever rendered in place by the app (avatars, backgrounds, image
 // attachments, call audio). Everything else is served as a download, so an uploaded
@@ -62,8 +74,8 @@ export function isTextLike(a) {
   if (a?.type && (a.type.startsWith('text/') || a.type === 'application/json')) return true;
   const ext = path.extname(a?.name || '').toLowerCase();
   if (TEXT_EXT.has(ext)) return true;
-  if (ext === '.pdf') return hasSidecar(a?.url);
-  if (a?.type && a.type.startsWith('image/')) return false;
+  if (hasSidecar(a?.url)) return true;
+  if (imageKind(a)) return false;
   return sniffUpload(a?.url);
 }
 
@@ -83,6 +95,48 @@ function hasSidecar(url) {
 }
 
 const sniffCache = new Map();
+
+function startsWithRtf(p) {
+  try {
+    const fd = fs.openSync(p, 'r');
+    const buf = Buffer.alloc(5);
+    try { fs.readSync(fd, buf, 0, 5, 0); } finally { fs.closeSync(fd); }
+    return isRtf(buf);
+  } catch { return false; }
+}
+
+const SKIP_EXTRACT = /^(image|audio|video|font)\//;
+const extractChecked = new Set();
+
+export async function ensureSidecar(a) {
+  if (!a?.url || (a.type && SKIP_EXTRACT.test(a.type)) || INLINE_EXT.has(path.extname(a.name || a.url).toLowerCase())) return;
+  const p = uploadPath(a.url);
+  if (!p || hasSidecar(a.url)) return;
+  let key;
+  try { const st = fs.statSync(p); key = p + ':' + st.mtimeMs + ':' + st.size; } catch { return; }
+  if (extractChecked.has(key)) return;
+  extractChecked.add(key);
+  if (extractChecked.size > 1024) extractChecked.delete(extractChecked.values().next().value);
+  if (sniffUpload(a.url) && !startsWithRtf(p)) return;
+  try {
+    const text = await extractDocument(await fs.promises.readFile(p), a.name);
+    if (text) await fs.promises.writeFile(p + '.txt', text);
+  } catch (e) {
+    console.warn('[uploads] could not extract text from', a.name, '-', e?.message || e);
+  }
+}
+
+export async function ensureSidecars(list) {
+  for (const a of list || []) await ensureSidecar(a);
+}
+
+export async function ensureChatSidecars(chatId) {
+  const list = [];
+  for (const m of db.messages.byChat(chatId)) for (const a of (m.attachments || [])) list.push(a);
+  const pins = db.chats.byId(chatId)?.pinned_files;
+  if (Array.isArray(pins)) list.push(...pins);
+  await ensureSidecars(list);
+}
 
 function sniffUpload(url) {
   const p = uploadPath(url);
@@ -150,11 +204,22 @@ export function readUploadText(url) {
   } catch { return ''; }
 }
 
+const PREVIEW_CHARS = 512 * 1024;
+
+export function uploadPreview(a) {
+  const p = uploadPath(a?.url);
+  if (!p) return null;
+  try { if (!fs.statSync(p).isFile()) return null; } catch { return null; }
+  if (!isTextLike(a)) return { text: null, extracted: false, truncated: false };
+  const text = readUploadText(a.url);
+  return { text: text.slice(0, PREVIEW_CHARS), extracted: hasSidecar(a.url), truncated: text.length > PREVIEW_CHARS };
+}
+
 export function readImageDataUri(a) {
   try {
     const p = path.join(UPLOADS, path.basename(a.url || ''));
     if (!p.startsWith(UPLOADS_PREFIX)) return null;
-    const mime = a.type && a.type.startsWith('image/') ? a.type : (MIME[path.extname(a.name || '').toLowerCase()] || 'image/png');
+    const mime = imageMime(a) || 'image/png';
     const st = fs.statSync(p);
     const key = mime + '|' + p;
     const cached = cacheGet(imageCache, key, st.mtimeMs, st.size);

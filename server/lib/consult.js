@@ -1,7 +1,7 @@
 import { recordUsage } from './budget.js';
 import { oneShotFull, stripThink } from '../llm/index.js';
 import { resolveModel } from './models.js';
-import { readImageDataUri } from './uploads.js';
+import { readImageDataUri, imageKind } from './uploads.js';
 import { activePath } from './tree.js';
 import { promptVars } from './convo.js';
 import { renderPrompt } from './promptblocks.js';
@@ -52,7 +52,7 @@ function latestImages(chatId) {
   for (let i = path.length - 1; i >= 0; i--) {
     if (path[i].role !== 'user') continue;
     return (path[i].attachments || [])
-      .filter(a => a.type && a.type.startsWith('image/'))
+      .filter(a => imageKind(a) === 'vision')
       .map(a => readImageDataUri(a))
       .filter(Boolean);
   }

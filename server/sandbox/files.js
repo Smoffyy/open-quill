@@ -7,7 +7,7 @@ import { extOf, isText, isIgnoredDir, isIgnoredRel, globToRe, gitignoreCacheDrop
 import { zipBuffer, unzipBuffer } from './zip.js';
 import { compileSearchPattern } from '../lib/sandboxguard.js';
 import { runRegexSearch } from './regexsearch.js';
-import { looksTextual } from '../lib/extract.js';
+import { looksTextual, extractDocument } from '../lib/extract.js';
 
 const byName = new Intl.Collator(undefined, { numeric: true }).compare;
 
@@ -350,8 +350,28 @@ export function view(chatId, rel, start, end) {
     const t = treeString(chatId, rel || '', false);
     return { ok: true, path: rel || '.', dir: true, content: t.text, hidden: t.hidden };
   }
-  if (!isText(rel)) { let size = 0; try { size = fs.statSync(p).size; } catch {} return { ok: true, path: rel, content: `[binary file, ${size} bytes; not shown as text]`, binary: true }; }
-  const all = fs.readFileSync(p, 'utf8').split('\n');
+  if (!isViewableText(chatId, rel)) { let size = 0; try { size = fs.statSync(p).size; } catch {} return { ok: true, path: rel, content: `[binary file, ${size} bytes; not shown as text]`, binary: true }; }
+  return pageText(rel, fs.readFileSync(p, 'utf8'), start, end);
+}
+
+const DOC_MAX_BYTES = 64 * 1024 * 1024;
+const docCache = new Map();
+
+export async function documentText(chatId, rel) {
+  const p = resolveSafe(chatId, rel);
+  const st = fs.statSync(p);
+  if (!st.isFile() || st.size > DOC_MAX_BYTES) return '';
+  const key = p + ':' + st.mtimeMs + ':' + st.size;
+  if (docCache.has(key)) return docCache.get(key);
+  let text = '';
+  try { text = await extractDocument(fs.readFileSync(p), rel); } catch {}
+  docCache.set(key, text);
+  if (docCache.size > 32) docCache.delete(docCache.keys().next().value);
+  return text;
+}
+
+export function pageText(rel, text, start, end) {
+  const all = text.split('\n');
   let s = 1, e = all.length;
   if (Number.isInteger(start)) s = Math.max(1, start);
   if (Number.isInteger(end)) e = Math.min(all.length, end);
