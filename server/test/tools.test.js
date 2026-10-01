@@ -205,3 +205,13 @@ test('a pending question resolves with the answer, a skip, a stop or a timeout',
   live.answerQuestion('chat-d', { skipped: true });
   assert.deepEqual(await second, { skipped: true });
 });
+
+test('a dismissed plan leaves the prompt, and a newer plan comes back', async () => {
+  const { runTodo, latestTodos } = await import('../lib/todo.js');
+  const rec = (payload) => '[[OQR:' + Buffer.from(JSON.stringify({ call: { tool: 'todo' }, result: payload }), 'utf8').toString('base64') + ']]';
+  const plan = runTodo({ items: [{ content: 'Build', status: 'in_progress' }, { content: 'Test', status: 'pending' }] }).payload;
+  const thread = [{ id: 'a1', role: 'assistant', content: rec(plan) }];
+  assert.equal(latestTodos(thread).length, 2);
+  assert.deepEqual(latestTodos(thread, { msg: 'a1', n: 1 }), []);
+  assert.equal(latestTodos([...thread, { id: 'a2', role: 'assistant', content: rec(plan) }], { msg: 'a1', n: 1 }).length, 2);
+});

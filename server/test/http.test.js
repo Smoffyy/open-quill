@@ -689,6 +689,45 @@ test('a project file opens, saves as a new version, refuses a stale save and res
   await browser('DELETE', base);
 });
 
+test('project files keep their folders, and can be created, renamed and zipped', async () => {
+  const project = (await browser('POST', '/api/projects', { body: { name: 'Folder probe' } })).json;
+  const base = '/api/projects/' + project.id;
+  const boundary = 'oqfolder' + Date.now();
+  const part = (name, value) => `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`;
+  const raw = Buffer.from(part('path', 'src/lib/app.py') + `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="app.py"\r\nContent-Type: text/plain\r\n\r\nprint(1)\r\n--${boundary}--\r\n`);
+  const up = await browser('POST', base + '/files', { raw, headers: { 'Content-Type': 'multipart/form-data; boundary=' + boundary } });
+  assert.equal(up.status, 200);
+  assert.ok(up.json.files.some(f => f.name === 'src/lib/app.py'), 'the folder path survives the upload');
+  const hostile = Buffer.from(part('path', '../../escape.txt') + `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="x.txt"\r\n\r\nx\r\n--${boundary}--\r\n`);
+  assert.equal((await browser('POST', base + '/files', { raw: hostile, headers: { 'Content-Type': 'multipart/form-data; boundary=' + boundary } })).status, 400);
+
+  const made = await browser('POST', base + '/files/new', { body: { path: 'docs/notes.md' } });
+  assert.equal(made.status, 200);
+  assert.equal(made.json.path, 'docs/notes.md');
+  assert.equal((await browser('POST', base + '/files/new', { body: { path: 'docs/notes.md' } })).status, 409);
+  assert.equal((await browser('POST', base + '/files/new', { body: { path: '.env' } })).status, 400);
+
+  const moved = await browser('POST', base + '/files/rename', { body: { path: 'docs/notes.md', to: 'README.md' } });
+  assert.equal(moved.status, 200);
+  assert.ok(moved.json.files.some(f => f.name === 'README.md') && !moved.json.files.some(f => f.name === 'docs/notes.md'));
+  assert.equal((await browser('POST', base + '/files/rename', { body: { path: 'README.md', to: 'src/lib/app.py' } })).status, 409);
+
+  const zip = await browser('GET', base + '/zip');
+  assert.equal(zip.status, 200);
+  assert.match(zip.headers['content-type'] || '', /zip/);
+  await browser('DELETE', base);
+});
+
+test('a dismissed plan is stored on the chat, and saving a missing chat file is refused', async () => {
+  const { id } = (await browser('POST', '/api/chats', { body: {} })).json;
+  assert.ok(id);
+  assert.equal((await browser('POST', `/api/chats/${id}/plan/dismiss`, { body: { messageId: 'm1', n: 0 } })).status, 400);
+  assert.equal((await browser('POST', `/api/chats/${id}/plan/dismiss`, { body: { messageId: 'm1', n: 2 } })).status, 200);
+  assert.deepEqual((await browser('GET', `/api/chats/${id}`)).json.chat.planDismissed, { msg: 'm1', n: 2 });
+  assert.equal((await browser('PUT', `/api/chats/${id}/file`, { body: { path: 'none.txt', text: 'x' } })).status, 404);
+  await browser('DELETE', `/api/chats/${id}`);
+});
+
 test('the artifacts library answers for a member and refuses a stranger', async () => {
   assert.equal((await request('GET', '/api/artifacts')).status, 401);
   const res = await browser('GET', '/api/artifacts');

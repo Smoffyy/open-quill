@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../lib/api.js';
 import { toast } from '../../lib/toast.js';
+import { askConfirm } from '../../lib/confirm.js';
 import { t } from '../../i18n.jsx';
 import { useSkeleton } from '../../lib/skeleton.js';
 import { useFocusTrap } from '../../lib/focus.js';
@@ -99,20 +100,27 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
     setChats(cs => cs.filter(c => !selected.has(c.id)));
     setSelected(new Set());
     setBusy(false);
-    toast(`${ids.length} chat${ids.length === 1 ? '' : 's'} ${archived ? 'archived' : 'restored'}.`);
+    const n = ids.length;
+    toast(archived
+      ? (n === 1 ? t('{n} chat archived.', { n }) : t('{n} chats archived.', { n }))
+      : (n === 1 ? t('{n} chat restored.', { n }) : t('{n} chats restored.', { n })));
     onChatsChanged?.();
   }
 
   async function bulkDelete() {
     if (!selected.size || busy) return;
-    if (!confirm(`Permanently delete ${selected.size} chat${selected.size === 1 ? '' : 's'}? This cannot be undone.`)) return;
+    const count = selected.size;
+    if (!await askConfirm({
+      title: count === 1 ? t('Delete {n} chat?', { n: count }) : t('Delete {n} chats?', { n: count }),
+      message: t('This cannot be undone.'), confirm: t('Delete'), danger: true
+    })) return;
     setBusy(true);
     const ids = [...selected];
     for (const id of ids) { try { await api.del('/api/chats/' + id); } catch {} }
     setChats(cs => cs.filter(c => !selected.has(c.id)));
     setSelected(new Set());
     setBusy(false);
-    toast(`${ids.length} chat${ids.length === 1 ? '' : 's'} deleted.`);
+    toast(ids.length === 1 ? t('{n} chat deleted.', { n: ids.length }) : t('{n} chats deleted.', { n: ids.length }));
     onChatsChanged?.();
   }
 

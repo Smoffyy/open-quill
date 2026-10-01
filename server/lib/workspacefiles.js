@@ -1,8 +1,49 @@
 import * as sandbox from '../sandbox.js';
+import { roleLimit } from './models.js';
+
+export const sandboxCap = (user) => roleLimit('sandbox_limit_mb', !!user.is_admin, user.is_admin ? 1024 : 256) * 1024 * 1024;
 
 export const attachName = (name) => String(name || 'file').replace(/[\r\n"\\]/g, '_');
 
 const exists = (ws, rel) => !!rel && sandbox.list(ws).some(f => f.path === rel);
+
+const MAX_DEPTH = 12;
+const MAX_SEGMENT = 120;
+const MAX_PATH = 400;
+
+export function cleanPath(ws, raw) {
+  const segs = String(raw ?? '').replace(/\\/g, '/').split('/')
+    .map(s => s.replace(/[\u0000-\u001f:*?"<>|]/g, '_').trim().slice(0, MAX_SEGMENT))
+    .filter(s => s && s !== '.');
+  if (!segs.length) return { ok: false, error: 'A file name is required.' };
+  if (segs.length > MAX_DEPTH) return { ok: false, error: 'That path has too many folders.' };
+  if (segs.some(s => s === '..' || s.startsWith('.'))) return { ok: false, error: 'Names may not start with a dot.' };
+  const rel = segs.join('/');
+  if (rel.length > MAX_PATH) return { ok: false, error: 'That path is too long.' };
+  if (sandbox.isIgnoredRel(ws, rel)) return { ok: false, error: `${rel} is inside a folder the workspace ignores (dependencies or build output).` };
+  const n = sandbox.normalizeRel(rel);
+  return n.ok ? { ok: true, rel: n.rel } : { ok: false, error: n.error };
+}
+
+export function createEmpty(ws, raw) {
+  const p = cleanPath(ws, raw);
+  if (!p.ok) return { status: 400, body: { error: p.error } };
+  if (exists(ws, p.rel)) return { status: 409, body: { error: `${p.rel} already exists.` } };
+  const r = sandbox.createFile(ws, p.rel, '');
+  if (!r.ok) return { status: 400, body: { error: r.error || 'Could not create the file.' } };
+  return { status: 200, body: { ok: true, path: p.rel } };
+}
+
+export function renameTo(ws, rel, raw) {
+  if (!exists(ws, rel)) return { status: 404, body: { error: 'not found' } };
+  const p = cleanPath(ws, raw);
+  if (!p.ok) return { status: 400, body: { error: p.error } };
+  if (p.rel === rel) return { status: 200, body: { ok: true, path: rel } };
+  if (exists(ws, p.rel)) return { status: 409, body: { error: `${p.rel} already exists.` } };
+  const r = sandbox.renameFile(ws, rel, p.rel);
+  if (!r.ok) return { status: 400, body: { error: r.error || 'Could not rename the file.' } };
+  return { status: 200, body: { ok: true, path: p.rel } };
+}
 
 export function fileInfo(ws, rel, vq, downloadBase) {
   if (!exists(ws, rel)) return { status: 404, body: { error: 'not found' } };

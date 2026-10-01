@@ -117,7 +117,16 @@
 .art-btn.text.solid { background: var(--text); color: var(--bg); font-weight: 600; }
 .art-btn.text.solid:hover { opacity: .88; }
 .art-btn.text:disabled { opacity: .5; pointer-events: none; }
+.art-viewer { container-type: inline-size; }
 .art-edit { display: flex; flex-direction: column; height: 100%; }
+.art-edit.split { flex-direction: row; }
+.art-edit-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.art-edit-preview { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden auto; border-left: 1px solid var(--border-soft); background: var(--bg); }
+.art-edit-preview .art-preview-frame { flex: 1; }
+@container (max-width: 640px) {
+  .art-edit.split { flex-direction: column; }
+  .art-edit-preview { border-left: 0; border-top: 1px solid var(--border-soft); }
+}
 .art-editor {
   flex: 1; width: 100%; min-height: 0; box-sizing: border-box; padding: 8px 14px; margin: 0; border: 0; outline: none; resize: none;
   background: transparent; color: var(--text); font-family: var(--font-mono, monospace); font-size: 14px; line-height: 22px;

@@ -88,3 +88,20 @@ test('a cancelled step stays in the open plan', async () => {
   assert.equal(g.plan.total, 2);
   assert.equal(g.plan.items[1].status, 'cancelled');
 });
+
+test('a plan the member dismissed stays closed until the model writes a newer one', async () => {
+  const { planRecords, groupPlans, latestPlanRef } = await import('../src/lib/agentpanel.js');
+  const messages = [
+    { id: 'a1', role: 'assistant', content: todo([step('One', 'in_progress'), step('Two')]) + todo([step('One', 'completed'), step('Two', 'in_progress')]) },
+    { id: 'u1', role: 'user', content: 'stop' }
+  ];
+  const ref = latestPlanRef(messages);
+  assert.deepEqual(ref, { msg: 'a1', n: 2 });
+  const closed = groupPlans(planRecords(messages, ref));
+  assert.equal(closed.plan, null);
+  assert.equal(closed.previousPlan.done, 1, 'the dismissed plan is still there as the previous one');
+  const later = [...messages, { id: 'a2', role: 'assistant', content: todo([step('New')]) }];
+  assert.equal(groupPlans(planRecords(later, ref)).plan.items[0].content, 'New');
+  assert.equal(groupPlans(planRecords(messages, { msg: 'a1', n: 1 })).plan.items[1].status, 'in_progress', 'a later update in the same reply brings the plan back');
+  assert.equal(latestPlanRef([{ id: 'u', role: 'user', content: 'hi' }]), null);
+});

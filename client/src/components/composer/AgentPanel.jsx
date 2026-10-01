@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Check, Chevron, ListChecks } from '../ui/icons.jsx';
+import { Check, Chevron, ListChecks, X } from '../ui/icons.jsx';
 import { t, tk } from '../../i18n.jsx';
 
 const STATUS = {
@@ -34,16 +34,21 @@ function Steps({ items }) {
   );
 }
 
-function Plan({ plan }) {
+function Plan({ plan, onDismiss }) {
   const [open, setOpen] = useState(true);
   return (
     <section className={'ap-plan ap-enter' + (open ? ' open' : '')}>
-      <button type="button" className="ap-plan-head" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <ListChecks className="ap-ic" aria-hidden="true" />
-        <span className="ap-title">{t('Plan')}</span>
-        <span className="ap-count">{t('{done} of {total} done', { done: plan.done, total: plan.total })}</span>
-        <Chevron className="ap-chev" aria-hidden="true" />
-      </button>
+      <div className="ap-plan-bar">
+        <button type="button" className="ap-plan-head" aria-expanded={open} onClick={() => setOpen(!open)}>
+          <ListChecks className="ap-ic" aria-hidden="true" />
+          <span className="ap-title">{t('Plan')}</span>
+          <span className="ap-count">{t('{done} of {total} done', { done: plan.done, total: plan.total })}</span>
+          <Chevron className="ap-chev" aria-hidden="true" />
+        </button>
+        {onDismiss && (
+          <button type="button" className="ap-dismiss" title={t('Dismiss plan')} aria-label={t('Dismiss plan')} onClick={onDismiss}><X aria-hidden="true" /></button>
+        )}
+      </div>
       {open && plan.items.length > 0 && <Steps items={plan.items} />}
     </section>
   );
@@ -85,7 +90,7 @@ function Question({ question, onAnswer, onSkip }) {
   );
 }
 
-export default function AgentPanel({ plan, previousPlan, question, onAnswer, onSkip }) {
+export default function AgentPanel({ plan, previousPlan, onDismissPlan, question, onAnswer, onSkip }) {
   const [showPrev, setShowPrev] = useState(false);
   const prevKey = previousPlan?.key || '';
   useEffect(() => { setShowPrev(false); }, [prevKey]);
@@ -103,7 +108,7 @@ export default function AgentPanel({ plan, previousPlan, question, onAnswer, onS
       {(plan || question || withPrev) && (
         <div className="agent-panel">
           {withPrev && <PreviousPlan plan={previousPlan} />}
-          {plan && <Plan key={plan.key} plan={plan} />}
+          {plan && <Plan key={plan.key} plan={plan} onDismiss={onDismissPlan} />}
           {question && <Question key={question.id} question={question} onAnswer={onAnswer} onSkip={onSkip} />}
         </div>
       )}

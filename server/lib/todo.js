@@ -1,3 +1,4 @@
+import { db } from '../db.js';
 import { activePath } from './tree.js';
 import { decodeOqr } from './history.js';
 
@@ -40,22 +41,24 @@ export function planClosure(items) {
   return items.every(t => t.status === 'completed' || t.status === 'cancelled') ? 'finished' : null;
 }
 
-export function latestTodos(messages) {
+const isPlanRecord = (d) => !!(d && d.call && d.call.tool === 'todo' && d.result && d.result.ok && Array.isArray(d.result.items));
+
+export function latestTodos(messages, dismissed = null) {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
     if (m.role !== 'assistant' || !m.content || !m.content.includes('[[OQR:')) continue;
-    const recs = [...m.content.matchAll(OQR)].map(x => decodeOqr(x[1]));
-    for (let j = recs.length - 1; j >= 0; j--) {
-      const d = recs[j];
-      if (!d || !d.call || d.call.tool !== 'todo' || !d.result || !d.result.ok || !Array.isArray(d.result.items)) continue;
-      return planClosure(d.result.items) ? [] : d.result.items;
-    }
+    const recs = [...m.content.matchAll(OQR)].map(x => decodeOqr(x[1])).filter(isPlanRecord);
+    if (!recs.length) continue;
+    if (dismissed && dismissed.msg === m.id && dismissed.n === recs.length) return [];
+    const items = recs[recs.length - 1].result.items;
+    return planClosure(items) ? [] : items;
   }
   return [];
 }
 
 export function todosOf(chatId) {
-  return chatId ? latestTodos(activePath(chatId)) : [];
+  if (!chatId) return [];
+  return latestTodos(activePath(chatId), db.chats.byId(chatId)?.plan_dismissed || null);
 }
 
 export function todoText(items) {

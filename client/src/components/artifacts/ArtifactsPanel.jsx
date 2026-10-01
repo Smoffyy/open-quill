@@ -11,7 +11,7 @@ function clampW(w) { return Math.max(320, Math.min(w, Math.round(window.innerWid
 
 const MemoViewer = React.memo(Viewer);
 
-export default function ArtifactsPanel({ chatId, files, live, pending = {}, focus = null, onClose }) {
+export default function ArtifactsPanel({ chatId, files, live, pending = {}, focus = null, busy = false, onFilesChanged, onClose }) {
   const [active, setActive] = useState(null);
   const [split, setSplit] = useState(null);
   const [focusedPane, setFocusedPane] = useState('left');
@@ -86,6 +86,10 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
     document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
   }
 
+  const filesChangedRef = useRef(onFilesChanged);
+  filesChangedRef.current = onFilesChanged;
+  const onSaved = useCallback((d) => { if (Array.isArray(d?.files)) filesChangedRef.current?.(d.files); }, []);
+
   const paneProps = (p) => ({
     chatId, path: p,
     liveText: live && p === live.path ? live.content : null,
@@ -93,6 +97,8 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
     committed: !!files.find(f => f.path === p),
     fileV: byPath.get(p)?.v || 0,
     pendingText: p in pending ? pending[p] : null,
+    editable: !busy && !!chatId,
+    onSaved
   });
 
   const q = filter.trim().toLowerCase();
@@ -144,7 +150,7 @@ export default function ArtifactsPanel({ chatId, files, live, pending = {}, focu
       ) : (
         <>
           <div className="art-head">
-            <div className="art-title">Artifacts{treeFiles.length > 0 && <span className="art-count">{treeFiles.length}</span>}</div>
+            <div className="art-title">{t('Artifacts')}{treeFiles.length > 0 && <span className="art-count">{treeFiles.length}</span>}</div>
             <div className="art-head-actions">
               {files.length > 0 && <a className="art-dl-all" href={`/api/chats/${chatId}/zip`}><Download style={{ width: 15 }} /> {t("Download all")}</a>}
               <button className="art-btn icon" onClick={onClose} title={t("Close panel")}><X style={{ width: 15 }} /></button>

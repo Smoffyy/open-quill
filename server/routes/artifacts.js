@@ -2,7 +2,8 @@ import { db } from '../db.js';
 import { authMiddleware } from '../auth.js';
 import * as sandbox from '../sandbox.js';
 import { workspaceFor } from '../lib/projectfiles.js';
-import { attachName, fileInfo, sendDownload, restoreVersion } from '../lib/workspacefiles.js';
+import { sandboxCap, attachName, fileInfo, sendDownload, restoreVersion, saveText } from '../lib/workspacefiles.js';
+import { activeTurn } from '../lib/ws/live.js';
 
 const wsOf = (c) => workspaceFor(c);
 
@@ -76,6 +77,13 @@ export default function registerArtifactRoutes(app) {
   app.get('/api/chats/:id/download', authMiddleware, (req, res) => {
     const c = ownChat(req, res); if (!c) return;
     sendDownload(res, wsOf(c), String(req.query.path || ''), parseInt(req.query.v));
+  });
+
+  app.put('/api/chats/:id/file', authMiddleware, (req, res) => {
+    const c = ownChat(req, res); if (!c) return;
+    if (activeTurn(c.id)) return res.status(409).json({ error: 'Wait for the reply to finish before editing files.' });
+    const r = saveText(wsOf(c), String(req.body?.path || ''), req.body?.text, req.body?.v, sandboxCap(req.user));
+    res.status(r.status).json(r.body);
   });
 
   app.post('/api/chats/:id/restore', authMiddleware, (req, res) => {

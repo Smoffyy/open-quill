@@ -2,10 +2,9 @@ import path from 'path';
 import multer from 'multer';
 import { db, uid, now } from '../db.js';
 import { authMiddleware } from '../auth.js';
-import { roleLimit } from '../lib/models.js';
 import * as sandbox from '../sandbox.js';
 import * as projectfiles from '../lib/projectfiles.js';
-import { fileInfo, sendDownload, restoreVersion, saveText } from '../lib/workspacefiles.js';
+import { sandboxCap, attachName, cleanPath, createEmpty, renameTo, fileInfo, sendDownload, restoreVersion, saveText } from '../lib/workspacefiles.js';
 
 function ownProject(req, res) {
   const p = db.projects.byId(req.params.id);
@@ -13,7 +12,7 @@ function ownProject(req, res) {
   return p;
 }
 
-const capFor = (user) => roleLimit('sandbox_limit_mb', !!user.is_admin, user.is_admin ? 1024 : 256) * 1024 * 1024;
+const capFor = sandboxCap;
 
 function projectView(p) {
   const chats = db.chats.byUser(p.user_id).filter(c => c.project_id === p.id);
@@ -67,11 +66,32 @@ export default function registerProjectRoutes(app) {
     const pr = ownProject(req, res); if (!pr) return;
     if (!req.file) return res.status(400).json({ error: 'No file received.' });
     const ws = projectfiles.workspaceOfProject(pr.id);
-    const name = path.basename(String(req.file.originalname || 'file')).replace(/[\\/:*?"<>|]/g, '_').slice(0, 120);
-    if (!name || name.startsWith('.')) return res.status(400).json({ error: 'Invalid file name.' });
-    const r = sandbox.importBuffer(ws, name, req.file.buffer, capFor(req.user));
+    const p = cleanPath(ws, req.body?.path || path.basename(String(req.file.originalname || 'file')));
+    if (!p.ok) return res.status(400).json({ error: p.error });
+    const r = sandbox.importBuffer(ws, p.rel, req.file.buffer, capFor(req.user));
     if (!r.ok) return res.status(400).json({ error: r.error });
-    res.json({ file: { name, size: req.file.buffer.length }, files: fileView(ws), cap: capFor(req.user) });
+    res.json({ file: { name: p.rel, size: req.file.buffer.length }, files: fileView(ws), cap: capFor(req.user) });
+  });
+
+  app.post('/api/projects/:id/files/new', authMiddleware, (req, res) => {
+    const pr = ownProject(req, res); if (!pr) return;
+    const ws = projectfiles.workspaceOfProject(pr.id);
+    const r = createEmpty(ws, req.body?.path);
+    res.status(r.status).json(r.status === 200 ? { ...r.body, files: fileView(ws), cap: capFor(req.user) } : r.body);
+  });
+
+  app.post('/api/projects/:id/files/rename', authMiddleware, (req, res) => {
+    const pr = ownProject(req, res); if (!pr) return;
+    const ws = projectfiles.workspaceOfProject(pr.id);
+    const r = renameTo(ws, String(req.body?.path || ''), req.body?.to);
+    res.status(r.status).json(r.status === 200 ? { ...r.body, files: fileView(ws), cap: capFor(req.user) } : r.body);
+  });
+
+  app.get('/api/projects/:id/zip', authMiddleware, (req, res) => {
+    const pr = ownProject(req, res); if (!pr) return;
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${attachName(String(pr.name || 'project').replace(/[^a-zA-Z0-9_-]/g, '_'))}.zip"`);
+    res.send(sandbox.zipAll(projectfiles.workspaceOfProject(pr.id)));
   });
 
   app.delete('/api/projects/:id/files', authMiddleware, (req, res) => {

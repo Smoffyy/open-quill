@@ -5,16 +5,32 @@ const finished = (it) => it.status === 'completed' || it.status === 'cancelled';
 
 const isClosedPlan = (items) => !items.length || items.every(finished);
 
-export function planRecords(messages) {
+const isPlanRecord = ({ call, result }) => call.tool === 'todo' && !!result && !!result.ok && Array.isArray(result.items);
+
+export function planRecords(messages, dismissed = null) {
   const out = [];
   for (const m of Array.isArray(messages) ? messages : []) {
     if (m.role !== 'assistant') continue;
-    for (const { call, result, hidden } of oqrRecords(m.content)) {
-      if (hidden || call.tool !== 'todo' || !result || !result.ok || !Array.isArray(result.items)) continue;
-      out.push(result.items);
+    let n = 0;
+    for (const rec of oqrRecords(m.content)) {
+      if (!isPlanRecord(rec)) continue;
+      n++;
+      if (!rec.hidden) out.push(rec.result.items);
+      if (dismissed && dismissed.msg === m.id && dismissed.n === n) out.push([]);
     }
   }
   return out;
+}
+
+export function latestPlanRef(messages) {
+  const list = Array.isArray(messages) ? messages : [];
+  for (let i = list.length - 1; i >= 0; i--) {
+    const m = list[i];
+    if (m.role !== 'assistant' || !m.id) continue;
+    const n = oqrRecords(m.content).filter(isPlanRecord).length;
+    if (n) return { msg: m.id, n };
+  }
+  return null;
 }
 
 export function isNewPlan(prev, next) {
@@ -48,7 +64,7 @@ export function groupPlans(records) {
   return { plan: shape(current), previousPlan: shape(previous) };
 }
 
-export function agentPanelState(messages, { liveContent = '' } = {}) {
-  const live = liveContent ? [{ role: 'assistant', content: liveContent }] : [];
-  return groupPlans(planRecords([...(messages || []), ...live]));
+export function agentPanelState(messages, { liveContent = '', liveId = null, dismissed = null } = {}) {
+  const live = liveContent ? [{ id: liveId, role: 'assistant', content: liveContent }] : [];
+  return groupPlans(planRecords([...(messages || []), ...live], dismissed));
 }

@@ -8,7 +8,7 @@ import * as websearch from '../websearch.js';
 import * as sandbox from '../../sandbox.js';
 import { UPLOADS } from '../uploads.js';
 import { ensureChain, activePath } from '../tree.js';
-import { resolveModel, roleLimit } from '../models.js';
+import { resolveModel } from '../models.js';
 import { applyKwargs } from '../kwargs.js';
 import { budgetStatus } from '../budget.js';
 import { runQueued } from '../queue.js';
@@ -20,6 +20,7 @@ import { runCompletion } from './turn.js';
 import * as live from './live.js';
 import { isRouter, resolveRouted } from '../router.js';
 import { sameOrigin } from '../origin.js';
+import { sandboxCap } from '../workspacefiles.js';
 
 // A frame this large is already far beyond any real composer paste; the cap exists so a
 // hostile client cannot make the server buffer an arbitrary amount before we ever look
@@ -191,7 +192,7 @@ export function initWs(server) {
         if (bs.enforce && bs.state === 'over') { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'You have reached your monthly usage budget. It resets at the start of next month.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
         if (live.activeTurn(chat.id)) { safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: 'A reply is already being generated in this chat. Wait for it to finish, or stop it first.' })); safeSend(JSON.stringify({ type: 'done', chatId: chat.id })); return; }
 
-        const sandboxCap = roleLimit('sandbox_limit_mb', !!u.is_admin, u.is_admin ? 1024 : 256) * 1024 * 1024;
+        const sandboxLimit = sandboxCap(u);
         const userSandbox = !!msg.sandbox;
         if (!!chat.sandbox !== userSandbox) db.chats.update(chat.id, { sandbox: userSandbox ? 1 : 0 });
         const sandboxOn = userSandbox || !!chat.project_id;
@@ -222,7 +223,7 @@ export function initWs(server) {
               try {
                 const fname = path.basename(a.url || '');
                 const src = fname ? path.join(UPLOADS, fname) : '';
-                if (src && fs.existsSync(src)) sandbox.importBuffer(sandbox.wsKey(chat), path.basename(a.name || fname || 'file'), fs.readFileSync(src), sandboxCap);
+                if (src && fs.existsSync(src)) sandbox.importBuffer(sandbox.wsKey(chat), path.basename(a.name || fname || 'file'), fs.readFileSync(src), sandboxLimit);
                 else console.warn('[sandbox import] upload not found for', a.name, '->', src);
               } catch (e) { console.warn('[sandbox import] failed for', a && a.name, e.message); }
             }
@@ -238,7 +239,7 @@ export function initWs(server) {
         try {
           await runQueued(queueOn, model.id,
             () => { liveSend(JSON.stringify({ type: 'queued', chatId: chat.id })); },
-            () => runCompletion(liveWs, liveState, liveSend, chat, model, !!msg.extended, sandboxOn, sandboxCap, webSearchOn, !!msg.call, styleText));
+            () => runCompletion(liveWs, liveState, liveSend, chat, model, !!msg.extended, sandboxOn, sandboxLimit, webSearchOn, !!msg.call, styleText));
         } finally { live.endTurn(chat.id); }
       } catch (err) {
         console.error('[ws chat]', err);

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { ownsDrop } from './dropfiles.js';
 import { attachKey, peekAttachments, readAttachments, writeAttachments, dropAttachments } from './attachdrafts.js';
 
 const DEFAULT_GLOW = 'var(--text)';
@@ -109,10 +110,15 @@ export function useAttachments({ visionSupported, draftId }) {
 
   useEffect(() => {
     const hasFiles = (e) => !!e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
-    const onEnter = (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current++; setDragActive(true); };
-    const onOver = (e) => { if (!hasFiles(e)) return; e.preventDefault(); };
+    const onEnter = (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current++; setDragActive(!ownsDrop(e.target)); };
+    const onOver = (e) => { if (!hasFiles(e)) return; e.preventDefault(); setDragActive(!ownsDrop(e.target)); };
     const onLeave = (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current--; if (dragDepth.current <= 0) { dragDepth.current = 0; setDragActive(false); } };
-    const onDrop = (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current = 0; setDragActive(false); addFiles(e.dataTransfer.files); };
+    const onDrop = (e) => {
+      if (!hasFiles(e)) return;
+      dragDepth.current = 0; setDragActive(false);
+      if (e.defaultPrevented || ownsDrop(e.target)) return;
+      e.preventDefault(); addFiles(e.dataTransfer.files);
+    };
     window.addEventListener('dragenter', onEnter);
     window.addEventListener('dragover', onOver);
     window.addEventListener('dragleave', onLeave);

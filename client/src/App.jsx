@@ -8,7 +8,7 @@ import Sidebar from './components/sidebar/Sidebar.jsx';
 import AppBackground from './components/chat/AppBackground.jsx';
 import Composer from './components/composer/Composer.jsx';
 import AgentPanel from './components/composer/AgentPanel.jsx';
-import { planRecords, groupPlans } from './lib/agentpanel.js';
+import { planRecords, groupPlans, latestPlanRef } from './lib/agentpanel.js';
 import QuickPrompts from './components/chat/QuickPrompts.jsx';
 import CompactingBar from './components/chat/CompactingBar.jsx';
 import EngineStrip from './components/chat/EngineStrip.jsx';
@@ -42,6 +42,7 @@ import ProjectsPanel from './components/pages/ProjectsPanel.jsx';
 import PersonasModal from './components/dialogs/PersonasModal.jsx';
 import SearchModal from './components/dialogs/SearchModal.jsx';
 import Toaster from './components/ui/Toaster.jsx';
+import ConfirmHost from './components/ui/ConfirmHost.jsx';
 import Lightbox from './components/dialogs/Lightbox.jsx';
 import ShortcutsModal from './components/dialogs/ShortcutsModal.jsx';
 import ThreadRail from './components/chat/ThreadRail.jsx';
@@ -462,8 +463,11 @@ export default function App() {
   const showCtxGauge = !!user?.prefs?.ctxGauge;
   const statusDelay = statusDelayEnabled(user?.prefs?.statusDelay);
   const ledgerTokens = liveLedgerTokens({ streaming, promptTokens: livePrompt, telemetry, ledgerOpen });
-  const planRecs = useMemo(() => planRecords(streaming ? messages.filter(m => m.id !== assistantIdRef.current) : messages), [messages, streaming]);
-  const livePlanRecs = useMemo(() => (streaming && dispContent ? planRecords([{ role: 'assistant', content: dispContent }]) : []), [streaming, dispContent]);
+  const [planDismissed, setPlanDismissed] = useState(null);
+  const settledMsgs = useMemo(() => (streaming ? messages.filter(m => m.id !== assistantIdRef.current) : messages), [messages, streaming]);
+  const liveMsg = useMemo(() => (streaming && dispContent ? { id: assistantIdRef.current, role: 'assistant', content: dispContent } : null), [streaming, dispContent]);
+  const planRecs = useMemo(() => planRecords(settledMsgs, planDismissed), [settledMsgs, planDismissed]);
+  const livePlanRecs = useMemo(() => (liveMsg ? planRecords([liveMsg], planDismissed) : []), [liveMsg, planDismissed]);
   const plans = useMemo(() => groupPlans([...planRecs, ...livePlanRecs]), [planRecs, livePlanRecs]);
   const pendingAsk = activeId ? asks[activeId] || null : null;
   const question = useMemo(() => (pendingAsk ? { ...pendingAsk, id: activeId + ':' + pendingAsk.question } : null), [pendingAsk, activeId]);
@@ -976,7 +980,19 @@ export default function App() {
   // Everything a chat's view owns, cleared as one. newChat, toggleIncognito and
   // startProjectChat each used to spell this out, and they had already begun to
   // disagree about which pieces were included.
+  function dismissPlan() {
+    const ref = latestPlanRef(liveMsg ? [...settledMsgs, liveMsg] : settledMsgs);
+    if (!ref) return;
+    setPlanDismissed(ref);
+    const key = activeKey();
+    if (!key || key === 'incognito') return;
+    const cached = chatCache.current.get(key);
+    if (cached?.chat) cacheChat(key, { chat: { ...cached.chat, planDismissed: ref } });
+    api.post('/api/chats/' + key + '/plan/dismiss', { messageId: ref.msg, n: ref.n }).catch(() => {});
+  }
+
   function resetChatView() {
+    setPlanDismissed(null);
     setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false);
     clearLive(); setArtifactFocus(null);
     turnMeta.reset(); setLedger(null);
@@ -993,6 +1009,7 @@ export default function App() {
     setChatGenParams(chat.genParams || null);
     setChatSysOverride(chat.systemOverride || '');
     setChatPins(Array.isArray(chat.pinnedFiles) ? chat.pinnedFiles : []);
+    setPlanDismissed(chat.planDismissed || null);
   }
   function resolveLastModel(lastA) {
     if (modelsRef.current.find(mm => mm.id === lastA.model_id)) {
@@ -1581,6 +1598,7 @@ export default function App() {
 
       <div className={'main' + (incognito ? ' incognito' : '')} data-incognito={incognito ? 'on' : undefined}>
         <Toaster />
+        <ConfirmHost />
         <ThemeSlot name="main.top" />
         {notFound && (
           <NotFound appName={cfg.appName} appIcon={cfg.appIcon} path={location.pathname}
@@ -1740,7 +1758,7 @@ export default function App() {
               {user?.prefs?.engineStrip === true && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
               {callDock}
               <Composer {...composerProps} focusKey={focusTick}
-                panel={!incognito && (plans.plan || question) ? <AgentPanel plan={plans.plan} previousPlan={plans.previousPlan} question={question} onAnswer={answerQuestion} onSkip={() => answerQuestion(null)} /> : null} />
+                panel={!incognito && (plans.plan || question) ? <AgentPanel plan={plans.plan} previousPlan={plans.previousPlan} onDismissPlan={dismissPlan} question={question} onAnswer={answerQuestion} onSkip={() => answerQuestion(null)} /> : null} />
               <Disclaimer text={cfg.disclaimer} />
             </div>
           </>
@@ -1748,7 +1766,7 @@ export default function App() {
       </div>
 
       {artifactsOpen && activeId && !callOpen && (
-        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} pending={pendingFiles} focus={artifactFocus} onClose={closeArtifacts} />
+        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} pending={pendingFiles} focus={artifactFocus} busy={streaming || queued} onFilesChanged={setFiles} onClose={closeArtifacts} />
       )}
       {ctlOpen && user?.isAdmin && !incognito && (
         <ChatControls chatId={activeId || null} initialParams={chatGenParams} initialOverride={chatSysOverride} onChange={(p, o) => { setChatGenParams(p && Object.keys(p).length ? p : null); setChatSysOverride(o || ''); }} onClose={() => setCtlOpen(false)} />
