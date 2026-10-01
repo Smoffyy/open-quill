@@ -2762,7 +2762,6 @@
   "Routed to": "Routé vers",
   "Provider defaults": "Valeurs par défaut du fournisseur",
   "Extra fields": "Champs supplémentaires",
-  "Tools do not run in the playground, so their instructions are left out of the system prompt, the same as in an incognito chat.": "Les outils ne s’exécutent pas dans le laboratoire, leurs instructions sont donc absentes du prompt système, comme dans une discussion privée.",
   "Test {n}": "Test {n}",
   "What a good answer looks like (optional)": "À quoi ressemble une bonne réponse (facultatif)",
   "Expected answer": "Réponse attendue",
@@ -2798,5 +2797,16 @@
   "Saved key ending {hint}. Type to replace it.": "Clé enregistrée se terminant par {hint}. Saisissez-en une pour la remplacer.",
   "A key is saved. Type to replace it.": "Une clé est enregistrée. Saisissez-en une pour la remplacer.",
   "Held server-side and never sent to the browser. A new key is saved when you leave the field.": "Conservée sur le serveur et jamais envoyée au navigateur. Une nouvelle clé est enregistrée quand vous quittez le champ.",
-  "Remove saved key": "Supprimer la clé enregistrée"
+  "Remove saved key": "Supprimer la clé enregistrée",
+  "Saved: {names}. Values stay on the server.": "Enregistré : {names}. Les valeurs restent sur le serveur.",
+  "Values are hidden. Type to replace all of them.": "Les valeurs sont masquées. Saisissez pour toutes les remplacer.",
+  "Remove saved variables": "Supprimer les variables enregistrées",
+  "Remove saved headers": "Supprimer les en-têtes enregistrés",
+  "{pct}% of input read from cache": "{pct} % de l’entrée lue depuis le cache",
+  "Run tools": "Exécuter les outils",
+  "Calculator, web search, reference files, skills, past-chat search, consult and MCP tools run for real. Sandbox, memory, to-do list and other chat-only tools stay off.": "La calculatrice, la recherche web, les fichiers de référence, les compétences, la recherche dans les conversations passées, la consultation et les outils MCP s’exécutent réellement. Le bac à sable, la mémoire, la liste de tâches et les autres outils propres aux conversations restent désactivés.",
+  "failed": "échec",
+  "{n} images": "{n} images",
+  "Chat-only tools (sandbox, memory, to-do list, questions to the member and ending the conversation) stay off in the playground.": "Les outils propres aux conversations (bac à sable, mémoire, liste de tâches, questions au membre et fin de la conversation) restent désactivés dans le laboratoire.",
+  "Tools were off for this run, so their instructions are left out of the system prompt.": "Les outils étaient désactivés pour cette exécution, leurs instructions sont donc absentes du prompt système."
 }

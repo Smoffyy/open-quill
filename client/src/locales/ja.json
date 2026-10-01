@@ -2762,7 +2762,6 @@
   "Routed to": "ルーティング先",
   "Provider defaults": "プロバイダーの既定値",
   "Extra fields": "追加フィールド",
-  "Tools do not run in the playground, so their instructions are left out of the system prompt, the same as in an incognito chat.": "プレイグラウンドではツールが動作しないため、シークレットチャットと同様に、ツールの指示はシステムプロンプトから除かれます。",
   "Test {n}": "テスト {n}",
   "What a good answer looks like (optional)": "良い回答の例（任意）",
   "Expected answer": "期待される回答",
@@ -2798,5 +2797,16 @@
   "Saved key ending {hint}. Type to replace it.": "{hint} で終わるキーが保存されています。入力すると置き換えます。",
   "A key is saved. Type to replace it.": "キーが保存されています。入力すると置き換えます。",
   "Held server-side and never sent to the browser. A new key is saved when you leave the field.": "サーバー側で保持され、ブラウザーには送信されません。新しいキーは入力欄を離れたときに保存されます。",
-  "Remove saved key": "保存したキーを削除"
+  "Remove saved key": "保存したキーを削除",
+  "Saved: {names}. Values stay on the server.": "保存しました: {names}。値はサーバーに保持されます。",
+  "Values are hidden. Type to replace all of them.": "値は非表示です。入力するとすべて置き換わります。",
+  "Remove saved variables": "保存済み変数を削除",
+  "Remove saved headers": "保存済みヘッダーを削除",
+  "{pct}% of input read from cache": "入力の {pct}% をキャッシュから読み込み",
+  "Run tools": "ツールを実行",
+  "Calculator, web search, reference files, skills, past-chat search, consult and MCP tools run for real. Sandbox, memory, to-do list and other chat-only tools stay off.": "計算機、ウェブ検索、リファレンスファイル、スキル、過去のチャット検索、相談、MCPツールは実際に実行されます。サンドボックス、メモリ、ToDo リストなどのチャット専用ツールはオフのままです。",
+  "failed": "失敗",
+  "{n} images": "{n} 枚の画像",
+  "Chat-only tools (sandbox, memory, to-do list, questions to the member and ending the conversation) stay off in the playground.": "チャット専用ツール(サンドボックス、メモリ、ToDo リスト、メンバーへの質問、会話の終了)はプレイグラウンドではオフのままです。",
+  "Tools were off for this run, so their instructions are left out of the system prompt.": "この実行ではツールがオフだったため、その指示はシステムプロンプトに含まれていません。"
 }

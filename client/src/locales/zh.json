@@ -2762,7 +2762,6 @@
   "Routed to": "路由至",
   "Provider defaults": "提供方默认值",
   "Extra fields": "额外字段",
-  "Tools do not run in the playground, so their instructions are left out of the system prompt, the same as in an incognito chat.": "演练场不运行工具，因此与无痕聊天一样，工具说明不会出现在系统提示词中。",
   "Test {n}": "测试 {n}",
   "What a good answer looks like (optional)": "好答案应当是什么样（可选）",
   "Expected answer": "预期答案",
@@ -2798,5 +2797,16 @@
   "Saved key ending {hint}. Type to replace it.": "已保存的密钥以 {hint} 结尾。输入新密钥即可替换。",
   "A key is saved. Type to replace it.": "已保存密钥。输入新密钥即可替换。",
   "Held server-side and never sent to the browser. A new key is saved when you leave the field.": "保存在服务器上，绝不会发送到浏览器。离开该字段时会保存新密钥。",
-  "Remove saved key": "删除已保存的密钥"
+  "Remove saved key": "删除已保存的密钥",
+  "Saved: {names}. Values stay on the server.": "已保存:{names}。值保留在服务器上。",
+  "Values are hidden. Type to replace all of them.": "值已隐藏。输入即可全部替换。",
+  "Remove saved variables": "删除已保存的变量",
+  "Remove saved headers": "删除已保存的请求头",
+  "{pct}% of input read from cache": "{pct}% 的输入从缓存读取",
+  "Run tools": "运行工具",
+  "Calculator, web search, reference files, skills, past-chat search, consult and MCP tools run for real. Sandbox, memory, to-do list and other chat-only tools stay off.": "计算器、联网搜索、参考文件、技能、历史对话搜索、咨询和 MCP 工具会真实运行。沙盒、记忆、待办清单等仅限对话的工具保持关闭。",
+  "failed": "失败",
+  "{n} images": "{n} 张图片",
+  "Chat-only tools (sandbox, memory, to-do list, questions to the member and ending the conversation) stay off in the playground.": "仅限对话的工具(沙盒、记忆、待办清单、向成员提问和结束对话)在演练场中保持关闭。",
+  "Tools were off for this run, so their instructions are left out of the system prompt.": "本次运行未启用工具,因此其说明未包含在系统提示词中。"
 }

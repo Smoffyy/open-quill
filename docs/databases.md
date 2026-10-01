@@ -39,7 +39,7 @@ If you are ever unsure which database you are looking at, that line is the autho
 Two ways, both taking effect on the next restart:
 
 - **Edit `.env`**: set `OPEN_QUILL_DB` to any name and restart. A brand-new name starts as a fresh, empty database.
-- **Admin panel**: sign in as the admin and open **Admin Panel → Databases**. Create named databases, see which one is running versus which loads next, choose the one to load, and delete unused ones. Your choice is marked pending and applied on the next restart.
+- **Admin Panel**: open **Admin Panel → Storage**. Create named databases, see which one is running and which loads on the next start, pick one with **Use next start**, and delete unused ones. The running database cannot be deleted. Your choice is written to `.env` and applied on the next restart.
 
 ## Encryption
 

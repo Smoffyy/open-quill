@@ -2,35 +2,55 @@
 
 ## Picking a model
 
-The model dropdown lives in the chat topbar (and on the home screen). It lists every model an admin has published, each with its configured icon and name; a "More models" submenu holds anything that doesn't fit the main list. Selecting a model only affects the current chat going forward, earlier replies keep whatever model actually generated them.
+The model picker sits at the bottom right of the composer (top left of the chat in the OpenAI layout). It lists every model an admin has published, with its logo, name and a one-line description. Models an admin has grouped together sit in submenus, such as **More models**. The info button on an entry opens that model's page in the model reference.
 
-Some entries are **routers**: picking one doesn't run that model directly, it hands your message to a different model chosen automatically based on rules the admin configured (a keyword, a regex, "has an image," message length, and so on). The reply still shows which underlying model actually answered.
+Changing the model affects the chat from the next message on. Earlier replies keep the model that wrote them. To redo one reply with a different model, use **Retry with** on that reply.
 
-## Extended thinking / reasoning
+Small badges show what a model can do:
 
-Models the admin has flagged as reasoning-capable show an **Extended** toggle in the dropdown, plus (if the provider supports it) an effort slider. When a reasoning model replies, its thought process streams into a collapsible section above the final answer, collapsed by default to "Thinking…", or fully expanded if the admin allows it. This works whether the model emits `<think>` tags or a separate reasoning stream, and Open Quill appends the right trigger tokens (like `/think` or `/no_think`) automatically so you don't have to type them.
+| Badge | Means |
+| --- | --- |
+| **Auto** | A router that picks the best model for each message |
+| **Code** | Can run code and work with files |
+| **Vision** | Can read the images you attach |
+| **Web search** | Can look things up online |
+| **Reasoning** | Thinks before it answers |
+| **Long context** | Holds a lot of text, with the size on hover |
 
-## Custom parameters (kwargs)
+## Routers
 
-Some models expose extra request parameters directly in the picker, as a toggle, a slider, or a dropdown, depending on how the admin set it up. These map to whatever the underlying provider supports and aren't standardized across models, so check the model's docs page (the small "i"/docs button next to the picker) if one is unfamiliar.
+Some entries are **routers**. Picking one does not run a model itself. Each message is checked against rules the admin wrote, such as "has an image attached", "looks like code", a keyword or a length, and sent to whichever model matches first. The reply shows which model actually answered.
 
-## Per-chat overrides
+## Extended thinking
 
-The chat menu's **Chat Controls** section lets you override a model's system prompt and sampling parameters (temperature, top-p/top-k, min-p, max tokens, frequency/presence/repeat penalty) just for that chat, each individually resettable back to the model's default, or all at once. A system prompt override replaces the model's own text but keeps its `<tools>` and `<context>` blocks, so tools keep their instructions.
+Models that can reason show an **Extended** switch at the bottom of the picker. When a reasoning model replies, its thinking streams into a collapsible section above the answer. The admin decides whether you see the full thinking or only a status line.
 
-## Context and speed readouts
+Some models offer more than an on/off switch: a reasoning effort level or other options. These appear in the same place.
 
-These are separate, optional surfaces (**Settings → Chat → Tools & context**), each answering a different question:
+## Request controls
 
-| Surface | Shows | When |
-| --- | --- | --- |
-| **Context gauge** | how full the model's context window is right now | always, between turns |
-| **Engine telemetry** | live tokens/second with a sparkline, prompt tok/s, context fill for this turn | while a reply streams, plus a few seconds after |
-| **Speed** | the tokens/second a specific past reply ran at | on hover, forever |
-| **Prefill status** | how far a reply is into prefill, how much was reused from cache | before the first token appears |
+An admin can expose a model's extra request options in the picker as switches, sliders or lists. What they do depends on the model, so check the model's page in the reference if one is unfamiliar. Some only appear once another control is set, and some are visible to admins only.
 
-All are opt-in and off by default except prefill status. They're extra numbers that mostly matter if you're running the model yourself and care about its performance. Context accounting uses the model's own tokenizer where available, not an estimate, so the gauge is trustworthy rather than approximate.
+If a model has a showcase backdrop, **Background in chat** keeps it behind the conversation instead of only on the home screen.
 
-## Model docs
+## Per-chat overrides (admins)
 
-Each model can have a public docs page (its small doc button) summarizing intelligence/speed rating, input/output modalities, max output tokens, and knowledge cutoff. Useful for deciding which model fits a task before you switch to it.
+**⋯ → Chat controls (admin)** in the top bar overrides the model's system prompt and sampling settings (temperature, top P, top K, min P, max tokens and the frequency, presence and repeat penalties) for one chat. Each value can be reset to the model's default on its own. A system prompt override replaces the model's own text but keeps its tool and context blocks, so tools still get their instructions.
+
+## Readouts
+
+Optional numbers for people who want to see how the model is doing, all under **Settings → Chat**:
+
+| Setting | Shows |
+| --- | --- |
+| **Engine telemetry** | Live speed and how full the context is, above the composer while a reply streams |
+| **Context gauge** | How full the context window is, beside the model picker |
+| **Speed on each reply** | The tokens per second each reply ran at, kept beside the reply |
+| **Progress line** | What the model is doing, beside its logo, when a reply takes longer than a few seconds |
+| **Context ledger on open** | Opens chats with the per-message token ledger showing |
+
+Token counts come from the model's own tokenizer, not an estimate, so the gauge and ledger match what the model actually sees.
+
+## The model reference
+
+**Model docs** in the sidebar opens a reference page for every published model: what it is good at, what it accepts and produces, its context window, maximum output, knowledge cutoff, pricing and how it compares to the others. **Try in chat** switches to that model. Admins can edit these pages in place, and their changes are published with everything else.

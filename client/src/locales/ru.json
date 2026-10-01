@@ -2762,7 +2762,6 @@
   "Routed to": "Перенаправлено на",
   "Provider defaults": "Значения поставщика по умолчанию",
   "Extra fields": "Дополнительные поля",
-  "Tools do not run in the playground, so their instructions are left out of the system prompt, the same as in an incognito chat.": "Инструменты в песочнице не запускаются, поэтому их инструкции не попадают в системный промпт, как и в чате инкогнито.",
   "Test {n}": "Тест {n}",
   "What a good answer looks like (optional)": "Как выглядит хороший ответ (необязательно)",
   "Expected answer": "Ожидаемый ответ",
@@ -2798,5 +2797,16 @@
   "Saved key ending {hint}. Type to replace it.": "Сохранённый ключ заканчивается на {hint}. Введите новый, чтобы заменить его.",
   "A key is saved. Type to replace it.": "Ключ сохранён. Введите новый, чтобы заменить его.",
   "Held server-side and never sent to the browser. A new key is saved when you leave the field.": "Хранится на сервере и никогда не отправляется в браузер. Новый ключ сохраняется, когда вы покидаете поле.",
-  "Remove saved key": "Удалить сохранённый ключ"
+  "Remove saved key": "Удалить сохранённый ключ",
+  "Saved: {names}. Values stay on the server.": "Сохранено: {names}. Значения остаются на сервере.",
+  "Values are hidden. Type to replace all of them.": "Значения скрыты. Начните ввод, чтобы заменить их все.",
+  "Remove saved variables": "Удалить сохранённые переменные",
+  "Remove saved headers": "Удалить сохранённые заголовки",
+  "{pct}% of input read from cache": "{pct}% входных данных прочитано из кэша",
+  "Run tools": "Запускать инструменты",
+  "Calculator, web search, reference files, skills, past-chat search, consult and MCP tools run for real. Sandbox, memory, to-do list and other chat-only tools stay off.": "Калькулятор, веб-поиск, файлы справочника, навыки, поиск по прошлым чатам, консультации и инструменты MCP работают по-настоящему. Песочница, память, список задач и другие инструменты, доступные только в чате, остаются выключенными.",
+  "failed": "ошибка",
+  "{n} images": "Изображений: {n}",
+  "Chat-only tools (sandbox, memory, to-do list, questions to the member and ending the conversation) stay off in the playground.": "Инструменты, доступные только в чате (песочница, память, список задач, вопросы участнику и завершение разговора), в песочнице для тестов остаются выключенными.",
+  "Tools were off for this run, so their instructions are left out of the system prompt.": "В этом запуске инструменты были выключены, поэтому их инструкции не включены в системный промпт."
 }

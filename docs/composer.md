@@ -1,41 +1,66 @@
 # The Composer
 
-The composer is the input box at the bottom of every chat and the home screen. Beyond plain text, it's the entry point for attachments, voice, slash commands, and a handful of per-turn toggles.
+The composer is the message box at the bottom of every chat and in the middle of the home screen. Besides text, it handles attachments, voice, slash commands and a few per-message switches.
+
+## The parts
+
+From left to right: the **+** menu, the message field, the model picker, the microphone, and a button that changes with what is happening:
+
+- **Send** when there is text to send.
+- **Start a voice call** (a waveform) when the field is empty and calls are on.
+- **Stop** while a reply is being written. Type something and it becomes **Queue** or **Steer** instead, see [Chatting](chatting.md#sending-and-streaming).
+
+In the OpenAI layout the model picker sits at the top left of the chat instead.
 
 ## Attachments
 
-Drag and drop a file, paste one, or use the file picker (`Ctrl+U` or the **+** menu → **Add files or photos**). Accepted types include text and code files (`.txt .md .csv .json .js .jsx .ts .tsx .py .lua .html .css .xml .yml .yaml .log`), PDFs, and images. Images only work with models the admin has marked as vision-capable. Attach multiple files at once; each shows as a removable chip above the composer.
+Drop files onto the window, paste them, or use **+ → Add files or photos** (`Ctrl+U`). Any file type can be attached; text, code and PDFs are read by the model, and images are sent only to models an admin has given **Image input**. A model that cannot read images says so instead of sending them. Each attachment shows as a removable chip above the field.
+
+**+ → Take a screenshot** captures a screen, window or browser tab through your browser's screen picker and attaches the image.
+
+Inside a project, files you attach in a chat can be pinned to keep them in context. See [Chatting](chatting.md#message-actions).
 
 ## Dictation
 
-The microphone button transcribes speech into the composer. Depending on how the admin has configured **Voice**, this is either your browser's built-in speech recognition (live, word-by-word) or a server-side speech-to-text engine (records while you hold/toggle, then transcribes on stop). If neither is available or permission is denied, a toast explains why.
+The microphone turns speech into text in the field. Depending on how the admin set up **Voice**, it uses your browser's built-in speech recognition, which types as you speak, or a speech-to-text server, which records until you stop and then transcribes. If neither is available, or the microphone is blocked, a message explains why. The admin can hide the microphone altogether.
 
 ## Slash commands
 
-Type `/` at the start of an empty composer to open a filtered command list: **New chat**, toggling sandbox/web search on or off, **Keyboard shortcuts**, plus every prompt you've saved (see [Personas, Styles & Prompts](personas-styles-prompts.md)). Arrow keys and `Enter`/`Tab` select; `Esc` dismisses.
+Type `/` at the start of the field for a list of commands: **New chat**, turn **Sandbox tools** or **Web search** on or off, **Keyboard shortcuts**, and every prompt you have saved. Keep typing to filter, use the arrow keys to move and **Enter** or **Tab** to pick. **Esc** closes the list.
 
-## The "+" menu
+## The + menu
 
-- **Add files or photos**: same as above.
-- **Saved prompts**: insert, delete, or save your current draft as a new one.
-- **Response style**: Normal, Concise, Explanatory, Formal, or any custom style you've created.
-- **Improve prompt**: rewrites your current draft through the model before you send it; toggle again to restore what you originally typed.
-- **Compare models**: pick up to two additional models to answer the same message alongside the one currently selected, so you can see several answers side by side.
-- **Sandbox tools**: lets the assistant write and run files in a per-chat workspace. See [Artifacts & Sandbox](artifacts-sandbox.md).
-- **Web search**: lets the assistant search the web (only shown if an admin has configured it).
+| Item | Does |
+| --- | --- |
+| **Add files or photos** | Attach files, see above |
+| **Take a screenshot** | Attach a capture of your screen |
+| **Add to project** | Move this chat into one of your projects, or out of one |
+| **Saved prompts** | Insert a saved prompt, or save what you have typed as a new one |
+| **Response style** | Normal, Concise, Explanatory, Formal or one of your own |
+| **Improve prompt** | Has the model rewrite your draft before you send it. Use it again to get your original back |
+| **Compare models** | Pick up to two more models to answer your next message, each reply becoming a version of one response |
+| **Skills** | Turn your skills on or off for this chat, or browse and manage them |
+| **Add connector** | Opens your MCP servers in Settings |
+| **Sandbox tools** | Gives the assistant a workspace with files and a shell. See [Artifacts & Sandbox](artifacts-sandbox.md) |
+| **Web search** | Lets the assistant search the web, shown only when an admin has set it up |
+
+Items only appear when they apply. Sandbox tools and web search depend on the model, and both are off in incognito chats. Styles and prompts are covered in [Personas, Styles & Prompts](personas-styles-prompts.md).
+
+## Plans and questions
+
+Models with the right tools can show their work above the composer:
+
+- A **Plan** lists the steps the assistant is working through and ticks them off as it goes.
+- A **Question** asks you to pick an answer, or several, before it continues. Pick one, or ignore the options and type your own reply.
 
 ## Voice calls
 
-When the composer is empty and voice calls are enabled, the send button becomes a wave/call icon. Starting a call opens a full-screen panel with an animated orb reflecting listening/thinking/speaking state; replies are spoken back sentence by sentence as they stream. Tap the orb to interrupt it mid-sentence, use the mute button to stop your mic, and the **✕** to hang up.
+When calls are on and the field is empty, the waveform button starts a call. A full-screen panel shows an animated mark that reacts as it listens, thinks and speaks, and replies are read out as they are written. Tap to interrupt, use the mute button to stop your microphone, and the close button to hang up. Calls are not available in incognito chats.
 
 ## Banners
 
-The composer surfaces context-sensitive banners above itself when relevant: the selected model has been removed or made temporarily unavailable, a model is scheduled for retirement (with a countdown that intensifies as the date nears), the assistant has ended the conversation, a message was flagged by the safety filter, or you're approaching or over a spending cap set by an admin.
-
-## The right-hand controls
-
-From left to right in the composer's action row: the context gauge (if enabled, see [Models & Reasoning](models.md)), the model dropdown, a docs button for the selected model, the microphone, and send/stop/steer, which swap in for each other depending on whether a reply is in flight.
+Messages appear above the composer when something needs your attention: the selected model was removed, is unavailable or is going away on a date, the assistant ended the conversation, a message was blocked by the safety check, or you are close to or over a monthly spending cap set by an admin.
 
 ## Drafts
 
-Whatever you've typed but not sent is saved automatically per chat (and separately for the home screen's "new chat" box), so navigating away and back, or reloading the page, never loses a draft. Incognito chats are the one exception: nothing typed there is ever written to disk. See [Privacy & Security](privacy-security.md).
+Anything you type and do not send is saved per chat, and separately for the home screen, so leaving or reloading never loses it. Incognito chats are the exception: nothing typed there is stored.

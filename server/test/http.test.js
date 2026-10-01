@@ -423,7 +423,9 @@ test('admin settings and branding survive hostile input rather than 500', async 
   const back = await browser('GET', '/api/admin/settings');
   assert.equal(back.status, 200);
   assert.equal(typeof back.json.apiBaseUrl, 'string', 'never stored as the object it arrived as');
-  assert.equal(back.json.apiKey.length, 500, 'capped at the boundary');
+  assert.equal(back.json.apiKey, '', 'a secret never leaves the server');
+  assert.equal(back.json.apiKeySaved, true);
+  assert.equal(back.json.apiKeyHint, '…kkkk');
   assert.equal(back.json.webSearchCount, 20, 'clamped, not stored raw');
   assert.equal(back.json.sessionTtlDays, 30, 'unparseable falls back to the default');
   assert.equal(back.json.voiceSttEngine, 'browser', 'an unknown enum value is refused');
@@ -1076,7 +1078,7 @@ test('a Claude model runs a full chat turn with thinking and a tool round trip',
     for (const r of mock.requests) assert.equal(r.rejected, undefined, r.rejected);
     const turns = mock.requests.filter(r => r.body.stream);
     assert.equal(turns.length, 2);
-    assert.match(turns[0].body.system, /<tool name="calculator">/);
+    assert.match(turns[0].body.system.map(b => b.text).join('\n'), /<tool name="calculator">/);
     assert.deepEqual(turns[0].body.tools.map(t => t.name), ['calculator']);
     const replay = turns[1].body.messages;
     assert.equal(replay.at(-2).content[0].type, 'thinking', 'the signed thinking block goes back with the tool call');

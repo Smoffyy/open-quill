@@ -2762,7 +2762,6 @@
   "Routed to": "Weitergeleitet an",
   "Provider defaults": "Standardwerte des Anbieters",
   "Extra fields": "Zusätzliche Felder",
-  "Tools do not run in the playground, so their instructions are left out of the system prompt, the same as in an incognito chat.": "Tools laufen im Playground nicht, daher fehlen ihre Anweisungen im Systemprompt, genau wie in einem Inkognito-Chat.",
   "Test {n}": "Test {n}",
   "What a good answer looks like (optional)": "So sieht eine gute Antwort aus (optional)",
   "Expected answer": "Erwartete Antwort",
@@ -2798,5 +2797,16 @@
   "Saved key ending {hint}. Type to replace it.": "Gespeicherter Schlüssel endet auf {hint}. Tippe, um ihn zu ersetzen.",
   "A key is saved. Type to replace it.": "Ein Schlüssel ist gespeichert. Tippe, um ihn zu ersetzen.",
   "Held server-side and never sent to the browser. A new key is saved when you leave the field.": "Wird auf dem Server gehalten und nie an den Browser gesendet. Ein neuer Schlüssel wird gespeichert, wenn du das Feld verlässt.",
-  "Remove saved key": "Gespeicherten Schlüssel entfernen"
+  "Remove saved key": "Gespeicherten Schlüssel entfernen",
+  "Saved: {names}. Values stay on the server.": "Gespeichert: {names}. Die Werte bleiben auf dem Server.",
+  "Values are hidden. Type to replace all of them.": "Die Werte sind verborgen. Tippe, um alle zu ersetzen.",
+  "Remove saved variables": "Gespeicherte Variablen entfernen",
+  "Remove saved headers": "Gespeicherte Header entfernen",
+  "{pct}% of input read from cache": "{pct} % der Eingabe aus dem Cache gelesen",
+  "Run tools": "Tools ausführen",
+  "Calculator, web search, reference files, skills, past-chat search, consult and MCP tools run for real. Sandbox, memory, to-do list and other chat-only tools stay off.": "Rechner, Websuche, Referenzdateien, Skills, Suche in früheren Chats, Befragen und MCP-Tools laufen wirklich. Sandbox, Gedächtnis, To-do-Liste und andere reine Chat-Tools bleiben aus.",
+  "failed": "fehlgeschlagen",
+  "{n} images": "{n} Bilder",
+  "Chat-only tools (sandbox, memory, to-do list, questions to the member and ending the conversation) stay off in the playground.": "Reine Chat-Tools (Sandbox, Gedächtnis, To-do-Liste, Fragen an das Mitglied und Beenden der Unterhaltung) bleiben im Playground aus.",
+  "Tools were off for this run, so their instructions are left out of the system prompt.": "Die Tools waren bei diesem Durchlauf aus, daher fehlen ihre Anweisungen im Systemprompt."
 }

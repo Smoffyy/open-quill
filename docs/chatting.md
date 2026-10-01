@@ -2,43 +2,64 @@
 
 ## Sending and streaming
 
-Type in the composer and press **Enter** to send (`Shift+Enter` inserts a newline instead). The reply streams in token by token with a fade-in reveal. While it's streaming you can:
+Type in the composer and press **Enter** to send, **Shift+Enter** for a new line. The reply streams in as it is written. While it streams:
 
-- **Stop** it (`Ctrl+.` or the stop button that replaces send).
-- **Steer** it by sending a correction that's folded into the reply without discarding what's already been written (if enabled, see [Settings](settings.md)).
-- **Queue** a follow-up message. It's held and sent automatically the instant the current reply finishes, with a counter showing how many are queued.
+- **Stop** it with the stop button or `Ctrl+.`. If the assistant is in the middle of a tool step, it finishes that step and then stops.
+- **Queue** a follow-up. Type while the reply is running and send it: the message waits above the composer and goes out the moment the reply finishes. Queued messages can be removed before they send.
+- **Steer** the reply, if **Mid-stream steering** is on in **Settings → Chat**. A short correction such as "shorter" or "you misread the file" is applied to the reply in progress. It restarts from where it was cut, so it costs an extra request.
 
-The thread auto-scrolls as new content arrives; scroll up to read back and a **jump-to-bottom** control appears to snap back.
+The thread follows new text as it arrives. Scroll up to read and it stops following; a button appears to jump back to the latest message (`Alt+↓`).
 
-## Per-message actions
+If a reply stops early, for example because it hit the length limit, a **Continue** button picks up where it left off.
 
-Hover a message (or focus it with `J`/`K` and use single-key shortcuts) for:
+## Message actions
 
-- **Copy**: copies the message text; code blocks also get their own hover-to-copy button.
-- **Edit** (your messages): rewrites and resends from that point, forming a new branch (see below).
-- **Retry** (assistant replies): regenerates the response, also forming a new branch. If more than one model is available you can retry with a different model than the one that answered originally.
-- **Branch into new chat**: spins the conversation up to that point off into its own separate chat.
-- Thumbs up/down feedback, if enabled by the admin, with an optional comment, visible to admins under **Admin Panel → Feedback**.
+Hover a message to see its actions. With **Message shortcuts** on you can also move between messages with `J` and `K` and act on the focused one from the keyboard.
+
+**Your messages**: copy, edit, and from the **⋯** menu branch, pin or delete. Editing resends from that point as a new version.
+
+**Assistant replies**:
+
+- **Copy**, or copy what has been written so far while it is still streaming.
+- **Read aloud**, using the speech settings the admin configured.
+- **Good response** and **Bad response**, which an admin can see under **Admin Panel → Ratings**.
+- **Retry**, and the arrow beside it to **Retry with** a different model.
+- **Compare versions**, once a reply has more than one version.
+- From the **⋯** menu: **Edit** the reply's text, **Branch** into a new chat, **Pin** it, or **Delete** it.
+
+A pinned message is never folded into a summary when a long chat is compacted, so it always stays in what the model sees. Files attached to a message can be pinned the same way, with the pin button on the attachment.
 
 ## Branching
 
-Editing a message or retrying a reply doesn't overwrite history, it creates a sibling branch from that point, so nothing is ever lost. The conversation you're viewing is always one path through that tree.
+Editing a message or retrying a reply never overwrites anything. It creates a new version from that point, and the chat you see is one path through those versions.
 
-- Small **version arrows** (`‹ 2/3 ›`) appear on any message with siblings, letting you step between versions in place.
-- The **branch map** (`B`, or the header button) opens a full visual tree of every edit and retry. Long straight stretches collapse into "N more turns" you can expand, forks render as parallel columns labeled Version 1/2/…, and the active path is highlighted. Click a node already on your current path to jump to it; click a node on a different branch to switch onto it.
-- **Side-by-side branch compare** lets you view two versions of a reply next to each other instead of stepping between them one at a time.
-- **Cherry-pick**: copying a message from one branch onto your current one adds it as a new message on the active path. The source branch is untouched, so it's a copy, not a move.
+- **Version arrows** (`‹ 2/3 ›`) on a message step between its versions in place.
+- **Compare versions** shows the versions of a reply side by side, and **Use this version** switches to the one you like.
+- The **branch map** (`B`, or **⋯ → Branch map**) draws every version as a tree. Long straight runs fold into "N more turns", and your current path is highlighted. Click any message to **Jump to this message** or **Switch to this branch**, or **Copy into the current branch** to bring it over without leaving where you are.
+- **Branch** in a message's **⋯** menu copies the conversation up to that point into a new, separate chat.
 
-## Navigating a long thread
+## Finding your way around a long chat
 
-Three optional aids, all under **Settings → Chat → Navigation** (each defaults on, and costs nothing when turned off since the feature isn't just hidden, it isn't mounted):
+These live under **Settings → Interface → Navigation**. Each one can be turned off, which removes its button and its shortcut.
 
-- **Thread rail**: a slim tick-mark strip along the right edge, one tick per turn, highlighting whichever part of the conversation is currently on screen. Click a tick to jump there.
-- **Find in conversation**: `Ctrl+F` searches only the open thread instead of the browser's page search, highlighting every match and letting you step between them.
-- **Message shortcuts**: `J`/`K` move focus between messages; with a message focused, `C`/`E`/`R`/`Y` copy/edit/retry/branch it without touching the mouse.
+- **Find in conversation** (`Ctrl+F`) searches the open chat and steps between matches. Turn it off to give `Ctrl+F` back to the browser.
+- **Branch map**, described above.
+- **Contents** (`Alt+O`) lists the headings in the assistant's replies. Click one to jump to it.
+- **Conversation map** puts a rail down the right edge with one mark per turn. Off by default.
+- **Message shortcuts**: `J`/`K` to move, then `C` copy, `E` edit, `R` retry, `Y` branch.
 
-See [Keyboard Shortcuts](keyboard-shortcuts.md) for the complete list.
+**Focus mode** (`Alt+F`) hides the sidebar and everything else but the conversation.
 
-## Ending and organizing a chat
+## What the model sees
 
-The chat header menu (**…**) offers Rename, Star, Archive, Fork, Copy all, per-chat instructions, pinned messages/files, and **Inspect context**, a full breakdown of exactly what gets sent to the model on the next turn (every segment, its role, token count, and a preview). See [Organizing Your Chats](organizing-chats.md) for folders, projects, and search.
+Three views, each from the **⋯** menu in the top bar:
+
+- **Context ledger** (`Alt+L`) shows next to every message how many tokens it costs and whether it is still sent, summarized or dropped. **Drop** takes a message out of what the model sees without deleting it, and **Restore** puts it back.
+- **Inspect context** breaks the next request down into its parts: system prompt, instructions, memory, files and messages, with their token counts.
+- **What gets sent** (`Alt+P`) shows the exact prompt in order, ready to copy.
+
+When a chat outgrows the model's context window, older turns are compacted into a summary, if the admin has turned that on. **Conversation memory** in the **⋯** menu shows that summary.
+
+## Managing a chat
+
+Click the chat title in the top bar to rename it, star it, add it to or remove it from a project, export it as Markdown or JSON, or delete it. The same menu is on each chat in the sidebar. See [Organizing Your Chats](organizing-chats.md) for projects, archiving and search.

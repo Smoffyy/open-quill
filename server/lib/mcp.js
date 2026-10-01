@@ -199,6 +199,7 @@ const stdioClients = new Map();
 const httpSessions = new Map();
 const sseClients = new Map();
 const listTimers = new Map();
+const serverCaps = new Map();
 
 function killTree(proc, sync = false) {
   if (!proc || proc.exitCode != null) return;
@@ -319,7 +320,8 @@ async function stdioEnsureReady(server) {
   const client = stdioClient(server);
   if (!client.ready) {
     client.ready = (async () => {
-      await stdioRequest(client, 'initialize', { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: CLIENT_INFO }, INIT_TIMEOUT);
+      const result = await stdioRequest(client, 'initialize', { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: CLIENT_INFO }, INIT_TIMEOUT);
+      serverCaps.set(server.id, result?.capabilities || {});
       client.write({ jsonrpc: '2.0', method: 'notifications/initialized' });
     })().catch(e => { client.ready = null; throw e; });
   }
@@ -411,6 +413,7 @@ async function httpEnsureSession(server) {
   const cached = httpSessions.get(server.id);
   if (cached) return cached;
   const { result, sessionId } = await httpRequest(server, 'initialize', { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: CLIENT_INFO }, null, INIT_TIMEOUT);
+  serverCaps.set(server.id, result?.capabilities || {});
   const negotiated = typeof result?.protocolVersion === 'string' && result.protocolVersion ? result.protocolVersion : PROTOCOL_VERSION;
   const session = { sessionId, protocolVersion: negotiated, url: server.url };
   session.headers = httpHeaders(server, session);
@@ -514,7 +517,8 @@ async function sseEnsureReady(server, userId) {
   entry.ready = (async () => {
     const client = await sseOpen(server, userId);
     entry.client = client;
-    await sseRequest(server, client, 'initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: CLIENT_INFO }, INIT_TIMEOUT);
+    const result = await sseRequest(server, client, 'initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: CLIENT_INFO }, INIT_TIMEOUT);
+    serverCaps.set(server.id, result?.capabilities || {});
     fetch(client.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', ...parseHeaders(server.headers) }, body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) }).catch(() => {});
     return client;
   })();
@@ -602,6 +606,7 @@ async function refreshWith(server, userId) {
 
 async function listOptional(server, method, key, userId) {
   const all = [];
+  if (!serverCaps.get(server.id)?.[key]) return all;
   let cursor;
   try {
     for (let page = 0; page < PAGE_CAP; page++) {

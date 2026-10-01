@@ -2762,7 +2762,6 @@
   "Routed to": "Encaminhado para",
   "Provider defaults": "Padrões do provedor",
   "Extra fields": "Campos extras",
-  "Tools do not run in the playground, so their instructions are left out of the system prompt, the same as in an incognito chat.": "As ferramentas não rodam no playground, então as instruções delas ficam fora do prompt de sistema, assim como em um chat anônimo.",
   "Test {n}": "Teste {n}",
   "What a good answer looks like (optional)": "Como é uma boa resposta (opcional)",
   "Expected answer": "Resposta esperada",
@@ -2798,5 +2797,16 @@
   "Saved key ending {hint}. Type to replace it.": "Chave salva terminando em {hint}. Digite para substituí-la.",
   "A key is saved. Type to replace it.": "Há uma chave salva. Digite para substituí-la.",
   "Held server-side and never sent to the browser. A new key is saved when you leave the field.": "Guardada no servidor e nunca enviada ao navegador. Uma nova chave é salva quando você sai do campo.",
-  "Remove saved key": "Remover chave salva"
+  "Remove saved key": "Remover chave salva",
+  "Saved: {names}. Values stay on the server.": "Salvo: {names}. Os valores ficam no servidor.",
+  "Values are hidden. Type to replace all of them.": "Os valores estão ocultos. Digite para substituir todos.",
+  "Remove saved variables": "Remover as variáveis salvas",
+  "Remove saved headers": "Remover os cabeçalhos salvos",
+  "{pct}% of input read from cache": "{pct}% da entrada lida do cache",
+  "Run tools": "Executar ferramentas",
+  "Calculator, web search, reference files, skills, past-chat search, consult and MCP tools run for real. Sandbox, memory, to-do list and other chat-only tools stay off.": "Calculadora, busca na web, arquivos de referência, habilidades, busca em conversas anteriores, consulta e ferramentas MCP são executadas de verdade. Sandbox, memória, lista de tarefas e outras ferramentas exclusivas do chat ficam desativadas.",
+  "failed": "falhou",
+  "{n} images": "{n} imagens",
+  "Chat-only tools (sandbox, memory, to-do list, questions to the member and ending the conversation) stay off in the playground.": "Ferramentas exclusivas do chat (sandbox, memória, lista de tarefas, perguntas ao membro e encerrar a conversa) ficam desativadas no playground.",
+  "Tools were off for this run, so their instructions are left out of the system prompt.": "As ferramentas estavam desativadas nesta execução, então suas instruções ficaram fora do prompt do sistema."
 }
