@@ -3,6 +3,9 @@ import { resolveSection, DEFAULT_SECTION } from './nav.jsx';
 import { useCatalog } from './state/useCatalog.js';
 import { useWorkspace, promptFeaturesOf } from './state/useWorkspace.js';
 import { useMembers } from './state/useMembers.js';
+import { createHistory } from './state/history.js';
+import { toast } from '../../lib/toast.js';
+import { t } from '../../i18n.jsx';
 
 const Ctx = createContext(null);
 export const useAdmin = () => useContext(Ctx);
@@ -27,13 +30,37 @@ export function AdminProvider({ user, onClose, children }) {
 
   const confirm = useCallback((spec) => setAsk(spec), []);
 
-  const workspace = useWorkspace();
+  const history = useRef(null);
+  if (!history.current) history.current = createHistory();
+
+  const workspace = useWorkspace({ history: history.current });
   const features = useRef(null);
   features.current = promptFeaturesOf(workspace.settings);
-  const catalog = useCatalog({ confirm, features });
+  const catalog = useCatalog({ confirm, features, history: history.current });
   const members = useMembers({ confirm });
 
-  const { setSelection } = catalog;
+  const { setSelection, revert } = catalog;
+  const { discard, reload: reloadWorkspace } = workspace;
+
+  const undo = useCallback(() => {
+    if (history.current.undo()) toast(t('Change undone'));
+  }, []);
+
+  const redo = useCallback(() => {
+    if (history.current.redo()) toast(t('Change redone'));
+  }, []);
+
+  const revertAll = useCallback(() => confirm({
+    title: t('Revert all changes'),
+    message: t('This discards every unpublished change and restores what members are running now. This cannot be undone.'),
+    confirm: t('Revert all changes'),
+    onConfirm: async () => {
+      discard();
+      if (!(await revert())) return;
+      await reloadWorkspace();
+      history.current.clear();
+    }
+  }), [confirm, discard, revert, reloadWorkspace]);
 
   // Opening a model is always "show the models page with this one open", so the
   // finder, the overview and every list action go through one call.
@@ -59,7 +86,7 @@ export function AdminProvider({ user, onClose, children }) {
 
   const value = {
     user, onClose,
-    section, setSection, openModel,
+    section, setSection, openModel, undo, redo, revertAll,
     ask, setAsk, confirm,
     keepScroll,
     catalog, workspace, members

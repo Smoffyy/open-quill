@@ -2676,5 +2676,13 @@
   "New file name": "新文件名",
   "File name, e.g. notes.md": "文件名，例如 notes.md",
   "Delete this project?": "删除此项目？",
-  "Its files are deleted. Chats inside it are kept.": "项目文件会被删除，其中的对话会保留。"
+  "Its files are deleted. Chats inside it are kept.": "项目文件会被删除，其中的对话会保留。",
+  "Nothing to revert": "没有可还原的更改",
+  "Reverting…": "正在还原…",
+  "Revert all": "全部还原",
+  "The changes could not be reverted.": "无法还原更改。",
+  "Change undone": "已撤销更改",
+  "Revert all changes": "还原所有更改",
+  "This discards every unpublished change and restores what members are running now. This cannot be undone.": "这将丢弃所有未发布的更改，并恢复成员当前使用的版本。此操作无法撤销。",
+  "Change redone": "已重做更改"
 }

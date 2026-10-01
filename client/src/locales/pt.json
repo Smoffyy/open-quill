@@ -2676,5 +2676,13 @@
   "New file name": "Nome do novo arquivo",
   "File name, e.g. notes.md": "Nome do arquivo, por ex. notes.md",
   "Delete this project?": "Excluir este projeto?",
-  "Its files are deleted. Chats inside it are kept.": "Os arquivos dele são excluídos. As conversas dentro dele são mantidas."
+  "Its files are deleted. Chats inside it are kept.": "Os arquivos dele são excluídos. As conversas dentro dele são mantidas.",
+  "Nothing to revert": "Nada para reverter",
+  "Reverting…": "Revertendo…",
+  "Revert all": "Reverter tudo",
+  "The changes could not be reverted.": "Não foi possível reverter as alterações.",
+  "Change undone": "Alteração desfeita",
+  "Revert all changes": "Reverter todas as alterações",
+  "This discards every unpublished change and restores what members are running now. This cannot be undone.": "Isso descarta todas as alterações não publicadas e restaura o que os membros estão usando agora. Não é possível desfazer.",
+  "Change redone": "Alteração refeita"
 }

@@ -498,6 +498,25 @@ test('admin edits stage until they are published', async () => {
   assert.equal((await browser('GET', '/api/app-config')).json.appName, 'Staged Name', 'and the value survives as the live one');
 });
 
+test('reverting discards every staged edit back to the published state', async () => {
+  const kept = (await browser('POST', '/api/admin/models', { body: { display_name: 'Kept', internal_name: 'kept' } })).json.id;
+  await browser('POST', '/api/admin/models/publish', { body: {} });
+  const before = (await browser('GET', '/api/admin/models')).json.find(m => m.id === kept);
+
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: kept, description: 'edited' }] } });
+  const added = (await browser('POST', '/api/admin/models', { body: { display_name: 'Added', internal_name: 'added' } })).json.id;
+  await browser('PATCH', '/api/admin/app-config', { body: { appName: 'Reverted Name' } });
+  assert.equal((await browser('GET', '/api/admin/models/publish-state')).json.dirty, true);
+
+  assert.equal((await browser('POST', '/api/admin/models/revert', { body: {} })).status, 200);
+  const rows = (await browser('GET', '/api/admin/models')).json;
+  assert.deepEqual(rows.find(m => m.id === kept), before, 'an edited row is restored exactly');
+  assert.ok(!rows.some(m => m.id === added), 'a model created since publishing is gone');
+  assert.notEqual((await browser('GET', '/api/app-config')).json.appName, 'Reverted Name', 'staged config is dropped');
+  const state = (await browser('GET', '/api/admin/models/publish-state')).json;
+  assert.equal(state.dirty, false, 'and nothing is left to publish');
+});
+
 test('the catalog edits, copies and removes models in batches', async () => {
   const a = (await browser('POST', '/api/admin/models', { body: { display_name: 'Batch A', internal_name: 'batch-a' } })).json.id;
   const b = (await browser('POST', '/api/admin/models', { body: { display_name: 'Batch B', internal_name: 'batch-b' } })).json.id;

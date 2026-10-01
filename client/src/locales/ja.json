@@ -2676,5 +2676,13 @@
   "New file name": "新しいファイル名",
   "File name, e.g. notes.md": "ファイル名 (例: notes.md)",
   "Delete this project?": "このプロジェクトを削除しますか？",
-  "Its files are deleted. Chats inside it are kept.": "ファイルは削除されます。中のチャットは残ります。"
+  "Its files are deleted. Chats inside it are kept.": "ファイルは削除されます。中のチャットは残ります。",
+  "Nothing to revert": "元に戻す変更はありません",
+  "Reverting…": "元に戻しています…",
+  "Revert all": "すべて元に戻す",
+  "The changes could not be reverted.": "変更を元に戻せませんでした。",
+  "Change undone": "変更を取り消しました",
+  "Revert all changes": "すべての変更を元に戻す",
+  "This discards every unpublished change and restores what members are running now. This cannot be undone.": "未公開の変更をすべて破棄し、メンバーが現在使用している状態に戻します。この操作は取り消せません。",
+  "Change redone": "変更をやり直しました"
 }

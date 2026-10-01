@@ -3,7 +3,7 @@ import { authMiddleware, adminOnly } from '../auth.js';
 import { getProviders, resolveProvider, providerSpec } from '../lib/providers.js';
 import { matchPreset, presetList, setCustomPresets, getCustomPresets } from '../lib/pricing.js';
 import { logAudit } from '../lib/audit.js';
-import { promoteDrafts, hasDrafts } from '../lib/draft.js';
+import { promoteDrafts, discardDrafts, hasDrafts } from '../lib/draft.js';
 import { draftModels, publicModels, detectContextLength, timedFetch } from '../lib/models.js';
 import { sanitizeKwargs } from '../lib/kwargs.js';
 import { sanitizeBadgesOff } from '../lib/badges.js';
@@ -334,6 +334,19 @@ export default function registerModelRoutes(app) {
     logAudit(req, 'config.publish', { meta: { models: snapshot.length, settings: promoted.length } });
     broadcastConfig();
     res.json({ ok: true, count: snapshot.length, settings: promoted.length, publishedAt: getSetting('published_at') });
+  });
+
+  app.post('/api/admin/models/revert', authMiddleware, adminOnly, (req, res) => {
+    const snapshot = getSetting('published_models', null);
+    if (!Array.isArray(snapshot)) return res.status(409).json({ error: 'Nothing has been published yet.' });
+    tx(() => {
+      db.models.removeByIds(db.models.all().map(m => m.id));
+      for (const m of snapshot) db.models.insert(m);
+    });
+    const discarded = discardDrafts();
+    logAudit(req, 'config.revert', { meta: { models: snapshot.length, settings: discarded.length } });
+    broadcastAdminConfig();
+    res.json({ ok: true, count: snapshot.length, settings: discarded.length });
   });
 
   // has the draft diverged from what is published?

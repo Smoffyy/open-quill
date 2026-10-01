@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../../lib/api.js';
 import { appFontId } from '../../../lib/prefs.js';
+import { changedKeys, pick } from './history.js';
 
 export const SETTINGS_DEFAULTS = {
   uploadLimitAdminMb: 8, uploadLimitUserMb: 8, sandboxLimitAdminMb: 1024, sandboxLimitUserMb: 256,
@@ -44,7 +45,7 @@ const SAVED_LINGER = 1800;
 // loaded yet" flag. Loading replaces both objects, and a flag flipped in a
 // promise callback can lose the race with React's render, which used to fire a
 // PATCH of freshly-loaded values every single time the panel opened.
-export function useWorkspace() {
+export function useWorkspace({ history } = {}) {
   const [settings, setSettings] = useState(SETTINGS_DEFAULTS);
   const [config, setConfig] = useState(CONFIG_DEFAULTS);
   const [lanes, setLanes] = useState({ settings: 'idle', config: 'idle' });
@@ -53,6 +54,8 @@ export function useWorkspace() {
   const saved = useRef({ settings: SETTINGS_DEFAULTS, config: CONFIG_DEFAULTS });
   const timers = useRef({});
   const linger = useRef({});
+  const shown = useRef({ settings: SETTINGS_DEFAULTS, config: CONFIG_DEFAULTS });
+  const quiet = useRef({ settings: SETTINGS_DEFAULTS, config: CONFIG_DEFAULTS });
 
   const mark = useCallback((lane, state) => {
     setLanes(v => (v[lane] === state ? v : { ...v, [lane]: state }));
@@ -75,6 +78,7 @@ export function useWorkspace() {
     try {
       const next = { ...SETTINGS_DEFAULTS, ...(await api.get('/api/admin/settings')) };
       saved.current.settings = next;
+      quiet.current.settings = next;
       setSettings(next);
     } catch {}
     try {
@@ -97,12 +101,39 @@ export function useWorkspace() {
         egressAllowlist: Array.isArray(c.egressAllowlist) ? c.egressAllowlist : []
       };
       saved.current.config = next;
+      quiet.current.config = next;
       setConfig(next);
     } catch {}
     setReady(true);
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const discard = useCallback(() => {
+    for (const id of Object.values(timers.current)) clearTimeout(id);
+    timers.current = {};
+    setLanes({ settings: 'idle', config: 'idle' });
+  }, []);
+
+  const restore = useCallback((lane, values) => {
+    const next = { ...shown.current[lane], ...values };
+    quiet.current[lane] = next;
+    (lane === 'settings' ? setSettings : setConfig)(next);
+  }, []);
+
+  const track = useCallback((lane, value) => {
+    const before = shown.current[lane];
+    shown.current[lane] = value;
+    if (before === value || quiet.current[lane] === value) return;
+    const keys = changedKeys(before, value);
+    if (!keys.length || !history) return;
+    const was = pick(before, keys);
+    const now = pick(value, keys);
+    history.record({ key: lane + ':' + keys.join(','), undo: () => restore(lane, was), redo: () => restore(lane, now) });
+  }, [history, restore]);
+
+  useEffect(() => { track('settings', settings); }, [settings, track]);
+  useEffect(() => { track('config', config); }, [config, track]);
 
   useEffect(() => {
     if (settings === saved.current.settings) return undefined;
@@ -139,5 +170,5 @@ export function useWorkspace() {
   const set = useCallback((key, value) => setSettings(s => (s[key] === value ? s : { ...s, [key]: value })), []);
   const setCfg = useCallback((key, value) => setConfig(c => (c[key] === value ? c : { ...c, [key]: value })), []);
 
-  return { settings, setSettings, set, config, setConfig, setCfg, saveState, ready, reload: load };
+  return { settings, setSettings, set, config, setConfig, setCfg, saveState, ready, reload: load, discard };
 }

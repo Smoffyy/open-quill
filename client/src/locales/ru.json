@@ -2676,5 +2676,13 @@
   "New file name": "Имя нового файла",
   "File name, e.g. notes.md": "Имя файла, например notes.md",
   "Delete this project?": "Удалить этот проект?",
-  "Its files are deleted. Chats inside it are kept.": "Его файлы будут удалены. Чаты в нём сохранятся."
+  "Its files are deleted. Chats inside it are kept.": "Его файлы будут удалены. Чаты в нём сохранятся.",
+  "Nothing to revert": "Нечего отменять",
+  "Reverting…": "Отмена изменений…",
+  "Revert all": "Отменить всё",
+  "The changes could not be reverted.": "Не удалось отменить изменения.",
+  "Change undone": "Изменение отменено",
+  "Revert all changes": "Отменить все изменения",
+  "This discards every unpublished change and restores what members are running now. This cannot be undone.": "Все неопубликованные изменения будут удалены, и будет восстановлено то, что сейчас используют участники. Это действие нельзя отменить.",
+  "Change redone": "Изменение возвращено"
 }

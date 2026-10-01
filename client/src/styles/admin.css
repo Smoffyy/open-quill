@@ -913,6 +913,10 @@ code.cp-code {
   .cp-mark span { display: none; }
 }
 
+@media (max-width: 480px) {
+  .cp-top .cp-state { display: none; }
+}
+
 /* Theme rows in the Interface section. One row per theme, the active one marked
    on its left edge so the list reads at a glance. */
 .cp-theme-rows { display: flex; flex-direction: column; gap: var(--cp-1); }

@@ -2676,5 +2676,13 @@
   "New file name": "Name der neuen Datei",
   "File name, e.g. notes.md": "Dateiname, z. B. notes.md",
   "Delete this project?": "Dieses Projekt löschen?",
-  "Its files are deleted. Chats inside it are kept.": "Seine Dateien werden gelöscht. Die Chats darin bleiben erhalten."
+  "Its files are deleted. Chats inside it are kept.": "Seine Dateien werden gelöscht. Die Chats darin bleiben erhalten.",
+  "Nothing to revert": "Nichts zurückzusetzen",
+  "Reverting…": "Wird zurückgesetzt…",
+  "Revert all": "Alles zurücksetzen",
+  "The changes could not be reverted.": "Die Änderungen konnten nicht zurückgesetzt werden.",
+  "Change undone": "Änderung rückgängig gemacht",
+  "Revert all changes": "Alle Änderungen zurücksetzen",
+  "This discards every unpublished change and restores what members are running now. This cannot be undone.": "Damit werden alle unveröffentlichten Änderungen verworfen und der Stand wiederhergestellt, den Mitglieder gerade nutzen. Dies kann nicht rückgängig gemacht werden.",
+  "Change redone": "Änderung wiederhergestellt"
 }
