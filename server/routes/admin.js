@@ -8,6 +8,9 @@ import { monthStartMs } from '../lib/budget.js';
 import * as dataroot from '../lib/dataroot.js';
 import { toolStatsReport } from '../lib/toolstats.js';
 import { USAGE_WINDOWS } from './auth.js';
+import { roleOf, canManage, canAssign, rolePatch } from '../lib/roles.js';
+
+const OUTRANKED = 'You can only manage accounts below your own role.';
 
 export default function registerAdminRoutes(app) {
   app.get('/api/admin/skills', authMiddleware, adminOnly, (req, res) => res.json({ skills: workspaceSkills.list() }));
@@ -128,6 +131,7 @@ export default function registerAdminRoutes(app) {
   app.patch('/api/admin/users/:id/budget', authMiddleware, adminOnly, (req, res) => {
     const u = db.users.byId(req.params.id);
     if (!u) return res.status(404).json({ error: 'not found' });
+    if (u.id !== req.user.id && !canManage(req.user, u)) return res.status(403).json({ error: OUTRANKED });
     const v = req.body?.budget;
     const patch = (v === null || v === '' || v === undefined) ? { budget: null } : { budget: Math.max(0, Number(v) || 0) };
     db.users.update(u.id, patch);
@@ -140,7 +144,7 @@ export default function registerAdminRoutes(app) {
     const spend = db.usage.spendSinceByUser(since);
     res.json(db.users.all().sort((a, b) => a.created_at - b.created_at).map(u => ({
       id: u.id, email: u.email, displayName: u.display_name || (u.email || '').split('@')[0],
-      isAdmin: !!u.is_admin, isOwner: !!u.is_owner, createdAt: u.created_at,
+      isAdmin: !!u.is_admin, isOwner: !!u.is_owner, role: roleOf(u), createdAt: u.created_at,
       twoFactor: !!u.totp_enabled, budget: u.budget == null ? null : Number(u.budget),
       monthSpend: spend.get(u.id) || 0
     })));
@@ -149,15 +153,21 @@ export default function registerAdminRoutes(app) {
     const u = db.users.byId(req.params.id);
     if (!u) return res.status(404).json({ error: 'not found' });
     if (u.is_owner) return res.status(403).json({ error: 'The top admin cannot be changed.' });
-    if ('isAdmin' in req.body) db.users.update(u.id, { is_admin: req.body.isAdmin ? 1 : 0 });
-    logAudit(req, 'user.role', { type: 'user', id: u.id, meta: { email: u.email, isAdmin: !!req.body.isAdmin } });
-    res.json({ ok: true });
+    const role = typeof req.body?.role === 'string' ? req.body.role : ('isAdmin' in (req.body || {}) ? (req.body.isAdmin ? 'editor' : 'member') : null);
+    if (!role) return res.status(400).json({ error: 'role is required' });
+    if (!canManage(req.user, u)) return res.status(403).json({ error: OUTRANKED });
+    if (!canAssign(req.user, role)) return res.status(403).json({ error: 'You can only grant roles below your own.' });
+    const from = roleOf(u);
+    db.users.update(u.id, rolePatch(role));
+    logAudit(req, 'user.role', { type: 'user', id: u.id, meta: { email: u.email, from, to: role } });
+    res.json({ ok: true, role });
   });
   app.delete('/api/admin/users/:id', authMiddleware, adminOnly, (req, res) => {
     const u = db.users.byId(req.params.id);
     if (!u) return res.json({ ok: true });
     if (u.is_owner) return res.status(403).json({ error: 'The top admin cannot be removed.' });
     if (u.id === req.user.id) return res.status(403).json({ error: 'You cannot remove your own account here.' });
+    if (!canManage(req.user, u)) return res.status(403).json({ error: OUTRANKED });
     purgeUser(u.id);
     logAudit(req, 'user.delete', { type: 'user', id: u.id, meta: { email: u.email } });
     res.json({ ok: true });

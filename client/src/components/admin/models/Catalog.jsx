@@ -3,6 +3,7 @@ import { useAdmin } from '../store.jsx';
 import { Btn, IconBtn, Input, Select, PointMenu, MenuItem, clampToViewport } from '../ui.jsx';
 import { Plus, Folder, Chevron, Star, EyeOff, Cube, Pencil, Copy, Trash, DotsV, Retry } from '../../ui/icons.jsx';
 import { ModelMark } from '../../ui/Weave.jsx';
+import { Faces } from '../changes/Review.jsx';
 import { t, tk } from '../../../i18n.jsx';
 import {
   layout, displayOrder, folderOf, folderPatch, folderNames, planMove, nudge, rangeIds, matches, STATUS,
@@ -20,7 +21,7 @@ const FILTERS = [
   ['listed', tk('Listed')],
   ['hidden', tk('Hidden')],
   ['down', tk('Marked down')],
-  ['unpublished', tk('Unpublished changes')]
+  ['unpublished', tk('Edited')]
 ];
 
 function readSet(key) {
@@ -97,7 +98,7 @@ function FolderName({ initial, taken, onDone }) {
 }
 
 export default function Catalog() {
-  const { catalog } = useAdmin();
+  const { catalog, present } = useAdmin();
   const {
     models, selection, setSelection, edit, reorderModels, createModel, duplicateModels, removeModels, draft,
     folders, saveFolders, keepFolders
@@ -395,7 +396,8 @@ export default function Catalog() {
           {!m.enabled && <span title={t('Hidden from members')}><EyeOff /><span className="sr-only">{t('Hidden from members')}</span></span>}
           {!!m.unavailable && <span className="mc-flag bad">{t('down')}</span>}
           {m.kind === 'router' && <span className="mc-flag">{t('router')}</span>}
-          {changed.has(m.id) && <span className="mc-dot" title={t('Unpublished changes')}><span className="sr-only">{t('Unpublished changes')}</span></span>}
+          {changed.has(m.id) && <span className="mc-flag" title={t('Changed since the last release')}>{t('edited')}</span>}
+          <Faces people={present.filter(p => p.section === 'models' && p.target === m.id)} small />
         </span>
       </li>
     );

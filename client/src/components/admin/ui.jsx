@@ -294,27 +294,15 @@ export function KV({ items }) {
   );
 }
 
-// Silent when nothing is happening. A status line that always says something
-// trains people to stop reading it.
-export function SaveState({ state }) {
-  if (state !== 'saving' && state !== 'saved' && state !== 'error') return null;
-  return (
-    <span className={'cp-state' + (state === 'error' ? ' bad' : '')} role="status">
-      <span className={'cp-dot' + (state === 'saving' ? ' pending' : state === 'saved' ? ' live' : ' bad')} />
-      {state === 'saving' ? t('Saving') : state === 'saved' ? t('Saved') : t('Not saved')}
-    </span>
-  );
-}
-
 /* ---------- overlays ---------- */
 
-export function Dialog({ title, size, onClose, foot, children }) {
+export function Dialog({ title, size, layer, onClose, foot, children }) {
   const box = useRef(null);
   const titleId = useId();
   useFocusTrap(box, onClose, { field: true });
 
   return createPortal(
-    <div className="cp-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className={'cp-overlay' + (layer ? ' ' + layer : '')} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div ref={box} className={'cp-dialog' + (size ? ' ' + size : '')}
         role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className="cp-dialog-head">

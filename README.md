@@ -96,6 +96,30 @@ The Admin Panel is in the profile menu, bottom-left of the sidebar.
 > [!NOTE]
 > Open Quill is built and tested primarily against llama.cpp. Other OpenAI-compatible providers generally work, but full feature parity is not guaranteed.
 
+### 5. Bring in your team
+
+**Roles.** Every account has one role. You can only manage accounts below your own role, and only grant roles below it.
+
+| Role | Can |
+| --- | --- |
+| **Member** | Chat. No Admin Panel |
+| **Editor** | Use the Admin Panel and stage changes. Can discard only their own changes |
+| **Publisher** | Everything an editor can, plus publish releases, restore old versions and discard anyone's changes |
+| **Owner** | Everything, including making and removing publishers. The first account created is the owner |
+
+Set roles in **Admin Panel → Members**.
+
+**How changes reach people.** Admin edits never go straight to members. Every edit saves itself into a shared draft that all admins see live, with the faces of whoever else is in the panel and on which model. Members keep running the published version until a publisher ships the draft.
+
+1. Make your changes anywhere in the Admin Panel or in build mode. There is no save button.
+2. Open **Review changes** (top right). Every pending change is listed with its before and after value, who made it and when. Long text such as a system prompt can be compared line by line.
+3. Tick what should go out, add an optional note, and **Publish**. Unticked changes stay in the draft.
+4. Every connected client picks up the new version within about a second, without a reload. A reply already being written finishes on the version it started with.
+
+Each publish is a numbered version under **Admin Panel → Releases**, with who published it, the note and exactly what changed. **Restore this version** puts an older one live again as a new version, so a rollback can itself be undone, and anything still waiting in the draft is kept. Providers and model folders are infrastructure rather than member-facing settings, so they apply immediately.
+
+If two admins edit the same field, the person still typing keeps their edit and is told someone else changed it. If someone publishes while you are reviewing, your publish is refused until you look at the updated list.
+
 ---
 
 ## Features

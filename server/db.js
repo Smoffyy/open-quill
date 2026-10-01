@@ -251,6 +251,18 @@ const tasksDueStmt = sdb.prepare('SELECT data FROM tasks WHERE next_run>0 AND ne
 tasksCol.byUser = userId => tasksByUserStmt.all(userId).map(r => JSON.parse(r.data));
 tasksCol.due = (at, limit) => tasksDueStmt.all(at, limit || 20).map(r => JSON.parse(r.data));
 
+const releasesCol = collection('releases');
+const releaseHeadStmt = sdb.prepare('SELECT data FROM releases ORDER BY version DESC LIMIT 1');
+const releaseByVersionStmt = sdb.prepare('SELECT data FROM releases WHERE version=?');
+const releasePageStmt = sdb.prepare("SELECT json_remove(data,'$.snapshot') AS data FROM releases ORDER BY version DESC LIMIT ? OFFSET ?");
+const releaseCountStmt = sdb.prepare('SELECT count(*) AS n FROM releases');
+const releasePruneStmt = sdb.prepare('DELETE FROM releases WHERE version <= ?');
+releasesCol.head = () => { const r = releaseHeadStmt.get(); return r ? JSON.parse(r.data) : null; };
+releasesCol.byVersion = v => { const r = releaseByVersionStmt.get(Number(v) || 0); return r ? JSON.parse(r.data) : null; };
+releasesCol.page = (limit, offset) => releasePageStmt.all(limit, offset).map(r => JSON.parse(r.data));
+releasesCol.total = () => releaseCountStmt.get().n;
+releasesCol.pruneThrough = v => { try { const n = releasePruneStmt.run(v).changes; if (n) bumpTable('releases'); return n; } catch { return 0; } };
+
 export const db = {
   users: usersCol,
   chats: chatsCol,
@@ -264,7 +276,9 @@ export const db = {
   feedback: feedbackCol,
   toolStats: toolStatsCol,
   tasks: tasksCol,
-  skills: skillsCol
+  skills: skillsCol,
+  releases: releasesCol,
+  draftEdits: collection('draft_edits')
 };
 
 const sGet = sdb.prepare('SELECT value FROM settings WHERE key=?');
@@ -273,6 +287,9 @@ const sDel = sdb.prepare('DELETE FROM settings WHERE key=?');
 const sKeys = sdb.prepare('SELECT key FROM settings WHERE key LIKE ?');
 
 const settingsCache = new Map();
+let settingsRev = 0;
+
+export const settingsVersion = () => settingsRev;
 
 export function getSetting(key, fallback = null) {
   if (settingsCache.has(key)) {
@@ -290,11 +307,13 @@ export function getSetting(key, fallback = null) {
 export function setSetting(key, value) {
   sSet.run(key, JSON.stringify(value));
   settingsCache.set(key, value);
+  settingsRev++;
 }
 
 export function delSetting(key) {
   sDel.run(key);
   settingsCache.delete(key);
+  settingsRev++;
 }
 
 export function settingKeysWithPrefix(prefix) {
@@ -362,6 +381,13 @@ if (!getSetting('legacy_mark_v1')) {
   }
   if (LEGACY_MARK_SET.includes(getSetting('app_icon', ''))) setSetting('app_icon', '');
   setSetting('legacy_mark_v1', '1');
+}
+
+if (!getSetting('publish_role_v1')) {
+  for (const u of db.users.all()) {
+    if (u.is_admin && !u.is_owner && u.can_publish === undefined) db.users.update(u.id, { can_publish: 1 });
+  }
+  setSetting('publish_role_v1', '1');
 }
 
 export default db;

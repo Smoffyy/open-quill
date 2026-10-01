@@ -1,6 +1,7 @@
 import { useState, useEffect, useId, useMemo } from 'react';
 import { useAdmin } from '../store.jsx';
-import { Btn, IconBtn, Tabs, SaveState, Empty, PointMenu, MenuItem, clampToViewport } from '../ui.jsx';
+import { Btn, IconBtn, Tabs, Empty, PointMenu, MenuItem, clampToViewport } from '../ui.jsx';
+import { Faces } from '../changes/Review.jsx';
 import { X, Cube, ChevDown, Check } from '../../ui/icons.jsx';
 import { ModelMark } from '../../ui/Weave.jsx';
 import { t, tk } from '../../../i18n.jsx';
@@ -67,7 +68,7 @@ function Title({ models, changed }) {
           <b>{m.display_name || t('Untitled')}</b>
           <span className="mc-title-sub">
             <span className="mono">{m.kind === 'router' ? t('router') : (m.internal_name || t('no model id'))}</span>
-            {changed.has(m.id) && <span className="mc-flag warn">{t('unpublished')}</span>}
+            {changed.has(m.id) && <span className="mc-flag" title={t('Changed since the last release')}>{t('edited')}</span>}
           </span>
         </div>
       </div>
@@ -87,8 +88,8 @@ function Title({ models, changed }) {
 }
 
 export default function Inspector({ models }) {
-  const { catalog } = useAdmin();
-  const { edit, saveState, setSelection, draft } = catalog;
+  const { catalog, present } = useAdmin();
+  const { edit, setSelection, draft } = catalog;
   const [tab, setTab] = useState(firstTab);
   const [added, setAdded] = useState(readAdded);
   const [menu, setMenu] = useState(null);
@@ -141,7 +142,7 @@ export default function Inspector({ models }) {
       <header className="mc-inspector-head">
         <div className="mc-inspector-bar">
           <Title models={models} changed={changed} />
-          <SaveState state={saveState} />
+          <Faces people={present.filter(p => p.section === 'models' && ids.includes(p.target))} />
           <IconBtn kind="quiet" label={t('Clear selection')} onClick={() => setSelection([])}><X /></IconBtn>
         </div>
         <div className="mc-tabs-row">

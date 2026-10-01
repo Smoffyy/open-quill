@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { api } from '../../../lib/api.js';
+import { api, TAB_ID } from '../../../lib/api.js';
 import { appFontId } from '../../../lib/prefs.js';
+import { toast } from '../../../lib/toast.js';
+import { t } from '../../../i18n.jsx';
 import { changedKeys, pick } from './history.js';
 
 export const SETTINGS_DEFAULTS = {
@@ -35,12 +37,37 @@ export const CONFIG_DEFAULTS = {
 };
 
 const SAVE_DELAY = 450;
-const SAVED_LINGER = 1800;
 
-// Both stores autosave: an edit is PATCHed after a short pause, and the header
-// reports the result. Admins preview their own app-config draft; members keep
-// reading the published one until publish promotes it.
-//
+const URLS = { settings: '/api/admin/settings', config: '/api/admin/app-config' };
+
+function configFrom(c) {
+  return {
+    ...CONFIG_DEFAULTS,
+    appName: c.appName || '',
+    disclaimer: c.disclaimer || '',
+    greetings: c.greetings?.length ? c.greetings : [''],
+    appIcon: c.appIcon || '',
+    quickPrompts: Array.isArray(c.quickPrompts) ? c.quickPrompts : [],
+    appFont: appFontId(c.appFont),
+    uiPreset: c.uiPreset === 'openai' ? 'openai' : 'anthropic',
+    modelDocs: c.modelDocs !== false,
+    modelDocsConfig: c.modelDocsConfig || null,
+    allowSignups: c.allowSignups !== false,
+    localOnly: c.localOnly !== false,
+    egressLocalOnly: c.egressLocalOnly !== false,
+    egressAllowWebSearch: c.egressAllowWebSearch !== false,
+    egressAllowlist: Array.isArray(c.egressAllowlist) ? c.egressAllowlist : []
+  };
+}
+
+function wire(lane, patch) {
+  if (lane !== 'config') return patch;
+  const out = { ...patch };
+  if ('greetings' in out) out.greetings = (out.greetings || []).map(g => g.trim()).filter(Boolean);
+  if ('quickPrompts' in out) out.quickPrompts = (out.quickPrompts || []).filter(q => (q.label || '').trim() && (q.prompt || '').trim());
+  return out;
+}
+
 // A save is keyed off the *identity* of the state object rather than a "have we
 // loaded yet" flag. Loading replaces both objects, and a flag flipped in a
 // promise callback can lose the race with React's render, which used to fire a
@@ -48,72 +75,36 @@ const SAVED_LINGER = 1800;
 export function useWorkspace({ history } = {}) {
   const [settings, setSettings] = useState(SETTINGS_DEFAULTS);
   const [config, setConfig] = useState(CONFIG_DEFAULTS);
-  const [lanes, setLanes] = useState({ settings: 'idle', config: 'idle' });
   const [ready, setReady] = useState(false);
 
   const saved = useRef({ settings: SETTINGS_DEFAULTS, config: CONFIG_DEFAULTS });
   const timers = useRef({});
-  const linger = useRef({});
+  const inflight = useRef(0);
   const shown = useRef({ settings: SETTINGS_DEFAULTS, config: CONFIG_DEFAULTS });
   const quiet = useRef({ settings: SETTINGS_DEFAULTS, config: CONFIG_DEFAULTS });
-
-  const mark = useCallback((lane, state) => {
-    setLanes(v => (v[lane] === state ? v : { ...v, [lane]: state }));
-    clearTimeout(linger.current[lane]);
-    if (state !== 'saved') return;
-    linger.current[lane] = setTimeout(
-      () => setLanes(v => (v[lane] === 'saved' ? { ...v, [lane]: 'idle' } : v)), SAVED_LINGER);
-  }, []);
+  const rawConfig = useRef({});
 
   useEffect(() => () => {
-    for (const id of Object.values(linger.current)) clearTimeout(id);
     for (const id of Object.values(timers.current)) clearTimeout(id);
   }, []);
 
-  const saveState = lanes.settings === 'error' || lanes.config === 'error' ? 'error'
-    : lanes.settings === 'saving' || lanes.config === 'saving' ? 'saving'
-      : lanes.settings === 'saved' || lanes.config === 'saved' ? 'saved' : 'idle';
+  const adopt = useCallback((lane, next) => {
+    saved.current[lane] = next;
+    quiet.current[lane] = next;
+    (lane === 'settings' ? setSettings : setConfig)(next);
+  }, []);
 
   const load = useCallback(async () => {
-    try {
-      const next = { ...SETTINGS_DEFAULTS, ...(await api.get('/api/admin/settings')) };
-      saved.current.settings = next;
-      quiet.current.settings = next;
-      setSettings(next);
-    } catch {}
+    try { adopt('settings', { ...SETTINGS_DEFAULTS, ...(await api.get('/api/admin/settings')) }); } catch {}
     try {
       const c = await api.get('/api/app-config');
-      const next = {
-        ...CONFIG_DEFAULTS,
-        appName: c.appName || '',
-        disclaimer: c.disclaimer || '',
-        greetings: c.greetings?.length ? c.greetings : [''],
-        appIcon: c.appIcon || '',
-        quickPrompts: Array.isArray(c.quickPrompts) ? c.quickPrompts : [],
-        appFont: appFontId(c.appFont),
-        uiPreset: c.uiPreset === 'openai' ? 'openai' : 'anthropic',
-        modelDocs: c.modelDocs !== false,
-        modelDocsConfig: c.modelDocsConfig || null,
-        allowSignups: c.allowSignups !== false,
-        localOnly: c.localOnly !== false,
-        egressLocalOnly: c.egressLocalOnly !== false,
-        egressAllowWebSearch: c.egressAllowWebSearch !== false,
-        egressAllowlist: Array.isArray(c.egressAllowlist) ? c.egressAllowlist : []
-      };
-      saved.current.config = next;
-      quiet.current.config = next;
-      setConfig(next);
+      rawConfig.current = c;
+      adopt('config', configFrom(c));
     } catch {}
     setReady(true);
-  }, []);
+  }, [adopt]);
 
   useEffect(() => { load(); }, [load]);
-
-  const discard = useCallback(() => {
-    for (const id of Object.values(timers.current)) clearTimeout(id);
-    timers.current = {};
-    setLanes({ settings: 'idle', config: 'idle' });
-  }, []);
 
   const restore = useCallback((lane, values) => {
     const next = { ...shown.current[lane], ...values };
@@ -135,40 +126,64 @@ export function useWorkspace({ history } = {}) {
   useEffect(() => { track('settings', settings); }, [settings, track]);
   useEffect(() => { track('config', config); }, [config, track]);
 
-  useEffect(() => {
-    if (settings === saved.current.settings) return undefined;
-    mark('settings', 'saving');
-    clearTimeout(timers.current.settings);
-    timers.current.settings = setTimeout(async () => {
+  const save = useCallback((lane, value) => {
+    clearTimeout(timers.current[lane]);
+    if (value === saved.current[lane]) return;
+    timers.current[lane] = setTimeout(async () => {
+      timers.current[lane] = null;
+      const keys = changedKeys(saved.current[lane], value);
+      if (!keys.length) return;
+      const patch = pick(value, keys);
+      inflight.current++;
       try {
-        await api.patch('/api/admin/settings', settings);
-        saved.current.settings = settings;
-        mark('settings', 'saved');
-      } catch { mark('settings', 'error'); }
+        await api.patch(URLS[lane], wire(lane, patch));
+        saved.current[lane] = { ...saved.current[lane], ...patch };
+      } catch (e) {
+        toast(e?.message || t('Your last change could not be saved. Edit the field again to retry.'), { kind: 'error', icon: 'info' });
+      } finally { inflight.current--; }
     }, SAVE_DELAY);
-    return undefined;
-  }, [settings, mark]);
+  }, []);
+
+  useEffect(() => { save('settings', settings); }, [settings, save]);
+  useEffect(() => { save('config', config); }, [config, save]);
 
   useEffect(() => {
-    if (config === saved.current.config) return undefined;
-    mark('config', 'saving');
-    clearTimeout(timers.current.config);
-    timers.current.config = setTimeout(async () => {
-      try {
-        await api.patch('/api/admin/app-config', {
-          ...config,
-          greetings: config.greetings.map(g => g.trim()).filter(Boolean),
-          quickPrompts: (config.quickPrompts || []).filter(q => (q.label || '').trim() && (q.prompt || '').trim())
-        });
-        saved.current.config = config;
-        mark('config', 'saved');
-      } catch { mark('config', 'error'); }
-    }, SAVE_DELAY);
-    return undefined;
-  }, [config, mark]);
+    function merge(lane, incoming, own) {
+      const cur = shown.current[lane];
+      const base = saved.current[lane];
+      const nextSaved = { ...base };
+      const next = { ...cur };
+      let clash = false;
+      for (const k of Object.keys(incoming)) {
+        nextSaved[k] = incoming[k];
+        if (JSON.stringify(cur[k]) !== JSON.stringify(base[k]) && JSON.stringify(cur[k]) !== JSON.stringify(incoming[k])) clash = true;
+        else next[k] = incoming[k];
+      }
+      saved.current[lane] = nextSaved;
+      quiet.current[lane] = next;
+      (lane === 'settings' ? setSettings : setConfig)(next);
+      if (clash && !own) toast(t('Another admin changed a setting you are editing. Your edit is kept.'), { icon: 'info' });
+    }
+    function onDraft(e) {
+      const f = e.detail || {};
+      if (f.scope === 'all') { load(); return; }
+      if (!f.values || typeof f.values !== 'object') return;
+      const own = !!f.tab && f.tab === TAB_ID;
+      if (f.scope === 'settings') merge('settings', f.values, own);
+      else if (f.scope === 'config') {
+        rawConfig.current = { ...rawConfig.current, ...f.values };
+        const shaped = configFrom(rawConfig.current);
+        merge('config', pick(shaped, Object.keys(f.values).filter(k => k in CONFIG_DEFAULTS)), own);
+      }
+    }
+    window.addEventListener('oq-admin-draft', onDraft);
+    return () => window.removeEventListener('oq-admin-draft', onDraft);
+  }, [load]);
+
+  const unsaved = useCallback(() => inflight.current > 0 || Object.values(timers.current).some(Boolean), []);
 
   const set = useCallback((key, value) => setSettings(s => (s[key] === value ? s : { ...s, [key]: value })), []);
   const setCfg = useCallback((key, value) => setConfig(c => (c[key] === value ? c : { ...c, [key]: value })), []);
 
-  return { settings, setSettings, set, config, setConfig, setCfg, saveState, ready, reload: load, discard };
+  return { settings, setSettings, set, config, setConfig, setCfg, ready, reload: load, unsaved };
 }

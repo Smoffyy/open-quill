@@ -102,6 +102,8 @@ function handshake(headers, pathname = '/ws') {
 }
 
 // Opens a socket and resolves with the frames it receives after `send`.
+const SESSION_FRAMES = new Set(['hello', 'presence']);
+
 function exchange(headers, send, { frames = 1, timeoutMs = 8000 } = {}) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`, { headers });
@@ -110,7 +112,10 @@ function exchange(headers, send, { frames = 1, timeoutMs = 8000 } = {}) {
     const timer = setTimeout(() => finish(resolve, got), timeoutMs);
     ws.on('open', () => ws.send(JSON.stringify(send)));
     ws.on('message', (raw) => {
-      try { got.push(JSON.parse(raw)); } catch { return; }
+      let m;
+      try { m = JSON.parse(raw); } catch { return; }
+      if (SESSION_FRAMES.has(m?.type)) return;
+      got.push(m);
       if (got.length >= frames) finish(resolve, got);
     });
     ws.on('error', (e) => finish(reject, e));
@@ -305,7 +310,13 @@ test('malformed frames do not take the socket down', async () => {
   // a well-formed frame still gets a reply afterwards
   const reply = await new Promise((resolve) => {
     const timer = setTimeout(() => resolve(null), 6000);
-    ws.on('message', (raw) => { clearTimeout(timer); try { resolve(JSON.parse(raw)); } catch { resolve(null); } });
+    ws.on('message', (raw) => {
+      let m;
+      try { m = JSON.parse(raw); } catch { m = null; }
+      if (SESSION_FRAMES.has(m?.type)) return;
+      clearTimeout(timer);
+      resolve(m);
+    });
     ws.send(JSON.stringify({ type: 'chat', chatId: 'no-such-chat', modelId: 'x' }));
   });
   try { ws.terminate(); } catch {}
@@ -468,13 +479,13 @@ test('uploads need a session, except the icon the sign-in screen shows', async (
   // An admin edit only stages the value, so the icon is not public on the strength
   // of a draft: it has to be published first.
   assert.equal((await request('GET', '/uploads/brand.png')).status, 404, 'a staged icon is still private');
-  assert.equal((await browser('POST', '/api/admin/models/publish', { body: {} })).status, 200);
+  assert.equal((await browser('POST', '/api/admin/changes/publish', { body: {} })).status, 200);
   assert.equal((await request('GET', '/uploads/brand.png')).status, 200, 'now the login screen can load it');
   assert.equal((await request('GET', '/uploads/attachment.png')).status, 404, 'and only that one file');
 
   // the exemption follows the setting rather than being latched on first use
   await browser('PATCH', '/api/admin/app-config', { body: { appIcon: '' } });
-  await browser('POST', '/api/admin/models/publish', { body: {} });
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
   assert.equal((await request('GET', '/uploads/brand.png')).status, 404, 'unset the icon and it is private again');
 });
 
@@ -484,43 +495,44 @@ test('admin edits stage until they are published', async () => {
   const staged = await browser('GET', '/api/admin/settings');
   assert.equal(staged.json.voiceMicEnabled, true, 'the panel sees its own draft');
 
-  const state = await browser('GET', '/api/admin/models/publish-state');
-  assert.equal(state.json.staged, true, 'the draft is reported as staged');
-  assert.equal(state.json.dirty, true, 'and that alone marks the draft dirty');
+  const state = await browser('GET', '/api/admin/changes');
+  const mic = state.json.changes.find(c => c.key === 'setting:voice_mic_enabled');
+  assert.ok(mic, 'the staged setting is listed as a pending change');
+  assert.equal(mic.after, '1');
+  assert.deepEqual(mic.authors.map(a => a.id), [(await browser('GET', '/api/me')).json.user.id], 'and attributed to the admin who made it');
 
   // The admin previews their own draft; the published value is what everyone else
   // reads, which the public app-icon test above exercises from a signed-out caller.
   await browser('PATCH', '/api/admin/app-config', { body: { appName: 'Staged Name' } });
   assert.equal((await browser('GET', '/api/app-config')).json.appName, 'Staged Name', 'an admin previews the draft');
 
-  assert.equal((await browser('POST', '/api/admin/models/publish', { body: {} })).status, 200);
-  assert.equal((await browser('GET', '/api/admin/models/publish-state')).json.staged, false, 'publishing clears the staging area');
+  assert.equal((await browser('POST', '/api/admin/changes/publish', { body: {} })).status, 200);
+  assert.equal((await browser('GET', '/api/admin/changes')).json.changes.length, 0, 'publishing clears the staging area');
   assert.equal((await browser('GET', '/api/app-config')).json.appName, 'Staged Name', 'and the value survives as the live one');
 });
 
-test('reverting discards every staged edit back to the published state', async () => {
+test('discarding drops every staged edit back to the published state', async () => {
   const kept = (await browser('POST', '/api/admin/models', { body: { display_name: 'Kept', internal_name: 'kept' } })).json.id;
-  await browser('POST', '/api/admin/models/publish', { body: {} });
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
   const before = (await browser('GET', '/api/admin/models')).json.find(m => m.id === kept);
 
   await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: kept, description: 'edited' }] } });
   const added = (await browser('POST', '/api/admin/models', { body: { display_name: 'Added', internal_name: 'added' } })).json.id;
   await browser('PATCH', '/api/admin/app-config', { body: { appName: 'Reverted Name' } });
-  assert.equal((await browser('GET', '/api/admin/models/publish-state')).json.dirty, true);
+  assert.ok((await browser('GET', '/api/admin/changes')).json.changes.length > 0);
 
-  assert.equal((await browser('POST', '/api/admin/models/revert', { body: {} })).status, 200);
+  assert.equal((await browser('POST', '/api/admin/changes/discard', { body: {} })).status, 200);
   const rows = (await browser('GET', '/api/admin/models')).json;
   assert.deepEqual(rows.find(m => m.id === kept), before, 'an edited row is restored exactly');
   assert.ok(!rows.some(m => m.id === added), 'a model created since publishing is gone');
   assert.notEqual((await browser('GET', '/api/app-config')).json.appName, 'Reverted Name', 'staged config is dropped');
-  const state = (await browser('GET', '/api/admin/models/publish-state')).json;
-  assert.equal(state.dirty, false, 'and nothing is left to publish');
+  assert.equal((await browser('GET', '/api/admin/changes')).json.changes.length, 0, 'and nothing is left to publish');
 });
 
 test('the catalog edits, copies and removes models in batches', async () => {
   const a = (await browser('POST', '/api/admin/models', { body: { display_name: 'Batch A', internal_name: 'batch-a' } })).json.id;
   const b = (await browser('POST', '/api/admin/models', { body: { display_name: 'Batch B', internal_name: 'batch-b' } })).json.id;
-  await browser('POST', '/api/admin/models/publish', { body: {} });
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
 
   const edit = await browser('PATCH', '/api/admin/models', { body: { rows: [
     { id: a, system_prompt: 'Shared prompt', temperature: '0.4' },
@@ -534,7 +546,7 @@ test('the catalog edits, copies and removes models in batches', async () => {
   assert.equal(ra.temperature, 0.4, 'values are sanitized exactly as a single edit is');
   assert.equal(rb.temperature, null);
 
-  const state = (await browser('GET', '/api/admin/models/publish-state')).json;
+  const state = (await browser('GET', '/api/admin/changes')).json.models;
   assert.deepEqual([...state.changed].sort(), [a, b].sort(), 'only the edited rows are reported as unpublished');
   assert.match(state.live[a].system_prompt, /^<context>\n[\s\S]*<tools>\n<tool name="sandbox">/, 'the published copy of each changed row comes along for diffing, with the blocks a new model starts with');
   assert.ok(state.order.indexOf(a) < state.order.indexOf(b), 'and so does the published order');
@@ -554,10 +566,10 @@ test('the catalog edits, copies and removes models in batches', async () => {
   assert.deepEqual((await browser('GET', '/api/models')).json.find(m => m.id === a).badges, ['text', 'code']);
 
   await browser('PATCH', '/api/admin/settings', { body: { webSearchEnabled: true } });
-  await browser('POST', '/api/admin/models/publish', { body: {} });
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
   assert.deepEqual((await browser('GET', '/api/models')).json.find(m => m.id === a).badges, ['text', 'web', 'code'], 'switching web search on for the workspace refreshes the cached badges');
   await browser('PATCH', '/api/admin/settings', { body: { webSearchEnabled: false } });
-  await browser('POST', '/api/admin/models/publish', { body: {} });
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
   assert.deepEqual((await browser('GET', '/api/models')).json.find(m => m.id === a).badges, ['text', 'code']);
 
   const promptOf = async (id) => (await browser('GET', '/api/admin/models')).json.find(m => m.id === id).system_prompt;
@@ -582,17 +594,17 @@ test('the catalog edits, copies and removes models in batches', async () => {
   assert.equal((await browser('POST', '/api/admin/models/remove', { body: { ids: [a, b, copies[0]] } })).json.count, 3);
   const left = (await browser('GET', '/api/admin/models')).json.map(m => m.id);
   assert.ok(![a, b, copies[0]].some(id => left.includes(id)));
-  await browser('POST', '/api/admin/models/publish', { body: {} });
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
 });
 
 test('model folders persist on their own, empty or not', async () => {
-  await browser('POST', '/api/admin/models/publish', { body: {} });
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
   assert.deepEqual((await browser('GET', '/api/admin/models/folders')).json.folders, []);
   const put = await browser('PUT', '/api/admin/models/folders', { body: { folders: ['  Fast ', 'Archive', 'Fast', '', 7, 'x'.repeat(90)] } });
   assert.equal(put.status, 200);
   assert.deepEqual(put.json.folders, ['Archive', 'Fast', 'x'.repeat(60)], 'names are trimmed, capped, deduplicated and sorted');
   assert.deepEqual((await browser('GET', '/api/admin/models/folders')).json.folders, put.json.folders, 'and read back unchanged');
-  assert.equal((await browser('GET', '/api/admin/models/publish-state')).json.dirty, false, 'an empty folder is not a catalog change');
+  assert.equal((await browser('GET', '/api/admin/changes')).json.changes.length, 0, 'an empty folder is not a catalog change');
   const added = await browser('POST', '/api/admin/models/folders/add', { body: { folders: ['Fast', 'Zeta'] } });
   assert.deepEqual(added.json.folders, ['Archive', 'Fast', 'x'.repeat(60), 'Zeta'], 'adding only ever unions, so it cannot bring back a folder another admin removed');
   await browser('PUT', '/api/admin/models/folders', { body: { folders: [] } });
@@ -607,13 +619,87 @@ test('a staged app-config edit can be taken back before it is published', async 
   const staged = (await browser('GET', '/api/app-config')).json;
   assert.equal(staged.appName, 'Typo Name', 'the admin previews the staged name');
   assert.equal(staged.uiPreset, other, 'and the staged preset');
-  assert.equal((await browser('GET', '/api/admin/models/publish-state')).json.staged, true);
+  assert.ok((await browser('GET', '/api/admin/changes')).json.changes.some(c => c.key === 'setting:app_name'));
 
   await browser('PATCH', '/api/admin/app-config', { body: live });
   const back = (await browser('GET', '/api/app-config')).json;
   assert.equal(back.appName, live.appName, 'the name draft is gone, not still holding the edit');
   assert.equal(back.uiPreset, live.uiPreset, 'and so is the preset draft');
   assert.equal(back.appFont, live.appFont);
+});
+
+test('a release can ship part of the draft, refuses a stale review and rolls back', async () => {
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
+  const base = (await browser('GET', '/api/admin/changes')).json.version;
+
+  await browser('PATCH', '/api/admin/app-config', { body: { appName: 'Ship Me', disclaimer: 'Hold me back' } });
+  const listed = (await browser('GET', '/api/admin/changes')).json.changes.map(c => c.key).sort();
+  assert.deepEqual(listed, ['setting:app_name', 'setting:disclaimer']);
+
+  const stale = await browser('POST', '/api/admin/changes/publish', { body: { keys: ['setting:app_name'], base: base - 1 } });
+  assert.equal(stale.status, 409, 'a publish reviewed against an older release is refused');
+
+  const shipped = await browser('POST', '/api/admin/changes/publish', { body: { keys: ['setting:app_name'], note: 'Rename', base } });
+  assert.equal(shipped.status, 200);
+  assert.equal(shipped.json.version, base + 1);
+  assert.deepEqual((await browser('GET', '/api/admin/changes')).json.changes.map(c => c.key), ['setting:disclaimer'], 'the unpicked change stays staged');
+
+  const list = (await browser('GET', '/api/admin/releases')).json;
+  assert.equal(list.version, base + 1);
+  assert.equal(list.releases[0].note, 'Rename');
+  assert.deepEqual(list.releases[0].changes.map(c => c.key), ['setting:app_name']);
+  assert.equal('snapshot' in list.releases[0], false, 'the list never carries a snapshot');
+  const detail = (await browser('GET', `/api/admin/releases/${base + 1}`)).json;
+  assert.equal(detail.changes[0].after, 'Ship Me');
+
+  const back = await browser('POST', `/api/admin/releases/${base}/restore`, { body: {} });
+  assert.equal(back.status, 200);
+  assert.equal(back.json.version, base + 2, 'a rollback is itself a new release');
+  assert.equal((await browser('GET', '/api/admin/releases')).json.releases[0].kind, 'restore');
+  const after = (await browser('GET', '/api/admin/changes')).json.changes.map(c => c.key);
+  assert.deepEqual(after, ['setting:disclaimer'], 'work still in the draft survives a rollback, the rolled-back value does not reappear');
+
+  assert.equal((await browser('POST', '/api/admin/changes/discard', { body: { keys: ['setting:disclaimer'] } })).status, 200);
+  assert.equal((await browser('POST', '/api/admin/changes/publish', { body: {} })).status, 400, 'nothing left to publish');
+  assert.equal((await browser('POST', '/api/admin/releases/999999/restore', { body: {} })).status, 404);
+});
+
+test('editors stage, publishers ship, and only the owner makes publishers', async () => {
+  const join = async (email) => {
+    const res = await request('POST', '/api/auth/register', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email, password: PASSWORD } });
+    assert.equal(res.status, 200, res.text);
+    const c = String(res.headers['set-cookie']?.[0] || '').split(';')[0];
+    return { cookie: c, id: (await browser('GET', '/api/me', { cookie: c })).json.user.id };
+  };
+  const as = (who) => (method, url, opts = {}) => browser(method, url, { ...opts, cookie: who.cookie });
+  const ed = await join('editor-role@example.com');
+  const pub = await join('publisher-role@example.com');
+  const other = await join('member-role@example.com');
+
+  assert.equal((await browser('PATCH', `/api/admin/users/${pub.id}`, { body: { role: 'publisher' } })).status, 200);
+  assert.equal((await browser('PATCH', `/api/admin/users/${ed.id}`, { body: { role: 'editor' } })).status, 200);
+  const me = (await as(ed)('GET', '/api/me')).json.user;
+  assert.equal(me.role, 'editor');
+  assert.equal(me.canPublish, false);
+  assert.equal((await browser('PATCH', `/api/admin/users/${ed.id}`, { body: { role: 'owner' } })).status, 403, 'ownership is never granted');
+
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
+  await as(ed)('PATCH', '/api/admin/app-config', { body: { disclaimer: 'Editor draft' } });
+  await as(pub)('PATCH', '/api/admin/app-config', { body: { supportContact: 'help@example.com' } });
+  assert.equal((await as(ed)('POST', '/api/admin/changes/publish', { body: {} })).status, 403, 'an editor cannot publish');
+  assert.equal((await as(ed)('POST', '/api/admin/changes/discard', { body: { keys: ['setting:support_contact'] } })).status, 403, 'nor discard someone else’s change');
+  assert.equal((await as(ed)('POST', '/api/admin/changes/discard', { body: { keys: ['setting:disclaimer'] } })).status, 200, 'but can drop their own');
+  assert.equal((await as(pub)('POST', '/api/admin/changes/publish', { body: {} })).status, 200, 'a publisher ships');
+  const head = (await browser('GET', '/api/admin/releases')).json.version;
+  assert.equal((await as(ed)('POST', `/api/admin/releases/${head - 1}/restore`, { body: {} })).status, 403, 'an editor cannot roll back');
+
+  assert.equal((await as(pub)('PATCH', `/api/admin/users/${other.id}`, { body: { role: 'editor' } })).status, 200, 'a publisher can make editors');
+  assert.equal((await as(pub)('PATCH', `/api/admin/users/${other.id}`, { body: { role: 'publisher' } })).status, 403, 'but not publishers');
+  assert.equal((await as(ed)('PATCH', `/api/admin/users/${other.id}`, { body: { role: 'member' } })).status, 403, 'an editor cannot touch another editor');
+  assert.equal((await as(ed)('DELETE', `/api/admin/users/${pub.id}`)).status, 403, 'nor remove a publisher');
+  assert.equal((await as(pub)('PATCH', `/api/admin/users/${pub.id}/budget`, { body: { budget: 5 } })).status, 200, 'everyone can set their own cap');
+
+  for (const u of [ed, pub, other]) assert.equal((await browser('DELETE', `/api/admin/users/${u.id}`)).status, 200, 'the owner can remove anyone');
 });
 
 test('unknown routes answer in the right language', async () => {
@@ -866,7 +952,7 @@ test('consult settings are admin-only, sanitised and add their block', async () 
   assert.deepEqual(row.consult_models, [helper], 'ids are deduplicated and non-strings dropped');
   assert.match(row.system_prompt, /<tool name="consult_model">[\s\S]*\{\{consultModels\}\}/);
   assert.equal((await request('PATCH', '/api/admin/models', { origin: ORIGIN, secFetchSite: 'same-origin', body: { rows: [{ id: asker, consult_models: [] }] } })).status, 401, 'nobody without a session can change them');
-  await browser('POST', '/api/admin/models/publish', { body: {} });
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
   const pub = (await browser('GET', '/api/models')).json.find(m => m.id === asker);
   assert.equal(JSON.stringify(pub).includes('consult'), false, 'the member-facing catalog never carries the consult settings');
 
@@ -875,5 +961,5 @@ test('consult settings are admin-only, sanitised and add their block', async () 
   assert.match(system, /<tool name="consult_model">[\s\S]*Models you can consult:\n- Helper: Sees images\n<\/tool>/);
 
   await browser('POST', '/api/admin/models/remove', { body: { ids: [asker, helper] } });
-  await browser('POST', '/api/admin/models/publish', { body: {} });
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
 });

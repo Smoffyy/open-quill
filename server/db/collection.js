@@ -11,7 +11,9 @@ export const MIRROR = {
   feedback: { ts: o => o.ts ?? 0, user_id: o => o.user_id ?? null },
   toolstats: { ts: o => o.ts ?? 0 },
   tasks: { user_id: o => o.user_id ?? null, next_run: o => o.next_run ?? 0, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 },
-  skills: { user_id: o => o.user_id ?? null, name: o => o.name ?? null, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 }
+  skills: { user_id: o => o.user_id ?? null, name: o => o.name ?? null, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 },
+  releases: { version: o => o.version ?? 0, created_at: o => o.created_at ?? 0 },
+  draft_edits: { updated_at: o => o.updated_at ?? 0 }
 };
 
 const bumps = new Map();

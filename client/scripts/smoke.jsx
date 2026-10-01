@@ -53,6 +53,8 @@ import AppearanceTab from '../src/components/admin/models/tabs/Appearance.jsx';
 import RoutingTab from '../src/components/admin/models/tabs/Routing.jsx';
 import NetworkSection from '../src/components/admin/sections/NetworkSection.jsx';
 import OverviewSection from '../src/components/admin/sections/OverviewSection.jsx';
+import ReleasesSection from '../src/components/admin/sections/ReleasesSection.jsx';
+import { ChangeRow, fieldLabel } from '../src/components/admin/changes/ChangeRow.jsx';
 import ProvidersSection from '../src/components/admin/sections/ProvidersSection.jsx';
 import QuotasSection from '../src/components/admin/sections/QuotasSection.jsx';
 import RatingsSection from '../src/components/admin/sections/RatingsSection.jsx';
@@ -184,7 +186,7 @@ const ADMIN_SECTIONS = [
   ['Network', NetworkSection], ['Overview', OverviewSection], ['Providers', ProvidersSection],
   ['Quotas', QuotasSection], ['Ratings', RatingsSection], ['Search', SearchSection],
   ['Skills', SkillsSection], ['Storage', StorageSection], ['Usage', UsageSection],
-  ['Voice', VoiceSection],
+  ['Voice', VoiceSection], ['Releases', ReleasesSection],
 ];
 const adminUser = { id: 'u1', displayName: 'Admin', email: 'a@b.c', isAdmin: true, isOwner: true, prefs: {} };
 for (const [name, Section] of ADMIN_SECTIONS) {
@@ -212,6 +214,26 @@ for (const [name, Tab] of MODEL_TABS) {
   cases.push(['ModelTab:' + name + ':mixed', () => editing(mixedModels, Tab)]);
 }
 cases.push(['ModelsCatalog', () => inAdmin(React.createElement(Catalog))]);
+const by = [{ id: 'u2', name: 'Sam' }];
+const SAMPLE_CHANGES = [
+  { key: 'model:m1:temperature', scope: 'model', target: 'm1', field: 'temperature', kind: 'update', before: 0.7, after: 0.4, authors: by, at: 1 },
+  { key: 'model:m1:system_prompt', scope: 'model', target: 'm1', field: 'system_prompt', kind: 'update', before: 'a\nb', after: 'a\nc', authors: by },
+  { key: 'model:m1:sandbox_allowed', scope: 'model', target: 'm1', field: 'sandbox_allowed', kind: 'update', before: null, after: 0, authors: [] },
+  { key: 'model:m2', scope: 'model', target: 'm2', field: null, kind: 'create', before: null, after: { id: 'm2' }, authors: by },
+  { key: 'model:m3', scope: 'model', target: 'm3', field: null, kind: 'delete', before: { id: 'm3' }, after: null, authors: by },
+  { key: 'models:order', scope: 'model', target: null, field: 'order', kind: 'order', before: ['a'], after: ['b'], authors: by },
+  { key: 'setting:voice_mic_enabled', scope: 'setting', target: 'voice_mic_enabled', field: null, kind: 'update', before: '0', after: '1', authors: by },
+  { key: 'setting:greetings', scope: 'setting', target: 'greetings', field: null, kind: 'update', before: '["Hi"]', after: '[]', authors: by },
+  { key: 'setting:api_key', scope: 'setting', target: 'api_key', field: null, kind: 'update', before: null, after: null, secret: true, authors: by },
+  { key: 'setting:voice_stt_url', scope: 'setting', target: 'voice_stt_url', field: null, kind: 'update', before: '', after: 'http://x', authors: by },
+  { key: 'theme:t1:doc', scope: 'theme', target: 't1', field: 'doc', kind: 'update', before: null, after: null, count: 3, authors: by },
+  { key: 'theme:t2', scope: 'theme', target: 't2', field: null, kind: 'create', before: null, after: { name: 'Ocean' }, authors: by },
+  { key: 'themes:active', scope: 'theme', target: 't2', field: 'active', kind: 'update', before: 'Anthropic', after: 'Ocean', authors: by }
+];
+cases.push(['ChangeRows:selectable', () => React.createElement('ul', null, SAMPLE_CHANGES.map(c =>
+  React.createElement(ChangeRow, { key: c.key, change: c, checked: true, onToggle: noop, label: fieldLabel(c), ago: '2m' })))]);
+cases.push(['ChangeRows:history', () => React.createElement('ul', null, SAMPLE_CHANGES.map(c =>
+  React.createElement(ChangeRow, { key: c.key, change: c, label: fieldLabel(c) })))]);
 cases.push(['ModelsInspector:idle', () => inAdmin(React.createElement(Inspector, { models: [] }))]);
 cases.push(['ModelsInspector:single', () => inAdmin(React.createElement(Inspector, { models: [kwargModel] }))]);
 cases.push(['ModelsInspector:mixed', () => inAdmin(React.createElement(Inspector, { models: mixedModels }))]);

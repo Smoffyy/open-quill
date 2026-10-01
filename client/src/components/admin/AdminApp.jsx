@@ -2,14 +2,15 @@ import '../../styles/admin.css';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { AdminProvider, useAdmin } from './store.jsx';
 import { NAV, SECTIONS, sectionMeta } from './nav.jsx';
-import { Confirm, SaveState, SectionSkeleton } from './ui.jsx';
-import { PublishState } from './publish.jsx';
+import { Confirm, SectionSkeleton } from './ui.jsx';
+import { ReviewButton, ReviewDialog, Faces } from './changes/Review.jsx';
 import { Search, X, Cube } from '../ui/icons.jsx';
 import { t } from '../../i18n.jsx';
 import BrandMark from '../ui/BrandMark.jsx';
 import { useSkeleton } from '../../lib/skeleton.js';
 
 import OverviewSection from './sections/OverviewSection.jsx';
+import ReleasesSection from './sections/ReleasesSection.jsx';
 import ModelsSection from './sections/ModelsSection.jsx';
 import ProvidersSection from './sections/ProvidersSection.jsx';
 import SearchSection from './sections/SearchSection.jsx';
@@ -37,6 +38,7 @@ import { historyKey } from './state/history.js';
 const VIEWS = {
   __proto__: null,
   overview: OverviewSection,
+  releases: ReleasesSection,
   models: ModelsSection,
   providers: ProvidersSection,
   search: SearchSection,
@@ -154,7 +156,7 @@ function Finder() {
 }
 
 function Shell() {
-  const { section, setSection, catalog, members, onClose, ask, setAsk, keepScroll, workspace, undo, redo } = useAdmin();
+  const { section, setSection, catalog, members, onClose, ask, setAsk, keepScroll, workspace, undo, redo, present } = useAdmin();
   const scrollRef = useRef(null);
   const meta = sectionMeta(section);
   const View = VIEWS[section] || OverviewSection;
@@ -196,7 +198,8 @@ function Shell() {
           <div className="cp-top-spacer" />
           <Finder />
           <div className="cp-top-acts">
-            <PublishState />
+            <Faces people={present} where />
+            <ReviewButton />
             <button type="button" className="cp-exit" onClick={onClose} title={t('Close')} aria-label={t('Close')}>
               <X />
             </button>
@@ -213,6 +216,7 @@ function Shell() {
                     aria-current={section === id ? 'page' : undefined} onClick={() => setSection(id)}>
                     <Icon />
                     <span>{t(label)}</span>
+                    <Faces people={present.filter(p => p.section === id)} small />
                     {counts[id] > 0 && <span className="cp-rail-count">{counts[id]}</span>}
                   </button>
                 ))}
@@ -226,9 +230,6 @@ function Shell() {
                 <h1>{t(meta.title)}</h1>
                 <p>{t(meta.blurb)}</p>
               </div>
-              <div className="cp-head-acts">
-                {meta.saves === 'workspace' && <SaveState state={workspace.saveState} />}
-              </div>
             </div>
             <div ref={scrollRef} className="cp-scroll">
               <div className="cp-page" aria-busy={!workspace.ready || undefined}>
@@ -239,6 +240,7 @@ function Shell() {
         </div>
 
         <Confirm ask={ask} onClose={() => setAsk(null)} />
+        <ReviewDialog />
       </div>
     </div>
   );

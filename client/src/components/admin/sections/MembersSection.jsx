@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { useAdmin } from '../store.jsx';
-import { Card, Rows, ToggleRow, Input, Seg, IconBtn, Acts, Table, Badge, Empty, fmtMoney } from '../ui.jsx';
+import { Card, Rows, ToggleRow, Input, Seg, IconBtn, Acts, Table, Badge, Empty, KV, fmtMoney } from '../ui.jsx';
 import { Trash, Users } from '../../ui/icons.jsx';
-import { t } from '../../../i18n.jsx';
+import { t, tk } from '../../../i18n.jsx';
 import { Skel, SkelTable } from '../../ui/Skeleton.jsx';
+import { ASSIGNABLE, canManage, canAssign } from '../../../lib/roles.js';
+
+const ROLE_LABELS = { __proto__: null, member: tk('member'), editor: tk('editor'), publisher: tk('publisher'), owner: tk('owner') };
 
 export default function MembersSection() {
   const { members: M, workspace, user } = useAdmin();
@@ -37,6 +40,14 @@ export default function MembersSection() {
         </Rows>
       </Card>
 
+      <Card title={t('Roles')} sub={t('Everyone can manage only the accounts below their own role, and grant only roles below it.')}>
+        <KV items={[
+          [t('Editor'), t('Uses the admin panel and stages changes. Can discard only their own changes.')],
+          [t('Publisher'), t('Everything an editor can do, plus publishing releases, restoring old versions and discarding anyone’s changes.')],
+          [t('Owner'), t('Everything, including making and removing publishers. There is exactly one owner.')]
+        ]} />
+      </Card>
+
       <div className="cp-toolbar">
         <div className="cp-toolbar-find">
           <Input value={q} type="search" placeholder={t('Filter by name or email')} aria-label={t('Filter by name or email')}
@@ -67,6 +78,7 @@ export default function MembersSection() {
             ]}>
               {shown.map(u => {
                 const draft = drafts[u.id];
+                const manage = canManage(user?.role, u.role);
                 const value = draft !== undefined ? draft : (u.budget == null ? '' : u.budget);
                 return (
                   <tr key={u.id}>
@@ -84,23 +96,23 @@ export default function MembersSection() {
                     <td className="num mono">{u.monthSpend > 0 ? fmtMoney(u.monthSpend) : <span className="dim">—</span>}</td>
                     <td>
                       <Input type="number" min="0" step="any" placeholder={t('default')} value={value}
-                        aria-label={t('Cap $/month')}
+                        aria-label={t('Cap $/month')} disabled={!manage && u.id !== user?.id}
                         onChange={(e) => setDrafts(d => ({ ...d, [u.id]: e.target.value }))}
                         onBlur={(e) => commitBudget(u.id, e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }} />
                     </td>
                     <td className="fit">
-                      {u.isOwner
-                        ? <span className="dim">{t('owner')}</span>
-                        : (
-                          <Seg value={u.isAdmin ? 'admin' : 'member'} label={t('Role')}
-                            onChange={(v) => setRole(u.id, v === 'admin')}
-                            options={[{ value: 'member', label: t('member') }, { value: 'admin', label: t('admin') }]} />
-                        )}
+                      {manage
+                        ? (
+                          <Seg value={u.role} label={t('Role')}
+                            onChange={(v) => { if (v !== u.role && canAssign(user?.role, v)) setRole(u.id, v); }}
+                            options={ASSIGNABLE.filter(r => canAssign(user?.role, r) || r === u.role).map(r => ({ value: r, label: t(ROLE_LABELS[r]) }))} />
+                        )
+                        : <span className="dim">{t(ROLE_LABELS[u.role] || ROLE_LABELS.member)}</span>}
                     </td>
                     <td className="acts">
                       <Acts end>
-                        {!u.isOwner && u.id !== user?.id && (
+                        {manage && u.id !== user?.id && (
                           <IconBtn kind="danger" label={t('Remove member')} onClick={() => remove(u.id, u.email)}><Trash /></IconBtn>
                         )}
                       </Acts>

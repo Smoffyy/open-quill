@@ -1,13 +1,12 @@
-import { db, uid, now, tx, getSetting, setSetting } from '../db.js';
+import { db, uid, tx, getSetting, setSetting } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
 import { getProviders, resolveProvider, providerSpec } from '../lib/providers.js';
 import { matchPreset, presetList, setCustomPresets, getCustomPresets } from '../lib/pricing.js';
 import { logAudit } from '../lib/audit.js';
-import { promoteDrafts, discardDrafts, hasDrafts } from '../lib/draft.js';
+import { staged } from '../lib/releases.js';
 import { draftModels, publicModels, detectContextLength, timedFetch } from '../lib/models.js';
 import { sanitizeKwargs } from '../lib/kwargs.js';
 import { sanitizeBadgesOff } from '../lib/badges.js';
-import { broadcastConfig, broadcastAdminConfig } from '../lib/ws/index.js';
 import { ROUTE_MATCHERS } from '../lib/router.js';
 import { DOCS_MODEL_STR, DOCS_MODEL_BOOL, DOCS_MODEL_INT, DOCS_MODEL_FLOAT, DOCS_BADGES, sanitizePairs, sanitizeCards, sanitizeDocsLinks, sanitizeStrList } from '../lib/modeldocs.js';
 import { listLogos } from '../lib/logos.js';
@@ -117,6 +116,26 @@ function idList(raw) {
   return new Set((Array.isArray(raw) ? raw : []).slice(0, MAX_BATCH).filter(id => typeof id === 'string'));
 }
 
+function defaultHolders() {
+  return db.models.all().filter(m => m.is_default).map(m => m.id);
+}
+
+function syncModels(req, plan, holders) {
+  const keys = [];
+  const ids = new Set();
+  for (const [cur, patch] of plan) {
+    ids.add(cur.id);
+    for (const f of Object.keys(patch)) keys.push(`model:${cur.id}:${f}`);
+  }
+  if (plan.some(([, p]) => p.is_default === 1)) {
+    for (const id of holders) {
+      ids.add(id);
+      keys.push(`model:${id}:is_default`);
+    }
+  }
+  staged(req, 'models', { keys, rows: [...ids].map(id => db.models.byId(id)).filter(Boolean) });
+}
+
 function applyPatch(cur, patch) {
   if (patch.is_default === 1) for (const other of db.models.all()) if (other.id !== cur.id && other.is_default) db.models.update(other.id, { is_default: 0 });
   db.models.update(cur.id, patch);
@@ -193,7 +212,7 @@ export default function registerModelRoutes(app) {
     const withBlocks = addBlocks(m.system_prompt || '', eligibleBlocks(m, draftFeatures()));
     if (withBlocks !== (m.system_prompt || '')) db.models.update(m.id, { system_prompt: withBlocks });
     logAudit(req, 'model.create', { type: 'model', id: m.id, meta: { displayName: m.display_name, internalName: m.internal_name } });
-    broadcastAdminConfig();
+    staged(req, 'models', { keys: ['model:' + m.id], rows: [db.models.byId(m.id)] });
     res.json({ id: m.id });
   });
 
@@ -201,9 +220,10 @@ export default function registerModelRoutes(app) {
     const cur = db.models.byId(req.params.id);
     if (!cur) return res.status(404).json({ error: 'not found' });
     const patch = modelPatch(req.body || {}, cur);
+    const holders = defaultHolders();
     tx(() => applyPatch(cur, patch));
     logAudit(req, 'model.update', { type: 'model', id: cur.id, meta: { fields: Object.keys(patch) } });
-    broadcastAdminConfig();
+    syncModels(req, [[cur, patch]], holders);
     res.json({ ok: true });
   });
 
@@ -217,9 +237,10 @@ export default function registerModelRoutes(app) {
       plan.push([cur, modelPatch(row, cur)]);
     }
     if (plan.filter(([, p]) => p.is_default === 1).length > 1) return res.status(400).json({ error: 'only one model can be the default' });
+    const holders = defaultHolders();
     tx(() => { for (const [cur, patch] of plan) applyPatch(cur, patch); });
     logAudit(req, 'model.update', { type: 'model', meta: { ids: plan.map(([c]) => c.id), fields: [...new Set(plan.flatMap(([, p]) => Object.keys(p)))] } });
-    broadcastAdminConfig();
+    syncModels(req, plan, holders);
     res.json({ ok: true, count: plan.length });
   });
 
@@ -240,7 +261,7 @@ export default function registerModelRoutes(app) {
       order.forEach((m, i) => db.models.update(m.id, { sort_order: i }));
     });
     for (const c of made) logAudit(req, 'model.create', { type: 'model', id: c.id, meta: { displayName: c.display_name, internalName: c.internal_name } });
-    broadcastAdminConfig();
+    staged(req, 'models', { keys: made.map(c => 'model:' + c.id), reload: true });
     res.json({ ids: made.map(c => c.id) });
   });
 
@@ -248,7 +269,7 @@ export default function registerModelRoutes(app) {
     const gone = db.models.all().filter(m => idList(req.body?.ids).has(m.id));
     db.models.removeByIds(gone.map(m => m.id));
     for (const m of gone) logAudit(req, 'model.delete', { type: 'model', id: m.id, meta: { displayName: m.display_name } });
-    broadcastAdminConfig();
+    staged(req, 'models', { keys: gone.map(m => 'model:' + m.id), removed: gone.map(m => m.id) });
     res.json({ ok: true, count: gone.length });
   });
 
@@ -256,7 +277,7 @@ export default function registerModelRoutes(app) {
     const m = db.models.byId(req.params.id);
     db.models.removeById(req.params.id);
     logAudit(req, 'model.delete', { type: 'model', id: req.params.id, meta: { displayName: m?.display_name } });
-    broadcastAdminConfig();
+    if (m) staged(req, 'models', { keys: ['model:' + m.id], removed: [m.id] });
     res.json({ ok: true });
   });
 
@@ -302,7 +323,7 @@ export default function registerModelRoutes(app) {
     const folders = sanitizeFolders(req.body?.folders);
     setSetting('model_folders', folders);
     logAudit(req, 'model.folders', { meta: { count: folders.length } });
-    broadcastAdminConfig();
+    staged(req, 'folders', { folders });
     res.json({ folders });
   });
 
@@ -311,7 +332,7 @@ export default function registerModelRoutes(app) {
     const folders = sanitizeFolders([...have, ...(Array.isArray(req.body?.folders) ? req.body.folders : [])]);
     if (folders.length !== have.length) {
       setSetting('model_folders', folders);
-      broadcastAdminConfig();
+      staged(req, 'folders', { folders });
     }
     res.json({ folders });
   });
@@ -319,47 +340,7 @@ export default function registerModelRoutes(app) {
   app.post('/api/admin/models/reorder', authMiddleware, adminOnly, (req, res) => {
     const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
     tx(() => ids.forEach((id, i) => db.models.update(id, { sort_order: i })));
-    broadcastAdminConfig();
+    staged(req, 'models', { keys: ['models:order'], order: ids.filter(id => typeof id === 'string') });
     res.json({ ok: true });
-  });
-
-  // publish the current draft (full model rows) to all clients
-  app.post('/api/admin/models/publish', authMiddleware, adminOnly, (req, res) => {
-    const snapshot = db.models.all();
-    setSetting('published_models', snapshot);
-    // Staged settings and app-config become live in the same step, so one button
-    // means one coherent state rather than a catalog that leads its own config.
-    const promoted = promoteDrafts();
-    setSetting('published_at', now());
-    logAudit(req, 'config.publish', { meta: { models: snapshot.length, settings: promoted.length } });
-    broadcastConfig();
-    res.json({ ok: true, count: snapshot.length, settings: promoted.length, publishedAt: getSetting('published_at') });
-  });
-
-  app.post('/api/admin/models/revert', authMiddleware, adminOnly, (req, res) => {
-    const snapshot = getSetting('published_models', null);
-    if (!Array.isArray(snapshot)) return res.status(409).json({ error: 'Nothing has been published yet.' });
-    tx(() => {
-      db.models.removeByIds(db.models.all().map(m => m.id));
-      for (const m of snapshot) db.models.insert(m);
-    });
-    const discarded = discardDrafts();
-    logAudit(req, 'config.revert', { meta: { models: snapshot.length, settings: discarded.length } });
-    broadcastAdminConfig();
-    res.json({ ok: true, count: snapshot.length, settings: discarded.length });
-  });
-
-  // has the draft diverged from what is published?
-  app.get('/api/admin/models/publish-state', authMiddleware, adminOnly, (req, res) => {
-    const snap = getSetting('published_models', null);
-    const published = Array.isArray(snap);
-    const staged = hasDrafts();
-    const liveRows = new Map((published ? snap : []).map(m => [m.id, m]));
-    const rows = db.models.all();
-    const changed = rows.filter(m => JSON.stringify(liveRows.get(m.id)) !== JSON.stringify(m)).map(m => m.id);
-    const dirty = !published || staged || changed.length > 0 || rows.length !== liveRows.size;
-    const live = Object.fromEntries(changed.map(id => [id, liveRows.get(id) || null]));
-    const order = [...liveRows.values()].sort((a, b) => a.sort_order - b.sort_order).map(m => m.id);
-    res.json({ published, dirty, staged, changed, live, order, publishedAt: getSetting('published_at', null) });
   });
 }
