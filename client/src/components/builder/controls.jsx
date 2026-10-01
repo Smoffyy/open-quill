@@ -289,4 +289,3 @@ export function Confirm({ title, message, confirmLabel, onConfirm, onClose, dang
     </Dialog>
   );
 }
-

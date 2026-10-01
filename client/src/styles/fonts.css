@@ -58,4 +58,3 @@
 }
 :root[data-font="newsreader"] { --font-serif: 'Newsreader Variable'; --prose-weight: 420; --prose-strong: 615; --greeting-weight: 390; }
 :root[data-font="sans"] { --font-serif: 'Open Sans'; --prose-weight: 400; --prose-strong: 600; --greeting-weight: 390; }
-

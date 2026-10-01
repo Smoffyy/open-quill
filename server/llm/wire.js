@@ -41,4 +41,3 @@ export function requestKwargs(model) {
   if (model && model.resolved_kwargs && typeof model.resolved_kwargs === 'object') return model.resolved_kwargs;
   return defaultKwargPayload(model);
 }
-

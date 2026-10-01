@@ -169,4 +169,3 @@ export function runCalculator(call) {
 export function formatCalculatorResult(r) {
   return r.ok ? `calculator "${r.expression}" → ${r.result}` : `calculator "${r.expression}" → ERROR: ${r.error}`;
 }
-

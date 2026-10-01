@@ -212,4 +212,3 @@ export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, sk
   if (mcpSchemas && mcpSchemas.length) out.push(...mcpSchemas);
   return out;
 }
-

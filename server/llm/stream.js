@@ -140,4 +140,3 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
   };
   return pumpLines(res, handle, () => { flush(); finishCalls(); });
 }
-

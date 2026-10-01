@@ -413,4 +413,3 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .bt-menu button { display: block; width: 100%; text-align: left; padding: 7px 9px; border-radius: 7px; font-size: 13px; color: var(--text); background: transparent; font-family: var(--font-sans); }
 .bt-menu button:hover:not(:disabled) { background: var(--pop-hover, var(--surface-hover)); }
 .bt-menu button:disabled { opacity: .38; pointer-events: none; }
-
