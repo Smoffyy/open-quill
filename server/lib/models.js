@@ -3,6 +3,7 @@ import { badgesOf } from './badges.js';
 import { resolveProvider, providerSpec } from './providers.js';
 import { publicKwargDefs } from './kwargs.js';
 import { llamaContext } from './llamacpp.js';
+import { anthropicModelInfo } from '../llm/index.js';
 
 let sunsetCheckedAt = 0;
 let sunsetCheckedVersion = -1;
@@ -157,6 +158,7 @@ export async function detectContextLength(prov, internal) {
   const root = base.replace(/\/v1$/, '');
   const asInt = (v) => { const n = parseInt(v); return Number.isFinite(n) && n > 0 ? n : 0; };
   try {
+    if (spec.protocol === 'anthropic') return internal ? asInt((await anthropicModelInfo({ base, key }, internal)).context) : 0;
     if (spec.protocol === 'ollama') {
       const r = await timedFetch(root + '/api/show', { method: 'POST', headers, body: JSON.stringify({ model: internal }) });
       if (!r.ok) return 0;
@@ -204,7 +206,7 @@ export async function detectContextLength(prov, internal) {
 const ctxDetectCache = new Map();
 const CTX_CACHE_MS = 5 * 60 * 1000;
 const CTX_CACHE_MAX = 200;
-const CTX_AUTO_TYPES = new Set(['llamacpp', 'ollama', 'lmstudio']);
+const CTX_AUTO_TYPES = new Set(['llamacpp', 'ollama', 'lmstudio', 'anthropic']);
 
 export async function modelCtx(model) {
   const manual = parseInt(model.num_ctx);

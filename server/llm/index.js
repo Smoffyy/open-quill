@@ -6,3 +6,4 @@ export { normalizeMessages } from './wire.js';
 export { streamCompletion } from './stream.js';
 export { oneShot, oneShotFull } from './oneshot.js';
 export { stripThink, generateTitle, summarizeConversation, resolveTitleModel } from './summarize.js';
+export { listAnthropicModels, anthropicModelInfo } from './anthropic.js';

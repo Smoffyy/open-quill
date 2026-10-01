@@ -29,10 +29,12 @@ export default function registerUserMcpRoutes(app) {
     res.json({ server: mine(refreshed.server || r.server), warning: refreshed.error || undefined });
   });
 
-  app.patch('/api/mcp/:id', authMiddleware, (req, res) => {
+  app.patch('/api/mcp/:id', authMiddleware, async (req, res) => {
     const r = mcp.update(req.params.id, { ...(req.body || {}), transport: 'http' }, req.user.id);
     if (r.error) return res.status(r.error === 'Server not found.' ? 404 : 400).json({ error: r.error });
-    res.json({ server: mine(r.server) });
+    if (!r.server.enabled) return res.json({ server: mine(r.server) });
+    const refreshed = await mcp.refreshTools(r.server.id, req.user.id);
+    res.json({ server: mine(refreshed.server || r.server), warning: refreshed.error || undefined });
   });
 
   app.delete('/api/mcp/:id', authMiddleware, (req, res) => {

@@ -1,6 +1,8 @@
 import { modelProvider, endpoint, authHeaders } from './provider.js';
 import { ollamaOptions } from './sampling.js';
 import { oneShotKwargPayload, stripNestedKwargs } from '../lib/kwargs.js';
+import { oneShotAnthropic } from './anthropic.js';
+import { memoFor, postWithRecovery } from './compat.js';
 
 const ONESHOT_TIMEOUT = 120000;
 
@@ -17,6 +19,10 @@ const usageOf = (prompt, completion) => ({ prompt: prompt || 0, completion: comp
 
 export async function oneShotFull(model, messages, { signal = null } = {}) {
   const { spec, base, key } = modelProvider(model);
+  if (spec.protocol === 'anthropic') {
+    try { return await oneShotAnthropic({ model, spec, base, key, messages, kwargs: oneShotKwargPayload(model), signal }); }
+    catch { return { text: '', usage: null }; }
+  }
   if (spec.protocol === 'ollama') {
     const res = await post(endpoint(base, '/api/chat'), {
       method: 'POST', headers: authHeaders(key),
@@ -26,12 +32,15 @@ export async function oneShotFull(model, messages, { signal = null } = {}) {
     const json = await res.json();
     return { text: json.message?.content?.trim() || '', usage: usageOf(json.prompt_eval_count, json.eval_count) };
   }
-  const res = await post(endpoint(base, '/chat/completions'), {
-    method: 'POST', headers: authHeaders(key),
-    body: JSON.stringify({ model: model.internal_name, stream: false, messages, ...oneShotKwargPayload(model) })
-  }, signal);
-  if (!res.ok) return { text: '', usage: null };
-  const json = await res.json();
+  let res;
+  try {
+    res = await postWithRecovery({
+      url: endpoint(base, '/chat/completions'), headers: authHeaders(key), mem: memoFor(base, model.internal_name),
+      send: (url, init) => post(url, init, signal),
+      body: { model: model.internal_name, stream: false, messages, ...oneShotKwargPayload(model) }
+    });
+  } catch { return { text: '', usage: null }; }
+  const json = await res.json().catch(() => ({}));
   return { text: json.choices?.[0]?.message?.content?.trim() || '', usage: json.usage ? usageOf(json.usage.prompt_tokens, json.usage.completion_tokens) : null };
 }
 

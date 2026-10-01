@@ -87,7 +87,7 @@ function Title({ models, changed }) {
   );
 }
 
-export default function Inspector({ models }) {
+export default function Inspector({ models, onDismiss }) {
   const { catalog, present } = useAdmin();
   const { edit, setSelection, draft } = catalog;
   const [tab, setTab] = useState(firstTab);
@@ -143,7 +143,7 @@ export default function Inspector({ models }) {
         <div className="mc-inspector-bar">
           <Title models={models} changed={changed} />
           <Faces people={present.filter(p => p.section === 'models' && ids.includes(p.target))} />
-          <IconBtn kind="quiet" label={t('Clear selection')} onClick={() => setSelection([])}><X /></IconBtn>
+          <IconBtn kind="quiet" label={onDismiss ? t('Hide settings') : t('Clear selection')} onClick={onDismiss || (() => setSelection([]))}><X /></IconBtn>
         </div>
         <div className="mc-tabs-row">
           <Tabs label={t('Model settings')} value={current} onChange={setTab} panelId={panelId}

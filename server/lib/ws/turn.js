@@ -319,6 +319,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       let aborted = false;
       let stepFinish = '';
       let toolCalls = [];
+      let toolBlocks = null;
       let liveSent = false;
       let liveState = { key: '', len: 0, lastAt: 0 };
       let previewAt = 0;
@@ -463,7 +464,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
               return;
             }
             if (e.type === 'finish') { stepFinish = String(e.reason || ''); return; }
-            if (e.type === 'tool_calls') { toolCalls = e.calls; }
+            if (e.type === 'tool_calls') { toolCalls = e.calls; toolBlocks = e.blocks || null; }
           }
         });
         stopSilenceWatch();
@@ -618,7 +619,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       }
       inTurn = [
         ...inTurn,
-        { role: 'assistant', content: stripThink(model, stepText), tool_calls: toolCalls.map(c => ({ id: c.id, name: c.name, argsText: c.argsText })) },
+        { role: 'assistant', content: stripThink(model, stepText), tool_calls: toolCalls.map(c => ({ id: c.id, name: c.name, argsText: c.argsText })), ...(toolBlocks?.length ? { blocks: toolBlocks } : {}) },
         ...toolMsgs
       ];
       if (loopGuard.note({ calls: toolCalls, ok: stepOk, failed: stepFailed, failKinds: stepFailKinds })) {

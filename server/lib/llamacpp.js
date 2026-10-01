@@ -269,6 +269,10 @@ export function parseOverflow(err) {
   if (fieldPrompt) prompt = asInt(fieldPrompt[1]);
   if (fieldCtx) ctx = asInt(fieldCtx[1]);
   if (!prompt || !ctx) {
+    const cmp = msg.match(/(\d+)\s*tokens?\s*>\s*(\d+)(?:\s*maximum)?/i);
+    if (cmp) { prompt = prompt || asInt(cmp[1]); ctx = ctx || asInt(cmp[2]); }
+  }
+  if (!prompt || !ctx) {
     const pair = msg.match(/\((\d+)\s*tokens?\)[^(]*\((\d+)\s*tokens?\)/);
     if (pair) { prompt = prompt || asInt(pair[1]); ctx = ctx || asInt(pair[2]); }
   }

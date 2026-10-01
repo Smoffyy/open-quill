@@ -40,11 +40,13 @@ export default function registerAdminRoutes(app) {
     const refreshed = await mcp.refreshTools(r.server.id);
     res.json({ server: refreshed.server || r.server, warning: refreshed.error || undefined });
   });
-  app.patch('/api/admin/mcp/:id', authMiddleware, adminOnly, (req, res) => {
+  app.patch('/api/admin/mcp/:id', authMiddleware, adminOnly, async (req, res) => {
     const r = mcp.update(req.params.id, req.body || {});
     if (r.error) return res.status(400).json({ error: r.error });
     logAudit(req, 'mcp.update', { meta: { name: r.server.name } });
-    res.json(r);
+    if (!r.server.enabled) return res.json(r);
+    const refreshed = await mcp.refreshTools(r.server.id);
+    res.json({ server: refreshed.server || r.server, warning: refreshed.error || undefined });
   });
   app.delete('/api/admin/mcp/:id', authMiddleware, adminOnly, (req, res) => {
     mcp.remove(req.params.id);

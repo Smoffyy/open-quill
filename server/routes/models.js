@@ -6,6 +6,7 @@ import { logAudit } from '../lib/audit.js';
 import { staged } from '../lib/releases.js';
 import { draftModels, publicModels, detectContextLength, timedFetch } from '../lib/models.js';
 import { sanitizeKwargs } from '../lib/kwargs.js';
+import { listAnthropicModels } from '../llm/index.js';
 import { sanitizeBadgesOff } from '../lib/badges.js';
 import { ROUTE_MATCHERS } from '../lib/router.js';
 import { DOCS_MODEL_STR, DOCS_MODEL_BOOL, DOCS_MODEL_INT, DOCS_MODEL_FLOAT, DOCS_BADGES, sanitizePairs, sanitizeCards, sanitizeDocsLinks, sanitizeStrList } from '../lib/modeldocs.js';
@@ -155,7 +156,10 @@ export default function registerModelRoutes(app) {
       const { spec, base, key } = providerSpec(prov);
       const headers = key ? { Authorization: `Bearer ${key}` } : {};
       let ids = [];
-      if (spec.protocol === 'ollama') {
+      if (spec.protocol === 'anthropic') {
+        if (!key) return res.status(400).json({ error: 'Add an API key to this connection first.' });
+        ids = (await listAnthropicModels({ base, key })).map(m => m.id);
+      } else if (spec.protocol === 'ollama') {
         const r = await timedFetch(base.replace(/\/v1$/, '') + '/api/tags', { headers });
         if (!r.ok) return res.status(502).json({ error: `Backend returned ${r.status}.` });
         const j = await r.json().catch(() => ({}));

@@ -60,6 +60,12 @@ function startHttp() {
     let body = '';
     req.on('data', c => { body += c; });
     req.on('end', () => {
+      if (req.method === 'DELETE') {
+        seen.push({ method: 'DELETE', session: req.headers['mcp-session-id'] || null });
+        res.writeHead(200);
+        res.end();
+        return;
+      }
       const m = JSON.parse(body || '{}');
       seen.push({ method: m.method, protocol: req.headers['mcp-protocol-version'] || null, session: req.headers['mcp-session-id'] || null, auth: req.headers.authorization || null });
       const send = (payload, sid) => {
@@ -197,13 +203,17 @@ test('an http server connects with its configured headers and reuses the session
   const failed = await mcp.execTool({ tool: `mcp_${sv.slug}_fail` });
   assert.equal(failed.error, 'the remote tool refused');
 
+  assert.equal((await mcp.execTool({ tool: `mcp_${sv.slug}_ping` })).ok, true, 'a tool error does not cost the session');
   assert.equal(seen.filter(r => r.method === 'initialize').length, 1, 'initialize runs once, not per call');
   assert.ok(seen.every(r => r.auth === 'Bearer fixture-token'), 'every request carries the configured header');
   // Required from revision 2025-06-18 on, and it must be the version the server
   // negotiated rather than the one this client asked for.
   assert.equal(seen[0].protocol, null, 'initialize has nothing to echo yet');
   assert.ok(seen.slice(1).every(r => r.protocol === '2025-06-18' && r.session), JSON.stringify(seen));
+  const session = seen[1].session;
   mcp.remove(sv.id);
+  await new Promise(r => { setTimeout(r, 100); });
+  assert.deepEqual(seen.filter(r => r.method === 'DELETE').map(r => r.session), [session], 'removing a server ends its session');
 });
 
 test('a rejected header and a public url are both refused with a reason', async () => {
@@ -297,4 +307,188 @@ test('a user cannot add more servers than the limit', () => {
   for (let i = 0; i < mcp.USER_SERVER_LIMIT; i++) assert.equal(remote('Server ' + i, '', u).error, undefined);
   assert.match(remote('One too many', '', u).error, /limit/i);
   assert.equal(mcp.list(u).length, mcp.USER_SERVER_LIMIT);
+});
+
+const RICH = path.join(path.dirname(FIXTURE), 'rich.mjs');
+fs.writeFileSync(RICH, String.raw`
+const out = o => process.stdout.write(JSON.stringify(o) + '\n');
+const schema = { type: 'object', properties: { file: { $ref: '#/$defs/path' } }, $defs: { path: { type: 'string' } }, required: ['file'] };
+const tool = (name, inputSchema) => ({ name, description: name, inputSchema: inputSchema || { type: 'object', properties: {} } });
+let added = false;
+const waiting = new Map();
+let buf = '';
+process.stdin.on('data', c => {
+  buf += c;
+  for (let i; (i = buf.indexOf('\n')) !== -1;) {
+    const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+    let m; try { m = JSON.parse(line); } catch { continue; }
+    if (!m.method && waiting.has(m.id)) { waiting.get(m.id)(m); waiting.delete(m.id); continue; }
+    if (m.method === 'initialize') out({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: m.params.protocolVersion, capabilities: { tools: { listChanged: true } } } });
+    else if (m.method === 'tools/list') {
+      const page = m.params && m.params.cursor === 'p2'
+        ? { tools: [tool('structured'), tool('argv'), tool('env'), ...(added ? [tool('added')] : [])] }
+        : { tools: [tool('files.read', schema), tool('echo_raw')], nextCursor: 'p2' };
+      out({ jsonrpc: '2.0', id: m.id, result: page });
+    } else if (m.method === 'tools/call') {
+      const reply = (result) => {
+        out({ jsonrpc: '2.0', id: m.id, result });
+        if (!added) { added = true; out({ jsonrpc: '2.0', method: 'notifications/tools/list_changed' }); }
+      };
+      const name = m.params.name;
+      if (name === 'files.read') {
+        waiting.set('srv-1', (r) => reply({ content: [{ type: 'text', text: r.result ? 'pinged back' : 'ping failed' }] }));
+        out({ jsonrpc: '2.0', id: 'srv-1', method: 'ping' });
+      } else if (name === 'structured') reply({ content: [], structuredContent: { temp: 21 } });
+      else if (name === 'argv') reply({ content: [{ type: 'text', text: JSON.stringify(process.argv.slice(2)) }] });
+      else if (name === 'env') reply({ content: [{ type: 'text', text: String(process.env.OQ_FIXTURE_VALUE) + '|' + String(process.env.DB_ENCRYPTION_KEY) }] });
+      else reply({ content: [{ type: 'text', text: JSON.stringify(m.params.arguments || {}) }] });
+    } else if (!m.method.startsWith('notifications/')) out({ jsonrpc: '2.0', id: m.id, error: { code: -32601, message: 'Method not found' } });
+  }
+});
+`);
+
+const richServer = (extra = {}) => mcp.create({ name: 'Rich', transport: 'stdio', command: NODE, args: `"${RICH}" "two words" plain`, ...extra }).server;
+
+test('arguments, environment lines and Windows commands are read the way people write them', () => {
+  assert.deepEqual(mcp.splitArgs(`-y "C:\\My Docs" 'single quoted' x"y z" ""`), ['-y', 'C:\\My Docs', 'single quoted', 'xy z', '']);
+  assert.deepEqual(mcp.splitArgs(`O'Brien it's`), ["O'Brien", "it's"], 'an apostrophe inside a word is not a quote');
+  assert.deepEqual(mcp.splitArgs('["a b", "c"]'), ['a b', 'c']);
+  assert.deepEqual(mcp.parseEnv('A=1\n# note\n bad line\nB="two words"\n1X=no\nC=x=y'), { A: '1', B: 'two words', C: 'x=y' });
+  assert.equal(mcp.shellQuote('plain-arg'), 'plain-arg');
+  assert.equal(mcp.shellQuote('two words'), '"two words"');
+  assert.equal(mcp.shellQuote('say "x"'), '"say ""x"""');
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oq-path-'));
+  fs.writeFileSync(path.join(dir, 'npx.cmd'), '');
+  fs.writeFileSync(path.join(dir, 'uvx.exe'), '');
+  const env = { Path: dir, PATHEXT: '.COM;.EXE;.BAT;.CMD' };
+  assert.deepEqual(mcp.resolveCommand('npx', env, 'win32'), { file: path.join(dir, 'npx.cmd'), shell: true }, 'a .cmd shim runs through the shell');
+  assert.deepEqual(mcp.resolveCommand('uvx', env, 'win32'), { file: path.join(dir, 'uvx.exe'), shell: false });
+  assert.deepEqual(mcp.resolveCommand('missing', env, 'win32'), { file: 'missing', shell: false });
+  assert.deepEqual(mcp.resolveCommand('npx', env, 'linux'), { file: 'npx', shell: false });
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('an event stream answer is matched to the request that asked for it', () => {
+  const sse = [
+    'event: message\ndata: {"jsonrpc":"2.0","method":"notifications/progress","params":{"progress":1}}',
+    'event: message\ndata: {"jsonrpc":"2.0","id":7,"method":"sampling/createMessage","params":{}}',
+    'event: message\ndata: {"jsonrpc":"2.0","id":3,"result":{"ok":true}}'
+  ].join('\n\n') + '\n\n';
+  assert.deepEqual(mcp.pickResponse(sse, 'text/event-stream', 3), { jsonrpc: '2.0', id: 3, result: { ok: true } });
+  assert.equal(mcp.pickResponse(sse, 'text/event-stream', 9), null);
+  assert.deepEqual(mcp.guessUrls('http://h:1'), ['http://h:1/mcp', 'http://h:1/sse']);
+  assert.deepEqual(mcp.guessUrls('http://h:1/custom'), []);
+});
+
+test('a richer stdio server: paging, odd names, server pings, structured results and live tool changes', async () => {
+  const sv = richServer({ env: 'OQ_FIXTURE_VALUE=from config' });
+  try {
+    const refreshed = await mcp.refreshTools(sv.id);
+    assert.equal(refreshed.error, undefined, String(refreshed.error));
+    assert.deepEqual(refreshed.server.tools.map(t => t.name), ['files.read', 'echo_raw', 'structured', 'argv', 'env'], 'every page of tools is read');
+
+    const schemas = mcp.toolSchemas().filter(s => s.function.name.startsWith(`mcp_${sv.slug}_`));
+    assert.ok(schemas.every(s => /^[A-Za-z0-9_-]{1,64}$/.test(s.function.name)), 'every advertised name is one a provider accepts');
+    const read = schemas.find(s => s.function.description.includes('files.read'));
+    assert.deepEqual(read.function.parameters.$defs, { path: { type: 'string' } }, 'a $ref keeps what it points at');
+    assert.equal(mcp.isMcpTool(read.function.name), true);
+
+    const pinged = await mcp.execTool({ tool: read.function.name, file: 'a.txt' });
+    assert.equal(pinged.content, 'pinged back', 'a ping from the server is answered mid-call');
+
+    const { toCall } = await import('../tools/args.js');
+    const raw = await mcp.execTool(toCall(`mcp_${sv.slug}_echo_raw`, '{"tool":"hammer","n":2}'));
+    assert.equal(raw.content, '{"tool":"hammer","n":2}', 'an argument named tool reaches the server');
+
+    assert.equal((await mcp.execTool({ tool: `mcp_${sv.slug}_structured` })).content, '{\n  "temp": 21\n}');
+    assert.equal((await mcp.execTool({ tool: `mcp_${sv.slug}_argv` })).content, '["two words","plain"]', 'a quoted argument stays whole');
+    assert.equal((await mcp.execTool({ tool: `mcp_${sv.slug}_env` })).content, 'from config|undefined', 'configured env arrives and the database key does not');
+
+    const deadline = Date.now() + 5000;
+    while (!mcp.byId(sv.id).tools.some(t => t.name === 'added') && Date.now() < deadline) await new Promise(r => { setTimeout(r, 50); });
+    assert.ok(mcp.byId(sv.id).tools.some(t => t.name === 'added'), 'a tools/list_changed notification refreshes the list');
+  } finally {
+    mcp.remove(sv.id);
+  }
+});
+
+test('renaming keeps a connection, changing how it connects resets it', async () => {
+  const sv = richServer();
+  try {
+    assert.equal((await mcp.refreshTools(sv.id)).server.status, 'connected');
+    mcp.update(sv.id, { name: 'Renamed' });
+    assert.equal(mcp.byId(sv.id).status, 'connected');
+    mcp.update(sv.id, { args: `"${RICH}"` });
+    assert.equal(mcp.byId(sv.id).status, 'new');
+  } finally {
+    mcp.remove(sv.id);
+  }
+});
+
+test('a Windows .cmd launcher found on PATH starts', { skip: process.platform !== 'win32' }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oq-shim-'));
+  fs.writeFileSync(path.join(dir, 'oq-fake-mcp.cmd'), `@echo off\r\n"${NODE}" "${RICH}" %*\r\n`);
+  const sv = mcp.create({ name: 'Shim', transport: 'stdio', command: 'oq-fake-mcp', args: '"with space"', env: `PATH=${dir};${process.env.PATH}` }).server;
+  try {
+    const refreshed = await mcp.refreshTools(sv.id);
+    assert.equal(refreshed.error, undefined, String(refreshed.error));
+    assert.equal((await mcp.execTool({ tool: `mcp_${sv.slug}_argv` })).content, '["with space"]');
+  } finally {
+    mcp.remove(sv.id);
+    await new Promise(r => { setTimeout(r, 300); });
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
+});
+
+test('a legacy SSE server is found from its bare address and works', async () => {
+  const streams = new Set();
+  let stream = null;
+  const legacy = http.createServer((req, res) => {
+    const url = new URL(req.url, 'http://x');
+    if (req.method === 'GET' && url.pathname === '/sse') {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' });
+      res.write('event: endpoint\ndata: /messages?sessionId=abc\n\n');
+      stream = res;
+      streams.add(res);
+      return;
+    }
+    if (req.method === 'POST' && url.pathname === '/messages') {
+      let body = '';
+      req.on('data', c => { body += c; });
+      req.on('end', () => {
+        res.writeHead(202);
+        res.end('Accepted');
+        const m = JSON.parse(body);
+        if (m.id == null) return;
+        const result = m.method === 'initialize' ? { protocolVersion: '2024-11-05', capabilities: { tools: {} } }
+          : m.method === 'tools/list' ? { tools: [{ name: 'legacy_echo', inputSchema: { type: 'object', properties: { text: { type: 'string' } } } }] }
+            : { content: [{ type: 'text', text: 'legacy:' + JSON.stringify(m.params.arguments) }] };
+        stream.write(`event: message\ndata: ${JSON.stringify({ jsonrpc: '2.0', id: m.id, result })}\n\n`);
+      });
+      return;
+    }
+    res.writeHead(404, { 'Content-Type': 'text/html' });
+    res.end('<!DOCTYPE html><html><head><title>Error</title></head><body><pre>Cannot POST ' + url.pathname + '</pre></body></html>');
+  });
+  const port = await new Promise(r => { legacy.listen(0, '127.0.0.1', () => r(legacy.address().port)); });
+  const sv = mcp.create({ name: 'Legacy', transport: 'http', url: `http://127.0.0.1:${port}` }).server;
+  const wrong = mcp.create({ name: 'Wrong path', transport: 'http', url: `http://127.0.0.1:${port}/nothing` }).server;
+  try {
+    const refreshed = await mcp.refreshTools(sv.id);
+    assert.equal(refreshed.error, undefined, String(refreshed.error));
+    assert.equal(mcp.byId(sv.id).url, `http://127.0.0.1:${port}/sse`, 'the working address is saved');
+    assert.deepEqual(refreshed.server.tools.map(t => t.name), ['legacy_echo']);
+    assert.equal((await mcp.execTool({ tool: `mcp_${sv.slug}_legacy_echo`, text: 'hi' })).content, 'legacy:{"text":"hi"}');
+
+    const failed = await mcp.refreshTools(wrong.id);
+    assert.match(failed.server.error, /^MCP HTTP 404: Nothing answers MCP at this URL/);
+    assert.doesNotMatch(failed.server.error, /<|DOCTYPE/, 'an HTML error page is reduced to its text');
+  } finally {
+    mcp.remove(sv.id);
+    mcp.remove(wrong.id);
+    for (const s of streams) s.destroy();
+    legacy.closeAllConnections?.();
+    await new Promise(r => { legacy.close(r); });
+  }
 });

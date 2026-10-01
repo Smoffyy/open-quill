@@ -31,7 +31,7 @@ const EXTRA_KEYS = [
   'Blank kwarg', 'An empty kwarg you fill in yourself.',
   'On/off thinking toggle with false and true.', 'A slider through low, medium, and high.',
   'Hidden kwarg meant to follow a thinking toggle.',
-  'change', 'changes', 'user', 'assistant', 'system',
+  'user', 'assistant', 'system',
   'Temperature', 'Top P', 'Top K', 'Min P', 'Repetition penalty', 'Presence penalty',
   'Frequency penalty', 'Max tokens', 'Context window', 'Seed', 'System prompt',
   'Extended-mode trigger', 'Standard-mode trigger',

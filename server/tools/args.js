@@ -1,6 +1,7 @@
 import { extractPartial, matchBracket } from './partial.js';
 
 export const CUT_OFF = Symbol('oq.cutOff');
+export const RAW_ARGS = Symbol('oq.rawArgs');
 
 const ARG_WRAPPERS = ['arguments', 'parameters', 'args', 'input', 'kwargs', 'parameter'];
 
@@ -64,7 +65,7 @@ export function parseArgs(argsText) {
 export function toCall(name, argsText) {
   let args;
   try { args = parseArgs(argsText); } catch { args = {}; }
-  return { ...args, tool: String(name || '').trim() };
+  return { ...args, tool: String(name || '').trim(), [RAW_ARGS]: args && typeof args === 'object' && !Array.isArray(args) ? args : {} };
 }
 
 export function cutOffOf(call) {

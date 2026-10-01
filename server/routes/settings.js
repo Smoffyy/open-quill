@@ -1,7 +1,7 @@
 import { db, uid, getSetting, setSetting } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
 import { oneShot } from '../llm/index.js';
-import { PROVIDER_TYPES, getProviders, typesForClient, isProviderType } from '../lib/providers.js';
+import { PROVIDER_TYPES, getProviders, typesForClient, isProviderType, publicProvider } from '../lib/providers.js';
 import { llamaEngine } from '../lib/llamacpp.js';
 import { logAudit } from '../lib/audit.js';
 import { draftGet, draftSet } from '../lib/draft.js';
@@ -73,7 +73,7 @@ export default function registerSettingsRoutes(app) {
   });
 
   app.get('/api/admin/provider-types', authMiddleware, adminOnly, (req, res) => res.json(typesForClient()));
-  app.get('/api/admin/providers', authMiddleware, adminOnly, (req, res) => res.json({ providers: getProviders(), types: typesForClient() }));
+  app.get('/api/admin/providers', authMiddleware, adminOnly, (req, res) => res.json({ providers: getProviders().map(publicProvider), types: typesForClient() }));
 
   app.get('/api/admin/providers/:id/engine', authMiddleware, adminOnly, async (req, res) => {
     const prov = getProviders().find(p => p.id === req.params.id);
@@ -101,8 +101,10 @@ export default function registerSettingsRoutes(app) {
     if (i === -1) return res.status(404).json({ error: 'not found' });
     const p = { ...list[i] };
     if ('name' in b) p.name = String(b.name || '').trim().slice(0, 120) || p.name;
+    const was = p.type;
     if ('type' in b && isProviderType(b.type)) p.type = b.type;
     if (!isProviderType(p.type)) p.type = 'lmstudio';
+    if (p.type !== was && !('base_url' in b) && (!p.base_url || p.base_url === PROVIDER_TYPES[was]?.defaultBaseUrl)) p.base_url = PROVIDER_TYPES[p.type].defaultBaseUrl;
     if ('base_url' in b) p.base_url = String(b.base_url || '').trim().slice(0, 500) || PROVIDER_TYPES[p.type].defaultBaseUrl;
     if ('api_key' in b) p.api_key = String(b.api_key || '').slice(0, 500);
     list[i] = p;

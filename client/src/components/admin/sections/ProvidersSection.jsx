@@ -7,6 +7,33 @@ import { t } from '../../../i18n.jsx';
 import { modelIconFor, useLogos } from '../../../lib/logos.js';
 import { Skel, SkelRows } from '../../ui/Skeleton.jsx';
 
+function KeyField({ p, optional, onSave }) {
+  const [text, setText] = useState('');
+  const commit = () => {
+    if (!text.trim()) return;
+    onSave({ api_key: text.trim(), has_key: true, key_hint: text.trim().length >= 12 ? '\u2026' + text.trim().slice(-4) : '' });
+    setText('');
+  };
+  const placeholder = p.has_key
+    ? (p.key_hint ? t('Saved key ending {hint}. Type to replace it.', { hint: p.key_hint }) : t('A key is saved. Type to replace it.'))
+    : optional ? t('not needed locally') : t('required');
+  return (
+    <Field label={t('API key')} optional={optional}
+      hint={p.has_key ? t('Held server-side and never sent to the browser. A new key is saved when you leave the field.') : t('Held server-side and never sent to the browser.')}>
+      <div className="cp-inline">
+        <Input mono type="password" value={text} autoComplete="off" placeholder={placeholder}
+          aria-label={t('API key')}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }} />
+        {p.has_key && (
+          <IconBtn kind="quiet" label={t('Remove saved key')} onClick={() => { setText(''); onSave({ api_key: '', has_key: false, key_hint: '' }); }}><Trash /></IconBtn>
+        )}
+      </div>
+    </Field>
+  );
+}
+
 function Engine({ e }) {
   const rows = [];
   if (e.ctx > 0) rows.push([t('Context per slot'), fmtInt(e.ctx) + ' ' + t('tokens'), true]);
@@ -182,12 +209,7 @@ export default function ProvidersSection() {
                 <Input mono value={p.base_url || ''} placeholder={type.defaultBaseUrl || ''}
                   onChange={(e) => patchProvider(p.id, { base_url: e.target.value })} />
               </Field>
-              <Field label={t('API key')} optional={!!type.keyOptional}
-                hint={t('Held server-side and never sent to the browser.')}>
-                <Input mono type="password" value={p.api_key || ''} autoComplete="off"
-                  placeholder={type.keyOptional ? t('not needed locally') : t('required')}
-                  onChange={(e) => patchProvider(p.id, { api_key: e.target.value })} />
-              </Field>
+              <KeyField p={p} optional={!!type.keyOptional} onSave={(patch) => patchProvider(p.id, patch)} />
             </Fields>
             {state?.engine?.ok && <Engine e={state.engine} />}
           </Card>

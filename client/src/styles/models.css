@@ -255,7 +255,11 @@
 .mc-folder-edit .cp-input { height: var(--cp-h-sm); }
 
 .mc-tabs-row { display: flex; align-items: center; gap: var(--cp-2); border-bottom: 1px solid var(--cp-line); }
-.mc-tabs-row .cp-tabs { flex: 1; min-width: 0; border-bottom: 0; }
+.mc-tabs-row .cp-tabs { flex: 1; min-width: 0; border-bottom: 0; scrollbar-width: auto; }
+.mc-tabs-row .cp-tabs::-webkit-scrollbar { display: block; }
+@supports not selector(::-webkit-scrollbar) {
+  .mc-tabs-row .cp-tabs { scrollbar-width: thin; }
+}
 .mc-tabs-row > .btn { flex-shrink: 0; }
 
 .cp-menu-item > .mc-menu-two { display: flex; flex-direction: column; gap: 1px; padding: var(--cp-1) 0; white-space: normal; }

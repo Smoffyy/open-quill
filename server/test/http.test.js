@@ -1007,3 +1007,198 @@ test('consult settings are admin-only, sanitised and add their block', async () 
   await browser('POST', '/api/admin/models/remove', { body: { ids: [asker, helper] } });
   await browser('POST', '/api/admin/changes/publish', { body: {} });
 });
+
+function chatTurn(send, { timeoutMs = 20000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`, { headers: { Cookie: cookie, Origin: ORIGIN } });
+    const got = [];
+    const finish = (fn, arg) => { clearTimeout(timer); try { ws.terminate(); } catch {} fn(arg); };
+    const timer = setTimeout(() => finish(reject, new Error('no done frame: ' + JSON.stringify(got.slice(-5)))), timeoutMs);
+    ws.on('open', () => ws.send(JSON.stringify(send)));
+    ws.on('message', (raw) => {
+      let m;
+      try { m = JSON.parse(raw); } catch { return; }
+      if (SESSION_FRAMES.has(m?.type)) return;
+      got.push(m);
+      if (m.type === 'done' && m.chatId === send.chatId) finish(resolve, got);
+    });
+    ws.on('error', (e) => finish(reject, e));
+  });
+}
+
+async function connection(type, base_url, api_key) {
+  const id = (await browser('POST', '/api/admin/providers', { body: { type } })).json.id;
+  const res = await browser('PATCH', `/api/admin/providers/${id}`, { body: { base_url, api_key } });
+  assert.equal(res.status, 200);
+  return id;
+}
+
+const lastAssistant = (saved) => [...(saved.messages || [])].reverse().find(m => m.role === 'assistant');
+
+test('switching a connection type moves an untouched address to the new default', async () => {
+  const id = (await browser('POST', '/api/admin/providers', { body: { type: 'llamacpp' } })).json.id;
+  await browser('PATCH', `/api/admin/providers/${id}`, { body: { type: 'anthropic' } });
+  let p = (await browser('GET', '/api/admin/providers')).json.providers.find(x => x.id === id);
+  assert.equal(p.base_url, 'https://api.anthropic.com');
+  await browser('PATCH', `/api/admin/providers/${id}`, { body: { base_url: 'https://proxy.example/anthropic' } });
+  await browser('PATCH', `/api/admin/providers/${id}`, { body: { type: 'openai' } });
+  p = (await browser('GET', '/api/admin/providers')).json.providers.find(x => x.id === id);
+  assert.equal(p.base_url, 'https://proxy.example/anthropic', 'an address someone typed is never replaced');
+  assert.equal(p.has_key, false);
+  await browser('PATCH', `/api/admin/providers/${id}`, { body: { api_key: 'sk-ant-secret-value-1234' } });
+  const raw = (await browser('GET', '/api/admin/providers')).text;
+  assert.doesNotMatch(raw, /sk-ant-secret/, 'a saved key never travels back to the browser');
+  p = JSON.parse(raw).providers.find(x => x.id === id);
+  assert.deepEqual([p.has_key, p.key_hint, 'api_key' in p], [true, '…1234', false]);
+  await browser('DELETE', `/api/admin/providers/${id}`);
+});
+
+test('a Claude model runs a full chat turn with thinking and a tool round trip', async () => {
+  const { mockAnthropic } = await import('./mockapis.js');
+  const mock = await mockAnthropic({
+    key: 'sk-ant-e2e',
+    models: [{ id: 'claude-opus-5-5', max_input_tokens: 1000000, max_tokens: 128000 }],
+    respond: (body) => {
+      if (!body.stream) return { text: 'Multiplying numbers' };
+      const results = body.messages.flatMap(m => (Array.isArray(m.content) ? m.content : [])).filter(b => b.type === 'tool_result');
+      if (!results.length) return { thinking: 'I should use the calculator.', text: 'Let me check.', tools: [{ id: 'toolu_e2e', name: 'calculator', input: { expression: '17*23' } }] };
+      return { thinking: 'The tool said 391.', text: 'The product is 391.' };
+    }
+  });
+  try {
+    const provider_id = await connection('anthropic', mock.url, 'sk-ant-e2e');
+    const found = (await browser('GET', `/api/admin/discover-models?provider=${provider_id}`)).json;
+    assert.deepEqual(found.models.map(m => m.id), ['claude-opus-5-5']);
+    const model = (await browser('POST', '/api/admin/models', { body: { display_name: 'Claude', internal_name: 'claude-opus-5-5', provider_id, has_reasoning: true, calculator_allowed: true } })).json.id;
+    const chat = (await browser('POST', '/api/chats', { body: {} })).json;
+    const frames = await chatTurn({ type: 'chat', chatId: chat.id, modelId: model, content: 'What is 17*23?' });
+    assert.equal(frames.find(f => f.type === 'error'), undefined, JSON.stringify(frames.find(f => f.type === 'error')));
+    for (const r of mock.requests) assert.equal(r.rejected, undefined, r.rejected);
+    const turns = mock.requests.filter(r => r.body.stream);
+    assert.equal(turns.length, 2);
+    assert.match(turns[0].body.system, /<tool name="calculator">/);
+    assert.deepEqual(turns[0].body.tools.map(t => t.name), ['calculator']);
+    const replay = turns[1].body.messages;
+    assert.equal(replay.at(-2).content[0].type, 'thinking', 'the signed thinking block goes back with the tool call');
+    assert.match(replay.at(-1).content[0].content, /391/);
+    assert.ok(frames.some(f => f.type === 'reasoning'), 'thinking reaches the browser');
+    assert.match(lastAssistant((await browser('GET', `/api/chats/${chat.id}`)).json).content, /The product is 391\./);
+
+    const pg = await browser('POST', '/api/admin/playground/stream', { body: { modelId: model, source: 'draft', messages: [{ role: 'user', content: 'What is 17*23?' }] } });
+    assert.equal(pg.status, 200);
+    assert.match(pg.text, /"type":"start"/);
+    assert.doesNotMatch(pg.text, /"type":"error"/, pg.text);
+    await browser('POST', '/api/admin/models/remove', { body: { ids: [model] } });
+    await browser('DELETE', `/api/admin/providers/${provider_id}`);
+  } finally {
+    await mock.close();
+  }
+});
+
+test('an OpenAI model runs a full chat turn with a tool round trip and a refused parameter', async () => {
+  const { mockOpenAi } = await import('./mockapis.js');
+  const mock = await mockOpenAi({
+    key: 'sk-e2e',
+    models: ['gpt-mock', 'o-mock'],
+    rejects: { 'o-mock': { temperature: "Unsupported value: 'temperature' does not support 0.3 with this model. Only the default (1) value is supported." } },
+    respond: (body) => {
+      if (!body.stream) return { text: 'Multiplying numbers' };
+      if (!body.messages.some(m => m.role === 'tool')) return { tools: [{ id: 'call_e2e', name: 'calculator', input: { expression: '17*23' } }] };
+      return { text: 'It is 391.' };
+    }
+  });
+  try {
+    const provider_id = await connection('openai', mock.url, 'sk-e2e');
+    const found = (await browser('GET', `/api/admin/discover-models?provider=${provider_id}`)).json;
+    assert.deepEqual(found.models.map(m => m.id), ['gpt-mock', 'o-mock']);
+    const id = (await browser('POST', '/api/admin/models', { body: { display_name: 'o', internal_name: 'o-mock', provider_id, calculator_allowed: true } })).json.id;
+    await browser('PATCH', '/api/admin/models', { body: { rows: [{ id, temperature: 0.3 }] } });
+    const chat = (await browser('POST', '/api/chats', { body: {} })).json;
+    const frames = await chatTurn({ type: 'chat', chatId: chat.id, modelId: id, content: 'What is 17*23?' });
+    assert.equal(frames.find(f => f.type === 'error'), undefined, JSON.stringify(frames.find(f => f.type === 'error')));
+    const turns = mock.requests.filter(r => r.body.stream && !r.rejected);
+    assert.equal(turns.length, 2);
+    assert.equal(turns[0].body.temperature, undefined, 'the refused temperature is dropped and the turn goes through');
+    const tool = turns[1].body.messages.find(m => m.role === 'tool');
+    assert.equal(tool.tool_call_id, 'call_e2e');
+    assert.match(tool.content, /391/);
+    assert.match(lastAssistant((await browser('GET', `/api/chats/${chat.id}`)).json).content, /It is 391\./);
+    await browser('POST', '/api/admin/models/remove', { body: { ids: [id] } });
+    await browser('DELETE', `/api/admin/providers/${provider_id}`);
+  } finally {
+    await mock.close();
+  }
+});
+
+test('a wrong key surfaces as a readable error in the chat', async () => {
+  const { mockAnthropic } = await import('./mockapis.js');
+  const mock = await mockAnthropic({ key: 'right', respond: () => ({ text: 'never' }) });
+  try {
+    const provider_id = await connection('anthropic', mock.url, 'wrong');
+    const model = (await browser('POST', '/api/admin/models', { body: { display_name: 'k', internal_name: 'claude-opus-5-5', provider_id } })).json.id;
+    const chat = (await browser('POST', '/api/chats', { body: {} })).json;
+    const frames = await chatTurn({ type: 'chat', chatId: chat.id, modelId: model, content: 'hi' });
+    assert.match(frames.find(f => f.type === 'error')?.error || '', /Anthropic rejected the API key/);
+    await browser('POST', '/api/admin/models/remove', { body: { ids: [model] } });
+    await browser('DELETE', `/api/admin/providers/${provider_id}`);
+  } finally {
+    await mock.close();
+  }
+});
+
+test('a Claude model calls an MCP tool an admin added, inside a real chat turn', async () => {
+  const os = await import('node:os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oq-e2e-mcp-'));
+  const fixture = path.join(dir, 'server.mjs');
+  fs.writeFileSync(fixture, String.raw`
+let buf = '';
+const out = o => process.stdout.write(JSON.stringify(o) + '\n');
+process.stdin.on('data', c => {
+  buf += c;
+  for (let i; (i = buf.indexOf('\n')) !== -1;) {
+    const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
+    if (m.method === 'initialize') out({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: m.params.protocolVersion, capabilities: { tools: {} } } });
+    else if (m.method === 'tools/list') out({ jsonrpc: '2.0', id: m.id, result: { tools: [{ name: 'lookup.order', description: 'Find an order', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } }] } });
+    else if (m.method === 'tools/call') out({ jsonrpc: '2.0', id: m.id, result: { content: [{ type: 'text', text: 'order ' + m.params.arguments.id + ' shipped on Tuesday' }] } });
+  }
+});
+`);
+  const added = await browser('POST', '/api/admin/mcp', { body: { name: 'Orders', transport: 'stdio', command: process.execPath, args: `"${fixture}"` } });
+  assert.equal(added.status, 200, added.text);
+  assert.equal(added.json.server.status, 'connected', added.json.warning);
+  const server = added.json.server;
+  const advertised = (body) => body.tools?.find(t => /Find an order/.test(t.description))?.name;
+  let toolName = '';
+
+  const { mockAnthropic } = await import('./mockapis.js');
+  const mock = await mockAnthropic({
+    key: 'sk-ant-mcp',
+    respond: (body) => {
+      if (!body.stream) return { text: 'Order status' };
+      const done = body.messages.some(m => Array.isArray(m.content) && m.content.some(b => b.type === 'tool_result'));
+      toolName = advertised(body) || toolName;
+      return done ? { text: 'Your order shipped on Tuesday.' } : { tools: [{ id: 'toolu_mcp', name: toolName, input: { id: 'A-17' } }] };
+    }
+  });
+  try {
+    const provider_id = await connection('anthropic', mock.url, 'sk-ant-mcp');
+    const model = (await browser('POST', '/api/admin/models', { body: { display_name: 'Claude MCP', internal_name: 'claude-opus-5-5', provider_id, mcp_allowed: true } })).json.id;
+    const chat = (await browser('POST', '/api/chats', { body: {} })).json;
+    const frames = await chatTurn({ type: 'chat', chatId: chat.id, modelId: model, content: 'Where is order A-17?' });
+    assert.equal(frames.find(f => f.type === 'error'), undefined, JSON.stringify(frames.find(f => f.type === 'error')));
+    for (const r of mock.requests) assert.equal(r.rejected, undefined, r.rejected);
+    const first = mock.requests.find(r => r.body.stream);
+    assert.match(toolName, new RegExp(`^mcp_${server.slug}_lookup_order_[a-z0-9]{4}$`), 'the dotted MCP name is offered under one the API accepts');
+    assert.ok(first.body.tools.some(t => t.name === toolName));
+    const result = mock.requests.filter(r => r.body.stream)[1].body.messages.at(-1).content[0];
+    assert.match(result.content, /order A-17 shipped on Tuesday/);
+    assert.match(lastAssistant((await browser('GET', `/api/chats/${chat.id}`)).json).content, /shipped on Tuesday/);
+    await browser('POST', '/api/admin/models/remove', { body: { ids: [model] } });
+    await browser('DELETE', `/api/admin/providers/${provider_id}`);
+  } finally {
+    await browser('DELETE', `/api/admin/mcp/${server.id}`);
+    await mock.close();
+    await new Promise(r => { setTimeout(r, 300); });
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
+});

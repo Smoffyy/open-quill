@@ -3,7 +3,9 @@ import { resolveSection, DEFAULT_SECTION } from './nav.jsx';
 import { useCatalog } from './state/useCatalog.js';
 import { useWorkspace, promptFeaturesOf } from './state/useWorkspace.js';
 import { useMembers } from './state/useMembers.js';
-import { createHistory } from './state/history.js';
+import { createHistory, historyKey } from './state/history.js';
+import { isMacPlatform } from '../../lib/keybinds.js';
+import { isTypingTarget } from '../../lib/keyboard.js';
 import { usePresence } from './state/usePresence.js';
 import { useChanges } from '../../lib/useChanges.js';
 import { toast } from '../../lib/toast.js';
@@ -14,6 +16,25 @@ export const useAdmin = () => useContext(Ctx);
 
 const TAB_KEY = 'oq-admin-section';
 
+export function useUndoKeys(rootRef) {
+  const { undo, redo } = useAdmin();
+  useEffect(() => {
+    const onKey = (e) => {
+      const action = e.defaultPrevented ? null : historyKey(e, isMacPlatform());
+      if (!action) return;
+      const el = document.activeElement;
+      if (isTypingTarget(el)) return;
+      const owner = el?.closest?.('[role="dialog"]');
+      if (owner && owner !== rootRef.current) return;
+      e.preventDefault();
+      if (action === 'undo') undo();
+      else redo();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo, rootRef]);
+}
+
 function firstSection() {
   try {
     const raw = localStorage.getItem(TAB_KEY);
@@ -22,13 +43,13 @@ function firstSection() {
   return DEFAULT_SECTION;
 }
 
-export function AdminProvider({ user, onClose, children }) {
-  const [section, setSectionRaw] = useState(firstSection);
+export function AdminProvider({ user, onClose, fixedSection, children }) {
+  const [section, setSectionRaw] = useState(() => fixedSection || firstSection());
   const [ask, setAsk] = useState(null);
   const scrollMem = useRef(new Map());
 
   const setSection = useCallback((id) => setSectionRaw(resolveSection(id)), []);
-  useEffect(() => { try { localStorage.setItem(TAB_KEY, section); } catch {} }, [section]);
+  useEffect(() => { if (!fixedSection) try { localStorage.setItem(TAB_KEY, section); } catch {} }, [section, fixedSection]);
 
   const confirm = useCallback((spec) => setAsk(spec), []);
 

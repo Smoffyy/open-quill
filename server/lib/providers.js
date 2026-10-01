@@ -29,7 +29,12 @@ export const PROVIDER_TYPES = {
   openai: {
     label: 'OpenAI API', defaultBaseUrl: 'https://api.openai.com/v1', protocol: 'openai', keyOptional: false,
     samplers: ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens', 'stop'],
-    remap: {}
+    remap: { max_tokens: 'max_completion_tokens' }
+  },
+  anthropic: {
+    label: 'Anthropic API', defaultBaseUrl: 'https://api.anthropic.com', protocol: 'anthropic', keyOptional: false,
+    samplers: ['temperature', 'top_p', 'top_k', 'max_tokens', 'stop'],
+    remap: { stop: 'stop_sequences' }, stopMax: 8
   },
   openrouter: {
     label: 'OpenRouter', defaultBaseUrl: 'https://openrouter.ai/api/v1', protocol: 'openai', keyOptional: false,
@@ -67,6 +72,11 @@ export function typesForClient() {
 
 export const isLocalType = (type) => !!PROVIDER_TYPES[type]?.local;
 
+export function publicProvider(p) {
+  const key = String(p?.api_key || '');
+  return { id: p.id, name: p.name, type: p.type, base_url: p.base_url, has_key: !!key, key_hint: key.length >= 12 ? '…' + key.slice(-4) : '' };
+}
+
 export function getProviders() {
   const list = getSetting('providers', null);
   if (Array.isArray(list) && list.length) return list;
@@ -84,6 +94,7 @@ export function providerSpec(provider) {
   const spec = (isProviderType(provider?.type) && PROVIDER_TYPES[provider.type]) || PROVIDER_TYPES.llamacpp;
   let base = (provider?.base_url || spec.defaultBaseUrl).replace(/\/+$/, '');
   if (spec.protocol === 'openai' && !/\/v\d+$/.test(base)) base += '/v1';
+  if (spec.protocol === 'anthropic') base = base.replace(/\/v1$/, '');
   return { spec, base, key: provider?.api_key || '' };
 }
 

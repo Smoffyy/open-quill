@@ -25,6 +25,7 @@ import { screenCommand, normalizeRel, compileSearchPattern } from '../lib/sandbo
 import { resolveToolName, makeToolResolver, nearestTool, SANDBOX_TOOLS } from '../tools/aliases.js';
 import { isPrivateAddress, hostAllowed } from '../lib/egress.js';
 import { resolveRouted, ruleMatches, routerRules, modelLabel } from '../lib/router.js';
+import { playgroundHistory, sourceOf, sanitizeSuites, MAX_CONTENT, MAX_TURNS, SUITE_LIMITS } from '../lib/playground.js';
 import { preferredChild } from '../lib/tree.js';
 import { looksTextual, isDocumentName, extractDocument, decodeText, rtfText } from '../lib/extract.js';
 import zlib from 'zlib';
@@ -2813,4 +2814,42 @@ test('changes that only make sense together are published together', () => {
   assert.deepEqual(expandKeys(changes, ['model:c'], 'discard'), ['model:c'], 'but dropping one leaves the order alone');
   assert.deepEqual(expandKeys(changes, ['setting:ui_preset']).sort(), ['setting:ui_preset', 'theme:n', 'themes:active'], 'a layout ships with its base preset and the theme it points at');
   assert.deepEqual(expandKeys(changes, ['nope']), [], 'unknown keys are ignored');
+});
+
+test('playground history keeps only known roles and caps each message', () => {
+  const out = playgroundHistory([
+    { role: 'system', content: 'be brief' },
+    { role: 'tool', content: 'x' },
+    { role: '__proto__', content: 'x' },
+    { role: 'user', content: '   ' },
+    { role: 'assistant', content: '' },
+    { role: 'user', content: 'a'.repeat(MAX_CONTENT + 10) },
+    { role: 'user', content: 42 }
+  ]);
+  assert.deepEqual(out.map(m => m.role), ['system', 'assistant', 'user']);
+  assert.equal(out[2].content.length, MAX_CONTENT);
+  assert.equal(playgroundHistory(Array.from({ length: MAX_TURNS + 5 }, () => ({ role: 'user', content: 'x' }))).length, MAX_TURNS);
+  assert.deepEqual(playgroundHistory('nope'), []);
+  assert.equal(sourceOf('live'), 'live');
+  assert.equal(sourceOf('anything'), 'draft');
+});
+
+test('playground test sets are trimmed, capped and given unique ids', () => {
+  const out = sanitizeSuites([
+    { id: 'same', name: '  Checks  ', cases: [{ id: 'c', prompt: 'hi', expect: 'hello' }, { id: 'c', prompt: 'again' }, { prompt: '  ' }] },
+    { id: 'same', name: '', cases: 'nope' },
+    null,
+    { id: 'bad id!', cases: [{ prompt: 'x'.repeat(SUITE_LIMITS.prompt + 1) }] }
+  ]);
+  assert.equal(out.length, 3);
+  assert.equal(out[0].name, 'Checks');
+  assert.deepEqual(out[0].cases.map(c => c.prompt), ['hi', 'again']);
+  assert.notEqual(out[0].cases[0].id, out[0].cases[1].id);
+  assert.equal(out[0].cases[1].expect, '');
+  assert.notEqual(out[1].id, out[0].id);
+  assert.equal(out[1].name, 'Untitled set');
+  assert.deepEqual(out[1].cases, []);
+  assert.notEqual(out[2].id, 'bad id!');
+  assert.equal(out[2].cases[0].prompt.length, SUITE_LIMITS.prompt);
+  assert.equal(sanitizeSuites(Array.from({ length: SUITE_LIMITS.sets + 3 }, () => ({}))).length, SUITE_LIMITS.sets);
 });

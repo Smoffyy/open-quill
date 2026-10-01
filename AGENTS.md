@@ -96,6 +96,10 @@ Dependency direction is **routes to lib**; `lib/ws/` never imports from `routes/
 
 **System prompt** (`lib/promptblocks.js`, `lib/systemprompt.js`): a model's `system_prompt` is the whole template and nothing is appended behind it. `promptblocks.js` is the registry: one entry per tool (`<tool name>` inside `<tools>`) or piece of member context (`<section name>` inside `<context>`), with its eligibility and default text. `syncModelPrompt` adds or removes blocks when a tool flag or workspace feature changes (diff-based, so an edited block is kept and a deleted one is not re-added); `renderPrompt` drops blocks whose tool is off this turn or whose `{{variables}}` are all empty, then fills the variables. `systemprompt.js` computes the per-turn tool state and variable values (lazily, so an inactive block never walks the workspace). A new tool is one registry entry, its runtime flag in `toolState`/`activeBlocks`, any variables in `systemPrompt`, and a line in the Prompts tab's variable list. A shipped default text is not rewritten in stored prompts, so a wording change reaches new models only.
 
+**Providers** (`lib/providers.js`, `llm/`): every connection type names a `protocol`, `openai`, `ollama` or `anthropic`, and `llm/stream.js` and `llm/oneshot.js` branch on it. Anthropic goes through `llm/anthropic.js` and the official `@anthropic-ai/sdk`, handed a fetch that calls the guarded global so the egress rules still apply; it maps the OpenAI-shaped history (system messages, `image_url` parts, `tool_calls`, `role: 'tool'`) onto the Messages API, and the signed thinking blocks of a tool step ride on that step's assistant message as `blocks` so the next request can replay them. `llm/compat.js` remembers, per connection and model, a parameter the provider refused, and drops or renames it on the retry. Connection keys never leave the server: `GET /api/admin/providers` sends `publicProvider()` (`has_key`, `key_hint`). Provider behaviour is tested against strict mocks of both APIs in `test/mockapis.js`, in process by `providers.test.js` and end to end by `http.test.js`.
+
+**MCP** (`lib/mcp.js`): stdio servers (admin only), streamable HTTP and the 2024 HTTP+SSE transport, which is used for a `/sse` address or when streamable HTTP is refused. On Windows a command is resolved on the PATH and a `.cmd` shim such as `npx` runs through the shell with every argument quoted, and stopping a server kills its process tree.
+
 **Context window** (`lib/ctxwindow.js` with `lib/convo.js`): prompt size is measured with the model's real tokenizer, never estimated. `slideToFit` binary-searches how many older messages to drop while always protecting the system prompt and the newest user message; oversized survivors get their middle cut rather than being dropped whole, and images get their own eviction pass.
 
 ## Client
@@ -117,10 +121,10 @@ client/src/
     dialogs/     modal windows opened from anywhere (search, command palette, shortcuts, ...)
     settings/    SettingsModal and one component per tab
     pages/       full views: projects, scheduled, all chats, model docs, playground, login
-    artifacts/, admin/, builder/, setup/   feature areas
+    artifacts/, admin/, builder/, setup/, playground/   feature areas
 ```
 
-The admin panel, playground, model docs, setup guide and build mode are `React.lazy` chunks, so members never download them; a stylesheet only one of them uses is imported by that component, not by `app.css`.
+The admin panel, playground, model docs, setup guide and build mode are `React.lazy` chunks, so members never download them; a stylesheet only one of them uses is imported by that component, not by `app.css`. The playground (`pages/Playground.jsx`, parts in `playground/`) mounts the admin store with `AdminProvider fixedSection="models"`, so its settings panel is the admin model `Inspector` itself and edits stage to the draft exactly as in the admin panel; its runs go through `routes/playground.js`, which renders the prompt with `systemPrompt()` like an incognito chat and resolves a `live` column from the published snapshot.
 
 `client/src/App.jsx` holds top-level state, WS wiring and routing. Its state lives in `client/src/lib/`, one hook per concern; App wires them together and owns the ordering between them, nothing more:
 

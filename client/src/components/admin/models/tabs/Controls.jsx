@@ -28,7 +28,7 @@ const CONTROL_TAG = {
   toggle: tk('toggle'), slider: tk('slider'), range: tk('range'), select: tk('dropdown')
 };
 
-function legacyKwarg(m) {
+export function legacyKwarg(m) {
   const levels = (Array.isArray(m.effort_levels) && m.effort_levels.length)
     ? m.effort_levels
     : String(m.effort_levels || 'low, medium, high').split(',').map(x => x.trim()).filter(Boolean);

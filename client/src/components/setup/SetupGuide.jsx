@@ -111,7 +111,8 @@ function ConnectionStep({ types, draft, setDraft, probe, onTest, busy }) {
   const pick = (type) => setDraft(d => ({
     ...d, type,
     base_url: types[type]?.defaultBaseUrl || '',
-    api_key: types[type]?.keyOptional ? '' : d.api_key
+    api_key: types[type]?.keyOptional ? '' : d.api_key,
+    keyTouched: d.keyTouched || !!types[type]?.keyOptional
   }));
 
   const group = (label, hint, list) => (
@@ -145,8 +146,8 @@ function ConnectionStep({ types, draft, setDraft, probe, onTest, busy }) {
         <label className="sg-field">
           <span className="sg-label">{spec.keyOptional ? t('API key, not needed here') : t('API key')}</span>
           <input className="sg-input mono" type="password" value={draft.api_key} autoComplete="off"
-            placeholder={spec.keyOptional ? t('leave empty') : t('required')}
-            onChange={(e) => setDraft(d => ({ ...d, api_key: e.target.value }))} />
+            placeholder={draft.hasKey && !draft.keyTouched ? t('A key is saved. Type to replace it.') : spec.keyOptional ? t('leave empty') : t('required')}
+            onChange={(e) => setDraft(d => ({ ...d, api_key: e.target.value, keyTouched: true }))} />
           <span className="sg-hint">{t('Stored on the server and never sent to the browser.')}</span>
         </label>
       </div>
@@ -285,7 +286,7 @@ export default function SetupGuide({ appName, onDone }) {
       setTypes(r.types || {});
       if (first) {
         setProviderId(first.id);
-        setDraft({ type: first.type, base_url: first.base_url || '', api_key: first.api_key || '' });
+        setDraft({ type: first.type, base_url: first.base_url || '', api_key: '', hasKey: !!first.has_key, keyTouched: false });
       }
     }).catch(() => {});
     return () => { live = false; };
@@ -297,7 +298,9 @@ export default function SetupGuide({ appName, onDone }) {
     setBusy(true);
     setProbe(null);
     try {
-      await api.patch('/api/admin/providers/' + providerId, draft);
+      await api.patch('/api/admin/providers/' + providerId, {
+        type: draft.type, base_url: draft.base_url, ...(draft.keyTouched ? { api_key: draft.api_key } : {})
+      });
       const r = await api.get('/api/admin/discover-models?provider=' + encodeURIComponent(providerId));
       const list = r.models || [];
       if (!alive.current) return;

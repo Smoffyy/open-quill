@@ -1,6 +1,6 @@
 import '../../styles/admin.css';
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { AdminProvider, useAdmin } from './store.jsx';
+import { AdminProvider, useAdmin, useUndoKeys } from './store.jsx';
 import { NAV, SECTIONS, sectionMeta } from './nav.jsx';
 import { Confirm, SectionSkeleton } from './ui.jsx';
 import { ReviewButton, ReviewDialog, Faces } from './changes/Review.jsx';
@@ -31,9 +31,6 @@ import EventsSection from './sections/EventsSection.jsx';
 import StorageSection from './sections/StorageSection.jsx';
 import { useDismiss } from '../../lib/dismiss.js';
 import { useFocusTrap } from '../../lib/focus.js';
-import { isMacPlatform } from '../../lib/keybinds.js';
-import { isTypingTarget } from '../../lib/keyboard.js';
-import { historyKey } from './state/history.js';
 
 const VIEWS = {
   __proto__: null,
@@ -156,7 +153,7 @@ function Finder() {
 }
 
 function Shell() {
-  const { section, setSection, catalog, members, onClose, ask, setAsk, keepScroll, workspace, undo, redo, present } = useAdmin();
+  const { section, setSection, catalog, members, onClose, ask, setAsk, keepScroll, workspace, present } = useAdmin();
   const scrollRef = useRef(null);
   const meta = sectionMeta(section);
   const View = VIEWS[section] || OverviewSection;
@@ -166,21 +163,7 @@ function Shell() {
   const scrimRef = useRef(null);
   useFocusTrap(scrimRef, (e) => { if (!e?.target?.closest?.('input, textarea, select')) onClose(); }, { initial: scrimRef });
 
-  useEffect(() => {
-    const onKey = (e) => {
-      const action = e.defaultPrevented ? null : historyKey(e, isMacPlatform());
-      if (!action) return;
-      const el = document.activeElement;
-      if (isTypingTarget(el)) return;
-      const owner = el?.closest?.('[role="dialog"]');
-      if (owner && owner !== scrimRef.current) return;
-      e.preventDefault();
-      if (action === 'undo') undo();
-      else redo();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo]);
+  useUndoKeys(scrimRef);
 
   const counts = { models: catalog.models.length, members: members.members.length, providers: catalog.providers.length };
   const showSkeleton = useSkeleton(!workspace.ready);

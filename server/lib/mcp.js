@@ -1,14 +1,22 @@
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
 import { db, getSetting, setSetting, uid } from '../db.js';
+import { RAW_ARGS } from '../tools/args.js';
 
 const PROTOCOL_VERSION = '2025-06-18';
 const CALL_TIMEOUT = 30000;
 const INIT_TIMEOUT = 15000;
 const NOTIFY_TIMEOUT = 5000;
 const RESULT_CAP = 60000;
+const TOOL_CAP = 100;
+const PAGE_CAP = 10;
+const LIST_CHANGED_DELAY = 500;
 export const USER_SERVER_LIMIT = 10;
 const STDIO_BUF_MAX = 32 * 1024 * 1024;
 const PRIVATE_ENV = ['DB_ENCRYPTION_KEY'];
+const CLIENT_INFO = { name: 'open-quill', version: '1.0.0' };
+const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 export function slugify(s) {
   return String(s || '').toLowerCase().trim().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 24) || 'server';
@@ -41,6 +49,79 @@ function parseHeaders(raw) {
   return out;
 }
 
+export function parseEnv(raw) {
+  const out = {};
+  for (const line of String(raw || '').split('\n')) {
+    const s = line.trim();
+    if (!s || s.startsWith('#')) continue;
+    const i = s.indexOf('=');
+    if (i <= 0) continue;
+    const key = s.slice(0, i).trim();
+    let value = s.slice(i + 1).trim();
+    if (value.length >= 2 && value[0] === value[value.length - 1] && (value[0] === '"' || value[0] === "'")) value = value.slice(1, -1);
+    if (ENV_KEY.test(key)) out[key] = value;
+  }
+  return out;
+}
+
+export function splitArgs(raw) {
+  const text = String(raw || '').trim();
+  if (text.startsWith('[')) {
+    try {
+      const arr = JSON.parse(text);
+      if (Array.isArray(arr) && arr.every(a => typeof a === 'string' || typeof a === 'number')) return arr.map(String);
+    } catch {}
+  }
+  const out = [];
+  let cur = '';
+  let quote = '';
+  let open = false;
+  for (const ch of text) {
+    if (quote) {
+      if (ch === quote) quote = '';
+      else cur += ch;
+    } else if (ch === '"' || (ch === "'" && !cur && !open)) {
+      quote = ch;
+      open = true;
+    } else if (/\s/.test(ch)) {
+      if (cur || open) out.push(cur);
+      cur = '';
+      open = false;
+    } else cur += ch;
+  }
+  if (cur || open) out.push(cur);
+  return out;
+}
+
+function envValue(env, name) {
+  const key = Object.keys(env).find(k => k.toLowerCase() === name.toLowerCase());
+  return key ? env[key] : '';
+}
+
+// npx, uvx and most MCP launchers are .cmd shims on Windows, which spawn cannot run
+// without a shell; a bare "npx" therefore failed with ENOENT on every Windows host.
+export function resolveCommand(command, env = process.env, platform = process.platform) {
+  if (platform !== 'win32') return { file: command, shell: false };
+  const exts = (envValue(env, 'PATHEXT') || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean).map(e => e.toLowerCase());
+  const named = path.extname(command) ? [command] : exts.map(e => command + e);
+  const dirs = /[\\/]/.test(command) ? [''] : envValue(env, 'PATH').split(';').filter(Boolean);
+  for (const dir of dirs) {
+    for (const name of named) {
+      const full = dir ? path.join(dir, name) : name;
+      try {
+        if (fs.statSync(full).isFile()) return { file: full, shell: /\.(cmd|bat)$/i.test(full) };
+      } catch {}
+    }
+  }
+  return { file: command, shell: false };
+}
+
+export function shellQuote(arg) {
+  const s = String(arg);
+  if (s && /^[\w\-.,:/\\@=+]+$/.test(s)) return s;
+  return '"' + s.replace(/"/g, '""') + '"';
+}
+
 function validate(b, existingId, userId = null) {
   const name = String(b.name || '').trim().slice(0, 60);
   if (!name) return { error: 'Server name is required.' };
@@ -56,6 +137,7 @@ function validate(b, existingId, userId = null) {
     name, slug, transport,
     command: String(b.command || '').trim().slice(0, 500),
     args: String(b.args || '').trim().slice(0, 1000),
+    env: userId ? '' : String(b.env || '').slice(0, 4000),
     url: String(b.url || '').trim().slice(0, 500),
     headers: String(b.headers || '').slice(0, 2000),
     enabled: b.enabled !== false
@@ -79,7 +161,8 @@ export function update(id, b, userId = null) {
   if (!cur) return { error: 'Server not found.' };
   const v = validate({ ...cur, ...b }, id, userId);
   if (v.error) return v;
-  const server = { ...cur, ...v };
+  const moved = ['transport', 'command', 'args', 'env', 'url', 'headers'].some(k => (cur[k] || '') !== (v[k] || ''));
+  const server = { ...cur, ...v, ...(moved ? { http_mode: '', status: 'new', error: '' } : {}) };
   save(list(userId).map(s => s.id === id ? server : s), userId);
   disconnect(id);
   return { server };
@@ -97,32 +180,73 @@ function patchServer(id, patch, userId = null) {
 }
 
 const stdioClients = new Map();
+const httpSessions = new Map();
+const sseClients = new Map();
+const listTimers = new Map();
 
-function disconnect(id) {
+function killTree(proc, sync = false) {
+  if (!proc || proc.exitCode != null) return;
+  if (process.platform === 'win32' && proc.pid) {
+    const args = ['/pid', String(proc.pid), '/T', '/F'];
+    try {
+      if (sync) spawnSync('taskkill', args, { stdio: 'ignore', windowsHide: true });
+      else spawn('taskkill', args, { stdio: 'ignore', windowsHide: true }).on('error', () => {});
+    } catch {}
+    return;
+  }
+  try { proc.kill(); } catch {}
+}
+
+function disconnect(id, sync = false) {
   const c = stdioClients.get(id);
   if (c) {
-    try { c.proc.kill(); } catch {}
+    killTree(c.proc, sync);
     stdioClients.delete(id);
   }
+  const session = httpSessions.get(id);
+  if (session?.sessionId && session.url && !sync) {
+    fetch(session.url, { method: 'DELETE', headers: session.headers, signal: AbortSignal.timeout(NOTIFY_TIMEOUT) }).catch(() => {});
+  }
   httpSessions.delete(id);
+  const sse = sseClients.get(id);
+  if (sse) {
+    try { sse.client?.ctl.abort(); } catch {}
+    sseClients.delete(id);
+  }
+}
+
+function scheduleRefresh(id, userId) {
+  clearTimeout(listTimers.get(id));
+  const timer = setTimeout(() => { listTimers.delete(id); refreshTools(id, userId).catch(() => {}); }, LIST_CHANGED_DELAY);
+  if (typeof timer.unref === 'function') timer.unref();
+  listTimers.set(id, timer);
+}
+
+function answerServer(msg, write) {
+  if (msg.method === 'ping') write({ jsonrpc: '2.0', id: msg.id, result: {} });
+  else write({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'Method not found' } });
 }
 
 function stdioClient(server) {
   const existing = stdioClients.get(server.id);
   if (existing && existing.proc.exitCode == null) return existing;
   stdioClients.delete(server.id);
-  const args = server.args ? server.args.split(/\s+/).filter(Boolean) : [];
-  const env = { ...process.env };
+  const env = { ...process.env, ...parseEnv(server.env) };
   for (const k of PRIVATE_ENV) delete env[k];
-  const proc = spawn(server.command, args, { stdio: ['pipe', 'pipe', 'pipe'], env });
+  const args = splitArgs(server.args);
+  const run = resolveCommand(server.command, env);
+  const proc = run.shell
+    ? spawn([run.file, ...args].map(shellQuote).join(' '), { stdio: ['pipe', 'pipe', 'pipe'], env, shell: true, windowsHide: true })
+    : spawn(run.file, args, { stdio: ['pipe', 'pipe', 'pipe'], env, windowsHide: true });
   const client = { proc, seq: 0, pending: new Map(), buf: '', ready: null, stderr: '' };
+  const write = (obj) => { try { proc.stdin.write(JSON.stringify(obj) + '\n'); } catch {} };
   proc.stderr.on('data', (chunk) => { client.stderr = (client.stderr + chunk.toString('utf8')).slice(-4000); });
   proc.stdout.on('data', (chunk) => {
     client.buf += chunk.toString('utf8');
     if (client.buf.length > STDIO_BUF_MAX) {
       client.buf = '';
       fail(new Error('MCP server sent a message larger than the limit.'));
-      try { proc.kill(); } catch {}
+      killTree(proc);
       return;
     }
     let idx;
@@ -132,6 +256,8 @@ function stdioClient(server) {
       if (!line) continue;
       let msg;
       try { msg = JSON.parse(line); } catch { continue; }
+      if (msg.method && msg.id != null) { answerServer(msg, write); continue; }
+      if (msg.method === 'notifications/tools/list_changed') { scheduleRefresh(server.id, null); continue; }
       if (msg.id != null && client.pending.has(msg.id)) {
         const { resolve, reject, timer } = client.pending.get(msg.id);
         client.pending.delete(msg.id);
@@ -148,12 +274,16 @@ function stdioClient(server) {
   };
   proc.stdin.on('error', () => {});
   proc.on('error', (e) => fail(new Error(e?.code === 'ENOENT'
-    ? `Could not start the MCP server: "${server.command}" was not found.`
+    ? `Could not start the MCP server: "${server.command}" was not found. Install it, or give the full path to the program.`
     : `Could not start the MCP server: ${e?.message || e}`)));
-  proc.on('exit', () => {
+  proc.on('exit', (code) => {
     const detail = client.stderr.trim().slice(-500);
-    fail(new Error('MCP server process exited.' + (detail ? ' ' + detail : '')));
+    const missing = run.shell && /is not recognized as an internal or external command/i.test(detail);
+    fail(new Error(missing
+      ? `Could not start the MCP server: "${server.command}" was not found. Install it, or give the full path to the program.`
+      : 'MCP server process exited' + (code != null ? ` (code ${code})` : '') + '.' + (detail ? ' ' + detail : '')));
   });
+  client.write = write;
   stdioClients.set(server.id, client);
   return client;
 }
@@ -162,44 +292,46 @@ function stdioRequest(client, method, params, timeoutMs) {
   return new Promise((resolve, reject) => {
     if (client.proc.exitCode != null) { reject(new Error('MCP server process exited.')); return; }
     const id = ++client.seq;
-    const timer = setTimeout(() => { client.pending.delete(id); reject(new Error('MCP request timed out.')); }, timeoutMs);
+    const timer = setTimeout(() => { client.pending.delete(id); reject(new Error(`MCP request timed out after ${Math.round(timeoutMs / 1000)}s.`)); }, timeoutMs);
     client.pending.set(id, { resolve, reject, timer });
     try { client.proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params: params || {} }) + '\n'); }
     catch (e) { client.pending.delete(id); clearTimeout(timer); reject(e); }
   });
 }
 
-function stdioNotify(client, method, params) {
-  try { client.proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method, params: params || {} }) + '\n'); } catch {}
-}
-
 async function stdioEnsureReady(server) {
   const client = stdioClient(server);
   if (!client.ready) {
     client.ready = (async () => {
-      await stdioRequest(client, 'initialize', {
-        protocolVersion: PROTOCOL_VERSION,
-        capabilities: {},
-        clientInfo: { name: 'open-quill', version: '1.0.0' }
-      }, INIT_TIMEOUT);
-      stdioNotify(client, 'notifications/initialized');
+      await stdioRequest(client, 'initialize', { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: CLIENT_INFO }, INIT_TIMEOUT);
+      client.write({ jsonrpc: '2.0', method: 'notifications/initialized' });
     })().catch(e => { client.ready = null; throw e; });
   }
   await client.ready;
   return client;
 }
 
-const httpSessions = new Map();
-
-function parseHttpBody(text, contentType) {
-  if ((contentType || '').includes('text/event-stream')) {
-    const events = [];
-    for (const block of text.split(/\n\n/)) {
-      const dataLines = block.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trim());
-      if (!dataLines.length) continue;
-      try { events.push(JSON.parse(dataLines.join('\n'))); } catch {}
+export function parseSse(text) {
+  const events = [];
+  for (const block of String(text || '').split(/\r?\n\r?\n/)) {
+    let event = 'message';
+    const data = [];
+    for (const line of block.split(/\r?\n/)) {
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      else if (line.startsWith('data:')) data.push(line.slice(5).replace(/^ /, ''));
     }
-    return events.find(e => e && e.id != null) || events[events.length - 1] || null;
+    if (data.length) events.push({ event, data: data.join('\n') });
+  }
+  return events;
+}
+
+export function pickResponse(text, contentType, id) {
+  if ((contentType || '').includes('text/event-stream')) {
+    const msgs = [];
+    for (const e of parseSse(text)) { try { msgs.push(JSON.parse(e.data)); } catch {} }
+    return msgs.find(m => m && m.id != null && String(m.id) === String(id) && !m.method)
+      || msgs.find(m => m && m.error && m.id == null)
+      || null;
   }
   try { return JSON.parse(text); } catch { return null; }
 }
@@ -211,23 +343,42 @@ function httpHeaders(server, session) {
   return { ...headers, ...parseHeaders(server.headers) };
 }
 
+function plainBody(text) {
+  const raw = String(text || '').trim();
+  const flat = /<html|<!doctype/i.test(raw) ? raw.replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ') : raw;
+  return flat.replace(/\s+/g, ' ').trim().slice(0, 200);
+}
+
+function httpFailure(status, text) {
+  const body = plainBody(text);
+  const lead = status === 401 || status === 403
+    ? 'The MCP server refused the credentials. Check the headers'
+    : status === 404 ? 'Nothing answers MCP at this URL. Check the path (often /mcp or /sse)'
+      : status === 405 ? 'This URL does not accept MCP requests'
+        : 'The MCP server returned an error';
+  return Object.assign(new Error(`MCP HTTP ${status}: ${lead}.${body ? ' ' + body : ''}`), { status });
+}
+
+let httpSeq = 0;
+
 async function httpRequest(server, method, params, session, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const id = ++httpSeq;
   try {
     const res = await fetch(server.url, {
       method: 'POST', headers: httpHeaders(server, session), signal: controller.signal,
-      body: JSON.stringify({ jsonrpc: '2.0', id: Date.now() + Math.floor(Math.random() * 1000), method, params: params || {} })
+      body: JSON.stringify({ jsonrpc: '2.0', id, method, params: params || {} })
     });
     const newSession = res.headers.get('mcp-session-id') || session?.sessionId || null;
     const text = await res.text();
-    if (!res.ok) throw Object.assign(new Error(`MCP HTTP ${res.status}: ${text.slice(0, 200)}`), { status: res.status });
-    const msg = parseHttpBody(text, res.headers.get('content-type'));
+    if (!res.ok) throw httpFailure(res.status, text);
+    const msg = pickResponse(text, res.headers.get('content-type'), id);
     if (!msg) throw new Error('MCP server returned an unreadable response.');
-    if (msg.error) throw new Error(msg.error.message || 'MCP error');
+    if (msg.error) throw Object.assign(new Error(msg.error.message || 'MCP error'), { rpc: true });
     return { result: msg.result, sessionId: newSession };
   } catch (e) {
-    if (e?.name === 'AbortError') throw new Error('MCP request timed out.', { cause: e });
+    if (e?.name === 'AbortError') throw new Error(`MCP request timed out after ${Math.round(timeoutMs / 1000)}s.`, { cause: e });
     throw e;
   } finally { clearTimeout(timer); }
 }
@@ -243,22 +394,157 @@ async function httpNotify(server, method, session) {
 async function httpEnsureSession(server) {
   const cached = httpSessions.get(server.id);
   if (cached) return cached;
-  const { result, sessionId } = await httpRequest(server, 'initialize', {
-    protocolVersion: PROTOCOL_VERSION,
-    capabilities: {},
-    clientInfo: { name: 'open-quill', version: '1.0.0' }
-  }, null, INIT_TIMEOUT);
+  const { result, sessionId } = await httpRequest(server, 'initialize', { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: CLIENT_INFO }, null, INIT_TIMEOUT);
   const negotiated = typeof result?.protocolVersion === 'string' && result.protocolVersion ? result.protocolVersion : PROTOCOL_VERSION;
-  const session = { sessionId, protocolVersion: negotiated };
+  const session = { sessionId, protocolVersion: negotiated, url: server.url };
+  session.headers = httpHeaders(server, session);
   await httpNotify(server, 'notifications/initialized', session);
   httpSessions.set(server.id, session);
   return session;
 }
 
-async function rpc(server, method, params, timeoutMs = CALL_TIMEOUT) {
+// The HTTP+SSE transport from protocol revision 2024-11-05: a long-lived GET stream that
+// names a POST endpoint and carries every response. Superseded by streamable HTTP, but
+// still what many hosted servers speak, so it is tried when streamable HTTP is refused.
+async function sseOpen(server, userId) {
+  const ctl = new AbortController();
+  const client = { ctl, endpoint: '', pending: new Map(), seq: 0, closed: false };
+  const fail = (err) => {
+    client.closed = true;
+    for (const { reject, timer } of client.pending.values()) { clearTimeout(timer); reject(err); }
+    client.pending.clear();
+    if (sseClients.get(server.id)?.client === client) sseClients.delete(server.id);
+  };
+  const timer = setTimeout(() => ctl.abort(), INIT_TIMEOUT);
+  let res;
+  try {
+    res = await fetch(server.url, { headers: { Accept: 'text/event-stream', ...parseHeaders(server.headers) }, signal: ctl.signal });
+  } catch (e) {
+    clearTimeout(timer);
+    throw e?.name === 'AbortError' ? new Error('MCP server did not open an event stream in time.') : e;
+  }
+  if (!res.ok) { clearTimeout(timer); throw httpFailure(res.status, await res.text().catch(() => '')); }
+  if (!(res.headers.get('content-type') || '').includes('text/event-stream')) { clearTimeout(timer); ctl.abort(); throw new Error('MCP server did not answer with an event stream.'); }
+  let found;
+  const endpoint = new Promise((resolve) => { found = resolve; });
+  (async () => {
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const cut = buf.lastIndexOf('\n\n');
+        if (cut === -1) continue;
+        const ready = buf.slice(0, cut);
+        buf = buf.slice(cut + 2);
+        for (const e of parseSse(ready)) {
+          if (e.event === 'endpoint') {
+            client.endpoint = new URL(e.data.trim(), server.url).href;
+            found();
+            continue;
+          }
+          let msg;
+          try { msg = JSON.parse(e.data); } catch { continue; }
+          if (msg.method && msg.id != null) {
+            answerServer(msg, (reply) => { fetch(client.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', ...parseHeaders(server.headers) }, body: JSON.stringify(reply) }).catch(() => {}); });
+          } else if (msg.method === 'notifications/tools/list_changed') scheduleRefresh(server.id, userId);
+          else if (msg.id != null && client.pending.has(msg.id)) {
+            const p = client.pending.get(msg.id);
+            client.pending.delete(msg.id);
+            clearTimeout(p.timer);
+            if (msg.error) p.reject(new Error(msg.error.message || 'MCP error'));
+            else p.resolve(msg.result);
+          }
+        }
+      }
+      fail(new Error('The MCP event stream closed.'));
+    } catch (e) {
+      fail(e?.name === 'AbortError' ? new Error('The MCP connection was closed.') : e);
+    }
+  })();
+  await Promise.race([endpoint, new Promise((_, reject) => { ctl.signal.addEventListener('abort', () => reject(new Error('MCP server opened an event stream but never named its message endpoint.')), { once: true }); })]);
+  clearTimeout(timer);
+  return client;
+}
+
+function sseRequest(server, client, method, params, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    if (client.closed) { reject(new Error('The MCP connection was closed.')); return; }
+    const id = ++client.seq;
+    const timer = setTimeout(() => { client.pending.delete(id); reject(new Error(`MCP request timed out after ${Math.round(timeoutMs / 1000)}s.`)); }, timeoutMs);
+    client.pending.set(id, { resolve, reject, timer });
+    fetch(client.endpoint, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...parseHeaders(server.headers) },
+      body: JSON.stringify({ jsonrpc: '2.0', id, method, params: params || {} })
+    }).then(async (res) => {
+      if (!res.ok) {
+        const p = client.pending.get(id);
+        if (p) { client.pending.delete(id); clearTimeout(p.timer); p.reject(httpFailure(res.status, await res.text().catch(() => ''))); }
+      }
+    }).catch((e) => {
+      const p = client.pending.get(id);
+      if (p) { client.pending.delete(id); clearTimeout(p.timer); p.reject(e); }
+    });
+  });
+}
+
+async function sseEnsureReady(server, userId) {
+  const cur = sseClients.get(server.id);
+  if (cur && !cur.client?.closed) return cur.ready;
+  const entry = { client: null, ready: null };
+  entry.ready = (async () => {
+    const client = await sseOpen(server, userId);
+    entry.client = client;
+    await sseRequest(server, client, 'initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: CLIENT_INFO }, INIT_TIMEOUT);
+    fetch(client.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', ...parseHeaders(server.headers) }, body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) }).catch(() => {});
+    return client;
+  })();
+  sseClients.set(server.id, entry);
+  entry.ready.catch(() => {
+    try { entry.client?.ctl.abort(); } catch {}
+    if (sseClients.get(server.id) === entry) sseClients.delete(server.id);
+  });
+  return entry.ready;
+}
+
+function legacyUrl(url) {
+  try { return /\/sse\/?$/.test(new URL(url).pathname); } catch { return false; }
+}
+
+export function guessUrls(url) {
+  try {
+    const u = new URL(url);
+    if (u.pathname !== '/' && u.pathname !== '') return [];
+    return ['/mcp', '/sse'].map(p => new URL(p, u).href);
+  } catch { return []; }
+}
+
+async function discover(server, userId, err) {
+  for (const url of guessUrls(server.url)) {
+    const probe = { ...server, url, http_mode: '' };
+    try {
+      await refreshWith(probe, userId);
+      disconnect(server.id);
+      patchServer(server.id, { url, http_mode: '' }, userId);
+      return true;
+    } catch {
+      disconnect(server.id);
+    }
+  }
+  throw err;
+}
+
+async function rpc(server, method, params, timeoutMs = CALL_TIMEOUT, userId = null) {
   if (server.transport === 'stdio') {
     const client = await stdioEnsureReady(server);
     return stdioRequest(client, method, params, timeoutMs);
+  }
+  if (server.http_mode === 'sse' || legacyUrl(server.url)) {
+    const client = await sseEnsureReady(server, userId);
+    return sseRequest(server, client, method, params, timeoutMs);
   }
   const attempt = async () => {
     const session = await httpEnsureSession(server);
@@ -266,8 +552,17 @@ async function rpc(server, method, params, timeoutMs = CALL_TIMEOUT) {
   };
   try { return await attempt(); }
   catch (e) {
+    if (e?.rpc) throw e;
     const expired = e?.status === 404 && httpSessions.get(server.id)?.sessionId;
+    const fresh = !httpSessions.get(server.id);
     httpSessions.delete(server.id);
+    if (fresh && (e?.status === 404 || e?.status === 405 || e?.status === 400)) {
+      try {
+        const client = await sseEnsureReady(server, userId);
+        patchServer(server.id, { http_mode: 'sse' }, userId);
+        return await sseRequest(server, client, method, params, timeoutMs);
+      } catch { throw e; }
+    }
     if (!expired) throw e;
   }
   try { return await attempt(); }
@@ -277,15 +572,33 @@ async function rpc(server, method, params, timeoutMs = CALL_TIMEOUT) {
   }
 }
 
+async function refreshWith(server, userId) {
+  const all = [];
+  let cursor;
+  for (let page = 0; page < PAGE_CAP; page++) {
+    const result = await rpc(server, 'tools/list', cursor ? { cursor } : {}, CALL_TIMEOUT, userId);
+    if (Array.isArray(result?.tools)) all.push(...result.tools);
+    cursor = typeof result?.nextCursor === 'string' && result.nextCursor ? result.nextCursor : null;
+    if (!cursor || all.length >= TOOL_CAP) break;
+  }
+  return all;
+}
+
 export async function refreshTools(id, userId = null) {
   const server = byId(id, userId);
   if (!server) return { error: 'Server not found.' };
   try {
-    const result = await rpc(server, 'tools/list', {});
-    const tools = (Array.isArray(result?.tools) ? result.tools : []).slice(0, 60).map(t => ({
-      name: String(t.name || '').slice(0, 80),
-      description: String(t.description || '').slice(0, 800),
-      inputSchema: t.inputSchema && typeof t.inputSchema === 'object' ? t.inputSchema : { type: 'object', properties: {} }
+    let all;
+    try { all = await refreshWith(server, userId); }
+    catch (e) {
+      if (server.transport !== 'http' || e?.status !== 404 || !guessUrls(server.url).length) throw e;
+      await discover(server, userId, e);
+      all = await refreshWith(byId(id, userId), userId);
+    }
+    const tools = all.slice(0, TOOL_CAP).map(t => ({
+      name: String(t?.name || '').slice(0, 80),
+      description: String(t?.description || t?.annotations?.title || '').slice(0, 800),
+      inputSchema: t?.inputSchema && typeof t.inputSchema === 'object' ? t.inputSchema : { type: 'object', properties: {} }
     })).filter(t => t.name);
     patchServer(id, { tools, status: 'connected', error: '', refreshed_at: Date.now() }, userId);
     return { server: byId(id, userId) };
@@ -295,20 +608,23 @@ export async function refreshTools(id, userId = null) {
   }
 }
 
+const SCHEMA_KEEP = ['$defs', 'definitions', 'additionalProperties', 'description'];
+
 function sanitizeSchema(schema) {
   const s = schema && typeof schema === 'object' ? schema : {};
-  return {
+  const out = {
     type: 'object',
-    properties: s.properties && typeof s.properties === 'object' ? s.properties : {},
-    required: Array.isArray(s.required) ? s.required : []
+    properties: s.properties && typeof s.properties === 'object' && !Array.isArray(s.properties) ? s.properties : {},
+    required: Array.isArray(s.required) ? s.required.filter(r => typeof r === 'string') : []
   };
+  for (const k of SCHEMA_KEEP) if (s[k] !== undefined) out[k] = s[k];
+  return out;
 }
 
-// Function names are capped at 64 characters. Truncating alone let two long tool
-// names on one server collapse into the same string: the model was handed two
-// identical function names and every call resolved to whichever came first, so
-// the other tool was silently unreachable. A short digest of the full name keeps
-// them distinct within the cap.
+// Function names are capped at 64 characters and may only hold letters, digits, _ and -.
+// Truncating alone let two long tool names on one server collapse into the same string,
+// and a dot or space in an MCP tool name made the provider refuse the whole request. A
+// short digest of the original name keeps every advertised name valid and distinct.
 export const MCP_NAME_MAX = 64;
 
 function digest(s) {
@@ -318,9 +634,11 @@ function digest(s) {
 }
 
 export function mcpToolName(slug, toolName) {
-  const full = `mcp_${slug}_${toolName}`;
-  if (full.length <= MCP_NAME_MAX) return full;
-  return full.slice(0, MCP_NAME_MAX - 5) + '_' + digest(full);
+  const raw = String(toolName || '');
+  const safe = raw.replace(/[^A-Za-z0-9_-]/g, '_');
+  const full = `mcp_${slug}_${safe}`;
+  if (safe === raw && full.length <= MCP_NAME_MAX) return full;
+  return full.slice(0, MCP_NAME_MAX - 5) + '_' + digest(`mcp_${slug}_${raw}`);
 }
 
 export function toolSchemas(userId = null) {
@@ -364,24 +682,32 @@ export function toolsText(userId = null) {
     .join('\n');
 }
 
+function contentText(c) {
+  if (!c || typeof c !== 'object') return '';
+  if (c.type === 'text') return String(c.text || '');
+  if (c.type === 'resource') return c.resource?.text ? String(c.resource.text) : `[resource ${c.resource?.uri || ''}]`.trim();
+  if (c.type === 'resource_link') return `[${c.name || 'link'}: ${c.uri || ''}]`;
+  if (c.type === 'image' || c.type === 'audio') return `[${c.type} content${c.mimeType ? ', ' + c.mimeType : ''}]`;
+  return c.type ? `[${c.type} content]` : '';
+}
+
+export function callArguments(call) {
+  if (call && call[RAW_ARGS] && typeof call[RAW_ARGS] === 'object') return { ...call[RAW_ARGS] };
+  const args = { ...call };
+  delete args.tool;
+  return args;
+}
+
 export async function execTool(call, userId = null) {
   const resolved = resolveTool(call.tool, userId);
   if (!resolved) return { ok: false, tool: call.tool, error: 'Unknown MCP tool.' };
   const { server, tool } = resolved;
-  const args = { ...call };
-  delete args.tool;
   try {
-    const result = await rpc(server, 'tools/call', { name: tool.name, arguments: args });
+    const result = await rpc(server, 'tools/call', { name: tool.name, arguments: callArguments(call) }, CALL_TIMEOUT, userId);
     let text = '';
-    if (Array.isArray(result?.content)) {
-      text = result.content.map(c => {
-        if (c?.type === 'text') return String(c.text || '');
-        if (c?.type === 'resource' && c.resource?.text) return String(c.resource.text);
-        return c?.type ? `[${c.type} content]` : '';
-      }).filter(Boolean).join('\n');
-    } else if (result != null) {
-      text = JSON.stringify(result);
-    }
+    if (Array.isArray(result?.content)) text = result.content.map(contentText).filter(Boolean).join('\n');
+    if (!text && result?.structuredContent !== undefined) text = JSON.stringify(result.structuredContent, null, 2);
+    else if (!text && result != null && !Array.isArray(result?.content)) text = JSON.stringify(result);
     if (text.length > RESULT_CAP) text = text.slice(0, RESULT_CAP) + '\n... [truncated]';
     if (result?.isError) return { ok: false, tool: call.tool, server: server.name, error: text || 'The MCP tool reported an error.' };
     return { ok: true, tool: call.tool, server: server.name, content: text || '(empty result)' };
@@ -391,8 +717,8 @@ export async function execTool(call, userId = null) {
 }
 
 export function formatResult(call, r) {
-  if (!r.ok) return `${call.tool} \u2192 ERROR: ${r.error}`;
-  return `${call.tool} \u2192\n${r.content}`;
+  if (!r.ok) return `${call.tool} → ERROR: ${r.error}`;
+  return `${call.tool} →\n${r.content}`;
 }
 
 export function resultPayload(call, r) {
@@ -403,5 +729,8 @@ export function resultPayload(call, r) {
 }
 
 export function shutdown() {
-  for (const id of [...stdioClients.keys()]) disconnect(id);
+  for (const t of listTimers.values()) clearTimeout(t);
+  listTimers.clear();
+  for (const id of new Set([...stdioClients.keys(), ...sseClients.keys()])) disconnect(id, true);
+  httpSessions.clear();
 }
