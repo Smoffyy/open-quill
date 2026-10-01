@@ -4,6 +4,8 @@ import { useCatalog } from './state/useCatalog.js';
 import { useWorkspace, promptFeaturesOf } from './state/useWorkspace.js';
 import { useMembers } from './state/useMembers.js';
 import { createHistory } from './state/history.js';
+import { usePresence } from './state/usePresence.js';
+import { useChanges } from '../../lib/useChanges.js';
 import { toast } from '../../lib/toast.js';
 import { t } from '../../i18n.jsx';
 
@@ -36,11 +38,25 @@ export function AdminProvider({ user, onClose, children }) {
   const workspace = useWorkspace({ history: history.current });
   const features = useRef(null);
   features.current = promptFeaturesOf(workspace.settings);
-  const catalog = useCatalog({ confirm, features, history: history.current });
+  const changes = useChanges();
+  const catalog = useCatalog({ confirm, features, history: history.current, changes });
   const members = useMembers({ confirm });
+  const [reviewing, setReviewing] = useState(false);
 
-  const { setSelection, revert } = catalog;
-  const { discard, reload: reloadWorkspace } = workspace;
+  const { setSelection, selection, unsaved: catalogUnsaved } = catalog;
+  const { unsaved: workspaceUnsaved } = workspace;
+
+  useEffect(() => {
+    const warn = (e) => {
+      if (!catalogUnsaved() && !workspaceUnsaved()) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [catalogUnsaved, workspaceUnsaved]);
+  const focusModel = section === 'models' && selection.length === 1 ? selection[0] : '';
+  const present = usePresence(user?.id, section, focusModel);
 
   const undo = useCallback(() => {
     if (history.current.undo()) toast(t('Change undone'));
@@ -49,18 +65,6 @@ export function AdminProvider({ user, onClose, children }) {
   const redo = useCallback(() => {
     if (history.current.redo()) toast(t('Change redone'));
   }, []);
-
-  const revertAll = useCallback(() => confirm({
-    title: t('Revert all changes'),
-    message: t('This discards every unpublished change and restores what members are running now. This cannot be undone.'),
-    confirm: t('Revert all changes'),
-    onConfirm: async () => {
-      discard();
-      if (!(await revert())) return;
-      await reloadWorkspace();
-      history.current.clear();
-    }
-  }), [confirm, discard, revert, reloadWorkspace]);
 
   // Opening a model is always "show the models page with this one open", so the
   // finder, the overview and every list action go through one call.
@@ -86,10 +90,10 @@ export function AdminProvider({ user, onClose, children }) {
 
   const value = {
     user, onClose,
-    section, setSection, openModel, undo, redo, revertAll,
+    section, setSection, openModel, undo, redo,
     ask, setAsk, confirm,
-    keepScroll,
-    catalog, workspace, members
+    keepScroll, reviewing, setReviewing, present,
+    catalog, workspace, members, changes
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

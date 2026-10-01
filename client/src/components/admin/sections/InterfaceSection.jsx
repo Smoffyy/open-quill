@@ -5,7 +5,7 @@ import { Card, Rows, Row, ToggleRow, Fields, Field, Input, Seg, Btn, Note, Badge
 import { ImagePicker } from '../media.jsx';
 import { t, tk } from '../../../i18n.jsx';
 import { MODEL_WEAVE } from '../../../lib/brand.js';
-import { Palette, Sparkles, Eye } from '../../ui/icons.jsx';
+import { Palette, Sparkles } from '../../ui/icons.jsx';
 import { toast } from '../../../lib/toast.js';
 
 const PRESETS = [['anthropic', tk('Anthropic')], ['openai', tk('OpenAI')]];
@@ -35,7 +35,6 @@ export default function InterfaceSection() {
   useEffect(() => { load(); }, []);
 
   const active = themes.themes.find(x => x.id === themes.activeId);
-  const dirty = !!active?.dirty || (themes.activeId && themes.activeId !== themes.publishedActiveId);
 
   const enterBuild = () => {
     try { localStorage.setItem(BUILD_KEY, '1'); } catch {}
@@ -59,20 +58,12 @@ export default function InterfaceSection() {
         actions={<Btn kind="primary" onClick={enterBuild}><Palette /> {t('Enter build mode')}</Btn>}>
         <Rows>
           <Row label={t('Active theme')} note={t('The layout everyone on this workspace renders once it is published.')}>
-            <div className="cp-inline">
-              <b>{active?.name || t('None')}</b>
-              {dirty ? <Badge tone="warn">{t('Unpublished changes')}</Badge> : <Badge tone="good">{t('Published')}</Badge>}
-            </div>
+            <b>{active?.name || t('None')}</b>
           </Row>
           <Row label={t('Last edited')} note={active ? t('Based on the {preset} layout.', { preset: active.basePreset === 'openai' ? 'OpenAI' : 'Anthropic' }) : ''}>
             <span className="dim">{fmt(active?.updatedAt)}</span>
           </Row>
         </Rows>
-        {dirty && (
-          <Note tone="warn" icon={<Eye />}>
-            {t('Members are still seeing the previously published interface. Open build mode to preview and publish your draft.')}
-          </Note>
-        )}
       </Card>
 
       <Card title={t('Themes')} sub={t('Anthropic and OpenAI ship as editable presets. Duplicate one to start your own; every theme uses the same builder.')}>
@@ -89,7 +80,7 @@ export default function InterfaceSection() {
               </div>
               <Acts end>
                 {th.id === themes.activeId
-                  ? <Badge tone="good">{t('Active')}</Badge>
+                  ? <Badge>{t('Active')}</Badge>
                   : <Btn size="sm" disabled={busy} onClick={() => run(() => api.post(`/api/admin/themes/${th.id}/activate`, {}), t('Now editing “{name}”.', { name: th.name }))}>{t('Use this')}</Btn>}
                 <Btn size="sm" disabled={busy}
                   onClick={() => run(() => api.post('/api/admin/themes', { from: th.id, name: th.name + ' copy' }), t('Duplicated.'))}>

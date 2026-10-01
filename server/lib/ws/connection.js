@@ -21,6 +21,8 @@ import * as live from './live.js';
 import { isRouter, resolveRouted } from '../router.js';
 import { sameOrigin } from '../origin.js';
 import { sandboxCap } from '../workspacefiles.js';
+import { liveVersion } from '../releases.js';
+import { setPresence, presenceList, broadcastPresence } from './presence.js';
 
 // A frame this large is already far beyond any real composer paste; the cap exists so a
 // hostile client cannot make the server buffer an arbitrary amount before we ever look
@@ -74,6 +76,8 @@ export function initWs(server) {
     const liveSend = (s) => live.sendLive(userId, s);
     const liveState = { aborts: live.aborts, steers: live.steers, stops: live.stops, interactive: true };
     const liveWs = { readyState: 1, send: liveSend };
+    safeSend(JSON.stringify({ type: 'hello', configVersion: liveVersion() }));
+    if (u.is_admin) safeSend(JSON.stringify({ type: 'presence', admins: presenceList() }));
     {
       const pending = live.snapshotsFor(u.id);
       if (pending.length) safeSend(JSON.stringify({ type: 'resume', turns: pending }));
@@ -93,6 +97,10 @@ export function initWs(server) {
         const c = db.chats.byId(chatId);
         return !!c && c.user_id === state.userId;
       };
+      if (msg.type === 'presence') {
+        setPresence(state, msg.at);
+        return;
+      }
       if (msg.type === 'stop') {
         const own = msg.chatId === 'incognito' ? state : (ownsChat(msg.chatId) && live.activeTurn(msg.chatId) ? liveState : null);
         if (!own) return;
@@ -267,6 +275,7 @@ export function initWs(server) {
         }
       } catch {}
       clients.delete(ws);
+      if (st?.presence) broadcastPresence();
     });
   });
 

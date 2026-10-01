@@ -11,8 +11,10 @@ async function failure(url, res, fallback) {
   return new Error(body.error || fallback || res.statusText);
 }
 
+export const TAB_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+
 async function req(method, url, body) {
-  const opts = { method, headers: {}, credentials: 'same-origin' };
+  const opts = { method, headers: { 'X-Oq-Tab': TAB_ID }, credentials: 'same-origin' };
   if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
   const res = await fetch(url, opts);
   if (!res.ok) throw await failure(url, res);

@@ -71,7 +71,11 @@ CREATE INDEX IF NOT EXISTS idx_skills_user ON skills(user_id, name);`,
 DROP TABLE IF EXISTS spaces;`,
 
   `CREATE INDEX IF NOT EXISTS idx_tasks_next ON tasks(next_run);
-CREATE INDEX IF NOT EXISTS idx_sessions_seen ON sessions(last_seen);`
+CREATE INDEX IF NOT EXISTS idx_sessions_seen ON sessions(last_seen);`,
+
+  `CREATE TABLE IF NOT EXISTS releases (id TEXT PRIMARY KEY, version INTEGER, created_at INTEGER, data TEXT NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_releases_version ON releases(version);
+CREATE TABLE IF NOT EXISTS draft_edits (id TEXT PRIMARY KEY, updated_at INTEGER, data TEXT NOT NULL);`
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length + 1;

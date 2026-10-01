@@ -54,7 +54,8 @@ function wsCtx(activeKey = 'c1') {
     actions: {
       finalize: log('finalize'), finalizeBackground: log('finalizeBackground'), syncView: log('syncView'),
       loadModels: log('loadModels'), loadAppConfig: log('loadAppConfig'), loadBudget: log('loadBudget'),
-      loadLedger: log('loadLedger'), taskStarted: log('taskStarted'), setAsk: log('setAsk')
+      loadLedger: log('loadLedger'), taskStarted: log('taskStarted'), setAsk: log('setAsk'),
+      syncConfig: log('syncConfig'), adminDraft: log('adminDraft'), presence: log('presence')
     }
   };
   return ctx;
@@ -79,7 +80,7 @@ test('every frame the server can send has a handler', () => {
   const SENT = ['session_revoked', 'config', 'resume', 'files', 'tool_live', 'tool_live_delta',
     'tool_exec', 'tool', 'compacting', 'compacted', 'ctx_rolling', 'title', 'chat_ended',
     'routed', 'queued', 'status', 'prompt_size', 'telemetry', 'steered', 'start',
-    'reasoning', 'content', 'error', 'done', 'task_started'];
+    'reasoning', 'content', 'error', 'done', 'task_started', 'hello', 'admin_draft', 'presence'];
   for (const type of SENT) assert.ok(handlers[type], 'no handler for ' + type);
 });
 
@@ -299,4 +300,12 @@ test('a stopped turn is committed at once, without waiting for the reveal to cat
   slow.stream.markDone = () => false;
   dispatchWs({ type: 'done', chatId: 'c1', messageId: 'a2' }, slow);
   assert.equal(did(slow, 'finalize'), false, 'a finished turn still waits for its reveal');
+});
+
+test('a config frame and the connect greeting both hand their version on', () => {
+  const ctx = wsCtx('c1');
+  dispatchWs({ type: 'config', version: 7 }, ctx);
+  dispatchWs({ type: 'hello', configVersion: 7 }, ctx);
+  const calls = ctx.calls.filter(c => c[0] === 'syncConfig').map(c => c.slice(1));
+  assert.deepEqual(calls, [[7, false], [7, true]]);
 });

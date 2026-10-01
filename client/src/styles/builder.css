@@ -127,13 +127,18 @@
 .bx-toggle svg { width: 14px; height: 14px; }
 .bx-toggle.on { background: color-mix(in srgb, var(--bx-accent) 22%, transparent); border-color: var(--bx-accent); color: var(--bx-text); }
 
-.bx-state { display: inline-flex; align-items: center; gap: 6px; color: var(--bx-muted); white-space: nowrap; }
-.bx-state::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.bx-state.pending { color: #e2b03f; }
-.bx-state.live { color: #4caf7d; }
-.bx-saved { color: var(--bx-muted); display: inline-flex; align-items: center; gap: 5px; }
-.bx-saved svg { width: 13px; height: 13px; }
-.bx-saved.bad { color: #e5484d; }
+.bx-count {
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .2);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 17px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 
 .bx-preview-note {
   position: fixed;
@@ -517,7 +522,6 @@
 .bx-theme-foot { padding: 10px; border-top: 1px solid var(--bx-line); }
 .bx-tag { padding: 1px 6px; border-radius: 999px; background: rgba(255, 255, 255, .09); font-size: 10px; color: var(--bx-muted); }
 .bx-tag.live { background: color-mix(in srgb, #4caf7d 26%, transparent); color: #b7e8cd; }
-.bx-tag.pending { background: color-mix(in srgb, #e2b03f 26%, transparent); color: #f2dda6; }
 
 .bx-empty { padding: 40px 22px; text-align: center; color: var(--bx-muted); }
 .bx-empty b { display: block; color: var(--bx-text); margin-bottom: 6px; }

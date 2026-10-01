@@ -1,6 +1,6 @@
 # Admin Guide
 
-Everything here lives in the **Admin Panel**, reachable from the profile menu for accounts with admin rights. Most sections work as a draft: you make changes, then hit **Push to all clients** to publish them live to every connected user. Dashboard and Databases apply immediately instead, since there's nothing to draft.
+Everything here lives in the **Admin Panel**, reachable from the profile menu for editors, publishers and the owner. Most sections work as a draft: your changes save themselves into a shared draft, and a publisher ships them to everyone from **Review changes**. Providers, model folders and Databases apply immediately instead, since there's nothing for members to see.
 
 ## Catalog
 
@@ -79,8 +79,25 @@ The chat's **What gets sent** view shows the rendered prompt with each block lis
 
 ## Dashboard
 
-A landing overview when you open the Admin Panel. It surfaces the state that's most likely to need attention (unpublished changes, provider health, and similar) without digging into individual tabs.
+A landing overview when you open the Admin Panel. It shows the live version, how much is waiting in the draft, provider health and recent admin events without digging into individual tabs.
+
+## Roles
+
+| Role | Can |
+| --- | --- |
+| **Member** | Chat. No Admin Panel |
+| **Editor** | Use the Admin Panel and stage changes. Can discard only their own changes |
+| **Publisher** | Everything an editor can, plus publish, restore old versions and discard anyone's changes |
+| **Owner** | Everything, including making and removing publishers |
+
+You can only change, cap or remove accounts below your own role, and only grant roles below it. Set roles under **Members**. Accounts that were admins before roles existed became publishers.
 
 ## Publishing changes
 
-Most tabs distinguish a **draft** from what users currently see. Edit freely, and nothing changes for anyone until you click **Push to all clients**, at which point every connected client re-themes/re-configures live, no refresh required. Databases and Limits & Budgets are the exceptions: those apply the moment you save.
+Every edit in the panel saves itself into one shared draft. All admins see it live, along with who else is in the panel and which model they have open; members keep running the published version.
+
+**Review changes** in the top bar lists every pending change grouped by model, settings section and theme, with the before and after value, who changed it and when. Long text has a line-by-line comparison. Tick what should ship, add an optional note and **Publish**; anything left unticked stays in the draft. **Discard** throws the ticked changes away instead. A few changes always travel together: only one model can be the default, a new model ships with its place in the order, and the active theme ships with its base layout.
+
+Every publish becomes a numbered version under **Releases**, which keeps the last 50 with their author, note and full contents. **Restore this version** puts an older one live as a new version and leaves work still waiting in the draft alone. Connected clients pick up a new version within about a second, without a reload; a client that was offline catches up when it reconnects.
+
+If someone else publishes while you are reviewing, your publish is refused until you look at the updated list. If another admin changes a field you are still typing in, your edit is kept and you are told.

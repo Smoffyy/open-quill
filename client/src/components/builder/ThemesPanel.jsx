@@ -46,7 +46,6 @@ export function useThemes() {
     reset: (id, to) => run(() => api.post(`/api/admin/themes/${id}/reset`, { to }), () => reload()),
     restore: (id, index) => run(() => api.post(`/api/admin/themes/${id}/restore`, { index }), () => reload()),
     snapshot: (id, label) => run(() => api.post(`/api/admin/themes/${id}/snapshot`, { label })),
-    publish: () => run(() => api.post('/api/admin/themes/publish', {}), () => reload()),
     importTheme: (body) => run(() => api.post('/api/admin/themes/import', body), () => reload())
   };
 }
@@ -116,7 +115,7 @@ export default function ThemesPanel({ compact }) {
                   <b>{th.name}</b>
                   {th.builtin && <span className="bx-tag">{t('Preset')}</span>}
                   {active && <span className="bx-tag live">{t('Active')}</span>}
-                  {th.dirty && <span className="bx-tag pending">{t('Unpublished')}</span>}
+                  {th.dirty && <span className="bx-tag" title={t('Changed since the last release')}>{t('edited')}</span>}
                 </div>
                 <div className="bx-theme-meta">
                   {th.note ? t(th.note) : t('Based on {preset}', { preset: th.basePreset === 'openai' ? 'OpenAI' : 'Anthropic' })}

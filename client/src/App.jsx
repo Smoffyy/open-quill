@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
-import { api, SESSION_EXPIRED } from './lib/api.js';
+import { api, SESSION_EXPIRED, TAB_ID } from './lib/api.js';
+import { newerVersion, syncDelay, draftReloads, DRAFT_SETTLE_MS } from './lib/configsync.js';
+import { setWsSender, publishPresence } from './lib/wsbus.js';
 import { t, tk } from './i18n.jsx';
 import { applyPrefs, prefersDark, appFontId, takeSettingsToReopen } from './lib/prefs.js';
 import { kwargValuesArr, defaultValueOf } from './lib/kwargs.js';
@@ -403,6 +405,12 @@ export default function App() {
   const shouldReconnect = useCallback(() => !!userRef.current, []);
   const socket = useSocket({ onMessage: onWsMessage, shouldReconnect });
   const { connect, send: socketSend } = socket;
+  useEffect(() => { setWsSender(socketSend); return () => setWsSender(null); }, [socketSend]);
+  const configVersion = useRef(0);
+  const configTimer = useRef(null);
+  const draftTimer = useRef(null);
+  const draftDue = useRef(new Set());
+  useEffect(() => () => { clearTimeout(configTimer.current); clearTimeout(draftTimer.current); }, []);
   const getCurrentModelId = useCallback(() => currentIdRef.current, []);
   const { busyChats, syncBusy, peek, queueRec, dropRec, recFor, resumeRec } = useGenMirror(getCurrentModelId);
   const nextTurnPending = useRef(false);
@@ -649,7 +657,42 @@ export default function App() {
     } finally { setModelsReady(true); }
   }
   async function loadChats() { try { setChats(await api.get('/api/chats')); } catch {} finally { setChatsLoaded(true); } }
-  async function loadAppConfig() { try { applyCfg(await api.get('/api/app-config')); } catch {} }
+  async function loadAppConfig() {
+    try {
+      const c = await api.get('/api/app-config');
+      configVersion.current = Math.max(configVersion.current, Number(c.configVersion) || 0);
+      applyCfg(c);
+    } catch {}
+  }
+
+  function syncConfig(version, greeting) {
+    if (greeting) { try { window.dispatchEvent(new CustomEvent('oq-hello')); } catch {} }
+    const next = newerVersion(configVersion.current, version);
+    if (!next) return;
+    const first = !configVersion.current;
+    configVersion.current = next;
+    if (greeting && first) return;
+    clearTimeout(configTimer.current);
+    configTimer.current = setTimeout(() => {
+      loadModels();
+      loadAppConfig();
+      try { window.dispatchEvent(new CustomEvent('oq-config')); } catch {}
+    }, syncDelay(!!userRef.current?.isAdmin));
+  }
+
+  function adminDraft(frame) {
+    try { window.dispatchEvent(new CustomEvent('oq-admin-draft', { detail: frame })); } catch {}
+    for (const r of draftReloads(frame, TAB_ID)) draftDue.current.add(r);
+    if (!draftDue.current.size) return;
+    clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => {
+      const due = draftDue.current;
+      draftDue.current = new Set();
+      if (due.has('models')) loadModels();
+      if (due.has('config')) loadAppConfig();
+      if (due.has('theme')) { try { window.dispatchEvent(new CustomEvent('oq-config')); } catch {} }
+    }, DRAFT_SETTLE_MS);
+  }
   const [setupDone, setSetupDone] = useState(false);
   const onSetupDone = useCallback(() => {
     setSetupDone(true);
@@ -771,6 +814,9 @@ export default function App() {
       syncView: () => syncView(),
       loadModels: () => loadModels(),
       loadAppConfig: () => loadAppConfig(),
+      syncConfig: (version, greeting) => syncConfig(version, greeting),
+      adminDraft: (frame) => adminDraft(frame),
+      presence: (list) => publishPresence(list),
       loadBudget: () => loadBudget(),
       loadLedger: () => loadLedger(),
       setAsk: (chatId, q) => setAsk(chatId, q),
@@ -1810,7 +1856,7 @@ export default function App() {
       {showChangelog && <DocModal title={t("Changelog")} name="changelog" onClose={() => setShowChangelog(false)} />}
       {cmdkOpen && <CommandPalette commands={commands} ready={modelsReady && chatsLoaded} onClose={() => setCmdkOpen(false)} />}
     </div>
-    {user?.isAdmin && <Suspense fallback={null}><BuildMode /></Suspense>}
+    {user?.isAdmin && <Suspense fallback={null}><BuildMode user={user} /></Suspense>}
     </ThemeProvider>
   );
 }

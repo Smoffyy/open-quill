@@ -173,15 +173,6 @@
   white-space: nowrap;
 }
 .mc-flag.bad { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 38%, transparent); }
-.mc-flag.warn { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 38%, transparent); }
-
-.mc-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--warning);
-  flex-shrink: 0;
-}
 
 .mc-folder {
   display: flex;

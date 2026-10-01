@@ -28,11 +28,13 @@ import registerAdminRoutes from './routes/admin.js';
 import registerMediaRoutes from './routes/media.js';
 import registerMiscRoutes from './routes/misc.js';
 import registerThemeRoutes from './routes/theme.js';
+import registerChangeRoutes from './routes/changes.js';
 import { localOnlyMiddleware } from './lib/localonly.js';
 import { installEgressGuard } from './lib/egress.js';
 import { sameOriginGuard } from './lib/origin.js';
 import { uploadHeaders, isPublicUpload } from './lib/uploads.js';
 import { migratePromptBlocks } from './lib/systemprompt.js';
+import { ensureInitialRelease } from './lib/releases.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3001;
@@ -40,6 +42,7 @@ const HOST = process.env.HOST || '127.0.0.1';
 
 installEgressGuard();
 migratePromptBlocks();
+ensureInitialRelease();
 
 const app = express();
 app.disable('x-powered-by');
@@ -78,6 +81,7 @@ registerSettingsRoutes(app);
 registerAdminRoutes(app);
 registerMediaRoutes(app);
 registerThemeRoutes(app);
+registerChangeRoutes(app);
 registerMiscRoutes(app);
 
 // Unknown API routes answer in JSON. Falling through to the SPA handler below served a

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../../lib/api.js';
 import { useAdmin } from '../store.jsx';
-import { Card, Btn, Acts, Table, Stats, Badge, Empty, Note, KV, fmtInt, fmtMoney, fmtAgo } from '../ui.jsx';
-import { PublishState } from '../publish.jsx';
+import { Card, Btn, Acts, Table, Stats, Badge, Empty, KV, fmtInt, fmtMoney, fmtAgo } from '../ui.jsx';
+import { changeCount } from '../changes/count.js';
 import { Plus, Sliders, Users, Clock } from '../../ui/icons.jsx';
 import { t } from '../../../i18n.jsx';
 import { Skel, SkelTable } from '../../ui/Skeleton.jsx';
@@ -11,8 +11,9 @@ const RECENT_EVENTS = 8;
 const USAGE_DAYS = 30;
 
 export default function OverviewSection() {
-  const { catalog, members, setSection, openModel } = useAdmin();
-  const { models, providers, draft, publishError, createModel } = catalog;
+  const { catalog, members, changes, setSection, openModel } = useAdmin();
+  const { models, providers, createModel } = catalog;
+  const pending = changes.changes.length;
   const [usage, setUsage] = useState(null);
   const [events, setEvents] = useState(null);
 
@@ -46,17 +47,11 @@ export default function OverviewSection() {
         { k: t('30-day spend'), v: usage ? fmtMoney(usage.totals.cost) : '—', n: usage ? t('{n} tokens', { n: fmtInt(usage.totals.total) }) : t('loading') }
       ]} />
 
-      <Card title={t('Draft')}
-        sub={t('Every edit in this panel is staged. You see your own draft straight away; members keep running the published version until you publish.')}
-        actions={<PublishState />}>
-        <Note tone={draft.dirty ? 'warn' : undefined}>
-          {draft.dirty
-            ? t('The draft has changes members are not running yet.')
-            : draft.published ? t('Members are running the current draft.') : t('Nothing has been published yet.')}
-        </Note>
-        {!!publishError && <Note tone="bad">{publishError}</Note>}
+      <Card title={t('Live version')}
+        actions={<Btn size="sm" onClick={() => setSection('releases')}>{t('Open releases')}</Btn>}>
         <KV items={[
-          [t('Last published'), draft.publishedAt ? new Date(draft.publishedAt).toLocaleString() : t('never')],
+          [t('Members are on'), changes.version ? t('Version {v}', { v: changes.version }) : t('loading')],
+          [t('Waiting in the draft'), pending ? changeCount(pending) : t('nothing')],
           [t('Fallback model'), fallback
             ? <button type="button" className="linklike" onClick={() => openModel(fallback.id)}>
               {fallback.display_name || fallback.internal_name}

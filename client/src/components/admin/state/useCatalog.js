@@ -1,49 +1,32 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { api } from '../../../lib/api.js';
+import { api, TAB_ID } from '../../../lib/api.js';
+import { toast } from '../../../lib/toast.js';
 import { t } from '../../../i18n.jsx';
 import { touchesBlocks, syncModelPrompt } from '../../../lib/promptblocks.js';
 import { pick } from './history.js';
 
 const SAVE_DELAY = 450;
-const SAVED_LINGER = 1800;
-const ECHO_WINDOW = 1200;
-const REFOCUS_RETRY = 2500;
 
-export function useCatalog({ confirm, features, history }) {
+const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+export function useCatalog({ confirm, features, history, changes }) {
   const [models, setModels] = useState([]);
   const [providers, setProviders] = useState([]);
   const [providerTypes, setProviderTypes] = useState({});
   const [selection, setSelection] = useState([]);
   const [folders, setFolders] = useState([]);
-  const [draft, setDraft] = useState({ published: false, dirty: false, publishedAt: null, changed: [] });
-  const [publishing, setPublishing] = useState(false);
-  const [reverting, setReverting] = useState(false);
-  const [publishError, setPublishError] = useState('');
-  const [saveState, setSaveState] = useState('idle');
   const [probe, setProbe] = useState({});
   const [ready, setReady] = useState(false);
 
   const modelsRef = useRef([]);
   const providersRef = useRef([]);
   const pending = useRef(new Map());
-  const guard = useRef(new Map());
+  const inflight = useRef(new Map());
   const flushTimer = useRef(null);
   const queue = useRef(Promise.resolve());
-  const linger = useRef(null);
 
   useEffect(() => { modelsRef.current = models; }, [models]);
   useEffect(() => { providersRef.current = providers; }, [providers]);
-
-  const settle = useCallback((state) => {
-    setSaveState(state);
-    clearTimeout(linger.current);
-    if (state !== 'saved') return;
-    linger.current = setTimeout(() => setSaveState(s => (s === 'saved' ? 'idle' : s)), SAVED_LINGER);
-  }, []);
-
-  const readDraft = useCallback(async () => {
-    try { setDraft(await api.get('/api/admin/models/publish-state')); } catch {}
-  }, []);
 
   const loadModels = useCallback(async () => {
     try { setModels(await api.get('/api/admin/models')); } catch {}
@@ -84,8 +67,7 @@ export function useCatalog({ confirm, features, history }) {
   const reload = useCallback(async () => {
     await Promise.all([loadModels(), loadProviders(), loadFolders()]);
     setReady(true);
-    readDraft();
-  }, [loadModels, loadProviders, loadFolders, readDraft]);
+  }, [loadModels, loadProviders, loadFolders]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -100,54 +82,74 @@ export function useCatalog({ confirm, features, history }) {
     flushTimer.current = null;
     const rows = takeRows();
     if (!rows.length) return queue.current;
+    for (const row of rows) inflight.current.set(row.id, { ...(inflight.current.get(row.id) || {}), ...row });
     queue.current = queue.current.then(async () => {
       try {
         await api.patch('/api/admin/models', { rows });
-        settle('saved');
-        readDraft();
-      } catch {
-        settle('error');
+      } catch (e) {
+        toast(e?.message || t('A model change could not be saved.'), { kind: 'error', icon: 'info' });
         loadModels();
       } finally {
-        for (const { id } of rows) {
-          clearTimeout(guard.current.get(id));
-          guard.current.set(id, setTimeout(() => guard.current.delete(id), ECHO_WINDOW));
-        }
+        for (const { id } of rows) inflight.current.delete(id);
       }
     });
     return queue.current;
-  }, [takeRows, settle, readDraft, loadModels]);
+  }, [takeRows, loadModels]);
 
   useEffect(() => () => {
     clearTimeout(flushTimer.current);
-    clearTimeout(linger.current);
-    for (const id of guard.current.values()) clearTimeout(id);
     const rows = takeRows();
     if (rows.length) api.patch('/api/admin/models', { rows }).catch(() => {});
   }, [takeRows]);
 
+  const unsaved = useCallback(() => pending.current.size > 0 || inflight.current.size > 0, []);
+
   useEffect(() => {
-    let retry;
-    async function onConfig() {
-      const el = document.activeElement;
-      if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') && el.closest('.cp, .cp-dialog')) {
-        clearTimeout(retry);
-        retry = setTimeout(onConfig, REFOCUS_RETRY);
-        return;
+    const local = (id) => ({ ...(inflight.current.get(id) || {}), ...(pending.current.get(id) || {}) });
+    function merge(rows) {
+      const clashes = [];
+      const next = new Map(modelsRef.current.map(m => [m.id, m]));
+      for (const row of rows) {
+        const mine = local(row.id);
+        const cur = next.get(row.id);
+        for (const k of Object.keys(mine)) {
+          if (k !== 'id' && cur && !same(cur[k], row[k]) && !same(mine[k], row[k])) clashes.push(row.display_name || row.internal_name || '');
+        }
+        next.set(row.id, { ...row, ...mine, id: row.id });
       }
-      try {
-        const fresh = await api.get('/api/admin/models');
-        setModels(cur => fresh.map(f => ((pending.current.has(f.id) || guard.current.has(f.id))
-          ? (cur.find(c => c.id === f.id) || f)
-          : f)));
-        setSelection(sel => sel.filter(id => fresh.some(f => f.id === id)));
-        readDraft();
-        loadFolders();
-      } catch {}
+      const list = [...next.values()].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+      modelsRef.current = list;
+      setModels(list);
+      if (clashes.length) toast(t('Another admin changed “{name}” while you were editing it. Your edit is kept.', { name: clashes[0] }), { icon: 'info' });
     }
-    window.addEventListener('oq-config', onConfig);
-    return () => { clearTimeout(retry); window.removeEventListener('oq-config', onConfig); };
-  }, [readDraft, loadFolders]);
+    function onDraft(e) {
+      const f = e.detail || {};
+      const own = !!f.tab && f.tab === TAB_ID;
+      if (f.scope === 'all') { reload(); return; }
+      if (f.scope === 'providers') { if (!own) loadProviders(); return; }
+      if (f.scope === 'folders') { if (Array.isArray(f.folders)) setFolders(f.folders); return; }
+      if (f.scope !== 'models' || own) return;
+      if (f.reload) { loadModels(); return; }
+      if (Array.isArray(f.rows) && f.rows.length) merge(f.rows);
+      if (Array.isArray(f.removed) && f.removed.length) {
+        const gone = new Set(f.removed);
+        for (const id of gone) pending.current.delete(id);
+        modelsRef.current = modelsRef.current.filter(m => !gone.has(m.id));
+        setModels(modelsRef.current);
+        setSelection(sel => sel.filter(id => !gone.has(id)));
+      }
+      if (Array.isArray(f.order) && f.order.length) {
+        const rank = new Map(f.order.map((id, i) => [id, i]));
+        const list = modelsRef.current
+          .map(m => (rank.has(m.id) ? { ...m, sort_order: rank.get(m.id) } : m))
+          .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+        modelsRef.current = list;
+        setModels(list);
+      }
+    }
+    window.addEventListener('oq-admin-draft', onDraft);
+    return () => window.removeEventListener('oq-admin-draft', onDraft);
+  }, [reload, loadModels, loadProviders]);
 
   const stage = useCallback((all) => {
     const patches = new Map([...all].filter(([id]) => modelsRef.current.some(m => m.id === id)));
@@ -159,15 +161,10 @@ export function useCatalog({ confirm, features, history }) {
     });
     modelsRef.current = next;
     setModels(next);
-    for (const [id, p] of patches) {
-      pending.current.set(id, { ...(pending.current.get(id) || {}), ...p });
-      clearTimeout(guard.current.get(id));
-      guard.current.set(id, null);
-    }
-    settle('saving');
+    for (const [id, p] of patches) pending.current.set(id, { ...(pending.current.get(id) || {}), ...p });
     clearTimeout(flushTimer.current);
     flushTimer.current = setTimeout(flush, SAVE_DELAY);
-  }, [flush, settle]);
+  }, [flush]);
 
   const edit = useCallback((ids, change) => {
     const per = typeof change === 'function' ? change : () => change;
@@ -202,8 +199,7 @@ export function useCatalog({ confirm, features, history }) {
       setModels(ms => ms.filter(m => !ids.includes(m.id)));
     } catch { await loadModels(); }
     setSelection(sel => sel.filter(id => !ids.includes(id)));
-    readDraft();
-  }, [loadModels, readDraft]);
+  }, [loadModels]);
 
   const createModel = useCallback(async () => {
     await flush();
@@ -211,9 +207,8 @@ export function useCatalog({ confirm, features, history }) {
     history?.record({ undo: () => dropModels([id]) });
     await loadModels();
     setSelection([id]);
-    readDraft();
     return id;
-  }, [flush, loadModels, readDraft, history, dropModels]);
+  }, [flush, loadModels, history, dropModels]);
 
   const duplicateModels = useCallback(async (ids) => {
     await flush();
@@ -222,9 +217,8 @@ export function useCatalog({ confirm, features, history }) {
       if (r.ids?.length) history?.record({ undo: () => dropModels(r.ids) });
       await loadModels();
       setSelection(r.ids || []);
-    } catch { settle('error'); }
-    readDraft();
-  }, [flush, loadModels, readDraft, settle, history, dropModels]);
+    } catch (e) { toast(e?.message || t('The models could not be duplicated.'), { kind: 'error', icon: 'info' }); }
+  }, [flush, loadModels, history, dropModels]);
 
   const removeModels = useCallback((ids) => {
     const one = ids.length === 1;
@@ -243,8 +237,7 @@ export function useCatalog({ confirm, features, history }) {
     setModels(arr);
     try { await api.post('/api/admin/models/reorder', { ids: arr.map(m => m.id) }); }
     catch { await loadModels(); }
-    readDraft();
-  }, [loadModels, readDraft]);
+  }, [loadModels]);
 
   const orderBy = useCallback((ids) => {
     const rank = new Map(ids.map((id, i) => [id, i]));
@@ -258,36 +251,6 @@ export function useCatalog({ confirm, features, history }) {
     history?.record({ undo: () => orderBy(was), redo: () => orderBy(now) });
     return writeOrder(arr);
   }, [history, writeOrder, orderBy]);
-
-  const publish = useCallback(async () => {
-    setPublishing(true);
-    setPublishError('');
-    try {
-      await flush();
-      await api.post('/api/admin/models/publish', {});
-      await readDraft();
-    } catch (e) {
-      setPublishError(e?.message || t('The catalog could not be published.'));
-    } finally { setPublishing(false); }
-  }, [flush, readDraft]);
-
-  const revert = useCallback(async () => {
-    setReverting(true);
-    setPublishError('');
-    try {
-      await flush();
-      await api.post('/api/admin/models/revert', {});
-      const fresh = await api.get('/api/admin/models');
-      modelsRef.current = fresh;
-      setModels(fresh);
-      setSelection(sel => sel.filter(id => fresh.some(m => m.id === id)));
-      await readDraft();
-      return true;
-    } catch (e) {
-      setPublishError(e?.message || t('The changes could not be reverted.'));
-      return false;
-    } finally { setReverting(false); }
-  }, [flush, readDraft]);
 
   const addProvider = useCallback(async () => {
     await api.post('/api/admin/providers', { type: 'llamacpp' });
@@ -322,7 +285,7 @@ export function useCatalog({ confirm, features, history }) {
 
   return {
     models, providers, providerTypes, ready, selection, setSelection, folders, saveFolders, keepFolders,
-    draft, publishing, publish, reverting, revert, publishError, saveState,
+    draft: changes.models, unsaved,
     edit, flush, createModel, duplicateModels, removeModels, reorderModels,
     addProvider, patchProvider, removeProvider, probeProvider, probe,
     reload, loadModels, loadProviders

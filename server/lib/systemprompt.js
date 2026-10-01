@@ -35,12 +35,12 @@ export function syncedPrompt(cur, patch, features = draftFeatures()) {
 }
 
 export function syncAllModels(before, after) {
-  let changed = 0;
+  const changed = [];
   for (const m of db.models.all()) {
     const text = syncModelPrompt(m, m, before, after);
     if (text === (m.system_prompt ?? '')) continue;
     db.models.update(m.id, { system_prompt: text });
-    changed++;
+    changed.push(m.id);
   }
   return changed;
 }

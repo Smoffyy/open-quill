@@ -224,31 +224,6 @@
 .cp-menu-empty { padding: var(--cp-3); font-size: 12.5px; color: var(--cp-faint); }
 .cp-menu-sep { height: 1px; margin: var(--cp-1) var(--cp-2); background: var(--pop-divider); }
 
-/* ---------- publish state ---------- */
-
-.cp-publish { display: flex; align-items: center; gap: var(--cp-3); flex-shrink: 0; }
-.cp-state {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--cp-2);
-  font-size: 12.5px;
-  color: var(--cp-dim);
-  white-space: nowrap;
-}
-.cp-state.bad { color: var(--danger); }
-.cp-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--cp-faint);
-  flex-shrink: 0;
-}
-.cp-dot.live { background: var(--success); }
-.cp-dot.pending { background: var(--warning); animation: cpPulse 1.8s ease-in-out infinite; }
-.cp-dot.bad { background: var(--danger); }
-@keyframes cpPulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
-@media (prefers-reduced-motion: reduce) { .cp-dot.pending { animation: none; } }
-
 /* ---------- body + rail ---------- */
 
 .cp-body { display: grid; grid-template-columns: var(--cp-rail) minmax(0, 1fr); min-height: 0; }
@@ -320,13 +295,6 @@
   font-size: 13px;
   color: var(--cp-dim);
   margin: var(--cp-1) 0 0;
-}
-.cp-head-acts {
-  display: flex;
-  align-items: center;
-  gap: var(--cp-2);
-  flex-shrink: 0;
-  min-height: var(--cp-h);
 }
 
 .cp-scroll { flex: 1; min-height: 0; overflow: hidden auto; }
@@ -911,10 +879,6 @@ code.cp-code {
   .cp-find { width: 100%; order: 3; }
   .cp-find kbd { display: none; }
   .cp-mark span { display: none; }
-}
-
-@media (max-width: 480px) {
-  .cp-top .cp-state { display: none; }
 }
 
 /* Theme rows in the Interface section. One row per theme, the active one marked

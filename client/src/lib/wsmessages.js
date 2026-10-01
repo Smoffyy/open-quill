@@ -27,9 +27,19 @@ export const handlers = {
   },
 
   config(m, ctx) {
-    ctx.actions.loadModels();
-    ctx.actions.loadAppConfig();
-    try { window.dispatchEvent(new CustomEvent('oq-config')); } catch {}
+    ctx.actions.syncConfig(m.version, false);
+  },
+
+  hello(m, ctx) {
+    ctx.actions.syncConfig(m.configVersion, true);
+  },
+
+  admin_draft(m, ctx) {
+    ctx.actions.adminDraft(m);
+  },
+
+  presence(m, ctx) {
+    ctx.actions.presence(Array.isArray(m.admins) ? m.admins : []);
   },
 
   // Sent on connect: every turn this user has running, so a reload picks them up.

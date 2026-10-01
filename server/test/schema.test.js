@@ -12,7 +12,7 @@ const indexes = (sdb) =>
 const EXPECTED_TABLES = [
   'users', 'folders', 'chats', 'messages', 'models', 'usage', 'settings',
   'sessions', 'audit', 'projects', 'feedback',
-  'toolstats', 'tasks', 'skills'
+  'toolstats', 'tasks', 'skills', 'releases', 'draft_edits'
 ];
 
 test('an empty database migrates all the way to the current version', () => {

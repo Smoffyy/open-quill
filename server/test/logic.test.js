@@ -19,6 +19,7 @@ import { trimInTurn, compactThreshold, estimateTokens, textTokens, makeTokenCoun
 import { scanTools } from '../lib/toolproto.js';
 import { isContextOverflowError } from '../lib/llamacpp.js';
 import { sanitizeDoc, blankLayoutDoc, normalizeStoreForTest, docDiffCount } from '../lib/theme.js';
+import { diffState, applyState, expandKeys } from '../lib/changes.js';
 import { winTranslate, wsKey, projectKey, isProjectKey, execTool, childEnv } from '../sandbox.js';
 import { screenCommand, normalizeRel, compileSearchPattern } from '../lib/sandboxguard.js';
 import { resolveToolName, makeToolResolver, nearestTool, SANDBOX_TOOLS } from '../tools/aliases.js';
@@ -33,7 +34,7 @@ import { samplingParams, parseStop } from '../llm/sampling.js';
 import { PROVIDER_TYPES, isProviderType, providerSpec, isLocalType } from '../lib/providers.js';
 import { slideWithCounter, trimMode } from '../lib/ctxwindow.js';
 import { sameOrigin, sameOriginGuard, requestHost } from '../lib/origin.js';
-import { SETTING_FIELDS, coerceSetting } from '../routes/settings.js';
+import { SETTING_FIELDS, coerceSetting } from '../lib/settingfields.js';
 import { localOnlyCsp } from '../lib/localonly.js';
 import { runQueued } from '../lib/queue.js';
 import { isText } from '../sandbox/ignore.js';
@@ -2569,4 +2570,57 @@ test('profile lists from an import are cleaned like the save routes clean them',
   assert.equal(prefsFit({ a: 'x'.repeat(300 * 1024) }), false);
   assert.equal(prefsFit([]), false);
   assert.equal(prefsFit({ theme: 'dark' }), true);
+});
+
+const stateOf = (models, settings = {}, themes = { activeId: 'a', themes: [{ id: 'a', name: 'A', basePreset: 'anthropic', doc: {} }] }) => ({ models, settings, themes });
+
+test('the change list is per field, per setting and per theme, and ignores sort numbers', () => {
+  const live = stateOf([
+    { id: 'm1', display_name: 'One', temperature: 0.7, sort_order: 0 },
+    { id: 'm2', display_name: 'Two', sort_order: 1 },
+    { id: 'm3', display_name: 'Three', sort_order: 2 }
+  ], { app_name: 'Quill', api_key: 'old' });
+  const draft = stateOf([
+    { id: 'm2', display_name: 'Two', sort_order: 5 },
+    { id: 'm1', display_name: 'Uno', temperature: 0.7, badges_off: undefined, sort_order: 6 },
+    { id: 'm4', display_name: 'Four', sort_order: 7 }
+  ], { app_name: 'Quill 2', api_key: 'new' }, {
+    activeId: 'b',
+    themes: [{ id: 'a', name: 'A', basePreset: 'anthropic', doc: { tokens: { color: { accent: '#111' } } } }, { id: 'b', name: 'B', basePreset: 'openai', doc: {} }]
+  });
+  const changes = diffState(live, draft, { secret: new Set(['api_key']) });
+  const keys = changes.map(c => c.key).sort();
+  assert.deepEqual(keys, ['model:m1:display_name', 'model:m3', 'model:m4', 'models:order', 'setting:api_key', 'setting:app_name', 'theme:a:doc', 'theme:b', 'themes:active']);
+  assert.equal(changes.find(c => c.key === 'model:m3').kind, 'delete');
+  assert.equal(changes.find(c => c.key === 'model:m4').kind, 'create');
+  assert.deepEqual(changes.find(c => c.key === 'models:order').after, ['m2', 'm1']);
+  const secret = changes.find(c => c.key === 'setting:api_key');
+  assert.equal(secret.secret, true);
+  assert.equal(secret.before, null, 'a secret never leaves the server in a change list');
+  assert.equal(changes.find(c => c.key === 'theme:a:doc').count, 1);
+});
+
+test('publishing a subset leaves exactly the rest pending', () => {
+  const live = stateOf([{ id: 'm1', display_name: 'One', top_p: 0.9, sort_order: 0 }], { app_name: 'Quill', disclaimer: 'x' });
+  const draft = stateOf([{ id: 'm1', display_name: 'Uno', sort_order: 0 }], { app_name: 'Quill 2', disclaimer: 'y' });
+  const all = diffState(live, draft);
+  const next = applyState(live, draft, ['model:m1:top_p', 'setting:app_name']);
+  assert.equal('top_p' in next.models[0], false, 'a field the draft removed is removed, not nulled');
+  const left = diffState(next, draft).map(c => c.key).sort();
+  assert.deepEqual(left, ['model:m1:display_name', 'setting:disclaimer']);
+  const back = applyState(draft, live, all.map(c => c.key));
+  assert.deepEqual(diffState(live, back), [], 'discarding everything returns the draft to the live state');
+});
+
+test('changes that only make sense together are published together', () => {
+  const live = stateOf([{ id: 'a', is_default: 1, sort_order: 0 }, { id: 'b', is_default: 0, sort_order: 1 }], { ui_preset: 'anthropic' });
+  const draft = stateOf([
+    { id: 'b', is_default: 1, sort_order: 0 }, { id: 'a', is_default: 0, sort_order: 1 }, { id: 'c', sort_order: 2 }
+  ], { ui_preset: 'openai' }, { activeId: 'n', themes: [{ id: 'a', name: 'A', basePreset: 'anthropic', doc: {} }, { id: 'n', name: 'N', basePreset: 'openai', doc: {} }] });
+  const changes = diffState(live, draft);
+  assert.deepEqual(expandKeys(changes, ['model:b:is_default']).sort(), ['model:a:is_default', 'model:b:is_default'], 'one default at a time');
+  assert.deepEqual(expandKeys(changes, ['model:c']).sort(), ['model:c', 'models:order'], 'a new model ships with the order it was placed in');
+  assert.deepEqual(expandKeys(changes, ['model:c'], 'discard'), ['model:c'], 'but dropping one leaves the order alone');
+  assert.deepEqual(expandKeys(changes, ['setting:ui_preset']).sort(), ['setting:ui_preset', 'theme:n', 'themes:active'], 'a layout ships with its base preset and the theme it points at');
+  assert.deepEqual(expandKeys(changes, ['nope']), [], 'unknown keys are ignored');
 });
