@@ -269,9 +269,13 @@ export default function Weave({ state = 'idle', still = false, className = '', s
   useEffect(() => {
     const o = inst.current;
     if (!o) return;
-    o.target = weaveState(state);
+    const idle = weaveState('idle');
+    const target = weaveState(state);
+    const finished = o.target !== idle && target === idle;
+    o.target = target;
     o.still = still;
     settle(o);
+    if (finished) poke(o);
   }, [state, still]);
 
   return (
