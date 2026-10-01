@@ -3,7 +3,7 @@ import { argText, argBody, argBool, argInt, argList, argPath, argDest, missingAr
 import {
   createFile, strReplace, insertLines, view, treeString, list, findFiles, search,
   deleteFile, renameFile, copyFile, makeDir, extractZip, bundleZip, clearAll,
-  overCap, capError, dirSize
+  overCap, capError, dirSize, forgetSize
 } from './files.js';
 import { bash } from './shell.js';
 import { isProjectKey } from './paths.js';
@@ -29,7 +29,8 @@ const HANDLERS = {
   async bash(chatId, call, { signal } = {}) {
     const t = argInt(call, 'timeout_s', 'timeout');
     const ms = Number.isFinite(t) && t > 0 ? Math.min(t, 600) * 1000 : 60000;
-    return bash(chatId, argText(call, 'cmd', 'command', 'script'), ms, argText(call, 'workdir', 'cwd'), signal);
+    try { return await bash(chatId, argText(call, 'cmd', 'command', 'script'), ms, argText(call, 'workdir', 'cwd'), signal); }
+    finally { forgetSize(chatId); }
   },
 
   create_file(chatId, call, { rel, missing, maxBytes }) {

@@ -21,9 +21,8 @@ export default function registerArtifactRoutes(app) {
   app.get('/api/artifacts', authMiddleware, (req, res) => {
     const q = String(req.query.q ?? '').slice(0, 120).trim().toLowerCase();
     const limit = Math.min(LIBRARY_PAGE, Math.max(1, parseInt(req.query.limit, 10) || LIBRARY_PAGE));
-    const chats = db.chats.byUser(req.user.id)
+    const chats = db.chats.listByUser(req.user.id)
       .filter(c => !c.archived)
-      .sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0))
       .slice(0, LIBRARY_SCAN);
     const items = [];
     const seen = new Set();
@@ -35,14 +34,14 @@ export default function registerArtifactRoutes(app) {
       if (seen.has(key)) continue;
       seen.add(key);
       let files;
-      try { files = sandbox.list(wsOf(c)); } catch { continue; }
+      try { files = sandbox.list(key); } catch { continue; }
       if (!Array.isArray(files)) continue;
       for (const f of files) {
         if (q && f.path.toLowerCase().indexOf(q) === -1 && String(c.title || '').toLowerCase().indexOf(q) === -1) continue;
         let preview = '';
         if (f.size > 0 && f.size < 512 * 1024) {
           try {
-            if (sandbox.isViewableText(wsOf(c), f.path)) preview = String(sandbox.readText(wsOf(c), f.path) || '').slice(0, PREVIEW_CHARS);
+            if (sandbox.isText(f.path)) preview = sandbox.readHead(key, f.path, PREVIEW_CHARS * 4).slice(0, PREVIEW_CHARS);
           } catch { preview = ''; }
         }
         items.push({

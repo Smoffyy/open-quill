@@ -3,11 +3,12 @@ import { hash, check, sign, publicUser, authMiddleware, sessionFromRequest, crea
 import { oneShot, stripThink } from '../llm/index.js';
 import { randomSecret, verifyTotp, otpauthUri, makeRecoveryCodes, hashRecovery } from '../lib/totp.js';
 import { logAudit, clientIp } from '../lib/audit.js';
-import { purgeUserChats } from '../lib/purge.js';
+import { purgeUserChats, purgeUser } from '../lib/purge.js';
 import { resolveModelOrDefault } from '../lib/models.js';
 import { budgetStatus } from '../lib/budget.js';
 import { memoriesOf, changeMemory, setMemories } from '../lib/memory.js';
 import { killSessionSockets } from '../lib/ws/index.js';
+import { cleanStyles, cleanPersonas, cleanPrompts, prefsFit } from '../lib/profile.js';
 
 const isHttps = (req) =>
   !!req.socket?.encrypted || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
@@ -67,7 +68,6 @@ async function passwordMatches(pw, stored) {
   return false;
 }
 
-const PREFS_MAX_BYTES = 256 * 1024;
 export const USAGE_WINDOWS = new Set([7, 30, 90]);
 
 const DEFAULT_STYLE_GEN_PROMPT ='You create writing-style instructions for an AI assistant. The user will provide a sample of writing they like. Analyze its tone, sentence structure, vocabulary, formality, formatting habits, and personality, then output ONLY a concise instruction paragraph (under 120 words) telling an assistant how to write in that style. Do not mention the sample, do not add a preamble, output only the instruction text.';
@@ -126,14 +126,18 @@ export default function registerAuthRoutes(app) {
     if (!/.+@.+\..+/.test(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
     if (pw.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
     if (pw.length > 1024) return res.status(400).json({ error: 'That password is too long.' });
-    const isFirst = db.users.count() === 0;
-    if (!isFirst && getSetting('allow_signups', '1') !== '1') {
-      return res.status(403).json({ error: 'New accounts are turned off on this server.' });
-    }
-    if (db.users.byEmail(email)) { keys.forEach(noteLoginFail); return res.status(409).json({ error: 'An account with that email already exists.' }); }
-    const u = db.users.insert({ id: uid(), email, password_hash: await hash(pw), display_name: '', is_admin: isFirst ? 1 : 0, is_owner: isFirst ? 1 : 0, prefs: {}, created_at: now() });
-    if (isFirst) setSetting('setup_complete', '0');
-    logAudit(req, 'user.register', { type: 'user', id: u.id, meta: { email, owner: isFirst } });
+    const refused = () => {
+      if (db.users.count() !== 0 && getSetting('allow_signups', '1') !== '1') return res.status(403).json({ error: 'New accounts are turned off on this server.' });
+      if (db.users.byEmail(email)) { keys.forEach(noteLoginFail); return res.status(409).json({ error: 'An account with that email already exists.' }); }
+      return null;
+    };
+    if (refused()) return;
+    const passwordHash = await hash(pw);
+    if (refused()) return;
+    const owner = db.users.count() === 0;
+    const u = db.users.insert({ id: uid(), email, password_hash: passwordHash, display_name: '', is_admin: owner ? 1 : 0, is_owner: owner ? 1 : 0, prefs: {}, created_at: now() });
+    if (owner) setSetting('setup_complete', '0');
+    logAudit(req, 'user.register', { type: 'user', id: u.id, meta: { email, owner } });
     const sid = createSession(u, req);
     setCookie(req, res, sign(u, sid));
     res.json({ user: publicUser(u) });
@@ -158,7 +162,7 @@ export default function registerAuthRoutes(app) {
         return res.status(400).json({ error: 'prefs must be an object.' });
       }
       const prefs = b.prefs || {};
-      if (JSON.stringify(prefs).length > PREFS_MAX_BYTES) return res.status(413).json({ error: 'Settings are too large to save.' });
+      if (!prefsFit(prefs)) return res.status(413).json({ error: 'Settings are too large to save.' });
       patch.prefs = prefs;
     }
     if ('displayName' in b) patch.display_name = String(b.displayName ?? '').slice(0, 80);
@@ -169,13 +173,7 @@ export default function registerAuthRoutes(app) {
   });
 
   app.put('/api/me/styles', authMiddleware, (req, res) => {
-    const list = (Array.isArray(req.body.styles) ? req.body.styles : [])
-      .map(x => ({
-        id: String(x.id || uid()).slice(0, 40),
-        name: String(x.name || '').trim().slice(0, 50),
-        prompt: String(x.prompt || '').trim().slice(0, 4000)
-      }))
-      .filter(x => x.name && x.prompt).slice(0, 30);
+    const list = cleanStyles(req.body.styles);
     db.users.update(req.user.id, { styles: list });
     res.json({ styles: list });
   });
@@ -250,22 +248,13 @@ export default function registerAuthRoutes(app) {
   });
 
   app.put('/api/me/personas', authMiddleware, (req, res) => {
-    const list = (Array.isArray(req.body.personas) ? req.body.personas : [])
-      .map(p => ({
-        id: String(p.id || uid()).slice(0, 40),
-        name: String(p.name || '').trim().slice(0, 60),
-        modelId: p.modelId ? String(p.modelId).slice(0, 40) : null,
-        instructions: String(p.instructions || '').trim().slice(0, 8000)
-      }))
-      .filter(p => p.name).slice(0, 50);
+    const list = cleanPersonas(req.body.personas);
     db.users.update(req.user.id, { personas: list });
     res.json({ personas: list });
   });
 
   app.put('/api/me/prompts', authMiddleware, (req, res) => {
-    const list = (Array.isArray(req.body.prompts) ? req.body.prompts : [])
-      .map(p => ({ id: String(p.id || uid()).slice(0, 40), title: String(p.title || '').trim().slice(0, 80), text: String(p.text || '').trim().slice(0, 8000) }))
-      .filter(p => p.title && p.text).slice(0, 50);
+    const list = cleanPrompts(req.body.prompts);
     db.users.update(req.user.id, { saved_prompts: list });
     res.json({ savedPrompts: list });
   });
@@ -379,9 +368,7 @@ export default function registerAuthRoutes(app) {
   app.delete('/api/me', authMiddleware, (req, res) => {
     const u = req.user;
     if (u.is_owner) return res.status(403).json({ error: 'The owner account cannot be deleted.' });
-    purgeUserChats(u.id);
-    db.sessions.removeWhere('user_id', u.id);
-    db.users.removeById(u.id);
+    purgeUser(u.id);
     logAudit(req, 'account.delete', { type: 'user', id: u.id, meta: { email: u.email } });
     setCookie(req, res, '');
     res.json({ ok: true });

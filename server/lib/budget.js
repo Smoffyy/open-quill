@@ -1,4 +1,4 @@
-import { db, getSetting } from '../db.js';
+import { db, uid, now, getSetting } from '../db.js';
 
 export function monthStartMs() {
   const d = new Date();
@@ -34,4 +34,13 @@ export function budgetStatus(user) {
   if (fraction >= 1) state = 'over';
   else if (fraction >= cfg.warnFraction) state = 'warn';
   return { cap, spent, fraction, state, enforce: cfg.enforce };
+}
+
+export function recordUsage(userId, model, usage, name = model.display_name || '') {
+  if (!usage || !(usage.prompt || usage.completion)) return null;
+  const prompt = usage.prompt || 0, completion = usage.completion || 0;
+  const costIn = Number(model.cost_in) || 0, costOut = Number(model.cost_out) || 0;
+  const rec = { prompt, completion, total: usage.total || prompt + completion, cost: (prompt / 1e6) * costIn + (completion / 1e6) * costOut };
+  db.usage.insert({ id: uid(), user_id: userId, model_id: model.id, model_name: name, ...rec, cost_in: costIn, cost_out: costOut, created_at: now() });
+  return rec;
 }

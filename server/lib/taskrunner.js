@@ -14,6 +14,7 @@ const POLL_MS = 30000;
 export function fireTask(task) {
   const user = db.users.byId(task.user_id);
   if (!user) return { error: 'The task owner no longer exists.' };
+  if (task.last_chat_id && live.activeTurn(task.last_chat_id)) return { error: 'This task is still running from last time.' };
 
   let baseModel = resolveModelOrDefault(task.model_id, !!user.is_admin);
   if (!baseModel) return { error: 'No model is available to run this task.' };
@@ -52,8 +53,10 @@ export function fireTask(task) {
   return { chatId: chat.id };
 }
 
+const DUE_BATCH = 50;
+
 export function dueTasks(at = Date.now()) {
-  return db.tasks.filter(t => isDue(t, at));
+  return db.tasks.due(at, DUE_BATCH).filter(t => isDue(t, at));
 }
 
 export function runDueTasks() {

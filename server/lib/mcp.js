@@ -7,6 +7,8 @@ const INIT_TIMEOUT = 15000;
 const NOTIFY_TIMEOUT = 5000;
 const RESULT_CAP = 60000;
 export const USER_SERVER_LIMIT = 10;
+const STDIO_BUF_MAX = 32 * 1024 * 1024;
+const PRIVATE_ENV = ['DB_ENCRYPTION_KEY'];
 
 export function slugify(s) {
   return String(s || '').toLowerCase().trim().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 24) || 'server';
@@ -110,11 +112,19 @@ function stdioClient(server) {
   if (existing && existing.proc.exitCode == null) return existing;
   stdioClients.delete(server.id);
   const args = server.args ? server.args.split(/\s+/).filter(Boolean) : [];
-  const proc = spawn(server.command, args, { stdio: ['pipe', 'pipe', 'pipe'], env: process.env });
+  const env = { ...process.env };
+  for (const k of PRIVATE_ENV) delete env[k];
+  const proc = spawn(server.command, args, { stdio: ['pipe', 'pipe', 'pipe'], env });
   const client = { proc, seq: 0, pending: new Map(), buf: '', ready: null, stderr: '' };
   proc.stderr.on('data', (chunk) => { client.stderr = (client.stderr + chunk.toString('utf8')).slice(-4000); });
   proc.stdout.on('data', (chunk) => {
     client.buf += chunk.toString('utf8');
+    if (client.buf.length > STDIO_BUF_MAX) {
+      client.buf = '';
+      fail(new Error('MCP server sent a message larger than the limit.'));
+      try { proc.kill(); } catch {}
+      return;
+    }
     let idx;
     while ((idx = client.buf.indexOf('\n')) !== -1) {
       const line = client.buf.slice(0, idx).trim();
@@ -211,7 +221,7 @@ async function httpRequest(server, method, params, session, timeoutMs) {
     });
     const newSession = res.headers.get('mcp-session-id') || session?.sessionId || null;
     const text = await res.text();
-    if (!res.ok) throw new Error(`MCP HTTP ${res.status}: ${text.slice(0, 200)}`);
+    if (!res.ok) throw Object.assign(new Error(`MCP HTTP ${res.status}: ${text.slice(0, 200)}`), { status: res.status });
     const msg = parseHttpBody(text, res.headers.get('content-type'));
     if (!msg) throw new Error('MCP server returned an unreadable response.');
     if (msg.error) throw new Error(msg.error.message || 'MCP error');
@@ -250,11 +260,18 @@ async function rpc(server, method, params, timeoutMs = CALL_TIMEOUT) {
     const client = await stdioEnsureReady(server);
     return stdioRequest(client, method, params, timeoutMs);
   }
-  try {
+  const attempt = async () => {
     const session = await httpEnsureSession(server);
-    const { result } = await httpRequest(server, method, params, session, timeoutMs);
-    return result;
-  } catch (e) {
+    return (await httpRequest(server, method, params, session, timeoutMs)).result;
+  };
+  try { return await attempt(); }
+  catch (e) {
+    const expired = e?.status === 404 && httpSessions.get(server.id)?.sessionId;
+    httpSessions.delete(server.id);
+    if (!expired) throw e;
+  }
+  try { return await attempt(); }
+  catch (e) {
     httpSessions.delete(server.id);
     throw e;
   }

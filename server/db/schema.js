@@ -68,7 +68,10 @@ CREATE INDEX IF NOT EXISTS idx_skills_user ON skills(user_id, name);`,
 
   // Spaces (shared multi-user chat rooms) was removed as a feature; drop the tables it left behind.
   `DROP TABLE IF EXISTS space_messages;
-DROP TABLE IF EXISTS spaces;`
+DROP TABLE IF EXISTS spaces;`,
+
+  `CREATE INDEX IF NOT EXISTS idx_tasks_next ON tasks(next_run);
+CREATE INDEX IF NOT EXISTS idx_sessions_seen ON sessions(last_seen);`
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length + 1;
@@ -82,8 +85,10 @@ export function migrate(sdb) {
   for (let i = 0; i < MIGRATIONS.length; i++) {
     const version = i + 2;
     if (at() >= version) continue;
-    sdb.exec(MIGRATIONS[i]);
-    sdb.pragma(`user_version = ${version}`);
+    sdb.transaction(() => {
+      sdb.exec(MIGRATIONS[i]);
+      sdb.pragma(`user_version = ${version}`);
+    })();
   }
   return at();
 }

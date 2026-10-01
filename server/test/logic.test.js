@@ -2552,3 +2552,21 @@ test('a growing write changes the live key, so frames keep flowing', () => {
   const two = keyOf('{"content":"aaabbb');
   assert.notEqual(one, two, 'an unchanging key is what froze the row at "Creating"');
 });
+
+test('web search only fetches result pages on public addresses', async () => {
+  const { isPublicUrl } = await import('../lib/websearch.js');
+  for (const url of ['http://127.0.0.1:3001/api', 'http://10.0.0.5/', 'http://169.254.169.254/latest/meta-data', 'http://[::1]/', 'http://192.168.1.1/', 'file:///etc/passwd', 'not a url']) {
+    assert.equal(await isPublicUrl(url), false, url);
+  }
+  assert.equal(await isPublicUrl('https://8.8.8.8/'), true);
+});
+
+test('profile lists from an import are cleaned like the save routes clean them', async () => {
+  const { cleanStyles, cleanPersonas, cleanPrompts, prefsFit } = await import('../lib/profile.js');
+  assert.deepEqual(cleanStyles([null, 'x', { id: 's1', name: { bad: 1 }, prompt: 'p' }, { id: 's2', name: ' Calm ', prompt: ' be calm ' }]).map(s => [s.id, s.name, s.prompt]), [['s1', '[object Object]', 'p'], ['s2', 'Calm', 'be calm']]);
+  assert.equal(cleanPersonas([{ id: 'p', name: 'x'.repeat(100), instructions: 'y'.repeat(9000) }])[0].instructions.length, 8000);
+  assert.equal(cleanPrompts(Array.from({ length: 80 }, (_, i) => ({ id: 'q' + i, title: 't', text: 'x' }))).length, 50);
+  assert.equal(prefsFit({ a: 'x'.repeat(300 * 1024) }), false);
+  assert.equal(prefsFit([]), false);
+  assert.equal(prefsFit({ theme: 'dark' }), true);
+});

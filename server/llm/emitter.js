@@ -16,6 +16,9 @@ const TEXT_CALL_TAGS = [
 const LOOSE_OPENS = ['<parameter=', '<parameter name=', '[used ', '[tool_call', '[tool '];
 const LOOSE_PROBE = 400;
 const NAME_BACK = 240;
+const RESCAN = 256;
+const PARK_TAIL = 64;
+const PARAM_EDGE = /<\s*\/?\s*parameter/i;
 const CONTINUATIONS = ['<parameter=', '<parameter name=', '</function>', '</invoke>', '</tool_call>', '</tool_calls>', '[/TOOL_CALLS]', '[/TOOL_CALL]'];
 const PARAM_OPEN_G = /<\s*parameter(?:\s*=\s*|\s+name\s*=\s*)["']?[A-Za-z0-9_.-]+["']?\s*>/gi;
 const PARAM_CLOSE_G = /<\s*\/\s*parameter\s*>/gi;
@@ -39,18 +42,26 @@ function isPrefixOfContinuation(s) {
   return false;
 }
 
-function scanLoose(buf, openLen, final) {
-  PARAM_OPEN_G.lastIndex = 0;
-  let last = -1, m;
-  while ((m = PARAM_OPEN_G.exec(buf))) last = m.index + m[0].length;
+function scanLoose(buf, openLen, final, memo) {
+  PARAM_OPEN_G.lastIndex = Math.max(0, memo.openScan - RESCAN);
+  let m;
+  while ((m = PARAM_OPEN_G.exec(buf))) {
+    const at = m.index + m[0].length;
+    if (at > memo.last) { memo.last = at; memo.closeScan = at; }
+  }
+  memo.openScan = buf.length;
+  const last = memo.last;
   if (last === -1) {
     if (final) return { giveUp: true, at: openLen };
     if (buf.length - openLen > LOOSE_PROBE) return { giveUp: true, at: openLen };
     return { wait: true };
   }
-  PARAM_CLOSE_G.lastIndex = last;
+  PARAM_CLOSE_G.lastIndex = Math.max(last, memo.closeScan - RESCAN);
   const close = PARAM_CLOSE_G.exec(buf);
-  if (!close) return final ? { end: buf.length } : { wait: true };
+  if (!close) {
+    memo.closeScan = buf.length;
+    return final ? { end: buf.length } : { wait: true, awaiting: true };
+  }
   const i = close.index + close[0].length;
   const tail = buf.slice(i).match(TAIL_SKIP);
   const j = i + (tail ? tail[0].length : 0);
@@ -103,14 +114,16 @@ export function makeToolTextFilter(onText, onCalls, isAllowed) {
           state = { kind: 'tag', tag: best.tag };
           if (!best.tag.keepOpen) buf = buf.slice(best.tag.open.length);
         } else {
-          state = { kind: 'loose', openLen: best.open.length };
+          state = { kind: 'loose', openLen: best.open.length, memo: { last: -1, openScan: 0, closeScan: 0 } };
         }
         continue;
       }
       if (state.kind === 'tag') {
         const tag = state.tag;
-        const ci = buf.indexOf(tag.close);
+        const ci = buf.indexOf(tag.close, state.from || 0);
         if (ci === -1) {
+          state.from = Math.max(0, buf.length - tag.close.length + 1);
+          state.awaiting = true;
           if (!final) return;
           settle(buf, tag.keepOpen ? '' : tag.open, '');
           buf = ''; state = null;
@@ -121,7 +134,8 @@ export function makeToolTextFilter(onText, onCalls, isAllowed) {
         state = null;
         continue;
       }
-      const r = scanLoose(buf, state.openLen, final);
+      const r = scanLoose(buf, state.openLen, final, state.memo);
+      state.awaiting = !!r.awaiting;
       if (r.wait) return;
       if (r.giveUp) {
         emit(buf.slice(0, r.at));
@@ -139,9 +153,26 @@ export function makeToolTextFilter(onText, onCalls, isAllowed) {
     }
   };
 
+  // While a call body is open and only its closing marker can change anything, new
+  // chunks are parked instead of appended. Growing one string and searching it on
+  // every token copies the whole body each time; a 200 KB file streamed as a text
+  // call cost about a second of blocked server per call.
+  let parked = [];
+  let tail = '';
+  const unpark = () => { if (parked.length) { buf += parked.join(''); parked = []; } };
+  const closeIn = (probe) => (state.kind === 'tag' ? probe.indexOf(state.tag.close) !== -1 : PARAM_EDGE.test(probe));
+
   return {
-    feed: (raw) => { if (!raw) return; buf += raw; step(false); },
-    flush: () => { step(true); if (buf) { emit(buf); buf = ''; } state = null; }
+    feed: (raw) => {
+      if (!raw) return;
+      const probe = tail + raw;
+      tail = probe.slice(-PARK_TAIL);
+      if (state && state.awaiting && !closeIn(probe)) { parked.push(raw); return; }
+      unpark();
+      buf += raw;
+      step(false);
+    },
+    flush: () => { unpark(); step(true); if (buf) { emit(buf); buf = ''; } state = null; tail = ''; }
   };
 }
 

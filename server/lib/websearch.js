@@ -1,5 +1,7 @@
 import { getSetting } from '../db.js';
-import { unguardedFetch, webSearchEgressAllowed } from './egress.js';
+import dns from 'dns';
+import net from 'net';
+import { unguardedFetch, webSearchEgressAllowed, isPrivateAddress } from './egress.js';
 
 export function webSearchConfig() {
   let domains = [];
@@ -41,12 +43,55 @@ async function fetchTimeout(url, opts = {}, ms = 12000) {
 }
 
 const MAX_PAGE_CHARS = 100000;
+const MAX_PAGE_BYTES = 3 * 1024 * 1024;
+const MAX_REDIRECTS = 5;
+
+export async function isPublicUrl(url) {
+  let p;
+  try { p = new URL(url); } catch { return false; }
+  if (p.protocol !== 'http:' && p.protocol !== 'https:') return false;
+  const host = p.hostname.replace(/^\[|\]$/g, '');
+  if (net.isIP(host)) return !isPrivateAddress(host);
+  try {
+    const addrs = await dns.promises.lookup(host, { all: true });
+    return addrs.length > 0 && !addrs.some(a => isPrivateAddress(a.address));
+  } catch { return false; }
+}
+
+async function fetchPublic(url, opts, ms) {
+  let target = url;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    if (!(await isPublicUrl(target))) return null;
+    const r = await fetchTimeout(target, { ...opts, redirect: 'manual' }, ms);
+    const next = r.status >= 300 && r.status < 400 ? r.headers.get('location') : null;
+    if (!next) return r;
+    try { target = new URL(next, target).href; } catch { return null; }
+  }
+  return null;
+}
+
+async function readCapped(res, max) {
+  const reader = res.body?.getReader();
+  if (!reader) return '';
+  const chunks = [];
+  let n = 0;
+  while (n < max) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    n += value.length;
+  }
+  try { await reader.cancel(); } catch {}
+  return new TextDecoder().decode(Buffer.concat(chunks).subarray(0, max));
+}
+
 async function ingestPage(url) {
   try {
-    const r = await fetchTimeout(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OpenQuillBot/1.0)', 'Accept': 'text/html,application/xhtml+xml' } }, 15000);
+    const r = await fetchPublic(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OpenQuillBot/1.0)', 'Accept': 'text/html,application/xhtml+xml' } }, 15000);
+    if (!r) return { text: '', chars: 0, truncated: false };
     const ct = r.headers.get('content-type') || '';
-    if (!r.ok || !/text\/html|text\/plain|application\/xhtml/.test(ct)) return { text: '', chars: 0, truncated: false };
-    const html = await r.text();
+    if (!r.ok || !/text\/html|text\/plain|application\/xhtml/.test(ct)) { try { await r.body?.cancel(); } catch {} return { text: '', chars: 0, truncated: false }; }
+    const html = await readCapped(r, MAX_PAGE_BYTES);
     const full = ct.includes('html') ? htmlToText(html) : html.trim();
     const truncated = full.length > MAX_PAGE_CHARS;
     return { text: truncated ? full.slice(0, MAX_PAGE_CHARS) : full, chars: full.length, truncated };

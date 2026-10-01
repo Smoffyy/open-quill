@@ -181,10 +181,9 @@ export function attachmentUrlsOf(chatIds) {
 
 export function purgeUnreferencedUploads(urls) {
   if (!urls || !urls.size) return 0;
-  const stillUsed = db.messages.attachmentUrls();
   let removed = 0;
   for (const url of urls) {
-    if (stillUsed.has(url)) continue;
+    if (db.messages.mentions(url)) continue;
     const fname = path.basename(url);
     if (!fname) continue;
     const p = path.join(UPLOADS, fname);

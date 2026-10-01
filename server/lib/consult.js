@@ -1,4 +1,4 @@
-import { db, uid, now } from '../db.js';
+import { recordUsage } from './budget.js';
 import { oneShotFull, stripThink } from '../llm/index.js';
 import { resolveModel } from './models.js';
 import { readImageDataUri } from './uploads.js';
@@ -76,14 +76,7 @@ export async function runConsult({ model, targets, call, chatId, userId, signal 
     ? { role: 'user', content: [{ type: 'text', text: question }, ...images.map(url => ({ type: 'image_url', image_url: { url } }))] }
     : { role: 'user', content: question });
   const r = await oneShotFull(target, messages, { signal });
-  if (r.usage && (r.usage.prompt || r.usage.completion)) {
-    const costIn = Number(target.cost_in) || 0, costOut = Number(target.cost_out) || 0;
-    db.usage.insert({
-      id: uid(), user_id: userId, model_id: target.id, model_name: label,
-      prompt: r.usage.prompt, completion: r.usage.completion, total: r.usage.total,
-      cost: (r.usage.prompt / 1e6) * costIn + (r.usage.completion / 1e6) * costOut, cost_in: costIn, cost_out: costOut, created_at: now()
-    });
-  }
+  recordUsage(userId, target, r.usage, label);
   const answer = stripThink(target, r.text || '').trim().slice(0, ANSWER_MAX);
   if (!answer) return { ok: false, model: label, error: `${label} returned no answer.` };
   return { ok: true, model: label, answer, images: images.length };

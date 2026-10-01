@@ -254,7 +254,7 @@ export async function compactStep(ws, chat, model) {
   try { ws.send(JSON.stringify({ type: 'compacting', chatId: chat.id })); } catch {}
   const enriched = await enrichForSummary(model, toSummarize);
   const summary = await summarizeConversation(model, fresh.summary, enriched);
-  db.chats.update(chat.id, { summary, summary_upto: marker });
+  if (summary) db.chats.update(chat.id, { summary, summary_upto: marker });
   try { ws.send(JSON.stringify({ type: 'compacted', chatId: chat.id })); } catch {}
   return !!summary;
 }
@@ -305,6 +305,7 @@ export function trimInTurn(inTurn, keepRecent = 2) {
 }
 
 export const tokenCalib = new Map();
+const CALIB_MAX = 2000;
 
 export function updateCalib(chatId, actualPrompt, estimated) {
   if (!chatId || !actualPrompt || !estimated || estimated < 200) return;
@@ -313,9 +314,13 @@ export function updateCalib(chatId, actualPrompt, estimated) {
   const ratio = Math.max(0.25, Math.min(4, raw));
   const prev = tokenCalib.get(chatId);
   tokenCalib.set(chatId, { ratio: prev ? prev.ratio * 0.4 + ratio * 0.6 : ratio, at: Date.now() });
-  if (tokenCalib.size > 2000) {
+  if (tokenCalib.size > CALIB_MAX) {
     const cutoff = Date.now() - 6 * 3600 * 1000;
     for (const [k, v] of tokenCalib) if (v.at < cutoff) tokenCalib.delete(k);
+    for (const k of tokenCalib.keys()) {
+      if (tokenCalib.size <= CALIB_MAX * 0.75) break;
+      tokenCalib.delete(k);
+    }
   }
 }
 

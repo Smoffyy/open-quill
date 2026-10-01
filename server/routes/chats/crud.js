@@ -2,6 +2,7 @@ import { db, uid, now } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
 import * as sandbox from '../../sandbox.js';
 import { attachmentUrlsOf, purgeUnreferencedUploads } from '../../lib/uploads.js';
+import { stopTurn } from '../../lib/ws/index.js';
 
 const MAX_PINS = 40;
 
@@ -17,6 +18,7 @@ export default function registerCrudRoutes(app) {
   app.delete('/api/chats/:id', authMiddleware, (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (c && c.user_id === req.user.id) {
+      stopTurn(c.id);
       const urls = attachmentUrlsOf(c.id);
       db.messages.removeWhere('chat_id', c.id);
       db.chats.removeById(c.id);

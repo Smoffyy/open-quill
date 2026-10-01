@@ -215,11 +215,11 @@ export function runChatSearchTool(userId, currentChatId, call) {
     const q = String(call.query || '').trim().toLowerCase();
     if (!q) return { ok: false, error: 'Empty query.' };
     const byId = new Map();
-    for (const c of db.chats.byUser(userId)) if (c.id !== currentChatId) byId.set(c.id, c);
+    for (const c of db.chats.listByUser(userId)) if (c.id !== currentChatId) byId.set(c.id, c);
     const dateOf = (c) => new Date(c.updated_at || 0).toISOString().slice(0, 10);
     const matches = [];
     const seen = new Set();
-    for (const c of [...byId.values()].sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0))) {
+    for (const c of byId.values()) {
       const title = c.title || 'Untitled';
       if (!title.toLowerCase().includes(q)) continue;
       seen.add(c.id);

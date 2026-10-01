@@ -83,7 +83,7 @@ const searchStmt = sdb.prepare(`
   WHERE c.user_id = ?
     AND json_extract(m.data,'$.content') IS NOT NULL
     AND oq_icontains(json_extract(m.data,'$.content'), ?)
-  ORDER BY m.created_at
+  ORDER BY m.created_at DESC
   LIMIT ?`);
 messagesCol.searchForUser = (userId, needle, limit = 5000) => searchStmt.all(userId, needle, limit);
 
@@ -95,21 +95,25 @@ const lastUserStmt = sdb.prepare(`
   ORDER BY created_at DESC LIMIT 1`);
 messagesCol.lastUserText = chatId => lastUserStmt.get(chatId)?.content || '';
 
-const attachUrlStmt = sdb.prepare(`
-  SELECT DISTINCT json_extract(a.value,'$.url') AS url
-  FROM messages m, json_each(json_extract(m.data,'$.attachments')) a
-  WHERE json_type(m.data,'$.attachments') = 'array'`);
-messagesCol.attachmentUrls = () => {
-  const out = new Set();
-  for (const r of attachUrlStmt.all()) if (r.url) out.add(r.url);
-  return out;
-};
+const mentionStmt = sdb.prepare('SELECT 1 FROM messages WHERE instr(data, ?) > 0 LIMIT 1');
+messagesCol.mentions = text => !!(text && mentionStmt.get(String(text)));
 
 const chatsCol = collection('chats');
 const byUserStmt = sdb.prepare('SELECT data FROM chats WHERE user_id=?');
 chatsCol.byUser = userId => byUserStmt.all(userId).map(r => JSON.parse(r.data));
 const byUserRecentStmt = sdb.prepare('SELECT data FROM chats WHERE user_id=? ORDER BY updated_at DESC LIMIT ?');
 chatsCol.recentByUser = (userId, limit) => byUserRecentStmt.all(userId, limit).map(r => JSON.parse(r.data));
+const listByUserStmt = sdb.prepare(`
+  SELECT id, updated_at,
+    json_extract(data,'$.title') AS title, json_extract(data,'$.starred') AS starred,
+    json_extract(data,'$.archived') AS archived, json_extract(data,'$.project_id') AS project_id,
+    json_extract(data,'$.ended') AS ended
+  FROM chats WHERE user_id=? ORDER BY updated_at DESC`);
+chatsCol.listByUser = userId => listByUserStmt.all(userId);
+const projectCountsStmt = sdb.prepare(`
+  SELECT json_extract(data,'$.project_id') AS project_id, count(*) AS n
+  FROM chats WHERE user_id=? AND json_extract(data,'$.project_id') IS NOT NULL GROUP BY 1`);
+chatsCol.projectCounts = userId => new Map(projectCountsStmt.all(userId).map(r => [r.project_id, r.n]));
 const byUserOldestStmt = sdb.prepare('SELECT data FROM chats WHERE user_id=? ORDER BY updated_at ASC');
 chatsCol.oldestByUser = userId => byUserOldestStmt.all(userId).map(r => JSON.parse(r.data));
 
@@ -176,6 +180,8 @@ const sessionsByUserStmt = sdb.prepare('SELECT data FROM sessions WHERE user_id=
 sessionsCol.byUser = userId => sessionsByUserStmt.all(userId).map(r => JSON.parse(r.data));
 const touchSessionStmt = sdb.prepare('UPDATE sessions SET last_seen=?, data=json_set(data,\'$.last_seen\',?) WHERE id=?');
 sessionsCol.touch = (id, ts) => { try { touchSessionStmt.run(ts, ts, id); } catch {} };
+const pruneSessionsStmt = sdb.prepare('DELETE FROM sessions WHERE last_seen < ?');
+sessionsCol.prune = before => { try { const n = pruneSessionsStmt.run(before).changes; if (n) bumpTable('sessions'); return n; } catch { return 0; } };
 
 const auditCol = collection('audit');
 const auditRecentStmt = sdb.prepare('SELECT data FROM audit ORDER BY ts DESC LIMIT ? OFFSET ?');

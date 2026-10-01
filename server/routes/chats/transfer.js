@@ -2,6 +2,7 @@ import { db, uid, now, tx } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
 import { activePath } from '../../lib/tree.js';
 import { memoriesOf, sanitizeMemories, legacyMemories, newMemoryId, MEMORY_MAX_ITEMS } from '../../lib/memory.js';
+import { cleanStyles, cleanPersonas, cleanPrompts, prefsFit } from '../../lib/profile.js';
 
 export default function registerTransferRoutes(app) {
   app.get('/api/chats/export-all', authMiddleware, (req, res) => {
@@ -42,17 +43,15 @@ export default function registerTransferRoutes(app) {
       if (typeof pf.instructions === 'string' && pf.instructions.trim() && !(u.instructions || '').trim()) patch.instructions = pf.instructions.slice(0, 8000);
       const incoming = Array.isArray(pf.memories) ? sanitizeMemories(pf.memories)
         : (typeof pf.memory === 'string' ? legacyMemories(pf.memory, Date.now()) : []);
-      const mergeById = (mine, theirs, cap) => {
+      const mergeById = (mine, theirs, clean) => {
         const out = Array.isArray(mine) ? [...mine] : [];
         const seen = new Set(out.map(x => x && x.id));
-        for (const x of (Array.isArray(theirs) ? theirs : [])) {
-          if (x && x.id && !seen.has(x.id) && out.length < cap) { out.push(x); seen.add(x.id); }
-        }
-        return out;
+        for (const x of clean((Array.isArray(theirs) ? theirs : []).filter(t => t && t.id))) if (!seen.has(x.id)) { out.push(x); seen.add(x.id); }
+        return clean(out);
       };
-      patch.styles = mergeById(u.styles, pf.styles, 30);
-      patch.personas = mergeById(u.personas, pf.personas, 50);
-      patch.saved_prompts = mergeById(u.saved_prompts, pf.savedPrompts, 100);
+      patch.styles = mergeById(u.styles, pf.styles, cleanStyles);
+      patch.personas = mergeById(u.personas, pf.personas, cleanPersonas);
+      patch.saved_prompts = mergeById(u.saved_prompts, pf.savedPrompts, cleanPrompts);
       if (incoming.length) {
         const mem = memoriesOf(req.user.id);
         const texts = new Set(mem.map(m => m.text.toLowerCase()));
@@ -66,7 +65,10 @@ export default function registerTransferRoutes(app) {
         }
         patch.memories = mem;
       }
-      if (pf.prefs && typeof pf.prefs === 'object') patch.prefs = { ...pf.prefs, ...(u.prefs || {}) };
+      if (pf.prefs && typeof pf.prefs === 'object' && !Array.isArray(pf.prefs)) {
+        const prefs = { ...pf.prefs, ...(u.prefs || {}) };
+        if (prefsFit(prefs)) patch.prefs = prefs;
+      }
       db.users.update(req.user.id, patch);
     }
     if (!bundle || !bundle.length) return res.json({ imported: 0, profile: true });
@@ -74,13 +76,13 @@ export default function registerTransferRoutes(app) {
     for (const c of bundle.slice(0, 500)) {
       if (!c || !Array.isArray(c.messages) || !c.messages.length) continue;
       const t = now();
-      const chat = db.chats.insert({ id: uid(), user_id: req.user.id, title: String(c.title || 'Imported chat').slice(0, 120) || 'Imported chat', starred: c.starred ? 1 : 0, archived: c.archived ? 1 : 0, sandbox: 0, summary: String(c.summary || ''), created_at: t, updated_at: t });
+      const chat = db.chats.insert({ id: uid(), user_id: req.user.id, title: String(c.title || 'Imported chat').slice(0, 120) || 'Imported chat', starred: c.starred ? 1 : 0, archived: c.archived ? 1 : 0, sandbox: 0, summary: typeof c.summary === 'string' ? c.summary : '', created_at: t, updated_at: t });
       let parent = null;
       tx(() => {
         for (const m of c.messages.slice(0, 2000)) {
           if (!m || (m.role !== 'user' && m.role !== 'assistant') || typeof m.content !== 'string') continue;
           const mid = uid();
-          db.messages.insert({ id: mid, chat_id: chat.id, role: m.role, content: m.content, reasoning: m.reasoning || '', model_id: null, attachments: [], parent_id: parent, created_at: now() });
+          db.messages.insert({ id: mid, chat_id: chat.id, role: m.role, content: m.content, reasoning: typeof m.reasoning === 'string' ? m.reasoning : '', model_id: null, attachments: [], parent_id: parent, created_at: now() });
           parent = mid;
         }
       });

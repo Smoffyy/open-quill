@@ -60,6 +60,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The plan in the model's prompt follows the branch on screen; it went stale after a regenerate, an edit or a branch switch.
 - The file viewer's version menu, older-version bar, restore button, download menu and folded diff lines, the artifacts panel title, the project Files heading and the chat bulk-action messages are now translated.
 - The theme builder's "Project file row" element now targets the real rows; it matched nothing before.
+- A long-running reply is no longer cut loose after 45 minutes: a turn now counts as stale only after 45 minutes with no activity, so Stop keeps working and a second reply cannot start in the same chat while the first is still going.
+- Pressing Stop while an older conversation is being summarized now stops the reply; the stop was cleared once summarizing finished. A Stop that arrives when nothing is running no longer lingers to cancel the next reply.
+- A reply that fails partway is saved as unfinished, so Continue is offered and the model knows it was cut off.
+- If summarizing an older part of the conversation fails, that part stays in the conversation; it used to be dropped with no summary in its place.
+- Scheduled tasks skip a run while their previous run is still going, so a short interval on a slow model no longer piles up overlapping runs, and "Run now" cannot start the same task twice at once.
+- The model queue is fair: requests for a different model are no longer starved while one model keeps receiving new requests.
+- Incognito chats respect the monthly usage budget, and their token usage is recorded like any other chat (no content is stored).
+- Deleting an account now also removes its projects' files, stops its running replies and disconnects its open sessions; deleting a chat stops a reply still running in it.
+- Demoting an admin or changing a member's budget takes effect on their open connection straight away instead of after a reconnect.
+- Two sign-ups racing on a fresh install can no longer both become the owner.
+- Signed-in sessions that have expired are now pruned daily instead of only when used; tokens from before sessions existed are no longer accepted.
+- Web search only reads result pages that resolve to public addresses (checked again on every redirect), so a result cannot point the server at itself, the local network or a cloud metadata address; page downloads are capped at 3 MB.
+- Imported chats and profiles are cleaned the same way as normal saves: styles, personas, saved prompts and settings keep their size limits, and malformed entries are dropped instead of breaking the settings screens.
+- MCP command servers no longer receive the database encryption key in their environment, an MCP server sending an oversized message is stopped instead of growing memory without limit, and an expired MCP HTTP session reconnects once instead of failing the tool call.
+- `chat_search` finds recent conversations first; it used to scan only the oldest matching messages.
+- A file's version history keeps its latest 50 versions instead of every save forever, and files with very long paths keep their history.
+- Projects are limited to 500 per member, like tasks and skills.
+
+### Performance
+- Streaming a large file as a tool call no longer stalls the server: the live preview is throttled for long arguments, and tool calls written as text are scanned incrementally (a 200 KB file went from about a second of blocked server to a few milliseconds).
+- Writing files in a workspace no longer walks and measures every file in it, `node_modules` included, before each write; the workspace size is cached and kept current.
+- Extracting a large zip writes the version index once instead of once per file.
+- The chat list, project list, search and artifacts library read only the fields they show instead of every chat's full record, and the project list counts chats in one query instead of once per project.
+- A chat's message tree stays cached while other chats are being written to.
+- Removing an upload after a chat is deleted checks for other uses with one quick lookup instead of reading every attachment in the database.
+- The artifacts library reads only the start of each file for its preview.
+- Scheduled tasks are found through an index instead of loading every task, and database migrations apply atomically.
 
 ---
 

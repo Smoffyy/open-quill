@@ -49,6 +49,7 @@ export function createSession(user, req) {
 }
 export function sign(user, sessionId) { return jwt.sign({ id: user.id, sid: sessionId }, SECRET, { expiresIn: `${tokenLifeDays()}d` }); }
 export function revokeSession(id) { db.sessions.removeById(id); }
+export function pruneSessions() { return db.sessions.prune(now() - sessionTtlMs()); }
 export function revokeOtherSessions(userId, keepId) { db.sessions.removeByIds(db.sessions.byUser(userId).filter(s => s.id !== keepId).map(s => s.id)); }
 
 export function publicUser(u) {
@@ -58,16 +59,14 @@ export function publicUser(u) {
 function resolveToken(token) {
   let payload;
   try { payload = jwt.verify(token, SECRET); } catch { return null; }
+  if (!payload?.sid) return null;
   const u = db.users.byId(payload.id);
   if (!u) return null;
-  if (payload.sid) {
-    const s = db.sessions.byId(payload.sid);
-    if (!s || s.user_id !== u.id) return null;
-    if (now() - (s.last_seen || 0) > sessionTtlMs()) { db.sessions.removeById(s.id); return null; }
-    if (Date.now() - (s.last_seen || 0) > 60 * 1000) db.sessions.touch(s.id, now());
-    return { user: u, sessionId: s.id };
-  }
-  return { user: u, sessionId: null };
+  const s = db.sessions.byId(payload.sid);
+  if (!s || s.user_id !== u.id) return null;
+  if (now() - (s.last_seen || 0) > sessionTtlMs()) { db.sessions.removeById(s.id); return null; }
+  if (Date.now() - (s.last_seen || 0) > 60 * 1000) db.sessions.touch(s.id, now());
+  return { user: u, sessionId: s.id };
 }
 
 export function authMiddleware(req, res, next) {

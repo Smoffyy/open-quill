@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
+import { StringDecoder } from 'string_decoder';
 import { dirFor, resolveSafe, relOf } from './paths.js';
-import { readMeta, versionOf, bumpVersion, dropVersion, moveVersion, saveSnapshot, forgetMeta, histRoot, metaPath } from './meta.js';
+import { readMeta, versionOf, bumpVersion, bumpVersions, dropVersion, moveVersion, saveSnapshot, forgetMeta, histRoot, metaPath } from './meta.js';
 import { extOf, isText, isIgnoredDir, isIgnoredRel, globToRe, gitignoreCacheDrop } from './ignore.js';
 import { zipBuffer, unzipBuffer } from './zip.js';
 import { compileSearchPattern } from '../lib/sandboxguard.js';
@@ -62,11 +63,27 @@ export function list(chatId, opts = {}) {
   return opts.withHidden ? { files: out, hidden } : out;
 }
 
+const SIZE_TTL_MS = 30000;
+const SIZE_CACHE_MAX = 64;
+const sizeCache = new Map();
+
 export function dirSize(chatId) {
+  const key = String(chatId);
+  const hit = sizeCache.get(key);
+  if (hit && Date.now() - hit.at < SIZE_TTL_MS) return hit.bytes;
   let total = 0;
   for (const abs of walkFiles(chatId, { includeIgnored: true }).files) { try { total += fs.statSync(abs).size; } catch {} }
+  sizeCache.delete(key);
+  sizeCache.set(key, { bytes: total, at: Date.now() });
+  if (sizeCache.size > SIZE_CACHE_MAX) sizeCache.delete(sizeCache.keys().next().value);
   return total;
 }
+function adjustSize(chatId, delta) {
+  const hit = sizeCache.get(String(chatId));
+  if (hit) hit.bytes = Math.max(0, hit.bytes + delta);
+}
+export function forgetSize(chatId) { sizeCache.delete(String(chatId)); }
+const sizeOf = (p) => { try { return fs.statSync(p).size; } catch { return 0; } };
 export function capError(maxBytes) { return { ok: false, error: `Sandbox storage limit reached (${Math.round(maxBytes / 1048576)} MB). Delete files to free space.` }; }
 export function overCap(chatId, incomingBytes, maxBytes) { if (!maxBytes || maxBytes <= 0) return false; return dirSize(chatId) + incomingBytes > maxBytes; }
 
@@ -75,6 +92,7 @@ export function remove(chatId) {
   try { fs.rmSync(metaPath(chatId), { force: true }); } catch {}
   try { fs.rmSync(histRoot(chatId), { recursive: true, force: true }); } catch {}
   forgetMeta(chatId);
+  forgetSize(chatId);
   gitignoreCacheDrop(chatId);
 }
 export function clearAll(chatId) {
@@ -84,6 +102,7 @@ export function clearAll(chatId) {
   try { fs.rmSync(metaPath(chatId), { force: true }); } catch {}
   try { fs.rmSync(histRoot(chatId), { recursive: true, force: true }); } catch {}
   forgetMeta(chatId);
+  forgetSize(chatId);
   gitignoreCacheDrop(chatId);
   return { ok: true, cleared };
 }
@@ -106,6 +125,14 @@ export function readText(chatId, rel) {
   return fs.readFileSync(p, 'utf8');
 }
 export function readBuffer(chatId, rel) { return fs.readFileSync(resolveSafe(chatId, rel)); }
+export function readHead(chatId, rel, bytes) {
+  const fd = fs.openSync(resolveSafe(chatId, rel), 'r');
+  try {
+    const buf = Buffer.alloc(bytes);
+    const n = fs.readSync(fd, buf, 0, bytes, 0);
+    return new StringDecoder('utf8').write(buf.subarray(0, n));
+  } finally { fs.closeSync(fd); }
+}
 
 // Can the viewer show this as text? True for anything the extension list knows,
 // and for anything else whose bytes read as text. Kept separate from `isText`
@@ -126,12 +153,15 @@ export function isViewableText(chatId, rel) {
 
 export function createFile(chatId, rel, content) {
   const p = resolveSafe(chatId, rel);
-  if (fs.existsSync(p) && fs.statSync(p).isDirectory()) return { ok: false, error: `${rel} is a directory` };
-  const prev = (fs.existsSync(p) && isText(rel)) ? fs.readFileSync(p, 'utf8') : null;
+  let st = null;
+  try { st = fs.statSync(p); } catch {}
+  if (st && st.isDirectory()) return { ok: false, error: `${rel} is a directory` };
+  const prev = (st && isText(rel)) ? fs.readFileSync(p, 'utf8') : null;
   const body = content ?? '';
   if (prev != null && prev === body) return { ok: true, path: rel, bytes: Buffer.byteLength(body), v: versionOf(chatId, rel), adds: 0, dels: 0, unchanged: true };
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, body, 'utf8');
+  adjustSize(chatId, Buffer.byteLength(body) - (st ? st.size : 0));
   const v = bumpVersion(chatId, rel);
   if (isText(rel)) saveSnapshot(chatId, rel, v, body);
   const { adds, dels } = lineDelta(prev, body);
@@ -227,6 +257,7 @@ export function strReplace(chatId, rel, oldStr, newStr, replaceAll = false) {
 
   const commit = (next, extra) => {
     fs.writeFileSync(p, next, 'utf8');
+    adjustSize(chatId, Buffer.byteLength(next) - Buffer.byteLength(text));
     const v = bumpVersion(chatId, rel);
     saveSnapshot(chatId, rel, v, next);
     const { adds, dels } = lineDelta(text, next);
@@ -276,6 +307,7 @@ export function insertLines(chatId, rel, atLine, content) {
   lines.splice(at, 0, ...insert);
   const next = lines.join('\n');
   fs.writeFileSync(p, next, 'utf8');
+  adjustSize(chatId, Buffer.byteLength(next) - Buffer.byteLength(text));
   const v = bumpVersion(chatId, rel);
   saveSnapshot(chatId, rel, v, next);
   return { ok: true, path: rel, v, adds: insert.length, dels: 0 };
@@ -342,6 +374,7 @@ export function deleteFile(chatId, rel) {
   const wasDir = fs.statSync(p).isDirectory();
   if (wasDir) for (const f of list(chatId, { all: true, under: rel })) dropVersion(chatId, f.path);
   fs.rmSync(p, { recursive: true, force: true });
+  forgetSize(chatId);
   dropVersion(chatId, rel);
   return { ok: true, path: rel, dir: wasDir };
 }
@@ -381,12 +414,14 @@ export function copyFile(chatId, rel, newRel, maxBytes = 0) {
   if (overCap(chatId, incoming, maxBytes)) return capError(maxBytes);
   fs.mkdirSync(path.dirname(dst), { recursive: true });
   fs.cpSync(src, dst, { recursive: true, force: true });
-  const created = [];
-  const stamp = (r) => { const v = bumpVersion(chatId, r); if (isText(r)) { try { saveSnapshot(chatId, r, v, fs.readFileSync(resolveSafe(chatId, r), 'utf8')); } catch {} } created.push(r); };
+  forgetSize(chatId);
   // Scoped to the copy: this used to walk and stat every file in the sandbox and
   // then filter, which on a large workspace is the whole tree for one directory.
-  if (fs.statSync(dst).isDirectory()) { for (const f of list(chatId, { all: true, under: newRel })) stamp(f.path); }
-  else stamp(newRel);
+  const created = fs.statSync(dst).isDirectory() ? list(chatId, { all: true, under: newRel }).map(f => f.path) : [newRel];
+  const versions = bumpVersions(chatId, created);
+  for (const r of created) {
+    if (isText(r)) { try { saveSnapshot(chatId, r, versions.get(r), fs.readFileSync(resolveSafe(chatId, r), 'utf8')); } catch {} }
+  }
   return { ok: true, path: newRel, from: rel, count: created.length };
 }
 export function makeDir(chatId, rel) {
@@ -468,6 +503,7 @@ export function bundleZip(chatId, name, paths, includeIgnored = false) {
   if (!entries.length) return { ok: false, error: 'No files to bundle.' };
   const zipName = (name || 'bundle').replace(/[^a-zA-Z0-9_.-]/g, '_').replace(/\.zip$/i, '') + '.zip';
   fs.writeFileSync(resolveSafe(chatId, zipName), zipBuffer(entries));
+  forgetSize(chatId);
   return { ok: true, path: zipName, count: entries.length };
 }
 export function zipAll(chatId) {
@@ -505,21 +541,26 @@ export function extractZip(chatId, rel, dest, budget = 0) {
       total += e.data.length;
       written++;
       if (isDep) deps++;
-      else { const v = bumpVersion(chatId, rel2); if (isText(rel2)) saveSnapshot(chatId, rel2, v, e.data.toString('utf8')); created.push(rel2); }
+      else created.push({ rel: rel2, data: e.data });
     } catch {}
   }
+  const versions = bumpVersions(chatId, created.map(c => c.rel));
+  for (const c of created) if (isText(c.rel)) saveSnapshot(chatId, c.rel, versions.get(c.rel), c.data.toString('utf8'));
+  forgetSize(chatId);
   gitignoreCacheDrop(chatId);
   const notes = [];
   if (deps) notes.push(`${deps} file(s) in dependency/build folders extracted but hidden from listings`);
   if (skipped) notes.push(`${skipped} entries skipped (size/count limit)`);
-  return { ok: true, path: rel, count: created.length, files: created.slice(0, 200), deps, ...(notes.length ? { note: notes.join('; ') } : {}) };
+  return { ok: true, path: rel, count: created.length, files: created.slice(0, 200).map(c => c.rel), deps, ...(notes.length ? { note: notes.join('; ') } : {}) };
 }
 export function importBuffer(chatId, destRel, buffer, maxBytes = 0) {
   if (overCap(chatId, buffer.length, maxBytes)) return capError(maxBytes);
   try {
     const p = resolveSafe(chatId, destRel);
+    const before = sizeOf(p);
     fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, buffer);
+    adjustSize(chatId, buffer.length - before);
     const v = bumpVersion(chatId, destRel);
     if (isText(destRel)) saveSnapshot(chatId, destRel, v, buffer.toString('utf8'));
     return { ok: true, path: destRel };

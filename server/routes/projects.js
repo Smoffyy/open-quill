@@ -14,19 +14,21 @@ function ownProject(req, res) {
 
 const capFor = sandboxCap;
 
-function projectView(p) {
-  const chats = db.chats.byUser(p.user_id).filter(c => c.project_id === p.id);
-  return { id: p.id, name: p.name, description: p.description || '', instructions: p.instructions || '', starred: !!p.starred, updated_at: p.updated_at, created_at: p.created_at, chatCount: chats.length };
+function projectView(p, counts = db.chats.projectCounts(p.user_id)) {
+  return { id: p.id, name: p.name, description: p.description || '', instructions: p.instructions || '', starred: !!p.starred, updated_at: p.updated_at, created_at: p.created_at, chatCount: counts.get(p.id) || 0 };
 }
 
+const PROJECT_LIMIT = 500;
 const projectUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
 
 export default function registerProjectRoutes(app) {
   app.get('/api/projects', authMiddleware, (req, res) => {
-    res.json(db.projects.byUser(req.user.id).map(projectView));
+    const counts = db.chats.projectCounts(req.user.id);
+    res.json(db.projects.byUser(req.user.id).map(p => projectView(p, counts)));
   });
 
   app.post('/api/projects', authMiddleware, (req, res) => {
+    if (db.projects.countWhere('user_id', req.user.id) >= PROJECT_LIMIT) return res.status(400).json({ error: 'You have reached the project limit.' });
     const t = now();
     const name = String(req.body?.name || 'New project').slice(0, 120).trim() || 'New project';
     const description = String(req.body?.description || '').slice(0, 2000);
@@ -37,8 +39,7 @@ export default function registerProjectRoutes(app) {
   app.get('/api/projects/:id', authMiddleware, (req, res) => {
     const p = db.projects.byId(req.params.id);
     if (!p || p.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
-    const chats = db.chats.byUser(req.user.id).filter(c => c.project_id === p.id)
-      .sort((a, b) => b.updated_at - a.updated_at)
+    const chats = db.chats.listByUser(req.user.id).filter(c => c.project_id === p.id)
       .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred }));
     res.json({ ...projectView(p), chats });
   });
@@ -133,7 +134,7 @@ export default function registerProjectRoutes(app) {
     if (!p || p.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     try { projectfiles.removeAll(p.id); } catch {}
     try { sandbox.remove(sandbox.projectKey(p.id)); } catch {}
-    for (const c of db.chats.byUser(req.user.id)) { if (c.project_id === p.id) db.chats.update(c.id, { project_id: null }); }
+    for (const c of db.chats.listByUser(req.user.id)) { if (c.project_id === p.id) db.chats.update(c.id, { project_id: null }); }
     db.projects.removeById(p.id);
     res.json({ ok: true });
   });

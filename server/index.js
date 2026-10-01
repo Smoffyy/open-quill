@@ -6,7 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { getSetting } from './db.js';
-import { parseCookies, sessionFromRequest } from './auth.js';
+import { parseCookies, sessionFromRequest, pruneSessions } from './auth.js';
 import { setCustomPresets } from './lib/pricing.js';
 import * as mcp from './lib/mcp.js';
 import { pruneAudit } from './lib/audit.js';
@@ -123,7 +123,7 @@ function warmHostEnv() {
 
 server.listen(PORT, HOST, () => console.log(`open-quill running on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`));
 warmHostEnv();
-const pruneOld = () => { pruneAudit(); pruneToolStats(); };
+const pruneOld = () => { pruneAudit(); pruneToolStats(); pruneSessions(); };
 pruneOld();
 setInterval(pruneOld, 24 * 60 * 60 * 1000).unref();
 startTaskScheduler();

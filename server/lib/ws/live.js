@@ -53,8 +53,10 @@ export function beginTurn(userId, chatId, modelId) {
     status: null,
     promptTokens: 0,
     ask: null,
-    startedAt: Date.now()
+    startedAt: Date.now(),
+    seenAt: Date.now()
   };
+  stops.delete(chatId);
   turns.set(chatId, rec);
   return rec;
 }
@@ -68,19 +70,20 @@ export function endTurn(chatId) {
   stops.delete(chatId);
 }
 
+const isStale = (rec) => Date.now() - rec.seenAt > STALE_MS && !asks.has(rec.chatId);
+
 export function activeTurn(chatId) {
   const rec = chatId ? turns.get(chatId) : null;
   if (!rec) return null;
-  if (Date.now() - rec.startedAt > STALE_MS) { endTurn(chatId); return null; }
+  if (isStale(rec)) { endTurn(chatId); return null; }
   return rec;
 }
 
 export function snapshotsFor(userId) {
   const out = [];
-  const cutoff = Date.now() - STALE_MS;
   for (const rec of turns.values()) {
     if (rec.userId !== userId) continue;
-    if (rec.startedAt < cutoff) continue;
+    if (isStale(rec)) continue;
     out.push({
       chatId: rec.chatId,
       messageId: rec.messageId,
@@ -102,6 +105,7 @@ export function record(m) {
   if (!m || typeof m.type !== 'string' || !m.chatId) return;
   const rec = turns.get(m.chatId);
   if (!rec) return;
+  rec.seenAt = Date.now();
   switch (m.type) {
     case 'queued':
       rec.phase = 'queued';
@@ -164,4 +168,10 @@ export function sendLive(userId, raw) {
     if (sock.readyState !== 1 || st.userId !== userId) continue;
     try { sock.send(raw); } catch {}
   }
+}
+
+export function stopTurn(chatId) {
+  if (!turns.has(chatId)) return;
+  stops.add(chatId);
+  aborts.get(chatId)?.abort();
 }

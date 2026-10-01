@@ -30,10 +30,13 @@ import { runTodo } from '../todo.js';
 import { runAskUser, formatAskUser } from '../askuser.js';
 import { waitForAnswer } from './live.js';
 import { runConsult, formatConsult } from '../consult.js';
+import { recordUsage } from '../budget.js';
 
 const MAX_STEERS = 6;
 const TELEMETRY_MS = 220;
 const SILENT_MS = 2500;
+const PREVIEW_FREE_CHARS = 4096;
+const PREVIEW_MS = 100;
 
 export async function maybeCompact(ws, chat, model, extended, flags, opts = {}) {
   const threshold = compactThreshold(model, await modelCtx(model));
@@ -231,10 +234,6 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     windowNotified = total;
     safeSend(JSON.stringify({ type: 'ctx_rolling', chatId: chat.id, dropped: dropped || 0, trimmed: !!trimmed, limit: budget }));
   };
-  // A stop that lands just after a turn ended has nothing to cancel and would
-  // otherwise sit in the set and kill this turn before its first step. Every
-  // turn starts from a clean slate; stops arriving from here on are this turn's.
-  if (state.stops) state.stops.delete(chat.id);
   const stopRequested = () => !!(state.stops && state.stops.has(chat.id));
   const stepCap = (model.agent_steps && model.agent_steps > 0) ? model.agent_steps : 1000;
   let maxSteps = toolsOn ? stepCap : 1;
@@ -243,6 +242,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   let continues = 0;
   let stepController = null;
   let lastFinish = '';
+  let turnFailed = false;
   const steerNotes = [];
   let steerBudget = MAX_STEERS;
   const takeSteers = () => {
@@ -319,6 +319,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       let toolCalls = [];
       let liveSent = false;
       let liveState = { key: '', len: 0, lastAt: 0 };
+      let previewAt = 0;
       let genStart = 0;
       let exactTelemetry = false;
       let lastTelemetryAt = 0;
@@ -430,6 +431,9 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
             }
             if (e.type === 'tool_call_delta') {
               if (hideTools) return;
+              const at = Date.now();
+              if ((e.argsText || '').length > PREVIEW_FREE_CHARS && at - previewAt < PREVIEW_MS) return;
+              previewAt = at;
               const live = livePreview(e.name, e.argsText);
               if (!live || !live.tool) return;
               const isFile = (live.tool === 'create_file' || live.tool === 'str_replace') && live.path;
@@ -624,6 +628,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     }
   } catch (err) {
     if (err.name !== 'AbortError') {
+      turnFailed = true;
       console.error('[turn]', err);
       safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: String(err.message || err) }));
     }
@@ -634,18 +639,13 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   if (state.steers) state.steers.delete(chat.id);
   if (state.stops) state.stops.delete(chat.id);
 
-  let usageRec = null;
-  if (usage && (usage.prompt || usage.completion)) {
-    const cost = (usage.prompt / 1e6) * (Number(model.cost_in) || 0) + (usage.completion / 1e6) * (Number(model.cost_out) || 0);
-    usageRec = { prompt: usage.prompt, completion: usage.completion, total: usage.total || (usage.prompt + usage.completion), cost };
-    db.usage.insert({ id: uid(), user_id: chat.user_id, model_id: model.id, model_name: model.display_name || '', prompt: usageRec.prompt, completion: usageRec.completion, total: usageRec.total, cost, cost_in: Number(model.cost_in) || 0, cost_out: Number(model.cost_out) || 0, created_at: now() });
-  }
+  const usageRec = recordUsage(chat.user_id, model, usage);
   // Computed before the insert so it can be stored on the row: without it the
   // "Continue" affordance lived only in the `done` frame and vanished on reload,
   // stranding a stopped turn the user meant to pick up later.
   const outCap = Number(model.max_tokens) || 0;
   const hitCap = outCap > 0 && lastStepCompletion >= outCap - 2;
-  const truncated = (lastFinish === 'length' || hitCap || wasStopped) && !conversationEnded;
+  const truncated = (lastFinish === 'length' || hitCap || wasStopped || turnFailed) && !conversationEnded;
   const hasOutput = !!(content.trim() || reasoning.trim());
   if (hasOutput || usageRec) {
     const finalRow = { id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, reasoning_segs: reasonSegs.length ? reasonSegs : null, reasoning_seg_ms: reasonSegs.length ? segMs : null, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: usageRec, speed, reasoning_ms: reasonMs || null, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, kwarg_values: model.kwarg_values || null, steers: steerNotes.length ? steerNotes.slice(0, MAX_STEERS) : null, truncated: truncated || null, created_at: now() };

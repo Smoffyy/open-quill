@@ -10,7 +10,7 @@ import { UPLOADS } from '../uploads.js';
 import { ensureChain, activePath } from '../tree.js';
 import { resolveModel } from '../models.js';
 import { applyKwargs } from '../kwargs.js';
-import { budgetStatus } from '../budget.js';
+import { budgetStatus, recordUsage } from '../budget.js';
 import { runQueued } from '../queue.js';
 import { styleTextFor, CUT_NOTE } from '../convo.js';
 import { systemPrompt } from '../systemprompt.js';
@@ -47,14 +47,6 @@ function sanitizeAttachments(list) {
   return out;
 }
 
-function lastUserContent(chatId) {
-  try {
-    const rows = db.messages.byChat(chatId) || [];
-    for (let i = rows.length - 1; i >= 0; i--) if (rows[i].role === 'user') return rows[i].content || '';
-  } catch {}
-  return '';
-}
-
 export function initWs(server) {
   // The session cookie alone is not enough to authorise a socket: SameSite does not
   // reliably cover the websocket handshake in every browser, so a hostile page could
@@ -72,13 +64,14 @@ export function initWs(server) {
 
   wss.on('connection', (ws, req) => {
     const r = sessionFromRequest(req);
-    const u = r?.user;
+    let u = r?.user;
     if (!u) { ws.close(); return; }
     ws.isAlive = true;
     ws.on('pong', () => { ws.isAlive = true; });
     clients.set(ws, { userId: u.id, sessionId: r.sessionId || null, isAdmin: !!u.is_admin, aborts: new Map(), steers: new Map(), stops: new Set() });
     const safeSend = (s) => { if (ws.readyState === 1) { try { ws.send(s); } catch {} } };
-    const liveSend = (s) => live.sendLive(u.id, s);
+    const userId = u.id;
+    const liveSend = (s) => live.sendLive(userId, s);
     const liveState = { aborts: live.aborts, steers: live.steers, stops: live.stops, interactive: true };
     const liveWs = { readyState: 1, send: liveSend };
     {
@@ -91,13 +84,17 @@ export function initWs(server) {
       if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') return;
       const state = clients.get(ws);
       if (!state) return;
+      const fresh = db.users.byId(userId);
+      if (!fresh) { ws.close(); return; }
+      u = fresh;
+      state.isAdmin = !!u.is_admin;
       const ownsChat = (chatId) => {
         if (typeof chatId !== 'string' || !chatId || chatId === 'incognito') return false;
         const c = db.chats.byId(chatId);
         return !!c && c.user_id === state.userId;
       };
       if (msg.type === 'stop') {
-        const own = msg.chatId === 'incognito' ? state : (ownsChat(msg.chatId) ? liveState : null);
+        const own = msg.chatId === 'incognito' ? state : (ownsChat(msg.chatId) && live.activeTurn(msg.chatId) ? liveState : null);
         if (!own) return;
         own.steers.delete(msg.chatId);
         // Recorded before aborting: the controller may already be spent (a stop
@@ -133,6 +130,8 @@ export function initWs(server) {
           const model = applyKwargs(baseModel, requestedKwargs(msg), state.isAdmin);
           if (!model) { safeSend(JSON.stringify({ type: 'error', error: 'Invalid model.' })); safeSend(JSON.stringify({ type: 'done' })); return; }
           if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', error: (model.unavailable_reason || 'This model is currently unavailable.') })); safeSend(JSON.stringify({ type: 'done' })); return; }
+          const ibs = budgetStatus(u);
+          if (ibs.enforce && ibs.state === 'over') { safeSend(JSON.stringify({ type: 'error', chatId: 'incognito', error: 'You have reached your monthly usage budget. It resets at the start of next month.' })); safeSend(JSON.stringify({ type: 'done', chatId: 'incognito' })); return; }
           if (state.aborts.has('incognito')) { safeSend(JSON.stringify({ type: 'error', chatId: 'incognito', error: 'A reply is already being generated. Wait for it to finish, or stop it first.' })); safeSend(JSON.stringify({ type: 'done', chatId: 'incognito' })); return; }
           const history = (Array.isArray(msg.messages) ? msg.messages : [])
             .filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
@@ -146,15 +145,18 @@ export function initWs(server) {
           const controller = new AbortController();
           state.aborts.set('incognito', controller);
           safeSend(JSON.stringify({ type: 'start', chatId: 'incognito', messageId: assistantId }));
+          let usage = null;
           try {
             await streamCompletion({
               model, messages, signal: controller.signal,
               onEvent: (e) => {
                 if (e.type === 'reasoning') safeSend(JSON.stringify({ type: 'reasoning', chatId: 'incognito', text: e.text }));
                 else if (e.type === 'content') safeSend(JSON.stringify({ type: 'content', chatId: 'incognito', text: e.text }));
+                else if (e.type === 'usage') usage = e.usage;
               }
             });
           } catch (err) { if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', chatId: 'incognito', error: String(err.message || err) })); }
+          recordUsage(u.id, model, usage);
           state.aborts.delete('incognito');
           if (state.stops) state.stops.delete('incognito');
           safeSend(JSON.stringify({ type: 'done', chatId: 'incognito', messageId: assistantId, stopped: controller.signal.aborted }));
@@ -170,6 +172,11 @@ export function initWs(server) {
       const content = textField(msg.content);
       const attachments = sanitizeAttachments(msg.attachments);
       const messageId = typeof msg.messageId === 'string' ? msg.messageId : '';
+      if (msg.type === 'chat' && !content.trim() && !attachments.length) {
+        safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'Nothing to send.' }));
+        safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId }));
+        return;
+      }
       let ownsTurn = false;
       try {
         const chat = db.chats.byId(msg.chatId);
@@ -178,7 +185,7 @@ export function initWs(server) {
         let routedInfo = null;
         let baseModel = hubModel;
         if (isRouter(hubModel)) {
-          const probe = [{ role: 'user', content: msg.type === 'regenerate' ? lastUserContent(chat.id) : content }];
+          const probe = [{ role: 'user', content: msg.type === 'regenerate' ? db.messages.lastUserText(chat.id) : content }];
           const r = resolveRouted(hubModel, probe, attachments, (id) => resolveModel(id, state.isAdmin));
           if (!r.model) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: r.routed?.error || 'This router could not pick a model.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
           baseModel = r.model;
