@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAdmin } from '../store.jsx';
-import { Card, Fields, Field, Input, Select, Btn, IconBtn, Acts, Badge, KV, Empty, Dialog, Table, Logo, fmtInt } from '../ui.jsx';
+import { Card, Fields, Field, Input, Select, Btn, IconBtn, Acts, Badge, KV, Empty, Dialog, Table, Logo, SecretInput, fmtInt } from '../ui.jsx';
 import { Cube, Plus, Trash, Sliders } from '../../ui/icons.jsx';
 import { api } from '../../../lib/api.js';
 import { t } from '../../../i18n.jsx';
@@ -8,28 +8,14 @@ import { modelIconFor, useLogos } from '../../../lib/logos.js';
 import { Skel, SkelRows } from '../../ui/Skeleton.jsx';
 
 function KeyField({ p, optional, onSave }) {
-  const [text, setText] = useState('');
-  const commit = () => {
-    if (!text.trim()) return;
-    onSave({ api_key: text.trim(), has_key: true, key_hint: text.trim().length >= 12 ? '\u2026' + text.trim().slice(-4) : '' });
-    setText('');
-  };
-  const placeholder = p.has_key
-    ? (p.key_hint ? t('Saved key ending {hint}. Type to replace it.', { hint: p.key_hint }) : t('A key is saved. Type to replace it.'))
-    : optional ? t('not needed locally') : t('required');
+  const hint = (v) => (v.length >= 12 ? '\u2026' + v.slice(-4) : '');
   return (
     <Field label={t('API key')} optional={optional}
       hint={p.has_key ? t('Held server-side and never sent to the browser. A new key is saved when you leave the field.') : t('Held server-side and never sent to the browser.')}>
-      <div className="cp-inline">
-        <Input mono type="password" value={text} autoComplete="off" placeholder={placeholder}
-          aria-label={t('API key')}
-          onChange={(e) => setText(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }} />
-        {p.has_key && (
-          <IconBtn kind="quiet" label={t('Remove saved key')} onClick={() => { setText(''); onSave({ api_key: '', has_key: false, key_hint: '' }); }}><Trash /></IconBtn>
-        )}
-      </div>
+      <SecretInput saved={p.has_key} hint={p.key_hint} label={t('API key')}
+        emptyText={optional ? t('not needed locally') : t('required')}
+        onSave={(v) => onSave({ api_key: v, has_key: true, key_hint: hint(v) })}
+        onRemove={() => onSave({ api_key: '', has_key: false, key_hint: '' })} />
     </Field>
   );
 }

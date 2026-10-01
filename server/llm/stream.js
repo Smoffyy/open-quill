@@ -110,7 +110,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
       const json = JSON.parse(data);
       if (json.prompt_progress) onEvent({ type: 'prompt_progress', progress: json.prompt_progress });
       if (json.timings) onEvent({ type: 'timings', timings: json.timings });
-      if (json.usage) { const u = json.usage; onEvent({ type: 'usage', usage: { prompt: u.prompt_tokens || 0, completion: u.completion_tokens || 0, total: u.total_tokens || ((u.prompt_tokens || 0) + (u.completion_tokens || 0)) } }); }
+      if (json.usage) { const u = json.usage; onEvent({ type: 'usage', usage: { prompt: u.prompt_tokens || 0, completion: u.completion_tokens || 0, total: u.total_tokens || ((u.prompt_tokens || 0) + (u.completion_tokens || 0)), cacheRead: u.prompt_tokens_details?.cached_tokens || 0, cacheWrite: 0 } }); }
       else if (json.timings) {
         const pn = json.timings.prompt_n || 0, cn = json.timings.predicted_n || 0;
         if (pn || cn) onEvent({ type: 'usage', usage: { prompt: pn, completion: cn, total: pn + cn } });

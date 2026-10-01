@@ -48,6 +48,26 @@ export function Stats({ reply }) {
   );
 }
 
+function ToolCalls({ tools }) {
+  if (!tools?.length) return null;
+  return (
+    <div className="pg-tool-calls">
+      {tools.map((c, i) => (
+        <details key={i} className={'pg-tool-call' + (c.ok ? '' : ' failed')}>
+          <summary>
+            <span className={'pg-tool-dot' + (c.ok ? ' ok' : ' bad')} aria-hidden="true" />
+            <code>{c.name}</code>
+            {!c.ok && <span className="pg-dim">{t('failed')}</span>}
+            {c.images > 0 && <span className="pg-dim">{t('{n} images', { n: c.images })}</span>}
+          </summary>
+          <pre>{JSON.stringify(c.args, null, 2)}</pre>
+          <pre>{c.result}</pre>
+        </details>
+      ))}
+    </div>
+  );
+}
+
 export default function Reply({ reply, compare, preferred, onPrefer, onRerun, onEdit, onRequest, clamp, preset }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -76,6 +96,7 @@ export default function Reply({ reply, compare, preferred, onPrefer, onRerun, on
         <ReasoningBlock text={reply.reasoning} live={running && !reply.content} preset={preset}
           durationMs={reply.firstAt && reply.endedAt && !running ? reply.endedAt - reply.firstAt : 0} />
       ) : null}
+      <ToolCalls tools={reply.tools} />
       {waiting && <Waiting since={reply.startedAt} queued={queued} progress={reply.progress} />}
       {editing ? (
         <div className="pg-edit">
@@ -140,9 +161,12 @@ export function RequestDialog({ replies, at, onClose }) {
           [t('Connection'), [req.provider, req.protocol].filter(Boolean).join(' · ') || '–'],
           ...(req.routed ? [[t('Routed to'), req.routed.model + ' · ' + req.routed.via]] : []),
           [t('Sampling'), Object.keys(req.params || {}).length ? JSON.stringify(req.params) : t('Provider defaults'), true],
-          [t('Extra fields'), Object.keys(req.kwargs || {}).length ? JSON.stringify(req.kwargs) : t('None'), true]
+          [t('Extra fields'), Object.keys(req.kwargs || {}).length ? JSON.stringify(req.kwargs) : t('None'), true],
+          [t('Tools'), req.tools?.length ? req.tools.join(', ') : t('None'), true]
         ]} />
-        <p className="cp-note-line">{t('Tools do not run in the playground, so their instructions are left out of the system prompt, the same as in an incognito chat.')}</p>
+        <p className="cp-note-line">{req.tools?.length
+          ? t('Chat-only tools (sandbox, memory, to-do list, questions to the member and ending the conversation) stay off in the playground.')
+          : t('Tools were off for this run, so their instructions are left out of the system prompt.')}</p>
         <div className="pg-req-msgs">
           {(req.messages || []).map((m, i) => (
             <div key={i} className="pg-req-msg">

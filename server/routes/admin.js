@@ -32,21 +32,21 @@ export default function registerAdminRoutes(app) {
     res.json({ ok: true });
   });
 
-  app.get('/api/admin/mcp', authMiddleware, adminOnly, (req, res) => res.json({ servers: mcp.list() }));
+  app.get('/api/admin/mcp', authMiddleware, adminOnly, (req, res) => res.json({ servers: mcp.list().map(mcp.publicServer) }));
   app.post('/api/admin/mcp', authMiddleware, adminOnly, async (req, res) => {
     const r = mcp.create(req.body || {});
     if (r.error) return res.status(400).json({ error: r.error });
     logAudit(req, 'mcp.create', { meta: { name: r.server.name } });
     const refreshed = await mcp.refreshTools(r.server.id);
-    res.json({ server: refreshed.server || r.server, warning: refreshed.error || undefined });
+    res.json({ server: mcp.publicServer(refreshed.server || r.server), warning: refreshed.error || undefined });
   });
   app.patch('/api/admin/mcp/:id', authMiddleware, adminOnly, async (req, res) => {
     const r = mcp.update(req.params.id, req.body || {});
     if (r.error) return res.status(400).json({ error: r.error });
     logAudit(req, 'mcp.update', { meta: { name: r.server.name } });
-    if (!r.server.enabled) return res.json(r);
+    if (!r.server.enabled) return res.json({ server: mcp.publicServer(r.server) });
     const refreshed = await mcp.refreshTools(r.server.id);
-    res.json({ server: refreshed.server || r.server, warning: refreshed.error || undefined });
+    res.json({ server: mcp.publicServer(refreshed.server || r.server), warning: refreshed.error || undefined });
   });
   app.delete('/api/admin/mcp/:id', authMiddleware, adminOnly, (req, res) => {
     mcp.remove(req.params.id);
@@ -56,7 +56,7 @@ export default function registerAdminRoutes(app) {
   app.post('/api/admin/mcp/:id/refresh', authMiddleware, adminOnly, async (req, res) => {
     const r = await mcp.refreshTools(req.params.id);
     if (!r.server) return res.status(404).json({ error: 'Server not found.' });
-    res.json({ server: r.server, error: r.error || undefined });
+    res.json({ server: mcp.publicServer(r.server), error: r.error || undefined });
   });
 
   const FEEDBACK_PAGE = 50;
@@ -106,7 +106,7 @@ export default function registerAdminRoutes(app) {
     const { totals, byUser, byModel, byDay } = db.usage.report(since);
     res.json({
       totals: {
-        prompt: totals.prompt, completion: totals.completion, total: totals.prompt + totals.completion,
+        prompt: totals.prompt, completion: totals.completion, total: totals.prompt + totals.completion, cached: totals.cached,
         cost: totals.cost, generations: totals.count, users: totals.users
       },
       users: byUser

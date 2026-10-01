@@ -10,7 +10,10 @@ const MIN_BUDGET = 1024;
 const EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 const EFFORT_KEYS = new Set(['effort', 'reasoning_effort']);
 const RESERVED = new Set(['model', 'messages', 'system', 'stream', 'max_tokens', 'tools', 'thinking', 'output_config']);
-const DROPPABLE = ['temperature', 'top_p', 'top_k', 'stop_sequences', 'eager_input_streaming', 'output_config'];
+const DROPPABLE = ['temperature', 'top_p', 'top_k', 'stop_sequences', 'eager_input_streaming', 'output_config', 'cache_control', 'fallbacks'];
+export const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
+const FALLBACK_MODELS = /^claude-(?:fable-5-1|opus-5-5|opus-5|sonnet-5-5)(?:$|[-@])/;
+const EPHEMERAL = { type: 'ephemeral' };
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 export function anthropicClient({ base, key }) {
   return new Anthropic({
@@ -192,13 +195,41 @@ export function buildParams(model, spec, { messages, tools = [], memo: mem = nul
   if (effort) params.output_config = { effort };
   const list = toAnthropicTools(tools);
   if (list.length) params.tools = list;
+  if (!oneShot) cacheBreakpoints(params);
+  if (!oneShot && FALLBACK_MODELS.test(String(model.internal_name || '').replace(/^.*?(?=claude-)/, ''))) params.fallbacks = 'default';
   if (mem) applyMemo(params, mem);
   return params;
+}
+
+// Tools render first, then the system prompt, then the conversation. A marker on the
+// last tool and on the system prompt lets every chat on this model reuse that prefix;
+// the top-level marker moves with the conversation, so each step of a tool loop and
+// the next turn read the history back at a tenth of the input price.
+export function cacheBreakpoints(params) {
+  if (params.tools?.length) params.tools = params.tools.map((t, i, all) => (i === all.length - 1 ? { ...t, cache_control: EPHEMERAL } : t));
+  if (typeof params.system === 'string' && params.system.trim()) params.system = [{ type: 'text', text: params.system, cache_control: EPHEMERAL }];
+  params.cache_control = EPHEMERAL;
+  return params;
+}
+
+function uncache(params) {
+  delete params.cache_control;
+  if (Array.isArray(params.system)) params.system = params.system.map(b => b.text).join('\n\n');
+  if (params.tools) params.tools = params.tools.map(({ cache_control, ...t }) => t);
+}
+
+export function usageOf(u) {
+  const read = u?.cache_read_input_tokens || 0;
+  const write = u?.cache_creation_input_tokens || 0;
+  const prompt = (u?.input_tokens || 0) + read + write;
+  const completion = u?.output_tokens || 0;
+  return { prompt, completion, total: prompt + completion, cacheRead: read, cacheWrite: write };
 }
 
 function applyMemo(params, mem) {
   for (const k of mem.drop) {
     if (k === 'eager_input_streaming') { if (params.tools) params.tools = params.tools.map(({ eager_input_streaming, ...t }) => t); }
+    else if (k === 'cache_control') uncache(params);
     else delete params[k];
   }
   if (mem.noThinking) {
@@ -216,7 +247,8 @@ export function errorText(err) {
 export function rejectedParam(message, params) {
   const msg = String(message || '');
   for (const k of DROPPABLE) {
-    const present = k === 'eager_input_streaming' ? params.tools?.some(t => t.eager_input_streaming) : k in params;
+    const present = k === 'eager_input_streaming' ? params.tools?.some(t => t.eager_input_streaming)
+      : k === 'cache_control' ? ('cache_control' in params || Array.isArray(params.system)) : k in params;
     if (present && new RegExp('\\b' + k + '\\b').test(msg)) return k;
   }
   return null;
@@ -310,19 +342,17 @@ export async function streamAnthropic({ model, spec, base, key, messages, tools,
 
 async function streamOnce(client, params, signal, onEvent) {
   const blocks = [];
-  const usage = { prompt: 0, completion: 0 };
+  let usage = usageOf(null);
   let streamed = false;
   let stop = '';
   let wrote = false;
-  const stream = client.messages.stream(params, { signal });
+  const stream = client.messages.stream(params, { signal, ...(params.fallbacks ? { headers: { 'anthropic-beta': FALLBACK_BETA } } : {}) });
   try {
     for await (const ev of stream) {
       streamed = true;
       if (ev.type === 'message_start') {
-        const u = ev.message?.usage || {};
-        usage.prompt = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
-        usage.completion = u.output_tokens || 0;
-        onEvent({ type: 'usage', usage: { ...usage, total: usage.prompt + usage.completion } });
+        usage = usageOf(ev.message?.usage);
+        onEvent({ type: 'usage', usage });
       } else if (ev.type === 'content_block_start') {
         const b = ev.content_block || {};
         if (b.type === 'tool_use') {
@@ -348,9 +378,11 @@ async function streamOnce(client, params, signal, onEvent) {
         }
       } else if (ev.type === 'message_delta') {
         const u = ev.usage || {};
-        if (Number.isFinite(u.input_tokens)) usage.prompt = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
-        if (Number.isFinite(u.output_tokens)) usage.completion = u.output_tokens;
-        onEvent({ type: 'usage', usage: { ...usage, total: usage.prompt + usage.completion } });
+        const next = Number.isFinite(u.input_tokens) ? usageOf(u) : { ...usage };
+        if (Number.isFinite(u.output_tokens)) next.completion = u.output_tokens;
+        next.total = next.prompt + next.completion;
+        usage = next;
+        onEvent({ type: 'usage', usage });
         if (ev.delta?.stop_reason) stop = ev.delta.stop_reason;
       }
     }
@@ -374,9 +406,7 @@ export async function oneShotAnthropic({ model, spec, base, key, messages, kwarg
   try {
     const res = await runWithRecovery(params, mem, (p) => client.messages.create(p, { signal }));
     const text = (res.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
-    const u = res.usage || {};
-    const prompt = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
-    return { text, usage: { prompt, completion: u.output_tokens || 0, total: prompt + (u.output_tokens || 0) } };
+    return { text, usage: usageOf(res.usage) };
   } catch (err) {
     throw friendlyError(err, model, base);
   }
@@ -392,4 +422,15 @@ export async function listAnthropicModels({ base, key }) {
 export async function anthropicModelInfo({ base, key }, id) {
   const m = await anthropicClient({ base, key }).models.retrieve(id);
   return { context: Number(m?.max_input_tokens) || 0, maxOutput: Number(m?.max_tokens) || 0 };
+}
+
+export async function countAnthropicTokens({ model, spec, base, key, messages, tools = [] }) {
+  const p = buildParams(model, spec, { messages, tools, memo: memoFor(base, model.internal_name) });
+  const body = { model: p.model, messages: p.messages };
+  if (Array.isArray(p.system)) body.system = p.system.map(b => b.text).join('\n\n');
+  else if (p.system) body.system = p.system;
+  if (p.tools) body.tools = p.tools.map(({ cache_control, eager_input_streaming, ...t }) => t);
+  if (p.thinking) body.thinking = p.thinking;
+  const res = await anthropicClient({ base, key }).messages.countTokens(body);
+  return Number(res?.input_tokens) || 0;
 }

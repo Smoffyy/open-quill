@@ -144,6 +144,7 @@ const USAGE_SUMS = `
   COUNT(*) AS count,
   COALESCE(SUM(json_extract(data,'$.prompt')), 0) AS prompt,
   COALESCE(SUM(json_extract(data,'$.completion')), 0) AS completion,
+  COALESCE(SUM(json_extract(data,'$.cache_read')), 0) AS cached,
   COALESCE(SUM(json_extract(data,'$.cost')), 0) AS cost`;
 const usageTotalsStmt = sdb.prepare(`
   SELECT ${USAGE_SUMS}, COUNT(DISTINCT COALESCE(user_id, 'unknown')) AS users
@@ -163,7 +164,7 @@ usageCol.report = (since) => {
   const t = usageTotalsStmt.get(from) || {};
   const num = (v) => Number(v) || 0;
   return {
-    totals: { count: num(t.count), prompt: num(t.prompt), completion: num(t.completion), cost: num(t.cost), users: num(t.users) },
+    totals: { count: num(t.count), prompt: num(t.prompt), completion: num(t.completion), cached: num(t.cached), cost: num(t.cost), users: num(t.users) },
     byUser: usageByUserAggStmt.all(from).map(r => ({ userId: r.user_id || 'unknown', count: num(r.count), prompt: num(r.prompt), completion: num(r.completion), cost: num(r.cost) })),
     byModel: usageByModelAggStmt.all(from).map(r => ({ modelId: r.model_id || 'unknown', name: r.model_name || '', count: num(r.count), prompt: num(r.prompt), completion: num(r.completion), cost: num(r.cost) })),
     byDay: usageByDayAggStmt.all(from).map(r => ({ day: r.day, prompt: num(r.prompt), completion: num(r.completion), cost: num(r.cost) }))

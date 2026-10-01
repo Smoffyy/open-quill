@@ -7,7 +7,7 @@ export const newId = () => Math.random().toString(36).slice(2, 10) + Date.now().
 export const laneKey = (lane) => (lane ? lane.modelId + ':' + (lane.source === 'live' ? 'live' : 'draft') : '');
 
 export function makeLane(modelId, source = 'draft') {
-  return { id: newId(), modelId, source: source === 'live' ? 'live' : 'draft', kwargValues: {}, extended: false };
+  return { id: newId(), modelId, source: source === 'live' ? 'live' : 'draft', kwargValues: {}, extended: false, tools: true };
 }
 
 export function addLane(lanes, modelId, source) {
@@ -160,7 +160,7 @@ export function restoreSession(raw, modelIds) {
   const lanes = (Array.isArray(s.lanes) ? s.lanes : [])
     .filter(l => l && known.has(l.modelId))
     .slice(0, MAX_LANES)
-    .map(l => ({ ...makeLane(l.modelId, l.source), id: String(l.id || newId()), kwargValues: l.kwargValues && typeof l.kwargValues === 'object' ? l.kwargValues : {}, extended: !!l.extended }));
+    .map(l => ({ ...makeLane(l.modelId, l.source), id: String(l.id || newId()), kwargValues: l.kwargValues && typeof l.kwargValues === 'object' ? l.kwargValues : {}, extended: !!l.extended, tools: l.tools !== false }));
   const thread = (Array.isArray(s.thread) ? s.thread : [])
     .filter(turn => turn && ['user', 'assistant', 'system'].includes(turn.role))
     .map(turn => (Array.isArray(turn.replies) ? { ...turn, replies: turn.replies.map(settle) } : turn));

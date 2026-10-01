@@ -1,6 +1,7 @@
 import { draftGet } from './draft.js';
 import { DEFAULT_SAFETY_PROMPT } from './safety.js';
 import { autoTitleDefault } from './autotitle.js';
+import { keyHint } from './secrets.js';
 
 const domainList = (v) => JSON.stringify([...new Set(
   String(v ?? '').slice(0, 20000)
@@ -79,8 +80,22 @@ export function coerceSetting(spec, raw) {
   return v || (spec.fallback ?? '');
 }
 
+const SECRET_FIELDS = Object.entries(SETTING_FIELDS).filter(([, s]) => s.secret).map(([name]) => name);
+
+export function maskSecrets(values) {
+  const out = { ...values };
+  for (const name of SECRET_FIELDS) {
+    if (!(name in out)) continue;
+    const v = out[name];
+    out[name] = '';
+    out[name + 'Saved'] = !!v;
+    out[name + 'Hint'] = keyHint(v);
+  }
+  return out;
+}
+
 export function adminSettings() {
-  return {
+  return maskSecrets({
     apiBaseUrl: draftGet('api_base_url'), apiKey: draftGet('api_key'),
     uploadLimitAdminMb: Number(draftGet('upload_limit_mb_admin', 8)) || 0,
     uploadLimitUserMb: Number(draftGet('upload_limit_mb_user', 8)) || 0,
@@ -122,5 +137,5 @@ export function adminSettings() {
     autoTitleEnabled: draftGet('auto_title_enabled', autoTitleDefault()) === '1',
     autoTitleModelMode: draftGet('auto_title_model_mode', 'current') === 'specific' ? 'specific' : 'current',
     autoTitleModelId: draftGet('auto_title_model_id', '')
-  };
+  });
 }

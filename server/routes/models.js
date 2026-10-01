@@ -171,6 +171,7 @@ export default function registerModelRoutes(app) {
         const raw = Array.isArray(j?.data) ? j.data : (Array.isArray(j?.models) ? j.models : []);
         ids = raw.map(x => (typeof x === 'string' ? x : (x?.id || x?.name))).filter(Boolean);
       }
+      if (spec.modelPrefix) ids = ids.map(id => (String(id).startsWith(spec.modelPrefix) ? String(id).slice(spec.modelPrefix.length) : id));
       ids = [...new Set(ids)];
       const existing = new Set(db.models.all().map(m => (m.internal_name || '').toLowerCase()));
       res.json({ models: ids.map(id => ({ id, added: existing.has(String(id).toLowerCase()) })) });

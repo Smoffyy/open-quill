@@ -75,6 +75,13 @@ function LaneOptions({ lane, row, onChange }) {
         <KwargControl key={d.id} def={d} value={values[d.id]} isAdmin
           onSet={(id, v) => onChange({ kwargValues: { ...lane.kwargValues, [id]: v } })} />
       ))}
+      <div className="pg-opt-row">
+        <span>
+          <b>{t('Run tools')}</b>
+          <small>{t('Calculator, web search, reference files, skills, past-chat search, consult and MCP tools run for real. Sandbox, memory, to-do list and other chat-only tools stay off.')}</small>
+        </span>
+        <Switch on={lane.tools !== false} label={t('Run tools')} onToggle={() => onChange({ tools: lane.tools === false })} />
+      </div>
       {token && (
         <div className="pg-opt-row">
           <span>
@@ -92,7 +99,7 @@ function LaneOptions({ lane, row, onChange }) {
 function LaneHead({ lane, row, index, wins, live, changes, onChange, onRemove, onReview }) {
   const [menu, setMenu] = useState(null);
   const subject = index === 0;
-  const hasOpts = !!row && (kwargDefsOf(row, legacyKwarg).length > 0 || usesPromptToken(row));
+  const hasOpts = !!row;
   const n = subject ? changes : 0;
   return (
     <div className={'pg-lane' + (subject ? ' subject' : '')}>

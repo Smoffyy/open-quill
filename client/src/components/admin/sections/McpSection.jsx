@@ -11,6 +11,8 @@ import { statusOf } from '../../settings/McpCard.jsx';
 const BLANK = { name: '', transport: 'stdio', command: '', args: '', env: '', url: '', headers: '', enabled: true };
 const TONE = { __proto__: null, connected: 'good', error: 'bad', new: undefined };
 
+const savedNote = (names, touched) => (names?.length && !touched ? t('Saved: {names}. Values stay on the server.', { names: names.join(', ') }) : '');
+
 export default function McpSection() {
   const { confirm } = useAdmin();
   const [servers, setServers] = useState(null);
@@ -39,7 +41,10 @@ export default function McpSection() {
     setError('');
     setBusy('save');
     try {
-      const r = draft.id ? await api.patch('/api/admin/mcp/' + draft.id, draft) : await api.post('/api/admin/mcp', draft);
+      const { headersTouched, envTouched, headerNames, envNames, tools, ...body } = draft;
+      if (draft.id && !headersTouched) delete body.headers;
+      if (draft.id && !envTouched) delete body.env;
+      const r = draft.id ? await api.patch('/api/admin/mcp/' + draft.id, body) : await api.post('/api/admin/mcp', body);
       setServers(list => (list.some(x => x.id === r.server.id) ? list.map(x => (x.id === r.server.id ? r.server : x)) : [...list, r.server]));
       if (r.warning) {
         setDraft({ ...BLANK, ...r.server });
@@ -195,9 +200,14 @@ export default function McpSection() {
                   <Input mono value={draft.args} placeholder="-y @modelcontextprotocol/server-filesystem /home/me/docs"
                     onChange={(e) => setDraft(d => ({ ...d, args: e.target.value }))} />
                 </Field>
-                <Field label={t('Environment variables')} optional hint={t('One NAME=value per line, such as an API key the server needs.')}>
-                  <Area mono rows={3} value={draft.env || ''} placeholder="GITHUB_PERSONAL_ACCESS_TOKEN=..."
-                    onChange={(e) => setDraft(d => ({ ...d, env: e.target.value }))} />
+                <Field label={t('Environment variables')} optional
+                  hint={savedNote(draft.envNames, draft.envTouched) || t('One NAME=value per line, such as an API key the server needs.')}>
+                  <Area mono rows={3} value={draft.env || ''}
+                    placeholder={draft.envNames?.length && !draft.envTouched ? t('Values are hidden. Type to replace all of them.') : 'GITHUB_PERSONAL_ACCESS_TOKEN=...'}
+                    onChange={(e) => setDraft(d => ({ ...d, env: e.target.value, envTouched: true }))} />
+                  {draft.envNames?.length > 0 && !draft.envTouched && (
+                    <Acts><Btn size="sm" kind="quiet" onClick={() => setDraft(d => ({ ...d, env: '', envTouched: true }))}>{t('Remove saved variables')}</Btn></Acts>
+                  )}
                 </Field>
               </>
             ) : (
@@ -206,9 +216,13 @@ export default function McpSection() {
                   <Input mono value={draft.url} placeholder="http://localhost:8931/mcp"
                     onChange={(e) => setDraft(d => ({ ...d, url: e.target.value }))} />
                 </Field>
-                <Field label={t('Headers')} optional hint={t('One Name: value pair per line.')}>
-                  <Area mono rows={3} value={draft.headers} placeholder="Authorization: Bearer …"
-                    onChange={(e) => setDraft(d => ({ ...d, headers: e.target.value }))} />
+                <Field label={t('Headers')} optional hint={savedNote(draft.headerNames, draft.headersTouched) || t('One Name: value pair per line.')}>
+                  <Area mono rows={3} value={draft.headers || ''}
+                    placeholder={draft.headerNames?.length && !draft.headersTouched ? t('Values are hidden. Type to replace all of them.') : 'Authorization: Bearer ...'}
+                    onChange={(e) => setDraft(d => ({ ...d, headers: e.target.value, headersTouched: true }))} />
+                  {draft.headerNames?.length > 0 && !draft.headersTouched && (
+                    <Acts><Btn size="sm" kind="quiet" onClick={() => setDraft(d => ({ ...d, headers: '', headersTouched: true }))}>{t('Remove saved headers')}</Btn></Acts>
+                  )}
                 </Field>
               </>
             )}

@@ -1202,3 +1202,41 @@ process.stdin.on('data', c => {
     fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
+
+test('settings secrets are saved but never read back', async () => {
+  await browser('PATCH', '/api/admin/settings', { body: { voiceSttKey: 'stt-secret-value-9876' } });
+  const raw = (await browser('GET', '/api/admin/settings')).text;
+  assert.doesNotMatch(raw, /stt-secret-value/);
+  const s = JSON.parse(raw);
+  assert.deepEqual([s.voiceSttKey, s.voiceSttKeySaved, s.voiceSttKeyHint], ['', true, '…9876']);
+  await browser('PATCH', '/api/admin/settings', { body: { voiceSttKey: null } });
+  assert.equal((await browser('GET', '/api/admin/settings')).json.voiceSttKeySaved, false, 'removing is explicit');
+  await browser('POST', '/api/admin/changes/discard', { body: {} });
+});
+
+test('MCP header and environment values stay on the server', async () => {
+  const created = await browser('POST', '/api/admin/mcp', {
+    body: { name: 'Secretive', transport: 'http', url: 'http://127.0.0.1:9/mcp', headers: 'Authorization: Bearer mcp-header-secret', enabled: false }
+  });
+  assert.doesNotMatch(created.text, /mcp-header-secret/);
+  const id = created.json.server.id;
+  const stdio = await browser('POST', '/api/admin/mcp', {
+    body: { name: 'Env', transport: 'stdio', command: 'oq-not-a-real-binary-xyz', env: 'API_TOKEN=mcp-env-secret\nREGION=eu', enabled: false }
+  });
+  assert.doesNotMatch(stdio.text, /mcp-env-secret/);
+  const list = (await browser('GET', '/api/admin/mcp')).text;
+  assert.doesNotMatch(list, /mcp-header-secret|mcp-env-secret/);
+  const servers = JSON.parse(list).servers;
+  assert.deepEqual(servers.find(s => s.id === id).headerNames, ['Authorization']);
+  assert.deepEqual(servers.find(s => s.id === stdio.json.server.id).envNames, ['API_TOKEN', 'REGION']);
+
+  const renamed = await browser('PATCH', `/api/admin/mcp/${id}`, { body: { name: 'Renamed', headers: undefined } });
+  assert.deepEqual(renamed.json.server.headerNames, ['Authorization'], 'an edit that does not send headers keeps them');
+  const cleared = await browser('PATCH', `/api/admin/mcp/${id}`, { body: { headers: '' } });
+  assert.deepEqual(cleared.json.server.headerNames, [], 'sending an empty value clears them');
+
+  const member = await browser('GET', '/api/mcp');
+  assert.doesNotMatch(member.text, /mcp-header-secret|mcp-env-secret/);
+  await browser('DELETE', `/api/admin/mcp/${id}`);
+  await browser('DELETE', `/api/admin/mcp/${stdio.json.server.id}`);
+});

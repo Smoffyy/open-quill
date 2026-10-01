@@ -41,7 +41,7 @@ export async function oneShotFull(model, messages, { signal = null } = {}) {
     });
   } catch { return { text: '', usage: null }; }
   const json = await res.json().catch(() => ({}));
-  return { text: json.choices?.[0]?.message?.content?.trim() || '', usage: json.usage ? usageOf(json.usage.prompt_tokens, json.usage.completion_tokens) : null };
+  return { text: json.choices?.[0]?.message?.content?.trim() || '', usage: json.usage ? { ...usageOf(json.usage.prompt_tokens, json.usage.completion_tokens), cacheRead: json.usage.prompt_tokens_details?.cached_tokens || 0, cacheWrite: 0 } : null };
 }
 
 export async function oneShot(model, messages) {

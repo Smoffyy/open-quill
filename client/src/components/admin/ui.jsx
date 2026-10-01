@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useId } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Copy, X } from '../ui/icons.jsx';
+import { Check, Copy, X, Trash } from '../ui/icons.jsx';
 import { Switch, SegSlide, SelectRow } from '../ui/controls.jsx';
 import { t } from '../../i18n.jsx';
 import { logoFor, useLogos } from '../../lib/logos.js';
@@ -130,6 +130,32 @@ export function Btn({ kind, size, icon, className, children, ...rest }) {
 // for everyone else, so the two can never drift apart.
 export function IconBtn({ kind, size = 'sm', label, children, ...rest }) {
   return <Btn kind={kind} size={size} icon title={label} aria-label={label} {...rest}>{children}</Btn>;
+}
+
+// A stored secret is never sent back to the browser, so the field starts empty and
+// says whether something is saved. A typed value is saved when the field is left
+// or Enter is pressed; removing it is its own action, so clearing the box by
+// accident never wipes a working key.
+export function SecretInput({ saved, hint, emptyText, label, onSave, onRemove }) {
+  const [text, setText] = useState('');
+  const commit = () => {
+    const v = text.trim();
+    if (!v) return;
+    onSave(v);
+    setText('');
+  };
+  const placeholder = saved
+    ? (hint ? t('Saved key ending {hint}. Type to replace it.', { hint }) : t('A key is saved. Type to replace it.'))
+    : emptyText;
+  return (
+    <div className="cp-inline">
+      <Input mono type="password" value={text} autoComplete="off" placeholder={placeholder} aria-label={label}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }} />
+      {saved && <IconBtn kind="quiet" label={t('Remove saved key')} onClick={() => { setText(''); onRemove(); }}><Trash /></IconBtn>}
+    </div>
+  );
 }
 
 export function CopyBtn({ text, title }) {

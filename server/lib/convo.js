@@ -1,5 +1,5 @@
 import { db } from '../db.js';
-import { oneShot, stripThink, summarizeConversation } from '../llm/index.js';
+import { oneShot, stripThink, summarizeConversation, modelProvider, countAnthropicTokens } from '../llm/index.js';
 import { resolveProvider } from './providers.js';
 import { activePath } from './tree.js';
 import { historyText } from './history.js';
@@ -278,7 +278,21 @@ export function compactThreshold(model, ctxOverride) {
   return Math.floor(ctx * (1 - padding));
 }
 
-export async function exactTokens(chatId, model, messages) {
+// Claude has an exact counter, but it is a round trip, so it is only asked once the
+// estimate comes within reach of the threshold the caller is checking against.
+const NEAR = 0.7;
+
+export async function exactTokens(chatId, model, messages, near = 0, tools = []) {
+  const { spec, base, key } = modelProvider(model);
+  if (spec.protocol === 'anthropic') {
+    const est = calibratedTokens(chatId, messages);
+    if (near > 0 && Number.isFinite(near) && est < near * NEAR) return est;
+    try {
+      const n = await countAnthropicTokens({ model, spec, base, key, messages, tools });
+      if (n > 0) { updateCalib(chatId, n, estimateTokens(messages)); return n; }
+    } catch {}
+    return est;
+  }
   if (isLlamaCpp(model)) {
     const n = await llamaTokenCount(model, messages);
     if (n > 0) {

@@ -23,7 +23,7 @@ export async function streamReply({ lane, history, signal, onPatch, fallbackErro
       method: 'POST', credentials: 'same-origin', signal,
       headers: { 'Content-Type': 'application/json', 'X-Oq-Tab': TAB_ID },
       body: JSON.stringify({
-        modelId: lane.modelId, source: lane.source, kwargValues: lane.kwargValues, extended: lane.extended, messages: history
+        modelId: lane.modelId, source: lane.source, kwargValues: lane.kwargValues, extended: lane.extended, tools: lane.tools !== false, messages: history
       })
     });
     if (!res.ok || !res.body) {
@@ -46,6 +46,7 @@ export async function streamReply({ lane, history, signal, onPatch, fallbackErro
         else if (ev.type === 'usage') paint({ usage: ev.usage });
         else if (ev.type === 'finish') paint({ finish: ev.reason });
         else if (ev.type === 'progress') paint({ progress: { processed: ev.processed, total: ev.total } });
+        else if (ev.type === 'tool') paint({ tools: [...(reply.tools || []), ev.tool] });
         else if (ev.type === 'error') paint({ error: ev.error });
       }
     }

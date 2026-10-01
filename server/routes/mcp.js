@@ -14,7 +14,7 @@ function workspaceView() {
 }
 
 function mine(s) {
-  return { ...s, headers: undefined, hasHeaders: !!(s.headers || '').trim(), scope: 'user', editable: true };
+  return { ...mcp.publicServer(s), hasHeaders: !!(s.headers || '').trim(), scope: 'user', editable: true };
 }
 
 export default function registerUserMcpRoutes(app) {
@@ -41,6 +41,17 @@ export default function registerUserMcpRoutes(app) {
     const r = mcp.remove(req.params.id, req.user.id);
     if (r.error) return res.status(404).json({ error: r.error });
     res.json({ ok: true });
+  });
+
+  app.get('/api/mcp/prompts', authMiddleware, (req, res) => {
+    res.json({ prompts: mcp.listPrompts(req.user.id) });
+  });
+
+  app.post('/api/mcp/prompts/get', authMiddleware, async (req, res) => {
+    const b = req.body || {};
+    const r = await mcp.getPrompt(String(b.serverId || ''), String(b.name || ''), b.arguments && typeof b.arguments === 'object' ? b.arguments : {}, req.user.id);
+    if (r.error) return res.status(r.error === 'Prompt not found.' ? 404 : 400).json({ error: r.error });
+    res.json({ text: r.text });
   });
 
   app.post('/api/mcp/:id/refresh', authMiddleware, async (req, res) => {

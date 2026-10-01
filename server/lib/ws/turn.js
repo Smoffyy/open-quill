@@ -45,7 +45,7 @@ export async function maybeCompact(ws, chat, model, extended, flags, opts = {}) 
   let guard = 0;
   while (guard++ < 3) {
     const convo = buildMessages(model, chatHistory(chat, model), extended, systemPrompt(chat, model, flags, opts).text);
-    if ((await exactTokens(chat.id, model, convo)) < threshold) return;
+    if ((await exactTokens(chat.id, model, convo, threshold)) < threshold) return;
     if (!(await compactStep(ws, chat, model))) return;
   }
 }
@@ -101,9 +101,10 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   };
   const addStepUsage = (stepUsage) => {
     if (!stepUsage) return;
-    if (!usage) usage = { prompt: 0, completion: 0, total: 0 };
+    if (!usage) usage = { prompt: 0, completion: 0, total: 0, cacheRead: 0, cacheWrite: 0 };
     usage.prompt += stepUsage.prompt; usage.completion += stepUsage.completion;
     usage.total += stepUsage.total || (stepUsage.prompt + stepUsage.completion);
+    usage.cacheRead += stepUsage.cacheRead || 0; usage.cacheWrite += stepUsage.cacheWrite || 0;
     lastStepCompletion = stepUsage.completion;
   };
   const reasonSegs = [];
@@ -181,7 +182,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     }
     if (mcpOn && mcp.isMcpTool(call.tool, mcpUser)) {
       const r = await mcp.execTool(call, mcpUser);
-      return { payload: mcp.resultPayload(call, r), formatted: mcp.formatResult(call, r), hide: false };
+      return { payload: mcp.resultPayload(call, r), formatted: mcp.formatResult(call, r), hide: false, images: r.images || [] };
     }
     if (call.tool === 'web_search') {
       if (!webSearchOn) return null;
@@ -275,9 +276,9 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   try {
     for (let step = 0; step < maxSteps; step++) {
       // running low on context mid-response? summarize older turns, then carry on where we left off
-      if (threshold !== Infinity && inTurn.length && (await exactTokens(chat.id, model, base.concat(inTurn))) >= threshold) {
+      if (threshold !== Infinity && inTurn.length && (await exactTokens(chat.id, model, base.concat(inTurn), threshold, tools)) >= threshold) {
         if (await compactStep(ws, chat, model)) base = rebuildBase();
-        if ((await exactTokens(chat.id, model, base.concat(inTurn))) >= threshold) {
+        if ((await exactTokens(chat.id, model, base.concat(inTurn), threshold, tools)) >= threshold) {
           const t = trimInTurn(inTurn);
           if (t.trimmed) {
             inTurn = t.list;
@@ -376,7 +377,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
             heard();
             if (e.type === 'usage') {
               stepPromptTokens = e.usage.prompt || stepPromptTokens;
-              stepUsage = { prompt: e.usage.prompt || 0, completion: e.usage.completion || 0, total: e.usage.total || 0 };
+              stepUsage = { prompt: e.usage.prompt || 0, completion: e.usage.completion || 0, total: e.usage.total || 0, cacheRead: e.usage.cacheRead || 0, cacheWrite: e.usage.cacheWrite || 0 };
               return;
             }
             if (e.type === 'prompt_progress') {
@@ -555,6 +556,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         break;
       }
       const toolMsgs = [];
+      const stepImages = [];
       let stepOk = 0, stepFailed = 0;
       const stepFailKinds = new Set();
       for (const tc of toolCalls) {
@@ -609,7 +611,10 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         }
         if (mayChangeFiles(call.tool)) safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(space) }));
         toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: formatted });
+        for (const img of out.images || []) stepImages.push({ ...img, tool: call.tool });
       }
+      const shown = mcp.imageMessage(stepImages, !!model.has_vision);
+      if (shown) toolMsgs.push(shown);
       if (liveSent) safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live: null }));
       if (stopRequested()) break;
       if (conversationEnded) {

@@ -242,6 +242,15 @@ button.pg-role:hover:not(:disabled) { color: var(--cp-ink); background: var(--ho
 .pg-reply-flags:empty { display: none; }
 .pg-reply-acts { display: flex; gap: 2px; margin-left: auto; }
 
+.pg-tool-calls { display: flex; flex-direction: column; gap: var(--cp-1); }
+.pg-tool-call { border: 1px solid var(--cp-line); border-radius: var(--cp-r-sm); background: var(--cp-sunk); font-size: 12px; }
+.pg-tool-call > summary { display: flex; align-items: center; gap: var(--cp-2); padding: 5px var(--cp-2); cursor: pointer; list-style: none; }
+.pg-tool-call > summary::-webkit-details-marker { display: none; }
+.pg-tool-call > summary code { font-family: var(--cp-mono); font-size: 11.5px; color: var(--cp-ink); overflow-wrap: anywhere; }
+.pg-tool-call pre { margin: 0; padding: var(--cp-2); border-top: 1px solid var(--cp-line); max-height: 220px; overflow: auto; font-family: var(--cp-mono); font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pg-tool-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--cp-faint); }
+.pg-tool-dot.ok { background: var(--success); }
+.pg-tool-dot.bad { background: var(--danger); }
 .pg-waiting { display: flex; align-items: center; gap: var(--cp-2); font-size: 12.5px; color: var(--cp-dim); min-height: 28px; }
 .pg-waiting-t { font-family: var(--cp-mono); font-size: 11.5px; color: var(--cp-faint); }
 .pg-pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--cp-dim); animation: pg-pulse 1.1s ease-in-out infinite; }

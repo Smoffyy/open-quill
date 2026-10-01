@@ -34,7 +34,7 @@ export function validateAnthropic(body, issued) {
   if (!body || typeof body !== 'object') return 'Request body must be JSON.';
   if (typeof body.model !== 'string' || !body.model) return 'model: Field required';
   if (!Number.isInteger(body.max_tokens) || body.max_tokens < 1) return 'max_tokens: Field required';
-  if (body.system !== undefined && typeof body.system !== 'string' && !Array.isArray(body.system)) return 'system: Input should be a valid string';
+  if (body.system !== undefined && typeof body.system !== 'string' && !(Array.isArray(body.system) && body.system.every(b => b?.type === 'text' && typeof b.text === 'string'))) return 'system: Input should be a valid string or a list of text blocks';
   const msgs = body.messages;
   if (!Array.isArray(msgs) || !msgs.length) return 'messages: at least one message is required';
   if (msgs[0].role !== 'user') return 'messages: first message must use the "user" role';
@@ -112,11 +112,34 @@ export function validateAnthropic(body, issued) {
     }
   }
   for (const k of Object.keys(body)) {
-    if (!['model', 'max_tokens', 'messages', 'system', 'stream', 'temperature', 'top_p', 'top_k', 'stop_sequences', 'thinking', 'output_config', 'tools', 'tool_choice', 'metadata'].includes(k)) {
+    if (!['model', 'max_tokens', 'messages', 'system', 'stream', 'temperature', 'top_p', 'top_k', 'stop_sequences', 'thinking', 'output_config', 'tools', 'tool_choice', 'metadata', 'cache_control', 'fallbacks'].includes(k)) {
       return `${k}: Extra inputs are not permitted`;
     }
   }
   return null;
+}
+
+const strip = (v) => JSON.stringify(v, (k, x) => (k === 'cache_control' ? undefined : x));
+const systemText = (s) => (Array.isArray(s) ? s.map(b => b.text).join('\n\n') : (s || ''));
+
+// Prompt caching as the API applies it: a prefix written by one request is read back by
+// a later request that starts with the same bytes. Segments are the tool list, the
+// system prompt and each message, in render order.
+export function simulateCache(body, store) {
+  const segs = [strip(body.tools || []), systemText(body.system), ...body.messages.map(strip)];
+  const keys = segs.map((_, i) => strip(segs.slice(0, i + 1)));
+  const size = (from, to) => segs.slice(from, to + 1).reduce((n, s) => n + Math.ceil(s.length / 4), 0);
+  const marks = [];
+  if (body.tools?.some(t => t.cache_control)) marks.push(0);
+  if (Array.isArray(body.system) && body.system.some(b => b.cache_control)) marks.push(1);
+  if (body.cache_control) marks.push(segs.length - 1);
+  let hit = -1;
+  for (let i = keys.length - 1; i >= 0; i--) if (store.has(keys[i])) { hit = i; break; }
+  const top = marks.length ? Math.max(...marks) : -1;
+  for (const m of marks) store.add(keys[m]);
+  const read = hit >= 0 ? size(0, hit) : 0;
+  const write = top > hit ? size(hit + 1, top) : 0;
+  return { input_tokens: size(0, segs.length - 1) - read - write, cache_read_input_tokens: read, cache_creation_input_tokens: write };
 }
 
 export function anthropicTurn({ thinking = '', text = '', tools = [], stop, usage = {}, chunk = 7 } = {}) {
@@ -153,9 +176,10 @@ export function anthropicTurn({ thinking = '', text = '', tools = [], stop, usag
   return { events, signatures };
 }
 
-export async function mockAnthropic({ key = 'sk-ant-test', respond, models = [] } = {}) {
+export async function mockAnthropic({ key = 'sk-ant-test', respond, models = [], rejectCache = false } = {}) {
   const requests = [];
   const issued = new Map();
+  const cache = new Set();
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
     const headers = req.headers;
@@ -180,11 +204,12 @@ export async function mockAnthropic({ key = 'sk-ant-test', respond, models = [] 
     const body = await readBody(req);
     const entry = { body, headers, at: Date.now() };
     requests.push(entry);
-    const invalid = validateAnthropic(body, issued);
+    const invalid = (rejectCache && /cache_control/.test(JSON.stringify(body)) ? 'cache_control: Extra inputs are not permitted' : null) || validateAnthropic(body, issued);
     if (invalid) { entry.rejected = invalid; return anthropicError(res, 400, 'invalid_request_error', invalid); }
     const out = await respond(body, requests.length - 1, entry);
     if (out.status) return anthropicError(res, out.status, out.type || 'api_error', out.message || 'error', out.headers || {});
-    const turn = out.events ? out : anthropicTurn(out);
+    entry.cache = simulateCache(body, cache);
+    const turn = out.events ? out : anthropicTurn({ ...out, usage: { ...entry.cache, ...(out.usage || {}) } });
     for (const s of turn.signatures || []) issued.set(s, { system: JSON.stringify(body.system ?? null) });
     if (!body.stream) {
       const content = [];
@@ -250,7 +275,7 @@ export function validateOpenAi(body, { rejects = {} } = {}) {
   return null;
 }
 
-export function openAiChunks({ text = '', tools = [], finish, usage = { prompt_tokens: 30, completion_tokens: 12 }, chunk = 6, includeUsage = true } = {}) {
+export function openAiChunks({ text = '', tools = [], finish, usage = { prompt_tokens: 30, completion_tokens: 12 }, cached = 0, chunk = 6, includeUsage = true } = {}) {
   const id = 'chatcmpl-' + crypto.randomBytes(5).toString('hex');
   const base = { id, object: 'chat.completion.chunk', created: 1, model: 'mock' };
   const out = [{ ...base, choices: [{ index: 0, delta: { role: 'assistant', content: '' }, finish_reason: null }] }];
@@ -261,11 +286,11 @@ export function openAiChunks({ text = '', tools = [], finish, usage = { prompt_t
     for (let i = 0; i < args.length; i += chunk) out.push({ ...base, choices: [{ index: 0, delta: { tool_calls: [{ index: idx, function: { arguments: args.slice(i, i + chunk) } }] }, finish_reason: null }] });
   });
   out.push({ ...base, choices: [{ index: 0, delta: {}, finish_reason: finish || (tools.length ? 'tool_calls' : 'stop') }] });
-  if (includeUsage) out.push({ ...base, choices: [], usage: { ...usage, total_tokens: usage.prompt_tokens + usage.completion_tokens } });
+  if (includeUsage) out.push({ ...base, choices: [], usage: { ...usage, total_tokens: usage.prompt_tokens + usage.completion_tokens, prompt_tokens_details: { cached_tokens: cached } } });
   return out;
 }
 
-export async function mockOpenAi({ key = 'sk-test', respond, models = [], rejects = {} } = {}) {
+export async function mockOpenAi({ key = 'sk-test', respond, models = [], rejects = {}, prefix = '' } = {}) {
   const requests = [];
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
@@ -274,11 +299,12 @@ export async function mockOpenAi({ key = 'sk-test', respond, models = [], reject
       res.end(JSON.stringify({ error: { message, type: status === 401 ? 'invalid_request_error' : 'invalid_request_error', param, code } }));
     };
     if (req.headers.authorization !== 'Bearer ' + key) return fail(401, 'Incorrect API key provided: sk-***. You can find your API key at https://platform.openai.com/account/api-keys.', null, 'invalid_api_key');
-    if (req.method === 'GET' && url.pathname === '/v1/models') {
+    if (req.method === 'GET' && url.pathname.endsWith('/models')) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       return res.end(JSON.stringify({ object: 'list', data: models.map(id => ({ id, object: 'model', owned_by: 'mock' })) }));
     }
-    if (req.method !== 'POST' || url.pathname !== '/v1/chat/completions') return fail(404, 'Not found');
+    if (req.method !== 'POST' || !url.pathname.endsWith('/chat/completions')) return fail(404, 'Not found');
+    if (prefix && !url.pathname.startsWith(prefix)) return fail(404, 'Wrong path ' + url.pathname);
     const body = await readBody(req);
     const entry = { body, headers: req.headers };
     requests.push(entry);

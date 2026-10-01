@@ -3,13 +3,19 @@ import fs from 'fs';
 import path from 'path';
 import { db, getSetting, setSetting, uid } from '../db.js';
 import { RAW_ARGS } from '../tools/args.js';
+import { lineNames } from './secrets.js';
 
 const PROTOCOL_VERSION = '2025-06-18';
 const CALL_TIMEOUT = 30000;
 const INIT_TIMEOUT = 15000;
 const NOTIFY_TIMEOUT = 5000;
 const RESULT_CAP = 60000;
+const IMAGE_CAP = 4;
+const IMAGE_BYTES = 5 * 1024 * 1024;
+const IMAGE_MIME = /^image\/(png|jpeg|gif|webp)$/i;
 const TOOL_CAP = 100;
+const LIST_CAP = 50;
+const RESOURCE_SUFFIX = '__resource';
 const PAGE_CAP = 10;
 const LIST_CHANGED_DELAY = 500;
 export const USER_SERVER_LIMIT = 10;
@@ -156,10 +162,20 @@ export function create(b, userId = null) {
   return { server };
 }
 
+// Header and environment values never reach the browser, so a form that was not
+// touched sends them back empty or not at all. Only a string the caller actually
+// sent replaces what is stored.
+export function publicServer(s) {
+  if (!s) return s;
+  const { headers, env, ...rest } = s;
+  return { ...rest, headers: '', env: '', headerNames: lineNames(headers, ':'), envNames: lineNames(env, '=') };
+}
+
 export function update(id, b, userId = null) {
   const cur = byId(id, userId);
   if (!cur) return { error: 'Server not found.' };
-  const v = validate({ ...cur, ...b }, id, userId);
+  const given = Object.fromEntries(Object.entries(b || {}).filter(([k, v]) => v !== undefined && !((k === 'headers' || k === 'env') && typeof v !== 'string')));
+  const v = validate({ ...cur, ...given }, id, userId);
   if (v.error) return v;
   const moved = ['transport', 'command', 'args', 'env', 'url', 'headers'].some(k => (cur[k] || '') !== (v[k] || ''));
   const server = { ...cur, ...v, ...(moved ? { http_mode: '', status: 'new', error: '' } : {}) };
@@ -584,6 +600,33 @@ async function refreshWith(server, userId) {
   return all;
 }
 
+async function listOptional(server, method, key, userId) {
+  const all = [];
+  let cursor;
+  try {
+    for (let page = 0; page < PAGE_CAP; page++) {
+      const result = await rpc(server, method, cursor ? { cursor } : {}, CALL_TIMEOUT, userId);
+      if (Array.isArray(result?.[key])) all.push(...result[key]);
+      cursor = typeof result?.nextCursor === 'string' && result.nextCursor ? result.nextCursor : null;
+      if (!cursor || all.length >= LIST_CAP) break;
+    }
+  } catch {}
+  return all.slice(0, LIST_CAP);
+}
+
+const text = (v, cap) => String(v ?? '').slice(0, cap);
+
+function shapeResources(list) {
+  return list.map(r => ({ uri: text(r?.uri, 500), name: text(r?.name || r?.title || r?.uri, 120), description: text(r?.description, 300), mimeType: text(r?.mimeType, 80) })).filter(r => r.uri);
+}
+
+function shapePrompts(list) {
+  return list.map(p => ({
+    name: text(p?.name, 120), title: text(p?.title || p?.name, 120), description: text(p?.description, 400),
+    arguments: (Array.isArray(p?.arguments) ? p.arguments : []).slice(0, 10).map(a => ({ name: text(a?.name, 60), description: text(a?.description, 200), required: !!a?.required })).filter(a => a.name)
+  })).filter(p => p.name);
+}
+
 export async function refreshTools(id, userId = null) {
   const server = byId(id, userId);
   if (!server) return { error: 'Server not found.' };
@@ -600,7 +643,10 @@ export async function refreshTools(id, userId = null) {
       description: String(t?.description || t?.annotations?.title || '').slice(0, 800),
       inputSchema: t?.inputSchema && typeof t.inputSchema === 'object' ? t.inputSchema : { type: 'object', properties: {} }
     })).filter(t => t.name);
-    patchServer(id, { tools, status: 'connected', error: '', refreshed_at: Date.now() }, userId);
+    const live = byId(id, userId);
+    const resources = shapeResources(await listOptional(live, 'resources/list', 'resources', userId));
+    const prompts = shapePrompts(await listOptional(live, 'prompts/list', 'prompts', userId));
+    patchServer(id, { tools, resources, prompts, status: 'connected', error: '', refreshed_at: Date.now() }, userId);
     return { server: byId(id, userId) };
   } catch (e) {
     patchServer(id, { status: 'error', error: String(e.message || e).slice(0, 400) }, userId);
@@ -641,9 +687,26 @@ export function mcpToolName(slug, toolName) {
   return full.slice(0, MCP_NAME_MAX - 5) + '_' + digest(`mcp_${slug}_${raw}`);
 }
 
+export function resourceToolName(slug) {
+  return `mcp_${slug}${RESOURCE_SUFFIX}`;
+}
+
+function resourceSchema(server) {
+  const list = (server.resources || []).map(r => `- ${r.name} (${r.uri})${r.description ? ': ' + r.description : ''}`).join('\n');
+  return {
+    type: 'function',
+    function: {
+      name: resourceToolName(server.slug),
+      description: `[MCP: ${server.name}] Read one of this server's resources by its URI. Available resources:\n${list}`.slice(0, 2000),
+      parameters: { type: 'object', properties: { uri: { type: 'string', description: 'The URI of the resource to read.' } }, required: ['uri'] }
+    }
+  };
+}
+
 export function toolSchemas(userId = null) {
   const out = [];
   for (const server of getEnabled(userId)) {
+    if ((server.resources || []).length) out.push(resourceSchema(server));
     for (const t of (server.tools || [])) {
       out.push({
         type: 'function',
@@ -662,6 +725,7 @@ export function isMcpTool(name, userId = null) { return typeof name === 'string'
 
 function resolveTool(name, userId = null) {
   for (const server of getEnabled(userId)) {
+    if (name === resourceToolName(server.slug) && (server.resources || []).length) return { server, resource: true };
     const prefix = `mcp_${server.slug}_`;
     if (name.startsWith(prefix)) {
       const toolName = name.slice(prefix.length);
@@ -678,7 +742,7 @@ function resolveTool(name, userId = null) {
 export function toolsText(userId = null) {
   return getEnabled(userId)
     .filter(s => (s.tools || []).length)
-    .map(s => `- ${s.name}: ${(s.tools || []).map(t => mcpToolName(s.slug, t.name)).join(', ')}`)
+    .map(s => `- ${s.name}: ${[...(s.tools || []).map(t => mcpToolName(s.slug, t.name)), ...((s.resources || []).length ? [resourceToolName(s.slug)] : [])].join(', ')}`)
     .join('\n');
 }
 
@@ -689,6 +753,18 @@ function contentText(c) {
   if (c.type === 'resource_link') return `[${c.name || 'link'}: ${c.uri || ''}]`;
   if (c.type === 'image' || c.type === 'audio') return `[${c.type} content${c.mimeType ? ', ' + c.mimeType : ''}]`;
   return c.type ? `[${c.type} content]` : '';
+}
+
+export function imagesOf(content) {
+  const out = [];
+  for (const c of Array.isArray(content) ? content : []) {
+    const mime = c?.type === 'image' ? c.mimeType : c?.type === 'resource' && c.resource?.blob ? c.resource.mimeType : '';
+    const data = c?.type === 'image' ? c.data : c?.resource?.blob;
+    if (!IMAGE_MIME.test(String(mime || '')) || typeof data !== 'string' || !data || data.length > IMAGE_BYTES) continue;
+    out.push({ mime: String(mime).toLowerCase(), data });
+    if (out.length >= IMAGE_CAP) break;
+  }
+  return out;
 }
 
 export function callArguments(call) {
@@ -702,6 +778,7 @@ export async function execTool(call, userId = null) {
   const resolved = resolveTool(call.tool, userId);
   if (!resolved) return { ok: false, tool: call.tool, error: 'Unknown MCP tool.' };
   const { server, tool } = resolved;
+  if (resolved.resource) return readResource(server, callArguments(call).uri, call.tool, userId);
   try {
     const result = await rpc(server, 'tools/call', { name: tool.name, arguments: callArguments(call) }, CALL_TIMEOUT, userId);
     let text = '';
@@ -710,9 +787,51 @@ export async function execTool(call, userId = null) {
     else if (!text && result != null && !Array.isArray(result?.content)) text = JSON.stringify(result);
     if (text.length > RESULT_CAP) text = text.slice(0, RESULT_CAP) + '\n... [truncated]';
     if (result?.isError) return { ok: false, tool: call.tool, server: server.name, error: text || 'The MCP tool reported an error.' };
-    return { ok: true, tool: call.tool, server: server.name, content: text || '(empty result)' };
+    const images = imagesOf(result?.content);
+    return { ok: true, tool: call.tool, server: server.name, content: text || '(empty result)', ...(images.length ? { images } : {}) };
   } catch (e) {
     return { ok: false, tool: call.tool, server: server.name, error: String(e.message || e).slice(0, 500) };
+  }
+}
+
+async function readResource(server, uri, toolName, userId) {
+  if (typeof uri !== 'string' || !uri) return { ok: false, tool: toolName, server: server.name, error: 'A resource uri is required.' };
+  try {
+    const result = await rpc(server, 'resources/read', { uri }, CALL_TIMEOUT, userId);
+    const contents = Array.isArray(result?.contents) ? result.contents : [];
+    let body = contents.map(c => (typeof c?.text === 'string' ? c.text : c?.blob ? `[${c.mimeType || 'binary'} content]` : '')).filter(Boolean).join('\n');
+    if (body.length > RESULT_CAP) body = body.slice(0, RESULT_CAP) + '\n... [truncated]';
+    const images = imagesOf(contents.map(c => ({ type: 'resource', resource: c })));
+    return { ok: true, tool: toolName, server: server.name, content: body || '(empty resource)', ...(images.length ? { images } : {}) };
+  } catch (e) {
+    return { ok: false, tool: toolName, server: server.name, error: String(e.message || e).slice(0, 500) };
+  }
+}
+
+export function listPrompts(userId = null) {
+  return getEnabled(userId).flatMap(s => (s.prompts || []).map(p => ({ serverId: s.id, server: s.name, ...p })));
+}
+
+export async function getPrompt(serverId, name, args, userId = null) {
+  const server = getEnabled(userId).find(s => s.id === serverId);
+  const prompt = server && (server.prompts || []).find(p => p.name === name);
+  if (!prompt) return { error: 'Prompt not found.' };
+  const values = {};
+  for (const a of prompt.arguments) {
+    const v = typeof args?.[a.name] === 'string' ? args[a.name].slice(0, 4000) : '';
+    if (a.required && !v.trim()) return { error: `"${a.name}" is required.` };
+    if (v) values[a.name] = v;
+  }
+  try {
+    const result = await rpc(server, 'prompts/get', { name, arguments: values }, CALL_TIMEOUT, userId);
+    const parts = (Array.isArray(result?.messages) ? result.messages : []).map(m => {
+      const c = m?.content;
+      if (Array.isArray(c)) return c.map(contentText).filter(Boolean).join('\n');
+      return contentText(c);
+    }).filter(Boolean);
+    return { text: parts.join('\n\n').slice(0, 40000) };
+  } catch (e) {
+    return { error: String(e.message || e).slice(0, 400) };
   }
 }
 
@@ -725,7 +844,22 @@ export function resultPayload(call, r) {
   const o = { ok: !!r.ok, server: r.server || '' };
   if (r.error) o.error = r.error;
   if (r.ok) o.chars = (r.content || '').length;
+  if (r.images?.length) o.images = r.images.length;
   return o;
+}
+
+// Tool messages carry text only on every protocol, so images a tool returned go to the
+// model as one message straight after that step's results. Without image input the
+// text placeholders stay, and nothing is sent.
+export function imageMessage(found, vision) {
+  if (!vision || !found.length) return null;
+  return {
+    role: 'user',
+    content: [
+      { type: 'text', text: 'Images returned by the tool calls above, in order: ' + found.map(f => f.tool).join(', ') + '.' },
+      ...found.map(f => ({ type: 'image_url', image_url: { url: `data:${f.mime};base64,${f.data}` } }))
+    ]
+  };
 }
 
 export function shutdown() {

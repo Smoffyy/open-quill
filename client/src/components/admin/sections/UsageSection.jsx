@@ -199,7 +199,7 @@ export default function UsageSection() {
         ? <Skel when><SkelStats count={4} /></Skel>
         : (
           <Stats items={[
-            { k: t('Tokens'), v: fmtInt(usage.totals.total) },
+            { k: t('Tokens'), v: fmtInt(usage.totals.total), n: usage.totals.cached ? t('{pct}% of input read from cache', { pct: Math.round((usage.totals.cached / Math.max(1, usage.totals.prompt)) * 100) }) : undefined },
             { k: t('Estimated'), v: fmtMoney(usage.totals.cost), n: t('from the price table below') },
             { k: t('Generations'), v: fmtInt(usage.totals.generations) },
             { k: t('Active members'), v: fmtInt(usage.totals.users) }

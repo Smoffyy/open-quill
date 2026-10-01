@@ -15,6 +15,8 @@ const { PROVIDER_TYPES } = await import('../lib/providers.js');
 const { streamCompletion, oneShotFull, listAnthropicModels, anthropicModelInfo } = await import('../llm/index.js');
 const { toAnthropic, buildParams, legacyThinking, toolUseId } = await import('../llm/anthropic.js');
 const { resetMemo, upstreamMessage, fixOpenAiBody, memoFor } = await import('../llm/compat.js');
+const { usageCost } = await import('../lib/budget.js');
+const { cacheRates, matchPreset } = await import('../lib/pricing.js');
 const { parseOverflow, isContextOverflowError } = await import('../lib/llamacpp.js');
 
 const mocks = [];
@@ -115,13 +117,13 @@ test('request parameters follow what each Claude generation accepts', () => {
 
 test('Anthropic streams text, summarized thinking, tool calls and usage', async () => {
   const mock = await anthropic({
-    respond: () => ({ thinking: 'Need to add.', text: 'Let me compute.', tools: [{ id: 'toolu_01', name: 'calculator', input: { expression: '17*23' } }], usage: { input_tokens: 10, cache_read_input_tokens: 90 } })
+    respond: () => ({ thinking: 'Need to add.', text: 'Let me compute.', tools: [{ id: 'toolu_01', name: 'calculator', input: { expression: '17*23' } }], usage: { input_tokens: 10, cache_read_input_tokens: 90, cache_creation_input_tokens: 0 } })
   });
   const model = { provider_id: useProvider('anthropic', mock.url + '/v1', 'sk-ant-test'), internal_name: 'claude-opus-5-5', has_reasoning: 1 };
   const r = await run(model, [{ role: 'system', content: 'Sys' }, { role: 'user', content: 'What is 17*23?' }], { tools: [CALC_TOOL] });
   assert.equal(mock.requests[0].rejected, undefined, mock.requests[0].rejected);
   assert.equal(mock.requests[0].headers['anthropic-version'], '2023-06-01');
-  assert.equal(mock.requests[0].body.system, 'Sys');
+  assert.deepEqual(mock.requests[0].body.system, [{ type: 'text', text: 'Sys', cache_control: { type: 'ephemeral' } }]);
   assert.equal(r.reasoning, 'Need to add.');
   assert.equal(r.text, 'Let me compute.');
   assert.equal(r.finish, 'tool_calls');
@@ -130,6 +132,7 @@ test('Anthropic streams text, summarized thinking, tool calls and usage', async 
   assert.match(r.calls.blocks[0].signature, /^sig_/);
   assert.ok(r.deltas.length > 2, 'tool arguments stream as they are written');
   assert.equal(r.usage.prompt, 100, 'cached input tokens count toward the prompt');
+  assert.equal(r.usage.cacheRead, 90);
   assert.equal(r.usage.completion, 21);
 });
 
@@ -278,7 +281,7 @@ test('OpenAI streams text, parallel tool calls and usage', async () => {
   assert.equal(body.stream_options.include_usage, true);
   assert.equal(r.text, 'Checking.');
   assert.deepEqual(r.calls.calls.map(c => [c.id, JSON.parse(c.argsText).expression]), [['call_x', '1+1'], ['call_y', '2+2']]);
-  assert.deepEqual(r.usage, { prompt: 30, completion: 12, total: 42 });
+  assert.deepEqual(r.usage, { prompt: 30, completion: 12, total: 42, cacheRead: 0, cacheWrite: 0 });
   const next = await run(model, [
     { role: 'user', content: 'go' },
     { role: 'assistant', content: 'Checking.', tool_calls: r.calls.calls },
@@ -320,4 +323,64 @@ test('OpenAI one-shot calls recover the same way', async () => {
   const provider_id = useProvider('openai', mock.url, 'sk-test');
   const r = await oneShotFull({ provider_id, internal_name: 'o-mock', resolved_kwargs: { reasoning_effort: 'low' }, kwargs: [{ id: 'e', name: 'reasoning_effort', target: 'body', values: ['low', 'high'] }] }, [{ role: 'user', content: 'x' }]);
   assert.equal(r.text, 'Title');
+});
+
+const BIG_SYSTEM = 'You are a careful assistant. '.repeat(400);
+
+test('Claude reuses the cached prompt across tool steps and turns', async () => {
+  const mock = await anthropic({
+    respond: (body) => {
+      const done = body.messages.some(m => Array.isArray(m.content) && m.content.some(b => b.type === 'tool_result'));
+      return done ? { text: 'Done.' } : { tools: [{ id: 'toolu_k', name: 'calculator', input: { expression: '1+1' } }] };
+    }
+  });
+  const model = { provider_id: useProvider('anthropic', mock.url, 'sk-ant-test'), internal_name: 'claude-opus-4-8' };
+  const turn = [{ role: 'system', content: BIG_SYSTEM }, { role: 'user', content: 'Add one and one.' }];
+  const step1 = await run(model, turn, { tools: [CALC_TOOL] });
+  const body = mock.requests[0].body;
+  assert.deepEqual(body.cache_control, { type: 'ephemeral' }, 'the conversation carries the moving breakpoint');
+  assert.deepEqual(body.tools.at(-1).cache_control, { type: 'ephemeral' });
+  assert.equal(body.system[0].cache_control.type, 'ephemeral');
+  assert.equal(step1.usage.cacheRead, 0);
+  assert.ok(step1.usage.cacheWrite > 2000, 'the first request writes the prefix');
+
+  const step2 = await run(model, [...turn, { role: 'assistant', content: '', tool_calls: step1.calls.calls }, { role: 'tool', tool_call_id: 'toolu_k', content: '2' }], { tools: [CALC_TOOL] });
+  assert.ok(step2.usage.cacheRead >= step1.usage.cacheWrite, 'the next tool step reads everything the first one wrote');
+
+  const next = await run(model, [...turn, { role: 'assistant', content: 'Done.' }, { role: 'user', content: 'And two and two?' }], { tools: [CALC_TOOL] });
+  assert.ok(next.usage.cacheRead > 2000, 'the next turn reads the tools and system prompt back');
+
+  const priced = { internal_name: 'claude-opus-4-8', cost_in: 5, cost_out: 25 };
+  assert.ok(usageCost(priced, step2.usage) < usageCost(priced, { ...step2.usage, cacheRead: 0, cacheWrite: 0 }) / 2, 'a cached step costs well under half');
+});
+
+test('a proxy that refuses cache markers still gets the request, without them', async () => {
+  const mock = await anthropic({ rejectCache: true, respond: () => ({ text: 'plain' }) });
+  const model = { provider_id: useProvider('anthropic', mock.url, 'sk-ant-test'), internal_name: 'claude-opus-4-8' };
+  assert.equal((await run(model, [{ role: 'system', content: 'Sys' }, { role: 'user', content: 'hi' }], { tools: [CALC_TOOL] })).text, 'plain');
+  assert.equal((await run(model, [{ role: 'user', content: 'again' }])).text, 'plain');
+  assert.equal(mock.requests.length, 3, 'refused once, then remembered');
+  assert.equal(mock.requests[2].body.cache_control, undefined);
+});
+
+test('OpenAI cached tokens are counted and priced', async () => {
+  const mock = await openai({ respond: () => ({ text: 'ok', usage: { prompt_tokens: 1000, completion_tokens: 10 }, cached: 800 }) });
+  const r = await run({ provider_id: useProvider('openai', mock.url, 'sk-test'), internal_name: 'gpt-5.4' }, [{ role: 'user', content: 'x' }]);
+  assert.equal(r.usage.cacheRead, 800);
+  const cost = usageCost({ internal_name: 'gpt-5.4', cost_in: 2.5, cost_out: 15 }, r.usage);
+  assert.equal(Number(cost.toFixed(6)), Number(((200 + 800 * 0.1) / 1e6 * 2.5 + 10 / 1e6 * 15).toFixed(6)));
+});
+
+test('Claude prices and cache rates match the published ones', () => {
+  const price = (id) => { const p = matchPreset(id); return p && [p.in, p.out]; };
+  assert.deepEqual(price('claude-haiku-4-5'), [1, 5]);
+  assert.deepEqual(price('claude-opus-4-6'), [5, 25]);
+  assert.deepEqual(price('claude-opus-4-1'), [15, 75]);
+  assert.deepEqual(price('claude-sonnet-4-6'), [3, 15]);
+  assert.deepEqual(price('claude-sonnet-5-5'), [2, 10]);
+  assert.deepEqual(price('claude-opus-5-5'), [4, 20]);
+  assert.deepEqual(cacheRates('claude-opus-5-5'), { read: 0.05, write: 1.25 });
+  assert.deepEqual(cacheRates('claude-fable-5-1'), { read: 0.025, write: 1.25 });
+  assert.deepEqual(cacheRates('claude-sonnet-5-5'), { read: 0.1, write: 1.25 });
+  assert.deepEqual(cacheRates('local-model'), { read: 1, write: 1 });
 });
