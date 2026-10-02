@@ -16,7 +16,7 @@
   <a href="https://github.com/Smoffyy/open-quill/releases/latest"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.github.com%2Frepos%2FSmoffyy%2Fopen-quill%2Freleases%2Flatest&query=%24.name&label=release&labelColor=1f1f1e&color=d97757" alt="Latest release"></a>
   <a href="https://github.com/Smoffyy/open-quill/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Smoffyy/open-quill/ci.yml?branch=dev&label=CI&labelColor=1f1f1e&logo=githubactions&logoColor=f4f3ee" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-7193f5?labelColor=1f1f1e" alt="MIT license"></a>
-  <a href="https://x.com/smoffyyx"><img src="https://img.shields.io/badge/%40smoffyyx-1f1f1e?logo=x&logoColor=f4f3ee" alt="Updates on X"></a>
+  <a href="https://github.com/Smoffyy/open-quill/commits/dev"><img src="https://img.shields.io/github/last-commit/Smoffyy/open-quill/dev?labelColor=1f1f1e&color=d97757&logo=git&logoColor=f4f3ee" alt="Last commit"></a>
 </p>
 
 <br/>
@@ -189,7 +189,6 @@ Environment variables (`PORT`, `HOST`, `OPEN_QUILL_DB`, `DB_ENCRYPTION_KEY`, `TR
 
 - **Ask or suggest** in [Discussions](https://github.com/Smoffyy/open-quill/discussions)
 - **Report a bug** in [Issues](https://github.com/Smoffyy/open-quill/issues), with your version from Settings → Version
-- **Follow along** on [@smoffyyx](https://x.com/smoffyyx), where previews and release notes go first
 - **Send a PR** against `dev`, never `main`, with lint, build and tests passing
 
 Open Quill started from admiration for Anthropic's interface and color work and a wish to have an open version of it anyone could build on. It is meant to be forked, restyled and bent to your own taste, and it will stay free.
