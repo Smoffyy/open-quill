@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { ownsDrop } from './dropfiles.js';
 import { attachKey, peekAttachments, readAttachments, writeAttachments, dropAttachments } from './attachdrafts.js';
+import { isVisionImage, previewKind } from './filepreview.js';
 
 const DEFAULT_GLOW = 'var(--text)';
 
@@ -28,7 +30,7 @@ function dominantColor(url) {
 
 const hydrate = (list) => list.map(f => ({
   ...f,
-  preview: f.type && f.type.startsWith('image/') ? URL.createObjectURL(f.file) : null
+  preview: previewKind(f.name, f.type) === 'image' ? URL.createObjectURL(f.file) : null
 }));
 
 export function useAttachments({ visionSupported, draftId }) {
@@ -72,12 +74,12 @@ export function useAttachments({ visionSupported, draftId }) {
 
   function addFiles(list) {
     let picked = Array.from(list || []);
-    if (!visionSupported) picked = picked.filter(f => !f.type.startsWith('image/'));
+    if (!visionSupported) picked = picked.filter(f => !isVisionImage(f.type));
     if (!picked.length) return;
     setUpErr('');
     const mapped = picked.map(file => ({
       id: Math.random().toString(36).slice(2), file, name: file.name, type: file.type, size: file.size,
-      preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null
+      preview: previewKind(file.name, file.type) === 'image' ? URL.createObjectURL(file) : null
     }));
     setFiles(fs => [...fs, ...mapped]);
     const lastImg = [...mapped].reverse().find(f => f.preview);
@@ -109,10 +111,15 @@ export function useAttachments({ visionSupported, draftId }) {
 
   useEffect(() => {
     const hasFiles = (e) => !!e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
-    const onEnter = (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current++; setDragActive(true); };
-    const onOver = (e) => { if (!hasFiles(e)) return; e.preventDefault(); };
+    const onEnter = (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current++; setDragActive(!ownsDrop(e.target)); };
+    const onOver = (e) => { if (!hasFiles(e)) return; e.preventDefault(); setDragActive(!ownsDrop(e.target)); };
     const onLeave = (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current--; if (dragDepth.current <= 0) { dragDepth.current = 0; setDragActive(false); } };
-    const onDrop = (e) => { if (!hasFiles(e)) return; e.preventDefault(); dragDepth.current = 0; setDragActive(false); addFiles(e.dataTransfer.files); };
+    const onDrop = (e) => {
+      if (!hasFiles(e)) return;
+      dragDepth.current = 0; setDragActive(false);
+      if (e.defaultPrevented || ownsDrop(e.target)) return;
+      e.preventDefault(); addFiles(e.dataTransfer.files);
+    };
     window.addEventListener('dragenter', onEnter);
     window.addEventListener('dragover', onOver);
     window.addEventListener('dragleave', onLeave);

@@ -1,101 +1,90 @@
 import { db, uid, now, getSetting } from '../../db.js';
-import { buildMessages, streamCompletion, generateTitle, resolveTitleModel, stripThink } from '../../llm/index.js';
+import { buildMessages, streamCompletion, generateTitle, resolveTitleModel, stripThink, canPrefill, refusePrefill } from '../../llm/index.js';
 import { buildTools, toCall, cutOffOf, livePreview, resolveToolName, SANDBOX_READONLY } from '../../tools/index.js';
 import { announcedMoreWork, MAX_CONTINUES, CONTINUE_INSTRUCTION } from '../continuation.js';
+import { resumeTurn, createStitcher, isPrefillRefusal, fileStep, fileRest, joinFile, STOPPED_FILE, STOPPED_CALL } from '../resume.js';
 import * as websearch from '../websearch.js';
 import * as sandbox from '../../sandbox.js';
 import * as referenceFiles from '../referencefiles.js';
 import * as workspaceSkills from '../workspaceskills.js';
-import * as userskills from '../userskills.js';
 import * as mcp from '../mcp.js';
 import * as projectfiles from '../projectfiles.js';
 import { stripToolSyntax } from '../history.js';
 import { modelCtx } from '../models.js';
 import {
   chatHistory, estimateTokens, makeTokenCounter, updateCalib, truncateForRollingCtx, rollingCtxFor,
-  compactStep, compactThreshold, promptVars, instrFor, exactTokens, trimInTurn
+  compactStep, compactThreshold, exactTokens, trimInTurn
 } from '../convo.js';
 import { isContextOverflowError, parseOverflow, isLlamaCpp, learnImageCost, imageTokenCost, countImages } from '../llamacpp.js';
 import { contextBudget, slideToFit, noteRealCtx, shrinkByRatio, countExact } from '../ctxwindow.js';
 import {
-  sandboxPromptFor, cleanCall, resultPayload, formatToolResult, runChatSearchTool,
-  formatChatSearchResult, chatSearchPayload, endChatPromptFor, longConvoReminderFor,
-  cutOffError, CHAT_SEARCH_PROMPT
+  cleanCall, resultPayload, formatToolResult, runChatSearchTool, formatChatSearchResult, chatSearchPayload, cutOffError
 } from '../prompts.js';
 import { noteToolCall, classifyToolError } from '../toolstats.js';
 import { autoTitleEnabled } from '../autotitle.js';
 import { openFence, seamFor, steerInstruction } from '../steer.js';
 import { createLoopGuard, STUCK_NOTE } from '../loopguard.js';
+import { changeMemory, memoryToolResult } from '../memory.js';
+import { toolState, systemPrompt } from '../systemprompt.js';
+import { runCalculator, formatCalculatorResult } from '../calculator.js';
+import { runTodo } from '../todo.js';
+import { runAskUser, formatAskUser } from '../askuser.js';
+import { waitForAnswer } from './live.js';
+import { runConsult, formatConsult } from '../consult.js';
+import { recordUsage } from '../budget.js';
+import { ensureChatSidecars } from '../uploads.js';
 
 const MAX_STEERS = 6;
 const TELEMETRY_MS = 220;
 const SILENT_MS = 2500;
+const PREVIEW_FREE_CHARS = 4096;
+const PREVIEW_MS = 100;
+const USAGE_KEYS = ['prompt', 'completion', 'total', 'cache_read', 'cache_write', 'cost'];
 
-const projectNameOf = (row) => (row && row.project_id ? String((db.projects.byId(row.project_id) || {}).name || '') : '');
+function addUsage(a, b) {
+  if (!a || !b) return b || a || null;
+  const out = { ...a };
+  for (const k of USAGE_KEYS) out[k] = (Number(a[k]) || 0) + (Number(b[k]) || 0);
+  return out;
+}
 
-export async function maybeCompact(ws, chat, model, extended, sandboxOn) {
+export async function maybeCompact(ws, chat, model, extended, flags, opts = {}, skipId = null) {
   const threshold = compactThreshold(model, await modelCtx(model));
   if (threshold === Infinity) return;
   let guard = 0;
   while (guard++ < 3) {
-    const fresh = db.chats.byId(chat.id);
-    const sandboxP = sandboxOn ? sandboxPromptFor(sandbox.wsKey(fresh), projectNameOf(fresh)) : null;
-    const convo = buildMessages(model, chatHistory(chat, model), extended, sandboxP, fresh.summary, promptVars(chat.user_id), instrFor(fresh));
-    if ((await exactTokens(chat.id, model, convo)) < threshold) return;
+    const convo = buildMessages(model, chatHistory(chat, model, skipId), extended, systemPrompt(chat, model, flags, opts).text);
+    if ((await exactTokens(chat.id, model, convo, threshold)) < threshold) return;
     if (!(await compactStep(ws, chat, model))) return;
   }
 }
 
-export async function runCompletion(ws, state, safeSend, chat, model, extended, sandboxOn, sandboxCap = 0, webSearchOn = false, callMode = false, styleText = '') {
-  if (callMode && (model.call_prompt || '').trim()) model = { ...model, system_prompt: model.call_prompt };
+export async function runCompletion(ws, state, safeSend, chat, model, extended, sandboxOn, sandboxCap = 0, webSearchOn = false, callMode = false, { styleText = '', client = null, resume = null } = {}) {
   {
     const cRow0 = db.chats.byId(chat.id) || chat;
     if (cRow0.gen_params && typeof cRow0.gen_params === 'object') model = { ...model, ...cRow0.gen_params };
-    if ((cRow0.system_override || '').trim()) model = { ...model, system_prompt: cRow0.system_override };
   }
-  await maybeCompact(ws, chat, model, extended, sandboxOn);
-  const history = chatHistory(chat, model);
+  const flags = toolState(chat, model, { sandboxOn, webSearchOn, canAsk: !!state?.interactive });
+  const promptOpts = { styleText, callMode, client };
+  await ensureChatSidecars(chat.id);
+  await maybeCompact(ws, chat, model, extended, flags, promptOpts, resume ? resume.id : null);
+  const history = chatHistory(chat, model, resume ? resume.id : null);
   const chatRow = db.chats.byId(chat.id) || chat;
-  const membankOn = getSetting('membank_enabled', '0') === '1' && referenceFiles.count() > 0;
+  const {
+    membankOn, chatSearchOn, skillsOn, userSkills, mcpSchemas, mcpOn, mcpUser, endChatOn, memoryOn, calculatorOn,
+    todoOn, askUserOn, consultOn, consultWith, toolsOn
+  } = flags;
   const membankHideTools = getSetting('membank_hide_tools', '0') === '1';
   if (membankOn) { try { await referenceFiles.ensureIndexedAll(); } catch {} }
-  const chatSearchOn = !!model.chat_search_allowed && getSetting('chat_search_enabled', '0') === '1';
-  const userSkills = chatRow.user_id ? userskills.enabledFor(chatRow.user_id).map(s => ({ name: s.name, description: s.description, content: s.body })) : [];
-  const skillsOn = !!model.skills_allowed && (workspaceSkills.getEnabled().length + userSkills.length) > 0;
-  const mcpUser = chatRow.user_id || null;
-  const mcpSchemas = model.mcp_allowed ? mcp.toolSchemas(mcpUser) : [];
-  const mcpOn = mcpSchemas.length > 0;
-  const endChatOn = !!model.end_chat_allowed;
+  const hideTools = !!model.hide_tool_calls;
   const space = projectfiles.workspaceFor(chatRow);
-  const projectName = projectNameOf(chatRow);
-  const longReminderOn = !!model.long_convo_reminder;
   let conversationEnded = false;
-  const toolsOn = sandboxOn || webSearchOn || membankOn || chatSearchOn || skillsOn || mcpOn || endChatOn;
-  const withStyle = (instr) => {
-    if (!styleText) return instr;
-    const block = 'The user selected a response style for this conversation. Apply it consistently to every reply:\n' + styleText;
-    return instr ? instr + '\n\n' + block : block;
-  };
-  const toolsP = () => {
-    const parts = [];
-    if (sandboxOn) parts.push(sandboxPromptFor(space, projectName));
-    if (webSearchOn) { parts.push(websearch.webSearchConfig().prompt); parts.push(websearch.webSearchToolPrompt()); }
-    if (membankOn) parts.push(referenceFiles.promptFor(getSetting('membank_prompt', '')));
-    if (chatSearchOn) parts.push(CHAT_SEARCH_PROMPT);
-    if (skillsOn) parts.push(workspaceSkills.promptFor(userSkills));
-    if (mcpOn) parts.push(mcp.promptFor(mcpUser));
-    if (endChatOn) parts.push(endChatPromptFor(model));
-    if (longReminderOn) parts.push(longConvoReminderFor(chat.id));
-    return parts.filter(Boolean).join('\n\n') || null;
-  };
-  const rebuildBase = () => {
-    const row = db.chats.byId(chat.id) || chat;
-    return buildMessages(model, chatHistory(chat, model), extended, toolsP(), row.summary, promptVars(chat.user_id), withStyle(instrFor(row)));
-  };
-  let base = buildMessages(model, history, extended, toolsP(), chatRow.summary, promptVars(chat.user_id), withStyle(instrFor(chatRow)));
+  const systemText = () => systemPrompt(chat, model, flags, promptOpts).text;
+  const rebuildBase = () => buildMessages(model, chatHistory(chat, model, assistantId), extended, systemText());
+  let base = buildMessages(model, history, extended, systemText());
   let inTurn = []; // assistant/tool exchanges accumulated during this response
-  const assistantId = uid();
-  const assistantParent = chatRow.active_leaf || null;
+  const assistantId = resume ? resume.id : uid();
+  const assistantParent = resume ? (resume.parent_id ?? null) : (chatRow.active_leaf || null);
   let content = '', reasoning = '', usage = null, lastStepCompletion = 0;
   let checkpointed = false;
   const checkpoint = () => {
@@ -121,9 +110,10 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   };
   const addStepUsage = (stepUsage) => {
     if (!stepUsage) return;
-    if (!usage) usage = { prompt: 0, completion: 0, total: 0 };
+    if (!usage) usage = { prompt: 0, completion: 0, total: 0, cacheRead: 0, cacheWrite: 0 };
     usage.prompt += stepUsage.prompt; usage.completion += stepUsage.completion;
     usage.total += stepUsage.total || (stepUsage.prompt + stepUsage.completion);
+    usage.cacheRead += stepUsage.cacheRead || 0; usage.cacheWrite += stepUsage.cacheWrite || 0;
     lastStepCompletion = stepUsage.completion;
   };
   const reasonSegs = [];
@@ -139,9 +129,35 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     if (i >= 0) segMs[i] = (segMs[i] || 0) + spent;
     else reasonMs += spent;
   };
-  safeSend(JSON.stringify({ type: 'start', chatId: chat.id, messageId: assistantId }));
+  let stitcher = null;
+  let seed = null;
+  let filePlan = null;
+  let fileStopped = false;
+  if (resume) {
+    checkpointed = true;
+    let plan = resumeTurn(resume.content, canPrefill(model));
+    if (plan && plan.mode === 'file') {
+      let partial = null;
+      if (sandboxOn) { try { partial = sandbox.readText(space, plan.path); } catch {} }
+      if (partial == null) plan = resumeTurn(resume.content, canPrefill(model), { file: false });
+      else filePlan = { ...plan, partial };
+    }
+    if (plan) {
+      content = resume.content;
+      reasoning = resume.reasoning || '';
+      if (Array.isArray(resume.reasoning_segs)) reasonSegs.push(...resume.reasoning_segs);
+      if (Array.isArray(resume.reasoning_seg_ms)) segMs.push(...resume.reasoning_seg_ms);
+      reasonMs = resume.reasoning_ms || 0;
+      const mark = content.lastIndexOf('[[OQT:');
+      contentSinceReason = !!(mark === -1 ? content : content.slice(content.indexOf(']]', mark) + 2)).trim();
+      if (!filePlan) inTurn = seed = plan.messages;
+      stitcher = createStitcher(content, plan);
+    }
+  }
+  safeSend(JSON.stringify({ type: 'start', chatId: chat.id, messageId: assistantId, ...(resume ? { content, reasoning, reasonSegs: reasonSegs.length ? reasonSegs : null } : {}) }));
 
-  const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, hostEnv: sandboxOn ? sandbox.hostEnvInfo() : null }) : [];
+  const consultNames = consultOn ? consultWith.map(t => t.display_name || t.internal_name) : [];
+  const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, memoryOn, calculatorOn, todoOn, askUserOn, consultNames, hostEnv: sandboxOn ? sandbox.hostEnvInfo() : null }) : [];
   const toolNameSet = new Set(tools.map(t => t && t.function && t.function.name).filter(Boolean));
   const canonicalize = (call) => {
     if (!sandboxOn || !call.tool || toolNameSet.has(call.tool)) return call;
@@ -149,6 +165,8 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     if (canon && toolNameSet.has(canon)) call.tool = canon;
     return call;
   };
+  const hidden = (tool) => hideTools && tool !== 'ask_user';
+  const oqrBlock = (call, result) => '\n\n[[OQR:' + Buffer.from(JSON.stringify(hidden(call.tool) ? { call: cleanCall(call), result, hidden: true } : { call: cleanCall(call), result }), 'utf8').toString('base64') + ']]\n';
   const runToolCall = async (call) => {
     if (call.tool === 'end_conversation') {
       if (!endChatOn) return null;
@@ -162,6 +180,35 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       const r = runChatSearchTool(chat.user_id, chat.id, call);
       return { payload: chatSearchPayload(call, r), formatted: formatChatSearchResult(call, r), hide: false };
     }
+    if (call.tool === 'memory') {
+      if (!memoryOn) return null;
+      const r = changeMemory(chat.user_id, { action: call.action, id: call.id, text: call.text, source: 'assistant' });
+      return { ...memoryToolResult(call, r), hide: false };
+    }
+    if (call.tool === 'calculator') {
+      if (!calculatorOn) return null;
+      const r = runCalculator(call);
+      return { payload: r, formatted: formatCalculatorResult(r), hide: false };
+    }
+    if (call.tool === 'todo') {
+      if (!todoOn) return null;
+      return { ...runTodo(call), hide: false };
+    }
+    if (call.tool === 'ask_user') {
+      if (!askUserOn) return null;
+      const r = runAskUser(call);
+      if (!r.ok) return { payload: r, formatted: formatAskUser(r), hide: false };
+      safeSend(JSON.stringify({ type: 'ask', chatId: chat.id, question: { question: r.question, options: r.options, multiple: r.multiple } }));
+      const a = await waitForAnswer(chat.id, stepController ? stepController.signal : null);
+      safeSend(JSON.stringify({ type: 'asked', chatId: chat.id }));
+      const payload = { ...r, answer: a.answer || '', skipped: !!a.skipped, stopped: !!a.stopped, timedOut: !!a.timedOut };
+      return { payload, formatted: formatAskUser(payload), hide: false };
+    }
+    if (call.tool === 'consult_model') {
+      if (!consultOn) return null;
+      const r = await runConsult({ model, targets: consultWith, call, chatId: chat.id, userId: chat.user_id, client, signal: stepController ? stepController.signal : null });
+      return { payload: r, formatted: formatConsult(r), hide: false };
+    }
     if (call.tool === 'skill_view') {
       if (!skillsOn) return null;
       const r = workspaceSkills.execTool(call, userSkills);
@@ -169,7 +216,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     }
     if (mcpOn && mcp.isMcpTool(call.tool, mcpUser)) {
       const r = await mcp.execTool(call, mcpUser);
-      return { payload: mcp.resultPayload(call, r), formatted: mcp.formatResult(call, r), hide: false };
+      return { payload: mcp.resultPayload(call, r), formatted: mcp.formatResult(call, r), hide: false, images: r.images || [] };
     }
     if (call.tool === 'web_search') {
       if (!webSearchOn) return null;
@@ -224,10 +271,6 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     windowNotified = total;
     safeSend(JSON.stringify({ type: 'ctx_rolling', chatId: chat.id, dropped: dropped || 0, trimmed: !!trimmed, limit: budget }));
   };
-  // A stop that lands just after a turn ended has nothing to cancel and would
-  // otherwise sit in the set and kill this turn before its first step. Every
-  // turn starts from a clean slate; stops arriving from here on are this turn's.
-  if (state.stops) state.stops.delete(chat.id);
   const stopRequested = () => !!(state.stops && state.stops.has(chat.id));
   const stepCap = (model.agent_steps && model.agent_steps > 0) ? model.agent_steps : 1000;
   let maxSteps = toolsOn ? stepCap : 1;
@@ -236,8 +279,15 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   let continues = 0;
   let stepController = null;
   let lastFinish = '';
-  const steerNotes = [];
+  let turnFailed = false;
+  const steerNotes = resume && Array.isArray(resume.steers) ? resume.steers.slice() : [];
   let steerBudget = MAX_STEERS;
+  const settle = (written) => {
+    const last = inTurn[inTurn.length - 1];
+    if (!last || !last.prefill) return written;
+    inTurn = inTurn.slice(0, -1);
+    return last.content + written;
+  };
   const takeSteers = () => {
     const list = state.steers && state.steers.get(chat.id);
     if (!list || !list.length) return null;
@@ -247,7 +297,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   };
   const applySteer = (notes, partial) => {
     steerNotes.push(...notes);
-    const written = stripThink(model, String(partial || ''));
+    const written = settle(stripThink(model, String(partial || '')));
     const hadText = !!written.trim();
     const wasInBlock = hadText && !!openFence(content);
     if (hadText) {
@@ -263,12 +313,110 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     inTurn = list;
     safeSend(JSON.stringify({ type: 'steered', chatId: chat.id, notes }));
   };
+  const writeFile = async (path, text) => {
+    const call = { tool: 'create_file', path, content: text };
+    let r;
+    try { r = await sandbox.execTool(space, call, sandboxCap); }
+    catch (e) { r = { ok: false, error: String(e.message || e).slice(0, 400) }; }
+    safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(space) }));
+    return { call, r: r || { ok: false, error: 'The file could not be written.' } };
+  };
+  const saveStopped = async (partials) => {
+    const list = [...partials.entries()].sort((a, b) => a[0] - b[0]).map(([, p]) => p);
+    for (const p of list) {
+      const live = livePreview(p.name, p.argsText);
+      if (!live || !live.tool) continue;
+      const call = { tool: live.tool, ...(live.path ? { path: live.path } : {}) };
+      let error = STOPPED_CALL;
+      if (sandboxOn && live.tool === 'create_file' && live.path && live.content && toolNameSet.has('create_file')) {
+        const { r } = await writeFile(live.path, live.content);
+        if (r.ok !== false) error = STOPPED_FILE;
+      }
+      const block = oqrBlock(call, { ok: false, interrupted: true, error });
+      content += block; contentSinceReason = true;
+      safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: block }));
+    }
+  };
+  const resumeFile = async (plan) => {
+    const { path } = plan;
+    const show = !hidden('create_file');
+    let { partial, start, end, prefill } = plan;
+    const replace = (block) => {
+      content = content.slice(0, start) + block + content.slice(end);
+      end = start + block.length;
+      safeSend(JSON.stringify({ type: 'rewrite', chatId: chat.id, content }));
+    };
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const step = fileStep(path, partial, plan.head, prefill);
+      let convo = base.concat(step.messages);
+      if (exactCtx && budget > 0) {
+        const fit = await slideToFit(model, convo, budget, []);
+        lastFitTokens = fit.tokens || 0;
+        if (fit.dropped || fit.trimmed || fit.images) { convo = fit.msgs; notifyWindow(fit.dropped, fit.trimmed || !!fit.images); }
+      } else if (rollCtx) {
+        const t = truncateForRollingCtx(chat.id, convo, rollCtx);
+        if (t.dropped || t.trimmed) convo = t.msgs;
+      }
+      const controller = new AbortController();
+      stepController = controller;
+      state.aborts.set(chat.id, controller);
+      let collected = '', rest = '', sent = 0, closed = false, finish = '', stepUsage = null, heardBack = false;
+      if (show) safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live: { tool: 'create_file', path, content: partial, oldStr: null }, index: 0 }));
+      safeSend(JSON.stringify({ type: 'status', chatId: chat.id, phase: 'prefill' }));
+      try {
+        await streamCompletion({
+          model: capForOutput(model), messages: convo, tools: [], signal: controller.signal,
+          onEvent: (e) => {
+            if (!heardBack) { heardBack = true; safeSend(JSON.stringify({ type: 'status', chatId: chat.id, phase: 'generating' })); }
+            if (e.type === 'usage') { stepUsage = { prompt: e.usage.prompt || 0, completion: e.usage.completion || 0, total: e.usage.total || 0, cacheRead: e.usage.cacheRead || 0, cacheWrite: e.usage.cacheWrite || 0 }; return; }
+            if (e.type === 'finish') { finish = String(e.reason || ''); return; }
+            if (e.type !== 'content' || closed) return;
+            collected += e.text;
+            const got = fileRest(collected, step);
+            rest = got.text;
+            const ready = got.closed ? rest.length : rest.lastIndexOf('\n') + 1;
+            if (show && ready > sent) { safeSend(JSON.stringify({ type: 'tool_live_delta', chatId: chat.id, text: rest.slice(sent, ready), index: 0 })); sent = ready; }
+            if (got.closed) { closed = true; controller.abort(); }
+          }
+        });
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          state.aborts.delete(chat.id);
+          if (prefill && attempt === 0 && isPrefillRefusal(err)) { refusePrefill(model); prefill = false; continue; }
+          throw err;
+        }
+      }
+      addStepUsage(stepUsage);
+      state.aborts.delete(chat.id);
+      if (show) safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live: null }));
+      const text = partial + joinFile(partial, rest, prefill);
+      if (!closed && (controller.signal.aborted || finish === 'length')) {
+        const { r } = await writeFile(path, text);
+        replace(oqrBlock({ tool: 'create_file', path }, { ok: false, interrupted: true, error: r.ok === false ? r.error : STOPPED_FILE }));
+        fileStopped = true;
+        checkpoint();
+        return false;
+      }
+      const { call, r } = await writeFile(path, text);
+      noteToolCall(model, 'create_file', r.ok !== false, r.ok === false ? r.error : '');
+      replace(oqrBlock(call, resultPayload(call, r)));
+      const id = 'call_resume_' + uid().replace(/-/g, '').slice(0, 12);
+      inTurn = [
+        { role: 'assistant', content: plan.head, tool_calls: [{ id, name: 'create_file', argsText: JSON.stringify({ path, content: text }) }] },
+        { role: 'tool', tool_call_id: id, name: 'create_file', content: formatToolResult(call, r) }
+      ];
+      checkpoint();
+      return true;
+    }
+    return false;
+  };
   try {
+    if (filePlan && !(await resumeFile(filePlan))) maxSteps = 0;
     for (let step = 0; step < maxSteps; step++) {
       // running low on context mid-response? summarize older turns, then carry on where we left off
-      if (threshold !== Infinity && inTurn.length && (await exactTokens(chat.id, model, base.concat(inTurn))) >= threshold) {
+      if (threshold !== Infinity && inTurn.length && (await exactTokens(chat.id, model, base.concat(inTurn), threshold, tools)) >= threshold) {
         if (await compactStep(ws, chat, model)) base = rebuildBase();
-        if ((await exactTokens(chat.id, model, base.concat(inTurn))) >= threshold) {
+        if ((await exactTokens(chat.id, model, base.concat(inTurn), threshold, tools)) >= threshold) {
           const t = trimInTurn(inTurn);
           if (t.trimmed) {
             inTurn = t.list;
@@ -310,8 +458,11 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       let aborted = false;
       let stepFinish = '';
       let toolCalls = [];
+      let toolBlocks = null;
+      const partials = new Map();
       let liveSent = false;
       let liveState = { key: '', len: 0, lastAt: 0 };
+      let previewAt = 0;
       let genStart = 0;
       let exactTelemetry = false;
       let lastTelemetryAt = 0;
@@ -351,6 +502,25 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       let heardBack = false;
       const stopSilenceWatch = () => { if (silentTimer) { clearInterval(silentTimer); silentTimer = null; } };
       const heard = () => { if (heardBack) return; heardBack = true; stopSilenceWatch(); };
+      const takeContent = (text) => {
+        closeReasoning();
+        if (text.trim()) contentSinceReason = true;
+        content += text; stepText += text;
+        if (!genStart) { genStart = Date.now(); sendStatus({ phase: 'generating' }, true); }
+        safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text }));
+        if (!exactTelemetry) {
+          genTokens.add(text);
+          const secs = (Date.now() - genStart) / 1000;
+          const gen = genTokens.tokens;
+          sendTelemetry({ tps: secs > 0.4 ? gen / secs : 0, promptTps: 0, promptTokens: stepPromptTokens || stepEstimate, genTokens: gen, exact: false });
+        }
+      };
+      const flushStitch = () => {
+        if (!stitcher || !stitcher.touched) return;
+        const rest = stitcher.flush();
+        stitcher = null;
+        if (rest) takeContent(rest);
+      };
       try {
         sendStatus({ phase: 'prefill' }, true);
         const askedAt = Date.now();
@@ -365,7 +535,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
             heard();
             if (e.type === 'usage') {
               stepPromptTokens = e.usage.prompt || stepPromptTokens;
-              stepUsage = { prompt: e.usage.prompt || 0, completion: e.usage.completion || 0, total: e.usage.total || 0 };
+              stepUsage = { prompt: e.usage.prompt || 0, completion: e.usage.completion || 0, total: e.usage.total || 0, cacheRead: e.usage.cacheRead || 0, cacheWrite: e.usage.cacheWrite || 0 };
               return;
             }
             if (e.type === 'prompt_progress') {
@@ -408,20 +578,16 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
               return;
             }
             if (e.type === 'content') {
-              closeReasoning();
-              if (e.text.trim()) contentSinceReason = true;
-              content += e.text; stepText += e.text;
-              if (!genStart) { genStart = Date.now(); sendStatus({ phase: 'generating' }, true); }
-              safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: e.text }));
-              if (!exactTelemetry) {
-                genTokens.add(e.text);
-                const secs = (Date.now() - genStart) / 1000;
-                const gen = genTokens.tokens;
-                sendTelemetry({ tps: secs > 0.4 ? gen / secs : 0, promptTps: 0, promptTokens: stepPromptTokens || stepEstimate, genTokens: gen, exact: false });
-              }
+              const text = stitcher ? stitcher.push(e.text) : e.text;
+              if (text) takeContent(text);
               return;
             }
             if (e.type === 'tool_call_delta') {
+              partials.set(e.index, { name: e.name, argsText: e.argsText });
+              if (hideTools) return;
+              const at = Date.now();
+              if ((e.argsText || '').length > PREVIEW_FREE_CHARS && at - previewAt < PREVIEW_MS) return;
+              previewAt = at;
               const live = livePreview(e.name, e.argsText);
               if (!live || !live.tool) return;
               const isFile = (live.tool === 'create_file' || live.tool === 'str_replace') && live.path;
@@ -449,12 +615,13 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
               return;
             }
             if (e.type === 'finish') { stepFinish = String(e.reason || ''); return; }
-            if (e.type === 'tool_calls') { toolCalls = e.calls; }
+            if (e.type === 'tool_calls') { toolCalls = e.calls; toolBlocks = e.blocks || null; }
           }
         });
         stopSilenceWatch();
       } catch (err) {
         stopSilenceWatch();
+        flushStitch();
         if (err.name === 'AbortError') {
           const notes = takeSteers();
           if (notes && steerBudget > 0) {
@@ -486,9 +653,10 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           }
           if (!exactCtx || !freed) {
             const over = info && info.prompt > 0 ? Math.max(0.1, (info.prompt - (info.ctx || info.prompt)) / info.prompt) : 0.25;
-            const sh = shrinkByRatio(inTurn.length ? inTurn : base, Math.min(0.6, over + 0.15));
+            const ownTurn = inTurn.length > 0 && inTurn !== seed;
+            const sh = shrinkByRatio(ownTurn ? inTurn : base, Math.min(0.6, over + 0.15));
             if (sh.dropped || sh.trimmed) {
-              if (inTurn.length) inTurn = sh.msgs; else base = sh.msgs;
+              if (ownTurn) inTurn = sh.msgs; else base = sh.msgs;
               freed = true;
               notifyWindow(sh.dropped, sh.trimmed);
             }
@@ -503,6 +671,14 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           step--;
           continue;
         }
+        else if (inTurn[inTurn.length - 1]?.prefill && isPrefillRefusal(err)) {
+          refusePrefill(model);
+          const plan = resumeTurn(content, false);
+          inTurn = seed = plan ? plan.messages : [];
+          stitcher = createStitcher(content, plan);
+          step--;
+          continue;
+        }
         else throw err;
       }
       updateCalib(chat.id, stepPromptTokens, stepEstimate);
@@ -512,6 +688,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           learnImageCost(model, imgs, stepPromptTokens - lastFitTokens + imgs * imageTokenCost(model));
         }
       }
+      flushStitch();
       addStepUsage(stepUsage);
       if (!aborted) {
         const notes = takeSteers();
@@ -526,12 +703,13 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       if (stepFinish) lastFinish = stepFinish;
       if (aborted || !toolsOn || !toolCalls.length) {
         if (liveSent) safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live: null }));
+        if (aborted && toolsOn && partials.size) await saveStopped(partials);
         // The model announced the next step and then stopped without taking it.
         // Nudge it once or twice rather than making the user type "keep going".
         // No maxSteps bump: this spends the operator's existing step budget.
         if (!aborted && !stopRequested() && toolsOn && continues < MAX_CONTINUES && step + 1 < maxSteps && announcedMoreWork(stepText)) {
           continues++;
-          const written = stripThink(model, stepText);
+          const written = settle(stripThink(model, stepText));
           const seam = seamFor(content);
           if (seam) { content += seam; safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: seam })); }
           inTurn = [...inTurn, { role: 'assistant', content: written }, { role: 'user', content: CONTINUE_INSTRUCTION }];
@@ -540,6 +718,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         break;
       }
       const toolMsgs = [];
+      const stepImages = [];
       let stepOk = 0, stepFailed = 0;
       const stepFailKinds = new Set();
       for (const tc of toolCalls) {
@@ -557,8 +736,8 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           const msg = cutOffError(call.tool, cut, stepFinish === 'length');
           stepFailKinds.add(call.tool + ':' + classifyToolError(msg));
           noteToolCall(model, call.tool, false, msg);
-          safeSend(JSON.stringify({ type: 'tool_exec', chatId: chat.id, call: cleanCall(call) }));
-          const block = '\n\n[[OQR:' + Buffer.from(JSON.stringify({ call: cleanCall(call), result: { ok: false, error: msg } }), 'utf8').toString('base64') + ']]\n';
+          if (!hideTools) safeSend(JSON.stringify({ type: 'tool_exec', chatId: chat.id, call: cleanCall(call) }));
+          const block = oqrBlock(call, { ok: false, error: msg });
           content += block; contentSinceReason = true;
           safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: block }));
           toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: `${call.tool} → ERROR: ${msg}` });
@@ -568,7 +747,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: `${call.tool} \u2192 ERROR: the conversation has been ended; no further tools may run.` });
           continue;
         }
-        safeSend(JSON.stringify({ type: 'tool_exec', chatId: chat.id, call: cleanCall(call) }));
+        if (!hidden(call.tool)) safeSend(JSON.stringify({ type: 'tool_exec', chatId: chat.id, call: cleanCall(call) }));
         let out;
         try { out = await runToolCall(call); }
         catch (e) { out = { payload: { ok: false, error: String(e.message || e).slice(0, 400) }, formatted: `${call.tool} → ERROR: ${String(e.message || e).slice(0, 400)}`, hide: false }; }
@@ -588,13 +767,16 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           if (n >= 2) formatted += `\n(NOTE: this identical call has failed ${n} times. Do not repeat it. Change the arguments or approach, or tell the user why it cannot be done.)`;
         } else { stepOk++; callFails.delete(sig); }
         if (!out.hide) {
-          const block = '\n\n[[OQR:' + Buffer.from(JSON.stringify({ call: cleanCall(call), result: out.payload }), 'utf8').toString('base64') + ']]\n';
+          const block = oqrBlock(call, out.payload);
           content += block; contentSinceReason = true;
           safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: block }));
         }
         if (mayChangeFiles(call.tool)) safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(space) }));
         toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: formatted });
+        for (const img of out.images || []) stepImages.push({ ...img, tool: call.tool });
       }
+      const shown = mcp.imageMessage(stepImages, !!model.has_vision);
+      if (shown) toolMsgs.push(shown);
       if (liveSent) safeSend(JSON.stringify({ type: 'tool_live', chatId: chat.id, live: null }));
       if (stopRequested()) break;
       if (conversationEnded) {
@@ -602,9 +784,10 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         safeSend(JSON.stringify({ type: 'chat_ended', chatId: chat.id, reason: (endedChat && endedChat.ended_reason) || '' }));
         break;
       }
+      const said = settle(stripThink(model, stepText));
       inTurn = [
         ...inTurn,
-        { role: 'assistant', content: stripThink(model, stepText), tool_calls: toolCalls.map(c => ({ id: c.id, name: c.name, argsText: c.argsText })) },
+        { role: 'assistant', content: said, tool_calls: toolCalls.map(c => ({ id: c.id, name: c.name, argsText: c.argsText })), ...(toolBlocks?.length ? { blocks: toolBlocks } : {}) },
         ...toolMsgs
       ];
       if (loopGuard.note({ calls: toolCalls, ok: stepOk, failed: stepFailed, failKinds: stepFailKinds })) {
@@ -616,6 +799,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     }
   } catch (err) {
     if (err.name !== 'AbortError') {
+      turnFailed = true;
       console.error('[turn]', err);
       safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: String(err.message || err) }));
     }
@@ -626,28 +810,23 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   if (state.steers) state.steers.delete(chat.id);
   if (state.stops) state.stops.delete(chat.id);
 
-  let usageRec = null;
-  if (usage && (usage.prompt || usage.completion)) {
-    const cost = (usage.prompt / 1e6) * (Number(model.cost_in) || 0) + (usage.completion / 1e6) * (Number(model.cost_out) || 0);
-    usageRec = { prompt: usage.prompt, completion: usage.completion, total: usage.total || (usage.prompt + usage.completion), cost };
-    db.usage.insert({ id: uid(), user_id: chat.user_id, model_id: model.id, model_name: model.display_name || '', prompt: usageRec.prompt, completion: usageRec.completion, total: usageRec.total, cost, cost_in: Number(model.cost_in) || 0, cost_out: Number(model.cost_out) || 0, created_at: now() });
-  }
+  const usageRec = recordUsage(chat.user_id, model, usage);
   // Computed before the insert so it can be stored on the row: without it the
   // "Continue" affordance lived only in the `done` frame and vanished on reload,
   // stranding a stopped turn the user meant to pick up later.
   const outCap = Number(model.max_tokens) || 0;
   const hitCap = outCap > 0 && lastStepCompletion >= outCap - 2;
-  const truncated = (lastFinish === 'length' || hitCap || wasStopped) && !conversationEnded;
+  const truncated = (lastFinish === 'length' || hitCap || wasStopped || turnFailed || fileStopped) && !conversationEnded;
   const hasOutput = !!(content.trim() || reasoning.trim());
   if (hasOutput || usageRec) {
-    const finalRow = { id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, reasoning_segs: reasonSegs.length ? reasonSegs : null, reasoning_seg_ms: reasonSegs.length ? segMs : null, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: usageRec, speed, reasoning_ms: reasonMs || null, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, kwarg_values: model.kwarg_values || null, steers: steerNotes.length ? steerNotes.slice(0, MAX_STEERS) : null, truncated: truncated || null, created_at: now() };
+    const finalRow = { id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, reasoning_segs: reasonSegs.length ? reasonSegs : null, reasoning_seg_ms: reasonSegs.length ? segMs : null, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: resume ? addUsage(resume.usage, usageRec) : usageRec, speed, reasoning_ms: reasonMs || null, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, kwarg_values: model.kwarg_values || null, steers: steerNotes.length ? steerNotes.slice(0, MAX_STEERS) : null, truncated: truncated || null, created_at: (resume && resume.created_at) || now() };
     if (checkpointed) db.messages.update(assistantId, finalRow);
     else db.messages.insert(finalRow);
     db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
   } else {
     db.chats.update(chat.id, { updated_at: now() });
   }
-  safeSend(JSON.stringify({ type: 'done', chatId: chat.id, messageId: (hasOutput || usageRec) ? assistantId : null, truncated }));
+  safeSend(JSON.stringify({ type: 'done', chatId: chat.id, messageId: (hasOutput || usageRec) ? assistantId : null, truncated, stopped: wasStopped }));
 
   const fresh = db.chats.byId(chat.id);
   const cleanContent = stripToolSyntax(content).trim();

@@ -1,11 +1,14 @@
 import { db, getSetting } from '../db.js';
-import { oneShot, stripThink, summarizeConversation } from '../llm/index.js';
+import { roleOf } from './roles.js';
+import { memberContext, languageName } from './memberctx.js';
+import { docsVars } from './modeldocs.js';
+import { oneShot, stripThink, summarizeConversation, modelProvider, countAnthropicTokens } from '../llm/index.js';
 import { resolveProvider } from './providers.js';
 import { activePath } from './tree.js';
 import { historyText } from './history.js';
-import { isTextLike, readUploadText, readImageDataUri } from './uploads.js';
+import { isTextLike, readUploadText, readImageDataUri, imageKind, imageMime } from './uploads.js';
+import { isDocumentName } from './extract.js';
 import { modelCtx } from './models.js';
-import { pinnedFilesPrompt } from './prompts.js';
 import { llamaTokenCount, isLlamaCpp } from './llamacpp.js';
 
 export const STYLE_PRESETS = {
@@ -38,26 +41,31 @@ export function historyRows(chat, model) {
   }));
 }
 
-export function chatHistory(chat, model) {
-  return historyRows(chat, model).filter(r => !r.summarized && !r.excluded).map(r => r.msg);
+export function chatHistory(chat, model, skipId = null) {
+  return historyRows(chat, model).filter(r => !r.summarized && !r.excluded && r.id !== skipId).map(r => r.msg);
 }
+
+export const CUT_NOTE = '[This reply was cut off here before it was finished.]';
 
 function historyMessage(m, model) {
   let text = historyText(m.content || '').replace(/\n{3,}/g, '\n\n');
+  if (m.role === 'assistant' && m.truncated) text = (text.trim() ? text.trimEnd() + '\n\n' : '') + CUT_NOTE;
   const atts = m.attachments || [];
   const images = [];
   if (atts.length) {
     const notes = [];
     for (const a of atts) {
-      const isImage = a.type && a.type.startsWith('image/');
-      if (isImage && model.has_vision) { const uri = readImageDataUri(a); if (uri) images.push(uri); }
-      else if (isImage) notes.push(`[Attached image: ${a.name} — this model cannot see images, so tell the user you cannot view it.]`);
+      const kind = imageKind(a);
+      if (kind === 'vision' && model.has_vision) { const uri = readImageDataUri(a); if (uri) images.push(uri); }
+      else if (kind === 'other' && model.has_vision) notes.push(`[Attached image: ${a.name} - its format (${imageMime(a)}) cannot be passed to the model, so you cannot view it. Ask the user for a PNG, JPEG, GIF or WebP copy.]`);
+      else if (kind) notes.push(`[Attached image: ${a.name} — this model cannot see images, so tell the user you cannot view it.]`);
       else if (isTextLike(a)) {
         const body = readUploadText(a.url);
         notes.push(body
           ? `--- Attached file: ${a.name} ---\n${body}`
           : `[Attached file: ${a.name} — the file is empty or could not be read.]`);
-      } else notes.push(`[Attached file: ${a.name} — this is a binary format the server cannot read as text, so its contents are not available to you. Say so rather than guessing what it contains.]`);
+      } else if (isDocumentName(a.name)) notes.push(`[Attached file: ${a.name} - no readable text could be extracted from this document (it may be scanned images only, password protected, or damaged), so its contents are not available to you. Say so rather than guessing what it contains.]`);
+      else notes.push(`[Attached file: ${a.name}${a.type ? ` (${a.type})` : ''} - this is a binary format the server cannot read as text, so its contents are not available to you. Say so rather than guessing what it contains.]`);
     }
     if (notes.length) text = (text ? text + '\n\n' : '') + notes.join('\n\n');
   }
@@ -223,7 +231,7 @@ async function enrichForSummary(model, rows) {
     const notes = [];
     let changed = false;
     for (const a of atts) {
-      const isImage = a.type && a.type.startsWith('image/');
+      const isImage = imageKind(a) === 'vision';
       if (!isImage) continue;
       let d = typeof a.summary_desc === 'string' ? a.summary_desc : '';
       if (!d) {
@@ -252,7 +260,7 @@ export async function compactStep(ws, chat, model) {
   try { ws.send(JSON.stringify({ type: 'compacting', chatId: chat.id })); } catch {}
   const enriched = await enrichForSummary(model, toSummarize);
   const summary = await summarizeConversation(model, fresh.summary, enriched);
-  db.chats.update(chat.id, { summary, summary_upto: marker });
+  if (summary) db.chats.update(chat.id, { summary, summary_upto: marker });
   try { ws.send(JSON.stringify({ type: 'compacted', chatId: chat.id })); } catch {}
   return !!summary;
 }
@@ -273,7 +281,21 @@ export function compactThreshold(model, ctxOverride) {
   return Math.floor(ctx * (1 - padding));
 }
 
-export async function exactTokens(chatId, model, messages) {
+// Claude has an exact counter, but it is a round trip, so it is only asked once the
+// estimate comes within reach of the threshold the caller is checking against.
+const NEAR = 0.7;
+
+export async function exactTokens(chatId, model, messages, near = 0, tools = []) {
+  const { spec, base, key } = modelProvider(model);
+  if (spec.protocol === 'anthropic') {
+    const est = calibratedTokens(chatId, messages);
+    if (near > 0 && Number.isFinite(near) && est < near * NEAR) return est;
+    try {
+      const n = await countAnthropicTokens({ model, spec, base, key, messages, tools });
+      if (n > 0) { updateCalib(chatId, n, estimateTokens(messages)); return n; }
+    } catch {}
+    return est;
+  }
   if (isLlamaCpp(model)) {
     const n = await llamaTokenCount(model, messages);
     if (n > 0) {
@@ -303,6 +325,7 @@ export function trimInTurn(inTurn, keepRecent = 2) {
 }
 
 export const tokenCalib = new Map();
+const CALIB_MAX = 2000;
 
 export function updateCalib(chatId, actualPrompt, estimated) {
   if (!chatId || !actualPrompt || !estimated || estimated < 200) return;
@@ -311,9 +334,13 @@ export function updateCalib(chatId, actualPrompt, estimated) {
   const ratio = Math.max(0.25, Math.min(4, raw));
   const prev = tokenCalib.get(chatId);
   tokenCalib.set(chatId, { ratio: prev ? prev.ratio * 0.4 + ratio * 0.6 : ratio, at: Date.now() });
-  if (tokenCalib.size > 2000) {
+  if (tokenCalib.size > CALIB_MAX) {
     const cutoff = Date.now() - 6 * 3600 * 1000;
     for (const [k, v] of tokenCalib) if (v.at < cutoff) tokenCalib.delete(k);
+    for (const k of tokenCalib.keys()) {
+      if (tokenCalib.size <= CALIB_MAX * 0.75) break;
+      tokenCalib.delete(k);
+    }
   }
 }
 
@@ -328,39 +355,28 @@ export function calibratedTokens(chatId, messages) {
   return c ? Math.round(est * c.ratio) : est;
 }
 
-export function promptVars(userId) {
+export function promptVars(userId, { model = null, client = null } = {}) {
   const u = userId ? db.users.byId(userId) : null;
   const name = u ? (u.display_name || (u.email ? u.email.split('@')[0] : '') || 'User') : 'User';
+  const ctx = memberContext(u, client);
   const now = new Date();
-  let dt;
-  try { dt = now.toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' }); }
-  catch { dt = now.toString(); }
-  return { currentUser: name, currentDateTime: dt };
-}
-
-function userMemoryBlock(u) {
-  if (getSetting('memory_enabled', '0') !== '1') return '';
-  if (!u || u.prefs?.memoryEnabled === false) return '';
-  const mem = (u.memory || '').trim();
-  if (!mem) return '';
-  return 'Things you remember about this user from earlier conversations (the user can view and edit this memory at any time):\n' + mem;
-}
-
-export function combinedInstructions(chat) {
-  const userId = chat && chat.user_id;
-  const u = userId ? db.users.byId(userId) : null;
-  const parts = [];
-  const ui = (u && u.instructions) ? u.instructions : '';
-  if (ui && ui.trim()) parts.push(ui.trim());
-  const mem = userMemoryBlock(u);
-  if (mem) parts.push(mem);
-  if (chat && chat.instructions && chat.instructions.trim()) parts.push(chat.instructions.trim());
-  return parts.join('\n\n');
-}
-
-export function instrFor(chat) {
-  const base = combinedInstructions(chat);
-  let pinned;
-  try { pinned = pinnedFilesPrompt(chat); } catch { pinned = ''; }
-  return pinned ? (base ? base + '\n\n' + pinned : pinned) : base;
+  const timeZone = ctx.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  const fmt = (opts) => {
+    try { return now.toLocaleString(undefined, { ...opts, timeZone: timeZone || undefined }); }
+    catch { return now.toString(); }
+  };
+  return {
+    currentUser: name,
+    currentDateTime: fmt({ dateStyle: 'full', timeStyle: 'short' }),
+    currentDate: fmt({ dateStyle: 'full' }),
+    currentTime: fmt({ timeStyle: 'short' }),
+    timeZone,
+    userLanguage: languageName(ctx.language),
+    userRole: u ? roleOf(u) : '',
+    device: ctx.device,
+    modelName: model ? (model.display_name || model.internal_name || '') : '',
+    ...docsVars(model),
+    instanceName: getSetting('app_name', 'open-quill') || 'open-quill',
+    supportContact: getSetting('support_contact', '') || ''
+  };
 }

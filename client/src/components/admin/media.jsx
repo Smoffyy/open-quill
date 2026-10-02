@@ -4,6 +4,9 @@ import { Dialog, Btn, Field, Fields, Seg, Note } from './ui.jsx';
 import { QP_ICON_LIST, QpIcon } from '../ui/quickPromptIcons.jsx';
 import { t, tk } from '../../i18n.jsx';
 import { useDismiss } from '../../lib/dismiss.js';
+import Weave from '../ui/Weave.jsx';
+import { MODEL_WEAVE } from '../../lib/brand.js';
+import { isAnimatedImage, ANIMATION_SNIFF_BYTES } from '../../lib/animatedimage.js';
 
 function Slider({ label, min, max, step, value, onChange }) {
   return (
@@ -204,7 +207,7 @@ function VectorCrop({ file, onDone, onCancel }) {
   );
 }
 
-export function ImagePicker({ value, fallback, onChange, hint }) {
+export function ImagePicker({ value, fallback, onChange, hint, state }) {
   const ref = useRef(null);
   const [raster, setRaster] = useState(null);
   const [vector, setVector] = useState(null);
@@ -215,7 +218,7 @@ export function ImagePicker({ value, fallback, onChange, hint }) {
     e.target.value = '';
     if (!f) return;
     if (f.type === 'image/svg+xml' || /\.svg$/i.test(f.name || '')) { setVector(f); return; }
-    if (f.type === 'image/gif') { const { url } = await api.upload(f); onChange(url); return; }
+    if (isAnimatedImage(await f.slice(0, ANIMATION_SNIFF_BYTES).arrayBuffer())) { const { url } = await api.upload(f); onChange(url); return; }
     setRaster(f);
   }
 
@@ -227,7 +230,7 @@ export function ImagePicker({ value, fallback, onChange, hint }) {
             width: 48, height: 48, borderRadius: 10, display: 'grid', placeItems: 'center',
             border: '1px solid var(--border-soft)', background: 'var(--surface-2)', overflow: 'hidden', flexShrink: 0
           }}>
-          {shown ? <img src={shown} alt={t('Current image')} style={{ width: 32, height: 32, objectFit: 'contain' }} /> : <span className="cp-hint">{t('none')}</span>}
+          {shown === MODEL_WEAVE ? <Weave state={state} style={{ width: 32, height: 32 }} /> : shown ? <img src={shown} alt={t('Current image')} style={{ width: 32, height: 32, objectFit: 'contain' }} /> : <span className="cp-hint">{t('none')}</span>}
         </button>
         <div className="cp-acts">
           <Btn size="sm" onClick={() => ref.current?.click()}>{value ? t('Replace') : t('Upload')}</Btn>
@@ -236,7 +239,7 @@ export function ImagePicker({ value, fallback, onChange, hint }) {
       </div>
       {hint && <div className="cp-hint">{hint}</div>}
       <input ref={ref} type="file" hidden onChange={pick}
-        accept=".png,.svg,.jpg,.jpeg,.gif,image/png,image/svg+xml,image/jpeg,image/gif" />
+        accept=".png,.svg,.jpg,.jpeg,.gif,.webp,image/png,image/svg+xml,image/jpeg,image/gif,image/webp" />
       {raster && <RasterCrop file={raster} onCancel={() => setRaster(null)} onDone={(url) => { setRaster(null); onChange(url); }} />}
       {vector && <VectorCrop file={vector} onCancel={() => setVector(null)} onDone={(url) => { setVector(null); onChange(url); }} />}
     </div>

@@ -22,7 +22,7 @@ jobs:
           Open Quill tags are bare version strings: 27.0.0.
 
           You should not need to tag by hand at all. Releases are drafted by the
-          Release workflow when dev is merged into stable, and publishing that draft
+          Release workflow when dev is merged into main, and publishing that draft
           is what creates the tag.
 
           To remove this one:

@@ -18,7 +18,7 @@ const REVEAL_STOPS = [
 // safe on its own, since resolveReveal falls a retired value back to the default.
 const REVEAL_STYLE_OPTS = [
   { v: 'instant', label: tk('Instant'), note: tk('Text appears the moment it arrives.') },
-  { v: 'modern', label: tk('Modern'), note: tk('Words fade in as they arrive and your message rises to the top.') },
+  { v: 'modern', label: tk('Modern'), note: tk('Words fade in as they arrive.') },
   { v: 'legacy', label: tk('Legacy'), note: tk('Letters type out one after another.') },
 ];
 
@@ -101,7 +101,7 @@ export default function InterfaceTab({ prefs, setPref, cfg }) {
       <div className="me-section-h">{t("Navigation")}</div>
       <div className="sec-note">{t("Tools for moving around a long conversation. Turn any off for a bare view.")}</div>
       <SwitchRow label={t("Conversation map")} desc={t("A rail down the right edge with one mark per turn. Click a mark to jump.")}
-        on={prefs.threadRail !== false} onToggle={() => setPref('threadRail', prefs.threadRail === false)} />
+        on={prefs.threadRail === true} onToggle={() => setPref('threadRail', prefs.threadRail !== true)} />
       <SwitchRow label={t("Find in conversation")} desc={t("Search the open chat from the header. Off gives Ctrl+F back to the browser.")}
         on={prefs.threadFind !== false} onToggle={() => setPref('threadFind', prefs.threadFind === false)} />
       <SwitchRow label={t("Branch map")} desc={t("A header button showing the whole conversation, every branch included.")}

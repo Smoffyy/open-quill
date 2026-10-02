@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { authMiddleware, adminOnly } from '../auth.js';
 import { logAudit } from '../lib/audit.js';
 import { appConfig } from '../lib/appconfig.js';
-import { broadcastAdminConfig } from '../lib/ws/index.js';
+import { staged, liveVersion } from '../lib/releases.js';
 import { draftGet, draftSet } from '../lib/draft.js';
 import { egressLog, clearEgressLog } from '../lib/egress.js';
 import { releaseInfo } from '../lib/release.js';
@@ -18,15 +18,16 @@ const DOCS = { __proto__: null, credits: 'CREDITS.md', changelog: 'CHANGELOG.md'
 const text = (v, cap) => String(v ?? '').slice(0, cap);
 
 export default function registerMiscRoutes(app) {
-  app.get('/api/app-config', authMiddleware, (req, res) => res.json(appConfig(!!req.user?.is_admin)));
+  app.get('/api/app-config', authMiddleware, (req, res) => res.json({ ...appConfig(!!req.user?.is_admin), configVersion: liveVersion() }));
 
   app.patch('/api/admin/app-config', authMiddleware, adminOnly, (req, res) => {
     const b = req.body && typeof req.body === 'object' ? req.body : {};
-    let changed = false;
+    const keys = [];
+    const was = appConfig(true);
     const put = (key, value) => {
       if (draftGet(key, null) === value) return false;
       draftSet(key, value);
-      changed = true;
+      keys.push('setting:' + key);
       return true;
     };
     if ('appName' in b) put('app_name', text(b.appName, 120).trim() || 'open-quill');
@@ -80,7 +81,11 @@ export default function registerMiscRoutes(app) {
         logAudit(req, 'branding.preset', { meta: { preset: next } });
       }
     }
-    if (changed) broadcastAdminConfig();
+    if (keys.length) {
+      const now = appConfig(true);
+      const values = Object.fromEntries(Object.keys(now).filter(k => JSON.stringify(now[k]) !== JSON.stringify(was[k])).map(k => [k, now[k]]));
+      staged(req, 'config', { keys, values });
+    }
     res.json({ ok: true });
   });
 

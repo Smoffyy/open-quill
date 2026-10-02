@@ -11,7 +11,7 @@ import {
 } from '../lib/kwargs.js';
 import { parseTextToolCalls, parseArgs, toCall, cutOffOf } from '../tools/index.js';
 import { classifyToolError } from '../lib/toolstats.js';
-import { sanitizeDocsConfig, readDocsConfig, sanitizePairs, sanitizeCards, sanitizeStrList, DOCS_DEFAULTS } from '../lib/modeldocs.js';
+import { sanitizeDocsConfig, readDocsConfig, sanitizePairs, sanitizeCards, sanitizeStrList, DOCS_DEFAULTS, docsVars } from '../lib/modeldocs.js';
 import { parseSkillFile, buildSkillFile, normalizeName, validate } from '../lib/skillfile.js';
 import { cutOffError } from '../lib/prompts.js';
 import { makeToolTextFilter, makeEmitter } from '../llm/emitter.js';
@@ -19,20 +19,25 @@ import { trimInTurn, compactThreshold, estimateTokens, textTokens, makeTokenCoun
 import { scanTools } from '../lib/toolproto.js';
 import { isContextOverflowError } from '../lib/llamacpp.js';
 import { sanitizeDoc, blankLayoutDoc, normalizeStoreForTest, docDiffCount } from '../lib/theme.js';
+import { diffState, applyState, expandKeys } from '../lib/changes.js';
 import { winTranslate, wsKey, projectKey, isProjectKey, execTool, childEnv } from '../sandbox.js';
 import { screenCommand, normalizeRel, compileSearchPattern } from '../lib/sandboxguard.js';
 import { resolveToolName, makeToolResolver, nearestTool, SANDBOX_TOOLS } from '../tools/aliases.js';
 import { isPrivateAddress, hostAllowed } from '../lib/egress.js';
 import { resolveRouted, ruleMatches, routerRules, modelLabel } from '../lib/router.js';
+import { playgroundHistory, sourceOf, sanitizeSuites, MAX_CONTENT, MAX_TURNS, SUITE_LIMITS } from '../lib/playground.js';
 import { preferredChild } from '../lib/tree.js';
-import { looksTextual, isZipOfficeDoc } from '../lib/extract.js';
+import { looksTextual, isDocumentName, extractDocument, decodeText, rtfText } from '../lib/extract.js';
+import zlib from 'zlib';
 import { releaseCandidates, parseManifest } from '../lib/release.js';
-import { remapBrandPath } from '../lib/brand.js';
+import { remapBrandPath, retireLegacyMark } from '../lib/brand.js';
+import { badgesOf, sanitizeBadgesOff } from '../lib/badges.js';
+import { cleanClient, memberContext, languageName } from '../lib/memberctx.js';
 import { samplingParams, parseStop } from '../llm/sampling.js';
 import { PROVIDER_TYPES, isProviderType, providerSpec, isLocalType } from '../lib/providers.js';
 import { slideWithCounter, trimMode } from '../lib/ctxwindow.js';
 import { sameOrigin, sameOriginGuard, requestHost } from '../lib/origin.js';
-import { SETTING_FIELDS, coerceSetting } from '../routes/settings.js';
+import { SETTING_FIELDS, coerceSetting } from '../lib/settingfields.js';
 import { localOnlyCsp } from '../lib/localonly.js';
 import { runQueued } from '../lib/queue.js';
 import { isText } from '../sandbox/ignore.js';
@@ -1560,10 +1565,199 @@ test('looksTextual decides by bytes, not by extension', () => {
   assert.equal(looksTextual(Buffer.alloc(0)), false, 'empty');
 });
 
-test('isZipOfficeDoc recognises the zip-container office formats', () => {
-  assert.equal(isZipOfficeDoc('report.docx'), true);
-  assert.equal(isZipOfficeDoc('deck.pptx'), true);
-  assert.equal(isZipOfficeDoc('notes.txt'), false);
+test('isDocumentName recognises the document formats, old and new', () => {
+  assert.equal(isDocumentName('report.docx'), true);
+  assert.equal(isDocumentName('legacy.DOC'), true);
+  assert.equal(isDocumentName('mail.msg'), true);
+  assert.equal(isDocumentName('deck.pptx'), true);
+  assert.equal(isDocumentName('notes.txt'), false);
+});
+
+const zipOf = (files) => zipBuffer(Object.entries(files).map(([name, s]) => ({ name, data: Buffer.from(s) })));
+
+test('extractDocument reads Word, Excel, PowerPoint, OpenDocument and EPUB text', async () => {
+  const docx = zipOf({ 'word/document.xml': '<w:document><w:body><w:p><w:r><w:t>Hello &amp; welcome</w:t></w:r></w:p><w:p><w:r><w:instrText>HYPERLINK x</w:instrText><w:t>Second</w:t></w:r></w:p></w:body></w:document>' });
+  assert.equal(await extractDocument(docx, 'a.docx'), 'Hello & welcome\nSecond');
+
+  const xlsx = zipOf({
+    'xl/workbook.xml': '<workbook><sheets><sheet name="Data" sheetId="1" r:id="rId1"/></sheets></workbook>',
+    'xl/_rels/workbook.xml.rels': '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+    'xl/sharedStrings.xml': '<sst><si><t>Name</t></si><si><r><t>a,</t></r><r><t>b</t></r></si></sst>',
+    'xl/worksheets/sheet1.xml': '<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c><c r="C1"><v>42</v></c></row><row r="2"><c r="B2" t="s"><v>1</v></c><c r="C2" t="b"><v>1</v></c></row></sheetData></worksheet>'
+  });
+  assert.equal(await extractDocument(xlsx, 'b.xlsx'), '## Sheet: Data\nName,,42\n,"a,b",TRUE');
+
+  const pptx = zipOf({
+    'ppt/slides/slide2.xml': '<p:sld><a:p><a:r><a:t>Two</a:t></a:r></a:p></p:sld>',
+    'ppt/slides/slide10.xml': '<p:sld><a:p><a:r><a:t>Ten</a:t></a:r></a:p></p:sld>',
+    'ppt/slides/slide1.xml': '<p:sld><a:p><a:r><a:t>One</a:t></a:r></a:p></p:sld>'
+  });
+  assert.equal(await extractDocument(pptx, 'c.pptx'), '## Slide 1\nOne\n\n## Slide 2\nTwo\n\n## Slide 3\nTen');
+
+  const odt = zipOf({ 'content.xml': '<office:text><text:h>Title</text:h><text:p>Body<text:tab/>x</text:p></office:text>' });
+  assert.equal(await extractDocument(odt, 'd.odt'), 'Title\nBody\tx');
+
+  const epub = zipOf({
+    'META-INF/container.xml': '<container><rootfiles><rootfile full-path="OEBPS/book.opf"/></rootfiles></container>',
+    'OEBPS/book.opf': '<package><manifest><item id="c2" href="ch2.xhtml"/><item id="c1" href="ch1.xhtml"/></manifest><spine><itemref idref="c1"/><itemref idref="c2"/></spine></package>',
+    'OEBPS/ch1.xhtml': '<html><head><title>skip</title></head><body><p>First</p></body></html>',
+    'OEBPS/ch2.xhtml': '<html><body><p>Second</p><script>x()</script></body></html>'
+  });
+  assert.equal(await extractDocument(epub, 'e.epub'), 'First\n\nSecond');
+});
+
+test('extractDocument lists a plain archive and inlines its text files', async () => {
+  const zip = zipBuffer([{ name: 'src/a.js', data: Buffer.from('let a = 1;\n') }, { name: 'img.png', data: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0]) }]);
+  const text = await extractDocument(zip, 'project.zip');
+  assert.match(text, /Archive with 2 file\(s\)/);
+  assert.match(text, /--- src\/a\.js ---\nlet a = 1;/);
+  assert.doesNotMatch(text, /--- img\.png ---/);
+});
+
+test('extractDocument decides by content, so a renamed or unknown binary yields nothing', async () => {
+  assert.equal(await extractDocument(Buffer.from([0, 1, 2, 3, 4]), 'blob.bin'), '');
+  assert.equal(await extractDocument(Buffer.alloc(0), 'empty.pdf'), '');
+  assert.equal(await extractDocument(zlib.gzipSync(Buffer.from('log line\n')), 'app.log.gz'), 'log line\n');
+});
+
+function cfbOf(streams) {
+  const SECTOR = 512, END = 0xfffffffe, FREE = 0xffffffff;
+  const names = Object.keys(streams);
+  const fat = [];
+  const sectors = [];
+  const place = (buf) => {
+    const count = Math.max(1, Math.ceil(buf.length / SECTOR));
+    const first = sectors.length;
+    for (let i = 0; i < count; i++) {
+      const s = Buffer.alloc(SECTOR);
+      buf.copy(s, 0, i * SECTOR, Math.min(buf.length, (i + 1) * SECTOR));
+      sectors.push(s);
+      fat.push(i === count - 1 ? END : first + i + 1);
+    }
+    return first;
+  };
+  const starts = names.map(n => place(streams[n]));
+  const dir = Buffer.alloc(128 * (names.length + 1));
+  const entry = (i, name, type, start, size, right, child) => {
+    const at = i * 128;
+    dir.write(name, at, 'utf16le');
+    dir.writeUInt16LE((name.length + 1) * 2, at + 0x40);
+    dir[at + 0x42] = type;
+    dir.writeUInt32LE(FREE, at + 0x44);
+    dir.writeUInt32LE(right, at + 0x48);
+    dir.writeUInt32LE(child, at + 0x4c);
+    dir.writeUInt32LE(start, at + 0x74);
+    dir.writeUInt32LE(size, at + 0x78);
+  };
+  entry(0, 'Root Entry', 5, END, 0, FREE, names.length ? 1 : FREE);
+  names.forEach((n, i) => entry(i + 1, n, 2, starts[i], streams[n].length, i + 2 <= names.length ? i + 2 : FREE, FREE));
+  const dirStart = place(dir);
+  const fatSectors = Math.ceil((fat.length + 2) / (SECTOR / 4)) + 1;
+  const fatStart = sectors.length;
+  for (let i = 0; i < fatSectors; i++) { sectors.push(Buffer.alloc(SECTOR)); fat.push(0xfffffffd); }
+  const fatBuf = Buffer.alloc(fatSectors * SECTOR, 0xff);
+  fat.forEach((v, i) => fatBuf.writeUInt32LE(v, i * 4));
+  for (let i = 0; i < fatSectors; i++) fatBuf.copy(sectors[fatStart + i], 0, i * SECTOR, (i + 1) * SECTOR);
+  const head = Buffer.alloc(SECTOR);
+  Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]).copy(head, 0);
+  head.writeUInt16LE(0x3e, 0x18); head.writeUInt16LE(3, 0x1a); head.writeUInt16LE(0xfffe, 0x1c);
+  head.writeUInt16LE(9, 0x1e); head.writeUInt16LE(6, 0x20);
+  head.writeUInt32LE(fatSectors, 0x2c); head.writeUInt32LE(dirStart, 0x30);
+  head.writeUInt32LE(0, 0x38); head.writeUInt32LE(END, 0x3c); head.writeUInt32LE(END, 0x44);
+  for (let i = 0; i < 109; i++) head.writeUInt32LE(i < fatSectors ? fatStart + i : FREE, 0x4c + i * 4);
+  return Buffer.concat([head, ...sectors]);
+}
+
+const rec = (type, body, { ver = 0, inst = 0 } = {}) => {
+  const h = Buffer.alloc(8);
+  h.writeUInt16LE(ver | (inst << 4), 0); h.writeUInt16LE(type, 2); h.writeUInt32LE(body.length, 4);
+  return Buffer.concat([h, body]);
+};
+const u32 = (...v) => { const b = Buffer.alloc(v.length * 4); v.forEach((x, i) => b.writeUInt32LE(x, i * 4)); return b; };
+
+test('extractDocument reads Word 97-2003 text through the piece table, dropping field codes', async () => {
+  const text = 'Hello Word\r\x13 HYPERLINK "x" \x14the link\x15 here\rSecond\x07cell\x07\r';
+  const wd = Buffer.alloc(1024 + text.length);
+  wd.writeUInt16LE(0xa5ec, 0); wd.writeUInt16LE(0xc1, 2); wd.writeUInt16LE(0x0200, 0x0a);
+  wd.writeUInt16LE(14, 32);
+  wd.writeUInt16LE(22, 62);
+  wd.writeUInt32LE(text.length, 64 + 12);
+  wd.writeUInt16LE(0x5d, 152);
+  const clx = Buffer.concat([Buffer.from([0x02]), u32(16), u32(0, text.length), Buffer.from([0, 0]), u32(((1024 * 2) | 0x40000000) >>> 0), Buffer.from([0, 0])]);
+  wd.writeUInt32LE(0, 154 + 0x108); wd.writeUInt32LE(clx.length, 154 + 0x10c);
+  Buffer.from(text, 'latin1').copy(wd, 1024);
+  const out = await extractDocument(cfbOf({ WordDocument: wd, '1Table': clx }), 'legacy.doc');
+  assert.equal(out, 'Hello Word\nthe link here\nSecond\tcell');
+});
+
+test('extractDocument reads Excel 97-2003 sheets, including a shared string split across CONTINUE', async () => {
+  const r = (type, body) => { const h = Buffer.alloc(4); h.writeUInt16LE(type, 0); h.writeUInt16LE(body.length, 2); return Buffer.concat([h, body]); };
+  const cell = (row, col, extra) => Buffer.concat([Buffer.from([row, 0, col, 0, 0, 0]), extra]);
+  const bof = r(0x0809, Buffer.alloc(16));
+  const eof = r(0x000a, Buffer.alloc(0));
+  const sst = r(0x00fc, Buffer.concat([u32(2, 2), Buffer.from([4, 0, 0]), Buffer.from('Name'), Buffer.from([10, 0, 0]), Buffer.from('Long ')]));
+  const cont = r(0x003c, Buffer.concat([Buffer.from([1]), Buffer.from('words', 'utf16le')]));
+  const sheetName = (pos) => r(0x0085, Buffer.concat([u32(pos), Buffer.from([0, 0, 6, 0]), Buffer.from('Budget')]));
+  const globalsLen = bof.length + sheetName(0).length + sst.length + cont.length + eof.length;
+  const rkInt = (n) => u32(((n << 2) | 2) >>> 0);
+  const num = Buffer.alloc(8); num.writeDoubleLE(2.5);
+  const sheet = Buffer.concat([
+    bof,
+    r(0x00fd, cell(0, 0, u32(0))), r(0x00fd, cell(0, 1, u32(1))),
+    r(0x0203, cell(1, 0, num)), r(0x027e, cell(1, 2, rkInt(-7))),
+    eof
+  ]);
+  const wb = Buffer.concat([bof, sheetName(globalsLen), sst, cont, eof, sheet]);
+  const out = await extractDocument(cfbOf({ Workbook: wb }), 'legacy.xls');
+  assert.equal(out, '## Sheet: Budget\nName,Long words\n2.5,,-7');
+});
+
+test('extractDocument reads PowerPoint 97-2003 slides in order, following the live persist directory', async () => {
+  const chars = (s) => rec(0x0fa0, Buffer.from(s, 'utf16le'));
+  const bytes = (s) => rec(0x0fa8, Buffer.from(s, 'latin1'));
+  const persistAtom = (id) => rec(0x03f3, Buffer.concat([u32(id), Buffer.alloc(16)]));
+  const slwt = rec(0x0ff0, Buffer.concat([persistAtom(1), chars('Title one'), persistAtom(2), bytes('Second')]), { ver: 0xf });
+  const docC = rec(0x03e8, slwt, { ver: 0xf });
+  const slide = rec(0x03ee, rec(0xf00d, chars('Box text'), { ver: 0xf }), { ver: 0xf });
+  const slideAt = docC.length;
+  const dirAt = slideAt + slide.length;
+  const dir = rec(0x1772, Buffer.concat([u32(((3 << 20) | 1) >>> 0), u32(slideAt, 999999, 0)]));
+  const editAt = dirAt + dir.length;
+  const edit = rec(0x0ff5, Buffer.concat([u32(0), Buffer.alloc(4), u32(0, dirAt, 3), Buffer.alloc(8)]));
+  const stream = Buffer.concat([docC, slide, dir, edit]);
+  const current = Buffer.concat([Buffer.alloc(8), u32(20, 0xe391c05f, editAt), Buffer.alloc(12)]);
+  const out = await extractDocument(cfbOf({ 'PowerPoint Document': stream, 'Current User': current }), 'deck.ppt');
+  assert.equal(out, '## Slide 1\nTitle one\nBox text\n\n## Slide 2\nSecond');
+});
+
+test('extractDocument reads an Outlook message and refuses an encrypted Office file', async () => {
+  const msg = cfbOf({ '__substg1.0_0037001F': Buffer.from('Quarterly\0', 'utf16le'), '__substg1.0_0C1A001F': Buffer.from('Ana', 'utf16le'), '__substg1.0_1000001F': Buffer.from('See attached.', 'utf16le') });
+  assert.equal(await extractDocument(msg, 'mail.msg'), 'Subject: Quarterly\nFrom: Ana\n\nSee attached.');
+  await assert.rejects(extractDocument(cfbOf({ EncryptedPackage: Buffer.alloc(16) }), 'secret.docx'), /password/);
+});
+
+test('RTF is reduced to its text, keeping unicode and dropping font tables and field codes', () => {
+  const rtf = '{\\rtf1\\ansi{\\fonttbl{\\f0 Arial;}}{\\*\\generator x;}Caf\\\'e9 \\u8364? price\\par{\\field{\\*\\fldinst HYPERLINK "u"}{\\fldrslt link}}\\tab end}';
+  assert.equal(rtfText(rtf), 'Café € price\nlink\tend');
+});
+
+test('decodeText reads UTF-16 with or without a BOM and legacy single-byte text, and rejects binary', () => {
+  assert.equal(decodeText(Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('héllo', 'utf16le')])), 'héllo');
+  assert.equal(decodeText(Buffer.from('plain words here', 'utf16le')), 'plain words here');
+  assert.equal(decodeText(Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x20, 0x80])), 'café €');
+  assert.equal(decodeText(Buffer.from([0x00, 0x01, 0x02, 0x03, 0x90, 0x00, 0x10, 0x00])), '');
+});
+
+test('extractDocument lists a tar.gz and inlines its text files', async () => {
+  const entry = (name, body) => {
+    const h = Buffer.alloc(512);
+    h.write(name, 0); h.write(body.length.toString(8).padStart(11, '0'), 124); h[156] = 48; h.write('ustar', 257);
+    return Buffer.concat([h, Buffer.from(body), Buffer.alloc((512 - (body.length % 512)) % 512)]);
+  };
+  const tar = Buffer.concat([entry('pkg/main.hx', 'class Main {}\n'), Buffer.alloc(1024)]);
+  const out = await extractDocument(zlib.gzipSync(tar), 'pkg.tgz');
+  assert.match(out, /Archive with 1 file\(s\):\npkg\/main\.hx \(14 bytes\)/);
+  assert.match(out, /--- pkg\/main\.hx ---\nclass Main \{\}/);
 });
 
 // --- release metadata -----------------------------------------------------
@@ -1626,6 +1820,15 @@ test('remapBrandPath leaves an operator upload alone', () => {
     assert.equal(remapBrandPath(v), v, String(v));
   }
   assert.equal(remapBrandPath('constructor'), 'constructor', 'the table is null-prototyped');
+});
+
+test('retireLegacyMark moves the retired legacy set to the weave and nothing else', () => {
+  for (const v of ['/brand/mark.svg', '/brand/mark-generating.svg', '/brand/mark-thinking.svg']) {
+    assert.equal(retireLegacyMark(v), 'builtin:weave', v);
+  }
+  for (const v of ['/uploads/mine.png', 'builtin:weave', '/brand/app-icon.svg', '/brand/mark.svg?v=2', '', null, undefined, 42]) {
+    assert.equal(retireLegacyMark(v), v, String(v));
+  }
 });
 
 // --- continuing a turn the model ended too early -------------------------
@@ -1725,6 +1928,15 @@ test('historyText reports failures and keeps a single-call turn readable', () =>
   assert.ok(out.includes('bash'), out);
   assert.equal(out.includes('×'), false, 'one call is not given a multiplier');
   assert.ok(out.includes('1 failed'), out);
+});
+
+test('historyText keeps the answers to questions asked during a turn', () => {
+  const asked = oqr({ tool: 'ask_user', question: 'Which parser?' }, { ok: true, question: 'Which parser?', options: ['clap', 'argh'], answer: 'clap' });
+  const out = historyText('Before I start:' + asked + 'Using clap.');
+  assert.ok(out.includes('[Answers the user gave to your questions in this turn: "Which parser?" → clap.]'), out);
+  assert.equal(out.includes('Tools already run'), false, 'a question alone is not reported as tool activity');
+  const both = historyText(asked + oqr({ tool: 'bash', cmd: 'cargo add clap' }, { ok: true }));
+  assert.ok(both.includes('Tools already run in this turn: bash') && both.includes('"Which parser?" → clap'), both);
 });
 
 test('historyText leaves a turn with no tool activity completely alone', () => {
@@ -2011,11 +2223,37 @@ test('the client and server copies of the tool protocol stay byte-identical', ()
   assert.equal(client, server, 'client/src/lib/toolproto.js and server/lib/toolproto.js must be kept identical');
 });
 
+test('client/src/lib/badges.js and server/lib/badges.js are the same file', () => {
+  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  const repo = path.dirname(root);
+  const read = (p) => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
+  assert.equal(read(path.join(repo, 'client', 'src', 'lib', 'badges.js')), read(path.join(root, 'lib', 'badges.js')),
+    'the picker and the admin panel must agree on which badges a model earns');
+});
+
+test('badges follow what a model supports, minus the ones an admin switched off', () => {
+  const plain = { sandbox_allowed: 0 };
+  assert.deepEqual(badgesOf(plain), ['text']);
+  assert.deepEqual(badgesOf({ ...plain, has_vision: 1 }), ['text', 'vision'], 'every model reads and writes text; vision is added on top');
+  assert.deepEqual(badgesOf({ ...plain, has_vision: 1, kwargs: [{ name: 'enable_thinking' }] }), ['text', 'vision', 'reasoning']);
+  assert.deepEqual(badgesOf({ ...plain, has_reasoning: 1, badges_off: ['text'] }), ['reasoning']);
+  assert.deepEqual(badgesOf({ ...plain, reasoning_collapsible: 0 }), ['text', 'reasoning']);
+  assert.deepEqual(badgesOf({ ...plain, kwargs: [{ name: 'top_k' }] }), ['text'], 'an unrelated kwarg is not reasoning');
+  assert.deepEqual(badgesOf({}), ['text', 'code'], 'the sandbox is allowed unless switched off');
+  assert.deepEqual(badgesOf({ ...plain }, { webSearch: true }), ['text', 'web'], 'web search is on per model unless switched off');
+  assert.deepEqual(badgesOf({ ...plain, web_search_allowed: 1 }), ['text'], 'but only once the workspace has web search');
+  assert.deepEqual(badgesOf({ ...plain, num_ctx: 131072 }), ['text', 'long']);
+  assert.deepEqual(badgesOf({ ...plain, num_ctx: 32768 }), ['text']);
+  assert.deepEqual(badgesOf({ kind: 'router', has_vision: 1, num_ctx: 200000 }, { webSearch: true }), ['auto'], 'a router only says it routes');
+  assert.deepEqual(sanitizeBadgesOff(['reasoning', 'bogus', 'text', 'text', 3]), ['text', 'reasoning']);
+  assert.deepEqual(sanitizeBadgesOff('text'), []);
+});
+
 test('the client and server agree on the brand icon paths', async () => {
   const server = await import('../lib/brand.js');
   const client = await import('../../client/src/lib/brand.js');
-  for (const key of ['BRAND_ICON', 'BRAND_GENERATING', 'BRAND_THINKING']) {
-    assert.equal(client[key], server[key], `${key} differs between client/src/lib/brand.js and server/lib/brand.js`);
+  for (const key of ['MODEL_WEAVE', 'BRAND_FRAME', 'BRAND_FAVICON_DARK', 'BRAND_FAVICON_LIGHT']) {
+    assert.deepEqual(client[key], server[key], `${key} differs between client/src/lib/brand.js and server/lib/brand.js`);
   }
 });
 
@@ -2506,4 +2744,154 @@ test('a growing write changes the live key, so frames keep flowing', () => {
   const one = keyOf('{"content":"aaa');
   const two = keyOf('{"content":"aaabbb');
   assert.notEqual(one, two, 'an unchanging key is what froze the row at "Creating"');
+});
+
+test('web search only fetches result pages on public addresses', async () => {
+  const { isPublicUrl } = await import('../lib/websearch.js');
+  for (const url of ['http://127.0.0.1:3001/api', 'http://10.0.0.5/', 'http://169.254.169.254/latest/meta-data', 'http://[::1]/', 'http://192.168.1.1/', 'file:///etc/passwd', 'not a url']) {
+    assert.equal(await isPublicUrl(url), false, url);
+  }
+  assert.equal(await isPublicUrl('https://8.8.8.8/'), true);
+});
+
+test('profile lists from an import are cleaned like the save routes clean them', async () => {
+  const { cleanStyles, cleanPersonas, cleanPrompts, prefsFit } = await import('../lib/profile.js');
+  assert.deepEqual(cleanStyles([null, 'x', { id: 's1', name: { bad: 1 }, prompt: 'p' }, { id: 's2', name: ' Calm ', prompt: ' be calm ' }]).map(s => [s.id, s.name, s.prompt]), [['s1', '[object Object]', 'p'], ['s2', 'Calm', 'be calm']]);
+  assert.equal(cleanPersonas([{ id: 'p', name: 'x'.repeat(100), instructions: 'y'.repeat(9000) }])[0].instructions.length, 8000);
+  assert.equal(cleanPrompts(Array.from({ length: 80 }, (_, i) => ({ id: 'q' + i, title: 't', text: 'x' }))).length, 50);
+  assert.equal(prefsFit({ a: 'x'.repeat(300 * 1024) }), false);
+  assert.equal(prefsFit([]), false);
+  assert.equal(prefsFit({ theme: 'dark' }), true);
+});
+
+const stateOf = (models, settings = {}, themes = { activeId: 'a', themes: [{ id: 'a', name: 'A', basePreset: 'anthropic', doc: {} }] }) => ({ models, settings, themes });
+
+test('the change list is per field, per setting and per theme, and ignores sort numbers', () => {
+  const live = stateOf([
+    { id: 'm1', display_name: 'One', temperature: 0.7, sort_order: 0 },
+    { id: 'm2', display_name: 'Two', sort_order: 1 },
+    { id: 'm3', display_name: 'Three', sort_order: 2 }
+  ], { app_name: 'Quill', api_key: 'old' });
+  const draft = stateOf([
+    { id: 'm2', display_name: 'Two', sort_order: 5 },
+    { id: 'm1', display_name: 'Uno', temperature: 0.7, badges_off: undefined, sort_order: 6 },
+    { id: 'm4', display_name: 'Four', sort_order: 7 }
+  ], { app_name: 'Quill 2', api_key: 'new' }, {
+    activeId: 'b',
+    themes: [{ id: 'a', name: 'A', basePreset: 'anthropic', doc: { tokens: { color: { accent: '#111' } } } }, { id: 'b', name: 'B', basePreset: 'openai', doc: {} }]
+  });
+  const changes = diffState(live, draft, { secret: new Set(['api_key']) });
+  const keys = changes.map(c => c.key).sort();
+  assert.deepEqual(keys, ['model:m1:display_name', 'model:m3', 'model:m4', 'models:order', 'setting:api_key', 'setting:app_name', 'theme:a:doc', 'theme:b', 'themes:active']);
+  assert.equal(changes.find(c => c.key === 'model:m3').kind, 'delete');
+  assert.equal(changes.find(c => c.key === 'model:m4').kind, 'create');
+  assert.deepEqual(changes.find(c => c.key === 'models:order').after, ['m2', 'm1']);
+  const secret = changes.find(c => c.key === 'setting:api_key');
+  assert.equal(secret.secret, true);
+  assert.equal(secret.before, null, 'a secret never leaves the server in a change list');
+  assert.equal(changes.find(c => c.key === 'theme:a:doc').count, 1);
+});
+
+test('publishing a subset leaves exactly the rest pending', () => {
+  const live = stateOf([{ id: 'm1', display_name: 'One', top_p: 0.9, sort_order: 0 }], { app_name: 'Quill', disclaimer: 'x' });
+  const draft = stateOf([{ id: 'm1', display_name: 'Uno', sort_order: 0 }], { app_name: 'Quill 2', disclaimer: 'y' });
+  const all = diffState(live, draft);
+  const next = applyState(live, draft, ['model:m1:top_p', 'setting:app_name']);
+  assert.equal('top_p' in next.models[0], false, 'a field the draft removed is removed, not nulled');
+  const left = diffState(next, draft).map(c => c.key).sort();
+  assert.deepEqual(left, ['model:m1:display_name', 'setting:disclaimer']);
+  const back = applyState(draft, live, all.map(c => c.key));
+  assert.deepEqual(diffState(live, back), [], 'discarding everything returns the draft to the live state');
+});
+
+test('changes that only make sense together are published together', () => {
+  const live = stateOf([{ id: 'a', is_default: 1, sort_order: 0 }, { id: 'b', is_default: 0, sort_order: 1 }], { ui_preset: 'anthropic' });
+  const draft = stateOf([
+    { id: 'b', is_default: 1, sort_order: 0 }, { id: 'a', is_default: 0, sort_order: 1 }, { id: 'c', sort_order: 2 }
+  ], { ui_preset: 'openai' }, { activeId: 'n', themes: [{ id: 'a', name: 'A', basePreset: 'anthropic', doc: {} }, { id: 'n', name: 'N', basePreset: 'openai', doc: {} }] });
+  const changes = diffState(live, draft);
+  assert.deepEqual(expandKeys(changes, ['model:b:is_default']).sort(), ['model:a:is_default', 'model:b:is_default'], 'one default at a time');
+  assert.deepEqual(expandKeys(changes, ['model:c']).sort(), ['model:c', 'models:order'], 'a new model ships with the order it was placed in');
+  assert.deepEqual(expandKeys(changes, ['model:c'], 'discard'), ['model:c'], 'but dropping one leaves the order alone');
+  assert.deepEqual(expandKeys(changes, ['setting:ui_preset']).sort(), ['setting:ui_preset', 'theme:n', 'themes:active'], 'a layout ships with its base preset and the theme it points at');
+  assert.deepEqual(expandKeys(changes, ['nope']), [], 'unknown keys are ignored');
+});
+
+test('playground history keeps only known roles and caps each message', () => {
+  const out = playgroundHistory([
+    { role: 'system', content: 'be brief' },
+    { role: 'tool', content: 'x' },
+    { role: '__proto__', content: 'x' },
+    { role: 'user', content: '   ' },
+    { role: 'assistant', content: '' },
+    { role: 'user', content: 'a'.repeat(MAX_CONTENT + 10) },
+    { role: 'user', content: 42 }
+  ]);
+  assert.deepEqual(out.map(m => m.role), ['system', 'assistant', 'user']);
+  assert.equal(out[2].content.length, MAX_CONTENT);
+  assert.equal(playgroundHistory(Array.from({ length: MAX_TURNS + 5 }, () => ({ role: 'user', content: 'x' }))).length, MAX_TURNS);
+  assert.deepEqual(playgroundHistory('nope'), []);
+  assert.equal(sourceOf('live'), 'live');
+  assert.equal(sourceOf('anything'), 'draft');
+});
+
+test('playground test sets are trimmed, capped and given unique ids', () => {
+  const out = sanitizeSuites([
+    { id: 'same', name: '  Checks  ', cases: [{ id: 'c', prompt: 'hi', expect: 'hello' }, { id: 'c', prompt: 'again' }, { prompt: '  ' }] },
+    { id: 'same', name: '', cases: 'nope' },
+    null,
+    { id: 'bad id!', cases: [{ prompt: 'x'.repeat(SUITE_LIMITS.prompt + 1) }] }
+  ]);
+  assert.equal(out.length, 3);
+  assert.equal(out[0].name, 'Checks');
+  assert.deepEqual(out[0].cases.map(c => c.prompt), ['hi', 'again']);
+  assert.notEqual(out[0].cases[0].id, out[0].cases[1].id);
+  assert.equal(out[0].cases[1].expect, '');
+  assert.notEqual(out[1].id, out[0].id);
+  assert.equal(out[1].name, 'Untitled set');
+  assert.deepEqual(out[1].cases, []);
+  assert.notEqual(out[2].id, 'bad id!');
+  assert.equal(out[2].cases[0].prompt.length, SUITE_LIMITS.prompt);
+  assert.equal(sanitizeSuites(Array.from({ length: SUITE_LIMITS.sets + 3 }, () => ({}))).length, SUITE_LIMITS.sets);
+});
+
+test('member context keeps only valid time zones, languages and devices', () => {
+  assert.deepEqual(cleanClient({ timeZone: 'Asia/Tokyo', language: 'es-MX', device: 'phone' }), { timeZone: 'Asia/Tokyo', language: 'es-MX', device: 'phone' });
+  assert.deepEqual(cleanClient({ timeZone: 'Mars/Olympus', language: '<script>', device: 'fridge' }), { timeZone: '', language: '', device: '' });
+  assert.deepEqual(cleanClient(null), { timeZone: '', language: '', device: '' });
+  assert.deepEqual(cleanClient(['x']), { timeZone: '', language: '', device: '' });
+  const saved = { client_ctx: { timeZone: 'Europe/Berlin', language: 'de', device: 'phone' } };
+  assert.deepEqual(memberContext(saved, { language: 'ja' }), { timeZone: 'Europe/Berlin', language: 'ja', device: '' });
+  assert.deepEqual(memberContext(null, null), { timeZone: '', language: '', device: '' });
+  assert.equal(languageName('ja'), 'Japanese');
+  assert.equal(languageName(''), '');
+});
+
+test('docs variables read the model page fields the way the docs show them', () => {
+  const v = docsVars({
+    description: 'Fast helper', docs_ids: [{ label: 'API', value: 'quill-1' }, { label: 'Local', value: 'q1.gguf' }, { label: 'Empty', value: '' }],
+    docs_badge: 'latest', docs_notes: '- Good at code\n* Short replies\n\n', num_ctx: 200000, docs_max_output: 64000,
+    has_reasoning: 1, docs_in_image: 0, has_vision: 1, docs_out_text: 0, docs_out_audio: 1, docs_intelligence: 4, docs_speed: 9,
+    cost_in: 2, cost_out: 10.5, docs_price_cache_read: 0.2, docs_released: 'June 30, 2026', docs_platforms: ['API', '', 'Local']
+  });
+  assert.equal(v.modelId, 'quill-1');
+  assert.equal(v.modelIds, 'API: quill-1\nLocal: q1.gguf');
+  assert.equal(v.modelBadge, 'Latest');
+  assert.equal(v.modelNotes, '- Good at code\n- Short replies');
+  assert.equal(v.modelContextWindow, '200K tokens');
+  assert.equal(v.modelMaxOutput, '64K tokens');
+  assert.equal(v.modelThinking, 'Supported');
+  assert.equal(v.modelInput, 'Text, Images');
+  assert.equal(v.modelOutput, 'Audio');
+  assert.equal(v.modelIntelligence, 'High');
+  assert.equal(v.modelSpeed, 'Fastest');
+  assert.equal(v.modelPriceInput, '$2 per million tokens');
+  assert.equal(v.modelPriceOutput, '$10.5 per million tokens');
+  assert.equal(v.modelPriceCacheRead, '$0.2 per million tokens');
+  assert.equal(v.modelPriceCacheWrite, '');
+  assert.equal(v.modelReleased, 'June 30, 2026');
+  assert.equal(v.modelRetirement, '');
+  assert.equal(v.modelPlatforms, 'API, Local');
+  assert.deepEqual(docsVars(null), {});
+  assert.equal(docsVars({ docs_badge: '__proto__' }).modelBadge, '');
 });

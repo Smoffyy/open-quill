@@ -114,14 +114,14 @@ export function useTurnStream(opts = {}) {
   }, [stopTimer]);
 
   // A new turn on the active chat.
-  const begin = useCallback(({ messageId, modelId: mid }) => {
-    target.current = '';
-    targetReason.current = '';
+  const begin = useCallback(({ messageId, modelId: mid, content: from = '', reasoning: fromReason = '', segs: fromSegs = null }) => {
+    target.current = from;
+    targetReason.current = fromReason;
     donePending.current = false;
-    shown.current = 0;
+    shown.current = from.length;
     assistantId.current = messageId;
     modelId.current = mid;
-    setContent(''); setReasoning(''); setSegs(null);
+    setContent(from); setReasoning(fromReason); setSegs(fromSegs ? fromSegs.slice() : null);
     setPhase('generating'); setStreaming(true); setQueued(false);
     startTimer();
   }, [startTimer]);

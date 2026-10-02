@@ -106,12 +106,12 @@ async function replaceAsync(str, re, fn) {
   return parts.map(p => (p === null ? done[k++] : p)).join('');
 }
 
-function makeLoader(chatId) {
+function makeLoader(base) {
   const cache = new Map();
   return (path, kind) => {
     const key = kind + '\u0000' + path;
     if (!cache.has(key)) {
-      const url = '/api/chats/' + encodeURIComponent(chatId) + '/download?path=' + encodeURIComponent(path);
+      const url = base + '/download?path=' + encodeURIComponent(path);
       const job = fetch(url, { credentials: 'same-origin' })
         .then(res => {
           if (!res.ok) return null;
@@ -299,7 +299,7 @@ function injectBootstrap(doc) {
   else head.appendChild(script);
 }
 
-export async function buildPreviewDoc({ chatId, path, html }) {
+export async function buildPreviewDoc({ base, path, html }) {
   const source = String(html || '');
   if (!source.trim()) return source;
   if (extOf(path) === 'svg') return source;
@@ -308,7 +308,7 @@ export async function buildPreviewDoc({ chatId, path, html }) {
   try { doc = new DOMParser().parseFromString(source, 'text/html'); } catch { return source; }
   if (!doc || !doc.documentElement) return source;
   const baseDir = dirOf(path);
-  const load = makeLoader(chatId);
+  const load = makeLoader(base);
   try {
     await Promise.all([
       inlineStyles(doc, baseDir, load),

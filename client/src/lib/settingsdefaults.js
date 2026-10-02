@@ -6,7 +6,7 @@ export function presetDefaults(isOpenai, theme = 'system') {
     streamCursor: isOpenai, cursorStyle: isOpenai ? 'circle' : 'block',
     cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40,
     oledShift: false,
-    threadRail: true, threadFind: true, branchMap: true, threadOutline: true, msgKeys: true, readWidth: 'normal', keybinds: {}
+    threadRail: false, threadFind: true, branchMap: true, threadOutline: true, msgKeys: true, readWidth: 'normal', keybinds: {}
   };
 }
 

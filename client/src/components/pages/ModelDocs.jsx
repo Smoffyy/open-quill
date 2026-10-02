@@ -3,6 +3,7 @@ import { t } from '../../i18n.jsx';
 import { api } from '../../lib/api.js';
 import Markdown from '../chat/Markdown.jsx';
 import Tip from '../ui/Tip.jsx';
+import { ModelMark } from '../ui/Weave.jsx';
 import { Copy, Check, ArrowOut, Chevron, Info, Pencil, Trash, Plus, X } from '../ui/icons.jsx';
 import {
   fmtTokens, fmtPrice, priceRange, bulletLines, modalityLabel,
@@ -156,7 +157,7 @@ function TileRows({ rows, onChange }) {
 function modIcon(m, cls) {
   const src = m.docsIcon || m.staticIcon;
   return src
-    ? <img className={cls} src={src} alt="" aria-hidden="true" />
+    ? <ModelMark src={src} className={cls} />
     : <span className={cls + ' noicon'}>{(m.displayName || '?').trim().charAt(0).toUpperCase()}</span>;
 }
 
@@ -443,7 +444,7 @@ function Meters({ m, set }) {
     <div className="mdoc-meters">
       {(on || intel > 0) && (
         <div className="mdoc-meter">
-          <span className="mdoc-meter-label">{m.capReasoning || m.hasReasoning ? t('Reasoning') : t('Intelligence')}</span>
+          <span className="mdoc-meter-label">{m.badges?.includes('reasoning') || m.hasReasoning ? t('Reasoning') : t('Intelligence')}</span>
           <span className="mdoc-dots">{dots(intel, 'docsIntelligence')}</span>
           <span className="mdoc-meter-val">{intel ? t(INTEL_LABELS[intel]) : t('Not rated')}</span>
         </div>
@@ -586,7 +587,7 @@ function ModelPage({ m, models, cfg, set, onTry, onOpen, appName, onExit }) {
           <Rows title={t('Capabilities')} rows={[
             { tip: TIPS.context, label: t('Context window'), value: fmtTokens(m.numCtx) && fmtTokens(m.numCtx) + ' ' + t('tokens'), raw: fmtTokens(m.numCtx), ph: '200K', set: S('numCtx'), parse: parseTokens },
             { tip: TIPS.maxOutput, label: t('Max output'), value: fmtTokens(m.docsMaxOutput) && fmtTokens(m.docsMaxOutput) + ' ' + t('tokens'), raw: fmtTokens(m.docsMaxOutput), ph: '64K', set: S('docsMaxOutput'), parse: parseTokens },
-            { tip: TIPS.thinking, label: t('Thinking'), value: m.docsThinking || ((m.capReasoning || m.hasReasoning) ? t('Supported') : ''), raw: m.docsThinking, ph: t('Adaptive'), set: S('docsThinking') },
+            { tip: TIPS.thinking, label: t('Thinking'), value: m.docsThinking || ((m.badges?.includes('reasoning') || m.hasReasoning) ? t('Supported') : ''), raw: m.docsThinking, ph: t('Adaptive'), set: S('docsThinking') },
             { tip: TIPS.effort, label: t('Default effort'), value: m.docsEffort, mono: true, ph: 'high', set: S('docsEffort') },
             { tip: TIPS.latency, label: t('Comparative latency'), value: m.docsLatency, ph: t('Fast'), set: S('docsLatency') },
             { tip: TIPS.modalities, label: t('Input → output'), value: inLabel + ' → ' + outLabel },
@@ -639,7 +640,7 @@ function OverviewPage({ models, cfg, setCfg, onOpen, appName, onExit }) {
     [t('Model id'), (m) => publicModelId(m), true, null, TIPS.modelId]
   ];
   const capRows = [
-    [t('Thinking'), (m) => m.docsThinking || ((m.capReasoning || m.hasReasoning) ? t('Supported') : ''), false, null, TIPS.thinking],
+    [t('Thinking'), (m) => m.docsThinking || ((m.badges?.includes('reasoning') || m.hasReasoning) ? t('Supported') : ''), false, null, TIPS.thinking],
     [t('Default effort'), (m) => m.docsEffort, true, null, TIPS.effort],
     [t('Context window'), (m) => fmtTokens(m.numCtx) && fmtTokens(m.numCtx) + ' ' + t('tokens'), false, null, TIPS.context],
     [t('Max output'), (m) => fmtTokens(m.docsMaxOutput) && fmtTokens(m.docsMaxOutput) + ' ' + t('tokens'), false, null, TIPS.maxOutput],

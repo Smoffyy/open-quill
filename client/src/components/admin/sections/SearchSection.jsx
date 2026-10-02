@@ -46,13 +46,6 @@ export default function SearchSection() {
               </Field>
             </Fields>
           </Card>
-
-          <Card title={t('Tool instructions')}
-            sub={t('Appended to the system prompt only for chats where search is on. Use it to say when searching is worth the round trip.')}>
-            <Area rows={6} value={settings.webSearchPrompt ?? ''} aria-label={t('Tool instructions')}
-              placeholder={t('Search only when the answer depends on current information, or when you are unsure.')}
-              onChange={(e) => set('webSearchPrompt', e.target.value)} />
-          </Card>
         </>
       )}
     </>

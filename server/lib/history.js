@@ -31,6 +31,7 @@ export function historyText(text) {
   let s = String(text || '');
   const counts = new Map();
   let failed = 0;
+  const answers = [];
   const note = (tool, isFail) => {
     const name = String(tool || '').trim();
     if (!name) return;
@@ -54,17 +55,27 @@ export function historyText(text) {
     const d = decodeOqr(b);
     const c = d && d.call;
     if (!c || !c.tool) return '';
+    if (c.tool === 'ask_user' && d.result && d.result.ok && d.result.answer) {
+      answers.push(`"${d.result.question}" → ${d.result.answer}`);
+      return '';
+    }
     note(c.tool, !!(d.result && d.result.ok === false));
     return '';
   });
   s = s.replace(/\[\[OQT:\d+\]\]/g, '');
   s = s.replace(/```tool[\s\S]*?```/g, '');
 
-  if (!counts.size) return s;
+  const qa = answers.length ? `[Answers the user gave to your questions in this turn: ${answers.join('; ')}.]` : '';
+  if (!counts.size) {
+    if (!qa) return s;
+    const text = s.replace(/\n{3,}/g, '\n\n').trim();
+    return text ? text + '\n\n' + qa : qa;
+  }
   const parts = [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .map(([tool, n]) => (n > 1 ? `${tool} ×${n}` : tool));
   const tail = `[Tools already run in this turn: ${parts.join(', ')}${failed ? `; ${failed} failed` : ''}. Their results are already applied — the workspace listing above is the current truth. Do not describe these calls in text; make new tool calls for anything still to do.]`;
   const body = s.replace(/\n{3,}/g, '\n\n').trim();
-  return body ? body + '\n\n' + tail : tail;
+  const end = qa ? tail + '\n' + qa : tail;
+  return body ? body + '\n\n' + end : end;
 }

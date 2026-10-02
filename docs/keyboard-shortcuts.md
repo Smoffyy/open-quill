@@ -1,19 +1,19 @@
 # Keyboard Shortcuts
 
-Every shortcut below is rebindable at **Settings → Keybinds**, so treat this as the factory defaults, not a fixed layout. On macOS, `Ctrl` in a combo becomes `Cmd`.
+These are the defaults. Every one except **Clear focus** can be changed under **Settings → Keybinds**. On macOS, `Ctrl` is `Cmd` and `Alt` is `Option`. Press `?` anywhere outside a text field to see the list in the app.
 
 ## General
 
 | Shortcut | Action |
 | --- | --- |
-| `Ctrl+K` | Open command palette |
-| `Ctrl+Shift+F` | Search all chats |
+| `Ctrl+K` | Command palette |
+| `Ctrl+Shift+F` | Search chats |
 | `Ctrl+Shift+O` | New chat |
 | `Ctrl+Shift+S` | Toggle sidebar |
 | `Ctrl+,` | Open settings |
-| `Alt+I` | Toggle incognito chat |
-| `Alt+T` | Switch light/dark |
-| `?` | Shortcuts help |
+| `Alt+I` | Toggle incognito |
+| `Alt+T` | Switch light / dark |
+| `?` | Show shortcuts |
 
 ## Composer
 
@@ -25,42 +25,43 @@ Every shortcut below is rebindable at **Settings → Keybinds**, so treat this a
 | `Alt+S` | Toggle sandbox |
 | `Ctrl+.` | Stop generating |
 
-## Inside a conversation
+## In a conversation
 
 | Shortcut | Action |
 | --- | --- |
-| `Ctrl+F` | Find in conversation (only when the open chat has messages; otherwise the browser's own find runs) |
+| `Ctrl+F` | Find in conversation |
 | `B` | Branch map |
 | `J` / `K` | Next / previous message |
-| `Alt+↓` | Jump to latest message |
+| `Alt+↓` | Jump to latest |
 | `Alt+L` | Context ledger |
-| `Alt+P` | "What gets sent" (prompt inspector) |
+| `Alt+P` | What gets sent |
 | `Alt+A` | Artifacts panel |
+| `Alt+O` | Contents |
+| `Alt+F` | Focus mode |
 | `Alt+J` / `Alt+K` | Next / previous chat in the sidebar |
 
 ## On a focused message
 
-Focus a message with `J`/`K` first, then:
+Move to a message with `J` or `K` first, then:
 
 | Shortcut | Action |
 | --- | --- |
 | `C` | Copy |
-| `E` | Edit |
-| `R` | Retry |
+| `E` | Edit (your message) |
+| `R` | Retry (assistant) |
 | `Y` | Branch into new chat |
-| `Escape` | Clear focus |
+| `Esc` | Clear focus |
 
-## Chords
-
-A few bindings are two-key chords, like `space` followed by a letter. Pressing the first key arms it and shows a hint overlay of everything bound under it. The chord only arms while focus isn't inside a text field, so it never interferes with typing a literal space.
+Single-letter shortcuts never fire while you are typing in a field.
 
 ## Customizing
 
-**Settings → Keybinds** lets you:
+In **Settings → Keybinds**:
 
-- Record a new combo for any action by clicking it and pressing the keys you want.
-- Switch between the **default** layout and a **Vim-flavored** preset in one click.
-- See conflicts flagged when two actions share a combo. The first-listed action wins if you save one anyway.
-- **Export**/**import** your bindings as a file, to carry a layout between devices or accounts.
+- Press **Change** next to an action, then the keys you want. `Esc` cancels.
+- **Reset** one action, or **Reset all** to go back to the defaults.
+- **Preset** switches between the defaults and a **Vim flavoured** layout in one step. You can still change individual keys afterwards.
+- If two actions share keys, both are marked so you can fix it. Combinations the browser usually keeps for itself, such as `Ctrl+W`, are flagged too.
+- **Export** saves your changes as a file and **Import** loads them on another device or account.
 
-Shortcuts tied to a navigation feature (thread rail, find, branch map, message shortcuts) only work while that feature is turned on in **Settings → Chat → Navigation**. Turning the feature off removes both the button and the shortcut, not just one or the other. Some bindings, like `Escape` to clear focus, aren't rebindable at all.
+Shortcuts that belong to a navigation feature (find, branch map, contents, message shortcuts) only work while that feature is on in **Settings → Interface → Navigation**. Turning the feature off removes its button and its shortcut together.

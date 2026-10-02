@@ -1,5 +1,7 @@
 import { getSetting } from '../db.js';
-import { unguardedFetch, webSearchEgressAllowed } from './egress.js';
+import dns from 'dns';
+import net from 'net';
+import { unguardedFetch, webSearchEgressAllowed, isPrivateAddress } from './egress.js';
 
 export function webSearchConfig() {
   let domains = [];
@@ -9,23 +11,13 @@ export function webSearchConfig() {
     engine: getSetting('web_search_engine', 'searxng'),
     url: (getSetting('searxng_url', '') || '').trim().replace(/\/$/, ''),
     count: Math.max(1, Math.min(20, parseInt(getSetting('web_search_count', '5')) || 5)),
-    domains,
-    prompt: getSetting('web_search_prompt', DEFAULT_WS_PROMPT)
+    domains
   };
 }
-
-export const DEFAULT_WS_PROMPT = `You have access to a web_search tool that fetches live results from the internet. Only use it when the user explicitly asks you to look something up, or when answering accurately requires information that is not in your training data or may be out of date (for example recent events, current prices, release dates, or niche facts you are unsure about). Do not search for things you already know with confidence.
-
-Before each web_search call, first tell the user in one short natural sentence what you are about to look up. For example "I'll look for the latest iPhone release date." or "Let me search for current pricing on that." Then emit the tool call. You may call the tool more than once in a single response to follow up or refine a query, announcing each search the same way. After searching, base your answer on the retrieved pages and cite the source URLs you relied on.`;
 
 export function webSearchAvailable() {
   const c = webSearchConfig();
   return c.enabled && !!c.url;
-}
-
-export function webSearchToolPrompt() {
-  return `## Web search tool
-The \`web_search\` function is available. Call it with a focused \`query\` (and an optional \`count\`, capped by the server). Results come back as page contents with their URLs. Issue follow-up searches to refine when needed, and base your answer on the retrieved pages, citing the source URLs you relied on.`;
 }
 
 function hostOf(u) { try { return new URL(u).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; } }
@@ -51,12 +43,55 @@ async function fetchTimeout(url, opts = {}, ms = 12000) {
 }
 
 const MAX_PAGE_CHARS = 100000;
+const MAX_PAGE_BYTES = 3 * 1024 * 1024;
+const MAX_REDIRECTS = 5;
+
+export async function isPublicUrl(url) {
+  let p;
+  try { p = new URL(url); } catch { return false; }
+  if (p.protocol !== 'http:' && p.protocol !== 'https:') return false;
+  const host = p.hostname.replace(/^\[|\]$/g, '');
+  if (net.isIP(host)) return !isPrivateAddress(host);
+  try {
+    const addrs = await dns.promises.lookup(host, { all: true });
+    return addrs.length > 0 && !addrs.some(a => isPrivateAddress(a.address));
+  } catch { return false; }
+}
+
+async function fetchPublic(url, opts, ms) {
+  let target = url;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    if (!(await isPublicUrl(target))) return null;
+    const r = await fetchTimeout(target, { ...opts, redirect: 'manual' }, ms);
+    const next = r.status >= 300 && r.status < 400 ? r.headers.get('location') : null;
+    if (!next) return r;
+    try { target = new URL(next, target).href; } catch { return null; }
+  }
+  return null;
+}
+
+async function readCapped(res, max) {
+  const reader = res.body?.getReader();
+  if (!reader) return '';
+  const chunks = [];
+  let n = 0;
+  while (n < max) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    n += value.length;
+  }
+  try { await reader.cancel(); } catch {}
+  return new TextDecoder().decode(Buffer.concat(chunks).subarray(0, max));
+}
+
 async function ingestPage(url) {
   try {
-    const r = await fetchTimeout(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OpenQuillBot/1.0)', 'Accept': 'text/html,application/xhtml+xml' } }, 15000);
+    const r = await fetchPublic(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OpenQuillBot/1.0)', 'Accept': 'text/html,application/xhtml+xml' } }, 15000);
+    if (!r) return { text: '', chars: 0, truncated: false };
     const ct = r.headers.get('content-type') || '';
-    if (!r.ok || !/text\/html|text\/plain|application\/xhtml/.test(ct)) return { text: '', chars: 0, truncated: false };
-    const html = await r.text();
+    if (!r.ok || !/text\/html|text\/plain|application\/xhtml/.test(ct)) { try { await r.body?.cancel(); } catch {} return { text: '', chars: 0, truncated: false }; }
+    const html = await readCapped(r, MAX_PAGE_BYTES);
     const full = ct.includes('html') ? htmlToText(html) : html.trim();
     const truncated = full.length > MAX_PAGE_CHARS;
     return { text: truncated ? full.slice(0, MAX_PAGE_CHARS) : full, chars: full.length, truncated };

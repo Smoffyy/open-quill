@@ -1,22 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  runStats as pgRunStats,
-  fmtDuration as pgFmtDuration,
-  activePreset as pgActivePreset,
-  applyPreset as pgApplyPreset,
-  pickedText as pgPickedText,
-  historyFor as pgHistoryFor,
-  isUnset as pgIsUnset,
-  clampField as pgClampField,
-  groupModels as pgGroupModels,
-  SAMPLING_PRESETS as PG_PRESETS
+  MAX_LANES, laneKey, makeLane, addLane, moveSubject, laneRow, kwargDefsOf, usesPromptToken,
+  pickedText, historyFor, tally, sseSplit, runStats, fmtDuration, replyStats, settle,
+  restoreSession, suiteWins, patchCase, groupModels
 } from '../src/lib/playground.js';
 
 test('throughput is measured over generation, not over the wait before it', () => {
-  // A model that thinks for 20s and then writes 80 tokens in 2s writes at 40/s.
-  // Dividing by the whole run would call that 3.6/s and hide the real problem.
-  const s = pgRunStats({ startedAt: 0, firstAt: 20000, endedAt: 22000, usage: { completion: 80, prompt: 300 } });
+  const s = runStats({ startedAt: 0, firstAt: 20000, endedAt: 22000, usage: { completion: 80, prompt: 300 } });
   assert.equal(s.ttft, 20000);
   assert.equal(s.total, 22000);
   assert.equal(Math.round(s.tps), 40);
@@ -25,58 +16,113 @@ test('throughput is measured over generation, not over the wait before it', () =
 });
 
 test('a run with no tokens yet reports no rate rather than zero', () => {
-  const s = pgRunStats({ startedAt: 0, endedAt: 5000 });
+  const s = runStats({ startedAt: 0, endedAt: 5000 });
   assert.equal(s.ttft, null);
   assert.equal(s.tps, null);
-  assert.equal(s.out, null);
   assert.equal(s.total, 5000);
+  assert.equal(replyStats({}), null, 'a reply that never started has no numbers');
 });
 
 test('durations read at the scale a human is judging', () => {
-  assert.equal(pgFmtDuration(374), '374ms');
-  assert.equal(pgFmtDuration(1240), '1.24s');
-  assert.equal(pgFmtDuration(64000), '1m 04s');
-  assert.equal(pgFmtDuration(NaN), '—');
+  assert.equal(fmtDuration(374), '374ms');
+  assert.equal(fmtDuration(1240), '1.24s');
+  assert.equal(fmtDuration(64000), '1m 04s');
+  assert.equal(fmtDuration(NaN), '–');
 });
 
-test('a sampling preset is only active when nothing else is set', () => {
-  assert.equal(pgActivePreset({ temperature: 0.7, top_p: 1 }), 'balanced');
-  assert.equal(pgActivePreset({ temperature: 0.1, top_p: 0.9 }), 'precise');
-  assert.equal(pgActivePreset({ temperature: 0.7, top_p: 1, top_k: 40 }), null, 'a stray sampler is not silently ignored');
-  assert.equal(pgActivePreset({}), null);
+test('a column is a model and a version, and the same pair is never added twice', () => {
+  let lanes = [makeLane('a')];
+  lanes = addLane(lanes, 'a', 'live');
+  assert.deepEqual(lanes.map(laneKey), ['a:draft', 'a:live']);
+  assert.equal(addLane(lanes, 'a', 'live'), lanes);
+  lanes = addLane(lanes, 'b', 'draft');
+  assert.equal(lanes.length, MAX_LANES);
+  assert.equal(addLane(lanes, 'c', 'draft'), lanes, 'the column limit holds');
 });
 
-test('applying a preset clears the samplers it does not name', () => {
-  const next = pgApplyPreset({ temperature: 2, top_k: 40, min_p: 0.1, max_tokens: 512 }, PG_PRESETS[0]);
-  assert.equal(next.temperature, 0.1);
-  assert.equal(next.top_k, '');
-  assert.equal(next.min_p, '');
-  assert.equal(next.max_tokens, 512, 'limits are not samplers and are left alone');
+test('switching the model under test carries its live column with it', () => {
+  const lanes = [makeLane('a'), makeLane('a', 'live'), makeLane('b')];
+  const next = moveSubject(lanes, 'a', 'c');
+  assert.deepEqual(next.map(laneKey), ['c:draft', 'c:live', 'b:draft']);
+  assert.equal(next[0].id, lanes[0].id, 'the first column keeps its identity');
+  assert.deepEqual(moveSubject(lanes, 'a', 'b').map(laneKey), ['b:draft', 'b:live'], 'a duplicate after the move is dropped');
 });
 
-test('the kept reply is the one the rest of the screen reads', () => {
-  const msg = { role: 'assistant', content: 'a', pick: 1, variants: [{ content: 'a' }, { content: 'b' }] };
-  assert.equal(pgPickedText(msg), 'b');
-  assert.equal(pgPickedText({ role: 'user', content: 'hi' }), 'hi');
-  assert.equal(pgPickedText({ role: 'assistant', pick: 9, variants: [{ content: 'a' }] }), 'a');
-  assert.deepEqual(pgHistoryFor([{ role: 'user', content: 'hi' }, msg]),
-    [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'b' }]);
+test('a live column reads the released row, a draft column the edited one', () => {
+  const models = [{ id: 'a', temperature: 0.2 }];
+  const live = { a: { id: 'a', temperature: 0.7 } };
+  assert.equal(laneRow(makeLane('a'), models, live).temperature, 0.2);
+  assert.equal(laneRow(makeLane('a', 'live'), models, live).temperature, 0.7);
+  assert.equal(laneRow(makeLane('x', 'live'), models, live), null);
 });
 
-test('a blank field means the request leaves it out', () => {
-  assert.equal(pgIsUnset(''), true);
-  assert.equal(pgIsUnset(null), true);
-  assert.equal(pgIsUnset(0), false, 'zero is a value an admin chose');
-  assert.equal(pgClampField('5', { min: 0, max: 2 }), 2);
-  assert.equal(pgClampField('-1', { min: 0, max: 2 }), 0);
-  assert.equal(pgClampField('abc', { min: 0, max: 2 }), '');
+test('run options come from the model kwargs, or the legacy effort setting', () => {
+  const legacy = (m) => ({ id: 'effort', values: m.effort_levels });
+  assert.deepEqual(kwargDefsOf({ kwargs: [{ id: 'k' }] }, legacy), [{ id: 'k' }]);
+  assert.deepEqual(kwargDefsOf({ effort_enabled: 1, effort_levels: ['low', 'high'] }, legacy), [{ id: 'effort', values: ['low', 'high'] }]);
+  assert.deepEqual(kwargDefsOf({}, legacy), []);
+  assert.equal(usesPromptToken({ has_reasoning: 1, reasoning_token: '/think' }), true);
+  assert.equal(usesPromptToken({ has_reasoning: 1, effort_enabled: 1, reasoning_token: '/think' }), false, 'effort replaces the prompt token');
 });
 
-test('models are grouped under the provider they run on', () => {
-  const groups = pgGroupModels(
-    [{ id: 'a', provider_id: 'p1' }, { id: 'b', provider_id: 'p2' }, { id: 'c', provider_id: 'p1' }, { id: 'd' }],
-    [{ id: 'p1', name: 'Local' }, { id: 'p2', name: 'Cloud' }]
-  );
-  assert.deepEqual(groups.map(g => g.label), ['Local', 'Cloud', 'Other']);
+test('the conversation continues from the preferred reply', () => {
+  const turn = { role: 'assistant', pick: 1, replies: [{ content: 'a', key: 'm:draft' }, { content: 'b', key: 'm:live' }] };
+  assert.equal(pickedText(turn), 'b');
+  assert.equal(pickedText({ role: 'assistant', pick: 9, replies: [{ content: 'a' }] }), 'a');
+  assert.deepEqual(historyFor([{ role: 'system', content: 'be brief' }, { role: 'user', content: 'hi' }, turn, { role: 'user', content: ' ' }]),
+    [{ role: 'system', content: 'be brief' }, { role: 'user', content: 'hi' }, { role: 'assistant', content: 'b' }]);
+});
+
+test('only an explicit preference counts as a win', () => {
+  const replies = [{ key: 'a:draft' }, { key: 'a:live' }];
+  const wins = tally([
+    { role: 'assistant', pick: 0, chosen: false, replies },
+    { role: 'assistant', pick: 1, chosen: true, replies },
+    { role: 'assistant', pick: 0, chosen: true, replies: [{ key: 'a:draft' }] }
+  ]);
+  assert.deepEqual(wins, { 'a:live': 1 });
+  assert.deepEqual(suiteWins({ c1: { pick: 'a:live' }, c2: { pick: '' }, c3: { pick: 'gone:draft' } }, [makeLane('a'), makeLane('a', 'live')]),
+    { 'a:draft': 0, 'a:live': 1 });
+});
+
+test('a stream chunk split mid-line keeps the tail for the next read', () => {
+  const { events, rest } = sseSplit('data: {"type":"content","text":"Hi"}\n\ndata: {"type":"con');
+  assert.deepEqual(events, [{ type: 'content', text: 'Hi' }]);
+  assert.equal(rest, 'data: {"type":"con');
+  assert.deepEqual(sseSplit(rest + 'tent","text":"!"}\n').events, [{ type: 'content', text: '!' }]);
+  assert.deepEqual(sseSplit('data: not json\n').events, []);
+});
+
+test('a reload never leaves a reply spinning', () => {
+  assert.equal(settle({ status: 'run', startedAt: 5, firstAt: 9 }).status, 'stopped');
+  assert.equal(settle({ status: 'queue', startedAt: 5 }).endedAt, 5);
+  const done = { status: 'done' };
+  assert.equal(settle(done), done);
+  const s = restoreSession({
+    subjectId: 'gone',
+    lanes: [{ modelId: 'a', source: 'live' }, { modelId: 'gone' }],
+    thread: [{ role: 'assistant', replies: [{ status: 'run' }] }, { role: 'tool', content: 'x' }],
+    results: { s1: { c1: { pick: 'a:live', cells: { 'a:live': { status: 'queue' } } } } },
+    mode: 'suite'
+  }, ['a']);
+  assert.equal(s.subjectId, '');
+  assert.deepEqual(s.lanes.map(laneKey), ['a:live']);
+  assert.equal(s.thread.length, 1);
+  assert.equal(s.thread[0].replies[0].status, 'stopped');
+  assert.equal(s.results.s1.c1.cells['a:live'].status, 'stopped');
+  assert.equal(s.mode, 'suite');
+  assert.equal(s.panel, true);
+});
+
+test('editing one test leaves the others alone', () => {
+  const suites = [{ id: 's', cases: [{ id: '1', prompt: 'a' }, { id: '2', prompt: 'b' }] }];
+  const next = patchCase(suites, 's', '2', { prompt: 'c' });
+  assert.deepEqual(next[0].cases.map(c => c.prompt), ['a', 'c']);
+  assert.equal(next[0].cases[0], suites[0].cases[0]);
+});
+
+test('the model picker groups by folder in catalog order', () => {
+  const groups = groupModels([{ id: 'a', f: 'X' }, { id: 'b' }, { id: 'c', f: 'X' }], (m) => m.f || '');
+  assert.deepEqual(groups.map(g => g.label), ['X', '']);
   assert.deepEqual(groups[0].items.map(m => m.id), ['a', 'c']);
 });

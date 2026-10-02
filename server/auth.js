@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import * as cookie from 'cookie';
 import { db, uid, now, getSetting, setSetting } from './db.js';
 import { clientIp } from './lib/audit.js';
+import { roleOf, canPublish } from './lib/roles.js';
 
 let SECRET = getSetting('jwt_secret');
 if (!SECRET) { SECRET = crypto.randomBytes(48).toString('base64url'); setSetting('jwt_secret', SECRET); }
@@ -49,25 +50,24 @@ export function createSession(user, req) {
 }
 export function sign(user, sessionId) { return jwt.sign({ id: user.id, sid: sessionId }, SECRET, { expiresIn: `${tokenLifeDays()}d` }); }
 export function revokeSession(id) { db.sessions.removeById(id); }
+export function pruneSessions() { return db.sessions.prune(now() - sessionTtlMs()); }
 export function revokeOtherSessions(userId, keepId) { db.sessions.removeByIds(db.sessions.byUser(userId).filter(s => s.id !== keepId).map(s => s.id)); }
 
 export function publicUser(u) {
-  return { id: u.id, email: u.email, displayName: u.display_name || (u.email || '').split('@')[0], isAdmin: !!u.is_admin, isOwner: !!u.is_owner, twoFactor: !!u.totp_enabled, prefs: u.prefs || {}, instructions: u.instructions || '', savedPrompts: Array.isArray(u.saved_prompts) ? u.saved_prompts : [], personas: Array.isArray(u.personas) ? u.personas : [], styles: Array.isArray(u.styles) ? u.styles : [], memory: u.memory || '', memoryUpdatedAt: u.memory_updated_at || 0 };
+  return { id: u.id, email: u.email, displayName: u.display_name || (u.email || '').split('@')[0], isAdmin: !!u.is_admin, isOwner: !!u.is_owner, role: roleOf(u), canPublish: canPublish(u), twoFactor: !!u.totp_enabled, prefs: u.prefs || {}, instructions: u.instructions || '', savedPrompts: Array.isArray(u.saved_prompts) ? u.saved_prompts : [], personas: Array.isArray(u.personas) ? u.personas : [], styles: Array.isArray(u.styles) ? u.styles : [] };
 }
 
 function resolveToken(token) {
   let payload;
   try { payload = jwt.verify(token, SECRET); } catch { return null; }
+  if (!payload?.sid) return null;
   const u = db.users.byId(payload.id);
   if (!u) return null;
-  if (payload.sid) {
-    const s = db.sessions.byId(payload.sid);
-    if (!s || s.user_id !== u.id) return null;
-    if (now() - (s.last_seen || 0) > sessionTtlMs()) { db.sessions.removeById(s.id); return null; }
-    if (Date.now() - (s.last_seen || 0) > 60 * 1000) db.sessions.touch(s.id, now());
-    return { user: u, sessionId: s.id };
-  }
-  return { user: u, sessionId: null };
+  const s = db.sessions.byId(payload.sid);
+  if (!s || s.user_id !== u.id) return null;
+  if (now() - (s.last_seen || 0) > sessionTtlMs()) { db.sessions.removeById(s.id); return null; }
+  if (Date.now() - (s.last_seen || 0) > 60 * 1000) db.sessions.touch(s.id, now());
+  return { user: u, sessionId: s.id };
 }
 
 export function authMiddleware(req, res, next) {
@@ -80,6 +80,11 @@ export function authMiddleware(req, res, next) {
 
 export function adminOnly(req, res, next) {
   if (!req.user?.is_admin) return res.status(403).json({ error: 'forbidden' });
+  next();
+}
+
+export function publisherOnly(req, res, next) {
+  if (!canPublish(req.user)) return res.status(403).json({ error: 'Publishing needs the publisher role. Ask a publisher or the owner.' });
   next();
 }
 

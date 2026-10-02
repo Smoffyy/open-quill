@@ -1,37 +1,43 @@
 # Getting Started
 
-For installation (Node.js, `npm run install:all`, `npm run build`, `npm start`) see the [root README](../README.md#setup). This page picks up once the server is running.
+This page picks up once the server is running. For installing, see the [root README](../README.md#up-and-running).
 
 ## Creating your account
 
-Open the app and you'll land on the sign-in screen. On a brand-new install there are no accounts yet, so the screen forces **Create account** mode. The first account you create becomes the **owner**, with full admin rights. Every account after that follows whatever the admin has configured (open signup, or invite-only).
+Open the app and you land on the sign-in screen. On a fresh install there are no accounts yet, so it opens on **Create account**. The first account becomes the **owner**, with every admin right. Whether anyone else can sign up is up to you, decided in the setup guide below and changeable later under **Admin Panel → Members → Accept new sign-ups**.
 
-If two-factor authentication is enabled on an account, signing in asks for a 6-digit authenticator code (or a recovery code) after the password.
+If an account has two-factor authentication on, signing in asks for a 6-digit code from the authenticator app, or a recovery code, after the password.
 
-## Choosing an interface preset (admins, first run)
+## The setup guide
 
-The first time an admin signs in, a **Choose your interface** modal appears, offering two complete looks:
+The first time the owner signs in, a short setup guide walks through the basics. Every step can be skipped and done later in the Admin Panel.
 
-- **Anthropic-style**, with a serif assistant voice and a warm cream/black palette.
-- **OpenAI-style**, sans-serif, with a pill-shaped composer and a pure black/white palette.
+1. **Basics**: name the workspace and choose who can create an account (anyone who can reach this server, or only you for now).
+2. **Connect a model**: choose whether the model runs **on this machine** (free, nothing leaves your computer) or is **a paid service** that needs an API key. Enter the address, then **Check the connection**.
+3. **Choose your models**: Open Quill lists every model the backend reports. Tick the ones you want.
+4. **What does it cost?**: optional per-model input and output prices, used for the usage and spend numbers. Leave them empty for local models.
+5. **Look**: choose a starting layout, Anthropic-style or OpenAI-style. You can change it any time under **Admin Panel → Interface**.
 
-Pick one and it applies instantly for every connected user. This isn't permanent. Change it any time from **Admin Panel → Appearance**, and it takes effect live for everyone with the app open.
+When it finishes, the models are published and everyone can start chatting.
 
-## Connecting a model
+## Connecting a model later
 
-Nothing works until a model provider is configured. As an admin:
+If you skipped the guide, or want to add another backend:
 
-1. Start your inference server (llama.cpp is the primary target; see [root README](../README.md#connecting-your-model)).
-2. Open the profile menu (bottom-left) → **Admin Panel → Providers**, and set the base URL and API key.
-3. Open **Admin Panel → Models**, add a model, and set its **internal model name** to whatever id your server expects.
-4. Give it a display name, description, icon, and (optionally) a system prompt, then **Push to all clients**.
+1. Start your model server. llama.cpp, Ollama, LM Studio and vLLM all work locally.
+2. Open the profile menu (bottom-left) → **Admin Panel → Providers** → **Add connection**. Pick the type, check the base URL, add a key if the service needs one and press **Test**.
+3. Press **Discover** to list the models the backend reports, and add the ones you want. Or go to **Admin Panel → Models → Add model** and enter the model id by hand.
+4. Open **Review changes** in the top bar and **Publish**. Until then, members do not see the new models.
 
-Once at least one model is published, it appears in the model picker for every user and chatting can begin. See [Models & Reasoning](models.md) for what each model setting does from a user's perspective, and [Admin Guide](admin-guide.md) for the full editor reference.
+Cloud providers live on public addresses, which Open Quill blocks by default. Before a cloud connection will work, either add its host to the allowlist or turn off **Block public internet** under **Admin Panel → Network**.
+
+See [Models & Reasoning](models.md) for what members see in the picker, and the [Admin Guide](admin-guide.md) for every model setting.
 
 ## Your first chat
 
-- The **home screen** shows a greeting and, if configured, quick-prompt buttons. Click one or just start typing in the composer.
-- Type a message and press **Enter** to send (**Shift+Enter** for a newline).
-- The reply streams in token by token. Once it's a few messages long, the app auto-generates a title for the chat.
+- The **home screen** shows a greeting, the composer and, if set up, a row of starter prompts. Click one or just start typing.
+- Press **Enter** to send and **Shift+Enter** for a new line.
+- The reply streams in as it is written. The chat gets a title automatically after the first reply, unless an admin has turned chat titles off.
+- The model picker sits at the bottom right of the composer (top left of the chat in the OpenAI layout).
 
-From here, [Chatting](chatting.md) and [The Composer](composer.md) cover the rest of day-to-day use.
+From here, [Chatting](chatting.md) and [The Composer](composer.md) cover day-to-day use.

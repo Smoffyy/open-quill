@@ -2,10 +2,11 @@ import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from 're
 import { createPortal } from 'react-dom';
 import Markdown, { ReasonSegs } from './Markdown.jsx';
 import { copyText } from '../../lib/clipboard.js';
-import { openLightbox } from '../../lib/lightbox.js';
+import { openFilePreview, previewKind } from '../../lib/filepreview.js';
 import ReasoningBlock from './ReasoningBlock.jsx';
 import BranchCompare from './BranchCompare.jsx';
 import ToolCard from './ToolCard.jsx';
+import { ModelMark } from '../ui/Weave.jsx';
 import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash, Dots, Steer, Speaker, SpeakerOff } from '../ui/icons.jsx';
 import { api } from '../../lib/api.js';
 import { extLabel } from '../../lib/files.js';
@@ -96,17 +97,17 @@ function Attachments({ items, pins, onTogglePinFile }) {
   const pinnedUrls = new Set((pins || []).map(p => p.url));
   return (
     <div className="msg-attachments">
-      {items.map((a, i) => a.type && a.type.startsWith('image/') ? (
-        <button key={i} className="att image" onClick={() => openLightbox(a.url, a.name)} aria-label={t('Open image {name}', { name: a.name })}><img src={a.url} alt={a.name} loading="lazy" decoding="async" /></button>
+      {items.map((a, i) => previewKind(a.name, a.type) === 'image' ? (
+        <button key={i} className="att image" onClick={() => openFilePreview(a)} aria-label={t('Open image {name}', { name: a.name })}><img src={a.url} alt={a.name} loading="lazy" decoding="async" /></button>
       ) : (
         <div key={i} className={'att file' + (pinnedUrls.has(a.url) ? ' pinned-file' : '')}>
-          <a className="att-link" href={a.url} target="_blank" rel="noreferrer" title={a.name}>
+          <button type="button" className="att-link" onClick={() => openFilePreview(a)} title={a.name} aria-label={t('Open file {name}', { name: a.name })}>
             <span className="att-name">{a.name}</span>
             <span className="att-foot">
               <FileText style={{ width: 13 }} />
               <span className="att-type">{extLabel(a.name)}</span>
             </span>
-          </a>
+          </button>
           {onTogglePinFile && (
             <button className={'att-pin' + (pinnedUrls.has(a.url) ? ' on' : '')} title={pinnedUrls.has(a.url) ? t('Unpin from chat') : t('Pin to chat (keep in context)')} aria-label={pinnedUrls.has(a.url) ? t('Unpin from chat') : t('Pin to chat')} aria-pressed={pinnedUrls.has(a.url)} onClick={() => onTogglePinFile(a)}><Pin style={{ width: 13 }} /></button>
           )}
@@ -169,7 +170,7 @@ function StatusCaption({ swapKey, label, detail }) {
   );
 }
 
-const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name, nameHoverOnly, crossfade, statusKey, statusLabel, statusDetail }, ref) {
+const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name, nameHoverOnly, statusKey, statusLabel, statusDetail }, ref) {
   const base = model?.staticIcon || '';
   const map = {
     static: base,
@@ -180,12 +181,12 @@ const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, nam
   if (!base && !name && !statusLabel) return null;
   const anim = phase === 'generating' ? (model?.generatingAnim || 'none') : phase === 'thinking' ? (model?.thinkingAnim || 'none') : '';
   const cls = anim === 'none' ? '' : anim;
-  const sz = model?.iconSize > 0 ? model.iconSize : 40;
+  const sz = model?.iconSize > 0 ? model.iconSize : 50;
   return (
     <div ref={ref} className={'msg-icon' + (below ? ' below' : '') + (name ? ' with-name' : '')}>
-      {base && <img src={src} className={cls} style={{ width: sz, height: sz }} alt="" aria-hidden="true" />}
+      {base && <ModelMark src={src} state={phase} className={cls} style={{ width: sz, height: sz }} />}
       {name && <span className={'msg-icon-name' + (nameHoverOnly ? ' hover-reveal' : '')}>{name}</span>}
-      <StatusCaption swapKey={crossfade ? statusKey : null} label={statusLabel} detail={statusDetail} />
+      <StatusCaption swapKey={statusKey} label={statusLabel} detail={statusDetail} />
     </div>
   );
 });
@@ -231,7 +232,7 @@ function SteerChips({ notes }) {
   );
 }
 
-function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onEditAssistant, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, statusDelay = true, showSpeed = false, preset = 'anthropic', modern = false }) {
+function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onEditAssistant, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, statusDelay = true, showSpeed = false, preset = 'anthropic', fadeWords = false }) {
   if (chatEnded) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onEditAssistant = null; onFork = null; onDelete = null; }
   if (!chatId) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onEditAssistant = null; onFork = null; onTogglePin = null; }
   const [typing, setTyping] = useState(false);
@@ -342,26 +343,8 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
       if (el) { el.style.transition = ''; el.style.transform = ''; }
       return;
     }
-    if (!modern) {
-      // The one the legacy motion has always had: a single catch-up slide the
-      // first time the reply pushes the avatar, then it rides with the text.
-      const top = el.offsetTop;
-      const was = iconSlide.current;
-      if (was === null) { iconSlide.current = { top, done: false }; return; }
-      if (was.done) return;
-      const step = was.top - top;
-      if (Math.abs(step) <= 0.5) return;
-      was.done = true;
-      el.style.transition = 'none';
-      el.style.transform = `translateY(${step}px)`;
-      requestAnimationFrame(() => {
-        el.style.transition = 'transform .6s cubic-bezier(.16,1,.3,1)';
-        el.style.transform = '';
-      });
-      return;
-    }
     glideIcon();
-  }, [pos, streaming, modern, glideIcon, msg.content, msg.reasoning, phase, liveCall, liveCalls]);
+  }, [pos, streaming, glideIcon, msg.content, msg.reasoning, phase, liveCall, liveCalls]);
 
   // A code block's highlighting, a lazily loaded image, a tool card opening: all
   // of them move the avatar without a render of this component, which would
@@ -369,13 +352,13 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   // that lands into a jump. Watching the body catches the move where it happens.
   useLayoutEffect(() => {
     const el = iconRef.current;
-    if (!modern || pos !== 'below' || !streaming || !el || typeof ResizeObserver === 'undefined') return;
+    if (pos !== 'below' || !streaming || !el || typeof ResizeObserver === 'undefined') return;
     const body = el.parentElement;
     if (!body) return;
     const ro = new ResizeObserver(glideIcon);
     ro.observe(body);
     return () => ro.disconnect();
-  }, [modern, pos, streaming, glideIcon]);
+  }, [pos, streaming, glideIcon]);
 
   const [fb, setFb] = useState(msg.feedback || 0);
   useEffect(() => { setFb(msg.feedback || 0); }, [msg.id]);
@@ -445,7 +428,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   const showStatus = streaming && !msg.content && !msg.reasoning && !liveRows.length && statusInfo.show;
   const icon = showIt ? <ModelIcon ref={iconRef} model={model} phase={iconPhase} below={pos === 'below'} name={pos === 'left' ? null : (hasName ? model.displayName : null)}
     nameHoverOnly={pos !== 'left' && hasName && !showName}
-    crossfade={modern} statusKey={statusInfo.key} statusLabel={showStatus ? statusInfo.label : null} statusDetail={statusInfo.detail} /> : null;
+    statusKey={statusInfo.key} statusLabel={showStatus ? statusInfo.label : null} statusDetail={statusInfo.detail} /> : null;
 
   async function rate(r) {
     const next = fb === r ? 0 : r;
@@ -473,7 +456,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
             </>
           ) : msg.content ? (
             <ReasonSegs.Provider value={segCtx}>
-              <Markdown streaming={streaming} reveal={modern && streaming}>{msg.content}</Markdown>
+              <Markdown streaming={streaming} reveal={fadeWords && streaming}>{msg.content}</Markdown>
             </ReasonSegs.Provider>
           ) : null}
           {streaming && liveRows.length > 0 && (
@@ -489,7 +472,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
           <button className="action-btn" onClick={doCopy} title={t("Copy what's written so far")} aria-label={t("Copy what's written so far")}>{copied ? <Check /> : <Copy />}</button>
         </div>
       )}
-      {!streaming && msg.content && !editing && (
+      {!streaming && (msg.content || msg.truncated) && !editing && (
         <div className="actions">
           <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
           <button className={'action-btn' + (speaking ? ' on' : '')} onClick={toggleSpeak} title={speaking ? t("Stop speaking") : t("Read aloud")} aria-label={speaking ? t("Stop speaking") : t("Read aloud")} aria-pressed={speaking}>{speaking ? <SpeakerOff /> : <Speaker />}</button>
@@ -509,7 +492,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
                 <div className="retry-menu-label">{t("Retry with")}</div>
                 {models.map(mm => (
                   <button key={mm.id} role="menuitem" className={mm.id === currentId ? 'on' : ''} onClick={() => { setRetryMenu(false); onRegenerateWith(msg.id, mm.id); }}>
-                    {mm.staticIcon && <img src={mm.staticIcon} alt="" aria-hidden="true" />}{mm.displayName}{mm.id === currentId && <Check style={{ width: 13, marginLeft: 'auto' }} />}
+                    <ModelMark src={mm.staticIcon} />{mm.displayName}{mm.id === currentId && <Check style={{ width: 13, marginLeft: 'auto' }} />}
                   </button>
                 ))}
               </div>, document.body)}
@@ -525,7 +508,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
           {showSpeed && <SpeedChip speed={msg.speed} />}
           {(() => { const ti = fmtTime(msg.created_at); return ti ? <span className="msg-time" data-full={ti.full}>{ti.short}</span> : null; })()}
           {canContinue && onContinue && (
-            <button className="action-btn continue-act" onClick={onContinue} title={t("Pick up where this reply stopped")}>
+            <button className="action-btn continue-act" onClick={() => onContinue(msg.id)} title={t("Pick up where this reply stopped")}>
               <Retry style={{ width: 14 }} /> {t("Continue")}
             </button>
           )}
@@ -537,9 +520,9 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   );
 
   if (pos === 'left') {
-    const gutter = model?.iconSize > 0 ? model.iconSize : 40;
+    const gutter = model?.iconSize > 0 ? model.iconSize : 50;
     return (
-      <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant icon-left' + (streaming ? ' streaming-msg' : '') + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
+      <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant icon-left' + (streaming ? ' streaming-msg' : '') + (msg._enter ? ' enter' : '') + (!streaming && (msg.content || msg.truncated) ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
         {icon && <div className="il-avatar" style={{ left: -(gutter + 14) }}>{icon}</div>}
         {hasName && <div className={'assistant-name' + (showName ? '' : ' hover-reveal')}>{model.displayName}</div>}
         {inner}
@@ -548,7 +531,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   }
 
   return (
-    <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant' + (streaming ? ' streaming-msg' : '') + (msg._enter ? ' enter' : '') + (!streaming && msg.content ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
+    <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant' + (streaming ? ' streaming-msg' : '') + (msg._enter ? ' enter' : '') + (!streaming && (msg.content || msg.truncated) ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
       {pos === 'above' && icon}
       {inner}
       {pos === 'below' && icon}

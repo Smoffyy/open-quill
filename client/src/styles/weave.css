@@ -1,0 +1,6 @@
+.weave {
+  display: block;
+  flex-shrink: 0;
+  color: var(--text);
+  cursor: pointer;
+}

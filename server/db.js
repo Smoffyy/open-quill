@@ -4,7 +4,7 @@ import Database from 'better-sqlite3-multiple-ciphers';
 import { DATA_ROOT, dataPath } from './lib/dataroot.js';
 import { migrate } from './db/schema.js';
 import { makeCollection, bumpTable } from './db/collection.js';
-import { BRAND_ICON, BRAND_GENERATING, BRAND_THINKING, BRAND_ICON_FIELDS, remapBrandPath } from './lib/brand.js';
+import { BRAND_ICON_FIELDS, LEGACY_MARK_SET, MODEL_WEAVE, remapBrandPath, retireLegacyMark } from './lib/brand.js';
 
 const DATA_DIR = DATA_ROOT;
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -83,7 +83,7 @@ const searchStmt = sdb.prepare(`
   WHERE c.user_id = ?
     AND json_extract(m.data,'$.content') IS NOT NULL
     AND oq_icontains(json_extract(m.data,'$.content'), ?)
-  ORDER BY m.created_at
+  ORDER BY m.created_at DESC
   LIMIT ?`);
 messagesCol.searchForUser = (userId, needle, limit = 5000) => searchStmt.all(userId, needle, limit);
 
@@ -95,21 +95,25 @@ const lastUserStmt = sdb.prepare(`
   ORDER BY created_at DESC LIMIT 1`);
 messagesCol.lastUserText = chatId => lastUserStmt.get(chatId)?.content || '';
 
-const attachUrlStmt = sdb.prepare(`
-  SELECT DISTINCT json_extract(a.value,'$.url') AS url
-  FROM messages m, json_each(json_extract(m.data,'$.attachments')) a
-  WHERE json_type(m.data,'$.attachments') = 'array'`);
-messagesCol.attachmentUrls = () => {
-  const out = new Set();
-  for (const r of attachUrlStmt.all()) if (r.url) out.add(r.url);
-  return out;
-};
+const mentionStmt = sdb.prepare('SELECT 1 FROM messages WHERE instr(data, ?) > 0 LIMIT 1');
+messagesCol.mentions = text => !!(text && mentionStmt.get(String(text)));
 
 const chatsCol = collection('chats');
 const byUserStmt = sdb.prepare('SELECT data FROM chats WHERE user_id=?');
 chatsCol.byUser = userId => byUserStmt.all(userId).map(r => JSON.parse(r.data));
 const byUserRecentStmt = sdb.prepare('SELECT data FROM chats WHERE user_id=? ORDER BY updated_at DESC LIMIT ?');
 chatsCol.recentByUser = (userId, limit) => byUserRecentStmt.all(userId, limit).map(r => JSON.parse(r.data));
+const listByUserStmt = sdb.prepare(`
+  SELECT id, updated_at,
+    json_extract(data,'$.title') AS title, json_extract(data,'$.starred') AS starred,
+    json_extract(data,'$.archived') AS archived, json_extract(data,'$.project_id') AS project_id,
+    json_extract(data,'$.ended') AS ended
+  FROM chats WHERE user_id=? ORDER BY updated_at DESC`);
+chatsCol.listByUser = userId => listByUserStmt.all(userId);
+const projectCountsStmt = sdb.prepare(`
+  SELECT json_extract(data,'$.project_id') AS project_id, count(*) AS n
+  FROM chats WHERE user_id=? AND json_extract(data,'$.project_id') IS NOT NULL GROUP BY 1`);
+chatsCol.projectCounts = userId => new Map(projectCountsStmt.all(userId).map(r => [r.project_id, r.n]));
 const byUserOldestStmt = sdb.prepare('SELECT data FROM chats WHERE user_id=? ORDER BY updated_at ASC');
 chatsCol.oldestByUser = userId => byUserOldestStmt.all(userId).map(r => JSON.parse(r.data));
 
@@ -140,6 +144,7 @@ const USAGE_SUMS = `
   COUNT(*) AS count,
   COALESCE(SUM(json_extract(data,'$.prompt')), 0) AS prompt,
   COALESCE(SUM(json_extract(data,'$.completion')), 0) AS completion,
+  COALESCE(SUM(json_extract(data,'$.cache_read')), 0) AS cached,
   COALESCE(SUM(json_extract(data,'$.cost')), 0) AS cost`;
 const usageTotalsStmt = sdb.prepare(`
   SELECT ${USAGE_SUMS}, COUNT(DISTINCT COALESCE(user_id, 'unknown')) AS users
@@ -159,7 +164,7 @@ usageCol.report = (since) => {
   const t = usageTotalsStmt.get(from) || {};
   const num = (v) => Number(v) || 0;
   return {
-    totals: { count: num(t.count), prompt: num(t.prompt), completion: num(t.completion), cost: num(t.cost), users: num(t.users) },
+    totals: { count: num(t.count), prompt: num(t.prompt), completion: num(t.completion), cached: num(t.cached), cost: num(t.cost), users: num(t.users) },
     byUser: usageByUserAggStmt.all(from).map(r => ({ userId: r.user_id || 'unknown', count: num(r.count), prompt: num(r.prompt), completion: num(r.completion), cost: num(r.cost) })),
     byModel: usageByModelAggStmt.all(from).map(r => ({ modelId: r.model_id || 'unknown', name: r.model_name || '', count: num(r.count), prompt: num(r.prompt), completion: num(r.completion), cost: num(r.cost) })),
     byDay: usageByDayAggStmt.all(from).map(r => ({ day: r.day, prompt: num(r.prompt), completion: num(r.completion), cost: num(r.cost) }))
@@ -176,6 +181,8 @@ const sessionsByUserStmt = sdb.prepare('SELECT data FROM sessions WHERE user_id=
 sessionsCol.byUser = userId => sessionsByUserStmt.all(userId).map(r => JSON.parse(r.data));
 const touchSessionStmt = sdb.prepare('UPDATE sessions SET last_seen=?, data=json_set(data,\'$.last_seen\',?) WHERE id=?');
 sessionsCol.touch = (id, ts) => { try { touchSessionStmt.run(ts, ts, id); } catch {} };
+const pruneSessionsStmt = sdb.prepare('DELETE FROM sessions WHERE last_seen < ?');
+sessionsCol.prune = before => { try { const n = pruneSessionsStmt.run(before).changes; if (n) bumpTable('sessions'); return n; } catch { return 0; } };
 
 const auditCol = collection('audit');
 const auditRecentStmt = sdb.prepare('SELECT data FROM audit ORDER BY ts DESC LIMIT ? OFFSET ?');
@@ -245,6 +252,18 @@ const tasksDueStmt = sdb.prepare('SELECT data FROM tasks WHERE next_run>0 AND ne
 tasksCol.byUser = userId => tasksByUserStmt.all(userId).map(r => JSON.parse(r.data));
 tasksCol.due = (at, limit) => tasksDueStmt.all(at, limit || 20).map(r => JSON.parse(r.data));
 
+const releasesCol = collection('releases');
+const releaseHeadStmt = sdb.prepare('SELECT data FROM releases ORDER BY version DESC LIMIT 1');
+const releaseByVersionStmt = sdb.prepare('SELECT data FROM releases WHERE version=?');
+const releasePageStmt = sdb.prepare("SELECT json_remove(data,'$.snapshot') AS data FROM releases ORDER BY version DESC LIMIT ? OFFSET ?");
+const releaseCountStmt = sdb.prepare('SELECT count(*) AS n FROM releases');
+const releasePruneStmt = sdb.prepare('DELETE FROM releases WHERE version <= ?');
+releasesCol.head = () => { const r = releaseHeadStmt.get(); return r ? JSON.parse(r.data) : null; };
+releasesCol.byVersion = v => { const r = releaseByVersionStmt.get(Number(v) || 0); return r ? JSON.parse(r.data) : null; };
+releasesCol.page = (limit, offset) => releasePageStmt.all(limit, offset).map(r => JSON.parse(r.data));
+releasesCol.total = () => releaseCountStmt.get().n;
+releasesCol.pruneThrough = v => { try { const n = releasePruneStmt.run(v).changes; if (n) bumpTable('releases'); return n; } catch { return 0; } };
+
 export const db = {
   users: usersCol,
   chats: chatsCol,
@@ -258,7 +277,9 @@ export const db = {
   feedback: feedbackCol,
   toolStats: toolStatsCol,
   tasks: tasksCol,
-  skills: skillsCol
+  skills: skillsCol,
+  releases: releasesCol,
+  draftEdits: collection('draft_edits')
 };
 
 const sGet = sdb.prepare('SELECT value FROM settings WHERE key=?');
@@ -267,6 +288,9 @@ const sDel = sdb.prepare('DELETE FROM settings WHERE key=?');
 const sKeys = sdb.prepare('SELECT key FROM settings WHERE key LIKE ?');
 
 const settingsCache = new Map();
+let settingsRev = 0;
+
+export const settingsVersion = () => settingsRev;
 
 export function getSetting(key, fallback = null) {
   if (settingsCache.has(key)) {
@@ -284,11 +308,13 @@ export function getSetting(key, fallback = null) {
 export function setSetting(key, value) {
   sSet.run(key, JSON.stringify(value));
   settingsCache.set(key, value);
+  settingsRev++;
 }
 
 export function delSetting(key) {
   sDel.run(key);
   settingsCache.delete(key);
+  settingsRev++;
 }
 
 export function settingKeysWithPrefix(prefix) {
@@ -317,7 +343,7 @@ if (!getSetting('seeded')) {
     internal_name: 'local-model', system_prompt: 'You are a helpful assistant.', provider_id: pid,
     has_reasoning: 0, reasoning_token: '', non_reasoning_token: '',
     in_more_models: 0, more_models_label: 'More models',
-    static_icon: BRAND_ICON, generating_icon: BRAND_GENERATING, thinking_icon: BRAND_THINKING, icon_position: 'below', sort_order: 0, enabled: 1
+    static_icon: MODEL_WEAVE, generating_icon: MODEL_WEAVE, thinking_icon: MODEL_WEAVE, icon_position: 'below', sort_order: 0, enabled: 1
   });
   setSetting('seeded', '1');
 }
@@ -334,6 +360,35 @@ if (!getSetting('brand_paths_v2')) {
   const icon = getSetting('app_icon', '');
   if (icon && remapBrandPath(icon) !== icon) setSetting('app_icon', remapBrandPath(icon));
   setSetting('brand_paths_v2', '1');
+}
+
+if (!getSetting('model_weave_v1')) {
+  for (const m of db.models.all()) {
+    if (m.static_icon === LEGACY_MARK_SET[0] && m.generating_icon === LEGACY_MARK_SET[1] && m.thinking_icon === LEGACY_MARK_SET[2]) {
+      db.models.update(m.id, { static_icon: MODEL_WEAVE, generating_icon: MODEL_WEAVE, thinking_icon: MODEL_WEAVE });
+    }
+  }
+  setSetting('model_weave_v1', '1');
+}
+
+if (!getSetting('legacy_mark_v1')) {
+  for (const m of db.models.all()) {
+    const patch = {};
+    for (const f of BRAND_ICON_FIELDS) {
+      const next = retireLegacyMark(m[f]);
+      if (next !== m[f]) patch[f] = next;
+    }
+    if (Object.keys(patch).length) db.models.update(m.id, patch);
+  }
+  if (LEGACY_MARK_SET.includes(getSetting('app_icon', ''))) setSetting('app_icon', '');
+  setSetting('legacy_mark_v1', '1');
+}
+
+if (!getSetting('publish_role_v1')) {
+  for (const u of db.users.all()) {
+    if (u.is_admin && !u.is_owner && u.can_publish === undefined) db.users.update(u.id, { can_publish: 1 });
+  }
+  setSetting('publish_role_v1', '1');
 }
 
 export default db;

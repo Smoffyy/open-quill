@@ -3,23 +3,28 @@ import path from 'path';
 import { WebSocketServer } from 'ws';
 import { db, uid, now, getSetting } from '../../db.js';
 import { sessionFromRequest } from '../../auth.js';
-import { buildMessages, streamCompletion } from '../../llm/index.js';
+import { buildMessages, streamCompletion, canPrefill, refusePrefill } from '../../llm/index.js';
 import * as websearch from '../websearch.js';
 import * as sandbox from '../../sandbox.js';
 import { UPLOADS } from '../uploads.js';
 import { ensureChain, activePath } from '../tree.js';
-import { resolveModel, roleLimit } from '../models.js';
+import { resolveModel } from '../models.js';
 import { applyKwargs } from '../kwargs.js';
-import { budgetStatus } from '../budget.js';
+import { budgetStatus, recordUsage } from '../budget.js';
 import { runQueued } from '../queue.js';
-import { maybeUpdateMemory } from '../memory.js';
-import { promptVars, styleTextFor } from '../convo.js';
+import { styleTextFor, CUT_NOTE } from '../convo.js';
+import { resumeTurn, createStitcher, isPrefillRefusal } from '../resume.js';
+import { systemPrompt } from '../systemprompt.js';
+import { cleanClient, rememberClient } from '../memberctx.js';
 
 import { clients, requestedKwargs } from './broadcast.js';
 import { runCompletion } from './turn.js';
 import * as live from './live.js';
 import { isRouter, resolveRouted } from '../router.js';
 import { sameOrigin } from '../origin.js';
+import { sandboxCap } from '../workspacefiles.js';
+import { liveVersion } from '../releases.js';
+import { setPresence, presenceList, broadcastPresence } from './presence.js';
 
 // A frame this large is already far beyond any real composer paste; the cap exists so a
 // hostile client cannot make the server buffer an arbitrary amount before we ever look
@@ -46,14 +51,6 @@ function sanitizeAttachments(list) {
   return out;
 }
 
-function lastUserContent(chatId) {
-  try {
-    const rows = db.messages.byChat(chatId) || [];
-    for (let i = rows.length - 1; i >= 0; i--) if (rows[i].role === 'user') return rows[i].content || '';
-  } catch {}
-  return '';
-}
-
 export function initWs(server) {
   // The session cookie alone is not enough to authorise a socket: SameSite does not
   // reliably cover the websocket handshake in every browser, so a hostile page could
@@ -71,15 +68,18 @@ export function initWs(server) {
 
   wss.on('connection', (ws, req) => {
     const r = sessionFromRequest(req);
-    const u = r?.user;
+    let u = r?.user;
     if (!u) { ws.close(); return; }
     ws.isAlive = true;
     ws.on('pong', () => { ws.isAlive = true; });
     clients.set(ws, { userId: u.id, sessionId: r.sessionId || null, isAdmin: !!u.is_admin, aborts: new Map(), steers: new Map(), stops: new Set() });
     const safeSend = (s) => { if (ws.readyState === 1) { try { ws.send(s); } catch {} } };
-    const liveSend = (s) => live.sendLive(u.id, s);
-    const liveState = { aborts: live.aborts, steers: live.steers, stops: live.stops };
+    const userId = u.id;
+    const liveSend = (s) => live.sendLive(userId, s);
+    const liveState = { aborts: live.aborts, steers: live.steers, stops: live.stops, interactive: true };
     const liveWs = { readyState: 1, send: liveSend };
+    safeSend(JSON.stringify({ type: 'hello', configVersion: liveVersion() }));
+    if (u.is_admin) safeSend(JSON.stringify({ type: 'presence', admins: presenceList() }));
     {
       const pending = live.snapshotsFor(u.id);
       if (pending.length) safeSend(JSON.stringify({ type: 'resume', turns: pending }));
@@ -90,13 +90,21 @@ export function initWs(server) {
       if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') return;
       const state = clients.get(ws);
       if (!state) return;
+      const fresh = db.users.byId(userId);
+      if (!fresh) { ws.close(); return; }
+      u = fresh;
+      state.isAdmin = !!u.is_admin;
       const ownsChat = (chatId) => {
         if (typeof chatId !== 'string' || !chatId || chatId === 'incognito') return false;
         const c = db.chats.byId(chatId);
         return !!c && c.user_id === state.userId;
       };
+      if (msg.type === 'presence') {
+        setPresence(state, msg.at);
+        return;
+      }
       if (msg.type === 'stop') {
-        const own = msg.chatId === 'incognito' ? state : (ownsChat(msg.chatId) ? liveState : null);
+        const own = msg.chatId === 'incognito' ? state : (ownsChat(msg.chatId) && live.activeTurn(msg.chatId) ? liveState : null);
         if (!own) return;
         own.steers.delete(msg.chatId);
         // Recorded before aborting: the controller may already be spent (a stop
@@ -104,6 +112,13 @@ export function initWs(server) {
         if (own.stops) own.stops.add(msg.chatId);
         const c = own.aborts.get(msg.chatId);
         if (c) { c.abort(); own.aborts.delete(msg.chatId); }
+        return;
+      }
+      if (msg.type === 'answer') {
+        if (!ownsChat(msg.chatId)) return;
+        if (msg.skip === true) { live.answerQuestion(msg.chatId, { skipped: true }); return; }
+        const text = typeof msg.text === 'string' ? msg.text.trim().slice(0, 4000) : '';
+        if (text) live.answerQuestion(msg.chatId, { answer: text });
         return;
       }
       if (msg.type === 'steer') {
@@ -119,36 +134,61 @@ export function initWs(server) {
         c.abort();
         return;
       }
+      const client = cleanClient(msg.client);
+      rememberClient(u, client);
       if (msg.type === 'incognito') {
         try {
           const baseModel = resolveModel(msg.modelId, state.isAdmin);
           const model = applyKwargs(baseModel, requestedKwargs(msg), state.isAdmin);
           if (!model) { safeSend(JSON.stringify({ type: 'error', error: 'Invalid model.' })); safeSend(JSON.stringify({ type: 'done' })); return; }
           if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', error: (model.unavailable_reason || 'This model is currently unavailable.') })); safeSend(JSON.stringify({ type: 'done' })); return; }
+          const ibs = budgetStatus(u);
+          if (ibs.enforce && ibs.state === 'over') { safeSend(JSON.stringify({ type: 'error', chatId: 'incognito', error: 'You have reached your monthly usage budget. It resets at the start of next month.' })); safeSend(JSON.stringify({ type: 'done', chatId: 'incognito' })); return; }
           if (state.aborts.has('incognito')) { safeSend(JSON.stringify({ type: 'error', chatId: 'incognito', error: 'A reply is already being generated. Wait for it to finish, or stop it first.' })); safeSend(JSON.stringify({ type: 'done', chatId: 'incognito' })); return; }
-          const history = (Array.isArray(msg.messages) ? msg.messages : [])
+          const turns = (Array.isArray(msg.messages) ? msg.messages : [])
             .filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
-            .slice(-MAX_INCOGNITO_TURNS)
-            .map(m => ({ role: m.role, content: m.content.slice(0, MAX_CONTENT) }));
-          if (!history.length || history[history.length - 1].role !== 'user') {
+            .slice(-MAX_INCOGNITO_TURNS);
+          const resumeOf = msg.resume === true && turns.length && turns[turns.length - 1].role === 'assistant' ? turns.pop() : null;
+          const history = turns.map(m => ({ role: m.role, content: m.content.slice(0, MAX_CONTENT) + (m.role === 'assistant' && m.truncated === true ? '\n\n' + CUT_NOTE : '') }));
+          if (!history.length || history[history.length - 1].role !== 'user' || (msg.resume === true && !resumeOf)) {
             safeSend(JSON.stringify({ type: 'error', error: 'Nothing to send.' })); safeSend(JSON.stringify({ type: 'done' })); return;
           }
-          const messages = buildMessages(model, history, !!msg.extended, null, null, promptVars(u.id));
-          const assistantId = 'inc-' + uid();
+          const base = buildMessages(model, history, !!msg.extended, systemPrompt(null, model, {}, { userId: u.id, client }).text);
+          let partial = resumeOf ? resumeOf.content.slice(0, MAX_CONTENT) : '';
+          let plan = resumeOf ? resumeTurn(partial, canPrefill(model)) : null;
+          if (!plan) partial = '';
+          const resumeId = typeof msg.messageId === 'string' && /^inc-[\w-]{1,64}$/.test(msg.messageId) ? msg.messageId : '';
+          const assistantId = (resumeOf && resumeId) || ('inc-' + uid());
           const controller = new AbortController();
           state.aborts.set('incognito', controller);
-          safeSend(JSON.stringify({ type: 'start', chatId: 'incognito', messageId: assistantId }));
+          safeSend(JSON.stringify({ type: 'start', chatId: 'incognito', messageId: assistantId, ...(resumeOf ? { content: partial } : {}) }));
+          let usage = null;
+          let stitcher = createStitcher(partial, plan);
+          const sendContent = (text) => { if (text) safeSend(JSON.stringify({ type: 'content', chatId: 'incognito', text })); };
+          const flush = () => { if (stitcher) { sendContent(stitcher.flush()); stitcher = null; } };
+          const run = () => streamCompletion({
+            model, messages: plan ? base.concat(plan.messages) : base, signal: controller.signal,
+            onEvent: (e) => {
+              if (e.type === 'reasoning') safeSend(JSON.stringify({ type: 'reasoning', chatId: 'incognito', text: e.text }));
+              else if (e.type === 'content') sendContent(stitcher ? stitcher.push(e.text) : e.text);
+              else if (e.type === 'usage') usage = e.usage;
+            }
+          });
           try {
-            await streamCompletion({
-              model, messages, signal: controller.signal,
-              onEvent: (e) => {
-                if (e.type === 'reasoning') safeSend(JSON.stringify({ type: 'reasoning', chatId: 'incognito', text: e.text }));
-                else if (e.type === 'content') safeSend(JSON.stringify({ type: 'content', chatId: 'incognito', text: e.text }));
-              }
-            });
+            try { await run(); }
+            catch (err) {
+              if (plan?.mode !== 'prefill' || !isPrefillRefusal(err)) throw err;
+              refusePrefill(model);
+              plan = resumeTurn(partial, false);
+              stitcher = createStitcher(partial, plan);
+              await run();
+            }
           } catch (err) { if (err.name !== 'AbortError') safeSend(JSON.stringify({ type: 'error', chatId: 'incognito', error: String(err.message || err) })); }
+          flush();
+          recordUsage(u.id, model, usage);
           state.aborts.delete('incognito');
-          safeSend(JSON.stringify({ type: 'done', chatId: 'incognito', messageId: assistantId }));
+          if (state.stops) state.stops.delete('incognito');
+          safeSend(JSON.stringify({ type: 'done', chatId: 'incognito', messageId: assistantId, stopped: controller.signal.aborted }));
         } catch (err) {
           state.aborts.delete('incognito');
           safeSend(JSON.stringify({ type: 'error', chatId: 'incognito', error: String(err.message || err) }));
@@ -156,11 +196,16 @@ export function initWs(server) {
         }
         return;
       }
-      if (msg.type !== 'chat' && msg.type !== 'regenerate' && msg.type !== 'edit') return;
+      if (msg.type !== 'chat' && msg.type !== 'regenerate' && msg.type !== 'edit' && msg.type !== 'continue') return;
       if (typeof msg.chatId !== 'string' || !msg.chatId) return;
       const content = textField(msg.content);
       const attachments = sanitizeAttachments(msg.attachments);
       const messageId = typeof msg.messageId === 'string' ? msg.messageId : '';
+      if (msg.type === 'chat' && !content.trim() && !attachments.length) {
+        safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'Nothing to send.' }));
+        safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId }));
+        return;
+      }
       let ownsTurn = false;
       try {
         const chat = db.chats.byId(msg.chatId);
@@ -169,7 +214,7 @@ export function initWs(server) {
         let routedInfo = null;
         let baseModel = hubModel;
         if (isRouter(hubModel)) {
-          const probe = [{ role: 'user', content: msg.type === 'regenerate' ? lastUserContent(chat.id) : content }];
+          const probe = [{ role: 'user', content: msg.type === 'regenerate' || msg.type === 'continue' ? db.messages.lastUserText(chat.id) : content }];
           const r = resolveRouted(hubModel, probe, attachments, (id) => resolveModel(id, state.isAdmin));
           if (!r.model) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: r.routed?.error || 'This router could not pick a model.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
           baseModel = r.model;
@@ -183,14 +228,19 @@ export function initWs(server) {
         if (bs.enforce && bs.state === 'over') { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'You have reached your monthly usage budget. It resets at the start of next month.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
         if (live.activeTurn(chat.id)) { safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: 'A reply is already being generated in this chat. Wait for it to finish, or stop it first.' })); safeSend(JSON.stringify({ type: 'done', chatId: chat.id })); return; }
 
-        const sandboxCap = roleLimit('sandbox_limit_mb', !!u.is_admin, u.is_admin ? 1024 : 256) * 1024 * 1024;
+        const sandboxLimit = sandboxCap(u);
         const userSandbox = !!msg.sandbox;
         if (!!chat.sandbox !== userSandbox) db.chats.update(chat.id, { sandbox: userSandbox ? 1 : 0 });
         const sandboxOn = userSandbox || !!chat.project_id;
         const webSearchOn = !!msg.webSearch && websearch.webSearchAvailable() && model.web_search_allowed !== 0;
         ensureChain(chat.id);
 
-        if (msg.type === 'regenerate') {
+        let resume = null;
+        if (msg.type === 'continue') {
+          resume = messageId ? db.messages.byId(messageId) : null;
+          const leaf = (db.chats.byId(chat.id) || {}).active_leaf;
+          if (!resume || resume.chat_id !== chat.id || resume.role !== 'assistant' || leaf !== resume.id) { safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: 'Only the latest reply can be continued.' })); safeSend(JSON.stringify({ type: 'done', chatId: chat.id })); return; }
+        } else if (msg.type === 'regenerate') {
           const target = (messageId && db.messages.byId(messageId)) || activePath(chat.id).slice().reverse().find(m => m.role === 'assistant');
           if (!target || target.chat_id !== chat.id) { safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: 'Nothing to regenerate.' })); return; }
           const parent = target.role === 'assistant' ? (target.parent_id ?? null) : target.id;
@@ -214,7 +264,7 @@ export function initWs(server) {
               try {
                 const fname = path.basename(a.url || '');
                 const src = fname ? path.join(UPLOADS, fname) : '';
-                if (src && fs.existsSync(src)) sandbox.importBuffer(sandbox.wsKey(chat), path.basename(a.name || fname || 'file'), fs.readFileSync(src), sandboxCap);
+                if (src && fs.existsSync(src)) sandbox.importBuffer(sandbox.wsKey(chat), path.basename(a.name || fname || 'file'), fs.readFileSync(src), sandboxLimit);
                 else console.warn('[sandbox import] upload not found for', a.name, '->', src);
               } catch (e) { console.warn('[sandbox import] failed for', a && a.name, e.message); }
             }
@@ -230,9 +280,8 @@ export function initWs(server) {
         try {
           await runQueued(queueOn, model.id,
             () => { liveSend(JSON.stringify({ type: 'queued', chatId: chat.id })); },
-            () => runCompletion(liveWs, liveState, liveSend, chat, model, !!msg.extended, sandboxOn, sandboxCap, webSearchOn, !!msg.call, styleText));
+            () => runCompletion(liveWs, liveState, liveSend, chat, model, !!msg.extended, sandboxOn, sandboxLimit, webSearchOn, !!msg.call, { styleText, client, resume }));
         } finally { live.endTurn(chat.id); }
-        maybeUpdateMemory(u.id, model);
       } catch (err) {
         console.error('[ws chat]', err);
         const send = ownsTurn ? liveSend : safeSend;
@@ -252,6 +301,7 @@ export function initWs(server) {
         }
       } catch {}
       clients.delete(ws);
+      if (st?.presence) broadcastPresence();
     });
   });
 

@@ -2,14 +2,14 @@ name: Release
 
 on:
   push:
-    branches: [stable]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-stable
+  group: release-main
   cancel-in-progress: false
 
 jobs:
@@ -32,7 +32,7 @@ jobs:
 
           case "$VERSION" in
             *-*)
-              echo "::error::package.json version $VERSION has a prerelease tail. stable carries bare versions only, like ${VERSION%%-*}."
+              echo "::error::package.json version $VERSION has a prerelease tail. main carries bare versions only, like ${VERSION%%-*}."
               exit 1
               ;;
           esac

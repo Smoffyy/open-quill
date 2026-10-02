@@ -1,5 +1,5 @@
 import { useAdmin } from '../store.jsx';
-import { Card, Rows, Row, ToggleRow, Fields, Field, Input, Seg, Note } from '../ui.jsx';
+import { Card, Rows, Row, ToggleRow, Fields, Field, Input, Seg, Note, SecretInput } from '../ui.jsx';
 import { t } from '../../../i18n.jsx';
 
 // Speech-to-text and text-to-speech take exactly the same three fields, so the
@@ -12,8 +12,9 @@ function Endpoint({ settings, set, prefix, path, urlPlaceholder, modelPlaceholde
           onChange={(e) => set(prefix + 'Url', e.target.value)} />
       </Field>
       <Field label={t('API key')} optional>
-        <Input mono type="password" value={settings[prefix + 'Key'] || ''} placeholder={t('none')}
-          onChange={(e) => set(prefix + 'Key', e.target.value)} />
+        <SecretInput saved={!!settings[prefix + 'KeySaved']} hint={settings[prefix + 'KeyHint'] || ''} label={t('API key')} emptyText={t('none')}
+          onSave={(v) => { set(prefix + 'Key', v); set(prefix + 'KeySaved', true); set(prefix + 'KeyHint', v.length >= 12 ? '\u2026' + v.slice(-4) : ''); }}
+          onRemove={() => { set(prefix + 'Key', null); set(prefix + 'KeySaved', false); set(prefix + 'KeyHint', ''); }} />
       </Field>
       <Field label={t('Model')}>
         <Input mono value={settings[prefix + 'Model'] || ''} placeholder={modelPlaceholder}

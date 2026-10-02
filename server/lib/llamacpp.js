@@ -178,7 +178,7 @@ export function learnImageCost(model, images, measured) {
 }
 
 function wireFor(messages) {
-  return messages.map(m => {
+  const wire = messages.map(m => {
     const out = { role: m.role, content: textOf(m.content) };
     // The same OpenAI shape the completion request uses. Handing /apply-template
     // the raw internal call makes it 500 with "Missing tool call type", and the
@@ -189,6 +189,8 @@ function wireFor(messages) {
     if (m.name) out.name = m.name;
     return out;
   });
+  if (messages.length && messages[messages.length - 1].prefill) wire.push({ role: 'user', content: '' });
+  return wire;
 }
 
 function toolSig(tools) {
@@ -268,6 +270,10 @@ export function parseOverflow(err) {
   const fieldCtx = msg.match(/"n_ctx"\s*:\s*(\d+)/);
   if (fieldPrompt) prompt = asInt(fieldPrompt[1]);
   if (fieldCtx) ctx = asInt(fieldCtx[1]);
+  if (!prompt || !ctx) {
+    const cmp = msg.match(/(\d+)\s*tokens?\s*>\s*(\d+)(?:\s*maximum)?/i);
+    if (cmp) { prompt = prompt || asInt(cmp[1]); ctx = ctx || asInt(cmp[2]); }
+  }
   if (!prompt || !ctx) {
     const pair = msg.match(/\((\d+)\s*tokens?\)[^(]*\((\d+)\s*tokens?\)/);
     if (pair) { prompt = prompt || asInt(pair[1]); ctx = ctx || asInt(pair[2]); }

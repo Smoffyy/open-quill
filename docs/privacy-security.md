@@ -2,42 +2,49 @@
 
 ## Incognito chats
 
-Toggle the ghost icon near the composer (`Alt+I`, or the command palette) to start a temporary chat. While in incognito:
+Press the ghost button at the top right, `Alt+I`, or use the command palette to start an incognito chat. While it is open:
 
-- Nothing is saved to your chat history. Closing it or leaving is permanent and immediate.
-- The sandbox and web search are unavailable.
-- Showcase backgrounds and other per-chat cosmetics are suppressed.
-- Voice calls are disabled.
-- Drafts aren't written to local storage either, unlike a normal chat's autosaved draft.
+- Nothing is saved to your history. Leaving it ends it for good.
+- Sandbox tools, web search and voice calls are unavailable.
+- Model backdrops are not shown.
+- Nothing you type is stored as a draft.
+- Replies cannot be rated, edited or deleted, since nothing is kept.
 
-Leave incognito with the **✕** on its topbar, or by starting/opening a real chat.
+Leave with the close button on the incognito bar, or by opening or starting a normal chat.
 
 ## Two-factor authentication
 
-Set up in **Settings → Security**: scan a QR code with an authenticator app (or type in the secret manually), confirm a code, and you're given one-time recovery codes. Store these somewhere safe, they're the only way back in if you lose the device. From then on, signing in asks for a 6-digit code after your password. 2FA can be disabled (password required) and recovery codes regenerated at any time.
+Set it up under **Settings → Security**. Scan the QR code with an authenticator app, or type the secret in by hand, then confirm with a code. You get one-time recovery codes: keep them somewhere safe, because they are the only way back in if you lose the device. From then on, signing in asks for a 6-digit code after your password. Recovery codes can be regenerated and two-factor can be turned off, both with your password.
 
 ## Sessions
 
-**Settings → Sessions** lists every device currently signed into your account with browser/OS, IP address, and last-active time. Revoke any one of them, or **Revoke all other sessions** if you're not sure what's still logged in somewhere. Sessions also expire on their own after 30 days.
+**Settings → Security → Active sessions** lists every device signed in to your account, with its browser, address and last activity. **Revoke** any one of them, or **Revoke others** to sign out everywhere except here. Sessions end on their own after 30 days without use by default, and an admin can limit how many devices may be signed in at once.
 
-## Account and data deletion
+## Deleting your data
 
-- **Delete all chats** (Settings → General) removes every chat but keeps the account.
-- **Delete account** removes the account and everything tied to it. It's hidden for the workspace owner, since deleting that account would leave the workspace without an admin.
-- An admin can also purge chats or remove a member from **Admin Panel → Members**.
+- **Settings → General → Delete all chats** removes every chat and its files, and keeps your account.
+- **Delete account** removes the account and everything in it. The owner account cannot be deleted, so the workspace always has an owner.
+- **Settings → Memory → Forget everything** clears your saved memories.
+- An admin can remove a member from **Admin Panel → Members**, which deletes that member's chats too.
 
-## Spending limits
+## Spending caps
 
-If an admin has set a budget for your account or the workspace, the composer shows a warning banner as you approach the cap and a blocking banner once you're over it. There's no separate account page for this, it surfaces right where you'd hit it.
+If an admin has set a monthly spending cap, a banner appears above the composer as you approach it. Once you reach it, sending may be paused until next month, depending on how the admin set it up.
 
 ## What leaves the machine
 
-Open Quill is designed to run entirely on your own hardware. Nothing is sent anywhere unless a feature is explicitly configured to reach an external destination:
+Open Quill is built to run entirely on your own hardware. By default nothing is sent anywhere. Traffic leaves only for features someone deliberately set up, and only to the address they gave:
 
-- **Model requests** go to whatever provider URL is configured, a local server by default, or a cloud provider if an admin adds one.
-- **Voice** (dictation/calls) uses whatever speech endpoint is configured, local by default.
-- **Web search** is off unless enabled, and only reaches the SearXNG instance the admin points it at (plus the actual result pages it fetches, which is the point of a search).
-- **Connectors (MCP)** only run servers an admin has explicitly added.
-- **The sandbox** runs code with the same network access as the host machine. A script it runs could make its own requests, same as if you'd run it yourself.
+- **Model requests** go to the provider address configured for each model. That is a local server unless an admin added a cloud provider.
+- **Voice** uses the speech services an admin configured, or your browser's own speech recognition.
+- **Web search** is off unless an admin sets it up, and then only reaches their SearXNG instance, plus the result pages it reads.
+- **MCP servers** run or connect only where an admin, or you under **Settings → MCP**, pointed them.
+- **The sandbox** runs code with the same network access as the machine, so a script it runs can make its own requests.
 
-There's no telemetry, analytics, or crash reporting anywhere in the app. The **Analytics** tab in the admin panel is your own local usage data, computed from your own database, never transmitted. See the [root README](../README.md#privacy-and-local-only-operation) for the technical enforcement behind this (egress guard, CSP, build-time checks).
+Requests to public internet addresses are blocked by default. An admin can see every outbound attempt, and allow specific hosts, under **Admin Panel → Network**.
+
+There is no telemetry, analytics or crash reporting anywhere in the app. The usage numbers in Settings and the Admin Panel are computed from this server's own database and are never sent anywhere.
+
+## Prompt screening
+
+An admin can turn on **Guardrails**, which has a model check each message before it reaches the assistant. A blocked message shows a banner above the composer, and the admin can see what was refused.

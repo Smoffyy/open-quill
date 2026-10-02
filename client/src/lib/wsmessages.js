@@ -27,9 +27,19 @@ export const handlers = {
   },
 
   config(m, ctx) {
-    ctx.actions.loadModels();
-    ctx.actions.loadAppConfig();
-    try { window.dispatchEvent(new CustomEvent('oq-config')); } catch {}
+    ctx.actions.syncConfig(m.version, false);
+  },
+
+  hello(m, ctx) {
+    ctx.actions.syncConfig(m.configVersion, true);
+  },
+
+  admin_draft(m, ctx) {
+    ctx.actions.adminDraft(m);
+  },
+
+  presence(m, ctx) {
+    ctx.actions.presence(Array.isArray(m.admins) ? m.admins : []);
   },
 
   // Sent on connect: every turn this user has running, so a reload picks them up.
@@ -48,6 +58,7 @@ export const handlers = {
         status: turn.status || null,
         promptTokens: turn.promptTokens || 0
       });
+      if (turn.ask) ctx.actions.setAsk?.(turn.chatId, turn.ask);
       if (isActive(ctx, turn.chatId) && turn.promptTokens > 0) ctx.meta.setPromptTokens(turn.promptTokens);
     }
     ctx.mirror.syncBusy();
@@ -186,7 +197,10 @@ export const handlers = {
       ctx.actions.finalize();
     }
     const rec = ctx.mirror.recFor(m.chatId);
-    rec.content = ''; rec.reasoning = ''; rec.phase = 'generating';
+    rec.content = typeof m.content === 'string' ? m.content : '';
+    rec.reasoning = typeof m.reasoning === 'string' ? m.reasoning : '';
+    rec.reasonSegs = Array.isArray(m.reasonSegs) ? m.reasonSegs.slice() : null;
+    rec.phase = 'generating';
     rec.done = false; rec.error = false;
     rec.assistantId = m.messageId; rec.live = null; rec.steers = []; rec.status = null;
     if (!isActive(ctx, m.chatId)) return;
@@ -194,7 +208,7 @@ export const handlers = {
     ctx.refs.refreshSeq.current++;
     ctx.set.compacting(false);
     ctx.tools.clear();
-    ctx.stream.begin({ messageId: m.messageId, modelId: rec.model_id || ctx.refs.currentIdRef.current });
+    ctx.stream.begin({ messageId: m.messageId, modelId: rec.model_id || ctx.refs.currentIdRef.current, content: rec.content, reasoning: rec.reasoning, segs: rec.reasonSegs });
   },
 
   reasoning(m, ctx) {
@@ -226,6 +240,17 @@ export const handlers = {
     }
   },
 
+  rewrite(m, ctx) {
+    if (typeof m.content !== 'string') return;
+    const rec = ctx.mirror.recFor(m.chatId);
+    rec.content = m.content;
+    if (!isActive(ctx, m.chatId)) return;
+    if (ctx.stream.pushContent(rec.content, rec.content)) {
+      ctx.tools.setCall(null);
+      ctx.tools.setRows(EMPTY_CALLS);
+    }
+  },
+
   error(m, ctx) {
     voiceEmit({ type: 'error', chatId: m.chatId });
     const rec = ctx.mirror.peek(m.chatId);
@@ -247,9 +272,20 @@ export const handlers = {
     ctx.set.errors(prev => ({ ...prev, [m.chatId]: String(m.error || ctx.text.modelError) }));
   },
 
+  ask(m, ctx) {
+    if (m.chatId && m.question) ctx.actions.setAsk?.(m.chatId, m.question);
+  },
+
+  asked(m, ctx) {
+    if (m.chatId) ctx.actions.setAsk?.(m.chatId, null);
+  },
+
   done(m, ctx) {
     voiceEmit({ type: 'done', chatId: m.chatId });
-    ctx.mirror.recFor(m.chatId).done = true;
+    ctx.actions.setAsk?.(m.chatId, null);
+    const rec = ctx.mirror.recFor(m.chatId);
+    rec.done = true;
+    rec.truncated = !!(m.truncated || m.stopped);
     ctx.mirror.syncBusy();
     ctx.actions.loadBudget();
     if (!isActive(ctx, m.chatId)) { ctx.actions.finalizeBackground(m.chatId); return; }
@@ -261,7 +297,7 @@ export const handlers = {
     const cmp = ctx.refs.compareRef.current;
     if (cmp && cmp.chatId === m.chatId && !cmp.messageId && m.messageId) cmp.messageId = m.messageId;
     ctx.refs.nextTurnPending.current = true;
-    if (ctx.stream.markDone()) ctx.actions.finalize();
+    if (ctx.stream.markDone() || m.stopped) ctx.actions.finalize();
   }
 };
 

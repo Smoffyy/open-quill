@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
-import { api, SESSION_EXPIRED } from './lib/api.js';
-import { t, tk } from './i18n.jsx';
+import { api, SESSION_EXPIRED, TAB_ID } from './lib/api.js';
+import { newerVersion, syncDelay, draftReloads, DRAFT_SETTLE_MS } from './lib/configsync.js';
+import { setWsSender, publishPresence } from './lib/wsbus.js';
+import { t, tk, getLang } from './i18n.jsx';
+import { withClient } from './lib/clientctx.js';
 import { applyPrefs, prefersDark, appFontId, takeSettingsToReopen } from './lib/prefs.js';
 import { kwargValuesArr, defaultValueOf } from './lib/kwargs.js';
 import Login from './components/pages/Login.jsx';
 import Sidebar from './components/sidebar/Sidebar.jsx';
 import AppBackground from './components/chat/AppBackground.jsx';
 import Composer from './components/composer/Composer.jsx';
+import AgentPanel from './components/composer/AgentPanel.jsx';
+import { planRecords, groupPlans, latestPlanRef } from './lib/agentpanel.js';
 import QuickPrompts from './components/chat/QuickPrompts.jsx';
 import CompactingBar from './components/chat/CompactingBar.jsx';
 import EngineStrip from './components/chat/EngineStrip.jsx';
@@ -40,7 +45,9 @@ import ProjectsPanel from './components/pages/ProjectsPanel.jsx';
 import PersonasModal from './components/dialogs/PersonasModal.jsx';
 import SearchModal from './components/dialogs/SearchModal.jsx';
 import Toaster from './components/ui/Toaster.jsx';
+import ConfirmHost from './components/ui/ConfirmHost.jsx';
 import Lightbox from './components/dialogs/Lightbox.jsx';
+import FilePreview from './components/dialogs/FilePreview.jsx';
 import ShortcutsModal from './components/dialogs/ShortcutsModal.jsx';
 import ThreadRail from './components/chat/ThreadRail.jsx';
 import ThreadFind from './components/chat/ThreadFind.jsx';
@@ -74,7 +81,8 @@ import BranchTree from './components/chat/BranchTree.jsx';
 import { toast } from './lib/toast.js';
 import { copyText } from './lib/clipboard.js';
 import { Down, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork, Panel, Copy, Star, Telescope, TextIcon, Expand } from './components/ui/icons.jsx';
-import { BRAND_ICON } from './lib/brand.js';
+import { setCustomFavicon } from './lib/favicon.js';
+import BrandMark from './components/ui/BrandMark.jsx';
 import { SKELETON_DELAY } from './lib/skeleton.js';
 
 const SetupGuide = lazy(() => import('./components/setup/SetupGuide.jsx'));
@@ -203,6 +211,14 @@ export default function App() {
   const [safetyChecking, setSafetyChecking] = useState(false);
   const [safetyReason, setSafetyReason] = useState('');
   const [chatEnded, setChatEnded] = useState(false);
+  const [asks, setAsks] = useState({});
+  const setAsk = useCallback((chatId, q) => setAsks(a => {
+    if (q) return { ...a, [chatId]: q };
+    if (!(chatId in a)) return a;
+    const next = { ...a };
+    delete next[chatId];
+    return next;
+  }), []);
   const [ctlOpen, setCtlOpen] = useState(false);
   const [chatGenParams, setChatGenParams] = useState(null);
   const [chatSysOverride, setChatSysOverride] = useState('');
@@ -214,6 +230,7 @@ export default function App() {
   if (!chatCache.current) chatCache.current = createLru(25);
   const cacheChat = (id, entry) => chatCache.current.merge(id, entry);
   const sendRef = useRef(null);
+  const resumeRef = useRef(null);
   const genOptsRef = useRef({});
   const [canContinue, setCanContinue] = useState(false);
   const [compareIds, setCompareIds] = useState([]);
@@ -391,22 +408,26 @@ export default function App() {
   const shouldReconnect = useCallback(() => !!userRef.current, []);
   const socket = useSocket({ onMessage: onWsMessage, shouldReconnect });
   const { connect, send: socketSend } = socket;
+  useEffect(() => { setWsSender(socketSend); return () => setWsSender(null); }, [socketSend]);
+  const configVersion = useRef(0);
+  const configTimer = useRef(null);
+  const draftTimer = useRef(null);
+  const draftDue = useRef(new Set());
+  useEffect(() => () => { clearTimeout(configTimer.current); clearTimeout(draftTimer.current); }, []);
   const getCurrentModelId = useCallback(() => currentIdRef.current, []);
   const { busyChats, syncBusy, peek, queueRec, dropRec, recFor, resumeRec } = useGenMirror(getCurrentModelId);
   const nextTurnPending = useRef(false);
   const selectingRef = useRef(false);
   const hasSelectionRef = useRef(false);
   const canFollow = useCallback(() => !selectingRef.current && !hasSelectionRef.current, []);
-  // `modern` is the whole of the thread's motion, `legacy` the reveal that walks
-  // the text a slice at a time; `instant` is neither.
   const revealStyle = resolveReveal(user?.prefs, cfg.uiPreset === 'openai' ? 'openai' : 'anthropic');
-  const modernMotion = revealStyle === 'modern';
+  const fadeWords = revealStyle === 'modern';
   const autoscroll = user?.prefs?.autoscroll !== false;
   const {
     scrollRef, stick, showJump,
     scrollBottom, pinToBottom, onScroll, onWheel, onTouchMove, jumpDown, resetJump,
     startFollow, stopFollow, followNow, syncPad, smoothPending, gliding
-  } = useThreadScroll({ canFollow, modern: modernMotion, autoscroll });
+  } = useThreadScroll({ canFollow, autoscroll });
   const animate = revealStyle === 'legacy';
   const revealMs = revealSpeedMs(user?.prefs?.revealMs);
   // finalize is redefined every render; the hook reads it through a ref so the
@@ -414,7 +435,7 @@ export default function App() {
   const finalizeRef = useRef(null);
   const stream = useTurnStream({
     animate,
-    batch: modernMotion,
+    batch: fadeWords,
     speedMs: revealMs,
     onRevealComplete: () => finalizeRef.current?.(),
     onFollowStart: startFollow,
@@ -451,6 +472,14 @@ export default function App() {
   const showCtxGauge = !!user?.prefs?.ctxGauge;
   const statusDelay = statusDelayEnabled(user?.prefs?.statusDelay);
   const ledgerTokens = liveLedgerTokens({ streaming, promptTokens: livePrompt, telemetry, ledgerOpen });
+  const [planDismissed, setPlanDismissed] = useState(null);
+  const settledMsgs = useMemo(() => (streaming ? messages.filter(m => m.id !== assistantIdRef.current) : messages), [messages, streaming]);
+  const liveMsg = useMemo(() => (streaming && dispContent ? { id: assistantIdRef.current, role: 'assistant', content: dispContent } : null), [streaming, dispContent]);
+  const planRecs = useMemo(() => planRecords(settledMsgs, planDismissed), [settledMsgs, planDismissed]);
+  const livePlanRecs = useMemo(() => (liveMsg ? planRecords([liveMsg], planDismissed) : []), [liveMsg, planDismissed]);
+  const plans = useMemo(() => groupPlans([...planRecs, ...livePlanRecs]), [planRecs, livePlanRecs]);
+  const pendingAsk = activeId ? asks[activeId] || null : null;
+  const question = useMemo(() => (pendingAsk ? { ...pendingAsk, id: activeId + ':' + pendingAsk.question } : null), [pendingAsk, activeId]);
 
   const activeIdRef = useRef(null);
   const currentIdRef = useRef(null);
@@ -514,6 +543,7 @@ export default function App() {
         try { localStorage.setItem('oq-preset', preset); } catch {}
         document.documentElement.setAttribute('data-font', appFontId(c.appFont));
         applyPrefs(null, preset);
+        setCustomFavicon(c.appIcon);
       }).catch(() => {});
     });
   }, []);
@@ -628,7 +658,42 @@ export default function App() {
     } finally { setModelsReady(true); }
   }
   async function loadChats() { try { setChats(await api.get('/api/chats')); } catch {} finally { setChatsLoaded(true); } }
-  async function loadAppConfig() { try { applyCfg(await api.get('/api/app-config')); } catch {} }
+  async function loadAppConfig() {
+    try {
+      const c = await api.get('/api/app-config');
+      configVersion.current = Math.max(configVersion.current, Number(c.configVersion) || 0);
+      applyCfg(c);
+    } catch {}
+  }
+
+  function syncConfig(version, greeting) {
+    if (greeting) { try { window.dispatchEvent(new CustomEvent('oq-hello')); } catch {} }
+    const next = newerVersion(configVersion.current, version);
+    if (!next) return;
+    const first = !configVersion.current;
+    configVersion.current = next;
+    if (greeting && first) return;
+    clearTimeout(configTimer.current);
+    configTimer.current = setTimeout(() => {
+      loadModels();
+      loadAppConfig();
+      try { window.dispatchEvent(new CustomEvent('oq-config')); } catch {}
+    }, syncDelay(!!userRef.current?.isAdmin));
+  }
+
+  function adminDraft(frame) {
+    try { window.dispatchEvent(new CustomEvent('oq-admin-draft', { detail: frame })); } catch {}
+    for (const r of draftReloads(frame, TAB_ID)) draftDue.current.add(r);
+    if (!draftDue.current.size) return;
+    clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => {
+      const due = draftDue.current;
+      draftDue.current = new Set();
+      if (due.has('models')) loadModels();
+      if (due.has('config')) loadAppConfig();
+      if (due.has('theme')) { try { window.dispatchEvent(new CustomEvent('oq-config')); } catch {} }
+    }, DRAFT_SETTLE_MS);
+  }
   const [setupDone, setSetupDone] = useState(false);
   const onSetupDone = useCallback(() => {
     setSetupDone(true);
@@ -670,13 +735,11 @@ export default function App() {
     try { localStorage.setItem('oq-preset', preset); } catch {}
     applyPrefs(userRef.current?.prefs, preset);
     document.documentElement.setAttribute('data-font', appFontId(c.appFont));
-    let link = document.querySelector('link[rel="icon"]');
-    if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
-    link.href = c.appIcon || BRAND_ICON;
+    setCustomFavicon(c.appIcon);
   }
 
   function wsSend(obj) {
-    if (socketSend(obj)) return true;
+    if (socketSend(withClient(obj, getLang()))) return true;
     setChatErrors(prev => ({ ...prev, [activeKey()]: t('Connection lost, reconnecting. Try again in a moment.') }));
     return false;
   }
@@ -752,8 +815,12 @@ export default function App() {
       syncView: () => syncView(),
       loadModels: () => loadModels(),
       loadAppConfig: () => loadAppConfig(),
+      syncConfig: (version, greeting) => syncConfig(version, greeting),
+      adminDraft: (frame) => adminDraft(frame),
+      presence: (list) => publishPresence(list),
       loadBudget: () => loadBudget(),
       loadLedger: () => loadLedger(),
+      setAsk: (chatId, q) => setAsk(chatId, q),
       taskStarted: (m) => toast(t('Running scheduled task "{title}"', { title: m.title || t('New chat') }), { icon: 'info' })
     }
   };
@@ -777,8 +844,8 @@ export default function App() {
     setStopping(false);
     if (out.content || out.reasoning) {
       setMessages(ms => ms.some(m => m.id === id)
-        ? ms
-        : [...ms, { id, role: 'assistant', content: out.content, reasoning: out.reasoning, model_id: mid }]);
+        ? ms.map(m => (m.id === id ? { ...m, content: out.content, reasoning: out.reasoning || m.reasoning, truncated: !!(r && r.truncated) } : m))
+        : [...ms,{ id, role: 'assistant', content: out.content, reasoning: out.reasoning, model_id: mid, truncated: !!(r && r.truncated) }]);
     }
     clearLive();
     if (stick.current && !selectingRef.current && !hasSelectionRef.current) setTimeout(() => scrollBottom(false), 0);
@@ -960,7 +1027,19 @@ export default function App() {
   // Everything a chat's view owns, cleared as one. newChat, toggleIncognito and
   // startProjectChat each used to spell this out, and they had already begun to
   // disagree about which pieces were included.
+  function dismissPlan() {
+    const ref = latestPlanRef(liveMsg ? [...settledMsgs, liveMsg] : settledMsgs);
+    if (!ref) return;
+    setPlanDismissed(ref);
+    const key = activeKey();
+    if (!key || key === 'incognito') return;
+    const cached = chatCache.current.get(key);
+    if (cached?.chat) cacheChat(key, { chat: { ...cached.chat, planDismissed: ref } });
+    api.post('/api/chats/' + key + '/plan/dismiss', { messageId: ref.msg, n: ref.n }).catch(() => {});
+  }
+
   function resetChatView() {
+    setPlanDismissed(null);
     setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false);
     clearLive(); setArtifactFocus(null);
     turnMeta.reset(); setLedger(null);
@@ -977,6 +1056,7 @@ export default function App() {
     setChatGenParams(chat.genParams || null);
     setChatSysOverride(chat.systemOverride || '');
     setChatPins(Array.isArray(chat.pinnedFiles) ? chat.pinnedFiles : []);
+    setPlanDismissed(chat.planDismissed || null);
   }
   function resolveLastModel(lastA) {
     if (modelsRef.current.find(mm => mm.id === lastA.model_id)) {
@@ -1135,7 +1215,18 @@ export default function App() {
       .catch(() => { setChats(cs => cs.map(c => c.id === chatId ? { ...c, projectId: prev } : c)); warn(); });
   }
 
+  function answerQuestion(answer) {
+    const chatId = activeIdRef.current;
+    if (!chatId || !asks[chatId]) return false;
+    const skip = answer == null;
+    if (!skip && !String(answer).trim()) return false;
+    if (!wsSend(skip ? { type: 'answer', chatId, skip: true } : { type: 'answer', chatId, text: String(answer).trim() })) return false;
+    setAsk(chatId, null);
+    return true;
+  }
+
   async function send(attachments = [], overrideText, opts = {}) {
+    if (overrideText == null && pendingAsk && answerQuestion(input)) { setInput(''); clearDraft(activeId); return; }
     if ((streaming || queued) && !opts.fromQueue) return;
     if (safetyChecking) return;
     if (safetyFlagged) return;
@@ -1167,7 +1258,7 @@ export default function App() {
     if (incognito) {
       const history = [...messages
         .filter(m => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
-        .map(m => ({ role: m.role, content: m.content })),
+        .map(m => ({ role: m.role, content: m.content, truncated: !!m.truncated })),
         { role: 'user', content: text }];
       if (!wsSend({ type: 'incognito', modelId: currentId, extended, reasoningEffort, kwargValues, messages: history })) return;
       queueRec('incognito', currentId);
@@ -1320,10 +1411,24 @@ export default function App() {
   // useCallback closing over `send` freezes the first render's copy, where
   // currentId is still null and send returns immediately. sendRef is kept
   // current during render, so the click always reaches the live send.
-  const continueReply = useCallback(() => {
+  const continueReply = useCallback((messageId) => resumeRef.current(messageId), []);
+  function resumeReply(messageId) {
+    const key = activeKey();
+    const busy = peek(key);
+    if (streaming || queued || !currentId || (busy && !busy.done)) return;
+    const idx = messages.findIndex(m => m.id === messageId);
+    if (idx === -1 || messages[idx].role !== 'assistant') return;
+    dismissError();
     setCanContinue(false);
-    sendRef.current([], t('Carry on from exactly where your previous reply stopped. Do not repeat or summarise what you already did, it is already saved. If work is still unfinished, make the tool calls to finish it now.'));
-  }, []);
+    if (incognito) {
+      const history = messages.slice(0, idx + 1)
+        .filter(m => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+        .map(m => ({ role: m.role, content: m.content, truncated: !!m.truncated }));
+      if (!wsSend({ type: 'incognito', resume: true, messageId, modelId: currentId, extended, reasoningEffort, kwargValues, messages: history })) return;
+    } else if (!wsSend({ type: 'continue', chatId: activeId, modelId: currentId, messageId, ...genOptsRef.current })) return;
+    queueRec(key, currentId);
+    pinToBottom(true, 20);
+  }
   const stopChat = useCallback((chatId) => {
     if (!chatId) return;
     if (chatId === activeKey()) { stop(); return; }
@@ -1357,6 +1462,7 @@ export default function App() {
   const modelHasBg = !incognito && !!(model?.bgEnabled && model?.bgImage);
   const activeBg = computeActiveBg(models, currentId, activeId, messages.length, incognito, user?.prefs);
   sendRef.current = send;
+  resumeRef.current = resumeReply;
   genOptsRef.current = { extended, reasoningEffort, kwargValues, sandbox, webSearch, styleId };
   const ctxGaugeEl = (showCtxGauge && activeId && !incognito)
     ? <CtxGauge chatId={activeId} modelId={currentId} streaming={streaming || queued}
@@ -1368,7 +1474,7 @@ export default function App() {
     draftId: incognito ? undefined : activeId,
     projects,
     onSetProject: activeId ? (p) => moveChatToProject(activeId, p.id) : null,
-    value: input, onChange: (v) => { if (safetyFlagged) { setSafetyFlagged(false); setSafetyReason(''); } setInput(v); saveDraft(activeId, v); }, onSend: send, onStop: stop, streaming: streaming || queued, stopping,
+    value: input, onChange: (v) => { if (safetyFlagged) { setSafetyFlagged(false); setSafetyReason(''); } setInput(v); saveDraft(activeId, v); }, onSend: send, onStop: stop, streaming: (streaming || queued) && !pendingAsk, stopping,
     queueCount: queuedList.length,
     onQueue: (t, atts) => setQueue(l => [...l, { id: 'q' + Date.now() + Math.random().toString(36).slice(2, 7), text: t, attachments: atts || [] }]),
     onSteer: steer, canSteer: streaming && !!activeId && !incognito && user?.prefs?.steering === true,
@@ -1554,6 +1660,7 @@ export default function App() {
 
       <div className={'main' + (incognito ? ' incognito' : '')} data-incognito={incognito ? 'on' : undefined}>
         <Toaster />
+        <ConfirmHost />
         <ThemeSlot name="main.top" />
         {notFound && (
           <NotFound appName={cfg.appName} appIcon={cfg.appIcon} path={location.pathname}
@@ -1601,6 +1708,7 @@ export default function App() {
             </>}
             items={[
               { id: 'personas', icon: <Star />, label: t('Personas'), onClick: () => setPersonasOpen(true) },
+              user?.isAdmin && !incognito && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => { setArtifactsOpen(false); setCtlOpen(o => !o); } },
             ]} />
         )}
         {empty && !incognito && cfg.uiPreset === 'openai' && (
@@ -1665,8 +1773,9 @@ export default function App() {
                 {threadLoading && messages.length === 0 && <ThreadSkeleton />}
                 {(() => {
                   const streamKey = assistantIdRef.current || '_stream';
+                  const resumed = streaming ? messages.find(m => m.id === streamKey) : null;
                   const renderList = streaming
-                    ? [...messages.filter(m => m.id !== streamKey), { id: streamKey, _k: streamKey, role: 'assistant', content: dispContent, reasoning: dispReason, reasoningSegs: dispSegs, model_id: streamModelRef.current || currentId, _streaming: true }]
+                    ? [...messages.filter(m => m !== resumed), { id: streamKey, _k: resumed?._k || streamKey, role: 'assistant', content: dispContent, reasoning: dispReason, reasoningSegs: dispSegs, model_id: streamModelRef.current || currentId, _streaming: true }]
                     : messages;
                   let lastA = null;
                   for (let i = renderList.length - 1; i >= 0; i--) if (renderList[i].role === 'assistant') { lastA = renderList[i]; break; }
@@ -1691,7 +1800,7 @@ export default function App() {
                       onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onEditAssistant={editAssistantMessage} onDelete={deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
                       showSpeed={showMsgSpeed}
                       showIcon={msg.role === 'assistant' && (cfg.uiPreset === 'openai' || (lastA && msg.id === lastA.id))}
-                      modern={modernMotion}
+                      fadeWords={fadeWords}
                       preset={cfg.uiPreset === 'openai' ? 'openai' : 'anthropic'} />
                     );
                   });
@@ -1699,19 +1808,20 @@ export default function App() {
                 {chatErrors[activeKey()] && <ChatError message={chatErrors[activeKey()]} onDismiss={() => dismissError()} />}
                 <QueuedMessages items={queuedList} onRemove={(id) => setQueue(l => l.filter(x => x.id !== id))} />
                 {queued && !streaming && (
-                  <div className="msg assistant"><div className="queue-wait"><img src={BRAND_ICON} className="pulse think-dot" alt="" aria-hidden="true" /> {t("Waiting for queue…")}</div></div>
+                  <div className="msg assistant"><div className="queue-wait"><BrandMark className="think-dot" state="thinking" /> {t("Waiting for queue…")}</div></div>
                 )}
                 {compacting && <CompactingBar />}
                 <div className="thread-pad" />
               </div>
             </div>
-            {user?.prefs?.threadRail !== false && <ThreadRail items={railList} scrollRef={scrollRef} matches={findMatches} onJump={railJump} />}
+            {user?.prefs?.threadRail === true && <ThreadRail items={railList} scrollRef={scrollRef} matches={findMatches} onJump={railJump} />}
             {outlineOpen && outline.length > 0 && user?.prefs?.threadOutline !== false && <Outline items={outline} onJump={outlineJump} onClose={() => setOutlineOpen(false)} />}
             {showJump && <button className="to-bottom" onClick={jumpDown} title={t('Jump to latest')} aria-label={t('Jump to latest')}><Down style={{ width: 17 }} /></button>}
             <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')}>
               {user?.prefs?.engineStrip === true && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
               {callDock}
-              <Composer {...composerProps} focusKey={focusTick} />
+              <Composer {...composerProps} focusKey={focusTick}
+                panel={!incognito && (plans.plan || question) ? <AgentPanel plan={plans.plan} previousPlan={plans.previousPlan} onDismissPlan={dismissPlan} question={question} onAnswer={answerQuestion} onSkip={() => answerQuestion(null)} /> : null} />
               <Disclaimer text={cfg.disclaimer} />
             </div>
           </>
@@ -1719,7 +1829,7 @@ export default function App() {
       </div>
 
       {artifactsOpen && activeId && !callOpen && (
-        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} pending={pendingFiles} focus={artifactFocus} onClose={closeArtifacts} />
+        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} pending={pendingFiles} focus={artifactFocus} busy={streaming || queued} onFilesChanged={setFiles} onClose={closeArtifacts} />
       )}
       {ctlOpen && user?.isAdmin && !incognito && (
         <ChatControls chatId={activeId || null} initialParams={chatGenParams} initialOverride={chatSysOverride} onChange={(p, o) => { setChatGenParams(p && Object.keys(p).length ? p : null); setChatSysOverride(o || ''); }} onClose={() => setCtlOpen(false)} />
@@ -1731,7 +1841,7 @@ export default function App() {
       )}
 
 
-      {settings && <SettingsModal user={user} cfg={cfg} modelId={currentId} initialTab={settings.tab} browseSkills={!!settings.browse} onClose={onSettingsClosed} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile}
+      {settings && <SettingsModal user={user} cfg={cfg} initialTab={settings.tab} browseSkills={!!settings.browse} onClose={onSettingsClosed} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile}
         onChangelog={() => { setSettings(null); setShowChangelog(true); }}
         onTrySkill={(sk) => { newChat(); setInput('/' + sk.name + ' '); setFocusTick(n => n + 1); }} />}
       {user?.isAdmin && cfg.setupComplete === false && !setupDone && (
@@ -1748,9 +1858,10 @@ export default function App() {
       {showShortcuts && <ShortcutsModal prefs={user?.prefs} onClose={() => setShowShortcuts(false)} onCustomize={() => { setShowShortcuts(false); openSettings('keybinds'); }} />}
       {treeOpen && activeId && user?.prefs?.branchMap !== false && <BranchTree chatId={activeId} onSelect={selectBranch} onJump={jumpToMessage} onClose={() => setTreeOpen(false)} onChanged={async () => { await refreshMessages(activeId); setTimeout(() => scrollBottom(false), 20); toast(t('Message copied into this branch')); }} />}
       <Lightbox />
+      <FilePreview />
       <Suspense fallback={null}>
         {showAdmin && <AdminPanel user={user} onClose={() => { setShowAdmin(false); if (shouldResetPath('admin', location.pathname)) history.pushState({}, '', '/'); }} />}
-        {showPlayground && <Playground onClose={() => { setShowPlayground(false); if (shouldResetPath('playground', location.pathname)) history.pushState({}, '', '/'); }} />}
+        {showPlayground && <Playground user={user} onClose={() => { setShowPlayground(false); if (shouldResetPath('playground', location.pathname)) history.pushState({}, '', '/'); }} />}
       </Suspense>
       {showProjects && <ProjectsPanel openId={projectOpenId} composerProps={composerProps}
         startCreate={projectCreate} onCreateHandled={() => setProjectCreate(false)}
@@ -1763,7 +1874,7 @@ export default function App() {
       {showChangelog && <DocModal title={t("Changelog")} name="changelog" onClose={() => setShowChangelog(false)} />}
       {cmdkOpen && <CommandPalette commands={commands} ready={modelsReady && chatsLoaded} onClose={() => setCmdkOpen(false)} />}
     </div>
-    {user?.isAdmin && <Suspense fallback={null}><BuildMode /></Suspense>}
+    {user?.isAdmin && <Suspense fallback={null}><BuildMode user={user} /></Suspense>}
     </ThemeProvider>
   );
 }

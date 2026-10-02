@@ -1,8 +1,6 @@
 import { getSetting, setSetting, uid } from '../db.js';
 import { normalizeName, validName, DESC_MAX, CONTENT_MAX } from './skillfile.js';
 
-export const DEFAULT_INTRO = 'You have access to admin-provided skills: reusable instruction files with best practices, workflows, and domain knowledge. When a task matches a skill\u2019s description, load that skill with `skill_view` BEFORE doing the work and follow its instructions. Loading a relevant skill is not optional \u2014 it encodes requirements you must respect.';
-
 export function list() {
   const raw = getSetting('skills_list', []);
   return Array.isArray(raw) ? raw : [];
@@ -45,16 +43,11 @@ export function update(id, b) {
 
 export function remove(id) { save(list().filter(s => s.id !== id)); return { ok: true }; }
 
-export function promptFor(extra = []) {
-  const skills = [...getEnabled(), ...extra];
-  if (!skills.length) return '';
-  let p = '## Skills\n' + DEFAULT_INTRO + '\n\nAvailable skills:\n';
-  for (const s of skills) {
+export function skillsText(extra = []) {
+  return [...getEnabled(), ...extra].map(s => {
     const lines = (s.content || '').split('\n').length;
-    p += `- ${s.name}${s.description ? ` \u2014 ${s.description}` : ''} (${lines} lines)\n`;
-  }
-  p += '\nUse the `skill_view` function to load a skill by `name` before starting a matching task.';
-  return p;
+    return `- ${s.name}${s.description ? `: ${s.description}` : ''} (${lines} lines)`;
+  }).join('\n');
 }
 
 export function execTool(call, extra = []) {

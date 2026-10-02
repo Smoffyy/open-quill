@@ -1,18 +1,20 @@
-import { db, getSetting } from '../../db.js';
+import { db } from '../../db.js';
 import { contextBudget, slideToFit, countExact } from '../../lib/ctxwindow.js';
 import { authMiddleware } from '../../auth.js';
 import { buildMessages } from '../../llm/index.js';
-import { applyPromptVars } from '../../llm/provider.js';
-import * as referenceFiles from '../../lib/referencefiles.js';
 import * as websearch from '../../lib/websearch.js';
+import { toolState, systemPrompt } from '../../lib/systemprompt.js';
 import { modelCtx } from '../../lib/models.js';
 import {
   chatHistory, historyRows, estimateTokens, calibratedTokens, calibRatio, messageTokens,
-  tokenCalib, compactThreshold, rollingCtxFor, promptVars, instrFor
+  tokenCalib, compactThreshold, rollingCtxFor
 } from '../../lib/convo.js';
 
-function applyPromptVarsSafe(text, userId) {
-  try { return applyPromptVars(text || '', promptVars(userId)); } catch { return text || ''; }
+const PART_LABEL = { base: () => 'Model system prompt', tool: (p) => `Tool: ${p.name}`, section: (p) => `Context: ${p.name}` };
+
+function promptOf(c, model) {
+  const flags = toolState(c, model, { sandboxOn: !!c.sandbox || !!c.project_id, canAsk: true });
+  return { flags, ...systemPrompt(c, model, flags) };
 }
 
 function pickModel(modelId) {
@@ -28,7 +30,7 @@ export default function registerInspectRoutes(app) {
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const model = pickModel(req.query.modelId);
     if (!model) return res.json({ used: 0, limit: 0, pct: 0, hasSummary: !!c.summary, summaries: !!c.enable_summaries });
-    const convo = buildMessages(model, chatHistory(c, model), false, null, c.summary, promptVars(c.user_id), instrFor(c));
+    const convo = buildMessages(model, chatHistory(c, model), false, promptOf(c, model).text);
     const exact = await countExact(model, convo);
     const used = exact || calibratedTokens(c.id, convo);
     const ctx = await modelCtx(model);
@@ -51,12 +53,12 @@ export default function registerInspectRoutes(app) {
     if (!model) return res.json({ limit: 0, used: 0, overhead: 0, messages: [] });
     const rows = historyRows(c, model);
     const active = rows.filter(r => !r.summarized && !r.excluded);
-    const instructions = instrFor(c);
-    const convo = buildMessages(model, active.map(r => r.msg), false, null, c.summary, promptVars(c.user_id), instructions);
+    const system = promptOf(c, model).text;
+    const convo = buildMessages(model, active.map(r => r.msg), false, system);
     const ratio = calibRatio(c.id);
     const exact = await countExact(model, convo);
     const used = exact || calibratedTokens(c.id, convo);
-    const scaffold = buildMessages(model, [], false, null, c.summary, promptVars(c.user_id), instructions);
+    const scaffold = buildMessages(model, [], false, system);
     const exactHead = exact ? await countExact(model, scaffold) : 0;
     const overheadTokens = exactHead || Math.round(calibratedTokens(c.id, scaffold) * (exact ? 1 : ratio));
     const raw = rows.map(r => messageTokens(r.msg));
@@ -95,9 +97,8 @@ export default function registerInspectRoutes(app) {
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const model = pickModel(req.query.modelId);
     if (!model) return res.json({ segments: [], totalTokens: 0 });
-    const membankOn = getSetting('membank_enabled', '0') === '1' && referenceFiles.count() > 0;
-    const memP = membankOn ? referenceFiles.promptFor(getSetting('membank_prompt', '')) : '';
-    const convo = buildMessages(model, chatHistory(c, model), false, memP || null, c.summary, promptVars(c.user_id), instrFor(c));
+    const prompt = promptOf(c, model);
+    const convo = buildMessages(model, chatHistory(c, model), false, prompt.text);
     const segments = convo.map((m, i) => {
       const txt = typeof m.content === 'string' ? m.content : (m.content || []).map(p => p.type === 'text' ? p.text : '[image]').join('\n');
       return { index: i, role: m.role, tokens: estimateTokens([m]), chars: txt.length, preview: txt.slice(0, 600), hasImages: Array.isArray(m.content) && m.content.some(p => p.type === 'image_url') };
@@ -106,7 +107,7 @@ export default function registerInspectRoutes(app) {
     const total = estimateTokens(convo);
     res.json({
       segments, totalTokens: total, limit, pct: limit ? Math.min(100, Math.round((total / limit) * 100)) : 0,
-      flags: { memoryBank: membankOn, webSearch: websearch.webSearchAvailable(), summary: !!c.summary }
+      flags: { memoryBank: prompt.flags.membankOn, webSearch: websearch.webSearchAvailable(), summary: !!c.summary }
     });
   });
 
@@ -115,23 +116,14 @@ export default function registerInspectRoutes(app) {
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const model = pickModel(req.query.modelId);
     if (!model) return res.json({ sections: [], messages: [], total: 0 });
-    const membankOn = getSetting('membank_enabled', '0') === '1' && referenceFiles.count() > 0;
-    const memP = membankOn ? referenceFiles.promptFor(getSetting('membank_prompt', '')) : '';
-    const instructions = instrFor(c);
     const rows = historyRows(c, model);
-    const convo = buildMessages(model, chatHistory(c, model), false, memP || null, c.summary, promptVars(c.user_id), instructions);
+    const prompt = promptOf(c, model);
+    const convo = buildMessages(model, chatHistory(c, model), false, prompt.text);
 
     const sys = convo.find(m => m.role === 'system');
     const sysText = sys ? String(sys.content || '') : '';
-    const pieces = [
-      ['Model system prompt', applyPromptVarsSafe(model.system_prompt || '', c.user_id)],
-      ['Your instructions', (instructions || '').trim()],
-      ['Conversation summary', (c.summary || '').trim()],
-      ['Memory bank', (memP || '').trim()],
-    ].filter(([, text]) => text);
-    const sections = pieces.map(([name, text]) => ({
-      name, chars: text.length, tokens: estimateTokens([{ role: 'system', content: text }]), text,
-      present: sysText.includes(text.slice(0, Math.min(60, text.length))),
+    const sections = prompt.parts.map(p => ({
+      name: PART_LABEL[p.kind](p), chars: p.text.length, tokens: estimateTokens([{ role: 'system', content: p.text }]), text: p.text
     }));
 
     const messages = convo.filter(m => m.role !== 'system').map((m, i) => {

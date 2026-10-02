@@ -1,9 +1,9 @@
 import { uid } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
 import { logAudit } from '../lib/audit.js';
-import { draftSet, promoteDraft } from '../lib/draft.js';
-import { broadcastConfig, broadcastAdminConfig } from '../lib/ws/index.js';
-import { readStore, writeStore, publishStore, themeForClient, sanitizeDoc, docDiffCount, emptyDoc, seedDocFor, pushHistory, PRESET_IDS, THEME_SCHEMA } from '../lib/theme.js';
+import { draftSet } from '../lib/draft.js';
+import { staged } from '../lib/releases.js';
+import { readStore, writeStore, themeForClient, sanitizeDoc, docDiffCount, emptyDoc, seedDocFor, pushHistory, PRESET_IDS, THEME_SCHEMA } from '../lib/theme.js';
 
 const name = (v, fallback) => String(v ?? '').slice(0, 80).trim() || fallback;
 
@@ -66,7 +66,7 @@ export default function registerThemeRoutes(app) {
     store.themes.push(theme);
     writeStore(store);
     logAudit(req, 'theme.create', { type: 'theme', id: theme.id, meta: { name: theme.name, from: from?.id || null } });
-    broadcastAdminConfig();
+    staged(req, 'theme', { keys: ['theme:' + theme.id] });
     res.json({ id: theme.id });
   });
 
@@ -75,16 +75,27 @@ export default function registerThemeRoutes(app) {
     const store = readStore(true);
     const theme = find(store, req.params.id);
     if (!theme) return res.status(404).json({ error: 'not found' });
-    if ('name' in b) theme.name = name(b.name, theme.name);
+    const keys = [];
+    if ('name' in b) {
+      theme.name = name(b.name, theme.name);
+      keys.push(`theme:${theme.id}:name`);
+    }
     if ('basePreset' in b && PRESET_IDS.has(b.basePreset)) {
       theme.basePreset = b.basePreset;
       theme.doc = sanitizeDoc({ ...theme.doc, basePreset: b.basePreset });
-      if (store.activeId === theme.id) syncPreset(b.basePreset);
+      keys.push(`theme:${theme.id}:basePreset`, `theme:${theme.id}:doc`);
+      if (store.activeId === theme.id) {
+        syncPreset(b.basePreset);
+        keys.push('setting:ui_preset');
+      }
     }
-    if ('doc' in b) theme.doc = sanitizeDoc({ ...b.doc, basePreset: theme.basePreset });
+    if ('doc' in b) {
+      theme.doc = sanitizeDoc({ ...b.doc, basePreset: theme.basePreset });
+      keys.push(`theme:${theme.id}:doc`);
+    }
     theme.updatedAt = Date.now();
     writeStore(store);
-    broadcastAdminConfig();
+    staged(req, 'theme', { keys });
     res.json({ ok: true, updatedAt: theme.updatedAt });
   });
 
@@ -96,7 +107,7 @@ export default function registerThemeRoutes(app) {
     writeStore(store);
     syncPreset(theme.basePreset);
     logAudit(req, 'theme.activate', { type: 'theme', id: theme.id, meta: { name: theme.name } });
-    broadcastAdminConfig();
+    staged(req, 'theme', { keys: ['themes:active', 'setting:ui_preset'] });
     res.json({ ok: true });
   });
 
@@ -109,7 +120,7 @@ export default function registerThemeRoutes(app) {
     if (store.activeId === theme.id) store.activeId = store.themes[0].id;
     writeStore(store);
     logAudit(req, 'theme.delete', { type: 'theme', id: theme.id, meta: { name: theme.name } });
-    broadcastAdminConfig();
+    staged(req, 'theme', { keys: ['theme:' + theme.id, 'themes:active'] });
     res.json({ ok: true });
   });
 
@@ -136,7 +147,7 @@ export default function registerThemeRoutes(app) {
     theme.updatedAt = Date.now();
     writeStore(store);
     logAudit(req, 'theme.restore', { type: 'theme', id: theme.id, meta: { index: i } });
-    broadcastAdminConfig();
+    staged(req, 'theme', { keys: [`theme:${theme.id}:doc`] });
     res.json({ ok: true, doc: theme.doc });
   });
 
@@ -157,21 +168,8 @@ export default function registerThemeRoutes(app) {
     theme.updatedAt = Date.now();
     writeStore(store);
     logAudit(req, 'theme.reset', { type: 'theme', id: theme.id, meta: { to } });
-    broadcastAdminConfig();
+    staged(req, 'theme', { keys: [`theme:${theme.id}:doc`] });
     res.json({ ok: true, doc: theme.doc });
-  });
-
-  app.post('/api/admin/themes/publish', authMiddleware, adminOnly, (req, res) => {
-    const store = readStore(true);
-    const theme = find(store, store.activeId);
-    if (theme) pushHistory(theme, 'published');
-    writeStore(store);
-    const live = publishStore();
-    // The base preset is part of the layout, so it ships with it.
-    promoteDraft('ui_preset');
-    logAudit(req, 'theme.publish', { type: 'theme', id: live.activeId, meta: { themes: live.themes.length } });
-    broadcastConfig();
-    res.json({ ok: true, activeId: live.activeId });
   });
 
   app.get('/api/admin/themes/:id/export', authMiddleware, adminOnly, (req, res) => {
@@ -199,7 +197,7 @@ export default function registerThemeRoutes(app) {
     store.themes.push(theme);
     writeStore(store);
     logAudit(req, 'theme.import', { type: 'theme', id: theme.id, meta: { name: theme.name } });
-    broadcastAdminConfig();
+    staged(req, 'theme', { keys: ['theme:' + theme.id] });
     res.json({ id: theme.id, name: theme.name });
   });
 }

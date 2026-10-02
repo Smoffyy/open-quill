@@ -11,7 +11,7 @@ export const NAV_GROUPS = [
     { id: 'security', label: tk('Security'), Icon: Shield },
     { id: 'chat', label: tk('Chat'), Icon: Chat },
     { id: 'keybinds', label: tk('Keybinds'), Icon: Keyboard },
-    { id: 'memory', label: tk('Memory'), Icon: Brain, needs: 'memoryFeature' },
+    { id: 'memory', label: tk('Memory'), Icon: Brain },
     { id: 'usage', label: tk('Usage'), Icon: Clock },
   ] },
   { label: tk('Customize'), items: [
@@ -41,7 +41,7 @@ const SETTINGS_INDEX = {
     tk('Web search on by default'), tk('Engine telemetry'), tk('Context gauge'),
     tk('Speed on each reply'), tk('Progress line'), tk('Context ledger on open'), tk('Mid-stream steering'),
   ],
-  memory: [tk('Use memory in chats'), tk('Update from recent chats'), tk('Forget everything')],
+  memory: [tk('Use memory in chats'), tk('Saved memories'), tk('Forget everything')],
   skills: [tk('Browse'), tk('Add'), tk('Create with the assistant'), tk('Write skill instructions'), tk('Upload a skill')],
   mcp: [tk('Add server'), tk('Server name'), tk('URL'), tk('Headers'), tk('From this workspace')],
   usage: [tk('Usage window'), tk('By model')],

@@ -148,15 +148,67 @@ export function endConversationSchema() {
   }, []);
 }
 
-export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, hostEnv = null }) {
+export function memorySchema() {
+  return fn('memory', "Save, change or remove a short fact about the user that should be remembered in all of their future conversations. Saved memories are listed with their ids in the system prompt.", {
+    action: { type: 'string', enum: ['add', 'update', 'delete'], description: '"add" saves a new memory, "update" rewrites one by id, "delete" removes one by id.' },
+    text: str('For add and update: the memory as one short, self-contained sentence, e.g. "Prefers TypeScript over JavaScript."'),
+    id: str('For update and delete: the id of an existing memory, as shown in brackets in the system prompt.')
+  }, ['action']);
+}
+
+export function calculatorSchema() {
+  return fn('calculator', 'Evaluate a math expression exactly and return the number. Supports + - * / ^ (power), % (remainder), ! (factorial), parentheses, scientific notation (1.5e3), the constants pi, e and tau, and the functions sqrt, cbrt, abs, sign, exp, ln, log (base 10, or log(x, base)), log2, log10, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, floor, ceil, trunc, round (round(x, digits)), min, max, hypot, pow, mod, factorial and ncr. Trigonometry uses radians; multiply degrees by pi/180. Write percentages as division, e.g. 15% of 80 is 0.15*80.', {
+    expression: str('The expression to evaluate, e.g. "(1200 * 1.07^5) / 12".')
+  }, ['expression']);
+}
+
+export function todoSchema() {
+  return fn('todo', 'Write the plan for a multi-step task. The user sees it as a checklist. Every call replaces the whole list, so send every item each time with its current status. Keep exactly one item in_progress while working. Mark a step cancelled to drop it. The plan closes and disappears once every step is completed or cancelled; send an empty list to cancel the whole plan.', {
+    items: {
+      type: 'array',
+      description: 'The complete list, in order. An empty list cancels and closes the plan.',
+      items: {
+        type: 'object',
+        properties: {
+          content: str('What the step is, in a few words.'),
+          status: { type: 'string', enum: ['pending', 'in_progress', 'completed', 'cancelled'], description: 'The step\'s current status. Use cancelled for a step that is no longer needed.' }
+        },
+        required: ['content', 'status'],
+        additionalProperties: false
+      }
+    }
+  }, ['items']);
+}
+
+export function askUserSchema() {
+  return fn('ask_user', 'Show the user a question with clickable options and wait for their answer, which comes back as the result. Your reply then continues.', {
+    question: str('One clear question.'),
+    options: { type: 'array', items: { type: 'string' }, description: 'Between 2 and 6 short, distinct answers the user can click.' },
+    multiple: bool('Optional. If true, the user can pick more than one option before sending.')
+  }, ['question', 'options']);
+}
+
+export function consultModelSchema(names = []) {
+  return fn('consult_model', 'Send one self-contained question to another model and get its answer back. It sees only what you send, not this conversation.', {
+    model: names.length ? { type: 'string', enum: names, description: 'Which model to ask.' } : str('Which model to ask.'),
+    question: str('The full question, with all the context the other model needs.'),
+    include_images: bool('Optional. If true, also send the images from the user\'s latest message.')
+  }, ['model', 'question']);
+}
+
+export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, memoryOn = false, calculatorOn = false, todoOn = false, askUserOn = false, consultNames = [], hostEnv = null }) {
   const out = [];
   if (sandboxOn) out.push(...sandboxToolSchemas(hostEnv));
   if (webSearchOn) out.push(webSearchSchema());
   if (membankOn) out.push(...membankSchemas());
   if (chatSearchOn) out.push(...chatSearchSchemas());
   if (skillsOn) out.push(skillSchema());
+  if (memoryOn) out.push(memorySchema());
+  if (calculatorOn) out.push(calculatorSchema());
+  if (todoOn) out.push(todoSchema());
+  if (askUserOn) out.push(askUserSchema());
+  if (consultNames.length) out.push(consultModelSchema(consultNames));
   if (endChatOn) out.push(endConversationSchema());
   if (mcpSchemas && mcpSchemas.length) out.push(...mcpSchemas);
   return out;
 }
-

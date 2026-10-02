@@ -92,4 +92,3 @@ export function scanTools(text, opts) {
   }
   return { calls, live };
 }
-

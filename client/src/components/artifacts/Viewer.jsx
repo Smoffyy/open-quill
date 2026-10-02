@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef, useSyncExternalStore, useId } from 'react';
 import { ensureLanguage, hljsVersion, knowsLanguage, rawHighlight, subscribeHljs } from '../../lib/hljs.js';
 import { api } from '../../lib/api.js';
 import { copyText } from '../../lib/clipboard.js';
 import Markdown from '../chat/Markdown.jsx';
 import FileChip from './FileChip.jsx';
-import { Download, Check, ChevDown, Chevron, Search, X, Down, Eye, CodeTag } from '../ui/icons.jsx';
+import { Download, Check, ChevDown, Chevron, Search, X, Down, Eye, EyeOff, CodeTag, Pencil } from '../ui/icons.jsx';
 import { t } from '../../i18n.jsx';
 import { buildPreviewDoc } from '../../lib/preview.js';
 import { SegSlide } from '../ui/controls.jsx';
@@ -69,22 +69,31 @@ function ImageView({ src, alt }) {
 
 const PREVIEW_SANDBOX = 'allow-scripts allow-modals allow-forms allow-popups allow-downloads allow-pointer-lock';
 
-function HtmlPreview({ chatId, path, html }) {
+function HtmlPreview({ base, path, html }) {
   const [doc, setDoc] = useState(null);
+  useEffect(() => { setDoc(null); }, [base, path]);
   useEffect(() => {
     let on = true;
-    setDoc(null);
-    buildPreviewDoc({ chatId, path, html })
+    buildPreviewDoc({ base, path, html })
       .then(d => { if (on) setDoc(d); })
       .catch(() => { if (on) setDoc(html); });
     return () => { on = false; };
-  }, [chatId, path, html]);
+  }, [base, path, html]);
   if (doc == null) return <div className="art-empty"><div className="art-empty-spin" />{t('Preparing preview…')}</div>;
   return <iframe className="art-preview-frame" sandbox={PREVIEW_SANDBOX} srcDoc={doc} title={baseName(path)} referrerPolicy="no-referrer" />;
 }
 
-export default function Viewer({ chatId, path, onBack, canBack, liveText, liveInfo = null, committed = true, pendingText = null, fileV = 0, headerExtra = null, onFocusPane }) {
+export default function Viewer({ chatId, apiBase, path, onBack, canBack, liveText, liveInfo = null, committed = true, pendingText = null, fileV = 0, headerExtra = null, onFocusPane, editable = false, onSaved, onDirtyChange }) {
+  const base = apiBase || '/api/chats/' + chatId;
   const [data, setData] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [livePreview, setLivePreview] = useState(true);
+  const [previewText, setPreviewText] = useState('');
+  const errId = useId();
+  const editing = draft != null;
+  const dirty = editing && draft !== data?.text;
   const [copied, setCopied] = useState(false);
   const [menu, setMenu] = useState(false);
   const [diff, setDiff] = useState(false);
@@ -104,7 +113,7 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
   const canPreview = PREVIEW_HTML.has(ext) || PREVIEW_MD.has(ext);
   const [mode, setMode] = useState(() => (PREVIEW_HTML.has(ext) ? 'preview' : 'code'));
   useEffect(() => { setMode(PREVIEW_HTML.has(extOf(path)) ? 'preview' : 'code'); }, [path]);
-  const previewOn = canPreview && mode === 'preview' && !isLive && !diff;
+  const previewOn = canPreview && mode === 'preview' && !isLive && !diff && !editing;
   const liveEdit = isLive && liveInfo && liveInfo.tool === 'str_replace';
   const liveActive = isLive || liveEdit;
   const rawStream = isLive ? liveText : (!committed && pendingText != null ? pendingText : null);
@@ -112,6 +121,13 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
   const streamText = useFrameThrottle(rawStream ?? '', fromStream);
 
   useEffect(() => { setExpanded(new Set()); }, [path, diff]);
+  useEffect(() => { setDraft(null); setSaveError(''); }, [path]);
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty]);
+  useEffect(() => {
+    if (draft == null) return;
+    const id = setTimeout(() => setPreviewText(draft), 250);
+    return () => clearTimeout(id);
+  }, [draft]);
   useEffect(() => { setWrap(localStorage.getItem('oq-art-wrap') === '1'); }, [path]);
   useEffect(() => { if (search && searchInputRef.current) searchInputRef.current.focus(); }, [search]);
 
@@ -119,10 +135,10 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
     if (!liveEdit) { setBaseText(null); return; }
     if (baseText != null) return;
     let on = true;
-    api.get(`/api/chats/${chatId}/file?path=${encodeURIComponent(path)}`)
+    api.get(`${base}/file?path=${encodeURIComponent(path)}`)
       .then(r => { if (on) setBaseText(r.text ?? ''); }).catch(() => { if (on) setBaseText(''); });
     return () => { on = false; };
-  }, [liveEdit, path, chatId]);
+  }, [liveEdit, path, base]);
 
   const liveDiff = useMemo(() => {
     if (!liveEdit || baseText == null) return null;
@@ -136,7 +152,7 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
   async function load(v, { blank = false } = {}) {
     const tok = ++loadTok.current;
     if (blank) setData(null);
-    try { const r = await api.get(`/api/chats/${chatId}/file?path=${encodeURIComponent(path)}${v ? '&v=' + v : ''}`); if (tok === loadTok.current) setData(r); }
+    try { const r = await api.get(`${base}/file?path=${encodeURIComponent(path)}${v ? '&v=' + v : ''}`); if (tok === loadTok.current) setData(r); }
     catch { if (tok === loadTok.current) setData({ error: true }); }
   }
   useEffect(() => { if (isLive) return; if (committed) { setDiff(false); setPrev(null); load(undefined, { blank: true }); } else setData(null); }, [path, isLive, committed]);
@@ -153,10 +169,10 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
   useEffect(() => {
     if (!diff || !viewingV || viewingV <= 1) { setPrev(null); return; }
     let on = true; setPrev(null);
-    api.get(`/api/chats/${chatId}/file?path=${encodeURIComponent(path)}&v=${viewingV - 1}`)
+    api.get(`${base}/file?path=${encodeURIComponent(path)}&v=${viewingV - 1}`)
       .then(r => { if (on) setPrev(r.text ?? ''); }).catch(() => { if (on) setPrev(''); });
     return () => { on = false; };
-  }, [diff, viewingV, path, chatId]);
+  }, [diff, viewingV, path, base]);
 
   const shownText = fromStream ? streamText : (data?.text != null ? data.text : null);
   const [viewText, setViewText] = useState(shownText);
@@ -207,8 +223,27 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
   async function restore() {
     if (restoring || !viewing) return;
     setRestoring(true);
-    try { await api.post(`/api/chats/${chatId}/restore`, { path, v: viewing }); await load(); } catch {}
+    try { await api.post(`${base}/restore`, { path, v: viewing }); await load(); } catch {}
     setRestoring(false);
+  }
+  function startEdit() { setSearch(false); setQuery(''); setSaveError(''); setPreviewText(data.text); setDraft(data.text); }
+  function cancelEdit() { setDraft(null); setSaveError(''); }
+  async function save() {
+    if (saving || !editing) return;
+    if (!dirty) { cancelEdit(); return; }
+    setSaving(true);
+    try {
+      const r = await api.put(`${base}/file`, { path, text: draft, v: data.v });
+      setDraft(null);
+      setSaveError('');
+      await load();
+      onSaved?.(r);
+    } catch (e) { setSaveError(e?.message || t('Could not save this file.')); }
+    setSaving(false);
+  }
+  function onEditorKey(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); }
+    else if (e.key === 'Escape') { e.preventDefault(); if (!dirty) cancelEdit(); }
   }
 
   const bodyRef = useRef(null);
@@ -217,7 +252,7 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
   const [following, setFollowing] = useState(true);
   const progUntil = useRef(0);
   const touchY = useRef(0);
-  const scrollKey = chatId + '::' + path;
+  const scrollKey = base + '::' + path;
 
   useEffect(() => { followRef.current = true; setFollowing(true); }, [path]);
 
@@ -276,13 +311,15 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
   const current = data?.v;
   const stale = viewing && current && viewing !== current;
   const showText = (fromStream || (committed && data && data.text != null));
-  const isCode = !liveEdit && showText && !diff && !previewOn;
+  const isCode = !liveEdit && showText && !diff && !previewOn && !editing;
+  const canEdit = editable && !isLive && committed && data?.text != null && !stale && !diff;
+  const splitPreview = editing && canPreview && livePreview;
   const crumbs = path.split('/');
 
   const renderDiffRows = (rows, live) => (
     <div className={'art-diff' + (live ? ' live' : '') + (wrap ? ' wrap' : '')} ref={live ? codeRef : undefined}>
       {(rows || []).map((r) => r.fold
-        ? <button key={r.key} className="art-fold" onClick={() => setExpanded(s => { const n = new Set(s); n.add(r.key); return n; })}>⋯ {r.count} unchanged line{r.count === 1 ? '' : 's'}</button>
+        ? <button key={r.key} className="art-fold" onClick={() => setExpanded(s => { const n = new Set(s); n.add(r.key); return n; })}>⋯ {r.count === 1 ? t('{n} unchanged line', { n: r.count }) : t('{n} unchanged lines', { n: r.count })}</button>
         : (
           <div key={r.key} className={'art-diff-line ' + r.type}>
             <span className="art-diff-sign">{r.type === 'add' ? '+' : r.type === 'del' ? '−' : ''}</span>
@@ -298,7 +335,7 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
       <div className="art-vhead">
         <div className="art-vtitle">
           {canBack && <button className="art-back" onClick={onBack} title={t("Back to files")}><Chevron style={{ width: 16, transform: 'rotate(180deg)' }} /></button>}
-          {canPreview && showText && !isLive && (
+          {canPreview && showText && !isLive && !editing && (
             <SegSlide value={previewOn ? 'preview' : 'code'} label={t('View')} className="compact"
               onPick={(v) => setMode(v)}
               options={[
@@ -308,16 +345,31 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
           )}
           <span className="art-vname">{crumbs[crumbs.length - 1]}</span>
           <span className="art-vkind">{isLive ? (liveEdit ? t('editing…') : (liveText && liveText.length ? t('writing…') : t('creating…'))) : ext.toUpperCase()}</span>
-          {!isLive && stale && <span className="art-vkind">v{viewing} of {current}</span>}
+          {!isLive && stale && <span className="art-vkind">{t('v{v} of {total}', { v: viewing, total: current })}</span>}
         </div>
         <div className="art-vactions">
-          {!isLive && data?.text != null && (
+          {editing ? (
+            <>
+              {canPreview && (
+                <button type="button" className={'art-btn icon' + (livePreview ? ' on' : '')} aria-pressed={livePreview}
+                  title={livePreview ? t('Hide preview') : t('Show preview')} aria-label={livePreview ? t('Hide preview') : t('Show preview')}
+                  onClick={() => setLivePreview(v => !v)}>{livePreview ? <EyeOff style={{ width: 15 }} /> : <Eye style={{ width: 15 }} />}</button>
+              )}
+              <button type="button" className="art-btn text" disabled={saving} onClick={cancelEdit}>{t('Cancel')}</button>
+              <button type="button" className="art-btn text solid" disabled={saving || !editable} title={editable ? undefined : t('Wait for the reply to finish before editing files.')} onClick={save}>
+                {saving && <span className="btn-spin" aria-hidden="true" />}{saving ? t('Saving…') : t('Save')}
+              </button>
+            </>
+          ) : canEdit && (
+            <button type="button" className="art-btn text" onClick={startEdit}><Pencil style={{ width: 14 }} /> {t('Edit')}</button>
+          )}
+          {!isLive && !editing && data?.text != null && (
             <div className="art-copy-wrap">
               <button className="art-btn copy" onClick={copy}>{copied ? <Check style={{ width: 14 }} /> : null} {copied ? t('Copied') : t('Copy')}</button>
               <button className="art-btn caret" aria-label={t('More actions')} aria-expanded={menu} aria-haspopup="menu" onClick={() => setMenu(m => !m)}><ChevDown style={{ width: 13 }} /></button>
               {menu && (
                 <div className="art-menu" onMouseLeave={() => setMenu(false)}>
-                  <a className="art-menu-item" href={`/api/chats/${chatId}/download?path=${encodeURIComponent(path)}${stale ? '&v=' + viewing : ''}`}>Download as {ext.toUpperCase()}</a>
+                  <a className="art-menu-item" href={`${base}/download?path=${encodeURIComponent(path)}${stale ? '&v=' + viewing : ''}`}>{t('Download as {ext}', { ext: ext.toUpperCase() })}</a>
                   {showText && !previewOn && <button className="art-menu-item" onClick={() => { setMenu(false); setSearch(true); }}>{t('Find in file')}</button>}
                   {isCode && (
                     <button className="art-menu-item" onClick={() => { setMenu(false); setWrap(w => { localStorage.setItem('oq-art-wrap', w ? '0' : '1'); return !w; }); }}>
@@ -333,7 +385,7 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
                     <div className="art-menu-label">{t("Version history")}</div>
                     {[...versions].reverse().map(v => (
                       <button key={v} className={'art-menu-item ver' + (v === viewing ? ' active' : '')} onClick={() => { setMenu(false); load(v); }}>
-                        Version {v}{v === current ? ' · latest' : ''}{v === viewing && <Check style={{ width: 13 }} />}
+                        {v === current ? t('Version {v} · latest', { v }) : t('Version {v}', { v })}{v === viewing && <Check style={{ width: 13 }} />}
                       </button>
                     ))}
                   </>}
@@ -356,8 +408,8 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
       )}
       {stale && (
         <div className="art-stale-row">
-          <button className="art-stale-bar" onClick={() => load()}>Viewing older version v{viewing}, jump to latest (v{current})</button>
-          <button className="art-restore-btn" disabled={restoring} onClick={restore}>{restoring ? 'Restoring…' : `Restore v${viewing}`}</button>
+          <button className="art-stale-bar" onClick={() => load()}>{t('Viewing older version v{v}, jump to latest (v{latest})', { v: viewing, latest: current })}</button>
+          <button className="art-restore-btn" disabled={restoring} onClick={restore}>{restoring ? t('Restoring…') : t('Restore v{v}', { v: viewing })}</button>
         </div>
       )}
       <div className="art-vbody" ref={bodyRef} onScroll={onBodyScroll} onWheel={onBodyWheel} onTouchStart={onBodyTouchStart} onTouchMove={onBodyTouchMove}>
@@ -369,7 +421,24 @@ export default function Viewer({ chatId, path, onBack, canBack, liveText, liveIn
         {!liveEdit && showText && !diff && previewOn && (
           PREVIEW_MD.has(ext)
             ? <div className="art-md"><Markdown>{shownText || ''}</Markdown></div>
-            : <HtmlPreview chatId={chatId} path={path} html={shownText || ''} />
+            : <HtmlPreview base={base} path={path} html={shownText || ''} />
+        )}
+        {editing && (
+          <div className={'art-edit' + (splitPreview ? ' split' : '')}>
+            <div className="art-edit-main">
+              <textarea className={'art-editor' + (wrap ? ' wrap' : '')} value={draft} autoFocus spellCheck={false}
+                aria-label={t('Edit {name}', { name: baseName(path) })} aria-invalid={saveError ? true : undefined}
+                aria-describedby={errId} onChange={(e) => { setDraft(e.target.value); if (saveError) setSaveError(''); }} onKeyDown={onEditorKey} />
+              <div id={errId} className="art-edit-error" role="alert">{saveError}</div>
+            </div>
+            {splitPreview && (
+              <div className="art-edit-preview" aria-label={t('Preview')} role="region">
+                {PREVIEW_MD.has(ext)
+                  ? <div className="art-md"><Markdown>{previewText}</Markdown></div>
+                  : <HtmlPreview base={base} path={path} html={previewText} />}
+              </div>
+            )}
+          </div>
         )}
         {isCode && (
           <div className={'art-code2' + (isLive ? ' live' : '') + (wrap ? ' wrap' : '')} ref={codeRef}>

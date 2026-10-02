@@ -6,7 +6,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { getSetting } from './db.js';
-import { parseCookies, sessionFromRequest } from './auth.js';
+import { parseCookies, sessionFromRequest, pruneSessions } from './auth.js';
 import { setCustomPresets } from './lib/pricing.js';
 import * as mcp from './lib/mcp.js';
 import { pruneAudit } from './lib/audit.js';
@@ -28,16 +28,21 @@ import registerAdminRoutes from './routes/admin.js';
 import registerMediaRoutes from './routes/media.js';
 import registerMiscRoutes from './routes/misc.js';
 import registerThemeRoutes from './routes/theme.js';
+import registerChangeRoutes from './routes/changes.js';
 import { localOnlyMiddleware } from './lib/localonly.js';
 import { installEgressGuard } from './lib/egress.js';
 import { sameOriginGuard } from './lib/origin.js';
 import { uploadHeaders, isPublicUpload } from './lib/uploads.js';
+import { migratePromptBlocks } from './lib/systemprompt.js';
+import { ensureInitialRelease } from './lib/releases.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || '127.0.0.1';
 
 installEgressGuard();
+migratePromptBlocks();
+ensureInitialRelease();
 
 const app = express();
 app.disable('x-powered-by');
@@ -76,6 +81,7 @@ registerSettingsRoutes(app);
 registerAdminRoutes(app);
 registerMediaRoutes(app);
 registerThemeRoutes(app);
+registerChangeRoutes(app);
 registerMiscRoutes(app);
 
 // Unknown API routes answer in JSON. Falling through to the SPA handler below served a
@@ -121,7 +127,7 @@ function warmHostEnv() {
 
 server.listen(PORT, HOST, () => console.log(`open-quill running on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`));
 warmHostEnv();
-const pruneOld = () => { pruneAudit(); pruneToolStats(); };
+const pruneOld = () => { pruneAudit(); pruneToolStats(); pruneSessions(); };
 pruneOld();
 setInterval(pruneOld, 24 * 60 * 60 * 1000).unref();
 startTaskScheduler();

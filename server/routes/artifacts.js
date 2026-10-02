@@ -2,10 +2,10 @@ import { db } from '../db.js';
 import { authMiddleware } from '../auth.js';
 import * as sandbox from '../sandbox.js';
 import { workspaceFor } from '../lib/projectfiles.js';
+import { sandboxCap, attachName, fileInfo, sendDownload, restoreVersion, saveText } from '../lib/workspacefiles.js';
+import { activeTurn } from '../lib/ws/live.js';
 
 const wsOf = (c) => workspaceFor(c);
-
-const attachName = (name) => String(name || 'file').replace(/[\r\n"\\]/g, '_');
 
 function ownChat(req, res) {
   const c = db.chats.byId(req.params.id);
@@ -21,9 +21,8 @@ export default function registerArtifactRoutes(app) {
   app.get('/api/artifacts', authMiddleware, (req, res) => {
     const q = String(req.query.q ?? '').slice(0, 120).trim().toLowerCase();
     const limit = Math.min(LIBRARY_PAGE, Math.max(1, parseInt(req.query.limit, 10) || LIBRARY_PAGE));
-    const chats = db.chats.byUser(req.user.id)
+    const chats = db.chats.listByUser(req.user.id)
       .filter(c => !c.archived)
-      .sort((a, b) => (b.updated_at || 0) - (a.updated_at || 0))
       .slice(0, LIBRARY_SCAN);
     const items = [];
     const seen = new Set();
@@ -35,14 +34,14 @@ export default function registerArtifactRoutes(app) {
       if (seen.has(key)) continue;
       seen.add(key);
       let files;
-      try { files = sandbox.list(wsOf(c)); } catch { continue; }
+      try { files = sandbox.list(key); } catch { continue; }
       if (!Array.isArray(files)) continue;
       for (const f of files) {
         if (q && f.path.toLowerCase().indexOf(q) === -1 && String(c.title || '').toLowerCase().indexOf(q) === -1) continue;
         let preview = '';
         if (f.size > 0 && f.size < 512 * 1024) {
           try {
-            if (sandbox.isViewableText(wsOf(c), f.path)) preview = String(sandbox.readText(wsOf(c), f.path) || '').slice(0, PREVIEW_CHARS);
+            if (sandbox.isText(f.path)) preview = sandbox.readHead(key, f.path, PREVIEW_CHARS * 4).slice(0, PREVIEW_CHARS);
           } catch { preview = ''; }
         }
         items.push({
@@ -70,54 +69,26 @@ export default function registerArtifactRoutes(app) {
 
   app.get('/api/chats/:id/file', authMiddleware, (req, res) => {
     const c = ownChat(req, res); if (!c) return;
-    const rel = req.query.path || '';
-    const files = sandbox.list(wsOf(c));
-    if (!files.find(f => f.path === rel)) return res.status(404).json({ error: 'not found' });
-    // Viewing sniffs the bytes as well as the extension, so a file with an
-    // unknown or missing extension still opens instead of being a download-only
-    // dead end. Versioning still keys off the extension list, so `versions` is
-    // simply empty for those and the viewer shows the current text.
-    if (sandbox.isViewableText(wsOf(c), rel)) {
-      const versions = sandbox.listVersions(wsOf(c), rel);
-      const current = sandbox.versionOf(wsOf(c), rel);
-      const vq = parseInt(req.query.v);
-      const viewing = vq && versions.includes(vq) ? vq : current;
-      const text = viewing === current ? sandbox.readText(wsOf(c), rel) : sandbox.readVersion(wsOf(c), rel, viewing);
-      return res.json({ path: rel, ext: sandbox.extOf(rel), text, v: current, viewing, versions });
-    }
-    res.json({ path: rel, ext: sandbox.extOf(rel), binary: true, downloadUrl: `/api/chats/${c.id}/download?path=${encodeURIComponent(rel)}` });
+    const r = fileInfo(wsOf(c), String(req.query.path || ''), parseInt(req.query.v), `/api/chats/${c.id}`);
+    res.status(r.status).json(r.body);
   });
 
   app.get('/api/chats/:id/download', authMiddleware, (req, res) => {
     const c = ownChat(req, res); if (!c) return;
-    const rel = req.query.path || '';
-    const files = sandbox.list(wsOf(c));
-    if (!files.find(f => f.path === rel)) return res.status(404).json({ error: 'not found' });
-    const name = attachName(rel.split('/').pop());
-    const vq = parseInt(req.query.v);
-    const versions = sandbox.isText(rel) ? sandbox.listVersions(wsOf(c), rel) : [];
-    if (vq && versions.includes(vq) && vq !== sandbox.versionOf(wsOf(c), rel)) {
-      res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
-      return res.send(sandbox.readVersion(wsOf(c), rel, vq) ?? '');
-    }
-    res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
-    res.send(sandbox.readBuffer(wsOf(c), rel));
+    sendDownload(res, wsOf(c), String(req.query.path || ''), parseInt(req.query.v));
+  });
+
+  app.put('/api/chats/:id/file', authMiddleware, (req, res) => {
+    const c = ownChat(req, res); if (!c) return;
+    if (activeTurn(c.id)) return res.status(409).json({ error: 'Wait for the reply to finish before editing files.' });
+    const r = saveText(wsOf(c), String(req.body?.path || ''), req.body?.text, req.body?.v, sandboxCap(req.user));
+    res.status(r.status).json(r.body);
   });
 
   app.post('/api/chats/:id/restore', authMiddleware, (req, res) => {
     const c = ownChat(req, res); if (!c) return;
-    const rel = String(req.body?.path || '');
-    const v = parseInt(req.body?.v);
-    const files = sandbox.list(wsOf(c));
-    if (!files.find(f => f.path === rel)) return res.status(404).json({ error: 'not found' });
-    if (!sandbox.isText(rel)) return res.status(400).json({ error: 'Only text files can be restored to an older version.' });
-    const versions = sandbox.listVersions(wsOf(c), rel);
-    if (!Number.isFinite(v) || !versions.includes(v)) return res.status(400).json({ error: 'Unknown version.' });
-    const content = sandbox.readVersion(wsOf(c), rel, v);
-    if (content == null) return res.status(404).json({ error: 'That version could not be read.' });
-    const r = sandbox.createFile(wsOf(c), rel, content);
-    if (!r.ok) return res.status(400).json({ error: r.error || 'Restore failed.' });
-    res.json({ ok: true, v: sandbox.versionOf(wsOf(c), rel), restoredFrom: v, files: sandbox.list(wsOf(c)) });
+    const r = restoreVersion(wsOf(c), String(req.body?.path || ''), parseInt(req.body?.v));
+    res.status(r.status).json(r.body);
   });
 
   app.get('/api/chats/:id/zip', authMiddleware, (req, res) => {

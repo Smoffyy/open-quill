@@ -4,6 +4,7 @@ import { Plus, Plug } from '../ui/icons.jsx';
 import McpCard from './McpCard.jsx';
 import { t } from '../../i18n.jsx';
 import { Skel, SkelRows } from '../ui/Skeleton.jsx';
+import { parseMcpConfig } from '../../lib/mcpconfig.js';
 
 const blank = () => ({ name: '', url: '', headers: '', enabled: true });
 
@@ -27,6 +28,12 @@ export default function UserMcpSection() {
   const atLimit = limit > 0 && mine.length >= limit;
 
   function startAdd() { setEditError(''); setEdit(blank()); }
+  function importConfig(text) {
+    const { servers: found, error } = parseMcpConfig(text);
+    const http = found.find(s => s.transport === 'http');
+    if (http) { setEditError(''); setEdit(x => ({ ...x, name: http.name, url: http.url, headers: http.headers, clearHeaders: false })); }
+    else if (text.trim()) setEditError(error === 'not-json' ? t('That is not valid JSON yet.') : t('No HTTP server found in that config. Local command servers are added by an admin.'));
+  }
   function startEdit(sv) { setEditError(''); setEdit({ id: sv.id, name: sv.name, url: sv.url, headers: '', hasHeaders: sv.hasHeaders, enabled: sv.enabled !== false }); }
 
   async function save() {
@@ -65,6 +72,13 @@ export default function UserMcpSection() {
 
         {edit && (
           <div className="fn-editor mcp-editor">
+            {!edit.id && (
+              <div className="field"><label>{t("Import a config")}</label>
+                <textarea rows={2} placeholder={'{ "mcpServers": { "docs": { "url": "https://…/mcp" } } }'}
+                  onChange={(e) => importConfig(e.target.value)} />
+                <div className="muted-note mcp-headers-note"><span>{t("Optional. Paste the JSON from a server's README and the fields below fill in.")}</span></div>
+              </div>
+            )}
             <div className="field"><label>{t("Server name")}</label>
               <input value={edit.name} onChange={(e) => setEdit(x => ({ ...x, name: e.target.value }))} placeholder={t("Filesystem")} />
             </div>

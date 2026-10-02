@@ -2,68 +2,92 @@ import fs from 'fs';
 import path from 'path';
 import { getSetting, setSetting } from '../db.js';
 import { dataPath } from './dataroot.js';
-import { extractPdf } from './extract.js';
+import { looksTextual, extractDocument, isRtf } from './extract.js';
 
 
 export const MEMBANK_ROOT = dataPath('membank');
-const CACHE_DIR = path.join(MEMBANK_ROOT, '.cache');
+const CACHE_DIR = path.join(MEMBANK_ROOT, '.extracted');
+const LEGACY_CACHE_DIR = path.join(MEMBANK_ROOT, '.cache');
+const RESERVED = new Set([path.basename(CACHE_DIR), path.basename(LEGACY_CACHE_DIR)]);
 fs.mkdirSync(CACHE_DIR, { recursive: true });
+try { fs.rmSync(LEGACY_CACHE_DIR, { recursive: true, force: true }); } catch {}
 
 const TEXT_CAP = 200000;
-const TEXT_EXT = new Set(['.txt', '.md', '.markdown', '.csv', '.tsv', '.json', '.js', '.jsx', '.ts', '.tsx', '.py', '.lua', '.html', '.htm', '.css', '.xml', '.yml', '.yaml', '.sh', '.c', '.cpp', '.h', '.hpp', '.java', '.rb', '.go', '.rs', '.php', '.sql', '.ini', '.cfg', '.conf', '.log', '.rst', '.toml', '.env', '.gitignore']);
-
-export const DEFAULT_PROMPT = 'The admin has provided reference files below. Treat their contents as trusted, authoritative context. When a question relates to them, READ the relevant file (or just the needed lines) before answering instead of guessing or searching the web.';
+const HEAD_BYTES = 4096;
 
 function safe(name) {
   const base = path.basename(String(name || ''));
-  if (!base || base === '.' || base === '..' || base.startsWith('.')) return null;
+  if (!base || base === '.' || base === '..' || RESERVED.has(base)) return null;
   const p = path.join(MEMBANK_ROOT, base);
   if (!p.startsWith(MEMBANK_ROOT + path.sep)) return null;
   return { base, p };
 }
 function ext(name) { return path.extname(name).toLowerCase(); }
-function isPdf(name) { return ext(name) === '.pdf'; }
-function isReadable(name) { return isPdf(name) || TEXT_EXT.has(ext(name)); }
 function cachePathFor(base) { return path.join(CACHE_DIR, base + '.txt'); }
 
+const rawTextCache = new Map();
+function rawIsText(p) {
+  let st;
+  try { st = fs.statSync(p); } catch { return false; }
+  if (!st.size) return true;
+  const key = p + ':' + st.mtimeMs + ':' + st.size;
+  const hit = rawTextCache.get(key);
+  if (hit !== undefined) return hit;
+  let ok = false;
+  try {
+    const fd = fs.openSync(p, 'r');
+    const head = Buffer.alloc(Math.min(HEAD_BYTES, st.size));
+    try { fs.readSync(fd, head, 0, head.length, 0); } finally { fs.closeSync(fd); }
+    ok = looksTextual(head) && !isRtf(head);
+  } catch {}
+  rawTextCache.set(key, ok);
+  if (rawTextCache.size > 500) rawTextCache.delete(rawTextCache.keys().next().value);
+  return ok;
+}
 
 async function buildCache(base) {
   const s = safe(base);
   if (!s) return null;
   let buffer; try { buffer = fs.readFileSync(s.p); } catch { return null; }
-  let text;
-  try { text = await extractPdf(buffer); }
-  catch (e) { text = `[Could not extract text from this PDF: ${e.message}]`; }
+  let text = '';
+  try { text = await extractDocument(buffer, s.base); }
+  catch (e) { console.warn('[reference files] could not extract text from', s.base, '-', e?.message || e); }
   try { fs.writeFileSync(cachePathFor(s.base), text); } catch {}
   return text;
 }
 function cacheFresh(base) {
   const s = safe(base); if (!s) return false;
-  const c = cachePathFor(s.base);
   try {
-    const src = fs.statSync(s.p), cc = fs.statSync(c);
+    const src = fs.statSync(s.p), cc = fs.statSync(cachePathFor(s.base));
     return cc.mtimeMs >= src.mtimeMs;
   } catch { return false; }
 }
 
+function sourceOf(base) {
+  const s = safe(base); if (!s) return null;
+  if (rawIsText(s.p)) return s.p;
+  const c = cachePathFor(s.base);
+  try { return cacheFresh(base) && fs.statSync(c).size > 0 ? c : null; } catch { return null; }
+}
+function isReadable(base) { return !!sourceOf(base); }
+
 export async function ensureIndexedAll() {
   for (const f of rawList()) {
-    if (isPdf(f.name) && !cacheFresh(f.name)) { try { await buildCache(f.name); } catch {} }
+    const s = safe(f.name);
+    if (s && !rawIsText(s.p) && !cacheFresh(f.name)) { try { await buildCache(f.name); } catch {} }
   }
 }
 
 function readableTextSync(base) {
-  const s = safe(base); if (!s) return null;
-  if (isPdf(base)) { try { return fs.readFileSync(cachePathFor(s.base), 'utf8'); } catch { return null; } }
-  if (TEXT_EXT.has(ext(base))) { try { return fs.readFileSync(s.p, 'utf8'); } catch { return null; } }
-  return null;
+  const src = sourceOf(base);
+  if (!src) return null;
+  try { return fs.readFileSync(src, 'utf8'); } catch { return null; }
 }
 
 const lineCache = new Map();
 function countLines(base) {
-  const s = safe(base);
-  if (!s) return 0;
-  const src = isPdf(base) ? cachePathFor(s.base) : s.p;
+  const src = sourceOf(base);
+  if (!src) return 0;
   let stamp;
   try { const st = fs.statSync(src); stamp = st.mtimeMs + ':' + st.size; } catch { return 0; }
   const hit = lineCache.get(src);
@@ -75,12 +99,13 @@ function countLines(base) {
   return lines;
 }
 
+
 function rawList() {
   let names;
   try { names = fs.readdirSync(MEMBANK_ROOT); } catch { return []; }
   const out = [];
   for (const n of names) {
-    if (n.startsWith('.')) continue;
+    if (RESERVED.has(n)) continue;
     let st; try { st = fs.statSync(path.join(MEMBANK_ROOT, n)); } catch { continue; }
     if (!st.isFile()) continue;
     out.push({ name: n, size: st.size });
@@ -130,7 +155,7 @@ export async function saveUpload(originalName, buffer) {
   const s = safe(originalName);
   if (!s) throw new Error('Invalid file name.');
   fs.writeFileSync(s.p, buffer);
-  if (isPdf(s.base)) { try { await buildCache(s.base); } catch {} }
+  if (!rawIsText(s.p)) { try { await buildCache(s.base); } catch {} }
   return { name: s.base, size: buffer.length, lines: countLines(s.base), readable: isReadable(s.base) };
 }
 export function remove(name) {
@@ -159,25 +184,21 @@ export function rename(oldName, newName) {
   return { ok: true, name: b.base };
 }
 
-export function promptFor(introOverride) {
-  const files = list();
-  if (!files.length) return '';
-  const intro = (introOverride && String(introOverride).trim()) || DEFAULT_PROMPT;
-  let p = '## Memory Bank\n' + intro + '\n\nAvailable files:\n';
+export function filesText() {
+  let p = '';
   let curFolder = null;
-  for (const f of files) {
+  for (const f of list()) {
     if ((f.folder || '') !== curFolder) { curFolder = f.folder || ''; if (curFolder) p += `[${curFolder}]\n`; }
     p += `- ${f.name}${f.readable ? ` (${f.lines} lines, ${f.size} bytes)` : ` (${f.size} bytes, not readable as text)`}\n`;
   }
-  p += '\nUse the `mb_view` function to read a file (pass `path`, and optional `start`/`end` line numbers to read only a slice) and `mb_search` to search across all files (pass `query`). Read only what you need, do not pull entire large files if a line range suffices.';
-  return p;
+  return p.trimEnd();
 }
 
 export function execTool(call) {
   if (call.tool === 'mb_view') {
     const s = safe(call.path);
     if (!s) return { ok: false, error: `No memory bank file named "${call.path}".` };
-    if (!isReadable(call.path)) return { ok: false, error: `"${call.path}" is not a readable text or PDF file.` };
+    if (!isReadable(call.path)) return { ok: false, error: `"${call.path}" has no readable text (it may be an image-only, password protected or unsupported file).` };
     const text = readableTextSync(call.path);
     if (text == null) return { ok: false, error: `Could not read "${call.path}". It may still be indexing, try again.` };
     const lines = text.split('\n');

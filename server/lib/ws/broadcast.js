@@ -15,14 +15,13 @@ export function requestedKwargs(msg) {
 
 function send(ws, msg) { if (ws.readyState !== 1) return; try { ws.send(msg); } catch {} }
 
-export function broadcastConfig() {
-  const msg = JSON.stringify({ type: 'config' });
+export function broadcastConfig(version) {
+  const msg = JSON.stringify({ type: 'config', version });
   for (const ws of clients.keys()) send(ws, msg);
 }
 
-// notify only admin sessions to refresh their draft view (live editing)
-export function broadcastAdminConfig() {
-  const msg = JSON.stringify({ type: 'config' });
+export function broadcastAdmins(payload) {
+  const msg = JSON.stringify(payload);
   for (const [ws, st] of clients.entries()) if (st.isAdmin) send(ws, msg);
 }
 

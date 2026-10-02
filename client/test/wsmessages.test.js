@@ -54,7 +54,8 @@ function wsCtx(activeKey = 'c1') {
     actions: {
       finalize: log('finalize'), finalizeBackground: log('finalizeBackground'), syncView: log('syncView'),
       loadModels: log('loadModels'), loadAppConfig: log('loadAppConfig'), loadBudget: log('loadBudget'),
-      loadLedger: log('loadLedger'), taskStarted: log('taskStarted')
+      loadLedger: log('loadLedger'), taskStarted: log('taskStarted'), setAsk: log('setAsk'),
+      syncConfig: log('syncConfig'), adminDraft: log('adminDraft'), presence: log('presence')
     }
   };
   return ctx;
@@ -79,7 +80,7 @@ test('every frame the server can send has a handler', () => {
   const SENT = ['session_revoked', 'config', 'resume', 'files', 'tool_live', 'tool_live_delta',
     'tool_exec', 'tool', 'compacting', 'compacted', 'ctx_rolling', 'title', 'chat_ended',
     'routed', 'queued', 'status', 'prompt_size', 'telemetry', 'steered', 'start',
-    'reasoning', 'content', 'error', 'done', 'task_started'];
+    'reasoning', 'content', 'rewrite', 'error', 'done', 'task_started', 'hello', 'admin_draft', 'presence'];
   for (const type of SENT) assert.ok(handlers[type], 'no handler for ' + type);
 });
 
@@ -137,6 +138,29 @@ test('start resets the record so a retry does not inherit the last attempt', () 
   assert.equal(rec.done, false);
   assert.deepEqual(rec.steers, []);
   assert.equal(rec.assistantId, 'a2');
+});
+
+test('a continued reply starts from the text already written', () => {
+  const ctx = wsCtx('c1');
+  dispatchWs({ type: 'start', chatId: 'c1', messageId: 'a1', content: 'Half a sen', reasoning: 'plan', reasonSegs: ['s0'] }, ctx);
+  const rec = ctx.recs.get('c1');
+  assert.equal(rec.content, 'Half a sen');
+  assert.equal(rec.reasoning, 'plan');
+  assert.deepEqual(rec.reasonSegs, ['s0']);
+  const begin = ctx.calls.find(c => c[0] === 'begin')[1];
+  assert.deepEqual([begin.messageId, begin.content, begin.reasoning, begin.segs], ['a1', 'Half a sen', 'plan', ['s0']]);
+  dispatchWs({ type: 'content', chatId: 'c1', text: 'tence.' }, ctx);
+  assert.equal(rec.content, 'Half a sentence.');
+});
+
+test('rewrite replaces the text so far, as when a stopped file card is swapped for the finished one', () => {
+  const ctx = wsCtx('c1');
+  ctx.mirror.recFor('c1').content = 'Writing.[[OQR:c3RvcHBlZA==]]';
+  dispatchWs({ type: 'rewrite', chatId: 'c1', content: 'Writing.[[OQR:ZG9uZQ==]]' }, ctx);
+  assert.equal(ctx.recs.get('c1').content, 'Writing.[[OQR:ZG9uZQ==]]');
+  assert.ok(ctx.calls.some(c => c[0] === 'pushContent' && c[1] === 'Writing.[[OQR:ZG9uZQ==]]'));
+  dispatchWs({ type: 'rewrite', chatId: 'c1' }, ctx);
+  assert.equal(ctx.recs.get('c1').content, 'Writing.[[OQR:ZG9uZQ==]]', 'a frame without content changes nothing');
 });
 
 test('an error after text has streamed keeps the text instead of discarding it', () => {
@@ -271,4 +295,40 @@ test('task_started inserts a chat the sidebar has never seen, once', () => {
   assert.equal(inserted[0].title, 'Daily briefing');
   // A duplicate frame for a chat already in the list must not add a second row.
   assert.deepEqual(updater(inserted), inserted);
+});
+
+test('a question the model is waiting on is tracked per chat until it is answered or the turn ends', () => {
+  const ctx = wsCtx();
+  const q = { question: 'Which parser?', options: ['clap', 'argh'], multiple: false };
+  dispatchWs({ type: 'ask', chatId: 'c2', question: q }, ctx);
+  assert.deepEqual(ctx.calls.find(c => c[0] === 'setAsk'), ['setAsk', 'c2', q], 'a background chat keeps its question too');
+  ctx.calls.length = 0;
+  dispatchWs({ type: 'asked', chatId: 'c2' }, ctx);
+  assert.deepEqual(ctx.calls.find(c => c[0] === 'setAsk'), ['setAsk', 'c2', null]);
+  ctx.calls.length = 0;
+  dispatchWs({ type: 'done', chatId: 'c1' }, ctx);
+  assert.deepEqual(ctx.calls.find(c => c[0] === 'setAsk'), ['setAsk', 'c1', null], 'a finished turn leaves no question behind');
+  ctx.calls.length = 0;
+  dispatchWs({ type: 'resume', turns: [{ chatId: 'c3', content: '', ask: q }] }, ctx);
+  assert.deepEqual(ctx.calls.find(c => c[0] === 'setAsk'), ['setAsk', 'c3', q], 'a reload brings the open question back');
+});
+
+test('a stopped turn is committed at once, without waiting for the reveal to catch up', () => {
+  const ctx = wsCtx('c1');
+  ctx.stream.markDone = () => { ctx.calls.push(['markDone']); return false; };
+  dispatchWs({ type: 'done', chatId: 'c1', messageId: 'a1', truncated: true, stopped: true }, ctx);
+  assert.equal(did(ctx, 'finalize'), true);
+  assert.equal(ctx.recs.get('c1').truncated, true, 'the committed message keeps its cut-off flag');
+  const slow = wsCtx('c1');
+  slow.stream.markDone = () => false;
+  dispatchWs({ type: 'done', chatId: 'c1', messageId: 'a2' }, slow);
+  assert.equal(did(slow, 'finalize'), false, 'a finished turn still waits for its reveal');
+});
+
+test('a config frame and the connect greeting both hand their version on', () => {
+  const ctx = wsCtx('c1');
+  dispatchWs({ type: 'config', version: 7 }, ctx);
+  dispatchWs({ type: 'hello', configVersion: 7 }, ctx);
+  const calls = ctx.calls.filter(c => c[0] === 'syncConfig').map(c => c.slice(1));
+  assert.deepEqual(calls, [[7, false], [7, true]]);
 });

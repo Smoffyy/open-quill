@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useId } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Copy, X } from '../ui/icons.jsx';
+import { Check, Copy, X, Trash } from '../ui/icons.jsx';
 import { Switch, SegSlide, SelectRow } from '../ui/controls.jsx';
 import { t } from '../../i18n.jsx';
 import { logoFor, useLogos } from '../../lib/logos.js';
@@ -14,9 +14,9 @@ export { Switch };
 
 // Every page is a stack of cards. A card owns its own padding and internal
 // rhythm so a section never reaches for an inline margin.
-export function Card({ title, sub, actions, foot, flush, children }) {
+export function Card({ title, sub, actions, foot, flush, className, children }) {
   return (
-    <section className="cp-card">
+    <section className={'cp-card' + (className ? ' ' + className : '')}>
       {(title || sub || actions) && (
         <div className="cp-card-head">
           <div>
@@ -91,8 +91,8 @@ export function Input({ mono, ...rest }) {
   return <input className={'cp-input' + (mono ? ' mono' : '')} {...rest} />;
 }
 
-export function Area({ mono, rows = 5, ...rest }) {
-  return <textarea className={'cp-area' + (mono ? ' mono' : '')} rows={rows} {...rest} />;
+export function Area({ mono, rows = 5, className, ...rest }) {
+  return <textarea className={['cp-area', mono && 'mono', className].filter(Boolean).join(' ')} rows={rows} {...rest} />;
 }
 
 export function Select({ value, onChange, options, disabled, label }) {
@@ -130,6 +130,32 @@ export function Btn({ kind, size, icon, className, children, ...rest }) {
 // for everyone else, so the two can never drift apart.
 export function IconBtn({ kind, size = 'sm', label, children, ...rest }) {
   return <Btn kind={kind} size={size} icon title={label} aria-label={label} {...rest}>{children}</Btn>;
+}
+
+// A stored secret is never sent back to the browser, so the field starts empty and
+// says whether something is saved. A typed value is saved when the field is left
+// or Enter is pressed; removing it is its own action, so clearing the box by
+// accident never wipes a working key.
+export function SecretInput({ saved, hint, emptyText, label, onSave, onRemove }) {
+  const [text, setText] = useState('');
+  const commit = () => {
+    const v = text.trim();
+    if (!v) return;
+    onSave(v);
+    setText('');
+  };
+  const placeholder = saved
+    ? (hint ? t('Saved key ending {hint}. Type to replace it.', { hint }) : t('A key is saved. Type to replace it.'))
+    : emptyText;
+  return (
+    <div className="cp-inline">
+      <Input mono type="password" value={text} autoComplete="off" placeholder={placeholder} aria-label={label}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }} />
+      {saved && <IconBtn kind="quiet" label={t('Remove saved key')} onClick={() => { setText(''); onRemove(); }}><Trash /></IconBtn>}
+    </div>
+  );
 }
 
 export function CopyBtn({ text, title }) {
@@ -294,27 +320,15 @@ export function KV({ items }) {
   );
 }
 
-// Silent when nothing is happening. A status line that always says something
-// trains people to stop reading it.
-export function SaveState({ state }) {
-  if (state !== 'saving' && state !== 'saved' && state !== 'error') return null;
-  return (
-    <span className={'cp-state' + (state === 'error' ? ' bad' : '')} role="status">
-      <span className={'cp-dot' + (state === 'saving' ? ' pending' : state === 'saved' ? ' live' : ' bad')} />
-      {state === 'saving' ? t('Saving') : state === 'saved' ? t('Saved') : t('Not saved')}
-    </span>
-  );
-}
-
 /* ---------- overlays ---------- */
 
-export function Dialog({ title, size, onClose, foot, children }) {
+export function Dialog({ title, size, layer, onClose, foot, children }) {
   const box = useRef(null);
   const titleId = useId();
   useFocusTrap(box, onClose, { field: true });
 
   return createPortal(
-    <div className="cp-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className={'cp-overlay' + (layer ? ' ' + layer : '')} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div ref={box} className={'cp-dialog' + (size ? ' ' + size : '')}
         role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className="cp-dialog-head">
@@ -370,8 +384,8 @@ export function PointMenu({ at, onClose, width = 250, anchorEl, children }) {
     </div>, document.body);
 }
 
-export function MenuItem({ tone, sub, active, children, ...rest }) {
-  const cls = ['cp-menu-item', tone, sub && 'sub', active && 'on'].filter(Boolean).join(' ');
+export function MenuItem({ tone, sub, active, className, children, ...rest }) {
+  const cls = ['cp-menu-item', tone, sub && 'sub', active && 'on', className].filter(Boolean).join(' ');
   return <button type="button" role="menuitem" className={cls} {...rest}>{children}</button>;
 }
 

@@ -130,3 +130,19 @@
 .chord-hint-item { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--text); }
 .chord-hint-item.muted { color: var(--text-faint); }
 .chord-hint kbd { font-family: var(--font-sans); font-size: 11px; background: var(--surface-2); border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 6px; padding: 1px 7px; min-width: 18px; text-align: center; color: var(--text-muted); }
+
+/* ---------- confirm ---------- */
+.confirm-overlay { z-index: 440; }
+.confirm-dialog { width: min(420px, calc(100vw - 32px)); padding: 22px; background: var(--menu-bg); border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, .28); font-family: var(--font-sans); }
+.confirm-title { margin: 0; font-size: 18px; font-weight: 600; line-height: 24px; color: var(--text); }
+.confirm-message { margin: 10px 0 0; font-size: 14px; line-height: 1.5; color: var(--text-muted); overflow-wrap: anywhere; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.confirm-btn { height: 36px; padding: 0 14px; border-radius: 8px; font-size: 14px; color: var(--text); background: var(--surface-hover); transition: background var(--fx-t, .12s), opacity var(--fx-t, .12s); }
+.confirm-btn:hover { background: var(--hover-mid); }
+.confirm-btn.solid { background: var(--text); color: var(--bg); font-weight: 600; }
+.confirm-btn.solid.danger { background: var(--danger); color: #fff; }
+.confirm-btn.solid:hover { opacity: .88; }
+@media (max-width: 480px) {
+  .confirm-actions { flex-direction: column-reverse; }
+  .confirm-btn { width: 100%; }
+}

@@ -61,8 +61,7 @@ export async function summarizeConversation(model, priorSummary, msgs) {
     ? `Summary of the conversation up to an earlier point:\n${priorSummary.trim()}\n\nNewer messages to fold into the summary:\n\n${flat}`
     : `Conversation to summarize:\n\n${flat}`;
   try {
-    let t = await oneShot(model, [{ role: 'system', content: SUMMARY_SYSTEM }, { role: 'user', content: user }]);
-    t = stripThink(model, t).trim();
-    return t || priorSummary || '';
-  } catch { return priorSummary || ''; }
+    const t = await oneShot(model, [{ role: 'system', content: SUMMARY_SYSTEM }, { role: 'user', content: user }]);
+    return stripThink(model, t).trim();
+  } catch { return ''; }
 }

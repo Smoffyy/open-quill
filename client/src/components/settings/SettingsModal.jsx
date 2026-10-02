@@ -25,7 +25,7 @@ function findRow(body, text) {
   return rows.find(el => said(el) === want) || rows.find(el => said(el).startsWith(want)) || null;
 }
 
-export default function SettingsModal({ user, cfg, modelId, initialTab, browseSkills = false, onClose, onUpdated, onDeleted, onExportChats, onImportChats, onTrySkill, onChangelog }) {
+export default function SettingsModal({ user, cfg, initialTab, browseSkills = false, onClose, onUpdated, onDeleted, onExportChats, onImportChats, onTrySkill, onChangelog }) {
   const [tab, setTab] = useState(initialTab || 'general');
   const [reveal, setReveal] = useState(null);
   const [browse, setBrowse] = useState(browseSkills);
@@ -58,7 +58,7 @@ export default function SettingsModal({ user, cfg, modelId, initialTab, browseSk
   else if (tab === 'chat') content = <ChatTab prefs={prefs} setPref={setPref} cfg={cfg} />;
   else if (tab === 'security') content = <SecurityTab user={user} onUpdated={onUpdated} />;
   else if (tab === 'keybinds') content = <KeybindsPanel prefs={prefs} setPref={setPref} />;
-  else if (tab === 'memory') content = <MemoryTab user={user} prefs={prefs} setPref={setPref} modelId={modelId} onUpdated={onUpdated} />;
+  else if (tab === 'memory') content = <MemoryTab prefs={prefs} setPref={setPref} />;
   else if (tab === 'usage') content = <UsageTab />;
   else if (tab === 'version') content = <VersionTab cfg={cfg} onChangelog={onChangelog} />;
   else if (tab === 'skills') content = <SkillsSection browse={browse} onTrySkill={(sk) => { onTrySkill?.(sk); onClose(); }} />;

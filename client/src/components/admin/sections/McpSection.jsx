@@ -1,12 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { api } from '../../../lib/api.js';
 import { useAdmin } from '../store.jsx';
 import { Card, Rows, ToggleRow, Fields, Field, Input, Area, Seg, Btn, IconBtn, Acts, Table, Badge, Switch, Empty, Dialog, Note } from '../ui.jsx';
 import { Plus, Trash, Pencil, Refresh, Plug } from '../../ui/icons.jsx';
 import { t } from '../../../i18n.jsx';
 import { Skel, SkelRows } from '../../ui/Skeleton.jsx';
+import { parseMcpConfig } from '../../../lib/mcpconfig.js';
+import { statusOf } from '../../settings/McpCard.jsx';
 
-const BLANK = { name: '', transport: 'stdio', command: '', args: '', url: '', headers: '', enabled: true };
+const BLANK = { name: '', transport: 'stdio', command: '', args: '', env: '', url: '', headers: '', enabled: true };
+const TONE = { __proto__: null, connected: 'good', error: 'bad', new: undefined };
+
+const savedNote = (names, touched) => (names?.length && !touched ? t('Saved: {names}. Values stay on the server.', { names: names.join(', ') }) : '');
 
 export default function McpSection() {
   const { confirm } = useAdmin();
@@ -14,6 +19,8 @@ export default function McpSection() {
   const [draft, setDraft] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
+  const [paste, setPaste] = useState('');
+  const imported = useMemo(() => parseMcpConfig(paste), [paste]);
 
   useEffect(() => {
     let alive = true;
@@ -24,20 +31,43 @@ export default function McpSection() {
     return () => { alive = false; };
   }, []);
 
+  function open(next) {
+    setDraft(next);
+    setError('');
+    setPaste('');
+  }
+
   async function save() {
     setError('');
     setBusy('save');
     try {
-      if (draft.id) {
-        const r = await api.patch('/api/admin/mcp/' + draft.id, draft);
-        setServers(list => list.map(x => (x.id === draft.id ? r.server : x)));
-      } else {
-        const r = await api.post('/api/admin/mcp', draft);
-        setServers(list => [...list, r.server]);
-      }
-      setDraft(null);
+      const { headersTouched, envTouched, headerNames, envNames, tools, ...body } = draft;
+      if (draft.id && !headersTouched) delete body.headers;
+      if (draft.id && !envTouched) delete body.env;
+      const r = draft.id ? await api.patch('/api/admin/mcp/' + draft.id, body) : await api.post('/api/admin/mcp', body);
+      setServers(list => (list.some(x => x.id === r.server.id) ? list.map(x => (x.id === r.server.id ? r.server : x)) : [...list, r.server]));
+      if (r.warning) {
+        setDraft({ ...BLANK, ...r.server });
+        setError(t('Saved, but the server did not connect: {error}', { error: r.warning }));
+      } else setDraft(null);
     } catch (e) { setError(e.message || t('Could not reach that server.')); }
     finally { setBusy(''); }
+  }
+
+  async function addAll(list) {
+    setError('');
+    setBusy('save');
+    const failed = [];
+    for (const sv of list) {
+      try {
+        const r = await api.post('/api/admin/mcp', sv);
+        setServers(cur => [...cur, r.server]);
+        if (r.warning) failed.push(sv.name);
+      } catch { failed.push(sv.name); }
+    }
+    setBusy('');
+    if (failed.length) setError(t('Added, but these did not connect: {names}. Each row shows why.', { names: failed.join(', ') }));
+    else setDraft(null);
   }
 
   async function toggle(sv) {
@@ -75,7 +105,7 @@ export default function McpSection() {
     <>
       <Card title={t('Servers')} flush
         sub={t('Tools from every enabled server are exposed to any model with tool calling, prefixed with mcp_. Servers run on this machine or your network; nothing is relayed through a third party. Members can attach HTTP servers of their own under Settings.')}
-        actions={<Btn kind="primary" size="sm" onClick={() => { setDraft({ ...BLANK }); setError(''); }}>
+        actions={<Btn kind="primary" size="sm" onClick={() => open({ ...BLANK })}>
           <Plus /> {t('Add server')}
         </Btn>}
         foot={anyError
@@ -99,20 +129,21 @@ export default function McpSection() {
           ]}>
             {servers.map(sv => (
               <tr key={sv.id}>
-                <td>{sv.name}</td>
+                <td>
+                  {sv.name}
+                  {sv.status === 'error' && sv.error && <div className="mcp-row-error">{sv.error}</div>}
+                </td>
                 <td className="mono dim">{sv.transport === 'http' ? 'http' : 'stdio'}</td>
                 <td className="mono dim wrap">{sv.transport === 'http' ? sv.url : [sv.command, sv.args].filter(Boolean).join(' ')}</td>
                 <td className="num mono">{sv.tools?.length ?? sv.toolCount ?? 0}</td>
                 <td className="fit">
-                  {sv.error
-                    ? <Badge tone="bad">{t('error')}</Badge>
-                    : sv.enabled ? <Badge tone="good">{t('connected')}</Badge> : <Badge>{t('off')}</Badge>}
+                  {sv.enabled === false ? <Badge>{t('off')}</Badge> : <Badge tone={TONE[statusOf(sv).key]}>{statusOf(sv).label}</Badge>}
                 </td>
                 <td className="fit"><Switch on={sv.enabled} label={t('Enabled')} onToggle={() => toggle(sv)} /></td>
                 <td className="acts">
                   <Acts end>
                     <IconBtn label={t('Reconnect')} disabled={busy === sv.id} onClick={() => refresh(sv.id)}><Refresh /></IconBtn>
-                    <IconBtn label={t('Edit')} onClick={() => { setDraft({ ...sv }); setError(''); }}><Pencil /></IconBtn>
+                    <IconBtn label={t('Edit')} onClick={() => open({ ...BLANK, ...sv })}><Pencil /></IconBtn>
                     <IconBtn kind="danger" label={t('Remove')} onClick={() => del(sv)}><Trash /></IconBtn>
                   </Acts>
                 </td>
@@ -131,6 +162,24 @@ export default function McpSection() {
             </Btn>
           </>}>
           <Fields>
+            {!draft.id && (
+              <Field label={t('Import a config')} optional
+                hint={imported.error === 'not-json' ? t('That is not valid JSON yet.') : imported.error ? t('No MCP servers found in that JSON.') : t('Paste the JSON block from a server README, such as an "mcpServers" entry. It fills in the fields below.')}>
+                <Area mono rows={3} value={paste} placeholder={'{ "mcpServers": { "filesystem": { "command": "npx", "args": ["-y", "..."] } } }'}
+                  onChange={(e) => setPaste(e.target.value)} />
+                {imported.servers.length === 1 && (
+                  <Acts><Btn size="sm" onClick={() => { setDraft({ ...BLANK, ...imported.servers[0] }); setPaste(''); }}>{t('Fill in from this config')}</Btn></Acts>
+                )}
+                {imported.servers.length > 1 && (
+                  <Acts>
+                    <Btn size="sm" kind="primary" disabled={busy === 'save'} onClick={() => addAll(imported.servers)}>
+                      {t('Add all {n} servers', { n: imported.servers.length })}
+                    </Btn>
+                    <span className="cp-note-line">{imported.servers.map(s => s.name).join(', ')}</span>
+                  </Acts>
+                )}
+              </Field>
+            )}
             <Field label={t('Name')} hint={t('Shown to admins only. Tool names come from the server itself.')}>
               <Input value={draft.name} placeholder={t('filesystem')}
                 onChange={(e) => setDraft(d => ({ ...d, name: e.target.value }))} />
@@ -147,20 +196,33 @@ export default function McpSection() {
                   <Input mono value={draft.command} placeholder="npx"
                     onChange={(e) => setDraft(d => ({ ...d, command: e.target.value }))} />
                 </Field>
-                <Field label={t('Arguments')} hint={t('Passed to the command as written, split on spaces.')}>
+                <Field label={t('Arguments')} hint={t('Split on spaces. Wrap an argument in double quotes to keep its spaces.')}>
                   <Input mono value={draft.args} placeholder="-y @modelcontextprotocol/server-filesystem /home/me/docs"
                     onChange={(e) => setDraft(d => ({ ...d, args: e.target.value }))} />
+                </Field>
+                <Field label={t('Environment variables')} optional
+                  hint={savedNote(draft.envNames, draft.envTouched) || t('One NAME=value per line, such as an API key the server needs.')}>
+                  <Area mono rows={3} value={draft.env || ''}
+                    placeholder={draft.envNames?.length && !draft.envTouched ? t('Values are hidden. Type to replace all of them.') : 'GITHUB_PERSONAL_ACCESS_TOKEN=...'}
+                    onChange={(e) => setDraft(d => ({ ...d, env: e.target.value, envTouched: true }))} />
+                  {draft.envNames?.length > 0 && !draft.envTouched && (
+                    <Acts><Btn size="sm" kind="quiet" onClick={() => setDraft(d => ({ ...d, env: '', envTouched: true }))}>{t('Remove saved variables')}</Btn></Acts>
+                  )}
                 </Field>
               </>
             ) : (
               <>
-                <Field label={t('URL')}>
+                <Field label={t('URL')} hint={t('Streamable HTTP and the older SSE transport both work. A bare address is tried at /mcp and /sse.')}>
                   <Input mono value={draft.url} placeholder="http://localhost:8931/mcp"
                     onChange={(e) => setDraft(d => ({ ...d, url: e.target.value }))} />
                 </Field>
-                <Field label={t('Headers')} optional hint={t('One Name: value pair per line.')}>
-                  <Area mono rows={3} value={draft.headers} placeholder="Authorization: Bearer …"
-                    onChange={(e) => setDraft(d => ({ ...d, headers: e.target.value }))} />
+                <Field label={t('Headers')} optional hint={savedNote(draft.headerNames, draft.headersTouched) || t('One Name: value pair per line.')}>
+                  <Area mono rows={3} value={draft.headers || ''}
+                    placeholder={draft.headerNames?.length && !draft.headersTouched ? t('Values are hidden. Type to replace all of them.') : 'Authorization: Bearer ...'}
+                    onChange={(e) => setDraft(d => ({ ...d, headers: e.target.value, headersTouched: true }))} />
+                  {draft.headerNames?.length > 0 && !draft.headersTouched && (
+                    <Acts><Btn size="sm" kind="quiet" onClick={() => setDraft(d => ({ ...d, headers: '', headersTouched: true }))}>{t('Remove saved headers')}</Btn></Acts>
+                  )}
                 </Field>
               </>
             )}

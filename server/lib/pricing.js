@@ -19,16 +19,20 @@ const PRESETS = [
   { match: 'o3', label: 'o3', in: 2, out: 8 },
   { match: 'o3-mini', label: 'o3-mini', in: 1.1, out: 4.4 },
 
-  { match: 'claude-opus-5-5', label: 'Claude Opus 5.5', in: 4, out: 20 },
   { match: 'claude-fable-5-1', label: 'Claude Fable 5.1', in: 10, out: 50 },
   { match: 'claude-fable-5', label: 'Claude Fable 5', in: 10, out: 50 },
-  { match: 'claude-opus-5', label: 'Claude Opus 5', in: 5, out: 25 },
-  { match: 'claude-sonnet-5', label: 'Claude Sonnet 5', in: 2, out: 10 },
-  { match: 'claude-haiku-4.5', label: 'Claude Haiku 4.5', in: 1, out: 5 },
   { match: 'claude-mythos-5', label: 'Claude Mythos 5', in: 10, out: 50 },
+  { match: 'claude-opus-5-5', label: 'Claude Opus 5.5', in: 4, out: 20 },
+  { match: 'claude-opus-5', label: 'Claude Opus 5', in: 5, out: 25 },
   { match: 'claude-opus-4-8', label: 'Claude Opus 4.8', in: 5, out: 25 },
+  { match: 'claude-opus-4-7', label: 'Claude Opus 4.7', in: 5, out: 25 },
+  { match: 'claude-opus-4-6', label: 'Claude Opus 4.6', in: 5, out: 25 },
+  { match: 'claude-opus-4-5', label: 'Claude Opus 4.5', in: 5, out: 25 },
   { match: 'claude-opus-4', label: 'Claude Opus 4', in: 15, out: 75 },
+  { match: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5', in: 2, out: 10 },
+  { match: 'claude-sonnet-5', label: 'Claude Sonnet 5', in: 2, out: 10 },
   { match: 'claude-sonnet-4', label: 'Claude Sonnet 4', in: 3, out: 15 },
+  { match: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', in: 1, out: 5 },
   { match: 'claude-3-7-sonnet', label: 'Claude 3.7 Sonnet', in: 3, out: 15 },
   { match: 'claude-3-5-haiku', label: 'Claude 3.5 Haiku', in: 0.8, out: 4 },
 
@@ -96,6 +100,29 @@ export function matchPreset(internalName) {
   }
   if (!best) return null;
   return { label: best.label, in: best.in, out: best.out };
+}
+
+// Cache reads and writes are priced as a multiple of the input price. Anthropic charges
+// a premium to write and a steep discount to read; OpenAI caches for free and discounts
+// reads by model generation. An unknown model is charged as if nothing were cached.
+const CACHE_RATES = [
+  { match: 'claude-fable-5-1', read: 0.025, write: 1.25 },
+  { match: 'claude-mythos-5-1', read: 0.025, write: 1.25 },
+  { match: 'claude-opus-5-5', read: 0.05, write: 1.25 },
+  { match: 'claude-', read: 0.1, write: 1.25 },
+  { match: 'gpt-5', read: 0.1, write: 1 },
+  { match: 'gpt-4.1', read: 0.25, write: 1 },
+  { match: 'gpt-4o', read: 0.5, write: 1 },
+  { match: 'o4-', read: 0.25, write: 1 },
+  { match: 'o3', read: 0.25, write: 1 },
+  { match: 'gemini-', read: 0.25, write: 1 }
+];
+
+export function cacheRates(internalName) {
+  const n = normalize(internalName);
+  let best = null;
+  for (const r of CACHE_RATES) if (n.includes(r.match) && (!best || r.match.length > best.match.length)) best = r;
+  return best ? { read: best.read, write: best.write } : { read: 1, write: 1 };
 }
 
 export function presetList() {

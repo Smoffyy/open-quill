@@ -58,6 +58,9 @@ function request(method, pathname, opts = {}) {
     payload = JSON.stringify(opts.body);
     headers['Content-Type'] = 'application/json';
     headers['Content-Length'] = Buffer.byteLength(payload);
+  } else if (opts.raw !== undefined) {
+    payload = opts.raw;
+    headers['Content-Length'] = payload.length;
   }
   // Origin and Sec-Fetch-Site are forbidden header names in a browser, which is the point:
   // only the browser may set them. node:http lets us reproduce exactly what it would send.
@@ -99,6 +102,8 @@ function handshake(headers, pathname = '/ws') {
 }
 
 // Opens a socket and resolves with the frames it receives after `send`.
+const SESSION_FRAMES = new Set(['hello', 'presence']);
+
 function exchange(headers, send, { frames = 1, timeoutMs = 8000 } = {}) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`, { headers });
@@ -107,7 +112,10 @@ function exchange(headers, send, { frames = 1, timeoutMs = 8000 } = {}) {
     const timer = setTimeout(() => finish(resolve, got), timeoutMs);
     ws.on('open', () => ws.send(JSON.stringify(send)));
     ws.on('message', (raw) => {
-      try { got.push(JSON.parse(raw)); } catch { return; }
+      let m;
+      try { m = JSON.parse(raw); } catch { return; }
+      if (SESSION_FRAMES.has(m?.type)) return;
+      got.push(m);
       if (got.length >= frames) finish(resolve, got);
     });
     ws.on('error', (e) => finish(reject, e));
@@ -302,7 +310,13 @@ test('malformed frames do not take the socket down', async () => {
   // a well-formed frame still gets a reply afterwards
   const reply = await new Promise((resolve) => {
     const timer = setTimeout(() => resolve(null), 6000);
-    ws.on('message', (raw) => { clearTimeout(timer); try { resolve(JSON.parse(raw)); } catch { resolve(null); } });
+    ws.on('message', (raw) => {
+      let m;
+      try { m = JSON.parse(raw); } catch { m = null; }
+      if (SESSION_FRAMES.has(m?.type)) return;
+      clearTimeout(timer);
+      resolve(m);
+    });
     ws.send(JSON.stringify({ type: 'chat', chatId: 'no-such-chat', modelId: 'x' }));
   });
   try { ws.terminate(); } catch {}
@@ -409,7 +423,9 @@ test('admin settings and branding survive hostile input rather than 500', async 
   const back = await browser('GET', '/api/admin/settings');
   assert.equal(back.status, 200);
   assert.equal(typeof back.json.apiBaseUrl, 'string', 'never stored as the object it arrived as');
-  assert.equal(back.json.apiKey.length, 500, 'capped at the boundary');
+  assert.equal(back.json.apiKey, '', 'a secret never leaves the server');
+  assert.equal(back.json.apiKeySaved, true);
+  assert.equal(back.json.apiKeyHint, '…kkkk');
   assert.equal(back.json.webSearchCount, 20, 'clamped, not stored raw');
   assert.equal(back.json.sessionTtlDays, 30, 'unparseable falls back to the default');
   assert.equal(back.json.voiceSttEngine, 'browser', 'an unknown enum value is refused');
@@ -465,14 +481,58 @@ test('uploads need a session, except the icon the sign-in screen shows', async (
   // An admin edit only stages the value, so the icon is not public on the strength
   // of a draft: it has to be published first.
   assert.equal((await request('GET', '/uploads/brand.png')).status, 404, 'a staged icon is still private');
-  assert.equal((await browser('POST', '/api/admin/models/publish', { body: {} })).status, 200);
+  assert.equal((await browser('POST', '/api/admin/changes/publish', { body: {} })).status, 200);
   assert.equal((await request('GET', '/uploads/brand.png')).status, 200, 'now the login screen can load it');
   assert.equal((await request('GET', '/uploads/attachment.png')).status, 404, 'and only that one file');
 
   // the exemption follows the setting rather than being latched on first use
   await browser('PATCH', '/api/admin/app-config', { body: { appIcon: '' } });
-  await browser('POST', '/api/admin/models/publish', { body: {} });
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
   assert.equal((await request('GET', '/uploads/brand.png')).status, 404, 'unset the icon and it is private again');
+});
+
+test('a chat upload keeps its UTF-8 name and any format previews as the text the model reads', async () => {
+  const boundary = 'oqattach' + Date.now();
+  const part = (name, type, body) => Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="files"; filename="${name}"\r\nContent-Type: ${type}\r\n\r\n`, 'utf8'),
+    body, Buffer.from('\r\n')
+  ]);
+  const raw = Buffer.concat([
+    part('résumé 履歴.rtf', 'application/rtf', Buffer.from('{\\rtf1\\ansi{\\fonttbl{\\f0 Arial;}}Hello\\par World}')),
+    part('Main.hx', 'application/octet-stream', Buffer.from('class Main { static function main() {} }\n')),
+    part('notes.txt', 'text/plain', Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('wide text', 'utf16le')])),
+    Buffer.from(`--${boundary}--\r\n`)
+  ]);
+  const up = await browser('POST', '/api/upload', { raw, headers: { 'Content-Type': 'multipart/form-data; boundary=' + boundary } });
+  assert.equal(up.status, 200);
+  const [rtf, hx, wide] = up.json.files;
+  assert.equal(rtf.name, 'résumé 履歴.rtf', 'a non-ASCII file name is not mangled into latin1');
+  const text = async (f) => (await browser('GET', '/api/uploads/' + f.url.split('/').pop() + '/text')).json.text;
+  assert.equal(await text(rtf), 'Hello\nWorld');
+  assert.equal(await text(hx), 'class Main { static function main() {} }\n');
+  assert.equal(await text(wide), 'wide text');
+  assert.equal((await browser('GET', '/api/uploads/missing.pdf/text')).status, 404);
+});
+
+test('reference files read any text extension, convert documents and accept dotfile names', async () => {
+  const boundary = 'oqref' + Date.now();
+  const part = (name, body) => Buffer.concat([Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="files"; filename="${name}"\r\nContent-Type: application/octet-stream\r\n\r\n`), Buffer.from(body), Buffer.from('\r\n')]);
+  const raw = Buffer.concat([
+    part('Main.hx', 'class Main {}\nfunction a() {}\n'),
+    part('brief.rtf', '{\\rtf1\\ansi First\\par Second}'),
+    part('.editorconfig', 'root = true\n'),
+    Buffer.from(`--${boundary}--\r\n`)
+  ]);
+  const up = await browser('POST', '/api/admin/membank', { raw, headers: { 'Content-Type': 'multipart/form-data; boundary=' + boundary } });
+  assert.equal(up.status, 200);
+  assert.equal(up.json.saved, 3);
+  const byName = Object.fromEntries(up.json.files.map(f => [f.name, f]));
+  assert.equal(byName['Main.hx'].readable, true, 'an extension no list knows is still text');
+  assert.equal(byName['Main.hx'].lines, 3);
+  assert.equal(byName['brief.rtf'].readable, true);
+  assert.equal(byName['brief.rtf'].lines, 2, 'RTF is counted as its converted text, not its markup');
+  assert.equal(byName['.editorconfig'].readable, true);
+  for (const name of Object.keys(byName)) await browser('DELETE', '/api/admin/membank/' + encodeURIComponent(name));
 });
 
 test('admin edits stage until they are published', async () => {
@@ -481,18 +541,119 @@ test('admin edits stage until they are published', async () => {
   const staged = await browser('GET', '/api/admin/settings');
   assert.equal(staged.json.voiceMicEnabled, true, 'the panel sees its own draft');
 
-  const state = await browser('GET', '/api/admin/models/publish-state');
-  assert.equal(state.json.staged, true, 'the draft is reported as staged');
-  assert.equal(state.json.dirty, true, 'and that alone marks the draft dirty');
+  const state = await browser('GET', '/api/admin/changes');
+  const mic = state.json.changes.find(c => c.key === 'setting:voice_mic_enabled');
+  assert.ok(mic, 'the staged setting is listed as a pending change');
+  assert.equal(mic.after, '1');
+  assert.deepEqual(mic.authors.map(a => a.id), [(await browser('GET', '/api/me')).json.user.id], 'and attributed to the admin who made it');
 
   // The admin previews their own draft; the published value is what everyone else
   // reads, which the public app-icon test above exercises from a signed-out caller.
   await browser('PATCH', '/api/admin/app-config', { body: { appName: 'Staged Name' } });
   assert.equal((await browser('GET', '/api/app-config')).json.appName, 'Staged Name', 'an admin previews the draft');
 
-  assert.equal((await browser('POST', '/api/admin/models/publish', { body: {} })).status, 200);
-  assert.equal((await browser('GET', '/api/admin/models/publish-state')).json.staged, false, 'publishing clears the staging area');
+  assert.equal((await browser('POST', '/api/admin/changes/publish', { body: {} })).status, 200);
+  assert.equal((await browser('GET', '/api/admin/changes')).json.changes.length, 0, 'publishing clears the staging area');
   assert.equal((await browser('GET', '/api/app-config')).json.appName, 'Staged Name', 'and the value survives as the live one');
+});
+
+test('discarding drops every staged edit back to the published state', async () => {
+  const kept = (await browser('POST', '/api/admin/models', { body: { display_name: 'Kept', internal_name: 'kept' } })).json.id;
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
+  const before = (await browser('GET', '/api/admin/models')).json.find(m => m.id === kept);
+
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: kept, description: 'edited' }] } });
+  const added = (await browser('POST', '/api/admin/models', { body: { display_name: 'Added', internal_name: 'added' } })).json.id;
+  await browser('PATCH', '/api/admin/app-config', { body: { appName: 'Reverted Name' } });
+  assert.ok((await browser('GET', '/api/admin/changes')).json.changes.length > 0);
+
+  assert.equal((await browser('POST', '/api/admin/changes/discard', { body: {} })).status, 200);
+  const rows = (await browser('GET', '/api/admin/models')).json;
+  assert.deepEqual(rows.find(m => m.id === kept), before, 'an edited row is restored exactly');
+  assert.ok(!rows.some(m => m.id === added), 'a model created since publishing is gone');
+  assert.notEqual((await browser('GET', '/api/app-config')).json.appName, 'Reverted Name', 'staged config is dropped');
+  assert.equal((await browser('GET', '/api/admin/changes')).json.changes.length, 0, 'and nothing is left to publish');
+});
+
+test('the catalog edits, copies and removes models in batches', async () => {
+  const a = (await browser('POST', '/api/admin/models', { body: { display_name: 'Batch A', internal_name: 'batch-a' } })).json.id;
+  const b = (await browser('POST', '/api/admin/models', { body: { display_name: 'Batch B', internal_name: 'batch-b' } })).json.id;
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
+
+  const edit = await browser('PATCH', '/api/admin/models', { body: { rows: [
+    { id: a, system_prompt: 'Shared prompt', temperature: '0.4' },
+    { id: b, system_prompt: 'Shared prompt', temperature: '' }
+  ] } });
+  assert.equal(edit.status, 200);
+  const rows = (await browser('GET', '/api/admin/models')).json;
+  const ra = rows.find(m => m.id === a), rb = rows.find(m => m.id === b);
+  assert.equal(ra.system_prompt, 'Shared prompt');
+  assert.equal(rb.system_prompt, 'Shared prompt');
+  assert.equal(ra.temperature, 0.4, 'values are sanitized exactly as a single edit is');
+  assert.equal(rb.temperature, null);
+
+  const state = (await browser('GET', '/api/admin/changes')).json.models;
+  assert.deepEqual([...state.changed].sort(), [a, b].sort(), 'only the edited rows are reported as unpublished');
+  assert.match(state.live[a].system_prompt, /^<context>\n[\s\S]*<tools>\n<tool name="sandbox">/, 'the published copy of each changed row comes along for diffing, with the blocks a new model starts with');
+  assert.ok(state.order.indexOf(a) < state.order.indexOf(b), 'and so does the published order');
+
+  const missing = await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: a, description: 'x' }, { id: 'nope' }] } });
+  assert.equal(missing.status, 404, 'an unknown id rejects the whole batch');
+  assert.notEqual((await browser('GET', '/api/admin/models')).json.find(m => m.id === a).description, 'x', 'and nothing in it was applied');
+  assert.equal((await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: a, is_default: true }, { id: b, is_default: true }] } })).status, 400);
+
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: a, badges_off: ['text', 'nope'] }] } });
+  let row = (await browser('GET', '/api/admin/models')).json.find(m => m.id === a);
+  assert.deepEqual(row.badges_off, ['text'], 'unknown badge ids are dropped');
+  assert.deepEqual((await browser('GET', '/api/models')).json.find(m => m.id === a).badges, ['code'], 'a switched-off badge leaves the picker');
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: a, badges_off: null }] } });
+  row = (await browser('GET', '/api/admin/models')).json.find(m => m.id === a);
+  assert.equal('badges_off' in row, false, 'switching every badge back on leaves no field behind, so a revert matches the published row');
+  assert.deepEqual((await browser('GET', '/api/models')).json.find(m => m.id === a).badges, ['text', 'code']);
+
+  await browser('PATCH', '/api/admin/settings', { body: { webSearchEnabled: true } });
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
+  assert.deepEqual((await browser('GET', '/api/models')).json.find(m => m.id === a).badges, ['text', 'web', 'code'], 'switching web search on for the workspace refreshes the cached badges');
+  await browser('PATCH', '/api/admin/settings', { body: { webSearchEnabled: false } });
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
+  assert.deepEqual((await browser('GET', '/api/models')).json.find(m => m.id === a).badges, ['text', 'code']);
+
+  const promptOf = async (id) => (await browser('GET', '/api/admin/models')).json.find(m => m.id === id).system_prompt;
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: b, calculator_allowed: true }] } });
+  assert.match(await promptOf(b), /^Shared prompt\n\n<tools>\n<tool name="calculator">\n/, 'turning a tool on writes its block into the system prompt');
+  await browser('PATCH', '/api/admin/settings', { body: { chatSearchEnabled: true } });
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: b, chat_search_allowed: true }] } });
+  assert.match(await promptOf(b), /<tool name="chat_search">[\s\S]*<tool name="calculator">/, 'blocks keep a stable order');
+  await browser('PATCH', '/api/admin/settings', { body: { chatSearchEnabled: false } });
+  assert.doesNotMatch(await promptOf(b), /chat_search/, 'turning a workspace feature off removes its block from every model');
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: b, calculator_allowed: false }] } });
+  assert.equal(await promptOf(b), 'Shared prompt', 'and turning the last tool off leaves the prompt as it was');
+
+  const copies = (await browser('POST', '/api/admin/models/duplicate', { body: { ids: [a] } })).json.ids;
+  assert.equal(copies.length, 1);
+  const order = (await browser('GET', '/api/admin/models')).json.map(m => m.id);
+  assert.equal(order.indexOf(copies[0]), order.indexOf(a) + 1, 'a copy lands right after its source');
+  const copy = (await browser('GET', '/api/admin/models')).json.find(m => m.id === copies[0]);
+  assert.equal(copy.system_prompt, 'Shared prompt', 'and carries every field');
+  assert.equal(copy.temperature, 0.4);
+
+  assert.equal((await browser('POST', '/api/admin/models/remove', { body: { ids: [a, b, copies[0]] } })).json.count, 3);
+  const left = (await browser('GET', '/api/admin/models')).json.map(m => m.id);
+  assert.ok(![a, b, copies[0]].some(id => left.includes(id)));
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
+});
+
+test('model folders persist on their own, empty or not', async () => {
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
+  assert.deepEqual((await browser('GET', '/api/admin/models/folders')).json.folders, []);
+  const put = await browser('PUT', '/api/admin/models/folders', { body: { folders: ['  Fast ', 'Archive', 'Fast', '', 7, 'x'.repeat(90)] } });
+  assert.equal(put.status, 200);
+  assert.deepEqual(put.json.folders, ['Archive', 'Fast', 'x'.repeat(60)], 'names are trimmed, capped, deduplicated and sorted');
+  assert.deepEqual((await browser('GET', '/api/admin/models/folders')).json.folders, put.json.folders, 'and read back unchanged');
+  assert.equal((await browser('GET', '/api/admin/changes')).json.changes.length, 0, 'an empty folder is not a catalog change');
+  const added = await browser('POST', '/api/admin/models/folders/add', { body: { folders: ['Fast', 'Zeta'] } });
+  assert.deepEqual(added.json.folders, ['Archive', 'Fast', 'x'.repeat(60), 'Zeta'], 'adding only ever unions, so it cannot bring back a folder another admin removed');
+  await browser('PUT', '/api/admin/models/folders', { body: { folders: [] } });
 });
 
 test('a staged app-config edit can be taken back before it is published', async () => {
@@ -504,13 +665,87 @@ test('a staged app-config edit can be taken back before it is published', async 
   const staged = (await browser('GET', '/api/app-config')).json;
   assert.equal(staged.appName, 'Typo Name', 'the admin previews the staged name');
   assert.equal(staged.uiPreset, other, 'and the staged preset');
-  assert.equal((await browser('GET', '/api/admin/models/publish-state')).json.staged, true);
+  assert.ok((await browser('GET', '/api/admin/changes')).json.changes.some(c => c.key === 'setting:app_name'));
 
   await browser('PATCH', '/api/admin/app-config', { body: live });
   const back = (await browser('GET', '/api/app-config')).json;
   assert.equal(back.appName, live.appName, 'the name draft is gone, not still holding the edit');
   assert.equal(back.uiPreset, live.uiPreset, 'and so is the preset draft');
   assert.equal(back.appFont, live.appFont);
+});
+
+test('a release can ship part of the draft, refuses a stale review and rolls back', async () => {
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
+  const base = (await browser('GET', '/api/admin/changes')).json.version;
+
+  await browser('PATCH', '/api/admin/app-config', { body: { appName: 'Ship Me', disclaimer: 'Hold me back' } });
+  const listed = (await browser('GET', '/api/admin/changes')).json.changes.map(c => c.key).sort();
+  assert.deepEqual(listed, ['setting:app_name', 'setting:disclaimer']);
+
+  const stale = await browser('POST', '/api/admin/changes/publish', { body: { keys: ['setting:app_name'], base: base - 1 } });
+  assert.equal(stale.status, 409, 'a publish reviewed against an older release is refused');
+
+  const shipped = await browser('POST', '/api/admin/changes/publish', { body: { keys: ['setting:app_name'], note: 'Rename', base } });
+  assert.equal(shipped.status, 200);
+  assert.equal(shipped.json.version, base + 1);
+  assert.deepEqual((await browser('GET', '/api/admin/changes')).json.changes.map(c => c.key), ['setting:disclaimer'], 'the unpicked change stays staged');
+
+  const list = (await browser('GET', '/api/admin/releases')).json;
+  assert.equal(list.version, base + 1);
+  assert.equal(list.releases[0].note, 'Rename');
+  assert.deepEqual(list.releases[0].changes.map(c => c.key), ['setting:app_name']);
+  assert.equal('snapshot' in list.releases[0], false, 'the list never carries a snapshot');
+  const detail = (await browser('GET', `/api/admin/releases/${base + 1}`)).json;
+  assert.equal(detail.changes[0].after, 'Ship Me');
+
+  const back = await browser('POST', `/api/admin/releases/${base}/restore`, { body: {} });
+  assert.equal(back.status, 200);
+  assert.equal(back.json.version, base + 2, 'a rollback is itself a new release');
+  assert.equal((await browser('GET', '/api/admin/releases')).json.releases[0].kind, 'restore');
+  const after = (await browser('GET', '/api/admin/changes')).json.changes.map(c => c.key);
+  assert.deepEqual(after, ['setting:disclaimer'], 'work still in the draft survives a rollback, the rolled-back value does not reappear');
+
+  assert.equal((await browser('POST', '/api/admin/changes/discard', { body: { keys: ['setting:disclaimer'] } })).status, 200);
+  assert.equal((await browser('POST', '/api/admin/changes/publish', { body: {} })).status, 400, 'nothing left to publish');
+  assert.equal((await browser('POST', '/api/admin/releases/999999/restore', { body: {} })).status, 404);
+});
+
+test('editors stage, publishers ship, and only the owner makes publishers', async () => {
+  const join = async (email) => {
+    const res = await request('POST', '/api/auth/register', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email, password: PASSWORD } });
+    assert.equal(res.status, 200, res.text);
+    const c = String(res.headers['set-cookie']?.[0] || '').split(';')[0];
+    return { cookie: c, id: (await browser('GET', '/api/me', { cookie: c })).json.user.id };
+  };
+  const as = (who) => (method, url, opts = {}) => browser(method, url, { ...opts, cookie: who.cookie });
+  const ed = await join('editor-role@example.com');
+  const pub = await join('publisher-role@example.com');
+  const other = await join('member-role@example.com');
+
+  assert.equal((await browser('PATCH', `/api/admin/users/${pub.id}`, { body: { role: 'publisher' } })).status, 200);
+  assert.equal((await browser('PATCH', `/api/admin/users/${ed.id}`, { body: { role: 'editor' } })).status, 200);
+  const me = (await as(ed)('GET', '/api/me')).json.user;
+  assert.equal(me.role, 'editor');
+  assert.equal(me.canPublish, false);
+  assert.equal((await browser('PATCH', `/api/admin/users/${ed.id}`, { body: { role: 'owner' } })).status, 403, 'ownership is never granted');
+
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
+  await as(ed)('PATCH', '/api/admin/app-config', { body: { disclaimer: 'Editor draft' } });
+  await as(pub)('PATCH', '/api/admin/app-config', { body: { supportContact: 'help@example.com' } });
+  assert.equal((await as(ed)('POST', '/api/admin/changes/publish', { body: {} })).status, 403, 'an editor cannot publish');
+  assert.equal((await as(ed)('POST', '/api/admin/changes/discard', { body: { keys: ['setting:support_contact'] } })).status, 403, 'nor discard someone else’s change');
+  assert.equal((await as(ed)('POST', '/api/admin/changes/discard', { body: { keys: ['setting:disclaimer'] } })).status, 200, 'but can drop their own');
+  assert.equal((await as(pub)('POST', '/api/admin/changes/publish', { body: {} })).status, 200, 'a publisher ships');
+  const head = (await browser('GET', '/api/admin/releases')).json.version;
+  assert.equal((await as(ed)('POST', `/api/admin/releases/${head - 1}/restore`, { body: {} })).status, 403, 'an editor cannot roll back');
+
+  assert.equal((await as(pub)('PATCH', `/api/admin/users/${other.id}`, { body: { role: 'editor' } })).status, 200, 'a publisher can make editors');
+  assert.equal((await as(pub)('PATCH', `/api/admin/users/${other.id}`, { body: { role: 'publisher' } })).status, 403, 'but not publishers');
+  assert.equal((await as(ed)('PATCH', `/api/admin/users/${other.id}`, { body: { role: 'member' } })).status, 403, 'an editor cannot touch another editor');
+  assert.equal((await as(ed)('DELETE', `/api/admin/users/${pub.id}`)).status, 403, 'nor remove a publisher');
+  assert.equal((await as(pub)('PATCH', `/api/admin/users/${pub.id}/budget`, { body: { budget: 5 } })).status, 200, 'everyone can set their own cap');
+
+  for (const u of [ed, pub, other]) assert.equal((await browser('DELETE', `/api/admin/users/${u.id}`)).status, 200, 'the owner can remove anyone');
 });
 
 test('unknown routes answer in the right language', async () => {
@@ -573,6 +808,77 @@ test('scheduled tasks round-trip and normalise a hostile schedule', async () => 
   assert.equal((await browser('PATCH', '/api/tasks/nope', { body: {} })).status, 404, 'an unknown id is a miss, not a crash');
 });
 
+test('a project file opens, saves as a new version, refuses a stale save and restores', async () => {
+  const project = (await browser('POST', '/api/projects', { body: { name: 'Files probe' } })).json;
+  const base = '/api/projects/' + project.id;
+  const boundary = 'oqprobe' + Date.now();
+  const raw = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="notes.md"\r\nContent-Type: text/markdown\r\n\r\n# One\r\n--${boundary}--\r\n`);
+  const up = await browser('POST', base + '/files', { raw, headers: { 'Content-Type': 'multipart/form-data; boundary=' + boundary } });
+  assert.equal(up.status, 200);
+
+  const opened = await browser('GET', base + '/file?path=notes.md');
+  assert.equal(opened.status, 200);
+  assert.equal(opened.json.text, '# One');
+  const saved = await browser('PUT', base + '/file', { body: { path: 'notes.md', text: '# Two', v: opened.json.v } });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.json.v, opened.json.v + 1);
+  assert.ok(saved.json.files.some(f => f.name === 'notes.md'), 'the project file list comes back in its own shape');
+
+  const stale = await browser('PUT', base + '/file', { body: { path: 'notes.md', text: '# Lost', v: opened.json.v } });
+  assert.equal(stale.status, 409, 'a save based on an older version is refused, not silently overwritten');
+  assert.equal((await browser('PUT', base + '/file', { body: { path: 'missing.md', text: 'x' } })).status, 404, 'saving never creates a file');
+  assert.equal((await browser('PUT', base + '/file', { body: { path: 'notes.md', text: 42 } })).status, 400);
+
+  const restored = await browser('POST', base + '/restore', { body: { path: 'notes.md', v: opened.json.v } });
+  assert.equal(restored.status, 200);
+  assert.equal((await browser('GET', base + '/file?path=notes.md')).json.text, '# One');
+  const dl = await browser('GET', base + '/download?path=notes.md');
+  assert.equal(dl.text, '# One');
+  assert.match(dl.headers['content-disposition'] || '', /attachment; filename="notes.md"/);
+
+  assert.equal((await request('GET', base + '/file?path=notes.md')).status, 401);
+  await browser('DELETE', base);
+});
+
+test('project files keep their folders, and can be created, renamed and zipped', async () => {
+  const project = (await browser('POST', '/api/projects', { body: { name: 'Folder probe' } })).json;
+  const base = '/api/projects/' + project.id;
+  const boundary = 'oqfolder' + Date.now();
+  const part = (name, value) => `--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`;
+  const raw = Buffer.from(part('path', 'src/lib/app.py') + `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="app.py"\r\nContent-Type: text/plain\r\n\r\nprint(1)\r\n--${boundary}--\r\n`);
+  const up = await browser('POST', base + '/files', { raw, headers: { 'Content-Type': 'multipart/form-data; boundary=' + boundary } });
+  assert.equal(up.status, 200);
+  assert.ok(up.json.files.some(f => f.name === 'src/lib/app.py'), 'the folder path survives the upload');
+  const hostile = Buffer.from(part('path', '../../escape.txt') + `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="x.txt"\r\n\r\nx\r\n--${boundary}--\r\n`);
+  assert.equal((await browser('POST', base + '/files', { raw: hostile, headers: { 'Content-Type': 'multipart/form-data; boundary=' + boundary } })).status, 400);
+
+  const made = await browser('POST', base + '/files/new', { body: { path: 'docs/notes.md' } });
+  assert.equal(made.status, 200);
+  assert.equal(made.json.path, 'docs/notes.md');
+  assert.equal((await browser('POST', base + '/files/new', { body: { path: 'docs/notes.md' } })).status, 409);
+  assert.equal((await browser('POST', base + '/files/new', { body: { path: '.env' } })).status, 400);
+
+  const moved = await browser('POST', base + '/files/rename', { body: { path: 'docs/notes.md', to: 'README.md' } });
+  assert.equal(moved.status, 200);
+  assert.ok(moved.json.files.some(f => f.name === 'README.md') && !moved.json.files.some(f => f.name === 'docs/notes.md'));
+  assert.equal((await browser('POST', base + '/files/rename', { body: { path: 'README.md', to: 'src/lib/app.py' } })).status, 409);
+
+  const zip = await browser('GET', base + '/zip');
+  assert.equal(zip.status, 200);
+  assert.match(zip.headers['content-type'] || '', /zip/);
+  await browser('DELETE', base);
+});
+
+test('a dismissed plan is stored on the chat, and saving a missing chat file is refused', async () => {
+  const { id } = (await browser('POST', '/api/chats', { body: {} })).json;
+  assert.ok(id);
+  assert.equal((await browser('POST', `/api/chats/${id}/plan/dismiss`, { body: { messageId: 'm1', n: 0 } })).status, 400);
+  assert.equal((await browser('POST', `/api/chats/${id}/plan/dismiss`, { body: { messageId: 'm1', n: 2 } })).status, 200);
+  assert.deepEqual((await browser('GET', `/api/chats/${id}`)).json.chat.planDismissed, { msg: 'm1', n: 2 });
+  assert.equal((await browser('PUT', `/api/chats/${id}/file`, { body: { path: 'none.txt', text: 'x' } })).status, 404);
+  await browser('DELETE', `/api/chats/${id}`);
+});
+
 test('the artifacts library answers for a member and refuses a stranger', async () => {
   assert.equal((await request('GET', '/api/artifacts')).status, 401);
   const res = await browser('GET', '/api/artifacts');
@@ -626,4 +932,313 @@ test('skills round-trip, reject a bad name and stay scoped to their owner', asyn
   assert.equal((await browser('DELETE', `/api/skills/${uploaded.json.id}`)).status, 200);
   const after = await browser('GET', '/api/skills');
   assert.equal(after.json.skills.filter(s => s.scope === 'user').length, 0);
+});
+
+test('memories round-trip and reject bad input', async () => {
+  assert.equal((await request('GET', '/api/me/memories')).status, 401, 'memories need a session');
+
+  const empty = await browser('GET', '/api/me/memories');
+  assert.equal(empty.status, 200);
+  assert.deepEqual(empty.json.memories, []);
+
+  const made = await browser('POST', '/api/me/memories', { body: { text: '  Works   in Python ' } });
+  assert.equal(made.status, 200, made.text);
+  assert.equal(made.json.memory.text, 'Works in Python', 'whitespace is collapsed at the boundary');
+  assert.equal(made.json.memory.source, 'user');
+  const id = made.json.memory.id;
+
+  const again = await browser('POST', '/api/me/memories', { body: { text: 'works in python' } });
+  assert.equal(again.json.memories.length, 1, 'a duplicate is not stored twice');
+  assert.equal((await browser('POST', '/api/me/memories', { body: { text: '   ' } })).status, 400);
+  assert.equal((await browser('POST', '/api/me/memories', { body: { text: { $gt: '' } } })).status, 400);
+
+  const edited = await browser('PUT', `/api/me/memories/${id}`, { body: { text: 'Works in Rust' } });
+  assert.equal(edited.status, 200, edited.text);
+  assert.equal(edited.json.memories[0].text, 'Works in Rust');
+  assert.equal((await browser('PUT', '/api/me/memories/nope12', { body: { text: 'x' } })).status, 404);
+  assert.equal((await browser('DELETE', '/api/me/memories/nope12')).status, 404);
+
+  assert.equal((await browser('DELETE', `/api/me/memories/${id}`)).status, 200);
+  await browser('POST', '/api/me/memories', { body: { text: 'Lives in Oslo' } });
+  assert.equal((await browser('DELETE', '/api/me/memories')).status, 200);
+  assert.deepEqual((await browser('GET', '/api/me/memories')).json.memories, []);
+});
+
+test('the prompt a chat sends is the model prompt with its blocks filled in', async () => {
+  const id = (await browser('POST', '/api/admin/models', { body: { display_name: 'Blocks', internal_name: 'blocks', system_prompt: 'Base for {{currentUser}}.' } })).json.id;
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id, sandbox_allowed: false, memory_allowed: true, calculator_allowed: true }] } });
+  await browser('PATCH', '/api/me', { body: { instructions: 'Answer tersely.', prefs: { memoryEnabled: true } } });
+  await browser('POST', '/api/me/memories', { body: { text: 'Uses Rust' } });
+  const chat = (await browser('POST', '/api/chats', { body: {} })).json;
+
+  const sent = (await browser('GET', `/api/chats/${chat.id}/prompt?modelId=${id}`)).json;
+  const system = sent.raw.find(m => m.role === 'system').content;
+  assert.match(system, /^Base for [^{}\n]+\.\n\n<context>\n<section name="user_instructions">\n[^\n]+\nAnswer tersely\.\n<\/section>/);
+  assert.match(system, /<section name="user_memory">\n[^\n]+\n- \[[a-z0-9]+\] Uses Rust\n<\/section>/);
+  assert.match(system, /<tools>\n<tool name="memory">\nUser Memory: True\n/);
+  assert.match(system, /<tool name="calculator">/);
+  assert.doesNotMatch(system, /\{\{|<section name="chat_instructions">|<tool name="sandbox">/, 'empty sections, off tools and raw variables are left out');
+  assert.deepEqual(sent.sections.map(s => s.name), ['Model system prompt', 'Context: user_instructions', 'Context: user_memory', 'Tool: memory', 'Tool: calculator']);
+
+  await browser('PATCH', '/api/me', { body: { prefs: { memoryEnabled: false } } });
+  const off = (await browser('GET', `/api/chats/${chat.id}/prompt?modelId=${id}`)).json.raw.find(m => m.role === 'system').content;
+  assert.match(off, /User Memory: False/);
+  assert.doesNotMatch(off, /Uses Rust/, 'memories are not shown while memory is off');
+
+  await browser('DELETE', '/api/me/memories');
+  await browser('PATCH', '/api/me', { body: { instructions: '', prefs: {} } });
+  await browser('POST', '/api/admin/models/remove', { body: { ids: [id] } });
+});
+
+test('consult settings are admin-only, sanitised and add their block', async () => {
+  const asker = (await browser('POST', '/api/admin/models', { body: { display_name: 'Asker', internal_name: 'asker' } })).json.id;
+  const helper = (await browser('POST', '/api/admin/models', { body: { display_name: 'Helper', internal_name: 'helper', description: 'Sees images' } })).json.id;
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: asker, consult_allowed: true, consult_models: [helper, helper, 7, ''], consult_images: true }] } });
+  const row = (await browser('GET', '/api/admin/models')).json.find(m => m.id === asker);
+  assert.deepEqual(row.consult_models, [helper], 'ids are deduplicated and non-strings dropped');
+  assert.match(row.system_prompt, /<tool name="consult_model">[\s\S]*\{\{consultModels\}\}/);
+  assert.equal((await request('PATCH', '/api/admin/models', { origin: ORIGIN, secFetchSite: 'same-origin', body: { rows: [{ id: asker, consult_models: [] }] } })).status, 401, 'nobody without a session can change them');
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
+  const pub = (await browser('GET', '/api/models')).json.find(m => m.id === asker);
+  assert.equal(JSON.stringify(pub).includes('consult'), false, 'the member-facing catalog never carries the consult settings');
+
+  const chat = (await browser('POST', '/api/chats', { body: {} })).json;
+  const system = (await browser('GET', `/api/chats/${chat.id}/prompt?modelId=${asker}`)).json.raw.find(m => m.role === 'system').content;
+  assert.match(system, /<tool name="consult_model">[\s\S]*Models you can consult:\n- Helper: Sees images\n<\/tool>/);
+
+  await browser('POST', '/api/admin/models/remove', { body: { ids: [asker, helper] } });
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
+});
+
+function chatTurn(send, { timeoutMs = 20000 } = {}) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`, { headers: { Cookie: cookie, Origin: ORIGIN } });
+    const got = [];
+    const finish = (fn, arg) => { clearTimeout(timer); try { ws.terminate(); } catch {} fn(arg); };
+    const timer = setTimeout(() => finish(reject, new Error('no done frame: ' + JSON.stringify(got.slice(-5)))), timeoutMs);
+    ws.on('open', () => ws.send(JSON.stringify(send)));
+    ws.on('message', (raw) => {
+      let m;
+      try { m = JSON.parse(raw); } catch { return; }
+      if (SESSION_FRAMES.has(m?.type)) return;
+      got.push(m);
+      if (m.type === 'done' && m.chatId === send.chatId) finish(resolve, got);
+    });
+    ws.on('error', (e) => finish(reject, e));
+  });
+}
+
+async function connection(type, base_url, api_key) {
+  const id = (await browser('POST', '/api/admin/providers', { body: { type } })).json.id;
+  const res = await browser('PATCH', `/api/admin/providers/${id}`, { body: { base_url, api_key } });
+  assert.equal(res.status, 200);
+  return id;
+}
+
+const lastAssistant = (saved) => [...(saved.messages || [])].reverse().find(m => m.role === 'assistant');
+
+test('switching a connection type moves an untouched address to the new default', async () => {
+  const id = (await browser('POST', '/api/admin/providers', { body: { type: 'llamacpp' } })).json.id;
+  await browser('PATCH', `/api/admin/providers/${id}`, { body: { type: 'anthropic' } });
+  let p = (await browser('GET', '/api/admin/providers')).json.providers.find(x => x.id === id);
+  assert.equal(p.base_url, 'https://api.anthropic.com');
+  await browser('PATCH', `/api/admin/providers/${id}`, { body: { base_url: 'https://proxy.example/anthropic' } });
+  await browser('PATCH', `/api/admin/providers/${id}`, { body: { type: 'openai' } });
+  p = (await browser('GET', '/api/admin/providers')).json.providers.find(x => x.id === id);
+  assert.equal(p.base_url, 'https://proxy.example/anthropic', 'an address someone typed is never replaced');
+  assert.equal(p.has_key, false);
+  await browser('PATCH', `/api/admin/providers/${id}`, { body: { api_key: 'sk-ant-secret-value-1234' } });
+  const raw = (await browser('GET', '/api/admin/providers')).text;
+  assert.doesNotMatch(raw, /sk-ant-secret/, 'a saved key never travels back to the browser');
+  p = JSON.parse(raw).providers.find(x => x.id === id);
+  assert.deepEqual([p.has_key, p.key_hint, 'api_key' in p], [true, '…1234', false]);
+  await browser('DELETE', `/api/admin/providers/${id}`);
+});
+
+test('a Claude model runs a full chat turn with thinking and a tool round trip', async () => {
+  const { mockAnthropic } = await import('./mockapis.js');
+  const mock = await mockAnthropic({
+    key: 'sk-ant-e2e',
+    models: [{ id: 'claude-opus-5-5', max_input_tokens: 1000000, max_tokens: 128000 }],
+    respond: (body) => {
+      if (!body.stream) return { text: 'Multiplying numbers' };
+      const results = body.messages.flatMap(m => (Array.isArray(m.content) ? m.content : [])).filter(b => b.type === 'tool_result');
+      if (!results.length) return { thinking: 'I should use the calculator.', text: 'Let me check.', tools: [{ id: 'toolu_e2e', name: 'calculator', input: { expression: '17*23' } }] };
+      return { thinking: 'The tool said 391.', text: 'The product is 391.' };
+    }
+  });
+  try {
+    const provider_id = await connection('anthropic', mock.url, 'sk-ant-e2e');
+    const found = (await browser('GET', `/api/admin/discover-models?provider=${provider_id}`)).json;
+    assert.deepEqual(found.models.map(m => m.id), ['claude-opus-5-5']);
+    const model = (await browser('POST', '/api/admin/models', { body: { display_name: 'Claude', internal_name: 'claude-opus-5-5', provider_id, has_reasoning: true, calculator_allowed: true } })).json.id;
+    const chat = (await browser('POST', '/api/chats', { body: {} })).json;
+    const frames = await chatTurn({ type: 'chat', chatId: chat.id, modelId: model, content: 'What is 17*23?' });
+    assert.equal(frames.find(f => f.type === 'error'), undefined, JSON.stringify(frames.find(f => f.type === 'error')));
+    for (const r of mock.requests) assert.equal(r.rejected, undefined, r.rejected);
+    const turns = mock.requests.filter(r => r.body.stream);
+    assert.equal(turns.length, 2);
+    assert.match(turns[0].body.system.map(b => b.text).join('\n'), /<tool name="calculator">/);
+    assert.deepEqual(turns[0].body.tools.map(t => t.name), ['calculator']);
+    const replay = turns[1].body.messages;
+    assert.equal(replay.at(-2).content[0].type, 'thinking', 'the signed thinking block goes back with the tool call');
+    assert.match(replay.at(-1).content[0].content, /391/);
+    assert.ok(frames.some(f => f.type === 'reasoning'), 'thinking reaches the browser');
+    assert.match(lastAssistant((await browser('GET', `/api/chats/${chat.id}`)).json).content, /The product is 391\./);
+
+    const pg = await browser('POST', '/api/admin/playground/stream', { body: { modelId: model, source: 'draft', messages: [{ role: 'user', content: 'What is 17*23?' }] } });
+    assert.equal(pg.status, 200);
+    assert.match(pg.text, /"type":"start"/);
+    assert.doesNotMatch(pg.text, /"type":"error"/, pg.text);
+    await browser('POST', '/api/admin/models/remove', { body: { ids: [model] } });
+    await browser('DELETE', `/api/admin/providers/${provider_id}`);
+  } finally {
+    await mock.close();
+  }
+});
+
+test('an OpenAI model runs a full chat turn with a tool round trip and a refused parameter', async () => {
+  const { mockOpenAi } = await import('./mockapis.js');
+  const mock = await mockOpenAi({
+    key: 'sk-e2e',
+    models: ['gpt-mock', 'o-mock'],
+    rejects: { 'o-mock': { temperature: "Unsupported value: 'temperature' does not support 0.3 with this model. Only the default (1) value is supported." } },
+    respond: (body) => {
+      if (!body.stream) return { text: 'Multiplying numbers' };
+      if (!body.messages.some(m => m.role === 'tool')) return { tools: [{ id: 'call_e2e', name: 'calculator', input: { expression: '17*23' } }] };
+      return { text: 'It is 391.' };
+    }
+  });
+  try {
+    const provider_id = await connection('openai', mock.url, 'sk-e2e');
+    const found = (await browser('GET', `/api/admin/discover-models?provider=${provider_id}`)).json;
+    assert.deepEqual(found.models.map(m => m.id), ['gpt-mock', 'o-mock']);
+    const id = (await browser('POST', '/api/admin/models', { body: { display_name: 'o', internal_name: 'o-mock', provider_id, calculator_allowed: true } })).json.id;
+    await browser('PATCH', '/api/admin/models', { body: { rows: [{ id, temperature: 0.3 }] } });
+    const chat = (await browser('POST', '/api/chats', { body: {} })).json;
+    const frames = await chatTurn({ type: 'chat', chatId: chat.id, modelId: id, content: 'What is 17*23?' });
+    assert.equal(frames.find(f => f.type === 'error'), undefined, JSON.stringify(frames.find(f => f.type === 'error')));
+    const turns = mock.requests.filter(r => r.body.stream && !r.rejected);
+    assert.equal(turns.length, 2);
+    assert.equal(turns[0].body.temperature, undefined, 'the refused temperature is dropped and the turn goes through');
+    const tool = turns[1].body.messages.find(m => m.role === 'tool');
+    assert.equal(tool.tool_call_id, 'call_e2e');
+    assert.match(tool.content, /391/);
+    assert.match(lastAssistant((await browser('GET', `/api/chats/${chat.id}`)).json).content, /It is 391\./);
+    await browser('POST', '/api/admin/models/remove', { body: { ids: [id] } });
+    await browser('DELETE', `/api/admin/providers/${provider_id}`);
+  } finally {
+    await mock.close();
+  }
+});
+
+test('a wrong key surfaces as a readable error in the chat', async () => {
+  const { mockAnthropic } = await import('./mockapis.js');
+  const mock = await mockAnthropic({ key: 'right', respond: () => ({ text: 'never' }) });
+  try {
+    const provider_id = await connection('anthropic', mock.url, 'wrong');
+    const model = (await browser('POST', '/api/admin/models', { body: { display_name: 'k', internal_name: 'claude-opus-5-5', provider_id } })).json.id;
+    const chat = (await browser('POST', '/api/chats', { body: {} })).json;
+    const frames = await chatTurn({ type: 'chat', chatId: chat.id, modelId: model, content: 'hi' });
+    assert.match(frames.find(f => f.type === 'error')?.error || '', /Anthropic rejected the API key/);
+    await browser('POST', '/api/admin/models/remove', { body: { ids: [model] } });
+    await browser('DELETE', `/api/admin/providers/${provider_id}`);
+  } finally {
+    await mock.close();
+  }
+});
+
+test('a Claude model calls an MCP tool an admin added, inside a real chat turn', async () => {
+  const os = await import('node:os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oq-e2e-mcp-'));
+  const fixture = path.join(dir, 'server.mjs');
+  fs.writeFileSync(fixture, String.raw`
+let buf = '';
+const out = o => process.stdout.write(JSON.stringify(o) + '\n');
+process.stdin.on('data', c => {
+  buf += c;
+  for (let i; (i = buf.indexOf('\n')) !== -1;) {
+    const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
+    if (m.method === 'initialize') out({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: m.params.protocolVersion, capabilities: { tools: {} } } });
+    else if (m.method === 'tools/list') out({ jsonrpc: '2.0', id: m.id, result: { tools: [{ name: 'lookup.order', description: 'Find an order', inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } }] } });
+    else if (m.method === 'tools/call') out({ jsonrpc: '2.0', id: m.id, result: { content: [{ type: 'text', text: 'order ' + m.params.arguments.id + ' shipped on Tuesday' }] } });
+  }
+});
+`);
+  const added = await browser('POST', '/api/admin/mcp', { body: { name: 'Orders', transport: 'stdio', command: process.execPath, args: `"${fixture}"` } });
+  assert.equal(added.status, 200, added.text);
+  assert.equal(added.json.server.status, 'connected', added.json.warning);
+  const server = added.json.server;
+  const advertised = (body) => body.tools?.find(t => /Find an order/.test(t.description))?.name;
+  let toolName = '';
+
+  const { mockAnthropic } = await import('./mockapis.js');
+  const mock = await mockAnthropic({
+    key: 'sk-ant-mcp',
+    respond: (body) => {
+      if (!body.stream) return { text: 'Order status' };
+      const done = body.messages.some(m => Array.isArray(m.content) && m.content.some(b => b.type === 'tool_result'));
+      toolName = advertised(body) || toolName;
+      return done ? { text: 'Your order shipped on Tuesday.' } : { tools: [{ id: 'toolu_mcp', name: toolName, input: { id: 'A-17' } }] };
+    }
+  });
+  try {
+    const provider_id = await connection('anthropic', mock.url, 'sk-ant-mcp');
+    const model = (await browser('POST', '/api/admin/models', { body: { display_name: 'Claude MCP', internal_name: 'claude-opus-5-5', provider_id, mcp_allowed: true } })).json.id;
+    const chat = (await browser('POST', '/api/chats', { body: {} })).json;
+    const frames = await chatTurn({ type: 'chat', chatId: chat.id, modelId: model, content: 'Where is order A-17?' });
+    assert.equal(frames.find(f => f.type === 'error'), undefined, JSON.stringify(frames.find(f => f.type === 'error')));
+    for (const r of mock.requests) assert.equal(r.rejected, undefined, r.rejected);
+    const first = mock.requests.find(r => r.body.stream);
+    assert.match(toolName, new RegExp(`^mcp_${server.slug}_lookup_order_[a-z0-9]{4}$`), 'the dotted MCP name is offered under one the API accepts');
+    assert.ok(first.body.tools.some(t => t.name === toolName));
+    const result = mock.requests.filter(r => r.body.stream)[1].body.messages.at(-1).content[0];
+    assert.match(result.content, /order A-17 shipped on Tuesday/);
+    assert.match(lastAssistant((await browser('GET', `/api/chats/${chat.id}`)).json).content, /shipped on Tuesday/);
+    await browser('POST', '/api/admin/models/remove', { body: { ids: [model] } });
+    await browser('DELETE', `/api/admin/providers/${provider_id}`);
+  } finally {
+    await browser('DELETE', `/api/admin/mcp/${server.id}`);
+    await mock.close();
+    await new Promise(r => { setTimeout(r, 300); });
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
+});
+
+test('settings secrets are saved but never read back', async () => {
+  await browser('PATCH', '/api/admin/settings', { body: { voiceSttKey: 'stt-secret-value-9876' } });
+  const raw = (await browser('GET', '/api/admin/settings')).text;
+  assert.doesNotMatch(raw, /stt-secret-value/);
+  const s = JSON.parse(raw);
+  assert.deepEqual([s.voiceSttKey, s.voiceSttKeySaved, s.voiceSttKeyHint], ['', true, '…9876']);
+  await browser('PATCH', '/api/admin/settings', { body: { voiceSttKey: null } });
+  assert.equal((await browser('GET', '/api/admin/settings')).json.voiceSttKeySaved, false, 'removing is explicit');
+  await browser('POST', '/api/admin/changes/discard', { body: {} });
+});
+
+test('MCP header and environment values stay on the server', async () => {
+  const created = await browser('POST', '/api/admin/mcp', {
+    body: { name: 'Secretive', transport: 'http', url: 'http://127.0.0.1:9/mcp', headers: 'Authorization: Bearer mcp-header-secret', enabled: false }
+  });
+  assert.doesNotMatch(created.text, /mcp-header-secret/);
+  const id = created.json.server.id;
+  const stdio = await browser('POST', '/api/admin/mcp', {
+    body: { name: 'Env', transport: 'stdio', command: 'oq-not-a-real-binary-xyz', env: 'API_TOKEN=mcp-env-secret\nREGION=eu', enabled: false }
+  });
+  assert.doesNotMatch(stdio.text, /mcp-env-secret/);
+  const list = (await browser('GET', '/api/admin/mcp')).text;
+  assert.doesNotMatch(list, /mcp-header-secret|mcp-env-secret/);
+  const servers = JSON.parse(list).servers;
+  assert.deepEqual(servers.find(s => s.id === id).headerNames, ['Authorization']);
+  assert.deepEqual(servers.find(s => s.id === stdio.json.server.id).envNames, ['API_TOKEN', 'REGION']);
+
+  const renamed = await browser('PATCH', `/api/admin/mcp/${id}`, { body: { name: 'Renamed', headers: undefined } });
+  assert.deepEqual(renamed.json.server.headerNames, ['Authorization'], 'an edit that does not send headers keeps them');
+  const cleared = await browser('PATCH', `/api/admin/mcp/${id}`, { body: { headers: '' } });
+  assert.deepEqual(cleared.json.server.headerNames, [], 'sending an empty value clears them');
+
+  const member = await browser('GET', '/api/mcp');
+  assert.doesNotMatch(member.text, /mcp-header-secret|mcp-env-secret/);
+  await browser('DELETE', `/api/admin/mcp/${id}`);
+  await browser('DELETE', `/api/admin/mcp/${stdio.json.server.id}`);
 });

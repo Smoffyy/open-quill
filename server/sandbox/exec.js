@@ -1,9 +1,9 @@
 import { SANDBOX_TOOLS, resolveToolName, nearestTool } from '../tools/aliases.js';
 import { argText, argBody, argBool, argInt, argList, argPath, argDest, missingArg } from './args.js';
 import {
-  createFile, strReplace, insertLines, view, treeString, list, findFiles, search,
+  createFile, strReplace, insertLines, view, documentText, pageText, treeString, list, findFiles, search,
   deleteFile, renameFile, copyFile, makeDir, extractZip, bundleZip, clearAll,
-  overCap, capError, dirSize
+  overCap, capError, dirSize, forgetSize
 } from './files.js';
 import { bash } from './shell.js';
 import { isProjectKey } from './paths.js';
@@ -29,7 +29,8 @@ const HANDLERS = {
   async bash(chatId, call, { signal } = {}) {
     const t = argInt(call, 'timeout_s', 'timeout');
     const ms = Number.isFinite(t) && t > 0 ? Math.min(t, 600) * 1000 : 60000;
-    return bash(chatId, argText(call, 'cmd', 'command', 'script'), ms, argText(call, 'workdir', 'cwd'), signal);
+    try { return await bash(chatId, argText(call, 'cmd', 'command', 'script'), ms, argText(call, 'workdir', 'cwd'), signal); }
+    finally { forgetSize(chatId); }
   },
 
   create_file(chatId, call, { rel, missing, maxBytes }) {
@@ -58,8 +59,12 @@ const HANDLERS = {
     return insertLines(chatId, rel, argInt(call, 'line', 'at', 'insert_line'), body.text);
   },
 
-  view(chatId, call, { rel }) {
-    return view(chatId, rel, argInt(call, 'start', 'from'), argInt(call, 'end', 'to'));
+  async view(chatId, call, { rel }) {
+    const start = argInt(call, 'start', 'from'), end = argInt(call, 'end', 'to');
+    const r = view(chatId, rel, start, end);
+    if (!r.binary) return r;
+    const text = await documentText(chatId, rel);
+    return text ? { ...pageText(rel, text, start, end), extracted: true } : r;
   },
 
   list_files(chatId, call, { rel }) {

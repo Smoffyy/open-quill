@@ -16,7 +16,6 @@ if (typeof globalThis.window === 'undefined') {
 
 import React from 'react';
 import { renderToString } from 'react-dom/server';
-import ModelEditor from '../src/components/admin/ModelEditor.jsx';
 import PromptLedger from '../src/components/dialogs/PromptLedger.jsx';
 import ShortcutsModal from '../src/components/dialogs/ShortcutsModal.jsx';
 import KeybindsPanel from '../src/components/settings/KeybindsPanel.jsx';
@@ -38,10 +37,24 @@ import GuardrailsSection from '../src/components/admin/sections/GuardrailsSectio
 import LauncherSection from '../src/components/admin/sections/LauncherSection.jsx';
 import McpSection from '../src/components/admin/sections/McpSection.jsx';
 import MembersSection from '../src/components/admin/sections/MembersSection.jsx';
-import MemorySection from '../src/components/admin/sections/MemorySection.jsx';
+import ChatHistorySection from '../src/components/admin/sections/ChatHistorySection.jsx';
 import ModelsSection from '../src/components/admin/sections/ModelsSection.jsx';
+import Catalog from '../src/components/admin/models/Catalog.jsx';
+import Inspector from '../src/components/admin/models/Inspector.jsx';
+import { EditorProvider } from '../src/components/admin/models/bind.jsx';
+import GeneralTab from '../src/components/admin/models/tabs/General.jsx';
+import PromptsTab from '../src/components/admin/models/tabs/Prompts.jsx';
+import ToolsTab from '../src/components/admin/models/tabs/Tools.jsx';
+import ReasoningTab from '../src/components/admin/models/tabs/Reasoning.jsx';
+import ContextTab from '../src/components/admin/models/tabs/Context.jsx';
+import SamplingTab from '../src/components/admin/models/tabs/Sampling.jsx';
+import ControlsTab from '../src/components/admin/models/tabs/Controls.jsx';
+import AppearanceTab from '../src/components/admin/models/tabs/Appearance.jsx';
+import RoutingTab from '../src/components/admin/models/tabs/Routing.jsx';
 import NetworkSection from '../src/components/admin/sections/NetworkSection.jsx';
 import OverviewSection from '../src/components/admin/sections/OverviewSection.jsx';
+import ReleasesSection from '../src/components/admin/sections/ReleasesSection.jsx';
+import { ChangeRow, fieldLabel } from '../src/components/admin/changes/ChangeRow.jsx';
 import ProvidersSection from '../src/components/admin/sections/ProvidersSection.jsx';
 import QuotasSection from '../src/components/admin/sections/QuotasSection.jsx';
 import RatingsSection from '../src/components/admin/sections/RatingsSection.jsx';
@@ -58,11 +71,6 @@ const models = [router, plain];
 const noop = () => {};
 
 const cases = [];
-cases.push(['ModelEditor:router', () => React.createElement(ModelEditor, {
-  model: router, models, onChange: noop, onBack: noop, onDelete: noop, onDuplicate: noop,
-  saveState: 'idle',
-  providers: [{ id: 'p1', name: 'Local', type: 'openai' }], providerTypes: { openai: { label: 'OpenAI' } }
-})]);
 cases.push(['PromptLedger', () => React.createElement(PromptLedger, { chatId: 'c1', modelId: 'm1', onClose: noop })]);
 cases.push(['ShortcutsModal', () => React.createElement(ShortcutsModal, { prefs: {}, onClose: noop, onCustomize: noop })]);
 cases.push(['KeybindsPanel', () => React.createElement(KeybindsPanel, { prefs: {}, setPref: noop })]);
@@ -73,18 +81,13 @@ cases.push(['Login:firstrun', () => React.createElement(Login, { onLogin: noop, 
 // A model carrying every kwarg control shape, so the editor's range branch and the
 // user-facing slider are both actually rendered rather than only compiled.
 const kwargModel = {
-  ...plain, id: 'm3', display_name: 'Tuned', kwargs: [
+  ...plain, id: 'm3', display_name: 'Tuned', badges: ['text', 'reasoning', 'web', 'code', 'long'], numCtx: 131072, kwargs: [
     { id: 'b', name: 'thinking_budget_tokens', label: 'Thinking budget', target: 'body', type: 'number', min: 1024, max: 8192, step: 1024, default: '1024', values: [], showIf: { id: 'think', value: 'true' } },
     { id: 'think', name: 'enable_thinking', label: 'Extended thinking', values: ['false', 'true'], default: 'false' },
     { id: 'eff', name: 'reasoning_effort', values: ['low', 'medium', 'high'], default: 'medium' },
     { id: 'keep', name: 'preserve_thinking', values: ['false', 'true'], parentId: 'think', rules: [{ when: 'true', value: 'true', send: true }] }
   ]
 };
-cases.push(['ModelEditor:kwargs', () => React.createElement(ModelEditor, {
-  model: kwargModel, models: [...models, kwargModel], onChange: noop, onBack: noop,
-  onDelete: noop, onDuplicate: noop, saveState: 'idle',
-  providers: [{ id: 'p1', name: 'Local', type: 'openai' }], providerTypes: { openai: { label: 'OpenAI' } }
-})]);
 cases.push(['ModelDropdown:kwargs:gateShut', () => React.createElement(ModelDropdown, {
   models: [kwargModel], currentId: 'm3', onSelect: noop, open: true, onClose: noop,
   isAdmin: true, kwargValues: {}, onSetKwarg: noop
@@ -179,11 +182,11 @@ cases.push(['DocsNav:editing', () => React.createElement(DocsNav, {
 const ADMIN_SECTIONS = [
   ['Interface', InterfaceSection], ['Events', EventsSection], ['Files', FilesSection],
   ['Guardrails', GuardrailsSection], ['Launcher', LauncherSection], ['Mcp', McpSection],
-  ['Members', MembersSection], ['Memory', MemorySection], ['Models', ModelsSection],
+  ['Members', MembersSection], ['Chat history', ChatHistorySection], ['Models', ModelsSection],
   ['Network', NetworkSection], ['Overview', OverviewSection], ['Providers', ProvidersSection],
   ['Quotas', QuotasSection], ['Ratings', RatingsSection], ['Search', SearchSection],
   ['Skills', SkillsSection], ['Storage', StorageSection], ['Usage', UsageSection],
-  ['Voice', VoiceSection],
+  ['Voice', VoiceSection], ['Releases', ReleasesSection],
 ];
 const adminUser = { id: 'u1', displayName: 'Admin', email: 'a@b.c', isAdmin: true, isOwner: true, prefs: {} };
 for (const [name, Section] of ADMIN_SECTIONS) {
@@ -191,6 +194,49 @@ for (const [name, Section] of ADMIN_SECTIONS) {
     AdminProvider, { user: adminUser, onClose: noop }, React.createElement(Section)
   )]);
 }
+
+const MODEL_TABS = [
+  ['General', GeneralTab], ['Prompts', PromptsTab], ['Tools', ToolsTab], ['Reasoning', ReasoningTab],
+  ['Context', ContextTab], ['Sampling', SamplingTab], ['Controls', ControlsTab], ['Appearance', AppearanceTab],
+  ['Routing', RoutingTab]
+];
+const mixedModels = [
+  { ...router, system_prompt: 'one', unavailable: 1, sunset_at: '2030-01-01', end_chat_allowed: 1, in_more_models: 1, more_models_label: 'Fast' },
+  { ...plain, system_prompt: 'two', has_reasoning: 1, sandbox_allowed: 0 },
+  { ...kwargModel, effort_enabled: 1, bg_enabled: 1 }
+];
+const legacyModel = { ...plain, id: 'm4', kwargs: [], effort_enabled: 1, effort_levels: ['low', 'high'] };
+const inAdmin = (child) => React.createElement(AdminProvider, { user: adminUser, onClose: noop }, child);
+const editing = (list, Tab) => inAdmin(React.createElement(EditorProvider, { models: list, edit: noop }, React.createElement(Tab)));
+for (const [name, Tab] of MODEL_TABS) {
+  cases.push(['ModelTab:' + name + ':single', () => editing([kwargModel], Tab)]);
+  cases.push(['ModelTab:' + name + ':legacy', () => editing([legacyModel], Tab)]);
+  cases.push(['ModelTab:' + name + ':mixed', () => editing(mixedModels, Tab)]);
+}
+cases.push(['ModelsCatalog', () => inAdmin(React.createElement(Catalog))]);
+const by = [{ id: 'u2', name: 'Sam' }];
+const SAMPLE_CHANGES = [
+  { key: 'model:m1:temperature', scope: 'model', target: 'm1', field: 'temperature', kind: 'update', before: 0.7, after: 0.4, authors: by, at: 1 },
+  { key: 'model:m1:system_prompt', scope: 'model', target: 'm1', field: 'system_prompt', kind: 'update', before: 'a\nb', after: 'a\nc', authors: by },
+  { key: 'model:m1:sandbox_allowed', scope: 'model', target: 'm1', field: 'sandbox_allowed', kind: 'update', before: null, after: 0, authors: [] },
+  { key: 'model:m2', scope: 'model', target: 'm2', field: null, kind: 'create', before: null, after: { id: 'm2' }, authors: by },
+  { key: 'model:m3', scope: 'model', target: 'm3', field: null, kind: 'delete', before: { id: 'm3' }, after: null, authors: by },
+  { key: 'models:order', scope: 'model', target: null, field: 'order', kind: 'order', before: ['a'], after: ['b'], authors: by },
+  { key: 'setting:voice_mic_enabled', scope: 'setting', target: 'voice_mic_enabled', field: null, kind: 'update', before: '0', after: '1', authors: by },
+  { key: 'setting:greetings', scope: 'setting', target: 'greetings', field: null, kind: 'update', before: '["Hi"]', after: '[]', authors: by },
+  { key: 'setting:api_key', scope: 'setting', target: 'api_key', field: null, kind: 'update', before: null, after: null, secret: true, authors: by },
+  { key: 'setting:voice_stt_url', scope: 'setting', target: 'voice_stt_url', field: null, kind: 'update', before: '', after: 'http://x', authors: by },
+  { key: 'theme:t1:doc', scope: 'theme', target: 't1', field: 'doc', kind: 'update', before: null, after: null, count: 3, authors: by },
+  { key: 'theme:t2', scope: 'theme', target: 't2', field: null, kind: 'create', before: null, after: { name: 'Ocean' }, authors: by },
+  { key: 'themes:active', scope: 'theme', target: 't2', field: 'active', kind: 'update', before: 'Anthropic', after: 'Ocean', authors: by }
+];
+cases.push(['ChangeRows:selectable', () => React.createElement('ul', null, SAMPLE_CHANGES.map(c =>
+  React.createElement(ChangeRow, { key: c.key, change: c, checked: true, onToggle: noop, label: fieldLabel(c), ago: '2m' })))]);
+cases.push(['ChangeRows:history', () => React.createElement('ul', null, SAMPLE_CHANGES.map(c =>
+  React.createElement(ChangeRow, { key: c.key, change: c, label: fieldLabel(c) })))]);
+cases.push(['ModelsInspector:idle', () => inAdmin(React.createElement(Inspector, { models: [] }))]);
+cases.push(['ModelsInspector:single', () => inAdmin(React.createElement(Inspector, { models: [kwargModel] }))]);
+cases.push(['ModelsInspector:mixed', () => inAdmin(React.createElement(Inspector, { models: mixedModels }))]);
 
 let failed = 0;
 for (const [name, make] of cases) {

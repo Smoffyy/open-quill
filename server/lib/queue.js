@@ -3,7 +3,7 @@ let waiters = [];
 let activeModel = null;
 
 function acquireModel(modelId, onWait) {
-  if (activeModel === null || activeModel === modelId) {
+  if (activeModel === null || (activeModel === modelId && !waiters.length)) {
     if (activeModel === null) activeModel = modelId;
     activeCount++;
     return Promise.resolve();

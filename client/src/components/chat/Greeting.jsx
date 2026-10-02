@@ -1,5 +1,6 @@
 import { t } from '../../i18n.jsx';
 import { Ghost } from '../ui/icons.jsx';
+import { ModelMark } from '../ui/Weave.jsx';
 
 function timeOfDay(hour) {
   if (hour < 5) return t('Working late');
@@ -24,7 +25,7 @@ export default function Greeting({ incognito, preset, incognitoLine, greeting, u
   const line = greeting ? t(greeting) : (first ? part + ', ' + first : part);
   return (
     <div className="greeting">
-      {icon && <img className="greeting-icon" src={icon} alt="" aria-hidden="true" />}
+      <ModelMark src={icon} className="greeting-icon" />
       {icon ? ' ' : null}{line}
     </div>
   );

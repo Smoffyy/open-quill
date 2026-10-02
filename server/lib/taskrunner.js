@@ -4,7 +4,6 @@ import { applyKwargs } from './kwargs.js';
 import { budgetStatus } from './budget.js';
 import { runQueued } from './queue.js';
 import { ensureChain } from './tree.js';
-import { maybeUpdateMemory } from './memory.js';
 import { isRouter, resolveRouted } from './router.js';
 import { isDue, nextRun } from './tasks.js';
 import { runCompletion } from './ws/turn.js';
@@ -15,6 +14,7 @@ const POLL_MS = 30000;
 export function fireTask(task) {
   const user = db.users.byId(task.user_id);
   if (!user) return { error: 'The task owner no longer exists.' };
+  if (task.last_chat_id && live.activeTurn(task.last_chat_id)) return { error: 'This task is still running from last time.' };
 
   let baseModel = resolveModelOrDefault(task.model_id, !!user.is_admin);
   if (!baseModel) return { error: 'No model is available to run this task.' };
@@ -46,16 +46,17 @@ export function fireTask(task) {
 
   live.beginTurn(user.id, chat.id, model.id);
   const queueOn = getSetting('model_queue', '0') === '1';
-  runQueued(queueOn, model.id, () => {}, () => runCompletion(ws, state, send, chat, model, false, false, 0, false, false, ''))
+  runQueued(queueOn, model.id, () => {}, () => runCompletion(ws, state, send, chat, model, false, false, 0, false, false))
     .catch(err => console.error('[tasks] run failed for', task.id, err))
-    .finally(() => live.endTurn(chat.id))
-    .then(() => { try { maybeUpdateMemory(user.id, model); } catch {} });
+    .finally(() => live.endTurn(chat.id));
 
   return { chatId: chat.id };
 }
 
+const DUE_BATCH = 50;
+
 export function dueTasks(at = Date.now()) {
-  return db.tasks.filter(t => isDue(t, at));
+  return db.tasks.due(at, DUE_BATCH).filter(t => isDue(t, at));
 }
 
 export function runDueTasks() {

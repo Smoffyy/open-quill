@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { t } from '../../i18n.jsx';
 import { tokenRefs } from '../../lib/theme/schema.js';
-import { X, Check, Refresh } from '../ui/icons.jsx';
+import { X, Refresh } from '../ui/icons.jsx';
 import { useDismiss } from '../../lib/dismiss.js';
 import { useFocusTrap } from '../../lib/focus.js';
 
@@ -287,14 +287,5 @@ export function Confirm({ title, message, confirmLabel, onConfirm, onClose, dang
       </>}>
       <p className="bx-dialog-msg">{message}</p>
     </Dialog>
-  );
-}
-
-export function Saved({ state }) {
-  if (state !== 'saving' && state !== 'saved' && state !== 'error') return null;
-  return (
-    <span className={'bx-saved' + (state === 'error' ? ' bad' : '')} role="status">
-      {state === 'saving' ? t('Saving…') : state === 'saved' ? <><Check /> {t('Saved')}</> : t('Not saved')}
-    </span>
   );
 }

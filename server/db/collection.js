@@ -11,18 +11,33 @@ export const MIRROR = {
   feedback: { ts: o => o.ts ?? 0, user_id: o => o.user_id ?? null },
   toolstats: { ts: o => o.ts ?? 0 },
   tasks: { user_id: o => o.user_id ?? null, next_run: o => o.next_run ?? 0, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 },
-  skills: { user_id: o => o.user_id ?? null, name: o => o.name ?? null, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 }
+  skills: { user_id: o => o.user_id ?? null, name: o => o.name ?? null, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 },
+  releases: { version: o => o.version ?? 0, created_at: o => o.created_at ?? 0 },
+  draft_edits: { updated_at: o => o.updated_at ?? 0 }
 };
 
 const bumps = new Map();
 export function bumpTable(table) { bumps.set(table, (bumps.get(table) || 0) + 1); }
+
+const KEYED = { messages: 'chat_id' };
+const KEYED_MAX = 20000;
 
 const isKey = id => typeof id === 'string' || typeof id === 'number';
 
 export function makeCollection(sdb, table) {
   const cols = Object.keys(MIRROR[table]);
   const mirror = MIRROR[table];
-  const bump = () => bumpTable(table);
+  const keyCol = KEYED[table] || null;
+  const keyBumps = new Map();
+  let unkeyed = 0;
+  const bump = () => { bumpTable(table); if (keyCol) unkeyed++; };
+  const bumpKey = (key) => {
+    bumpTable(table);
+    if (!keyCol) return;
+    if (key == null) { unkeyed++; return; }
+    if (keyBumps.size >= KEYED_MAX && !keyBumps.has(key)) { keyBumps.clear(); unkeyed++; }
+    keyBumps.set(key, (keyBumps.get(key) || 0) + 1);
+  };
   const colList = ['id', ...cols, 'data'];
   const insSql = `INSERT INTO ${table} (${colList.join(',')}) VALUES (${colList.map(() => '?').join(',')})`;
   const insStmt = sdb.prepare(insSql);
@@ -53,6 +68,7 @@ export function makeCollection(sdb, table) {
 
   const api = {
     version: () => bumps.get(table) || 0,
+    versionFor: (key) => (keyCol ? unkeyed + ':' + (keyBumps.get(key) || 0) : String(bumps.get(table) || 0)),
     all: () => allStmt.all().map(r => JSON.parse(r.data)),
     filter: fn => allStmt.all().map(r => JSON.parse(r.data)).filter(fn),
     find: fn => allStmt.all().map(r => JSON.parse(r.data)).find(fn),
@@ -62,15 +78,24 @@ export function makeCollection(sdb, table) {
     byId: id => (isKey(id) ? parse(getStmt.get(id)) : undefined),
     where: (col, val) => (cols.includes(col) ? whereStmt(col).all(val ?? null).map(r => JSON.parse(r.data)) : api.filter(o => (o[col] ?? null) === (val ?? null))),
     countWhere: (col, val) => (cols.includes(col) ? countWhereStmt(col).get(val ?? null).n : api.filter(o => (o[col] ?? null) === (val ?? null)).length),
-    removeWhere: (col, val) => { if (!cols.includes(col)) return api.remove(o => (o[col] ?? null) === (val ?? null)); delWhereStmt(col).run(val ?? null); bump(); },
-    insert: obj => { insStmt.run(obj.id, ...rowVals(obj)); bump(); return obj; },
+    removeWhere: (col, val) => {
+      if (!cols.includes(col)) return api.remove(o => (o[col] ?? null) === (val ?? null));
+      delWhereStmt(col).run(val ?? null);
+      if (col === keyCol) bumpKey(val ?? null); else bump();
+    },
+    insert: obj => { insStmt.run(obj.id, ...rowVals(obj)); if (keyCol) bumpKey(obj[keyCol] ?? null); else bump(); return obj; },
     update: (id, patch) => {
       if (!isKey(id)) return undefined;
       const cur = parse(getStmt.get(id));
       if (!cur) return undefined;
+      const before = keyCol ? cur[keyCol] ?? null : null;
       Object.assign(cur, patch);
       updStmt.run(...rowVals(cur), id);
-      bump();
+      if (!keyCol) bump();
+      else {
+        bumpKey(cur[keyCol] ?? null);
+        if (before !== (cur[keyCol] ?? null)) bumpKey(before);
+      }
       return cur;
     },
     removeById: id => { if (!isKey(id)) return; delStmt.run(id); bump(); },

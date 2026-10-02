@@ -1,57 +1,32 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { api } from '../../../lib/api.js';
+import { api, TAB_ID } from '../../../lib/api.js';
+import { toast } from '../../../lib/toast.js';
 import { t } from '../../../i18n.jsx';
+import { touchesBlocks, syncModelPrompt } from '../../../lib/promptblocks.js';
+import { pick } from './history.js';
 
 const SAVE_DELAY = 450;
-const SAVED_LINGER = 1800;
-// How long after a write this tab keeps ignoring the server's copy of a row, so
-// a broadcast triggered by our own PATCH cannot overwrite what is on screen.
-const ECHO_WINDOW = 1200;
-const REFOCUS_RETRY = 2500;
 
-// Models are the only thing publish() snapshots, so this hook owns the whole
-// draft story: local edits, debounced PATCHes, and whether the draft has
-// diverged from what clients are running.
-export function useCatalog({ confirm }) {
+const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+export function useCatalog({ confirm, features, history, changes }) {
   const [models, setModels] = useState([]);
   const [providers, setProviders] = useState([]);
   const [providerTypes, setProviderTypes] = useState({});
-  const [selected, setSelected] = useState(null);
-  const [draft, setDraft] = useState({ published: false, dirty: false, publishedAt: null });
-  const [publishing, setPublishing] = useState(false);
-  const [publishError, setPublishError] = useState('');
-  const [saveState, setSaveState] = useState('idle');
+  const [selection, setSelection] = useState([]);
+  const [folders, setFolders] = useState([]);
   const [probe, setProbe] = useState({});
   const [ready, setReady] = useState(false);
 
   const modelsRef = useRef([]);
   const providersRef = useRef([]);
-  const timers = useRef({});
-  const inFlight = useRef(new Map());
-  const linger = useRef(null);
+  const pending = useRef(new Map());
+  const inflight = useRef(new Map());
+  const flushTimer = useRef(null);
+  const queue = useRef(Promise.resolve());
 
   useEffect(() => { modelsRef.current = models; }, [models]);
   useEffect(() => { providersRef.current = providers; }, [providers]);
-
-  // Nothing may fire after the panel closes: a pending debounce would PATCH a
-  // row the admin has already navigated away from, and settle state on an
-  // unmounted tree.
-  useEffect(() => () => {
-    for (const id of Object.values(timers.current)) clearTimeout(id);
-    for (const id of inFlight.current.values()) clearTimeout(id);
-    clearTimeout(linger.current);
-  }, []);
-
-  const settle = useCallback((state) => {
-    setSaveState(state);
-    clearTimeout(linger.current);
-    if (state !== 'saved') return;
-    linger.current = setTimeout(() => setSaveState(s => (s === 'saved' ? 'idle' : s)), SAVED_LINGER);
-  }, []);
-
-  const readDraft = useCallback(async () => {
-    try { setDraft(await api.get('/api/admin/models/publish-state')); } catch {}
-  }, []);
 
   const loadModels = useCallback(async () => {
     try { setModels(await api.get('/api/admin/models')); } catch {}
@@ -65,138 +40,217 @@ export function useCatalog({ confirm }) {
     } catch {}
   }, []);
 
+  const loadFolders = useCallback(async () => {
+    try { setFolders((await api.get('/api/admin/models/folders')).folders || []); } catch {}
+  }, []);
+
+  const foldersRef = useRef([]);
+  useEffect(() => { foldersRef.current = folders; }, [folders]);
+
+  const writeFolders = useCallback(async (list) => {
+    const clean = [...new Set(list.map(n => String(n).trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    setFolders(clean);
+    try { setFolders((await api.put('/api/admin/models/folders', { folders: clean })).folders || clean); }
+    catch { loadFolders(); }
+  }, [loadFolders]);
+
+  const saveFolders = useCallback((list) => {
+    const was = foldersRef.current;
+    history?.record({ undo: () => writeFolders(was), redo: () => writeFolders(list) });
+    return writeFolders(list);
+  }, [history, writeFolders]);
+
+  const keepFolders = useCallback(async (names) => {
+    try { setFolders((await api.post('/api/admin/models/folders/add', { folders: names })).folders || []); } catch {}
+  }, []);
+
   const reload = useCallback(async () => {
-    await Promise.all([loadModels(), loadProviders()]);
+    await Promise.all([loadModels(), loadProviders(), loadFolders()]);
     setReady(true);
-    readDraft();
-  }, [loadModels, loadProviders, readDraft]);
+  }, [loadModels, loadProviders, loadFolders]);
 
   useEffect(() => { reload(); }, [reload]);
 
-  // A live edit elsewhere should refresh the list, but never clobber a row this
-  // tab is still typing into, and never yank focus out of a field.
-  useEffect(() => {
-    let retry;
-    async function onConfig() {
-      const el = document.activeElement;
-      if (el && (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') && el.closest('.cp, .cp-dialog')) {
-        clearTimeout(retry);
-        retry = setTimeout(onConfig, REFOCUS_RETRY);
-        return;
-      }
+  const takeRows = useCallback(() => {
+    const rows = [...pending.current].map(([id, patch]) => ({ ...patch, id }));
+    pending.current.clear();
+    return rows;
+  }, []);
+
+  const flush = useCallback(() => {
+    clearTimeout(flushTimer.current);
+    flushTimer.current = null;
+    const rows = takeRows();
+    if (!rows.length) return queue.current;
+    for (const row of rows) inflight.current.set(row.id, { ...(inflight.current.get(row.id) || {}), ...row });
+    queue.current = queue.current.then(async () => {
       try {
-        const fresh = await api.get('/api/admin/models');
-        setModels(cur => fresh.map(f => (inFlight.current.has(f.id) || timers.current[f.id])
-          ? (cur.find(c => c.id === f.id) || f)
-          : f));
-        readDraft();
-      } catch {}
-    }
-    window.addEventListener('oq-config', onConfig);
-    return () => { clearTimeout(retry); window.removeEventListener('oq-config', onConfig); };
-  }, [readDraft]);
-
-  const patchModel = useCallback((next) => {
-    setModels(ms => ms.map(m => {
-      if (m.id === next.id) return next;
-      if (next.is_default && m.is_default) return { ...m, is_default: 0 };
-      return m;
-    }));
-    settle('saving');
-    // Guard the row from broadcast refreshes for the whole write, debounce
-    // included, not only once the request has come back.
-    if (!inFlight.current.has(next.id)) inFlight.current.set(next.id, null);
-    clearTimeout(timers.current[next.id]);
-    timers.current[next.id] = setTimeout(async () => {
-      delete timers.current[next.id];
-      try {
-        await api.patch('/api/admin/models/' + next.id, next);
-        settle('saved');
-        readDraft();
-      } catch { settle('error'); }
-      finally {
-        clearTimeout(inFlight.current.get(next.id));
-        inFlight.current.set(next.id, setTimeout(() => inFlight.current.delete(next.id), ECHO_WINDOW));
-      }
-    }, SAVE_DELAY);
-  }, [readDraft, settle]);
-
-  const bulkPatch = useCallback(async (ids, patch) => {
-    setModels(ms => ms.map(m => (ids.includes(m.id) ? { ...m, ...patch } : m)));
-    settle('saving');
-    try {
-      for (const id of ids) await api.patch('/api/admin/models/' + id, patch);
-      settle('saved');
-    } catch {
-      settle('error');
-      loadModels();
-    }
-    readDraft();
-  }, [readDraft, settle, loadModels]);
-
-  const createModel = useCallback(async () => {
-    const { id } = await api.post('/api/admin/models', { display_name: 'New model', internal_name: 'local-model' });
-    await loadModels();
-    setSelected(id);
-    readDraft();
-    return id;
-  }, [loadModels, readDraft]);
-
-  const copyModels = useCallback(async (ids) => {
-    let last = null;
-    for (const id of ids) {
-      const src = modelsRef.current.find(m => m.id === id);
-      if (!src) continue;
-      // The create route fixes sampling, price and reference fields to their
-      // defaults, so the copy is completed with a patch of the source row.
-      const body = { ...src, display_name: (src.display_name || 'Model') + ' copy', is_default: false };
-      const { id: newId } = await api.post('/api/admin/models', body);
-      await api.patch('/api/admin/models/' + newId, body);
-      last = newId;
-    }
-    await loadModels();
-    if (ids.length === 1 && last) setSelected(last);
-    readDraft();
-  }, [loadModels, readDraft]);
-
-  const removeModels = useCallback((ids, after) => {
-    confirm({
-      title: ids.length === 1 ? t('Delete model') : t('Delete models'),
-      message: ids.length === 1
-        ? t('This removes the model from the catalog. Chats that used it keep their messages. This cannot be undone.')
-        : t('This removes {n} models from the catalog. Chats that used them keep their messages. This cannot be undone.', { n: ids.length }),
-      confirm: ids.length === 1 ? t('Delete model') : t('Delete {n} models', { n: ids.length }),
-      onConfirm: async () => {
-        try {
-          for (const id of ids) await api.del('/api/admin/models/' + id);
-          setModels(ms => ms.filter(m => !ids.includes(m.id)));
-        } catch { await loadModels(); }
-        setSelected(s => (ids.includes(s) ? null : s));
-        readDraft();
-        if (after) after();
+        await api.patch('/api/admin/models', { rows });
+      } catch (e) {
+        toast(e?.message || t('A model change could not be saved.'), { kind: 'error', icon: 'info' });
+        loadModels();
+      } finally {
+        for (const { id } of rows) inflight.current.delete(id);
       }
     });
-  }, [confirm, readDraft, loadModels]);
+    return queue.current;
+  }, [takeRows, loadModels]);
 
-  // The list is reordered on screen first; a rejected write puts the server's
-  // order back rather than leaving the two silently disagreeing.
-  const reorderModels = useCallback(async (arr) => {
+  useEffect(() => () => {
+    clearTimeout(flushTimer.current);
+    const rows = takeRows();
+    if (rows.length) api.patch('/api/admin/models', { rows }).catch(() => {});
+  }, [takeRows]);
+
+  const unsaved = useCallback(() => pending.current.size > 0 || inflight.current.size > 0, []);
+
+  useEffect(() => {
+    const local = (id) => ({ ...(inflight.current.get(id) || {}), ...(pending.current.get(id) || {}) });
+    function merge(rows) {
+      const clashes = [];
+      const next = new Map(modelsRef.current.map(m => [m.id, m]));
+      for (const row of rows) {
+        const mine = local(row.id);
+        const cur = next.get(row.id);
+        for (const k of Object.keys(mine)) {
+          if (k !== 'id' && cur && !same(cur[k], row[k]) && !same(mine[k], row[k])) clashes.push(row.display_name || row.internal_name || '');
+        }
+        next.set(row.id, { ...row, ...mine, id: row.id });
+      }
+      const list = [...next.values()].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+      modelsRef.current = list;
+      setModels(list);
+      if (clashes.length) toast(t('Another admin changed “{name}” while you were editing it. Your edit is kept.', { name: clashes[0] }), { icon: 'info' });
+    }
+    function onDraft(e) {
+      const f = e.detail || {};
+      const own = !!f.tab && f.tab === TAB_ID;
+      if (f.scope === 'all') { reload(); return; }
+      if (f.scope === 'providers') { if (!own) loadProviders(); return; }
+      if (f.scope === 'folders') { if (Array.isArray(f.folders)) setFolders(f.folders); return; }
+      if (f.scope !== 'models' || own) return;
+      if (f.reload) { loadModels(); return; }
+      if (Array.isArray(f.rows) && f.rows.length) merge(f.rows);
+      if (Array.isArray(f.removed) && f.removed.length) {
+        const gone = new Set(f.removed);
+        for (const id of gone) pending.current.delete(id);
+        modelsRef.current = modelsRef.current.filter(m => !gone.has(m.id));
+        setModels(modelsRef.current);
+        setSelection(sel => sel.filter(id => !gone.has(id)));
+      }
+      if (Array.isArray(f.order) && f.order.length) {
+        const rank = new Map(f.order.map((id, i) => [id, i]));
+        const list = modelsRef.current
+          .map(m => (rank.has(m.id) ? { ...m, sort_order: rank.get(m.id) } : m))
+          .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+        modelsRef.current = list;
+        setModels(list);
+      }
+    }
+    window.addEventListener('oq-admin-draft', onDraft);
+    return () => window.removeEventListener('oq-admin-draft', onDraft);
+  }, [reload, loadModels, loadProviders]);
+
+  const stage = useCallback((all) => {
+    const patches = new Map([...all].filter(([id]) => modelsRef.current.some(m => m.id === id)));
+    if (!patches.size) return;
+    const makesDefault = [...patches.values()].some(p => p.is_default);
+    const next = modelsRef.current.map(m => {
+      if (patches.has(m.id)) return { ...m, ...patches.get(m.id) };
+      return makesDefault && m.is_default ? { ...m, is_default: 0 } : m;
+    });
+    modelsRef.current = next;
+    setModels(next);
+    for (const [id, p] of patches) pending.current.set(id, { ...(pending.current.get(id) || {}), ...p });
+    clearTimeout(flushTimer.current);
+    flushTimer.current = setTimeout(flush, SAVE_DELAY);
+  }, [flush]);
+
+  const edit = useCallback((ids, change) => {
+    const per = typeof change === 'function' ? change : () => change;
+    const patches = new Map();
+    const was = new Map();
+    for (const id of ids) {
+      const m = modelsRef.current.find(x => x.id === id);
+      let p = m && per(m);
+      if (p && touchesBlocks(p)) {
+        const next = { ...m, ...p };
+        const text = syncModelPrompt(m, next, features?.current || {});
+        if (text !== (next.system_prompt ?? '')) p = { ...p, system_prompt: text };
+      }
+      if (p && Object.keys(p).length) {
+        patches.set(id, p);
+        was.set(id, Object.fromEntries(Object.entries(pick(m, Object.keys(p))).map(([k, v]) => [k, v ?? null])));
+      }
+    }
+    if (!patches.size) return;
+    if ([...patches.values()].some(p => p.is_default)) {
+      for (const m of modelsRef.current) if (m.is_default && !patches.has(m.id)) was.set(m.id, { is_default: m.is_default });
+    }
+    const key = 'models:' + [...patches].map(([id, p]) => id + '=' + Object.keys(p).sort().join(',')).join(';');
+    history?.record({ key, undo: () => stage(was), redo: () => stage(patches) });
+    stage(patches);
+  }, [stage, features, history]);
+
+  const dropModels = useCallback(async (ids) => {
+    for (const id of ids) pending.current.delete(id);
+    try {
+      await api.post('/api/admin/models/remove', { ids });
+      setModels(ms => ms.filter(m => !ids.includes(m.id)));
+    } catch { await loadModels(); }
+    setSelection(sel => sel.filter(id => !ids.includes(id)));
+  }, [loadModels]);
+
+  const createModel = useCallback(async () => {
+    await flush();
+    const { id } = await api.post('/api/admin/models', { display_name: t('New model'), internal_name: 'local-model' });
+    history?.record({ undo: () => dropModels([id]) });
+    await loadModels();
+    setSelection([id]);
+    return id;
+  }, [flush, loadModels, history, dropModels]);
+
+  const duplicateModels = useCallback(async (ids) => {
+    await flush();
+    try {
+      const r = await api.post('/api/admin/models/duplicate', { ids });
+      if (r.ids?.length) history?.record({ undo: () => dropModels(r.ids) });
+      await loadModels();
+      setSelection(r.ids || []);
+    } catch (e) { toast(e?.message || t('The models could not be duplicated.'), { kind: 'error', icon: 'info' }); }
+  }, [flush, loadModels, history, dropModels]);
+
+  const removeModels = useCallback((ids) => {
+    const one = ids.length === 1;
+    confirm({
+      title: one ? t('Delete model') : t('Delete models'),
+      message: one
+        ? t('This removes the model from the catalog. Chats that used it keep their messages. This cannot be undone.')
+        : t('This removes {n} models from the catalog. Chats that used them keep their messages. This cannot be undone.', { n: ids.length }),
+      confirm: one ? t('Delete model') : t('Delete {n} models', { n: ids.length }),
+      onConfirm: () => dropModels(ids)
+    });
+  }, [confirm, dropModels]);
+
+  const writeOrder = useCallback(async (arr) => {
+    modelsRef.current = arr;
     setModels(arr);
     try { await api.post('/api/admin/models/reorder', { ids: arr.map(m => m.id) }); }
     catch { await loadModels(); }
-    readDraft();
-  }, [loadModels, readDraft]);
+  }, [loadModels]);
 
-  const publish = useCallback(async () => {
-    setPublishing(true);
-    setPublishError('');
-    try {
-      const r = await api.post('/api/admin/models/publish', {});
-      setDraft({ published: true, dirty: false, publishedAt: r.publishedAt });
-    } catch (e) {
-      setPublishError(e?.message || t('The catalog could not be published.'));
-    } finally { setPublishing(false); }
-  }, []);
+  const orderBy = useCallback((ids) => {
+    const rank = new Map(ids.map((id, i) => [id, i]));
+    const at = (m) => (rank.has(m.id) ? rank.get(m.id) : ids.length);
+    return writeOrder([...modelsRef.current].sort((a, b) => at(a) - at(b)));
+  }, [writeOrder]);
+
+  const reorderModels = useCallback((arr) => {
+    const was = modelsRef.current.map(m => m.id);
+    const now = arr.map(m => m.id);
+    history?.record({ undo: () => orderBy(was), redo: () => orderBy(now) });
+    return writeOrder(arr);
+  }, [history, writeOrder, orderBy]);
 
   const addProvider = useCallback(async () => {
     await api.post('/api/admin/providers', { type: 'llamacpp' });
@@ -230,9 +284,9 @@ export function useCatalog({ confirm }) {
   }, []);
 
   return {
-    models, providers, providerTypes, ready, selected, setSelected,
-    draft, publishing, publish, publishError, saveState,
-    patchModel, bulkPatch, createModel, copyModels, removeModels, reorderModels,
+    models, providers, providerTypes, ready, selection, setSelection, folders, saveFolders, keepFolders,
+    draft: changes.models, unsaved,
+    edit, flush, createModel, duplicateModels, removeModels, reorderModels,
     addProvider, patchProvider, removeProvider, probeProvider, probe,
     reload, loadModels, loadProviders
   };

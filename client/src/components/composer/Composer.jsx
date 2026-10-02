@@ -93,7 +93,7 @@ export default function Composer({
   removedModel = null, skills = [], onToggleSkill = null, onManageSkills = null,
   queueCount = 0, onQueue, onSteer, canSteer = false, onManageConnectors = null, attachCombo = '',
   compareIds = [], onSetCompare, hideModelPicker = false, chipsBelow = false, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
-  ctxGauge = null, enterSend = false, draftId
+  ctxGauge = null, enterSend = false, draftId, panel = null
 }) {
   const composerPlaceholder = useThemeText('composer.placeholder', t('How can I help you today?'));
   const ta = useRef(null);
@@ -325,7 +325,7 @@ export default function Composer({
   const budgetState = budget && budget.cap ? budget.state : 'none';
   const budgetBlock = budgetState === 'over' && budget?.enforce && !canUseUnavailable;
   const showBudgetBanner = budgetState === 'warn' || budgetState === 'over';
-  const sunsetOnly = !!sunsetInfo && !bannerMounted && !showBudgetBanner && !safetyFlagged && !conversationEnded && !removedModel;
+  const sunsetOnly = !!sunsetInfo && !bannerMounted && !showBudgetBanner && !safetyFlagged && !conversationEnded && !removedModel && !panel;
   const activeTools = [];
   if (sandboxAllowed && sandbox) activeTools.push({ id: 'sandbox', icon: <Cube />, label: t("Sandbox tools"), off: () => onToggleSandbox && onToggleSandbox() });
   if (webSearchAvailable && webSearch) activeTools.push({ id: 'websearch', icon: <Globe />, label: t("Web search"), off: () => onToggleWebSearch && onToggleWebSearch() });
@@ -339,10 +339,10 @@ export default function Composer({
   const fmtUsd = (n) => '$' + (Number(n || 0) > 0 && Number(n || 0) < 0.01 ? Number(n).toFixed(4) : Number(n || 0).toFixed(2));
 
   return (
-    <div className={'composer-stack' + ((bannerMounted || showBudgetBanner || safetyFlagged || conversationEnded || removedModel || sunsetInfo) ? ' has-banner' : '')}>
+    <div className={'composer-stack' + ((bannerMounted || showBudgetBanner || safetyFlagged || conversationEnded || removedModel || sunsetInfo || panel) ? ' has-banner' : '')}>
     {dragActive && <DropOverlay />}
-    {(bannerMounted || showBudgetBanner || safetyFlagged || conversationEnded || removedModel || sunsetInfo) && (
-      <div className={'unavail-bg' + (bannerOut && !showBudgetBanner && !safetyFlagged && !conversationEnded && !removedModel && !sunsetInfo ? ' out' : '')}
+    {(bannerMounted || showBudgetBanner || safetyFlagged || conversationEnded || removedModel || sunsetInfo || panel) && (
+      <div className={'unavail-bg' + (bannerOut && !showBudgetBanner && !safetyFlagged && !conversationEnded && !removedModel && !sunsetInfo && !panel ? ' out' : '')}
         style={sunsetOnly ? {
           background: `color-mix(in srgb, #e5484d ${sunsetInfo.mix}%, var(--bg))`,
           borderColor: `color-mix(in srgb, #e5484d ${Math.min(70, sunsetInfo.mix + 12)}%, var(--border-soft))`,
@@ -404,6 +404,7 @@ export default function Composer({
         )}
       </div>
     )}
+    {panel}
     <div className={cls} style={{ '--glow': glow }}>
       {files.length > 0 && (
         <div className="attach-row">

@@ -16,17 +16,17 @@
     <meta property="og:site_name" content="open-quill" />
     <meta property="og:title" content="open-quill" />
     <meta property="og:description" content="A self-hosted chat interface for local and remote language models." />
-    <meta property="og:image" content="/pwa/icon-512.png" />
-    <meta property="og:image:width" content="512" />
-    <meta property="og:image:height" content="512" />
-    <meta property="og:image:alt" content="The open-quill pinwheel mark" />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:image" content="/brand/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Open Quill: self-hosted chat for local and cloud models" />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="open-quill" />
     <meta name="twitter:description" content="A self-hosted chat interface for local and remote language models." />
-    <meta name="twitter:image" content="/pwa/icon-512.png" />
-    <link rel="icon" href="/brand/mark.svg" type="image/svg+xml" />
-    <link rel="icon" href="/favicon.ico" sizes="192x192" />
-    <link rel="apple-touch-icon" href="/pwa/icon-180.png" />
+    <meta name="twitter:image" content="/brand/og-image.png" />
+    <link rel="icon" href="/brand/favicon.ico" sizes="32x32" />
+    <link rel="icon" id="favicon" href="/brand/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/brand/icon-180.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <script>
       (function () {
@@ -53,6 +53,8 @@
           var meta = document.querySelector('meta[name="theme-color"]:not([media])');
           if (!meta) { meta = document.createElement('meta'); meta.setAttribute('name', 'theme-color'); document.head.appendChild(meta); }
           meta.setAttribute('content', bg);
+          var fav = document.getElementById('favicon');
+          if (fav) fav.setAttribute('href', t === 'light' ? '/brand/favicon-light.svg' : '/brand/favicon-dark.svg');
         } catch (e) {
           document.documentElement.setAttribute('data-preset', 'anthropic');
           document.documentElement.setAttribute('data-theme', 'anthropic');

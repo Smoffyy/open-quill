@@ -71,7 +71,7 @@ if (found) {
 
     if (!manifest.released) {
       if (final) errors.push(`release/${found.name}/release.json needs a "released" date before ${base} is published.`);
-      else warnings.push(`release/${found.name}/release.json has no "released" date yet. Set one before merging into stable.`);
+      else warnings.push(`release/${found.name}/release.json has no "released" date yet. Set one before merging into main.`);
     }
   }
 
@@ -89,7 +89,7 @@ if (changelog) {
   const hit = changelog.match(heading);
   if (!hit) errors.push(`CHANGELOG.md has no "## [${base}]" section, and the version panel points users at it.`);
   else if (/TBD/i.test(hit[0])) {
-    if (final) errors.push(`CHANGELOG.md still says "${hit[0].trim()}". Set the date before merging into stable.`);
+    if (final) errors.push(`CHANGELOG.md still says "${hit[0].trim()}". Set the date before merging into main.`);
     else warnings.push(`CHANGELOG.md still says "${hit[0].trim()}", which is fine while ${base} is in development.`);
   }
   else notes.push(`changelog ${hit[0].trim().replace(/^##\s*/, '')}`);

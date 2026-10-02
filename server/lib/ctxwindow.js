@@ -124,9 +124,9 @@ async function evictImages(msgs, budget, count) {
 
 function protectedFlags(msgs) {
   const keep = new Uint8Array(msgs.length);
-  for (let i = 0; i < msgs.length; i++) if (msgs[i].role === 'system') keep[i] = 1;
+  for (let i = 0; i < msgs.length; i++) if (msgs[i].role === 'system' || msgs[i].held) keep[i] = 1;
   let lastUser = -1;
-  for (let i = msgs.length - 1; i >= 0; i--) if (msgs[i].role === 'user') { lastUser = i; break; }
+  for (let i = msgs.length - 1; i >= 0; i--) if (msgs[i].role === 'user' && !msgs[i].held) { lastUser = i; break; }
   if (lastUser !== -1) for (let i = lastUser; i < msgs.length; i++) keep[i] = 1;
   return keep;
 }

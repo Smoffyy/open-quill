@@ -2,6 +2,7 @@ import { db, uid, now } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
 import * as sandbox from '../../sandbox.js';
 import { attachmentUrlsOf, purgeUnreferencedUploads } from '../../lib/uploads.js';
+import { stopTurn } from '../../lib/ws/index.js';
 
 const MAX_PINS = 40;
 
@@ -17,6 +18,7 @@ export default function registerCrudRoutes(app) {
   app.delete('/api/chats/:id', authMiddleware, (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (c && c.user_id === req.user.id) {
+      stopTurn(c.id);
       const urls = attachmentUrlsOf(c.id);
       db.messages.removeWhere('chat_id', c.id);
       db.chats.removeById(c.id);
@@ -60,6 +62,16 @@ export default function registerCrudRoutes(app) {
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     res.json({ pins: Array.isArray(c.pinned_files) ? c.pinned_files : [] });
   });
+  app.post('/api/chats/:id/plan/dismiss', authMiddleware, (req, res) => {
+    const c = db.chats.byId(req.params.id);
+    if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+    const msg = typeof req.body?.messageId === 'string' ? req.body.messageId.slice(0, 64) : '';
+    const n = Number(req.body?.n);
+    if (!msg || !Number.isInteger(n) || n < 1 || n > 1000) return res.status(400).json({ error: 'messageId and n are required.' });
+    db.chats.update(c.id, { plan_dismissed: { msg, n } });
+    res.json({ ok: true, planDismissed: { msg, n } });
+  });
+
   app.post('/api/chats/:id/pins', authMiddleware, (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });

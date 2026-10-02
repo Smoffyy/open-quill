@@ -34,6 +34,12 @@ function paramHits(body) {
   return hits;
 }
 
+const TRAIL_SCAN = 1024;
+function stripTrailingTags(raw) {
+  const cut = Math.max(0, raw.length - TRAIL_SCAN);
+  return raw.slice(0, cut) + raw.slice(cut).replace(TRAIL_TAG_RE, '');
+}
+
 function parseParams(body) {
   const args = {};
   const hits = paramHits(body);
@@ -42,7 +48,7 @@ function parseParams(body) {
     let raw = body.slice(hits[i].from, stop);
     const close = raw.search(PARAM_CLOSE_RE);
     if (close !== -1) raw = raw.slice(0, close);
-    else raw = raw.replace(TRAIL_TAG_RE, '');
+    else raw = stripTrailingTags(raw);
     args[hits[i].key] = coerceTextArg(hits[i].key, trimBlockValue(raw));
   }
   return { args, count: hits.length };

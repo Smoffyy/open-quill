@@ -18,7 +18,7 @@ function buildGraph(chatId) {
 }
 
 export function graphOf(chatId) {
-  const version = db.messages.version();
+  const version = db.messages.versionFor(chatId);
   const hit = cache.get(chatId);
   if (hit && hit.version === version) {
     cache.delete(chatId);

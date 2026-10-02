@@ -341,17 +341,11 @@ export function writeStore(store) {
   draftSet(STORE_KEY, normalizeStore(store));
 }
 
-// The live store is what members render. Publishing copies the admin's staged
-// store over it, which promoteDrafts() already does for every draft key. This
-// is only used when a theme is published on its own.
-export function publishStore() {
-  const staged = readStore(true);
-  setSetting(STORE_KEY, staged);
-  // Re-staging the value it now matches clears the draft key, so the workspace
-  // publish banner does not keep claiming there is something left to send.
-  draftSet(STORE_KEY, staged);
-  return staged;
+export function writeLiveStore(store) {
+  setSetting(STORE_KEY, normalizeStore(store));
 }
+
+export const THEME_STORE_KEY = STORE_KEY;
 
 export function activeTheme(isAdmin) {
   const store = readStore(isAdmin);

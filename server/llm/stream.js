@@ -4,9 +4,11 @@ import { makeEmitter } from './emitter.js';
 import { makeToolResolver } from '../tools/aliases.js';
 import { normalizeMessages, requestKwargs } from './wire.js';
 import { stripNestedKwargs } from '../lib/kwargs.js';
+import { streamAnthropic } from './anthropic.js';
+import { memoFor, postWithRecovery, upstreamMessage } from './compat.js';
 
 async function assertOk(res) {
-  if (!res.ok || !res.body) { const t = await res.text().catch(() => ''); throw new Error(`Upstream error ${res.status}: ${t.slice(0, 300)}`); }
+  if (!res.ok || !res.body) { const t = await res.text().catch(() => ''); throw new Error(upstreamMessage(res.status, t)); }
 }
 
 async function providerFetch(url, init) {
@@ -32,10 +34,32 @@ async function pumpLines(res, handle, finish) {
   finish();
 }
 
+export function canPrefill(model) {
+  const { spec, base } = modelProvider(model);
+  if (!spec.prefill) return false;
+  const mem = memoFor(base, model.internal_name);
+  if (mem.noPrefill) return false;
+  return !(spec.protocol === 'anthropic' && model.has_reasoning && !mem.noThinking);
+}
+
+export function refusePrefill(model) {
+  const { base } = modelProvider(model);
+  memoFor(base, model.internal_name).noPrefill = true;
+}
+
+function prefillWire(spec, messages, wire) {
+  const last = messages[messages.length - 1];
+  if (!last || !last.prefill || !spec.prefill) return {};
+  if (spec.prefill.message) Object.assign(wire[wire.length - 1], spec.prefill.message);
+  return spec.prefill.body || {};
+}
+
 export async function streamCompletion({ model, messages, tools, signal, onEvent }) {
   const { spec, base, key } = modelProvider(model);
+  if (spec.protocol === 'anthropic') return streamAnthropic({ model, spec, base, key, messages, tools, signal, onEvent });
   const hasTools = Array.isArray(tools) && tools.length > 0;
   const wire = normalizeMessages(spec.protocol, messages);
+  const fill = prefillWire(spec, messages, wire);
   const pending = new Map();
   let callSeq = 0;
   const nonce = Math.random().toString(36).slice(2, 8);
@@ -62,7 +86,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
   if (spec.protocol === 'ollama') {
     const res = await providerFetch(endpoint(base, '/api/chat'), {
       method: 'POST', headers: authHeaders(key), signal,
-      body: JSON.stringify({ model: model.internal_name, messages: wire, stream: true, think: !!model.has_reasoning, options: ollamaOptions(model, spec), ...(hasTools ? { tools } : {}), ...stripNestedKwargs(requestKwargs(model)) })
+      body: JSON.stringify({ model: model.internal_name, messages: wire, stream: true, think: !!model.has_reasoning, options: ollamaOptions(model, spec), ...(hasTools ? { tools } : {}), ...fill, ...stripNestedKwargs(requestKwargs(model)) })
     });
     await assertOk(res);
     const handle = (line) => {
@@ -93,11 +117,11 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
     return pumpLines(res, handle, () => { flush(); finishCalls(); });
   }
 
-  const res = await providerFetch(endpoint(base, '/chat/completions'), {
-    method: 'POST', headers: authHeaders(key), signal,
-    body: JSON.stringify({ model: model.internal_name, messages: wire, stream: true, stream_options: { include_usage: true }, ...(spec.timingsPerToken ? { timings_per_token: true } : {}), ...(spec.promptProgress ? { return_progress: true } : {}), ...(hasTools ? { tools, tool_choice: 'auto' } : {}), ...samplingParams(model, spec), ...requestKwargs(model) })
+  const res = await postWithRecovery({
+    url: endpoint(base, '/chat/completions'), headers: authHeaders(key), signal, send: providerFetch,
+    mem: memoFor(base, model.internal_name),
+    body: { model: model.internal_name, messages: wire, stream: true, stream_options: { include_usage: true }, ...(spec.timingsPerToken ? { timings_per_token: true } : {}), ...(spec.promptProgress ? { return_progress: true } : {}), ...(hasTools ? { tools, tool_choice: 'auto' } : {}), ...fill, ...samplingParams(model, spec), ...requestKwargs(model) }
   });
-  await assertOk(res);
   const handle = (line) => {
     const trimmed = line.trim();
     if (!trimmed.startsWith('data:')) return false;
@@ -107,7 +131,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
       const json = JSON.parse(data);
       if (json.prompt_progress) onEvent({ type: 'prompt_progress', progress: json.prompt_progress });
       if (json.timings) onEvent({ type: 'timings', timings: json.timings });
-      if (json.usage) { const u = json.usage; onEvent({ type: 'usage', usage: { prompt: u.prompt_tokens || 0, completion: u.completion_tokens || 0, total: u.total_tokens || ((u.prompt_tokens || 0) + (u.completion_tokens || 0)) } }); }
+      if (json.usage) { const u = json.usage; onEvent({ type: 'usage', usage: { prompt: u.prompt_tokens || 0, completion: u.completion_tokens || 0, total: u.total_tokens || ((u.prompt_tokens || 0) + (u.completion_tokens || 0)), cacheRead: u.prompt_tokens_details?.cached_tokens || 0, cacheWrite: 0 } }); }
       else if (json.timings) {
         const pn = json.timings.prompt_n || 0, cn = json.timings.predicted_n || 0;
         if (pn || cn) onEvent({ type: 'usage', usage: { prompt: pn, completion: cn, total: pn + cn } });
@@ -137,4 +161,3 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
   };
   return pumpLines(res, handle, () => { flush(); finishCalls(); });
 }
-

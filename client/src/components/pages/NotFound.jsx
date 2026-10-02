@@ -1,5 +1,5 @@
 import { t } from '../../i18n.jsx';
-import { BRAND_ICON } from '../../lib/brand.js';
+import BrandMark from '../ui/BrandMark.jsx';
 import { NewChatIcon, Search } from '../ui/icons.jsx';
 
 export function contactHref(value) {
@@ -15,7 +15,7 @@ export default function NotFound({ appName, appIcon, path, contact, onHome, onSe
   return (
     <div className="notfound" role="region" aria-label={t('Page not found')}>
       <div className="nf-card">
-        <img className="nf-mark" src={appIcon || BRAND_ICON} alt="" aria-hidden="true" />
+        <BrandMark className="nf-mark" src={appIcon} />
         <div className="nf-code">404</div>
         <h1 className="nf-title">{t('This page does not exist')}</h1>
         <p className="nf-sub">

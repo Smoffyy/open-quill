@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { highlight } from '../../lib/hljs.js';
 import { copyText } from '../../lib/clipboard.js';
-import { Wrench, FileText, Trash, Folder, Download, Search, Copy, Check, Terminal, Pencil, Plus, Chevron } from '../ui/icons.jsx';
+import { Wrench, FileText, Trash, Folder, Download, Search, Copy, Check, Terminal, Pencil, Plus, Chevron, Brain, Calculator, ListChecks, Users, Chat } from '../ui/icons.jsx';
 import { baseName, dirOf } from '../../lib/files.js';
 import { t, tk } from '../../i18n.jsx';
 
@@ -30,10 +30,19 @@ const VERBS = {
   chat_search: [tk('Searching past chats'), tk('Searched past chats')],
   chat_view: [tk('Reading a past chat'), tk('Read a past chat')],
   skill_view: [tk('Loading skill'), tk('Loaded skill')],
-  end_conversation: [tk('Ending the conversation'), tk('Ended the conversation')]
+  end_conversation: [tk('Ending the conversation'), tk('Ended the conversation')],
+  calculator: [tk('Calculating'), tk('Calculated')],
+  memory: [tk('Updating memory'), tk('Updated memory')],
+  'memory:add': [tk('Saving a memory'), tk('Saved a memory')],
+  'memory:update': [tk('Updating a memory'), tk('Updated a memory')],
+  'memory:delete': [tk('Forgetting a memory'), tk('Forgot a memory')],
+  todo: [tk('Updating the plan'), tk('Updated the plan')],
+  ask_user: [tk('Asking you'), tk('Asked you')]
 };
-function verbsFor(tool) {
-  if (VERBS[tool]) return VERBS[tool].map(v => t(v));
+function verbsFor(call) {
+  const tool = call.tool;
+  const key = tool === 'memory' && VERBS['memory:' + call.action] ? 'memory:' + call.action : tool;
+  if (VERBS[key]) return VERBS[key].map(v => t(v));
   if (String(tool || '').startsWith('mcp_')) {
     const short = String(tool).split('_').slice(2).join(' ') || t('connector');
     return [t('Using {name}', { name: short }), t('Used {name}', { name: short })];
@@ -68,6 +77,11 @@ function iconFor(tool) {
   if (tool === 'mb_search') return Search;
   if (tool === 'view') return FileText;
   if (tool === 'mb_view') return FileText;
+  if (tool === 'memory') return Brain;
+  if (tool === 'calculator') return Calculator;
+  if (tool === 'todo') return ListChecks;
+  if (tool === 'ask_user') return Chat;
+  if (tool === 'consult_model') return Users;
   if (tool === 'create_file') return Plus;
   if (tool === 'copy_file') return Copy;
   if (tool === 'str_replace' || tool === 'rename_file' || tool === 'move_file') return Pencil;
@@ -101,6 +115,9 @@ function targetOf(call) {
     case 'search': case 'mb_search': case 'chat_search': return q(call.query);
     case 'find': return q(call.pattern || call.query);
     case 'skill_view': return call.name ? { kind: 'text', text: call.name } : null;
+    case 'memory': return q(call.text);
+    case 'calculator': return call.expression ? { kind: 'text', text: call.expression } : null;
+    case 'ask_user': return q(call.question);
     case 'list_files': return call.path ? { kind: 'path', path: call.path } : { kind: 'text', text: t('the workspace') };
     case 'clear_sandbox': case 'delete_all': return null;
     default:
@@ -137,6 +154,11 @@ function resultNote(call, res) {
     case 'chat_search': return res.count != null ? plural(res.count, '{n} match', '{n} matches') : null;
     case 'chat_view': return res.title ? `"${res.title}"` : null;
     case 'skill_view': return res.name ? res.name : null;
+    case 'memory': return call.text ? (res.duplicate ? t('already saved') : null) : (res.text ? `"${res.text}"` : null);
+    case 'calculator': return res.result != null ? '= ' + res.result : null;
+    case 'todo': return res.closed === 'finished' ? t('Plan finished') : res.closed === 'cancelled' ? t('Plan cancelled')
+      : res.total != null ? t('{done} of {total} done', { done: res.done, total: res.total }) : null;
+    case 'ask_user': return res.answer ? t('Answer: {answer}', { answer: res.answer }) : res.skipped ? t('Skipped') : null;
     case 'extract_zip': return res.files ? plural(res.files.length, '{n} file', '{n} files') : null;
     case 'bundle_zip': return res.count != null ? plural(res.count, '{n} file', '{n} files') : null;
     case 'clear_sandbox': case 'delete_all': return res.cleared != null ? t('{n} removed', { n: res.cleared }) : null;
@@ -203,7 +225,7 @@ function BashCard({ call, result }) {
 function NamePending() { return <span className="tl-skel" aria-label={t('reading arguments')} />; }
 
 function ToolLine({ call, result, note, diff }) {
-  const v = verbsFor(call.tool) || [call.tool, call.tool];
+  const v = verbsFor(call) || [call.tool, call.tool];
   const pending = !result;
   const verb = v[pending ? 0 : 1];
   const Icon = iconFor(call.tool);
@@ -299,6 +321,41 @@ function WebSearchCard({ call, result }) {
   );
 }
 
+function ConsultCard({ call, result }) {
+  const [open, setOpen] = useState(false);
+  const pending = !result;
+  const failed = result && !result.ok;
+  const name = (result && result.model) || call.model || t('another model');
+  return (
+    <div className={'tool-bash tool-consult' + (pending ? ' pending' : '') + (failed ? ' err' : '') + (open ? ' open' : '')}>
+      <button className="tb-head" onClick={() => setOpen(o => !o)} aria-expanded={open}>
+        <Users style={{ width: 14 }} />
+        <span className="tb-label">{pending ? t('Consulting {name}', { name }) : t('Consulted {name}', { name })}</span>
+        {!pending && !failed && result.images > 0 && <span className="tl-note">{plural(result.images, '{n} image', '{n} images')}</span>}
+        {failed && <span className="tb-badge err">{t('error')}</span>}
+        {pending && <span className="tc-dots"><i /><i /><i /></span>}
+        <Chevron className="tb-chev" />
+      </button>
+      <div className={'tb-collapse' + (open ? ' open' : '')}>
+        <div className="tb-inner">
+          {call.question && (
+            <div className="tb-out">
+              <div className="tb-out-head">{t('Question')}</div>
+              <div className="tb-out-body">{call.question}</div>
+            </div>
+          )}
+          {result && (
+            <div className="tb-out">
+              <div className="tb-out-head">{failed ? t('Error') : t('Answer')}</div>
+              <div className="tb-out-body">{failed ? result.error : result.answer}</div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const TOOL_ALIAS = { run: 'bash', shell: 'bash', write_file: 'create_file', edit_file: 'str_replace', insert_lines: 'str_replace', read_file: 'view', cat: 'view', ls: 'list_files', tree: 'list_files', glob: 'find', grep: 'search', mv: 'move_file', cp: 'copy_file', rm: 'delete_file', mkdir: 'make_dir', unzip: 'extract_zip', zip: 'bundle_zip', reset: 'clear_sandbox' };
 
 function ToolCard({ call, result }) {
@@ -306,6 +363,7 @@ function ToolCard({ call, result }) {
   const c = TOOL_ALIAS[call.tool] ? { ...call, tool: TOOL_ALIAS[call.tool] } : call;
   if (c.tool === 'web_search') return <WebSearchCard call={c} result={result} />;
   if (c.tool === 'bash') return <BashCard call={c} result={result} />;
+  if (c.tool === 'consult_model') return <ConsultCard call={c} result={result} />;
   if (FILE_TOOLS.has(c.tool)) return <FileCard call={c} result={result} />;
   return <ChipCard call={c} result={result} />;
 }

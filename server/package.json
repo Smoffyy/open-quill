@@ -1,6 +1,6 @@
 {
   "name": "open-quill-server",
-  "version": "27.5.3",
+  "version": "27.6.0",
   "private": true,
   "type": "module",
   "main": "index.js",
@@ -10,6 +10,7 @@
     "test": "node --test"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "argon2": "^0.45.1",
     "better-sqlite3-multiple-ciphers": "^13.0.3",
     "cookie": "^2.0.1",
@@ -17,6 +18,6 @@
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.4.0",
     "pdfjs-dist": "^6.3.289",
-    "ws": "^8.21.3"
+    "ws": "^8.22.0"
   }
 }

@@ -110,7 +110,7 @@
   min-width: 0;
   flex-shrink: 0;
 }
-.cp-mark img { width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0; }
+.cp-mark .brand-mark { width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0; }
 .cp-mark b {
   font-size: 14px;
   font-weight: 600;
@@ -224,31 +224,6 @@
 .cp-menu-empty { padding: var(--cp-3); font-size: 12.5px; color: var(--cp-faint); }
 .cp-menu-sep { height: 1px; margin: var(--cp-1) var(--cp-2); background: var(--pop-divider); }
 
-/* ---------- publish state ---------- */
-
-.cp-publish { display: flex; align-items: center; gap: var(--cp-3); flex-shrink: 0; }
-.cp-state {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--cp-2);
-  font-size: 12.5px;
-  color: var(--cp-dim);
-  white-space: nowrap;
-}
-.cp-state.bad { color: var(--danger); }
-.cp-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--cp-faint);
-  flex-shrink: 0;
-}
-.cp-dot.live { background: var(--success); }
-.cp-dot.pending { background: var(--warning); animation: cpPulse 1.8s ease-in-out infinite; }
-.cp-dot.bad { background: var(--danger); }
-@keyframes cpPulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
-@media (prefers-reduced-motion: reduce) { .cp-dot.pending { animation: none; } }
-
 /* ---------- body + rail ---------- */
 
 .cp-body { display: grid; grid-template-columns: var(--cp-rail) minmax(0, 1fr); min-height: 0; }
@@ -320,13 +295,6 @@
   font-size: 13px;
   color: var(--cp-dim);
   margin: var(--cp-1) 0 0;
-}
-.cp-head-acts {
-  display: flex;
-  align-items: center;
-  gap: var(--cp-2);
-  flex-shrink: 0;
-  min-height: var(--cp-h);
 }
 
 .cp-scroll { flex: 1; min-height: 0; overflow: hidden auto; }
@@ -713,103 +681,6 @@
 
 .cp-row-drag { cursor: grab; }
 .cp-row-drag.dragging { opacity: .4; }
-.cp-drop-before td { box-shadow: inset 0 2px 0 var(--cp-ink); }
-.cp-drop-after td { box-shadow: inset 0 -2px 0 var(--cp-ink); }
-
-/* A model group is a folder, drawn as one: a header row with a disclosure
-   triangle, and children hung off a trunk line with a branch into each row,
-   the way a file tree reads in any editor's sidebar. */
-.cp-group-row td {
-  height: auto;
-  padding: var(--cp-2) var(--cp-4);
-  background: var(--cp-sunk);
-}
-.cp-group-row.dragging td { opacity: .4; }
-/* A folder is a drop target in its own right, so it says so while a row is
-   held over it rather than relying on the thin insertion line. */
-.cp-group-row.cp-drop-into td {
-  background: color-mix(in srgb, var(--cp-ring) 16%, var(--cp-sunk));
-  box-shadow: inset 0 0 0 1px var(--cp-ring);
-}
-.cp-group-bar { display: flex; align-items: center; gap: var(--cp-2); min-width: 0; }
-/* The folder's own actions stay out of the way until the row is approached. */
-.cp-group-bar .cp-acts { opacity: 0; transition: opacity var(--fx-t, .12s); }
-.cp-group-row:hover .cp-group-bar .cp-acts,
-.cp-group-bar .cp-acts:focus-within { opacity: 1; }
-.cp-group-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--cp-2);
-  height: var(--cp-h-sm);
-  padding: 0 var(--cp-2) 0 var(--cp-1);
-  border-radius: var(--cp-r-sm);
-  color: var(--cp-dim);
-  vertical-align: middle;
-}
-.cp-group-toggle:hover { background: var(--hover-mid); color: var(--cp-ink); }
-.cp-group-toggle > svg:first-child {
-  width: 12px; height: 12px; color: var(--cp-faint); flex-shrink: 0;
-  transition: transform var(--fx-t, .14s) ease;
-}
-.cp-group-toggle.open > svg:first-child { transform: rotate(90deg); }
-.cp-group-toggle > svg:nth-child(2) { width: 15px; height: 15px; color: var(--cp-faint); flex-shrink: 0; }
-.cp-group-name { font-size: 13px; font-weight: 500; }
-.cp-group-count {
-  min-width: 18px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: var(--hover-mid);
-  font-variant-numeric: tabular-nums;
-  font-size: 11px;
-  color: var(--cp-faint);
-  text-align: center;
-}
-.cp-group-note {
-  font-size: 12px;
-  color: var(--cp-faint);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-
-/* Space under the table that takes a drop, so a model can leave a folder
-   without hunting through a menu. */
-.cp-loose-zone {
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  min-height: 96px;
-  padding-top: var(--cp-4);
-  border-radius: var(--cp-r);
-}
-.cp-loose-zone:has(.cp-note-line) {
-  border: 1px dashed var(--cp-line-firm);
-  align-items: center;
-  padding-top: 0;
-}
-
-.cp-table tr.cp-grouped > td:first-child { position: relative; padding-left: 34px; }
-.cp-table tr.cp-grouped > td:first-child::before {
-  content: '';
-  position: absolute;
-  left: 20px;
-  top: -1px;
-  bottom: -1px;
-  width: 1.5px;
-  background: var(--cp-line-firm);
-}
-.cp-table tr.cp-grouped-last > td:first-child::before { bottom: 50%; }
-.cp-table tr.cp-grouped > td:first-child::after {
-  content: '';
-  position: absolute;
-  left: 20px;
-  top: 50%;
-  width: 12px;
-  height: 1.5px;
-  background: var(--cp-line-firm);
-}
-.cp-table tr.cp-grouped input[type="checkbox"] { position: relative; z-index: 1; }
 
 /* ---------- badges ---------- */
 
@@ -920,37 +791,6 @@ code.cp-code {
   overflow-wrap: anywhere;
 }
 
-/* ---------- model editor ---------- */
-
-.cp-editor { display: flex; flex-direction: column; min-height: 0; }
-/* Identity, actions and the tab strip stick as one block, so nothing has to
-   know how tall the row above it happens to be. */
-.cp-editor-head {
-  position: sticky;
-  top: 0;
-  z-index: 8;
-  padding-top: var(--cp-3);
-  background: var(--modal-bg, var(--bg));
-}
-.cp-editor-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--cp-3);
-  flex-wrap: wrap;
-  padding-bottom: var(--cp-3);
-}
-.cp-editor-id { display: flex; align-items: center; gap: var(--cp-2); min-width: 0; flex: 1; }
-.cp-editor-id img { width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0; }
-.cp-editor-id b {
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -.01em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.cp-editor-pane { display: flex; flex-direction: column; gap: var(--cp-4); padding-top: var(--cp-4); }
-
 /* ---------- dialogs ---------- */
 
 .cp-overlay {
@@ -1039,7 +879,6 @@ code.cp-code {
   .cp-find { width: 100%; order: 3; }
   .cp-find kbd { display: none; }
   .cp-mark span { display: none; }
-  .cp-editor-head { position: static; }
 }
 
 /* Theme rows in the Interface section. One row per theme, the active one marked

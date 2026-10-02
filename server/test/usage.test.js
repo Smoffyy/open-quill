@@ -79,7 +79,7 @@ test('the usage report honours its window', () => {
 
 test('the usage report is empty rather than broken with nothing in range', () => {
   const none = db.usage.report(T0 + 400 * DAY);
-  assert.deepEqual(none.totals, { count: 0, prompt: 0, completion: 0, cost: 0, users: 0 });
+  assert.deepEqual(none.totals, { count: 0, prompt: 0, completion: 0, cached: 0, cost: 0, users: 0 });
   assert.deepEqual(none.byUser, []);
   assert.deepEqual(none.byModel, []);
   assert.deepEqual(none.byDay, []);

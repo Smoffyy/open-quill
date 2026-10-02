@@ -664,6 +664,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 :root[data-preset="anthropic"] .modal-main .hint + :is(.set-row, .field) {
   border-top: 0;
 }
+:root[data-preset="anthropic"] .modal-main .danger-zone { border-top: 0; }
 :root[data-preset="anthropic"] .modal-main textarea { min-height: 88px; }
 :root[data-preset="anthropic"] .set-row-title { font-weight: 400; }
 :root[data-preset="anthropic"] .modal-main .field.row > label,

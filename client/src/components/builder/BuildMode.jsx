@@ -1,16 +1,17 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { t, tk } from '../../i18n.jsx';
 import { useTheme } from '../../lib/theme/store.jsx';
-import { docEditCount } from '../../lib/theme/ops.js';
 import { comboFromEvent, comboLabel } from '../../lib/keybinds.js';
 import Overlay from './Overlay.jsx';
 import Stage, { STAGES, STAGE_BY_ID, openStage, closeStage } from './Stage.jsx';
 import Inspector from './Inspector.jsx';
 import { LayersPanel, LibraryPanel, TokensPanel, ContentPanel } from './Panels.jsx';
 import ThemesPanel, { useThemes } from './ThemesPanel.jsx';
-import { Saved, Confirm } from './controls.jsx';
+import { Confirm } from './controls.jsx';
 import { toast } from '../../lib/toast.js';
+import { useChanges } from '../../lib/useChanges.js';
+import ChangesPanel from '../admin/changes/ChangesPanel.jsx';
 import { Panel, Palette, Box, TextIcon, Sparkles, Retry, X, Eye, Check, Keyboard, Refresh, Download } from '../ui/icons.jsx';
 import '../../styles/builder.css';
 
@@ -71,10 +72,15 @@ const DEVICES = [
    preview in the middle is the real interface with the real data, which is the
    only way an admin can trust that what they are designing is what ships. */
 
-export default function BuildMode() {
+const themeScope = (c) => c.scope === 'theme' || c.key === 'setting:ui_preset';
+
+export default function BuildMode({ user }) {
   const { build, setBuild, theme, live, undo, redo, depth, saveState, asMember, setAsMember, reload, setPreviewBp,
     revertSession, markSessionBaseline, replaceDoc } = useTheme();
   const themes = useThemes();
+  const changes = useChanges();
+  const [reviewing, setReviewing] = useState(false);
+  const lastSave = useRef(saveState);
   const [tab, setTab] = useState('layers');
   const [selection, setSelection] = useState(null);
   const [device, setDevice] = useState('desktop');
@@ -150,37 +156,20 @@ export default function BuildMode() {
   const themesReload = themes.reload;
   useEffect(() => {
     if (saveState === 'saved') themesReload();
+    if (saveState === 'error' && lastSave.current !== 'error') toast(t('A design change could not be saved.'), { kind: 'error', icon: 'info' });
+    lastSave.current = saveState;
   }, [saveState, themesReload]);
 
   if (!build) return null;
 
   const active = themes.list.themes.find(x => x.id === themes.list.activeId);
   const self = themes.list.themes.find(x => x.id === theme?.id);
-  /* Two different things can be unpublished, and saying so plainly is the
-     difference between an admin knowing where they stand and guessing: this
-     theme's own settings can have moved since the last publish, and members can
-     still be on a different theme entirely. Comparing the documents the session
-     already holds keeps the first one honest between saves, instead of trailing
-     whatever the last list fetch said. */
   const sameTheme = !!theme && theme.id === live?.id;
   const docDirty = sameTheme
     ? JSON.stringify(theme.doc) !== JSON.stringify(live?.doc)
     : !!self?.dirty;
-  const memberTheme = themes.list.themes.find(x => x.id === themes.list.publishedActiveId);
-  const activeDirty = !!theme && !!themes.list.publishedActiveId && theme.id !== themes.list.publishedActiveId;
-  const dirty = docDirty || activeDirty;
-  const edits = self?.changed ?? docEditCount(theme?.doc);
   const dirtySession = depth.undo > 0 || depth.redo > 0;
-
-  const publish = () => setAsk({
-    title: t('Publish this interface?'),
-    message: t('Everyone on this workspace will see “{name}” the next time their app reloads. The version you are replacing is kept so you can roll back.', { name: active?.name || theme?.name || '' }),
-    confirmLabel: t('Publish'),
-    onConfirm: async () => {
-      const r = await themes.publish();
-      if (r) { toast(t('Published to everyone.')); markSessionBaseline(); reload(); }
-    }
-  });
+  const pending = changes.changes.filter(themeScope).length;
 
   /* Undo is a session's memory and can legitimately run out; the published
      document never does. This is the floor an admin can always get back to. */
@@ -299,18 +288,10 @@ export default function BuildMode() {
         </div>
 
         <div className="bx-top-right">
-          <Saved state={saveState} />
-          <span className={'bx-state' + (dirty ? ' pending' : ' live')}
-            title={activeDirty ? t('Members are still on “{name}”. Publishing switches them to this one.', { name: memberTheme?.name || themes.list.publishedActiveId }) : undefined}>
-            {!dirty
-              ? t('Everything published')
-              : !docDirty
-                ? t('Not published to members yet')
-                : edits === 1 ? t('1 unpublished change')
-                  : t('{n} unpublished changes', { n: edits })}
-          </span>
-          <button type="button" className="bx-btn primary" disabled={!dirty || themes.busy} onClick={publish}>
-            {themes.busy ? t('Publishing…') : t('Publish')}
+          <button type="button" className="bx-btn primary" disabled={!changes.ready} onClick={() => setReviewing(true)}>
+            {t('Review changes')}
+            {pending > 0 && <span className="bx-count" aria-hidden="true">{pending}</span>}
+            {pending > 0 && <span className="sr-only">{pending === 1 ? t('1 change') : t('{n} changes', { n: pending })}</span>}
           </button>
           <button type="button" className={'bx-icon' + (keysOpen ? ' on' : '')} onClick={() => setKeysOpen(o => !o)}
             title={t('Keyboard shortcuts')} aria-label={t('Keyboard shortcuts')} aria-expanded={keysOpen}><Keyboard /></button>
@@ -372,5 +353,10 @@ export default function BuildMode() {
       {!asMember && <Overlay selection={selection} onSelect={select} interact={interact} tool={tool} />}
 
       {ask && <Confirm {...ask} onClose={() => setAsk(null)} />}
+      {reviewing && (
+        <ChangesPanel changes={changes} user={user} scope={themeScope} layer="over-build"
+          onPublished={() => { markSessionBaseline(); reload(); themes.reload(); }}
+          onClose={() => setReviewing(false)} />
+      )}
     </div>, document.body);
 }
