@@ -1,7 +1,7 @@
-import { createContext, useContext, useMemo, useState, useRef, useLayoutEffect } from 'react';
+import { createContext, useContext, useMemo, useState, useRef, useLayoutEffect, Fragment } from 'react';
 import { useAdmin } from '../store.jsx';
 import { Input, Area, Select, Switch, Btn, PointMenu, MenuItem, clampToViewport } from '../ui.jsx';
-import { ChevDown, Plus, X } from '../../ui/icons.jsx';
+import { ChevDown, X } from '../../ui/icons.jsx';
 import { t, tk } from '../../../i18n.jsx';
 import {
   shared, variants, flagOn, folderOf, folderPatch, applyText, approxTokens, norm, revertPatch, FLAGS, TEXT_OPS
@@ -12,6 +12,7 @@ const Ctx = createContext(null);
 const MIXED = '\u0000mixed';
 const MENU_W = 300;
 const MENU_H = 320;
+const VAR_MENU_H = 360;
 const PREVIEW = 48;
 const BULK_ROWS = 6;
 
@@ -337,13 +338,24 @@ function syncMirror(ta, m) {
   m.scrollTop = ta.scrollTop;
 }
 
-export function LongText({ k, label, hint, placeholder, rows = 6, mono, counter, inserts, mirror }) {
+export function LongText({ k, label, hint, placeholder, rows = 6, mono, counter, variables, mirror }) {
   const { edit, models } = useEditor();
   const { value, mixed } = useField(k);
   const ref = useRef(null);
   const mirrorRef = useRef(null);
+  const placed = useRef(null);
   const [caret, setCaret] = useState(null);
+  const [varMenu, setVarMenu] = useState(null);
   const mirrored = !!mirror && !mixed;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const p = placed.current;
+    if (!el || !p) return;
+    placed.current = null;
+    el.focus({ preventScroll: true });
+    el.setSelectionRange(p.at, p.at);
+    el.scrollTop = p.top;
+  });
   useLayoutEffect(() => { if (mirrored) syncMirror(ref.current, mirrorRef.current); });
   useLayoutEffect(() => {
     const ta = ref.current;
@@ -355,17 +367,35 @@ export function LongText({ k, label, hint, placeholder, rows = 6, mono, counter,
   if (mixed) return <BulkText k={k} label={label} hint={hint} rows={rows} mono={mono} count={models.length} />;
   const text = value ?? '';
 
-  function insert(token) {
-    const el = ref.current;
-    const at = el ? el.selectionStart : text.length;
-    const end = el ? el.selectionEnd : text.length;
-    edit({ [k]: text.slice(0, at) + token + text.slice(end) });
-    requestAnimationFrame(() => {
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(at + token.length, at + token.length);
-    });
+  function openVariables(e) {
+    if (e.shiftKey) return;
+    e.preventDefault();
+    const el = e.currentTarget;
+    const pointer = e.clientX + e.clientY > 0;
+    const r = el.getBoundingClientRect();
+    const at = clampToViewport(pointer ? e.clientX : r.left + 16, pointer ? e.clientY : r.top + 16, MENU_W, VAR_MENU_H);
+    setVarMenu({ at, start: el.selectionStart, end: el.selectionEnd, top: el.scrollTop });
   }
+
+  function closeVariables() {
+    const top = varMenu?.top;
+    setVarMenu(null);
+    const el = ref.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    if (top != null) el.scrollTop = top;
+  }
+
+  function insert(name) {
+    const token = `{{${name}}}`;
+    const start = Math.min(varMenu.start, text.length);
+    const end = Math.min(varMenu.end, text.length);
+    placed.current = { at: start + token.length, top: varMenu.top };
+    setVarMenu(null);
+    edit({ [k]: text.slice(0, start) + token + text.slice(end) });
+  }
+
+  const onContextMenu = variables ? openVariables : undefined;
 
   return (
     <Slot label={label} k={k} hint={hint}>
@@ -373,7 +403,7 @@ export function LongText({ k, label, hint, placeholder, rows = 6, mono, counter,
         <div className="mc-mirror-wrap">
           <Area ref={ref} mono={mono} rows={rows} value={text} placeholder={placeholder} aria-label={label}
             className="mc-mirror-input"
-            onChange={(e) => edit({ [k]: e.target.value })}
+            onChange={(e) => edit({ [k]: e.target.value })} onContextMenu={onContextMenu}
             onSelect={(e) => setCaret(e.target.selectionStart)}
             onBlur={() => setCaret(null)}
             onScroll={(e) => { if (mirrorRef.current) mirrorRef.current.scrollTop = e.target.scrollTop; }} />
@@ -384,27 +414,64 @@ export function LongText({ k, label, hint, placeholder, rows = 6, mono, counter,
         </div>
       ) : (
         <Area ref={ref} mono={mono} rows={rows} value={text} placeholder={placeholder} aria-label={label}
-          onChange={(e) => edit({ [k]: e.target.value })} />
+          onChange={(e) => edit({ [k]: e.target.value })} onContextMenu={onContextMenu} />
       )}
-      {(counter || inserts) && (
+      {(counter || variables) && (
         <div className="mc-text-foot">
           {counter && (
             <span className="cp-note-line">
               {t('{n} characters', { n: text.length.toLocaleString() })}{' · '}{t('~{n} tokens', { n: approxTokens(text).toLocaleString() })}
             </span>
           )}
-          {inserts && (
-            <span className="cp-acts">
-              {inserts.map(([name, token]) => (
-                <Btn key={token} size="sm" kind="quiet" title={token} onClick={() => insert(token)}>
-                  <Plus /> {name}
-                </Btn>
-              ))}
-            </span>
-          )}
+          {variables && <span className="cp-note-line">{t('Right-click to insert a variable. Shift and right-click for the browser’s own menu.')}</span>}
         </div>
       )}
+      {varMenu && <VariableMenu at={varMenu.at} groups={variables} onPick={insert} onClose={closeVariables} />}
     </Slot>
+  );
+}
+
+function VariableMenu({ at, groups, onPick, onClose }) {
+  const [query, setQuery] = useState('');
+  const q = query.trim().toLowerCase();
+  const hit = (s) => t(s).toLowerCase().includes(q);
+  const shown = groups
+    .map(([group, list]) => [group, !q || hit(group) ? list : list.filter(([name, desc]) => name.toLowerCase().includes(q) || hit(desc))])
+    .filter(([, list]) => list.length);
+  const first = shown[0]?.[1][0]?.[0];
+
+  function onKeyDown(e) {
+    if (e.key === 'Enter' && first) {
+      e.preventDefault();
+      onPick(first);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      e.currentTarget.closest('.cp-menu')?.querySelector('.cp-menu-item')?.focus();
+    }
+  }
+
+  return (
+    <PointMenu at={at} width={MENU_W} onClose={onClose}>
+      <div className="mc-var-find">
+        <Input autoFocus value={query} placeholder={t('Find a variable')} aria-label={t('Find a variable')}
+          onChange={(e) => setQuery(e.target.value)} onKeyDown={onKeyDown} />
+      </div>
+      {shown.map(([group, list], i) => (
+        <Fragment key={group}>
+          {i > 0 && <div className="cp-menu-sep" />}
+          <div className="cp-menu-empty">{t(group)}</div>
+          {list.map(([name, desc]) => (
+            <MenuItem key={name} onClick={() => onPick(name)}>
+              <span className="mc-menu-two">
+                <b><code>{`{{${name}}}`}</code></b>
+                <small>{t(desc)}</small>
+              </span>
+            </MenuItem>
+          ))}
+        </Fragment>
+      ))}
+      {!shown.length && <div className="cp-menu-empty">{t('No matching variables')}</div>}
+    </PointMenu>
   );
 }
 

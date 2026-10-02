@@ -83,13 +83,15 @@ function activeBlocks(model, state) {
   return out;
 }
 
-export function systemPrompt(chat, model, state, { userId = null, styleText = '', callMode = false } = {}) {
+export function systemPrompt(chat, model, state, { userId = null, styleText = '', callMode = false, client = null } = {}) {
   const row = chat ? (db.chats.byId(chat.id) || chat) : null;
   const uid = row?.user_id || userId;
   const u = row?.user_id ? db.users.byId(row.user_id) : null;
   const project = row?.project_id ? db.projects.byId(row.project_id) : null;
   const vars = {
-    ...promptVars(uid),
+    ...promptVars(uid, { model, client }),
+    chatTitle: row?.title && row.title !== 'New chat' ? row.title : '',
+    projectName: project?.name || '',
     userInstructions: u?.instructions || '',
     memories: () => memoriesText(u),
     userMemory: state.memoryOn ? 'True' : 'False',

@@ -109,6 +109,69 @@ export function sanitizeDocsLinks(raw, cap = 8) {
   return sanitizeLinks(raw, cap);
 }
 
+const INTEL_LABELS = ['', 'Low', 'Fair', 'Medium', 'High', 'Highest'];
+const SPEED_LABELS = ['', 'Slow', 'Steady', 'Medium', 'Fast', 'Fastest'];
+const BADGE_LABELS = { __proto__: null, latest: 'Latest', legacy: 'Legacy', preview: 'Preview', new: 'New' };
+const MODALITIES = [['text', 'Text'], ['image', 'Images'], ['audio', 'Audio'], ['video', 'Video']];
+
+function tokensText(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v) || v <= 0) return '';
+  const short = v >= 1000000 ? Number((v / 1000000).toFixed(1)) + 'M' : v >= 1000 ? Number((v / 1000).toFixed(1)) + 'K' : String(v);
+  return short + ' tokens';
+}
+
+function priceText(v) {
+  const n = Number(v);
+  if (v == null || v === '' || !Number.isFinite(n)) return '';
+  return '$' + (Number.isInteger(n) ? n : Number(n.toFixed(4))) + ' per million tokens';
+}
+
+function modalitiesText(m, dir) {
+  const on = (k) => (k === 'text' ? m[`docs_${dir}_text`] !== 0 : !!m[`docs_${dir}_${k}`] || (dir === 'in' && k === 'image' && !!m.has_vision));
+  return MODALITIES.filter(([k]) => on(k)).map(([, label]) => label).join(', ');
+}
+
+const level = (labels, n) => labels[Math.max(0, Math.min(5, Number(n) || 0))] || '';
+const pairs = (raw) => (Array.isArray(raw) ? raw : []).filter(p => p && p.value);
+const str = (v) => (typeof v === 'string' ? v.trim() : '');
+
+export function docsVars(m) {
+  if (!m) return {};
+  const ids = pairs(m.docs_ids);
+  return {
+    modelId: ids[0]?.value || '',
+    modelIds: ids.map(p => (p.label ? `${p.label}: ${p.value}` : p.value)).join('\n'),
+    modelDescription: str(m.description),
+    modelSummary: str(m.docs_summary),
+    modelAbout: str(m.docs_body),
+    modelBadge: BADGE_LABELS[m.docs_badge] || '',
+    modelGroup: str(m.docs_group),
+    modelNotice: str(m.docs_notice),
+    modelNotes: String(m.docs_notes || '').split('\n').map(s => s.replace(/^\s*[-*]\s*/, '').trim()).filter(Boolean).map(s => '- ' + s).join('\n'),
+    modelContextWindow: tokensText(m.num_ctx),
+    modelMaxOutput: tokensText(m.docs_max_output),
+    modelThinking: str(m.docs_thinking) || (m.has_reasoning ? 'Supported' : ''),
+    modelEffort: str(m.docs_effort),
+    modelLatency: str(m.docs_latency),
+    modelInput: modalitiesText(m, 'in'),
+    modelOutput: modalitiesText(m, 'out'),
+    modelKnowledgeCutoff: str(m.docs_cutoff),
+    modelTrainingCutoff: str(m.docs_train_cutoff),
+    modelIntelligence: level(INTEL_LABELS, m.docs_intelligence),
+    modelSpeed: level(SPEED_LABELS, m.docs_speed),
+    modelPriceInput: priceText(m.cost_in),
+    modelPriceOutput: priceText(m.cost_out),
+    modelPriceCacheWrite: priceText(m.docs_price_cache_write),
+    modelPriceCacheRead: priceText(m.docs_price_cache_read),
+    modelPriceBatch: str(m.docs_price_batch),
+    modelStatus: str(m.docs_status),
+    modelReleased: str(m.docs_released),
+    modelRetirement: str(m.docs_retired),
+    modelPlatforms: (Array.isArray(m.docs_platforms) ? m.docs_platforms : []).filter(Boolean).join(', ')
+  };
+}
+
 export function sanitizeStrList(raw, cap = 12) {
   return (Array.isArray(raw) ? raw : []).map(s => text(s, 80).trim()).filter(Boolean).slice(0, cap);
 }

@@ -2,7 +2,8 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMe
 import { api, SESSION_EXPIRED, TAB_ID } from './lib/api.js';
 import { newerVersion, syncDelay, draftReloads, DRAFT_SETTLE_MS } from './lib/configsync.js';
 import { setWsSender, publishPresence } from './lib/wsbus.js';
-import { t, tk } from './i18n.jsx';
+import { t, tk, getLang } from './i18n.jsx';
+import { withClient } from './lib/clientctx.js';
 import { applyPrefs, prefersDark, appFontId, takeSettingsToReopen } from './lib/prefs.js';
 import { kwargValuesArr, defaultValueOf } from './lib/kwargs.js';
 import Login from './components/pages/Login.jsx';
@@ -739,7 +740,7 @@ export default function App() {
   }
 
   function wsSend(obj) {
-    if (socketSend(obj)) return true;
+    if (socketSend(withClient(obj, getLang()))) return true;
     setChatErrors(prev => ({ ...prev, [activeKey()]: t('Connection lost, reconnecting. Try again in a moment.') }));
     return false;
   }

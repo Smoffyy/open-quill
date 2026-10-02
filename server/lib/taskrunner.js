@@ -46,7 +46,7 @@ export function fireTask(task) {
 
   live.beginTurn(user.id, chat.id, model.id);
   const queueOn = getSetting('model_queue', '0') === '1';
-  runQueued(queueOn, model.id, () => {}, () => runCompletion(ws, state, send, chat, model, false, false, 0, false, false, ''))
+  runQueued(queueOn, model.id, () => {}, () => runCompletion(ws, state, send, chat, model, false, false, 0, false, false))
     .catch(err => console.error('[tasks] run failed for', task.id, err))
     .finally(() => live.endTurn(chat.id));
 

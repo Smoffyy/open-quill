@@ -11,7 +11,7 @@ import {
 } from '../lib/kwargs.js';
 import { parseTextToolCalls, parseArgs, toCall, cutOffOf } from '../tools/index.js';
 import { classifyToolError } from '../lib/toolstats.js';
-import { sanitizeDocsConfig, readDocsConfig, sanitizePairs, sanitizeCards, sanitizeStrList, DOCS_DEFAULTS } from '../lib/modeldocs.js';
+import { sanitizeDocsConfig, readDocsConfig, sanitizePairs, sanitizeCards, sanitizeStrList, DOCS_DEFAULTS, docsVars } from '../lib/modeldocs.js';
 import { parseSkillFile, buildSkillFile, normalizeName, validate } from '../lib/skillfile.js';
 import { cutOffError } from '../lib/prompts.js';
 import { makeToolTextFilter, makeEmitter } from '../llm/emitter.js';
@@ -32,6 +32,7 @@ import zlib from 'zlib';
 import { releaseCandidates, parseManifest } from '../lib/release.js';
 import { remapBrandPath, retireLegacyMark } from '../lib/brand.js';
 import { badgesOf, sanitizeBadgesOff } from '../lib/badges.js';
+import { cleanClient, memberContext, languageName } from '../lib/memberctx.js';
 import { samplingParams, parseStop } from '../llm/sampling.js';
 import { PROVIDER_TYPES, isProviderType, providerSpec, isLocalType } from '../lib/providers.js';
 import { slideWithCounter, trimMode } from '../lib/ctxwindow.js';
@@ -2852,4 +2853,45 @@ test('playground test sets are trimmed, capped and given unique ids', () => {
   assert.notEqual(out[2].id, 'bad id!');
   assert.equal(out[2].cases[0].prompt.length, SUITE_LIMITS.prompt);
   assert.equal(sanitizeSuites(Array.from({ length: SUITE_LIMITS.sets + 3 }, () => ({}))).length, SUITE_LIMITS.sets);
+});
+
+test('member context keeps only valid time zones, languages and devices', () => {
+  assert.deepEqual(cleanClient({ timeZone: 'Asia/Tokyo', language: 'es-MX', device: 'phone' }), { timeZone: 'Asia/Tokyo', language: 'es-MX', device: 'phone' });
+  assert.deepEqual(cleanClient({ timeZone: 'Mars/Olympus', language: '<script>', device: 'fridge' }), { timeZone: '', language: '', device: '' });
+  assert.deepEqual(cleanClient(null), { timeZone: '', language: '', device: '' });
+  assert.deepEqual(cleanClient(['x']), { timeZone: '', language: '', device: '' });
+  const saved = { client_ctx: { timeZone: 'Europe/Berlin', language: 'de', device: 'phone' } };
+  assert.deepEqual(memberContext(saved, { language: 'ja' }), { timeZone: 'Europe/Berlin', language: 'ja', device: '' });
+  assert.deepEqual(memberContext(null, null), { timeZone: '', language: '', device: '' });
+  assert.equal(languageName('ja'), 'Japanese');
+  assert.equal(languageName(''), '');
+});
+
+test('docs variables read the model page fields the way the docs show them', () => {
+  const v = docsVars({
+    description: 'Fast helper', docs_ids: [{ label: 'API', value: 'quill-1' }, { label: 'Local', value: 'q1.gguf' }, { label: 'Empty', value: '' }],
+    docs_badge: 'latest', docs_notes: '- Good at code\n* Short replies\n\n', num_ctx: 200000, docs_max_output: 64000,
+    has_reasoning: 1, docs_in_image: 0, has_vision: 1, docs_out_text: 0, docs_out_audio: 1, docs_intelligence: 4, docs_speed: 9,
+    cost_in: 2, cost_out: 10.5, docs_price_cache_read: 0.2, docs_released: 'June 30, 2026', docs_platforms: ['API', '', 'Local']
+  });
+  assert.equal(v.modelId, 'quill-1');
+  assert.equal(v.modelIds, 'API: quill-1\nLocal: q1.gguf');
+  assert.equal(v.modelBadge, 'Latest');
+  assert.equal(v.modelNotes, '- Good at code\n- Short replies');
+  assert.equal(v.modelContextWindow, '200K tokens');
+  assert.equal(v.modelMaxOutput, '64K tokens');
+  assert.equal(v.modelThinking, 'Supported');
+  assert.equal(v.modelInput, 'Text, Images');
+  assert.equal(v.modelOutput, 'Audio');
+  assert.equal(v.modelIntelligence, 'High');
+  assert.equal(v.modelSpeed, 'Fastest');
+  assert.equal(v.modelPriceInput, '$2 per million tokens');
+  assert.equal(v.modelPriceOutput, '$10.5 per million tokens');
+  assert.equal(v.modelPriceCacheRead, '$0.2 per million tokens');
+  assert.equal(v.modelPriceCacheWrite, '');
+  assert.equal(v.modelReleased, 'June 30, 2026');
+  assert.equal(v.modelRetirement, '');
+  assert.equal(v.modelPlatforms, 'API, Local');
+  assert.deepEqual(docsVars(null), {});
+  assert.equal(docsVars({ docs_badge: '__proto__' }).modelBadge, '');
 });

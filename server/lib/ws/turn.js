@@ -50,13 +50,13 @@ export async function maybeCompact(ws, chat, model, extended, flags, opts = {}) 
   }
 }
 
-export async function runCompletion(ws, state, safeSend, chat, model, extended, sandboxOn, sandboxCap = 0, webSearchOn = false, callMode = false, styleText = '') {
+export async function runCompletion(ws, state, safeSend, chat, model, extended, sandboxOn, sandboxCap = 0, webSearchOn = false, callMode = false, { styleText = '', client = null } = {}) {
   {
     const cRow0 = db.chats.byId(chat.id) || chat;
     if (cRow0.gen_params && typeof cRow0.gen_params === 'object') model = { ...model, ...cRow0.gen_params };
   }
   const flags = toolState(chat, model, { sandboxOn, webSearchOn, canAsk: !!state?.interactive });
-  const promptOpts = { styleText, callMode };
+  const promptOpts = { styleText, callMode, client };
   await ensureChatSidecars(chat.id);
   await maybeCompact(ws, chat, model, extended, flags, promptOpts);
   const history = chatHistory(chat, model);
@@ -172,7 +172,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     }
     if (call.tool === 'consult_model') {
       if (!consultOn) return null;
-      const r = await runConsult({ model, targets: consultWith, call, chatId: chat.id, userId: chat.user_id, signal: stepController ? stepController.signal : null });
+      const r = await runConsult({ model, targets: consultWith, call, chatId: chat.id, userId: chat.user_id, client, signal: stepController ? stepController.signal : null });
       return { payload: r, formatted: formatConsult(r), hide: false };
     }
     if (call.tool === 'skill_view') {

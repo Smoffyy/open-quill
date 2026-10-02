@@ -1,4 +1,7 @@
-import { db } from '../db.js';
+import { db, getSetting } from '../db.js';
+import { roleOf } from './roles.js';
+import { memberContext, languageName } from './memberctx.js';
+import { docsVars } from './modeldocs.js';
 import { oneShot, stripThink, summarizeConversation, modelProvider, countAnthropicTokens } from '../llm/index.js';
 import { resolveProvider } from './providers.js';
 import { activePath } from './tree.js';
@@ -352,12 +355,28 @@ export function calibratedTokens(chatId, messages) {
   return c ? Math.round(est * c.ratio) : est;
 }
 
-export function promptVars(userId) {
+export function promptVars(userId, { model = null, client = null } = {}) {
   const u = userId ? db.users.byId(userId) : null;
   const name = u ? (u.display_name || (u.email ? u.email.split('@')[0] : '') || 'User') : 'User';
+  const ctx = memberContext(u, client);
   const now = new Date();
-  let dt;
-  try { dt = now.toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' }); }
-  catch { dt = now.toString(); }
-  return { currentUser: name, currentDateTime: dt };
+  const timeZone = ctx.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  const fmt = (opts) => {
+    try { return now.toLocaleString(undefined, { ...opts, timeZone: timeZone || undefined }); }
+    catch { return now.toString(); }
+  };
+  return {
+    currentUser: name,
+    currentDateTime: fmt({ dateStyle: 'full', timeStyle: 'short' }),
+    currentDate: fmt({ dateStyle: 'full' }),
+    currentTime: fmt({ timeStyle: 'short' }),
+    timeZone,
+    userLanguage: languageName(ctx.language),
+    userRole: u ? roleOf(u) : '',
+    device: ctx.device,
+    modelName: model ? (model.display_name || model.internal_name || '') : '',
+    ...docsVars(model),
+    instanceName: getSetting('app_name', 'open-quill') || 'open-quill',
+    supportContact: getSetting('support_contact', '') || ''
+  };
 }

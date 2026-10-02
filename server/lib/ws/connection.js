@@ -14,6 +14,7 @@ import { budgetStatus, recordUsage } from '../budget.js';
 import { runQueued } from '../queue.js';
 import { styleTextFor, CUT_NOTE } from '../convo.js';
 import { systemPrompt } from '../systemprompt.js';
+import { cleanClient, rememberClient } from '../memberctx.js';
 
 import { clients, requestedKwargs } from './broadcast.js';
 import { runCompletion } from './turn.js';
@@ -132,6 +133,8 @@ export function initWs(server) {
         c.abort();
         return;
       }
+      const client = cleanClient(msg.client);
+      rememberClient(u, client);
       if (msg.type === 'incognito') {
         try {
           const baseModel = resolveModel(msg.modelId, state.isAdmin);
@@ -148,7 +151,7 @@ export function initWs(server) {
           if (!history.length || history[history.length - 1].role !== 'user') {
             safeSend(JSON.stringify({ type: 'error', error: 'Nothing to send.' })); safeSend(JSON.stringify({ type: 'done' })); return;
           }
-          const messages = buildMessages(model, history, !!msg.extended, systemPrompt(null, model, {}, { userId: u.id }).text);
+          const messages = buildMessages(model, history, !!msg.extended, systemPrompt(null, model, {}, { userId: u.id, client }).text);
           const assistantId = 'inc-' + uid();
           const controller = new AbortController();
           state.aborts.set('incognito', controller);
@@ -254,7 +257,7 @@ export function initWs(server) {
         try {
           await runQueued(queueOn, model.id,
             () => { liveSend(JSON.stringify({ type: 'queued', chatId: chat.id })); },
-            () => runCompletion(liveWs, liveState, liveSend, chat, model, !!msg.extended, sandboxOn, sandboxLimit, webSearchOn, !!msg.call, styleText));
+            () => runCompletion(liveWs, liveState, liveSend, chat, model, !!msg.extended, sandboxOn, sandboxLimit, webSearchOn, !!msg.call, { styleText, client }));
         } finally { live.endTurn(chat.id); }
       } catch (err) {
         console.error('[ws chat]', err);

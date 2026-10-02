@@ -61,7 +61,7 @@ function latestImages(chatId) {
 
 const wantsImages = (v) => v === true || v === 'true';
 
-export async function runConsult({ model, targets, call, chatId, userId, signal }) {
+export async function runConsult({ model, targets, call, chatId, userId, client = null, signal }) {
   const names = targets.map(t => t.display_name || t.internal_name).join(', ');
   const target = pickTarget(targets, call.model);
   if (!target) return { ok: false, model: String(call.model || ''), error: `Unknown model "${call.model || ''}". You can consult: ${names}.` };
@@ -69,7 +69,7 @@ export async function runConsult({ model, targets, call, chatId, userId, signal 
   const question = String(call.question ?? '').trim().slice(0, QUESTION_MAX);
   if (!question) return { ok: false, model: label, error: 'question is required.' };
   const images = model.consult_images && target.has_vision && wantsImages(call.include_images) ? latestImages(chatId) : [];
-  const system = renderPrompt(target.system_prompt || '', { vars: promptVars(userId) }).text;
+  const system = renderPrompt(target.system_prompt || '', { vars: promptVars(userId, { model: target, client }) }).text;
   const messages = [];
   if (system) messages.push({ role: 'system', content: system });
   messages.push(images.length
