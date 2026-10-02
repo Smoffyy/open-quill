@@ -321,10 +321,10 @@
 /* One word, one ramp, started when the word arrives. The tail of a reply
    therefore reads as a soft gradient rather than a hard edge. */
 .rv-word { animation: text-enter-fade .35s linear both; }
-:root[data-motion="modern"] .msg.user.enter .bubble-user { animation: text-enter-fade .6s ease-out both, text-enter-bounce .5s cubic-bezier(.34,1.56,.64,1) both; }
+.msg.user.enter .bubble-user { animation: text-enter-fade .6s ease-out both, text-enter-bounce .5s cubic-bezier(.34,1.56,.64,1) both; }
 @media (prefers-reduced-motion: reduce) {
   .assistant-body.text-enter > :first-child,
-  .rv-word, :root[data-motion="modern"] .msg.user.enter .bubble-user { animation: none; }
+  .rv-word, .msg.user.enter .bubble-user { animation: none; }
 }
 
 .msg-icon { display: inline-flex; align-items: center; gap: 9px; margin-bottom: 8px; }

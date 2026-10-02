@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const JUMP_DISTANCE = 200;
 const AT_BOTTOM = 24;
-const FOLLOW_TAU = 85;
 const FOLLOW_MAX_DT = 80;
 
 const TOP_GAP = 56;
@@ -28,8 +27,6 @@ export function useThreadScroll(opts = {}) {
   const auto = useRef(opts.autoscroll !== false);
   auto.current = opts.autoscroll !== false;
 
-  const modern = useRef(!!opts.modern);
-  modern.current = !!opts.modern;
   const scrollRef = useRef(null);
   const stick = useRef(true);
   const programmatic = useRef(false);
@@ -38,7 +35,6 @@ export function useThreadScroll(opts = {}) {
   const jumpRef = useRef(false);
   const touchDrag = useRef(false);
   const followRaf = useRef(0);
-  const followTs = useRef(0);
   const smoothUntil = useRef(0);
   const padH = useRef(-1);
   const lastWant = useRef(0);
@@ -70,10 +66,6 @@ export function useThreadScroll(opts = {}) {
     if (!el) return false;
     const thread = el.querySelector('.thread');
     if (!thread) return false;
-    if (!modern.current) {
-      if (padH.current !== -1) { padH.current = -1; thread.style.removeProperty('--turn-pad'); still.current = null; delete thread.dataset.still; }
-      return false;
-    }
     const pad = thread.querySelector(':scope > .thread-pad');
     if (!pad) return false;
     const users = thread.querySelectorAll(':scope > .msg.user');
@@ -147,7 +139,7 @@ export function useThreadScroll(opts = {}) {
   const scrollBottom = useCallback((smooth) => {
     const el = scrollRef.current;
     if (!el) return;
-    if (smooth && modern.current) { glide(el); return; }
+    if (smooth) { glide(el); return; }
     endGlide();
     // While there is reserved room, the bottom is not where the view belongs.
     if (syncPad(true)) return;
@@ -202,7 +194,7 @@ export function useThreadScroll(opts = {}) {
     setJump(false);
   }, [setJump]);
 
-  const followStep = useCallback((dt) => {
+  const followStep = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
     if (!auto.current) setJump(el.scrollHeight - el.scrollTop - el.clientHeight > JUMP_DISTANCE);
@@ -216,12 +208,6 @@ export function useThreadScroll(opts = {}) {
       return;
     }
     setStill(false);
-
-    if (!modern.current) {
-      const diff = el.scrollHeight - el.clientHeight - el.scrollTop;
-      if (diff > 0.5) { programmatic.current = true; el.scrollTop += Math.max(1, diff * (1 - Math.exp(-dt / FOLLOW_TAU))); }
-      return;
-    }
 
     const thread = el.querySelector('.thread');
     if (!thread) return;
@@ -238,19 +224,13 @@ export function useThreadScroll(opts = {}) {
     el.scrollTop = snapScroll(el.scrollTop + over);
   }, [canFollow, syncPad, setStill, setJump]);
 
-  const followNow = useCallback(() => followStep(FOLLOW_MAX_DT), [followStep]);
-
   const follow = useCallback(function tick() {
-    const now = performance.now();
-    const dt = Math.min(FOLLOW_MAX_DT, now - (followTs.current || now));
-    followTs.current = now;
-    followStep(dt);
+    followStep();
     followRaf.current = requestAnimationFrame(tick);
   }, [followStep]);
 
   const startFollow = useCallback(() => {
     cancelAnimationFrame(followRaf.current);
-    followTs.current = 0;
     follow();
   }, [follow]);
 
@@ -270,6 +250,6 @@ export function useThreadScroll(opts = {}) {
   return useMemo(() => ({
     scrollRef, stick, programmatic, showJump,
     scrollBottom, pinToBottom, onScroll, onWheel, onTouchMove, jumpDown, resetJump,
-    startFollow, stopFollow, followNow, syncPad, smoothPending, gliding
-  }), [showJump, scrollBottom, pinToBottom, onScroll, onWheel, onTouchMove, jumpDown, resetJump, startFollow, stopFollow, followNow, syncPad, smoothPending, gliding]);
+    startFollow, stopFollow, followNow: followStep, syncPad, smoothPending, gliding
+  }), [showJump, scrollBottom, pinToBottom, onScroll, onWheel, onTouchMove, jumpDown, resetJump, startFollow, stopFollow, followStep, syncPad, smoothPending, gliding]);
 }

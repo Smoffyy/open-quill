@@ -419,16 +419,14 @@ export default function App() {
   const selectingRef = useRef(false);
   const hasSelectionRef = useRef(false);
   const canFollow = useCallback(() => !selectingRef.current && !hasSelectionRef.current, []);
-  // `modern` is the whole of the thread's motion, `legacy` the reveal that walks
-  // the text a slice at a time; `instant` is neither.
   const revealStyle = resolveReveal(user?.prefs, cfg.uiPreset === 'openai' ? 'openai' : 'anthropic');
-  const modernMotion = revealStyle === 'modern';
+  const fadeWords = revealStyle === 'modern';
   const autoscroll = user?.prefs?.autoscroll !== false;
   const {
     scrollRef, stick, showJump,
     scrollBottom, pinToBottom, onScroll, onWheel, onTouchMove, jumpDown, resetJump,
     startFollow, stopFollow, followNow, syncPad, smoothPending, gliding
-  } = useThreadScroll({ canFollow, modern: modernMotion, autoscroll });
+  } = useThreadScroll({ canFollow, autoscroll });
   const animate = revealStyle === 'legacy';
   const revealMs = revealSpeedMs(user?.prefs?.revealMs);
   // finalize is redefined every render; the hook reads it through a ref so the
@@ -436,7 +434,7 @@ export default function App() {
   const finalizeRef = useRef(null);
   const stream = useTurnStream({
     animate,
-    batch: modernMotion,
+    batch: fadeWords,
     speedMs: revealMs,
     onRevealComplete: () => finalizeRef.current?.(),
     onFollowStart: startFollow,
@@ -1785,7 +1783,7 @@ export default function App() {
                       onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onEditAssistant={editAssistantMessage} onDelete={deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
                       showSpeed={showMsgSpeed}
                       showIcon={msg.role === 'assistant' && (cfg.uiPreset === 'openai' || (lastA && msg.id === lastA.id))}
-                      modern={modernMotion}
+                      fadeWords={fadeWords}
                       preset={cfg.uiPreset === 'openai' ? 'openai' : 'anthropic'} />
                     );
                   });

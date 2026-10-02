@@ -111,6 +111,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A file's version history keeps its latest 50 versions instead of every save forever, and files with very long paths keep their history.
 - Projects are limited to 500 per member, like tasks and skills.
 - `{{currentDateTime}}` is in the member's time zone; it used to be the server's.
+- The Instant and Legacy text reveals now scroll and move like Modern: a sent message rises to the top with its entrance animation, the thread follows the reply smoothly, the avatar glides with the text and the status caption crossfades. The reveal style now changes only how the assistant's text appears, and Modern's description in Settings, Interface says just that.
 
 ### Performance
 - Streaming a large file as a tool call no longer stalls the server: the live preview is throttled for long arguments, and tool calls written as text are scanned incrementally (a 200 KB file went from about a second of blocked server to a few milliseconds).

@@ -18,7 +18,7 @@ const REVEAL_STOPS = [
 // safe on its own, since resolveReveal falls a retired value back to the default.
 const REVEAL_STYLE_OPTS = [
   { v: 'instant', label: tk('Instant'), note: tk('Text appears the moment it arrives.') },
-  { v: 'modern', label: tk('Modern'), note: tk('Words fade in as they arrive and your message rises to the top.') },
+  { v: 'modern', label: tk('Modern'), note: tk('Words fade in as they arrive.') },
   { v: 'legacy', label: tk('Legacy'), note: tk('Letters type out one after another.') },
 ];
 

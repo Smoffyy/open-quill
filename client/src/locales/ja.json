@@ -2290,7 +2290,6 @@
   "Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.": "どんなファイルでも追加できます。このプロジェクトのすべてのチャットがこのワークスペースを共有し、その中身を読み取り、編集し、実行できます。",
   "Modern": "モダン",
   "Legacy": "クラシック",
-  "Words fade in as they arrive and your message rises to the top.": "単語は届くたびにフェードインし、あなたのメッセージは上部へ移動します。",
   "3+ days ago": "3日以上前",
   "7+ days ago": "7日以上前",
   "Deleted {n} chat(s)": "{n}件のチャットを削除しました",
@@ -2853,5 +2852,6 @@
   "The release date.": "リリース日。",
   "The retirement date.": "廃止日。",
   "The platforms the model is available on.": "モデルを利用できるプラットフォーム。",
-  "Filled in when a message is sent. Write them in double braces anywhere in the prompt, or right-click the prompt to insert one. The model variables come from this model’s page in the docs, and one left blank there is empty.": "メッセージの送信時に値が入ります。プロンプトの任意の場所に二重波かっこで書くか、プロンプトを右クリックして挿入します。モデルの変数はドキュメント内のこのモデルのページから取得され、そこで空欄の項目は空になります。"
+  "Filled in when a message is sent. Write them in double braces anywhere in the prompt, or right-click the prompt to insert one. The model variables come from this model’s page in the docs, and one left blank there is empty.": "メッセージの送信時に値が入ります。プロンプトの任意の場所に二重波かっこで書くか、プロンプトを右クリックして挿入します。モデルの変数はドキュメント内のこのモデルのページから取得され、そこで空欄の項目は空になります。",
+  "Words fade in as they arrive.": "単語は届くたびにフェードインします。"
 }

@@ -2200,7 +2200,6 @@
   "Shows what the model is doing beside its logo if a reply takes more than {n}s.": "Mostra o que o modelo está fazendo ao lado do logotipo se uma resposta demorar mais de {n}s.",
   "Your account basics. Colours, fonts and layout live under Interface.": "O básico da sua conta. Cores, fontes e layout ficam em Interface.",
   "Modern": "Moderno",
-  "Words fade in as they arrive and your message rises to the top.": "As palavras aparecem gradualmente conforme chegam e sua mensagem sobe para o topo.",
   "Legacy": "Clássico",
   "How this app looks on your device. These are your own preferences; the layout itself is set by an administrator.": "Como este app aparece no seu dispositivo. São preferências suas; o layout em si é definido por um administrador.",
   "Reading width": "Largura de leitura",
@@ -2853,5 +2852,6 @@
   "The release date.": "A data de lançamento.",
   "The retirement date.": "A data de aposentadoria.",
   "The platforms the model is available on.": "As plataformas em que o modelo está disponível.",
-  "Filled in when a message is sent. Write them in double braces anywhere in the prompt, or right-click the prompt to insert one. The model variables come from this model’s page in the docs, and one left blank there is empty.": "Preenchidas quando uma mensagem é enviada. Escreva-as entre chavetas duplas em qualquer ponto do prompt, ou clique com o botão direito no prompt para inserir uma. As variáveis do modelo vêm da página deste modelo na documentação, e as que lá estiverem em branco ficam vazias."
+  "Filled in when a message is sent. Write them in double braces anywhere in the prompt, or right-click the prompt to insert one. The model variables come from this model’s page in the docs, and one left blank there is empty.": "Preenchidas quando uma mensagem é enviada. Escreva-as entre chavetas duplas em qualquer ponto do prompt, ou clique com o botão direito no prompt para inserir uma. As variáveis do modelo vêm da página deste modelo na documentação, e as que lá estiverem em branco ficam vazias.",
+  "Words fade in as they arrive.": "As palavras aparecem gradualmente conforme chegam."
 }

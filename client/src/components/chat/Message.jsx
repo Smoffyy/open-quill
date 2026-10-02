@@ -170,7 +170,7 @@ function StatusCaption({ swapKey, label, detail }) {
   );
 }
 
-const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name, nameHoverOnly, crossfade, statusKey, statusLabel, statusDetail }, ref) {
+const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name, nameHoverOnly, statusKey, statusLabel, statusDetail }, ref) {
   const base = model?.staticIcon || '';
   const map = {
     static: base,
@@ -186,7 +186,7 @@ const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, nam
     <div ref={ref} className={'msg-icon' + (below ? ' below' : '') + (name ? ' with-name' : '')}>
       {base && <ModelMark src={src} state={phase} className={cls} style={{ width: sz, height: sz }} />}
       {name && <span className={'msg-icon-name' + (nameHoverOnly ? ' hover-reveal' : '')}>{name}</span>}
-      <StatusCaption swapKey={crossfade ? statusKey : null} label={statusLabel} detail={statusDetail} />
+      <StatusCaption swapKey={statusKey} label={statusLabel} detail={statusDetail} />
     </div>
   );
 });
@@ -232,7 +232,7 @@ function SteerChips({ notes }) {
   );
 }
 
-function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onEditAssistant, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, statusDelay = true, showSpeed = false, preset = 'anthropic', modern = false }) {
+function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onEditAssistant, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, statusDelay = true, showSpeed = false, preset = 'anthropic', fadeWords = false }) {
   if (chatEnded) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onEditAssistant = null; onFork = null; onDelete = null; }
   if (!chatId) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onEditAssistant = null; onFork = null; onTogglePin = null; }
   const [typing, setTyping] = useState(false);
@@ -343,26 +343,8 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
       if (el) { el.style.transition = ''; el.style.transform = ''; }
       return;
     }
-    if (!modern) {
-      // The one the legacy motion has always had: a single catch-up slide the
-      // first time the reply pushes the avatar, then it rides with the text.
-      const top = el.offsetTop;
-      const was = iconSlide.current;
-      if (was === null) { iconSlide.current = { top, done: false }; return; }
-      if (was.done) return;
-      const step = was.top - top;
-      if (Math.abs(step) <= 0.5) return;
-      was.done = true;
-      el.style.transition = 'none';
-      el.style.transform = `translateY(${step}px)`;
-      requestAnimationFrame(() => {
-        el.style.transition = 'transform .6s cubic-bezier(.16,1,.3,1)';
-        el.style.transform = '';
-      });
-      return;
-    }
     glideIcon();
-  }, [pos, streaming, modern, glideIcon, msg.content, msg.reasoning, phase, liveCall, liveCalls]);
+  }, [pos, streaming, glideIcon, msg.content, msg.reasoning, phase, liveCall, liveCalls]);
 
   // A code block's highlighting, a lazily loaded image, a tool card opening: all
   // of them move the avatar without a render of this component, which would
@@ -370,13 +352,13 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   // that lands into a jump. Watching the body catches the move where it happens.
   useLayoutEffect(() => {
     const el = iconRef.current;
-    if (!modern || pos !== 'below' || !streaming || !el || typeof ResizeObserver === 'undefined') return;
+    if (pos !== 'below' || !streaming || !el || typeof ResizeObserver === 'undefined') return;
     const body = el.parentElement;
     if (!body) return;
     const ro = new ResizeObserver(glideIcon);
     ro.observe(body);
     return () => ro.disconnect();
-  }, [modern, pos, streaming, glideIcon]);
+  }, [pos, streaming, glideIcon]);
 
   const [fb, setFb] = useState(msg.feedback || 0);
   useEffect(() => { setFb(msg.feedback || 0); }, [msg.id]);
@@ -446,7 +428,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   const showStatus = streaming && !msg.content && !msg.reasoning && !liveRows.length && statusInfo.show;
   const icon = showIt ? <ModelIcon ref={iconRef} model={model} phase={iconPhase} below={pos === 'below'} name={pos === 'left' ? null : (hasName ? model.displayName : null)}
     nameHoverOnly={pos !== 'left' && hasName && !showName}
-    crossfade={modern} statusKey={statusInfo.key} statusLabel={showStatus ? statusInfo.label : null} statusDetail={statusInfo.detail} /> : null;
+    statusKey={statusInfo.key} statusLabel={showStatus ? statusInfo.label : null} statusDetail={statusInfo.detail} /> : null;
 
   async function rate(r) {
     const next = fb === r ? 0 : r;
@@ -474,7 +456,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
             </>
           ) : msg.content ? (
             <ReasonSegs.Provider value={segCtx}>
-              <Markdown streaming={streaming} reveal={modern && streaming}>{msg.content}</Markdown>
+              <Markdown streaming={streaming} reveal={fadeWords && streaming}>{msg.content}</Markdown>
             </ReasonSegs.Provider>
           ) : null}
           {streaming && liveRows.length > 0 && (
