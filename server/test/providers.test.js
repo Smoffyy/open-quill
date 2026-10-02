@@ -384,3 +384,41 @@ test('Claude prices and cache rates match the published ones', () => {
   assert.deepEqual(cacheRates('claude-sonnet-5-5'), { read: 0.1, write: 1.25 });
   assert.deepEqual(cacheRates('local-model'), { read: 1, write: 1 });
 });
+test('a continued reply is sent as an open assistant turn in each provider dialect', async () => {
+  const { canPrefill, refusePrefill } = await import('../llm/index.js');
+  const mock = await openai({ key: 'k', respond: () => ({ text: 'ld' }) });
+  const turns = [{ role: 'user', content: 'say hello world' }, { role: 'assistant', content: 'hello wor', prefill: true, held: true }];
+  for (const type of ['llamacpp', 'vllm', 'mistral', 'moonshot', 'openrouter']) {
+    const model = { provider_id: useProvider(type, mock.url, 'k'), internal_name: 'm-' + type };
+    assert.equal(canPrefill(model), true, type);
+    const r = await run(model, turns);
+    assert.equal(r.text, 'ld');
+    const body = mock.requests.at(-1).body;
+    const last = body.messages.at(-1);
+    assert.deepEqual([last.role, last.content], ['assistant', 'hello wor'], type);
+    assert.equal(last.held, undefined, 'internal flags never reach the wire');
+    assert.equal(last.prefix, type === 'mistral' ? true : undefined, type);
+    assert.equal(last.partial, type === 'moonshot' ? true : undefined, type);
+    assert.equal(body.continue_final_message, type === 'vllm' ? true : undefined, type);
+    assert.equal(body.add_generation_prompt, type === 'vllm' ? false : undefined, type);
+  }
+  const plain = { provider_id: useProvider('openai', mock.url, 'k'), internal_name: 'gpt-mock' };
+  assert.equal(canPrefill(plain), false, 'OpenAI has no prefill, so continuing falls back to an instruction');
+  const local = { provider_id: useProvider('llamacpp', mock.url, 'k'), internal_name: 'thinker' };
+  refusePrefill(local);
+  assert.equal(canPrefill(local), false, 'a refusal is remembered per connection and model');
+  const claude = { provider_id: useProvider('anthropic', mock.url, 'k'), internal_name: 'claude-x' };
+  assert.equal(canPrefill(claude), true);
+  assert.equal(canPrefill({ ...claude, has_reasoning: true }), false, 'Claude cannot prefill with thinking on');
+});
+
+test('an Anthropic prefill stays the last turn, without trailing whitespace', () => {
+  const { messages } = toAnthropic([
+    { role: 'user', content: 'Write a loop' },
+    { role: 'assistant', content: 'for (let i = 0; i < n; i++) {\n  ', prefill: true }
+  ]);
+  assert.deepEqual(messages.map(m => m.role), ['user', 'assistant']);
+  assert.equal(messages[1].content[0].text, 'for (let i = 0; i < n; i++) {');
+  const closed = toAnthropic([{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'Hello. ' }]).messages;
+  assert.equal(closed.at(-1).role, 'user', 'an ordinary trailing reply still gets a user turn after it');
+});

@@ -10,7 +10,7 @@ export const PROVIDER_TYPES = {
     label: 'llama.cpp server', defaultBaseUrl: 'http://localhost:9931', local: true, protocol: 'openai', keyOptional: true,
     samplers: ['temperature', 'top_p', 'top_k', 'min_p', 'repetition_penalty', 'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens', 'stop',
       'dry_multiplier', 'dry_base', 'dry_allowed_length', 'dry_penalty_last_n', 'xtc_probability', 'xtc_threshold', 'mirostat', 'mirostat_tau', 'mirostat_eta'],
-    remap: { repetition_penalty: 'repeat_penalty' }, timingsPerToken: true, promptProgress: true, stopMax: 8
+    remap: { repetition_penalty: 'repeat_penalty' }, timingsPerToken: true, promptProgress: true, stopMax: 8, prefill: {}
   },
   lmstudio: {
     label: 'LM Studio', defaultBaseUrl: 'http://localhost:1234/v1', local: true, protocol: 'openai', keyOptional: true,
@@ -20,12 +20,12 @@ export const PROVIDER_TYPES = {
   vllm: {
     label: 'vLLM', defaultBaseUrl: 'http://localhost:8000/v1', local: true, protocol: 'openai', keyOptional: true,
     samplers: ['temperature', 'top_p', 'top_k', 'min_p', 'repetition_penalty', 'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens', 'stop'],
-    remap: {}
+    remap: {}, prefill: { body: { continue_final_message: true, add_generation_prompt: false } }
   },
   ollama: {
     label: 'Ollama', defaultBaseUrl: 'http://localhost:11434', local: true, protocol: 'ollama', keyOptional: true,
     samplers: ['temperature', 'top_p', 'top_k', 'min_p', 'repetition_penalty', 'seed', 'max_tokens', 'stop'],
-    remap: { repetition_penalty: 'repeat_penalty', max_tokens: 'num_predict' }
+    remap: { repetition_penalty: 'repeat_penalty', max_tokens: 'num_predict' }, prefill: {}
   },
   openai: {
     label: 'OpenAI API', defaultBaseUrl: 'https://api.openai.com/v1', protocol: 'openai', keyOptional: false,
@@ -35,7 +35,7 @@ export const PROVIDER_TYPES = {
   anthropic: {
     label: 'Anthropic API', defaultBaseUrl: 'https://api.anthropic.com', protocol: 'anthropic', keyOptional: false,
     samplers: ['temperature', 'top_p', 'top_k', 'max_tokens', 'stop'],
-    remap: { stop: 'stop_sequences' }, stopMax: 8
+    remap: { stop: 'stop_sequences' }, stopMax: 8, prefill: {}
   },
   gemini: {
     label: 'Google Gemini', defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', protocol: 'openai', keyOptional: false,
@@ -45,17 +45,17 @@ export const PROVIDER_TYPES = {
   openrouter: {
     label: 'OpenRouter', defaultBaseUrl: 'https://openrouter.ai/api/v1', protocol: 'openai', keyOptional: false,
     samplers: ['temperature', 'top_p', 'top_k', 'min_p', 'repetition_penalty', 'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens', 'stop'],
-    remap: {}
+    remap: {}, prefill: {}
   },
   moonshot: {
     label: 'Moonshot AI (Kimi)', defaultBaseUrl: 'https://api.moonshot.ai/v1', protocol: 'openai', keyOptional: false,
     samplers: ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'max_tokens', 'stop'],
-    remap: {}
+    remap: {}, prefill: { message: { partial: true } }
   },
   mistral: {
     label: 'Mistral', defaultBaseUrl: 'https://api.mistral.ai/v1', protocol: 'openai', keyOptional: false,
     samplers: ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens', 'stop'],
-    remap: { seed: 'random_seed' }
+    remap: { seed: 'random_seed' }, prefill: { message: { prefix: true } }
   },
   meta: {
     label: 'Meta (Llama API)', defaultBaseUrl: 'https://api.llama.com/compat/v1', protocol: 'openai', keyOptional: false,

@@ -230,6 +230,7 @@ export default function App() {
   if (!chatCache.current) chatCache.current = createLru(25);
   const cacheChat = (id, entry) => chatCache.current.merge(id, entry);
   const sendRef = useRef(null);
+  const resumeRef = useRef(null);
   const genOptsRef = useRef({});
   const [canContinue, setCanContinue] = useState(false);
   const [compareIds, setCompareIds] = useState([]);
@@ -843,8 +844,8 @@ export default function App() {
     setStopping(false);
     if (out.content || out.reasoning) {
       setMessages(ms => ms.some(m => m.id === id)
-        ? ms
-        : [...ms, { id, role: 'assistant', content: out.content, reasoning: out.reasoning, model_id: mid, truncated: !!(r && r.truncated) }]);
+        ? ms.map(m => (m.id === id ? { ...m, content: out.content, reasoning: out.reasoning || m.reasoning, truncated: !!(r && r.truncated) } : m))
+        : [...ms,{ id, role: 'assistant', content: out.content, reasoning: out.reasoning, model_id: mid, truncated: !!(r && r.truncated) }]);
     }
     clearLive();
     if (stick.current && !selectingRef.current && !hasSelectionRef.current) setTimeout(() => scrollBottom(false), 0);
@@ -1410,10 +1411,24 @@ export default function App() {
   // useCallback closing over `send` freezes the first render's copy, where
   // currentId is still null and send returns immediately. sendRef is kept
   // current during render, so the click always reaches the live send.
-  const continueReply = useCallback(() => {
+  const continueReply = useCallback((messageId) => resumeRef.current(messageId), []);
+  function resumeReply(messageId) {
+    const key = activeKey();
+    const busy = peek(key);
+    if (streaming || queued || !currentId || (busy && !busy.done)) return;
+    const idx = messages.findIndex(m => m.id === messageId);
+    if (idx === -1 || messages[idx].role !== 'assistant') return;
+    dismissError();
     setCanContinue(false);
-    sendRef.current([], t('Carry on from exactly where your previous reply stopped. Do not repeat or summarise what you already did, it is already saved. If work is still unfinished, make the tool calls to finish it now.'));
-  }, []);
+    if (incognito) {
+      const history = messages.slice(0, idx + 1)
+        .filter(m => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+        .map(m => ({ role: m.role, content: m.content, truncated: !!m.truncated }));
+      if (!wsSend({ type: 'incognito', resume: true, messageId, modelId: currentId, extended, reasoningEffort, kwargValues, messages: history })) return;
+    } else if (!wsSend({ type: 'continue', chatId: activeId, modelId: currentId, messageId, ...genOptsRef.current })) return;
+    queueRec(key, currentId);
+    pinToBottom(true, 20);
+  }
   const stopChat = useCallback((chatId) => {
     if (!chatId) return;
     if (chatId === activeKey()) { stop(); return; }
@@ -1447,6 +1462,7 @@ export default function App() {
   const modelHasBg = !incognito && !!(model?.bgEnabled && model?.bgImage);
   const activeBg = computeActiveBg(models, currentId, activeId, messages.length, incognito, user?.prefs);
   sendRef.current = send;
+  resumeRef.current = resumeReply;
   genOptsRef.current = { extended, reasoningEffort, kwargValues, sandbox, webSearch, styleId };
   const ctxGaugeEl = (showCtxGauge && activeId && !incognito)
     ? <CtxGauge chatId={activeId} modelId={currentId} streaming={streaming || queued}
@@ -1757,8 +1773,9 @@ export default function App() {
                 {threadLoading && messages.length === 0 && <ThreadSkeleton />}
                 {(() => {
                   const streamKey = assistantIdRef.current || '_stream';
+                  const resumed = streaming ? messages.find(m => m.id === streamKey) : null;
                   const renderList = streaming
-                    ? [...messages.filter(m => m.id !== streamKey), { id: streamKey, _k: streamKey, role: 'assistant', content: dispContent, reasoning: dispReason, reasoningSegs: dispSegs, model_id: streamModelRef.current || currentId, _streaming: true }]
+                    ? [...messages.filter(m => m !== resumed), { id: streamKey, _k: resumed?._k || streamKey, role: 'assistant', content: dispContent, reasoning: dispReason, reasoningSegs: dispSegs, model_id: streamModelRef.current || currentId, _streaming: true }]
                     : messages;
                   let lastA = null;
                   for (let i = renderList.length - 1; i >= 0; i--) if (renderList[i].role === 'assistant') { lastA = renderList[i]; break; }

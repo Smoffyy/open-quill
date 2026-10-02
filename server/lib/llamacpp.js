@@ -178,7 +178,7 @@ export function learnImageCost(model, images, measured) {
 }
 
 function wireFor(messages) {
-  return messages.map(m => {
+  const wire = messages.map(m => {
     const out = { role: m.role, content: textOf(m.content) };
     // The same OpenAI shape the completion request uses. Handing /apply-template
     // the raw internal call makes it 500 with "Missing tool call type", and the
@@ -189,6 +189,8 @@ function wireFor(messages) {
     if (m.name) out.name = m.name;
     return out;
   });
+  if (messages.length && messages[messages.length - 1].prefill) wire.push({ role: 'user', content: '' });
+  return wire;
 }
 
 function toolSig(tools) {

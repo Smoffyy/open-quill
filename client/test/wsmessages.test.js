@@ -80,7 +80,7 @@ test('every frame the server can send has a handler', () => {
   const SENT = ['session_revoked', 'config', 'resume', 'files', 'tool_live', 'tool_live_delta',
     'tool_exec', 'tool', 'compacting', 'compacted', 'ctx_rolling', 'title', 'chat_ended',
     'routed', 'queued', 'status', 'prompt_size', 'telemetry', 'steered', 'start',
-    'reasoning', 'content', 'error', 'done', 'task_started', 'hello', 'admin_draft', 'presence'];
+    'reasoning', 'content', 'rewrite', 'error', 'done', 'task_started', 'hello', 'admin_draft', 'presence'];
   for (const type of SENT) assert.ok(handlers[type], 'no handler for ' + type);
 });
 
@@ -138,6 +138,29 @@ test('start resets the record so a retry does not inherit the last attempt', () 
   assert.equal(rec.done, false);
   assert.deepEqual(rec.steers, []);
   assert.equal(rec.assistantId, 'a2');
+});
+
+test('a continued reply starts from the text already written', () => {
+  const ctx = wsCtx('c1');
+  dispatchWs({ type: 'start', chatId: 'c1', messageId: 'a1', content: 'Half a sen', reasoning: 'plan', reasonSegs: ['s0'] }, ctx);
+  const rec = ctx.recs.get('c1');
+  assert.equal(rec.content, 'Half a sen');
+  assert.equal(rec.reasoning, 'plan');
+  assert.deepEqual(rec.reasonSegs, ['s0']);
+  const begin = ctx.calls.find(c => c[0] === 'begin')[1];
+  assert.deepEqual([begin.messageId, begin.content, begin.reasoning, begin.segs], ['a1', 'Half a sen', 'plan', ['s0']]);
+  dispatchWs({ type: 'content', chatId: 'c1', text: 'tence.' }, ctx);
+  assert.equal(rec.content, 'Half a sentence.');
+});
+
+test('rewrite replaces the text so far, as when a stopped file card is swapped for the finished one', () => {
+  const ctx = wsCtx('c1');
+  ctx.mirror.recFor('c1').content = 'Writing.[[OQR:c3RvcHBlZA==]]';
+  dispatchWs({ type: 'rewrite', chatId: 'c1', content: 'Writing.[[OQR:ZG9uZQ==]]' }, ctx);
+  assert.equal(ctx.recs.get('c1').content, 'Writing.[[OQR:ZG9uZQ==]]');
+  assert.ok(ctx.calls.some(c => c[0] === 'pushContent' && c[1] === 'Writing.[[OQR:ZG9uZQ==]]'));
+  dispatchWs({ type: 'rewrite', chatId: 'c1' }, ctx);
+  assert.equal(ctx.recs.get('c1').content, 'Writing.[[OQR:ZG9uZQ==]]', 'a frame without content changes nothing');
 });
 
 test('an error after text has streamed keeps the text instead of discarding it', () => {

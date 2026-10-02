@@ -72,7 +72,7 @@ function resultContent(content) {
   return text.trim() ? text : '(no output)';
 }
 
-function repair(out) {
+function repair(out, prefill = false) {
   const fixed = [];
   for (let i = 0; i < out.length; i++) {
     const msg = out[i];
@@ -97,7 +97,7 @@ function repair(out) {
     }
   }
   if (!fixed.length || fixed[0].role !== 'user') fixed.unshift({ role: 'user', content: [{ type: 'text', text: 'Continue.' }] });
-  if (fixed[fixed.length - 1].role === 'assistant') fixed.push({ role: 'user', content: [{ type: 'text', text: 'Continue.' }] });
+  if (fixed[fixed.length - 1].role === 'assistant' && !prefill) fixed.push({ role: 'user', content: [{ type: 'text', text: 'Continue.' }] });
   return fixed;
 }
 
@@ -122,7 +122,7 @@ export function toAnthropic(messages) {
       push('user', [{ type: 'tool_result', tool_use_id: toolUseId(m.tool_call_id), content: resultContent(m.content) }]);
     } else if (m.role === 'assistant') {
       const blocks = Array.isArray(m.blocks) ? m.blocks.filter(b => b && (b.type === 'thinking' || b.type === 'redacted_thinking')) : [];
-      const text = textOf(m.content);
+      const text = m.prefill ? textOf(m.content).trimEnd() : textOf(m.content);
       if (text.trim()) blocks.push({ type: 'text', text });
       for (const c of m.tool_calls || []) {
         blocks.push({ type: 'tool_use', id: toolUseId(c.id, toolIndex++), name: c.name || c.function?.name || '', input: toolInput(c) });
@@ -132,7 +132,8 @@ export function toAnthropic(messages) {
       push('user', contentBlocks(m.content));
     }
   }
-  return { system: system.join('\n\n'), messages: repair(out) };
+  const last = messages?.[messages.length - 1];
+  return { system: system.join('\n\n'), messages: repair(out, last?.role === 'assistant' && !!last.prefill) };
 }
 
 export function stripThinking(messages) {

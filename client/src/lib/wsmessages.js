@@ -197,7 +197,10 @@ export const handlers = {
       ctx.actions.finalize();
     }
     const rec = ctx.mirror.recFor(m.chatId);
-    rec.content = ''; rec.reasoning = ''; rec.phase = 'generating';
+    rec.content = typeof m.content === 'string' ? m.content : '';
+    rec.reasoning = typeof m.reasoning === 'string' ? m.reasoning : '';
+    rec.reasonSegs = Array.isArray(m.reasonSegs) ? m.reasonSegs.slice() : null;
+    rec.phase = 'generating';
     rec.done = false; rec.error = false;
     rec.assistantId = m.messageId; rec.live = null; rec.steers = []; rec.status = null;
     if (!isActive(ctx, m.chatId)) return;
@@ -205,7 +208,7 @@ export const handlers = {
     ctx.refs.refreshSeq.current++;
     ctx.set.compacting(false);
     ctx.tools.clear();
-    ctx.stream.begin({ messageId: m.messageId, modelId: rec.model_id || ctx.refs.currentIdRef.current });
+    ctx.stream.begin({ messageId: m.messageId, modelId: rec.model_id || ctx.refs.currentIdRef.current, content: rec.content, reasoning: rec.reasoning, segs: rec.reasonSegs });
   },
 
   reasoning(m, ctx) {
@@ -232,6 +235,17 @@ export const handlers = {
     // pushContent reports back when the text carried a tool-result marker, which
     // means the live rows that were drawing that call are finished with.
     if (ctx.stream.pushContent(rec.content, m.text)) {
+      ctx.tools.setCall(null);
+      ctx.tools.setRows(EMPTY_CALLS);
+    }
+  },
+
+  rewrite(m, ctx) {
+    if (typeof m.content !== 'string') return;
+    const rec = ctx.mirror.recFor(m.chatId);
+    rec.content = m.content;
+    if (!isActive(ctx, m.chatId)) return;
+    if (ctx.stream.pushContent(rec.content, rec.content)) {
       ctx.tools.setCall(null);
       ctx.tools.setRows(EMPTY_CALLS);
     }

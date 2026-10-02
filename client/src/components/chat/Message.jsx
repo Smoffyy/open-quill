@@ -508,7 +508,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
           {showSpeed && <SpeedChip speed={msg.speed} />}
           {(() => { const ti = fmtTime(msg.created_at); return ti ? <span className="msg-time" data-full={ti.full}>{ti.short}</span> : null; })()}
           {canContinue && onContinue && (
-            <button className="action-btn continue-act" onClick={onContinue} title={t("Pick up where this reply stopped")}>
+            <button className="action-btn continue-act" onClick={() => onContinue(msg.id)} title={t("Pick up where this reply stopped")}>
               <Retry style={{ width: 14 }} /> {t("Continue")}
             </button>
           )}

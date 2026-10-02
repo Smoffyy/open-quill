@@ -16,7 +16,7 @@ export function memoFor(base, id) {
   const key = String(base || '') + '|' + String(id || '');
   let m = memo.get(key);
   if (!m) {
-    m = { drop: new Set(), rename: new Map(), maxTokens: 0, noThinking: false };
+    m = { drop: new Set(), rename: new Map(), maxTokens: 0, noThinking: false, noPrefill: false };
     memo.set(key, m);
     if (memo.size > MEMO_MAX) memo.delete(memo.keys().next().value);
   }

@@ -113,8 +113,8 @@ export function record(m) {
     case 'start':
       rec.messageId = m.messageId || null;
       rec.phase = 'generating';
-      rec.content = '';
-      rec.reasoning = '';
+      rec.content = typeof m.content === 'string' ? m.content : '';
+      rec.reasoning = typeof m.reasoning === 'string' ? m.reasoning : '';
       rec.live = null;
       rec.steers = [];
       rec.status = null;
@@ -126,6 +126,9 @@ export function record(m) {
     case 'content':
       rec.content += m.text || '';
       rec.phase = 'generating';
+      break;
+    case 'rewrite':
+      if (typeof m.content === 'string') rec.content = m.content;
       break;
     case 'reasoning':
       rec.reasoning += m.text || '';
