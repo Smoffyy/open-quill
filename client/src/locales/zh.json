@@ -2858,5 +2858,7 @@
   "Active parameters": "激活参数量",
   "The active parameters, such as 35B.": "激活参数量，例如 35B。",
   "The total parameters, such as 175B.": "总参数量，例如 175B。",
-  "The size in one sentence, dense or mixture-of-experts.": "用一句话说明规模，稠密或混合专家。"
+  "Filled in as": "填入的内容",
+  "Empty for this model. Example": "此模型为空。示例",
+  "The parameters in one phrase, such as 175B parameters.": "用一个短语表示参数量，例如 175B 参数。"
 }

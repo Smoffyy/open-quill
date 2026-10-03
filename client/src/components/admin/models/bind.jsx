@@ -1,4 +1,5 @@
-import { createContext, useContext, useMemo, useState, useRef, useLayoutEffect, Fragment } from 'react';
+import { createContext, useContext, useMemo, useState, useRef, useLayoutEffect, useEffect, Fragment } from 'react';
+import { createPortal } from 'react-dom';
 import { useAdmin } from '../store.jsx';
 import { Input, Area, Select, Switch, Btn, PointMenu, MenuItem, clampToViewport } from '../ui.jsx';
 import { ChevDown, X } from '../../ui/icons.jsx';
@@ -338,7 +339,31 @@ function syncMirror(ta, m) {
   m.scrollTop = ta.scrollTop;
 }
 
-export function LongText({ k, label, hint, placeholder, rows = 6, mono, counter, variables, mirror }) {
+const VAR_SPLIT = /({{s*[A-Za-z][A-Za-z0-9_]*s*}})/;
+const VAR_NAME = /^{{s*([A-Za-z][A-Za-z0-9_]*)s*}}$/;
+const POP_W = 320;
+const POP_H = 150;
+
+function withVariables(text) {
+  return text.split(VAR_SPLIT).map((part, i) => {
+    const m = VAR_NAME.exec(part);
+    return m ? <span key={i} className="mc-var" data-var={m[1]}>{part}</span> : part;
+  });
+}
+
+function VariablePop({ at, above, name, info }) {
+  if (!info) return null;
+  return createPortal(
+    <div className="cp-menu mc-var-pop" role="tooltip" style={{ position: 'fixed', left: at.x, top: at.y, width: POP_W, transform: above ? 'translateY(-100%)' : undefined }}>
+      <code className="mc-var-pop-name">{`{{${name}}}`}</code>
+      <div className="mc-var-pop-desc">{info.desc}</div>
+      {info.filled
+        ? <div className="mc-var-pop-row"><span>{t('Filled in as')}</span><code>{info.filled}</code></div>
+        : <div className="mc-var-pop-row"><span>{t('Empty for this model. Example')}</span><code>{info.example}</code></div>}
+    </div>, document.body);
+}
+
+export function LongText({ k, label, hint, placeholder, rows = 6, mono, counter, variables, mirror, variableInfo }) {
   const { edit, models } = useEditor();
   const { value, mixed } = useField(k);
   const ref = useRef(null);
@@ -346,6 +371,7 @@ export function LongText({ k, label, hint, placeholder, rows = 6, mono, counter,
   const placed = useRef(null);
   const [caret, setCaret] = useState(null);
   const [varMenu, setVarMenu] = useState(null);
+  const [hover, setHover] = useState(null);
   const mirrored = !!mirror && !mixed;
   useLayoutEffect(() => {
     const el = ref.current;
@@ -364,6 +390,7 @@ export function LongText({ k, label, hint, placeholder, rows = 6, mono, counter,
     ro.observe(ta);
     return () => ro.disconnect();
   }, [mirrored]);
+  useEffect(() => { setHover(null); }, [value]);
   if (mixed) return <BulkText k={k} label={label} hint={hint} rows={rows} mono={mono} count={models.length} />;
   const text = value ?? '';
 
@@ -397,6 +424,24 @@ export function LongText({ k, label, hint, placeholder, rows = 6, mono, counter,
 
   const onContextMenu = variables ? openVariables : undefined;
 
+  function trackVariable(e) {
+    const m = mirrorRef.current;
+    if (!variableInfo || !m) return;
+    let hit = null;
+    for (const el of m.querySelectorAll('[data-var]')) {
+      for (const r of el.getClientRects()) {
+        if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) { hit = { el, r }; break; }
+      }
+      if (hit) break;
+    }
+    const name = hit ? hit.el.dataset.var : null;
+    if (!name) { if (hover) setHover(null); return; }
+    if (hover && hover.name === name && hover.key === hit.r.left + ':' + hit.r.top) return;
+    const above = hit.r.bottom + 6 + POP_H > window.innerHeight - 8;
+    const pos = clampToViewport(hit.r.left, above ? hit.r.top - 6 : hit.r.bottom + 6, POP_W, 0);
+    setHover({ name, above, key: hit.r.left + ':' + hit.r.top, at: pos });
+  }
+
   return (
     <Slot label={label} k={k} hint={hint}>
       {mirrored ? (
@@ -404,11 +449,12 @@ export function LongText({ k, label, hint, placeholder, rows = 6, mono, counter,
           <Area ref={ref} mono={mono} rows={rows} value={text} placeholder={placeholder} aria-label={label}
             className="mc-mirror-input"
             onChange={(e) => edit({ [k]: e.target.value })} onContextMenu={onContextMenu}
+            onMouseMove={variableInfo ? trackVariable : undefined} onMouseLeave={() => setHover(null)}
             onSelect={(e) => setCaret(e.target.selectionStart)}
             onBlur={() => setCaret(null)}
-            onScroll={(e) => { if (mirrorRef.current) mirrorRef.current.scrollTop = e.target.scrollTop; }} />
+            onScroll={(e) => { setHover(null); if (mirrorRef.current) mirrorRef.current.scrollTop = e.target.scrollTop; }} />
           <div className="mc-mirror" ref={mirrorRef} aria-hidden="true">
-            {mirror(text, caret).map((seg, i) => (seg.tone ? <span key={i} className={'mc-' + seg.tone}>{seg.text}</span> : seg.text))}
+            {mirror(text, caret).map((seg, i) => (seg.tone ? <span key={i} className={'mc-' + seg.tone}>{withVariables(seg.text)}</span> : <Fragment key={i}>{withVariables(seg.text)}</Fragment>))}
             {'\u200b'}
           </div>
         </div>
@@ -426,6 +472,7 @@ export function LongText({ k, label, hint, placeholder, rows = 6, mono, counter,
           {variables && <span className="cp-note-line">{t('Right-click to insert a variable. Shift and right-click for the browser’s own menu.')}</span>}
         </div>
       )}
+      {hover && !varMenu && <VariablePop at={hover.at} above={hover.above} name={hover.name} info={variableInfo ? variableInfo(hover.name) : null} />}
       {varMenu && <VariableMenu at={varMenu.at} groups={variables} onPick={insert} onClose={closeVariables} />}
     </Slot>
   );

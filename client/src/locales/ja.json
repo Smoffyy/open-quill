@@ -2858,5 +2858,7 @@
   "Active parameters": "アクティブパラメータ数",
   "The active parameters, such as 35B.": "アクティブパラメータ数。例: 35B。",
   "The total parameters, such as 175B.": "総パラメータ数。例: 175B。",
-  "The size in one sentence, dense or mixture-of-experts.": "サイズを一文で。密モデルまたはMixture-of-Experts。"
+  "Filled in as": "埋め込まれる値",
+  "Empty for this model. Example": "このモデルでは空です。例",
+  "The parameters in one phrase, such as 175B parameters.": "パラメータ数を一言で。例: 175Bパラメータ。"
 }

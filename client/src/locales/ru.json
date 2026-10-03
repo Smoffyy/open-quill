@@ -2858,5 +2858,7 @@
   "Active parameters": "Активные параметры",
   "The active parameters, such as 35B.": "Активные параметры, например 35B.",
   "The total parameters, such as 175B.": "Общее число параметров, например 175B.",
-  "The size in one sentence, dense or mixture-of-experts.": "Размер одной фразой: плотная модель или смесь экспертов."
+  "Filled in as": "Подставляется как",
+  "Empty for this model. Example": "Для этой модели пусто. Пример",
+  "The parameters in one phrase, such as 175B parameters.": "Параметры одной фразой, например 175B параметров."
 }

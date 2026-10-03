@@ -19,7 +19,7 @@ const TIPS = {
   pricing: 'The rate an admin set for this model, per million tokens in and out. Spend is estimated from it, never billed by it.',
   modelId: 'The identifier this model is sent to its backend under.',
   params: 'The total number of parameters the model has, such as 175B.',
-  activeParams: 'Mixture-of-experts models only. The parameters actually used to process each token, shown after an A, as in 2.4T A35B. Leave blank for a dense model, where every parameter is active.',
+  activeParams: 'Mixture-of-experts models only. The parameters actually used to process each token, shown after an A, as in 175B A35B. Leave blank for a dense model, where every parameter is active.',
   thinking: 'Whether the model reasons before it answers, and how that reasoning is steered.',
   effort: 'The reasoning effort used when a request does not ask for one.',
   context: 'How much prompt and reply fit in a single turn. Measured with the real tokenizer, never estimated.',

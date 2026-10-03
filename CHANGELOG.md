@@ -9,9 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [27.6.1] - 2026-10-02
 ### Added
-- **Parameter count in the model docs** - a model can now state its size. Enter the total and, for a mixture-of-experts model, the active parameters; they read `175B` for a dense model and `2.4T A35B` for a mixture-of-experts one. Shown in the stat strip on the model page and in the Capabilities card, and in the always-visible capabilities rows of the overview comparison, so it no longer needs "Show all details".
+- **Parameter count in the model docs** - a model can now state its size. Enter the total and, for a mixture-of-experts model, the active parameters; they read `175B` for a dense model and `175B A35B` for a mixture-of-experts one. Shown in the stat strip on the model page and in the Capabilities card, and in the always-visible capabilities rows of the overview comparison, so it no longer needs "Show all details".
 - **Automatic units** - type a bare number and the unit is added: `175` becomes `175B`, and anything from 1000B up becomes `T`, so `2400` or `2400B` reads `2.4T`. The active count follows the same rule and is prefixed with `A`.
-- **System prompt variables** - `{{modelSize}}` states the size in one sentence the model can use as-is (`175B parameters` or `2.4T parameters, 35B active per token (mixture-of-experts)`). `{{modelParameters}}` (the total, such as `175B`) and `{{modelActiveParameters}}` (such as `35B`) are there for custom wording. All three are empty when unset, so a block that uses only them is dropped, and an active count equal to or above the total is ignored. Listed in the Prompts tab under Model specifications.
+- **System prompt variables** - `{{modelParameterSummary}}` states the size in one sentence the model can use as-is (`175B parameters` or `175B parameters, 35B active per token (mixture-of-experts)`). `{{modelParameters}}` (the total, such as `175B`) and `{{modelActiveParameters}}` (such as `35B`) are there for custom wording. All three are empty when unset, so a block that uses only them is dropped, and an active count equal to or above the total is ignored. Listed in the Prompts tab under Model specifications.
+- **Variable hover** - hover a {{variable}} in the system prompt (or the voice call prompt) to see what it is filled in as for the selected model, or an example when it is empty for that model. Variables are lightly highlighted in the editor so they are easy to find.
+- **Live variable values** - each variable in the Variables list shows what it currently resolves to for the selected model, or "empty" when it has no value.
 
 ---
 

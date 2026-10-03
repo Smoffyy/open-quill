@@ -2858,5 +2858,7 @@
   "Active parameters": "Aktive Parameter",
   "The active parameters, such as 35B.": "Die aktiven Parameter, etwa 35B.",
   "The total parameters, such as 175B.": "Die Gesamtparameter, etwa 175B.",
-  "The size in one sentence, dense or mixture-of-experts.": "Die Größe in einem Satz, dicht oder Mixture-of-Experts."
+  "Filled in as": "Eingesetzt als",
+  "Empty for this model. Example": "Für dieses Modell leer. Beispiel",
+  "The parameters in one phrase, such as 175B parameters.": "Die Parameter in einer Wendung, etwa 175B Parameter."
 }

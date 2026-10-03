@@ -11,7 +11,7 @@ import { sanitizeBadgesOff } from '../lib/badges.js';
 import { ROUTE_MATCHERS } from '../lib/router.js';
 import { DOCS_MODEL_STR, DOCS_MODEL_BOOL, DOCS_MODEL_INT, DOCS_MODEL_FLOAT, DOCS_BADGES, sanitizePairs, sanitizeCards, sanitizeDocsLinks, sanitizeStrList } from '../lib/modeldocs.js';
 import { listLogos } from '../lib/logos.js';
-import { syncedPrompt, draftFeatures } from '../lib/systemprompt.js';
+import { syncedPrompt, draftFeatures, promptValues } from '../lib/systemprompt.js';
 import { sanitizeConsultModels } from '../lib/consult.js';
 import { touchesBlocks, addBlocks, eligibleBlocks } from '../lib/promptblocks.js';
 
@@ -149,6 +149,12 @@ export default function registerModelRoutes(app) {
     res.json(db.models.all().sort((a, b) => a.sort_order - b.sort_order)));
 
   app.get('/api/admin/logos', authMiddleware, adminOnly, (req, res) => res.json({ logos: listLogos() }));
+
+  app.post('/api/admin/models/prompt-values', authMiddleware, adminOnly, (req, res) => {
+    const model = typeof req.body?.id === 'string' ? db.models.byId(req.body.id) : null;
+    if (!model) return res.status(404).json({ error: 'Model not found.' });
+    res.json({ values: promptValues(model, req.user.id) });
+  });
 
   app.get('/api/admin/discover-models', authMiddleware, adminOnly, async (req, res) => {
     try {

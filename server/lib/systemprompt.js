@@ -13,6 +13,7 @@ import { todosOf, todoText } from './todo.js';
 import { consultTargets, consultTargetsText } from './consult.js';
 import { sandboxHostText, sandboxWorkspaceText, conversationTiming, pinnedFilesText } from './prompts.js';
 import { promptVars } from './convo.js';
+import { webSearchAvailable } from './websearch.js';
 
 const MIGRATION_KEY = 'prompt_blocks_version';
 const MIGRATION_VERSION = 1;
@@ -83,12 +84,12 @@ function activeBlocks(model, state) {
   return out;
 }
 
-export function systemPrompt(chat, model, state, { userId = null, styleText = '', callMode = false, client = null } = {}) {
+export function promptVarMap(chat, model, state, { userId = null, styleText = '', client = null } = {}) {
   const row = chat ? (db.chats.byId(chat.id) || chat) : null;
   const uid = row?.user_id || userId;
   const u = row?.user_id ? db.users.byId(row.user_id) : null;
   const project = row?.project_id ? db.projects.byId(row.project_id) : null;
-  const vars = {
+  return {
     ...promptVars(uid, { model, client }),
     chatTitle: row?.title && row.title !== 'New chat' ? row.title : '',
     projectName: project?.name || '',
@@ -109,9 +110,30 @@ export function systemPrompt(chat, model, state, { userId = null, styleText = ''
     todoList: () => todoText(row ? todosOf(row.id) : []),
     consultModels: () => consultTargetsText(model, state.consultWith || [])
   };
+}
+
+export function systemPrompt(chat, model, state, { userId = null, styleText = '', callMode = false, client = null } = {}) {
+  const row = chat ? (db.chats.byId(chat.id) || chat) : null;
+  const vars = promptVarMap(chat, model, state, { userId, styleText, client });
   const override = callMode && (model.call_prompt || '').trim() ? model.call_prompt
     : (row?.system_override || '').trim() ? row.system_override : null;
   return renderPrompt(model.system_prompt || '', { active: activeBlocks(model, state), vars, base: override });
+}
+
+const VALUE_CAP = 400;
+
+export function promptValues(model, userId) {
+  const state = toolState({ user_id: userId }, model, {
+    sandboxOn: model.sandbox_allowed !== 0,
+    webSearchOn: webSearchAvailable() && model.web_search_allowed !== 0
+  });
+  const out = {};
+  for (const [k, v] of Object.entries(promptVarMap(null, model, state, { userId }))) {
+    let plain;
+    try { plain = String(typeof v === 'function' ? v() : v ?? ''); } catch { plain = ''; }
+    out[k] = plain.length > VALUE_CAP ? plain.slice(0, VALUE_CAP) + '…' : plain;
+  }
+  return out;
 }
 
 function legacyBody(id, custom, keep) {

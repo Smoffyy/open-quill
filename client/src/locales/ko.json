@@ -2858,5 +2858,7 @@
   "Active parameters": "활성 파라미터",
   "The active parameters, such as 35B.": "활성 파라미터 수. 예: 35B.",
   "The total parameters, such as 175B.": "총 파라미터 수. 예: 175B.",
-  "The size in one sentence, dense or mixture-of-experts.": "크기를 한 문장으로. 밀집 모델 또는 전문가 혼합."
+  "Filled in as": "채워지는 값",
+  "Empty for this model. Example": "이 모델에서는 비어 있습니다. 예시",
+  "The parameters in one phrase, such as 175B parameters.": "파라미터를 한 구절로. 예: 175B 파라미터."
 }

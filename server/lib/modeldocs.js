@@ -185,7 +185,7 @@ export function docsVars(m) {
     modelGroup: str(m.docs_group),
     modelNotice: str(m.docs_notice),
     modelNotes: String(m.docs_notes || '').split('\n').map(s => s.replace(/^\s*[-*]\s*/, '').trim()).filter(Boolean).map(s => '- ' + s).join('\n'),
-    modelSize: sizeText(size),
+    modelParameterSummary: sizeText(size),
     modelParameters: size.t,
     modelActiveParameters: size.a,
     modelContextWindow: tokensText(m.num_ctx),
