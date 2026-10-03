@@ -173,8 +173,27 @@ export const DOCS_MODEL_FIELDS = {
   docsNoticeUrl: 'docs_notice_url',
   docsActionLabel: 'docs_action_label',
   docsIntelligence: 'docs_intelligence',
-  docsSpeed: 'docs_speed'
+  docsSpeed: 'docs_speed',
+  docsParams: 'docs_params',
+  docsParamsActive: 'docs_params_active'
 };
+
+function paramSize(v) {
+  const s = String(v ?? '').replace(/^\s*a(?=\d)/i, '').replace(/\s+/g, '').toUpperCase();
+  if (!s) return '';
+  const m = s.match(/^(\d*\.?\d+)([BT]?)$/);
+  if (!m) return s;
+  const b = Number(m[1]) * (m[2] === 'T' ? 1000 : 1);
+  const trim = (x) => String(Math.round(x * 100) / 100);
+  return b >= 1000 ? trim(b / 1000) + 'T' : trim(b) + 'B';
+}
+
+export function fmtParams(total, active) {
+  const t = paramSize(total);
+  const a = paramSize(active);
+  if (!t) return '';
+  return a ? t + ' A' + a : t;
+}
 
 const BOOL_FIELDS = new Set(['docs_featured', 'docs_hidden']);
 const NUM_FIELDS = new Set(['num_ctx', 'cost_in', 'cost_out', 'docs_max_output', 'docs_price_cache_write', 'docs_price_cache_read', 'docs_intelligence', 'docs_speed']);

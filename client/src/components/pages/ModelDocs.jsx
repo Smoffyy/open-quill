@@ -7,7 +7,7 @@ import { ModelMark } from '../ui/Weave.jsx';
 import { Copy, Check, ArrowOut, Chevron, Info, Pencil, Trash, Plus, X } from '../ui/icons.jsx';
 import {
   fmtTokens, fmtPrice, priceRange, bulletLines, modalityLabel,
-  publicModelId, parseTokens, parseMoney, DOCS_BADGE_OPTIONS
+  publicModelId, fmtParams, parseTokens, parseMoney, DOCS_BADGE_OPTIONS
 } from '../../lib/modeldocs.js';
 
 const INTEL_LABELS = ['', 'Low', 'Fair', 'Medium', 'High', 'Highest'];
@@ -18,6 +18,8 @@ const TIPS = {
   latency: 'Relative to the rest of this workspace. Real latency depends on prompt length, reply length, and how hard the model thinks.',
   pricing: 'The rate an admin set for this model, per million tokens in and out. Spend is estimated from it, never billed by it.',
   modelId: 'The identifier this model is sent to its backend under.',
+  params: 'The total number of parameters the model has, such as 175B.',
+  activeParams: 'Mixture-of-experts models only. The parameters actually used to process each token, shown after an A, as in 2.4T A35B. Leave blank for a dense model, where every parameter is active.',
   thinking: 'Whether the model reasons before it answers, and how that reasoning is steered.',
   effort: 'The reasoning effort used when a request does not ask for one.',
   context: 'How much prompt and reply fit in a single turn. Measured with the real tokenizer, never estimated.',
@@ -310,9 +312,28 @@ function StatStrip({ m, set }) {
     { label: t('Input pricing'), tip: TIPS.pricing, unit: t('/ MTok'), view: fmtPrice(m.priceIn), key: 'priceIn', parse: parseMoney, ph: '$2' },
     { label: t('Output pricing'), tip: TIPS.pricing, unit: t('/ MTok'), view: fmtPrice(m.priceOut), key: 'priceOut', parse: parseMoney, ph: '$10' }
   ];
-  if (!on && !cells.some(c => c.view)) return null;
+  const params = fmtParams(m.docsParams, m.docsParamsActive);
+  if (!on && !params && !cells.some(c => c.view)) return null;
+  const count = cells.length + (on || params ? 1 : 0);
   return (
-    <dl className="mdoc-stats">
+    <dl className="mdoc-stats" style={{ '--cols': count }}>
+      {(on || params) && (
+        <div className="mdoc-stat">
+          <dt><RowLabel label={t('Parameters')} tip={TIPS.params} /></dt>
+          <dd>
+            {on
+              ? (
+                <>
+                  <input className="mdoc-f-input stat" value={m.docsParams || ''} placeholder="175" aria-label={t('Total parameters')}
+                    onChange={(e) => set('docsParams', e.target.value)} />
+                  <input className="mdoc-f-input stat" value={m.docsParamsActive || ''} placeholder="35" aria-label={t('Active parameters')}
+                    onChange={(e) => set('docsParamsActive', e.target.value)} />
+                </>
+              )
+              : <span className="mdoc-stat-val">{params}</span>}
+          </dd>
+        </div>
+      )}
       {cells.map(c => (
         <div className="mdoc-stat" key={c.label}>
           <dt><RowLabel label={c.label} tip={c.tip} /></dt>
@@ -585,6 +606,8 @@ function ModelPage({ m, models, cfg, set, onTry, onOpen, appName, onExit }) {
         </div>
         <div className="mdoc-speccol">
           <Rows title={t('Capabilities')} rows={[
+            { tip: TIPS.params, label: t('Parameters'), value: fmtParams(m.docsParams, m.docsParamsActive), raw: m.docsParams, ph: '175', set: S('docsParams') },
+            ...(on ? [{ tip: TIPS.activeParams, label: t('Active parameters'), value: m.docsParamsActive, ph: '35', set: S('docsParamsActive') }] : []),
             { tip: TIPS.context, label: t('Context window'), value: fmtTokens(m.numCtx) && fmtTokens(m.numCtx) + ' ' + t('tokens'), raw: fmtTokens(m.numCtx), ph: '200K', set: S('numCtx'), parse: parseTokens },
             { tip: TIPS.maxOutput, label: t('Max output'), value: fmtTokens(m.docsMaxOutput) && fmtTokens(m.docsMaxOutput) + ' ' + t('tokens'), raw: fmtTokens(m.docsMaxOutput), ph: '64K', set: S('docsMaxOutput'), parse: parseTokens },
             { tip: TIPS.thinking, label: t('Thinking'), value: m.docsThinking || ((m.badges?.includes('reasoning') || m.hasReasoning) ? t('Supported') : ''), raw: m.docsThinking, ph: t('Adaptive'), set: S('docsThinking') },
@@ -640,6 +663,7 @@ function OverviewPage({ models, cfg, setCfg, onOpen, appName, onExit }) {
     [t('Model id'), (m) => publicModelId(m), true, null, TIPS.modelId]
   ];
   const capRows = [
+    [t('Parameters'), (m) => fmtParams(m.docsParams, m.docsParamsActive), false, null, TIPS.params],
     [t('Thinking'), (m) => m.docsThinking || ((m.badges?.includes('reasoning') || m.hasReasoning) ? t('Supported') : ''), false, null, TIPS.thinking],
     [t('Default effort'), (m) => m.docsEffort, true, null, TIPS.effort],
     [t('Context window'), (m) => fmtTokens(m.numCtx) && fmtTokens(m.numCtx) + ' ' + t('tokens'), false, null, TIPS.context],

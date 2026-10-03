@@ -54,6 +54,8 @@ const VARIABLES = [
     ['modelNotes', tk('The Notes, one bullet per line.')]
   ]],
   [tk('Model specifications'), [
+    ['modelParameters', tk('The total parameters, such as 175B.')],
+    ['modelActiveParameters', tk('The active parameters, such as 35B.')],
     ['modelContextWindow', tk('The context window, such as 200K tokens.')],
     ['modelMaxOutput', tk('The most tokens the model writes in one reply.')],
     ['modelThinking', tk('How the model thinks before answering.')],

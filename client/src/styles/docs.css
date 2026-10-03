@@ -231,7 +231,7 @@
 .mdoc-pill:hover { background: var(--dk-fill-selected); }
 
 .mdoc-stats {
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 24px 0 0;
+  display: grid; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); margin: 24px 0 0;
   background: var(--dk-card); border: 0.8px solid var(--dk-ring); border-radius: 11px; overflow: hidden;
 }
 .mdoc-stat { display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 10px 14px; min-height: 81px; }
