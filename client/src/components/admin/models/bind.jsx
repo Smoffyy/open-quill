@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, useRef, useLayoutEffect, useEffect, Fragment } from 'react';
+import { createContext, useContext, useMemo, useState, useRef, useLayoutEffect, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { useAdmin } from '../store.jsx';
 import { Input, Area, Select, Switch, Btn, PointMenu, MenuItem, clampToViewport } from '../ui.jsx';
@@ -339,8 +339,8 @@ function syncMirror(ta, m) {
   m.scrollTop = ta.scrollTop;
 }
 
-const VAR_SPLIT = /({{s*[A-Za-z][A-Za-z0-9_]*s*}})/;
-const VAR_NAME = /^{{s*([A-Za-z][A-Za-z0-9_]*)s*}}$/;
+const VAR_SPLIT = /(\{\{\s*[A-Za-z][A-Za-z0-9_]*\s*\}\})/;
+const VAR_NAME = /^\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}$/;
 const POP_W = 320;
 const POP_H = 150;
 
@@ -390,7 +390,6 @@ export function LongText({ k, label, hint, placeholder, rows = 6, mono, counter,
     ro.observe(ta);
     return () => ro.disconnect();
   }, [mirrored]);
-  useEffect(() => { setHover(null); }, [value]);
   if (mixed) return <BulkText k={k} label={label} hint={hint} rows={rows} mono={mono} count={models.length} />;
   const text = value ?? '';
 
@@ -448,7 +447,7 @@ export function LongText({ k, label, hint, placeholder, rows = 6, mono, counter,
         <div className="mc-mirror-wrap">
           <Area ref={ref} mono={mono} rows={rows} value={text} placeholder={placeholder} aria-label={label}
             className="mc-mirror-input"
-            onChange={(e) => edit({ [k]: e.target.value })} onContextMenu={onContextMenu}
+            onChange={(e) => { setHover(null); edit({ [k]: e.target.value }); }} onContextMenu={onContextMenu}
             onMouseMove={variableInfo ? trackVariable : undefined} onMouseLeave={() => setHover(null)}
             onSelect={(e) => setCaret(e.target.selectionStart)}
             onBlur={() => setCaret(null)}

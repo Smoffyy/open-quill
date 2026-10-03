@@ -1,3 +1,5 @@
+import { modelSize, sizePhrase, formatParamCount } from './modelsize.js';
+
 const text = (v, cap) => String(v ?? '').slice(0, cap);
 const slug = (v, cap) => text(v, cap).trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
 
@@ -79,14 +81,15 @@ export const DOCS_MODEL_STR = [
   'docs_cutoff', 'docs_body', 'docs_image', 'docs_icon', 'docs_badge', 'docs_group', 'docs_summary',
   'docs_latency', 'docs_thinking', 'docs_effort', 'docs_train_cutoff', 'docs_status', 'docs_released',
   'docs_retired', 'docs_price_batch', 'docs_notes', 'docs_notice', 'docs_notice_action', 'docs_notice_url',
-  'docs_action_label', 'docs_params', 'docs_params_active'
+  'docs_action_label'
 ];
 export const DOCS_MODEL_BOOL = [
   'docs_featured', 'docs_hidden', 'docs_in_text', 'docs_in_image', 'docs_in_audio', 'docs_in_video',
-  'docs_out_text', 'docs_out_image', 'docs_out_audio', 'docs_out_video'
+  'docs_out_text', 'docs_out_image', 'docs_out_audio', 'docs_out_video', 'docs_moe'
 ];
 export const DOCS_MODEL_INT = ['docs_intelligence', 'docs_speed', 'docs_max_output'];
 export const DOCS_MODEL_FLOAT = ['docs_price_cache_write', 'docs_price_cache_read'];
+export const DOCS_MODEL_PARAM_COUNTS = ['docs_total_params', 'docs_active_params'];
 
 export const DOCS_BADGES = new Set(['', 'latest', 'legacy', 'preview', 'new']);
 
@@ -132,41 +135,6 @@ function modalitiesText(m, dir) {
   return MODALITIES.filter(([k]) => on(k)).map(([, label]) => label).join(', ');
 }
 
-export function paramSize(v) {
-  const s = str(String(v ?? '')).replace(/^a(?=\d)/i, '').replace(/\s+/g, '').toUpperCase();
-  if (!s) return '';
-  const m = s.match(/^(\d*\.?\d+)([BT]?)$/);
-  if (!m) return s;
-  const b = Number(m[1]) * (m[2] === 'T' ? 1000 : 1);
-  const trim = (x) => String(Math.round(x * 100) / 100);
-  return b >= 1000 ? trim(b / 1000) + 'T' : trim(b) + 'B';
-}
-
-const paramBillions = (s) => {
-  const m = /^(\d*\.?\d+)([BT])$/.exec(s);
-  return m ? Number(m[1]) * (m[2] === 'T' ? 1000 : 1) : null;
-};
-
-export function paramParts(total, active) {
-  const t = paramSize(total);
-  let a = paramSize(active);
-  const tb = paramBillions(t);
-  const ab = paramBillions(a);
-  if (tb != null && ab != null && ab >= tb) a = '';
-  return { t, a };
-}
-
-export function paramsText(total, active) {
-  const { t, a } = paramParts(total, active);
-  if (!t) return '';
-  return a ? `${t} A${a}` : t;
-}
-
-function sizeText({ t, a }) {
-  if (!t) return '';
-  return a ? `${t} parameters, ${a} active per token (mixture-of-experts)` : `${t} parameters`;
-}
-
 const level = (labels, n) => labels[Math.max(0, Math.min(5, Number(n) || 0))] || '';
 const pairs = (raw) => (Array.isArray(raw) ? raw : []).filter(p => p && p.value);
 const str = (v) => (typeof v === 'string' ? v.trim() : '');
@@ -174,7 +142,7 @@ const str = (v) => (typeof v === 'string' ? v.trim() : '');
 export function docsVars(m) {
   if (!m) return {};
   const ids = pairs(m.docs_ids);
-  const size = paramParts(m.docs_params, m.docs_params_active);
+  const size = modelSize(m.docs_total_params, m.docs_moe, m.docs_active_params);
   return {
     modelId: ids[0]?.value || '',
     modelIds: ids.map(p => (p.label ? `${p.label}: ${p.value}` : p.value)).join('\n'),
@@ -185,9 +153,9 @@ export function docsVars(m) {
     modelGroup: str(m.docs_group),
     modelNotice: str(m.docs_notice),
     modelNotes: String(m.docs_notes || '').split('\n').map(s => s.replace(/^\s*[-*]\s*/, '').trim()).filter(Boolean).map(s => '- ' + s).join('\n'),
-    modelParameterSummary: sizeText(size),
-    modelParameters: size.t,
-    modelActiveParameters: size.a,
+    modelParameters: sizePhrase(size),
+    modelTotalParameters: formatParamCount(size.total),
+    modelActiveParameters: formatParamCount(size.active),
     modelContextWindow: tokensText(m.num_ctx),
     modelMaxOutput: tokensText(m.docs_max_output),
     modelThinking: str(m.docs_thinking) || (m.has_reasoning ? 'Supported' : ''),

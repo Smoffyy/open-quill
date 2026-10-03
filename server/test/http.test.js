@@ -643,6 +643,24 @@ test('the catalog edits, copies and removes models in batches', async () => {
   await browser('POST', '/api/admin/changes/publish', { body: {} });
 });
 
+test('parameter counts are stored in billions and the prompt preview reads the unsaved draft', async () => {
+  const id = (await browser('POST', '/api/admin/models', { body: { display_name: 'Sized', internal_name: 'sized' } })).json.id;
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id, docs_total_params: '2.4T', docs_moe: true, docs_active_params: 'A35B' }] } });
+  const row = (await browser('GET', '/api/admin/models')).json.find(m => m.id === id);
+  assert.equal(row.docs_total_params, 2400);
+  assert.equal(row.docs_active_params, 35);
+  assert.equal(row.docs_moe, 1);
+  const saved = (await browser('POST', '/api/admin/models/prompt-values', { body: { id } })).json.values;
+  assert.equal(saved.modelParameters, '2.4T parameters (mixture-of-experts, 35B active per token)');
+  const draft = (await browser('POST', '/api/admin/models/prompt-values', { body: { id, model: { ...row, docs_moe: 0, docs_total_params: 'nope' } } })).json.values;
+  assert.equal(draft.modelTotalParameters, '');
+  assert.equal(draft.modelActiveParameters, '');
+  assert.equal((await browser('GET', '/api/admin/models')).json.find(m => m.id === id).docs_total_params, 2400);
+  assert.equal((await browser('POST', '/api/admin/models/prompt-values', { body: { id: 'nope' } })).status, 404);
+  await browser('POST', '/api/admin/models/remove', { body: { ids: [id] } });
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
+});
+
 test('model folders persist on their own, empty or not', async () => {
   await browser('POST', '/api/admin/changes/publish', { body: {} });
   assert.deepEqual((await browser('GET', '/api/admin/models/folders')).json.folders, []);

@@ -11,7 +11,9 @@ import {
   priceRange,
   bulletLines,
   publicModelId,
-  docsModels
+  docsModels,
+  docsModelPatch,
+  docsSize
 } from '../src/lib/modeldocs.js';
 
 const DOCS_MODELS = [
@@ -93,4 +95,17 @@ test('bulletLines strips list markers and blank lines', () => {
 test('publicModelId uses the first identifier an admin entered, never the catalog row id', () => {
   assert.equal(publicModelId(DOCS_MODELS[0]), 'sonata-1');
   assert.equal(publicModelId(DOCS_MODELS[1]), '');
+});
+
+test('a docs model reads its size from the total, the MoE switch and the active count', () => {
+  assert.deepEqual(docsSize({ docsTotalParams: '175', docsMoe: true, docsActiveParams: '35' }), { total: 175, moe: true, active: 35 });
+  assert.deepEqual(docsSize({ docsTotalParams: 175, docsMoe: false, docsActiveParams: 35 }), { total: 175, moe: false, active: null });
+  assert.deepEqual(docsSize({}), { total: null, moe: false, active: null });
+});
+
+test('the docs save patch stores parameter counts as billions', () => {
+  const p = docsModelPatch({ docsTotalParams: '2.4T', docsActiveParams: 'nope', docsMoe: true });
+  assert.equal(p.docs_total_params, 2400);
+  assert.equal(p.docs_active_params, null);
+  assert.equal(p.docs_moe, 1);
 });

@@ -2856,9 +2856,15 @@
   "Parameters": "Parameter",
   "Total parameters": "Parameter gesamt",
   "Active parameters": "Aktive Parameter",
-  "The active parameters, such as 35B.": "Die aktiven Parameter, etwa 35B.",
   "The total parameters, such as 175B.": "Die Gesamtparameter, etwa 175B.",
   "Filled in as": "Eingesetzt als",
   "Empty for this model. Example": "Für dieses Modell leer. Beispiel",
-  "The parameters in one phrase, such as 175B parameters.": "Die Parameter in einer Wendung, etwa 175B Parameter."
+  "In billions unless a unit is given: 175 reads 175B, 2400 reads 2.4T, and 500M stays 500M.": "In Milliarden, sofern keine Einheit angegeben ist: 175 wird zu 175B, 2400 zu 2.4T, und 500M bleibt 500M.",
+  "Mixture of experts, where only some parameters are used for each token": "Mixture of Experts, bei dem pro Token nur ein Teil der Parameter genutzt wird",
+  "Use a number such as 175, 1.5T or 500M.": "Gib eine Zahl wie 175, 1.5T oder 500M ein.",
+  "The active parameters must be a number below the total.": "Die aktiven Parameter müssen eine Zahl unter der Gesamtzahl sein.",
+  "Shown as {size}.": "Angezeigt als {size}.",
+  "Hidden until a total is set.": "Ausgeblendet, bis eine Gesamtzahl festgelegt ist.",
+  "The parameter count as a phrase, such as 175B parameters, with the active count for a mixture-of-experts model.": "Die Parameterzahl als Ausdruck, etwa 175B parameters, bei einem Mixture-of-Experts-Modell mit der aktiven Zahl.",
+  "The parameters a mixture-of-experts model uses for each token, such as 3B.": "Die Parameter, die ein Mixture-of-Experts-Modell pro Token nutzt, etwa 3B."
 }

@@ -68,7 +68,7 @@ export function shapePublic(m, ctx = badgeContext()) {
     docsResources: Array.isArray(m.docs_resources) ? m.docs_resources : [], docsReference: Array.isArray(m.docs_reference) ? m.docs_reference : [],
     docsNotice: m.docs_notice || '', docsNoticeAction: m.docs_notice_action || '', docsNoticeUrl: m.docs_notice_url || '',
     docsActionLabel: m.docs_action_label || '',
-    docsParams: m.docs_params || '', docsParamsActive: m.docs_params_active || ''
+    docsTotalParams: m.docs_total_params ?? null, docsActiveParams: m.docs_active_params ?? null, docsMoe: !!m.docs_moe
   };
 }
 

@@ -2856,9 +2856,15 @@
   "Parameters": "参数量",
   "Total parameters": "总参数量",
   "Active parameters": "激活参数量",
-  "The active parameters, such as 35B.": "激活参数量，例如 35B。",
   "The total parameters, such as 175B.": "总参数量，例如 175B。",
   "Filled in as": "填入的内容",
   "Empty for this model. Example": "此模型为空。示例",
-  "The parameters in one phrase, such as 175B parameters.": "用一个短语表示参数量，例如 175B 参数。"
+  "In billions unless a unit is given: 175 reads 175B, 2400 reads 2.4T, and 500M stays 500M.": "未写单位时按十亿计:175 显示为 175B,2400 显示为 2.4T,500M 保持为 500M。",
+  "Mixture of experts, where only some parameters are used for each token": "混合专家模型,每个 token 只使用部分参数",
+  "Use a number such as 175, 1.5T or 500M.": "请输入数字,例如 175、1.5T 或 500M。",
+  "The active parameters must be a number below the total.": "激活参数必须小于总参数。",
+  "Shown as {size}.": "显示为 {size}。",
+  "Hidden until a total is set.": "设置总参数后才会显示。",
+  "The parameter count as a phrase, such as 175B parameters, with the active count for a mixture-of-experts model.": "以短语表示的参数量,例如 175B parameters;混合专家模型还会附上激活参数量。",
+  "The parameters a mixture-of-experts model uses for each token, such as 3B.": "混合专家模型每个 token 使用的参数量,例如 3B。"
 }

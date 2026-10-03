@@ -56,9 +56,9 @@ const VARIABLES = [
     ['modelNotes', tk('The Notes, one bullet per line.')]
   ]],
   [tk('Model specifications'), [
-    ['modelParameterSummary', tk('The parameters in one phrase, such as 175B parameters.')],
-    ['modelParameters', tk('The total parameters, such as 175B.')],
-    ['modelActiveParameters', tk('The active parameters, such as 35B.')],
+    ['modelParameters', tk('The parameter count as a phrase, such as 175B parameters, with the active count for a mixture-of-experts model.')],
+    ['modelTotalParameters', tk('The total parameters, such as 175B.')],
+    ['modelActiveParameters', tk('The parameters a mixture-of-experts model uses for each token, such as 3B.')],
     ['modelContextWindow', tk('The context window, such as 200K tokens.')],
     ['modelMaxOutput', tk('The most tokens the model writes in one reply.')],
     ['modelThinking', tk('How the model thinks before answering.')],
@@ -87,6 +87,7 @@ const VARIABLES = [
 ];
 
 const EXAMPLES = {
+  __proto__: null,
   currentUser: 'Sam',
   userRole: 'member',
   userLanguage: 'Japanese',
@@ -123,9 +124,9 @@ const EXAMPLES = {
   modelGroup: 'Current models',
   modelNotice: 'This model is being retired.',
   modelNotes: '- Supports tool use',
-  modelParameterSummary: '175B parameters',
-  modelParameters: '175B',
-  modelActiveParameters: '35B',
+  modelParameters: '175B parameters (mixture-of-experts, 3B active per token)',
+  modelTotalParameters: '175B',
+  modelActiveParameters: '3B',
   modelContextWindow: '200K tokens',
   modelMaxOutput: '64K tokens',
   modelThinking: 'Adaptive',
@@ -148,38 +149,36 @@ const EXAMPLES = {
   modelPlatforms: 'Open-source, Self-hosted'
 };
 
-const DESCRIPTIONS = Object.fromEntries(VARIABLES.flatMap(([, list]) => list));
+const DESCRIPTIONS = new Map(VARIABLES.flatMap(([, list]) => list));
 
 const labelOf = (id) => {
   const [kind, name] = id.split(':');
   return kind === 'tool' ? `<tool name="${name}">` : `<section name="${name}">`;
 };
 
-function useValues(model) {
-  const [state, setState] = useState({ values: {}, error: false });
-  const id = model?.id;
-  const stamp = model ? JSON.stringify(Object.entries(model).filter(([k]) => k.startsWith('docs_') || k === 'display_name' || k === 'description' || k === 'num_ctx')) : '';
+function usePromptValues(model) {
+  const [state, setState] = useState(null);
   useEffect(() => {
-    if (!id) return undefined;
+    if (!model) return undefined;
     let live = true;
     const timer = setTimeout(() => {
-      api.post('/api/admin/models/prompt-values', { id })
-        .then(r => { if (live) setState({ values: r.values || {}, error: false }); })
-        .catch(() => { if (live) setState(st => ({ ...st, error: true })); });
-    }, 400);
+      api.post('/api/admin/models/prompt-values', { id: model.id, model })
+        .then(r => { if (live) setState({ id: model.id, values: r.values || {} }); })
+        .catch(() => { if (live) setState(null); });
+    }, 300);
     return () => { live = false; clearTimeout(timer); };
-  }, [id, stamp]);
-  return id ? state : null;
+  }, [model]);
+  return model && state?.id === model.id ? state.values : null;
 }
 
 export default function Prompts() {
   const { workspace } = useAdmin();
   const { models, editEach, single } = useEditor();
-  const preview = useValues(single);
+  const values = usePromptValues(single);
   const variableInfo = (name) => {
-    if (!(name in DESCRIPTIONS)) return null;
-    const filled = preview && !preview.error ? String(preview.values[name] ?? '') : '';
-    return { desc: t(DESCRIPTIONS[name]), filled: filled.trim() ? filled : '', example: EXAMPLES[name] || '' };
+    if (!DESCRIPTIONS.has(name)) return null;
+    const filled = String(values?.[name] ?? '');
+    return { desc: t(DESCRIPTIONS.get(name)), filled: filled.trim() ? filled : '', example: EXAMPLES[name] || '' };
   };
   const calls = !!workspace.settings.voiceCallEnabled || models.some(m => m.call_prompt);
   const features = promptFeaturesOf(workspace.settings);
@@ -229,8 +228,8 @@ export default function Prompts() {
             <Rows>
               {list.map(([name, desc]) => (
                 <Row key={name} label={<code>{`{{${name}}}`}</code>}
-                  note={preview && !preview.error && name in preview.values
-                    ? <>{t(desc)}<div className="mc-var-val">{preview.values[name].trim() ? <code>{preview.values[name]}</code> : <em>{t('empty')}</em>}</div></>
+                  note={values && typeof values[name] === 'string'
+                    ? <>{t(desc)}<div className="mc-var-val">{values[name].trim() ? <code>{values[name]}</code> : <em>{t('empty')}</em>}</div></>
                     : t(desc)} />
               ))}
             </Rows>

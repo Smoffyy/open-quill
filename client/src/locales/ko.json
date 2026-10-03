@@ -2856,9 +2856,15 @@
   "Parameters": "파라미터",
   "Total parameters": "총 파라미터",
   "Active parameters": "활성 파라미터",
-  "The active parameters, such as 35B.": "활성 파라미터 수. 예: 35B.",
   "The total parameters, such as 175B.": "총 파라미터 수. 예: 175B.",
   "Filled in as": "채워지는 값",
   "Empty for this model. Example": "이 모델에서는 비어 있습니다. 예시",
-  "The parameters in one phrase, such as 175B parameters.": "파라미터를 한 구절로. 예: 175B 파라미터."
+  "In billions unless a unit is given: 175 reads 175B, 2400 reads 2.4T, and 500M stays 500M.": "단위가 없으면 10억 단위입니다. 175는 175B, 2400은 2.4T로 표시되고 500M은 그대로 500M입니다.",
+  "Mixture of experts, where only some parameters are used for each token": "전문가 혼합(MoE), 토큰마다 일부 파라미터만 사용",
+  "Use a number such as 175, 1.5T or 500M.": "175, 1.5T, 500M 같은 숫자를 입력하세요.",
+  "The active parameters must be a number below the total.": "활성 파라미터는 전체보다 작은 숫자여야 합니다.",
+  "Shown as {size}.": "{size}(으)로 표시됩니다.",
+  "Hidden until a total is set.": "전체 값을 설정할 때까지 표시되지 않습니다.",
+  "The parameter count as a phrase, such as 175B parameters, with the active count for a mixture-of-experts model.": "파라미터 수를 나타내는 구문(예: 175B parameters). 전문가 혼합 모델이면 활성 파라미터 수도 포함합니다.",
+  "The parameters a mixture-of-experts model uses for each token, such as 3B.": "전문가 혼합 모델이 토큰마다 사용하는 파라미터 수(예: 3B)."
 }

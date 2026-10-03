@@ -2856,9 +2856,15 @@
   "Parameters": "Параметры",
   "Total parameters": "Всего параметров",
   "Active parameters": "Активные параметры",
-  "The active parameters, such as 35B.": "Активные параметры, например 35B.",
   "The total parameters, such as 175B.": "Общее число параметров, например 175B.",
   "Filled in as": "Подставляется как",
   "Empty for this model. Example": "Для этой модели пусто. Пример",
-  "The parameters in one phrase, such as 175B parameters.": "Параметры одной фразой, например 175B параметров."
+  "In billions unless a unit is given: 175 reads 175B, 2400 reads 2.4T, and 500M stays 500M.": "В миллиардах, если единица не указана: 175 станет 175B, 2400 станет 2.4T, а 500M останется 500M.",
+  "Mixture of experts, where only some parameters are used for each token": "Смесь экспертов, где для каждого токена используется только часть параметров",
+  "Use a number such as 175, 1.5T or 500M.": "Введите число, например 175, 1.5T или 500M.",
+  "The active parameters must be a number below the total.": "Число активных параметров должно быть меньше общего.",
+  "Shown as {size}.": "Отображается как {size}.",
+  "Hidden until a total is set.": "Скрыто, пока не задано общее число.",
+  "The parameter count as a phrase, such as 175B parameters, with the active count for a mixture-of-experts model.": "Число параметров в виде фразы, например 175B parameters, с числом активных для модели со смесью экспертов.",
+  "The parameters a mixture-of-experts model uses for each token, such as 3B.": "Параметры, которые модель со смесью экспертов использует для каждого токена, например 3B."
 }
