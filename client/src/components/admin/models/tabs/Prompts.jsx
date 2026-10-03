@@ -54,6 +54,7 @@ const VARIABLES = [
     ['modelNotes', tk('The Notes, one bullet per line.')]
   ]],
   [tk('Model specifications'), [
+    ['modelSize', tk('The size in one sentence, dense or mixture-of-experts.')],
     ['modelParameters', tk('The total parameters, such as 175B.')],
     ['modelActiveParameters', tk('The active parameters, such as 35B.')],
     ['modelContextWindow', tk('The context window, such as 200K tokens.')],

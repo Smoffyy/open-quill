@@ -142,11 +142,29 @@ export function paramSize(v) {
   return b >= 1000 ? trim(b / 1000) + 'T' : trim(b) + 'B';
 }
 
-export function paramsText(total, active) {
+const paramBillions = (s) => {
+  const m = /^(\d*\.?\d+)([BT])$/.exec(s);
+  return m ? Number(m[1]) * (m[2] === 'T' ? 1000 : 1) : null;
+};
+
+export function paramParts(total, active) {
   const t = paramSize(total);
-  const a = paramSize(active);
+  let a = paramSize(active);
+  const tb = paramBillions(t);
+  const ab = paramBillions(a);
+  if (tb != null && ab != null && ab >= tb) a = '';
+  return { t, a };
+}
+
+export function paramsText(total, active) {
+  const { t, a } = paramParts(total, active);
   if (!t) return '';
   return a ? `${t} A${a}` : t;
+}
+
+function sizeText({ t, a }) {
+  if (!t) return '';
+  return a ? `${t} parameters, ${a} active per token (mixture-of-experts)` : `${t} parameters`;
 }
 
 const level = (labels, n) => labels[Math.max(0, Math.min(5, Number(n) || 0))] || '';
@@ -156,6 +174,7 @@ const str = (v) => (typeof v === 'string' ? v.trim() : '');
 export function docsVars(m) {
   if (!m) return {};
   const ids = pairs(m.docs_ids);
+  const size = paramParts(m.docs_params, m.docs_params_active);
   return {
     modelId: ids[0]?.value || '',
     modelIds: ids.map(p => (p.label ? `${p.label}: ${p.value}` : p.value)).join('\n'),
@@ -166,8 +185,9 @@ export function docsVars(m) {
     modelGroup: str(m.docs_group),
     modelNotice: str(m.docs_notice),
     modelNotes: String(m.docs_notes || '').split('\n').map(s => s.replace(/^\s*[-*]\s*/, '').trim()).filter(Boolean).map(s => '- ' + s).join('\n'),
-    modelParameters: paramSize(m.docs_params),
-    modelActiveParameters: paramSize(m.docs_params_active),
+    modelSize: sizeText(size),
+    modelParameters: size.t,
+    modelActiveParameters: size.a,
     modelContextWindow: tokensText(m.num_ctx),
     modelMaxOutput: tokensText(m.docs_max_output),
     modelThinking: str(m.docs_thinking) || (m.has_reasoning ? 'Supported' : ''),

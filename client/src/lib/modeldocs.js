@@ -188,9 +188,17 @@ function paramSize(v) {
   return b >= 1000 ? trim(b / 1000) + 'T' : trim(b) + 'B';
 }
 
+function paramBillions(s) {
+  const m = /^(\d*\.?\d+)([BT])$/.exec(s);
+  return m ? Number(m[1]) * (m[2] === 'T' ? 1000 : 1) : null;
+}
+
 export function fmtParams(total, active) {
   const t = paramSize(total);
-  const a = paramSize(active);
+  let a = paramSize(active);
+  const tb = paramBillions(t);
+  const ab = paramBillions(a);
+  if (tb != null && ab != null && ab >= tb) a = '';
   if (!t) return '';
   return a ? t + ' A' + a : t;
 }

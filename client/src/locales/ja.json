@@ -2857,5 +2857,6 @@
   "Total parameters": "総パラメータ数",
   "Active parameters": "アクティブパラメータ数",
   "The active parameters, such as 35B.": "アクティブパラメータ数。例: 35B。",
-  "The total parameters, such as 175B.": "総パラメータ数。例: 175B。"
+  "The total parameters, such as 175B.": "総パラメータ数。例: 175B。",
+  "The size in one sentence, dense or mixture-of-experts.": "サイズを一文で。密モデルまたはMixture-of-Experts。"
 }

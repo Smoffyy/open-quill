@@ -2857,5 +2857,6 @@
   "Total parameters": "Parâmetros totais",
   "Active parameters": "Parâmetros ativos",
   "The active parameters, such as 35B.": "Os parâmetros ativos, como 35B.",
-  "The total parameters, such as 175B.": "Os parâmetros totais, como 175B."
+  "The total parameters, such as 175B.": "Os parâmetros totais, como 175B.",
+  "The size in one sentence, dense or mixture-of-experts.": "O tamanho em uma frase, denso ou mistura de especialistas."
 }

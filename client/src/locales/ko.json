@@ -2857,5 +2857,6 @@
   "Total parameters": "총 파라미터",
   "Active parameters": "활성 파라미터",
   "The active parameters, such as 35B.": "활성 파라미터 수. 예: 35B.",
-  "The total parameters, such as 175B.": "총 파라미터 수. 예: 175B."
+  "The total parameters, such as 175B.": "총 파라미터 수. 예: 175B.",
+  "The size in one sentence, dense or mixture-of-experts.": "크기를 한 문장으로. 밀집 모델 또는 전문가 혼합."
 }

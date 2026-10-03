@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Parameter count in the model docs** - a model can now state its size. Enter the total and, for a mixture-of-experts model, the active parameters; they read `175B` for a dense model and `2.4T A35B` for a mixture-of-experts one. Shown in the stat strip on the model page and in the Capabilities card, and in the always-visible capabilities rows of the overview comparison, so it no longer needs "Show all details".
 - **Automatic units** - type a bare number and the unit is added: `175` becomes `175B`, and anything from 1000B up becomes `T`, so `2400` or `2400B` reads `2.4T`. The active count follows the same rule and is prefixed with `A`.
-- **System prompt variables** - `{{modelParameters}}` (the total, such as `175B`) and `{{modelActiveParameters}}` (such as `35B`, empty for a dense model so a block that uses only it is dropped), listed in the Prompts tab under Model specifications.
+- **System prompt variables** - `{{modelSize}}` states the size in one sentence the model can use as-is (`175B parameters` or `2.4T parameters, 35B active per token (mixture-of-experts)`). `{{modelParameters}}` (the total, such as `175B`) and `{{modelActiveParameters}}` (such as `35B`) are there for custom wording. All three are empty when unset, so a block that uses only them is dropped, and an active count equal to or above the total is ignored. Listed in the Prompts tab under Model specifications.
 
 ---
 
