@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [27.6.1] - 2026-10-02
+## [27.6.1] - 2026-10-09
 ### Added
 - **Parameter count in the model docs** - a model can now state its size. The Parameters box in edit mode takes the total and a "Mixture of experts" switch; turning the switch on asks for the active parameters. They read `175B` for a dense model, `175B A3B` for a mixture-of-experts one, and `175B MoE` when the active count is not given. Shown in the stat strip on the model page, in the Capabilities card, and in the always-visible capabilities rows of the overview comparison, so it no longer needs "Show all details".
 - **Automatic units** - counts are stored as numbers, so a bare number is read in billions and shown with the right unit: `175` reads `175B`, `2400` or `2.4t` reads `2.4T`, and `135M` stays `135M`. The active count is written with a leading `A`, as in `A3B`, and can be typed with or without it. The box shows how the size will read, and says so when a value cannot be read or the active count is not below the total.
