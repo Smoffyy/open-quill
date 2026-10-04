@@ -2852,5 +2852,19 @@
   "The retirement date.": "廃止日。",
   "The platforms the model is available on.": "モデルを利用できるプラットフォーム。",
   "Filled in when a message is sent. Write them in double braces anywhere in the prompt, or right-click the prompt to insert one. The model variables come from this model’s page in the docs, and one left blank there is empty.": "メッセージの送信時に値が入ります。プロンプトの任意の場所に二重波かっこで書くか、プロンプトを右クリックして挿入します。モデルの変数はドキュメント内のこのモデルのページから取得され、そこで空欄の項目は空になります。",
-  "Words fade in as they arrive.": "単語は届くたびにフェードインします。"
+  "Words fade in as they arrive.": "単語は届くたびにフェードインします。",
+  "Parameters": "パラメータ数",
+  "Total parameters": "総パラメータ数",
+  "Active parameters": "アクティブパラメータ数",
+  "The total parameters, such as 175B.": "総パラメータ数。例: 175B。",
+  "Filled in as": "埋め込まれる値",
+  "Empty for this model. Example": "このモデルでは空です。例",
+  "In billions unless a unit is given: 175 reads 175B, 2400 reads 2.4T, and 500M stays 500M.": "単位がない場合は10億単位です。175は175B、2400は2.4Tと表示され、500Mは500Mのままです。",
+  "Mixture of experts, where only some parameters are used for each token": "Mixture of Experts(トークンごとに一部のパラメータのみを使用)",
+  "Use a number such as 175, 1.5T or 500M.": "175、1.5T、500M のような数値を入力してください。",
+  "The active parameters must be a number below the total.": "アクティブパラメータは合計より小さい数値にしてください。",
+  "Shown as {size}.": "{size} と表示されます。",
+  "Hidden until a total is set.": "合計を設定するまで表示されません。",
+  "The parameter count as a phrase, such as 175B parameters, with the active count for a mixture-of-experts model.": "パラメータ数を表す語句(例: 175B parameters)。Mixture of Experts モデルではアクティブ数も含みます。",
+  "The parameters a mixture-of-experts model uses for each token, such as 3B.": "Mixture of Experts モデルがトークンごとに使うパラメータ数(例: 3B)。"
 }

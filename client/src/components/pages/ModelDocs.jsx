@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, createContext, useContext } from 'react';
+import React, { useState, useRef, useEffect, useCallback, createContext, useContext, useId } from 'react';
 import { t } from '../../i18n.jsx';
 import { api } from '../../lib/api.js';
 import Markdown from '../chat/Markdown.jsx';
@@ -7,8 +7,9 @@ import { ModelMark } from '../ui/Weave.jsx';
 import { Copy, Check, ArrowOut, Chevron, Info, Pencil, Trash, Plus, X } from '../ui/icons.jsx';
 import {
   fmtTokens, fmtPrice, priceRange, bulletLines, modalityLabel,
-  publicModelId, parseTokens, parseMoney, DOCS_BADGE_OPTIONS
+  publicModelId, docsSize, parseTokens, parseMoney, DOCS_BADGE_OPTIONS
 } from '../../lib/modeldocs.js';
+import { formatParamCount, sizeLabel } from '../../lib/modelsize.js';
 
 const INTEL_LABELS = ['', 'Low', 'Fair', 'Medium', 'High', 'Highest'];
 const SPEED_LABELS = ['', 'Slow', 'Steady', 'Medium', 'Fast', 'Fastest'];
@@ -18,6 +19,7 @@ const TIPS = {
   latency: 'Relative to the rest of this workspace. Real latency depends on prompt length, reply length, and how hard the model thinks.',
   pricing: 'The rate an admin set for this model, per million tokens in and out. Spend is estimated from it, never billed by it.',
   modelId: 'The identifier this model is sent to its backend under.',
+  params: 'The total number of parameters the model has. A mixture-of-experts model also shows the parameters used for each token after an A, as in 175B A3B.',
   thinking: 'Whether the model reasons before it answers, and how that reasoning is steered.',
   effort: 'The reasoning effort used when a request does not ask for one.',
   context: 'How much prompt and reply fit in a single turn. Measured with the real tokenizer, never estimated.',
@@ -304,7 +306,9 @@ function LinkRow({ links, set }) {
 
 function StatStrip({ m, set }) {
   const { on } = useEdit();
+  const params = sizeLabel(docsSize(m));
   const cells = [
+    ...(on || params ? [{ label: t('Parameters'), tip: TIPS.params, view: params }] : []),
     { label: t('Context window'), tip: TIPS.context, unit: t('tokens'), view: fmtTokens(m.numCtx), key: 'numCtx', parse: parseTokens, ph: '200K' },
     { label: t('Max output'), tip: TIPS.maxOutput, unit: t('tokens'), view: fmtTokens(m.docsMaxOutput), key: 'docsMaxOutput', parse: parseTokens, ph: '64K' },
     { label: t('Input pricing'), tip: TIPS.pricing, unit: t('/ MTok'), view: fmtPrice(m.priceIn), key: 'priceIn', parse: parseMoney, ph: '$2' },
@@ -312,12 +316,12 @@ function StatStrip({ m, set }) {
   ];
   if (!on && !cells.some(c => c.view)) return null;
   return (
-    <dl className="mdoc-stats">
+    <dl className="mdoc-stats" style={{ '--cols': cells.length }}>
       {cells.map(c => (
         <div className="mdoc-stat" key={c.label}>
           <dt><RowLabel label={c.label} tip={c.tip} /></dt>
           <dd>
-            {on
+            {on && c.parse
               ? <input className="mdoc-f-input stat" value={c.view} placeholder={c.ph} aria-label={c.label}
                   onChange={(e) => set(c.key, c.parse(e.target.value))} />
               : <span className="mdoc-stat-val">{c.view || '—'}</span>}
@@ -482,6 +486,41 @@ function Modalities({ m, set }) {
   );
 }
 
+const countInput = (v, prefix = '') => (typeof v === 'number' ? prefix + formatParamCount(v) : v ?? '');
+
+function SizeEdit({ m, set }) {
+  const noteId = useId();
+  const size = docsSize(m);
+  const total = countInput(m.docsTotalParams);
+  const active = countInput(m.docsActiveParams, 'A');
+  const badTotal = !!total.trim() && !size.total;
+  const badActive = size.moe && !!active.trim() && !size.active;
+  const shown = sizeLabel(size);
+  const field = (label, value, bad, key, ph) => (
+    <Labelled label={label}>
+      <input className="mdoc-f-input" value={value} placeholder={ph} aria-invalid={bad || undefined}
+        aria-describedby={bad ? noteId : undefined} onChange={(e) => set(key, e.target.value)} />
+    </Labelled>
+  );
+  return (
+    <EditBox title={t('Parameters')} hint={t('In billions unless a unit is given: 175 reads 175B, 2400 reads 2.4T, and 500M stays 500M.')}>
+      <div className="mdoc-editgrid">
+        {field(t('Total parameters'), total, badTotal, 'docsTotalParams', '175B')}
+        {m.docsMoe && field(t('Active parameters'), active, badActive, 'docsActiveParams', 'A3B')}
+      </div>
+      <label className="mdoc-fieldrow">
+        <input type="checkbox" checked={!!m.docsMoe} onChange={(e) => set('docsMoe', e.target.checked)} />
+        <span className="mdoc-hint">{t('Mixture of experts, where only some parameters are used for each token')}</span>
+      </label>
+      <div className="mdoc-hint" id={noteId} role="status">
+        {badTotal ? t('Use a number such as 175, 1.5T or 500M.')
+          : badActive ? t('The active parameters must be a number below the total.')
+            : shown ? t('Shown as {size}.', { size: shown }) : t('Hidden until a total is set.')}
+      </div>
+    </EditBox>
+  );
+}
+
 function ModelPage({ m, models, cfg, set, onTry, onOpen, appName, onExit }) {
   const { on } = useEdit();
   const labels = { text: t('Text'), image: t('Images'), audio: t('Audio'), video: t('Video') };
@@ -585,6 +624,7 @@ function ModelPage({ m, models, cfg, set, onTry, onOpen, appName, onExit }) {
         </div>
         <div className="mdoc-speccol">
           <Rows title={t('Capabilities')} rows={[
+            { tip: TIPS.params, label: t('Parameters'), value: sizeLabel(docsSize(m)) },
             { tip: TIPS.context, label: t('Context window'), value: fmtTokens(m.numCtx) && fmtTokens(m.numCtx) + ' ' + t('tokens'), raw: fmtTokens(m.numCtx), ph: '200K', set: S('numCtx'), parse: parseTokens },
             { tip: TIPS.maxOutput, label: t('Max output'), value: fmtTokens(m.docsMaxOutput) && fmtTokens(m.docsMaxOutput) + ' ' + t('tokens'), raw: fmtTokens(m.docsMaxOutput), ph: '64K', set: S('docsMaxOutput'), parse: parseTokens },
             { tip: TIPS.thinking, label: t('Thinking'), value: m.docsThinking || ((m.badges?.includes('reasoning') || m.hasReasoning) ? t('Supported') : ''), raw: m.docsThinking, ph: t('Adaptive'), set: S('docsThinking') },
@@ -594,6 +634,7 @@ function ModelPage({ m, models, cfg, set, onTry, onOpen, appName, onExit }) {
             { tip: TIPS.cutoff, label: t('Knowledge cutoff'), value: m.docsCutoff, ph: 'Feb 2026', set: S('docsCutoff') },
             { tip: TIPS.trainCutoff, label: t('Training data cutoff'), value: m.docsTrainCutoff, ph: 'Feb 2026', set: S('docsTrainCutoff') }
           ].filter(r => r.value != null || on)} />
+          <SizeEdit m={m} set={set} />
           <Rows title={t('Availability')} rows={[
             { tip: TIPS.status, label: t('Status'), value: m.docsStatus || (!on && m.unavailable ? t('Unavailable') : m.docsStatus), raw: m.docsStatus, ph: t('Active'), set: S('docsStatus') },
             { tip: TIPS.released, label: t('Released'), value: m.docsReleased, ph: 'June 30, 2026', set: S('docsReleased') },
@@ -640,6 +681,7 @@ function OverviewPage({ models, cfg, setCfg, onOpen, appName, onExit }) {
     [t('Model id'), (m) => publicModelId(m), true, null, TIPS.modelId]
   ];
   const capRows = [
+    [t('Parameters'), (m) => sizeLabel(docsSize(m)), false, null, TIPS.params],
     [t('Thinking'), (m) => m.docsThinking || ((m.badges?.includes('reasoning') || m.hasReasoning) ? t('Supported') : ''), false, null, TIPS.thinking],
     [t('Default effort'), (m) => m.docsEffort, true, null, TIPS.effort],
     [t('Context window'), (m) => fmtTokens(m.numCtx) && fmtTokens(m.numCtx) + ' ' + t('tokens'), false, null, TIPS.context],

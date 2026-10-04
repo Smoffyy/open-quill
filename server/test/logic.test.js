@@ -12,6 +12,7 @@ import {
 import { parseTextToolCalls, parseArgs, toCall, cutOffOf } from '../tools/index.js';
 import { classifyToolError } from '../lib/toolstats.js';
 import { sanitizeDocsConfig, readDocsConfig, sanitizePairs, sanitizeCards, sanitizeStrList, DOCS_DEFAULTS, docsVars } from '../lib/modeldocs.js';
+import { parseParamCount, formatParamCount, modelSize, sizeLabel } from '../lib/modelsize.js';
 import { parseSkillFile, buildSkillFile, normalizeName, validate } from '../lib/skillfile.js';
 import { cutOffError } from '../lib/prompts.js';
 import { makeToolTextFilter, makeEmitter } from '../llm/emitter.js';
@@ -2894,4 +2895,50 @@ test('docs variables read the model page fields the way the docs show them', () 
   assert.equal(v.modelPlatforms, 'API, Local');
   assert.deepEqual(docsVars(null), {});
   assert.equal(docsVars({ docs_badge: '__proto__' }).modelBadge, '');
+});
+
+test('client/src/lib/modelsize.js and server/lib/modelsize.js are the same file', () => {
+  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  const repo = path.dirname(root);
+  const read = (p) => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
+  assert.equal(read(path.join(repo, 'client', 'src', 'lib', 'modelsize.js')), read(path.join(root, 'lib', 'modelsize.js')),
+    'the model docs and the system prompt must read a parameter count the same way');
+});
+
+test('a parameter count is read in billions and written with its unit', () => {
+  assert.equal(parseParamCount('175'), 175);
+  assert.equal(parseParamCount('2.4t'), 2400);
+  assert.equal(parseParamCount(' A35 B '), 35);
+  assert.equal(parseParamCount('135M'), 0.135);
+  assert.equal(parseParamCount(70), 70);
+  for (const bad of ['', '0', '-5', 'undisclosed', '1,5', '1e3', null, undefined, NaN, Infinity, '__proto__']) assert.equal(parseParamCount(bad), null);
+  assert.equal(formatParamCount(175), '175B');
+  assert.equal(formatParamCount(2400), '2.4T');
+  assert.equal(formatParamCount(0.135), '135M');
+  assert.equal(formatParamCount(999.999), '1T');
+  assert.equal(formatParamCount(0.999999), '1B');
+  assert.equal(formatParamCount(null), '');
+});
+
+test('a model size only counts active parameters for a mixture-of-experts model, below its total', () => {
+  assert.deepEqual(modelSize('175', false, '35'), { total: 175, moe: false, active: null });
+  assert.deepEqual(modelSize(175, true, 'A35B'), { total: 175, moe: true, active: 35 });
+  assert.deepEqual(modelSize(35, true, 35), { total: 35, moe: true, active: null });
+  assert.deepEqual(modelSize(null, true, 35), { total: null, moe: false, active: null });
+  assert.equal(sizeLabel(modelSize(175)), '175B');
+  assert.equal(sizeLabel(modelSize(2400, true, 35)), '2.4T A35B');
+  assert.equal(sizeLabel(modelSize(175, true)), '175B MoE');
+  assert.equal(sizeLabel(modelSize()), '');
+});
+
+test('the parameter variables give a ready phrase and the bare counts', () => {
+  const vars = (m) => {
+    const v = docsVars(m);
+    return [v.modelParameters, v.modelTotalParameters, v.modelActiveParameters];
+  };
+  assert.deepEqual(vars({ docs_total_params: 175 }), ['175B parameters', '175B', '']);
+  assert.deepEqual(vars({ docs_total_params: 2400, docs_moe: 1, docs_active_params: 35 }), ['2.4T parameters (mixture-of-experts, 35B active per token)', '2.4T', '35B']);
+  assert.deepEqual(vars({ docs_total_params: 175, docs_moe: 1 }), ['175B parameters (mixture-of-experts)', '175B', '']);
+  assert.deepEqual(vars({ docs_total_params: 175, docs_moe: 0, docs_active_params: 35 }), ['175B parameters', '175B', '']);
+  assert.deepEqual(vars({ docs_moe: 1, docs_active_params: 35 }), ['', '', '']);
 });

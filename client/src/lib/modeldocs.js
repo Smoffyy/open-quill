@@ -1,3 +1,5 @@
+import { modelSize, parseParamCount } from './modelsize.js';
+
 export const DOCS_DEFAULTS = {
   title: 'Models',
   intro: 'All models available on this workspace. Compare the lineup, copy a model id, and open any model for its full specification.',
@@ -173,11 +175,19 @@ export const DOCS_MODEL_FIELDS = {
   docsNoticeUrl: 'docs_notice_url',
   docsActionLabel: 'docs_action_label',
   docsIntelligence: 'docs_intelligence',
-  docsSpeed: 'docs_speed'
+  docsSpeed: 'docs_speed',
+  docsTotalParams: 'docs_total_params',
+  docsActiveParams: 'docs_active_params',
+  docsMoe: 'docs_moe'
 };
 
-const BOOL_FIELDS = new Set(['docs_featured', 'docs_hidden']);
+export function docsSize(m) {
+  return modelSize(m.docsTotalParams, m.docsMoe, m.docsActiveParams);
+}
+
+const BOOL_FIELDS = new Set(['docs_featured', 'docs_hidden', 'docs_moe']);
 const NUM_FIELDS = new Set(['num_ctx', 'cost_in', 'cost_out', 'docs_max_output', 'docs_price_cache_write', 'docs_price_cache_read', 'docs_intelligence', 'docs_speed']);
+const PARAM_COUNT_FIELDS = new Set(['docs_total_params', 'docs_active_params']);
 
 export function docsModelPatch(draft) {
   const patch = {};
@@ -186,6 +196,7 @@ export function docsModelPatch(draft) {
     if (v === undefined) continue;
     if (BOOL_FIELDS.has(snake)) v = v ? 1 : 0;
     else if (NUM_FIELDS.has(snake)) v = (v === '' || v == null) ? null : Number(v);
+    else if (PARAM_COUNT_FIELDS.has(snake)) v = parseParamCount(v);
     patch[snake] = v;
   }
   for (const dir of ['In', 'Out']) {

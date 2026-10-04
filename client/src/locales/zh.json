@@ -2852,5 +2852,19 @@
   "The retirement date.": "退役日期。",
   "The platforms the model is available on.": "模型可用的平台。",
   "Filled in when a message is sent. Write them in double braces anywhere in the prompt, or right-click the prompt to insert one. The model variables come from this model’s page in the docs, and one left blank there is empty.": "在发送消息时填入。可用双花括号写在提示词的任意位置，或在提示词中右键单击插入。模型变量来自文档中此模型的页面，那里留空的项会是空值。",
-  "Words fade in as they arrive.": "文字在到达时淡入。"
+  "Words fade in as they arrive.": "文字在到达时淡入。",
+  "Parameters": "参数量",
+  "Total parameters": "总参数量",
+  "Active parameters": "激活参数量",
+  "The total parameters, such as 175B.": "总参数量，例如 175B。",
+  "Filled in as": "填入的内容",
+  "Empty for this model. Example": "此模型为空。示例",
+  "In billions unless a unit is given: 175 reads 175B, 2400 reads 2.4T, and 500M stays 500M.": "未写单位时按十亿计:175 显示为 175B,2400 显示为 2.4T,500M 保持为 500M。",
+  "Mixture of experts, where only some parameters are used for each token": "混合专家模型,每个 token 只使用部分参数",
+  "Use a number such as 175, 1.5T or 500M.": "请输入数字,例如 175、1.5T 或 500M。",
+  "The active parameters must be a number below the total.": "激活参数必须小于总参数。",
+  "Shown as {size}.": "显示为 {size}。",
+  "Hidden until a total is set.": "设置总参数后才会显示。",
+  "The parameter count as a phrase, such as 175B parameters, with the active count for a mixture-of-experts model.": "以短语表示的参数量,例如 175B parameters;混合专家模型还会附上激活参数量。",
+  "The parameters a mixture-of-experts model uses for each token, such as 3B.": "混合专家模型每个 token 使用的参数量,例如 3B。"
 }

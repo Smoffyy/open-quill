@@ -9,9 +9,10 @@ import { sanitizeKwargs } from '../lib/kwargs.js';
 import { listAnthropicModels } from '../llm/index.js';
 import { sanitizeBadgesOff } from '../lib/badges.js';
 import { ROUTE_MATCHERS } from '../lib/router.js';
-import { DOCS_MODEL_STR, DOCS_MODEL_BOOL, DOCS_MODEL_INT, DOCS_MODEL_FLOAT, DOCS_BADGES, sanitizePairs, sanitizeCards, sanitizeDocsLinks, sanitizeStrList } from '../lib/modeldocs.js';
+import { DOCS_MODEL_STR, DOCS_MODEL_BOOL, DOCS_MODEL_INT, DOCS_MODEL_FLOAT, DOCS_MODEL_PARAM_COUNTS, DOCS_BADGES, sanitizePairs, sanitizeCards, sanitizeDocsLinks, sanitizeStrList } from '../lib/modeldocs.js';
 import { listLogos } from '../lib/logos.js';
-import { syncedPrompt, draftFeatures } from '../lib/systemprompt.js';
+import { parseParamCount } from '../lib/modelsize.js';
+import { syncedPrompt, draftFeatures, promptValues } from '../lib/systemprompt.js';
 import { sanitizeConsultModels } from '../lib/consult.js';
 import { touchesBlocks, addBlocks, eligibleBlocks } from '../lib/promptblocks.js';
 
@@ -83,6 +84,7 @@ function modelPatch(b, cur) {
     'dry_allowed_length', 'dry_penalty_last_n', 'mirostat'];
   for (const k of numF) if (k in b) { const v = b[k]; patch[k] = (v === '' || v == null || isNaN(Number(v))) ? null : Number(v); }
   for (const k of numI) if (k in b) { const v = b[k]; patch[k] = (v === '' || v == null || isNaN(parseInt(v))) ? null : parseInt(v); }
+  for (const k of DOCS_MODEL_PARAM_COUNTS) if (k in b) patch[k] = parseParamCount(b[k]);
   if ('internal_name' in patch && !('cost_in' in b) && !('cost_out' in b) && cur.cost_in == null && cur.cost_out == null) {
     const preset = matchPreset(patch.internal_name);
     if (preset) { patch.cost_in = preset.in; patch.cost_out = preset.out; }
@@ -149,6 +151,13 @@ export default function registerModelRoutes(app) {
     res.json(db.models.all().sort((a, b) => a.sort_order - b.sort_order)));
 
   app.get('/api/admin/logos', authMiddleware, adminOnly, (req, res) => res.json({ logos: listLogos() }));
+
+  app.post('/api/admin/models/prompt-values', authMiddleware, adminOnly, (req, res) => {
+    const model = typeof req.body?.id === 'string' ? db.models.byId(req.body.id) : null;
+    if (!model) return res.status(404).json({ error: 'Model not found.' });
+    const draft = req.body.model && typeof req.body.model === 'object' ? modelPatch(req.body.model, model) : {};
+    res.json({ values: promptValues({ ...model, ...draft }, req.user.id) });
+  });
 
   app.get('/api/admin/discover-models', authMiddleware, adminOnly, async (req, res) => {
     try {

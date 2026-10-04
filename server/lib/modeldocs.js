@@ -1,3 +1,5 @@
+import { modelSize, sizePhrase, formatParamCount } from './modelsize.js';
+
 const text = (v, cap) => String(v ?? '').slice(0, cap);
 const slug = (v, cap) => text(v, cap).trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
 
@@ -83,10 +85,11 @@ export const DOCS_MODEL_STR = [
 ];
 export const DOCS_MODEL_BOOL = [
   'docs_featured', 'docs_hidden', 'docs_in_text', 'docs_in_image', 'docs_in_audio', 'docs_in_video',
-  'docs_out_text', 'docs_out_image', 'docs_out_audio', 'docs_out_video'
+  'docs_out_text', 'docs_out_image', 'docs_out_audio', 'docs_out_video', 'docs_moe'
 ];
 export const DOCS_MODEL_INT = ['docs_intelligence', 'docs_speed', 'docs_max_output'];
 export const DOCS_MODEL_FLOAT = ['docs_price_cache_write', 'docs_price_cache_read'];
+export const DOCS_MODEL_PARAM_COUNTS = ['docs_total_params', 'docs_active_params'];
 
 export const DOCS_BADGES = new Set(['', 'latest', 'legacy', 'preview', 'new']);
 
@@ -139,6 +142,7 @@ const str = (v) => (typeof v === 'string' ? v.trim() : '');
 export function docsVars(m) {
   if (!m) return {};
   const ids = pairs(m.docs_ids);
+  const size = modelSize(m.docs_total_params, m.docs_moe, m.docs_active_params);
   return {
     modelId: ids[0]?.value || '',
     modelIds: ids.map(p => (p.label ? `${p.label}: ${p.value}` : p.value)).join('\n'),
@@ -149,6 +153,9 @@ export function docsVars(m) {
     modelGroup: str(m.docs_group),
     modelNotice: str(m.docs_notice),
     modelNotes: String(m.docs_notes || '').split('\n').map(s => s.replace(/^\s*[-*]\s*/, '').trim()).filter(Boolean).map(s => '- ' + s).join('\n'),
+    modelParameters: sizePhrase(size),
+    modelTotalParameters: formatParamCount(size.total),
+    modelActiveParameters: formatParamCount(size.active),
     modelContextWindow: tokensText(m.num_ctx),
     modelMaxOutput: tokensText(m.docs_max_output),
     modelThinking: str(m.docs_thinking) || (m.has_reasoning ? 'Supported' : ''),

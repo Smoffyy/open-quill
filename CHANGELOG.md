@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [27.7.0] - 2026-10-04
+### Added
+- **Parameter count in the model docs** - a model can now state its size. The Parameters box in edit mode takes the total and a "Mixture of experts" switch; turning the switch on asks for the active parameters. They read `175B` for a dense model, `175B A3B` for a mixture-of-experts one, and `175B MoE` when the active count is not given. Shown in the stat strip on the model page, in the Capabilities card, and in the always-visible capabilities rows of the overview comparison, so it no longer needs "Show all details".
+- **Automatic units** - counts are stored as numbers, so a bare number is read in billions and shown with the right unit: `175` reads `175B`, `2400` or `2.4t` reads `2.4T`, and `135M` stays `135M`. The active count is written with a leading `A`, as in `A3B`, and can be typed with or without it. The box shows how the size will read, and says so when a value cannot be read or the active count is not below the total.
+- **System prompt variables** - `{{modelParameters}}` states the size as a phrase the model can use as-is, like `{{modelContextWindow}}` does for the context window: `175B parameters`, `175B parameters (mixture-of-experts)` or `175B parameters (mixture-of-experts, 3B active per token)`. `{{modelTotalParameters}}` (such as `175B`) and `{{modelActiveParameters}}` (such as `3B`) are the bare counts for custom wording. All three are empty without a total, so a block that uses only them is dropped; the active count is only used for a mixture-of-experts model and only when it is below the total. Listed in the Prompts tab under Model specifications.
+- **Variable hover** - hover a {{variable}} in the system prompt (or the voice call prompt) to see what it is filled in as for the selected model, or an example when it is empty for that model. Variables, including ones written with spaces such as `{{ modelName }}`, are lightly highlighted in the editor so they are easy to find.
+- **Live variable values** - each variable in the Variables list shows what it currently resolves to for the selected model, or "empty" when it has no value. Values follow unsaved edits as you type, since the preview is worked out from the model as it stands in the editor.
+
+---
+
 ## [27.6.0] - 2026-10-02
 ### Changed
 - **Admin Models tab rebuilt** - a list and an inspector side by side. Select one model or many (checkboxes, Ctrl, Shift, Ctrl+A); every field then edits the whole selection at once.
