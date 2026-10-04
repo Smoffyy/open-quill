@@ -260,7 +260,7 @@ function glassAt(v, u, s, j, time) {
   const bounce = Math.max(0, Math.sin(time * 3 - s * 0.9));
   const th = j * GOLDEN;
   const rr = 0.09 * Math.sqrt(u);
-  v.x = (s - 1) * 0.35 + rr * Math.cos(th);
+  v.x = (s - 1) * 0.55 + rr * Math.cos(th); // Original was 0.35 for old thinking offset.
   v.y = -0.15 + bounce * 0.28 + rr * Math.sin(th);
   v.z = 0;
   v.depth = 0.85;

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [28.0.0] - TBD
 ### Changed
 - **Version badge** - the badge in Settings, Version no longer shows trailing zeros.
+- **Widened thinking dots** - thinking dots went from 0.35 to 0.55 between dot centres.
 
 ---
 
