@@ -37,5 +37,6 @@ export const api = {
   del: (u, b) => req('DELETE', u, b),
   upload: (file) => upload('/api/admin/upload', 'file', [file]),
   uploadFiles: (files) => upload('/api/upload', 'files', files),
+  uploadTo: (url, file) => upload(url, 'file', [file]),
   uploadReferenceFiles: (files) => upload('/api/admin/membank', 'files', files)
 };

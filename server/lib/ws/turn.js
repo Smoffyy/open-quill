@@ -59,12 +59,12 @@ export async function maybeCompact(ws, chat, model, extended, flags, opts = {}, 
   }
 }
 
-export async function runCompletion(ws, state, safeSend, chat, model, extended, sandboxOn, sandboxCap = 0, webSearchOn = false, callMode = false, { styleText = '', client = null, resume = null } = {}) {
+export async function runCompletion(ws, state, safeSend, chat, model, extended, sandboxOn, sandboxCap = 0, webSearchOn = false, callMode = false, { styleText = '', client = null, resume = null, plan = false } = {}) {
   {
     const cRow0 = db.chats.byId(chat.id) || chat;
     if (cRow0.gen_params && typeof cRow0.gen_params === 'object') model = { ...model, ...cRow0.gen_params };
   }
-  const flags = toolState(chat, model, { sandboxOn, webSearchOn, canAsk: !!state?.interactive });
+  const flags = toolState(chat, model, { sandboxOn, webSearchOn, canAsk: !!state?.interactive, plan });
   const promptOpts = { styleText, callMode, client };
   await ensureChatSidecars(chat.id);
   await maybeCompact(ws, chat, model, extended, flags, promptOpts, resume ? resume.id : null);
@@ -157,7 +157,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   safeSend(JSON.stringify({ type: 'start', chatId: chat.id, messageId: assistantId, ...(resume ? { content, reasoning, reasonSegs: reasonSegs.length ? reasonSegs : null } : {}) }));
 
   const consultNames = consultOn ? consultWith.map(t => t.display_name || t.internal_name) : [];
-  const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, memoryOn, calculatorOn, todoOn, askUserOn, consultNames, hostEnv: sandboxOn ? sandbox.hostEnvInfo() : null }) : [];
+  const tools = toolsOn ? buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, memoryOn, calculatorOn, todoOn, askUserOn, consultNames, hostEnv: sandboxOn ? sandbox.hostEnvInfo() : null, readOnly: flags.planMode }) : [];
   const toolNameSet = new Set(tools.map(t => t && t.function && t.function.name).filter(Boolean));
   const canonicalize = (call) => {
     if (!sandboxOn || !call.tool || toolNameSet.has(call.tool)) return call;
@@ -229,6 +229,10 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       return { payload: referenceFiles.resultPayload(call, r), formatted: referenceFiles.formatResult(call, r), hide: membankHideTools };
     }
     if (!sandboxOn || !resolveToolName(call.tool, true)) return null;
+    if (flags.planMode && !SANDBOX_READONLY.has(resolveToolName(call.tool, true))) {
+      const error = 'Plan mode is on, so the workspace is read-only. Finish the plan and let the user switch modes before changing files.';
+      return { payload: { ok: false, error }, formatted: `${call.tool} → ERROR: ${error}`, hide: false };
+    }
     // The step's own controller: the stop handler aborts whatever is registered
     // for this chat, which during tool execution is this one. Handing its signal
     // to the sandbox is what lets a stop kill a running command instead of
@@ -819,7 +823,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   const truncated = (lastFinish === 'length' || hitCap || wasStopped || turnFailed || fileStopped) && !conversationEnded;
   const hasOutput = !!(content.trim() || reasoning.trim());
   if (hasOutput || usageRec) {
-    const finalRow = { id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, reasoning_segs: reasonSegs.length ? reasonSegs : null, reasoning_seg_ms: reasonSegs.length ? segMs : null, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: resume ? addUsage(resume.usage, usageRec) : usageRec, speed, reasoning_ms: reasonMs || null, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, kwarg_values: model.kwarg_values || null, steers: steerNotes.length ? steerNotes.slice(0, MAX_STEERS) : null, truncated: truncated || null, created_at: (resume && resume.created_at) || now() };
+    const finalRow = { id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, reasoning_segs: reasonSegs.length ? reasonSegs : null, reasoning_seg_ms: reasonSegs.length ? segMs : null, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: resume ? addUsage(resume.usage, usageRec) : usageRec, speed, reasoning_ms: reasonMs || null, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, kwarg_values: model.kwarg_values || null, steers: steerNotes.length ? steerNotes.slice(0, MAX_STEERS) : null, truncated: truncated || null, plan_mode: flags.planMode ? 1 : null, created_at: (resume && resume.created_at) || now() };
     if (checkpointed) db.messages.update(assistantId, finalRow);
     else db.messages.insert(finalRow);
     db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });

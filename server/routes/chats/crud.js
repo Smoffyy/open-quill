@@ -11,8 +11,9 @@ export default function registerCrudRoutes(app) {
     const t = now();
     let projectId = null;
     if (req.body?.projectId) { const p = db.projects.byId(req.body.projectId); if (p && p.user_id === req.user.id) projectId = p.id; }
-    const c = db.chats.insert({ id: uid(), user_id: req.user.id, project_id: projectId, title: 'New chat', starred: 0, sandbox: 0, created_at: t, updated_at: t });
-    res.json({ id: c.id, title: c.title, updated_at: c.updated_at, starred: false, projectId });
+    const mode = req.body?.mode === 'code' ? 'code' : 'chat';
+    const c = db.chats.insert({ id: uid(), user_id: req.user.id, project_id: mode === 'code' ? null : projectId, title: 'New chat', starred: 0, sandbox: 0, mode, created_at: t, updated_at: t });
+    res.json({ id: c.id, title: c.title, updated_at: c.updated_at, starred: false, projectId: c.project_id, mode });
   });
 
   app.delete('/api/chats/:id', authMiddleware, (req, res) => {
@@ -45,9 +46,8 @@ export default function registerCrudRoutes(app) {
         patch.gen_params = Object.keys(out).length ? out : null;
       }
       if (req.user.is_admin && 'systemOverride' in req.body) patch.system_override = String(req.body.systemOverride || '').slice(0, 24000);
-      if ('sandbox' in req.body) patch.sandbox = req.body.sandbox ? 1 : 0;
       if ('instructions' in req.body) patch.instructions = String(req.body.instructions || '').slice(0, 8000);
-      if ('projectId' in req.body) {
+      if ('projectId' in req.body && c.mode !== 'code') {
         const pid = req.body.projectId;
         if (pid === null || pid === '') patch.project_id = null;
         else { const p = db.projects.byId(pid); if (p && p.user_id === req.user.id) patch.project_id = pid; }

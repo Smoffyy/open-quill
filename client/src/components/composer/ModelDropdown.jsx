@@ -54,7 +54,7 @@ function viewport() {
   };
 }
 
-function Badges({ m }) {
+export function Badges({ m }) {
   const shown = (m.badges || []).filter(id => BADGE_ICONS[id]);
   if (!shown.length) return null;
   return (

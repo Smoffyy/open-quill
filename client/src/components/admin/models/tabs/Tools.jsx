@@ -32,8 +32,6 @@ export default function Tools() {
       <Card title={t('Capabilities')} sub={t('What this model is allowed to do inside a chat.')}>
         <Rows>
           <Flag k="has_vision" label={t('Image input')} note={t('Off, image attachments are refused for this model.')} />
-          <Levels label={t('Sandbox tools')} level={LEVELS.sandbox} options={access}
-            note={t('Code execution and a per-chat filesystem.')} />
           {webSearch && (
             <Levels label={t('Web search')} level={LEVELS.web} options={access}
               note={t('Lets members search the web from this model.')} />

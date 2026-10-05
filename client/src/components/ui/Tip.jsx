@@ -15,6 +15,7 @@ export default function Tip({ label, keys, side, tone, disabled, toggle, childre
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [pos, setPos] = useState(null);
+  const pointY = useRef(null);
 
   const closeAll = useCallback(() => {
     clearTimeout(timer.current);
@@ -76,6 +77,11 @@ export default function Tip({ label, keys, side, tone, disabled, toggle, childre
     const a = anchor.getBoundingClientRect();
     const w = tip.offsetWidth;
     const h = tip.offsetHeight;
+    if (side === 'right') {
+      const y = pointY.current ?? a.top + a.height / 2;
+      setPos({ top: Math.min(Math.max(EDGE, y - h / 2), window.innerHeight - h - EDGE), left: Math.min(a.right + GAP, window.innerWidth - w - EDGE) });
+      return;
+    }
     const below = side !== 'top' && a.bottom + GAP + h + EDGE <= window.innerHeight;
     const top = below ? a.bottom + GAP : Math.max(EDGE, a.top - GAP - h);
     let left = a.left + a.width / 2 - w / 2;
@@ -85,7 +91,7 @@ export default function Tip({ label, keys, side, tone, disabled, toggle, childre
 
   return (
     <span className={'tip-host' + (pinned ? ' tip-pinned' : '')} ref={hostRef}
-      onMouseEnter={show} onMouseLeave={toggle ? closeHover : closeAll}
+      onMouseEnter={(e) => { pointY.current = e.clientY; show(); }} onMouseLeave={toggle ? closeHover : closeAll}
       onPointerDownCapture={(e) => { if (toggle && hostRef.current?.contains(e.target)) return; closeAll(); }}
       onClick={toggle ? handleToggleClick : undefined}
       onFocusCapture={(e) => { if (e.target.matches?.(':focus-visible')) show(); }}

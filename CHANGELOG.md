@@ -8,9 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [28.0.0] - TBD
+### Added
+- **Code** - a separate coding interface beside Chat, switched with the Chat/Code control at the top of the sidebar and reached at `/code`. Each session has its own private folder on the server; the assistant creates, edits, renames, runs, debugs and deletes files there with its tools, and the sidebar lists sessions separately from chats.
+- **Files panel** - always open beside a Code session: a folder tree, Go to file, new file, upload, download one file or everything as a zip, rename, copy path, delete files and folders, and an editor with version history. It updates live while the assistant writes, and can be resized, expanded or hidden.
+- **Readable transcript** - tool calls are grouped into one line such as "Ran 3 commands, edited 2 files (1 failed)". A step expands to its command and output, or to the diff of the file version it wrote, and every turn ends with the files it changed and their added and removed lines.
+- **Plan mode** - the composer's mode switches between Auto and Plan. In Plan the assistant can only read the workspace and answers with a plan, then asks whether to proceed; yes switches to Auto and builds it.
+- **Code composer** - attach files into the workspace, dictate, pick the model with all of its options (thinking, effort and the rest) and watch the context used fill in live. Escape stops a turn and Continue picks up a reply that was cut off.
+- **Code prompt** - sessions use their own coding-agent prompt with the workspace, plan, question and web search tools, instead of the model's chat system prompt.
+
 ### Changed
 - **Version badge** - the badge in Settings, Version no longer shows trailing zeros.
 - **Widened thinking dots** - thinking dots went from 0.35 to 0.55 between dot centres.
+- **Sidebar** - a Chat/Code switch beside the name, the collapse button to its left, a "More" row for All chats and Model docs, and version and search in the footer. Clicking the sidebar's edge hides it and dragging resizes it.
+- **Scrollbars** - one thin scrollbar style everywhere, set once in `base.css`.
+- **Files in the Artifacts library** open their Code session with the file shown.
+
+### Removed
+- **Sandbox in chats** - the sandbox tools toggle, the per-chat artifacts panel and the per-model "Sandbox tools" setting are gone; file work happens in Code. Project chats keep reading their project's files.
 
 ---
 

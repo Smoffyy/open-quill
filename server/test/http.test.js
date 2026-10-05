@@ -1260,3 +1260,34 @@ test('MCP header and environment values stay on the server', async () => {
   await browser('DELETE', `/api/admin/mcp/${id}`);
   await browser('DELETE', `/api/admin/mcp/${stdio.json.server.id}`);
 });
+
+test('a code session keeps its mode and its workspace files can be managed from the panel', async () => {
+  const made = (await browser('POST', '/api/chats', { body: { mode: 'code' } })).json;
+  assert.equal(made.mode, 'code');
+  const listed = (await browser('GET', '/api/chats')).json.find(c => c.id === made.id);
+  assert.equal(listed.mode, 'code', 'the sidebar can tell a session from a chat');
+  assert.equal((await browser('GET', '/api/chats/' + made.id)).json.chat.mode, 'code');
+  assert.equal((await browser('GET', '/api/chats-overview')).json.chats.some(c => c.id === made.id), false, 'all chats lists chats only');
+  const plain = (await browser('POST', '/api/chats', { body: {} })).json;
+  assert.equal(plain.mode, 'chat');
+
+  const base = '/api/chats/' + made.id;
+  const created = await browser('POST', base + '/files/new', { body: { path: 'src/app.py' } });
+  assert.equal(created.status, 200);
+  assert.deepEqual(created.json.files.map(f => f.path), ['src/app.py']);
+  assert.equal((await browser('POST', base + '/files/new', { body: { path: '../escape.txt' } })).status, 400);
+  const renamed = await browser('POST', base + '/files/rename', { body: { path: 'src/app.py', to: 'src/main.py' } });
+  assert.equal(renamed.json.path, 'src/main.py');
+
+  const boundary = 'oqcode' + Date.now();
+  const raw = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="data.csv"\r\nContent-Type: text/csv\r\n\r\na,b\n1,2\n\r\n--${boundary}--\r\n`);
+  const up = await browser('POST', base + '/files', { raw, headers: { 'Content-Type': 'multipart/form-data; boundary=' + boundary } });
+  assert.equal(up.status, 200);
+  assert.deepEqual(up.json.files.map(f => f.path).sort(), ['data.csv', 'src/main.py']);
+  const gone = await browser('DELETE', base + '/files?path=' + encodeURIComponent('data.csv'));
+  assert.deepEqual(gone.json.files.map(f => f.path), ['src/main.py']);
+  await browser('PATCH', base, { body: { projectId: 'anything' } });
+  assert.equal((await browser('GET', base)).json.chat.projectId, null, 'a session never joins a project and its workspace');
+  await browser('DELETE', base);
+  await browser('DELETE', '/api/chats/' + plain.id);
+});

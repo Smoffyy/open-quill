@@ -1,3 +1,5 @@
+import { SANDBOX_READONLY } from './aliases.js';
+
 function fn(name, description, properties = {}, required = []) {
   return {
     type: 'function',
@@ -196,9 +198,9 @@ export function consultModelSchema(names = []) {
   }, ['model', 'question']);
 }
 
-export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, memoryOn = false, calculatorOn = false, todoOn = false, askUserOn = false, consultNames = [], hostEnv = null }) {
+export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, memoryOn = false, calculatorOn = false, todoOn = false, askUserOn = false, consultNames = [], hostEnv = null, readOnly = false }) {
   const out = [];
-  if (sandboxOn) out.push(...sandboxToolSchemas(hostEnv));
+  if (sandboxOn) out.push(...sandboxToolSchemas(hostEnv).filter(s => !readOnly || SANDBOX_READONLY.has(s.function.name)));
   if (webSearchOn) out.push(webSearchSchema());
   if (membankOn) out.push(...membankSchemas());
   if (chatSearchOn) out.push(...chatSearchSchemas());

@@ -112,12 +112,13 @@
 }
 .nav-item:hover .nav-go, .nav-item:focus-visible .nav-go { opacity: 1; transform: none; }
 .profile-caret { width: 12px; height: 12px; flex-shrink: 0; color: var(--text-faint); }
+.profile-tools { display: flex; align-items: center; margin-left: auto; flex-shrink: 0; }
 .profile-apps {
-  display: grid; place-items: center; width: 32px; height: 32px; margin-left: auto; flex-shrink: 0;
-  border-radius: 8px; color: var(--text-faint);
+  display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0;
+  border-radius: 8px; color: var(--sidebar-text, var(--text-muted));
   transition: background var(--fx-t, .15s), color var(--fx-t, .15s);
 }
-.profile-apps svg { width: 20px; height: 20px; }
+.profile-apps svg { width: 16px; height: 16px; }
 .profile-apps:hover { color: var(--sidebar-text, var(--text-muted)); }
 
 :root[data-preset="anthropic"] .sidebar { width: 280px; border-right: .8px solid var(--pop-border); }
@@ -125,7 +126,12 @@
 :root[data-preset="anthropic"] .sidebar-head {
   min-height: 54px; padding: 7px 8px; align-items: flex-start; justify-content: space-between; flex-shrink: 0;
 }
-:root[data-preset="anthropic"] .brand-wrap { margin: 0 0 0 8px; }
+:root[data-preset="anthropic"] .brand-wrap { margin: 0; }
+@media (max-width: 768px) {
+  :root[data-preset="anthropic"] .brand-wrap { margin-left: 8px; }
+}
+:root[data-preset="anthropic"] .sidebar-head > .tip-host > .collapse-btn { margin: 0 -2px 0 4px; color: var(--sidebar-text, var(--text-muted)); opacity: .7; }
+:root[data-preset="anthropic"] .sidebar-head > .tip-host > .collapse-btn:hover { opacity: 1; }
 :root[data-preset="anthropic"] .brand { font-size: 20px; line-height: 22px; }
 :root[data-preset="anthropic"] .sidebar-head-actions { gap: 0; margin-top: -5px; }
 :root[data-preset="anthropic"] .sidebar.collapsed .sidebar-head-actions { margin-top: 0; }
@@ -133,6 +139,7 @@
   width: 32px; height: 32px; border-radius: 8px; color: var(--text-faint);
 }
 :root[data-preset="anthropic"] .sidebar-head-actions .icon-btn:hover { background: none; color: var(--sidebar-text); }
+:root[data-preset="anthropic"] .sidebar-head-actions:has(.mode-switch) { align-self: center; margin-top: 0; }
 
 :root[data-preset="anthropic"] .nav { padding: 0 8px; gap: var(--cl-row-gap); margin-top: 12px; }
 :root[data-preset="anthropic"] .nav-item {
@@ -187,7 +194,7 @@
   border-top: 1px solid var(--border-soft);
 }
 .profile { display: flex; align-items: center; gap: 4px; }
-.profile-btn { width: auto; max-width: calc(100% - 40px); }
+.profile-btn { width: auto; max-width: calc(100% - 72px); }
 .profile-info { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
 
 :root[data-preset="anthropic"] .side-foot-nav {

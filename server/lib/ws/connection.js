@@ -229,10 +229,9 @@ export function initWs(server) {
         if (live.activeTurn(chat.id)) { safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: 'A reply is already being generated in this chat. Wait for it to finish, or stop it first.' })); safeSend(JSON.stringify({ type: 'done', chatId: chat.id })); return; }
 
         const sandboxLimit = sandboxCap(u);
-        const userSandbox = !!msg.sandbox;
-        if (!!chat.sandbox !== userSandbox) db.chats.update(chat.id, { sandbox: userSandbox ? 1 : 0 });
-        const sandboxOn = userSandbox || !!chat.project_id;
-        const webSearchOn = !!msg.webSearch && websearch.webSearchAvailable() && model.web_search_allowed !== 0;
+        const codeMode = chat.mode === 'code';
+        const sandboxOn = codeMode || !!chat.project_id;
+        const webSearchOn = (codeMode || !!msg.webSearch) && websearch.webSearchAvailable() && model.web_search_allowed !== 0;
         ensureChain(chat.id);
 
         let resume = null;
@@ -280,7 +279,7 @@ export function initWs(server) {
         try {
           await runQueued(queueOn, model.id,
             () => { liveSend(JSON.stringify({ type: 'queued', chatId: chat.id })); },
-            () => runCompletion(liveWs, liveState, liveSend, chat, model, !!msg.extended, sandboxOn, sandboxLimit, webSearchOn, !!msg.call, { styleText, client, resume }));
+            () => runCompletion(liveWs, liveState, liveSend, chat, model, !!msg.extended, sandboxOn, sandboxLimit, webSearchOn, !!msg.call, { styleText, client, resume, plan: codeMode && !!msg.plan }));
         } finally { live.endTurn(chat.id); }
       } catch (err) {
         console.error('[ws chat]', err);

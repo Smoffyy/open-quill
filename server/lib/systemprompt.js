@@ -14,6 +14,7 @@ import { consultTargets, consultTargetsText } from './consult.js';
 import { sandboxHostText, sandboxWorkspaceText, conversationTiming, pinnedFilesText } from './prompts.js';
 import { promptVars } from './convo.js';
 import { webSearchAvailable } from './websearch.js';
+import { codeToolState, codePrompt } from './codeprompt.js';
 
 const MIGRATION_KEY = 'prompt_blocks_version';
 const MIGRATION_VERSION = 1;
@@ -46,7 +47,9 @@ export function syncAllModels(before, after) {
   return changed;
 }
 
-export function toolState(chat, model, { sandboxOn = false, webSearchOn = false, canAsk = false } = {}) {
+export function toolState(chat, model, { sandboxOn = false, webSearchOn = false, canAsk = false, plan = false } = {}) {
+  const row = chat?.id ? (db.chats.byId(chat.id) || chat) : chat;
+  if (row?.mode === 'code') return codeToolState(row, { webSearchOn, canAsk, plan });
   const userId = chat?.user_id || null;
   const membankOn = getSetting('membank_enabled', '0') === '1' && referenceFiles.count() > 0;
   const chatSearchOn = !!model.chat_search_allowed && getSetting('chat_search_enabled', '0') === '1';
@@ -115,6 +118,7 @@ export function promptVarMap(chat, model, state, { userId = null, styleText = ''
 export function systemPrompt(chat, model, state, { userId = null, styleText = '', callMode = false, client = null } = {}) {
   const row = chat ? (db.chats.byId(chat.id) || chat) : null;
   const vars = promptVarMap(chat, model, state, { userId, styleText, client });
+  if (state.code) return codePrompt(vars, state);
   const override = callMode && (model.call_prompt || '').trim() ? model.call_prompt
     : (row?.system_override || '').trim() ? row.system_override : null;
   return renderPrompt(model.system_prompt || '', { active: activeBlocks(model, state), vars, base: override });

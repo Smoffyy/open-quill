@@ -85,7 +85,7 @@ function ActiveChip({ icon, label, onRemove }) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, stopping = false, models, modelsReady = true,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, onOpenProject, projects = [], onSetProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, onOpenProject, projects = [], onSetProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
   voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall, callActive = false,
   safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
@@ -250,7 +250,6 @@ export default function Composer({
   const slashCmds = [];
   if (slashActive) {
     if (onNewChat) slashCmds.push({ id: 'new', label: t('New chat'), icon: <NewChatIcon style={{ width: 16 }} />, run: () => { onChange(''); onNewChat(); } });
-    if (sandboxAllowed && onToggleSandbox) slashCmds.push({ id: 'sandbox', label: t('Sandbox tools'), sub: sandbox ? t('Disable') : t('Enable'), icon: <Cube style={{ width: 16 }} />, run: () => { onChange(''); onToggleSandbox(); } });
     if (webSearchAvailable && onToggleWebSearch) slashCmds.push({ id: 'web', label: t('Web search'), sub: webSearch ? t('Disable') : t('Enable'), icon: <Globe style={{ width: 16 }} />, run: () => { onChange(''); onToggleWebSearch(); } });
     if (onShortcuts) slashCmds.push({ id: 'keys', label: t('Keyboard shortcuts'), icon: <Sliders style={{ width: 16 }} />, run: () => { onChange(''); onShortcuts(); } });
     for (const p of (savedPrompts || [])) slashCmds.push({ id: 'p' + p.id, label: p.title, sub: t('Prompt'), icon: <Star style={{ width: 16 }} />, run: () => { onUsePrompt && onUsePrompt(p.text); } });
@@ -327,7 +326,6 @@ export default function Composer({
   const showBudgetBanner = budgetState === 'warn' || budgetState === 'over';
   const sunsetOnly = !!sunsetInfo && !bannerMounted && !showBudgetBanner && !safetyFlagged && !conversationEnded && !removedModel && !panel;
   const activeTools = [];
-  if (sandboxAllowed && sandbox) activeTools.push({ id: 'sandbox', icon: <Cube />, label: t("Sandbox tools"), off: () => onToggleSandbox && onToggleSandbox() });
   if (webSearchAvailable && webSearch) activeTools.push({ id: 'websearch', icon: <Globe />, label: t("Web search"), off: () => onToggleWebSearch && onToggleWebSearch() });
   for (const sk of skills) if (sk.enabled) activeTools.push({ id: 'skill:' + sk.id, icon: <SkillIcon />, label: sk.name, off: () => onToggleSkill && onToggleSkill(sk) });
   if (onSelectStyle && styleId && styleId !== 'normal') activeTools.push({ id: 'style', icon: <Sliders />, label: styleNameFor(styleId, styles), off: () => onSelectStyle('normal') });
@@ -623,14 +621,7 @@ export default function Composer({
                     <span className="pm-label">{t('Add connector')}</span>
                   </button>
                 )}
-                {(sandboxAllowed || webSearchAvailable) && <div className="pm-divider" />}
-                {sandboxAllowed && (
-                  <button className="pm-item" onClick={() => { onToggleSandbox && onToggleSandbox(); closePlusMenu(); }}>
-                    <Cube />
-                    <span className="pm-label">{t("Sandbox tools")}</span>
-                    {sandbox && <Check className="pm-check" />}
-                  </button>
-                )}
+                {webSearchAvailable && <div className="pm-divider" />}
                 {webSearchAvailable && (
                   <button className="pm-item" onClick={() => { onToggleWebSearch && onToggleWebSearch(); closePlusMenu(); }}>
                     <Globe />

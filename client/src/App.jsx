@@ -33,7 +33,7 @@ import SettingsModal from './components/settings/SettingsModal.jsx';
 import PromptLedger from './components/dialogs/PromptLedger.jsx';
 import DocModal from './components/dialogs/DocModal.jsx';
 import NotFound from './components/pages/NotFound.jsx';
-import ArtifactsPanel from './components/artifacts/ArtifactsPanel.jsx';
+import CodeView from './components/code/CodeView.jsx';
 import ChatControls from './components/chat/ChatControls.jsx';
 import ModelDropdown from './components/composer/ModelDropdown.jsx';
 import CallPanel from './components/chat/CallPanel.jsx';
@@ -72,15 +72,16 @@ import { dispatchWs } from './lib/wsmessages.js';
 import { createLru } from './lib/lru.js';
 import { useTurnMeta, liveLedgerTokens } from './lib/turnmeta.js';
 import { useTurnStream } from './lib/turnstream.js';
-import { parseRoute, shouldResetPath, pathForChat, pathForProject, pathForLibrary, LIBRARY_PAGES } from './lib/route.js';
+import { parseRoute, shouldResetPath, pathForChat, pathForCode, pathForProject, pathForLibrary, LIBRARY_PAGES } from './lib/route.js';
 import { hasMath, katexPlugin, ensureKatex } from './lib/mathjs.js';
 import { docsConfig, docsTree, docsPath, parseDocsPath } from './lib/modeldocs.js';
 import { useDocsEdit } from './lib/docsedit.js';
 import { useSocket } from './lib/socket.js';
 import BranchTree from './components/chat/BranchTree.jsx';
 import { toast } from './lib/toast.js';
+import { askConfirm } from './lib/confirm.js';
 import { copyText } from './lib/clipboard.js';
-import { Down, Paper, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork, Panel, Copy, Star, Telescope, TextIcon, Expand } from './components/ui/icons.jsx';
+import { Down, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork, Panel, Copy, Star, Telescope, TextIcon, Expand } from './components/ui/icons.jsx';
 import { setCustomFavicon } from './lib/favicon.js';
 import BrandMark from './components/ui/BrandMark.jsx';
 import { SKELETON_DELAY } from './lib/skeleton.js';
@@ -194,7 +195,12 @@ export default function App() {
   const onChatsOverviewCb = useCallback(() => navTo('chats'), [navTo]);
   const onArtifactsCb = useCallback(() => navTo('artifacts'), [navTo]);
   const onScheduledCb = useCallback(() => navTo('scheduled'), [navTo]);
-  const closeArtifacts = useCallback(() => setArtifactsOpen(false), []);
+  const onModeCb = useCallback((mode) => { setLibPage(null); setChatsOverview(false); setDocsTarget(null); sidebarFns.current.switchMode(mode); }, []);
+  const toggleCodePanel = useCallback(() => setCodePanel(o => {
+    const narrow = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+    try { if (!narrow) localStorage.setItem('oq-code-panel', o ? '0' : '1'); } catch {}
+    return !o;
+  }), []);
 
   const [extended, setExtended] = useState(false);
   const [kwargValues, setKwargValues] = useState({});
@@ -298,7 +304,15 @@ export default function App() {
   const [authCtx, setAuthCtx] = useState(null);
   const [budget, setBudget] = useState(null);
   const [greeting, setGreeting] = useState(DEFAULT_CFG.greetings[0]);
-  const [sandbox, setSandbox] = useState(false);
+  const [codeMode, setCodeMode] = useState(() => parseRoute(location.pathname).view === 'code');
+  const codeModeRef = useRef(codeMode);
+  useEffect(() => { codeModeRef.current = codeMode; }, [codeMode]);
+  const [codePanel, setCodePanel] = useState(() => {
+    if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) return false;
+    try { return localStorage.getItem('oq-code-panel') !== '0'; } catch { return true; }
+  });
+  const [planMode, setPlanMode] = useState(false);
+  const modeChats = useMemo(() => chats.filter(c => (c.mode === 'code') === codeMode), [chats, codeMode]);
   const [webSearch, setWebSearch] = useState(false);
   const [files, setFiles] = useState([]);
   const [pendingFiles, setPendingFiles] = useState({});
@@ -313,9 +327,6 @@ export default function App() {
   const [inspectOpen, setInspectOpen] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
-  const [artifactsOpen, setArtifactsOpen] = useState(false);
-  const artifactsOpenRef = useRef(false);
-  useEffect(() => { artifactsOpenRef.current = artifactsOpen; }, [artifactsOpen]);
   const [callOpen, setCallOpen] = useState(false);
   const [callRender, setCallRender] = useState(false);
   useEffect(() => {
@@ -607,20 +618,19 @@ export default function App() {
       document.removeEventListener('selectionchange', selChange);
     };
   }, []);
+  const openCodeFile = useCallback((p) => {
+    if (!p || !activeIdRef.current) return;
+    setCodePanel(true);
+    setArtifactFocus(f => ({ path: p, n: (f?.n || 0) + 1 }));
+  }, []);
   useEffect(() => {
-    const h = (e) => {
-      const p = e.detail?.path;
-      if (!p || !activeIdRef.current) return;
-      setArtifactsOpen(true);
-      setArtifactFocus(f => ({ path: p, n: (f?.n || 0) + 1 }));
-    };
+    const h = (e) => { if (codeModeRef.current) openCodeFile(e.detail?.path); };
     window.addEventListener('oq-open-file', h);
     return () => window.removeEventListener('oq-open-file', h);
-  }, []);
+  }, [openCodeFile]);
   useKeybinds(user, kbHandlers, setChordHint);
   useEffect(() => {
     const m = models.find(x => x.id === currentId);
-    if (m && m.sandboxAllowed === false) setSandbox(false);
     if (m && m.webSearchAllowed === false) setWebSearch(false);
     else if (!activeId && !incognito && m && user?.prefs?.webSearchDefault && cfg.webSearchAvailable) setWebSearch(true);
   }, [currentId, activeId, models, incognito, cfg.webSearchAvailable, user?.prefs?.webSearchDefault]);
@@ -642,11 +652,14 @@ export default function App() {
     if (r.view === 'notfound' || LIBRARY_PAGES.includes(r.view)) return;
     if (r.view === 'docs') return;
     if (onProjects) { setProjectOpenId(r.id ?? null); return; }
-    if (r.view !== 'home' && r.view !== 'chat') return;
-    if (r.view === 'chat') { openChat(r.id, false); return; }
+    if (r.view !== 'home' && r.view !== 'chat' && r.view !== 'code') return;
+    const code = r.view === 'code';
+    setCodeMode(code);
+    codeModeRef.current = code;
+    if (r.id) { openChat(r.id, false); return; }
     flushDraft();
-    setActiveId(null); setMessages([]);
-    if (!incognitoRef.current) setInput(loadDraft(null));
+    setActiveId(null); setMessages([]); resetChatView();
+    if (!incognitoRef.current) setInput(loadDraft(code ? 'code' : null));
   }
 
   async function loadModels() {
@@ -712,11 +725,12 @@ export default function App() {
       : libPage === 'scheduled' ? t('Scheduled tasks')
       : chatsOverview ? t('All chats')
       : incognito ? t('Incognito chat')
+      : codeMode ? (activeId ? ((chats.find(c => c.id === activeId)?.title) || t('Untitled session')) : t('New session'))
       : activeId ? ((chats.find(c => c.id === activeId)?.title) || t('Untitled chat'))
       : t('New chat')
     );
-    document.title = `${head} - ${appName}`;
-  }, [activeId, chats, cfg.appName, incognito, notFound, showAdmin, showPlayground, docsTarget, showProjects, projectOpenId, projects, libPage, chatsOverview]);
+    document.title = codeMode ? `${head} - ${appName} ${t('Code')}` : `${head} - ${appName}`;
+  }, [activeId, chats, cfg.appName, incognito, notFound, showAdmin, showPlayground, docsTarget, showProjects, projectOpenId, projects, libPage, chatsOverview, codeMode]);
   function exportAllChats() { window.open('/api/chats/export-all', '_blank'); }
   async function importChatsFile(file) {
     try {
@@ -1040,7 +1054,7 @@ export default function App() {
 
   function resetChatView() {
     setPlanDismissed(null);
-    setFiles([]); setPendingFiles({}); setArtifactsOpen(false); setHasSummary(false);
+    setFiles([]); setPendingFiles({}); setHasSummary(false);
     clearLive(); setArtifactFocus(null);
     turnMeta.reset(); setLedger(null);
   }
@@ -1048,7 +1062,13 @@ export default function App() {
   const openSeq = useRef(0);
   function applyChatMeta(chat) {
     setCurrentProject(chat.projectId ? (projects.find(p => p.id === chat.projectId) || { id: chat.projectId, name: 'Project' }) : null);
-    setSandbox(!!chat.sandbox);
+    if (chat.mode) {
+      const code = chat.mode === 'code';
+      setCodeMode(code);
+      codeModeRef.current = code;
+      const want = code ? pathForCode(chat.id) : pathForChat(chat.id);
+      if (chat.id && chat.id === activeIdRef.current && location.pathname !== want) history.replaceState({}, '', want);
+    }
     setWebSearch(false);
     setHasSummary(!!chat.hasSummary);
     setChatEnded(!!chat.ended);
@@ -1092,6 +1112,10 @@ export default function App() {
     if (incognito) setIncognito(false);
     setShowProjects(false);
     if (id !== activeIdRef.current) { clearLive(); setArtifactFocus(null); turnMeta.reset(); setLedger(null); }
+    const known = chats.find(c => c.id === id);
+    const isCode = known ? known.mode === 'code' : codeModeRef.current;
+    setCodeMode(isCode);
+    codeModeRef.current = isCode;
     setActiveId(id);
     const seq = ++openSeq.current;
     const cached = chatCache.current.get(id);
@@ -1103,7 +1127,6 @@ export default function App() {
       applyLastModel(cached.messages || []);
       setFiles(cached.files || []);
       setPendingFiles({});
-      setArtifactsOpen((cached.files || []).length > 0 && artifactsOpenRef.current);
       armSkeleton(false);
     } else {
       setPendingFiles({});
@@ -1115,8 +1138,9 @@ export default function App() {
     setCanContinue(false); setQueue([]);
     flushDraft();
     setInput(loadDraft(id));
-    if (push) history.pushState({}, '', pathForChat(id));
-    else history.replaceState({}, '', pathForChat(id));
+    const path = isCode ? pathForCode(id) : pathForChat(id);
+    if (push) history.pushState({}, '', path);
+    else history.replaceState({}, '', path);
     if (cached) pinToBottom(false, 30);
     try {
       const { chat, messages } = await api.get('/api/chats/' + id);
@@ -1131,9 +1155,9 @@ export default function App() {
       applyLastModel(messages);
       cacheChat(id, { chat, messages });
       if (!cached) pinToBottom(false, 30);
-      try { const f = await api.get('/api/chats/' + id + '/files'); if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { files: f.files || [] }); return; } setFiles(f.files || []); setArtifactsOpen((f.files || []).length > 0 && artifactsOpenRef.current); cacheChat(id, { files: f.files || [] }); }
+      try { const f = await api.get('/api/chats/' + id + '/files'); if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { files: f.files || [] }); return; } setFiles(f.files || []); cacheChat(id, { files: f.files || [] }); }
       catch { if (seq === openSeq.current && activeIdRef.current === id && !cached) setFiles([]); }
-    } catch { if (seq === openSeq.current) { armSkeleton(false); releaseThread(); if (!cached) { setActiveId(null); setMessages([]); history.replaceState({}, '', '/'); } } }
+    } catch { if (seq === openSeq.current) { armSkeleton(false); releaseThread(); if (!cached) { setActiveId(null); setMessages([]); history.replaceState({}, '', codeModeRef.current ? '/code' : '/'); } } }
   }
   function newChat(fromPop) {
     setMobileDrawer(false);
@@ -1149,7 +1173,7 @@ export default function App() {
     setCanContinue(false); setQueue([]);
     setChatGenParams(null); setChatSysOverride('');
     flushDraft();
-    setInput(loadDraft(null));
+    setInput(loadDraft(codeModeRef.current ? 'code' : null));
     const restored = homeSelectionRef.current;
     const targetId = (restored && restored.modelId && models.find(m => m.id === restored.modelId)) ? restored.modelId : currentId;
     if (restored) {
@@ -1158,13 +1182,21 @@ export default function App() {
       setKwargValues(restored.kwargValues || {});
     }
     const m = models.find(m => m.id === targetId);
-    setSandbox(m?.sandboxAllowed !== false && !!m?.sandboxAuto);
     setWebSearch(!!cfg.webSearchAvailable && m?.webSearchAllowed !== false && (!!m?.webSearchAuto || user?.prefs?.webSearchDefault === true));
     setFocusTick(t => t + 1);
-    if (fromPop !== true) history.pushState({}, '', '/');
+    if (fromPop !== true) history.pushState({}, '', codeModeRef.current ? '/code' : '/');
+  }
+  function switchMode(mode) {
+    const code = mode === 'code';
+    if (code === codeModeRef.current && !activeIdRef.current) return;
+    setCodeMode(code);
+    codeModeRef.current = code;
+    setCtlOpen(false);
+    setCallOpen(false);
+    newChat();
   }
   function toggleIncognito() {
-    if (streaming || queued) return;
+    if (streaming || queued || codeModeRef.current) return;
     if (incognito) {
       setIncognito(false);
       incognitoRef.current = false;
@@ -1175,7 +1207,6 @@ export default function App() {
       setActiveId(null); setMessages([]); setInput('');
       incognitoRef.current = true;
       resetChatView();
-      setSandbox(false);
       const gs = [tk('Greetings, whoever you are'), tk('No names, no traces'), tk('This one stays between us'), tk('Off the record')];
       setIncognitoGreeting(gs[Math.floor(Math.random() * gs.length)]);
       setIncognito(true);
@@ -1189,6 +1220,10 @@ export default function App() {
     chatCache.current.delete(id);
     setChats(cs => cs.filter(c => c.id !== id));
     if (id === activeId) newChat();
+  }
+  async function confirmDeleteChat(id) {
+    const ok = await askConfirm({ title: t('Delete this session?'), message: t('Its conversation and every file in its workspace are deleted. This cannot be undone.'), confirm: t('Delete'), danger: true });
+    if (ok) deleteChat(id);
   }
   const deleteMessage = useCallback(async (messageId) => {
     const id = activeIdRef.current;
@@ -1235,8 +1270,6 @@ export default function App() {
 
     dismissError();
     setCanContinue(false);
-    const sbAllowed = incognito ? false : (models.find(x => x.id === currentId)?.sandboxAllowed !== false);
-    if (sbAllowed && sandbox && !opts.call) { setArtifactFocus(null); setArtifactsOpen(true); }
     if (compareIds.length && !opts.call) {
       compareRef.current = { chatId: null, remaining: [...compareIds], messageId: null };
       setCompareIds([]);
@@ -1268,21 +1301,23 @@ export default function App() {
       return;
     }
 
+    const code = codeModeRef.current;
     let chatId = activeIdRef.current;
     if (!chatId) {
       let c;
-      try { c = await api.post('/api/chats'); }
-      catch { warn(t('Could not start a new chat.')); return; }
+      try { c = await api.post('/api/chats', code ? { mode: 'code' } : undefined); }
+      catch { warn(code ? t('Could not start a new session.') : t('Could not start a new chat.')); return; }
       chatId = c.id; setActiveId(chatId); activeIdRef.current = chatId;
-      setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false }, ...cs]);
-      history.pushState({}, '', pathForChat(chatId));
+      setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false, mode: c.mode || 'chat' }, ...cs]);
+      history.pushState({}, '', code ? pathForCode(chatId) : pathForChat(chatId));
+      if (code) { clearDraft('code'); setFiles([]); }
       if ((chatGenParams && Object.keys(chatGenParams).length) || (chatSysOverride && chatSysOverride.trim())) {
         try { await api.patch('/api/chats/' + chatId, { genParams: chatGenParams || {}, systemOverride: chatSysOverride || '' }); } catch {}
       }
     }
     if (compareRef.current && !compareRef.current.chatId) compareRef.current.chatId = chatId;
     clearDraft(activeId);
-    if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, reasoningEffort, kwargValues, content: text, attachments, sandbox, webSearch, call: !!opts.call, styleId })) return;
+    if (!wsSend({ type: 'chat', chatId, modelId: currentId, extended, reasoningEffort, kwargValues, content: text, attachments, webSearch, plan: code && (opts.plan ?? planMode), call: !!opts.call, styleId })) return;
     queueRec(chatId, currentId);
     setMessages(ms => [...ms, { id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     if (!opts.call) setInput('');
@@ -1302,7 +1337,7 @@ export default function App() {
     setActiveId(c.id); setMessages([]); setInput('');
     resetChatView();
     history.pushState({}, '', pathForChat(c.id));
-    if (!wsSend({ type: 'chat', chatId: c.id, modelId: currentId, extended, reasoningEffort, kwargValues, content: text, attachments, sandbox, webSearch, styleId })) return;
+    if (!wsSend({ type: 'chat', chatId: c.id, modelId: currentId, extended, reasoningEffort, kwargValues, content: text, attachments, webSearch, styleId })) return;
     queueRec(c.id, currentId);
     setMessages([{ id: 'u' + Date.now(), role: 'user', content: text, attachments, _enter: true }]);
     pinToBottom(true, 20);
@@ -1452,8 +1487,6 @@ export default function App() {
   const model = modelById.get(currentId);
   const activeChat = activeId ? chats.find(c => c.id === activeId) : null;
   const activeProject = activeChat?.projectId ? projects.find(p => p.id === activeChat.projectId) : null;
-  const sandboxAllowed = incognito ? false : (model ? model.sandboxAllowed !== false : true);
-  const sandboxOn = sandboxAllowed && (sandbox || !!currentProject);
   const webSearchAvailable = !incognito && !!cfg.webSearchAvailable && (model ? model.webSearchAllowed !== false : true);
   const webSearchOn = webSearchAvailable && webSearch;
   const booting = bootView.current !== 'home';
@@ -1463,7 +1496,7 @@ export default function App() {
   const activeBg = computeActiveBg(models, currentId, activeId, messages.length, incognito, user?.prefs);
   sendRef.current = send;
   resumeRef.current = resumeReply;
-  genOptsRef.current = { extended, reasoningEffort, kwargValues, sandbox, webSearch, styleId };
+  genOptsRef.current = { extended, reasoningEffort, kwargValues, webSearch, plan: codeMode && planMode, styleId };
   const ctxGaugeEl = (showCtxGauge && activeId && !incognito)
     ? <CtxGauge chatId={activeId} modelId={currentId} streaming={streaming || queued}
         revision={messages.length + ':' + (messages[messages.length - 1]?.id || '')} />
@@ -1492,37 +1525,25 @@ export default function App() {
     reasoningEffort, onSetEffort: setReasoningEffort, kwargValues, onSetKwarg: setKwarg,
     visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin, budget,
     modelHasBg, bgInChat, onToggleBgInChat: () => updatePref('modelBgInChat', !bgInChat),
-    sandbox: sandboxOn, sandboxAllowed, onToggleSandbox: () => { if (sandboxAllowed) setSandbox(s => !s); },
     webSearch: webSearchOn, webSearchAvailable, onToggleWebSearch: () => { if (webSearchAvailable) setWebSearch(s => !s); },
     project: currentProject, onClearProject: clearChatProject, onOpenProject: openProjects,
     savedPrompts: user?.savedPrompts || [], onUsePrompt: (t) => { setInput(t); setFocusTick(x => x + 1); }, onSavePrompt: savePromptFromInput, onDeletePrompt: deleteSavedPrompt,
     onNewChat: () => newChat(), onShortcuts: () => setShowShortcuts(true),
     voiceMic: !!cfg.voiceMic, voiceCall: !!cfg.voiceCall && !incognito, sttEngine: cfg.voiceStt || 'browser',
-    callActive: callOpen, onStartCall: () => { setArtifactsOpen(false); setCallOpen(o => !o); },
+    callActive: callOpen, onStartCall: () => setCallOpen(o => !o),
     ctxGauge: cfg.uiPreset === 'openai' ? null : ctxGaugeEl
   };
-  const showArtifactsBtn = sandboxOn || files.length > 0;
-  // Sits beside the incognito button in both the greeting and a live chat, so turning
-  // sandbox tools on reveals it before the first message is sent.
-  const artifactsBtn = showArtifactsBtn ? (
-    <button className={'paper-btn' + (artifactsOpen ? ' active' : '') + (liveFile ? ' writing' : '')}
-      onClick={() => { setCallOpen(false); setArtifactsOpen(o => !o); }}
-      title={t("Artifacts")} aria-label={t("Artifacts")} aria-pressed={artifactsOpen}>
-      <Paper />{files.length > 0 && <span className="paper-count">{files.length}</span>}
-    </button>
-  ) : null;
-
   function focusedMsg() {
     const list = messagesRef.current;
     if (!list.length || !kbFocusRef.current) return null;
     return list.find(m => m.id === kbFocusRef.current) || null;
   }
   function stepChat(delta) {
-    if (!chats.length) return false;
-    const at = chats.findIndex(c => c.id === activeId);
-    const next = at < 0 ? (delta > 0 ? 0 : chats.length - 1) : at + delta;
-    if (next < 0 || next >= chats.length) return false;
-    openChat(chats[next].id);
+    if (!modeChats.length) return false;
+    const at = modeChats.findIndex(c => c.id === activeId);
+    const next = at < 0 ? (delta > 0 ? 0 : modeChats.length - 1) : at + delta;
+    if (next < 0 || next >= modeChats.length) return false;
+    openChat(modeChats[next].id);
     return true;
   }
   kbHandlers.current = {
@@ -1546,12 +1567,11 @@ export default function App() {
     focusComposer: () => { setFocusTick(x => x + 1); },
     attachFiles: () => { window.dispatchEvent(new CustomEvent('oq-attach-files')); },
     toggleWebSearch: () => { if (!webSearchAvailable) return false; setWebSearch(v => !v); },
-    toggleSandbox: () => { if (!sandboxAllowed) return false; setSandbox(v => !v); },
     stopGeneration: () => { if (!streaming && !queued) return false; stop(); },
     scrollBottom: () => pinToBottom(true),
     toggleLedger: () => setLedgerOpen(o => !o),
     promptLedger: () => { if (!activeIdRef.current) return false; setLedgerPrompt(true); },
-    toggleArtifacts: () => { if (!showArtifactsBtn) return false; setCallOpen(false); setArtifactsOpen(o => !o); },
+    toggleArtifacts: () => { if (!codeMode || !activeId) return false; toggleCodePanel(); },
     nextChat: () => stepChat(1),
     prevChat: () => stepChat(-1),
     findInChat: () => { if (!messagesRef.current.length) return false; setFindOpen(true); },
@@ -1624,14 +1644,43 @@ export default function App() {
       onSendText={(txt) => send([], txt, { call: true })} />
   ) : null;
 
-  sidebarFns.current = { newChat, openChat, deleteChat, toggleStar, logout, openProjects, moveChatToProject, newProject: () => { openProjects(null); setProjectCreate(true); } };
+  sidebarFns.current = { newChat, openChat, deleteChat, toggleStar, logout, openProjects, moveChatToProject, switchMode, newProject: () => { openProjects(null); setProjectCreate(true); } };
+
+  const streamKey = assistantIdRef.current || '_stream';
+  const codeLive = !codeMode ? null
+    : streaming ? { id: streamKey, _k: messages.find(m => m.id === streamKey)?._k || '_live', role: 'assistant', content: dispContent, reasoning: dispReason, reasoningSegs: dispSegs, model_id: streamModelRef.current || currentId, _streaming: true }
+    : queued ? { id: '_queued', _k: '_live', role: 'assistant', content: '', _streaming: true } : null;
+  const codeView = codeMode ? (
+    <CodeView userName={user?.displayName} modelIcon={model?.staticIcon || ''} chat={activeChat} chatId={activeId} booting={booting} loading={threadLoading}
+      messages={messages} live={codeLive} liveCalls={liveCalls} phase={phase} status={modelStatus} statusDelay={statusDelay} streaming={streaming || queued}
+      files={files} liveFile={liveFile} pendingFiles={pendingFiles} fileFocus={artifactFocus} onFilesChanged={setFiles}
+      composer={{
+        value: input, onChange: (v) => { setInput(v); saveDraft(activeId || 'code', v); },
+        onSend: send, onStop: stop, streaming: (streaming || queued) && !pendingAsk, stopping, ended: chatEnded,
+        autoFocus: !activeId, focusKey: focusTick, draftId: activeId || 'code',
+        panel: plans.plan || question ? <AgentPanel plan={plans.plan} previousPlan={plans.previousPlan} onDismissPlan={dismissPlan} question={question} onAnswer={answerQuestion} onSkip={() => answerQuestion(null)} /> : null,
+        models, modelsReady, currentId, onSelect: pickModel, kwargValues, onSetKwarg: setKwarg, reasoningEffort, isAdmin: !!user?.isAdmin,
+        extended, onToggleExtended: () => setExtended(e => !e),
+        plan: planMode, onPlan: setPlanMode,
+        revision: messages.length + ':' + (messages[messages.length - 1]?.id || ''),
+        liveTokens: streaming && livePrompt > 0 ? { used: livePrompt + (telemetry?.genTokens || 0), limit: telemetry?.ctx || 0 } : null,
+        voiceMic: !!cfg.voiceMic, sttEngine: cfg.voiceStt || 'browser'
+      }}
+      scroll={{ scrollRef, onScroll, onWheel, onTouchMove, showJump, jumpDown }}
+      error={chatErrors[activeKey()]} onDismissError={() => dismissError()}
+      onRename={renameChat} onToggleStar={() => { if (activeId) toggleStar(activeId); }} onDelete={() => { if (activeId) confirmDeleteChat(activeId); }}
+      onRetry={regenerate} onContinue={continueReply} onOpenFile={openCodeFile}
+      onBuildPlan={() => { setPlanMode(false); send([], t('Go ahead and build the plan.'), { plan: false }); }}
+      panelOpen={codePanel} onTogglePanel={toggleCodePanel} onOpenMenu={() => setMobileDrawer(true)}
+      preset={cfg.uiPreset === 'openai' ? 'openai' : 'anthropic'} />
+  ) : null;
 
   return (
     <ThemeProvider user={user} cfg={cfg}>
     <div className={'app' + (incognito ? ' app-incognito' : '') + (bgVisible ? ' has-bg' : '') + (collapsed && !docsTarget ? ' sb-collapsed' : '')}>
       <a className="skip-link" href="#oq-composer">{t('Skip to message input')}</a>
       <AppBackground bg={activeBg} />
-      <Sidebar user={user} chats={chats} chatsLoaded={chatsLoaded} projectsReady={projectsReady} activeId={activeId} appName={cfg.appName} appIcon={cfg.appIcon} onSearch={onSearchCb}
+      <Sidebar user={user} chats={modeChats} mode={codeMode ? 'code' : 'chat'} onMode={onModeCb} chatsLoaded={chatsLoaded} projectsReady={projectsReady} activeId={activeId} appName={cfg.appName} appIcon={cfg.appIcon} onSearch={onSearchCb}
         dest={showProjects ? 'projects' : chatsOverview ? 'chats' : libPage}
         onArtifacts={onArtifactsCb} onScheduled={onScheduledCb}
         onCustomize={onSkillsCb} onModelDocs={onDocsCb} showModelDocs={cfg.modelDocs !== false} onVersion={onVersionCb}
@@ -1681,7 +1730,11 @@ export default function App() {
           <div className="lib-overlay" role="region" aria-label={libPage === 'artifacts' ? t('Artifacts') : t('Scheduled tasks')}>
             {libPage === 'artifacts'
               ? <ArtifactsLibrary onSearch={() => setShowSearch(true)} onNew={() => { setLibPage(null); newChat(); }}
-                  onOpen={(a) => { setLibPage(null); openChat(a.chatId); }} />
+                  onOpen={(a) => {
+                    setLibPage(null);
+                    openChat(a.chatId);
+                    if (a.mode === 'code') { setCodePanel(true); setArtifactFocus({ path: a.path, n: Date.now() }); }
+                  }} />
               : <ScheduledTasks onSearch={() => setShowSearch(true)} onRunTask={runTask} />}
           </div>
         )}
@@ -1695,28 +1748,27 @@ export default function App() {
             <button className="incognito-close" onClick={toggleIncognito} title={t("Exit incognito")} aria-label={t("Exit incognito")} disabled={streaming || queued}><X style={{ width: 16 }} /></button>
           </div>
         )}
-        {empty && (
+        {empty && !codeMode && (
           <button className="mobile-menu-btn empty-menu" onClick={() => setMobileDrawer(true)} title={t("Menu")} aria-label={t("Menu")}><Menu style={{ width: 20 }} /></button>
         )}
-        {!incognito && empty && (
+        {!incognito && empty && !codeMode && (
           <TopbarActions className="home-actions"
             leading={<>
               <button className="paper-btn" onClick={toggleIncognito} title={t("Incognito chat, not saved")} aria-label={t("Incognito chat, not saved")} disabled={streaming || queued}>
                 <Ghost />
               </button>
-              {artifactsBtn}
             </>}
             items={[
               { id: 'personas', icon: <Star />, label: t('Personas'), onClick: () => setPersonasOpen(true) },
-              user?.isAdmin && !incognito && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => { setArtifactsOpen(false); setCtlOpen(o => !o); } },
+              user?.isAdmin && !incognito && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => setCtlOpen(o => !o) },
             ]} />
         )}
-        {empty && !incognito && cfg.uiPreset === 'openai' && (
+        {empty && !incognito && !codeMode && cfg.uiPreset === 'openai' && (
           <div className="home-topbar">
             {modelPicker}
           </div>
         )}
-        {empty ? (
+        {codeMode ? codeView : empty ? (
           <div className="center-wrap">
             <ThemeSlot name="home.above" />
             <Greeting incognito={incognito} preset={cfg.uiPreset} incognitoLine={incognitoGreeting}
@@ -1750,14 +1802,13 @@ export default function App() {
                       <Ghost />
                     </button>
                   )}
-                  {artifactsBtn}
                 </>}
                 items={[
                   hasSummary && { id: 'summary', icon: <Compact />, label: t("Conversation memory"), onClick: () => setSummaryOpen(true) },
                   { id: 'personas', icon: <Star />, label: t('Personas'), onClick: () => setPersonasOpen(true) },
                   messages.length > 0 && { id: 'copyall', icon: <Copy />, label: t('Copy all'), onClick: () => copyConversation() },
                   activeId && { id: 'inspect', icon: <Telescope />, label: t('Inspect context'), onClick: () => setInspectOpen(true) },
-                  user?.isAdmin && activeId && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => { setArtifactsOpen(false); setCtlOpen(o => !o); } },
+                  user?.isAdmin && activeId && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => setCtlOpen(o => !o) },
                   messages.length > 0 && user?.prefs?.threadFind !== false && { id: 'find', icon: <Search />, label: t('Find in conversation'), active: findOpen, onClick: () => (findOpen ? closeFind() : setFindOpen(true)) },
                   activeId && messages.length > 0 && user?.prefs?.branchMap !== false && { id: 'tree', icon: <Fork />, label: t('Branch map'), active: treeOpen, onClick: () => setTreeOpen(o => !o) },
                   outline.length > 1 && user?.prefs?.threadOutline !== false && { id: 'outline', icon: <TextIcon />, label: t('Contents'), active: outlineOpen, onClick: () => setOutlineOpen(o => !o) },
@@ -1828,9 +1879,6 @@ export default function App() {
         )}
       </div>
 
-      {artifactsOpen && activeId && !callOpen && (
-        <ArtifactsPanel chatId={activeId} files={files} live={liveFile} pending={pendingFiles} focus={artifactFocus} busy={streaming || queued} onFilesChanged={setFiles} onClose={closeArtifacts} />
-      )}
       {ctlOpen && user?.isAdmin && !incognito && (
         <ChatControls chatId={activeId || null} initialParams={chatGenParams} initialOverride={chatSysOverride} onChange={(p, o) => { setChatGenParams(p && Object.keys(p).length ? p : null); setChatSysOverride(o || ''); }} onClose={() => setCtlOpen(false)} />
       )}

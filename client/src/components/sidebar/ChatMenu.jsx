@@ -52,7 +52,7 @@ export function ChatMenu({ chat, at, projects = [], projectsReady = true, busy =
       <button onClick={stop(() => onToggleStar(chat.id))}>
         <Star style={{ width: 20 }} /> {chat.starred ? t('Unstar chat') : t('Star chat')}
       </button>
-      {onMoveToProject && (
+      {onMoveToProject && chat.mode !== 'code' && (
         <div className="cm-sub">
           <button onClick={(e) => { e.stopPropagation(); setSubOpen(s => !s); setPos(p => ({ ...p, ready: false })); }}>
             <Box style={{ width: 20 }} /> {t('Add to project')}
