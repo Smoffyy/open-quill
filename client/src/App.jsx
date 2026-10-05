@@ -313,6 +313,13 @@ export default function App() {
   });
   const [planMode, setPlanMode] = useState(false);
   const modeChats = useMemo(() => chats.filter(c => (c.mode === 'code') === codeMode), [chats, codeMode]);
+  useEffect(() => {
+    if (!codeMode || !currentId) return;
+    if (models.find(m => m.id === currentId)?.codeAllowed !== false) return;
+    const fit = models.filter(m => m.codeAllowed !== false && (m.kind !== 'router' || user?.isAdmin));
+    const next = fit.find(m => m.isDefault) || fit[0];
+    if (next) setCurrentId(next.id);
+  }, [codeMode, models, currentId, user?.isAdmin]);
   const [webSearch, setWebSearch] = useState(false);
   const [files, setFiles] = useState([]);
   const [pendingFiles, setPendingFiles] = useState({});

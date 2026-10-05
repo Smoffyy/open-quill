@@ -349,10 +349,6 @@ function Sidebar({
         onRemovePage={docs.onRemovePage} onRenameTab={docs.onRenameTab} />}
       {!docs && <>
       <div className="sidebar-head">
-        <Tip label={collapsed ? t('Expand sidebar') : t('Collapse sidebar')} keys={sidebarCombo}>
-          <button className="icon-btn collapse-btn" onClick={onToggle}
-            aria-label={collapsed ? t('Expand sidebar') : t('Collapse sidebar')}><Panel /></button>
-        </Tip>
         <div className="brand-wrap">
           <div className="brand" ref={brandRef}>{brandText}</div>
           {(verText || code) && (
@@ -364,6 +360,10 @@ function Sidebar({
         </div>
         <div className="sidebar-head-actions">
           {onMode && <ModeSwitch mode={mode} onMode={onMode} />}
+          <Tip label={collapsed ? t('Expand sidebar') : t('Collapse sidebar')} keys={sidebarCombo}>
+            <button className="icon-btn collapse-btn" onClick={onToggle}
+              aria-label={collapsed ? t('Expand sidebar') : t('Collapse sidebar')}><Panel /></button>
+          </Tip>
           <button className="icon-btn mobile-close-btn" onClick={onMobileClose} title={t("Close menu")} aria-label={t("Close menu")}><X style={{ width: 18 }} /></button>
         </div>
       </div>

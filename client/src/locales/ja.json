@@ -2947,5 +2947,9 @@
   "What should we make today, {name}?": "{name} さん、今日は何を作りますか?",
   "What should we make today?": "今日は何を作りますか?",
   "Got something to fix, {name}?": "{name} さん、直したいものはありますか?",
-  "Got something to fix?": "直したいものはありますか?"
+  "Got something to fix?": "直したいものはありますか?",
+  "Available in Code": "Code で利用可能",
+  "Off, the model is greyed out in the Code model picker and cannot run Code sessions. Turn it off for models that are not reliable with tools.": "オフにすると、このモデルは Code のモデル選択でグレー表示になり、Code セッションを実行できません。ツールの扱いが不安定なモデルではオフにしてください。",
+  "{name} is not available in Code.": "{name} は Code では利用できません。",
+  "Not available in Code": "Code では利用不可"
 }

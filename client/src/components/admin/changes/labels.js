@@ -7,7 +7,7 @@ export const MODEL_FIELDS = {
   unavailable: tk('Marked as down'), unavailable_reason: tk('Reason shown to members'), sunset_at: tk('Retire on'),
   sunset_action: tk('On that date'), cost_in: tk('Input $/M'), cost_out: tk('Output $/M'),
   system_prompt: tk('System prompt'), call_prompt: tk('Voice calls'),
-  has_vision: tk('Image input'), sandbox_allowed: tk('Sandbox'), sandbox_auto: tk('Sandbox on by default'),
+  has_vision: tk('Image input'), sandbox_allowed: tk('Sandbox'), code_allowed: tk('Available in Code'), sandbox_auto: tk('Sandbox on by default'),
   web_search_allowed: tk('Web search'), web_search_auto: tk('Web search on by default'), skills_allowed: tk('Skills'),
   mcp_allowed: tk('MCP tools'), chat_search_allowed: tk('Past-chat search'), end_chat_allowed: tk('End conversation'),
   memory_allowed: tk('Memory'), calculator_allowed: tk('Calculator'), todo_allowed: tk('To-do list'),

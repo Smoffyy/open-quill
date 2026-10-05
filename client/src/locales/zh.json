@@ -2947,5 +2947,9 @@
   "What should we make today, {name}?": "{name},今天做点什么?",
   "What should we make today?": "今天做点什么?",
   "Got something to fix, {name}?": "{name},有什么要修的吗?",
-  "Got something to fix?": "有什么要修的吗?"
+  "Got something to fix?": "有什么要修的吗?",
+  "Available in Code": "可用于 Code",
+  "Off, the model is greyed out in the Code model picker and cannot run Code sessions. Turn it off for models that are not reliable with tools.": "关闭后,该模型在 Code 模型选择器中会变灰,且无法运行 Code 会话。对于使用工具不稳定的模型,请将其关闭。",
+  "{name} is not available in Code.": "{name} 在 Code 中不可用。",
+  "Not available in Code": "Code 中不可用"
 }

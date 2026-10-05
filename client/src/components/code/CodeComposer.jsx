@@ -60,16 +60,19 @@ function ContextRing({ chatId, modelId, revision, streaming, live }) {
   );
 }
 
-function ModelRow({ m, checked, kbd, nested, disabled, onPick }) {
+function ModelRow({ m, checked, kbd, nested, isAdmin, onPick }) {
+  const noCode = m.codeAllowed === false;
+  const down = m.unavailable && !isAdmin;
   return (
-    <button type="button" role="menuitemradio" aria-checked={checked} disabled={disabled}
-      className={'cx-mi cx-model' + (nested ? ' nested' : '') + (m.unavailable ? ' unavail' : '')} onClick={onPick}
-      title={m.unavailable ? t('{name} is currently unavailable.', { name: m.displayName }) : m.description || undefined}>
+    <button type="button" role="menuitemradio" aria-checked={checked} disabled={noCode || down}
+      className={'cx-mi cx-model' + (nested ? ' nested' : '') + (m.unavailable || noCode ? ' unavail' : '')} onClick={onPick}
+      title={noCode ? t('{name} is not available in Code.', { name: m.displayName }) : m.unavailable ? t('{name} is currently unavailable.', { name: m.displayName }) : m.description || undefined}>
       <span className="cx-mi-main">
         <span className="cx-mi-label">
           {m.displayName}
           <Badges m={m} />
-          {m.unavailable && <span className="cx-mi-tag"><Info />{t('Currently unavailable')}</span>}
+          {noCode ? <span className="cx-mi-tag"><Info />{t('Not available in Code')}</span>
+            : m.unavailable && <span className="cx-mi-tag"><Info />{t('Currently unavailable')}</span>}
         </span>
       </span>
       {checked && <Check className="cx-mi-check" />}
@@ -129,7 +132,7 @@ export default function CodeComposer({
     if (!g) { g = { label, items: [] }; groups.push(g); }
     g.items.push(m);
   }
-  const choose = (m) => { if (m) { onSelect(m.id); setMenu(null); setOpenGroup(null); } };
+  const choose = (m) => { if (m && m.codeAllowed !== false) { onSelect(m.id); setMenu(null); setOpenGroup(null); } };
   const pickModel = (i) => choose(main[i]);
   const pickMode = (i) => { onPlan(i === 1); setMenu(null); };
   useDigits(menu === 'model', Math.min(9, main.length), pickModel);
@@ -234,14 +237,14 @@ export default function CodeComposer({
           <CodeMenu open={menu === 'model'} setOpen={setOpen('model')} anchorRef={modelRef} align="right" label={t('Model')} className="cx-model-menu">
             {modelsReady && main.length === 0 && groups.length === 0 && <div className="cx-mempty">{t('No models available')}</div>}
             {main.map((m, i) => (
-              <ModelRow key={m.id} m={m} checked={m.id === currentId} kbd={m.id === currentId || i > 8 ? null : String(i + 1)}
-                disabled={m.unavailable && !isAdmin} onPick={() => choose(m)} />
+              <ModelRow key={m.id} m={m} checked={m.id === currentId} kbd={m.id === currentId || i > 8 || m.codeAllowed === false ? null : String(i + 1)}
+                isAdmin={isAdmin} onPick={() => choose(m)} />
             ))}
             {groups.map(g => (
               <React.Fragment key={g.label}>
                 <MenuItem sub onClick={() => setOpenGroup(o => (o === g.label ? null : g.label))}>{g.label}</MenuItem>
                 {openGroup === g.label && g.items.map(m => (
-                  <ModelRow key={m.id} m={m} nested checked={m.id === currentId} disabled={m.unavailable && !isAdmin} onPick={() => choose(m)} />
+                  <ModelRow key={m.id} m={m} nested checked={m.id === currentId} isAdmin={isAdmin} onPick={() => choose(m)} />
                 ))}
               </React.Fragment>
             ))}

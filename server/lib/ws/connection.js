@@ -223,6 +223,7 @@ export function initWs(server) {
         const model = applyKwargs(baseModel, requestedKwargs(msg), state.isAdmin);
         if (!model) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'Invalid chat or model.' })); return; }
         if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: (model.unavailable_reason || 'This model is currently unavailable.') })); return; }
+        if (chat.mode === 'code' && model.code_allowed === 0) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'This model is not available in Code. Pick another model.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
         if (chat.ended) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'This conversation was ended by the assistant and can no longer be continued.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
         const bs = budgetStatus(u);
         if (bs.enforce && bs.state === 'over') { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'You have reached your monthly usage budget. It resets at the start of next month.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }

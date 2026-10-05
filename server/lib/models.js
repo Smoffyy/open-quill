@@ -47,7 +47,7 @@ export function shapePublic(m, ctx = badgeContext()) {
     reasoningCollapsible: m.reasoning_collapsible !== 0, hideThinking: !!m.hide_thinking,
     staticIcon: m.static_icon, generatingIcon: m.generating_icon, thinkingIcon: m.thinking_icon, generatingAnim: m.generating_anim || 'none', thinkingAnim: m.thinking_anim || 'none',
     iconPosition: m.icon_position || 'below', hasVision: !!m.has_vision, iconSize: m.icon_size || 0, showName: !!m.show_name,
-    sandboxAuto: !!m.sandbox_auto, sandboxAllowed: m.sandbox_allowed !== 0, dropdownIcon: m.dropdown_icon !== 0, isDefault: !!m.is_default, agentSteps: m.agent_steps || 0,
+    sandboxAuto: !!m.sandbox_auto, sandboxAllowed: m.sandbox_allowed !== 0, codeAllowed: m.code_allowed !== 0, dropdownIcon: m.dropdown_icon !== 0, isDefault: !!m.is_default, agentSteps: m.agent_steps || 0,
     webSearchAuto: !!m.web_search_auto, webSearchAllowed: m.web_search_allowed !== 0,
     enableSummaries: !!m.enable_summaries, numCtx: m.num_ctx || 0, summaryPadding: m.summary_padding || 0.125, recentWindow: m.recent_window || 4,
     unavailable: !!m.unavailable, unavailableReason: m.unavailable_reason || '',

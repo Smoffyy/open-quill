@@ -2947,5 +2947,9 @@
   "What should we make today, {name}?": "{name}님, 오늘은 무엇을 만들까요?",
   "What should we make today?": "오늘은 무엇을 만들까요?",
   "Got something to fix, {name}?": "{name}님, 고칠 게 있나요?",
-  "Got something to fix?": "고칠 게 있나요?"
+  "Got something to fix?": "고칠 게 있나요?",
+  "Available in Code": "Code에서 사용 가능",
+  "Off, the model is greyed out in the Code model picker and cannot run Code sessions. Turn it off for models that are not reliable with tools.": "끄면 이 모델은 Code 모델 선택기에서 회색으로 표시되며 Code 세션을 실행할 수 없습니다. 도구 사용이 불안정한 모델에는 꺼 두세요.",
+  "{name} is not available in Code.": "{name}은(는) Code에서 사용할 수 없습니다.",
+  "Not available in Code": "Code에서 사용 불가"
 }

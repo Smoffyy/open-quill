@@ -2947,5 +2947,9 @@
   "What should we make today, {name}?": "Qu’est-ce qu’on fait aujourd’hui, {name} ?",
   "What should we make today?": "Qu’est-ce qu’on fait aujourd’hui ?",
   "Got something to fix, {name}?": "Quelque chose à corriger, {name} ?",
-  "Got something to fix?": "Quelque chose à corriger ?"
+  "Got something to fix?": "Quelque chose à corriger ?",
+  "Available in Code": "Disponible dans Code",
+  "Off, the model is greyed out in the Code model picker and cannot run Code sessions. Turn it off for models that are not reliable with tools.": "Désactivé, le modèle est grisé dans le sélecteur de modèles de Code et ne peut pas lancer de sessions Code. Désactivez-le pour les modèles peu fiables avec les outils.",
+  "{name} is not available in Code.": "{name} n'est pas disponible dans Code.",
+  "Not available in Code": "Indisponible dans Code"
 }

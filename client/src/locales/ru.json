@@ -2947,5 +2947,9 @@
   "What should we make today, {name}?": "Что сделаем сегодня, {name}?",
   "What should we make today?": "Что сделаем сегодня?",
   "Got something to fix, {name}?": "Есть что исправить, {name}?",
-  "Got something to fix?": "Есть что исправить?"
+  "Got something to fix?": "Есть что исправить?",
+  "Available in Code": "Доступна в Code",
+  "Off, the model is greyed out in the Code model picker and cannot run Code sessions. Turn it off for models that are not reliable with tools.": "Если выключено, модель затемнена в выборе моделей Code и не может запускать сессии Code. Выключайте для моделей, ненадёжно работающих с инструментами.",
+  "{name} is not available in Code.": "{name} недоступна в Code.",
+  "Not available in Code": "Недоступна в Code"
 }

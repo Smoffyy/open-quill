@@ -41,8 +41,7 @@
 .brand-version { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-sans); font-size: 12px; line-height: 16px; letter-spacing: .2px; color: color-mix(in srgb, var(--text-faint) 65%, transparent); }
 .sidebar-head-actions { display: flex; align-items: center; flex-shrink: 0; gap: 4px; color: var(--text-muted); }
 .sidebar-head-actions .icon-btn { width: 24px; height: 24px; border-radius: 6px; }
-.sidebar-head > .tip-host > .collapse-btn { width: 24px; height: 24px; align-self: center; flex-shrink: 0; border-radius: 6px; }
-.sidebar-head > .tip-host > .collapse-btn svg { width: 16px; height: 16px; }
+.sidebar-head-actions .collapse-btn svg { width: 16px; height: 16px; }
 .mode-switch {
   position: relative; display: flex; flex-shrink: 0; padding: 1px; border-radius: 7px;
   background: color-mix(in srgb, var(--text) 5%, transparent);
