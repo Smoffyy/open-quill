@@ -4,6 +4,7 @@ import { copyText } from '../../lib/clipboard.js';
 import { Wrench, FileText, Trash, Folder, Download, Search, Copy, Check, Terminal, Pencil, Plus, Chevron, Brain, Calculator, ListChecks, Users, Chat } from '../ui/icons.jsx';
 import { baseName, dirOf } from '../../lib/files.js';
 import { t, tk } from '../../i18n.jsx';
+import { safeUrl } from '../../lib/safeurl.js';
 
 const VERBS = {
   bash: [tk('Running'), tk('Ran')],
@@ -302,7 +303,7 @@ function WebSearchCard({ call, result }) {
               ? <div className="ws-results">{results.map((r, i) => {
                   const host = hostOf(r.url);
                   return (
-                    <a key={i} className="ws-result" href={r.url} target="_blank" rel="noopener noreferrer" title={[r.title, r.url].filter(Boolean).join('\n')}>
+                    <a key={i} className="ws-result" href={safeUrl(r.url) || undefined} target="_blank" rel="noopener noreferrer" title={[r.title, r.url].filter(Boolean).join('\n')}>
                       <span className="ws-num">{i + 1}</span>
                       <span className="ws-body">
                         <span className="ws-title">{r.title || host || r.url}</span>

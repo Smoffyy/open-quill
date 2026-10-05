@@ -10,6 +10,7 @@ import {
   publicModelId, docsSize, parseTokens, parseMoney, DOCS_BADGE_OPTIONS
 } from '../../lib/modeldocs.js';
 import { formatParamCount, sizeLabel } from '../../lib/modelsize.js';
+import { safeUrl } from '../../lib/safeurl.js';
 
 const INTEL_LABELS = ['', 'Low', 'Fair', 'Medium', 'High', 'Highest'];
 const SPEED_LABELS = ['', 'Slow', 'Steady', 'Medium', 'Fast', 'Fastest'];
@@ -238,7 +239,7 @@ function Crumbs({ items, onHome }) {
 
 function Notice({ m, set, onOpen }) {
   const { on } = useEdit();
-  const target = m.docsNotice ? (m.docsNoticeUrl || '') : '';
+  const target = m.docsNotice ? safeUrl(m.docsNoticeUrl) : '';
   const external = /^https?:\/\//i.test(target);
   return (
     <>
@@ -283,7 +284,7 @@ function LinkRow({ links, set }) {
           {list.map((l, i) => (
             <React.Fragment key={i}>
               {i > 0 && <span className="mdoc-linkdot">·</span>}
-              <a className="mdoc-link" href={l.url || '#'} target={/^https?:\/\//i.test(l.url || '') ? '_blank' : undefined}
+              <a className="mdoc-link" href={safeUrl(l.url) || '#'} target={/^https?:\/\//i.test(l.url || '') ? '_blank' : undefined}
                 rel={/^https?:\/\//i.test(l.url || '') ? 'noreferrer noopener' : undefined}>
                 {l.label}
                 {/^https?:\/\//i.test(l.url || '')
@@ -371,7 +372,7 @@ function CardGrid({ title, cards, set, hint }) {
             const external = /^https?:\/\//i.test(c.url || '');
             const Tag = c.url && !on ? 'a' : 'div';
             return (
-              <Tag key={i} className="mdoc-tile" href={(c.url && !on) ? c.url : undefined}
+              <Tag key={i} className="mdoc-tile" href={on ? undefined : safeUrl(c.url) || undefined}
                 target={external && !on ? '_blank' : undefined} rel={external && !on ? 'noreferrer noopener' : undefined}>
                 <span className="mdoc-tile-body">
                   <span className="mdoc-tile-title">
@@ -747,7 +748,7 @@ function OverviewPage({ models, cfg, setCfg, onOpen, appName, onExit }) {
           {links.map((l, i) => {
             const ext = /^https?:\/\//i.test(l.url || '');
             return (
-              <a key={i} className="mdoc-pill" href={l.url || '#'} target={ext ? '_blank' : undefined}
+              <a key={i} className="mdoc-pill" href={safeUrl(l.url) || '#'} target={ext ? '_blank' : undefined}
                 rel={ext ? 'noreferrer noopener' : undefined}>
                 {l.label}
                 {ext && <ArrowOut className="mdoc-link-ic" aria-hidden="true" />}
@@ -832,7 +833,7 @@ function OverviewPage({ models, cfg, setCfg, onOpen, appName, onExit }) {
                 const ext = /^https?:\/\//i.test(c.url || '');
                 const Tag = c.url && !on ? 'a' : 'div';
                 return (
-                  <Tag key={i} className="mdoc-tile" href={(c.url && !on) ? c.url : undefined}
+                  <Tag key={i} className="mdoc-tile" href={on ? undefined : safeUrl(c.url) || undefined}
                     target={ext && !on ? '_blank' : undefined} rel={ext && !on ? 'noreferrer noopener' : undefined}>
                     <span className="mdoc-tile-body">
                       <span className="mdoc-tile-title">

@@ -10,6 +10,7 @@ import { highlight } from '../../lib/hljs.js';
 import { diffLines, stableLineDiff, collapseRuns, baseName, extOf } from '../../lib/artifacts.js';
 import { splitTurn, withLive, groupCounts, fileChanges, totals, stepTarget } from '../../lib/codeview.js';
 import { t, tk, fmtRelative } from '../../i18n.jsx';
+import { safeUrl } from '../../lib/safeurl.js';
 
 const VERBS = {
   __proto__: null,
@@ -179,7 +180,7 @@ function StepBody({ call, result, chatId }) {
   if (call.tool === 'web_search') {
     return (
       <div className="cx-links">
-        {result.results.map((r, i) => <a key={i} href={r.url} target="_blank" rel="noopener noreferrer">{r.title || r.url}</a>)}
+        {result.results.map((r, i) => <a key={i} href={safeUrl(r.url) || undefined} target="_blank" rel="noopener noreferrer">{r.title || r.url}</a>)}
       </div>
     );
   }

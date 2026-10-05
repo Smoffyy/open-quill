@@ -2,6 +2,7 @@ import { getSetting } from '../db.js';
 import dns from 'dns';
 import net from 'net';
 import { unguardedFetch, webSearchEgressAllowed, isPrivateAddress } from './egress.js';
+import { safeUrl } from './safeurl.js';
 
 export function webSearchConfig() {
   let domains = [];
@@ -125,7 +126,7 @@ export async function runWebSearch(call) {
 
 export function webSearchResultPayload(call, r) {
   if (!r || !r.ok) return { ok: false, error: r?.error || 'Search failed' };
-  return { ok: true, count: r.count, results: (r.results || []).map(x => ({ title: x.title, url: x.url, chars: x.chars || 0 })) };
+  return { ok: true, count: r.count, results: (r.results || []).map(x => ({ title: x.title, url: safeUrl(x.url), chars: x.chars || 0 })) };
 }
 
 export function formatWebSearchResult(call, r) {

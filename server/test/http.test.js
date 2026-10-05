@@ -611,6 +611,11 @@ test('the catalog edits, copies and removes models in batches', async () => {
   assert.equal('badges_off' in row, false, 'switching every badge back on leaves no field behind, so a revert matches the published row');
   assert.deepEqual((await browser('GET', '/api/models')).json.find(m => m.id === a).badges, ['text', 'code']);
 
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: a, docs_notice: 'Heads up', docs_notice_url: 'javascript:alert(1)' }] } });
+  assert.equal((await browser('GET', '/api/admin/models')).json.find(m => m.id === a).docs_notice_url, '', 'a script address never reaches the docs page');
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: a, docs_notice_url: 'https://example.com/x' }] } });
+  assert.equal((await browser('GET', '/api/admin/models')).json.find(m => m.id === a).docs_notice_url, 'https://example.com/x');
+
   await browser('PATCH', '/api/admin/settings', { body: { webSearchEnabled: true } });
   await browser('POST', '/api/admin/changes/publish', { body: {} });
   assert.deepEqual((await browser('GET', '/api/models')).json.find(m => m.id === a).badges, ['text', 'web', 'code'], 'switching web search on for the workspace refreshes the cached badges');

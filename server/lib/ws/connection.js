@@ -38,13 +38,15 @@ function textField(v, cap = MAX_CONTENT) {
   return typeof v === 'string' ? v.slice(0, cap) : '';
 }
 
+const UPLOAD_URL = /^\/uploads\/[A-Za-z0-9._-]+$/;
+
 function sanitizeAttachments(list) {
   if (!Array.isArray(list)) return [];
   const out = [];
   for (const a of list) {
     if (!a || typeof a !== 'object') continue;
     const url = textField(a.url, 512);
-    if (!url) continue;
+    if (!UPLOAD_URL.test(url) || url.includes('..')) continue;
     out.push({ url, name: textField(a.name, 256), type: textField(a.type, 128), size: Number(a.size) || 0 });
     if (out.length >= MAX_ATTACHMENTS) break;
   }

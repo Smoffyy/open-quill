@@ -39,7 +39,8 @@ import { PROVIDER_TYPES, isProviderType, providerSpec, isLocalType } from '../li
 import { slideWithCounter, trimMode } from '../lib/ctxwindow.js';
 import { sameOrigin, sameOriginGuard, requestHost } from '../lib/origin.js';
 import { SETTING_FIELDS, coerceSetting } from '../lib/settingfields.js';
-import { localOnlyCsp } from '../lib/localonly.js';
+import { localOnlyCsp, baseCsp } from '../lib/localonly.js';
+import { safeUrl } from '../lib/safeurl.js';
 import { runQueued } from '../lib/queue.js';
 import { isText } from '../sandbox/ignore.js';
 import { announcedMoreWork } from '../lib/continuation.js';
@@ -2566,6 +2567,41 @@ test('a host that would break out of the directive is dropped, not escaped', () 
     assert.ok(!csp.includes('evil.test'), `hostile host survived: ${host}`);
     assert.ok(!csp.includes('*'), `wildcard reached the policy via: ${host}`);
   }
+});
+
+test('with local-only off the page still cannot be framed, rebased or given plugins', () => {
+  const csp = new Map(baseCsp().split('; ').map(d => { const [name, ...sources] = d.split(' '); return [name, sources]; }));
+  assert.deepEqual(csp.get('frame-ancestors'), ["'self'"]);
+  assert.deepEqual(csp.get('object-src'), ["'none'"]);
+  assert.deepEqual(csp.get('base-uri'), ["'self'"]);
+  assert.deepEqual(csp.get('form-action'), ["'self'"]);
+  assert.ok(!csp.has('default-src'), 'a workspace that allows remote content keeps loading it');
+});
+
+test('safeUrl keeps web, mail and relative links and drops every other scheme', () => {
+  for (const ok of ['https://example.com/a?b=1', 'http://example.com', 'mailto:me@example.com', '/docs/models', 'gpt-5', '#top', '']) {
+    assert.equal(safeUrl(ok), ok, `should keep: ${ok}`);
+  }
+  for (const bad of ['javascript:alert(1)', 'JaVaScRiPt:alert(1)', ' javascript:alert(1)', 'java\tscript:alert(1)', 'java\nscript:alert(1)', '\u0001javascript:alert(1)', 'data:text/html,<script>alert(1)</script>', 'vbscript:msgbox(1)', 'blob:https://x/y', 'file:///etc/passwd']) {
+    assert.equal(safeUrl(bad), '', `should drop: ${JSON.stringify(bad)}`);
+  }
+  assert.equal(safeUrl(null), '');
+  assert.equal(safeUrl(undefined), '');
+});
+
+test('client/src/lib/safeurl.js and server/lib/safeurl.js are the same file', () => {
+  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  const repo = path.dirname(root);
+  const read = (p) => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
+  assert.equal(read(path.join(repo, 'client', 'src', 'lib', 'safeurl.js')), read(path.join(root, 'lib', 'safeurl.js')),
+    'what the server stores and what the page renders must agree on a safe link');
+});
+
+test('docs cards and links lose a script address before they are stored', () => {
+  assert.deepEqual(sanitizeCards([{ title: 'T', url: 'javascript:alert(1)' }, { title: 'U', url: 'https://example.com' }]),
+    [{ title: 'T', desc: '', url: '' }, { title: 'U', desc: '', url: 'https://example.com' }]);
+  const cfg = sanitizeDocsConfig({ links: [{ label: 'Bad', url: 'data:text/html,x' }, { label: 'Good', url: '/docs/x' }] });
+  assert.deepEqual(cfg.links.map(l => l.url), ['', '/docs/x']);
 });
 
 // --- the one-model-at-a-time queue -------------------------------------------

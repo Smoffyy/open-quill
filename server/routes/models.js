@@ -8,6 +8,7 @@ import { draftModels, publicModels, detectContextLength, timedFetch } from '../l
 import { sanitizeKwargs } from '../lib/kwargs.js';
 import { listAnthropicModels } from '../llm/index.js';
 import { sanitizeBadgesOff } from '../lib/badges.js';
+import { safeUrl } from '../lib/safeurl.js';
 import { ROUTE_MATCHERS } from '../lib/router.js';
 import { DOCS_MODEL_STR, DOCS_MODEL_BOOL, DOCS_MODEL_INT, DOCS_MODEL_FLOAT, DOCS_MODEL_PARAM_COUNTS, DOCS_BADGES, sanitizePairs, sanitizeCards, sanitizeDocsLinks, sanitizeStrList } from '../lib/modeldocs.js';
 import { listLogos } from '../lib/logos.js';
@@ -54,6 +55,7 @@ function modelPatch(b, cur) {
     const v = String(b.sunset_action || '');
     patch.sunset_action = v === 'unavailable' ? 'unavailable' : 'hide';
   }
+  if ('docs_notice_url' in patch) patch.docs_notice_url = safeUrl(patch.docs_notice_url);
   if ('docs_badge' in patch) patch.docs_badge = DOCS_BADGES.has(patch.docs_badge) ? patch.docs_badge : '';
   if ('docs_ids' in b) patch.docs_ids = sanitizePairs(b.docs_ids);
   if ('docs_platforms' in b) patch.docs_platforms = sanitizeStrList(b.docs_platforms);
