@@ -31,3 +31,6 @@ Thumbs.db
 
 # Local maintainer scripts
 update-deps-major.mjs
+
+# Editor
+.vs/
