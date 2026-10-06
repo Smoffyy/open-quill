@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Jump to latest button** - the scroll-to-bottom button had a see-through background in the OpenAI Dark 2025 palette, so text showed through it. It is now solid in every palette.
+- **Empty reply after a tool call** - a reasoning model could finish the step after a tool call with only thinking, so the reply ended with no answer. The turn now asks the model once or twice for its final answer instead of stopping.
+- **Thinking icon after a tool call** - the model icon stayed on the generating animation when the model started thinking again after a tool call. It now shows the thinking animation for every round of reasoning.
 
 ### Removed
 - **Sandbox in chats** - the sandbox tools toggle, the per-chat artifacts panel and the per-model "Sandbox tools" setting are gone; file work happens in Code. Project chats keep reading their project's files.

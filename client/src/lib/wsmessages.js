@@ -218,6 +218,7 @@ export const handlers = {
     if (m.seg != null) {
       if (!rec.reasonSegs) rec.reasonSegs = [];
       rec.reasonSegs[m.seg] = (rec.reasonSegs[m.seg] || '') + m.text;
+      rec.phase = 'thinking';
       if (isActive(ctx, m.chatId)) ctx.stream.setSegments(rec.reasonSegs.slice());
       return;
     }

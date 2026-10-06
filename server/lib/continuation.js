@@ -40,5 +40,10 @@ export function announcedMoreWork(text) {
 
 export const MAX_CONTINUES = 2;
 
+export const MAX_SILENT_RETRIES = 2;
+
+export const SILENT_INSTRUCTION =
+  'Your last reply ended without any answer text for the user. Write your final answer now, in plain text, outside your thinking.';
+
 export const CONTINUE_INSTRUCTION =
   'You described what you would do next but made no tool call, so nothing happened. Make the real tool calls now and keep going until the task is actually finished. If it is already finished, reply with one short sentence saying so.';

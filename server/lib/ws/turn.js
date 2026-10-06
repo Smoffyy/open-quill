@@ -1,7 +1,7 @@
 import { db, uid, now, getSetting } from '../../db.js';
 import { buildMessages, streamCompletion, generateTitle, resolveTitleModel, stripThink, canPrefill, refusePrefill } from '../../llm/index.js';
 import { buildTools, toCall, cutOffOf, livePreview, resolveToolName, SANDBOX_READONLY } from '../../tools/index.js';
-import { announcedMoreWork, MAX_CONTINUES, CONTINUE_INSTRUCTION } from '../continuation.js';
+import { announcedMoreWork, MAX_CONTINUES, CONTINUE_INSTRUCTION, MAX_SILENT_RETRIES, SILENT_INSTRUCTION } from '../continuation.js';
 import { resumeTurn, createStitcher, isPrefillRefusal, fileStep, fileRest, joinFile, STOPPED_FILE, STOPPED_CALL } from '../resume.js';
 import * as websearch from '../websearch.js';
 import * as sandbox from '../../sandbox.js';
@@ -281,6 +281,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   const callFails = new Map();
   const loopGuard = createLoopGuard();
   let continues = 0;
+  let silentRetries = 0;
   let stepController = null;
   let lastFinish = '';
   let turnFailed = false;
@@ -717,6 +718,11 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           const seam = seamFor(content);
           if (seam) { content += seam; safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: seam })); }
           inTurn = [...inTurn, { role: 'assistant', content: written }, { role: 'user', content: CONTINUE_INSTRUCTION }];
+          continue;
+        }
+        if (!aborted && !stopRequested() && toolsOn && !stepText.trim() && silentRetries < MAX_SILENT_RETRIES && step + 1 < maxSteps) {
+          silentRetries++;
+          inTurn = [...inTurn, { role: 'user', content: SILENT_INSTRUCTION }];
           continue;
         }
         break;
