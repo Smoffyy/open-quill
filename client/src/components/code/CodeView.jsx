@@ -144,7 +144,7 @@ function PlanPrompt({ onBuild, onKeep }) {
 export default function CodeView({
   userName, modelIcon, chat, chatId, booting, loading, messages, live, liveCalls, phase, status, statusDelay, streaming,
   files, liveFile, pendingFiles, fileFocus, onFilesChanged, composer, scroll, error, onDismissError,
-  onRename, onToggleStar, onDelete, onRetry, onContinue, onOpenFile, panelOpen, onTogglePanel, onOpenMenu, onBuildPlan, preset
+  onRename, onToggleStar, onDelete, onRetry, onContinue, onOpenFile, panelOpen, onTogglePanel, onOpenMenu, onBuildPlan
 }) {
   const [panelW, setPanelW] = useState(readPanelW);
   const [wide, setWide] = useState(false);
@@ -209,7 +209,7 @@ export default function CodeView({
             {fresh && <CodeHero icon={modelIcon} userName={userName} />}
             {loading && messages.length === 0 && <ThreadSkeleton />}
             <CodeTranscript messages={messages} live={live} liveCalls={liveCalls} phase={phase} status={status} statusDelay={statusDelay} modelIcon={modelIcon} chatId={chatId}
-              onOpenFile={onOpenFile} onRetry={onRetry} onContinue={onContinue} preset={preset} />
+              onOpenFile={onOpenFile} onRetry={onRetry} onContinue={onContinue} />
             {error && <ChatError message={error} onDismiss={onDismissError} />}
             <div className="thread-pad" />
           </div>

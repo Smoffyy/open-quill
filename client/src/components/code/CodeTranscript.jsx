@@ -282,16 +282,16 @@ function TurnActions({ msg, onRetry, onContinue }) {
   );
 }
 
-const AssistantTurn = React.memo(function AssistantTurn({ msg, streaming, liveCalls, phase, status, statusDelay, modelIcon, chatId, onOpenFile, onRetry, onContinue, preset }) {
+const AssistantTurn = React.memo(function AssistantTurn({ msg, streaming, liveCalls, phase, status, statusDelay, modelIcon, chatId, onOpenFile, onRetry, onContinue }) {
   const statusInfo = useStatusLabel(streaming ? status : null, statusDelay);
   const parts = useMemo(() => withLive(splitTurn(msg.content), streaming ? liveCalls : null), [msg.content, streaming, liveCalls]);
   const changes = useMemo(() => (streaming ? [] : fileChanges(parts)), [parts, streaming]);
   const segs = Array.isArray(msg.reasoningSegs) ? msg.reasoningSegs : null;
-  const segCtx = useMemo(() => (segs ? { segs, segMs: msg.reasoningSegMs || null, live: streaming, preset, collapsible: true } : null),
-    [segs, msg.reasoningSegMs, streaming, preset]);
+  const segCtx = useMemo(() => (segs ? { segs, segMs: msg.reasoningSegMs || null, live: streaming, collapsible: true } : null),
+    [segs, msg.reasoningSegMs, streaming]);
   return (
     <div className={'cx-turn' + (streaming ? ' live' : '')} data-mid={msg.id} role="article" aria-label={t('Assistant message')}>
-      {msg.reasoning && <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} durationMs={msg.reasoningMs || 0} preset={preset} collapsible />}
+      {msg.reasoning && <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'}  durationMs={msg.reasoningMs || 0} collapsible />}
       <ReasonSegs.Provider value={segCtx}>
         {parts.map((p, i) => (p.kind === 'text'
           ? <div className="cx-prose" key={'t' + i}><Markdown streaming={streaming && i === parts.length - 1}>{p.text}</Markdown></div>
@@ -326,7 +326,7 @@ function UserTurn({ msg }) {
   );
 }
 
-export default function CodeTranscript({ messages, live, liveCalls, phase, status, statusDelay, modelIcon, chatId, onOpenFile, onRetry, onContinue, preset }) {
+export default function CodeTranscript({ messages, live, liveCalls, phase, status, statusDelay, modelIcon, chatId, onOpenFile, onRetry, onContinue }) {
   const list = live ? [...messages.filter(m => m.id !== live.id), live] : messages;
   const last = list[list.length - 1];
   return list.map(m => (m.role === 'user'
@@ -334,5 +334,5 @@ export default function CodeTranscript({ messages, live, liveCalls, phase, statu
     : <AssistantTurn key={m._k || m.id} msg={m} streaming={!!m._streaming} liveCalls={m._streaming ? liveCalls : null}
         phase={m._streaming ? phase : 'static'} status={m._streaming ? status : null} statusDelay={statusDelay} modelIcon={modelIcon}
         chatId={chatId} onOpenFile={onOpenFile} onRetry={m._streaming ? null : onRetry}
-        onContinue={!live && m === last && m.truncated ? onContinue : null} preset={preset} />));
+        onContinue={!live && m === last && m.truncated ? onContinue : null} />));
 }

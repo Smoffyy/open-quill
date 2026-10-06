@@ -5,6 +5,8 @@ import { setWsSender, publishPresence } from './lib/wsbus.js';
 import { t, tk, getLang } from './i18n.jsx';
 import { withClient } from './lib/clientctx.js';
 import { applyPrefs, prefersDark, appFontId, takeSettingsToReopen } from './lib/prefs.js';
+import { layoutOf } from './lib/layout.js';
+import { LayoutContext } from './lib/uselayout.js';
 import { kwargValuesArr, defaultValueOf } from './lib/kwargs.js';
 import Login from './components/pages/Login.jsx';
 import Sidebar from './components/sidebar/Sidebar.jsx';
@@ -276,6 +278,7 @@ export default function App() {
   const [notFound, setNotFound] = useState(() => parseRoute(location.pathname).view === 'notfound');
   const [focusTick, setFocusTick] = useState(0);
   const [cfg, setCfg] = useState(DEFAULT_CFG);
+  const layout = layoutOf(cfg.uiPreset);
   const docsCfg = useMemo(() => docsConfig(cfg.modelDocsConfig), [cfg.modelDocsConfig]);
   const docsEdit = useDocsEdit(models, docsCfg, { onSaved: async () => { await loadModels(); await loadAppConfig(); } });
   const docsNavTree = useMemo(() => docsTree(docsEdit.liveModels, docsEdit.liveCfg, { includeEmpty: docsEdit.editing }),
@@ -438,7 +441,7 @@ export default function App() {
   const selectingRef = useRef(false);
   const hasSelectionRef = useRef(false);
   const canFollow = useCallback(() => !selectingRef.current && !hasSelectionRef.current, []);
-  const revealStyle = resolveReveal(user?.prefs, cfg.uiPreset === 'openai' ? 'openai' : 'anthropic');
+  const revealStyle = resolveReveal(user?.prefs, layout);
   const fadeWords = revealStyle === 'modern';
   const autoscroll = user?.prefs?.autoscroll !== false;
   const {
@@ -556,9 +559,7 @@ export default function App() {
       setUser(null);
       api.get('/api/auth/context').then(c => {
         setAuthCtx(c);
-        const preset = c.uiPreset === 'openai' ? 'openai' : 'anthropic';
-        document.documentElement.setAttribute('data-preset', preset);
-        try { localStorage.setItem('oq-preset', preset); } catch {}
+        const preset = presetOf(c.uiPreset);
         document.documentElement.setAttribute('data-font', appFontId(c.appFont));
         applyPrefs(null, preset);
         setCustomFavicon(c.appIcon);
@@ -567,7 +568,7 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!user) return;
-    const preset = cfg?.uiPreset === 'openai' ? 'openai' : 'anthropic';
+    const preset = presetOf(cfg?.uiPreset);
     applyPrefs(user?.prefs, preset);
     const t = user?.prefs?.theme || 'dark';
     if (t === 'system' && window.matchMedia) {
@@ -751,9 +752,7 @@ export default function App() {
     setCfg(c);
     const list = c.greetings && c.greetings.length ? c.greetings : DEFAULT_CFG.greetings;
     setGreeting(list[Math.floor(Math.random() * list.length)]);
-    const preset = c.uiPreset === 'openai' ? 'openai' : 'anthropic';
-    document.documentElement.setAttribute('data-preset', preset);
-    try { localStorage.setItem('oq-preset', preset); } catch {}
+    const preset = presetOf(c.uiPreset);
     applyPrefs(userRef.current?.prefs, preset);
     document.documentElement.setAttribute('data-font', appFontId(c.appFont));
     setCustomFavicon(c.appIcon);
@@ -1525,9 +1524,9 @@ export default function App() {
     removedModel: activeId ? chatRemovedModel : null,
     skills, onToggleSkill: toggleSkill, onManageSkills: (mode) => openSettings('skills', { browse: mode === 'browse' }),
     onManageConnectors: () => openSettings('mcp'), attachCombo: comboLabel(resolveKeybinds(user?.prefs).attachFiles),
-    hideModelPicker: cfg.uiPreset === 'openai',
-    enterSend: cfg.uiPreset !== 'openai',
-    chipsBelow: cfg.uiPreset === 'openai',
+    hideModelPicker: layout.pickerInTopbar,
+    enterSend: layout.sendShowsEnter,
+    chipsBelow: layout.chipsBelowComposer,
     models, modelsReady, currentId, onSelect: pickModel, extended, onToggleExtended: () => setExtended(e => !e),
     reasoningEffort, onSetEffort: setReasoningEffort, kwargValues, onSetKwarg: setKwarg,
     visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin, budget,
@@ -1538,7 +1537,7 @@ export default function App() {
     onNewChat: () => newChat(), onShortcuts: () => setShowShortcuts(true),
     voiceMic: !!cfg.voiceMic, voiceCall: !!cfg.voiceCall && !incognito, sttEngine: cfg.voiceStt || 'browser',
     callActive: callOpen, onStartCall: () => setCallOpen(o => !o),
-    ctxGauge: cfg.uiPreset === 'openai' ? null : ctxGaugeEl
+    ctxGauge: layout.composerGauge ? ctxGaugeEl : null
   };
   function focusedMsg() {
     const list = messagesRef.current;
@@ -1678,11 +1677,11 @@ export default function App() {
       onRename={renameChat} onToggleStar={() => { if (activeId) toggleStar(activeId); }} onDelete={() => { if (activeId) confirmDeleteChat(activeId); }}
       onRetry={regenerate} onContinue={continueReply} onOpenFile={openCodeFile}
       onBuildPlan={() => { setPlanMode(false); send([], t('Go ahead and build the plan.'), { plan: false }); }}
-      panelOpen={codePanel} onTogglePanel={toggleCodePanel} onOpenMenu={() => setMobileDrawer(true)}
-      preset={cfg.uiPreset === 'openai' ? 'openai' : 'anthropic'} />
+      panelOpen={codePanel} onTogglePanel={toggleCodePanel} onOpenMenu={() => setMobileDrawer(true)} />
   ) : null;
 
   return (
+    <LayoutContext.Provider value={layout}>
     <ThemeProvider user={user} cfg={cfg}>
     <div className={'app' + (incognito ? ' app-incognito' : '') + (bgVisible ? ' has-bg' : '') + (collapsed && !docsTarget ? ' sb-collapsed' : '')}>
       <a className="skip-link" href="#oq-composer">{t('Skip to message input')}</a>
@@ -1749,7 +1748,7 @@ export default function App() {
         {incognito && (
           <div className="incognito-bar">
             <div className="incog-left">
-              {empty && cfg.uiPreset === 'openai' && modelPicker}
+              {empty && layout.pickerInTopbar && modelPicker}
               <div className="incognito-title"><Ghost style={{ width: 18 }} /> {t("Incognito chat")}</div>
             </div>
             <button className="incognito-close" onClick={toggleIncognito} title={t("Exit incognito")} aria-label={t("Exit incognito")} disabled={streaming || queued}><X style={{ width: 16 }} /></button>
@@ -1770,7 +1769,7 @@ export default function App() {
               user?.isAdmin && !incognito && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => setCtlOpen(o => !o) },
             ]} />
         )}
-        {empty && !incognito && !codeMode && cfg.uiPreset === 'openai' && (
+        {empty && !incognito && !codeMode && layout.pickerInTopbar && (
           <div className="home-topbar">
             {modelPicker}
           </div>
@@ -1778,7 +1777,7 @@ export default function App() {
         {codeMode ? codeView : empty ? (
           <div className="center-wrap">
             <ThemeSlot name="home.above" />
-            <Greeting incognito={incognito} preset={cfg.uiPreset} incognitoLine={incognitoGreeting}
+            <Greeting incognito={incognito} incognitoLine={incognitoGreeting}
               greeting={cfg.greetingsChosen ? greeting : null} userName={user?.displayName} icon={model?.staticIcon || ''} />
             <ThemeSlot name="composer.above" />
             <div className="composer-wrap">
@@ -1786,7 +1785,7 @@ export default function App() {
             </div>
             <div className="qp-slot">
               {incognito ? (
-                <div className={cfg.uiPreset === 'openai' ? 'incog-note' : 'incognito-note'}>{cfg.uiPreset === 'openai' ? t("This chat won't appear in history. Incognito chats aren't saved.") : t("Incognito chats aren't saved to your history.")}</div>
+                <div className={layout.temporaryChatLabel ? 'incog-note' : 'incognito-note'}>{layout.temporaryChatLabel ? t("This chat won't appear in history. Incognito chats aren't saved.") : t("Incognito chats aren't saved to your history.")}</div>
               ) : cfg.quickPrompts && cfg.quickPrompts.length > 0 && (
                 <QuickPrompts prompts={cfg.quickPrompts} visible={!input.trim()} disabled={streaming} onPick={(p) => send([], p)} />
               )}
@@ -1796,7 +1795,7 @@ export default function App() {
         ) : (
           <>
             <ChatTopbar
-              lead={cfg.uiPreset === 'openai' ? modelPicker : null}
+              lead={layout.pickerInTopbar ? modelPicker : null}
               chat={activeChat} chatId={activeId} project={activeProject} booting={booting}
               projects={projects} busy={busyChats.includes(activeId)}
               onOpenMenu={() => setMobileDrawer(true)} onOpenProject={openProjects} onRename={renameChat}
@@ -1857,9 +1856,8 @@ export default function App() {
                       streaming={!!msg._streaming} phase={msg._streaming ? ((modelById.get(currentId)?.hideThinking && phase === 'thinking') ? 'generating' : phase) : 'static'} liveCall={msg._streaming ? liveCall : null} liveCalls={msg._streaming ? liveCalls : EMPTY_CALLS}
                       onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onEditAssistant={editAssistantMessage} onDelete={deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
                       showSpeed={showMsgSpeed}
-                      showIcon={msg.role === 'assistant' && (cfg.uiPreset === 'openai' || (lastA && msg.id === lastA.id))}
-                      fadeWords={fadeWords}
-                      preset={cfg.uiPreset === 'openai' ? 'openai' : 'anthropic'} />
+                      showIcon={msg.role === 'assistant' && (layout.replyIconOnEvery || (lastA && msg.id === lastA.id))}
+                      fadeWords={fadeWords} />
                     );
                   });
                 })()}
@@ -1875,7 +1873,7 @@ export default function App() {
             {user?.prefs?.threadRail === true && <ThreadRail items={railList} scrollRef={scrollRef} matches={findMatches} onJump={railJump} />}
             {outlineOpen && outline.length > 0 && user?.prefs?.threadOutline !== false && <Outline items={outline} onJump={outlineJump} onClose={() => setOutlineOpen(false)} />}
             {showJump && <button className="to-bottom" onClick={jumpDown} title={t('Jump to latest')} aria-label={t('Jump to latest')}><Down style={{ width: 17 }} /></button>}
-            <div className={'composer-wrap active-composer' + (cfg.uiPreset === 'openai' ? ' floating' : '')}>
+            <div className={'composer-wrap active-composer' + (layout.floatingComposer ? ' floating' : '')}>
               {user?.prefs?.engineStrip === true && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
               {callDock}
               <Composer {...composerProps} focusKey={focusTick}
@@ -1931,5 +1929,6 @@ export default function App() {
     </div>
     {user?.isAdmin && <Suspense fallback={null}><BuildMode user={user} /></Suspense>}
     </ThemeProvider>
+    </LayoutContext.Provider>
   );
 }

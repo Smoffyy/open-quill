@@ -3,6 +3,7 @@ import { Chevron, Bulb, Copy, Check, CheckCircle, Clock } from '../ui/icons.jsx'
 import { copyText } from '../../lib/clipboard.js';
 import { t } from '../../i18n.jsx';
 import { parseSteps, lastSentence, thoughtSeconds, LINE_HOLD_MS } from '../../lib/reasoning.js';
+import { useLayout } from '../../lib/uselayout.js';
 
 const COLLAPSE_MS = 560;
 
@@ -14,7 +15,8 @@ function thoughtLabel(ms) {
   return mins === 1 ? t('Thought for 1 minute') : t('Thought for {n} minutes', { n: mins });
 }
 
-export default function ReasoningBlock({ text, live, durationMs = 0, preset = 'anthropic', collapsible = true }) {
+export default function ReasoningBlock({ text, live, durationMs = 0, collapsible = true }) {
+  const layout = useLayout();
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [line, setLine] = useState({ cur: '', prev: '' });
@@ -25,7 +27,7 @@ export default function ReasoningBlock({ text, live, durationMs = 0, preset = 'a
   const lineAt = useRef(0);
   const lineTimer = useRef(null);
   const steps = useMemo(() => parseSteps(text), [text]);
-  const rolling = preset !== 'openai';
+  const rolling = layout.rollingReasoning;
 
   useEffect(() => {
     if (!rolling) return;

@@ -1,8 +1,9 @@
 import { t } from '../../i18n.jsx';
 import { QpIcon } from '../ui/quickPromptIcons.jsx';
+import { useLayout } from '../../lib/uselayout.js';
 
 export default function QuickPrompts({ prompts, visible, disabled, onPick }) {
-  const keepSpace = document.documentElement.getAttribute('data-preset') === 'openai';
+  const keepSpace = useLayout().keepQuickPromptSpace;
   if (!visible && !keepSpace) return null;
   return (
     <div className={'quick-prompts' + (keepSpace && !visible ? ' qp-ghost' : '')}>

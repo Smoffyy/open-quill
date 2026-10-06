@@ -1,0 +1,186 @@
+:root { --focus-ring: #5598e7; }
+
+:root:root .nav-item:focus-visible,
+:root:root .chat-row:focus-visible,
+:root:root .chat-row:has(> .row-link:focus-visible),
+:root:root .icon-btn:focus-visible,
+:root:root .profile-btn:focus-visible,
+.profile-apps:focus-visible,
+.lib-tab:focus-visible, .lib-pill:focus-visible, .lib-primary:focus-visible, .lib-icon-btn:focus-visible,
+.sched-card:focus-visible, .lib-card:focus-visible, .sec-head:focus-visible {
+  outline: 1.6px solid var(--focus-ring); outline-offset: 1.6px;
+}
+
+:root:root :is(
+  .nav-item, .chat-row, .icon-btn, .profile-btn, .profile-apps,
+  .lib-pill, .lib-primary, .lib-icon-btn, .lib-tab, .sched-card
+) {
+  position: relative; isolation: isolate; background: none;
+}
+:root:root :is(
+  .nav-item, .chat-row, .icon-btn, .profile-btn, .profile-apps,
+  .lib-pill, .lib-primary, .lib-icon-btn, .lib-tab, .sched-card
+)::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit;
+  background: transparent;
+}
+:root:root :is(
+  .nav-item, .chat-row, .icon-btn, .profile-btn, .profile-apps,
+  .lib-pill, .lib-icon-btn, .lib-tab, .sched-card
+):hover::before { background: var(--cl-hover); }
+:root:root .lib-primary::before { background: var(--text); }
+:root:root .lib-pill::before,
+:root:root .lib-tab.on::before { background: var(--cl-hover); }
+:root:root .lib-pill:hover::before { background: var(--hover-mid); }
+:root:root .nav-item.on::before,
+:root:root .nav-item.on:hover::before { background: var(--cl-active); }
+:root:root .chat-row.active::before { background: var(--cmdk-active); }
+
+@keyframes cl-chunk-in { from { opacity: 0; } to { opacity: 1; } }
+:root:root .send { animation: cl-chunk-in .12s ease-out both; }
+
+:root:root .msg-icon.below { margin-top: 24px; }
+
+:root:root .msg-icon img.spin { animation-duration: .72s; }
+:root:root .msg-icon img.pulse,
+:root:root .msg-icon img.bounce,
+:root:root .msg-icon img.wobble { animation-duration: .72s; }
+/* `sprite` is a legacy generating_anim/thinking_anim value. No current build
+   offers it in the model editor, so an unused-class report flags it, but a
+   database written by an older release can still hold it. Keep it. */
+.msg-icon img.sprite {
+  animation: icon-sprite .72s steps(8, jump-none) infinite;
+  object-fit: none; object-position: top center;
+}
+@keyframes icon-sprite { from { object-position: top center; } to { object-position: bottom center; } }
+@media (prefers-reduced-motion: reduce) { .msg-icon img.sprite { animation: none; } }
+
+:root:root .modal {
+  border: 0; box-shadow: inset 0 0 0 1px var(--pop-border), 0 8px 32px rgba(0, 0, 0, .28);
+}
+:root:root .modal-side {
+  width: 192px; background: var(--modal-side); padding: 12px 0 0; gap: 12px;
+  border-right: .8px solid var(--pop-border);
+}
+:root:root .modal-side .ms-nav { gap: 12px; padding: 0 12px 12px; }
+:root:root .modal-side .ms-search {
+  background: var(--modal-fill); box-shadow: none;
+}
+:root:root .modal-side .ms-search:hover:not(:focus-within) {
+  box-shadow: inset 0 0 0 1px var(--pop-border);
+}
+:root:root .modal-side .ms-search:has(:focus-visible) {
+  box-shadow: inset 0 0 0 1px var(--focus-ring);
+}
+:root:root .modal-tab:hover { background: var(--cl-hover); }
+:root:root .modal-tab.active { background: var(--modal-active); }
+
+:root:root .modal-body { padding: 0 24px 40px; }
+@media (max-width: 768px) {
+  :root:root .modal-body { padding: 4px 18px 24px; }
+}
+:root:root .modal .modal-title { font-size: 15px; line-height: 20px; font-weight: 500; letter-spacing: 0; }
+:root:root .modal-body > .hint { display: none; }
+:root:root .modal-body > .hint:first-child + .me-section-h { margin-top: 4px; }
+:root:root .set-row,
+:root:root .modal-main .field { padding: 12px 0; gap: 24px; }
+:root:root .modal-main :is(.set-row, .field) {
+  border-top: .8px solid var(--modal-line);
+}
+:root:root .modal-main :is(.set-row, .field):first-child,
+:root:root .modal-main .me-section-h + :is(.set-row, .field),
+:root:root .modal-main .hint + :is(.set-row, .field) {
+  border-top: 0;
+}
+:root:root .modal-main .danger-zone { border-top: 0; }
+:root:root .modal-main textarea { min-height: 88px; }
+:root:root .set-row-title { font-weight: 400; }
+:root:root .modal-main .field.row > label,
+:root:root .modal-main .field.row label { font-weight: 400; }
+:root:root .modal-main h3,
+:root:root .modal-main .sec-title {
+  font-size: 15px; line-height: 20px; font-weight: 580; color: var(--text);
+}
+:root:root .modal-main input[type="text"],
+:root:root .modal-main input[type="password"],
+:root:root .modal-main input[type="email"],
+:root:root .modal-main input[type="number"],
+:root:root .modal-main select,
+:root:root .modal-main textarea {
+  background: var(--modal-fill); border: 0;
+  box-shadow: inset 0 0 0 1px var(--pop-border);
+  border-radius: 8px; font-size: 14px; line-height: 20px; color: var(--text);
+}
+:root:root .modal-main input[type="text"],
+:root:root .modal-main input[type="password"],
+:root:root .modal-main input[type="email"] {
+  height: 32px; padding: 0 12px;
+}
+:root:root .modal-main textarea { padding: 8px 12px; }
+:root:root .modal-main input:focus-visible,
+:root:root .modal-main textarea:focus-visible,
+:root:root .modal-main select:focus-visible {
+  outline: none; box-shadow: inset 0 0 0 1px var(--focus-ring);
+}
+
+.set-input { width: 224px; max-width: 100%; }
+:root:root .modal-main .me-section-h { margin: 28px 0 8px; }
+
+:root:root {
+  --fx-t: 0s;
+  --fx-a: .18s;
+  --cl-ease-hover: cubic-bezier(.165, .84, .44, 1);
+  --cl-ease-std: cubic-bezier(.4, 0, .2, 1);
+  --cl-ease-spring: cubic-bezier(.34, 1.3, .64, 1);
+  --cl-ease-squish: linear(0 0%, .2459 7.14286%, .6526 14.2857%, .9468 21.4286%, 1.0764 28.5714%, 1.0915 35.7143%, 1.0585 42.8571%, 1.0219 50%, .9993 57.1429%, .9914 64.2857%, .9921 71.4286%, .9957 78.5714%, .9988 85.7143%, 1.0004 92.8571%, 1 100%);
+}
+:root:root :is(
+  button, a, .nav-item, .chat-row, .icon-btn, .modal-tab, .set-row,
+  .lib-tab, .lib-pill, .lib-primary, .lib-icon-btn, .sched-card, .sched-item,
+  .lib-card,
+  .pm-item, .model-opt, .popover button, .chat-menu button, .rl-menu button
+) {
+  transition-timing-function: var(--cl-ease-hover, cubic-bezier(.165, .84, .44, 1));
+}
+:root:root :is(
+  .nav-item, .icon-btn, .profile-btn, .profile-apps, .lib-pill, .lib-primary,
+  .lib-icon-btn, .lib-tab, .sched-card
+):active {
+  transition-duration: 0s;
+}
+:root:root :is(input, textarea, select):not(.composer textarea) {
+  transition: box-shadow 0s, background-color 0s;
+}
+:root:root :is(.nav-item, .chat-row, .icon-btn, .profile-btn, .profile-apps, .lib-pill, .lib-primary, .lib-icon-btn, .lib-tab, .sched-card):is(:hover, :active, .on, .active, :focus-visible) {
+  background: none;
+}
+:root:root .sidebar-head-actions .icon-btn:hover { background: none; }
+
+:root:root .all-chats-btn {
+  height: 32px; padding: 0 10px; margin-top: 4px; border-radius: 8px;
+  font-size: 14px; line-height: 20px; font-weight: 400;
+}
+:root:root .all-chats-btn svg { width: 16px; height: 16px; }
+
+:root:root .modal .btn {
+  height: 32px; padding: 0 12px; border-radius: 8px;
+  font-size: 14px; line-height: 20px; font-weight: 500;
+}
+:root:root .modal .btn svg { width: 16px; height: 16px; }
+
+:root:root :is(.topbar, .home-actions) .paper-btn {
+  width: 32px; height: 32px; border-radius: 8px;
+}
+:root:root :is(.topbar, .home-actions) .paper-btn svg { width: 19px; height: 19px; }
+
+:root:root :is(.art-dl-all, .rb-copy, .art-card-dl) svg { width: 14px; height: 14px; }
+:root:root .art-btn svg { width: 14px; height: 14px; }
+:root:root .tool-line { border-radius: 6px; }
+:root:root .tool-line .tl-icon { width: 16px; height: 16px; }
+:root:root .all-chats-btn svg { width: 12px; height: 12px; }
+
+:root:root :is(.art-btn, .art-folder) { border-radius: 6px; }
+:root:root .tb-copy {
+  width: 24px; height: 24px; padding: 0; border-radius: 6px;
+}
+:root:root .tb-copy svg { width: 14px; height: 14px; }

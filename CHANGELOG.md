@@ -22,6 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sidebar** - a Chat/Code switch beside the name, the collapse button to its left, a "More" row for All chats and Model docs, and version and search in the footer. Clicking the sidebar's edge hides it and dragging resizes it.
 - **Scrollbars** - one thin scrollbar style everywhere, set once in `base.css`.
 - **Files in the Artifacts library** open their Code session with the file shown.
+- **OpenAI layout matches Anthropic's sizing** - the sidebar, nav and chat rows, profile footer, thread, messages, reasoning and tool rows, thread navigation, modals, command palette, search and login take Anthropic's sizes and spacing. Only the input bar, the greeting, the model name and the model dropdown stay OpenAI's, along with the palette.
+- **OpenAI sidebar and code blocks** - the sidebar collapses to nothing with the open button, like Anthropic, instead of an icon rail, and code blocks use the floating copy button rather than a header bar.
+- **Model icon beside replies** - an icon placed to the left of a reply sits closer to it and a little higher, and the model name above the reply lines up with its text, in both layouts.
+- **New model defaults** - with the OpenAI base layout a new model starts with icon size 28, the name shown and the icon on the left, including when that layout is staged and not yet published.
+- **Themes change colours only** - in the Anthropic Light and Legacy palettes the plus, submenu and slash menus use an inset outline instead of a border, so every palette gives them the same size.
+- **Layout, palette and shared design are separate** - `anthropic.css` and `openai.css` are replaced by palette files (colours only), layout files (the Anthropic composer card and the OpenAI pill composer) and shared sheets for the sidebar, library, skills and design layer. A layout is a set of named flags in `lib/layout.js`, read with `useLayout()` and applied as `data-layout`, so components no longer test which preset is active, and the OpenAI Light palette is `data-palette="openai"`. `test/layout.test.js` guards the structure and AGENTS.md describes it.
+
+### Fixed
+- **Jump to latest button** - the scroll-to-bottom button had a see-through background in the OpenAI Dark 2025 palette, so text showed through it. It is now solid in every palette.
 
 ### Removed
 - **Sandbox in chats** - the sandbox tools toggle, the per-chat artifacts panel and the per-model "Sandbox tools" setting are gone; file work happens in Code. Project chats keep reading their project's files.

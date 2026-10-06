@@ -3,7 +3,7 @@ export const PALETTES = [
   { id: 'anthropic-legacy', preset: 'anthropic', theme: 'anthropic', palette: 'legacy', dark: true, label: 'Anthropic Legacy', bg: '#1f1f1e' },
   { id: 'anthropic-2025q2', preset: 'anthropic', theme: 'anthropic', palette: '', dark: true, label: 'Anthropic Dark 2025 Q2', bg: '#1a1a19' },
   { id: 'anthropic-2026q3', preset: 'anthropic', theme: 'anthropic', palette: '2026q3', dark: true, label: 'Anthropic Dark 2026 Q3', bg: '#151515' },
-  { id: 'openai-light', preset: 'openai', theme: 'light', palette: '', dark: false, label: 'OpenAI Light', bg: '#fcfcfc' },
+  { id: 'openai-light', preset: 'openai', theme: 'light', palette: 'openai', dark: false, label: 'OpenAI Light', bg: '#fcfcfc' },
   { id: 'openai-2024q1', preset: 'openai', theme: 'openai', palette: '', dark: true, label: 'OpenAI Dark 2024 Q1', bg: '#000000' },
   { id: 'openai-2025', preset: 'openai', theme: 'openai', palette: '2025', dark: true, label: 'OpenAI Dark 2025', bg: '#000000' }
 ];

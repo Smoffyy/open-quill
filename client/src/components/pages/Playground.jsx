@@ -73,7 +73,6 @@ function Workbench() {
   sessionRef.current = session;
 
   const running = busy.size > 0;
-  const preset = typeof document !== 'undefined' && document.documentElement.dataset.preset === 'openai' ? 'openai' : 'anthropic';
 
   useUndoKeys(scrimRef);
   useFocusTrap(scrimRef, (e) => {
@@ -328,7 +327,7 @@ function Workbench() {
             onAdd={(id, source) => patch(s => ({ lanes: addLane(s.lanes, id, source) }))}
             onReview={() => setReview(true)} />
           {mode === 'chat' ? (
-            <Conversation thread={session.thread} busy={busy} preset={preset} probes={PROBES}
+            <Conversation thread={session.thread} busy={busy} probes={PROBES}
               input={session.input} setInput={(input) => patch({ input })}
               role={session.role} setRole={(role) => patch({ role })}
               canRun={!!subjectRow && (!!session.input.trim() || session.thread.length > 0)}
@@ -342,7 +341,7 @@ function Workbench() {
               onEditReply={(id, i, text) => setTurn(id, x => ({ ...x, replies: x.replies.map((r, j) => (j === i ? { ...r, content: text } : r)) }))}
               onRequest={(replies, at) => setRequest({ replies, at })} />
           ) : (
-            <Suites suites={suites} suite={suite} rows={rows} lanes={session.lanes} busy={busy} preset={preset}
+            <Suites suites={suites} suite={suite} rows={rows} lanes={session.lanes} busy={busy}
               loaded={suitesLoaded} starter={PROBES}
               onPick={(id) => patch({ suiteId: id })}
               onCreate={createSuite}

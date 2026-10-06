@@ -4,6 +4,7 @@ import { palettesFor, themeValue } from '../../lib/palettes.js';
 import { t, tk } from '../../i18n.jsx';
 import { SetRow, SwitchRow, SegSlide, SelectRow, RangeRow } from '../ui/controls.jsx';
 import { resolveReveal, revealSpeedMs } from '../../lib/reveal.js';
+import { useLayout } from '../../lib/uselayout.js';
 
 // No zero stop: "no reveal at all" is the Instant *style*, so offering it here
 // too would be the same state reachable two ways. A pref already stored as 0
@@ -32,10 +33,11 @@ const clampInt = (v, lo, hi, def) => Math.max(lo, Math.min(hi, parseInt(v) || de
 
 export default function InterfaceTab({ prefs, setPref, cfg }) {
   const preset = currentPreset();
+  const layout = useLayout();
   const [userFont, setUserFontState] = useState(getUserFont());
   const rv = revealSpeedMs(prefs.revealMs);
-  const revealAvailable = cfg?.uiPreset !== 'openai';
-  const style = resolveReveal(prefs, 'anthropic');
+  const revealAvailable = !layout.instantReveal;
+  const style = resolveReveal(prefs);
   const styleOpt = REVEAL_STYLE_OPTS.find(o => o.v === style) || REVEAL_STYLE_OPTS[0];
   const cursorStyle = prefs.cursorStyle === 'circle' ? 'circle' : 'block';
   const knownStop = REVEAL_STOPS.some(o => o.v === rv);

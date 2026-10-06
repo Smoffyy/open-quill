@@ -1,6 +1,7 @@
 import { t } from '../../i18n.jsx';
 import { Ghost } from '../ui/icons.jsx';
 import { ModelMark } from '../ui/Weave.jsx';
+import { useLayout } from '../../lib/uselayout.js';
 
 function timeOfDay(hour) {
   if (hour < 5) return t('Working late');
@@ -10,11 +11,12 @@ function timeOfDay(hour) {
   return t('Burning the midnight oil');
 }
 
-export default function Greeting({ incognito, preset, incognitoLine, greeting, userName, icon }) {
+export default function Greeting({ incognito, incognitoLine, greeting, userName, icon }) {
+  const layout = useLayout();
   if (incognito) {
     return (
       <div className="greeting">
-        {preset === 'openai'
+        {layout.temporaryChatLabel
           ? <span className="incog-title">{t('Temporary Chat')}</span>
           : <><Ghost style={{ width: 44 }} /> {t(incognitoLine)}</>}
       </div>

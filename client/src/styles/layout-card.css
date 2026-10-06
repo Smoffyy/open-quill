@@ -1,0 +1,119 @@
+:root[data-layout="card"] .center-wrap .composer-wrap { max-width: 640px; }
+:root[data-layout="card"] .center-wrap .composer,
+:root[data-layout="card"] .composer {
+  padding: 8px; border-width: 0; border-radius: 14px;
+  transition: background-color .2s var(--cl-ease-std, cubic-bezier(.4, 0, .2, 1)),
+              border-color .2s var(--cl-ease-std, cubic-bezier(.4, 0, .2, 1)),
+              box-shadow .2s var(--cl-ease-std, cubic-bezier(.4, 0, .2, 1)),
+              opacity .2s var(--cl-ease-std, cubic-bezier(.4, 0, .2, 1));
+}
+:root[data-layout="card"] .app.has-bg .composer {
+  transition: background-color .5s ease, backdrop-filter .5s ease,
+              box-shadow .2s var(--cl-ease-std, cubic-bezier(.4, 0, .2, 1));
+}
+:root[data-layout="card"] .composer textarea {
+  padding: 5px 8px; font-size: 16px; line-height: 22px; min-height: 32px;
+}
+:root[data-layout="card"] .center-wrap .composer textarea { min-height: 43px; }
+:root[data-layout="card"] .composer-bar { margin-top: 8px; height: 32px; }
+:root[data-layout="card"] .composer-left { gap: 4px; padding-left: 0; }
+:root[data-layout="card"] .composer-right { gap: 4px; padding-right: 0; }
+
+:root[data-layout="card"] .composer .model-trigger {
+  height: 32px; gap: 4px; padding: 0 8px; border-radius: 8px;
+  font-size: 13px; font-weight: 400; line-height: 18px;
+}
+:root[data-layout="card"] .composer .plus,
+:root[data-layout="card"] .composer .mic,
+:root[data-layout="card"] .composer .send,
+:root[data-layout="card"] .composer .model-trigger {
+  transition: background .06s var(--cl-ease-std, cubic-bezier(.4, 0, .2, 1)),
+              color .06s var(--cl-ease-std, cubic-bezier(.4, 0, .2, 1)),
+              opacity .06s var(--cl-ease-std, cubic-bezier(.4, 0, .2, 1)),
+              transform .45s var(--cl-ease-squish);
+}
+:root[data-layout="card"] .composer .send:not(:disabled):active { transform: scale(.975); }
+
+:root[data-layout="card"] .composer .plus,
+:root[data-layout="card"] .composer .mic,
+:root[data-layout="card"] .composer .model-trigger {
+  position: relative; isolation: isolate; background: none;
+}
+:root[data-layout="card"] .composer .plus::before,
+:root[data-layout="card"] .composer .mic::before,
+:root[data-layout="card"] .composer .model-trigger::before {
+  content: ''; position: absolute; inset: 0; z-index: -1;
+  border-radius: inherit; background: transparent;
+  transition: background .06s var(--cl-ease-std, cubic-bezier(.4, 0, .2, 1)),
+              transform .45s var(--cl-ease-squish);
+}
+:root[data-layout="card"] .composer .plus:hover::before,
+:root[data-layout="card"] .composer .mic:hover::before,
+:root[data-layout="card"] .composer .model-trigger:hover::before {
+  background: var(--composer-hover, var(--surface-hover));
+}
+:root[data-layout="card"] .composer .plus.on::before,
+:root[data-layout="card"] .composer .mic.on::before,
+:root[data-layout="card"] .composer .model-trigger.on::before {
+  background: var(--pop-hover, var(--hover-mid));
+}
+:root[data-layout="card"] .composer .mic.call.on:hover::before {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+:root[data-layout="card"] .composer .plus:active::before,
+:root[data-layout="card"] .composer .mic:active::before,
+:root[data-layout="card"] .composer .model-trigger:active::before {
+  background: var(--composer-hover, var(--surface-hover));
+  transform: scale(.975);
+}
+:root[data-layout="card"] .composer .send.enter { background: transparent; color: var(--text); }
+:root[data-layout="card"] .composer .send.enter:hover { background: var(--composer-hover, var(--surface-hover)); }
+@media (prefers-reduced-motion: reduce) {
+  :root[data-layout="card"] .composer .send:not(:disabled):active,
+  :root[data-layout="card"] .composer .plus:active::before,
+  :root[data-layout="card"] .composer .mic:active::before,
+  :root[data-layout="card"] .composer .model-trigger:active::before { transform: none; }
+}
+
+/* In a thread the bar collapses into the text row: the plus sits left of the
+   caret and the send right of it, on one 32px line. A second line of text
+   drops the bar back under the text, which is what .ml already means. */
+:root[data-layout="card"] .active-composer .composer:not(.ml) {
+  display: flex; flex-wrap: wrap; align-items: center; row-gap: 8px;
+}
+:root[data-layout="card"] .active-composer .composer:not(.ml) > * { flex: 0 0 100%; }
+:root[data-layout="card"] .active-composer .composer:not(.ml) > textarea {
+  order: 1; flex: 1 1 auto; width: auto; min-width: 0;
+}
+:root[data-layout="card"] .active-composer .composer:not(.ml) .composer-bar { display: contents; }
+:root[data-layout="card"] .active-composer .composer:not(.ml) .composer-left { flex: 0 0 auto; }
+:root[data-layout="card"] .active-composer .composer:not(.ml) .composer-right { order: 2; flex: 0 0 auto; }
+
+/* The model picker leaves the bar in a thread and sits under the composer,
+   opposite the disclaimer. */
+:root[data-layout="card"] .active-composer .composer .model-select {
+  position: absolute; top: calc(100% + 8px); right: 8px; z-index: 2;
+}
+:root[data-layout="card"] .active-composer .composer .model-trigger {
+  height: 24px; padding: 0 6px; border-radius: 6px;
+}
+:root[data-layout="card"] .active-composer .disclaimer {
+  min-height: 40px; padding: 12px 152px 11px 16px;
+  text-align: left; font-size: 13px; line-height: 17px;
+}
+@media (max-width: 768px) {
+  :root[data-layout="card"] .active-composer .composer .model-select { position: static; }
+  :root[data-layout="card"] .active-composer .composer .model-trigger { height: 32px; padding: 0 8px; border-radius: 8px; }
+  :root[data-layout="card"] .active-composer .disclaimer {
+    min-height: 0; padding: 8px 0; text-align: center; font-size: 12px; line-height: 16px;
+  }
+}
+:root[data-layout="card"] .active-composer .composer-stack::before {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: 48px;
+  background: linear-gradient(to top, var(--bg), transparent); pointer-events: none;
+}
+
+:root[data-layout="card"] .greeting { font-weight: var(--greeting-weight, 390); }
+:root[data-layout="card"] .topbar .chat-name svg { width: 12px; height: 12px; }
+:root[data-layout="card"] .chat-name svg { width: 12px; height: 12px; }
+:root[data-layout="card"] .active-composer { max-width: var(--reading-max, 808px); }

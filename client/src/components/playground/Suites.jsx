@@ -5,7 +5,7 @@ import { t } from '../../i18n.jsx';
 import { laneKey } from '../../lib/playground.js';
 import Reply from './Reply.jsx';
 
-function Case({ c, index, row, lanes, busy, anyBusy, preset, onPatch, onDrop, onRun, onPrefer, onRequest }) {
+function Case({ c, index, row, lanes, busy, anyBusy, onPatch, onDrop, onRun, onPrefer, onRequest }) {
   const [editing, setEditing] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [expect, setExpect] = useState('');
@@ -48,7 +48,7 @@ function Case({ c, index, row, lanes, busy, anyBusy, preset, onPatch, onDrop, on
       </header>
       <div className="pg-grid">
         {cells.map((r, i) => (
-          <Reply key={lanes[i].id} reply={r} compare={compare} clamp preset={preset}
+          <Reply key={lanes[i].id} reply={r} compare={compare} clamp
             preferred={compare && row?.pick === laneKey(lanes[i])}
             onPrefer={compare && r && r.status !== 'run' ? () => onPrefer(laneKey(lanes[i])) : null}
             onRequest={r?.request ? () => onRequest(cells.filter(Boolean), cells.filter(Boolean).indexOf(r)) : null} />
@@ -59,7 +59,7 @@ function Case({ c, index, row, lanes, busy, anyBusy, preset, onPatch, onDrop, on
 }
 
 export default function Suites({
-  suites, suite, rows, lanes, busy, preset, loaded, starter,
+  suites, suite, rows, lanes, busy, loaded, starter,
   onPick, onCreate, onRename, onDelete, onAddCase, onPatchCase, onDropCase, onRunCase, onRunAll, onStop, onPrefer, onRequest
 }) {
   const [naming, setNaming] = useState(null);
@@ -113,7 +113,7 @@ export default function Suites({
       <div className="pg-scroll">
         <div className="pg-cases">
           {suite.cases.map((c, i) => (
-            <Case key={c.id} c={c} index={i} row={rows?.[c.id]} lanes={lanes} preset={preset}
+            <Case key={c.id} c={c} index={i} row={rows?.[c.id]} lanes={lanes}
               busy={busy.has('case:' + c.id) || busy.has('suite:' + suite.id)} anyBusy={running}
               onPatch={(p) => onPatchCase(c.id, p)} onDrop={() => onDropCase(c.id)} onRun={() => onRunCase(c.id)}
               onPrefer={(key) => onPrefer(c.id, key)} onRequest={onRequest} />

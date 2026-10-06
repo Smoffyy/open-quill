@@ -1,32 +1,33 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { initialPrefs, presetDefaults, shownThemeFallback } from '../src/lib/settingsdefaults.js';
+import { LAYOUTS } from '../src/lib/layout.js';
 import { browserName, systemName } from '../src/lib/useragent.js';
 import { relativeParts } from '../src/lib/relativetime.js';
 
 test('someone with no stored theme stays on the system theme', () => {
-  assert.equal(initialPrefs({}, false).theme, 'system');
-  assert.equal(initialPrefs(null, true).theme, 'system');
-  assert.equal(initialPrefs({ density: 'compact' }, false).theme, 'system');
+  assert.equal(initialPrefs({}, LAYOUTS.card).theme, 'system');
+  assert.equal(initialPrefs(null, LAYOUTS.pill).theme, 'system');
+  assert.equal(initialPrefs({ density: 'compact' }, LAYOUTS.card).theme, 'system');
 });
 
 test('a stored theme is kept as it is, and the retired oled value reads as dark', () => {
-  assert.equal(initialPrefs({ theme: 'anthropic-2025q2' }, false).theme, 'anthropic-2025q2');
-  assert.equal(initialPrefs({ theme: 'oled' }, false).theme, 'dark');
+  assert.equal(initialPrefs({ theme: 'anthropic-2025q2' }, LAYOUTS.card).theme, 'anthropic-2025q2');
+  assert.equal(initialPrefs({ theme: 'oled' }, LAYOUTS.card).theme, 'dark');
 });
 
 test('the reveal style is seeded from the old typewriter switch', () => {
-  assert.equal(initialPrefs({ typewriter: false }, false).revealStyle, 'instant');
-  assert.equal(initialPrefs({ animations: false }, false).revealStyle, 'instant');
-  assert.equal(initialPrefs({}, false).revealStyle, 'modern');
-  assert.equal(initialPrefs({ revealStyle: 'legacy', typewriter: false }, false).revealStyle, 'legacy');
+  assert.equal(initialPrefs({ typewriter: false }, LAYOUTS.card).revealStyle, 'instant');
+  assert.equal(initialPrefs({ animations: false }, LAYOUTS.card).revealStyle, 'instant');
+  assert.equal(initialPrefs({}, LAYOUTS.card).revealStyle, 'modern');
+  assert.equal(initialPrefs({ revealStyle: 'legacy', typewriter: false }, LAYOUTS.card).revealStyle, 'legacy');
 });
 
 test('each preset starts from its own cursor defaults', () => {
-  assert.equal(presetDefaults(true).streamCursor, true);
-  assert.equal(presetDefaults(true).cursorStyle, 'circle');
-  assert.equal(presetDefaults(false).streamCursor, false);
-  assert.equal(presetDefaults(false).cursorStyle, 'block');
+  assert.equal(presetDefaults(LAYOUTS.pill).streamCursor, true);
+  assert.equal(presetDefaults(LAYOUTS.pill).cursorStyle, 'circle');
+  assert.equal(presetDefaults(LAYOUTS.card).streamCursor, false);
+  assert.equal(presetDefaults(LAYOUTS.card).cursorStyle, 'block');
 });
 
 test('resetting keeps the light or dark the page is showing', () => {

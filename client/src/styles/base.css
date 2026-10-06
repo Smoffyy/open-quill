@@ -317,3 +317,19 @@ html { scrollbar-color: var(--scroll-thumb) transparent; }
 @media (prefers-reduced-motion: reduce) {
   .shimmer { animation: none; background-image: none; color: inherit; }
 }
+
+:root {
+  --cl-row-h: 32px;
+  --cl-row-gap: .5px;
+  --cl-slot: 28px;
+  --cl-hover: rgba(255, 255, 255, .075);
+  --cl-seg-track: rgba(255, 255, 255, .06);
+  --cl-seg-thumb: rgba(255, 255, 255, .1);
+  --cl-active: rgba(255, 255, 255, .15);
+}
+:root[data-theme="light"] {
+  --cl-hover: rgba(0, 0, 0, .05);
+  --cl-seg-track: rgba(0, 0, 0, .05);
+  --cl-seg-thumb: #ffffff;
+  --cl-active: rgba(0, 0, 0, .08);
+}

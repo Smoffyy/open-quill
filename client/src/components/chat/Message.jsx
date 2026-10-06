@@ -232,7 +232,7 @@ function SteerChips({ notes }) {
   );
 }
 
-function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onEditAssistant, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, statusDelay = true, showSpeed = false, preset = 'anthropic', fadeWords = false }) {
+function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onEditAssistant, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, statusDelay = true, showSpeed = false, fadeWords = false }) {
   if (chatEnded) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onEditAssistant = null; onFork = null; onDelete = null; }
   if (!chatId) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onEditAssistant = null; onFork = null; onTogglePin = null; }
   const [typing, setTyping] = useState(false);
@@ -368,8 +368,8 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   const segMs = Array.isArray(msg.reasoningSegMs) ? msg.reasoningSegMs : null;
   const segMsKey = segMs ? segMs.join(',') : '';
   const segCtx = useMemo(
-    () => (segs ? { segs, segMs, live: !!(streaming && tailIsMarker), preset, collapsible: model?.reasoningCollapsible !== false } : null),
-    [segs, segMsKey, streaming, tailIsMarker, preset, model]
+    () => (segs ? { segs, segMs, live: !!(streaming && tailIsMarker), collapsible: model?.reasoningCollapsible !== false } : null),
+    [segs, segMsKey, streaming, tailIsMarker, model]
   );
   const statusInfo = useStatusLabel(status, statusDelay);
 
@@ -440,7 +440,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
     <>
       {ledger && ledgerState && <LedgerRow tokens={ledgerTokens} pct={ledgerPct} state={ledgerState} id={msg.id} onToggleExclude={onToggleExclude} />}
       {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> {t("Pinned")}</div>}
-      <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} durationMs={msg.reasoningMs || 0} preset={preset} collapsible={model?.reasoningCollapsible !== false} />
+      <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} durationMs={msg.reasoningMs || 0} collapsible={model?.reasoningCollapsible !== false} />
       {(msg.content || streaming) && (
         <div className={'assistant-body' + (streaming ? ' streaming' : '') + (streaming && typing ? ' typing' : '') + (streaming && phase === 'thinking' ? ' thinking' : '') + (textEntered ? ' text-enter' : '')}>
           {editing ? (
@@ -523,7 +523,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
     const gutter = model?.iconSize > 0 ? model.iconSize : 50;
     return (
       <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant icon-left' + (streaming ? ' streaming-msg' : '') + (msg._enter ? ' enter' : '') + (!streaming && (msg.content || msg.truncated) ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
-        {icon && <div className="il-avatar" style={{ left: -(gutter + 14) }}>{icon}</div>}
+        {icon && <div className="il-avatar" style={{ left: -(gutter + 4) }}>{icon}</div>}
         {hasName && <div className={'assistant-name' + (showName ? '' : ' hover-reveal')}>{model.displayName}</div>}
         {inner}
       </div>

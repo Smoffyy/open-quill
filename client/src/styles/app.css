@@ -24,5 +24,11 @@
 @import './agenttools.css';
 @import './filepreview.css';
 @import './code.css';
-@import './anthropic.css';
-@import './openai.css';
+@import './palette-anthropic.css';
+@import './sidebar.css';
+@import './library.css';
+@import './skills.css';
+@import './design.css';
+@import './layout-card.css';
+@import './palette-openai.css';
+@import './layout-pill.css';

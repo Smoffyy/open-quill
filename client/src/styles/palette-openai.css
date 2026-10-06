@@ -1,0 +1,105 @@
+:root[data-theme="openai"] {
+  --bg: #212121;
+  --sidebar: #171717;
+  --input-bg: #2f2f2f;
+  --user-bubble: #2f2f2f;
+  --surface: #212121;
+  --surface-2: #2b2b2b;
+  --surface-hover: #424242;
+  --border: #ffffff1a;
+  --border-soft: #ffffff12;
+  --pop-bg: #303030;
+  --pop-border: rgba(255, 255, 255, .08);
+  --pop-ring: rgba(255, 255, 255, .2);
+  --pop-hover: #424242;
+  --pop-divider: rgba(255, 255, 255, .08);
+  --pop-switch: rgba(255, 255, 255, .25);
+  --modal-bg: #2f2f2f;
+  --modal-side: #171717;
+  --modal-line: rgba(255, 255, 255, .06);
+  --modal-fill: rgba(255, 255, 255, .05);
+  --modal-active: rgba(255, 255, 255, .1);
+  --menu-bg: #2f2f2f;
+  --card-bg: #262626;
+  --hover-soft: #ffffff0f;
+  --hover-mid: #ffffff1a;
+  --oai-row-fill: #393939;
+}
+:root[data-theme="openai"][data-palette="2025"] {
+  --bg: #000000;
+  --sidebar: #000000;
+  --input-bg: #212121;
+  --user-bubble: #323232;
+  --surface: #000000;
+  --surface-2: #212121;
+  --surface-hover: #ffffff14;
+  --border: #ffffff1a;
+  --border-soft: #ffffff0d;
+  --text: #ffffff;
+  --text-muted: #cdcdcd;
+  --text-faint: #afafaf;
+  --pop-bg: #353535;
+  --pop-border: #ffffff0d;
+  --pop-hover: #414141;
+  --pop-divider: #ffffff14;
+  --pop-switch: #ffffff40;
+  --modal-bg: #212121;
+  --modal-side: #000000;
+  --menu-bg: #353535;
+  --card-bg: #1b1b1b;
+  --hover-soft: #ffffff0d;
+  --hover-mid: #ffffff1a;
+  --oai-row-fill: #ffffff26;
+}
+
+:root[data-theme="light"][data-palette="openai"] {
+  --bg: #fcfcfc;
+  --sidebar: #fcfcfc;
+  --input-bg: #ffffff;
+  --user-bubble: #e9e9e9;
+  --surface: #ffffff;
+  --surface-2: #f0f0f0;
+  --surface-hover: #ececec;
+  --accent: #0d0d0d;
+  --on-accent: #ffffff;
+  --text: #0d0d0d;
+  --modal-bg: #ffffff;
+  --modal-side: #f9f9f9;
+  --menu-bg: #ffffff;
+  --card-bg: #f7f7f7;
+  --hover-soft: #0000000a;
+  --hover-mid: #00000012;
+  --oai-row-fill: #e2e2e2;
+}
+
+:root[data-theme="light"][data-palette="openai"] .composer { border-color: #0000001f; box-shadow: 0 2px 10px rgba(0, 0, 0, .05); }
+
+:root[data-theme="openai"] .code-wrap,
+:root[data-theme="openai"] .code-wrap pre { background: #1d1d1d; }
+
+:root:is([data-theme="openai"], [data-theme="light"][data-palette="openai"]) :is(
+  .nav-item, .chat-row, .icon-btn, .profile-btn, .profile-apps,
+  .lib-icon-btn, .lib-tab, .sched-card
+):hover::before { background: var(--surface-hover); }
+:root:is([data-theme="openai"], [data-theme="light"][data-palette="openai"]) .chat-row:hover::before,
+:root:is([data-theme="openai"], [data-theme="light"][data-palette="openai"]) .chat-row.active::before { background: var(--oai-row-fill); }
+:root:is([data-theme="openai"], [data-theme="light"][data-palette="openai"]) .nav-item.on::before,
+:root:is([data-theme="openai"], [data-theme="light"][data-palette="openai"]) .nav-item.on:hover::before { background: var(--oai-row-fill); }
+
+:root[data-theme="openai"] .login-box { background: #212121; border-color: #ffffff1a; }
+:root[data-theme="openai"] .login-tabs { background: #2b2b2b; }
+:root[data-theme="openai"] .login-tabs button.on { background: #424242; }
+:root[data-theme="openai"] .login input { background: #2b2b2b; border-color: #ffffff1a; }
+:root[data-theme="light"][data-palette="openai"] .btn.primary { background: #3d3d3d; }
+:root[data-theme="light"][data-palette="openai"] .btn.primary:hover:not(:disabled) { background: #4d4d4d; }
+:root[data-theme="light"][data-palette="openai"] .login-box { background: #fff; border-color: #0000001f; }
+:root[data-theme="light"][data-palette="openai"] .login-tabs { background: #f4f4f4; }
+:root[data-theme="light"][data-palette="openai"] .login-tabs button.on { background: #fff; }
+:root[data-theme="light"][data-palette="openai"] .login input { background: #fff; border-color: #0000001f; }
+
+:root[data-theme="light"][data-palette="openai"] .overlay,
+:root[data-theme="light"][data-palette="openai"] .ctx-inspect-overlay,
+:root[data-theme="light"][data-palette="openai"] .bc-overlay,
+:root[data-theme="light"][data-palette="openai"] .persona-overlay,
+:root[data-theme="light"][data-palette="openai"] .preset-scrim,
+:root[data-theme="light"][data-palette="openai"] .drop-overlay { background: rgba(0, 0, 0, .32); }

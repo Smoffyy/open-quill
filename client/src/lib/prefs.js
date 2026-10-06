@@ -1,4 +1,5 @@
 import { paletteFor } from './palettes.js';
+import { layoutOf } from './layout.js';
 import { syncFavicon } from './favicon.js';
 
 export function prefersDark() {
@@ -14,6 +15,8 @@ export function applyPrefs(prefs, preset) {
   const root = document.documentElement;
   const p = preset === 'openai' || preset === 'anthropic' ? preset : currentPreset();
   root.setAttribute('data-preset', p);
+  const layout = layoutOf(p);
+  root.setAttribute('data-layout', layout.id);
   try { localStorage.setItem('oq-preset', p); } catch {}
   const pal = paletteFor(prefs?.theme, p, prefersDark());
   root.setAttribute('data-theme', pal.theme);
@@ -26,8 +29,8 @@ export function applyPrefs(prefs, preset) {
   } catch {}
   root.setAttribute('data-density', prefs?.density === 'compact' ? 'compact' : 'comfortable');
   root.setAttribute('data-read', prefs?.readWidth === 'wide' ? 'wide' : 'normal');
-  const cursorOn = prefs?.streamCursor == null ? p === 'openai' : !!prefs.streamCursor;
-  const cursorStyle = prefs?.cursorStyle || (p === 'openai' ? 'circle' : 'block');
+  const cursorOn = prefs?.streamCursor == null ? layout.cursor.on : !!prefs.streamCursor;
+  const cursorStyle = prefs?.cursorStyle || layout.cursor.style;
   root.setAttribute('data-cursor', cursorOn ? (cursorStyle === 'circle' ? 'circle' : 'block') : 'off');
   root.setAttribute('data-oled', prefs?.oledShift ? 'on' : 'off');
   const blink = Math.max(150, Math.min(2000, parseInt(prefs?.cursorBlinkMs) || 500));

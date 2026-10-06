@@ -104,7 +104,7 @@ function ReasonSeg({ index }) {
   const text = segs && segs[index];
   if (text == null) return null;
   const live = !!(ctx.live && index === segs.length - 1);
-  return <ReasoningBlock text={text} live={live} durationMs={(ctx.segMs && ctx.segMs[index]) || 0} preset={ctx.preset} collapsible={ctx.collapsible !== false} />;
+  return <ReasoningBlock text={text} live={live} durationMs={(ctx.segMs && ctx.segMs[index]) || 0} collapsible={ctx.collapsible !== false} />;
 }
 
 const mdComponents = {

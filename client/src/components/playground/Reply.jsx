@@ -68,7 +68,7 @@ function ToolCalls({ tools }) {
   );
 }
 
-export default function Reply({ reply, compare, preferred, onPrefer, onRerun, onEdit, onRequest, clamp, preset }) {
+export default function Reply({ reply, compare, preferred, onPrefer, onRerun, onEdit, onRequest, clamp }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [open, setOpen] = useState(false);
@@ -93,7 +93,7 @@ export default function Reply({ reply, compare, preferred, onPrefer, onRerun, on
         </div>
       )}
       {reply.reasoning ? (
-        <ReasoningBlock text={reply.reasoning} live={running && !reply.content} preset={preset}
+        <ReasoningBlock text={reply.reasoning} live={running && !reply.content}
           durationMs={reply.firstAt && reply.endedAt && !running ? reply.endedAt - reply.firstAt : 0} />
       ) : null}
       <ToolCalls tools={reply.tools} />
