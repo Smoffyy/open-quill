@@ -43,10 +43,28 @@ export function chatHistory(chat, model, skipId = null) {
 }
 
 export const CUT_NOTE = '[This reply was cut off here before it was finished.]';
+const ACTIVITY_NOTE = '[What happened during this reply, in order. Times are UTC.]';
+
+function stamp(ms) {
+  return new Date(ms).toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+}
+
+function activityText(list) {
+  return list.map(e => {
+    const when = stamp(e.at);
+    if (e.kind === 'call') return `[${when}] Tool call: ${e.name}\nArguments: ${e.args}`;
+    if (e.kind === 'result') return `[${when}] Result of ${e.name} (${e.ok ? 'succeeded' : 'failed'}):\n${e.text}`;
+    if (e.kind === 'steer') return `[${when}] The user steered this reply part way through:\n${e.notes.map(n => '- ' + n).join('\n')}`;
+    return `[${when}] ${e.text}`;
+  }).join('\n\n');
+}
 
 function historyMessage(m, model) {
   let text = historyText(m.content || '').replace(/\n{3,}/g, '\n\n');
   if (m.role === 'assistant' && m.truncated) text = (text.trim() ? text.trimEnd() + '\n\n' : '') + CUT_NOTE;
+  if (m.role === 'assistant' && Array.isArray(m.activity) && m.activity.length) {
+    text = ACTIVITY_NOTE + '\n\n' + activityText(m.activity) + (text.trim() ? '\n\nReply:\n' + text : '');
+  }
   const atts = m.attachments || [];
   const images = [];
   if (atts.length) {

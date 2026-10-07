@@ -69,6 +69,8 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   const rebuildBase = () => buildMessages(model, chatHistory(chat, model, assistantId), extended, systemText());
   let base = buildMessages(model, history, extended, systemText());
   let inTurn = []; // assistant/tool exchanges accumulated during this response
+  const activity = resume && Array.isArray(resume.activity) ? resume.activity.slice() : [];
+  const logEvent = (event) => activity.push({ at: Date.now(), ...event });
   const assistantId = resume ? resume.id : uid();
   const assistantParent = resume ? (resume.parent_id ?? null) : (chatRow.active_leaf || null);
   let content = '', reasoning = '', usage = null, lastStepCompletion = 0;
@@ -79,7 +81,8 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       content, reasoning,
       reasoning_segs: reasonSegs.length ? reasonSegs : null,
       reasoning_seg_ms: reasonSegs.length ? segMs : null,
-      truncated: 1
+      truncated: 1,
+      activity
     };
     try {
       if (checkpointed) { db.messages.update(assistantId, row); return; }
@@ -305,6 +308,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     }
     const list = [...inTurn];
     if (hadText) list.push({ role: 'assistant', content: written + seamFor(written) });
+    logEvent({ kind: 'steer', notes });
     list.push({ role: 'user', content: steerInstruction(notes, hadText, wasInBlock) });
     inTurn = list;
     safeSend(JSON.stringify({ type: 'steered', chatId: chat.id, notes }));
@@ -395,6 +399,8 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       noteToolCall(model, 'create_file', r.ok !== false, r.ok === false ? r.error : '');
       replace(oqrBlock(call, resultPayload(call, r)));
       const id = 'call_resume_' + uid().replace(/-/g, '').slice(0, 12);
+      logEvent({ kind: 'call', name: 'create_file', args: JSON.stringify({ path, content: text }) });
+      logEvent({ kind: 'result', name: 'create_file', ok: r.ok !== false, text: formatToolResult(call, r) });
       inTurn = [
         { role: 'assistant', content: plan.head, tool_calls: [{ id, name: 'create_file', argsText: JSON.stringify({ path, content: text }) }] },
         { role: 'tool', tool_call_id: id, name: 'create_file', content: formatToolResult(call, r) }
@@ -744,11 +750,14 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         // A stop during a chain of calls must not run the ones still queued.
         // Each is reported back as refused so the saved transcript stays honest
         // about what did and did not happen.
+        const call = canonicalize(toCall(tc.name, tc.argsText));
+        logEvent({ kind: 'call', name: call.tool, args: tc.argsText || '' });
         if (stopRequested()) {
-          toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: tc.name, content: `${tc.name} → ERROR: stopped by the user before this call ran.` });
+          const text = `${tc.name} → ERROR: stopped by the user before this call ran.`;
+          toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: tc.name, content: text });
+          logEvent({ kind: 'result', name: call.tool, ok: false, text });
           continue;
         }
-        const call = canonicalize(toCall(tc.name, tc.argsText));
         const cut = cutOffOf(call);
         if (cut) {
           stepFailed++;
@@ -760,10 +769,13 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           content += block; contentSinceReason = true;
           safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: block }));
           toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: `${call.tool} → ERROR: ${msg}` });
+          logEvent({ kind: 'result', name: call.tool, ok: false, text: `${call.tool} → ERROR: ${msg}` });
           continue;
         }
         if (conversationEnded) {
-          toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: `${call.tool} \u2192 ERROR: the conversation has been ended; no further tools may run.` });
+          const text = `${call.tool} \u2192 ERROR: the conversation has been ended; no further tools may run.`;
+          toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: text });
+          logEvent({ kind: 'result', name: call.tool, ok: false, text });
           continue;
         }
         if (!hidden(call.tool)) safeSend(JSON.stringify({ type: 'tool_exec', chatId: chat.id, call: cleanCall(call) }));
@@ -792,7 +804,9 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         }
         if (mayChangeFiles(call.tool)) safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: sandbox.list(space) }));
         toolMsgs.push({ role: 'tool', tool_call_id: tc.id, name: call.tool, content: formatted });
+        logEvent({ kind: 'result', name: call.tool, ok: !failed, text: formatted });
         for (const img of out.images || []) stepImages.push({ ...img, tool: call.tool });
+        if (out.images?.length) logEvent({ kind: 'note', text: `${out.images.length} image(s) returned by ${call.tool} were shown to the model during this turn and are not kept in the history.` });
       }
       const shown = mcp.imageMessage(stepImages, !!model.has_vision);
       if (shown) toolMsgs.push(shown);
@@ -838,7 +852,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   const truncated = (lastFinish === 'length' || hitCap || wasStopped || turnFailed || fileStopped) && !conversationEnded;
   const hasOutput = !!(content.trim() || reasoning.trim());
   if (hasOutput || usageRec) {
-    const finalRow = { id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, reasoning_segs: reasonSegs.length ? reasonSegs : null, reasoning_seg_ms: reasonSegs.length ? segMs : null, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: resume ? addUsage(resume.usage, usageRec) : usageRec, speed, reasoning_ms: reasonMs || null, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, kwarg_values: model.kwarg_values || null, steers: steerNotes.length ? steerNotes.slice(0, MAX_STEERS) : null, truncated: truncated || null, plan_mode: flags.planMode ? 1 : null, ctx_used: lastStepTokens || null, created_at: (resume && resume.created_at) || now() };
+    const finalRow = { id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, activity, reasoning_segs: reasonSegs.length ? reasonSegs : null, reasoning_seg_ms: reasonSegs.length ? segMs : null, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: resume ? addUsage(resume.usage, usageRec) : usageRec, speed, reasoning_ms: reasonMs || null, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, kwarg_values: model.kwarg_values || null, steers: steerNotes.length ? steerNotes.slice(0, MAX_STEERS) : null, truncated: truncated || null, plan_mode: flags.planMode ? 1 : null, ctx_used: lastStepTokens || null, created_at: (resume && resume.created_at) || now() };
     if (checkpointed) db.messages.update(assistantId, finalRow);
     else db.messages.insert(finalRow);
     db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });

@@ -53,9 +53,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Model name on hover** - when a reply's model name is not shown beside its icon, hovering the icon shows it in a tooltip. The name is the one stored on that reply, so replies from removed models keep it.
 - **Logo beside replies** - a model's logo can be hidden from its replies in Admin, Models, Appearance, Logo, so it only shows in the greeting. It is on by default.
 - **Lighter reply text** - reply text in the Anthropic layout uses a lighter Literata weight (300 instead of 400) in every Anthropic palette. Bold text is unchanged.
+- **Incognito button** - the button that starts an incognito chat is only on the greeting screen, and no longer shows in the top bar of an open chat.
 - **Reply actions** - the latest reply's action bar is always visible, with its time shown on hover, and fades in when the reply finishes. Other replies still show the bar on hover, with a quicker fade and no upward movement. The timestamp tooltip waits a quarter of a second before it appears.
 
 ### Fixed
+- **Tool activity kept for follow-up questions** - everything a reply did is saved with it: each tool call and its result (web search pages included), steering notes, and file writes, each with a UTC timestamp. Later turns see that record in order, so a follow-up question can use the pages and results without running the tools again. Each result is kept in full. The record takes up room in the context window like other text, and once a chat is folded into its summary it goes with it. Images returned by tools are not kept.
 - **Images on Ollama** - images were sent in a format Ollama's chat API does not accept. They now go in its `images` field.
 - **Images on a model without vision** - an image added to the composer quietly disappeared; the composer now says it was left out.
 - **Replies cut off on small local windows** - when llama.cpp ran out of context mid-reply it sent an error inside the stream, which was ignored, so the reply just stopped as if it had finished. The error is now caught: a reply that runs out of room stops cleanly with **Continue**, and every request to llama.cpp is capped to the room the window has left, so it ends with a length stop instead of a server error.

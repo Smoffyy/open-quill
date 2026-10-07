@@ -1752,13 +1752,6 @@ export default function App() {
               onStopChat={stopChat} onToggleStar={toggleStar} onMoveToProject={moveChatToProject} onDelete={deleteChat}
               actions={
               <TopbarActions
-                leading={<>
-                  {!incognito && (
-                    <button className="paper-btn" onClick={toggleIncognito} title={t("Incognito chat, not saved")} aria-label={t("Incognito chat, not saved")} disabled={streaming || queued}>
-                      <Ghost />
-                    </button>
-                  )}
-                </>}
                 items={[
                   hasSummary && { id: 'summary', icon: <Compact />, label: t("Conversation memory"), onClick: () => setSummaryOpen(true) },
                   { id: 'personas', icon: <Star />, label: t('Personas'), onClick: () => setPersonasOpen(true) },
