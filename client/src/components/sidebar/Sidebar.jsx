@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Tip from '../ui/Tip.jsx';
+import { SegSlide } from '../ui/controls.jsx';
 import { ChatMenu, menuAtButton, menuAtPointer } from './ChatMenu.jsx';
 import DocsNav from './DocsNav.jsx';
 import { Plus, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, ChevDown, Box, Compact, Sliders, Check, Artifact, Briefcase, ModelDocs, Info, Clock, ArrowOut, QuickTask, Sparkles, Paper, Ghost, X, Chat, CodeTag, Laptop } from '../ui/icons.jsx';
@@ -189,19 +190,13 @@ function ProfileMenu({ user, anchorRef, onSettings, onAdmin, onPlayground, onCre
 }
 
 function ModeSwitch({ mode, onMode }) {
-  const code = mode === 'code';
+  const options = [
+    { v: 'chat', title: t('Chat'), label: <Chat /> },
+    { v: 'code', title: t('Code'), label: <CodeTag /> }
+  ];
   return (
-    <div className={'mode-switch' + (code ? ' code' : '')} role="radiogroup" aria-label={t('Mode')}>
-      <span className="mode-thumb" aria-hidden="true" />
-      <Tip label={t('Chat')}>
-        <button type="button" role="radio" aria-checked={!code} aria-label={t('Chat')} className={'mode-opt' + (code ? '' : ' on')}
-          onClick={() => { if (code) onMode('chat'); }}><Chat /></button>
-      </Tip>
-      <Tip label={t('Code')}>
-        <button type="button" role="radio" aria-checked={code} aria-label={t('Code')} className={'mode-opt' + (code ? ' on' : '')}
-          onClick={() => { if (!code) onMode('code'); }}><CodeTag /></button>
-      </Tip>
-    </div>
+    <SegSlide label={t('Mode')} value={mode} options={options} className="compact mode-switch"
+      onPick={(v) => { if (v !== mode) onMode(v); }} />
   );
 }
 

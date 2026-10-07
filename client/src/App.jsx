@@ -197,7 +197,7 @@ export default function App() {
   const onChatsOverviewCb = useCallback(() => navTo('chats'), [navTo]);
   const onArtifactsCb = useCallback(() => navTo('artifacts'), [navTo]);
   const onScheduledCb = useCallback(() => navTo('scheduled'), [navTo]);
-  const onModeCb = useCallback((mode) => { setLibPage(null); setChatsOverview(false); setDocsTarget(null); sidebarFns.current.switchMode(mode); }, []);
+  const onModeCb = useCallback((mode) => sidebarFns.current.switchMode(mode), []);
   const toggleCodePanel = useCallback(() => setCodePanel(o => {
     const narrow = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
     try { if (!narrow) localStorage.setItem('oq-code-panel', o ? '0' : '1'); } catch {}
@@ -309,6 +309,7 @@ export default function App() {
   const [greeting, setGreeting] = useState(DEFAULT_CFG.greetings[0]);
   const [codeMode, setCodeMode] = useState(() => parseRoute(location.pathname).view === 'code');
   const codeModeRef = useRef(codeMode);
+  const modeViews = useRef({});
   useEffect(() => { codeModeRef.current = codeMode; }, [codeMode]);
   const [codePanel, setCodePanel] = useState(() => {
     if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) return false;
@@ -1159,11 +1160,18 @@ export default function App() {
   function switchMode(mode) {
     const code = mode === 'code';
     if (code === codeModeRef.current && !activeIdRef.current) return;
+    modeViews.current[codeModeRef.current ? 'code' : 'chat'] = { path: location.pathname, overview: chatsOverview };
+    setLibPage(null); setChatsOverview(false); setDocsTarget(null);
     setCodeMode(code);
     codeModeRef.current = code;
     setCtlOpen(false);
     setCallOpen(false);
-    newChat();
+    const view = modeViews.current[mode];
+    const home = !view || view.path === '/' || view.path === '/code';
+    newChat(true);
+    if (home) history.pushState({}, '', code ? '/code' : '/');
+    else { history.pushState({}, '', view.path); openFromUrl(); }
+    if (view && view.overview) setChatsOverview(true);
   }
   function toggleIncognito() {
     if (streaming || queued || codeModeRef.current) return;
@@ -1793,7 +1801,7 @@ export default function App() {
                   let lastA = null;
                   for (let i = renderList.length - 1; i >= 0; i--) if (renderList[i].role === 'assistant') { lastA = renderList[i]; break; }
                   return renderList.map(msg => (
-                    <Message key={msg._k || msg.id} msg={msg} model={resolveMsgModel(msg, model)} models={models} currentId={currentId} chatId={activeId} pins={chatPins} chatEnded={chatEnded}
+                    <Message key={msg._k || msg.id} msg={msg} latest={msg === lastA} model={resolveMsgModel(msg, model)} models={models} currentId={currentId} chatId={activeId} pins={chatPins} chatEnded={chatEnded}
                       canContinue={(canContinue || !!msg.truncated) && !streaming && !chatEnded && msg === lastA && !msg._streaming}
                       onContinue={continueReply}
                       steers={msg._streaming ? liveSteers : (msg.steers || null)}

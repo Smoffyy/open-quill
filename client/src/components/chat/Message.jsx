@@ -7,6 +7,7 @@ import ReasoningBlock from './ReasoningBlock.jsx';
 import BranchCompare from './BranchCompare.jsx';
 import ToolCard from './ToolCard.jsx';
 import { ModelMark } from '../ui/Weave.jsx';
+import Tip from '../ui/Tip.jsx';
 import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash, Dots, Steer, Speaker, SpeakerOff } from '../ui/icons.jsx';
 import { api } from '../../lib/api.js';
 import { extLabel } from '../../lib/files.js';
@@ -170,7 +171,7 @@ function StatusCaption({ swapKey, label, detail }) {
   );
 }
 
-const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name, nameHoverOnly, statusKey, statusLabel, statusDetail }, ref) {
+const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name, tip, statusKey, statusLabel, statusDetail }, ref) {
   const base = model?.staticIcon || '';
   const map = {
     static: base,
@@ -184,8 +185,8 @@ const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, nam
   const sz = model?.iconSize > 0 ? model.iconSize : 50;
   return (
     <div ref={ref} className={'msg-icon' + (below ? ' below' : '') + (name ? ' with-name' : '')}>
-      {base && <ModelMark src={src} state={phase} className={cls} style={{ width: sz, height: sz }} />}
-      {name && <span className={'msg-icon-name' + (nameHoverOnly ? ' hover-reveal' : '')}>{name}</span>}
+      {base && <Tip label={tip}><ModelMark src={src} state={phase} className={cls} style={{ width: sz, height: sz }} /></Tip>}
+      {name && <span className="msg-icon-name">{name}</span>}
       <StatusCaption swapKey={statusKey} label={statusLabel} detail={statusDetail} />
     </div>
   );
@@ -211,7 +212,7 @@ function SteerChips({ notes }) {
   );
 }
 
-function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onEditAssistant, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, steers = null, status = null, statusDelay = true, showSpeed = false, fadeWords = false }) {
+function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onEditAssistant, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, steers = null, status = null, statusDelay = true, showSpeed = false, fadeWords = false, latest = false }) {
   if (chatEnded) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onEditAssistant = null; onFork = null; onDelete = null; }
   if (!chatId) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onEditAssistant = null; onFork = null; onTogglePin = null; }
   const [typing, setTyping] = useState(false);
@@ -227,6 +228,12 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   const textEnteredRef = useRef(false);
   if (streaming && msg.content) textEnteredRef.current = true;
   const textEntered = textEnteredRef.current;
+  const [finished, setFinished] = useState(false);
+  const wasStreaming = useRef(streaming);
+  useLayoutEffect(() => {
+    if (wasStreaming.current && !streaming) setFinished(true);
+    wasStreaming.current = streaming;
+  }, [streaming]);
   const [copied, setCopied] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const utterRef = useRef(null);
@@ -404,8 +411,8 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
     ? liveCalls
     : (liveCall && liveCall.tool ? [{ index: 0, call: liveCall }] : []);
   const showStatus = streaming && !msg.content && !msg.reasoning && !liveRows.length && statusInfo.show;
-  const icon = showIt ? <ModelIcon ref={iconRef} model={model} phase={iconPhase} below={pos === 'below'} name={pos === 'left' ? null : (hasName ? model.displayName : null)}
-    nameHoverOnly={pos !== 'left' && hasName && !showName}
+  const icon = showIt ? <ModelIcon ref={iconRef} model={model} phase={iconPhase} below={pos === 'below'} name={pos !== 'left' && showName ? model.displayName : null}
+    tip={hasName && !showName ? model.displayName : null}
     statusKey={statusInfo.key} statusLabel={showStatus ? statusInfo.label : null} statusDetail={statusInfo.detail} /> : null;
 
   async function rate(r) {
@@ -450,7 +457,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
         </div>
       )}
       {!streaming && (msg.content || msg.truncated) && !editing && (
-        <div className="actions">
+        <div className={'actions' + (finished ? ' fade-in' : '')}>
           <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
           <button className={'action-btn' + (speaking ? ' on' : '')} onClick={toggleSpeak} title={speaking ? t("Stop speaking") : t("Read aloud")} aria-label={speaking ? t("Stop speaking") : t("Read aloud")} aria-pressed={speaking}>{speaking ? <SpeakerOff /> : <Speaker />}</button>
           {chatId && !String(msg.id).startsWith('inc-') && (
@@ -499,16 +506,16 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   if (pos === 'left') {
     const gutter = model?.iconSize > 0 ? model.iconSize : 50;
     return (
-      <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant icon-left' + (streaming ? ' streaming-msg' : '') + (msg._enter ? ' enter' : '') + (!streaming && (msg.content || msg.truncated) ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '')} data-mid={msg.id}>
+      <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant icon-left' + (streaming ? ' streaming-msg' : '') + (latest ? ' latest' : '') + (msg._enter ? ' enter' : '') + (!streaming && (msg.content || msg.truncated) ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '')} data-mid={msg.id}>
         {icon && <div className="il-avatar" style={{ left: -(gutter + 4) }}>{icon}</div>}
-        {hasName && <div className={'assistant-name' + (showName ? '' : ' hover-reveal')}>{model.displayName}</div>}
+        {showName && <div className="assistant-name">{model.displayName}</div>}
         {inner}
       </div>
     );
   }
 
   return (
-    <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant' + (streaming ? ' streaming-msg' : '') + (msg._enter ? ' enter' : '') + (!streaming && (msg.content || msg.truncated) ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '')} data-mid={msg.id}>
+    <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant' + (streaming ? ' streaming-msg' : '') + (latest ? ' latest' : '') + (msg._enter ? ' enter' : '') + (!streaming && (msg.content || msg.truncated) ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '')} data-mid={msg.id}>
       {pos === 'above' && icon}
       {inner}
       {pos === 'below' && icon}

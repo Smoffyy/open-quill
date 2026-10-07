@@ -16,7 +16,7 @@
 /* ---------- user message timestamp ---------- */
 .msg-time { position: relative; font-size: 11px; line-height: 17px; color: var(--sidebar-label, var(--text-muted)); font-family: var(--font-sans); padding-left: 6px; margin-right: 4px; cursor: default; white-space: nowrap; }
 .msg-time::after { content: attr(data-full); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%) translateY(4px); background: var(--menu-bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 12px; white-space: nowrap; box-shadow: 0 8px 24px #00000055; opacity: 0; pointer-events: none; transition: opacity var(--fx-t, .15s), transform var(--fx-t, .15s); z-index: 20; }
-.msg-time:hover::after { opacity: 1; transform: translateX(-50%) translateY(0); }
+.msg-time:hover::after { opacity: 1; transform: translateX(-50%) translateY(0); transition-delay: .25s; }
 
 /* ---------- new chat circled plus ---------- */
 .nav-ic.new-chat-plus { position: relative; display: inline-grid; place-items: center; width: 20px; height: 20px; flex-shrink: 0; }

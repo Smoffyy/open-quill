@@ -49,6 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Colour palette setting** - the "Theme" picker in Settings, Interface is now called "Colour palette", since it only changes colours.
 - **Base layout follows the active theme** - the layout is set by choosing a theme under Admin, Interface, Themes, and switches live in the open tab. The display font follows the new layout unless an admin picked one by hand. Deleting the active theme moves the layout to the theme that takes over. The display font control now sits in its own Typography card.
 - **OpenAI phone model picker** - the bottom sheet is a layout setting and opens without inline positioning.
+- **Mode switch** - the Chat/Code control in the sidebar uses the same sliding control as the settings choices. Switching back to a mode returns to the screen you left it on: a chat, a Code session, a library page, Projects, Docs or All chats.
+- **Model name on hover** - when a reply's model name is not shown beside its icon, hovering the icon shows it in a tooltip. The name is the one stored on that reply, so replies from removed models keep it.
+- **Reply actions** - the latest reply's action bar is always visible, with its time shown on hover, and fades in when the reply finishes. Other replies still show the bar on hover, with a quicker fade and no upward movement. The timestamp tooltip waits a quarter of a second before it appears.
 
 ### Fixed
 - **Images on Ollama** - images were sent in a format Ollama's chat API does not accept. They now go in its `images` field.

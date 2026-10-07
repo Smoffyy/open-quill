@@ -124,9 +124,7 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 
 /* generating icon glow */
 
-/* actions rise on hover */
-.actions { transform: translateY(3px); transition: opacity var(--fx-t, .18s) ease, transform var(--fx-t, .2s) var(--ease-out); }
-.msg.assistant:hover .actions, .msg.user:hover .actions { transform: none; }
+.msg.assistant:hover .actions, .msg.user:hover .actions { transition-duration: .2s; }
 
 /* scroll-to-bottom pop */
 .to-bottom { transition: transform var(--fx-t, .16s) var(--ease-out), background var(--fx-t, .15s) ease; }
