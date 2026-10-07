@@ -1,5 +1,6 @@
-import { paletteFor } from './palettes.js';
+import { paletteFor, paletteChain } from './palettes.js';
 import { layoutOf } from './layout.js';
+import { DEFAULT_PRESET, isPreset } from './presets.js';
 import { syncFavicon } from './favicon.js';
 
 export function prefersDark() {
@@ -7,26 +8,21 @@ export function prefersDark() {
 }
 export function currentPreset() {
   const attr = document.documentElement.getAttribute('data-preset');
-  if (attr === 'openai' || attr === 'anthropic') return attr;
-  try { const s = localStorage.getItem('oq-preset'); if (s === 'openai' || s === 'anthropic') return s; } catch {}
-  return 'anthropic';
+  if (isPreset(attr)) return attr;
+  try { const s = localStorage.getItem('oq-preset'); if (isPreset(s)) return s; } catch {}
+  return DEFAULT_PRESET;
 }
 export function applyPrefs(prefs, preset) {
   const root = document.documentElement;
-  const p = preset === 'openai' || preset === 'anthropic' ? preset : currentPreset();
+  const p = isPreset(preset) ? preset : currentPreset();
   root.setAttribute('data-preset', p);
   const layout = layoutOf(p);
   root.setAttribute('data-layout', layout.id);
   try { localStorage.setItem('oq-preset', p); } catch {}
   const pal = paletteFor(prefs?.theme, p, prefersDark());
-  root.setAttribute('data-theme', pal.theme);
-  if (pal.palette) root.setAttribute('data-palette', pal.palette);
-  else root.removeAttribute('data-palette');
-  try {
-    localStorage.setItem('oq-theme', pal.theme);
-    if (pal.palette) localStorage.setItem('oq-palette', pal.palette);
-    else localStorage.removeItem('oq-palette');
-  } catch {}
+  root.setAttribute('data-theme', pal.mode);
+  root.setAttribute('data-palette', paletteChain(pal.id).join(' '));
+  try { localStorage.setItem('oq-palette', pal.id); } catch {}
   root.setAttribute('data-density', prefs?.density === 'compact' ? 'compact' : 'comfortable');
   root.setAttribute('data-read', prefs?.readWidth === 'wide' ? 'wide' : 'normal');
   const cursorOn = prefs?.streamCursor == null ? layout.cursor.on : !!prefs.streamCursor;

@@ -7,7 +7,7 @@
 .retry-menu img, .retry-menu .weave { width: 16px; height: 16px; object-fit: contain; border-radius: 4px; }
 
 /* ---- slash command menu ---- */
-.slash-menu { position: absolute; left: 12px; right: 12px; bottom: calc(100% + 8px); max-width: 420px; background: var(--pop-bg); border: 1px solid var(--pop-border); border-radius: 12px; padding: 4px; box-shadow: var(--pop-shadow); z-index: 25; }
+.slash-menu { position: absolute; left: 12px; right: 12px; bottom: calc(100% + 8px); max-width: 420px; background: var(--pop-bg); border: var(--menu-border, 1px solid var(--pop-border)); outline: var(--menu-outline, none); outline-offset: -1px; border-radius: 12px; padding: 4px; box-shadow: var(--pop-shadow); z-index: 25; }
 .slash-head { font-size: 13px; line-height: 17px; font-weight: 500; color: var(--pop-faint); padding: 4px 10px 5px; }
 .slash-item { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 6px 10px; border-radius: 8px; text-align: left; color: var(--pop-text); font-size: 14px; line-height: 20px; }
 .slash-item .slash-ico { display: grid; place-items: center; color: var(--text-muted); flex-shrink: 0; }

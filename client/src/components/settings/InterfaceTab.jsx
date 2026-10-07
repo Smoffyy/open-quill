@@ -46,8 +46,8 @@ export default function InterfaceTab({ prefs, setPref, cfg }) {
     <>
       <div className="hint">{t("How this app looks on your device. These are your own preferences; the layout itself is set by an administrator.")}</div>
       <div className="me-section-h">{t("Appearance")}</div>
-      <SetRow label={t("Theme")} desc={t("Follow your system, or pick a palette. Colours only, the layout never changes.")}>
-        <SelectRow label={t("Theme")} value={themeValue(prefs.theme, preset)} onPick={(v) => setPref('theme', v)}
+      <SetRow label={t("Colour palette")} desc={t("Follow your system, or pick a palette. Colours only, the layout never changes.")}>
+        <SelectRow label={t("Colour palette")} value={themeValue(prefs.theme, preset)} onPick={(v) => setPref('theme', v)}
           options={[{ v: 'system', label: t('System') }].concat(palettesFor(preset).map(p => ({ v: p.id, label: p.label })))} />
       </SetRow>
       <SetRow label={t("Chat font")} desc={t("Overrides the theme's default font, on this device only.")}>

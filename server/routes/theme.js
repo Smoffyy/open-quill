@@ -1,17 +1,31 @@
 import { uid } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
 import { logAudit } from '../lib/audit.js';
-import { draftSet } from '../lib/draft.js';
+import { draftGet, draftSet } from '../lib/draft.js';
 import { staged } from '../lib/releases.js';
-import { readStore, writeStore, themeForClient, sanitizeDoc, docDiffCount, emptyDoc, seedDocFor, pushHistory, PRESET_IDS, THEME_SCHEMA } from '../lib/theme.js';
+import { readStore, writeStore, themeForClient, sanitizeDoc, docDiffCount, emptyDoc, seedDocFor, pushHistory, THEME_SCHEMA } from '../lib/theme.js';
+import { isPreset, presetId, presetById } from '../lib/presets.js';
+import { appConfig, configChanges } from '../lib/appconfig.js';
 
 const name = (v, fallback) => String(v ?? '').slice(0, 80).trim() || fallback;
 
 // Selecting a theme also moves the base preset, because the preset stylesheet is
 // the layer the builder paints on top of. Leaving them out of step would show a
 // half-applied design.
-function syncPreset(preset) {
-  draftSet('ui_preset', PRESET_IDS.has(preset) ? preset : 'anthropic');
+function syncPreset(req, preset) {
+  const next = presetId(preset);
+  if (draftGet('ui_preset', '') === next) return [];
+  const was = appConfig(true);
+  const prev = presetId(draftGet('ui_preset', ''));
+  draftSet('ui_preset', next);
+  const keys = ['setting:ui_preset'];
+  const font = draftGet('app_font', '');
+  if (prev !== next && (!font || font === presetById(prev).font)) {
+    draftSet('app_font', presetById(next).font);
+    keys.push('setting:app_font');
+  }
+  staged(req, 'config', { values: configChanges(was) });
+  return keys;
 }
 
 function find(store, id) {
@@ -52,7 +66,7 @@ export default function registerThemeRoutes(app) {
     const store = readStore(true);
     if (store.themes.length >= 40) return res.status(400).json({ error: 'Theme limit reached.' });
     const from = b.from ? find(store, String(b.from)) : null;
-    const basePreset = PRESET_IDS.has(b.basePreset) ? b.basePreset : (from?.basePreset || 'anthropic');
+    const basePreset = isPreset(b.basePreset) ? b.basePreset : presetId(from?.basePreset);
     const theme = {
       id: uid(),
       name: name(b.name, from ? from.name + ' copy' : 'New theme'),
@@ -80,13 +94,12 @@ export default function registerThemeRoutes(app) {
       theme.name = name(b.name, theme.name);
       keys.push(`theme:${theme.id}:name`);
     }
-    if ('basePreset' in b && PRESET_IDS.has(b.basePreset)) {
+    if ('basePreset' in b && isPreset(b.basePreset)) {
       theme.basePreset = b.basePreset;
       theme.doc = sanitizeDoc({ ...theme.doc, basePreset: b.basePreset });
       keys.push(`theme:${theme.id}:basePreset`, `theme:${theme.id}:doc`);
       if (store.activeId === theme.id) {
-        syncPreset(b.basePreset);
-        keys.push('setting:ui_preset');
+        keys.push(...syncPreset(req, b.basePreset));
       }
     }
     if ('doc' in b) {
@@ -105,9 +118,9 @@ export default function registerThemeRoutes(app) {
     if (!theme) return res.status(404).json({ error: 'not found' });
     store.activeId = theme.id;
     writeStore(store);
-    syncPreset(theme.basePreset);
+    const keys = ['themes:active', ...syncPreset(req, theme.basePreset)];
     logAudit(req, 'theme.activate', { type: 'theme', id: theme.id, meta: { name: theme.name } });
-    staged(req, 'theme', { keys: ['themes:active', 'setting:ui_preset'] });
+    staged(req, 'theme', { keys });
     res.json({ ok: true });
   });
 
@@ -117,10 +130,14 @@ export default function registerThemeRoutes(app) {
     if (!theme) return res.status(404).json({ error: 'not found' });
     if (theme.builtin) return res.status(400).json({ error: 'A built-in layout cannot be deleted. Reset it instead, or delete a copy of it.' });
     store.themes = store.themes.filter(t => t.id !== theme.id);
-    if (store.activeId === theme.id) store.activeId = store.themes[0].id;
+    const keys = ['theme:' + theme.id, 'themes:active'];
+    if (store.activeId === theme.id) {
+      store.activeId = store.themes[0].id;
+      keys.push(...syncPreset(req, store.themes[0].basePreset));
+    }
     writeStore(store);
     logAudit(req, 'theme.delete', { type: 'theme', id: theme.id, meta: { name: theme.name } });
-    staged(req, 'theme', { keys: ['theme:' + theme.id, 'themes:active'] });
+    staged(req, 'theme', { keys });
     res.json({ ok: true });
   });
 
@@ -183,7 +200,7 @@ export default function registerThemeRoutes(app) {
     if (b.kind && b.kind !== 'open-quill-theme') return res.status(400).json({ error: 'That file is not a theme export.' });
     const store = readStore(true);
     if (store.themes.length >= 40) return res.status(400).json({ error: 'Theme limit reached.' });
-    const basePreset = PRESET_IDS.has(b.basePreset) ? b.basePreset : 'anthropic';
+    const basePreset = presetId(b.basePreset);
     const theme = {
       id: uid(),
       name: name(b.name, 'Imported theme'),

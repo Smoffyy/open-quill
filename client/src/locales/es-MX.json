@@ -735,7 +735,6 @@
   "The exact prompt this conversation would send right now, in order, with what each part costs.": "El prompt exacto que esta conversación enviaría ahora mismo, en orden, con lo que cuesta cada parte.",
   "The model returned an error.": "El modelo devolvió un error.",
   "The original model": "El modelo original",
-  "Theme": "Tema",
   "Theme default": "Predeterminada del tema",
   "These apply to the new chat once you send your first message.": "Se aplican al chat nuevo en cuanto envíes tu primer mensaje.",
   "Thinking": "Pensando",
@@ -1937,7 +1936,6 @@
   "Surface": "Superficie",
   "Surface hover": "Superficie al pasar el cursor",
   "Surface raised": "Superficie elevada",
-  "Switching also sets a matching default font. Models created while a preset is active inherit its icon defaults.": "Cambiar también define una fuente predeterminada a juego. Los modelos creados mientras un preajuste está activo heredan sus iconos predeterminados.",
   "Tab name": "Nombre de la pestaña",
   "Table": "Tabla",
   "Table cell": "Celda de la tabla",
@@ -1984,7 +1982,6 @@
   "The server queries this instance directly. Keys and URLs never reach the browser.": "El servidor consulta esta instancia directamente. Las claves y las URLs nunca llegan al navegador.",
   "The server will open “{name}” the next time it starts. Nothing changes until then, and the database running right now is left alone.": "El servidor abrirá “{name}” la próxima vez que arranque. Nada cambia hasta entonces, y la base de datos que corre ahora mismo no se toca.",
   "The small link row under the buttons. An address starting with http opens in a new tab.": "La fila pequeña de enlaces debajo de los botones. Una dirección que empiece con http se abre en una pestaña nueva.",
-  "The starting point a theme paints over. Anthropic is the native layout; OpenAI moves the model picker to the top-left, switches to a pill composer and a pitch-black palette, and pins a logo beside every reply.": "El punto de partida sobre el que se pinta un tema. Anthropic es el diseño nativo; OpenAI mueve el selector de modelo a la esquina superior izquierda, cambia a un redactor tipo píldora y una paleta negro absoluto, y fija un logotipo junto a cada respuesta.",
   "The theme builder, the theme library, and the identity every connected client renders.": "El constructor de temas, la biblioteca de temas y la identidad que renderiza cada cliente conectado.",
   "The three things a workspace needs before members can chat.": "Las tres cosas que necesita un espacio de trabajo antes de que los miembros puedan chatear.",
   "The upload failed.": "La subida falló.",
@@ -2055,7 +2052,6 @@
   "Use this": "Usar esto",
   "Use uncropped": "Usar sin recortar",
   "Use {label}": "Usar {label}",
-  "Used for headings, greetings, and assistant text. A theme can override this per element.": "Se usa para encabezados, saludos y texto del asistente. Un tema puede anular esto por elemento.",
   "Used in the browser tab, the sidebar, and the greeting.": "Se usa en la pestaña del navegador, la barra lateral y el saludo.",
   "Used when no rule matches. Without one, a router refuses the turn rather than guessing.": "Se usa cuando ninguna regla coincide. Sin uno, un enrutador rechaza el turno en lugar de adivinar.",
   "User email": "Correo del usuario",
@@ -2951,5 +2947,7 @@
   "Available in Code": "Disponible en Code",
   "Off, the model is greyed out in the Code model picker and cannot run Code sessions. Turn it off for models that are not reliable with tools.": "Desactivado, el modelo aparece atenuado en el selector de modelos de Code y no puede ejecutar sesiones de Code. Desactívalo en los modelos que no sean confiables con herramientas.",
   "{name} is not available in Code.": "{name} no está disponible en Code.",
-  "Not available in Code": "No disponible en Code"
+  "Not available in Code": "No disponible en Code",
+  "Colour palette": "Paleta de colores",
+  "Used for headings, greetings, and assistant text. Until you pick one, it follows the active theme's layout. A theme can override it per element.": "Se usa en títulos, saludos y respuestas del asistente. Hasta que elijas una, sigue el diseño del tema activo. Un tema puede cambiarla por elemento."
 }

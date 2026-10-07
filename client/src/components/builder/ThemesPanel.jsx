@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { t } from '../../i18n.jsx';
 import { api } from '../../lib/api.js';
 import { useTheme } from '../../lib/theme/store.jsx';
+import { presetById } from '../../lib/presets.js';
 import { toast } from '../../lib/toast.js';
 import { Dialog, Confirm, Text } from './controls.jsx';
 import { Copy, Trash, Download, Upload, Pencil, Check, Clock, Refresh } from '../ui/icons.jsx';
@@ -118,7 +119,7 @@ export default function ThemesPanel({ compact }) {
                   {th.dirty && <span className="bx-tag" title={t('Changed since the last release')}>{t('edited')}</span>}
                 </div>
                 <div className="bx-theme-meta">
-                  {th.note ? t(th.note) : t('Based on {preset}', { preset: th.basePreset === 'openai' ? 'OpenAI' : 'Anthropic' })}
+                  {th.note ? t(th.note) : t('Based on {preset}', { preset: t(presetById(th.basePreset).label) })}
                   {' · '}
                   {t('{n} customisations', { n: th.edits })}
                   {' · '}
@@ -142,7 +143,7 @@ export default function ThemesPanel({ compact }) {
                     title: t('Reset “{name}”?', { name: th.name }),
                     message: th.builtin
                       ? t('This goes back to the {name} layout exactly as it ships. The current version is kept in history so you can undo this.', { name: th.name })
-                      : t('Every customisation in this theme goes back to the plain {preset} layout. The current version is kept in history so you can undo this.', { preset: th.basePreset === 'openai' ? 'OpenAI' : 'Anthropic' }),
+                      : t('Every customisation in this theme goes back to the plain {preset} layout. The current version is kept in history so you can undo this.', { preset: t(presetById(th.basePreset).label) }),
                     confirmLabel: t('Reset'),
                     danger: true,
                     onConfirm: () => themes.reset(th.id, 'preset')

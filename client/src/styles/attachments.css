@@ -24,7 +24,7 @@
 .att.file:hover .att-pin, .att-pin.on, .att-pin:focus-visible { opacity: 1; }
 .att-pin:hover { color: var(--text); }
 .att-pin.on { color: var(--pop-blue); }
-.drop-overlay { position: fixed; inset: 0; z-index: 400; display: grid; place-items: center; pointer-events: none; background: rgba(0, 0, 0, .55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: dropOverlayIn .12s ease; }
+.drop-overlay { position: fixed; inset: 0; z-index: 400; display: grid; place-items: center; pointer-events: none; background: var(--scrim, rgba(0, 0, 0, .55)); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: dropOverlayIn .12s ease; }
 .drop-overlay::before { content: ''; position: absolute; inset: 8px; border: 2px solid var(--pop-blue); border-radius: 16px; box-shadow: 0 0 24px 2px color-mix(in srgb, var(--pop-blue) 45%, transparent); }
 .drop-overlay-content { position: relative; display: flex; flex-direction: column; align-items: center; }
 .drop-overlay-icons { display: flex; align-items: center; gap: 18px; color: var(--pop-blue); margin-bottom: 12px; }

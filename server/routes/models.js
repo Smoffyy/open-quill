@@ -17,6 +17,7 @@ import { parseParamCount } from '../lib/modelsize.js';
 import { syncedPrompt, draftFeatures, promptValues } from '../lib/systemprompt.js';
 import { sanitizeConsultModels } from '../lib/consult.js';
 import { touchesBlocks, addBlocks, eligibleBlocks } from '../lib/promptblocks.js';
+import { presetById } from '../lib/presets.js';
 
 function sanitizeRouterRules(raw) {
   const list = Array.isArray(raw) ? raw : [];
@@ -196,6 +197,7 @@ export default function registerModelRoutes(app) {
     const max = db.models.all().reduce((a, m) => Math.max(a, m.sort_order || 0), 0);
     const b = req.body;
     const preset = matchPreset(b.internal_name || '');
+    const look = presetById(draftGet('ui_preset', '')).model;
     const m = db.models.insert({
       id: uid(), display_name: b.display_name || 'New model', description: b.description || '',
       kind: b.kind === 'router' ? 'router' : 'model', router_rules: sanitizeRouterRules(b.router_rules), router_default: String(b.router_default || ''),
@@ -205,13 +207,13 @@ export default function registerModelRoutes(app) {
       has_reasoning: b.has_reasoning ? 1 : 0, reasoning_token: b.reasoning_token || '', non_reasoning_token: b.non_reasoning_token || '',
       kwargs: sanitizeKwargs(b.kwargs),
       effort_enabled: b.effort_enabled ? 1 : 0, effort_levels: Array.isArray(b.effort_levels) && b.effort_levels.length ? b.effort_levels : ['low', 'medium', 'high'], effort_default: b.effort_default || 'medium', effort_kwarg: b.effort_kwarg || 'reasoning_effort', effort_admin_only: b.effort_admin_only ? 1 : 0, hide_thinking: b.hide_thinking ? 1 : 0,
-      reasoning_collapsible: b.reasoning_collapsible === false ? 0 : 1, icon_size: parseInt(b.icon_size) || (draftGet('ui_preset', '') === 'openai' ? 28 : 0),
-      show_name: 'show_name' in b ? (b.show_name ? 1 : 0) : (draftGet('ui_preset', '') === 'openai' ? 1 : 0),
+      reasoning_collapsible: b.reasoning_collapsible === false ? 0 : 1, icon_size: parseInt(b.icon_size) || look.icon_size,
+      show_name: 'show_name' in b ? (b.show_name ? 1 : 0) : look.show_name,
       generating_anim: b.generating_anim || 'none',
       thinking_anim: b.thinking_anim || 'none',
       has_vision: b.has_vision ? 1 : 0,
       think_open: b.think_open || '', think_close: b.think_close || '',
-      sandbox_auto: b.sandbox_auto ? 1 : 0, sandbox_allowed: b.sandbox_allowed === false ? 0 : 1, code_allowed: b.code_allowed === false ? 0 : 1, dropdown_icon: 'dropdown_icon' in b ? (b.dropdown_icon === false ? 0 : 1) : (draftGet('ui_preset', '') === 'openai' ? 0 : 1), is_default: 0, agent_steps: Number.isInteger(b.agent_steps) ? Math.max(0, b.agent_steps) : 0,
+      sandbox_auto: b.sandbox_auto ? 1 : 0, sandbox_allowed: b.sandbox_allowed === false ? 0 : 1, code_allowed: b.code_allowed === false ? 0 : 1, dropdown_icon: 'dropdown_icon' in b ? (b.dropdown_icon === false ? 0 : 1) : look.dropdown_icon, is_default: 0, agent_steps: Number.isInteger(b.agent_steps) ? Math.max(0, b.agent_steps) : 0,
       web_search_auto: b.web_search_auto ? 1 : 0, web_search_allowed: b.web_search_allowed === false ? 0 : 1,
       skills_allowed: b.skills_allowed ? 1 : 0, mcp_allowed: b.mcp_allowed ? 1 : 0, chat_search_allowed: b.chat_search_allowed ? 1 : 0,
       end_chat_allowed: b.end_chat_allowed ? 1 : 0, memory_allowed: b.memory_allowed ? 1 : 0, calculator_allowed: b.calculator_allowed ? 1 : 0, todo_allowed: b.todo_allowed ? 1 : 0, ask_user_allowed: b.ask_user_allowed ? 1 : 0, consult_allowed: b.consult_allowed ? 1 : 0, consult_images: b.consult_images ? 1 : 0, consult_models: sanitizeConsultModels(b.consult_models), hide_tool_calls: b.hide_tool_calls ? 1 : 0, long_convo_reminder: b.long_convo_reminder ? 1 : 0,
@@ -221,7 +223,7 @@ export default function registerModelRoutes(app) {
       bg_enabled: b.bg_enabled ? 1 : 0, bg_image: b.bg_image || '',
       badges_off: badgesOff(b.badges_off),
       static_icon: b.static_icon || '', generating_icon: b.generating_icon || '', thinking_icon: b.thinking_icon || '',
-      icon_position: b.icon_position || (draftGet('ui_preset', '') === 'openai' ? 'left' : 'below'),
+      icon_position: b.icon_position || look.icon_position,
       temperature: null, top_p: null, presence_penalty: null, frequency_penalty: null, repetition_penalty: null, min_p: null, top_k: null, seed: null,
       cost_in: preset ? preset.in : null, cost_out: preset ? preset.out : null,
       sort_order: max + 1, enabled: 1

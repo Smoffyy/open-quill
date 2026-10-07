@@ -31,7 +31,7 @@ const SETTINGS_INDEX = {
     tk('What should we call you?'), tk('Language'), tk('Instructions for the Assistant'), tk('Export everything'), tk('Import'),
   ],
   interface: [
-    tk('Theme'), tk('Chat font'), tk('Message density'), tk('Reading width'), tk('OLED screen protection'),
+    tk('Colour palette'), tk('Chat font'), tk('Message density'), tk('Reading width'), tk('OLED screen protection'),
     tk('Text reveal'), tk('Reveal speed'), tk('Streaming cursor'), tk('Cursor style'), tk('Blink speed'), tk('Pulse speed'),
     tk('Conversation map'), tk('Find in conversation'), tk('Branch map'), tk('Message shortcuts'),
   ],

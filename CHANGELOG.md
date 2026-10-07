@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Plan mode** - the composer's mode switches between Auto and Plan. In Plan the assistant can only read the workspace and answers with a plan, then asks whether to proceed; yes switches to Auto and builds it.
 - **Code composer** - attach files into the workspace, dictate, pick the model with all of its options (thinking, effort and the rest) and watch the context used fill in live. Escape stops a turn and Continue picks up a reply that was cut off.
 - **Code prompt** - sessions use their own coding-agent prompt with the workspace, plan, question and web search tools, instead of the model's chat system prompt.
+- **Preset registry** - each base layout is one entry in `lib/presets.js`, shared by the server and the client: its label, layout, default display font, default dark and light palettes, the icon defaults new models get, its setup swatch and its builtin theme. Adding a preset is one entry plus its palettes; the theme list, setup guide, boot script and server defaults all follow from it.
 
 ### Changed
 - **Version badge** - the badge in Settings, Version no longer shows trailing zeros.
@@ -27,15 +28,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Model icon beside replies** - an icon placed to the left of a reply sits closer to it and a little higher, and the model name above the reply lines up with its text, in both layouts.
 - **New model defaults** - with the OpenAI base layout a new model starts with icon size 28, the name shown and the icon on the left, including when that layout is staged and not yet published.
 - **Themes change colours only** - in the Anthropic Light and Legacy palettes the plus, submenu and slash menus use an inset outline instead of a border, so every palette gives them the same size.
-- **Layout, palette and shared design are separate** - `anthropic.css` and `openai.css` are replaced by palette files (colours only), layout files (the Anthropic composer card and the OpenAI pill composer) and shared sheets for the sidebar, library, skills and design layer. A layout is a set of named flags in `lib/layout.js`, read with `useLayout()` and applied as `data-layout`, so components no longer test which preset is active, and the OpenAI Light palette is `data-palette="openai"`. `test/layout.test.js` guards the structure and AGENTS.md describes it.
+- **Layout, palette and shared design are separate** - `anthropic.css` and `openai.css` are replaced by palettes, layouts and shared sheets for the sidebar, library, skills and design layer.
+  - Palettes in `styles/palettes/` hold colour tokens only, one block per palette, and a palette builds on another instead of repeating it (Anthropic Dark 2026 Q3 on 2025 Q2, OpenAI Dark 2025 on 2024 Q1). Components read a token with their own fallback, so no palette styles a component directly. `data-theme` is now just `light` or `dark`, and `data-palette` names the palette and the ones it builds on.
+  - Each layout has a folder in `styles/layouts/` with one token file (composer shape and input, button size, menu radius and items) that every layout fills in, plus small files per area (composer, top bar, greeting, menus) for what tokens cannot express. Neither layout uses `!important` any more.
+  - Layout behaviour is a set of named flags in `lib/layout.js`, read with `useLayout()`. The composer reads them itself, and the model picker and context gauge are placed by `ModelPickerSlot`, so components never test which preset is active.
+  - The boot script in `index.html` is generated from the preset and palette registries at build time.
+  - `test/layout.test.js` and `test/palettes.test.js` guard the structure, and AGENTS.md describes it.
+- **Colour palette setting** - the "Theme" picker in Settings, Interface is now called "Colour palette", since it only changes colours.
+- **Base layout follows the active theme** - the layout is set by choosing a theme under Admin, Interface, Themes, and switches live in the open tab. The display font follows the new layout unless an admin picked one by hand. Deleting the active theme moves the layout to the theme that takes over. The display font control now sits in its own Typography card.
+- **OpenAI phone model picker** - the bottom sheet is a layout setting and opens without inline positioning.
 
 ### Fixed
 - **Jump to latest button** - the scroll-to-bottom button had a see-through background in the OpenAI Dark 2025 palette, so text showed through it. It is now solid in every palette.
 - **Empty reply after a tool call** - a reasoning model could finish the step after a tool call with only thinking, so the reply ended with no answer. The turn now asks the model once or twice for its final answer instead of stopping.
 - **Thinking icon after a tool call** - the model icon stayed on the generating animation when the model started thinking again after a tool call. It now shows the thinking animation for every round of reasoning.
+- **State colours in the Anthropic dark palettes** - a palette rule that was too broad hid them. The microphone now turns red while recording and during a call, liked and disliked reply buttons show their colour, the notes under request controls in the model menu use their own colour, and unavailable models are dimmed again.
+- **OpenAI login fields** - the focus and error borders on the login form were hidden by the palette and now show.
+- **Layout and theme out of step** - the Preset control could switch the layout while the active theme stayed on another base, so build mode painted over a different layout than the theme said.
 
 ### Removed
 - **Sandbox in chats** - the sandbox tools toggle, the per-chat artifacts panel and the per-model "Sandbox tools" setting are gone; file work happens in Code. Project chats keep reading their project's files.
+- **Preset control** - the Base layout card in Admin, Interface is gone; choosing a theme sets the layout. The app config endpoint no longer accepts `uiPreset`.
 
 ---
 

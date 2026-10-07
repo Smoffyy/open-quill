@@ -2225,6 +2225,28 @@ test('the client and server copies of the tool protocol stay byte-identical', ()
   assert.equal(client, server, 'client/src/lib/toolproto.js and server/lib/toolproto.js must be kept identical');
 });
 
+test('client/src/lib/presets.js and server/lib/presets.js are the same file', () => {
+  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  const repo = path.dirname(root);
+  const read = (p) => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
+  const server = read(path.join(root, 'lib', 'presets.js'));
+  const client = read(path.join(repo, 'client', 'src', 'lib', 'presets.js'));
+  assert.equal(client, server, 'client/src/lib/presets.js and server/lib/presets.js must be kept identical');
+});
+
+test('every preset is a complete registry entry', async () => {
+  const { PRESETS, DEFAULT_PRESET, presetId, presetById, isPreset } = await import('../lib/presets.js');
+  assert.ok(isPreset(DEFAULT_PRESET));
+  assert.equal(presetId('nonsense'), DEFAULT_PRESET);
+  assert.equal(presetById(undefined).id, DEFAULT_PRESET);
+  const keys = Object.keys(PRESETS[0]).sort();
+  for (const p of PRESETS) {
+    assert.deepEqual(Object.keys(p).sort(), keys, p.id + ' declares the same fields as every other preset');
+    assert.deepEqual(Object.keys(p.model).sort(), Object.keys(PRESETS[0].model).sort(), p.id + ' model defaults');
+    assert.ok(p.palettes.dark && p.palettes.light, p.id + ' names a dark and a light palette');
+  }
+});
+
 test('client/src/lib/badges.js and server/lib/badges.js are the same file', () => {
   const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
   const repo = path.dirname(root);

@@ -1668,7 +1668,6 @@
   "Switch light / dark": "라이트 / 다크 전환",
   "Switch modes with a prompt token": "프롬프트 토큰으로 모드 전환",
   "Switch to this branch": "이 분기로 전환",
-  "Switching also sets a matching default font. Models created while a preset is active inherit its icon defaults.": "전환하면 어울리는 기본 글꼴도 함께 설정됩니다. 프리셋이 활성화된 동안 만든 모델은 해당 프리셋의 아이콘 기본값을 물려받습니다.",
   "System": "시스템",
   "System prompt": "시스템 프롬프트",
   "System prompt override": "시스템 프롬프트 재정의",
@@ -1740,12 +1739,10 @@
   "The server queries this instance directly. Keys and URLs never reach the browser.": "서버가 이 인스턴스에 직접 질의합니다. 키와 URL은 브라우저에 전달되지 않습니다.",
   "The server will open “{name}” the next time it starts. Nothing changes until then, and the database running right now is left alone.": "서버는 다음 시작 시 “{name}”을(를) 엽니다. 그 전까지는 아무것도 바뀌지 않으며, 현재 실행 중인 데이터베이스는 그대로 유지됩니다.",
   "The small link row under the buttons. An address starting with http opens in a new tab.": "버튼 아래의 작은 링크 행입니다. http로 시작하는 주소는 새 탭에서 열립니다.",
-  "The starting point a theme paints over. Anthropic is the native layout; OpenAI moves the model picker to the top-left, switches to a pill composer and a pitch-black palette, and pins a logo beside every reply.": "테마가 덧입혀지는 출발점입니다. Anthropic은 기본 레이아웃이며, OpenAI는 모델 선택기를 왼쪽 상단으로 옮기고, 필 형태의 입력창과 새까만 팔레트로 전환하며, 모든 답변 옆에 로고를 고정합니다.",
   "The theme builder, the theme library, and the identity every connected client renders.": "테마 빌더, 테마 라이브러리, 그리고 연결된 모든 클라이언트가 렌더링하는 아이덴티티입니다.",
   "The three things a workspace needs before members can chat.": "구성원이 채팅할 수 있으려면 워크스페이스에 필요한 세 가지입니다.",
   "The upload failed.": "업로드에 실패했습니다.",
   "The voice id sent to the endpoint, for example alloy or af_bella.": "엔드포인트로 전송되는 음성 ID입니다. 예: alloy 또는 af_bella.",
-  "Theme": "테마",
   "Theme being edited. Double-click to rename.": "편집 중인 테마입니다. 더블 클릭하여 이름을 바꾸세요.",
   "Theme builder": "테마 빌더",
   "Theme default": "테마 기본값",
@@ -1881,7 +1878,6 @@
   "Use this version": "이 버전 사용",
   "Use uncropped": "자르지 않은 상태로 사용",
   "Use {label}": "{label} 사용",
-  "Used for headings, greetings, and assistant text. A theme can override this per element.": "제목, 인사말, 어시스턴트 텍스트에 사용됩니다. 테마는 요소별로 이를 재정의할 수 있습니다.",
   "Used in the browser tab, the sidebar, and the greeting.": "브라우저 탭, 사이드바, 인사말에 사용됩니다.",
   "Used when no rule matches. Without one, a router refuses the turn rather than guessing.": "일치하는 규칙이 없을 때 사용됩니다. 이것이 없으면 라우터는 추측하지 않고 턴을 거부합니다.",
   "Used {name}": "{name} 사용됨",
@@ -2951,5 +2947,7 @@
   "Available in Code": "Code에서 사용 가능",
   "Off, the model is greyed out in the Code model picker and cannot run Code sessions. Turn it off for models that are not reliable with tools.": "끄면 이 모델은 Code 모델 선택기에서 회색으로 표시되며 Code 세션을 실행할 수 없습니다. 도구 사용이 불안정한 모델에는 꺼 두세요.",
   "{name} is not available in Code.": "{name}은(는) Code에서 사용할 수 없습니다.",
-  "Not available in Code": "Code에서 사용 불가"
+  "Not available in Code": "Code에서 사용 불가",
+  "Colour palette": "색상 팔레트",
+  "Used for headings, greetings, and assistant text. Until you pick one, it follows the active theme's layout. A theme can override it per element.": "제목, 인사말, 어시스턴트 답변에 사용됩니다. 직접 고르기 전까지는 활성 테마의 레이아웃을 따릅니다. 테마에서 요소별로 바꿀 수 있습니다."
 }

@@ -1,4 +1,4 @@
-.unavail-bg { position: absolute; inset: 0; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 20px; z-index: 0; }
+.unavail-bg { position: absolute; inset: 0; background: var(--unavail-bg, var(--bg)); border: 1px solid var(--border-soft); border-radius: 20px; z-index: 0; }
 .unavail-banner { position: relative; z-index: 1; padding: 12px 18px; font-size: 13.5px; }
 .unavail-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .unavail-msg { color: var(--text); }

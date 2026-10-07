@@ -12,7 +12,7 @@ export function presetDefaults(layout, theme = 'system') {
 
 export function shownThemeFallback(appliedTheme) {
   if (appliedTheme === 'light') return 'light';
-  if (appliedTheme === 'anthropic' || appliedTheme === 'openai') return 'dark';
+  if (appliedTheme === 'dark') return 'dark';
   return 'system';
 }
 

@@ -6,6 +6,7 @@ import { logAudit, clientIp } from '../lib/audit.js';
 import { purgeUserChats, purgeUser } from '../lib/purge.js';
 import { resolveModelOrDefault } from '../lib/models.js';
 import { budgetStatus } from '../lib/budget.js';
+import { presetId } from '../lib/presets.js';
 import { memoriesOf, changeMemory, setMemories } from '../lib/memory.js';
 import { killSessionSockets } from '../lib/ws/index.js';
 import { cleanStyles, cleanPersonas, cleanPrompts, prefsFit } from '../lib/profile.js';
@@ -81,7 +82,7 @@ export default function registerAuthRoutes(app) {
       appName: getSetting('app_name', 'open-quill'),
       appIcon: getSetting('app_icon', ''),
       appFont: getSetting('app_font', 'literata'),
-      uiPreset: getSetting('ui_preset', '') === 'openai' ? 'openai' : 'anthropic',
+      uiPreset: presetId(getSetting('ui_preset', '')),
     });
   });
 

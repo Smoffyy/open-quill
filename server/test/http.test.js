@@ -22,6 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
+import { presetById } from '../lib/presets.js';
 
 const SERVER_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DB_NAME = 'oqhttptest';
@@ -681,20 +682,56 @@ test('model folders persist on their own, empty or not', async () => {
 
 test('a staged app-config edit can be taken back before it is published', async () => {
   const cfg = (await browser('GET', '/api/app-config')).json;
-  const live = { uiPreset: cfg.uiPreset, appFont: cfg.appFont, appName: cfg.appName };
-  const other = live.uiPreset === 'openai' ? 'anthropic' : 'openai';
+  const live = { appFont: cfg.appFont, appName: cfg.appName };
 
-  await browser('PATCH', '/api/admin/app-config', { body: { appName: 'Typo Name', uiPreset: other, appFont: 'newsreader' } });
+  await browser('PATCH', '/api/admin/app-config', { body: { appName: 'Typo Name', appFont: 'newsreader' } });
   const staged = (await browser('GET', '/api/app-config')).json;
   assert.equal(staged.appName, 'Typo Name', 'the admin previews the staged name');
-  assert.equal(staged.uiPreset, other, 'and the staged preset');
+  assert.equal(staged.appFont, 'newsreader', 'and the staged font');
   assert.ok((await browser('GET', '/api/admin/changes')).json.changes.some(c => c.key === 'setting:app_name'));
 
   await browser('PATCH', '/api/admin/app-config', { body: live });
   const back = (await browser('GET', '/api/app-config')).json;
   assert.equal(back.appName, live.appName, 'the name draft is gone, not still holding the edit');
-  assert.equal(back.uiPreset, live.uiPreset, 'and so is the preset draft');
-  assert.equal(back.appFont, live.appFont);
+  assert.equal(back.appFont, live.appFont, 'and so is the font draft');
+});
+
+test('the base layout follows the active theme and cannot be set on its own', async () => {
+  const cfg = (await browser('GET', '/api/app-config')).json;
+  const store = (await browser('GET', '/api/admin/themes')).json;
+  const start = store.themes.find(t => t.id === store.activeId);
+  const other = store.themes.find(t => t.basePreset !== start.basePreset);
+  const layout = async () => (await browser('GET', '/api/app-config')).json;
+
+  assert.equal(cfg.uiPreset, start.basePreset, 'the layout starts out as the active theme base');
+  await browser('PATCH', '/api/admin/app-config', { body: { uiPreset: other.basePreset } });
+  assert.equal((await layout()).uiPreset, start.basePreset, 'app-config no longer moves the layout');
+
+  await browser('PATCH', '/api/admin/app-config', { body: { appFont: presetById(start.basePreset).font } });
+  await browser('POST', `/api/admin/themes/${other.id}/activate`, { body: {} });
+  let now = await layout();
+  assert.equal(now.uiPreset, other.basePreset, 'activating a theme moves the layout to its base');
+  assert.equal(now.appFont, presetById(other.basePreset).font, 'and an untouched font follows the layout');
+
+  await browser('POST', `/api/admin/themes/${start.id}/activate`, { body: {} });
+  await browser('PATCH', '/api/admin/app-config', { body: { appFont: 'newsreader' } });
+  await browser('POST', `/api/admin/themes/${other.id}/activate`, { body: {} });
+  now = await layout();
+  assert.equal(now.uiPreset, other.basePreset);
+  assert.equal(now.appFont, 'newsreader', 'a font the admin picked is kept');
+
+  const copy = (await browser('POST', '/api/admin/themes', { body: { from: other.id } })).json.id;
+  await browser('POST', `/api/admin/themes/${copy}/activate`, { body: {} });
+  await browser('DELETE', `/api/admin/themes/${copy}`);
+  const left = (await browser('GET', '/api/admin/themes')).json;
+  const fallback = left.themes.find(t => t.id === left.activeId);
+  assert.equal((await layout()).uiPreset, fallback.basePreset, 'deleting the active theme moves the layout to the theme that takes over');
+
+  await browser('POST', `/api/admin/themes/${start.id}/activate`, { body: {} });
+  await browser('PATCH', '/api/admin/app-config', { body: { appFont: cfg.appFont } });
+  now = await layout();
+  assert.equal(now.uiPreset, cfg.uiPreset);
+  assert.equal(now.appFont, cfg.appFont);
 });
 
 test('a release can ship part of the draft, refuses a stale review and rolls back', async () => {

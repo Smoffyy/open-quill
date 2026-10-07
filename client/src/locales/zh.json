@@ -733,7 +733,6 @@
   "The exact prompt this conversation would send right now, in order, with what each part costs.": "此对话此刻会发送的完整提示词，按顺序列出，并标明每一部分的开销。",
   "The model returned an error.": "模型返回了一个错误。",
   "The original model": "原始模型",
-  "Theme": "主题",
   "Theme default": "主题默认",
   "These apply to the new chat once you send your first message.": "在你发送第一条消息后，这些设置会应用到新对话。",
   "Thinking": "思考中",
@@ -1541,9 +1540,6 @@
   "Who to reach about this instance. An email address or an https link. Shown on the 404 page; leave empty to hide it.": "就此实例应联系谁。可以是邮箱地址或 https 链接。显示在 404 页面上；留空则隐藏。",
   "Adds an entry at the foot of the sidebar. Admins edit every page from inside the reference itself.": "在侧边栏底部添加一个入口。管理员可在参考页面内直接编辑每个页面。",
   "Shown under the composer. Markdown links are allowed with http, https, mailto, or same-site paths. Custom text is rendered as written and is never translated.": "显示在输入框下方。允许使用 Markdown 链接，支持 http、https、mailto 或同站路径。自定义文本按原样显示，绝不会被翻译。",
-  "The starting point a theme paints over. Anthropic is the native layout; OpenAI moves the model picker to the top-left, switches to a pill composer and a pitch-black palette, and pins a logo beside every reply.": "主题所绘制的起点。Anthropic 是原生布局；OpenAI 会将模型选择器移到左上角，改用药丸形输入框和纯黑配色，并在每条回复旁固定一个标志。",
-  "Switching also sets a matching default font. Models created while a preset is active inherit its icon defaults.": "切换时也会设置相应的默认字体。在某个预设生效期间创建的模型会继承其默认图标。",
-  "Used for headings, greetings, and assistant text. A theme can override this per element.": "用于标题、问候语和助手文本。主题可以按元素覆盖此设置。",
   "One is picked at random each time the new chat screen opens. Leave a single entry for a fixed greeting.": "每次打开新对话界面时随机选取一条。只保留一条即为固定问候语。",
   "Buttons under the message box on the new chat screen. Selecting one sends its prompt immediately. Up to {n}.": "新对话界面输入框下方的按钮。选择其中一个会立即发送其提示词。最多 {n} 个。",
   "No starter prompts": "没有起始提示词",
@@ -2951,5 +2947,7 @@
   "Available in Code": "可用于 Code",
   "Off, the model is greyed out in the Code model picker and cannot run Code sessions. Turn it off for models that are not reliable with tools.": "关闭后,该模型在 Code 模型选择器中会变灰,且无法运行 Code 会话。对于使用工具不稳定的模型,请将其关闭。",
   "{name} is not available in Code.": "{name} 在 Code 中不可用。",
-  "Not available in Code": "Code 中不可用"
+  "Not available in Code": "Code 中不可用",
+  "Colour palette": "调色板",
+  "Used for headings, greetings, and assistant text. Until you pick one, it follows the active theme's layout. A theme can override it per element.": "用于标题、问候语和助手回复。在你选择之前，它会跟随当前主题的布局。主题可以按元素覆盖它。"
 }

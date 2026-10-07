@@ -32,8 +32,7 @@ test('each preset starts from its own cursor defaults', () => {
 
 test('resetting keeps the light or dark the page is showing', () => {
   assert.equal(shownThemeFallback('light'), 'light');
-  assert.equal(shownThemeFallback('anthropic'), 'dark');
-  assert.equal(shownThemeFallback('openai'), 'dark');
+  assert.equal(shownThemeFallback('dark'), 'dark');
   assert.equal(shownThemeFallback(null), 'system');
 });
 

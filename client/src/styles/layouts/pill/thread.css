@@ -1,0 +1,6 @@
+[data-layout="pill"] .assistant-body.text-enter > :first-child { animation: none; }
+[data-layout="pill"] .msg-icon-name { font-family: var(--font-sans); font-size: 13.5px; font-weight: 600; color: var(--text); }
+
+[data-layout="pill"] .trail { top: 66px; bottom: 168px; }
+[data-layout="pill"] .thread-find { top: 58px; }
+[data-layout="pill"] .thread.finding .msg { scroll-margin-top: 104px; }

@@ -27,7 +27,7 @@ export default function ReasoningBlock({ text, live, durationMs = 0, collapsible
   const lineAt = useRef(0);
   const lineTimer = useRef(null);
   const steps = useMemo(() => parseSteps(text), [text]);
-  const rolling = layout.rollingReasoning;
+  const rolling = layout.reasoning === 'rolling';
 
   useEffect(() => {
     if (!rolling) return;

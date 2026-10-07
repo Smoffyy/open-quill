@@ -16,7 +16,7 @@ export default function Greeting({ incognito, incognitoLine, greeting, userName,
   if (incognito) {
     return (
       <div className="greeting">
-        {layout.temporaryChatLabel
+        {layout.incognitoWording === 'temporary'
           ? <span className="incog-title">{t('Temporary Chat')}</span>
           : <><Ghost style={{ width: 44 }} /> {t(incognitoLine)}</>}
       </div>

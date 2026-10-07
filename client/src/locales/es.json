@@ -733,7 +733,6 @@
   "The exact prompt this conversation would send right now, in order, with what each part costs.": "El prompt exacto que esta conversación enviaría ahora mismo, en orden, con lo que cuesta cada parte.",
   "The model returned an error.": "El modelo devolvió un error.",
   "The original model": "El modelo original",
-  "Theme": "Tema",
   "Theme default": "Predeterminada del tema",
   "These apply to the new chat once you send your first message.": "Se aplican al chat nuevo en cuanto envíes tu primer mensaje.",
   "Thinking": "Pensando",
@@ -1541,9 +1540,6 @@
   "Who to reach about this instance. An email address or an https link. Shown on the 404 page; leave empty to hide it.": "A quién contactar sobre esta instancia. Un correo electrónico o un enlace https. Se muestra en la página 404; déjalo vacío para ocultarlo.",
   "Adds an entry at the foot of the sidebar. Admins edit every page from inside the reference itself.": "Añade una entrada al pie de la barra lateral. Los administradores editan cada página desde dentro de la propia referencia.",
   "Shown under the composer. Markdown links are allowed with http, https, mailto, or same-site paths. Custom text is rendered as written and is never translated.": "Se muestra debajo del redactor. Se permiten enlaces en Markdown con http, https, mailto, o rutas del mismo sitio. El texto personalizado se muestra tal como está escrito y nunca se traduce.",
-  "The starting point a theme paints over. Anthropic is the native layout; OpenAI moves the model picker to the top-left, switches to a pill composer and a pitch-black palette, and pins a logo beside every reply.": "El punto de partida sobre el que se pinta un tema. Anthropic es el diseño nativo; OpenAI mueve el selector de modelo a la esquina superior izquierda, cambia a un redactor tipo píldora y una paleta negro absoluto, y fija un logotipo junto a cada respuesta.",
-  "Switching also sets a matching default font. Models created while a preset is active inherit its icon defaults.": "Cambiar también define una fuente predeterminada a juego. Los modelos creados mientras un preajuste está activo heredan sus iconos predeterminados.",
-  "Used for headings, greetings, and assistant text. A theme can override this per element.": "Se usa para encabezados, saludos y texto del asistente. Un tema puede anular esto por elemento.",
   "One is picked at random each time the new chat screen opens. Leave a single entry for a fixed greeting.": "Se elige uno al azar cada vez que se abre la pantalla de chat nuevo. Deja una sola entrada para un saludo fijo.",
   "Buttons under the message box on the new chat screen. Selecting one sends its prompt immediately. Up to {n}.": "Botones debajo del campo de mensaje en la pantalla de chat nuevo. Elegir uno envía su prompt de inmediato. Hasta {n}.",
   "No starter prompts": "Sin prompts iniciales",
@@ -2951,5 +2947,7 @@
   "Available in Code": "Disponible en Code",
   "Off, the model is greyed out in the Code model picker and cannot run Code sessions. Turn it off for models that are not reliable with tools.": "Desactivado, el modelo aparece atenuado en el selector de modelos de Code y no puede ejecutar sesiones de Code. Desactívalo en los modelos que no sean fiables con herramientas.",
   "{name} is not available in Code.": "{name} no está disponible en Code.",
-  "Not available in Code": "No disponible en Code"
+  "Not available in Code": "No disponible en Code",
+  "Colour palette": "Paleta de colores",
+  "Used for headings, greetings, and assistant text. Until you pick one, it follows the active theme's layout. A theme can override it per element.": "Se usa en títulos, saludos y respuestas del asistente. Hasta que elijas una, sigue el diseño del tema activo. Un tema puede cambiarla por elemento."
 }

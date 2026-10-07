@@ -14,7 +14,7 @@
 }
 
 /* ---------- user message timestamp ---------- */
-.msg-time { position: relative; font-size: 11px; line-height: 17px; color: var(--text-muted); font-family: var(--font-sans); padding-left: 6px; margin-right: 4px; cursor: default; white-space: nowrap; }
+.msg-time { position: relative; font-size: 11px; line-height: 17px; color: var(--sidebar-label, var(--text-muted)); font-family: var(--font-sans); padding-left: 6px; margin-right: 4px; cursor: default; white-space: nowrap; }
 .msg-time::after { content: attr(data-full); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%) translateY(4px); background: var(--menu-bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 12px; white-space: nowrap; box-shadow: 0 8px 24px #00000055; opacity: 0; pointer-events: none; transition: opacity var(--fx-t, .15s), transform var(--fx-t, .15s); z-index: 20; }
 .msg-time:hover::after { opacity: 1; transform: translateX(-50%) translateY(0); }
 
@@ -35,9 +35,6 @@
   opacity: 0; transition: opacity var(--fx-t, .15s) cubic-bezier(.165, .84, .44, 1); }
 .nav-item:hover .nav-shortcut { opacity: 1; }
 .sidebar.collapsed .nav-shortcut { display: none; }
-
-/* ---------- anthropic: white chat title ---------- */
-:root[data-theme="anthropic"] .topbar .chat-name { color: var(--text); }
 
 /* ---------- model showcase background ---------- */
 .app-bg-stack { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
@@ -78,11 +75,11 @@ body:has(.app.has-bg) > .model-submenu.pinned {
   backdrop-filter: blur(30px) saturate(1.4); -webkit-backdrop-filter: blur(30px) saturate(1.4);
 }
 .app.has-bg .quick-prompt {
-  background: color-mix(in srgb, var(--surface) 50%, transparent);
+  background: var(--qp-bg, color-mix(in srgb, var(--surface) 50%, transparent));
   backdrop-filter: blur(16px) saturate(1.25); -webkit-backdrop-filter: blur(16px) saturate(1.25);
 }
 .app.has-bg .quick-prompt:hover, .app.has-bg .quick-prompt:focus-visible {
-  background: color-mix(in srgb, var(--surface-hover) 72%, transparent);
+  background: var(--qp-bg-hover, color-mix(in srgb, var(--surface-hover) 72%, transparent));
 }
 .app.has-bg .sidebar, .app.has-bg .composer, .app.has-bg .bubble-user,
 .app.has-bg .artifacts, .app.has-bg .topbar, .app.has-bg .scroll-area, .app.has-bg .quick-prompt {
@@ -122,7 +119,7 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .topbar .chat-name:disabled { cursor: default; background: none; }
 .topbar .ct-name { min-width: 0; padding: 0 6px 0 10px; border-radius: 7px 0 0 7px; }
 .topbar .ct-name .ct-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.topbar .ct-caret { width: 26px; padding: 0; display: inline-grid; place-items: center; border-radius: 0 7px 7px 0; color: var(--text-muted); }
+.topbar .ct-caret { width: 26px; padding: 0; display: inline-grid; place-items: center; border-radius: 0 7px 7px 0; color: var(--chat-caret, var(--text-muted)); }
 .topbar .ct-caret svg { width: 15px; height: 15px; }
 .topbar .ct-caret:hover { color: var(--text); }
 .topbar .chat-name:focus-visible { outline-offset: -2px; }
@@ -245,8 +242,7 @@ body:has(.app.has-bg) > .model-submenu.pinned {
   .composer .model-trigger { min-width: 0; overflow: hidden; white-space: nowrap; }
   .composer .model-trigger > span:first-child { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .composer-wrap { padding: 0 !important; }
-  .active-composer { padding: 0 8px 8px !important; max-width: 100% !important; }
-  .composer { border-radius: 20px; }
+  .active-composer { padding: var(--composer-dock-top) 8px 8px !important; max-width: 100% !important; }
   .to-bottom { bottom: 150px; }
   .toaster { top: calc(58px + var(--ledger-h, 0px) + var(--find-h, 0px)); }
 
@@ -328,10 +324,8 @@ body:has(.app.has-bg) > .model-submenu.pinned {
   .model-scrim { display: none; }
 
   /* compactness + overlap guards */
-  .center-wrap .composer { padding: 20px 14px 14px 16px; }
   /* iOS Safari auto-zooms on focus when a control is under 16px, so every
      editable control is floored at 16px for touch widths. */
-  .composer textarea, .center-wrap .composer textarea { font-size: 16px; line-height: 20px; }
   input, textarea, select, .chat-rename, .field input, .field textarea, .field select, .modal-main input, .modal-main textarea, .modal-main select { font-size: 16px; }
   .qp-slot { margin-top: 14px; }
   .qp-grid, .quick-prompts { gap: 8px; }

@@ -1,4 +1,4 @@
-.ctx-inspect-overlay { position: fixed; inset: 0; background: #00000066; backdrop-filter: blur(2px); display: grid; place-items: center; z-index: 200; }
+.ctx-inspect-overlay { position: fixed; inset: 0; background: var(--scrim, #00000066); backdrop-filter: blur(2px); display: grid; place-items: center; z-index: 200; }
 .ctx-inspect { width: min(760px, 92vw); max-height: 84vh; background: var(--menu-bg); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,.28); display: flex; flex-direction: column; overflow: hidden; }
 .ctx-inspect-head { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; border-bottom: 1px solid var(--border-soft); font-family: var(--font-sans); font-weight: 600; }
 .ctx-x { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; color: var(--text-muted); }

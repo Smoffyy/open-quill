@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import ModelDropdown from './ModelDropdown.jsx';
+import ModelPickerSlot from './ModelPickerSlot.jsx';
 import Tip from '../ui/Tip.jsx';
 import { api } from '../../lib/api.js';
 import { toast } from '../../lib/toast.js';
@@ -15,6 +16,7 @@ import { useThemeText } from '../../lib/theme/store.jsx';
 import { focusUnlessTouch } from '../../lib/touch.js';
 import { useSubmenus } from '../../lib/submenu.js';
 import { useDismiss } from '../../lib/dismiss.js';
+import { useLayout } from '../../lib/uselayout.js';
 
 // The picker no longer advertises a list. The server decides what it can read by
 // sniffing the bytes, so any format is accepted here and one that turns out to be
@@ -92,10 +94,13 @@ export default function Composer({
   conversationEnded = false, endedReason = '',
   removedModel = null, skills = [], onToggleSkill = null, onManageSkills = null,
   queueCount = 0, onQueue, onSteer, canSteer = false, onManageConnectors = null, attachCombo = '',
-  compareIds = [], onSetCompare, hideModelPicker = false, chipsBelow = false, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
-  ctxGauge = null, enterSend = false, draftId, panel = null
+  compareIds = [], onSetCompare, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
+  ctxGauge = null, thread = false, draftId, panel = null
 }) {
   const composerPlaceholder = useThemeText('composer.placeholder', t('How can I help you today?'));
+  const layout = useLayout();
+  const chipsBelow = layout.toolChips === 'below';
+  const enterSend = thread && layout.sendIcon === 'enter';
   const ta = useRef(null);
   const fileInput = useRef(null);
   const plusRef = useRef(null);
@@ -651,12 +656,14 @@ export default function Composer({
           )}
         </div>
         <div className="composer-right">
-          {ctxGauge}
-          {!hideModelPicker && <ModelDropdown models={models} modelsReady={modelsReady} currentId={currentId} onSelect={onSelect}
-            extended={extended} onToggleExtended={onToggleExtended} up={modelUp} isAdmin={canUseUnavailable}
-            reasoningEffort={reasoningEffort} onSetEffort={onSetEffort}
-            kwargValues={kwargValues} onSetKwarg={onSetKwarg}
-            modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />}
+          <ModelPickerSlot at="composer">
+            {ctxGauge}
+            <ModelDropdown models={models} modelsReady={modelsReady} currentId={currentId} onSelect={onSelect}
+              extended={extended} onToggleExtended={onToggleExtended} up={modelUp} isAdmin={canUseUnavailable}
+              reasoningEffort={reasoningEffort} onSetEffort={onSetEffort}
+              kwargValues={kwargValues} onSetKwarg={onSetKwarg}
+              modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />
+          </ModelPickerSlot>
           {voiceMic && (
             <Tip label={dictating ? t('Stop dictation') : transcribing ? t('Transcribing…') : t('Dictate')}>
               <button className={'mic' + (dictating ? ' rec' : '') + (transcribing ? ' busy' : '')} onClick={toggleDictation}

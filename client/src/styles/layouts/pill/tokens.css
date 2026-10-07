@@ -1,0 +1,21 @@
+:root[data-layout="pill"] {
+  --composer-width: 808px;
+  --composer-radius: 26px;
+  --composer-padding: 8px 96px 8px 48px;
+  --composer-border-width: 1px;
+  --composer-input-leading: 24px;
+  --composer-input-padding: 6px 0;
+  --composer-input-min: 24px;
+  --composer-home-input-min: 24px;
+  --composer-input-max: 280px;
+  --composer-tools-gap: 8px;
+  --composer-dock-top: 64px;
+  --control-size: 36px;
+  --control-radius: 50%;
+  --menu-radius: 16px;
+  --menu-item-radius: 10px;
+  --menu-item-padding: 8px 10px;
+  --menu-item-gap: 10px;
+  --menu-item-size: 14.5px;
+  --menu-item-weight: 500;
+}

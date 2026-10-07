@@ -1,4 +1,6 @@
 @import './base.css';
+@import './palettes/anthropic.css';
+@import './palettes/openai.css';
 @import './layout.css';
 @import './chat.css';
 @import './chrome.css';
@@ -24,11 +26,9 @@
 @import './agenttools.css';
 @import './filepreview.css';
 @import './code.css';
-@import './palette-anthropic.css';
 @import './sidebar.css';
 @import './library.css';
 @import './skills.css';
 @import './design.css';
-@import './layout-card.css';
-@import './palette-openai.css';
-@import './layout-pill.css';
+@import './layouts/card/index.css';
+@import './layouts/pill/index.css';

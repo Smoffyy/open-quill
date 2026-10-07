@@ -10,6 +10,7 @@ import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, k
 import { useDismiss } from '../../lib/dismiss.js';
 import { Skel, SkelMenu } from '../ui/Skeleton.jsx';
 import { ModelMark } from '../ui/Weave.jsx';
+import { useLayout } from '../../lib/uselayout.js';
 
 const BADGE_ICONS = {
   __proto__: null,
@@ -387,6 +388,7 @@ function MoreGroup({ label, items, renderOpt, openKey, setOpenKey }) {
 
 export default function ModelDropdown({ models, modelsReady = true, currentId, onSelect, extended, onToggleExtended, up, modelHasBg, bgInChat, onToggleBgInChat, reasoningEffort, onSetEffort, kwargValues, onSetKwarg, isAdmin = false }) {
   const [open, setOpen] = useState(false);
+  const sheetLayout = useLayout().pickerSheet;
   const [openSub, setOpenSub] = useState(null);
   const [place, setPlace] = useState({ shift: 0, left: null, maxH: 0, sheet: false, ready: false });
   const [listMaxH, setListMaxH] = useState(0);
@@ -403,6 +405,10 @@ export default function ModelDropdown({ models, modelsReady = true, currentId, o
     const measure = () => {
       const wrap = ref.current, menu = menuRef.current;
       if (!wrap || !menu) return;
+      if (sheetLayout && window.matchMedia('(max-width: 768px)').matches) {
+        setPlace(p => (p.ready && p.sheet) ? p : { shift: 0, left: null, maxH: 0, sheet: true, ready: true });
+        return;
+      }
       const trig = wrap.querySelector('.model-trigger') || wrap;
       const r = trig.getBoundingClientRect();
       const wr = wrap.getBoundingClientRect();
@@ -439,7 +445,7 @@ export default function ModelDropdown({ models, modelsReady = true, currentId, o
       window.removeEventListener('resize', measure);
       window.removeEventListener('scroll', measure, true);
     };
-  }, [open, listMaxH, extended]);
+  }, [open, listMaxH, extended, sheetLayout]);
   useLayoutEffect(() => {
     if (!open) { setListMaxH(0); return; }
     const list = listRef.current;

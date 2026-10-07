@@ -1,0 +1,24 @@
+[data-layout="pill"] .plus-menu, [data-layout="pill"] .pm-sub { z-index: 80; }
+[data-layout="pill"] .app.has-bg .plus-menu, [data-layout="pill"] .app.has-bg .pm-sub { background: var(--pop-bg); }
+[data-layout="pill"] .plus-menu { bottom: 48px; min-width: 260px; }
+[data-layout="pill"] .plus-menu.down { top: 44px; bottom: auto; }
+[data-layout="pill"] .model-menu { min-width: 268px; border: 1px solid var(--pop-border); box-shadow: var(--pop-shadow); }
+[data-layout="pill"] .model-submenu { min-width: 176px; border: 1px solid var(--pop-border); box-shadow: var(--pop-shadow); }
+[data-layout="pill"] .model-submenu .model-opt { padding: 6px 8px; }
+[data-layout="pill"] .submenu-row svg { color: var(--pop-faint); }
+[data-layout="pill"] .model-opt { padding: 6px 8px; }
+[data-layout="pill"] .toggle-row { padding: 7px 8px; }
+[data-layout="pill"] .effort-rail, [data-layout="pill"] .effort-thumb { border-radius: 999px; }
+[data-layout="pill"] .model-opt .check, [data-layout="pill"] .plus-menu .pm-check { color: var(--text); }
+[data-layout="pill"] .model-trigger { gap: 4px; font-weight: 400; line-height: 20px; }
+[data-layout="pill"] .model-trigger .ext { color: var(--text-faint); font-weight: 400; font-size: 14px; }
+
+@media (max-width: 768px) {
+  :root[data-layout="pill"] .model-menu {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+    width: 100%; min-width: 0; max-width: 100%; overflow: hidden auto;
+    border-radius: 20px 20px 0 0; padding: 14px 12px calc(14px + env(safe-area-inset-bottom));
+    max-height: 78vh;
+  }
+  [data-layout="pill"] .model-scrim { display: block; position: fixed; inset: 0; z-index: 49; background: #00000070; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+}

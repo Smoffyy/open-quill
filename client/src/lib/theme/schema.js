@@ -1,4 +1,5 @@
 import { tk } from '../../i18n.jsx';
+import { presetId } from '../presets.js';
 
 export const THEME_SCHEMA = 1;
 
@@ -470,8 +471,8 @@ export const NODE_INDEX = (() => {
    Documents
 --------------------------------------------------------------------------- */
 
-export function emptyDoc(basePreset = 'anthropic') {
-  return { v: THEME_SCHEMA, basePreset: basePreset === 'openai' ? 'openai' : 'anthropic', tokens: {}, content: {}, elements: {}, slots: {}, css: '' };
+export function emptyDoc(basePreset) {
+  return { v: THEME_SCHEMA, basePreset: presetId(basePreset), tokens: {}, content: {}, elements: {}, slots: {}, css: '' };
 }
 
 // Older documents keep working: an unknown key is left alone and a missing one
@@ -481,7 +482,7 @@ export function migrateDoc(raw) {
   return {
     ...d,
     v: THEME_SCHEMA,
-    basePreset: d.basePreset === 'openai' ? 'openai' : 'anthropic',
+    basePreset: presetId(d.basePreset),
     tokens: d.tokens && typeof d.tokens === 'object' ? d.tokens : {},
     content: d.content && typeof d.content === 'object' ? d.content : {},
     elements: d.elements && typeof d.elements === 'object' ? d.elements : {},

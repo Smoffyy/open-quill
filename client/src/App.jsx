@@ -24,7 +24,8 @@ import ThreadSkeleton from './components/chat/ThreadSkeleton.jsx';
 import SummaryModal from './components/dialogs/SummaryModal.jsx';
 import CommandPalette from './components/dialogs/CommandPalette.jsx';
 import { computeActiveBg } from './lib/appbg.js';
-import { presetOf, nextTheme } from './lib/palettes.js';
+import { nextTheme } from './lib/palettes.js';
+import { presetId } from './lib/presets.js';
 import Disclaimer from './components/chat/Disclaimer.jsx';
 import { ThemeProvider } from './lib/theme/store.jsx';
 import ThemeSlot from './components/builder/ThemeSlot.jsx';
@@ -38,6 +39,7 @@ import NotFound from './components/pages/NotFound.jsx';
 import CodeView from './components/code/CodeView.jsx';
 import ChatControls from './components/chat/ChatControls.jsx';
 import ModelDropdown from './components/composer/ModelDropdown.jsx';
+import ModelPickerSlot from './components/composer/ModelPickerSlot.jsx';
 import CallPanel from './components/chat/CallPanel.jsx';
 import ChatsOverview from './components/pages/ChatsOverview.jsx';
 import ArtifactsLibrary from './components/artifacts/ArtifactsLibrary.jsx';
@@ -559,7 +561,7 @@ export default function App() {
       setUser(null);
       api.get('/api/auth/context').then(c => {
         setAuthCtx(c);
-        const preset = presetOf(c.uiPreset);
+        const preset = presetId(c.uiPreset);
         document.documentElement.setAttribute('data-font', appFontId(c.appFont));
         applyPrefs(null, preset);
         setCustomFavicon(c.appIcon);
@@ -568,7 +570,7 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!user) return;
-    const preset = presetOf(cfg?.uiPreset);
+    const preset = presetId(cfg?.uiPreset);
     applyPrefs(user?.prefs, preset);
     const t = user?.prefs?.theme || 'dark';
     if (t === 'system' && window.matchMedia) {
@@ -752,7 +754,7 @@ export default function App() {
     setCfg(c);
     const list = c.greetings && c.greetings.length ? c.greetings : DEFAULT_CFG.greetings;
     setGreeting(list[Math.floor(Math.random() * list.length)]);
-    const preset = presetOf(c.uiPreset);
+    const preset = presetId(c.uiPreset);
     applyPrefs(userRef.current?.prefs, preset);
     document.documentElement.setAttribute('data-font', appFontId(c.appFont));
     setCustomFavicon(c.appIcon);
@@ -1524,9 +1526,6 @@ export default function App() {
     removedModel: activeId ? chatRemovedModel : null,
     skills, onToggleSkill: toggleSkill, onManageSkills: (mode) => openSettings('skills', { browse: mode === 'browse' }),
     onManageConnectors: () => openSettings('mcp'), attachCombo: comboLabel(resolveKeybinds(user?.prefs).attachFiles),
-    hideModelPicker: layout.pickerInTopbar,
-    enterSend: layout.sendShowsEnter,
-    chipsBelow: layout.chipsBelowComposer,
     models, modelsReady, currentId, onSelect: pickModel, extended, onToggleExtended: () => setExtended(e => !e),
     reasoningEffort, onSetEffort: setReasoningEffort, kwargValues, onSetKwarg: setKwarg,
     visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin, budget,
@@ -1537,7 +1536,7 @@ export default function App() {
     onNewChat: () => newChat(), onShortcuts: () => setShowShortcuts(true),
     voiceMic: !!cfg.voiceMic, voiceCall: !!cfg.voiceCall && !incognito, sttEngine: cfg.voiceStt || 'browser',
     callActive: callOpen, onStartCall: () => setCallOpen(o => !o),
-    ctxGauge: layout.composerGauge ? ctxGaugeEl : null
+    ctxGauge: ctxGaugeEl
   };
   function focusedMsg() {
     const list = messagesRef.current;
@@ -1563,7 +1562,7 @@ export default function App() {
     toggleTheme: () => {
       const next = nextTheme({
         themePref: user?.prefs?.theme,
-        preset: presetOf(cfg.uiPreset),
+        preset: presetId(cfg.uiPreset),
         prefersDark: prefersDark(),
         lastDark: lastDarkPalette.current
       });
@@ -1748,7 +1747,7 @@ export default function App() {
         {incognito && (
           <div className="incognito-bar">
             <div className="incog-left">
-              {empty && layout.pickerInTopbar && modelPicker}
+              {empty && <ModelPickerSlot at="topbar">{modelPicker}</ModelPickerSlot>}
               <div className="incognito-title"><Ghost style={{ width: 18 }} /> {t("Incognito chat")}</div>
             </div>
             <button className="incognito-close" onClick={toggleIncognito} title={t("Exit incognito")} aria-label={t("Exit incognito")} disabled={streaming || queued}><X style={{ width: 16 }} /></button>
@@ -1769,10 +1768,12 @@ export default function App() {
               user?.isAdmin && !incognito && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => setCtlOpen(o => !o) },
             ]} />
         )}
-        {empty && !incognito && !codeMode && layout.pickerInTopbar && (
-          <div className="home-topbar">
-            {modelPicker}
-          </div>
+        {empty && !incognito && !codeMode && (
+          <ModelPickerSlot at="topbar">
+            <div className="home-topbar">
+              {modelPicker}
+            </div>
+          </ModelPickerSlot>
         )}
         {codeMode ? codeView : empty ? (
           <div className="center-wrap">
@@ -1781,11 +1782,11 @@ export default function App() {
               greeting={cfg.greetingsChosen ? greeting : null} userName={user?.displayName} icon={model?.staticIcon || ''} />
             <ThemeSlot name="composer.above" />
             <div className="composer-wrap">
-              <Composer {...composerProps} autoFocus modelUp enterSend={false} focusKey={focusTick} />
+              <Composer {...composerProps} autoFocus modelUp focusKey={focusTick} />
             </div>
             <div className="qp-slot">
               {incognito ? (
-                <div className={layout.temporaryChatLabel ? 'incog-note' : 'incognito-note'}>{layout.temporaryChatLabel ? t("This chat won't appear in history. Incognito chats aren't saved.") : t("Incognito chats aren't saved to your history.")}</div>
+                <div className="incognito-note">{layout.incognitoWording === 'temporary' ? t("This chat won't appear in history. Incognito chats aren't saved.") : t("Incognito chats aren't saved to your history.")}</div>
               ) : cfg.quickPrompts && cfg.quickPrompts.length > 0 && (
                 <QuickPrompts prompts={cfg.quickPrompts} visible={!input.trim()} disabled={streaming} onPick={(p) => send([], p)} />
               )}
@@ -1795,7 +1796,7 @@ export default function App() {
         ) : (
           <>
             <ChatTopbar
-              lead={layout.pickerInTopbar ? modelPicker : null}
+              lead={<ModelPickerSlot at="topbar">{modelPicker}</ModelPickerSlot>}
               chat={activeChat} chatId={activeId} project={activeProject} booting={booting}
               projects={projects} busy={busyChats.includes(activeId)}
               onOpenMenu={() => setMobileDrawer(true)} onOpenProject={openProjects} onRename={renameChat}
@@ -1856,7 +1857,7 @@ export default function App() {
                       streaming={!!msg._streaming} phase={msg._streaming ? ((modelById.get(currentId)?.hideThinking && phase === 'thinking') ? 'generating' : phase) : 'static'} liveCall={msg._streaming ? liveCall : null} liveCalls={msg._streaming ? liveCalls : EMPTY_CALLS}
                       onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onEditAssistant={editAssistantMessage} onDelete={deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
                       showSpeed={showMsgSpeed}
-                      showIcon={msg.role === 'assistant' && (layout.replyIconOnEvery || (lastA && msg.id === lastA.id))}
+                      showIcon={msg.role === 'assistant' && (layout.replyIcon === 'every' || (lastA && msg.id === lastA.id))}
                       fadeWords={fadeWords} />
                     );
                   });
@@ -1876,7 +1877,7 @@ export default function App() {
             <div className={'composer-wrap active-composer' + (layout.floatingComposer ? ' floating' : '')}>
               {user?.prefs?.engineStrip === true && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
               {callDock}
-              <Composer {...composerProps} focusKey={focusTick}
+              <Composer {...composerProps} thread focusKey={focusTick}
                 panel={!incognito && (plans.plan || question) ? <AgentPanel plan={plans.plan} previousPlan={plans.previousPlan} onDismissPlan={dismissPlan} question={question} onAnswer={answerQuestion} onSkip={() => answerQuestion(null)} /> : null} />
               <Disclaimer text={cfg.disclaimer} />
             </div>

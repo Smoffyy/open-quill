@@ -1668,7 +1668,6 @@
   "Switch light / dark": "Переключить светлую / тёмную тему",
   "Switch modes with a prompt token": "Переключать режимы токеном в промпте",
   "Switch to this branch": "Переключиться на эту ветку",
-  "Switching also sets a matching default font. Models created while a preset is active inherit its icon defaults.": "Переключение также задаёт соответствующий шрифт по умолчанию. Модели, созданные при активном пресете, наследуют его значки по умолчанию.",
   "System": "Система",
   "System prompt": "Системный промпт",
   "System prompt override": "Переопределение системного промпта",
@@ -1740,12 +1739,10 @@
   "The server queries this instance directly. Keys and URLs never reach the browser.": "Сервер запрашивает этот экземпляр напрямую. Ключи и URL никогда не попадают в браузер.",
   "The server will open “{name}” the next time it starts. Nothing changes until then, and the database running right now is left alone.": "Сервер откроет «{name}» при следующем запуске. До этого момента ничего не меняется, а текущая работающая база данных остаётся нетронутой.",
   "The small link row under the buttons. An address starting with http opens in a new tab.": "Небольшая строка ссылок под кнопками. Адрес, начинающийся с http, открывается в новой вкладке.",
-  "The starting point a theme paints over. Anthropic is the native layout; OpenAI moves the model picker to the top-left, switches to a pill composer and a pitch-black palette, and pins a logo beside every reply.": "Отправная точка, поверх которой рисует тема. Anthropic — это исходный макет; OpenAI перемещает выбор модели в левый верхний угол, переключается на овальное поле ввода и чёрную как смоль палитру, а также закрепляет логотип рядом с каждым ответом.",
   "The theme builder, the theme library, and the identity every connected client renders.": "Конструктор тем, библиотека тем и идентичность, которую отображает каждый подключённый клиент.",
   "The three things a workspace needs before members can chat.": "Три вещи, необходимые рабочему пространству, прежде чем участники смогут общаться.",
   "The upload failed.": "Загрузка не удалась.",
   "The voice id sent to the endpoint, for example alloy or af_bella.": "Идентификатор голоса, отправляемый на эндпоинт, например alloy или af_bella.",
-  "Theme": "Тема",
   "Theme being edited. Double-click to rename.": "Редактируемая тема. Дважды щёлкните, чтобы переименовать.",
   "Theme builder": "Конструктор тем",
   "Theme default": "Значение темы по умолчанию",
@@ -1881,7 +1878,6 @@
   "Use this version": "Использовать эту версию",
   "Use uncropped": "Использовать без обрезки",
   "Use {label}": "Использовать {label}",
-  "Used for headings, greetings, and assistant text. A theme can override this per element.": "Используется для заголовков, приветствий и текста ассистента. Тема может переопределить это для каждого элемента.",
   "Used in the browser tab, the sidebar, and the greeting.": "Используется во вкладке браузера, боковой панели и приветствии.",
   "Used when no rule matches. Without one, a router refuses the turn rather than guessing.": "Используется, когда ни одно правило не подходит. Без него маршрутизатор отклоняет реплику вместо угадывания.",
   "Used {name}": "Использовано: {name}",
@@ -2951,5 +2947,7 @@
   "Available in Code": "Доступна в Code",
   "Off, the model is greyed out in the Code model picker and cannot run Code sessions. Turn it off for models that are not reliable with tools.": "Если выключено, модель затемнена в выборе моделей Code и не может запускать сессии Code. Выключайте для моделей, ненадёжно работающих с инструментами.",
   "{name} is not available in Code.": "{name} недоступна в Code.",
-  "Not available in Code": "Недоступна в Code"
+  "Not available in Code": "Недоступна в Code",
+  "Colour palette": "Цветовая палитра",
+  "Used for headings, greetings, and assistant text. Until you pick one, it follows the active theme's layout. A theme can override it per element.": "Используется в заголовках, приветствиях и ответах ассистента. Пока вы не выберете шрифт, он следует макету активной темы. Тема может переопределить его для отдельных элементов."
 }

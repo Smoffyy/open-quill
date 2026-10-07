@@ -1,0 +1,52 @@
+[data-layout="pill"] .composer-stack { max-width: 768px; margin: 0 auto; }
+[data-layout="pill"] .unavail-bg { border-radius: 26px; }
+[data-layout="pill"] .composer, [data-layout="pill"] .center-wrap .composer {
+  position: relative; z-index: 3;
+  background: var(--input-bg); min-height: 52px; max-width: 768px; width: 100%;
+  display: flex; flex-direction: column; justify-content: center; margin: 0 auto;
+}
+[data-layout="pill"] .composer:focus-within { border-color: var(--composer-border, var(--border-soft)); }
+[data-layout="pill"] .composer.ml, [data-layout="pill"] .center-wrap .composer.ml { padding-bottom: 52px; justify-content: flex-start; }
+[data-layout="pill"] .composer-bar {
+  position: absolute; left: 8px; right: 8px; bottom: 8px; top: auto; height: 36px;
+  display: flex; align-items: center; justify-content: space-between; pointer-events: none; padding: 0; margin: 0; z-index: 6;
+}
+[data-layout="pill"] .composer-bar > * { pointer-events: auto; }
+[data-layout="pill"] .composer .plus { background: transparent; }
+[data-layout="pill"] .composer .plus:hover { background: var(--surface-hover); }
+[data-layout="pill"] .composer .plus svg { width: 21px; height: 21px; stroke-width: 1.8; }
+[data-layout="pill"] .send svg { width: 18px; height: 18px; }
+[data-layout="pill"] .composer .attach-row, [data-layout="pill"] .composer .queued-chip,
+[data-layout="pill"] .composer .continue-row, [data-layout="pill"] .composer .slash-menu,
+[data-layout="pill"] .composer .steer-row { margin-left: -36px; margin-right: -84px; }
+[data-layout="pill"] .composer .attach-row { margin-top: 0; padding: 0 0 8px; }
+
+[data-layout="pill"] .lib-overlay { z-index: 35; }
+
+[data-layout="pill"] .composer-wrap.floating {
+  position: absolute; bottom: 0; left: 0; right: 0; z-index: 30;
+  max-width: none;
+  background: linear-gradient(to top,
+    var(--bg) 0%,
+    var(--bg) 26%,
+    color-mix(in srgb, var(--bg) 88%, transparent) 48%,
+    color-mix(in srgb, var(--bg) 62%, transparent) 66%,
+    color-mix(in srgb, var(--bg) 30%, transparent) 84%,
+    transparent 100%);
+  pointer-events: none;
+}
+[data-layout="pill"] .composer-wrap.floating > * { pointer-events: auto; }
+[data-layout="pill"] .composer-wrap.floating .disclaimer { margin: 0 auto; padding: 8px 0 10px; max-width: 768px; }
+[data-layout="pill"] .scroll-area .thread-pad { height: 160px; }
+[data-layout="pill"] .to-bottom { bottom: 130px; }
+[data-layout="pill"] .disclaimer { font-family: var(--font-sans); font-size: 12px; text-align: center; }
+
+[data-layout="pill"] .composer.has-chips { padding-bottom: 52px; }
+[data-layout="pill"] .composer.ml.has-chips { padding-bottom: 96px; }
+[data-layout="pill"] .composer.has-chips .composer-bar { bottom: 52px; }
+[data-layout="pill"] .composer-chips {
+  position: absolute; left: 8px; right: 8px; bottom: 8px;
+  display: flex; align-items: center; flex-wrap: nowrap; gap: 6px;
+  overflow: auto hidden; scrollbar-width: none;
+}
+[data-layout="pill"] .composer .active-chip { height: 36px; min-width: 36px; border-radius: 999px; }

@@ -32,7 +32,7 @@ export function promptFeaturesOf(settings) {
 
 export const CONFIG_DEFAULTS = {
   appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [],
-  appFont: 'literata', uiPreset: 'anthropic', modelDocs: true, modelDocsConfig: null,
+  appFont: 'literata', modelDocs: true, modelDocsConfig: null,
   allowSignups: true, localOnly: true, egressLocalOnly: true, egressAllowWebSearch: true, egressAllowlist: []
 };
 
@@ -49,7 +49,6 @@ function configFrom(c) {
     appIcon: c.appIcon || '',
     quickPrompts: Array.isArray(c.quickPrompts) ? c.quickPrompts : [],
     appFont: appFontId(c.appFont),
-    uiPreset: c.uiPreset === 'openai' ? 'openai' : 'anthropic',
     modelDocs: c.modelDocs !== false,
     modelDocsConfig: c.modelDocsConfig || null,
     allowSignups: c.allowSignups !== false,

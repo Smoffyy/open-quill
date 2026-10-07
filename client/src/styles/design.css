@@ -27,14 +27,15 @@
 :root:root :is(
   .nav-item, .chat-row, .icon-btn, .profile-btn, .profile-apps,
   .lib-pill, .lib-icon-btn, .lib-tab, .sched-card
-):hover::before { background: var(--cl-hover); }
+):hover::before { background: var(--row-hover, var(--cl-hover)); }
 :root:root .lib-primary::before { background: var(--text); }
 :root:root .lib-pill::before,
 :root:root .lib-tab.on::before { background: var(--cl-hover); }
 :root:root .lib-pill:hover::before { background: var(--hover-mid); }
 :root:root .nav-item.on::before,
-:root:root .nav-item.on:hover::before { background: var(--cl-active); }
-:root:root .chat-row.active::before { background: var(--cmdk-active); }
+:root:root .nav-item.on:hover::before { background: var(--row-selected, var(--cl-active)); }
+:root:root .chat-row:hover::before { background: var(--chat-row-hover, var(--row-hover, var(--cl-hover))); }
+:root:root .chat-row.active::before { background: var(--row-selected, var(--cmdk-active)); }
 
 @keyframes cl-chunk-in { from { opacity: 0; } to { opacity: 1; } }
 :root:root .send { animation: cl-chunk-in .12s ease-out both; }
