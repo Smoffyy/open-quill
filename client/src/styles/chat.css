@@ -89,6 +89,7 @@
 
 /* ---------- model dropdown ---------- */
 .model-select { position: relative; }
+.model-slot { display: flex; align-items: center; gap: var(--composer-tools-gap); }
 .model-trigger { display: flex; align-items: center; gap: 4px; height: 32px; padding: 0 12px; border-radius: 8px; color: var(--model-trigger-color, var(--text-muted)); font-size: 14px; font-weight: 500; line-height: 19.6px; transition: background var(--fx-t, .15s); }
 .model-trigger:hover { background: var(--composer-hover, var(--surface-hover)); color: var(--model-trigger-color, var(--text)); }
 .plus:active, .mic:active, .model-trigger:active { background: var(--pop-hover, var(--hover-mid)); }

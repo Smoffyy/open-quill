@@ -21,7 +21,6 @@ export const KEYBIND_ACTIONS = [
   { id: 'msgNext', group: 'In this conversation', label: 'Next message', def: 'j', pref: 'msgKeys', typing: false, overlay: false },
   { id: 'msgPrev', group: 'In this conversation', label: 'Previous message', def: 'k', pref: 'msgKeys', typing: false, overlay: false },
   { id: 'scrollBottom', group: 'In this conversation', label: 'Jump to latest', def: 'alt+ArrowDown', typing: true, overlay: false },
-  { id: 'toggleLedger', group: 'In this conversation', label: 'Context ledger', def: 'alt+l', typing: true, overlay: false },
   { id: 'promptLedger', group: 'In this conversation', label: 'What gets sent', def: 'alt+p', typing: true, overlay: false },
   { id: 'toggleArtifacts', group: 'In this conversation', label: 'Files panel (Code)', def: 'alt+a', typing: true, overlay: false },
   { id: 'toggleOutline', group: 'In this conversation', label: 'Contents', def: 'alt+o', pref: 'threadOutline', typing: true, overlay: false },

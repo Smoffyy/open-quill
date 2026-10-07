@@ -45,16 +45,3 @@ export function useTurnMeta() {
     reset, restore, addSteers
   }), [telemetry, promptTokens, status, steers, route, reset, restore, addSteers]);
 }
-
-// The ledger only shows a live token count when the backend reports exact
-// numbers; an estimate would put a number next to a label that promises a
-// measurement. Pulled out of the render so the condition is stated once.
-export function liveLedgerTokens({ streaming, promptTokens, telemetry, ledgerOpen }) {
-  const exact = !!(streaming && promptTokens > 0 && telemetry && telemetry.exact);
-  const generated = exact ? (telemetry.genTokens || 0) : 0;
-  return {
-    exact,
-    generated,
-    used: (ledgerOpen && exact) ? promptTokens + generated : 0
-  };
-}

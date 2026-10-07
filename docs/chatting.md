@@ -52,9 +52,8 @@ These live under **Settings → Interface → Navigation**. Each one can be turn
 
 ## What the model sees
 
-Three views, each from the **⋯** menu in the top bar:
+Once a chat has started, the ring beside the model name shows how full the context window is; hover it for the exact count. After switching models it is recounted when you send the next message, or right away with Shift+Click on the ring. Two more views go deeper:
 
-- **Context ledger** (`Alt+L`) shows next to every message how many tokens it costs and whether it is still sent, summarized or dropped. **Drop** takes a message out of what the model sees without deleting it, and **Restore** puts it back.
 - **Inspect context** breaks the next request down into its parts: system prompt, instructions, memory, files and messages, with their token counts.
 - **What gets sent** (`Alt+P`) shows the exact prompt in order, ready to copy.
 

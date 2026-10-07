@@ -239,7 +239,6 @@ export const ELEMENTS = [
   { id: 'threadRailTick', label: tk('Thread rail marker'), cat: 'thread', sel: '.trail-tick', parent: 'threadRail', caps: BOX },
   { id: 'threadFind', label: tk('Find in conversation'), cat: 'thread', sel: '.thread-find', parent: 'main', caps: ALL },
   { id: 'outlinePanel', label: tk('Contents panel'), cat: 'thread', sel: '.outline-panel', parent: 'main', caps: ALL },
-  { id: 'ledgerBar', label: tk('Context ledger'), cat: 'thread', sel: '.ledger-head', parent: 'thread', caps: ALL },
   { id: 'proseP', label: tk('Paragraph'), cat: 'thread', sel: '.assistant-body p', parent: 'assistantBody', caps: TEXTY },
   { id: 'proseH1', label: tk('Heading 1'), cat: 'thread', sel: '.assistant-body h1', parent: 'assistantBody', caps: TEXTY },
   { id: 'proseH2', label: tk('Heading 2 and below'), cat: 'thread', sel: '.assistant-body h2, .assistant-body h3, .assistant-body h4', parent: 'assistantBody', caps: TEXTY },
@@ -356,7 +355,7 @@ export const ELEMENTS = [
   { id: 'skeleton', label: tk('Loading placeholder'), cat: 'feedback', sel: '.skeleton', caps: BOX },
   { id: 'toastIcon', label: tk('Notification icon'), cat: 'feedback', sel: '.toast-ico', parent: 'toast', caps: BOX },
   { id: 'skeleton', label: tk('Loading skeleton'), cat: 'feedback', sel: '.skeleton', caps: BOX },
-  { id: 'ctxGauge', label: tk('Context gauge'), cat: 'feedback', sel: '.ctx-gauge', caps: BOX },
+  { id: 'contextRing', label: tk('Context ring'), cat: 'feedback', sel: '.cx-ring', caps: BOX },
   { id: 'engineStrip', label: tk('Engine telemetry'), cat: 'feedback', sel: '.engine-strip', caps: ALL },
   { id: 'unavailBanner', label: tk('Warning banner'), cat: 'feedback', sel: '.unavail-banner', caps: ALL }
 ];
@@ -539,8 +538,7 @@ export const ORDER_GROUPS = [
   {
     id: 'composerRight', container: '.composer-right', label: tk('Composer actions'),
     items: [
-      { id: 'cr.gauge', label: tk('Context gauge'), sel: '.composer-right > .ctx-gauge' },
-      { id: 'cr.model', label: tk('Model selector'), sel: '.composer-right > .model-select' },
+      { id: 'cr.model', label: tk('Model selector'), sel: '.composer-right > .model-slot' },
       { id: 'cr.mic', label: tk('Dictation'), sel: '.composer-right > .mic' },
       { id: 'cr.send', label: tk('Send'), sel: '.composer-right > .send' }
     ]

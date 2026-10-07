@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Preset registry** - each base layout is one entry in `lib/presets.js`, shared by the server and the client: its label, layout, default display font, default dark and light palettes, the icon defaults new models get, its setup swatch and its builtin theme. Adding a preset is one entry plus its palettes; the theme list, setup guide, boot script and server defaults all follow from it.
 
 ### Changed
+- **Context ring in chats** - the ring from the Code composer now sits beside the model name once a chat has started, filling as the context window is used and showing the exact count on hover. Switching models no longer asks the server to recount; the ring waits for the next message and says so. Shift+Click the ring to recount right away.
 - **Version badge** - the badge in Settings, Version no longer shows trailing zeros.
 - **Widened thinking dots** - thinking dots went from 0.35 to 0.55 between dot centres.
 - **Sidebar** - a Chat/Code switch beside the name, the collapse button to its left, a "More" row for All chats and Model docs, and version and search in the footer. Clicking the sidebar's edge hides it and dragging resizes it.
@@ -49,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - **Sandbox in chats** - the sandbox tools toggle, the per-chat artifacts panel and the per-model "Sandbox tools" setting are gone; file work happens in Code. Project chats keep reading their project's files.
 - **Preset control** - the Base layout card in Admin, Interface is gone; choosing a theme sets the layout. The app config endpoint no longer accepts `uiPreset`.
+- **Context ledger and context gauge** - the per-message token ledger (`Alt+L`), dropping a message from context, and the gauge beside the model picker are gone, along with their settings. `/api/chats/:id/ledger` is removed, and messages dropped earlier are sent to the model again.
 
 ---
 

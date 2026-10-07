@@ -87,7 +87,7 @@ export default function Tip({ label, keys, side, tone, disabled, toggle, childre
     let left = a.left + a.width / 2 - w / 2;
     left = Math.min(Math.max(EDGE, left), window.innerWidth - w - EDGE);
     setPos({ top, left });
-  }, [open, side]);
+  }, [open, side, label]);
 
   return (
     <span className={'tip-host' + (pinned ? ' tip-pinned' : '')} ref={hostRef}

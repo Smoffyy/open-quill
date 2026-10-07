@@ -286,7 +286,12 @@ function SampleStates() {
         <span className="badge">{t('New')}</span>
         <span className="chip">{t('A chip')}</span>
       </div>
-      <div className="ctx-gauge"><span className="cg-bar"><span className="cg-fill" style={{ width: '42%' }} /></span></div>
+      <span className="cx-ring">
+        <svg viewBox="0 0 12 12">
+          <circle cx="6" cy="6" r="5" className="cx-ring-track" />
+          <circle cx="6" cy="6" r="5" className="cx-ring-fill" strokeDasharray="31.4" strokeDashoffset="18.2" />
+        </svg>
+      </span>
       <div className="engine-strip final"><span className="es-icon"><Gauge style={{ width: 13 }} /></span><span className="es-stat">{t('Sample telemetry')}</span></div>
       <span className="skeleton" style={{ width: 220 }} />
     </div>, host);

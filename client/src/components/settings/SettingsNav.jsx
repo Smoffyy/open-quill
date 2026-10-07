@@ -38,8 +38,8 @@ const SETTINGS_INDEX = {
   security: [tk('Password'), tk('Two-factor authentication'), tk('Active sessions')],
   chat: [
     tk('Auto-scroll'),
-    tk('Web search on by default'), tk('Engine telemetry'), tk('Context gauge'),
-    tk('Speed on each reply'), tk('Progress line'), tk('Context ledger on open'), tk('Mid-stream steering'),
+    tk('Web search on by default'), tk('Engine telemetry'),
+    tk('Speed on each reply'), tk('Progress line'), tk('Mid-stream steering'),
   ],
   memory: [tk('Use memory in chats'), tk('Saved memories'), tk('Forget everything')],
   skills: [tk('Browse'), tk('Add'), tk('Create with the assistant'), tk('Write skill instructions'), tk('Upload a skill')],

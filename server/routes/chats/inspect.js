@@ -1,12 +1,12 @@
 import { db } from '../../db.js';
-import { contextBudget, slideToFit, countExact } from '../../lib/ctxwindow.js';
+import { contextBudget, countExact } from '../../lib/ctxwindow.js';
 import { authMiddleware } from '../../auth.js';
 import { buildMessages } from '../../llm/index.js';
 import * as websearch from '../../lib/websearch.js';
 import { toolState, systemPrompt } from '../../lib/systemprompt.js';
 import { modelCtx } from '../../lib/models.js';
 import {
-  chatHistory, historyRows, estimateTokens, calibratedTokens, calibRatio, messageTokens,
+  chatHistory, historyRows, estimateTokens, calibratedTokens,
   tokenCalib, compactThreshold, rollingCtxFor
 } from '../../lib/convo.js';
 
@@ -43,52 +43,6 @@ export default function registerInspectRoutes(app) {
       budget: bud.budget || 0, reserve: bud.reserve || 0,
       hasSummary: !!c.summary, measured: !!exact || tokenCalib.has(c.id),
       compacts: model.enable_summaries ? compactThreshold(model, ctx) : 0, rolling
-    });
-  });
-
-  app.get('/api/chats/:id/ledger', authMiddleware, async (req, res) => {
-    const c = db.chats.byId(req.params.id);
-    if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
-    const model = pickModel(req.query.modelId);
-    if (!model) return res.json({ limit: 0, used: 0, overhead: 0, messages: [] });
-    const rows = historyRows(c, model);
-    const active = rows.filter(r => !r.summarized && !r.excluded);
-    const system = promptOf(c, model).text;
-    const convo = buildMessages(model, active.map(r => r.msg), false, system);
-    const ratio = calibRatio(c.id);
-    const exact = await countExact(model, convo);
-    const used = exact || calibratedTokens(c.id, convo);
-    const scaffold = buildMessages(model, [], false, system);
-    const exactHead = exact ? await countExact(model, scaffold) : 0;
-    const overheadTokens = exactHead || Math.round(calibratedTokens(c.id, scaffold) * (exact ? 1 : ratio));
-    const raw = rows.map(r => messageTokens(r.msg));
-    const activeRaw = rows.reduce((n, r, i) => n + (!r.summarized && !r.excluded ? raw[i] : 0), 0);
-    const body = Math.max(0, used - overheadTokens);
-    const scale = exact && activeRaw > 0 ? body / activeRaw : ratio;
-    const messages = rows.map((r, i) => ({
-      id: r.id,
-      role: r.role,
-      tokens: Math.max(1, Math.round(raw[i] * scale)),
-      pinned: r.pinned,
-      excluded: r.excluded,
-      summarized: r.summarized
-    }));
-    const ctx = await modelCtx(model);
-    const bud = await contextBudget(model);
-    let sent = used;
-    let dropped = 0;
-    let trimmed = false;
-    if (exact && bud.budget > 0 && used > bud.budget) {
-      const fit = await slideToFit(model, convo, bud.budget);
-      if (fit.tokens) { sent = fit.tokens; dropped = fit.dropped; trimmed = fit.trimmed; }
-    }
-    const limit = bud.budget || ctx || parseInt(model.num_ctx) || 0;
-    res.json({
-      limit, used: sent, total: used, reserve: bud.reserve, ctx: bud.ctx || ctx,
-      overhead: overheadTokens, messages,
-      dropped, trimmed, windowed: dropped > 0 || trimmed,
-      measured: !!exact || tokenCalib.has(c.id), exact: !!exact, hasSummary: !!c.summary,
-      compacts: model.enable_summaries ? compactThreshold(model, ctx) : 0
     });
   });
 
@@ -130,7 +84,7 @@ export default function registerInspectRoutes(app) {
       const txt = typeof m.content === 'string' ? m.content : (m.content || []).map(p => p.type === 'text' ? p.text : '[image]').join('\n');
       return { index: i, role: m.role, tokens: estimateTokens([m]), chars: txt.length, text: txt };
     });
-    const dropped = rows.filter(r => r.summarized || r.excluded).length;
+    const dropped = rows.filter(r => r.summarized).length;
     res.json({
       modelId: model.id, modelName: model.display_name || model.internal_name,
       system: { text: sysText, tokens: sys ? estimateTokens([sys]) : 0, chars: sysText.length },

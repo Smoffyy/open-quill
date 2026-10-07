@@ -154,7 +154,7 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .pm-save-prompt:hover { background: var(--pop-hover); }
 
 /* ---- toasts ---- */
-.toaster { position: absolute; top: calc(66px + var(--ledger-h, 0px) + var(--find-h, 0px)); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; z-index: 200; pointer-events: none; width: max-content; max-width: 90vw; }
+.toaster { position: absolute; top: calc(66px + var(--find-h, 0px)); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; z-index: 200; pointer-events: none; width: max-content; max-width: 90vw; }
 .toast { display: flex; align-items: center; gap: 9px; padding: 11px 17px; border-radius: 13px; background: color-mix(in srgb, var(--menu-bg) 72%, transparent); border: 1px solid var(--border-soft); color: var(--text); font-size: 13.5px; box-shadow: 0 12px 40px #00000055; backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4); pointer-events: auto; cursor: pointer; max-width: 80vw; }
 .toast-ico { display: grid; place-items: center; color: var(--text); }
 .toast-msg { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -237,14 +237,14 @@ body:has(.app.has-bg) > .model-submenu.pinned {
   .composer-left { flex-shrink: 0; }
   .composer-left .composer-chips { max-width: 42vw; }
   .composer-right { min-width: 0; flex: 0 1 auto; }
-  .composer-right > *:not(.model-select) { flex-shrink: 0; }
-  .composer .model-select { min-width: 0; flex: 0 1 auto; }
+  .composer-right > *:not(.model-slot) { flex-shrink: 0; }
+  .composer .model-slot, .composer .model-select { min-width: 0; flex: 0 1 auto; }
   .composer .model-trigger { min-width: 0; overflow: hidden; white-space: nowrap; }
   .composer .model-trigger > span:first-child { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .composer-wrap { padding: 0 !important; }
   .active-composer { padding: var(--composer-dock-top) 8px 8px !important; max-width: 100% !important; }
   .to-bottom { bottom: 150px; }
-  .toaster { top: calc(58px + var(--ledger-h, 0px) + var(--find-h, 0px)); }
+  .toaster { top: calc(58px + var(--find-h, 0px)); }
 
   .model-menu, .model-menu.up { max-width: calc(100vw - 24px); max-height: 70vh; overflow: hidden auto; }
   .plus-menu, .pm-sub, .model-submenu, .chat-menu, .popover { max-width: calc(100vw - 24px); }
@@ -361,12 +361,6 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .retry-menu button.danger { color: var(--danger); }
 .retry-menu button.danger:hover { background: color-mix(in srgb, var(--danger) 10%, transparent); }
 .action-caret.on { background: var(--hover-mid); color: var(--text); }
-.thread.ledger-on .code-copy-anchor { top: calc(var(--ledger-h, 0px) + 8px); }
-@keyframes lhLive { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
-.msg.user .ctx-row { justify-content: flex-end; }
-.msg:hover .ctx-row .ctx-btn { opacity: 1; }
-.thread.ledger-on .msg.ctx-out .bubble-user,
-.thread.ledger-on .msg.ctx-out .assistant-body { opacity: .42; }
 .steer-seg button.on { background: var(--surface); color: var(--text); }
 .send.steer { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
 .send.steer:hover { border-color: var(--text); color: var(--text); }

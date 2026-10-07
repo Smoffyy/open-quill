@@ -119,7 +119,6 @@ function ThreadRail({ items, scrollRef, matches, onJump }) {
           if (it.tool) cls.push('is-tool');
           if (it.branch) cls.push('is-branch');
           if (it.pinned) cls.push('is-pinned');
-          if (it.excluded) cls.push('is-out');
           if (matches && matches.has(it.id)) cls.push('is-match');
           return <Tick key={it.id} index={i} cls={cls.join(' ')} label={labels[i]} on={on} scale={scales ? scales[i] : null} />;
         })}

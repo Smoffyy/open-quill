@@ -3,6 +3,7 @@ import CodeMenu, { MenuItem, MenuLabel, MenuSep } from './CodeMenu.jsx';
 import { KwargControl, Badges } from '../composer/ModelDropdown.jsx';
 import { Switch } from '../ui/controls.jsx';
 import Tip from '../ui/Tip.jsx';
+import ContextRing from '../chat/ContextRing.jsx';
 import { Plus, Mic, Enter, X, FileText, Laptop, Info, Check } from '../ui/icons.jsx';
 import { useAttachments } from '../../lib/attachments.js';
 import { useDictation } from '../../lib/dictation.js';
@@ -24,40 +25,6 @@ function useDigits(open, count, pick) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, count, pick]);
-}
-
-function ContextRing({ chatId, modelId, revision, streaming, live }) {
-  const [data, setData] = useState(null);
-  useEffect(() => {
-    if (!chatId) { setData(null); return undefined; }
-    if (streaming) return undefined;
-    let on = true;
-    const timer = setTimeout(() => {
-      api.get('/api/chats/' + chatId + '/context?modelId=' + encodeURIComponent(modelId || ''))
-        .then(d => { if (on) setData(d && d.limit > 0 ? d : null); })
-        .catch(() => { if (on) setData(null); });
-    }, 350);
-    return () => { on = false; clearTimeout(timer); };
-  }, [chatId, modelId, revision, streaming]);
-  const limit = (data && data.limit) || (live && live.limit) || 0;
-  const capTokens = data && data.budget > 0 ? data.budget : limit;
-  const used = streaming && live && live.used > 0 ? live.used : data ? data.used : 0;
-  const pct = capTokens > 0 ? Math.min(100, Math.round((used / capTokens) * 100)) : 0;
-  const r = 5;
-  const len = 2 * Math.PI * r;
-  const label = capTokens > 0 && used > 0
-    ? t('Context: {used} of {limit} tokens ({pct}%)', { used: Number(used).toLocaleString(), limit: Number(limit).toLocaleString(), pct })
-    : t('Context: nothing used yet');
-  return (
-    <Tip label={label}>
-      <span className={'cx-ring' + (pct >= 90 ? ' danger' : pct >= 75 ? ' warn' : '')} role="img" aria-label={label}>
-        <svg viewBox="0 0 12 12">
-          <circle cx="6" cy="6" r={r} className="cx-ring-track" />
-          <circle cx="6" cy="6" r={r} className="cx-ring-fill" strokeDasharray={len} strokeDashoffset={len - (len * pct) / 100} />
-        </svg>
-      </span>
-    </Tip>
-  );
 }
 
 function ModelRow({ m, checked, kbd, nested, isAdmin, onPick }) {

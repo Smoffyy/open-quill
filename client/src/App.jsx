@@ -17,9 +17,7 @@ import { planRecords, groupPlans, latestPlanRef } from './lib/agentpanel.js';
 import QuickPrompts from './components/chat/QuickPrompts.jsx';
 import CompactingBar from './components/chat/CompactingBar.jsx';
 import EngineStrip from './components/chat/EngineStrip.jsx';
-import CtxGauge from './components/chat/CtxGauge.jsx';
 import ContextInspector from './components/dialogs/ContextInspector.jsx';
-import LedgerBar from './components/chat/LedgerBar.jsx';
 import ThreadSkeleton from './components/chat/ThreadSkeleton.jsx';
 import SummaryModal from './components/dialogs/SummaryModal.jsx';
 import CommandPalette from './components/dialogs/CommandPalette.jsx';
@@ -30,6 +28,7 @@ import Disclaimer from './components/chat/Disclaimer.jsx';
 import { ThemeProvider } from './lib/theme/store.jsx';
 import ThemeSlot from './components/builder/ThemeSlot.jsx';
 
+import ContextRing from './components/chat/ContextRing.jsx';
 import Message from './components/chat/Message.jsx';
 import TopbarActions from './components/chat/TopbarActions.jsx';
 import SettingsModal from './components/settings/SettingsModal.jsx';
@@ -74,7 +73,7 @@ import { useGenMirror } from './lib/genmirror.js';
 import { useLiveTools, EMPTY_CALLS } from './lib/livetools.js';
 import { dispatchWs } from './lib/wsmessages.js';
 import { createLru } from './lib/lru.js';
-import { useTurnMeta, liveLedgerTokens } from './lib/turnmeta.js';
+import { useTurnMeta } from './lib/turnmeta.js';
 import { useTurnStream } from './lib/turnstream.js';
 import { parseRoute, shouldResetPath, pathForChat, pathForCode, pathForProject, pathForLibrary, LIBRARY_PAGES } from './lib/route.js';
 import { hasMath, katexPlugin, ensureKatex } from './lib/mathjs.js';
@@ -85,7 +84,7 @@ import BranchTree from './components/chat/BranchTree.jsx';
 import { toast } from './lib/toast.js';
 import { askConfirm } from './lib/confirm.js';
 import { copyText } from './lib/clipboard.js';
-import { Down, Compact, Ghost, Search, Menu, Sliders, X, Gauge, Fork, Panel, Copy, Star, Telescope, TextIcon, Expand } from './components/ui/icons.jsx';
+import { Down, Compact, Ghost, Search, Menu, Sliders, X, Fork, Panel, Copy, Star, Telescope, TextIcon, Expand } from './components/ui/icons.jsx';
 import { setCustomFavicon } from './lib/favicon.js';
 import BrandMark from './components/ui/BrandMark.jsx';
 import { SKELETON_DELAY } from './lib/skeleton.js';
@@ -421,9 +420,6 @@ export default function App() {
   useEffect(() => { if (!msgKeysOn) setKbFocus(null); }, [msgKeysOn]);
 
   const { telemetry, promptTokens: livePrompt, status: modelStatus, steers: liveSteers, route: routeInfo } = turnMeta;
-  const [ledgerOpen, setLedgerOpen] = useState(false);
-  const ledgerDefaultApplied = useRef(false);
-  const [ledger, setLedger] = useState(null);
   const [chatErrors, setChatErrors] = useState({});
 
   const handleWsRef = useRef(null);
@@ -492,9 +488,9 @@ export default function App() {
     setThreadSwap(false);
   }, []);
   const showMsgSpeed = !!user?.prefs?.msgSpeed;
-  const showCtxGauge = !!user?.prefs?.ctxGauge;
   const statusDelay = statusDelayEnabled(user?.prefs?.statusDelay);
-  const ledgerTokens = liveLedgerTokens({ streaming, promptTokens: livePrompt, telemetry, ledgerOpen });
+  const liveCtx = streaming && livePrompt > 0 ? { used: livePrompt + (telemetry?.genTokens || 0), limit: telemetry?.ctx || 0 } : null;
+  const ctxRevision = messages.length + ':' + (messages[messages.length - 1]?.id || '');
   const [planDismissed, setPlanDismissed] = useState(null);
   const settledMsgs = useMemo(() => (streaming ? messages.filter(m => m.id !== assistantIdRef.current) : messages), [messages, streaming]);
   const liveMsg = useMemo(() => (streaming && dispContent ? { id: assistantIdRef.current, role: 'assistant', content: dispContent } : null), [streaming, dispContent]);
@@ -771,39 +767,6 @@ export default function App() {
     const k = key || activeKey();
     setChatErrors(prev => { if (!(k in prev)) return prev; const n = { ...prev }; delete n[k]; return n; });
   }
-  const ledgerOpenRef = useRef(false);
-  useEffect(() => { ledgerOpenRef.current = ledgerOpen; }, [ledgerOpen]);
-  useEffect(() => {
-    if (ledgerDefaultApplied.current || !user) return;
-    ledgerDefaultApplied.current = true;
-    if (user.prefs?.ledgerDefault) setLedgerOpen(true);
-  }, [user]);
-  const loadLedger = useCallback(async () => {
-    const id = activeIdRef.current;
-    if (!id) { setLedger(null); return; }
-    try { setLedger(await api.get('/api/chats/' + id + '/ledger?modelId=' + encodeURIComponent(currentIdRef.current || ''))); }
-    catch { setLedger(null); }
-  }, []);
-  useEffect(() => {
-    if (!ledgerOpen || !activeId) return;
-    if (streamingRef.current && ledger) return;
-    loadLedger();
-  }, [ledgerOpen, activeId, currentId, messages.length, loadLedger]);
-  const toggleExclude = useCallback(async (messageId, excluded) => {
-    const id = activeIdRef.current;
-    if (!id) return;
-    setLedger(l => l ? { ...l, messages: l.messages.map(m => m.id === messageId ? { ...m, excluded } : m) } : l);
-    setMessages(ms => ms.map(m => m.id === messageId ? { ...m, excluded } : m));
-    try { await api.patch('/api/chats/' + id + '/messages/' + messageId, { excluded }); }
-    catch {
-      setMessages(ms => ms.map(m => m.id === messageId ? { ...m, excluded: !excluded } : m));
-      loadLedger();
-      warn();
-      return;
-    }
-    loadLedger();
-    toast(excluded ? t('Message dropped from context') : t('Message back in context'), { icon: 'info' });
-  }, [loadLedger]);
   const steer = useCallback((text) => {
     const id = activeIdRef.current;
     const body = String(text || '').trim();
@@ -817,7 +780,7 @@ export default function App() {
   // handlers always see current closures.
   const wsCtx = {
     activeKey,
-    refs: { activeIdRef, currentIdRef, ledgerOpenRef, compareRef, nextTurnPending, refreshSeq },
+    refs: { activeIdRef, currentIdRef, compareRef, nextTurnPending, refreshSeq },
     mirror: { recFor, peek, dropRec, syncBusy, resumeRec },
     stream,
     meta: turnMeta,
@@ -841,7 +804,6 @@ export default function App() {
       adminDraft: (frame) => adminDraft(frame),
       presence: (list) => publishPresence(list),
       loadBudget: () => loadBudget(),
-      loadLedger: () => loadLedger(),
       setAsk: (chatId, q) => setAsk(chatId, q),
       taskStarted: (m) => toast(t('Running scheduled task "{title}"', { title: m.title || t('New chat') }), { icon: 'info' })
     }
@@ -1064,7 +1026,7 @@ export default function App() {
     setPlanDismissed(null);
     setFiles([]); setPendingFiles({}); setHasSummary(false);
     clearLive(); setArtifactFocus(null);
-    turnMeta.reset(); setLedger(null);
+    turnMeta.reset();
   }
 
   const openSeq = useRef(0);
@@ -1119,7 +1081,7 @@ export default function App() {
     setMobileDrawer(false);
     if (incognito) setIncognito(false);
     setShowProjects(false);
-    if (id !== activeIdRef.current) { clearLive(); setArtifactFocus(null); turnMeta.reset(); setLedger(null); }
+    if (id !== activeIdRef.current) { clearLive(); setArtifactFocus(null); turnMeta.reset(); }
     const known = chats.find(c => c.id === id);
     const isCode = known ? known.mode === 'code' : codeModeRef.current;
     setCodeMode(isCode);
@@ -1505,10 +1467,6 @@ export default function App() {
   sendRef.current = send;
   resumeRef.current = resumeReply;
   genOptsRef.current = { extended, reasoningEffort, kwargValues, webSearch, plan: codeMode && planMode, styleId };
-  const ctxGaugeEl = (showCtxGauge && activeId && !incognito)
-    ? <CtxGauge chatId={activeId} modelId={currentId} streaming={streaming || queued}
-        revision={messages.length + ':' + (messages[messages.length - 1]?.id || '')} />
-    : null;
 
   const composerProps = {
     placeholder: activeId && !incognito ? t('Write a message...') : undefined,
@@ -1535,8 +1493,7 @@ export default function App() {
     savedPrompts: user?.savedPrompts || [], onUsePrompt: (t) => { setInput(t); setFocusTick(x => x + 1); }, onSavePrompt: savePromptFromInput, onDeletePrompt: deleteSavedPrompt,
     onNewChat: () => newChat(), onShortcuts: () => setShowShortcuts(true),
     voiceMic: !!cfg.voiceMic, voiceCall: !!cfg.voiceCall && !incognito, sttEngine: cfg.voiceStt || 'browser',
-    callActive: callOpen, onStartCall: () => setCallOpen(o => !o),
-    ctxGauge: ctxGaugeEl
+    callActive: callOpen, onStartCall: () => setCallOpen(o => !o)
   };
   function focusedMsg() {
     const list = messagesRef.current;
@@ -1574,7 +1531,6 @@ export default function App() {
     toggleWebSearch: () => { if (!webSearchAvailable) return false; setWebSearch(v => !v); },
     stopGeneration: () => { if (!streaming && !queued) return false; stop(); },
     scrollBottom: () => pinToBottom(true),
-    toggleLedger: () => setLedgerOpen(o => !o),
     promptLedger: () => { if (!activeIdRef.current) return false; setLedgerPrompt(true); },
     toggleArtifacts: () => { if (!codeMode || !activeId) return false; toggleCodePanel(); },
     nextChat: () => stepChat(1),
@@ -1613,7 +1569,6 @@ export default function App() {
   const commands = [
     { id: 'new', label: t('New chat'), shortcut: comboLabel(kb.newChat), keywords: 'create start', action: () => newChat() },
     { id: 'sidebar', label: collapsed ? t('Show sidebar') : t('Hide sidebar'), shortcut: comboLabel(kb.toggleSidebar), keywords: 'toggle collapse panel', action: () => setCollapsed(c => !c) },
-    { id: 'ledger', label: ledgerOpen ? t('Hide context ledger') : t('Show context ledger'), shortcut: comboLabel(kb.toggleLedger), keywords: 'context tokens ledger budget window', action: () => setLedgerOpen(o => !o) },
     ...((activeId && messages.length > 0) || focusMode ? [{ id: 'focus', label: focusMode ? t('Exit focus mode') : t('Enter focus mode'), shortcut: comboLabel(kb.focusMode), keywords: 'reading distraction free immersive zen hide sidebar', action: () => setFocusMode(o => !o) }] : []),
     ...(outline.length ? [{ id: 'outline', label: outlineOpen ? t('Hide contents') : t('Show contents'), shortcut: comboLabel(kb.toggleOutline), keywords: 'outline headings table of contents jump sections', action: () => setOutlineOpen(o => !o) }] : []),
     { id: 'chats', label: t('Browse all chats'), keywords: 'overview history search', action: () => setChatsOverview(true) },
@@ -1635,11 +1590,14 @@ export default function App() {
     { id: 'logout', label: t('Log out'), keywords: 'sign out exit', action: () => logout() }
   ];
 
+  const contextRing = activeId && !incognito
+    ? <ContextRing chatId={activeId} modelId={currentId} revision={ctxRevision} streaming={streaming || queued} live={liveCtx} className="chat-ring" />
+    : null;
+
   const modelPicker = (
     <div className="topbar-model tbm-flex">
       <ModelDropdown models={models} modelsReady={modelsReady} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} kwargValues={kwargValues} onSetKwarg={setKwarg} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
-
-      {ctxGaugeEl}
+      {contextRing}
     </div>
   );
 
@@ -1667,8 +1625,8 @@ export default function App() {
         models, modelsReady, currentId, onSelect: pickModel, kwargValues, onSetKwarg: setKwarg, reasoningEffort, isAdmin: !!user?.isAdmin,
         extended, onToggleExtended: () => setExtended(e => !e),
         plan: planMode, onPlan: setPlanMode,
-        revision: messages.length + ':' + (messages[messages.length - 1]?.id || ''),
-        liveTokens: streaming && livePrompt > 0 ? { used: livePrompt + (telemetry?.genTokens || 0), limit: telemetry?.ctx || 0 } : null,
+        revision: ctxRevision,
+        liveTokens: liveCtx,
         voiceMic: !!cfg.voiceMic, sttEngine: cfg.voiceStt || 'browser'
       }}
       scroll={{ scrollRef, onScroll, onWheel, onTouchMove, showJump, jumpDown }}
@@ -1820,14 +1778,12 @@ export default function App() {
                   activeId && messages.length > 0 && user?.prefs?.branchMap !== false && { id: 'tree', icon: <Fork />, label: t('Branch map'), active: treeOpen, onClick: () => setTreeOpen(o => !o) },
                   outline.length > 1 && user?.prefs?.threadOutline !== false && { id: 'outline', icon: <TextIcon />, label: t('Contents'), active: outlineOpen, onClick: () => setOutlineOpen(o => !o) },
                   activeId && messages.length > 0 && { id: 'focus', icon: <Expand />, label: focusMode ? t('Exit focus mode') : t('Focus mode'), active: focusMode, onClick: () => setFocusMode(o => !o) },
-                  activeId && { id: 'ledger', icon: <Gauge />, label: t('Context ledger'), active: ledgerOpen, onClick: () => setLedgerOpen(o => !o) },
                 ]} />
               } />
             {findOpen && user?.prefs?.threadFind !== false && <ThreadFind scrollRef={scrollRef} revision={findRevision} onMatches={onFindMatches} onClose={closeFind} />}
             <div className="scroll-area" id="oq-thread" ref={scrollRef} onScroll={onScroll} onWheel={onWheel} onTouchMove={onTouchMove}>
-              <div className={'thread' + (ledgerOpen ? ' ledger-on' : '') + (heavyThread ? ' virt' : '') + (findOpen ? ' finding' : '') + (threadSwap ? ' swapping' : '')}
+              <div className={'thread' + (heavyThread ? ' virt' : '') + (findOpen ? ' finding' : '') + (threadSwap ? ' swapping' : '')}
                 role="log" aria-label={t('Conversation')} aria-live="polite" aria-relevant="additions text" aria-busy={streaming ? 'true' : 'false'}>
-                {ledgerOpen && <LedgerBar ledger={ledger} liveUsed={ledgerTokens.used} live={streaming} />}
                 {threadLoading && messages.length === 0 && <ThreadSkeleton />}
                 {(() => {
                   const streamKey = assistantIdRef.current || '_stream';
@@ -1837,20 +1793,10 @@ export default function App() {
                     : messages;
                   let lastA = null;
                   for (let i = renderList.length - 1; i >= 0; i--) if (renderList[i].role === 'assistant') { lastA = renderList[i]; break; }
-                  const ledgerById = new Map((ledgerOpen && ledger ? ledger.messages : []).map(m => [m.id, m]));
-                  const ledgerLimit = (ledgerOpen && ledger && ledger.limit) || 0;
-                  return renderList.map(msg => {
-                    const li = ledgerOpen ? ledgerById.get(msg.id) : null;
-                    const liTokens = li ? li.tokens : (ledgerOpen && msg._streaming ? ledgerTokens.generated : 0);
-                    return (
+                  return renderList.map(msg => (
                     <Message key={msg._k || msg.id} msg={msg} model={resolveMsgModel(msg, model)} models={models} currentId={currentId} chatId={activeId} pins={chatPins} chatEnded={chatEnded}
                       canContinue={(canContinue || !!msg.truncated) && !streaming && !chatEnded && msg === lastA && !msg._streaming}
                       onContinue={continueReply}
-                      ledger={ledgerOpen}
-                      ledgerTokens={liTokens}
-                      ledgerPct={liTokens && ledgerLimit ? Math.min(100, Math.round((liTokens / ledgerLimit) * 1000) / 10) : 0}
-                      ledgerState={li ? (li.excluded ? 'excluded' : li.summarized ? 'summarized' : 'active') : (msg._streaming ? 'active' : '')}
-                      onToggleExclude={toggleExclude}
                       steers={msg._streaming ? liveSteers : (msg.steers || null)}
                       status={msg._streaming ? modelStatus : null}
                       statusDelay={statusDelay}
@@ -1859,8 +1805,7 @@ export default function App() {
                       showSpeed={showMsgSpeed}
                       showIcon={msg.role === 'assistant' && (layout.replyIcon === 'every' || (lastA && msg.id === lastA.id))}
                       fadeWords={fadeWords} />
-                    );
-                  });
+                  ));
                 })()}
                 {chatErrors[activeKey()] && <ChatError message={chatErrors[activeKey()]} onDismiss={() => dismissError()} />}
                 <QueuedMessages items={queuedList} onRemove={(id) => setQueue(l => l.filter(x => x.id !== id))} />
@@ -1878,7 +1823,8 @@ export default function App() {
               {user?.prefs?.engineStrip === true && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
               {callDock}
               <Composer {...composerProps} thread focusKey={focusTick}
-                panel={!incognito && (plans.plan || question) ? <AgentPanel plan={plans.plan} previousPlan={plans.previousPlan} onDismissPlan={dismissPlan} question={question} onAnswer={answerQuestion} onSkip={() => answerQuestion(null)} /> : null} />
+                panel={!incognito && (plans.plan || question) ? <AgentPanel plan={plans.plan} previousPlan={plans.previousPlan} onDismissPlan={dismissPlan} question={question} onAnswer={answerQuestion} onSkip={() => answerQuestion(null)} /> : null}
+                contextRing={contextRing} />
               <Disclaimer text={cfg.disclaimer} />
             </div>
           </>

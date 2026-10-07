@@ -39,7 +39,7 @@ Open **Settings** from the profile menu at the bottom left, or with `Ctrl+,`. Th
 
 - **Auto-scroll**: follow the reply as it is written unless you scroll up.
 - **Web search on by default**: new chats start with web search on, where the model allows it. Shown only when web search is set up.
-- **Engine telemetry**, **Context gauge**, **Speed on each reply**, **Progress line** and **Context ledger on open**: see [Models & Reasoning](models.md#readouts).
+- **Engine telemetry**, **Speed on each reply** and **Progress line**: see [Models & Reasoning](models.md#readouts).
 - **Mid-stream steering**: lets you correct a reply while it is being written. See [Chatting](chatting.md#sending-and-streaming).
 
 ### Keybinds

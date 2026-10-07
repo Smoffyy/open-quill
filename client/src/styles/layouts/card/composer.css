@@ -81,18 +81,20 @@
 
 /* The model picker leaves the bar in a thread and sits under the composer,
    opposite the disclaimer. */
-:root[data-layout="card"] .active-composer .composer .model-select {
-  position: absolute; top: calc(100% + 8px); right: 8px; z-index: 2;
+:root[data-layout="card"] .active-composer .composer .model-slot {
+  position: absolute; top: calc(100% + 8px); right: 8px; z-index: 2; gap: 2px;
 }
+:root[data-layout="card"] .active-composer .composer .chat-ring { width: 24px; height: 24px; border-radius: 6px; }
 :root[data-layout="card"] .active-composer .composer .model-trigger {
   height: 24px; padding: 0 6px; border-radius: 6px;
 }
 :root[data-layout="card"] .active-composer .disclaimer {
-  min-height: 40px; padding: 12px 152px 11px 16px;
+  min-height: 40px; padding: 12px 184px 11px 16px;
   text-align: left; font-size: 13px; line-height: 17px;
 }
 @media (max-width: 768px) {
-  :root[data-layout="card"] .active-composer .composer .model-select { position: static; }
+  :root[data-layout="card"] .active-composer .composer .model-slot { position: static; gap: var(--composer-tools-gap); }
+  :root[data-layout="card"] .active-composer .composer .chat-ring { width: var(--control-size); height: var(--control-size); border-radius: var(--control-radius); }
   :root[data-layout="card"] .active-composer .composer .model-trigger { height: 32px; padding: 0 8px; border-radius: 8px; }
   :root[data-layout="card"] .active-composer .disclaimer {
     min-height: 0; padding: 8px 0; text-align: center; font-size: 12px; line-height: 16px;

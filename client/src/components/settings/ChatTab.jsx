@@ -18,14 +18,10 @@ export default function ChatTab({ prefs, setPref, cfg }) {
       )}
       <SwitchRow label={t("Engine telemetry")} desc={t("Live speed and context fill above the message bar while a reply streams.")}
         on={prefs.engineStrip === true} onToggle={flip('engineStrip')} />
-      <SwitchRow label={t("Context gauge")} desc={t("A how-full-is-the-window meter beside the model picker, updated every message.")}
-        on={prefs.ctxGauge} onToggle={flip('ctxGauge')} />
       <SwitchRow label={t("Speed on each reply")} desc={t("Keep the tokens per second beside each reply, so models stay comparable.")}
         on={prefs.msgSpeed} onToggle={flip('msgSpeed')} />
       <SwitchRow label={t("Progress line")} desc={t("Shows what the model is doing beside its logo if a reply takes more than {n}s.", { n: STATUS_DELAY_SECS })}
         on={prefs.statusDelay !== false} onToggle={flipOnByDefault('statusDelay')} />
-      <SwitchRow label={t("Context ledger on open")} desc={t("Open chats with the per-message token ledger already showing.")}
-        on={prefs.ledgerDefault} onToggle={flip('ledgerDefault')} />
       <SwitchRow label={t("Mid-stream steering")} desc={t("Correct a reply mid-stream. Restarts from the cut point and costs an extra request.")}
         on={prefs.steering} onToggle={flip('steering')} />
     </>

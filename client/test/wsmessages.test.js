@@ -13,7 +13,6 @@ function wsCtx(activeKey = 'c1') {
     refs: {
       activeIdRef: { current: activeKey },
       currentIdRef: { current: 'model-1' },
-      ledgerOpenRef: { current: false },
       compareRef: { current: null },
       nextTurnPending: { current: false },
       refreshSeq: { current: 0 }
@@ -54,7 +53,7 @@ function wsCtx(activeKey = 'c1') {
     actions: {
       finalize: log('finalize'), finalizeBackground: log('finalizeBackground'), syncView: log('syncView'),
       loadModels: log('loadModels'), loadAppConfig: log('loadAppConfig'), loadBudget: log('loadBudget'),
-      loadLedger: log('loadLedger'), taskStarted: log('taskStarted'), setAsk: log('setAsk'),
+      taskStarted: log('taskStarted'), setAsk: log('setAsk'),
       syncConfig: log('syncConfig'), adminDraft: log('adminDraft'), presence: log('presence')
     }
   };

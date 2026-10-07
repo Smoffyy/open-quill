@@ -291,7 +291,6 @@ export const handlers = {
     ctx.actions.loadBudget();
     if (!isActive(ctx, m.chatId)) { ctx.actions.finalizeBackground(m.chatId); return; }
     ctx.set.pendingFiles(p => (Object.keys(p).length ? {} : p));
-    if (ctx.refs.ledgerOpenRef.current) ctx.actions.loadLedger();
     ctx.set.canContinue(!!m.truncated);
     // A model comparison fires several regenerations off one message; the first
     // `done` is where its id becomes known.

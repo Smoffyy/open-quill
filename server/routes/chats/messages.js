@@ -27,7 +27,7 @@ export default function registerMessageRoutes(app) {
       const sibs = childrenOf(c.id, m.parent_id ?? null);
       const mm = m.model_id ? modelById.get(m.model_id) : null;
       return {
-        id: m.id, role: m.role, content: m.content, reasoning: m.reasoning, reasoningSegs: Array.isArray(m.reasoning_segs) ? m.reasoning_segs : null, reasoningSegMs: Array.isArray(m.reasoning_seg_ms) ? m.reasoning_seg_ms : null, model_id: m.model_id, attachments: m.attachments || [], created_at: m.created_at, pinned: !!m.pinned, excluded: !!m.excluded, steers: Array.isArray(m.steers) ? m.steers : null, truncated: !!m.truncated, plan: !!m.plan_mode, feedback: m.feedback || 0,
+        id: m.id, role: m.role, content: m.content, reasoning: m.reasoning, reasoningSegs: Array.isArray(m.reasoning_segs) ? m.reasoning_segs : null, reasoningSegMs: Array.isArray(m.reasoning_seg_ms) ? m.reasoning_seg_ms : null, model_id: m.model_id, attachments: m.attachments || [], created_at: m.created_at, pinned: !!m.pinned, steers: Array.isArray(m.steers) ? m.steers : null, truncated: !!m.truncated, plan: !!m.plan_mode, feedback: m.feedback || 0,
         model_name: m.model_name || mm?.display_name || legacyName.get(m.model_id) || '', model_icon: m.model_icon || mm?.static_icon || '',
         extended: !!m.extended, reasoningEffort: m.reasoning_effort || null, kwargValues: m.kwarg_values || null,
         reasoningMs: Number(m.reasoning_ms) > 0 ? Number(m.reasoning_ms) : null,
@@ -143,7 +143,6 @@ export default function registerMessageRoutes(app) {
     if (!m || m.chat_id !== c.id) return res.status(404).json({ error: 'message not found' });
     const patch = {};
     if ('pinned' in req.body) patch.pinned = req.body.pinned ? 1 : 0;
-    if ('excluded' in req.body) patch.excluded = req.body.excluded ? 1 : 0;
     if ('content' in req.body) {
       if (m.role !== 'assistant') return res.status(400).json({ error: 'only an assistant message can be edited in place' });
       if (typeof req.body.content !== 'string') return res.status(400).json({ error: 'content must be a string' });
@@ -152,7 +151,7 @@ export default function registerMessageRoutes(app) {
       patch.content = next;
     }
     const saved = db.messages.update(m.id, patch);
-    res.json({ ok: true, pinned: !!(saved || m).pinned, excluded: !!(saved || m).excluded, content: (saved || m).content });
+    res.json({ ok: true, pinned: !!(saved || m).pinned, content: (saved || m).content });
   });
 
   app.delete('/api/chats/:id/messages/:mid', authMiddleware, (req, res) => {

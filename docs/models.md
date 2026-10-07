@@ -44,12 +44,10 @@ Optional numbers for people who want to see how the model is doing, all under **
 | Setting | Shows |
 | --- | --- |
 | **Engine telemetry** | Live speed and how full the context is, above the composer while a reply streams |
-| **Context gauge** | How full the context window is, beside the model picker |
 | **Speed on each reply** | The tokens per second each reply ran at, kept beside the reply |
 | **Progress line** | What the model is doing, beside its logo, when a reply takes longer than a few seconds |
-| **Context ledger on open** | Opens chats with the per-message token ledger showing |
 
-Token counts come from the model's own tokenizer, not an estimate, so the gauge and ledger match what the model actually sees.
+Token counts come from the model's own tokenizer, not an estimate, so the context ring beside the model name matches what the model actually sees.
 
 ## The model reference
 

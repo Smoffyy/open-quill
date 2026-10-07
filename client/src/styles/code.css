@@ -303,14 +303,6 @@ a.cx-hbtn { text-decoration: none; }
 .cx-tbtn.plan { color: var(--search-hit); }
 .cx-ext { color: var(--text-faint); }
 .cx-tbtn.rec { color: var(--danger); }
-.cx-ring { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 5px; }
-.cx-ring svg { width: 12px; height: 12px; transform: rotate(-90deg); }
-.cx-ring circle { fill: none; stroke-width: 1.6; }
-.cx-ring-track { stroke: color-mix(in srgb, var(--text-faint) 55%, transparent); }
-.cx-ring-fill { stroke: var(--text-muted); stroke-linecap: round; transition: stroke-dashoffset .3s ease; }
-.cx-ring.warn .cx-ring-fill { stroke: var(--warning); }
-.cx-ring.danger .cx-ring-fill { stroke: var(--danger); }
-.cx-ring:hover { background: var(--cx-hover); }
 .cx-drop {
   position: absolute; inset: -6px; z-index: 3; display: grid; place-items: center; border-radius: 14px;
   border: 1.5px dashed color-mix(in srgb, var(--text) 35%, transparent); background: color-mix(in srgb, var(--bg) 82%, transparent);

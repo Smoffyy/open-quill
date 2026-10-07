@@ -95,7 +95,7 @@ export default function Composer({
   removedModel = null, skills = [], onToggleSkill = null, onManageSkills = null,
   queueCount = 0, onQueue, onSteer, canSteer = false, onManageConnectors = null, attachCombo = '',
   compareIds = [], onSetCompare, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
-  ctxGauge = null, thread = false, draftId, panel = null
+  contextRing = null, thread = false, draftId, panel = null
 }) {
   const composerPlaceholder = useThemeText('composer.placeholder', t('How can I help you today?'));
   const layout = useLayout();
@@ -657,12 +657,14 @@ export default function Composer({
         </div>
         <div className="composer-right">
           <ModelPickerSlot at="composer">
-            {ctxGauge}
-            <ModelDropdown models={models} modelsReady={modelsReady} currentId={currentId} onSelect={onSelect}
-              extended={extended} onToggleExtended={onToggleExtended} up={modelUp} isAdmin={canUseUnavailable}
-              reasoningEffort={reasoningEffort} onSetEffort={onSetEffort}
-              kwargValues={kwargValues} onSetKwarg={onSetKwarg}
-              modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />
+            <div className="model-slot">
+              <ModelDropdown models={models} modelsReady={modelsReady} currentId={currentId} onSelect={onSelect}
+                extended={extended} onToggleExtended={onToggleExtended} up={modelUp} isAdmin={canUseUnavailable}
+                reasoningEffort={reasoningEffort} onSetEffort={onSetEffort}
+                kwargValues={kwargValues} onSetKwarg={onSetKwarg}
+                modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />
+              {contextRing}
+            </div>
           </ModelPickerSlot>
           {voiceMic && (
             <Tip label={dictating ? t('Stop dictation') : transcribing ? t('Transcribing…') : t('Dictate')}>

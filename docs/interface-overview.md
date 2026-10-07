@@ -45,7 +45,6 @@ The top bar shows the chat title. Click it for the chat menu: rename, star, add 
 | **Branch map** | Every branch of the conversation as a tree (`B`) |
 | **Contents** | The headings in the assistant's replies, for jumping around (`Alt+O`) |
 | **Focus mode** | Hides everything but the conversation (`Alt+F`) |
-| **Context ledger** | Shows how many tokens each message costs (`Alt+L`) |
 
 Some items only appear once they apply, for example Contents needs a reply with headings.
 

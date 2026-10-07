@@ -35,14 +35,13 @@ export function historyRows(chat, model) {
     id: m.id,
     role: m.role,
     pinned: !!m.pinned,
-    excluded: !!m.excluded,
     summarized: !!(upto && m.created_at <= upto && !m.pinned),
     msg: historyMessage(m, model)
   }));
 }
 
 export function chatHistory(chat, model, skipId = null) {
-  return historyRows(chat, model).filter(r => !r.summarized && !r.excluded && r.id !== skipId).map(r => r.msg);
+  return historyRows(chat, model).filter(r => !r.summarized && r.id !== skipId).map(r => r.msg);
 }
 
 export const CUT_NOTE = '[This reply was cut off here before it was finished.]';
