@@ -49,7 +49,7 @@ export function appFontId(v) {
 export const USER_FONT_KEY = 'oq-user-font';
 export const USER_FONTS = {
   __proto__: null,
-  literata: { stack: "'Literata Variable'", weight: 400, strong: 600, greeting: 290 },
+  literata: { stack: "'Literata Variable'", weight: 300, strong: 600, greeting: 290 },
   newsreader: { stack: "'Newsreader Variable'", weight: 420, strong: 615, greeting: 390 },
   sans: { stack: "'Open Sans'", weight: 400, strong: 600, greeting: 390 },
 };

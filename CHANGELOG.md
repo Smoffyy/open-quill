@@ -52,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Mode switch** - the Chat/Code control in the sidebar uses the same sliding control as the settings choices. Switching back to a mode returns to the screen you left it on: a chat, a Code session, a library page, Projects, Docs or All chats.
 - **Model name on hover** - when a reply's model name is not shown beside its icon, hovering the icon shows it in a tooltip. The name is the one stored on that reply, so replies from removed models keep it.
 - **Logo beside replies** - a model's logo can be hidden from its replies in Admin, Models, Appearance, Logo, so it only shows in the greeting. It is on by default.
+- **Lighter reply text** - reply text in the Anthropic layout uses a lighter Literata weight (300 instead of 400) in every Anthropic palette. Bold text is unchanged.
 - **Reply actions** - the latest reply's action bar is always visible, with its time shown on hover, and fades in when the reply finishes. Other replies still show the bar on hover, with a quicker fade and no upward movement. The timestamp tooltip waits a quarter of a second before it appears.
 
 ### Fixed
