@@ -1,4 +1,4 @@
-import { modelCtx } from './models.js';
+import { modelCtx, knownCtx } from './models.js';
 import { isLlamaCpp, llamaPromptTokens, llamaTextTokens } from './llamacpp.js';
 import { isVllm, vllmPromptTokens, vllmTextTokens } from './vllm.js';
 
@@ -50,13 +50,20 @@ export function outputReserve(model, ctx) {
   return Math.min(Math.max(model?.has_reasoning ? 4096 : 2048, floor), cap);
 }
 
-export async function contextBudget(model) {
-  const ctx = await effectiveCtx(model);
+export function budgetOf(model, ctx) {
   if (!(ctx > 0)) return { ctx: 0, reserve: 0, budget: 0 };
   const reserve = outputReserve(model, ctx);
   const safety = Math.min(256, Math.max(32, Math.floor(ctx * 0.01)));
   const raw = ctx - reserve - safety;
   return { ctx, reserve, budget: raw > 0 ? raw : Math.max(64, Math.floor(ctx * 0.5)) };
+}
+
+export function knownContext(model) {
+  return learnedFor(model) || knownCtx(model);
+}
+
+export async function contextBudget(model) {
+  return budgetOf(model, await effectiveCtx(model));
 }
 
 export function canCount(model) {

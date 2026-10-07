@@ -53,10 +53,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Model name on hover** - when a reply's model name is not shown beside its icon, hovering the icon shows it in a tooltip. The name is the one stored on that reply, so replies from removed models keep it.
 - **Logo beside replies** - a model's logo can be hidden from its replies in Admin, Models, Appearance, Logo, so it only shows in the greeting. It is on by default.
 - **Lighter reply text** - reply text in the Anthropic layout uses a lighter Literata weight (300 instead of 400) in every Anthropic palette. Bold text is unchanged.
+- **Code block corners** - code blocks in chat have rounder corners.
+- **Context size detection** - a model's window size is measured when it is first sent a message, and remembered across restarts. The Long context badge and the context ring use it from then on. The admin Context tab has one **Detect** button that checks every model, one at a time, in place of checking on open.
 - **Incognito button** - the button that starts an incognito chat is only on the greeting screen, and no longer shows in the top bar of an open chat.
 - **Reply actions** - the latest reply's action bar is always visible, with its time shown on hover, and fades in when the reply finishes. Other replies still show the bar on hover, with a quicker fade and no upward movement. The timestamp tooltip waits a quarter of a second before it appears.
 
 ### Fixed
+- **Opening a chat no longer loads its model** - the context ring used to count the chat's prompt when the chat opened, which loaded the chat's model behind a swap proxy. Opening a chat now shows the count from the last reply. The ring counts again when a reply finishes, and Shift+Click recounts at any time.
+- **Local models swapping in and out** - starting the server, listing models and opening the admin Context tab probed every local model's context size at once. Behind a llama.cpp swap proxy each probe loads its model, so the models evicted each other and cancelled each other's requests. Sizes are now measured only when a message is sent to that model, and detection runs one model at a time.
 - **Tool activity kept for follow-up questions** - everything a reply did is saved with it: each tool call and its result (web search pages included), steering notes, and file writes, each with a UTC timestamp. Later turns see that record in order, so a follow-up question can use the pages and results without running the tools again. Each result is kept in full. The record takes up room in the context window like other text, and once a chat is folded into its summary it goes with it. Images returned by tools are not kept.
 - **Images on Ollama** - images were sent in a format Ollama's chat API does not accept. They now go in its `images` field.
 - **Images on a model without vision** - an image added to the composer quietly disappeared; the composer now says it was left out.
@@ -76,6 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keep cache warm** - the "When the chat outgrows the window" choice in Admin, Models, Context is gone. Older history is always dropped only as far as the window needs.
 - **Context inspector** - gone; **What gets sent** shows what the model receives.
 - **Compaction settings** - the "Compact older turns" switch and "Compact when this much is left" are gone, since every model now uses rolling summaries. **Turns kept verbatim** remains.
+- **Model picker arrow** - the arrow beside the model name in the composer and top bar is gone in every theme. The picker still opens from the name.
 - **Retry with another model** - the arrow beside Retry on a reply, and its model list, are gone. To redo a reply with another model, pick that model in the picker and press Retry.
 - **Estimated numbers** - character-based token estimates, the per-chat calibration, estimated reply speeds (the "~" and "est" markers) and Anthropic's `count_tokens` call are removed. Older replies that only had an estimated speed no longer show one.
 

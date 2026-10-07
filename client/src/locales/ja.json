@@ -2903,7 +2903,6 @@
   "Refreshing context…": "コンテキストを更新中…",
   "Allow parallel requests": "並列リクエストを許可",
   "Each model uses the window its backend reports.": "各モデルはバックエンドが報告するウィンドウを使用します。",
-  "Reading the window from the backend…": "バックエンドからウィンドウを読み取り中…",
   "The backend reports {n} tokens. Turn this on to use a different size.": "バックエンドは {n} トークンを報告しています。別のサイズを使うにはオンにします。",
   "The backend did not report a window, so a conservative default is used. Turn this on to set one.": "バックエンドがウィンドウを報告しなかったため、控えめな既定値を使用します。設定するにはオンにします。",
   "Override window size": "ウィンドウサイズを上書き",
@@ -2922,5 +2921,10 @@
   "This provider cannot count tokens before sending.": "このプロバイダーは送信前にトークン数を数えられません。",
   "This model cannot see images, so they were left out.": "このモデルは画像を認識できないため、画像は除外されました。",
   "Logo beside replies": "返信の横にロゴを表示",
-  "Off keeps the logo in the greeting only.": "オフにすると、ロゴは挨拶画面にのみ表示されます。"
+  "Off keeps the logo in the greeting only.": "オフにすると、ロゴは挨拶画面にのみ表示されます。",
+  "Not detected yet. Detect window sizes checks every model.": "まだ検出されていません。ウィンドウサイズの検出では全モデルを確認します。",
+  "Detect window sizes": "ウィンドウサイズを検出",
+  "Asks each model's backend for its window size. Local models load one at a time, so this can take a while.": "各モデルのバックエンドにウィンドウサイズを問い合わせます。ローカルモデルは一つずつ読み込まれるため、時間がかかる場合があります。",
+  "Detecting…": "検出中…",
+  "Detect": "検出"
 }

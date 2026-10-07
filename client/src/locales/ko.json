@@ -2903,7 +2903,6 @@
   "Refreshing context…": "컨텍스트 새로 고치는 중…",
   "Allow parallel requests": "병렬 요청 허용",
   "Each model uses the window its backend reports.": "각 모델은 백엔드가 보고하는 창을 사용합니다.",
-  "Reading the window from the backend…": "백엔드에서 창을 읽는 중…",
   "The backend reports {n} tokens. Turn this on to use a different size.": "백엔드가 {n}개 토큰을 보고합니다. 다른 크기를 쓰려면 켜세요.",
   "The backend did not report a window, so a conservative default is used. Turn this on to set one.": "백엔드가 창을 보고하지 않아 보수적인 기본값을 사용합니다. 직접 설정하려면 켜세요.",
   "Override window size": "창 크기 재정의",
@@ -2922,5 +2921,10 @@
   "This provider cannot count tokens before sending.": "이 공급자는 보내기 전에 토큰을 셀 수 없습니다.",
   "This model cannot see images, so they were left out.": "이 모델은 이미지를 볼 수 없어 이미지는 제외되었습니다.",
   "Logo beside replies": "답변 옆에 로고 표시",
-  "Off keeps the logo in the greeting only.": "끄면 로고는 인사말 화면에만 표시됩니다."
+  "Off keeps the logo in the greeting only.": "끄면 로고는 인사말 화면에만 표시됩니다.",
+  "Not detected yet. Detect window sizes checks every model.": "아직 감지되지 않았습니다. 창 크기 감지는 모든 모델을 확인합니다.",
+  "Detect window sizes": "창 크기 감지",
+  "Asks each model's backend for its window size. Local models load one at a time, so this can take a while.": "각 모델의 백엔드에 창 크기를 요청합니다. 로컬 모델은 하나씩 로드되므로 시간이 걸릴 수 있습니다.",
+  "Detecting…": "감지 중…",
+  "Detect": "감지"
 }

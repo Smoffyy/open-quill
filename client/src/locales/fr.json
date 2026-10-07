@@ -2903,7 +2903,6 @@
   "Refreshing context…": "Actualisation du contexte…",
   "Allow parallel requests": "Autoriser les requêtes parallèles",
   "Each model uses the window its backend reports.": "Chaque modèle utilise la fenêtre indiquée par son backend.",
-  "Reading the window from the backend…": "Lecture de la fenêtre auprès du backend…",
   "The backend reports {n} tokens. Turn this on to use a different size.": "Le backend indique {n} tokens. Activez cette option pour utiliser une autre taille.",
   "The backend did not report a window, so a conservative default is used. Turn this on to set one.": "Le backend n’a pas indiqué de fenêtre, une valeur prudente est donc utilisée. Activez cette option pour en définir une.",
   "Override window size": "Remplacer la taille de la fenêtre",
@@ -2922,5 +2921,10 @@
   "This provider cannot count tokens before sending.": "Ce fournisseur ne peut pas compter les tokens avant l’envoi.",
   "This model cannot see images, so they were left out.": "Ce modèle ne voit pas les images, elles ont donc été retirées.",
   "Logo beside replies": "Logo à côté des réponses",
-  "Off keeps the logo in the greeting only.": "Désactivé : le logo n'apparaît que dans l'accueil."
+  "Off keeps the logo in the greeting only.": "Désactivé : le logo n'apparaît que dans l'accueil.",
+  "Not detected yet. Detect window sizes checks every model.": "Pas encore détecté. Détecter les tailles de fenêtre vérifie tous les modèles.",
+  "Detect window sizes": "Détecter les tailles de fenêtre",
+  "Asks each model's backend for its window size. Local models load one at a time, so this can take a while.": "Demande à chaque backend la taille de sa fenêtre. Les modèles locaux se chargent un à un, cela peut prendre un moment.",
+  "Detecting…": "Détection…",
+  "Detect": "Détecter"
 }

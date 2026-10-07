@@ -1,5 +1,5 @@
 import { db } from '../../db.js';
-import { contextBudget, canCount, countExact, countText } from '../../lib/ctxwindow.js';
+import { contextBudget, budgetOf, knownContext, canCount, countExact, countText } from '../../lib/ctxwindow.js';
 import { authMiddleware } from '../../auth.js';
 import { buildMessages } from '../../llm/index.js';
 import { toolState, systemPrompt, toolsFor } from '../../lib/systemprompt.js';
@@ -33,8 +33,9 @@ export default function registerInspectRoutes(app) {
     const upto = c.summary && c.summary_upto ? c.summary_upto : 0;
     const summarized = upto ? path.filter(m => m.created_at <= upto && !m.pinned).length : 0;
     if (!model) return res.json({ used: 0, limit: 0, budget: 0, summarized, pending: false });
-    const { ctx, budget, reserve } = await contextBudget(model);
-    if (canCount(model)) {
+    const exact = req.query.exact === '1';
+    const { ctx, budget, reserve } = exact ? await contextBudget(model) : budgetOf(model, knownContext(model));
+    if (exact && canCount(model)) {
       const prompt = promptOf(c, model);
       const used = await countExact(model, buildMessages(model, chatHistory(c, model), false, prompt.text), toolsFor(prompt.flags));
       return res.json({ used, limit: ctx, budget, reserve, summarized, pending: !used });

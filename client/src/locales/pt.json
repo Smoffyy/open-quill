@@ -2903,7 +2903,6 @@
   "Refreshing context…": "Atualizando o contexto…",
   "Allow parallel requests": "Permitir pedidos em paralelo",
   "Each model uses the window its backend reports.": "Cada modelo usa a janela informada pelo seu backend.",
-  "Reading the window from the backend…": "Lendo a janela do backend…",
   "The backend reports {n} tokens. Turn this on to use a different size.": "O backend informa {n} tokens. Ative para usar outro tamanho.",
   "The backend did not report a window, so a conservative default is used. Turn this on to set one.": "O backend não informou uma janela, então um padrão conservador é usado. Ative para definir uma.",
   "Override window size": "Substituir o tamanho da janela",
@@ -2922,5 +2921,10 @@
   "This provider cannot count tokens before sending.": "Este provedor não consegue contar tokens antes do envio.",
   "This model cannot see images, so they were left out.": "Este modelo não consegue ver imagens, por isso elas ficaram de fora.",
   "Logo beside replies": "Logotipo ao lado das respostas",
-  "Off keeps the logo in the greeting only.": "Desligado: o logotipo aparece só na saudação."
+  "Off keeps the logo in the greeting only.": "Desligado: o logotipo aparece só na saudação.",
+  "Not detected yet. Detect window sizes checks every model.": "Ainda não detectado. Detectar tamanhos de janela verifica todos os modelos.",
+  "Detect window sizes": "Detectar tamanhos de janela",
+  "Asks each model's backend for its window size. Local models load one at a time, so this can take a while.": "Pergunta ao backend de cada modelo o tamanho da janela. Modelos locais carregam um de cada vez, então pode demorar.",
+  "Detecting…": "Detectando…",
+  "Detect": "Detectar"
 }

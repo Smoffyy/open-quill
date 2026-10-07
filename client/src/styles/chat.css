@@ -474,7 +474,7 @@
 .reasoning:hover .rb-copy, .rb-copy:focus-visible { opacity: 1; }
 
 /* ---------- code blocks ---------- */
-.code-wrap { position: relative; margin: 0 0 12px; border: 0.8px solid var(--code-border, var(--border-soft)); border-radius: 8px; background: var(--code-wrap-bg, var(--code-bg, #1f1f1d)); }
+.code-wrap { position: relative; margin: 0 0 12px; border: 0.8px solid var(--code-border, var(--border-soft)); border-radius: 14px; background: var(--code-wrap-bg, var(--code-bg, #1f1f1d)); }
 .assistant-body > .code-wrap:last-child { margin-bottom: 0; }
 
 .code-bar {

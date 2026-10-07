@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevDown, Chevron, Bulb, Eye, Info, Globe, Terminal, FileText, Wand } from '../ui/icons.jsx';
+import { Check, Chevron, Bulb, Eye, Info, Globe, Terminal, FileText, Wand } from '../ui/icons.jsx';
 import Tip from '../ui/Tip.jsx';
 import { t } from '../../i18n.jsx';
 import { Switch } from '../ui/controls.jsx';
@@ -525,7 +525,6 @@ export default function ModelDropdown({ models, modelsReady = true, currentId, o
             ? chips.map((c, i) => <span key={c + i} className="ext">{t(c)}</span>)
             : (extended && current?.hasReasoning && <span className="ext">{t("Extended")}</span>)}
         </span>
-        <ChevDown style={{ width: 12, height: 12 }} />
       </button>
       {open && <div className="model-scrim" onClick={() => setOpen(false)} />}
       {open && (

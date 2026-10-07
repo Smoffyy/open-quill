@@ -5,7 +5,7 @@ import { matchPreset, presetList, setCustomPresets, getCustomPresets } from '../
 import { logAudit } from '../lib/audit.js';
 import { staged } from '../lib/releases.js';
 import { draftGet } from '../lib/draft.js';
-import { draftModels, publicModels, modelCtx, knownCtx, timedFetch } from '../lib/models.js';
+import { draftModels, publicModels, probeCtx, knownCtx, timedFetch } from '../lib/models.js';
 import { sanitizeKwargs } from '../lib/kwargs.js';
 import { listAnthropicModels } from '../llm/index.js';
 import { sanitizeBadgesOff } from '../lib/badges.js';
@@ -325,11 +325,10 @@ export default function registerModelRoutes(app) {
     res.json({ custom: getCustomPresets() });
   });
 
-  app.get('/api/admin/detect-ctx', authMiddleware, adminOnly, async (req, res) => {
-    const row = typeof req.query.id === 'string' ? db.models.byId(req.query.id) : null;
-    if (!row) return res.status(404).json({ error: 'model not found' });
-    const numCtx = await modelCtx({ ...row, num_ctx: 0 });
-    res.json({ numCtx, ok: !!numCtx });
+  app.post('/api/admin/detect-ctx', authMiddleware, adminOnly, async (req, res) => {
+    const numCtx = {};
+    for (const row of db.models.all()) numCtx[row.id] = await probeCtx({ ...row, num_ctx: 0 });
+    res.json({ numCtx });
   });
 
   app.get('/api/admin/models/folders', authMiddleware, adminOnly, (req, res) => {

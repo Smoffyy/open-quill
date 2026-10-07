@@ -2903,7 +2903,6 @@
   "Refreshing context…": "Обновление контекста…",
   "Allow parallel requests": "Разрешить параллельные запросы",
   "Each model uses the window its backend reports.": "Каждая модель использует окно, которое сообщает её бэкенд.",
-  "Reading the window from the backend…": "Чтение окна из бэкенда…",
   "The backend reports {n} tokens. Turn this on to use a different size.": "Бэкенд сообщает {n} токенов. Включите, чтобы задать другой размер.",
   "The backend did not report a window, so a conservative default is used. Turn this on to set one.": "Бэкенд не сообщил размер окна, поэтому используется осторожное значение по умолчанию. Включите, чтобы задать его.",
   "Override window size": "Переопределить размер окна",
@@ -2922,5 +2921,10 @@
   "This provider cannot count tokens before sending.": "Этот провайдер не умеет считать токены до отправки.",
   "This model cannot see images, so they were left out.": "Эта модель не видит изображения, поэтому они не были добавлены.",
   "Logo beside replies": "Логотип рядом с ответами",
-  "Off keeps the logo in the greeting only.": "Выключено: логотип показывается только в приветствии."
+  "Off keeps the logo in the greeting only.": "Выключено: логотип показывается только в приветствии.",
+  "Not detected yet. Detect window sizes checks every model.": "Ещё не определено. Определение размеров окна проверяет все модели.",
+  "Detect window sizes": "Определить размеры окна",
+  "Asks each model's backend for its window size. Local models load one at a time, so this can take a while.": "Запрашивает у бэкенда каждой модели размер окна. Локальные модели загружаются по одной, поэтому это может занять время.",
+  "Detecting…": "Определение…",
+  "Detect": "Определить"
 }

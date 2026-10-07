@@ -13,15 +13,19 @@ export default function ContextRing({ chatId, modelId, revision, streaming, live
   modelRef.current = modelId;
   const forced = useRef(false);
 
+  const wasStreaming = useRef(streaming);
   useEffect(() => {
+    const replied = wasStreaming.current && !streaming;
+    wasStreaming.current = streaming;
     if (!chatId) { setData(null); setBusy(false); return undefined; }
     if (streaming) return undefined;
     let on = true;
     const now = forced.current;
     forced.current = false;
+    const exact = now || replied;
     const timer = setTimeout(() => {
       const id = modelRef.current || '';
-      api.get('/api/chats/' + chatId + '/context?modelId=' + encodeURIComponent(id))
+      api.get('/api/chats/' + chatId + '/context?modelId=' + encodeURIComponent(id) + (exact ? '&exact=1' : ''))
         .then(d => { if (on) setData(d ? { ...d, modelId: id } : null); })
         .catch(() => { if (on) setData(null); })
         .finally(() => { if (on) setBusy(false); });

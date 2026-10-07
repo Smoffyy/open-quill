@@ -26,7 +26,6 @@
   padding: 6px 10px; border-radius: 10px; gap: 4px; background: transparent; border: none;
 }
 [data-layout="pill"] .topbar-model .model-trigger:hover { background: var(--surface-hover); }
-[data-layout="pill"] .topbar-model .model-trigger svg { color: var(--text-faint); }
 [data-layout="pill"] .home-topbar { position: absolute; top: 14px; left: 20px; z-index: 20; }
 [data-layout="pill"] .topbar-model .model-menu, [data-layout="pill"] .home-topbar .model-menu {
   bottom: auto; top: 42px; left: 0; right: auto; transform-origin: top left;

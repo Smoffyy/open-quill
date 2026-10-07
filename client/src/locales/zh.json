@@ -2903,7 +2903,6 @@
   "Refreshing context…": "正在刷新上下文…",
   "Allow parallel requests": "允许并行请求",
   "Each model uses the window its backend reports.": "每个模型使用其后端报告的窗口。",
-  "Reading the window from the backend…": "正在从后端读取窗口…",
   "The backend reports {n} tokens. Turn this on to use a different size.": "后端报告的窗口为 {n} 个 token。开启后可使用其他大小。",
   "The backend did not report a window, so a conservative default is used. Turn this on to set one.": "后端未报告窗口，因此使用保守的默认值。开启后可自行设置。",
   "Override window size": "覆盖窗口大小",
@@ -2922,5 +2921,10 @@
   "This provider cannot count tokens before sending.": "此提供方无法在发送前统计 token。",
   "This model cannot see images, so they were left out.": "此模型无法查看图片，因此图片未被添加。",
   "Logo beside replies": "回复旁显示徽标",
-  "Off keeps the logo in the greeting only.": "关闭后，徽标仅在问候语中显示。"
+  "Off keeps the logo in the greeting only.": "关闭后，徽标仅在问候语中显示。",
+  "Not detected yet. Detect window sizes checks every model.": "尚未检测。检测窗口大小会检查所有模型。",
+  "Detect window sizes": "检测窗口大小",
+  "Asks each model's backend for its window size. Local models load one at a time, so this can take a while.": "向每个模型的后端询问其窗口大小。本地模型会逐个加载，可能需要一些时间。",
+  "Detecting…": "检测中…",
+  "Detect": "检测"
 }

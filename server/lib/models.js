@@ -1,6 +1,6 @@
 import { db, getSetting, setSetting } from '../db.js';
 import { badgesOf } from './badges.js';
-import { resolveProvider, providerSpec, isLocalType } from './providers.js';
+import { resolveProvider, providerSpec } from './providers.js';
 import { publicKwargDefs } from './kwargs.js';
 import { llamaContext } from './llamacpp.js';
 import { anthropicModelInfo } from '../llm/index.js';
@@ -72,26 +72,38 @@ export function shapePublic(m, ctx = badgeContext()) {
   };
 }
 
-const knownWindows = new Map();
+const WINDOWS_KEY = 'detected_ctx';
+let knownWindows = null;
 let ctxVersion = 0;
 
+function windows() {
+  if (!knownWindows) knownWindows = new Map(Object.entries(getSetting(WINDOWS_KEY, null) || {}));
+  return knownWindows;
+}
+
 function rememberCtx(model, ctx) {
-  if (!model?.id || (knownWindows.get(model.id) || 0) === ctx) return;
-  knownWindows.set(model.id, ctx);
+  if (!model?.id || !(ctx > 0)) return;
+  const internal = model.internal_name || '';
+  const hit = windows().get(model.id);
+  if (hit && hit.ctx === ctx && hit.internal === internal) return;
+  windows().set(model.id, { ctx, internal });
+  setSetting(WINDOWS_KEY, Object.fromEntries(windows()));
   ctxVersion++;
 }
 
 export function knownCtx(m) {
   const manual = parseInt(m.num_ctx);
   if (Number.isFinite(manual) && manual > 0) return manual;
-  return knownWindows.get(m.id) || 0;
+  const hit = windows().get(m.id);
+  return hit && hit.internal === (m.internal_name || '') ? hit.ctx : 0;
 }
 
-function warmCtx(rows) {
-  for (const m of rows) {
-    const prov = resolveProvider(m.provider_id);
-    if (prov && isLocalType(prov.type) && !(parseInt(m.num_ctx) > 0)) modelCtx(m).catch(() => {});
-  }
+let ctxProbeChain = Promise.resolve();
+
+export function probeCtx(model) {
+  const run = ctxProbeChain.then(() => modelCtx(model)).catch(() => 0);
+  ctxProbeChain = run;
+  return run;
 }
 
 const shapeCache = { draft: null, published: null };
@@ -108,7 +120,6 @@ export function draftModels() {
   applySunsets();
   const version = db.models.version();
   const rows = db.models.all();
-  warmCtx(rows);
   const ctx = badgeContext();
   const hit = shapeCache.draft;
   if (hit && hit.version === version && hit.web === ctx.webSearch && hit.ctxVersion === ctxVersion) return hit.list;
@@ -121,7 +132,6 @@ export function publicModels() {
   applySunsets();
   const snap = getSetting('published_models', null);
   if (!Array.isArray(snap)) return draftModels();
-  warmCtx(snap);
   const ctx = badgeContext();
   const hit = shapeCache.published;
   if (hit && hit.snap === snap && hit.web === ctx.webSearch && hit.ctxVersion === ctxVersion) return hit.list;
