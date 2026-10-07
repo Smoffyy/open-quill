@@ -1,27 +1,3 @@
-.ctx-inspect-overlay { position: fixed; inset: 0; background: var(--scrim, #00000066); backdrop-filter: blur(2px); display: grid; place-items: center; z-index: 200; }
-.ctx-inspect { width: min(760px, 92vw); max-height: 84vh; background: var(--menu-bg); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,.28); display: flex; flex-direction: column; overflow: hidden; }
-.ctx-inspect-head { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; border-bottom: 1px solid var(--border-soft); font-family: var(--font-sans); font-weight: 600; }
-.ctx-x { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; color: var(--text-muted); }
-.ctx-x:hover { background: var(--surface-hover); color: var(--text); }
-.ctx-x svg { width: 14px; height: 14px; }
-.ctx-error { padding: 16px; }
-.ctx-inspect-body { overflow: hidden auto; padding: 14px 16px; font-family: var(--font-sans); }
-.ctx-summary { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--text-muted); margin-bottom: 8px; }
-.ctx-summary b { color: var(--text); font-weight: 600; }
-.ctx-tag { background: var(--primary); color: var(--on-primary); padding: 1px 8px; border-radius: 99px; font-size: 11.5px; }
-.ctx-flags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-.ctx-flag { font-size: 11.5px; color: var(--text-muted); border: 1px solid var(--border-soft); border-radius: 99px; padding: 2px 9px; }
-.ctx-segs { display: flex; flex-direction: column; gap: 8px; }
-.ctx-seg { border: 1px solid var(--border-soft); border-radius: 10px; padding: 9px 11px; }
-.ctx-seg.role-system { border-left: 3px solid #8a7cff; }
-.ctx-seg.role-user { border-left: 3px solid var(--text); }
-.ctx-seg.role-assistant { border-left: 3px solid #4f9d69; }
-.ctx-seg-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
-.ctx-role { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
-.ctx-seg-meta { font-size: 11.5px; color: var(--text-faint); }
-.ctx-seg-prev { font-size: 12.5px; line-height: 1.5; color: var(--text-muted); white-space: pre-wrap; word-break: break-word; max-height: 140px; overflow: hidden; }
-.ctx-inspect-overlay { padding: 20px; }
-
 .cx-ring { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 5px; }
 .cx-ring svg { width: 12px; height: 12px; transform: rotate(-90deg); }
 .cx-ring circle { fill: none; stroke-width: 1.6; }

@@ -335,7 +335,6 @@ export const ELEMENTS = [
   { id: 'branchNode', label: tk('Branch node'), cat: 'panels', sel: '.bt-node', parent: 'branchTree', caps: CTRL },
   { id: 'callPanel', label: tk('Voice panel'), cat: 'panels', sel: '.callpanel', caps: ALL },
   { id: 'callOrb', label: tk('Voice orb'), cat: 'panels', sel: '.call-orb', parent: 'callPanel', caps: BOX },
-  { id: 'ctxInspect', label: tk('Context inspector'), cat: 'panels', sel: '.ctx-inspect', caps: ALL },
   { id: 'chatCtl', label: tk('Chat controls panel'), cat: 'panels', sel: '.chatctl-panel', caps: ALL },
   /* controls */
   { id: 'button', label: tk('Button'), cat: 'controls', sel: '.btn', caps: CTRL },

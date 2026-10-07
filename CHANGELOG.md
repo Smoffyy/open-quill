@@ -16,8 +16,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Code composer** - attach files into the workspace, dictate, pick the model with all of its options (thinking, effort and the rest) and watch the context used fill in live. Escape stops a turn and Continue picks up a reply that was cut off.
 - **Code prompt** - sessions use their own coding-agent prompt with the workspace, plan, question and web search tools, instead of the model's chat system prompt.
 - **Preset registry** - each base layout is one entry in `lib/presets.js`, shared by the server and the client: its label, layout, default display font, default dark and light palettes, the icon defaults new models get, its setup swatch and its builtin theme. Adding a preset is one entry plus its palettes; the theme list, setup guide, boot script and server defaults all follow from it.
+- **Thinking that outgrows the window** - when a reasoning model runs out of room while still thinking, its reasoning is cut short (and marked so) and it is handed back the end of its thinking to write the answer, instead of stopping with no answer. Reasoning models also keep more of a small window free for the reply.
+- **One request at a time per llama.cpp model** - a llama.cpp server shares one window between everything it runs at once, so two requests could push each other out of room. Requests to the same llama.cpp model (replies, titles, summaries) now wait their turn. **Allow parallel requests** under Admin, Models, Context turns that off per model.
+- **Rolling summaries for every model** - once a chat fills about two thirds of the window, the chatting model folds its oldest turns into a summary in the background after a reply, in batches sized to fit the window, so the next message never waits for it. Recent turns and pinned messages stay word for word. Before anything is dropped, older images, long code blocks and tool output are trimmed; dropping the oldest messages is now only the last resort. A reasoning model that would spend its whole summary budget thinking is asked again with its thinking closed.
+- **recall** - a model that already uses tools can search the summarized part of the conversation and get the exact wording back. When a matching message had an image, a model with image input sees that image again at full quality.
+- **Images in long chats** - when a turn with an image is folded into the summary, a model with image input describes the image in full detail once (saved on the attachment), and the last 24 descriptions are kept word for word beside the summary instead of being summarized again.
+- **Image formats** - BMP, AVIF, ICO and TIFF (where the browser can open it) are converted to a lossless PNG of the same size when attached, so a vision model can see them. Images are never downscaled.
+- **Exact token counts everywhere** - the prompt is counted with the model's own tokenizer on llama.cpp and vLLM before it is sent. Every other provider is measured by the exact counts it reports after each reply and the exact sizes in its overflow errors. No count is ever estimated, and no counting endpoint of a hosted provider is called.
 
 ### Changed
+- **Context window setting** - the Context tab shows the size the backend reports and has no input by default. **Override window size** reveals the field, filled in with the detected size; turning it off goes back to detection. **Detect from backend** is gone, and window sizes saved before this release are cleared once so every model uses its detected size.
+- **Context ring** - its tooltip says how many earlier messages are summarized, and it refreshes when a background summary finishes.
+- **What gets sent** - shows exact per-part counts on llama.cpp and vLLM, and no numbers for providers that cannot count before sending.
+- **Window detection** - Ollama and LM Studio report the size the loaded model is actually running at, not its trained maximum, and vLLM its `max_model_len`. Ollama is sent that size so both sides agree.
 - **Context ring in chats** - the ring from the Code composer now sits beside the model name once a chat has started, filling as the context window is used and showing the exact count on hover. Switching models no longer asks the server to recount; the ring waits for the next message and says so. Shift+Click the ring to recount right away.
 - **Version badge** - the badge in Settings, Version no longer shows trailing zeros.
 - **Widened thinking dots** - thinking dots went from 0.35 to 0.55 between dot centres.
@@ -40,6 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OpenAI phone model picker** - the bottom sheet is a layout setting and opens without inline positioning.
 
 ### Fixed
+- **Images on Ollama** - images were sent in a format Ollama's chat API does not accept. They now go in its `images` field.
+- **Images on a model without vision** - an image added to the composer quietly disappeared; the composer now says it was left out.
+- **Replies cut off on small local windows** - when llama.cpp ran out of context mid-reply it sent an error inside the stream, which was ignored, so the reply just stopped as if it had finished. The error is now caught: a reply that runs out of room stops cleanly with **Continue**, and every request to llama.cpp is capped to the room the window has left, so it ends with a length stop instead of a server error.
 - **Jump to latest button** - the scroll-to-bottom button had a see-through background in the OpenAI Dark 2025 palette, so text showed through it. It is now solid in every palette.
 - **Empty reply after a tool call** - a reasoning model could finish the step after a tool call with only thinking, so the reply ended with no answer. The turn now asks the model once or twice for its final answer instead of stopping.
 - **Thinking icon after a tool call** - the model icon stayed on the generating animation when the model started thinking again after a tool call. It now shows the thinking animation for every round of reasoning.
@@ -51,6 +65,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sandbox in chats** - the sandbox tools toggle, the per-chat artifacts panel and the per-model "Sandbox tools" setting are gone; file work happens in Code. Project chats keep reading their project's files.
 - **Preset control** - the Base layout card in Admin, Interface is gone; choosing a theme sets the layout. The app config endpoint no longer accepts `uiPreset`.
 - **Context ledger and context gauge** - the per-message token ledger (`Alt+L`), dropping a message from context, and the gauge beside the model picker are gone, along with their settings. `/api/chats/:id/ledger` is removed, and messages dropped earlier are sent to the model again.
+- **Keep cache warm** - the "When the chat outgrows the window" choice in Admin, Models, Context is gone. Older history is always dropped only as far as the window needs.
+- **Context inspector** - gone; **What gets sent** shows what the model receives.
+- **Compaction settings** - the "Compact older turns" switch and "Compact when this much is left" are gone, since every model now uses rolling summaries. **Turns kept verbatim** remains.
+- **Estimated numbers** - character-based token estimates, the per-chat calibration, estimated reply speeds (the "~" and "est" markers) and Anthropic's `count_tokens` call are removed. Older replies that only had an estimated speed no longer show one.
 
 ---
 

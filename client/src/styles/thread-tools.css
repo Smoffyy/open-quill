@@ -71,7 +71,6 @@
 .engine-strip .es-stat { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
 .engine-strip .es-tps strong { color: var(--text); font-weight: 600; font-size: 11.5px; }
 .engine-strip .es-label { color: var(--text-faint); }
-.engine-strip .es-est { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); border: 1px solid var(--border); border-radius: 4px; padding: 0 3px; }
 .engine-strip .es-bar { width: 42px; height: 4px; border-radius: 999px; background: var(--hover-mid); overflow: hidden; }
 .engine-strip .es-fill { display: block; height: 100%; background: var(--text); transition: width var(--fx-t, .3s) ease; }
 .engine-strip .es-ctx.warn .es-fill { background: #e2a336; }

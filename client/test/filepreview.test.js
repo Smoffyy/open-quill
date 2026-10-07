@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { previewKind, uploadFileOf, isVisionImage } from '../src/lib/filepreview.js';
+import { previewKind, uploadFileOf, isVisionImage, needsConversion } from '../src/lib/filepreview.js';
 
 test('previewKind picks a native viewer by extension first, then by mime', () => {
   assert.equal(previewKind('photo.JPG'), 'image');
@@ -32,4 +32,9 @@ test('uploadFileOf only accepts an /uploads path', () => {
   assert.equal(uploadFileOf('/uploads/abc.pdf?x=1'), 'abc.pdf');
   assert.equal(uploadFileOf('https://example.com/uploads/abc.pdf'), '');
   assert.equal(uploadFileOf(null), '');
+});
+
+test('only images a model cannot read are converted, and never SVG or non-images', () => {
+  for (const t of ['image/bmp', 'image/avif', 'image/tiff', 'image/x-icon', 'IMAGE/BMP']) assert.equal(needsConversion(t), true, t);
+  for (const t of ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml', 'application/pdf', '', undefined]) assert.equal(needsConversion(t), false, String(t));
 });

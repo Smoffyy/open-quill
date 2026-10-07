@@ -53,7 +53,7 @@ function wsCtx(activeKey = 'c1') {
     actions: {
       finalize: log('finalize'), finalizeBackground: log('finalizeBackground'), syncView: log('syncView'),
       loadModels: log('loadModels'), loadAppConfig: log('loadAppConfig'), loadBudget: log('loadBudget'),
-      taskStarted: log('taskStarted'), setAsk: log('setAsk'),
+      taskStarted: log('taskStarted'), setAsk: log('setAsk'), contextChanged: log('contextChanged'),
       syncConfig: log('syncConfig'), adminDraft: log('adminDraft'), presence: log('presence')
     }
   };
@@ -79,7 +79,7 @@ test('every frame the server can send has a handler', () => {
   const SENT = ['session_revoked', 'config', 'resume', 'files', 'tool_live', 'tool_live_delta',
     'tool_exec', 'tool', 'compacting', 'compacted', 'ctx_rolling', 'title', 'chat_ended',
     'routed', 'queued', 'status', 'prompt_size', 'telemetry', 'steered', 'start',
-    'reasoning', 'content', 'rewrite', 'error', 'done', 'task_started', 'hello', 'admin_draft', 'presence'];
+    'reasoning', 'content', 'rewrite', 'error', 'done', 'task_started', 'hello', 'admin_draft', 'presence', 'folded'];
   for (const type of SENT) assert.ok(handlers[type], 'no handler for ' + type);
 });
 
@@ -330,4 +330,12 @@ test('a config frame and the connect greeting both hand their version on', () =>
   dispatchWs({ type: 'hello', configVersion: 7 }, ctx);
   const calls = ctx.calls.filter(c => c[0] === 'syncConfig').map(c => c.slice(1));
   assert.deepEqual(calls, [[7, false], [7, true]]);
+});
+
+test('a background summary refreshes the context ring only for the chat on screen', () => {
+  const ctx = wsCtx('c1');
+  dispatchWs({ type: 'folded', chatId: 'c2' }, ctx);
+  assert.equal(did(ctx, 'contextChanged'), false);
+  dispatchWs({ type: 'folded', chatId: 'c1' }, ctx);
+  assert.equal(did(ctx, 'contextChanged'), true);
 });

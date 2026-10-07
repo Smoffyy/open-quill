@@ -3,7 +3,6 @@
    around the panel. The old look came from the modal's 70px drop shadow
    darkening the backdrop right where it met the edges. */
 .overlay,
-.ctx-inspect-overlay,
 .bc-overlay,
 .persona-overlay {
   background: var(--scrim, rgba(0, 0, 0, .5));

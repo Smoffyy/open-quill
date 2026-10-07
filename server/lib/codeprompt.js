@@ -36,7 +36,7 @@ export function codeToolState(chat, { webSearchOn = false, canAsk = false, plan 
   return {
     code: true, planMode: !!plan, sandboxOn: true, webSearchOn: !!webSearchOn, membankOn: false, chatSearchOn: false,
     skillsOn: false, userSkills: [], mcpSchemas: [], mcpOn: false, mcpUser: chat?.user_id || null, endChatOn: false,
-    memoryAllowed: false, memoryOn: false, calculatorOn: false, todoOn, askUserOn, consultOn: false, consultWith: [], toolsOn: true
+    memoryAllowed: false, memoryOn: false, calculatorOn: false, todoOn, askUserOn, consultOn: false, consultWith: [], toolsOn: true, recallOn: !!chat?.summary
   };
 }
 

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { resolveProvider, providerSpec } from './providers.js';
 import { wireToolCalls } from '../llm/wire.js';
 
@@ -6,9 +7,6 @@ const infoCache = new Map();
 const tokenCache = new Map();
 const imageCostCache = new Map();
 const TOKEN_CACHE_MAX = 400;
-const DEFAULT_IMAGE_TOKENS = 1600;
-const PER_MSG_OVERHEAD = 8;
-const templateBroken = new Map();
 
 const asInt = (v) => { const n = parseInt(v, 10); return Number.isFinite(n) && n > 0 ? n : 0; };
 
@@ -70,13 +68,19 @@ function ctxFromProps(props) {
     || asInt(props?.n_ctx);
 }
 
+function ctxFromArgs(args) {
+  if (!Array.isArray(args)) return 0;
+  const at = args.findIndex(a => a === '--ctx-size' || a === '-c');
+  return at === -1 ? 0 : asInt(args[at + 1]);
+}
+
 function ctxFromModelList(list, name) {
   const rows = Array.isArray(list) ? list : (Array.isArray(list?.data) ? list.data : []);
   if (!rows.length) return 0;
   const match = (name && rows.find(r => r?.id === name || (Array.isArray(r?.aliases) && r.aliases.includes(name)))) || null;
   const pick = match || (rows.length === 1 ? rows[0] : null);
   if (!pick) return 0;
-  return asInt(pick?.meta?.n_ctx) || asInt(pick?.n_ctx) || asInt(pick?.context_length);
+  return asInt(pick?.meta?.n_ctx) || asInt(pick?.n_ctx) || asInt(pick?.context_length) || ctxFromArgs(pick?.status?.args);
 }
 
 export async function llamaInfo(model) {
@@ -107,7 +111,7 @@ export async function llamaInfo(model) {
   }
 
   const info = ctx ? { ctx, slots, vision } : null;
-  infoCache.set(cacheKey, { at: Date.now(), info });
+  if (info) infoCache.set(cacheKey, { at: Date.now(), info });
   return info;
 }
 
@@ -163,98 +167,54 @@ export function countImages(messages) {
 }
 
 export function imageTokenCost(model) {
-  const key = String(model?.id || model?.internal_name || '');
-  const learned = imageCostCache.get(key);
-  return learned && learned > 0 ? learned : DEFAULT_IMAGE_TOKENS;
+  return imageCostCache.get(String(model?.id || model?.internal_name || '')) || 0;
 }
 
 export function learnImageCost(model, images, measured) {
   if (!images || images < 1 || !(measured > 0)) return;
-  const key = String(model?.id || model?.internal_name || '');
   const per = Math.ceil(measured / images);
   if (per < 16 || per > 20000) return;
-  const prev = imageCostCache.get(key) || 0;
-  imageCostCache.set(key, Math.max(prev, per));
+  imageCostCache.set(String(model?.id || model?.internal_name || ''), per);
 }
 
 function wireFor(messages) {
-  const wire = messages.map(m => {
+  return messages.map(m => {
     const out = { role: m.role, content: textOf(m.content) };
     // The same OpenAI shape the completion request uses. Handing /apply-template
-    // the raw internal call makes it 500 with "Missing tool call type", and the
-    // fallback is an estimated prompt size on exactly the turns that need an
-    // exact one.
+    // the raw internal call makes it 500 with "Missing tool call type".
     if (Array.isArray(m.tool_calls) && m.tool_calls.length) out.tool_calls = wireToolCalls('openai', m.tool_calls);
     if (m.tool_call_id) out.tool_call_id = m.tool_call_id;
     if (m.name) out.name = m.name;
     return out;
   });
-  if (messages.length && messages[messages.length - 1].prefill) wire.push({ role: 'user', content: '' });
-  return wire;
-}
-
-function toolSig(tools) {
-  if (!Array.isArray(tools) || !tools.length) return '0';
-  let chars = 0;
-  const names = [];
-  for (const t of tools) {
-    const fn = t && t.function;
-    if (!fn) continue;
-    names.push(fn.name || '');
-    try { chars += JSON.stringify(fn.parameters || {}).length + (fn.description || '').length; } catch {}
-  }
-  return tools.length + ':' + chars + ':' + names.join(',');
-}
-
-function signature(wire, tools, name, images) {
-  let chars = 0;
-  for (const m of wire) chars += m.content.length + m.role.length;
-  const tail = wire.length ? wire[wire.length - 1].content.slice(-96) : '';
-  return name + '|' + wire.length + '|' + chars + '|' + images + '|' + toolSig(tools) + '|' + tail;
 }
 
 export async function llamaPromptTokens(model, messages, tools) {
   const ep = endpointFor(model);
   if (!ep) return 0;
   const wire = wireFor(messages);
-  const sig = signature(wire, tools, ep.name, countImages(messages));
+  const prefill = !!(messages.length && messages[messages.length - 1].prefill);
+  const body = { messages: wire, add_generation_prompt: !prefill };
+  if (Array.isArray(tools) && tools.length) { body.tools = tools; body.tool_choice = 'auto'; }
+  const sig = createHash('sha1').update(ep.root + '|' + ep.name + '|' + JSON.stringify(body)).digest('hex');
+  const images = countImages(messages) * imageTokenCost(model);
   const cached = tokenCache.get(sig);
   if (cached) {
     tokenCache.delete(sig);
     tokenCache.set(sig, cached);
-    return cached + countImages(messages) * imageTokenCost(model);
+    return cached + images;
   }
-  const broken = templateBroken.get(ep.root + '|' + ep.name);
-  const hasUser = wire.some(m => m.role === 'user');
-  let prompt = null;
-  let pad = 0;
-  if (hasUser && (!broken || Date.now() - broken > CACHE_MS)) {
-    const body = { messages: wire, add_generation_prompt: true };
-    if (Array.isArray(tools) && tools.length) { body.tools = tools; body.tool_choice = 'auto'; }
-    const tpl = await postWithModel(ep, '/apply-template', body, 15000);
-    prompt = tpl && typeof tpl.prompt === 'string' ? tpl.prompt : null;
-    if (prompt === null) templateBroken.set(ep.root + '|' + ep.name, Date.now());
-    else templateBroken.delete(ep.root + '|' + ep.name);
-  }
-  if (prompt === null) {
-    prompt = wire.map(m => m.role + '\n' + m.content).join('\n');
-    if (Array.isArray(tools) && tools.length) { try { prompt += '\n' + JSON.stringify(tools); } catch {} }
-    pad = wire.length * PER_MSG_OVERHEAD + 8;
-  }
-  const tok = await postWithModel(ep, '/tokenize', { content: prompt, add_special: true }, 15000);
+  const tpl = await postWithModel(ep, '/apply-template', body, 15000);
+  if (!tpl || typeof tpl.prompt !== 'string') return 0;
+  const tok = await postWithModel(ep, '/tokenize', { content: tpl.prompt, add_special: true }, 15000);
   const n = Array.isArray(tok?.tokens) ? tok.tokens.length : 0;
   if (!n) return 0;
-  const text = n + pad;
-  tokenCache.set(sig, text);
+  tokenCache.set(sig, n);
   if (tokenCache.size > TOKEN_CACHE_MAX) tokenCache.delete(tokenCache.keys().next().value);
-  return text + countImages(messages) * imageTokenCost(model);
+  return n + images;
 }
 
-export async function llamaTokenCount(model, messages, tools) {
-  return llamaPromptTokens(model, messages, tools);
-}
-
-const OVERFLOW_RE = /exceed(s|ed)?\s+the\s+(available\s+)?context|context\s+(size|window|length)\s+(exceeded|is\s+too|too\s+small)|prompt\s+is\s+too\s+long|n_ctx|kv\s*cache\s*is\s*full|context_length_exceeded|too\s+many\s+tokens/i;
+const OVERFLOW_RE = /exceed(s|ed)?\s+the\s+(available\s+)?context|context\s+(size|window|length)\s+(has\s+been\s+)?(exceeded|is\s+too|too\s+small)|prompt\s+is\s+too\s+long|n_ctx|kv\s*cache\s*is\s*full|free\s+space\s+in\s+the\s+kv\s*cache|context_length_exceeded|too\s+many\s+tokens|maximum\s+context\s+length|maximum\s+number\s+of\s+tokens|too\s+large\s+for\s+model/i;
 
 export function isContextOverflowError(err) {
   const msg = String((err && (err.message || err.error || err)) || '');
@@ -278,6 +238,25 @@ export function parseOverflow(err) {
     const pair = msg.match(/\((\d+)\s*tokens?\)[^(]*\((\d+)\s*tokens?\)/);
     if (pair) { prompt = prompt || asInt(pair[1]); ctx = ctx || asInt(pair[2]); }
   }
+  if (!prompt || !ctx) {
+    const openai = msg.match(/maximum context length is (\d+) tokens[\s\S]*?(?:resulted in|requested(?: about)?) (\d+) tokens/i);
+    if (openai) { prompt = prompt || asInt(openai[2]); ctx = ctx || asInt(openai[1]); }
+  }
+  if (!prompt || !ctx) {
+    const mistral = msg.match(/prompt contains (\d+) tokens[\s\S]*?with (\d+) maximum context length/i);
+    if (mistral) { prompt = prompt || asInt(mistral[1]); ctx = ctx || asInt(mistral[2]); }
+  }
+  if (!prompt || !ctx) {
+    const gemini = msg.match(/input token count \((\d+)\) exceeds the maximum number of tokens allowed \((\d+)\)/i);
+    if (gemini) { prompt = prompt || asInt(gemini[1]); ctx = ctx || asInt(gemini[2]); }
+  }
   if (!prompt || !ctx) return null;
   return { prompt, ctx };
+}
+
+export async function llamaTextTokens(model, text) {
+  const ep = endpointFor(model);
+  if (!ep) return 0;
+  const tok = await postWithModel(ep, '/tokenize', { content: String(text || ''), add_special: false }, 15000);
+  return Array.isArray(tok?.tokens) ? tok.tokens.length : 0;
 }

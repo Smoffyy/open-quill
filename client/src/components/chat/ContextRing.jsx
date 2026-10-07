@@ -22,7 +22,7 @@ export default function ContextRing({ chatId, modelId, revision, streaming, live
     const timer = setTimeout(() => {
       const id = modelRef.current || '';
       api.get('/api/chats/' + chatId + '/context?modelId=' + encodeURIComponent(id))
-        .then(d => { if (on) setData(d && d.limit > 0 ? { ...d, modelId: id } : null); })
+        .then(d => { if (on) setData(d ? { ...d, modelId: id } : null); })
         .catch(() => { if (on) setData(null); })
         .finally(() => { if (on) setBusy(false); });
     }, now ? 0 : 350);
@@ -53,11 +53,12 @@ export default function ContextRing({ chatId, modelId, revision, streaming, live
 
   const liveUsed = streaming && live && live.used > 0 ? live.used : 0;
   const current = data && data.modelId === (modelId || '') ? data : null;
-  const pending = !!data && !current && !liveUsed;
+  const pending = !liveUsed && !!data && (!current || !!current.pending);
   const limit = (current && current.limit) || (live && live.limit) || 0;
   const capTokens = current && current.budget > 0 ? current.budget : limit;
   const used = liveUsed || (current ? current.used : 0);
   const pct = capTokens > 0 ? Math.min(100, Math.round((used / capTokens) * 100)) : 0;
+  const summarized = current ? current.summarized || 0 : 0;
   const r = 5;
   const len = 2 * Math.PI * r;
   let label = t('Context: nothing used yet');
@@ -65,6 +66,8 @@ export default function ContextRing({ chatId, modelId, revision, streaming, live
   else if (shift && canRefresh) label = t('Shift+Click to refresh context');
   else if (pending) label = t('Send a message to load context');
   else if (capTokens > 0 && used > 0) label = t('Context: {used} of {limit} tokens ({pct}%)', { used: Number(used).toLocaleString(), limit: Number(limit).toLocaleString(), pct });
+  else if (used > 0) label = t('Context: {used} tokens', { used: Number(used).toLocaleString() });
+  if (summarized > 0 && !busy && !(shift && canRefresh)) label += ' · ' + t('{n} earlier messages summarized', { n: summarized });
   let cls = 'cx-ring';
   if (className) cls += ' ' + className;
   if (pct >= 90) cls += ' danger';

@@ -45,7 +45,7 @@ export default function EngineStrip({ telemetry, streaming, route }) {
   const data = telemetry || last;
   if (!data) return <div className="es-slot" aria-hidden="true" />;
 
-  const { tps, promptTps, promptTokens, genTokens, ctx, exact } = data;
+  const { tps, promptTps, promptTokens, genTokens, ctx } = data;
   const used = (promptTokens || 0) + (genTokens || 0);
   const pct = ctx > 0 ? Math.min(100, Math.round((used / ctx) * 1000) / 10) : 0;
   const level = pct >= 90 ? ' danger' : pct >= 75 ? ' warn' : '';
@@ -61,7 +61,6 @@ export default function EngineStrip({ telemetry, streaming, route }) {
       <span className="es-stat es-tps">
         <strong>{rate(tps)}</strong>
         <Sparkline points={history} />
-        {!exact && <span className="es-est" title={t('Estimated from streamed text, this provider does not report timings.')}>est</span>}
       </span>
       {promptTps > 0 && (
         <span className="es-stat" title={t('Prompt evaluation speed')}>

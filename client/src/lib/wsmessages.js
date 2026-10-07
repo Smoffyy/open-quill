@@ -170,6 +170,10 @@ export const handlers = {
     if (isActive(ctx, m.chatId)) ctx.meta.setStatus(rec.status);
   },
 
+  folded(m, ctx) {
+    if (isActive(ctx, m.chatId)) ctx.actions.contextChanged();
+  },
+
   prompt_size(m, ctx) {
     if (isActive(ctx, m.chatId)) ctx.meta.setPromptTokens(m.tokens || 0);
   },
@@ -178,7 +182,7 @@ export const handlers = {
     if (!isActive(ctx, m.chatId)) return;
     ctx.meta.setTelemetry({
       tps: m.tps, promptTps: m.promptTps, promptTokens: m.promptTokens,
-      genTokens: m.genTokens, ctx: m.ctx, exact: !!m.exact
+      genTokens: m.genTokens, ctx: m.ctx
     });
   },
 

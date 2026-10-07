@@ -17,7 +17,6 @@ import { planRecords, groupPlans, latestPlanRef } from './lib/agentpanel.js';
 import QuickPrompts from './components/chat/QuickPrompts.jsx';
 import CompactingBar from './components/chat/CompactingBar.jsx';
 import EngineStrip from './components/chat/EngineStrip.jsx';
-import ContextInspector from './components/dialogs/ContextInspector.jsx';
 import ThreadSkeleton from './components/chat/ThreadSkeleton.jsx';
 import SummaryModal from './components/dialogs/SummaryModal.jsx';
 import CommandPalette from './components/dialogs/CommandPalette.jsx';
@@ -84,7 +83,7 @@ import BranchTree from './components/chat/BranchTree.jsx';
 import { toast } from './lib/toast.js';
 import { askConfirm } from './lib/confirm.js';
 import { copyText } from './lib/clipboard.js';
-import { Down, Compact, Ghost, Search, Menu, Sliders, X, Fork, Panel, Copy, Star, Telescope, TextIcon, Expand } from './components/ui/icons.jsx';
+import { Down, Compact, Ghost, Search, Menu, Sliders, X, Fork, Panel, Copy, Star, TextIcon, Expand } from './components/ui/icons.jsx';
 import { setCustomFavicon } from './lib/favicon.js';
 import BrandMark from './components/ui/BrandMark.jsx';
 import { SKELETON_DELAY } from './lib/skeleton.js';
@@ -335,7 +334,6 @@ export default function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [chatPins, setChatPins] = useState([]);
   const [personasOpen, setPersonasOpen] = useState(false);
-  const [inspectOpen, setInspectOpen] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
@@ -490,7 +488,8 @@ export default function App() {
   const showMsgSpeed = !!user?.prefs?.msgSpeed;
   const statusDelay = statusDelayEnabled(user?.prefs?.statusDelay);
   const liveCtx = streaming && livePrompt > 0 ? { used: livePrompt + (telemetry?.genTokens || 0), limit: telemetry?.ctx || 0 } : null;
-  const ctxRevision = messages.length + ':' + (messages[messages.length - 1]?.id || '');
+  const [ctxTick, setCtxTick] = useState(0);
+  const ctxRevision = messages.length + ':' + (messages[messages.length - 1]?.id || '') + ':' + ctxTick;
   const [planDismissed, setPlanDismissed] = useState(null);
   const settledMsgs = useMemo(() => (streaming ? messages.filter(m => m.id !== assistantIdRef.current) : messages), [messages, streaming]);
   const liveMsg = useMemo(() => (streaming && dispContent ? { id: assistantIdRef.current, role: 'assistant', content: dispContent } : null), [streaming, dispContent]);
@@ -805,6 +804,7 @@ export default function App() {
       presence: (list) => publishPresence(list),
       loadBudget: () => loadBudget(),
       setAsk: (chatId, q) => setAsk(chatId, q),
+      contextChanged: () => setCtxTick(n => n + 1),
       taskStarted: (m) => toast(t('Running scheduled task "{title}"', { title: m.title || t('New chat') }), { icon: 'info' })
     }
   };
@@ -1772,7 +1772,6 @@ export default function App() {
                   hasSummary && { id: 'summary', icon: <Compact />, label: t("Conversation memory"), onClick: () => setSummaryOpen(true) },
                   { id: 'personas', icon: <Star />, label: t('Personas'), onClick: () => setPersonasOpen(true) },
                   messages.length > 0 && { id: 'copyall', icon: <Copy />, label: t('Copy all'), onClick: () => copyConversation() },
-                  activeId && { id: 'inspect', icon: <Telescope />, label: t('Inspect context'), onClick: () => setInspectOpen(true) },
                   user?.isAdmin && activeId && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => setCtlOpen(o => !o) },
                   messages.length > 0 && user?.prefs?.threadFind !== false && { id: 'find', icon: <Search />, label: t('Find in conversation'), active: findOpen, onClick: () => (findOpen ? closeFind() : setFindOpen(true)) },
                   activeId && messages.length > 0 && user?.prefs?.branchMap !== false && { id: 'tree', icon: <Fork />, label: t('Branch map'), active: treeOpen, onClick: () => setTreeOpen(o => !o) },
@@ -1849,7 +1848,6 @@ export default function App() {
       )}
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} onChatsChanged={() => loadChats()} />}
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} onOpen={(id) => openChat(id)} />}
-      {inspectOpen && activeId && <ContextInspector chatId={activeId} modelId={currentId} onClose={() => setInspectOpen(false)} />}
       {personasOpen && <PersonasModal personas={user?.personas || []} models={models} currentId={currentId} onApply={applyPersona} onSave={savePersonas} onClose={() => setPersonasOpen(false)} />}
       {ledgerPrompt && activeId && (
         <PromptLedger chatId={activeId} modelId={currentId} onClose={() => setLedgerPrompt(false)} />

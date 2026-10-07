@@ -5,7 +5,7 @@ import ModelPickerSlot from './ModelPickerSlot.jsx';
 import Tip from '../ui/Tip.jsx';
 import { api } from '../../lib/api.js';
 import { toast } from '../../lib/toast.js';
-import { useAttachments } from '../../lib/attachments.js';
+import { useAttachments, NO_VISION } from '../../lib/attachments.js';
 import { useDictation } from '../../lib/dictation.js';
 import { captureScreenshot, screenshotSupported, isCaptureCancel } from '../../lib/screenshot.js';
 import { Plus, Mic, Wave, Up, Enter, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer, Screenshot, Plug, SkillIcon, ImageIcon, Copy, Folder } from '../ui/icons.jsx';
@@ -428,7 +428,7 @@ export default function Composer({
           ))}
         </div>
       )}
-      {upErr && <div className="attach-err">{upErr}</div>}
+      {upErr && <div className="attach-err">{upErr === NO_VISION ? t('This model cannot see images, so they were left out.') : upErr}</div>}
       {slashOpen && (
         <div className="slash-menu">
           <div className="slash-head">{t("Commands")}</div>

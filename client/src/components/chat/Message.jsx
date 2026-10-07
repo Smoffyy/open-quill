@@ -192,13 +192,12 @@ const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, nam
 });
 
 function SpeedChip({ speed }) {
-  if (!speed || !(speed.tps > 0)) return null;
+  if (!speed || !(speed.tps > 0) || speed.exact === false) return null;
   const rate = speed.tps >= 100 ? Math.round(speed.tps) : Math.round(speed.tps * 10) / 10;
   const bits = [];
   if (speed.promptTps > 0) bits.push(`${t('prompt')} ${Math.round(speed.promptTps)} tok/s`);
   if (speed.out > 0) bits.push(`${Number(speed.out).toLocaleString()} ${t('tokens out')}`);
-  if (!speed.exact) bits.push(t('Estimated from streamed text, this provider does not report timings.'));
-  return <span className="msg-speed" title={bits.join(' · ')}>{rate} tok/s{!speed.exact && <span className="ms-est">~</span>}</span>;
+  return <span className="msg-speed" title={bits.join(' · ')}>{rate} tok/s</span>;
 }
 
 function SteerChips({ notes }) {

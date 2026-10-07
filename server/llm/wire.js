@@ -28,6 +28,13 @@ export function normalizeMessages(protocol, messages) {
       if (protocol === 'ollama') return { role: 'tool', tool_name: m.name || '', content: String(m.content ?? '') };
       return { role: 'tool', tool_call_id: m.tool_call_id || '', content: String(m.content ?? '') };
     }
+    if (protocol === 'ollama' && Array.isArray(m.content)) {
+      const text = m.content.filter(p => p && p.type === 'text').map(p => p.text || '').join('\n\n');
+      const images = m.content.filter(p => p && p.type === 'image_url')
+        .map(p => String(p.image_url?.url ?? p.image_url ?? '').replace(/^data:[^,]*,/, ''))
+        .filter(Boolean);
+      return images.length ? { role: m.role, content: text, images } : { role: m.role, content: text };
+    }
     return { role: m.role, content: m.content };
   });
 }

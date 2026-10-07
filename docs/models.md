@@ -47,7 +47,7 @@ Optional numbers for people who want to see how the model is doing, all under **
 | **Speed on each reply** | The tokens per second each reply ran at, kept beside the reply |
 | **Progress line** | What the model is doing, beside its logo, when a reply takes longer than a few seconds |
 
-Token counts come from the model's own tokenizer, not an estimate, so the context ring beside the model name matches what the model actually sees.
+Token counts are always exact, never estimated. Local llama.cpp and vLLM backends count the next prompt with the model's own tokenizer before it is sent. Other providers only report counts after a reply, so the ring shows the exact count from the last reply, and "Send a message to load context" before there is one.
 
 ## The model reference
 

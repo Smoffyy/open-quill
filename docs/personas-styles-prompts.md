@@ -35,4 +35,4 @@ Several sources of instructions can apply to the same chat. They are all sent to
 - **Chat instructions** apply to one chat. Applying a persona sets them.
 - The **response style** you picked.
 
-The model's own system prompt, set by an admin, sits around all of these. **Inspect context** in the **⋯** menu shows exactly what ended up in the prompt.
+The model's own system prompt, set by an admin, sits around all of these. **What gets sent** (`Alt+P`) shows exactly what ended up in the prompt.

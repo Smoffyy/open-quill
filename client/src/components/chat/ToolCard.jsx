@@ -30,6 +30,7 @@ const VERBS = {
   mb_search: [tk('Searching memory'), tk('Searched memory')],
   chat_search: [tk('Searching past chats'), tk('Searched past chats')],
   chat_view: [tk('Reading a past chat'), tk('Read a past chat')],
+  recall: [tk('Recalling earlier messages'), tk('Recalled earlier messages')],
   skill_view: [tk('Loading skill'), tk('Loaded skill')],
   end_conversation: [tk('Ending the conversation'), tk('Ended the conversation')],
   calculator: [tk('Calculating'), tk('Calculated')],
@@ -113,7 +114,7 @@ function targetOf(call) {
       return call.path && call.new_path
         ? { kind: 'move', from: call.path, to: call.new_path }
         : (call.path || call.new_path ? { kind: 'path', path: call.path || call.new_path } : null);
-    case 'search': case 'mb_search': case 'chat_search': return q(call.query);
+    case 'search': case 'mb_search': case 'chat_search': case 'recall': return q(call.query);
     case 'find': return q(call.pattern || call.query);
     case 'skill_view': return call.name ? { kind: 'text', text: call.name } : null;
     case 'memory': return q(call.text);
@@ -152,7 +153,7 @@ function resultNote(call, res) {
     case 'search': return res.count != null ? plural(res.count, '{n} match', '{n} matches') : null;
     case 'mb_search': return res.count != null ? plural(res.count, '{n} match', '{n} matches') : null;
     case 'mb_view': return res.total != null ? plural(res.total, '{n} line', '{n} lines') : null;
-    case 'chat_search': return res.count != null ? plural(res.count, '{n} match', '{n} matches') : null;
+    case 'chat_search': case 'recall': return res.count != null ? plural(res.count, '{n} match', '{n} matches') : null;
     case 'chat_view': return res.title ? `"${res.title}"` : null;
     case 'skill_view': return res.name ? res.name : null;
     case 'memory': return call.text ? (res.duplicate ? t('already saved') : null) : (res.text ? `"${res.text}"` : null);

@@ -36,10 +36,9 @@ The top bar shows the chat title. Click it for the chat menu: rename, star, add 
 
 | Item | Does |
 | --- | --- |
-| **Conversation memory** | Shows the summary that replaced older messages, once a long chat has been compacted |
+| **Conversation memory** | Shows the rolling summary that replaced older messages in a long chat |
 | **Personas** | Apply a saved persona to this chat |
 | **Copy all** | Copies the whole conversation |
-| **Inspect context** | A breakdown of everything sent to the model on the next turn |
 | **Chat controls (admin)** | Per-chat system prompt and sampling overrides, admins only |
 | **Find in conversation** | Search inside this chat (`Ctrl+F`) |
 | **Branch map** | Every branch of the conversation as a tree (`B`) |

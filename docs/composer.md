@@ -14,7 +14,7 @@ In the OpenAI layout the model picker sits at the top left of the chat instead.
 
 ## Attachments
 
-Drop files onto the window, paste them, or use **+ → Add files or photos** (`Ctrl+U`). Any file type can be attached; text, code and PDFs are read by the model, and images are sent only to models an admin has given **Image input**. A model that cannot read images says so instead of sending them. Each attachment shows as a removable chip above the field.
+Drop files onto the window, paste them, or use **+ → Add files or photos** (`Ctrl+U`). Any file type can be attached; text, code and PDFs are read by the model, and images are sent only to models an admin has given **Image input**, always at their full original quality. Formats a model cannot read (BMP, AVIF, ICO, and TIFF in browsers that open it) are converted to a lossless PNG of the same size when you attach them; HEIC photos are not, so share a JPEG copy instead. On a model without image input, images you add are left out and the composer says so. Each attachment shows as a removable chip above the field.
 
 **+ → Take a screenshot** captures a screen, window or browser tab through your browser's screen picker and attaches the image.
 

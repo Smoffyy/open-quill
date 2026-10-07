@@ -10,7 +10,6 @@
 
 .summary-skel { padding: 10px 2px; }
 .bt-skel, .bc-skel { padding: 18px 16px; }
-.ctx-skel { padding: 4px 16px 16px; }
 .vh-notes-skel { margin-top: 12px; }
 
 .skel-rows { display: flex; flex-direction: column; }

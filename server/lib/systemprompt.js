@@ -12,7 +12,9 @@ import { userMemoryOn, memoriesText } from './memory.js';
 import { todosOf, todoText } from './todo.js';
 import { consultTargets, consultTargetsText } from './consult.js';
 import { sandboxHostText, sandboxWorkspaceText, conversationTiming, pinnedFilesText } from './prompts.js';
-import { promptVars } from './convo.js';
+import { promptVars, summaryText } from './convo.js';
+import { buildTools } from '../tools/index.js';
+import { hostEnvInfo } from '../sandbox.js';
 import { webSearchAvailable } from './websearch.js';
 import { codeToolState, codePrompt } from './codeprompt.js';
 
@@ -47,6 +49,12 @@ export function syncAllModels(before, after) {
   return changed;
 }
 
+export function toolsFor(flags) {
+  if (!flags.toolsOn) return [];
+  const consultNames = flags.consultOn ? flags.consultWith.map(t => t.display_name || t.internal_name) : [];
+  return buildTools({ ...flags, consultNames, hostEnv: flags.sandboxOn ? hostEnvInfo() : null, readOnly: flags.planMode });
+}
+
 export function toolState(chat, model, { sandboxOn = false, webSearchOn = false, canAsk = false, plan = false } = {}) {
   const row = chat?.id ? (db.chats.byId(chat.id) || chat) : chat;
   if (row?.mode === 'code') return codeToolState(row, { webSearchOn, canAsk, plan });
@@ -69,7 +77,7 @@ export function toolState(chat, model, { sandboxOn = false, webSearchOn = false,
   const toolsOn = sandboxOn || webSearchOn || membankOn || chatSearchOn || skillsOn || mcpOn || endChatOn || memoryOn
     || calculatorOn || todoOn || askUserOn || consultOn;
   return {
-    sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, userSkills, mcpSchemas, mcpOn, mcpUser: userId,
+    sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, userSkills, mcpSchemas, mcpOn, mcpUser: userId, recallOn: toolsOn && !!row?.summary,
     endChatOn, memoryAllowed, memoryOn, calculatorOn, todoOn, askUserOn, consultOn, consultWith, toolsOn
   };
 }
@@ -103,7 +111,7 @@ export function promptVarMap(chat, model, state, { userId = null, styleText = ''
     chatInstructions: row?.instructions || '',
     pinnedFiles: () => pinnedFilesText(row),
     responseStyle: styleText,
-    conversationSummary: row?.summary || '',
+    conversationSummary: () => summaryText(row, !!state.recallOn),
     conversationTiming: () => (row ? conversationTiming(row.id) : ''),
     sandboxHost: () => sandboxHostText(),
     sandboxWorkspace: () => (row ? sandboxWorkspaceText(projectfiles.workspaceFor(row), String(project?.name || '')) : ''),

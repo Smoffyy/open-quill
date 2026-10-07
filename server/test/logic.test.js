@@ -16,9 +16,11 @@ import { parseParamCount, formatParamCount, modelSize, sizeLabel } from '../lib/
 import { parseSkillFile, buildSkillFile, normalizeName, validate } from '../lib/skillfile.js';
 import { cutOffError } from '../lib/prompts.js';
 import { makeToolTextFilter, makeEmitter } from '../llm/emitter.js';
-import { trimInTurn, compactThreshold, estimateTokens, textTokens, makeTokenCounter, truncateForRollingCtx, FALLBACK_CTX } from '../lib/convo.js';
+import { trimInTurn } from '../lib/convo.js';
 import { scanTools } from '../lib/toolproto.js';
 import { isContextOverflowError } from '../lib/llamacpp.js';
+import { forceAnswer, answerNudge, reasoningTail, tailChars, FORCE_ANSWER_INSTRUCTION } from '../lib/forceanswer.js';
+import { outputReserve, shedBulk } from '../lib/ctxwindow.js';
 import { sanitizeDoc, blankLayoutDoc, normalizeStoreForTest, docDiffCount } from '../lib/theme.js';
 import { diffState, applyState, expandKeys } from '../lib/changes.js';
 import { winTranslate, wsKey, projectKey, isProjectKey, execTool, childEnv } from '../sandbox.js';
@@ -36,7 +38,7 @@ import { badgesOf, sanitizeBadgesOff } from '../lib/badges.js';
 import { cleanClient, memberContext, languageName } from '../lib/memberctx.js';
 import { samplingParams, parseStop } from '../llm/sampling.js';
 import { PROVIDER_TYPES, isProviderType, providerSpec, isLocalType } from '../lib/providers.js';
-import { slideWithCounter, trimMode } from '../lib/ctxwindow.js';
+import { slideWithCounter } from '../lib/ctxwindow.js';
 import { sameOrigin, sameOriginGuard, requestHost } from '../lib/origin.js';
 import { SETTING_FIELDS, coerceSetting } from '../lib/settingfields.js';
 import { localOnlyCsp, baseCsp } from '../lib/localonly.js';
@@ -503,13 +505,6 @@ test('tool text filter: malformed block becomes a call, prose is untouched', () 
   }
 });
 
-test('compaction: threshold falls back when context is unknown', () => {
-  assert.equal(compactThreshold({ enable_summaries: 0 }, 0), Infinity);
-  const t = compactThreshold({ enable_summaries: 1, summary_padding: 0.125 }, 0);
-  assert.equal(t, Math.floor(FALLBACK_CTX * 0.875));
-  assert.equal(compactThreshold({ enable_summaries: 1, summary_padding: 0.125 }, 4096), 3584);
-});
-
 test('compaction: in-turn trim keeps recent tool results', () => {
   const big = 'x'.repeat(2000);
   const inTurn = [
@@ -525,11 +520,6 @@ test('compaction: in-turn trim keeps recent tool results', () => {
   assert.equal(list[3].content.length, 2000);
   assert.equal(list[0].content, 'a');
   assert.equal(trimInTurn(list, 2).trimmed, 0);
-});
-
-test('compaction: estimate counts roles and tool calls', () => {
-  assert.ok(estimateTokens([{ role: 'user', content: 'hello world' }]) > 0);
-  assert.ok(estimateTokens([{ role: 'assistant', content: '', tool_calls: [{ name: 'bash', argsText: '{"cmd":"ls"}' }] }]) > 8);
 });
 
 test('llamacpp: overflow errors are recognised', () => {
@@ -603,54 +593,6 @@ test('windows: cd is deliberately excluded from the slash fix', () => {
 test('windows: the slash fix reports a note, same as every other auto-correction', () => {
   const r = winTranslate('mkdir a/b');
   assert.equal(r.notes.length, 1);
-});
-
-test('rolling ctx: fits under budget returns the list untouched', () => {
-  const msgs = [{ role: 'system', content: 'sys' }, { role: 'user', content: 'hi' }];
-  const r = truncateForRollingCtx('c1', msgs, 8192);
-  assert.equal(r.msgs, msgs);
-  assert.equal(r.dropped, 0);
-  assert.equal(r.trimmed, false);
-});
-
-test('rolling ctx: drops oldest non-system turns first and keeps every system message', () => {
-  const msgs = [
-    { role: 'system', content: 'S'.repeat(100) },
-    { role: 'user', content: 'a'.repeat(6000) },
-    { role: 'assistant', content: 'b'.repeat(6000) },
-    { role: 'user', content: 'c'.repeat(600) }
-  ];
-  const r = truncateForRollingCtx('c2', msgs, 2048);
-  assert.ok(r.dropped > 0);
-  assert.equal(r.msgs.filter(m => m.role === 'system').length, 1);
-  assert.equal(r.msgs[r.msgs.length - 1].content, 'c'.repeat(600));
-  assert.ok(r.msgs.length < msgs.length);
-});
-
-test('rolling ctx: a single oversized turn is trimmed rather than dropped', () => {
-  const msgs = [{ role: 'system', content: 'S' }, { role: 'user', content: 'x'.repeat(200000) }];
-  const r = truncateForRollingCtx('c3', msgs, 2048);
-  assert.equal(r.dropped, 0);
-  assert.equal(r.trimmed, true);
-  assert.equal(r.msgs.length, 2);
-  assert.ok(r.msgs[1].content.length < 200000);
-});
-
-test('token counter: chunked adds match a whole-string estimate', () => {
-  const text = 'hello world '.repeat(120) + '日本語のテキスト'.repeat(40) + '한국어';
-  const counter = makeTokenCounter();
-  for (let i = 0; i < text.length; i += 7) counter.add(text.slice(i, i + 7));
-  assert.equal(counter.tokens, textTokens(text));
-  const empty = makeTokenCounter();
-  empty.add('');
-  assert.equal(empty.tokens, 0);
-});
-
-test('token estimates are stable across repeat calls on long strings', () => {
-  const long = 'word '.repeat(500);
-  const first = textTokens(long);
-  assert.equal(textTokens(long), first);
-  assert.equal(estimateTokens([{ role: 'user', content: long }]), first + 4);
 });
 
 test('scanTools: prose is never mistaken for a call, real calls still parse', () => {
@@ -819,13 +761,6 @@ test('samplingParams: llama.cpp samplers pass through, unsupported ones are drop
   }
 });
 
-test('trimMode only opts in on the exact value', () => {
-  assert.equal(trimMode({ ctx_trim_mode: 'cache' }), 'cache');
-  assert.equal(trimMode({ ctx_trim_mode: 'retain' }), 'retain');
-  assert.equal(trimMode({}), 'retain');
-  assert.equal(trimMode(null), 'retain');
-});
-
 const stubCount = (list) => list.reduce((n, m) => n + Math.ceil(String(m.content || '').length / 4) + 4, 0);
 const convo = (turns) => {
   const out = [{ role: 'system', content: 'S'.repeat(200) }];
@@ -836,62 +771,30 @@ const convo = (turns) => {
   return out;
 };
 
-test('slideWithCounter: cache mode drops past what is needed, retain mode does not', async () => {
+test('slideWithCounter: drops only as much history as the budget needs', async () => {
   const msgs = convo(40);
   const budget = 4000;
-  const retain = await slideWithCounter(stubCount, msgs, budget, { mode: 'retain' });
-  const cache = await slideWithCounter(stubCount, msgs, budget, { mode: 'cache' });
-  assert.ok(retain.tokens <= budget);
-  assert.ok(cache.tokens <= budget);
-  assert.ok(cache.tokens <= retain.tokens, `cache ${cache.tokens} should not exceed retain ${retain.tokens}`);
-  assert.ok(cache.dropped > retain.dropped, `cache ${cache.dropped} should exceed retain ${retain.dropped}`);
+  const r = await slideWithCounter(stubCount, msgs, budget);
+  assert.ok(r.tokens <= budget);
+  assert.ok(r.tokens > budget - 260, `${r.tokens} leaves more than one turn of slack under ${budget}`);
+  assert.ok(r.dropped > 0);
 });
 
-const firstKept = (r) => {
-  const m = r.msgs.find(x => x.role !== 'system');
-  const hit = String(m && m.content || '').match(/\b([ua]\d+)\b/);
-  return hit ? hit[1] : 'none';
-};
-
-test('slideWithCounter: cache mode holds the prefix still while retain mode moves it every turn', async () => {
-  const budget = 4000;
-  const retainHeads = new Set();
-  const cacheHeads = new Set();
-  for (let turns = 40; turns < 46; turns++) {
-    const msgs = convo(turns);
-    retainHeads.add(firstKept(await slideWithCounter(stubCount, msgs, budget, { mode: 'retain' })));
-    cacheHeads.add(firstKept(await slideWithCounter(stubCount, msgs, budget, { mode: 'cache' })));
-  }
-  assert.equal(retainHeads.size, 6, 'retain mode should move the boundary on every single turn');
-  assert.ok(cacheHeads.size <= 2, `cache mode moved the boundary ${cacheHeads.size} times over six turns`);
-});
-
-test('slideWithCounter: the cache boundary does move once the slack is used up', async () => {
-  const budget = 4000;
-  const heads = new Set();
-  for (let turns = 40; turns < 70; turns++) {
-    heads.add(firstKept(await slideWithCounter(stubCount, convo(turns), budget, { mode: 'cache' })));
-  }
-  assert.ok(heads.size > 1, 'cache mode must still slide, just less often');
-});
-
-test('slideWithCounter: an unreachable cache target still yields a prompt that fits', async () => {
+test('slideWithCounter: a tight budget still yields a prompt that fits', async () => {
   const msgs = convo(3);
   const budget = 420;
-  const r = await slideWithCounter(stubCount, msgs, budget, { mode: 'cache' });
+  const r = await slideWithCounter(stubCount, msgs, budget);
   assert.ok(r.tokens > 0);
   assert.ok(r.tokens <= budget, `${r.tokens} > ${budget}`);
 });
 
-test('slideWithCounter: a prompt already inside the budget is left alone in both modes', async () => {
+test('slideWithCounter: a prompt already inside the budget is left alone', async () => {
   const msgs = convo(2);
   const total = stubCount(msgs);
-  for (const mode of ['retain', 'cache']) {
-    const r = await slideWithCounter(stubCount, msgs, total + 500, { mode });
-    assert.equal(r.dropped, 0, mode);
-    assert.equal(r.trimmed, false, mode);
-    assert.equal(r.msgs, msgs, mode);
-  }
+  const r = await slideWithCounter(stubCount, msgs, total + 500);
+  assert.equal(r.dropped, 0);
+  assert.equal(r.trimmed, false);
+  assert.equal(r.msgs, msgs);
 });
 
 test('sandbox guard: ordinary build and run commands are not blocked', () => {
@@ -2999,4 +2902,70 @@ test('the parameter variables give a ready phrase and the bare counts', () => {
   assert.deepEqual(vars({ docs_total_params: 175, docs_moe: 1 }), ['175B parameters (mixture-of-experts)', '175B', '']);
   assert.deepEqual(vars({ docs_total_params: 175, docs_moe: 0, docs_active_params: 35 }), ['175B parameters', '175B', '']);
   assert.deepEqual(vars({ docs_moe: 1, docs_active_params: 35 }), ['', '', '']);
+});
+
+test('llama.cpp running out of room mid-reply reads as a context overflow', () => {
+  for (const msg of ['Context size has been exceeded.', 'failed to find free space in the KV cache, retrying with smaller batch size']) {
+    assert.equal(isContextOverflowError(new Error(msg)), true, msg);
+  }
+  assert.equal(isContextOverflowError(new Error('model not found')), false);
+});
+
+test('a reasoning model gets more of a small window for its reply', () => {
+  assert.equal(outputReserve({}, 2048), 1024);
+  assert.equal(outputReserve({ has_reasoning: 1 }, 2048), 1228);
+  assert.equal(outputReserve({ has_reasoning: 1 }, 32768), 4096);
+  assert.equal(outputReserve({ has_reasoning: 1, max_tokens: 900 }, 2048), 900);
+});
+
+test('cut reasoning keeps its end and hands it back so the model answers', () => {
+  const long = 'start ' + 'step '.repeat(1000) + 'so the answer is 42';
+  const tail = reasoningTail(long, tailChars(2048));
+  assert.ok(tail.startsWith('…') && tail.endsWith('so the answer is 42'));
+  assert.ok(tail.length <= tailChars(2048) + 1);
+  assert.equal(reasoningTail('short thought', 400), 'short thought');
+
+  const filled = forceAnswer({ think_open: '<reason>', think_close: '</reason>' }, long, 2048, true);
+  assert.equal(filled.role, 'assistant');
+  assert.ok(filled.prefill && filled.held && filled.forced);
+  assert.ok(filled.content.startsWith('<reason>\n…') && filled.content.endsWith('so the answer is 42\n</reason>\n\n'), 'the thought is closed so the model continues with its answer');
+  assert.ok(forceAnswer({}, long, 2048, true).content.endsWith('</think>\n\n'));
+
+  const asked = forceAnswer({}, long, 2048, false);
+  assert.equal(asked.role, 'user');
+  assert.ok(asked.held && asked.forced && !asked.prefill);
+  assert.ok(asked.content.includes('so the answer is 42') && asked.content.startsWith(FORCE_ANSWER_INSTRUCTION.split('{tail}')[0]));
+  assert.deepEqual(answerNudge(filled.tail), { ...asked, tail: filled.tail }, 'a refused prefill falls back to the same instruction');
+});
+
+test('shedBulk thins old images, long code and tool output but leaves the latest turn alone', () => {
+  const code = '```js\n' + Array.from({ length: 60 }, (_, i) => 'line ' + i).join('\n') + '\n```';
+  const msgs = [
+    { role: 'system', content: 'sys' },
+    { role: 'user', content: [{ type: 'text', text: 'look' }, { type: 'image_url', image_url: { url: 'data:x' } }] },
+    { role: 'assistant', content: 'Here:\n' + code },
+    { role: 'tool', content: 'r'.repeat(5000) },
+    { role: 'user', content: 'again\n' + code }
+  ];
+  const r = shedBulk(msgs);
+  assert.equal(r.shed, 3);
+  assert.ok(r.msgs[1].content.every(p => p.type === 'text'));
+  assert.ok(r.msgs[2].content.includes('[... 45 lines removed') && r.msgs[2].content.includes('line 0\n') && r.msgs[2].content.includes('line 59'));
+  assert.ok(r.msgs[3].content.length < 1200);
+  assert.equal(r.msgs[0], msgs[0]);
+  assert.equal(r.msgs[4], msgs[4], 'the newest user message is never thinned');
+  assert.equal(shedBulk([{ role: 'user', content: 'hi' }]).shed, 0);
+});
+
+test('Ollama gets the text in content and the images in their own field', () => {
+  const [m] = normalizeMessages('ollama', [{ role: 'user', content: [
+    { type: 'text', text: 'What is this?' },
+    { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } },
+    { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,BBBB' } }
+  ] }]);
+  assert.deepEqual(m, { role: 'user', content: 'What is this?', images: ['AAAA', 'BBBB'] });
+  const [plain] = normalizeMessages('ollama', [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }]);
+  assert.deepEqual(plain, { role: 'user', content: 'hi' });
+  const [openai] = normalizeMessages('openai', [{ role: 'user', content: [{ type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } }] }]);
+  assert.ok(Array.isArray(openai.content), 'other providers keep the OpenAI image parts');
 });

@@ -1,6 +1,6 @@
 import { db, getSetting, setSetting } from '../db.js';
 import { badgesOf } from './badges.js';
-import { resolveProvider, providerSpec } from './providers.js';
+import { resolveProvider, providerSpec, isLocalType } from './providers.js';
 import { publicKwargDefs } from './kwargs.js';
 import { llamaContext } from './llamacpp.js';
 import { anthropicModelInfo } from '../llm/index.js';
@@ -49,11 +49,11 @@ export function shapePublic(m, ctx = badgeContext()) {
     iconPosition: m.icon_position || 'below', hasVision: !!m.has_vision, iconSize: m.icon_size || 0, showName: !!m.show_name,
     sandboxAuto: !!m.sandbox_auto, sandboxAllowed: m.sandbox_allowed !== 0, codeAllowed: m.code_allowed !== 0, dropdownIcon: m.dropdown_icon !== 0, isDefault: !!m.is_default, agentSteps: m.agent_steps || 0,
     webSearchAuto: !!m.web_search_auto, webSearchAllowed: m.web_search_allowed !== 0,
-    enableSummaries: !!m.enable_summaries, numCtx: m.num_ctx || 0, summaryPadding: m.summary_padding || 0.125, recentWindow: m.recent_window || 4,
+    numCtx: knownCtx(m), recentWindow: m.recent_window || 4,
     unavailable: !!m.unavailable, unavailableReason: m.unavailable_reason || '',
     sunsetAt: m.sunset_at || '',
     bgEnabled: !!m.bg_enabled, bgImage: m.bg_image || '',
-    badges: badgesOf(m, ctx),
+    badges: badgesOf({ ...m, num_ctx: knownCtx(m) }, ctx),
     priceIn: m.cost_in ?? null, priceOut: m.cost_out ?? null,
     docsFeatured: !!m.docs_featured, docsIntelligence: m.docs_intelligence || 0, docsSpeed: m.docs_speed || 0,
     docsMaxOutput: m.docs_max_output || 0, docsCutoff: m.docs_cutoff || '', docsBody: m.docs_body || '', docsImage: m.docs_image || '', docsIcon: m.docs_icon || '',
@@ -72,6 +72,28 @@ export function shapePublic(m, ctx = badgeContext()) {
   };
 }
 
+const knownWindows = new Map();
+let ctxVersion = 0;
+
+function rememberCtx(model, ctx) {
+  if (!model?.id || (knownWindows.get(model.id) || 0) === ctx) return;
+  knownWindows.set(model.id, ctx);
+  ctxVersion++;
+}
+
+export function knownCtx(m) {
+  const manual = parseInt(m.num_ctx);
+  if (Number.isFinite(manual) && manual > 0) return manual;
+  return knownWindows.get(m.id) || 0;
+}
+
+function warmCtx(rows) {
+  for (const m of rows) {
+    const prov = resolveProvider(m.provider_id);
+    if (prov && isLocalType(prov.type) && !(parseInt(m.num_ctx) > 0)) modelCtx(m).catch(() => {});
+  }
+}
+
 const shapeCache = { draft: null, published: null };
 
 function badgeContext() {
@@ -85,10 +107,13 @@ function shapeList(rows, ctx) {
 export function draftModels() {
   applySunsets();
   const version = db.models.version();
+  const rows = db.models.all();
+  warmCtx(rows);
   const ctx = badgeContext();
-  if (shapeCache.draft && shapeCache.draft.version === version && shapeCache.draft.web === ctx.webSearch) return shapeCache.draft.list;
-  const list = shapeList(db.models.all(), ctx);
-  shapeCache.draft = { version, web: ctx.webSearch, list };
+  const hit = shapeCache.draft;
+  if (hit && hit.version === version && hit.web === ctx.webSearch && hit.ctxVersion === ctxVersion) return hit.list;
+  const list = shapeList(rows, ctx);
+  shapeCache.draft = { version, web: ctx.webSearch, ctxVersion, list };
   return list;
 }
 
@@ -96,10 +121,12 @@ export function publicModels() {
   applySunsets();
   const snap = getSetting('published_models', null);
   if (!Array.isArray(snap)) return draftModels();
+  warmCtx(snap);
   const ctx = badgeContext();
-  if (shapeCache.published && shapeCache.published.snap === snap && shapeCache.published.web === ctx.webSearch) return shapeCache.published.list;
+  const hit = shapeCache.published;
+  if (hit && hit.snap === snap && hit.web === ctx.webSearch && hit.ctxVersion === ctxVersion) return hit.list;
   const list = shapeList(snap, ctx);
-  shapeCache.published = { snap, web: ctx.webSearch, list };
+  shapeCache.published = { snap, web: ctx.webSearch, ctxVersion, list };
   return list;
 }
 
@@ -158,15 +185,17 @@ export async function detectContextLength(prov, internal) {
   const headers = { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) };
   const root = base.replace(/\/v1$/, '');
   const asInt = (v) => { const n = parseInt(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+  const getJson = async (url, init) => {
+    const r = await timedFetch(url, init || { headers });
+    return r.ok ? r.json() : null;
+  };
   try {
     if (spec.protocol === 'anthropic') return internal ? asInt((await anthropicModelInfo({ base, key }, internal)).context) : 0;
     if (spec.protocol === 'ollama') {
-      const r = await timedFetch(root + '/api/show', { method: 'POST', headers, body: JSON.stringify({ model: internal }) });
-      if (!r.ok) return 0;
-      const json = await r.json();
-      const info = json.model_info || {};
-      const ctxKey = Object.keys(info).find(k => k.endsWith('.context_length'));
-      return asInt(ctxKey ? info[ctxKey] : 0);
+      const json = await getJson(root + '/api/ps');
+      const list = Array.isArray(json?.models) ? json.models : [];
+      const hit = list.find(m => m.name === internal || m.model === internal);
+      return asInt(hit?.context_length);
     }
     if (prov?.type === 'llamacpp') {
       const propsUrls = internal
@@ -174,53 +203,52 @@ export async function detectContextLength(prov, internal) {
         : [root + '/props'];
       for (const url of propsUrls) {
         try {
-          const r = await timedFetch(url, { headers });
-          if (!r.ok) continue;
-          const json = await r.json();
+          const json = await getJson(url);
           const ctx = asInt(json?.default_generation_settings?.n_ctx)
             || asInt(json?.default_generation_settings?.params?.n_ctx)
             || asInt(json?.n_ctx);
           if (ctx) return ctx;
         } catch {}
       }
-      try {
-        const r = await timedFetch(base + '/models', { headers });
-        if (r.ok) {
-          const json = await r.json();
-          const list = Array.isArray(json.data) ? json.data : [];
-          const hit = list.find(m => m.id === internal) || (list.length === 1 ? list[0] : null);
-          const ctx = asInt(hit?.meta?.n_ctx) || asInt(hit?.n_ctx) || asInt(hit?.meta?.n_ctx_train);
-          if (ctx) return ctx;
-        }
-      } catch {}
-      return 0;
+      const json = await getJson(base + '/models');
+      const list = Array.isArray(json?.data) ? json.data : [];
+      const hit = list.find(m => m.id === internal) || (list.length === 1 ? list[0] : null);
+      return asInt(hit?.meta?.n_ctx) || asInt(hit?.n_ctx);
     }
-    const r = await timedFetch(root + '/api/v0/models', { headers: { 'Content-Type': 'application/json' } });
-    if (!r.ok) return 0;
-    const json = await r.json();
-    const list = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
-    const hit = list.find(m => (m.id || m.key) === internal) || list.find(m => (m.id || '').includes(internal));
-    return asInt(hit ? (hit.max_context_length || hit.loaded_context_length || hit.context_length || 0) : 0);
+    if (prov?.type === 'vllm') {
+      const json = await getJson(base + '/models');
+      const list = Array.isArray(json?.data) ? json.data : [];
+      const hit = list.find(m => m.id === internal) || (list.length === 1 ? list[0] : null);
+      return asInt(hit?.max_model_len);
+    }
+    const json = await getJson(root + '/api/v0/models', { headers: { 'Content-Type': 'application/json' } });
+    const list = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
+    const hit = list.find(m => (m.id || m.key) === internal);
+    return asInt(hit?.loaded_context_length);
   } catch { return 0; }
 }
 
 const ctxDetectCache = new Map();
 const CTX_CACHE_MS = 5 * 60 * 1000;
+const CTX_LOADED_MS = 15 * 1000;
 const CTX_CACHE_MAX = 200;
-const CTX_AUTO_TYPES = new Set(['llamacpp', 'ollama', 'lmstudio', 'anthropic']);
+const CTX_AUTO_TYPES = new Set(['llamacpp', 'ollama', 'lmstudio', 'vllm', 'anthropic']);
+const CTX_LOADED_TYPES = new Set(['ollama', 'lmstudio']);
 
 export async function modelCtx(model) {
   const manual = parseInt(model.num_ctx);
   if (Number.isFinite(manual) && manual > 0) return manual;
   const llama = await llamaContext(model);
-  if (llama > 0) return llama;
+  if (llama > 0) { rememberCtx(model, llama); return llama; }
   const prov = resolveProvider(model.provider_id);
   if (!prov || !CTX_AUTO_TYPES.has(prov.type)) return 0;
   const cacheKey = prov.id + ':' + (model.internal_name || '');
+  const ttl = CTX_LOADED_TYPES.has(prov.type) ? CTX_LOADED_MS : CTX_CACHE_MS;
   const hit = ctxDetectCache.get(cacheKey);
-  if (hit && Date.now() - hit.at < CTX_CACHE_MS) return hit.ctx;
+  if (hit && Date.now() - hit.at < (hit.ctx ? ttl : CTX_LOADED_MS)) return hit.ctx;
   const ctx = await detectContextLength(prov, model.internal_name || '');
   ctxDetectCache.set(cacheKey, { ctx, at: Date.now() });
   if (ctxDetectCache.size > CTX_CACHE_MAX) ctxDetectCache.delete(ctxDetectCache.keys().next().value);
+  rememberCtx(model, ctx);
   return ctx;
 }

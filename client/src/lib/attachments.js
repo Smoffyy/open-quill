@@ -1,9 +1,27 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { ownsDrop } from './dropfiles.js';
 import { attachKey, peekAttachments, readAttachments, writeAttachments, dropAttachments } from './attachdrafts.js';
-import { isVisionImage, previewKind } from './filepreview.js';
+import { isVisionImage, needsConversion, previewKind } from './filepreview.js';
 
 const DEFAULT_GLOW = 'var(--text)';
+
+export const NO_VISION = 'no-vision';
+
+async function modelReady(file) {
+  if (!needsConversion(file.type)) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const blob = await new Promise(resolve => { canvas.toBlob(resolve, 'image/png'); });
+    return blob ? new File([blob], file.name.replace(/\.[^.]+$/, '') + '.png', { type: 'image/png' }) : file;
+  } catch {
+    return file;
+  }
+}
 
 function dominantColor(url) {
   return new Promise((resolve) => {
@@ -72,11 +90,12 @@ export function useAttachments({ visionSupported, draftId }) {
     writeAttachments(key, files);
   }, [persist, key, files]);
 
-  function addFiles(list) {
-    let picked = Array.from(list || []);
-    if (!visionSupported) picked = picked.filter(f => !isVisionImage(f.type));
-    if (!picked.length) return;
-    setUpErr('');
+  async function addFiles(list) {
+    const all = Array.from(list || []);
+    const kept = visionSupported ? all : all.filter(f => !isVisionImage(f.type));
+    setUpErr(kept.length < all.length ? NO_VISION : '');
+    if (!kept.length) return;
+    const picked = await Promise.all(kept.map(modelReady));
     const mapped = picked.map(file => ({
       id: Math.random().toString(36).slice(2), file, name: file.name, type: file.type, size: file.size,
       preview: previewKind(file.name, file.type) === 'image' ? URL.createObjectURL(file) : null
