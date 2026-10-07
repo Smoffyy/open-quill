@@ -163,7 +163,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
   display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px;
   color: var(--text); transition: background var(--fx-t, .15s), color var(--fx-t, .15s);
 }
-.rail-open:hover { color: var(--sidebar-text, var(--text-muted)); }
+.rail-open:hover { background: var(--cl-hover); color: var(--sidebar-text, var(--text-muted)); }
 .rail-open:focus-visible { outline: 1.6px solid var(--focus-ring); outline-offset: 1.6px; }
 @media (min-width: 721px) {
   :root:root .app.sb-collapsed .topbar { padding-left: 48px; }

@@ -185,3 +185,9 @@
   width: 24px; height: 24px; padding: 0; border-radius: 6px;
 }
 :root:root .tb-copy svg { width: 14px; height: 14px; }
+
+:root[data-oq-instant] *,
+:root[data-oq-instant] *::before,
+:root[data-oq-instant] *::after {
+  transition: none !important; animation-duration: 0s !important; animation-delay: 0s !important;
+}
