@@ -1378,9 +1378,6 @@
   "Retirement": "폐지",
   "Retry": "재시도",
   "Retry (assistant)": "재시도 (어시스턴트)",
-  "Retry with": "다음으로 재시도",
-  "Retry with another model": "다른 모델로 재시도",
-  "Retrying with {model}": "{model}(으)로 재시도하는 중",
   "Reusing cache": "캐시 재사용 중",
   "Reveal speed": "표시 속도",
   "Revert": "되돌리기",
@@ -2923,5 +2920,7 @@
   "Recalled earlier messages": "이전 메시지 불러옴",
   "The exact prompt this conversation would send right now, in order.": "이 대화가 지금 보낼 정확한 프롬프트, 순서대로.",
   "This provider cannot count tokens before sending.": "이 공급자는 보내기 전에 토큰을 셀 수 없습니다.",
-  "This model cannot see images, so they were left out.": "이 모델은 이미지를 볼 수 없어 이미지는 제외되었습니다."
+  "This model cannot see images, so they were left out.": "이 모델은 이미지를 볼 수 없어 이미지는 제외되었습니다.",
+  "Logo beside replies": "답변 옆에 로고 표시",
+  "Off keeps the logo in the greeting only.": "끄면 로고는 인사말 화면에만 표시됩니다."
 }

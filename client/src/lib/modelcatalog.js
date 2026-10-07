@@ -2,10 +2,10 @@ import { reasons } from './badges.js';
 
 export { reasons };
 
-const INVERTED = new Set(['sandbox_allowed', 'code_allowed', 'web_search_allowed', 'reasoning_collapsible', 'dropdown_icon']);
+const INVERTED = new Set(['sandbox_allowed', 'code_allowed', 'web_search_allowed', 'reasoning_collapsible', 'dropdown_icon', 'show_icon']);
 
 export const FLAGS = new Set([
-  'has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'code_allowed', 'dropdown_icon',
+  'has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'code_allowed', 'dropdown_icon', 'show_icon',
   'is_default', 'unavailable',
   'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'show_name', 'skills_allowed',
   'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'memory_allowed', 'calculator_allowed', 'hide_tool_calls', 'todo_allowed', 'ask_user_allowed',
@@ -190,7 +190,7 @@ export const TAB_FIELDS = {
     'xtc_threshold', 'mirostat', 'mirostat_tau', 'mirostat_eta'],
   controls: ['kwargs', 'effort_enabled'],
   appearance: ['static_icon', 'generating_icon', 'thinking_icon', 'generating_anim', 'thinking_anim', 'icon_size', 'icon_position',
-    'dropdown_icon', 'show_name', 'badges_off', 'bg_enabled', 'bg_image'],
+    'dropdown_icon', 'show_icon', 'show_name', 'badges_off', 'bg_enabled', 'bg_image'],
   routing: ['router_rules', 'router_default']
 };
 

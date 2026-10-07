@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OpenAI phone model picker** - the bottom sheet is a layout setting and opens without inline positioning.
 - **Mode switch** - the Chat/Code control in the sidebar uses the same sliding control as the settings choices. Switching back to a mode returns to the screen you left it on: a chat, a Code session, a library page, Projects, Docs or All chats.
 - **Model name on hover** - when a reply's model name is not shown beside its icon, hovering the icon shows it in a tooltip. The name is the one stored on that reply, so replies from removed models keep it.
+- **Logo beside replies** - a model's logo can be hidden from its replies in Admin, Models, Appearance, Logo, so it only shows in the greeting. It is on by default.
 - **Reply actions** - the latest reply's action bar is always visible, with its time shown on hover, and fades in when the reply finishes. Other replies still show the bar on hover, with a quicker fade and no upward movement. The timestamp tooltip waits a quarter of a second before it appears.
 
 ### Fixed
@@ -62,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Thinking icon after a tool call** - the model icon stayed on the generating animation when the model started thinking again after a tool call. It now shows the thinking animation for every round of reasoning.
 - **State colours in the Anthropic dark palettes** - a palette rule that was too broad hid them. The microphone now turns red while recording and during a call, liked and disliked reply buttons show their colour, the notes under request controls in the model menu use their own colour, and unavailable models are dimmed again.
 - **OpenAI login fields** - the focus and error borders on the login form were hidden by the palette and now show.
+- **Long context badge in Appearance** - a model whose window was detected at 100K or more got the Long context badge in the picker, but Appearance could not switch it on or off. Appearance now uses the same window size as the picker.
 - **Layout and theme out of step** - the Preset control could switch the layout while the active theme stayed on another base, so build mode painted over a different layout than the theme said.
 
 ### Removed
@@ -71,6 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keep cache warm** - the "When the chat outgrows the window" choice in Admin, Models, Context is gone. Older history is always dropped only as far as the window needs.
 - **Context inspector** - gone; **What gets sent** shows what the model receives.
 - **Compaction settings** - the "Compact older turns" switch and "Compact when this much is left" are gone, since every model now uses rolling summaries. **Turns kept verbatim** remains.
+- **Retry with another model** - the arrow beside Retry on a reply, and its model list, are gone. To redo a reply with another model, pick that model in the picker and press Retry.
 - **Estimated numbers** - character-based token estimates, the per-chat calibration, estimated reply speeds (the "~" and "est" markers) and Anthropic's `count_tokens` call are removed. Older replies that only had an estimated speed no longer show one.
 
 ---

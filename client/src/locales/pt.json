@@ -588,9 +588,6 @@
   "Restore original prompt": "Restaurar o prompt original",
   "Retry": "Tentar de novo",
   "Retry (assistant)": "Tentar de novo (assistente)",
-  "Retry with": "Tentar de novo com",
-  "Retry with another model": "Tentar de novo com outro modelo",
-  "Retrying with {model}": "Tentando novamente com {model}",
   "Reusing cache": "Reaproveitando o cache",
   "Reveal speed": "Velocidade de exibição",
   "Revoke": "Revogar",
@@ -2923,5 +2920,7 @@
   "Recalled earlier messages": "Mensagens anteriores recuperadas",
   "The exact prompt this conversation would send right now, in order.": "O prompt exato que esta conversa enviaria agora, em ordem.",
   "This provider cannot count tokens before sending.": "Este provedor não consegue contar tokens antes do envio.",
-  "This model cannot see images, so they were left out.": "Este modelo não consegue ver imagens, por isso elas ficaram de fora."
+  "This model cannot see images, so they were left out.": "Este modelo não consegue ver imagens, por isso elas ficaram de fora.",
+  "Logo beside replies": "Logotipo ao lado das respostas",
+  "Off keeps the logo in the greeting only.": "Desligado: o logotipo aparece só na saudação."
 }

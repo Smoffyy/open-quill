@@ -1373,23 +1373,6 @@ export default function App() {
     msgActions.current.fork = forkChat;
   }, [regenerate, forkChat]);
 
-  const regenerateWith = useCallback((messageId, modelId) => {
-    if (streaming || !activeId || !modelId) return;
-    dismissError();
-    setChatRemovedModel(null);
-    setCurrentId(modelId);
-    if (!wsSend({ type: 'regenerate', chatId: activeId, modelId, messageId, ...genOptsRef.current })) return;
-    queueRec(activeId, modelId);
-    setMessages(ms => {
-      const idx = ms.findIndex(m => m.id === messageId);
-      if (idx === -1) return ms;
-      return ms.slice(0, ms[idx].role === 'user' ? idx + 1 : idx);
-    });
-    pinToBottom(true, 20);
-    const mm = models.find(m => m.id === modelId);
-    if (mm) toast(t('Retrying with {model}', { model: mm.displayName }), { icon: 'check' });
-  }, [streaming, activeId, models]);
-
   const editMessage = useCallback((messageId, newContent) => {
     if (streaming || !activeId || !currentId) return;
     setMessages(ms => { const idx = ms.findIndex(m => m.id === messageId); if (idx === -1) return ms; const copy = ms.slice(0, idx + 1); copy[idx] = { ...copy[idx], content: newContent }; return copy; });
@@ -1622,7 +1605,7 @@ export default function App() {
     : streaming ? { id: streamKey, _k: messages.find(m => m.id === streamKey)?._k || '_live', role: 'assistant', content: dispContent, reasoning: dispReason, reasoningSegs: dispSegs, model_id: streamModelRef.current || currentId, _streaming: true }
     : queued ? { id: '_queued', _k: '_live', role: 'assistant', content: '', _streaming: true } : null;
   const codeView = codeMode ? (
-    <CodeView userName={user?.displayName} modelIcon={model?.staticIcon || ''} chat={activeChat} chatId={activeId} booting={booting} loading={threadLoading}
+    <CodeView userName={user?.displayName} modelIcon={model?.staticIcon || ''} chatIcon={model?.showIcon === false ? '' : model?.staticIcon || ''} chat={activeChat} chatId={activeId} booting={booting} loading={threadLoading}
       messages={messages} live={codeLive} liveCalls={liveCalls} phase={phase} status={modelStatus} statusDelay={statusDelay} streaming={streaming || queued}
       files={files} liveFile={liveFile} pendingFiles={pendingFiles} fileFocus={artifactFocus} onFilesChanged={setFiles}
       composer={{
@@ -1801,14 +1784,14 @@ export default function App() {
                   let lastA = null;
                   for (let i = renderList.length - 1; i >= 0; i--) if (renderList[i].role === 'assistant') { lastA = renderList[i]; break; }
                   return renderList.map(msg => (
-                    <Message key={msg._k || msg.id} msg={msg} latest={msg === lastA} model={resolveMsgModel(msg, model)} models={models} currentId={currentId} chatId={activeId} pins={chatPins} chatEnded={chatEnded}
+                    <Message key={msg._k || msg.id} msg={msg} latest={msg === lastA} model={resolveMsgModel(msg, model)} chatId={activeId} pins={chatPins} chatEnded={chatEnded}
                       canContinue={(canContinue || !!msg.truncated) && !streaming && !chatEnded && msg === lastA && !msg._streaming}
                       onContinue={continueReply}
                       steers={msg._streaming ? liveSteers : (msg.steers || null)}
                       status={msg._streaming ? modelStatus : null}
                       statusDelay={statusDelay}
                       streaming={!!msg._streaming} phase={msg._streaming ? ((modelById.get(currentId)?.hideThinking && phase === 'thinking') ? 'generating' : phase) : 'static'} liveCall={msg._streaming ? liveCall : null} liveCalls={msg._streaming ? liveCalls : EMPTY_CALLS}
-                      onTogglePinFile={togglePinFile} onRegenerate={regenerate} onRegenerateWith={regenerateWith} onEdit={editMessage} onEditAssistant={editAssistantMessage} onDelete={deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
+                      onTogglePinFile={togglePinFile} onRegenerate={regenerate} onEdit={editMessage} onEditAssistant={editAssistantMessage} onDelete={deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
                       showSpeed={showMsgSpeed}
                       showIcon={msg.role === 'assistant' && (layout.replyIcon === 'every' || (lastA && msg.id === lastA.id))}
                       fadeWords={fadeWords} />

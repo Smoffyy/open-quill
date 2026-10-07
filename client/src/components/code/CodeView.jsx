@@ -142,7 +142,7 @@ function PlanPrompt({ onBuild, onKeep }) {
 }
 
 export default function CodeView({
-  userName, modelIcon, chat, chatId, booting, loading, messages, live, liveCalls, phase, status, statusDelay, streaming,
+  userName, modelIcon, chatIcon, chat, chatId, booting, loading, messages, live, liveCalls, phase, status, statusDelay, streaming,
   files, liveFile, pendingFiles, fileFocus, onFilesChanged, composer, scroll, error, onDismissError,
   onRename, onToggleStar, onDelete, onRetry, onContinue, onOpenFile, panelOpen, onTogglePanel, onOpenMenu, onBuildPlan
 }) {
@@ -208,7 +208,7 @@ export default function CodeView({
           <div className={'thread cx-thread' + (fresh ? ' fresh' : '')} role="log" aria-label={t('Conversation')} aria-live="polite" aria-busy={streaming ? 'true' : 'false'}>
             {fresh && <CodeHero icon={modelIcon} userName={userName} />}
             {loading && messages.length === 0 && <ThreadSkeleton />}
-            <CodeTranscript messages={messages} live={live} liveCalls={liveCalls} phase={phase} status={status} statusDelay={statusDelay} modelIcon={modelIcon} chatId={chatId}
+            <CodeTranscript messages={messages} live={live} liveCalls={liveCalls} phase={phase} status={status} statusDelay={statusDelay} modelIcon={chatIcon} chatId={chatId}
               onOpenFile={onOpenFile} onRetry={onRetry} onContinue={onContinue} />
             {error && <ChatError message={error} onDismiss={onDismissError} />}
             <div className="thread-pad" />

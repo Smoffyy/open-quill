@@ -23,7 +23,7 @@ Hover a message to see its actions. With **Message shortcuts** on you can also m
 - **Copy**, or copy what has been written so far while it is still streaming.
 - **Read aloud**, using the speech settings the admin configured.
 - **Good response** and **Bad response**, which an admin can see under **Admin Panel → Ratings**.
-- **Retry**, and the arrow beside it to **Retry with** a different model.
+- **Retry** to write the reply again. To use a different model, pick it in the model picker first.
 - **Compare versions**, once a reply has more than one version.
 - From the **⋯** menu: **Edit** the reply's text, **Branch** into a new chat, **Pin** it, or **Delete** it.
 

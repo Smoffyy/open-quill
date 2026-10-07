@@ -171,7 +171,7 @@ function StatusCaption({ swapKey, label, detail }) {
   );
 }
 
-const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name, tip, statusKey, statusLabel, statusDetail }, ref) {
+const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name, tip, hideMark, statusKey, statusLabel, statusDetail }, ref) {
   const base = model?.staticIcon || '';
   const map = {
     static: base,
@@ -179,13 +179,14 @@ const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, nam
     thinking: model?.thinkingIcon || base
   };
   const src = map[phase] || base;
-  if (!base && !name && !statusLabel) return null;
+  const mark = hideMark ? '' : base;
+  if (!mark && !name && !statusLabel) return null;
   const anim = phase === 'generating' ? (model?.generatingAnim || 'none') : phase === 'thinking' ? (model?.thinkingAnim || 'none') : '';
   const cls = anim === 'none' ? '' : anim;
   const sz = model?.iconSize > 0 ? model.iconSize : 50;
   return (
     <div ref={ref} className={'msg-icon' + (below ? ' below' : '') + (name ? ' with-name' : '')}>
-      {base && <Tip label={tip}><ModelMark src={src} state={phase} className={cls} style={{ width: sz, height: sz }} /></Tip>}
+      {mark && <Tip label={tip}><ModelMark src={src} state={phase} className={cls} style={{ width: sz, height: sz }} /></Tip>}
       {name && <span className="msg-icon-name">{name}</span>}
       <StatusCaption swapKey={statusKey} label={statusLabel} detail={statusDetail} />
     </div>
@@ -212,9 +213,9 @@ function SteerChips({ notes }) {
   );
 }
 
-function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onEditAssistant, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, steers = null, status = null, statusDelay = true, showSpeed = false, fadeWords = false, latest = false }) {
-  if (chatEnded) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onEditAssistant = null; onFork = null; onDelete = null; }
-  if (!chatId) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onEditAssistant = null; onFork = null; onTogglePin = null; }
+function Message({ msg, model, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onEdit, onEditAssistant, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, steers = null, status = null, statusDelay = true, showSpeed = false, fadeWords = false, latest = false }) {
+  if (chatEnded) { onRegenerate = null; onEdit = null; onEditAssistant = null; onFork = null; onDelete = null; }
+  if (!chatId) { onRegenerate = null; onEdit = null; onEditAssistant = null; onFork = null; onTogglePin = null; }
   const [typing, setTyping] = useState(false);
   const typingTimer = useRef(null);
   useEffect(() => {
@@ -255,11 +256,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   useEffect(() => () => { if (speaking) window.speechSynthesis.cancel(); }, []);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
-  const [retryMenu, setRetryMenu] = useState(false);
   const [compare, setCompare] = useState(false);
-  const retryRef = useRef(null);
-  const retryMenuRef = useRef(null);
-  const retryPos = useAnchoredMenu(retryMenu, setRetryMenu, retryRef, retryMenuRef, { align: 'center' });
   async function doCopy() {
     const clean = (msg.content || '').replace(/\[\[OQ(?:R:[A-Za-z0-9+/=]+|T:\d+)\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
     if (!(await copyText(clean))) return;
@@ -412,7 +409,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
     : (liveCall && liveCall.tool ? [{ index: 0, call: liveCall }] : []);
   const showStatus = streaming && !msg.content && !msg.reasoning && !liveRows.length && statusInfo.show;
   const icon = showIt ? <ModelIcon ref={iconRef} model={model} phase={iconPhase} below={pos === 'below'} name={pos !== 'left' && showName ? model.displayName : null}
-    tip={hasName && !showName ? model.displayName : null}
+    tip={hasName && !showName ? model.displayName : null} hideMark={model?.showIcon === false}
     statusKey={statusInfo.key} statusLabel={showStatus ? statusInfo.label : null} statusDetail={statusInfo.detail} /> : null;
 
   async function rate(r) {
@@ -466,21 +463,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
           {chatId && !String(msg.id).startsWith('inc-') && (
             <button className={'action-btn' + (fb === -1 ? ' on' : '')} onClick={() => rate(-1)} title={t("Bad response")} aria-label={t("Bad response")} aria-pressed={fb === -1}><ThumbDown /></button>
           )}
-          <span className="retry-wrap">
-            {onRegenerate && <button className="action-btn" title={t("Retry")} aria-label={t("Retry")} onClick={() => onRegenerate(msg.id)}><Retry /></button>}
-            {onRegenerateWith && models && models.length > 1 && (
-              <button ref={retryRef} className={'action-caret' + (retryMenu ? ' on' : '')} title={t("Retry with another model")} aria-label={t("Retry with another model")} aria-expanded={retryMenu} aria-haspopup="menu" onClick={() => setRetryMenu(o => !o)}>▾</button>
-            )}
-            {retryMenu && createPortal(
-              <div ref={retryMenuRef} className="retry-menu portal" role="menu" aria-label={t("Retry with another model")} style={menuStyleOf(retryPos)}>
-                <div className="retry-menu-label">{t("Retry with")}</div>
-                {models.map(mm => (
-                  <button key={mm.id} role="menuitem" className={mm.id === currentId ? 'on' : ''} onClick={() => { setRetryMenu(false); onRegenerateWith(msg.id, mm.id); }}>
-                    <ModelMark src={mm.staticIcon} />{mm.displayName}{mm.id === currentId && <Check style={{ width: 13, marginLeft: 'auto' }} />}
-                  </button>
-                ))}
-              </div>, document.body)}
-          </span>
+          {onRegenerate && <button className="action-btn" title={t("Retry")} aria-label={t("Retry")} onClick={() => onRegenerate(msg.id)}><Retry /></button>}
           <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
           {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")} aria-label={t("Compare versions")}><Columns /></button>}
           <MoreMenu items={[

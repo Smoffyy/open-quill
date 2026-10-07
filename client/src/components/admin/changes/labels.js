@@ -20,7 +20,7 @@ export const MODEL_FIELDS = {
   kwargs: tk('Request controls'), effort_enabled: tk('Request controls'),
   static_icon: tk('Static'), generating_icon: tk('While generating'), thinking_icon: tk('While thinking'),
   generating_anim: tk('Motion'), thinking_anim: tk('Motion'), icon_size: tk('Size beside replies'), icon_position: tk('Position'),
-  dropdown_icon: tk('Logo in the picker'), show_name: tk('Name beside replies'), badges_off: tk('Badges'),
+  dropdown_icon: tk('Logo in the picker'), show_icon: tk('Logo beside replies'), show_name: tk('Name beside replies'), badges_off: tk('Badges'),
   bg_enabled: tk('Use a backdrop'), bg_image: tk('Image URL or CSS gradient'),
   router_rules: tk('Rules'), router_default: tk('Fallback'),
   in_more_models: tk('Folder'), more_models_label: tk('Folder')

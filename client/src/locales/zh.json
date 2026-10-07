@@ -588,9 +588,6 @@
   "Restore original prompt": "恢复原始提示词",
   "Retry": "重试",
   "Retry (assistant)": "重试（助手）",
-  "Retry with": "换用模型重试",
-  "Retry with another model": "换用其他模型重试",
-  "Retrying with {model}": "正在改用 {model}",
   "Reusing cache": "正在复用缓存",
   "Reveal speed": "显示速度",
   "Revoke": "撤销",
@@ -2923,5 +2920,7 @@
   "Recalled earlier messages": "已回顾较早的消息",
   "The exact prompt this conversation would send right now, in order.": "此对话现在将要发送的确切提示，按顺序排列。",
   "This provider cannot count tokens before sending.": "此提供方无法在发送前统计 token。",
-  "This model cannot see images, so they were left out.": "此模型无法查看图片，因此图片未被添加。"
+  "This model cannot see images, so they were left out.": "此模型无法查看图片，因此图片未被添加。",
+  "Logo beside replies": "回复旁显示徽标",
+  "Off keeps the logo in the greeting only.": "关闭后，徽标仅在问候语中显示。"
 }

@@ -264,7 +264,7 @@ export const ELEMENTS = [
   /* menus and overlays */
   { id: 'menu', label: tk('Menu'), cat: 'chrome', sel: '.popover, .plus-menu, .chat-menu, .more-menu, .model-menu, .rl-menu, .retry-menu, .art-menu, .pj-menu, .sk-menu, .qp-iconmenu, .spc-mention-menu', caps: ALL },
   { id: 'menuItem', label: tk('Menu item'), cat: 'chrome', sel: '.popover button, .pm-item, .chat-menu button, .model-opt, .art-menu-item', parent: 'menu', caps: CTRL },
-  { id: 'menuLabel', label: tk('Menu section label'), cat: 'chrome', sel: '.pm-label, .art-menu-label, .retry-menu-label, .style-menu-label', parent: 'menu', caps: TEXTY },
+  { id: 'menuLabel', label: tk('Menu section label'), cat: 'chrome', sel: '.pm-label, .art-menu-label, .style-menu-label', parent: 'menu', caps: TEXTY },
   { id: 'menuHead', label: tk('Menu header'), cat: 'chrome', sel: '.persona-head, .rl-menu-head', parent: 'menu', caps: ALL },
   { id: 'modelBadge', label: tk('Model badge'), cat: 'chrome', sel: '.mo-badge', parent: 'menuItem', caps: BOX.concat(['type']) },
   { id: 'menuShortcut', label: tk('Menu shortcut'), cat: 'chrome', sel: '.pm-shortcut', parent: 'menuItem', caps: BOX.concat(['type']) },

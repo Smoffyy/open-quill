@@ -1378,9 +1378,6 @@
   "Retirement": "Abkündigung",
   "Retry": "Wiederholen",
   "Retry (assistant)": "Wiederholen (Assistent)",
-  "Retry with": "Wiederholen mit",
-  "Retry with another model": "Mit anderem Modell wiederholen",
-  "Retrying with {model}": "Wird mit {model} wiederholt",
   "Reusing cache": "Cache wird wiederverwendet",
   "Reveal speed": "Aufdeckgeschwindigkeit",
   "Revert": "Rückgängig machen",
@@ -2923,5 +2920,7 @@
   "Recalled earlier messages": "Frühere Nachrichten abgerufen",
   "The exact prompt this conversation would send right now, in order.": "Der genaue Prompt, den dieses Gespräch jetzt senden würde, in Reihenfolge.",
   "This provider cannot count tokens before sending.": "Dieser Anbieter kann Tokens vor dem Senden nicht zählen.",
-  "This model cannot see images, so they were left out.": "Dieses Modell kann keine Bilder sehen, daher wurden sie weggelassen."
+  "This model cannot see images, so they were left out.": "Dieses Modell kann keine Bilder sehen, daher wurden sie weggelassen.",
+  "Logo beside replies": "Logo neben Antworten",
+  "Off keeps the logo in the greeting only.": "Aus: Das Logo erscheint nur in der Begrüßung."
 }

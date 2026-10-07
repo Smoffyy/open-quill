@@ -244,7 +244,7 @@ function SampleThread() {
         {messages.map(msg => (
           <Message key={msg.id} msg={msg} chatId="oq-stage" phase="static"
             model={msg.role === 'assistant' ? SAMPLE_MODEL : null} models={[SAMPLE_MODEL]} currentId={SAMPLE_MODEL.id}
-            onRegenerate={noop} onRegenerateWith={noop} onEdit={noop} onDelete={noop} onFork={noop} onTogglePin={noop} />
+            onRegenerate={noop} onEdit={noop} onDelete={noop} onFork={noop} onTogglePin={noop} />
         ))}
         <div className="msg assistant">
           <ToolCard call={SAMPLE_CALL} result={SAMPLE_RESULT} />

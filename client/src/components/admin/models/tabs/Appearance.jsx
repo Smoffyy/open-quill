@@ -64,6 +64,8 @@ const BADGE_TEXT = {
   long: [tk('Long context'), tk('Earned with a context window of 100K tokens or more.')]
 };
 
+const windowed = (m) => ({ ...m, num_ctx: Number(m.num_ctx) > 0 ? m.num_ctx : m.known_ctx || 0 });
+
 function Badges() {
   const { models, edit } = useEditor();
   const { workspace } = useAdmin();
@@ -78,8 +80,8 @@ function Badges() {
       </div>
       <div className="mc-chips" role="group" aria-label={label}>
         {BADGES.map(({ id, supported }) => {
-          const able = models.filter(m => supported(m, ctx));
-          const shown = able.filter(m => badgesOf(m, ctx).includes(id));
+          const able = models.filter(m => supported(windowed(m), ctx));
+          const shown = able.filter(m => badgesOf(windowed(m), ctx).includes(id));
           const all = able.length > 0 && shown.length === able.length;
           const [name, hint] = BADGE_TEXT[id];
           return (
@@ -87,7 +89,7 @@ function Badges() {
               aria-pressed={all ? true : shown.length ? 'mixed' : false}
               className={'mc-chip' + (shown.length && !all ? ' part' : '')}
               onClick={() => edit(m => {
-                if (!supported(m, ctx)) return null;
+                if (!supported(windowed(m), ctx)) return null;
                 const off = new Set(Array.isArray(m.badges_off) ? m.badges_off : []);
                 if (all) off.add(id); else off.delete(id);
                 return { badges_off: BADGES.map(b => b.id).filter(b => off.has(b)) };
@@ -121,6 +123,9 @@ export default function Appearance() {
           <Choice k="icon_position" row label={t('Position')} note={t('Where the logo sits against the reply.')} fallback="below"
             options={[{ value: 'below', label: t('Below') }, { value: 'left', label: t('Left') }, { value: 'above', label: t('Above') }]} />
           <Flag k="show_name" label={t('Name beside replies')} note={t('Prints the model name next to its logo on each reply.')} />
+          <When test={m => !!m.static_icon} keep="show_icon">
+            <Flag k="show_icon" label={t('Logo beside replies')} note={t('Off keeps the logo in the greeting only.')} />
+          </When>
         </Rows>
       </Card>
 
