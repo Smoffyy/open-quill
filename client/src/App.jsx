@@ -797,6 +797,7 @@ export default function App() {
         { icon: 'info', kind: 'warn', duration: 6000 }),
       finalize: () => finalize(),
       finalizeBackground: (key) => finalizeBackground(key),
+      settleStale: (key) => settleStale(key),
       syncView: () => syncView(),
       loadModels: () => loadModels(),
       loadAppConfig: () => loadAppConfig(),
@@ -861,6 +862,14 @@ export default function App() {
   function finalizeBackground(key) {
     dropRec(key);
     if (key !== 'incognito') loadChats();
+  }
+
+  // A reply that finished while the socket was down never sent `done`, so its
+  // stream record would stay open. The saved reply is on the server; load it.
+  function settleStale(key) {
+    dropRec(key);
+    if (key === activeIdRef.current) { refreshMessages(key); syncView(); }
+    loadChats();
   }
 
   // Point the view at whatever the chat we just switched to is doing: pick up a

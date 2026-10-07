@@ -33,6 +33,7 @@ import { forceAnswer, answerNudge, REASONING_CUT_NOTE } from '../forceanswer.js'
 import { runRecall, formatRecallResult, recallPayload } from '../recall.js';
 
 const MAX_STEERS = 6;
+const SAVE_EVERY_MS = 2000;
 const TELEMETRY_MS = 220;
 const SILENT_MS = 2500;
 const PREVIEW_FREE_CHARS = 4096;
@@ -96,6 +97,12 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
       checkpointed = true;
     } catch (e) { console.warn('[turn] checkpoint failed', e.message); }
+  };
+  let lastSaved = 0;
+  const saveSoon = () => {
+    if (Date.now() - lastSaved < SAVE_EVERY_MS) return;
+    lastSaved = Date.now();
+    checkpoint();
   };
   const addStepUsage = (stepUsage) => {
     if (!stepUsage) return;
@@ -489,6 +496,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         closeReasoning();
         if (text.trim()) contentSinceReason = true;
         content += text; stepText += text;
+        saveSoon();
         if (!firstAt) firstAt = Date.now();
         if (!genStart) { genStart = Date.now(); sendStatus({ phase: 'generating' }, true); }
         safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text }));

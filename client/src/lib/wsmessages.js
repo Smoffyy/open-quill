@@ -61,6 +61,12 @@ export const handlers = {
       if (turn.ask) ctx.actions.setAsk?.(turn.chatId, turn.ask);
       if (isActive(ctx, turn.chatId) && turn.promptTokens > 0) ctx.meta.setPromptTokens(turn.promptTokens);
     }
+    const running = new Set(list.map(turn => turn && turn.chatId));
+    for (const key of ctx.mirror.keys()) {
+      const rec = ctx.mirror.peek(key);
+      if (key === 'incognito' || running.has(key) || !rec || rec.done) continue;
+      ctx.actions.settleStale(key);
+    }
     ctx.mirror.syncBusy();
     if (list.some(turn => turn && isActive(ctx, turn.chatId))) ctx.actions.syncView();
   },

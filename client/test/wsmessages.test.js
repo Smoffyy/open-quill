@@ -24,6 +24,7 @@ function wsCtx(activeKey = 'c1') {
       },
       peek: (id) => recs.get(id),
       dropRec: (id) => { recs.delete(id); calls.push(['dropRec', id]); },
+      keys: () => [...recs.keys()],
       syncBusy: log('syncBusy'),
       resumeRec: (id, patch) => { recs.set(id, patch); calls.push(['resumeRec', id]); }
     },
@@ -54,7 +55,8 @@ function wsCtx(activeKey = 'c1') {
       finalize: log('finalize'), finalizeBackground: log('finalizeBackground'), syncView: log('syncView'),
       loadModels: log('loadModels'), loadAppConfig: log('loadAppConfig'), loadBudget: log('loadBudget'),
       taskStarted: log('taskStarted'), setAsk: log('setAsk'), contextChanged: log('contextChanged'),
-      syncConfig: log('syncConfig'), adminDraft: log('adminDraft'), presence: log('presence')
+      syncConfig: log('syncConfig'), adminDraft: log('adminDraft'), presence: log('presence'),
+      settleStale: log('settleStale')
     }
   };
   return ctx;
@@ -245,6 +247,17 @@ test('resume rebuilds every turn and only syncs the view when one is on screen',
   dispatchWs({ type: 'resume', turns: [{ chatId: 'c1', content: 'x', promptTokens: 42 }] }, ctx2);
   assert.equal(did(ctx2, 'syncView'), true);
   assert.equal(did(ctx2, 'setPromptTokens'), true);
+});
+
+test('resume settles a reply that ended while the socket was down, and leaves running and finished ones alone', () => {
+  const ctx = wsCtx('c1');
+  ctx.recs.set('c2', { content: 'partial', done: false });
+  ctx.recs.set('c3', { content: 'running', done: false });
+  ctx.recs.set('c4', { content: 'finished', done: true });
+  ctx.recs.set('incognito', { content: 'private', done: false });
+  dispatchWs({ type: 'resume', turns: [{ chatId: 'c3', content: 'running' }] }, ctx);
+  const settled = ctx.calls.filter(([name]) => name === 'settleStale').map(([, id]) => id);
+  assert.deepEqual(settled, ['c2']);
 });
 
 test('resume ignores a malformed turn instead of throwing away the batch', () => {
