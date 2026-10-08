@@ -85,7 +85,7 @@
 
 .tip-host { display: contents; }
 .tip {
-  position: fixed; z-index: 90; display: flex; align-items: baseline; gap: 6px; width: max-content; max-width: 280px;
+  position: fixed; z-index: 1100; display: flex; align-items: baseline; gap: 6px; width: max-content; max-width: 280px;
   padding: 3px 8px; border-radius: 6px; background: var(--pop-bg); color: var(--pop-text);
   font-size: 13px; line-height: 18px; font-family: var(--font-sans);
   box-shadow: inset 0 0 0 1px var(--pop-border), 0 1px 2px rgba(11, 11, 11, .06), 0 2px 8px rgba(0, 0, 0, .24);

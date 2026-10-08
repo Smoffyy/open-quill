@@ -344,8 +344,7 @@
   color: var(--cp-dim);
   margin-bottom: var(--cp-2);
 }
-.mc-label { display: inline-flex; align-items: center; gap: var(--cp-2); flex-wrap: wrap; }
-.mc-mixed {
+.mc-label { display: inline-flex; align-items: center; gap: var(--cp-2); flex-wrap: wrap; }.mc-mixed {
   display: inline-flex;
   align-items: center;
   gap: 2px;

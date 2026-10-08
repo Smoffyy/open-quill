@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, createContext, useCont
 import { t } from '../../i18n.jsx';
 import { api } from '../../lib/api.js';
 import Markdown from '../chat/Markdown.jsx';
-import Tip from '../ui/Tip.jsx';
+import InfoTip from '../ui/InfoTip.jsx';
 import { ModelMark } from '../ui/Weave.jsx';
 import { Copy, Check, ArrowOut, Chevron, Info, Pencil, Trash, Plus, X } from '../ui/icons.jsx';
 import {
@@ -37,19 +37,8 @@ const TIPS = {
   platforms: 'Where this model can be reached from.'
 };
 
-function InfoTip({ text }) {
-  if (!text) return null;
-  return (
-    <Tip label={t(text)} tone="docs" toggle>
-      <button className="mdoc-info" aria-label={t(text)}>
-        <Info />
-      </button>
-    </Tip>
-  );
-}
-
 function RowLabel({ label, tip }) {
-  return <span className="mdoc-rowlabel">{label}<InfoTip text={tip} /></span>;
+  return <span className="mdoc-rowlabel">{label}{tip && <InfoTip text={t(tip)} />}</span>;
 }
 
 const Edit = createContext({ on: false });

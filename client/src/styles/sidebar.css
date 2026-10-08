@@ -224,6 +224,7 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 .nav-item:hover svg .ic-dot1, .nav-item:focus-visible svg .ic-dot1 { transform: translate(-.6px, 1.4px); }
 .nav-item:hover svg .ic-dot2, .nav-item:focus-visible svg .ic-dot2 { transform: translate(-1.4px, .4px); }
 .nav-item:hover svg .ic-dot3, .nav-item:focus-visible svg .ic-dot3 { transform: translate(-1px, -1px); }
+.nav-item:active svg [class^="ic-"] { transform: none; transition-duration: .15s; transition-timing-function: ease-out; }
 
 @media (prefers-reduced-motion: reduce) {
   .nav-item svg [class^="ic-"] { transition: none; transform: none !important; }
