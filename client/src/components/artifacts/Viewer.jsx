@@ -4,7 +4,7 @@ import { api } from '../../lib/api.js';
 import { copyText } from '../../lib/clipboard.js';
 import Markdown from '../chat/Markdown.jsx';
 import FileChip from './FileChip.jsx';
-import { Download, Check, ChevDown, Chevron, Search, X, Down, Eye, EyeOff, CodeTag, Pencil } from '../ui/icons.jsx';
+import { Download, Check, ChevDown, Chevron, Search, X, Up, Down, Plus, Minus, Expand, Eye, EyeOff, CodeTag, Pencil } from '../ui/icons.jsx';
 import { t } from '../../i18n.jsx';
 import { buildPreviewDoc } from '../../lib/preview.js';
 import { SegSlide } from '../ui/controls.jsx';
@@ -57,11 +57,11 @@ function ImageView({ src, alt }) {
         <img className="art-img" src={src} alt={alt} draggable={false} style={{ transform: `translate(${off.x}px, ${off.y}px) scale(${z})` }} />
       </div>
       <div className="art-imgbar">
-        <button className="art-btn icon" onClick={() => setZ(v => Math.max(0.2, v * 0.8))} title={t("Zoom out")}>−</button>
+        <button className="art-btn icon" onClick={() => setZ(v => Math.max(0.2, v * 0.8))} title={t("Zoom out")} aria-label={t("Zoom out")}><Minus style={{ width: 14 }} /></button>
         <span className="art-imgzoom">{Math.round(z * 100)}%</span>
-        <button className="art-btn icon" onClick={() => setZ(v => Math.min(8, v * 1.25))} title={t("Zoom in")}>+</button>
-        <button className="art-btn icon" onClick={reset} title={t("Reset")}>⤢</button>
-        <a className="art-btn copy" href={src} style={{ borderRadius: 8 }}><Download style={{ width: 14 }} /> {t("Download")}</a>
+        <button className="art-btn icon" onClick={() => setZ(v => Math.min(8, v * 1.25))} title={t("Zoom in")} aria-label={t("Zoom in")}><Plus style={{ width: 14 }} /></button>
+        <button className="art-btn icon" onClick={reset} title={t("Reset")} aria-label={t("Reset")}><Expand style={{ width: 14 }} /></button>
+        <a className="art-btn copy" href={src}><Download style={{ width: 14 }} /> {t("Download")}</a>
       </div>
     </div>
   );
@@ -401,9 +401,9 @@ export default function Viewer({ chatId, apiBase, path, onBack, canBack, liveTex
           <Search style={{ width: 14, opacity: .6, flexShrink: 0 }} />
           <input ref={searchInputRef} value={query} onChange={e => setQuery(e.target.value)} onKeyDown={onSearchKey} placeholder={t('Find in file')} spellCheck={false} />
           <span className="art-search-count">{matches.length ? `${matchIdx + 1} / ${matches.length}` : (query ? '0' : '')}</span>
-          <button className="art-btn icon" disabled={!matches.length} onClick={() => nextMatch(-1)} title={t("Previous")}>↑</button>
-          <button className="art-btn icon" disabled={!matches.length} onClick={() => nextMatch(1)} title={t("Next")}>↓</button>
-          <button className="art-btn icon" onClick={() => { setSearch(false); setQuery(''); }} title={t("Close")}><X style={{ width: 13 }} /></button>
+          <button className="art-btn icon" disabled={!matches.length} onClick={() => nextMatch(-1)} title={t("Previous")} aria-label={t("Previous")}><Up style={{ width: 14 }} /></button>
+          <button className="art-btn icon" disabled={!matches.length} onClick={() => nextMatch(1)} title={t("Next")} aria-label={t("Next")}><Down style={{ width: 14 }} /></button>
+          <button className="art-btn icon" onClick={() => { setSearch(false); setQuery(''); }} title={t("Close")} aria-label={t("Close")}><X style={{ width: 14 }} /></button>
         </div>
       )}
       {stale && (

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { t } from '../../i18n.jsx';
 import { tokenRefs } from '../../lib/theme/schema.js';
-import { X, Refresh } from '../ui/icons.jsx';
+import { X, Refresh, Link, Unlink } from '../ui/icons.jsx';
 import { useDismiss } from '../../lib/dismiss.js';
 import { useFocusTrap } from '../../lib/focus.js';
 
@@ -238,8 +238,9 @@ export function BoxSides({ label, value, onChange, base, max = 80 }) {
       <div className="bx-box-head">
         <span>{label}</span>
         <button type="button" className={'bx-link' + (linked ? ' on' : '')} onClick={() => setLinked(l => !l)}
-          title={linked ? t('Edit each side separately') : t('Link all sides')}>
-          {linked ? '⛓' : '⛓̸'}
+          title={linked ? t('Edit each side separately') : t('Link all sides')}
+          aria-label={linked ? t('Edit each side separately') : t('Link all sides')} aria-pressed={linked}>
+          {linked ? <Link /> : <Unlink />}
         </button>
       </div>
       {linked ? (

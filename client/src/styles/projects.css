@@ -96,7 +96,7 @@
 .pj-row-actions { position: absolute; top: 50%; right: 4px; transform: translateY(-50%); display: flex; gap: 2px; opacity: 0; transition: opacity var(--fx-t, .12s); }
 .pj-row:hover .pj-row-actions, .pj-row:focus-within .pj-row-actions { opacity: 1; }
 @media (hover: none) { .pj-row-actions { opacity: 1; } }
-.ft-act { display: grid; place-items: center; padding: 3px 4px; border-radius: 5px; color: var(--text-faint); transition: color var(--fx-t, .12s), background var(--fx-t, .12s); }
+.ft-act { width: 20px; height: 20px; flex-shrink: 0; display: grid; place-items: center; padding: 0; border-radius: 5px; color: var(--text-faint); transition: color var(--fx-t, .12s), background var(--fx-t, .12s); }
 .ft-act:hover { color: var(--text); background: var(--hover-mid); }
 .ft-act.ft-del:hover { color: var(--danger); }
 .ft-act svg { display: block; width: 12px; height: 12px; }

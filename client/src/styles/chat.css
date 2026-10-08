@@ -68,8 +68,9 @@
 .style-item svg { flex-shrink: 0; color: var(--pop-blue); }
 .style-item.create { color: var(--text-muted); font-weight: 600; justify-content: center; }
 .style-item.create:hover { color: var(--text); }
-.style-del { display: none; margin-left: auto; padding: 3px; border-radius: 6px; color: var(--text-muted); }
-.style-item:hover .style-del { display: inline-flex; }
+.style-del { display: none; margin-left: auto; width: 22px; height: 22px; place-items: center; border-radius: 6px; color: var(--text-muted); }
+.style-del svg { color: inherit; }
+.style-item:hover .style-del { display: grid; }
 .style-del:hover { color: var(--danger); background: var(--hover); }
 .style-create { padding: 2px 4px 6px; display: flex; flex-direction: column; gap: 7px; }
 .style-create .style-menu-label { padding: 4px 6px 2px; }
@@ -549,7 +550,7 @@
 .queued-chip { display: flex; align-items: center; gap: 7px; padding: 5px 10px 9px; font-size: 12.5px; color: var(--text-muted); }
 .queued-label { font-weight: 700; color: var(--text); }
 .queued-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.queued-x { display: inline-flex; padding: 3px; border-radius: 6px; color: var(--text-muted); }
+.queued-x { width: 20px; height: 20px; flex-shrink: 0; display: grid; place-items: center; border-radius: 6px; color: var(--text-muted); }
 .queued-x:hover { color: var(--text); background: var(--hover); }
 /* Sits at the end of the message's own action row, so picking a stopped reply
    back up is where every other per-message action already is. Same colour and
@@ -573,7 +574,8 @@
 .co-bulk-actions { margin-left: auto; display: flex; gap: 8px; }
 .co-card { position: relative; }
 .co-card.selected { outline: 2px solid var(--text); }
-.co-check { position: absolute; top: 8px; right: 8px; width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; background: var(--panel); color: var(--on-primary); z-index: 2; }
+.co-check { position: absolute; top: 8px; right: 8px; width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--border); display: grid; place-items: center; background: var(--panel); color: var(--on-primary); z-index: 2; }
+.co-check svg { width: 13px; height: 13px; }
 .co-check.on { background: var(--pop-blue); border-color: var(--pop-blue); }
 
 .topbar-model { margin-right: 10px; }
@@ -581,7 +583,8 @@
 .chatctl-head { display: flex; align-items: flex-start; gap: 10px; padding: 16px 16px 10px; border-bottom: 1px solid var(--border-soft); }
 .chatctl-title { font-size: 15px; font-weight: 700; }
 .chatctl-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.45; }
-.chatctl-x { margin-left: auto; padding: 5px; border-radius: 8px; color: var(--text-muted); }
+.chatctl-x { margin-left: auto; width: 28px; height: 28px; flex-shrink: 0; display: grid; place-items: center; border-radius: 8px; color: var(--text-muted); }
+.chatctl-x svg { width: 16px; height: 16px; }
 .chatctl-x:hover { background: var(--hover); color: var(--text); }
 .chatctl-body { flex: 1; overflow: hidden auto; padding: 12px 16px 20px; }
 .chatctl-section { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin: 14px 0 8px; }
@@ -591,7 +594,8 @@
 .chatctl-row.set label { color: var(--text); font-weight: 600; }
 .chatctl-row input[type=range] { flex: 1; accent-color: var(--text); }
 .chatctl-num { width: 68px; padding: 4px 6px; border-radius: 7px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; }
-.chatctl-clear { padding: 2px 7px; border-radius: 6px; color: var(--text-muted); font-size: 14px; }
+.chatctl-clear { width: 24px; height: 24px; flex-shrink: 0; display: grid; place-items: center; border-radius: 6px; color: var(--text-muted); }
+.chatctl-clear svg { width: 14px; height: 14px; }
 .chatctl-clear:hover { color: var(--danger); background: var(--hover); }
 .chatctl-default { margin-left: auto; padding: 4px 12px; border-radius: 7px; font-size: 11.5px; font-weight: 600; color: var(--text-muted); border: 1px dashed var(--border); }
 .chatctl-default:hover { color: var(--text); border-style: solid; }

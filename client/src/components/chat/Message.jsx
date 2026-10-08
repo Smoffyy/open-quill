@@ -8,7 +8,7 @@ import BranchCompare from './BranchCompare.jsx';
 import ToolCard from './ToolCard.jsx';
 import { ModelMark } from '../ui/Weave.jsx';
 import Tip from '../ui/Tip.jsx';
-import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash, Chevron, Steer, Speaker, SpeakerOff } from '../ui/icons.jsx';
+import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash, Chevron, Columns, Steer, Speaker, SpeakerOff } from '../ui/icons.jsx';
 import { api } from '../../lib/api.js';
 import { extLabel } from '../../lib/files.js';
 import { useStatusLabel } from '../../lib/status.js';
@@ -39,10 +39,6 @@ function UserBubble({ content }) {
       )}
     </div>
   );
-}
-
-function Columns(props) {
-  return (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect x="3" y="4" width="7" height="16" rx="1" /><rect x="14" y="4" width="7" height="16" rx="1" /></svg>);
 }
 
 function fmtTime(ts) {

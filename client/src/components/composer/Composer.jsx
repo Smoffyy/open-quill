@@ -8,7 +8,7 @@ import { toast } from '../../lib/toast.js';
 import { useAttachments, NO_VISION } from '../../lib/attachments.js';
 import { useDictation } from '../../lib/dictation.js';
 import { captureScreenshot, screenshotSupported, isCaptureCancel } from '../../lib/screenshot.js';
-import { Plus, Mic, Wave, Up, Enter, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer, Screenshot, Plug, SkillIcon, ImageIcon, Copy, Folder, ChevDown } from '../ui/icons.jsx';
+import { Plus, Mic, Wave, Up, Enter, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer, Screenshot, Plug, SkillIcon, ImageIcon, Copy, Folder, ChevDown, Calendar } from '../ui/icons.jsx';
 import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
 import { extLabel } from '../../lib/files.js';
 import { t, fmtDate } from '../../i18n.jsx';
@@ -396,7 +396,7 @@ export default function Composer({
       <div className={'unavail-banner sunset-banner' + (sunsetOnly ? '' : ' pill')} style={sunsetOnly ? undefined : { background: `color-mix(in srgb, #e5484d ${sunsetInfo.mix}%, transparent)` }}>
         <div className="unavail-row">
           <span className="unavail-msg sunset-msg">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="3.5" y="5" width="17" height="16" rx="2.5" /><path d="M8 3v4M16 3v4M3.5 10h17" /></svg>
+            <Calendar />
             <span><strong>{sunsetInfo.name}</strong> {t('is going away {date}.', { date: sunsetInfo.date })}</span>
           </span>
         </div>

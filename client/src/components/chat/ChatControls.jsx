@@ -55,7 +55,7 @@ export default function ChatControls({ chatId, initialParams, initialOverride, o
           <div className="chatctl-title">{t('Chat controls')}</div>
           <div className="chatctl-sub">{chatId ? <>{t("Overrides apply to this chat only, on top of the model's own settings.")} {status === 'saving' ? t('Saving…') : status === 'saved' ? t('Saved.') : ''}</> : t('These apply to the new chat once you send your first message.')}</div>
         </div>
-        <button className="chatctl-x" onClick={onClose}><X style={{ width: 16 }} /></button>
+        <button className="chatctl-x" onClick={onClose} title={t('Close')} aria-label={t('Close')}><X /></button>
       </div>
       <div className="chatctl-body">
         <div className="chatctl-section">{t('System prompt override')}</div>
@@ -71,7 +71,7 @@ export default function ChatControls({ chatId, initialParams, initialOverride, o
                 <>
                   <input type="range" min={f.min} max={f.max} step={f.step} value={params[f.k]} onChange={(e) => setField(f.k, e.target.value)} />
                   <input className="chatctl-num" type="number" min={f.min} max={f.max} step={f.step} value={params[f.k]} onChange={(e) => setField(f.k, e.target.value)} />
-                  <button className="chatctl-clear" title={t("Use model default")} onClick={() => setField(f.k, '')}>×</button>
+                  <button className="chatctl-clear" title={t("Use model default")} aria-label={t("Use model default")} onClick={() => setField(f.k, '')}><X /></button>
                 </>
               ) : (
                 <button className="chatctl-default" onClick={() => setField(f.k, f.k === 'max_tokens' ? 4096 : f.k === 'top_k' ? 40 : f.k === 'repeat_penalty' ? 1.1 : f.k === 'top_p' ? 0.95 : f.k === 'temperature' ? 0.7 : 0)}>{t('Default')}</button>

@@ -1,5 +1,10 @@
 const I = (p) => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" {...p} />;
 export const Plus = (p) => <I {...p}><path d="M12 5v14M5 12h14" /></I>;
+export const Minus = (p) => <I {...p}><path d="M5 12h14" /></I>;
+export const Link = (p) => <I {...p}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></I>;
+export const Columns = (p) => <I strokeWidth="2" {...p}><rect x="3" y="4" width="7" height="16" rx="1" /><rect x="14" y="4" width="7" height="16" rx="1" /></I>;
+export const Calendar = (p) => <I strokeWidth="1.9" {...p}><rect x="3.5" y="5" width="17" height="16" rx="2.5" /><path d="M8 3v4M16 3v4M3.5 10h17" /></I>;
+export const Unlink =(p) => <I {...p}><path d="m18.84 12.25 1.72-1.71a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="m5.17 11.75-1.71 1.71a5 5 0 0 0 7.07 7.07l1.71-1.71" /><path d="M8 2v3M2 8h3M16 19v3M19 16h3" /></I>;
 export const Chat = (p) => <I {...p}>
   <g transform="translate(12 12) scale(.9) translate(-12 -12)" strokeWidth="1.726">
     <path className="ic-b1" d="M3.37 13.98A7.7 7.7 0 1 1 7.91 17.34L2.2 17.6Z" />
