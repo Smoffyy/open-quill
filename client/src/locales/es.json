@@ -421,7 +421,6 @@
   "Min P": "P mínima",
   "Minimum": "Mínimo",
   "Model": "Modelo",
-  "Model comparison ready, use the version arrows or compare button on the response.": "Comparación de modelos lista: usa las flechas de versión o el botón de comparar en la respuesta.",
   "Model docs": "Documentación de modelos",
   "Models": "Modelos",
   "Monthly budget reached.": "Presupuesto mensual alcanzado.",
@@ -448,7 +447,6 @@
   "New style": "Estilo nuevo",
   "Newer": "Más recientes",
   "Next": "Siguiente",
-  "Next / previous match": "Coincidencia siguiente / anterior",
   "Next chat in sidebar": "Siguiente chat en la barra lateral",
   "Next match": "Coincidencia siguiente",
   "Next message": "Mensaje siguiente",
@@ -515,7 +513,6 @@
   "Personas": "Perfiles",
   "Pick up to 2 extra models. Your next message will be answered by each as versions of one response.": "Elige hasta 2 modelos adicionales. Tu próximo mensaje lo responderá cada uno como versiones de una misma respuesta.",
   "Pin": "Fijar",
-  "Pin / unpin": "Fijar o quitar",
   "Pin to chat": "Fijar al chat",
   "Pin to chat (keep in context)": "Fijar al chat (mantener en el contexto)",
   "Pinned": "Fijado",
@@ -2930,5 +2927,10 @@
   "Voice mode": "Modo de voz",
   "{n}s": "{n}s",
   "{m}m {s}s": "{m}m {s}s",
-  "Start a voice call": "Iniciar una llamada de voz"
+  "Start a voice call": "Iniciar una llamada de voz",
+  "Edit, branch, pin or delete (right-click or long-press)": "Editar, ramificar, fijar o eliminar (clic derecho o mantener pulsado)",
+  "Slash commands (at the start)": "Comandos con barra (al principio)",
+  "Save an edited message": "Guardar un mensaje editado",
+  "Cancel an edit": "Cancelar una edición",
+  "Model comparison ready, use the version arrows or right-click the response to compare.": "Comparación de modelos lista: usa las flechas de versión o haz clic derecho en la respuesta para comparar."
 }

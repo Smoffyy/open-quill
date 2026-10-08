@@ -61,6 +61,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Input bar** - the text field sits on its own surface, with the plus, microphone, voice options and model name on the row below it. The send button stays in place as lines are added, and the footer moves left to make room for a long model name.
 - **Voice options** - the chevron beside the microphone opens Dictate and Voice mode, and ends a call while one is running. The OpenAI layout keeps its call button.
 - **Tool chips** - active tools such as Web search and response styles sit left of the microphone, beside the plus button, at the same size as the plus button.
+- **Message menu** - the "..." button in a message's action bar is gone. Right-click a message, long-press it on a touch screen, or press Shift+F10 on one of its action buttons to edit, branch, pin or delete it. Compare versions moved from its own button into the same menu, shown once a message has more than one version. Right-clicking a link, an image or selected text still opens the browser's own menu.
+- **Retry keeps your place** - retrying a reply no longer scrolls your message up to the top of the view the way sending a new one does. The new reply is written where the old one was, and the view follows it once it reaches the bottom.
+- **Keyboard shortcuts** - the shortcuts dialog lists the message menu, slash commands and saving or cancelling an edit, splits next and previous match into their own rows, and drops the old hover-to-pin row.
 
 ### Fixed
 - **Replies kept when the connection drops** - a reply's text is saved every two seconds while it streams, so a server restart or a lost connection keeps what was written, and the reply shows the Continue button. A reply that finished while the browser was disconnected is loaded from the server on reconnect, instead of staying as an open stream that could hide it.
@@ -77,6 +80,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OpenAI login fields** - the focus and error borders on the login form were hidden by the palette and now show.
 - **Long context badge in Appearance** - a model whose window was detected at 100K or more got the Long context badge in the picker, but Appearance could not switch it on or off. Appearance now uses the same window size as the picker.
 - **Layout and theme out of step** - the Preset control could switch the layout while the active theme stayed on another base, so build mode painted over a different layout than the theme said.
+- **Shortcut labels on macOS** - the shortcuts dialog showed Ctrl and Shift for pasting an image, new lines and finding matches; it now shows ⌘ and ⇧ like the rest of the list.
+- **Missing and fixed shortcut hints** - What gets sent in the command palette now shows its shortcut, and the attach item in the Code composer shows your own binding instead of always reading Ctrl+U.
 
 ### Removed
 - **Sandbox in chats** - the sandbox tools toggle, the per-chat artifacts panel and the per-model "Sandbox tools" setting are gone; file work happens in Code. Project chats keep reading their project's files.

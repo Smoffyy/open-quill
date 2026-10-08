@@ -851,7 +851,7 @@ export default function App() {
         return;
       }
       compareRef.current = null;
-      toast(t('Model comparison ready, use the version arrows or compare button on the response.'), { duration: 6000 });
+      toast(t('Model comparison ready, use the version arrows or right-click the response to compare.'), { duration: 6000 });
     }
     const q = queuedListRef.current[0];
     if (!q) return;
@@ -1374,7 +1374,7 @@ export default function App() {
       if (idx === -1) return ms;
       return ms.slice(0, ms[idx].role === 'user' ? idx + 1 : idx);
     });
-    pinToBottom(true, 20);
+    resetJump();
   }, [streaming, activeId, currentId]);
 
   useEffect(() => {
@@ -1578,7 +1578,7 @@ export default function App() {
     { id: 'incognito', label: incognito ? t('Exit incognito') : t('Start incognito chat'), shortcut: comboLabel(kb.toggleIncognito), keywords: 'private ghost', action: () => toggleIncognito() },
     { id: 'modeldocs', label: t('Model docs'), keywords: 'models compare docs catalog capabilities', action: onDocsCb },
     { id: 'settings', label: t('Open settings'), shortcut: comboLabel(kb.openSettings), keywords: 'preferences account theme', action: () => openSettings('general') },
-    { id: 'promptledger', label: t('What gets sent'), keywords: 'prompt inspect context debug tokens', action: () => { if (activeId) setLedgerPrompt(true); } },
+    { id: 'promptledger', label: t('What gets sent'), shortcut: comboLabel(kb.promptLedger), keywords: 'prompt inspect context debug tokens', action: () => { if (activeId) setLedgerPrompt(true); } },
     { id: 'keybinds', label: t('Customize shortcuts'), keywords: 'keybinds hotkeys keys remap', action: () => openSettings('keybinds') },
     ...(user?.isAdmin ? [{ id: 'admin', label: t('Open admin panel'), keywords: 'models users connection providers', action: () => { history.pushState({}, '', '/admin'); setShowAdmin(true); } }] : []),
     ...(user?.isAdmin ? [{ id: 'build', label: t('Enter build mode'), keywords: 'theme builder design layout customise interface', action: () => { try { localStorage.setItem('oq-build-mode', '1'); } catch {} window.location.reload(); } }] : []),
@@ -1627,7 +1627,8 @@ export default function App() {
         plan: planMode, onPlan: setPlanMode,
         revision: ctxRevision,
         liveTokens: liveCtx,
-        voiceMic: !!cfg.voiceMic, sttEngine: cfg.voiceStt || 'browser'
+        voiceMic: !!cfg.voiceMic, sttEngine: cfg.voiceStt || 'browser',
+        attachCombo: comboLabel(kb.attachFiles)
       }}
       scroll={{ scrollRef, onScroll, onWheel, onTouchMove, showJump, jumpDown }}
       error={chatErrors[activeKey()]} onDismissError={() => dismissError()}

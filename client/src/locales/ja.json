@@ -951,7 +951,6 @@
   "Model Context Protocol endpoints shared with everyone on this workspace.": "このワークスペースの全員と共有されるModel Context Protocolエンドポイント。",
   "Model IDs": "モデルID",
   "Model card": "モデルカード",
-  "Model comparison ready, use the version arrows or compare button on the response.": "モデル比較の準備ができました。返信のバージョン矢印または比較ボタンを使用してください。",
   "Model docs": "モデルドキュメント",
   "Model docs card": "モデルドキュメントカード",
   "Model docs header": "モデルドキュメントのヘッダー",
@@ -1021,7 +1020,6 @@
   "Newest first. Read the negatives against the model’s system prompt: most of them point at an instruction that is missing rather than a bad model.": "新しい順です。ネガティブ評価はモデルのシステムプロンプトと照らし合わせて読んでください。ほとんどはモデルの欠陥ではなく、不足している指示を示しています。",
   "Newsreader": "Newsreader",
   "Next": "次へ",
-  "Next / previous match": "次/前の一致",
   "Next chat in sidebar": "サイドバーの次のチャット",
   "Next match": "次の一致",
   "Next message": "次のメッセージ",
@@ -1200,7 +1198,6 @@
   "Pill": "ピル",
   "Pills under the introduction. A path such as /docs/p/pricing opens one of your own pages.": "紹介文の下のピル。/docs/p/pricingのようなパスで自分のページを開けます。",
   "Pin": "ピン留め",
-  "Pin / unpin": "ピン留め/解除",
   "Pin to chat": "チャットに固定",
   "Pin to chat (keep in context)": "チャットに固定(コンテキストに保持)",
   "Pinned": "固定済み",
@@ -2930,5 +2927,10 @@
   "Voice mode": "音声モード",
   "{n}s": "{n}s",
   "{m}m {s}s": "{m}m {s}s",
-  "Start a voice call": "音声通話を開始"
+  "Start a voice call": "音声通話を開始",
+  "Edit, branch, pin or delete (right-click or long-press)": "編集、分岐、ピン留め、削除（右クリックまたは長押し）",
+  "Slash commands (at the start)": "スラッシュコマンド（先頭で入力）",
+  "Save an edited message": "編集したメッセージを保存",
+  "Cancel an edit": "編集をキャンセル",
+  "Model comparison ready, use the version arrows or right-click the response to compare.": "モデル比較の準備ができました。返信のバージョン矢印を使うか、返信を右クリックして比較してください。"
 }

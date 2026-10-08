@@ -51,7 +51,7 @@ function ModelRow({ m, checked, kbd, nested, isAdmin, onPick }) {
 export default function CodeComposer({
   value, onChange, onSend, onStop, streaming, stopping, ended, empty, placeholder, autoFocus, focusKey, panel,
   models, modelsReady = true, currentId, onSelect, kwargValues, onSetKwarg, reasoningEffort, extended, onToggleExtended, isAdmin,
-  plan, onPlan, chatId, revision, liveTokens, voiceMic, sttEngine, draftId
+  plan, onPlan, chatId, revision, liveTokens, voiceMic, sttEngine, draftId, attachCombo = ''
 }) {
   const taRef = useRef(null);
   const fileRef = useRef(null);
@@ -176,7 +176,7 @@ export default function CodeComposer({
               aria-expanded={menu === 'add'} onClick={() => setMenu(m => (m === 'add' ? null : 'add'))}><Plus /></button>
           </Tip>
           <CodeMenu open={menu === 'add'} setOpen={setOpen('add')} anchorRef={addRef} label={t('Add')}>
-            <MenuItem icon={<FileText />} kbd="Ctrl+U" onClick={() => { setMenu(null); fileRef.current?.click(); }}>{t('Add files or photos')}</MenuItem>
+            <MenuItem icon={<FileText />} kbd={attachCombo || null} onClick={() => { setMenu(null); fileRef.current?.click(); }}>{t('Add files or photos')}</MenuItem>
           </CodeMenu>
           {voiceMic && (
             <Tip label={dictating ? t('Stop dictation') : transcribing ? t('Transcribing…') : t('Dictate')}>

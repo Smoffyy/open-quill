@@ -951,7 +951,6 @@
   "Model Context Protocol endpoints shared with everyone on this workspace.": "이 워크스페이스의 모두와 공유되는 Model Context Protocol 엔드포인트입니다.",
   "Model IDs": "모델 ID",
   "Model card": "모델 카드",
-  "Model comparison ready, use the version arrows or compare button on the response.": "모델 비교 준비가 완료되었습니다. 응답의 버전 화살표나 비교 버튼을 사용하세요.",
   "Model docs": "모델 문서",
   "Model docs card": "모델 문서 카드",
   "Model docs header": "모델 문서 헤더",
@@ -1021,7 +1020,6 @@
   "Newest first. Read the negatives against the model’s system prompt: most of them point at an instruction that is missing rather than a bad model.": "최신순으로 정렬됩니다. 부정적인 평가는 모델의 시스템 프롬프트와 함께 살펴보세요. 대부분은 모델이 나빠서가 아니라 지침이 빠져 있음을 가리킵니다.",
   "Newsreader": "Newsreader",
   "Next": "다음",
-  "Next / previous match": "다음 / 이전 일치 항목",
   "Next chat in sidebar": "사이드바의 다음 채팅",
   "Next match": "다음 일치 항목",
   "Next message": "다음 메시지",
@@ -1200,7 +1198,6 @@
   "Pill": "필",
   "Pills under the introduction. A path such as /docs/p/pricing opens one of your own pages.": "소개 아래의 필입니다. /docs/p/pricing과 같은 경로는 직접 만든 페이지를 엽니다.",
   "Pin": "고정",
-  "Pin / unpin": "고정 / 고정 해제",
   "Pin to chat": "채팅에 고정",
   "Pin to chat (keep in context)": "채팅에 고정 (컨텍스트에 유지)",
   "Pinned": "고정됨",
@@ -2930,5 +2927,10 @@
   "Voice mode": "음성 모드",
   "{n}s": "{n}s",
   "{m}m {s}s": "{m}m {s}s",
-  "Start a voice call": "음성 통화 시작"
+  "Start a voice call": "음성 통화 시작",
+  "Edit, branch, pin or delete (right-click or long-press)": "편집, 분기, 고정 또는 삭제 (우클릭 또는 길게 누르기)",
+  "Slash commands (at the start)": "슬래시 명령 (맨 앞에서)",
+  "Save an edited message": "편집한 메시지 저장",
+  "Cancel an edit": "편집 취소",
+  "Model comparison ready, use the version arrows or right-click the response to compare.": "모델 비교 준비가 완료되었습니다. 버전 화살표를 사용하거나 응답을 우클릭해 비교하세요."
 }

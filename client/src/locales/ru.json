@@ -951,7 +951,6 @@
   "Model Context Protocol endpoints shared with everyone on this workspace.": "Эндпоинты Model Context Protocol, доступные всем в этом рабочем пространстве.",
   "Model IDs": "Идентификаторы моделей",
   "Model card": "Карточка модели",
-  "Model comparison ready, use the version arrows or compare button on the response.": "Сравнение моделей готово, используйте стрелки версий или кнопку сравнения на ответе.",
   "Model docs": "Документация по модели",
   "Model docs card": "Карточка документации по модели",
   "Model docs header": "Заголовок документации по модели",
@@ -1021,7 +1020,6 @@
   "Newest first. Read the negatives against the model’s system prompt: most of them point at an instruction that is missing rather than a bad model.": "Сначала новые. Читайте негативные оценки в сопоставлении с системным промптом модели: большинство из них указывают на отсутствующую инструкцию, а не на плохую модель.",
   "Newsreader": "Newsreader",
   "Next": "Далее",
-  "Next / previous match": "Следующее / предыдущее совпадение",
   "Next chat in sidebar": "Следующий чат в боковой панели",
   "Next match": "Следующее совпадение",
   "Next message": "Следующее сообщение",
@@ -1200,7 +1198,6 @@
   "Pill": "Плашка",
   "Pills under the introduction. A path such as /docs/p/pricing opens one of your own pages.": "Плашки под вступлением. Путь вида /docs/p/pricing открывает одну из ваших собственных страниц.",
   "Pin": "Закрепить",
-  "Pin / unpin": "Закрепить / открепить",
   "Pin to chat": "Закрепить в чате",
   "Pin to chat (keep in context)": "Закрепить в чате (оставить в контексте)",
   "Pinned": "Закреплено",
@@ -2930,5 +2927,10 @@
   "Voice mode": "Голосовой режим",
   "{n}s": "{n}s",
   "{m}m {s}s": "{m}m {s}s",
-  "Start a voice call": "Начать голосовой звонок"
+  "Start a voice call": "Начать голосовой звонок",
+  "Edit, branch, pin or delete (right-click or long-press)": "Изменить, ответвить, закрепить или удалить (правый клик или долгое нажатие)",
+  "Slash commands (at the start)": "Слэш-команды (в начале)",
+  "Save an edited message": "Сохранить изменённое сообщение",
+  "Cancel an edit": "Отменить правку",
+  "Model comparison ready, use the version arrows or right-click the response to compare.": "Сравнение моделей готово, используйте стрелки версий или щёлкните ответ правой кнопкой, чтобы сравнить."
 }

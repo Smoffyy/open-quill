@@ -146,13 +146,23 @@ export function isReservedCombo(combo) {
   return RESERVED.has(String(combo || '').toLowerCase());
 }
 
+export function modifierLabel(flag) {
+  const mac = isMacPlatform();
+  if (flag === 'mod') return mac ? '⌘' : 'Ctrl';
+  if (flag === 'alt') return mac ? '⌥' : 'Alt';
+  return mac ? '⇧' : 'Shift';
+}
+
+export function keyLabels(keys) {
+  return keys.map(k => (FLAG_SET.has(k) ? modifierLabel(k) : k));
+}
+
 export function comboKeys(combo) {
   if (!isValidCombo(combo)) return [];
   if (isChord(combo)) return chordParts(combo).flatMap((p, i) => (i ? ['then', ...comboKeys(p)] : comboKeys(p)));
-  const mac = isMacPlatform();
   const parts = combo.split('+');
   const key = parts.pop();
-  const out = parts.map(p => (p === 'mod' ? (mac ? '⌘' : 'Ctrl') : p === 'alt' ? (mac ? '⌥' : 'Alt') : mac ? '⇧' : 'Shift'));
+  const out = parts.map(modifierLabel);
   const lower = key.toLowerCase();
   out.push(KEY_LABELS[lower] || (key.length === 1 ? key.toUpperCase() : key));
   return out;

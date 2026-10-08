@@ -951,7 +951,6 @@
   "Model Context Protocol endpoints shared with everyone on this workspace.": "Model-Context-Protocol-Endpunkte, die mit allen in diesem Workspace geteilt werden.",
   "Model IDs": "Modell-IDs",
   "Model card": "Modellkarte",
-  "Model comparison ready, use the version arrows or compare button on the response.": "Modellvergleich bereit, verwenden Sie die Versionspfeile oder die Vergleichsschaltfläche bei der Antwort.",
   "Model docs": "Modell-Dokumentation",
   "Model docs card": "Karte der Modell-Dokumentation",
   "Model docs header": "Kopfzeile der Modell-Dokumentation",
@@ -1021,7 +1020,6 @@
   "Newest first. Read the negatives against the model’s system prompt: most of them point at an instruction that is missing rather than a bad model.": "Neueste zuerst. Lesen Sie die negativen Bewertungen im Vergleich zum System-Prompt des Modells: Die meisten deuten auf eine fehlende Anweisung hin, nicht auf ein schlechtes Modell.",
   "Newsreader": "Newsreader",
   "Next": "Weiter",
-  "Next / previous match": "Nächster / vorheriger Treffer",
   "Next chat in sidebar": "Nächster Chat in der Seitenleiste",
   "Next match": "Nächster Treffer",
   "Next message": "Nächste Nachricht",
@@ -1200,7 +1198,6 @@
   "Pill": "Pille",
   "Pills under the introduction. A path such as /docs/p/pricing opens one of your own pages.": "Pillen unter der Einleitung. Ein Pfad wie /docs/p/pricing öffnet eine Ihrer eigenen Seiten.",
   "Pin": "Anheften",
-  "Pin / unpin": "Anheften / lösen",
   "Pin to chat": "An Chat anheften",
   "Pin to chat (keep in context)": "An Chat anheften (im Kontext behalten)",
   "Pinned": "Angeheftet",
@@ -2930,5 +2927,10 @@
   "Voice mode": "Sprachmodus",
   "{n}s": "{n}s",
   "{m}m {s}s": "{m}m {s}s",
-  "Start a voice call": "Einen Sprachanruf starten"
+  "Start a voice call": "Einen Sprachanruf starten",
+  "Edit, branch, pin or delete (right-click or long-press)": "Bearbeiten, verzweigen, anheften oder löschen (Rechtsklick oder lange drücken)",
+  "Slash commands (at the start)": "Slash-Befehle (am Anfang)",
+  "Save an edited message": "Bearbeitete Nachricht speichern",
+  "Cancel an edit": "Bearbeitung abbrechen",
+  "Model comparison ready, use the version arrows or right-click the response to compare.": "Modellvergleich bereit, verwenden Sie die Versionspfeile oder klicken Sie zum Vergleichen mit der rechten Maustaste auf die Antwort."
 }

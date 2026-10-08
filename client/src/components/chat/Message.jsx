@@ -8,11 +8,13 @@ import BranchCompare from './BranchCompare.jsx';
 import ToolCard from './ToolCard.jsx';
 import { ModelMark } from '../ui/Weave.jsx';
 import Tip from '../ui/Tip.jsx';
-import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash, Dots, Steer, Speaker, SpeakerOff } from '../ui/icons.jsx';
+import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash, Steer, Speaker, SpeakerOff } from '../ui/icons.jsx';
 import { api } from '../../lib/api.js';
 import { extLabel } from '../../lib/files.js';
 import { useStatusLabel } from '../../lib/status.js';
-import { useAnchoredMenu, menuStyleOf } from '../../lib/anchor.js';
+import { menuStyleOf, scrollInsideMenu, MENU_EDGE } from '../../lib/anchor.js';
+import { useDismiss } from '../../lib/dismiss.js';
+import { useLongPress } from '../../lib/longpress.js';
 import { t } from '../../i18n.jsx';
 
 function UserBubble({ content }) {
@@ -58,26 +60,36 @@ function fmtTime(ts) {
   };
 }
 
-function MoreMenu({ items }) {
-  const [open, setOpen] = useState(false);
-  const btnRef = useRef(null);
+function MessageMenu({ at, items, onClose }) {
   const menuRef = useRef(null);
-  const pos = useAnchoredMenu(open, setOpen, btnRef, menuRef, { align: 'center' });
-  const list = items.filter(Boolean);
-  if (!list.length) return null;
-  return (
-    <span className="retry-wrap">
-      <button ref={btnRef} className={'action-btn' + (open ? ' on' : '')} title={t("More actions")} aria-label={t("More actions")} aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(o => !o)}><Dots /></button>
-      {open && createPortal(
-        <div ref={menuRef} className="retry-menu more-menu portal" role="menu" aria-label={t("More actions")} style={menuStyleOf(pos)}>
-          {list.map((it, i) => (
-            <button key={i} role="menuitem" aria-checked={it.on ? 'true' : undefined} className={(it.on ? 'on' : '') + (it.danger ? ' danger' : '')} onClick={() => { setOpen(false); it.run(); }}>
-              {it.icon}{it.label}
-            </button>
-          ))}
-        </div>, document.body)}
-    </span>
-  );
+  const [pos, setPos] = useState(null);
+  useDismiss(true, onClose, menuRef);
+  useEffect(() => {
+    const onScroll = (e) => { if (!scrollInsideMenu(menuRef.current, e.target)) onClose(); };
+    window.addEventListener('resize', onClose);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      window.removeEventListener('resize', onClose);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [onClose]);
+  useEffect(() => { menuRef.current.querySelector('button')?.focus({ preventScroll: true }); }, []);
+  useLayoutEffect(() => {
+    const r = menuRef.current.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+    const top = at.y + r.height > vh - MENU_EDGE ? Math.max(MENU_EDGE, at.y - r.height) : at.y;
+    const left = Math.min(Math.max(MENU_EDGE, at.x), vw - MENU_EDGE - r.width);
+    setPos({ top, left });
+  }, [at]);
+  return createPortal(
+    <div ref={menuRef} className="retry-menu more-menu portal" role="menu" aria-label={t("More actions")} style={menuStyleOf(pos)}>
+      {items.map((it, i) => (
+        <button key={i} role="menuitem" aria-checked={it.on ? 'true' : undefined} className={(it.on ? 'on' : '') + (it.danger ? ' danger' : '')} onClick={() => { onClose(); it.run(); }}>
+          {it.icon}{it.label}
+        </button>
+      ))}
+    </div>, document.body);
 }
 
 function BranchNav({ msg, onSelectBranch }) {
@@ -356,10 +368,34 @@ function Message({ msg, model, streaming, phase, liveCall, liveCalls = null, can
   );
   const statusInfo = useStatusLabel(status, statusDelay);
 
+  const incognito = String(msg.id).startsWith('inc-');
+  const menuItems = [
+    msg.role !== 'user' && onEditAssistant && !incognito && { label: t('Edit'), icon: <Pencil style={{ width: 15 }} />, run: startEdit },
+    msg.branchCount > 1 && chatId && { label: t('Compare versions'), icon: <Columns style={{ width: 15 }} />, run: () => setCompare(true) },
+    onFork && { label: t('Branch'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
+    onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
+    onDelete && chatId && (msg.role === 'user' || !incognito) && { label: t('Delete'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
+  ].filter(Boolean);
+  const [menu, setMenu] = useState(null);
+  const closeMenu = React.useCallback(() => setMenu(null), []);
+  const menuAllowed = (target) => !editing && !streaming && !!(msg.content || msg.truncated) && menuItems.length > 0
+    && !target.closest('a, img, video, textarea, input, [role="dialog"], [role="menu"]');
+  const press = useLongPress((target, x, y) => { if (menuAllowed(target)) setMenu({ x, y }); });
+  const menuProps = {
+    ...press,
+    onContextMenu(e) {
+      if (!menuAllowed(e.target) || String(window.getSelection())) return;
+      e.preventDefault();
+      if (e.clientX || e.clientY) setMenu({ x: e.clientX, y: e.clientY });
+      else { const r = e.target.getBoundingClientRect(); setMenu({ x: r.left, y: r.bottom }); }
+    }
+  };
+  const messageMenu = menu && <MessageMenu at={menu} items={menuItems} onClose={closeMenu} />;
+
   if (msg.role === 'user') {
     return (
       <div role="article" aria-label={t('Your message')} className={'msg user' + (msg._enter ? ' enter' : '') + (msg.pinned ? ' pinned' : '')} data-mid={msg.id}>
-        <div className="user-col">
+        <div className="user-col" {...menuProps}>
           {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> {t("Pinned")}</div>}
           <Attachments items={msg.attachments} pins={pins} onTogglePinFile={onTogglePinFile} />
           {editing ? (
@@ -380,18 +416,13 @@ function Message({ msg, model, streaming, phase, liveCall, liveCalls = null, can
             <div className="actions user-actions">
               {(() => { const t = fmtTime(msg.created_at); return t ? <span className="msg-time" data-full={t.full}>{t.short}</span> : null; })()}
               <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
-              {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")} aria-label={t("Compare versions")}><Columns /></button>}
-              <MoreMenu items={[
-                onFork && { label: t('Branch'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
-                onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
-                onDelete && chatId && { label: t('Delete'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
-              ]} />
               {onRegenerate && <button className="action-btn" onClick={() => onRegenerate(msg.id)} title={t("Retry")} aria-label={t("Retry")}><Retry /></button>}
               {onEdit && <button className="action-btn" onClick={startEdit} title={t("Edit")} aria-label={t("Edit")}><Pencil /></button>}
               <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
             </div>
           )}
           {compare && chatId && <BranchCompare chatId={chatId} messageId={msg.id} onSelect={onSelectBranch} onClose={() => setCompare(false)} />}
+          {messageMenu}
         </div>
       </div>
     );
@@ -465,13 +496,6 @@ function Message({ msg, model, streaming, phase, liveCall, liveCalls = null, can
           )}
           {onRegenerate && <button className="action-btn" title={t("Retry")} aria-label={t("Retry")} onClick={() => onRegenerate(msg.id)}><Retry /></button>}
           <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
-          {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")} aria-label={t("Compare versions")}><Columns /></button>}
-          <MoreMenu items={[
-            onEditAssistant && !String(msg.id).startsWith('inc-') && { label: t('Edit'), icon: <Pencil style={{ width: 15 }} />, run: startEdit },
-            onFork && { label: t('Branch'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
-            onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
-            onDelete && chatId && !String(msg.id).startsWith('inc-') && { label: t('Delete'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
-          ]} />
           {showSpeed && <SpeedChip speed={msg.speed} />}
           {(() => { const ti = fmtTime(msg.created_at); return ti ? <span className="msg-time" data-full={ti.full}>{ti.short}</span> : null; })()}
           {canContinue && onContinue && (
@@ -483,13 +507,14 @@ function Message({ msg, model, streaming, phase, liveCall, liveCalls = null, can
       )}
       <SteerChips notes={steers} />
       {compare && chatId && <BranchCompare chatId={chatId} messageId={msg.id} onSelect={onSelectBranch} onClose={() => setCompare(false)} />}
+      {messageMenu}
     </>
   );
 
   if (pos === 'left') {
     const gutter = model?.iconSize > 0 ? model.iconSize : 50;
     return (
-      <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant icon-left' + (streaming ? ' streaming-msg' : '') + (latest ? ' latest' : '') + (msg._enter ? ' enter' : '') + (!streaming && (msg.content || msg.truncated) ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '')} data-mid={msg.id}>
+      <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant icon-left' + (streaming ? ' streaming-msg' : '') + (latest ? ' latest' : '') + (msg._enter ? ' enter' : '') + (!streaming && (msg.content || msg.truncated) ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '')} data-mid={msg.id} {...menuProps}>
         {icon && <div className="il-avatar" style={{ left: -(gutter + 4) }}>{icon}</div>}
         {showName && <div className="assistant-name">{model.displayName}</div>}
         {inner}
@@ -498,7 +523,7 @@ function Message({ msg, model, streaming, phase, liveCall, liveCalls = null, can
   }
 
   return (
-    <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant' + (streaming ? ' streaming-msg' : '') + (latest ? ' latest' : '') + (msg._enter ? ' enter' : '') + (!streaming && (msg.content || msg.truncated) ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '')} data-mid={msg.id}>
+    <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant' + (streaming ? ' streaming-msg' : '') + (latest ? ' latest' : '') + (msg._enter ? ' enter' : '') + (!streaming && (msg.content || msg.truncated) ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '')} data-mid={msg.id} {...menuProps}>
       {pos === 'above' && icon}
       {inner}
       {pos === 'below' && icon}
