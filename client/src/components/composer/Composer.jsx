@@ -8,7 +8,7 @@ import { toast } from '../../lib/toast.js';
 import { useAttachments, NO_VISION } from '../../lib/attachments.js';
 import { useDictation } from '../../lib/dictation.js';
 import { captureScreenshot, screenshotSupported, isCaptureCancel } from '../../lib/screenshot.js';
-import { Plus, Mic, Wave, Up, Enter, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer, Screenshot, Plug, SkillIcon, ImageIcon, Copy, Folder } from '../ui/icons.jsx';
+import { Plus, Mic, Wave, Up, Enter, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer, Screenshot, Plug, SkillIcon, ImageIcon, Copy, Folder, ChevDown } from '../ui/icons.jsx';
 import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
 import { extLabel } from '../../lib/files.js';
 import { t, fmtDate } from '../../i18n.jsx';
@@ -95,7 +95,7 @@ export default function Composer({
   removedModel = null, skills = [], onToggleSkill = null, onManageSkills = null,
   queueCount = 0, onQueue, onSteer, canSteer = false, onManageConnectors = null, attachCombo = '',
   compareIds = [], onSetCompare, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
-  contextRing = null, thread = false, draftId, panel = null
+  contextRing = null, thread = false, footer = null, draftId, panel = null
 }) {
   const composerPlaceholder = useThemeText('composer.placeholder', t('How can I help you today?'));
   const layout = useLayout();
@@ -118,6 +118,39 @@ export default function Composer({
   const [plusDown, setPlusDown] = useState(false);
   const sub = useSubmenus();
   const { closeAll: closeSubs } = sub;
+  const [voiceMenu, setVoiceMenu] = useState(false);
+  const voiceRef = useRef(null);
+  useDismiss(voiceMenu, () => setVoiceMenu(false), voiceRef);
+  const rootRef = useRef(null);
+  const placeFooter = useCallback(() => {
+    const root = rootRef.current;
+    const foot = root && root.querySelector('.disclaimer');
+    if (!foot) return;
+    if (window.matchMedia('(max-width: 768px)').matches) {
+      foot.style.maxWidth = '';
+      root.style.setProperty('--foot-shift', '0px');
+      return;
+    }
+    const rb = root.getBoundingClientRect();
+    const rightOf = el => el.getBoundingClientRect().right - rb.left;
+    const leftBound = Math.max(0, ...[...root.querySelectorAll('.plus-wrap, .mic, .voice-wrap')].map(rightOf)) + 8;
+    const rightBound = Math.min(rb.width - 8, ...[...root.querySelectorAll('.model-select, .chat-ring')].map(el => el.getBoundingClientRect().left - rb.left)) - 8;
+    const avail = Math.max(0, rightBound - leftBound);
+    foot.style.maxWidth = avail + 'px';
+    const w = Math.min(foot.scrollWidth, avail);
+    const center = rb.width / 2;
+    let c = center;
+    if (c + w / 2 > rightBound) c = rightBound - w / 2;
+    if (c - w / 2 < leftBound) c = leftBound + w / 2;
+    root.style.setProperty('--foot-shift', (c - center) + 'px');
+  }, []);
+  useLayoutEffect(() => { placeFooter(); });
+  useLayoutEffect(() => {
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(placeFooter) : null;
+    if (ro) ro.observe(rootRef.current);
+    window.addEventListener('resize', placeFooter);
+    return () => { if (ro) ro.disconnect(); window.removeEventListener('resize', placeFooter); };
+  }, [placeFooter]);
   useEffect(() => { if (!plusMenu) closeSubs(); }, [plusMenu, closeSubs]);
   // Picking something in a submenu is the end of that errand, so the whole menu goes away.
   const closePlusMenu = useCallback(() => { closeSubs(); setPlusMenu(false); }, [closeSubs]);
@@ -408,7 +441,7 @@ export default function Composer({
       </div>
     )}
     {panel}
-    <div className={cls} style={{ '--glow': glow }}>
+    <div className={cls} style={{ '--glow': glow }} ref={rootRef}>
       {files.length > 0 && (
         <div className="attach-row">
           {files.map(f => (
@@ -674,6 +707,28 @@ export default function Composer({
               </button>
             </Tip>
           )}
+          {thread && layout.id === 'card' && (voiceMic || voiceCall) && (
+            <div className="voice-wrap" ref={voiceRef}>
+              <button type="button" className={'voice-trigger' + (voiceMenu ? ' on' : '')} onClick={() => setVoiceMenu(m => !m)}
+                aria-label={t('Voice options')} title={t('Voice options')} aria-haspopup="menu" aria-expanded={voiceMenu}>
+                <ChevDown style={{ width: 14, height: 14 }} />
+              </button>
+              {voiceMenu && (
+                <div className="plus-menu voice-menu" role="menu">
+                  {voiceMic && (
+                    <button type="button" role="menuitemradio" aria-checked="true" className="pm-item" onClick={() => { setVoiceMenu(false); toggleDictation(); }}>
+                      <Mic /><span className="pm-label">{t('Dictate')}</span><Check className="pm-check" />
+                    </button>
+                  )}
+                  {voiceCall && (
+                    <button type="button" role="menuitem" className="pm-item" onClick={() => { setVoiceMenu(false); onStartCall && onStartCall(); }}>
+                      <Wave /><span className="pm-label">{callActive ? t('End call') : t('Voice mode')}</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           {steering && hasText && (
             <button key="steer" className="send steer" onClick={doSend} title={t('Steer this reply')}><Steer style={{ width: 20, height: 20 }} /></button>
           )}
@@ -686,13 +741,14 @@ export default function Composer({
             <button key="send" className={'send' + (enterSend ? ' enter' : '')} onClick={doSend} disabled={uploading} aria-label={t('Send message')}>
               {enterSend ? <Enter style={{ width: 20, height: 20 }} /> : <Up style={{ width: 20, height: 20 }} />}
             </button>
-          ) : voiceCall ? (
+          ) : voiceCall && (!thread || layout.id !== 'card') ? (
             <Tip label={callActive ? t("End call") : t("Start a voice call")}><button key="call" className={'mic call' + (callActive ? ' on' : '')} onClick={onStartCall} aria-label={callActive ? t("End call") : t("Start a voice call")} aria-pressed={callActive}>{callActive ? <X style={{ width: 18, height: 18 }} /> : <Wave style={{ width: 20, height: 20 }} />}</button></Tip>
           ) : (
-            <button key="send" className="send ghost" disabled aria-label={t('Send message')}><Up style={{ width: 20, height: 20 }} /></button>
+            <button key="send" className={enterSend ? 'send enter' : 'send ghost'} disabled aria-label={t('Send message')}>{enterSend ? <Enter style={{ width: 20, height: 20 }} /> : <Up style={{ width: 20, height: 20 }} />}</button>
           )}
         </div>
       </div>
+      {footer}
       {chipsBelow && activeTools.length > 0 && <div className="composer-chips">{chips}</div>}
     </div>
     </div>

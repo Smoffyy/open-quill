@@ -422,14 +422,24 @@
 .rb-peek-in::-webkit-scrollbar { display: none; }
 
 /* anthropic: the header is a rolling one-line summary of the current thought */
-.reasoning.rolling .reasoning-head { max-width: 100%; font-size: 14.5px; color: var(--text-faint); }
+.reasoning.rolling .reasoning-head { max-width: 100%; font-size: 14px; color: var(--text-faint); padding: 6px 12px 6px 10px; }
 .reasoning.rolling .reasoning-head:hover { color: var(--text-muted); }
-.reasoning.rolling .chev { opacity: 0; }
-.reasoning.rolling:hover .chev, .reasoning.rolling .reasoning-head:focus-visible .chev { opacity: .5; }
+.reasoning.rolling .chev { width: 16px; height: 16px; opacity: .6; stroke-width: 3.2px; }
+.reasoning.rolling .rb-line { animation: none; }
+.reasoning.rolling .rb-lines.gliding .rb-line { text-overflow: clip; }
+.reasoning.rolling .rb-line.shimmer { animation: shimmer 2.2s linear infinite; }
+.reasoning.rolling .rb-line.out { animation: rbFadeOut .34s var(--ease-out) both; }
+.rb-meta { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.reasoning.rolling .rb-meta { opacity: 0; transition: opacity .3s var(--ease-out); }
+.reasoning.rolling .rb-meta.on { opacity: 1; }
+.reasoning.rolling:not(.live) .rb-lines { transition: none; }
+.rb-timer { flex-shrink: 0; margin-left: -2px; font-size: 13px; color: var(--text-faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.reasoning.rolling .rb-line.shimmer { --shimmer-to: var(--text); }
 .rb-lines {
   position: relative; display: block; min-width: 0; max-width: 620px;
   min-height: 1.5em; line-height: 1.5;
 }
+.reasoning.rolling .rb-lines { line-height: 20px; min-height: 20px; transition: width .34s var(--ease-out); }
 .rb-line {
   display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   animation: rbLineIn .34s var(--ease-out) both;
@@ -440,6 +450,7 @@
 }
 @keyframes rbLineIn { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
 @keyframes rbLineOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-7px); } }
+@keyframes rbFadeOut { from { opacity: 1; } to { opacity: 0; } }
 .rb-line.shimmer { --shimmer-from: var(--text-faint); --shimmer-to: var(--text-muted);
   animation: rbLineIn .34s var(--ease-out) both, shimmer 2.2s linear infinite; }
 .rb-line.out.shimmer { animation: rbLineOut .34s var(--ease-out) both, shimmer 2.2s linear infinite; }

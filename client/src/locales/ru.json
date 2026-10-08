@@ -1591,7 +1591,6 @@
   "Starred": "Отмечено звёздочкой",
   "Start": "Начать",
   "Start a chat to keep conversations organized and re-use project knowledge.": "Начните чат, чтобы разговоры оставались организованными и можно было переиспользовать знания проекта.",
-  "Start a voice call": "Начать голосовой звонок",
   "Start every new chat with web search enabled, when the model allows it.": "Начинать каждый новый чат с включённым веб-поиском, если модель это поддерживает.",
   "Start from": "Начать с",
   "Start incognito chat": "Начать чат в режиме инкогнито",
@@ -2926,5 +2925,10 @@
   "Detect window sizes": "Определить размеры окна",
   "Asks each model's backend for its window size. Local models load one at a time, so this can take a while.": "Запрашивает у бэкенда каждой модели размер окна. Локальные модели загружаются по одной, поэтому это может занять время.",
   "Detecting…": "Определение…",
-  "Detect": "Определить"
+  "Detect": "Определить",
+  "Voice options": "Параметры голоса",
+  "Voice mode": "Голосовой режим",
+  "{n}s": "{n}s",
+  "{m}m {s}s": "{m}m {s}s",
+  "Start a voice call": "Начать голосовой звонок"
 }

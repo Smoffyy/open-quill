@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Images in long chats** - when a turn with an image is folded into the summary, a model with image input describes the image in full detail once (saved on the attachment), and the last 24 descriptions are kept word for word beside the summary instead of being summarized again.
 - **Image formats** - BMP, AVIF, ICO and TIFF (where the browser can open it) are converted to a lossless PNG of the same size when attached, so a vision model can see them. Images are never downscaled.
 - **Exact token counts everywhere** - the prompt is counted with the model's own tokenizer on llama.cpp and vLLM before it is sent. Every other provider is measured by the exact counts it reports after each reply and the exact sizes in its overflow errors. No count is ever estimated, and no counting endpoint of a hosted provider is called.
+- **Reasoning preview** - a reasoning model's header shows its current thought on one line that glides as it changes, with a live timer and a chevron that moves to the end of the text. The first sentence appears as soon as it is complete and fades in with the timer and chevron, and finished reasoning does not animate when a chat is reopened.
 
 ### Changed
 - **Context window setting** - the Context tab shows the size the backend reports and has no input by default. **Override window size** reveals the field, filled in with the detected size; turning it off goes back to detection. **Detect from backend** is gone, and window sizes saved before this release are cleared once so every model uses its detected size.
@@ -57,6 +58,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Context size detection** - a model's window size is measured when it is first sent a message, and remembered across restarts. The Long context badge and the context ring use it from then on. The admin Context tab has one **Detect** button that checks every model, one at a time, in place of checking on open.
 - **Incognito button** - the button that starts an incognito chat is only on the greeting screen, and no longer shows in the top bar of an open chat.
 - **Reply actions** - the latest reply's action bar is always visible, with its time shown on hover, and fades in when the reply finishes. Other replies still show the bar on hover, with a quicker fade and no upward movement. The timestamp tooltip waits a quarter of a second before it appears.
+- **Input bar** - the text field sits on its own surface, with the plus, microphone, voice options and model name on the row below it. The send button stays in place as lines are added, and the footer moves left to make room for a long model name.
+- **Voice options** - the chevron beside the microphone opens Dictate and Voice mode, and ends a call while one is running. The OpenAI layout keeps its call button.
+- **Tool chips** - active tools such as Web search and response styles sit left of the microphone, beside the plus button, at the same size as the plus button.
 
 ### Fixed
 - **Replies kept when the connection drops** - a reply's text is saved every two seconds while it streams, so a server restart or a lost connection keeps what was written, and the reply shows the Continue button. A reply that finished while the browser was disconnected is loaded from the server on reconnect, instead of staying as an open stream that could hide it.
@@ -84,6 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Model picker arrow** - the arrow beside the model name in the composer and top bar is gone in every theme. The picker still opens from the name.
 - **Retry with another model** - the arrow beside Retry on a reply, and its model list, are gone. To redo a reply with another model, pick that model in the picker and press Retry.
 - **Estimated numbers** - character-based token estimates, the per-chat calibration, estimated reply speeds (the "~" and "est" markers) and Anthropic's `count_tokens` call are removed. Older replies that only had an estimated speed no longer show one.
+- **Reasoning header text** - the header no longer shows "Thinking…" or a "0s" timer before the first sentence, and a long sentence is cut to fit before it animates, rather than being clipped mid-word.
 
 ---
 

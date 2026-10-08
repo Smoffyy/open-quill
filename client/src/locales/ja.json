@@ -1591,7 +1591,6 @@
   "Starred": "スター付き",
   "Start": "開始",
   "Start a chat to keep conversations organized and re-use project knowledge.": "会話を整理し、プロジェクトの知識を再利用するためにチャットを開始しましょう。",
-  "Start a voice call": "音声通話を開始",
   "Start every new chat with web search enabled, when the model allows it.": "モデルが許可する場合、新しいチャットはすべてウェブ検索を有効にして開始します。",
   "Start from": "開始元",
   "Start incognito chat": "シークレットチャットを開始",
@@ -2926,5 +2925,10 @@
   "Detect window sizes": "ウィンドウサイズを検出",
   "Asks each model's backend for its window size. Local models load one at a time, so this can take a while.": "各モデルのバックエンドにウィンドウサイズを問い合わせます。ローカルモデルは一つずつ読み込まれるため、時間がかかる場合があります。",
   "Detecting…": "検出中…",
-  "Detect": "検出"
+  "Detect": "検出",
+  "Voice options": "音声オプション",
+  "Voice mode": "音声モード",
+  "{n}s": "{n}s",
+  "{m}m {s}s": "{m}m {s}s",
+  "Start a voice call": "音声通話を開始"
 }

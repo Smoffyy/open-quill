@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { Chevron, Bulb, Copy, Check, CheckCircle, Clock } from '../ui/icons.jsx';
 import { copyText } from '../../lib/clipboard.js';
 import { t } from '../../i18n.jsx';
@@ -15,6 +15,34 @@ function thoughtLabel(ms) {
   return mins === 1 ? t('Thought for 1 minute') : t('Thought for {n} minutes', { n: mins });
 }
 
+const LINE_CAP_PX = 616;
+let measureCanvas = null;
+
+function measureText(text, el) {
+  measureCanvas = measureCanvas || document.createElement('canvas').getContext('2d');
+  const cs = getComputedStyle(el);
+  measureCanvas.font = cs.font;
+  measureCanvas.letterSpacing = cs.letterSpacing;
+  return measureCanvas.measureText(text).width;
+}
+
+function fitLine(text, el) {
+  if (measureText(text, el) <= LINE_CAP_PX) return text;
+  let lo = 0;
+  let hi = text.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (measureText(text.slice(0, mid).trimEnd() + '…', el) <= LINE_CAP_PX) lo = mid;
+    else hi = mid - 1;
+  }
+  return text.slice(0, lo).trimEnd() + '…';
+}
+
+function elapsedLabel(secs) {
+  if (secs < 60) return t('{n}s', { n: secs });
+  return t('{m}m {s}s', { m: Math.floor(secs / 60), s: secs % 60 });
+}
+
 export default function ReasoningBlock({ text, live, durationMs = 0, collapsible = true }) {
   const layout = useLayout();
   const [open, setOpen] = useState(false);
@@ -28,12 +56,41 @@ export default function ReasoningBlock({ text, live, durationMs = 0, collapsible
   const lineTimer = useRef(null);
   const steps = useMemo(() => parseSteps(text), [text]);
   const rolling = layout.reasoning === 'rolling';
+  const linesRef = useRef(null);
+  const [shown, setShown] = useState('');
+  const [lineW, setLineW] = useState(0);
+  const [gliding, setGliding] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = linesRef.current;
+    if (!line.cur || !el) {
+      setShown('');
+      setLineW(0);
+      return;
+    }
+    const text = fitLine(line.cur, el);
+    setShown(text);
+    setLineW(Math.min(measureText(text, el) + 4, LINE_CAP_PX + 4));
+    setGliding(true);
+    const done = setTimeout(() => setGliding(false), 360);
+    return () => clearTimeout(done);
+  }, [line.cur]);
+
+  const [elapsed, setElapsed] = useState(0);
+  const startedAt = useRef(0);
+
+  useEffect(() => {
+    if (!live) return;
+    startedAt.current = Date.now();
+    setElapsed(0);
+    const tick = setInterval(() => setElapsed(Math.floor((Date.now() - startedAt.current) / 1000)), 1000);
+    return () => clearInterval(tick);
+  }, [live]);
 
   useEffect(() => {
     if (!rolling) return;
     const s = lastSentence(text);
     if (!s) return;
-    if (!lineAt.current) lineAt.current = Date.now();
     nextLine.current = s;
     const show = () => {
       lineTimer.current = null;
@@ -46,7 +103,7 @@ export default function ReasoningBlock({ text, live, durationMs = 0, collapsible
       return;
     }
     if (lineTimer.current) return;
-    const wait = LINE_HOLD_MS - (Date.now() - lineAt.current);
+    const wait = lineAt.current ? LINE_HOLD_MS - (Date.now() - lineAt.current) : 0;
     if (wait <= 0) show();
     else lineTimer.current = setTimeout(show, wait);
   }, [text, rolling, live]);
@@ -83,10 +140,10 @@ export default function ReasoningBlock({ text, live, durationMs = 0, collapsible
   if (!text) return null;
 
   const shim = live ? ' shimmer' : '';
-  const headLine = rolling && line.cur ? (
-    <span className="rb-lines">
+  const headLine = rolling && (live || line.cur) ? (
+    <span ref={linesRef} className={'rb-lines' + (gliding ? ' gliding' : '')} style={{ width: lineW }}>
       {line.prev && <span className={'rb-line out' + shim} key={'p' + line.prev}>{line.prev}</span>}
-      <span className={'rb-line' + shim} key={'c' + line.cur}>{line.cur}</span>
+      {shown && <span className={'rb-line' + shim} key={'c' + shown}>{shown}</span>}
     </span>
   ) : null;
 
@@ -127,8 +184,11 @@ export default function ReasoningBlock({ text, live, durationMs = 0, collapsible
       <button className={'reasoning-head' + (open ? ' open' : '') + (live ? ' live' : '')}
         onClick={toggle} aria-expanded={open}>
         {live && !rolling && <Bulb className="rb-icon" />}
-        {headLine || <span className={'rb-label' + shim}>{label}</span>}
-        <Chevron className="chev" />
+        {headLine || (!(rolling && live) && <span className={'rb-label' + shim}>{label}</span>)}
+        <span className={'rb-meta' + (line.cur || !live ? ' on' : '')}>
+          {live && rolling && line.cur && <span className="rb-timer">{elapsedLabel(elapsed)}</span>}
+          <Chevron className="chev" />
+        </span>
       </button>
       {carded && (
         <div className={'rb-peek' + (peeking ? ' shown' : '')}>

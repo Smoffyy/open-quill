@@ -1591,7 +1591,6 @@
   "Starred": "Markiert",
   "Start": "Start",
   "Start a chat to keep conversations organized and re-use project knowledge.": "Starten Sie einen Chat, um Unterhaltungen organisiert zu halten und Projektwissen wiederzuverwenden.",
-  "Start a voice call": "Einen Sprachanruf starten",
   "Start every new chat with web search enabled, when the model allows it.": "Jeden neuen Chat mit aktivierter Websuche starten, wenn das Modell dies zulässt.",
   "Start from": "Beginnen mit",
   "Start incognito chat": "Inkognito-Chat starten",
@@ -2926,5 +2925,10 @@
   "Detect window sizes": "Fenstergrößen ermitteln",
   "Asks each model's backend for its window size. Local models load one at a time, so this can take a while.": "Fragt das Backend jedes Modells nach seiner Fenstergröße. Lokale Modelle werden nacheinander geladen, das kann etwas dauern.",
   "Detecting…": "Wird ermittelt…",
-  "Detect": "Ermitteln"
+  "Detect": "Ermitteln",
+  "Voice options": "Sprachoptionen",
+  "Voice mode": "Sprachmodus",
+  "{n}s": "{n}s",
+  "{m}m {s}s": "{m}m {s}s",
+  "Start a voice call": "Einen Sprachanruf starten"
 }

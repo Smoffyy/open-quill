@@ -1591,7 +1591,6 @@
   "Starred": "즐겨찾기됨",
   "Start": "시작",
   "Start a chat to keep conversations organized and re-use project knowledge.": "채팅을 시작해 대화를 정리하고 프로젝트 지식을 재사용하세요.",
-  "Start a voice call": "음성 통화 시작",
   "Start every new chat with web search enabled, when the model allows it.": "모델이 허용하는 경우 모든 새 채팅을 웹 검색이 켜진 상태로 시작합니다.",
   "Start from": "시작점",
   "Start incognito chat": "시크릿 채팅 시작",
@@ -2926,5 +2925,10 @@
   "Detect window sizes": "창 크기 감지",
   "Asks each model's backend for its window size. Local models load one at a time, so this can take a while.": "각 모델의 백엔드에 창 크기를 요청합니다. 로컬 모델은 하나씩 로드되므로 시간이 걸릴 수 있습니다.",
   "Detecting…": "감지 중…",
-  "Detect": "감지"
+  "Detect": "감지",
+  "Voice options": "음성 옵션",
+  "Voice mode": "음성 모드",
+  "{n}s": "{n}s",
+  "{m}m {s}s": "{m}m {s}s",
+  "Start a voice call": "음성 통화 시작"
 }

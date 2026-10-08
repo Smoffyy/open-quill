@@ -665,7 +665,6 @@
   "Star chat": "Destacar chat",
   "Starred": "Destacados",
   "Start a chat to keep conversations organized and re-use project knowledge.": "Inicia un chat para mantener las conversaciones organizadas y reutilizar el conocimiento del proyecto.",
-  "Start a voice call": "Iniciar una llamada de voz",
   "Start every new chat with web search enabled, when the model allows it.": "Iniciar cada chat nuevo con la búsqueda web activada, cuando el modelo lo permita.",
   "Start incognito chat": "Iniciar chat de incógnito",
   "Static": "Estático",
@@ -2926,5 +2925,10 @@
   "Detect window sizes": "Detectar tamaños de ventana",
   "Asks each model's backend for its window size. Local models load one at a time, so this can take a while.": "Consulta al backend de cada modelo su tamaño de ventana. Los modelos locales se cargan uno a la vez, así que puede tardar.",
   "Detecting…": "Detectando…",
-  "Detect": "Detectar"
+  "Detect": "Detectar",
+  "Voice options": "Opciones de voz",
+  "Voice mode": "Modo de voz",
+  "{n}s": "{n}s",
+  "{m}m {s}s": "{m}m {s}s",
+  "Start a voice call": "Iniciar una llamada de voz"
 }

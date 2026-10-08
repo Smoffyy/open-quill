@@ -1816,8 +1816,8 @@ export default function App() {
               {callDock}
               <Composer {...composerProps} thread focusKey={focusTick}
                 panel={!incognito && (plans.plan || question) ? <AgentPanel plan={plans.plan} previousPlan={plans.previousPlan} onDismissPlan={dismissPlan} question={question} onAnswer={answerQuestion} onSkip={() => answerQuestion(null)} /> : null}
-                contextRing={contextRing} />
-              <Disclaimer text={cfg.disclaimer} />
+                contextRing={contextRing} footer={layout.id === 'card' ? <Disclaimer text={cfg.disclaimer} /> : null} />
+              {layout.id !== 'card' && <Disclaimer text={cfg.disclaimer} />}
             </div>
           </>
         )}

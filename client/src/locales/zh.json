@@ -664,7 +664,6 @@
   "Star chat": "收藏对话",
   "Starred": "已收藏",
   "Start a chat to keep conversations organized and re-use project knowledge.": "开始一段对话，让内容井然有序，并复用项目知识。",
-  "Start a voice call": "发起语音通话",
   "Start every new chat with web search enabled, when the model allows it.": "在模型允许的情况下，每个新对话都默认开启联网搜索。",
   "Start incognito chat": "开始无痕对话",
   "Static": "静态",
@@ -2926,5 +2925,10 @@
   "Detect window sizes": "检测窗口大小",
   "Asks each model's backend for its window size. Local models load one at a time, so this can take a while.": "向每个模型的后端询问其窗口大小。本地模型会逐个加载，可能需要一些时间。",
   "Detecting…": "检测中…",
-  "Detect": "检测"
+  "Detect": "检测",
+  "Voice options": "语音选项",
+  "Voice mode": "语音模式",
+  "{n}s": "{n}s",
+  "{m}m {s}s": "{m}m {s}s",
+  "Start a voice call": "发起语音通话"
 }
