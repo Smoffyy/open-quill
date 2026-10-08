@@ -32,14 +32,16 @@ export default function ChatTopbar({
       {lead}
       <button className="mobile-menu-btn" onClick={onOpenMenu} title={t('Menu')} aria-label={t('Menu')}><Menu style={{ width: 20 }} /></button>
       {renaming ? (
-        <input className="chat-rename" autoFocus value={draft} aria-label={t('Rename chat')}
-          onFocus={(e) => e.target.select()}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => finish(true)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') finish(true);
-            else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
-          }} />
+        <span className="chat-rename" data-value={draft + ' '}>
+          <input autoFocus size={1} value={draft} aria-label={t('Rename chat')}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => finish(true)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') finish(true);
+              else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+            }} />
+        </span>
       ) : (
         <div className="chat-name-wrap">
           {project && (

@@ -62,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Voice options** - the chevron beside the microphone opens Dictate and Voice mode, and ends a call while one is running. The OpenAI layout keeps its call button.
 - **Tool chips** - active tools such as Web search and response styles sit left of the microphone, beside the plus button, at the same size as the plus button.
 - **Message menu** - the "..." button in a message's action bar is gone. Right-click a message, long-press it on a touch screen, or press Shift+F10 on one of its action buttons to edit, branch, pin or delete it. Compare versions moved from its own button into the same menu, shown once a message has more than one version. Right-clicking a link, an image or selected text still opens the browser's own menu.
+- **Slower rise with Modern text reveal** - with Modern selected under Text reveal, the first lines of a reply rise into place over 0.7 seconds instead of 0.5.
 - **Retry keeps your place** - retrying a reply no longer scrolls your message up to the top of the view the way sending a new one does. The new reply is written where the old one was, and the view follows it once it reaches the bottom.
 - **Keyboard shortcuts** - the shortcuts dialog lists the message menu, slash commands and saving or cancelling an edit, splits next and previous match into their own rows, and drops the old hover-to-pin row.
 
@@ -80,6 +81,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OpenAI login fields** - the focus and error borders on the login form were hidden by the palette and now show.
 - **Long context badge in Appearance** - a model whose window was detected at 100K or more got the Long context badge in the picker, but Appearance could not switch it on or off. Appearance now uses the same window size as the picker.
 - **Layout and theme out of step** - the Preset control could switch the layout while the active theme stayed on another base, so build mode painted over a different layout than the theme said.
+- **Version arrows** - the previous and next version arrows under a regenerated message sat off-centre, with a lopsided hover box. They are now centred chevrons in the same square box as the other action buttons.
+- **Chat title in the top bar** - the title and its dropdown arrow each get a complete rounded hover and focus box instead of one cut flat where they meet. The arrow is larger and sits closer to the title. Renaming opens a field the width of the title that grows as you type, instead of a fixed 200 pixel box.
 - **Shortcut labels on macOS** - the shortcuts dialog showed Ctrl and Shift for pasting an image, new lines and finding matches; it now shows ⌘ and ⇧ like the rest of the list.
 - **Missing and fixed shortcut hints** - What gets sent in the command palette now shows its shortcut, and the attach item in the Code composer shows your own binding instead of always reading Ctrl+U.
 

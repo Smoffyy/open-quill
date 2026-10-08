@@ -16,11 +16,10 @@
 }
 [data-layout="pill"] .chat-name { font-family: var(--font-sans); font-size: 13.5px; color: var(--text-muted); }
 [data-layout="pill"] .topbar .chat-name { height: auto; padding: 5px 9px; border-radius: 9px; font-size: 15px; line-height: normal; color: var(--text-muted); }
-[data-layout="pill"] .topbar .ct-name { padding: 5px 6px 5px 9px; border-radius: 9px 0 0 9px; }
-[data-layout="pill"] .topbar .ct-caret { align-self: stretch; width: 28px; padding: 0; border-radius: 0 9px 9px 0; }
-[data-layout="pill"] .topbar .ct-name:focus-visible { border-radius: 9px 0 0 9px; }
-[data-layout="pill"] .topbar .ct-caret:focus-visible { border-radius: 0 9px 9px 0; }
+[data-layout="pill"] .topbar .ct-name { padding-right: 5px; }
+[data-layout="pill"] .topbar .ct-caret { align-self: stretch; width: 26px; padding: 0; }
 [data-layout="pill"] .chat-rename { height: 30px; font-size: 15px; }
+[data-layout="pill"] .chat-rename input { border-radius: 9px; }
 [data-layout="pill"] .topbar-model .model-trigger {
   font-size: 18px; font-weight: 600; color: var(--text); font-family: var(--font-sans);
   padding: 6px 10px; border-radius: 10px; gap: 4px; background: transparent; border: none;

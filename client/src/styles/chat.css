@@ -318,6 +318,7 @@
    rather than as each paragraph arriving. */
 @keyframes text-enter-bounce { 0% { transform: translateY(14px); } 60% { transform: translateY(-3px); } 100% { transform: translateY(0); } }
 .assistant-body.text-enter > :first-child { animation: text-enter-fade 0.6s ease-out both, text-enter-bounce .5s cubic-bezier(.34,1.56,.64,1) both; }
+.assistant-body.text-enter.fade-words > :first-child { animation-duration: .6s, .7s; }
 
 /* One word, one ramp, started when the word arrives. The tail of a reply
    therefore reads as a soft gradient rather than a hard edge. */

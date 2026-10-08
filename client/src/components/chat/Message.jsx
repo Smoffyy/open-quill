@@ -8,7 +8,7 @@ import BranchCompare from './BranchCompare.jsx';
 import ToolCard from './ToolCard.jsx';
 import { ModelMark } from '../ui/Weave.jsx';
 import Tip from '../ui/Tip.jsx';
-import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash, Steer, Speaker, SpeakerOff } from '../ui/icons.jsx';
+import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash, Chevron, Steer, Speaker, SpeakerOff } from '../ui/icons.jsx';
 import { api } from '../../lib/api.js';
 import { extLabel } from '../../lib/files.js';
 import { useStatusLabel } from '../../lib/status.js';
@@ -98,9 +98,9 @@ function BranchNav({ msg, onSelectBranch }) {
   const go = (d) => { const t = msg.siblings?.[i + d]; if (t) onSelectBranch?.(t); };
   return (
     <span className="branch-nav" role="group" aria-label={t("Message versions")}>
-      <button className="branch-arrow" disabled={i <= 0} onClick={() => go(-1)} title={t("Previous version")} aria-label={t("Previous version")}>‹</button>
+      <button className="branch-arrow" disabled={i <= 0} onClick={() => go(-1)} title={t("Previous version")} aria-label={t("Previous version")}><Chevron style={{ transform: 'scaleX(-1)' }} /></button>
       <span className="branch-count" aria-live="polite">{i + 1}/{msg.branchCount}</span>
-      <button className="branch-arrow" disabled={i >= msg.branchCount - 1} onClick={() => go(1)} title={t("Next version")} aria-label={t("Next version")}>›</button>
+      <button className="branch-arrow" disabled={i >= msg.branchCount - 1} onClick={() => go(1)} title={t("Next version")} aria-label={t("Next version")}><Chevron /></button>
     </span>
   );
 }
@@ -454,7 +454,7 @@ function Message({ msg, model, streaming, phase, liveCall, liveCalls = null, can
       {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> {t("Pinned")}</div>}
       <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking' && !(segs && segs.length)} durationMs={msg.reasoningMs || 0} collapsible={model?.reasoningCollapsible !== false} />
       {(msg.content || streaming) && (
-        <div className={'assistant-body' + (streaming ? ' streaming' : '') + (streaming && typing ? ' typing' : '') + (streaming && phase === 'thinking' ? ' thinking' : '') + (textEntered ? ' text-enter' : '')}>
+        <div className={'assistant-body' + (streaming ? ' streaming' : '') + (streaming && typing ? ' typing' : '') + (streaming && phase === 'thinking' ? ' thinking' : '') + (textEntered ? ' text-enter' : '') + (fadeWords ? ' fade-words' : '')}>
           {editing ? (
             <>
               <div className="edit-box" data-value={draft + ' '}>
