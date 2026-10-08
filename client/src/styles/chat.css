@@ -422,7 +422,7 @@
 .rb-peek-in::-webkit-scrollbar { display: none; }
 
 /* anthropic: the header is a rolling one-line summary of the current thought */
-.reasoning.rolling .reasoning-head { max-width: 100%; font-size: 14px; color: var(--text-faint); padding: 6px 12px 6px 10px; }
+.reasoning.rolling .reasoning-head { max-width: 100%; font-size: 14px; color: var(--text-faint); padding: 6px 12px 6px 10px; text-align: start; }
 .reasoning.rolling .reasoning-head:hover { color: var(--text-muted); }
 .reasoning.rolling .chev { width: 16px; height: 16px; opacity: .6; stroke-width: 3.2px; }
 .reasoning.rolling .rb-line { animation: none; }
@@ -430,6 +430,7 @@
 .reasoning.rolling .rb-line.shimmer { animation: shimmer 2.2s linear infinite; }
 .reasoning.rolling .rb-line.out { animation: rbFadeOut .34s var(--ease-out) both; }
 .rb-meta { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.rb-placeholder { position: absolute; left: 0; top: 0; white-space: nowrap; }
 .reasoning.rolling .rb-meta { opacity: 0; transition: opacity .3s var(--ease-out); }
 .reasoning.rolling .rb-meta.on { opacity: 1; }
 .reasoning.rolling:not(.live) .rb-lines { transition: none; }

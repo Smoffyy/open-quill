@@ -143,6 +143,7 @@ export default function ReasoningBlock({ text, live, durationMs = 0, collapsible
   const headLine = rolling && (live || line.cur) ? (
     <span ref={linesRef} className={'rb-lines' + (gliding ? ' gliding' : '')} style={{ width: lineW }}>
       {line.prev && <span className={'rb-line out' + shim} key={'p' + line.prev}>{line.prev}</span>}
+      {!shown && <span className={'rb-label rb-placeholder' + shim}>{t('Thinking…')}</span>}
       {shown && <span className={'rb-line' + shim} key={'c' + shown}>{shown}</span>}
     </span>
   ) : null;

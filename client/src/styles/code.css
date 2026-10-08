@@ -110,13 +110,11 @@ a.cx-hbtn { text-decoration: none; }
 
 .cx-turn { display: flex; flex-direction: column; gap: 8px; margin-top: 24px; }
 .cx-turn .reasoning { margin: 0; padding-left: 0; }
-.cx-turn .reasoning-head {
+.cx-turn .reasoning:not(.rolling) .reasoning-head {
   margin-left: -4px; padding: 2px 4px; gap: 6px; border-radius: 6px; max-width: 100%;
   font-size: 14px; line-height: 20px; letter-spacing: 0; color: var(--text-muted);
 }
-.cx-turn .reasoning.rolling .reasoning-head { font-size: 14px; color: var(--text-faint); }
-.cx-turn .reasoning-head .rb-icon { width: 16px; height: 16px; }
-.cx-turn .reasoning-head .chev { width: 12px; height: 12px; }
+.cx-turn .reasoning-head .rb-icon { width: 16px; height: 16px; }.cx-turn .reasoning:not(.rolling) .reasoning-head .chev { width: 12px; height: 12px; }
 .cx-turn .rb-lines { min-height: 20px; line-height: 20px; }
 .cx-prose { font-size: 14px; line-height: 20px; color: var(--text); overflow-wrap: anywhere; }
 .cx-prose p, .cx-prose ul, .cx-prose ol, .cx-prose pre, .cx-prose table, .cx-prose blockquote { margin: 10.5px 0 0; }

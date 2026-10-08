@@ -421,7 +421,7 @@ function Message({ msg, model, streaming, phase, liveCall, liveCalls = null, can
   const inner = (
     <>
       {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> {t("Pinned")}</div>}
-      <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} durationMs={msg.reasoningMs || 0} collapsible={model?.reasoningCollapsible !== false} />
+      <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking' && !(segs && segs.length)} durationMs={msg.reasoningMs || 0} collapsible={model?.reasoningCollapsible !== false} />
       {(msg.content || streaming) && (
         <div className={'assistant-body' + (streaming ? ' streaming' : '') + (streaming && typing ? ' typing' : '') + (streaming && phase === 'thinking' ? ' thinking' : '') + (textEntered ? ' text-enter' : '')}>
           {editing ? (

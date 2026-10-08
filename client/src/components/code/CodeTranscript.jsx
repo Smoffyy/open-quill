@@ -287,11 +287,12 @@ const AssistantTurn = React.memo(function AssistantTurn({ msg, streaming, liveCa
   const parts = useMemo(() => withLive(splitTurn(msg.content), streaming ? liveCalls : null), [msg.content, streaming, liveCalls]);
   const changes = useMemo(() => (streaming ? [] : fileChanges(parts)), [parts, streaming]);
   const segs = Array.isArray(msg.reasoningSegs) ? msg.reasoningSegs : null;
-  const segCtx = useMemo(() => (segs ? { segs, segMs: msg.reasoningSegMs || null, live: streaming, collapsible: true } : null),
-    [segs, msg.reasoningSegMs, streaming]);
+  const tailIsMarker = !!segs && /\[\[OQT:\d+\]\]\s*$/.test(msg.content || '');
+  const segCtx = useMemo(() => (segs ? { segs, segMs: msg.reasoningSegMs || null, live: !!(streaming && tailIsMarker), collapsible: true } : null),
+    [segs, msg.reasoningSegMs, streaming, tailIsMarker]);
   return (
     <div className={'cx-turn' + (streaming ? ' live' : '')} data-mid={msg.id} role="article" aria-label={t('Assistant message')}>
-      {msg.reasoning && <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'}  durationMs={msg.reasoningMs || 0} collapsible />}
+      {msg.reasoning && <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking' && !(segs && segs.length)}  durationMs={msg.reasoningMs || 0} collapsible />}
       <ReasonSegs.Provider value={segCtx}>
         {parts.map((p, i) => (p.kind === 'text'
           ? <div className="cx-prose" key={'t' + i}><Markdown streaming={streaming && i === parts.length - 1}>{p.text}</Markdown></div>
