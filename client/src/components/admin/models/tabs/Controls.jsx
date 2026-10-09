@@ -287,22 +287,24 @@ function DefEditor({ def, defs, patch }) {
         </>
       )}
 
-      <Rows>
-        <Row label={t('Replay past thinking')}
-          note={t('When this kwarg goes out with the chosen value, earlier replies are sent back with their thinking, for chat templates that keep it (preserve_thinking, clear_thinking and the like).')} wide>
-          <div className="mc-pair">
-            <Select value={replayWhen} label={t('Replay past thinking')}
-              onChange={(v) => patch({ replayWhen: v })}
-              options={[{ value: '', label: t('never') }, { value: '*', label: t('whenever it is sent') },
-                ...replayValues.map(v => ({ value: v, label: t('when it is {value}', { value: v }) }))]} />
-            {!!replayWhen && (
-              <Select value={def.replayAs || 'reasoning_content'} label={t('Sent as')}
-                onChange={(v) => patch({ replayAs: v })}
-                options={REPLAY_FIELDS.map(([v, l]) => ({ value: v, label: l }))} />
-            )}
-          </div>
-        </Row>
-      </Rows>
+      {(linked || def.visible === false || !!replayWhen) && (
+        <Rows>
+          <Row label={t('Replay past thinking')}
+            note={t('When this kwarg goes out with the chosen value, earlier replies are sent back with their thinking, for chat templates that keep it (preserve_thinking, clear_thinking and the like).')} wide>
+            <div className="mc-pair">
+              <Select value={replayWhen} label={t('Replay past thinking')}
+                onChange={(v) => patch({ replayWhen: v })}
+                options={[{ value: '', label: t('never') }, { value: '*', label: t('whenever it is sent') },
+                  ...replayValues.map(v => ({ value: v, label: t('when it is {value}', { value: v }) }))]} />
+              {!!replayWhen && (
+                <Select value={def.replayAs || 'reasoning_content'} label={t('Sent as')}
+                  onChange={(v) => patch({ replayAs: v })}
+                  options={REPLAY_FIELDS.map(([v, l]) => ({ value: v, label: l }))} />
+              )}
+            </div>
+          </Row>
+        </Rows>
+      )}
     </div>
   );
 }
