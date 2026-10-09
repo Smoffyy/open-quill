@@ -2950,11 +2950,17 @@
   "Mirostat replaces Top P, Top K and similar filters with a feedback loop that keeps the text at a steady level of surprise, measured as perplexity. 0 is off, 1 is the original algorithm and 2 is the simpler version most backends recommend. Use it when long replies swing between dull and incoherent. While it is on, the other filtering settings are mostly ignored.": "Mirostat 用一个反馈回路取代 Top P、Top K 等过滤器，让文本保持稳定的意外程度（以困惑度衡量）。0 为关闭，1 是原始算法，2 是大多数后端推荐的简化版本。当长回复在乏味和语无伦次之间摇摆时使用它。开启期间，其他过滤设置基本会被忽略。",
   "The level of surprise Mirostat aims for. Lower values such as 3 give focused, predictable text, and higher values such as 7 or 8 give more varied, creative text. 5 is the usual default.": "Mirostat 追求的意外程度。3 这样的较低值会产生集中、可预测的文字，7 或 8 这样的较高值会产生更多样、更有创意的文字。常用默认值为 5。",
   "How quickly Mirostat corrects itself when the text drifts from its target. Higher values such as 0.2 react fast but can overshoot and wobble, while lower values such as 0.05 adjust slowly and smoothly. 0.1 is the usual default.": "当文本偏离目标时，Mirostat 自我纠正的速度。0.2 这样的较高值反应快，但可能矫枉过正、来回摆动；0.05 这样的较低值调整缓慢而平稳。常用默认值为 0.1。",
-  "replays thinking": "回传思考",
-  "Replay past thinking": "回传过往思考",
-  "When this kwarg goes out with the chosen value, earlier replies are sent back with their thinking, for chat templates that keep it (preserve_thinking, clear_thinking and the like).": "当此 kwarg 以所选值发送时,之前的回复会连同其思考内容一起回传,适用于会保留思考的聊天模板(preserve_thinking、clear_thinking 等)。",
   "whenever it is sent": "每次发送时",
   "when it is {value}": "当值为 {value} 时",
   "Sent as": "发送字段",
-  "A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.": "与 model 和 messages 并列的普通字段。适用于服务器直接读取的任何参数，例如 llama.cpp 上的 reasoning_budget_tokens。"
+  "A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.": "与 model 和 messages 并列的普通字段。适用于服务器直接读取的任何参数，例如 llama.cpp 上的 reasoning_budget_tokens。",
+  "sends back thinking": "回传思考",
+  "Send back past thinking": "回传过往思考",
+  "For a kwarg like preserve_thinking that tells the model to keep its earlier thinking. While it is sent with the value picked here, earlier replies go back to the model together with the thinking behind them, so it remembers what it thought. The second box is the field the server reads that thinking from.": "适用于像 preserve_thinking 这样让模型保留先前思考的 kwarg。只要它以此处选择的值发送,之前的回复就会连同其背后的思考一起回传给模型,让模型记得自己想过什么。第二个框是服务器读取该思考的字段。",
+  "Unit": "单位",
+  "Shown after the number in the picker, such as tokens.": "在选择器中显示在数字后面,例如 tokens。",
+  "0 means off": "0 表示关闭",
+  "At 0 the picker says Off and the model name shows no chip.": "为 0 时,选择器显示关闭,模型名称旁不显示标签。",
+  "Shown beside the model name. {value} becomes the current number, as in Thinking · {value} tokens.": "显示在模型名称旁。{value} 会替换为当前数值,例如 思考 · {value} tokens。",
+  "Thinking · {value} tokens": "思考 · {value} tokens"
 }

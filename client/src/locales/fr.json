@@ -2950,11 +2950,17 @@
   "Mirostat replaces Top P, Top K and similar filters with a feedback loop that keeps the text at a steady level of surprise, measured as perplexity. 0 is off, 1 is the original algorithm and 2 is the simpler version most backends recommend. Use it when long replies swing between dull and incoherent. While it is on, the other filtering settings are mostly ignored.": "Mirostat remplace Top P, Top K et les filtres similaires par une boucle de régulation qui maintient le texte à un niveau de surprise stable, mesuré par la perplexité. 0 le désactive, 1 est l'algorithme d'origine et 2 la version simplifiée que recommandent la plupart des backends. Utilisez-le quand les longues réponses oscillent entre fades et incohérentes. Tant qu'il est actif, les autres réglages de filtrage sont en grande partie ignorés.",
   "The level of surprise Mirostat aims for. Lower values such as 3 give focused, predictable text, and higher values such as 7 or 8 give more varied, creative text. 5 is the usual default.": "Le niveau de surprise visé par Mirostat. Des valeurs basses comme 3 donnent un texte ciblé et prévisible, des valeurs hautes comme 7 ou 8 un texte plus varié et créatif. 5 est la valeur par défaut habituelle.",
   "How quickly Mirostat corrects itself when the text drifts from its target. Higher values such as 0.2 react fast but can overshoot and wobble, while lower values such as 0.05 adjust slowly and smoothly. 0.1 is the usual default.": "La rapidité avec laquelle Mirostat se corrige quand le texte s'écarte de sa cible. Des valeurs hautes comme 0,2 réagissent vite mais peuvent dépasser et osciller, des valeurs basses comme 0,05 s'ajustent lentement et en douceur. 0,1 est la valeur par défaut habituelle.",
-  "replays thinking": "renvoie la réflexion",
-  "Replay past thinking": "Renvoyer la réflexion passée",
-  "When this kwarg goes out with the chosen value, earlier replies are sent back with their thinking, for chat templates that keep it (preserve_thinking, clear_thinking and the like).": "Quand ce kwarg part avec la valeur choisie, les réponses précédentes sont renvoyées avec leur réflexion, pour les modèles de chat qui la conservent (preserve_thinking, clear_thinking et similaires).",
   "whenever it is sent": "dès qu'il est envoyé",
   "when it is {value}": "quand il vaut {value}",
   "Sent as": "Envoyé comme",
-  "A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.": "Un champ simple à côté de model et messages. À utiliser pour tout ce que le serveur lit directement, comme reasoning_budget_tokens sur llama.cpp."
+  "A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.": "Un champ simple à côté de model et messages. À utiliser pour tout ce que le serveur lit directement, comme reasoning_budget_tokens sur llama.cpp.",
+  "sends back thinking": "renvoie la réflexion",
+  "Send back past thinking": "Renvoyer la réflexion passée",
+  "For a kwarg like preserve_thinking that tells the model to keep its earlier thinking. While it is sent with the value picked here, earlier replies go back to the model together with the thinking behind them, so it remembers what it thought. The second box is the field the server reads that thinking from.": "Pour un kwarg comme preserve_thinking, qui demande au modèle de garder sa réflexion précédente. Tant qu'il est envoyé avec la valeur choisie ici, les réponses précédentes repartent vers le modèle avec la réflexion qui les accompagne, pour qu'il se souvienne de ce qu'il a pensé. Le second champ est celui dans lequel le serveur lit cette réflexion.",
+  "Unit": "Unité",
+  "Shown after the number in the picker, such as tokens.": "Affichée après le nombre dans le sélecteur, par exemple tokens.",
+  "0 means off": "0 signifie désactivé",
+  "At 0 the picker says Off and the model name shows no chip.": "À 0, le sélecteur affiche Désactivé et aucune étiquette n'apparaît à côté du nom du modèle.",
+  "Shown beside the model name. {value} becomes the current number, as in Thinking · {value} tokens.": "Affichée à côté du nom du modèle. {value} devient le nombre actuel, comme dans Réflexion · {value} tokens.",
+  "Thinking · {value} tokens": "Réflexion · {value} tokens"
 }

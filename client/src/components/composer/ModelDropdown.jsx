@@ -6,7 +6,7 @@ import { t } from '../../i18n.jsx';
 import { Switch } from '../ui/controls.jsx';
 import { clampPx, overshoot, stretchFor, squashFor, stretchOrigin, slideFor, magnetStep, DRAG_SLOP } from '../../lib/dragsteps.js';
 import { paintCells, fadeTrail, stampTrail, headColumn, CELL, CELL_FPS, CELL_SPEED } from '../../lib/cellfield.js';
-import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues, isRange, clampToRange, rangeSteps, nearestStep, kwargVisible, gateSourceIds } from '../../lib/kwargs.js';
+import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues, isRange, clampToRange, rangeSteps, nearestStep, rangeLabel, kwargVisible, gateSourceIds } from '../../lib/kwargs.js';
 import { useDismiss } from '../../lib/dismiss.js';
 import { Skel, SkelMenu } from '../ui/Skeleton.jsx';
 import { ModelMark } from '../ui/Weave.jsx';
@@ -101,7 +101,7 @@ export function KwargControl({ def, value, isAdmin, onSet, gated }) {
     const cur = clampToRange(def, value);
     return (
       <EffortSlider label={label} note={note} values={steps} idx={nearestStep(steps, cur == null ? defaultValueOf(def) : cur)}
-        locked={locked} gated={gated} onPick={(v) => onSet(def.id, v)} />
+        locked={locked} gated={gated} format={(v) => rangeLabel(def, v, t('Off'))} onPick={(v) => onSet(def.id, v)} />
     );
   }
   if (!values.length) return null;
@@ -203,7 +203,7 @@ function CellField({ fillRef }) {
 
 const THUMB = 16;
 const glowAt = (fill) => Math.max(0, (fill - 0.25) * 0.86);
-function EffortSlider({ label, note, values, idx, locked, gated, onPick }) {
+function EffortSlider({ label, note, values, idx, locked, gated, format, onPick }) {
   const railRef = useRef(null);
   const fillRef = useRef(null);
   const seen = useRef(idx);
@@ -266,7 +266,7 @@ function EffortSlider({ label, note, values, idx, locked, gated, onPick }) {
   };
   const stop = () => { dragging.current = false; setFree(null); };
 
-  const cur = capLevel(values[idx]);
+  const cur = format ? format(values[idx]) : capLevel(values[idx]);
   const rising = idx >= seen.current;
   seen.current = idx;
   const pos = free ? free.pos : idx / span;

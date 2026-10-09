@@ -2950,11 +2950,17 @@
   "Mirostat replaces Top P, Top K and similar filters with a feedback loop that keeps the text at a steady level of surprise, measured as perplexity. 0 is off, 1 is the original algorithm and 2 is the simpler version most backends recommend. Use it when long replies swing between dull and incoherent. While it is on, the other filtering settings are mostly ignored.": "Mirostat заменяет Top P, Top K и похожие фильтры петлёй обратной связи, которая держит текст на постоянном уровне неожиданности, измеряемом как перплексия. 0 — выключено, 1 — исходный алгоритм, 2 — упрощённая версия, которую рекомендует большинство бэкендов. Используйте его, когда длинные ответы мечутся между скучными и бессвязными. Пока он включён, остальные настройки фильтрации в основном игнорируются.",
   "The level of surprise Mirostat aims for. Lower values such as 3 give focused, predictable text, and higher values such as 7 or 8 give more varied, creative text. 5 is the usual default.": "Уровень неожиданности, к которому стремится Mirostat. Низкие значения, например 3, дают сосредоточенный и предсказуемый текст, а высокие, например 7 или 8, — более разнообразный и творческий. 5 — обычное значение по умолчанию.",
   "How quickly Mirostat corrects itself when the text drifts from its target. Higher values such as 0.2 react fast but can overshoot and wobble, while lower values such as 0.05 adjust slowly and smoothly. 0.1 is the usual default.": "Как быстро Mirostat корректирует себя, когда текст отклоняется от цели. Высокие значения, например 0,2, реагируют быстро, но могут перекорректировать и колебаться, а низкие, например 0,05, подстраиваются медленно и плавно. 0,1 — обычное значение по умолчанию.",
-  "replays thinking": "повторяет рассуждения",
-  "Replay past thinking": "Повторять прошлые рассуждения",
-  "When this kwarg goes out with the chosen value, earlier replies are sent back with their thinking, for chat templates that keep it (preserve_thinking, clear_thinking and the like).": "Когда этот kwarg отправляется с выбранным значением, предыдущие ответы отправляются обратно вместе с рассуждениями, для шаблонов чата, которые их сохраняют (preserve_thinking, clear_thinking и подобные).",
   "whenever it is sent": "всякий раз при отправке",
   "when it is {value}": "когда равно {value}",
   "Sent as": "Отправлять как",
-  "A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.": "Обычное поле рядом с моделью и сообщениями. Используйте его для всего, что сервер читает напрямую, например reasoning_budget_tokens в llama.cpp."
+  "A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.": "Обычное поле рядом с моделью и сообщениями. Используйте его для всего, что сервер читает напрямую, например reasoning_budget_tokens в llama.cpp.",
+  "sends back thinking": "возвращает рассуждения",
+  "Send back past thinking": "Возвращать прошлые рассуждения",
+  "For a kwarg like preserve_thinking that tells the model to keep its earlier thinking. While it is sent with the value picked here, earlier replies go back to the model together with the thinking behind them, so it remembers what it thought. The second box is the field the server reads that thinking from.": "Для kwarg вроде preserve_thinking, который велит модели сохранять прежние рассуждения. Пока он отправляется с выбранным здесь значением, прежние ответы возвращаются модели вместе с рассуждениями за ними, чтобы она помнила, что думала. Второе поле указывает, из какого поля сервер читает эти рассуждения.",
+  "Unit": "Единица",
+  "Shown after the number in the picker, such as tokens.": "Показывается после числа в выборе модели, например tokens.",
+  "0 means off": "0 означает выкл.",
+  "At 0 the picker says Off and the model name shows no chip.": "При 0 в выборе модели написано Выкл., а рядом с названием модели нет метки.",
+  "Shown beside the model name. {value} becomes the current number, as in Thinking · {value} tokens.": "Показывается рядом с названием модели. {value} заменяется текущим числом, например Рассуждение · {value} tokens.",
+  "Thinking · {value} tokens": "Рассуждение · {value} tokens"
 }

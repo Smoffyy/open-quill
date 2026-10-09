@@ -77,7 +77,7 @@ function Summary({ def, defs }) {
       {!parent && def.visible !== false && gate && <Badge tone="warn">{t('only when {name} = {value}', { name: nameOf(gate), value: def.showIf.value })}</Badge>}
       {!parent && def.visible !== false && <Badge>{t(CONTROL_TAG[controlOf(def)] || CONTROL_TAG.select)}</Badge>}
       {!!def.adminOnly && <Badge>{t('admins only')}</Badge>}
-      {!!replayWhenOf(def) && <Badge tone="warn">{t('replays thinking')}</Badge>}
+      {!!replayWhenOf(def) && <Badge tone="warn">{t('sends back thinking')}</Badge>}
       {(def.target || 'chat_template_kwargs') !== 'chat_template_kwargs' && <Badge>{def.target}</Badge>}
       <Badge>{isRange(def) ? `${def.min}…${def.max}` : (kwargValuesStr(def) || t('no values'))}</Badge>
     </span>
@@ -189,6 +189,17 @@ function DefEditor({ def, defs, patch }) {
         )}
       </Fields>
 
+      {range && (
+        <Fields cols={3}>
+          <Field label={t('Unit')} hint={t('Shown after the number in the picker, such as tokens.')}>
+            <Input value={def.unit || ''} placeholder={t('tokens')} aria-label={t('Unit')} onChange={(e) => patch({ unit: e.target.value })} />
+          </Field>
+          <Field label={t('0 means off')} hint={t('At 0 the picker says Off and the model name shows no chip.')}>
+            <Switch on={!!def.zeroOff} label={t('0 means off')} onToggle={() => patch({ zeroOff: !def.zeroOff })} />
+          </Field>
+        </Fields>
+      )}
+
       <Field label={t('Follows')}
         hint={t('A following kwarg has no control of its own; its value is derived from the one it follows. This is how you pair something like preserve_thinking to a thinking toggle.')}>
         <Select value={def.parentId || ''} label={t('Follows')}
@@ -231,8 +242,8 @@ function DefEditor({ def, defs, patch }) {
             <Field label={t('Title')}>
               <Input value={def.label || ''} placeholder={t('Extended thinking')} aria-label={t('Title')} onChange={(e) => patch({ label: e.target.value })} />
             </Field>
-            <Field label={t('Picker chip')}>
-              <Input value={def.chip || ''} placeholder={t('Thinking')} aria-label={t('Picker chip')} onChange={(e) => patch({ chip: e.target.value })} />
+            <Field label={t('Picker chip')} hint={range ? t('Shown beside the model name. {value} becomes the current number, as in Thinking · {value} tokens.') : undefined}>
+              <Input value={def.chip || ''} placeholder={range ? t('Thinking · {value} tokens') : t('Thinking')} aria-label={t('Picker chip')} onChange={(e) => patch({ chip: e.target.value })} />
             </Field>
             <Field label={t('Description')} hint={t('Leave the title and this blank to fall back to the key.')}>
               <Input value={def.description || ''} placeholder={t('Let the model think before answering')} aria-label={t('Description')}
@@ -289,10 +300,10 @@ function DefEditor({ def, defs, patch }) {
 
       {(linked || def.visible === false || !!replayWhen) && (
         <Rows>
-          <Row label={t('Replay past thinking')}
-            note={t('When this kwarg goes out with the chosen value, earlier replies are sent back with their thinking, for chat templates that keep it (preserve_thinking, clear_thinking and the like).')} wide>
+          <Row label={t('Send back past thinking')}
+            note={t('For a kwarg like preserve_thinking that tells the model to keep its earlier thinking. While it is sent with the value picked here, earlier replies go back to the model together with the thinking behind them, so it remembers what it thought. The second box is the field the server reads that thinking from.')} wide>
             <div className="mc-pair">
-              <Select value={replayWhen} label={t('Replay past thinking')}
+              <Select value={replayWhen} label={t('Send back past thinking')}
                 onChange={(v) => patch({ replayWhen: v })}
                 options={[{ value: '', label: t('never') }, { value: '*', label: t('whenever it is sent') },
                   ...replayValues.map(v => ({ value: v, label: t('when it is {value}', { value: v }) }))]} />

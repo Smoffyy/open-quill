@@ -97,6 +97,8 @@ export function normalizeKwarg(raw, index = 0) {
     min: num(src.min),
     max: num(src.max),
     step: null,
+    unit: text(src.unit, 24).trim(),
+    zeroOff: !!src.zeroOff,
     rules,
     replayWhen: src.replayWhen === undefined ? (REPLAY_DEFAULTS[slug(src.name, 80)] || '') : slug(src.replayWhen, 80),
     replayAs: REPLAY_FIELDS.includes(src.replayAs) ? src.replayAs : REPLAY_FIELDS[0]
@@ -113,6 +115,8 @@ export function normalizeKwarg(raw, index = 0) {
   }
   def.min = null;
   def.max = null;
+  def.unit = '';
+  def.zeroOff = false;
   if (def.values.length && !def.values.includes(def.default)) def.default = '';
   return def;
 }
@@ -317,6 +321,6 @@ export function publicKwargDefs(model) {
     id: d.id, name: d.name, label: d.label, description: d.description, chip: d.chip,
     values: d.values, default: d.default, control: d.control, type: d.type, target: d.target,
     visible: d.visible, adminOnly: d.adminOnly, sendWhenHidden: d.sendWhenHidden,
-    parentId: d.parentId, showIf: d.showIf, min: d.min, max: d.max, step: d.step, rules: d.rules
+    parentId: d.parentId, showIf: d.showIf, min: d.min, max: d.max, step: d.step, unit: d.unit, zeroOff: d.zeroOff, rules: d.rules
   }));
 }

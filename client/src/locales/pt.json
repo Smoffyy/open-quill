@@ -2950,11 +2950,17 @@
   "Mirostat replaces Top P, Top K and similar filters with a feedback loop that keeps the text at a steady level of surprise, measured as perplexity. 0 is off, 1 is the original algorithm and 2 is the simpler version most backends recommend. Use it when long replies swing between dull and incoherent. While it is on, the other filtering settings are mostly ignored.": "O Mirostat substitui Top P, Top K e filtros parecidos por um ciclo de controle que mantém o texto em um nível constante de surpresa, medido como perplexidade. 0 desativa, 1 é o algoritmo original e 2 é a versão mais simples recomendada pela maioria dos backends. Use quando respostas longas oscilarem entre sem graça e incoerentes. Enquanto estiver ativo, as outras configurações de filtragem são em grande parte ignoradas.",
   "The level of surprise Mirostat aims for. Lower values such as 3 give focused, predictable text, and higher values such as 7 or 8 give more varied, creative text. 5 is the usual default.": "O nível de surpresa que o Mirostat busca. Valores baixos como 3 geram texto focado e previsível, e valores altos como 7 ou 8 geram texto mais variado e criativo. 5 é o padrão usual.",
   "How quickly Mirostat corrects itself when the text drifts from its target. Higher values such as 0.2 react fast but can overshoot and wobble, while lower values such as 0.05 adjust slowly and smoothly. 0.1 is the usual default.": "A rapidez com que o Mirostat se corrige quando o texto se afasta do alvo. Valores altos como 0,2 reagem rápido, mas podem passar do ponto e oscilar, enquanto valores baixos como 0,05 ajustam de forma lenta e suave. 0,1 é o padrão usual.",
-  "replays thinking": "reenvia o raciocínio",
-  "Replay past thinking": "Reenviar o raciocínio anterior",
-  "When this kwarg goes out with the chosen value, earlier replies are sent back with their thinking, for chat templates that keep it (preserve_thinking, clear_thinking and the like).": "Quando este kwarg é enviado com o valor escolhido, as respostas anteriores são reenviadas com o seu raciocínio, para modelos de chat que o mantêm (preserve_thinking, clear_thinking e semelhantes).",
   "whenever it is sent": "sempre que for enviado",
   "when it is {value}": "quando for {value}",
   "Sent as": "Enviado como",
-  "A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.": "Um campo simples ao lado de model e messages. Use para qualquer coisa que o servidor leia diretamente, como reasoning_budget_tokens no llama.cpp."
+  "A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.": "Um campo simples ao lado de model e messages. Use para qualquer coisa que o servidor leia diretamente, como reasoning_budget_tokens no llama.cpp.",
+  "sends back thinking": "reenvia o raciocínio",
+  "Send back past thinking": "Reenviar o raciocínio anterior",
+  "For a kwarg like preserve_thinking that tells the model to keep its earlier thinking. While it is sent with the value picked here, earlier replies go back to the model together with the thinking behind them, so it remembers what it thought. The second box is the field the server reads that thinking from.": "Para um kwarg como preserve_thinking, que diz ao modelo para manter o seu raciocínio anterior. Enquanto for enviado com o valor escolhido aqui, as respostas anteriores voltam ao modelo juntamente com o raciocínio por trás delas, para que se lembre do que pensou. O segundo campo é o campo de onde o servidor lê esse raciocínio.",
+  "Unit": "Unidade",
+  "Shown after the number in the picker, such as tokens.": "Mostrada depois do número no seletor, por exemplo tokens.",
+  "0 means off": "0 significa desligado",
+  "At 0 the picker says Off and the model name shows no chip.": "Em 0, o seletor mostra Desligado e nenhuma etiqueta aparece ao lado do nome do modelo.",
+  "Shown beside the model name. {value} becomes the current number, as in Thinking · {value} tokens.": "Mostrada ao lado do nome do modelo. {value} passa a ser o número atual, como em Raciocínio · {value} tokens.",
+  "Thinking · {value} tokens": "Raciocínio · {value} tokens"
 }

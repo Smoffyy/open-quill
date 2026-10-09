@@ -15,7 +15,10 @@ import {
   replayWhenOf,
   replayValuesOf,
   rangeSteps,
-  nearestStep
+  nearestStep,
+  kwargChip,
+  chipNumber,
+  rangeLabel
 } from '../src/lib/kwargs.js';
 
 // --- kwarg number ranges ---------------------------------------------------
@@ -161,4 +164,24 @@ test('a range becomes the step list the effort slider walks', () => {
   assert.equal(nearestStep(steps, '4096'), 7);
   assert.equal(nearestStep(steps, 5000), 9);
   assert.equal(nearestStep(steps, 99999), 31);
+});
+
+test('a number slider chip follows the admin template, unit and 0 means off', () => {
+  const budget = KWARG_PRESETS.find(x => x.key === 'reasoning_budget_tokens').make();
+  assert.equal(kwargChip(budget, '0'), '', '0 means off leaves just the model name');
+  assert.equal(kwargChip(budget, '4096'), 'Thinking · 4K tokens');
+  assert.equal(kwargChip({ ...budget, chip: 'Thinking' }, '4096'), 'Thinking', 'no {value} means the word alone');
+  assert.equal(kwargChip({ ...budget, chip: '' }, '16384'), '16K tokens', 'no chip falls back to the number and unit');
+  assert.equal(kwargChip({ min: 0, max: 2, step: 0.1, chip: 'Temp {value}' }, '0'), 'Temp 0', 'without 0 means off, 0 is a value');
+  assert.equal(chipNumber('1536'), '1.5K');
+  assert.equal(chipNumber('512'), '512');
+  assert.equal(kwargChip({ values: ['low', 'medium', 'high'] }, 'medium'), 'Medium', 'step sliders are unchanged');
+});
+
+test('a number slider header reads Off at 0 and the full number with its unit', () => {
+  const budget = { min: 0, max: 16384, step: 1024, unit: 'tokens', zeroOff: true };
+  assert.equal(rangeLabel(budget, '0', 'Off'), 'Off');
+  assert.equal(rangeLabel(budget, '4096', 'Off'), (4096).toLocaleString() + ' tokens');
+  assert.equal(rangeLabel({ min: 0, max: 2, step: 0.1 }, '0', 'Off'), '0');
+  assert.equal(rangeLabel({ min: 0, max: 2, step: 0.1 }, '0.7', 'Off'), (0.7).toLocaleString());
 });

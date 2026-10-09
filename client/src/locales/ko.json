@@ -2950,11 +2950,17 @@
   "Mirostat replaces Top P, Top K and similar filters with a feedback loop that keeps the text at a steady level of surprise, measured as perplexity. 0 is off, 1 is the original algorithm and 2 is the simpler version most backends recommend. Use it when long replies swing between dull and incoherent. While it is on, the other filtering settings are mostly ignored.": "Mirostat는 Top P, Top K 같은 필터 대신, 퍼플렉시티로 측정한 놀라움의 정도를 일정하게 유지하는 피드백 루프를 사용합니다. 0은 꺼짐, 1은 원래 알고리즘, 2는 대부분의 백엔드가 권장하는 단순화된 버전입니다. 긴 답변이 지루함과 횡설수설 사이를 오갈 때 사용하세요. 켜져 있는 동안 다른 필터 설정은 대부분 무시됩니다.",
   "The level of surprise Mirostat aims for. Lower values such as 3 give focused, predictable text, and higher values such as 7 or 8 give more varied, creative text. 5 is the usual default.": "Mirostat가 목표로 하는 놀라움의 정도입니다. 3 같은 낮은 값은 집중되고 예측 가능한 글을, 7이나 8 같은 높은 값은 더 다양하고 창의적인 글을 만듭니다. 5가 일반적인 기본값입니다.",
   "How quickly Mirostat corrects itself when the text drifts from its target. Higher values such as 0.2 react fast but can overshoot and wobble, while lower values such as 0.05 adjust slowly and smoothly. 0.1 is the usual default.": "텍스트가 목표에서 벗어날 때 Mirostat가 얼마나 빨리 바로잡는지입니다. 0.2 같은 높은 값은 빠르게 반응하지만 지나치게 보정해 흔들릴 수 있고, 0.05 같은 낮은 값은 천천히 부드럽게 조정합니다. 0.1이 일반적인 기본값입니다.",
-  "replays thinking": "사고 재전송",
-  "Replay past thinking": "이전 사고 재전송",
-  "When this kwarg goes out with the chosen value, earlier replies are sent back with their thinking, for chat templates that keep it (preserve_thinking, clear_thinking and the like).": "이 kwarg가 선택한 값으로 전송되면 이전 답변이 사고 내용과 함께 다시 전송됩니다. 사고를 유지하는 채팅 템플릿용입니다(preserve_thinking, clear_thinking 등).",
   "whenever it is sent": "전송될 때마다",
   "when it is {value}": "{value}일 때",
   "Sent as": "전송 필드",
-  "A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.": "모델과 메시지 옆에 있는 일반 필드입니다. llama.cpp의 reasoning_budget_tokens처럼 서버가 직접 읽는 값에 사용하세요."
+  "A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.": "모델과 메시지 옆에 있는 일반 필드입니다. llama.cpp의 reasoning_budget_tokens처럼 서버가 직접 읽는 값에 사용하세요.",
+  "sends back thinking": "사고를 다시 보냄",
+  "Send back past thinking": "이전 사고 다시 보내기",
+  "For a kwarg like preserve_thinking that tells the model to keep its earlier thinking. While it is sent with the value picked here, earlier replies go back to the model together with the thinking behind them, so it remembers what it thought. The second box is the field the server reads that thinking from.": "preserve_thinking처럼 모델에게 이전 사고를 유지하라고 알리는 kwarg용입니다. 여기서 고른 값으로 전송되는 동안, 이전 답변이 그 뒤의 사고와 함께 모델에게 다시 전달되어 모델이 무엇을 생각했는지 기억합니다. 두 번째 칸은 서버가 그 사고를 읽는 필드입니다.",
+  "Unit": "단위",
+  "Shown after the number in the picker, such as tokens.": "선택기에서 숫자 뒤에 표시됩니다(예: tokens).",
+  "0 means off": "0은 끄기",
+  "At 0 the picker says Off and the model name shows no chip.": "0일 때 선택기에는 끔으로 표시되고 모델 이름 옆에 칩이 표시되지 않습니다.",
+  "Shown beside the model name. {value} becomes the current number, as in Thinking · {value} tokens.": "모델 이름 옆에 표시됩니다. {value}는 현재 숫자로 바뀝니다(예: 사고 · {value} tokens).",
+  "Thinking · {value} tokens": "사고 · {value} tokens"
 }

@@ -2973,3 +2973,10 @@ test('Ollama gets the text in content and the images in their own field', () => 
   const [openai] = normalizeMessages('openai', [{ role: 'user', content: [{ type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } }] }]);
   assert.ok(Array.isArray(openai.content), 'other providers keep the OpenAI image parts');
 });
+
+test('kwargs: a number range keeps its unit and 0 means off, a list drops them', () => {
+  const range = normalizeKwarg({ name: 'reasoning_budget_tokens', min: 0, max: 16384, step: 1024, unit: ' tokens ', zeroOff: true });
+  assert.deepEqual([range.unit, range.zeroOff], ['tokens', true]);
+  const list = normalizeKwarg({ name: 'reasoning_effort', values: ['low', 'high'], unit: 'tokens', zeroOff: true });
+  assert.deepEqual([list.unit, list.zeroOff], ['', false]);
+});

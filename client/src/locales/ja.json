@@ -2950,11 +2950,17 @@
   "Mirostat replaces Top P, Top K and similar filters with a feedback loop that keeps the text at a steady level of surprise, measured as perplexity. 0 is off, 1 is the original algorithm and 2 is the simpler version most backends recommend. Use it when long replies swing between dull and incoherent. While it is on, the other filtering settings are mostly ignored.": "Mirostat は Top P、Top K などのフィルターの代わりに、パープレキシティで測った「驚きの度合い」を一定に保つフィードバック制御を使います。0 で無効、1 は元のアルゴリズム、2 は多くのバックエンドが推奨する簡易版です。長い返答が退屈と支離滅裂の間を行き来するときに使ってください。有効な間は、他のフィルター設定はほぼ無視されます。",
   "The level of surprise Mirostat aims for. Lower values such as 3 give focused, predictable text, and higher values such as 7 or 8 give more varied, creative text. 5 is the usual default.": "Mirostat が目指す驚きの度合いです。3 のような低い値では的確で予測しやすい文章に、7〜8 のような高い値ではより多彩で創造的な文章になります。5 が一般的な既定値です。",
   "How quickly Mirostat corrects itself when the text drifts from its target. Higher values such as 0.2 react fast but can overshoot and wobble, while lower values such as 0.05 adjust slowly and smoothly. 0.1 is the usual default.": "文章が目標からずれたとき、Mirostat がどれだけ速く修正するかです。0.2 のような高い値は素早く反応しますが行き過ぎて揺れることがあり、0.05 のような低い値はゆっくり滑らかに調整します。0.1 が一般的な既定値です。",
-  "replays thinking": "思考を再送",
-  "Replay past thinking": "過去の思考を再送",
-  "When this kwarg goes out with the chosen value, earlier replies are sent back with their thinking, for chat templates that keep it (preserve_thinking, clear_thinking and the like).": "この kwarg が選択した値で送信されると、以前の返信が思考とともに送り返されます。思考を保持するチャットテンプレート向けです(preserve_thinking、clear_thinking など)。",
   "whenever it is sent": "送信されるたび",
   "when it is {value}": "{value} のとき",
   "Sent as": "送信フィールド",
-  "A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.": "モデルやメッセージと並ぶ単純なフィールドです。llama.cppのreasoning_budget_tokensのように、サーバーが直接読み取る値に使用します。"
+  "A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.": "モデルやメッセージと並ぶ単純なフィールドです。llama.cppのreasoning_budget_tokensのように、サーバーが直接読み取る値に使用します。",
+  "sends back thinking": "思考を送り返す",
+  "Send back past thinking": "過去の思考を送り返す",
+  "For a kwarg like preserve_thinking that tells the model to keep its earlier thinking. While it is sent with the value picked here, earlier replies go back to the model together with the thinking behind them, so it remembers what it thought. The second box is the field the server reads that thinking from.": "preserve_thinking のように、以前の思考を保持するようモデルに指示する kwarg 向けです。ここで選んだ値で送信されている間、以前の返信はその裏にある思考と一緒にモデルへ送り返されるため、モデルは自分が考えたことを覚えていられます。2 つ目の欄は、サーバーがその思考を読み取るフィールドです。",
+  "Unit": "単位",
+  "Shown after the number in the picker, such as tokens.": "ピッカーで数値の後ろに表示されます(例: tokens)。",
+  "0 means off": "0 はオフ",
+  "At 0 the picker says Off and the model name shows no chip.": "0 のとき、ピッカーにはオフと表示され、モデル名の横にチップは表示されません。",
+  "Shown beside the model name. {value} becomes the current number, as in Thinking · {value} tokens.": "モデル名の横に表示されます。{value} は現在の数値に置き換わります(例: 思考 · {value} tokens)。",
+  "Thinking · {value} tokens": "思考 · {value} tokens"
 }

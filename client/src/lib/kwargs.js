@@ -229,7 +229,7 @@ export function blankKwarg() {
     values: ['false', 'true'], default: 'false', control: 'auto',
     target: 'chat_template_kwargs', type: 'auto',
     visible: true, adminOnly: false, sendWhenHidden: true, parentId: '', showIf: null,
-    min: null, max: null, step: null, rules: [],
+    min: null, max: null, step: null, unit: '', zeroOff: false, rules: [],
     replayWhen: '', replayAs: 'reasoning_content'
   };
 }
@@ -261,15 +261,15 @@ export const KWARG_PRESETS = [
     key: 'reasoning_budget_tokens', label: 'reasoning_budget_tokens (number slider)',
     note: 'Caps how many tokens the model may spend thinking. Sent at the top level of the request, where llama.cpp reads it.',
     make: () => ({
-      ...blankKwarg(), name: 'reasoning_budget_tokens', label: 'Thinking budget',
+      ...blankKwarg(), name: 'reasoning_budget_tokens', label: 'Thinking budget', chip: 'Thinking · {value} tokens',
       description: 'How many tokens the model may spend thinking',
       values: [], default: '4096', min: 1024, max: 16384, step: 1024,
-      target: 'body', type: 'number'
+      unit: 'tokens', zeroOff: true, target: 'body', type: 'number'
     })
   },
   {
     key: 'preserve_thinking', label: 'preserve_thinking (paired)',
-    note: 'Hidden kwarg meant to follow a thinking toggle. Replays past thinking when true.',
+    note: 'Hidden kwarg meant to follow a thinking toggle. Sends past thinking back when true.',
     make: () => ({
       ...blankKwarg(), name: 'preserve_thinking', label: 'Preserve thinking',
       description: '', values: ['false', 'true'], default: 'false', visible: false, replayWhen: 'true'
@@ -285,11 +285,30 @@ export const KWARG_PRESETS = [
   }
 ];
 
+export function chipNumber(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  if (Math.abs(n) >= 1024 && n % 512 === 0) return n / 1024 + 'K';
+  return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(n);
+}
+
+export function rangeLabel(def, value, offText) {
+  const n = Number(value);
+  if (def.zeroOff && n === 0) return offText;
+  const shown = Number.isFinite(n) ? new Intl.NumberFormat(undefined, { maximumFractionDigits: 6 }).format(n) : String(value);
+  return def.unit ? shown + ' ' + def.unit : shown;
+}
+
 export function kwargChip(def, value) {
   if (value == null || value === '') return '';
   const control = controlOf(def);
   if (control === 'toggle') return /^true$/i.test(String(value)) ? (def.chip || def.label || 'On') : '';
-  if (control === 'range') return def.chip ? def.chip + ' ' + value : String(value);
+  if (control === 'range') {
+    if (def.zeroOff && Number(value) === 0) return '';
+    const short = chipNumber(value);
+    if (def.chip) return def.chip.split('{value}').join(short);
+    return def.unit ? short + ' ' + def.unit : short;
+  }
   if (def.chip) return def.chip;
   const s = String(value);
   return s.charAt(0).toUpperCase() + s.slice(1);
