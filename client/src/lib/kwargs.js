@@ -116,6 +116,12 @@ export function defaultValueOf(def) {
   return values[Math.floor(values.length / 2)] ?? values[0] ?? '';
 }
 
+export function kwargAccepts(def, value) {
+  if (value == null) return false;
+  if (isRange(def)) return String(clampToRange(def, value)) === String(value);
+  return kwargValuesArr(def).includes(value);
+}
+
 export function trueValueOf(def) {
   const values = kwargValuesArr(def);
   return values.find(v => /^true$/i.test(v)) ?? values[values.length - 1] ?? '';

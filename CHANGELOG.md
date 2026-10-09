@@ -72,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keyboard shortcuts** - the shortcuts dialog lists the message menu, slash commands and saving or cancelling an edit, splits next and previous match into their own rows, and drops the old hover-to-pin row.
 - **Number sliders match the effort slider** - a number range in the model picker, the Code composer and the playground is drawn with the same slider as reasoning effort: the value beside its name, the description behind an info button, the glowing rail, a dot for each step and the stretching thumb.
 - **Sliders stick to each step** - while dragging an effort or number slider, the thumb holds on to a step and only creeps a little as you keep dragging, then lets go and glides on to the next one. The value still changes halfway between two steps.
+- **Web search resets to off** - web search is off in every new chat and whenever a chat opens, and it never carries over from another chat, for privacy. It turns on only when the default setting is on or the model has auto web search, and picking a model with auto web search from the home screen turns it on straight away.
 
 ### Fixed
 - **Replies kept when the connection drops** - a reply's text is saved every two seconds while it streams, so a server restart or a lost connection keeps what was written, and the reply shows the Continue button. A reply that finished while the browser was disconnected is loaded from the server on reconnect, instead of staying as an open stream that could hide it.
@@ -95,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Shortcut labels on macOS** - the shortcuts dialog showed Ctrl and Shift for pasting an image, new lines and finding matches; it now shows ⌘ and ⇧ like the rest of the list.
 - **Missing and fixed shortcut hints** - What gets sent in the command palette now shows its shortcut, and the attach item in the Code composer shows your own binding instead of always reading Ctrl+U.
 - **preserve_thinking did nothing** - earlier replies went back to the model without their thinking, so a chat template that keeps past thinking had nothing to keep, and the model forgot what it had worked out before. They are now sent with it whenever the model's request controls ask for it. Qwen3.5's own chat template ignores `preserve_thinking`; Qwen3.6 is the first to support it.
+- **Number sliders kept out-of-range values between models** - a number slider such as the thinking budget was never checked when you switched models, so a value set on another model could stay in place outside this model's range or step. It is now reset to the model's default, the same as list controls such as reasoning effort.
 
 ### Removed
 - **Sandbox in chats** - the sandbox tools toggle, the per-chat artifacts panel and the per-model "Sandbox tools" setting are gone; file work happens in Code. Project chats keep reading their project's files.

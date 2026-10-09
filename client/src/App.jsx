@@ -7,7 +7,7 @@ import { withClient } from './lib/clientctx.js';
 import { applyPrefs, prefersDark, appFontId, takeSettingsToReopen } from './lib/prefs.js';
 import { layoutOf } from './lib/layout.js';
 import { LayoutContext } from './lib/uselayout.js';
-import { kwargValuesArr, defaultValueOf } from './lib/kwargs.js';
+import { kwargValuesArr, defaultValueOf, isRange, kwargAccepts } from './lib/kwargs.js';
 import Login from './components/pages/Login.jsx';
 import Sidebar from './components/sidebar/Sidebar.jsx';
 import AppBackground from './components/chat/AppBackground.jsx';
@@ -520,9 +520,8 @@ export default function App() {
       let changed = false;
       const next = { ...prev };
       for (const d of defs) {
-        const values = kwargValuesArr(d);
-        if (!values.length) continue;
-        if (values.includes(next[d.id])) continue;
+        if (!isRange(d) && !kwargValuesArr(d).length) continue;
+        if (kwargAccepts(d, next[d.id])) continue;
         next[d.id] = defaultValueOf(d);
         changed = true;
       }
@@ -638,7 +637,7 @@ export default function App() {
   useEffect(() => {
     const m = models.find(x => x.id === currentId);
     if (m && m.webSearchAllowed === false) setWebSearch(false);
-    else if (!activeId && !incognito && m && user?.prefs?.webSearchDefault && cfg.webSearchAvailable) setWebSearch(true);
+    else if (!activeId && !incognito && m && (m.webSearchAuto || user?.prefs?.webSearchDefault) && cfg.webSearchAvailable) setWebSearch(true);
   }, [currentId, activeId, models, incognito, cfg.webSearchAvailable, user?.prefs?.webSearchDefault]);
   function openFromUrl() {
     bootView.current = 'home';

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   isRange,
+  kwargAccepts,
   clampToRange,
   allNumeric,
   kwargPayload,
@@ -184,4 +185,15 @@ test('a number slider header reads Off at 0 and the full number with its unit', 
   assert.equal(rangeLabel(budget, '4096', 'Off'), (4096).toLocaleString() + ' tokens');
   assert.equal(rangeLabel({ min: 0, max: 2, step: 0.1 }, '0', 'Off'), '0');
   assert.equal(rangeLabel({ min: 0, max: 2, step: 0.1 }, '0.7', 'Off'), (0.7).toLocaleString());
+});
+
+test('a stored value is kept only when the model still accepts it, for sliders and lists alike', () => {
+  const budget = { min: 1024, max: 16384, step: 1024, values: [] };
+  assert.equal(kwargAccepts(budget, '8192'), true);
+  assert.equal(kwargAccepts(budget, '16384'), true);
+  assert.equal(kwargAccepts(budget, '20000'), false, 'above the admin maximum of another model');
+  assert.equal(kwargAccepts(budget, '1500'), false, 'off the step grid is reseeded to the default');
+  assert.equal(kwargAccepts(budget, null), false);
+  assert.equal(kwargAccepts({ values: ['low', 'high'] }, 'high'), true);
+  assert.equal(kwargAccepts({ values: ['low', 'high'] }, 'medium'), false);
 });
