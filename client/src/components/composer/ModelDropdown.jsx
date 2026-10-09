@@ -4,7 +4,7 @@ import { Check, Chevron, Bulb, Eye, Info, Globe, Terminal, FileText, Wand } from
 import Tip from '../ui/Tip.jsx';
 import { t } from '../../i18n.jsx';
 import { Switch } from '../ui/controls.jsx';
-import { clampPx, overshoot, stretchFor, squashFor, stretchOrigin, slideFor, DRAG_SLOP } from '../../lib/dragsteps.js';
+import { clampPx, overshoot, stretchFor, squashFor, stretchOrigin, slideFor, magnetStep, DRAG_SLOP } from '../../lib/dragsteps.js';
 import { paintCells, fadeTrail, stampTrail, headColumn, CELL, CELL_FPS, CELL_SPEED } from '../../lib/cellfield.js';
 import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues, isRange, clampToRange, rangeSteps, nearestStep, kwargVisible, gateSourceIds } from '../../lib/kwargs.js';
 import { useDismiss } from '../../lib/dismiss.js';
@@ -222,15 +222,16 @@ function EffortSlider({ label, note, values, idx, locked, gated, onPick }) {
     const r = rail.getBoundingClientRect();
     if (!r.width) return null;
     const local = clientX - r.left;
-    const centre = clampPx(local, 0, r.width);
     const travel = Math.max(1, r.width - THUMB);
     const raw = local - THUMB / 2;
     const over = overshoot(raw, 0, travel);
     const stretch = stretchFor(over, THUMB);
+    const along = clampPx(raw, 0, travel) / travel;
+    const pos = magnetStep(along, span);
     return {
-      pos: clampPx(raw, 0, travel) / travel,
-      fill: centre / r.width,
-      i: Math.min(last, Math.max(0, Math.round((centre / r.width) * span))),
+      pos,
+      fill: (pos * travel + THUMB / 2) / r.width,
+      i: Math.min(last, Math.max(0, Math.round(along * span))),
       stretch,
       squash: squashFor(stretch),
       origin: stretchOrigin(over)

@@ -11,6 +11,7 @@ import {
   stretchOrigin,
   nearestIndex,
   slideFor,
+  magnetStep,
   DRAG_SLOP,
   STRETCH_PX,
   SLIDE_BASE,
@@ -104,4 +105,31 @@ test('knobRaw keeps the overshoot that knobAt clamps away', () => {
 
 test('the drag slop stays small enough that a tap is never read as a drag', () => {
   assert.ok(DRAG_SLOP > 0 && DRAG_SLOP <= 4);
+});
+
+test('a stepped thumb sits on every step and the midpoint between two', () => {
+  for (const span of [1, 2, 15]) {
+    for (let k = 0; k <= span; k++) assert.ok(Math.abs(magnetStep(k / span, span) - k / span) < 1e-9);
+    assert.ok(Math.abs(magnetStep(0.5 / span, span) - 0.5 / span) < 1e-9);
+  }
+});
+
+test('near a step the thumb barely moves, then catches up past it', () => {
+  const span = 2;
+  const near = magnetStep(0.05 / span, span) * span;
+  assert.ok(near > 0 && near < 0.02, 'stuck but still creeping: ' + near);
+  const late = magnetStep(0.45 / span, span) * span;
+  assert.ok(late > 0.3 && late < 0.5, 'well on its way by the midpoint: ' + late);
+});
+
+test('the magnet never runs backwards or jumps', () => {
+  const span = 4;
+  let prev = magnetStep(0, span);
+  for (let i = 1; i <= 4000; i++) {
+    const cur = magnetStep(i / 4000, span);
+    assert.ok(cur >= prev - 1e-12, 'monotonic at ' + i);
+    assert.ok(cur - prev < 0.01, 'continuous at ' + i);
+    prev = cur;
+  }
+  assert.equal(magnetStep(0.3, 0), 0.3, 'nothing to snap to');
 });
