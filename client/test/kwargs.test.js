@@ -11,7 +11,9 @@ import {
   gateOpen,
   kwargVisible,
   gateSourceIds,
-  KWARG_PRESETS
+  KWARG_PRESETS,
+  replayWhenOf,
+  replayValuesOf
 } from '../src/lib/kwargs.js';
 
 // --- kwarg number ranges ---------------------------------------------------
@@ -130,4 +132,17 @@ test('the thinking budget preset matches the shape llama.cpp expects', () => {
   const out = kwargPayload([p], resolveKwargs([p], { [p.id]: '5000' }, false));
   assert.equal(out.thinking_budget_tokens, 5120, 'snapped to the 1024 grid');
   assert.equal('extra_body' in out, false);
+});
+
+test('replay defaults match the server and an explicit blank opts out', () => {
+  assert.equal(replayWhenOf({ name: 'preserve_thinking' }), 'true');
+  assert.equal(replayWhenOf({ name: 'clear_thinking' }), 'false');
+  assert.equal(replayWhenOf({ name: 'enable_thinking' }), '');
+  assert.equal(replayWhenOf({ name: 'preserve_thinking', replayWhen: '' }), '');
+  assert.equal(replayWhenOf({ name: 'keep', replayWhen: 'on' }), 'on');
+  assert.deepEqual(replayValuesOf({ values: ['off', 'on'] }), ['off', 'on']);
+  assert.deepEqual(replayValuesOf({ parentId: 'p', rules: [{ when: 'true', value: 'true' }, { when: 'false', value: 'x', send: false }] }), ['true']);
+  assert.deepEqual(replayValuesOf({ min: 0, max: 10 }), []);
+  assert.equal(KWARG_PRESETS.find(p => p.key === 'preserve_thinking').make().replayWhen, 'true');
+  assert.equal(KWARG_PRESETS.find(p => p.key === 'clear_thinking').make().replayWhen, 'false');
 });

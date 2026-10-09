@@ -6,6 +6,6 @@ export function buildMessages(model, history, extended, system = '') {
   }
   const msgs = [];
   if (sys.trim()) msgs.push({ role: 'system', content: sys });
-  for (const m of history) msgs.push({ role: m.role, content: m.content });
+  for (const m of history) msgs.push(m.reasoning ? { role: m.role, content: m.content, reasoning: m.reasoning } : { role: m.role, content: m.content });
   return msgs;
 }

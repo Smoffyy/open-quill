@@ -3,6 +3,7 @@ import { roleOf } from './roles.js';
 import { memberContext, languageName } from './memberctx.js';
 import { docsVars } from './modeldocs.js';
 import { summarizeConversation, summaryMessages, oneShotAnswer } from '../llm/index.js';
+import { replayFieldOf } from './kwargs.js';
 import { activePath } from './tree.js';
 import { historyText } from './history.js';
 import { isTextLike, readUploadText, readImageDataUri, imageKind, imageMime } from './uploads.js';
@@ -29,12 +30,13 @@ export function styleTextFor(userId, styleId) {
 export function historyRows(chat, model) {
   const fresh = db.chats.byId(chat.id) || chat;
   const upto = fresh.summary && fresh.summary_upto ? fresh.summary_upto : 0;
+  const replay = !!replayFieldOf(model);
   return activePath(chat.id).map(m => ({
     id: m.id,
     role: m.role,
     pinned: !!m.pinned,
     summarized: !!(upto && m.created_at <= upto && !m.pinned),
-    msg: historyMessage(m, model)
+    msg: historyMessage(m, model, replay)
   }));
 }
 
@@ -59,7 +61,7 @@ function activityText(list) {
   }).join('\n\n');
 }
 
-function historyMessage(m, model) {
+function historyMessage(m, model, replay) {
   let text = historyText(m.content || '').replace(/\n{3,}/g, '\n\n');
   if (m.role === 'assistant' && m.truncated) text = (text.trim() ? text.trimEnd() + '\n\n' : '') + CUT_NOTE;
   if (m.role === 'assistant' && Array.isArray(m.activity) && m.activity.length) {
@@ -84,11 +86,18 @@ function historyMessage(m, model) {
     }
     if (notes.length) text = (text ? text + '\n\n' : '') + notes.join('\n\n');
   }
-  if (!images.length) return { role: m.role, content: text };
+  const thought = replay && m.role === 'assistant' ? reasoningOf(m) : '';
+  const extra = thought ? { reasoning: thought } : {};
+  if (!images.length) return { role: m.role, content: text, ...extra };
   const parts = [];
   if (text) parts.push({ type: 'text', text });
   for (const url of images) parts.push({ type: 'image_url', image_url: { url } });
-  return { role: m.role, content: parts };
+  return { role: m.role, content: parts, ...extra };
+}
+
+function reasoningOf(m) {
+  const segs = Array.isArray(m.reasoning_segs) ? m.reasoning_segs : [];
+  return [m.reasoning, ...segs].map(s => String(s || '').trim()).filter(Boolean).join('\n\n');
 }
 
 const IMAGE_DETAIL_TOKENS = 1024;

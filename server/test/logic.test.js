@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import {
   sanitizeKwargs, kwargDefs, applyKwargs, resolveKwargValues, kwargPayload,
   oneShotKwargPayload, controlOf, defaultValueOf, isBoolPair, coerceKwargValue,
-  isRange, clampToRange, normalizeKwarg, gateOpen, kwargVisible
+  isRange, clampToRange, normalizeKwarg, gateOpen, kwargVisible, replayFieldOf
 } from '../lib/kwargs.js';
 import { parseTextToolCalls, parseArgs, toCall, cutOffOf } from '../tools/index.js';
 import { classifyToolError } from '../lib/toolstats.js';
@@ -45,7 +45,6 @@ import { localOnlyCsp, baseCsp } from '../lib/localonly.js';
 import { safeUrl } from '../lib/safeurl.js';
 import { runQueued } from '../lib/queue.js';
 import { isText } from '../sandbox/ignore.js';
-import { announcedMoreWork } from '../lib/continuation.js';
 import { openFence, seamFor, steerInstruction } from '../lib/steer.js';
 import { createLoopGuard } from '../lib/loopguard.js';
 import { stops, beginTurn, endTurn } from '../lib/ws/live.js';
@@ -326,6 +325,45 @@ test('kwargs: paired child sends only on match', () => {
   assert.equal('preserve_thinking' in off, false);
   const on = applyKwargs(m, { think: 'true' }, false).resolved_kwargs.chat_template_kwargs;
   assert.equal(on.preserve_thinking, true);
+});
+
+test('kwargs: any kwarg can switch on replaying past thinking at the value the admin picks', () => {
+  const think = { id: 'think', name: 'enable_thinking', values: ['false', 'true'], default: 'false' };
+  const paired = { kwargs: [think,
+    { id: 'pres', name: 'preserve_thinking', values: ['false', 'true'], visible: false, parentId: 'think',
+      rules: [{ when: 'true', value: 'true', send: true }] }] };
+  assert.equal(applyKwargs(paired, {}, false).replay_thinking, '', 'an omitted kwarg replays nothing');
+  assert.equal(applyKwargs(paired, { think: 'true' }, false).replay_thinking, 'reasoning_content', 'preserve_thinking defaults to true');
+
+  const clear = { kwargs: [{ id: 'c', name: 'clear_thinking', values: ['false', 'true'], default: 'false', visible: false }] };
+  assert.equal(applyKwargs(clear, {}, false).replay_thinking, 'reasoning_content', 'clear_thinking defaults to false');
+
+  const custom = { kwargs: [{ id: 'k', name: 'keep_reasoning', values: ['off', 'on'], default: 'off', replayWhen: 'on', replayAs: 'reasoning' }] };
+  assert.equal(applyKwargs(custom, {}, false).replay_thinking, '');
+  assert.equal(applyKwargs(custom, { k: 'on' }, false).replay_thinking, 'reasoning');
+
+  const optedOut = { kwargs: [{ id: 'p', name: 'preserve_thinking', values: ['false', 'true'], default: 'true', replayWhen: '' }] };
+  assert.equal(applyKwargs(optedOut, {}, false).replay_thinking, '', 'an explicit blank turns the default off');
+
+  const always = { kwargs: [{ id: 'b', name: 'budget', min: 0, max: 100, default: '50', replayWhen: '*', replayAs: 'thinking' }] };
+  assert.equal(replayFieldOf(always), 'thinking', 'any sent value matches *');
+
+  const unsent = { kwargs: [{ id: 'p', name: 'preserve_thinking', values: ['false', 'true'], default: 'true', visible: false, sendWhenHidden: false }] };
+  assert.equal(replayFieldOf(unsent), '', 'a kwarg that is not sent cannot ask for replay');
+  assert.equal(normalizeKwarg({ name: 'x', replayAs: 'bogus' }).replayAs, 'reasoning_content');
+
+  const msgs = [
+    { role: 'user', content: 'pick one', reasoning: 'ignored' },
+    { role: 'assistant', content: 'Okay', reasoning: 'It is 417.' },
+    { role: 'assistant', content: '', reasoning: 'call it', tool_calls: [{ id: 'c', name: 'x', argsText: '{}' }] }
+  ];
+  const wire = normalizeMessages('openai', msgs, 'reasoning_content');
+  assert.equal('reasoning_content' in wire[0], false);
+  assert.equal(wire[1].reasoning_content, 'It is 417.');
+  assert.equal(wire[2].reasoning_content, 'call it');
+  assert.equal(normalizeMessages('openai', msgs, 'reasoning')[1].reasoning, 'It is 417.');
+  assert.equal(normalizeMessages('ollama', msgs, 'reasoning_content')[1].thinking, 'It is 417.', 'Ollama only reads thinking');
+  assert.equal('reasoning_content' in normalizeMessages('openai', msgs)[1], false, 'nothing is replayed without a field');
 });
 
 test('kwargs: multi-level chains resolve', () => {
@@ -1735,40 +1773,6 @@ test('retireLegacyMark moves the retired legacy set to the weave and nothing els
     assert.equal(retireLegacyMark(v), v, String(v));
   }
 });
-
-// --- continuing a turn the model ended too early -------------------------
-// A step with no tool call ends the turn. When the model announced the next
-// step and then stopped without taking it, that is a stall, not an answer.
-// The detector must be narrow: stopping is always safe, continuing is not.
-
-test('announcedMoreWork spots a turn that stopped mid-plan', () => {
-  assert.equal(announcedMoreWork("I'll create the remaining files now."), true);
-  assert.equal(announcedMoreWork("Now I'll create all the files with real content."), true);
-  assert.equal(announcedMoreWork('Let me view the test file and show the tree.'), true);
-  assert.equal(announcedMoreWork("Created Cargo.toml.\n\nNext I'll add the source files."), true);
-  assert.equal(announcedMoreWork("I'm going to run the tests."), true);
-});
-
-test('announcedMoreWork leaves a finished or hand-back turn alone', () => {
-  assert.equal(announcedMoreWork('All the files are created. Let me know if you want anything else.'), false);
-  assert.equal(announcedMoreWork('Would you like me to add tests?'), false);
-  assert.equal(announcedMoreWork("That's everything you asked for."), false);
-  assert.equal(announcedMoreWork('Done.'), false);
-  assert.equal(announcedMoreWork('The script sums the integers in a file.'), false);
-  assert.equal(announcedMoreWork(''), false);
-  assert.equal(announcedMoreWork(null), false);
-});
-
-test('announcedMoreWork ignores an intent that was already carried out', () => {
-  // Stated up front, then done — the tail is what decides, not the opening line.
-  const s = "I'll create the config file.\n\nAll three files are created and the tests pass.";
-  assert.equal(announcedMoreWork(s), false);
-});
-
-test('announcedMoreWork treats a trailing question as a hand-back whatever precedes it', () => {
-  assert.equal(announcedMoreWork("I'll add the parser next. Should I also wire up the CLI?"), false);
-});
-
 
 // A stop should not leave a build or a test run grinding away until its timeout.
 // The signal handed to bash kills the child the same way the timeout does, and

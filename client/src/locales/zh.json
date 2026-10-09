@@ -2950,5 +2950,11 @@
   "When XTC triggers, every token at or above this probability is removed except the least likely of them, so one sensible choice always remains. 0.1 is standard. Lower thresholds cut more of the obvious options and push the style further, while 0.5 or above rarely finds two candidates to cut and has little effect.": "XTC 触发时，会移除所有概率不低于此值的 token，只保留其中最不可能的一个，因此总会剩下一个合理的选择。0.1 是标准值。阈值越低，被削减的显而易见的选项越多，风格变化也越大；而 0.5 或更高时很少能找到两个可削减的候选，几乎没有效果。",
   "Mirostat replaces Top P, Top K and similar filters with a feedback loop that keeps the text at a steady level of surprise, measured as perplexity. 0 is off, 1 is the original algorithm and 2 is the simpler version most backends recommend. Use it when long replies swing between dull and incoherent. While it is on, the other filtering settings are mostly ignored.": "Mirostat 用一个反馈回路取代 Top P、Top K 等过滤器，让文本保持稳定的意外程度（以困惑度衡量）。0 为关闭，1 是原始算法，2 是大多数后端推荐的简化版本。当长回复在乏味和语无伦次之间摇摆时使用它。开启期间，其他过滤设置基本会被忽略。",
   "The level of surprise Mirostat aims for. Lower values such as 3 give focused, predictable text, and higher values such as 7 or 8 give more varied, creative text. 5 is the usual default.": "Mirostat 追求的意外程度。3 这样的较低值会产生集中、可预测的文字，7 或 8 这样的较高值会产生更多样、更有创意的文字。常用默认值为 5。",
-  "How quickly Mirostat corrects itself when the text drifts from its target. Higher values such as 0.2 react fast but can overshoot and wobble, while lower values such as 0.05 adjust slowly and smoothly. 0.1 is the usual default.": "当文本偏离目标时，Mirostat 自我纠正的速度。0.2 这样的较高值反应快，但可能矫枉过正、来回摆动；0.05 这样的较低值调整缓慢而平稳。常用默认值为 0.1。"
+  "How quickly Mirostat corrects itself when the text drifts from its target. Higher values such as 0.2 react fast but can overshoot and wobble, while lower values such as 0.05 adjust slowly and smoothly. 0.1 is the usual default.": "当文本偏离目标时，Mirostat 自我纠正的速度。0.2 这样的较高值反应快，但可能矫枉过正、来回摆动；0.05 这样的较低值调整缓慢而平稳。常用默认值为 0.1。",
+  "replays thinking": "回传思考",
+  "Replay past thinking": "回传过往思考",
+  "When this kwarg goes out with the chosen value, earlier replies are sent back with their thinking, for chat templates that keep it (preserve_thinking, clear_thinking and the like).": "当此 kwarg 以所选值发送时,之前的回复会连同其思考内容一起回传,适用于会保留思考的聊天模板(preserve_thinking、clear_thinking 等)。",
+  "whenever it is sent": "每次发送时",
+  "when it is {value}": "当值为 {value} 时",
+  "Sent as": "发送字段"
 }

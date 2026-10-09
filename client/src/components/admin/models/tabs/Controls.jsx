@@ -10,7 +10,8 @@ import {
   KWARG_TARGETS, KWARG_CONTROLS, KWARG_TYPES, KWARG_PRESETS,
   blankKwarg, newKwargId, controlOf, defaultValueOf, isBoolPair,
   kwargValuesArr, kwargValuesStr, resolveKwargValues, kwargPayload,
-  isRange, rangeStep, clampToRange, allNumeric
+  isRange, rangeStep, clampToRange, allNumeric,
+  REPLAY_FIELDS, replayWhenOf, replayValuesOf
 } from '../../../../lib/kwargs.js';
 
 const MENU_W = 320;
@@ -76,6 +77,7 @@ function Summary({ def, defs }) {
       {!parent && def.visible !== false && gate && <Badge tone="warn">{t('only when {name} = {value}', { name: nameOf(gate), value: def.showIf.value })}</Badge>}
       {!parent && def.visible !== false && <Badge>{t(CONTROL_TAG[controlOf(def)] || CONTROL_TAG.select)}</Badge>}
       {!!def.adminOnly && <Badge>{t('admins only')}</Badge>}
+      {!!replayWhenOf(def) && <Badge tone="warn">{t('replays thinking')}</Badge>}
       {(def.target || 'chat_template_kwargs') !== 'chat_template_kwargs' && <Badge>{def.target}</Badge>}
       <Badge>{isRange(def) ? `${def.min}…${def.max}` : (kwargValuesStr(def) || t('no values'))}</Badge>
     </span>
@@ -101,6 +103,9 @@ function DefEditor({ def, defs, patch }) {
   const parentValues = parent ? (isRange(parent) ? ['*'] : kwargValuesArr(parent)) : [];
   const rules = Array.isArray(def.rules) ? def.rules : [];
   const blocked = descendants(defs, def.id);
+  const replayWhen = replayWhenOf(def);
+  const replayValues = replayValuesOf(def);
+  if (replayWhen && replayWhen !== '*' && !replayValues.includes(replayWhen)) replayValues.push(replayWhen);
 
   function setValues(raw) {
     setText(raw);
@@ -281,6 +286,23 @@ function DefEditor({ def, defs, patch }) {
           </Rows>
         </>
       )}
+
+      <Rows>
+        <Row label={t('Replay past thinking')}
+          note={t('When this kwarg goes out with the chosen value, earlier replies are sent back with their thinking, for chat templates that keep it (preserve_thinking, clear_thinking and the like).')} wide>
+          <div className="mc-pair">
+            <Select value={replayWhen} label={t('Replay past thinking')}
+              onChange={(v) => patch({ replayWhen: v })}
+              options={[{ value: '', label: t('never') }, { value: '*', label: t('whenever it is sent') },
+                ...replayValues.map(v => ({ value: v, label: t('when it is {value}', { value: v }) }))]} />
+            {!!replayWhen && (
+              <Select value={def.replayAs || 'reasoning_content'} label={t('Sent as')}
+                onChange={(v) => patch({ replayAs: v })}
+                options={REPLAY_FIELDS.map(([v, l]) => ({ value: v, label: l }))} />
+            )}
+          </div>
+        </Row>
+      </Rows>
     </div>
   );
 }

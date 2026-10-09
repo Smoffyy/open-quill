@@ -2950,5 +2950,11 @@
   "When XTC triggers, every token at or above this probability is removed except the least likely of them, so one sensible choice always remains. 0.1 is standard. Lower thresholds cut more of the obvious options and push the style further, while 0.5 or above rarely finds two candidates to cut and has little effect.": "XTC가 작동하면 이 확률 이상인 토큰 중 가장 가능성 낮은 하나를 제외하고 모두 제거하므로, 합리적인 선택지가 항상 하나는 남습니다. 0.1이 표준입니다. 임계값을 낮추면 뻔한 후보가 더 많이 잘리고 문체가 더 크게 바뀌며, 0.5 이상에서는 자를 후보 두 개를 거의 찾지 못해 효과가 거의 없습니다.",
   "Mirostat replaces Top P, Top K and similar filters with a feedback loop that keeps the text at a steady level of surprise, measured as perplexity. 0 is off, 1 is the original algorithm and 2 is the simpler version most backends recommend. Use it when long replies swing between dull and incoherent. While it is on, the other filtering settings are mostly ignored.": "Mirostat는 Top P, Top K 같은 필터 대신, 퍼플렉시티로 측정한 놀라움의 정도를 일정하게 유지하는 피드백 루프를 사용합니다. 0은 꺼짐, 1은 원래 알고리즘, 2는 대부분의 백엔드가 권장하는 단순화된 버전입니다. 긴 답변이 지루함과 횡설수설 사이를 오갈 때 사용하세요. 켜져 있는 동안 다른 필터 설정은 대부분 무시됩니다.",
   "The level of surprise Mirostat aims for. Lower values such as 3 give focused, predictable text, and higher values such as 7 or 8 give more varied, creative text. 5 is the usual default.": "Mirostat가 목표로 하는 놀라움의 정도입니다. 3 같은 낮은 값은 집중되고 예측 가능한 글을, 7이나 8 같은 높은 값은 더 다양하고 창의적인 글을 만듭니다. 5가 일반적인 기본값입니다.",
-  "How quickly Mirostat corrects itself when the text drifts from its target. Higher values such as 0.2 react fast but can overshoot and wobble, while lower values such as 0.05 adjust slowly and smoothly. 0.1 is the usual default.": "텍스트가 목표에서 벗어날 때 Mirostat가 얼마나 빨리 바로잡는지입니다. 0.2 같은 높은 값은 빠르게 반응하지만 지나치게 보정해 흔들릴 수 있고, 0.05 같은 낮은 값은 천천히 부드럽게 조정합니다. 0.1이 일반적인 기본값입니다."
+  "How quickly Mirostat corrects itself when the text drifts from its target. Higher values such as 0.2 react fast but can overshoot and wobble, while lower values such as 0.05 adjust slowly and smoothly. 0.1 is the usual default.": "텍스트가 목표에서 벗어날 때 Mirostat가 얼마나 빨리 바로잡는지입니다. 0.2 같은 높은 값은 빠르게 반응하지만 지나치게 보정해 흔들릴 수 있고, 0.05 같은 낮은 값은 천천히 부드럽게 조정합니다. 0.1이 일반적인 기본값입니다.",
+  "replays thinking": "사고 재전송",
+  "Replay past thinking": "이전 사고 재전송",
+  "When this kwarg goes out with the chosen value, earlier replies are sent back with their thinking, for chat templates that keep it (preserve_thinking, clear_thinking and the like).": "이 kwarg가 선택한 값으로 전송되면 이전 답변이 사고 내용과 함께 다시 전송됩니다. 사고를 유지하는 채팅 템플릿용입니다(preserve_thinking, clear_thinking 등).",
+  "whenever it is sent": "전송될 때마다",
+  "when it is {value}": "{value}일 때",
+  "Sent as": "전송 필드"
 }

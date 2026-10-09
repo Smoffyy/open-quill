@@ -1,7 +1,8 @@
 import { db, uid, now, getSetting } from '../../db.js';
 import { buildMessages, streamCompletion, generateTitle, resolveTitleModel, stripThink, canPrefill, refusePrefill, modelProvider } from '../../llm/index.js';
+import { replayFieldOf } from '../kwargs.js';
 import { toCall, cutOffOf, livePreview, resolveToolName, SANDBOX_READONLY } from '../../tools/index.js';
-import { announcedMoreWork, MAX_CONTINUES, CONTINUE_INSTRUCTION, MAX_SILENT_RETRIES, SILENT_INSTRUCTION } from '../continuation.js';
+import { MAX_SILENT_RETRIES, SILENT_INSTRUCTION } from '../continuation.js';
 import { resumeTurn, createStitcher, isPrefillRefusal, fileStep, fileRest, joinFile, STOPPED_FILE, STOPPED_CALL } from '../resume.js';
 import * as websearch from '../websearch.js';
 import * as sandbox from '../../sandbox.js';
@@ -54,6 +55,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   }
   const flags = toolState(chat, model, { sandboxOn, webSearchOn, canAsk: !!state?.interactive, plan });
   const promptOpts = { styleText, callMode, client };
+  const keepThinking = !!replayFieldOf(model);
   await ensureChatSidecars(chat.id);
   const history = chatHistory(chat, model, resume ? resume.id : null);
   const chatRow = db.chats.byId(chat.id) || chat;
@@ -281,7 +283,6 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   let maxSteps = toolsOn ? stepCap : 1;
   const callFails = new Map();
   const loopGuard = createLoopGuard();
-  let continues = 0;
   let silentRetries = 0;
   let stepController = null;
   let lastFinish = '';
@@ -732,17 +733,6 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           continue;
         }
         if (aborted && toolsOn && partials.size) await saveStopped(partials);
-        // The model announced the next step and then stopped without taking it.
-        // Nudge it once or twice rather than making the user type "keep going".
-        // No maxSteps bump: this spends the operator's existing step budget.
-        if (!aborted && !stopRequested() && toolsOn && continues < MAX_CONTINUES && step + 1 < maxSteps && announcedMoreWork(stepText)) {
-          continues++;
-          const written = settle(stripThink(model, stepText));
-          const seam = seamFor(content);
-          if (seam) { content += seam; safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: seam })); }
-          inTurn = [...inTurn, { role: 'assistant', content: written }, { role: 'user', content: CONTINUE_INSTRUCTION }];
-          continue;
-        }
         if (!aborted && !stopRequested() && toolsOn && !stepText.trim() && silentRetries < MAX_SILENT_RETRIES && step + 1 < maxSteps) {
           silentRetries++;
           inTurn = [...inTurn, { role: 'user', content: SILENT_INSTRUCTION }];
@@ -828,7 +818,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       const said = settle(stripThink(model, stepText));
       inTurn = [
         ...inTurn,
-        { role: 'assistant', content: said, tool_calls: toolCalls.map(c => ({ id: c.id, name: c.name, argsText: c.argsText })), ...(toolBlocks?.length ? { blocks: toolBlocks } : {}) },
+        { role: 'assistant', content: said, tool_calls: toolCalls.map(c => ({ id: c.id, name: c.name, argsText: c.argsText })), ...(toolBlocks?.length ? { blocks: toolBlocks } : {}), ...(keepThinking && stepReasoning.trim() ? { reasoning: stepReasoning.trim() } : {}) },
         ...toolMsgs
       ];
       if (loopGuard.note({ calls: toolCalls, ok: stepOk, failed: stepFailed, failKinds: stepFailKinds })) {

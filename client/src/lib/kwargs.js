@@ -17,6 +17,24 @@ export const KWARG_TYPES = [
   ['string', 'String']
 ];
 
+export const REPLAY_FIELDS = [
+  ['reasoning_content', 'reasoning_content (llama.cpp, vLLM, LM Studio)'],
+  ['reasoning', 'reasoning'],
+  ['thinking', 'thinking']
+];
+const REPLAY_DEFAULTS = { __proto__: null, preserve_thinking: 'true', clear_thinking: 'false' };
+
+export function replayWhenOf(def) {
+  if (def?.replayWhen === undefined) return REPLAY_DEFAULTS[String(def?.name || '').trim()] || '';
+  return String(def.replayWhen || '');
+}
+
+export function replayValuesOf(def) {
+  if (!def || isRange(def)) return [];
+  if (def.parentId) return [...new Set((Array.isArray(def.rules) ? def.rules : []).filter(r => r.send !== false && r.value).map(r => String(r.value)))];
+  return kwargValuesArr(def);
+}
+
 const RESERVED_BODY_KEYS = new Set(['model', 'messages', 'stream', 'stream_options', 'tools', 'tool_choice', 'chat_template_kwargs', 'extra_body']);
 
 export const isBoolPair = (values) =>
@@ -192,7 +210,8 @@ export function blankKwarg() {
     values: ['false', 'true'], default: 'false', control: 'auto',
     target: 'chat_template_kwargs', type: 'auto',
     visible: true, adminOnly: false, sendWhenHidden: true, parentId: '', showIf: null,
-    min: null, max: null, step: null, rules: []
+    min: null, max: null, step: null, rules: [],
+    replayWhen: '', replayAs: 'reasoning_content'
   };
 }
 
@@ -231,10 +250,18 @@ export const KWARG_PRESETS = [
   },
   {
     key: 'preserve_thinking', label: 'preserve_thinking (paired)',
-    note: 'Hidden kwarg meant to follow a thinking toggle.',
+    note: 'Hidden kwarg meant to follow a thinking toggle. Replays past thinking when true.',
     make: () => ({
       ...blankKwarg(), name: 'preserve_thinking', label: 'Preserve thinking',
-      description: '', values: ['false', 'true'], default: 'false', visible: false
+      description: '', values: ['false', 'true'], default: 'false', visible: false, replayWhen: 'true'
+    })
+  },
+  {
+    key: 'clear_thinking', label: 'clear_thinking (GLM)',
+    note: 'Hidden kwarg that keeps past thinking when false.',
+    make: () => ({
+      ...blankKwarg(), name: 'clear_thinking', label: 'Clear thinking',
+      description: '', values: ['false', 'true'], default: 'false', visible: false, replayWhen: 'false'
     })
   }
 ];

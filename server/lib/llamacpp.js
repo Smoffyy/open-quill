@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { resolveProvider, providerSpec } from './providers.js';
-import { wireToolCalls } from '../llm/wire.js';
+import { wireToolCalls, requestKwargs } from '../llm/wire.js';
+import { replayFieldOf } from './kwargs.js';
 
 const CACHE_MS = 5 * 60 * 1000;
 const infoCache = new Map();
@@ -177,7 +178,7 @@ export function learnImageCost(model, images, measured) {
   imageCostCache.set(String(model?.id || model?.internal_name || ''), per);
 }
 
-function wireFor(messages) {
+function wireFor(messages, replayAs) {
   return messages.map(m => {
     const out = { role: m.role, content: textOf(m.content) };
     // The same OpenAI shape the completion request uses. Handing /apply-template
@@ -185,6 +186,7 @@ function wireFor(messages) {
     if (Array.isArray(m.tool_calls) && m.tool_calls.length) out.tool_calls = wireToolCalls('openai', m.tool_calls);
     if (m.tool_call_id) out.tool_call_id = m.tool_call_id;
     if (m.name) out.name = m.name;
+    if (replayAs && m.role === 'assistant' && m.reasoning) out[replayAs] = m.reasoning;
     return out;
   });
 }
@@ -192,9 +194,10 @@ function wireFor(messages) {
 export async function llamaPromptTokens(model, messages, tools) {
   const ep = endpointFor(model);
   if (!ep) return 0;
-  const wire = wireFor(messages);
+  const wire = wireFor(messages, replayFieldOf(model));
   const prefill = !!(messages.length && messages[messages.length - 1].prefill);
-  const body = { messages: wire, add_generation_prompt: !prefill };
+  const kwargs = requestKwargs(model).chat_template_kwargs;
+  const body = { messages: wire, add_generation_prompt: !prefill, ...(kwargs ? { chat_template_kwargs: kwargs } : {}) };
   if (Array.isArray(tools) && tools.length) { body.tools = tools; body.tool_choice = 'auto'; }
   const sig = createHash('sha1').update(ep.root + '|' + ep.name + '|' + JSON.stringify(body)).digest('hex');
   const images = countImages(messages) * imageTokenCost(model);

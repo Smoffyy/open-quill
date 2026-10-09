@@ -3,7 +3,7 @@ import { samplingParams, ollamaOptions } from './sampling.js';
 import { makeEmitter } from './emitter.js';
 import { makeToolResolver } from '../tools/aliases.js';
 import { normalizeMessages, requestKwargs } from './wire.js';
-import { stripNestedKwargs } from '../lib/kwargs.js';
+import { stripNestedKwargs, replayFieldOf } from '../lib/kwargs.js';
 import { streamAnthropic } from './anthropic.js';
 import { memoFor, postWithRecovery, upstreamMessage } from './compat.js';
 import { queueKey, inLine } from './slots.js';
@@ -72,7 +72,7 @@ async function streamDirect({ model, messages, tools, signal, onEvent }) {
   const { spec, base, key } = modelProvider(model);
   if (spec.protocol === 'anthropic') return streamAnthropic({ model, spec, base, key, messages, tools, signal, onEvent });
   const hasTools = Array.isArray(tools) && tools.length > 0;
-  const wire = normalizeMessages(spec.protocol, messages);
+  const wire = normalizeMessages(spec.protocol, messages, replayFieldOf(model));
   const fill = prefillWire(spec, messages, wire);
   const pending = new Map();
   let callSeq = 0;

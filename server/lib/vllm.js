@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { resolveProvider, providerSpec } from './providers.js';
-import { normalizeMessages } from '../llm/wire.js';
+import { normalizeMessages, requestKwargs } from '../llm/wire.js';
+import { replayFieldOf } from './kwargs.js';
 
 const tokenCache = new Map();
 const TOKEN_CACHE_MAX = 400;
@@ -37,10 +38,12 @@ export async function vllmPromptTokens(model, messages, tools) {
   const ep = endpointFor(model);
   if (!ep) return 0;
   const prefill = !!(messages.length && messages[messages.length - 1].prefill);
+  const kwargs = requestKwargs(model).chat_template_kwargs;
   const body = {
-    model: ep.name, messages: normalizeMessages('openai', messages),
+    model: ep.name, messages: normalizeMessages('openai', messages, replayFieldOf(model)),
     add_generation_prompt: !prefill, ...(prefill ? { continue_final_message: true } : {}),
-    ...(Array.isArray(tools) && tools.length ? { tools } : {})
+    ...(Array.isArray(tools) && tools.length ? { tools } : {}),
+    ...(kwargs ? { chat_template_kwargs: kwargs } : {})
   };
   const raw = JSON.stringify(body);
   const sig = createHash('sha1').update(ep.root + '|' + raw).digest('hex');
