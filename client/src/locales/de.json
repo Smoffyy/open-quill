@@ -40,7 +40,6 @@
   "A model binds one provider model id to a system prompt, a set of abilities, and a price. Members pick from these in the chat.": "Ein Modell verknüpft eine Anbieter-Modell-ID mit einem System-Prompt, einem Satz von Fähigkeiten und einem Preis. Mitglieder wählen im Chat daraus aus.",
   "A model id, or an http address": "Eine Modell-ID oder eine HTTP-Adresse",
   "A persona bundles a model and chat instructions. Apply one to set them both for the current chat in one click.": "Eine Persona bündelt ein Modell und Chat-Anweisungen. Wenden Sie eine an, um beide mit einem Klick für den aktuellen Chat festzulegen.",
-  "A plain field beside model and messages. Use this for anything the server reads directly, such as thinking_budget_tokens on llama.cpp.": "Ein einfaches Feld neben Modell und Nachrichten. Nutzen Sie es für alles, was der Server direkt liest, etwa thinking_budget_tokens bei llama.cpp.",
   "A rail down the right edge with one mark per turn. Click a mark to jump.": "Eine Leiste am rechten Rand mit einer Markierung pro Beitrag. Klicken Sie auf eine Markierung, um zu springen.",
   "A remote URL needs the origin lock in Network turned off.": "Eine externe URL erfordert, dass die Origin-Sperre unter Netzwerk deaktiviert ist.",
   "A sample exchange, so messages and their text can be styled with no chat open.": "Ein Beispielaustausch, damit Nachrichten und ihr Text gestaltet werden können, ohne dass ein Chat geöffnet ist.",
@@ -2956,5 +2955,6 @@
   "When this kwarg goes out with the chosen value, earlier replies are sent back with their thinking, for chat templates that keep it (preserve_thinking, clear_thinking and the like).": "Wenn dieses kwarg mit dem gewählten Wert gesendet wird, werden frühere Antworten mit ihrem Denken zurückgeschickt, für Chat-Vorlagen, die es behalten (preserve_thinking, clear_thinking und Ähnliches).",
   "whenever it is sent": "immer wenn es gesendet wird",
   "when it is {value}": "wenn es {value} ist",
-  "Sent as": "Gesendet als"
+  "Sent as": "Gesendet als",
+  "A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.": "Ein einfaches Feld neben Modell und Nachrichten. Nutzen Sie es für alles, was der Server direkt liest, etwa reasoning_budget_tokens bei llama.cpp."
 }

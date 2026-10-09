@@ -122,15 +122,16 @@ test('an unresolvable or absent gate leaves the kwarg visible', () => {
 });
 
 test('the thinking budget preset matches the shape llama.cpp expects', () => {
-  const p = KWARG_PRESETS.find(x => x.key === 'thinking_budget_tokens').make();
-  assert.equal(p.name, 'thinking_budget_tokens');
+  assert.equal(KWARG_PRESETS.some(x => x.key === 'thinking_budget_tokens'), false);
+  const p = KWARG_PRESETS.find(x => x.key === 'reasoning_budget_tokens').make();
+  assert.equal(p.name, 'reasoning_budget_tokens');
   assert.equal(p.target, 'body', 'top level, not nested under extra_body');
   assert.equal(p.type, 'number');
-  assert.deepEqual([p.min, p.max, p.step, p.default], [1024, 8192, 1024, '1024']);
-  assert.equal(defaultValueOfKwarg(p), '1024');
+  assert.deepEqual([p.min, p.max, p.step, p.default], [512, 16384, 512, '4096']);
+  assert.equal(defaultValueOfKwarg(p), '4096');
   assert.equal(controlOfKwarg(p), 'range');
   const out = kwargPayload([p], resolveKwargs([p], { [p.id]: '5000' }, false));
-  assert.equal(out.thinking_budget_tokens, 5120, 'snapped to the 1024 grid');
+  assert.equal(out.reasoning_budget_tokens, 5120, 'snapped to the 512 grid');
   assert.equal('extra_body' in out, false);
 });
 

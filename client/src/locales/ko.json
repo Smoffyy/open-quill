@@ -40,7 +40,6 @@
   "A model binds one provider model id to a system prompt, a set of abilities, and a price. Members pick from these in the chat.": "모델은 제공업체의 모델 ID 하나를 시스템 프롬프트, 능력 집합, 가격과 묶습니다. 구성원은 채팅에서 이 중 하나를 선택합니다.",
   "A model id, or an http address": "모델 ID 또는 http 주소",
   "A persona bundles a model and chat instructions. Apply one to set them both for the current chat in one click.": "페르소나는 모델과 채팅 지침을 함께 묶습니다. 하나를 적용하면 클릭 한 번으로 현재 채팅에 둘 다 설정됩니다.",
-  "A plain field beside model and messages. Use this for anything the server reads directly, such as thinking_budget_tokens on llama.cpp.": "모델과 메시지 옆에 있는 일반 필드입니다. llama.cpp의 thinking_budget_tokens처럼 서버가 직접 읽는 값에 사용하세요.",
   "A rail down the right edge with one mark per turn. Click a mark to jump.": "오른쪽 가장자리를 따라 각 턴마다 표시가 있는 레일입니다. 표시를 클릭하면 해당 위치로 이동합니다.",
   "A remote URL needs the origin lock in Network turned off.": "원격 URL을 사용하려면 네트워크의 출처 잠금을 꺼야 합니다.",
   "A sample exchange, so messages and their text can be styled with no chat open.": "채팅을 열지 않고도 메시지와 텍스트 스타일을 지정할 수 있도록 만든 예시 대화입니다.",
@@ -2956,5 +2955,6 @@
   "When this kwarg goes out with the chosen value, earlier replies are sent back with their thinking, for chat templates that keep it (preserve_thinking, clear_thinking and the like).": "이 kwarg가 선택한 값으로 전송되면 이전 답변이 사고 내용과 함께 다시 전송됩니다. 사고를 유지하는 채팅 템플릿용입니다(preserve_thinking, clear_thinking 등).",
   "whenever it is sent": "전송될 때마다",
   "when it is {value}": "{value}일 때",
-  "Sent as": "전송 필드"
+  "Sent as": "전송 필드",
+  "A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.": "모델과 메시지 옆에 있는 일반 필드입니다. llama.cpp의 reasoning_budget_tokens처럼 서버가 직접 읽는 값에 사용하세요."
 }

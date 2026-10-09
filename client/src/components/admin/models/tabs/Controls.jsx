@@ -20,7 +20,7 @@ const MENU_H = 300;
 const TARGET_NOTE = {
   __proto__: null,
   chat_template_kwargs: tk('Nested under chat_template_kwargs, which is where a chat template reads values it consumes itself, such as enable_thinking.'),
-  body: tk('A plain field beside model and messages. Use this for anything the server reads directly, such as thinking_budget_tokens on llama.cpp.'),
+  body: tk('A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.'),
   extra_body: tk('Nested under a literal extra_body object. Only gateways that unwrap it will see it: llama.cpp and vLLM ignore it, and the OpenAI SDKs flatten extra_body before sending, so match them with the top level instead.')
 };
 

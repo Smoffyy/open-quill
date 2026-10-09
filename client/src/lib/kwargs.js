@@ -239,12 +239,12 @@ export const KWARG_PRESETS = [
     })
   },
   {
-    key: 'thinking_budget_tokens', label: 'thinking_budget_tokens (number slider)',
-    note: 'A draggable slider between a minimum and a maximum you set.',
+    key: 'reasoning_budget_tokens', label: 'reasoning_budget_tokens (number slider)',
+    note: 'Caps how many tokens the model may spend thinking. Sent at the top level of the request, where llama.cpp reads it.',
     make: () => ({
-      ...blankKwarg(), name: 'thinking_budget_tokens', label: 'Thinking budget',
+      ...blankKwarg(), name: 'reasoning_budget_tokens', label: 'Thinking budget',
       description: 'How many tokens the model may spend thinking',
-      values: [], default: '1024', min: 1024, max: 8192, step: 1024,
+      values: [], default: '4096', min: 512, max: 16384, step: 512,
       target: 'body', type: 'number'
     })
   },

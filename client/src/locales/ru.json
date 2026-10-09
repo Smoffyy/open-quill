@@ -40,7 +40,6 @@
   "A model binds one provider model id to a system prompt, a set of abilities, and a price. Members pick from these in the chat.": "Модель связывает идентификатор модели провайдера с системным промптом, набором возможностей и ценой. Участники выбирают из них в чате.",
   "A model id, or an http address": "Идентификатор модели или http-адрес",
   "A persona bundles a model and chat instructions. Apply one to set them both for the current chat in one click.": "Персона объединяет модель и инструкции чата. Примените её, чтобы задать и то, и другое для текущего чата в один клик.",
-  "A plain field beside model and messages. Use this for anything the server reads directly, such as thinking_budget_tokens on llama.cpp.": "Обычное поле рядом с моделью и сообщениями. Используйте его для всего, что сервер читает напрямую, например thinking_budget_tokens в llama.cpp.",
   "A rail down the right edge with one mark per turn. Click a mark to jump.": "Полоса вдоль правого края с отметкой на каждую реплику. Нажмите на отметку, чтобы перейти к ней.",
   "A remote URL needs the origin lock in Network turned off.": "Для удалённого URL нужно отключить блокировку источника в разделе «Сеть».",
   "A sample exchange, so messages and their text can be styled with no chat open.": "Пример диалога, чтобы можно было оформлять сообщения и их текст без открытого чата.",
@@ -2956,5 +2955,6 @@
   "When this kwarg goes out with the chosen value, earlier replies are sent back with their thinking, for chat templates that keep it (preserve_thinking, clear_thinking and the like).": "Когда этот kwarg отправляется с выбранным значением, предыдущие ответы отправляются обратно вместе с рассуждениями, для шаблонов чата, которые их сохраняют (preserve_thinking, clear_thinking и подобные).",
   "whenever it is sent": "всякий раз при отправке",
   "when it is {value}": "когда равно {value}",
-  "Sent as": "Отправлять как"
+  "Sent as": "Отправлять как",
+  "A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.": "Обычное поле рядом с моделью и сообщениями. Используйте его для всего, что сервер читает напрямую, например reasoning_budget_tokens в llama.cpp."
 }

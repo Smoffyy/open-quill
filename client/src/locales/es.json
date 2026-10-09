@@ -16,7 +16,6 @@
   "A header button showing the whole conversation, every branch included.": "Un botón en la cabecera que muestra toda la conversación, con todas sus ramas.",
   "A header is saved. Type here to replace it.": "Hay una cabecera guardada. Escribe aquí para reemplazarla.",
   "A persona bundles a model and chat instructions. Apply one to set them both for the current chat in one click.": "Un perfil agrupa un modelo y unas instrucciones de chat. Aplica uno para establecer ambos en el chat actual con un solo clic.",
-  "A plain field beside model and messages. Use this for anything the server reads directly, such as thinking_budget_tokens on llama.cpp.": "Un campo simple junto a model y messages. Úsalo para cualquier cosa que el servidor lea directamente, como thinking_budget_tokens en llama.cpp.",
   "A rail down the right edge with one mark per turn. Click a mark to jump.": "Un riel en el borde derecho con una marca por turno. Haz clic en una marca para saltar.",
   "A slider through low, medium, and high.": "Un deslizador con low, medium y high.",
   "Add MCP servers of your own. Their tools reach every model you use that has tool calling, and nobody else on this workspace can see them. Local command servers are added by an admin.": "Añade tus propios servidores MCP. Sus herramientas llegan a todos los modelos que uses con llamada a herramientas, y nadie más en este espacio de trabajo puede verlos. Los servidores de comando local los añade un administrador.",
@@ -2956,5 +2955,6 @@
   "When this kwarg goes out with the chosen value, earlier replies are sent back with their thinking, for chat templates that keep it (preserve_thinking, clear_thinking and the like).": "Cuando este kwarg se envía con el valor elegido, las respuestas anteriores se reenvían con su razonamiento, para las plantillas de chat que lo conservan (preserve_thinking, clear_thinking y similares).",
   "whenever it is sent": "siempre que se envíe",
   "when it is {value}": "cuando sea {value}",
-  "Sent as": "Enviado como"
+  "Sent as": "Enviado como",
+  "A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.": "Un campo simple junto a model y messages. Úsalo para cualquier cosa que el servidor lea directamente, como reasoning_budget_tokens en llama.cpp."
 }

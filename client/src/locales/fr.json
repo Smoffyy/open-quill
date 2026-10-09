@@ -16,7 +16,6 @@
   "A header button showing the whole conversation, every branch included.": "Un bouton d'en-tête qui montre toute la conversation, chaque branche comprise.",
   "A header is saved. Type here to replace it.": "Un en-tête est enregistré. Saisissez ici pour le remplacer.",
   "A persona bundles a model and chat instructions. Apply one to set them both for the current chat in one click.": "Un profil regroupe un modèle et des instructions de conversation. En appliquer un définit les deux d'un seul clic pour la conversation en cours.",
-  "A plain field beside model and messages. Use this for anything the server reads directly, such as thinking_budget_tokens on llama.cpp.": "Un champ simple à côté de model et messages. À utiliser pour tout ce que le serveur lit directement, comme thinking_budget_tokens sur llama.cpp.",
   "A rail down the right edge with one mark per turn. Click a mark to jump.": "Un rail sur le bord droit avec une marque par tour. Cliquez sur une marque pour y aller.",
   "A slider through low, medium, and high.": "Un curseur parcourant faible, moyen et élevé.",
   "Add MCP servers of your own. Their tools reach every model you use that has tool calling, and nobody else on this workspace can see them. Local command servers are added by an admin.": "Ajoutez vos propres serveurs MCP. Leurs outils atteignent tous les modèles que vous utilisez avec appel d'outils, et personne d'autre dans cet espace de travail ne les voit. Les serveurs en commande locale sont ajoutés par un administrateur.",
@@ -2956,5 +2955,6 @@
   "When this kwarg goes out with the chosen value, earlier replies are sent back with their thinking, for chat templates that keep it (preserve_thinking, clear_thinking and the like).": "Quand ce kwarg part avec la valeur choisie, les réponses précédentes sont renvoyées avec leur réflexion, pour les modèles de chat qui la conservent (preserve_thinking, clear_thinking et similaires).",
   "whenever it is sent": "dès qu'il est envoyé",
   "when it is {value}": "quand il vaut {value}",
-  "Sent as": "Envoyé comme"
+  "Sent as": "Envoyé comme",
+  "A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.": "Un champ simple à côté de model et messages. À utiliser pour tout ce que le serveur lit directement, comme reasoning_budget_tokens sur llama.cpp."
 }

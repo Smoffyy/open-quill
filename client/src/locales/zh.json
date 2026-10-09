@@ -16,7 +16,6 @@
   "A header button showing the whole conversation, every branch included.": "标题栏中的按钮，显示整场对话，含每一条分支。",
   "A header is saved. Type here to replace it.": "已保存一个请求头。在此输入以替换它。",
   "A persona bundles a model and chat instructions. Apply one to set them both for the current chat in one click.": "角色把一个模型和一组对话指令打包在一起。应用后可一键为当前对话同时设定两者。",
-  "A plain field beside model and messages. Use this for anything the server reads directly, such as thinking_budget_tokens on llama.cpp.": "与 model 和 messages 并列的普通字段。适用于服务器直接读取的任何参数，例如 llama.cpp 上的 thinking_budget_tokens。",
   "A rail down the right edge with one mark per turn. Click a mark to jump.": "右侧边缘的导航条，每轮对话一个标记。点击标记即可跳转。",
   "A slider through low, medium, and high.": "在低、中、高之间滑动的滑块。",
   "Add MCP servers of your own. Their tools reach every model you use that has tool calling, and nobody else on this workspace can see them. Local command servers are added by an admin.": "添加你自己的 MCP 服务器。它们的工具会提供给你使用的所有支持工具调用的模型，工作区中的其他人看不到它们。本地命令服务器由管理员添加。",
@@ -2956,5 +2955,6 @@
   "When this kwarg goes out with the chosen value, earlier replies are sent back with their thinking, for chat templates that keep it (preserve_thinking, clear_thinking and the like).": "当此 kwarg 以所选值发送时,之前的回复会连同其思考内容一起回传,适用于会保留思考的聊天模板(preserve_thinking、clear_thinking 等)。",
   "whenever it is sent": "每次发送时",
   "when it is {value}": "当值为 {value} 时",
-  "Sent as": "发送字段"
+  "Sent as": "发送字段",
+  "A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.": "与 model 和 messages 并列的普通字段。适用于服务器直接读取的任何参数，例如 llama.cpp 上的 reasoning_budget_tokens。"
 }

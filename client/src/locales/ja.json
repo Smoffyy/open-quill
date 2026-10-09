@@ -40,7 +40,6 @@
   "A model binds one provider model id to a system prompt, a set of abilities, and a price. Members pick from these in the chat.": "モデルは1つのプロバイダーのモデルIDを、システムプロンプト、能力の組み合わせ、価格と結び付けたものです。メンバーはチャット内でこれらから選択します。",
   "A model id, or an http address": "モデルID、またはhttpアドレス",
   "A persona bundles a model and chat instructions. Apply one to set them both for the current chat in one click.": "ペルソナはモデルとチャット指示をひとまとめにしたものです。適用すると、現在のチャットに両方をワンクリックで設定できます。",
-  "A plain field beside model and messages. Use this for anything the server reads directly, such as thinking_budget_tokens on llama.cpp.": "モデルやメッセージと並ぶ単純なフィールドです。llama.cppのthinking_budget_tokensのように、サーバーが直接読み取る値に使用します。",
   "A rail down the right edge with one mark per turn. Click a mark to jump.": "右端に沿って表示される、やり取りごとに1つのマークが付くレールです。マークをクリックするとそこへ移動します。",
   "A remote URL needs the origin lock in Network turned off.": "リモートURLを使うには、ネットワーク設定のオリジンロックをオフにする必要があります。",
   "A sample exchange, so messages and their text can be styled with no chat open.": "チャットを開かなくてもメッセージとそのテキストのスタイルを確認できる、サンプルのやり取りです。",
@@ -2956,5 +2955,6 @@
   "When this kwarg goes out with the chosen value, earlier replies are sent back with their thinking, for chat templates that keep it (preserve_thinking, clear_thinking and the like).": "この kwarg が選択した値で送信されると、以前の返信が思考とともに送り返されます。思考を保持するチャットテンプレート向けです(preserve_thinking、clear_thinking など)。",
   "whenever it is sent": "送信されるたび",
   "when it is {value}": "{value} のとき",
-  "Sent as": "送信フィールド"
+  "Sent as": "送信フィールド",
+  "A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.": "モデルやメッセージと並ぶ単純なフィールドです。llama.cppのreasoning_budget_tokensのように、サーバーが直接読み取る値に使用します。"
 }
