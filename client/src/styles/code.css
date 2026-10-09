@@ -367,7 +367,7 @@ a.cx-hbtn { text-decoration: none; }
 }
 .cx-mi-tag svg { width: 11px; height: 11px; }
 .cx-kwargs { display: flex; flex-direction: column; gap: 2px; padding: 0 0 2px; }
-.cx-kwargs .toggle-row, .cx-kwargs .kw-row, .cx-kwargs .kw-static, .cx-kwargs .kw-range { padding: 4px 8px; border-radius: 6px; }
+.cx-kwargs .toggle-row, .cx-kwargs .kw-row, .cx-kwargs .kw-static { padding: 4px 8px; border-radius: 6px; }
 .cx-kwargs .effort-row { padding: 6px 8px; }
 .cx-kwargs .toggle-row:hover { background: var(--cx-hover); }
 .cx-menu .cx-kwargs .mo-name { font-size: 13px; line-height: 19px; font-weight: 400; color: var(--pop-text, var(--text)); }

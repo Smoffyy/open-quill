@@ -72,6 +72,25 @@ export function clampToRange(def, value) {
   return d ? Number(n.toFixed(d)) : Math.round(n);
 }
 
+const MAX_RANGE_STEPS = 400;
+
+export function rangeSteps(def) {
+  const min = Number(def.min), max = Number(def.max), step = rangeStep(def);
+  const count = Math.floor((max - min) / step);
+  const stride = Math.max(1, Math.ceil(count / MAX_RANGE_STEPS));
+  const out = [];
+  for (let i = 0; i <= count; i += stride) out.push(String(clampToRange(def, min + i * step)));
+  out.push(String(max));
+  return [...new Set(out)];
+}
+
+export function nearestStep(steps, value) {
+  const n = Number(value);
+  let best = 0;
+  steps.forEach((s, i) => { if (Math.abs(Number(s) - n) < Math.abs(Number(steps[best]) - n)) best = i; });
+  return best;
+}
+
 // "300" reads as a number; "low" does not. Used by the editor to decide whether a
 // range slider is even offered for what the admin has typed.
 export const allNumeric = (values) =>
@@ -244,7 +263,7 @@ export const KWARG_PRESETS = [
     make: () => ({
       ...blankKwarg(), name: 'reasoning_budget_tokens', label: 'Thinking budget',
       description: 'How many tokens the model may spend thinking',
-      values: [], default: '4096', min: 512, max: 16384, step: 512,
+      values: [], default: '4096', min: 1024, max: 16384, step: 1024,
       target: 'body', type: 'number'
     })
   },

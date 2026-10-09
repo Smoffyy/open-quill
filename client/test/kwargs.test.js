@@ -13,7 +13,9 @@ import {
   gateSourceIds,
   KWARG_PRESETS,
   replayWhenOf,
-  replayValuesOf
+  replayValuesOf,
+  rangeSteps,
+  nearestStep
 } from '../src/lib/kwargs.js';
 
 // --- kwarg number ranges ---------------------------------------------------
@@ -127,11 +129,11 @@ test('the thinking budget preset matches the shape llama.cpp expects', () => {
   assert.equal(p.name, 'reasoning_budget_tokens');
   assert.equal(p.target, 'body', 'top level, not nested under extra_body');
   assert.equal(p.type, 'number');
-  assert.deepEqual([p.min, p.max, p.step, p.default], [512, 16384, 512, '4096']);
+  assert.deepEqual([p.min, p.max, p.step, p.default], [1024, 16384, 1024, '4096']);
   assert.equal(defaultValueOfKwarg(p), '4096');
   assert.equal(controlOfKwarg(p), 'range');
   const out = kwargPayload([p], resolveKwargs([p], { [p.id]: '5000' }, false));
-  assert.equal(out.reasoning_budget_tokens, 5120, 'snapped to the 512 grid');
+  assert.equal(out.reasoning_budget_tokens, 5120, 'snapped to the 1024 grid');
   assert.equal('extra_body' in out, false);
 });
 
@@ -146,4 +148,17 @@ test('replay defaults match the server and an explicit blank opts out', () => {
   assert.deepEqual(replayValuesOf({ min: 0, max: 10 }), []);
   assert.equal(KWARG_PRESETS.find(p => p.key === 'preserve_thinking').make().replayWhen, 'true');
   assert.equal(KWARG_PRESETS.find(p => p.key === 'clear_thinking').make().replayWhen, 'false');
+});
+
+test('a range becomes the step list the effort slider walks', () => {
+  const budget = { min: 512, max: 16384, step: 512 };
+  const steps = rangeSteps(budget);
+  assert.equal(steps.length, 32);
+  assert.deepEqual([steps[0], steps[1], steps[steps.length - 1]], ['512', '1024', '16384']);
+  assert.deepEqual(rangeSteps({ min: 0, max: 10, step: 3 }), ['0', '3', '6', '9', '10'], 'the max stays reachable off the grid');
+  assert.deepEqual(rangeSteps({ min: 0, max: 1, step: 0.25 }), ['0', '0.25', '0.5', '0.75', '1']);
+  assert.ok(rangeSteps({ min: 0, max: 100000, step: 1 }).length <= 402, 'a fine range is thinned so the slider stays usable');
+  assert.equal(nearestStep(steps, '4096'), 7);
+  assert.equal(nearestStep(steps, 5000), 9);
+  assert.equal(nearestStep(steps, 99999), 31);
 });

@@ -6,7 +6,7 @@ import { t } from '../../i18n.jsx';
 import { Switch } from '../ui/controls.jsx';
 import { clampPx, overshoot, stretchFor, squashFor, stretchOrigin, slideFor, DRAG_SLOP } from '../../lib/dragsteps.js';
 import { paintCells, fadeTrail, stampTrail, headColumn, CELL, CELL_FPS, CELL_SPEED } from '../../lib/cellfield.js';
-import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues, isRange, clampToRange, rangeStep, kwargVisible, gateSourceIds } from '../../lib/kwargs.js';
+import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues, isRange, clampToRange, rangeSteps, nearestStep, kwargVisible, gateSourceIds } from '../../lib/kwargs.js';
 import { useDismiss } from '../../lib/dismiss.js';
 import { Skel, SkelMenu } from '../ui/Skeleton.jsx';
 import { ModelMark } from '../ui/Weave.jsx';
@@ -97,23 +97,11 @@ export function KwargControl({ def, value, isAdmin, onSet, gated }) {
     );
   }
   if (isRange(def)) {
+    const steps = rangeSteps(def);
     const cur = clampToRange(def, value);
-    const at = cur == null ? Number(defaultValueOf(def)) : cur;
-    const min = Number(def.min), max = Number(def.max), step = rangeStep(def);
-    const pct = max > min ? ((at - min) / (max - min)) * 100 : 0;
     return (
-      <div className={'kw-range' + (locked ? ' locked' : '') + tie}>
-        <div className="kw-head">
-          <span className="mo-name">{label}</span>
-          <span className="kw-cur">{at}{locked ? ' · ' + t('admin set') : ''}</span>
-        </div>
-        {note && <div className="mo-desc" style={{ marginBottom: 8, marginTop: -2 }}>{note}</div>}
-        <input type="range" className="kw-slider" style={{ '--pct': pct + '%' }}
-          min={min} max={max} step={step} value={at} disabled={locked}
-          aria-label={label}
-          onChange={(e) => { if (!locked) onSet(def.id, String(clampToRange(def, e.target.value))); }} />
-        <div className="kw-range-ends"><span>{min}</span><span>{max}</span></div>
-      </div>
+      <EffortSlider label={label} note={note} values={steps} idx={nearestStep(steps, cur == null ? defaultValueOf(def) : cur)}
+        locked={locked} gated={gated} onPick={(v) => onSet(def.id, v)} />
     );
   }
   if (!values.length) return null;
