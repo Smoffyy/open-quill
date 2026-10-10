@@ -37,7 +37,6 @@ The top bar shows the chat title. Click it for the chat menu: rename, star, add 
 | Item | Does |
 | --- | --- |
 | **Conversation memory** | Shows the rolling summary that replaced older messages in a long chat |
-| **Personas** | Apply a saved persona to this chat |
 | **Copy all** | Copies the whole conversation |
 | **Chat controls (admin)** | Per-chat system prompt and sampling overrides, admins only |
 | **Find in conversation** | Search inside this chat (`Ctrl+F`) |

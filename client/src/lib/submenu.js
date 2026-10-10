@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-export const SUBMENU_CLOSE_DELAY = 160;
+export const SUBMENU_OPEN_DELAY = 200;
+export const SUBMENU_CLOSE_DELAY = 300;
 
 export function useSubmenus(opts = {}) {
-  const openDelay = opts.openDelay ?? 0;
+  const openDelay = opts.openDelay ?? SUBMENU_OPEN_DELAY;
   const closeDelay = opts.closeDelay ?? SUBMENU_CLOSE_DELAY;
   const [open, setOpen] = useState(null);
   const timer = useRef(null);

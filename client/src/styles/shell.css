@@ -64,7 +64,7 @@
   background: color-mix(in srgb, var(--surface) 52%, transparent);
   backdrop-filter: blur(26px) saturate(1.3); -webkit-backdrop-filter: blur(26px) saturate(1.3);
 }
-.app.has-bg .model-menu, .app.has-bg .model-submenu, .app.has-bg .plus-menu, .app.has-bg .pm-sub {
+.app.has-bg .model-menu, .app.has-bg .model-submenu, .app.has-bg .plus-menu {
   background: color-mix(in srgb, var(--pop-bg) 93%, transparent);
   backdrop-filter: blur(30px) saturate(1.4); -webkit-backdrop-filter: blur(30px) saturate(1.4);
 }
@@ -146,17 +146,7 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .pin-tag svg { color: var(--text); }
 .action-btn.on { color: var(--pop-blue); }
 
-/* ---- saved prompts in + menu ---- */
 .pm-empty { font-size: 12px; color: var(--text-faint); padding: 7px 10px; }
-.pm-prompt { display: flex; align-items: center; gap: 4px; }
-.pm-prompt-use { flex: 1; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; font-size: 13px; color: var(--text); text-align: left; min-width: 0; }
-.pm-prompt-use:hover { background: var(--pop-hover); }
-.pm-prompt-use svg { color: var(--text-muted); flex-shrink: 0; }
-.pm-prompt-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pm-prompt-x { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; color: var(--text-faint); flex-shrink: 0; }
-.pm-prompt-x:hover { background: var(--surface-hover); color: var(--text); }
-.pm-save-prompt { display: flex; align-items: center; gap: 7px; width: 100%; padding: 8px 10px; margin-top: 3px; border-radius: 8px; font-size: 12.5px; color: var(--text); }
-.pm-save-prompt:hover { background: var(--pop-hover); }
 
 /* ---- toasts ---- */
 .toaster { position: absolute; top: calc(66px + var(--find-h, 0px)); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; z-index: 200; pointer-events: none; width: max-content; max-width: 90vw; }
@@ -191,7 +181,7 @@ body:has(.app.has-bg) > .model-submenu.pinned {
     border-right: 0.8px solid var(--border-soft); box-shadow: none; overflow: hidden;
   }
   .sidebar.mobile-open { transform: none; }
-  .popover, .chat-menu, .rl-menu, .model-submenu, .pm-sub { z-index: 140; }
+  .popover, .chat-menu, .rl-menu, .model-submenu { z-index: 140; }
   .sidebar.collapsed .brand, .sidebar.collapsed .chats, .sidebar.collapsed .nav-label,
   .sidebar.collapsed .section-label, .sidebar.collapsed .profile-info, .sidebar.collapsed .search-btn { display: revert; }
   .sidebar.collapsed .nav-item { justify-content: flex-start; padding: 6px 10px; width: 100%; }
@@ -248,11 +238,7 @@ body:has(.app.has-bg) > .model-submenu.pinned {
   .toaster { top: calc(58px + var(--find-h, 0px)); }
 
   .model-menu, .model-menu.up { max-width: calc(100vw - 24px); max-height: 70vh; overflow: hidden auto; }
-  .plus-menu, .pm-sub, .model-submenu, .chat-menu, .popover { max-width: calc(100vw - 24px); }
-  .pm-sub, .pm-sub.left {
-    left: 0 !important; right: auto !important; top: calc(100% + 2px);
-    width: max-content; max-width: calc(100vw - 40px); max-height: 50vh;
-  }
+  .plus-menu, .model-submenu, .chat-menu, .popover { max-width: calc(100vw - 24px); }
   .model-submenu, .model-submenu.left {
     left: 0 !important; right: auto !important; top: calc(100% + 2px);
     width: max-content; max-width: calc(100vw - 40px);

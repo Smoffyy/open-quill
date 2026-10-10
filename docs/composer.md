@@ -35,16 +35,14 @@ Type `/` at the start of the field for a list of commands: **New chat**, turn **
 | **Add files or photos** | Attach files, see above |
 | **Take a screenshot** | Attach a capture of your screen |
 | **Add to project** | Move this chat into one of your projects, or out of one |
-| **Saved prompts** | Insert a saved prompt, or save what you have typed as a new one |
 | **Response style** | Normal, Concise, Explanatory, Formal or one of your own |
-| **Improve prompt** | Has the model rewrite your draft before you send it. Use it again to get your original back |
 | **Compare models** | Pick up to two more models to answer your next message, each reply becoming a version of one response |
 | **Skills** | Turn your skills on or off for this chat, or browse and manage them |
-| **Add connector** | Opens your MCP servers in Settings |
+| **MCP** | Opens your MCP servers in Settings |
 | **Sandbox tools** | Gives the assistant a workspace with files and a shell. See [Artifacts & Sandbox](artifacts-sandbox.md) |
 | **Web search** | Lets the assistant search the web, shown only when an admin has set it up |
 
-Items only appear when they apply. Sandbox tools and web search depend on the model, and both are off in incognito chats. Styles and prompts are covered in [Personas, Styles & Prompts](personas-styles-prompts.md).
+Items only appear when they apply. Sandbox tools and web search depend on the model, and both are off in incognito chats. Styles and instructions are covered in [Styles & Instructions](styles-and-instructions.md).
 
 ## Plans and questions
 

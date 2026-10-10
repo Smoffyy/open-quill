@@ -190,10 +190,17 @@
 .plus-menu .pm-chev { width: 16px; height: 16px; margin-left: auto; color: var(--pop-faint); flex-shrink: 0; }
 .plus-menu .pm-check { width: 16px; height: 16px; margin-left: auto; color: var(--pop-blue); flex-shrink: 0; }
 .plus-menu .pm-divider { height: 1px; background: var(--pop-divider); margin: 4px 10px; }
-.pm-subwrap { position: relative; }
-.pm-sub { position: absolute; left: calc(100% + 4px); top: -6px; min-width: 236px; max-height: 300px; overflow: hidden auto; background: var(--pop-bg); border: var(--menu-border, 1px solid var(--pop-border)); outline: var(--menu-outline, none); outline-offset: -1px; border-radius: var(--menu-radius); padding: 6px; box-shadow: var(--pop-shadow); z-index: 21; transform-origin: top left; }
-.pm-sub.left { left: auto; right: calc(100% + 4px); transform-origin: top right; }
-@media (max-width: 720px) { .pm-sub { left: auto; right: calc(100% + 4px); transform-origin: top right; } }
+:root .plus-menu.pm-flyout { position: fixed; bottom: auto; left: 0; top: 0; width: 280px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: hidden auto; z-index: 90; transform-origin: top left; }
+.plus-menu .pm-head { padding: 6px 10px 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--pop-faint); }
+.plus-menu .pm-opt { height: auto !important; min-height: 38px !important; padding: 7px 10px !important; }
+.plus-menu .pm-stack { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 2px; }
+.plus-menu .pm-stack .pm-label { flex: none; }
+.plus-menu .pm-desc { font-size: 12px; line-height: 16px; color: var(--pop-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plus-menu .pm-del { display: none; margin-left: auto; width: 22px; height: 22px; place-items: center; border-radius: 6px; color: var(--pop-faint); flex-shrink: 0; }
+.plus-menu .pm-item:hover .pm-del { display: grid; }
+.plus-menu .pm-del:hover { color: var(--danger); background: var(--hover); }
+.plus-menu .pm-create { justify-content: center; color: var(--pop-faint); }
+.plus-menu .pm-foot { padding: 6px 10px 4px; font-size: 12px; line-height: 16px; color: var(--pop-faint); white-space: normal; }
 
 /* tool chip */
 .tool-chip { display: inline-flex; align-items: center; gap: 7px; background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 9px; padding: 6px 11px; margin: 5px 0; font-family: var(--font-sans); font-size: 13px; color: var(--text); }

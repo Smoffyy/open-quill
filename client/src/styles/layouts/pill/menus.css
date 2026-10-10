@@ -1,5 +1,5 @@
-[data-layout="pill"] .plus-menu, [data-layout="pill"] .pm-sub { z-index: 80; }
-[data-layout="pill"] .app.has-bg .plus-menu, [data-layout="pill"] .app.has-bg .pm-sub { background: var(--pop-bg); }
+[data-layout="pill"] .plus-menu { z-index: 80; }
+[data-layout="pill"] .app.has-bg .plus-menu { background: var(--pop-bg); }
 [data-layout="pill"] .plus-menu { bottom: 48px; min-width: 260px; }
 [data-layout="pill"] .plus-menu.down { top: 44px; bottom: auto; }
 [data-layout="pill"] .model-menu { min-width: 268px; border: 1px solid var(--pop-border); box-shadow: var(--pop-shadow); }

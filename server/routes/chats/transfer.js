@@ -2,7 +2,7 @@ import { db, uid, now, tx } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
 import { activePath } from '../../lib/tree.js';
 import { memoriesOf, sanitizeMemories, legacyMemories, newMemoryId, MEMORY_MAX_ITEMS } from '../../lib/memory.js';
-import { cleanStyles, cleanPersonas, cleanPrompts, prefsFit } from '../../lib/profile.js';
+import { cleanStyles, prefsFit } from '../../lib/profile.js';
 
 export default function registerTransferRoutes(app) {
   app.get('/api/chats/export-all', authMiddleware, (req, res) => {
@@ -19,8 +19,6 @@ export default function registerTransferRoutes(app) {
         return {
           instructions: u.instructions || '', memories: memoriesOf(req.user.id),
           styles: Array.isArray(u.styles) ? u.styles : [],
-          personas: Array.isArray(u.personas) ? u.personas : [],
-          savedPrompts: Array.isArray(u.saved_prompts) ? u.saved_prompts : [],
           prefs: u.prefs && typeof u.prefs === 'object' ? u.prefs : {}
         };
       })()
@@ -50,8 +48,6 @@ export default function registerTransferRoutes(app) {
         return clean(out);
       };
       patch.styles = mergeById(u.styles, pf.styles, cleanStyles);
-      patch.personas = mergeById(u.personas, pf.personas, cleanPersonas);
-      patch.saved_prompts = mergeById(u.saved_prompts, pf.savedPrompts, cleanPrompts);
       if (incoming.length) {
         const mem = memoriesOf(req.user.id);
         const texts = new Set(mem.map(m => m.text.toLowerCase()));

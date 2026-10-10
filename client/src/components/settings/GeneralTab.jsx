@@ -73,7 +73,7 @@ export default function GeneralTab({ user, draft, onExportChats, onImportChats, 
         <div className="muted-note count-note">{draft.instructions.length}/8000</div>
       </div>
       <div className="me-section-h">{t("Your data")}</div>
-      <SetRow label={t("Export and import")} desc={t("Download everything (chats, styles, personas, prompts, memory) as one JSON file, or restore from one. Imported chats are added and profile data is merged.")}>
+      <SetRow label={t("Export and import")} desc={t("Download everything (chats, styles, memory) as one JSON file, or restore from one. Imported chats are added and profile data is merged.")}>
         <div className="set-actions">
           <button className="btn ghost" onClick={onExportChats}><Download className="btn-ic" /> {t("Export")}</button>
           <button className="btn ghost" onClick={() => importRef.current?.click()}><Upload className="btn-ic" /> {t("Import")}</button>

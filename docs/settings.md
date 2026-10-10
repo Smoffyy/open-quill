@@ -9,7 +9,7 @@ Open **Settings** from the profile menu at the bottom left, or with `Ctrl+,`. Th
 - **What should we call you?** Your display name, used in greetings.
 - **Language**: the interface language on this device. Replies are not translated.
 - **Instructions for the Assistant**: added to every chat you have, up to 8000 characters.
-- **Export everything** downloads your chats, styles, personas, prompts and memory as one JSON file. **Import** reads one back, adding its chats and merging the rest.
+- **Export everything** downloads your chats, styles and memory as one JSON file. **Import** reads one back, adding its chats and merging the rest.
 - **Danger zone**: **Delete all chats** (your account stays), **Reset all settings** to the current theme's defaults, and **Delete account**, which removes the account and everything in it. The owner account cannot be deleted.
 
 ### Interface

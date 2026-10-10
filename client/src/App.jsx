@@ -44,7 +44,6 @@ import ArtifactsLibrary from './components/artifacts/ArtifactsLibrary.jsx';
 import ScheduledTasks from './components/pages/ScheduledTasks.jsx';
 import Tip from './components/ui/Tip.jsx';
 import ProjectsPanel from './components/pages/ProjectsPanel.jsx';
-import PersonasModal from './components/dialogs/PersonasModal.jsx';
 import SearchModal from './components/dialogs/SearchModal.jsx';
 import Toaster from './components/ui/Toaster.jsx';
 import ConfirmHost from './components/ui/ConfirmHost.jsx';
@@ -83,7 +82,7 @@ import BranchTree from './components/chat/BranchTree.jsx';
 import { toast } from './lib/toast.js';
 import { askConfirm } from './lib/confirm.js';
 import { copyText } from './lib/clipboard.js';
-import { Down, Compact, Ghost, Search, Menu, Sliders, X, Fork, Panel, Copy, Star, TextIcon, Expand } from './components/ui/icons.jsx';
+import { Down, Compact, Ghost, Search, Menu, Sliders, X, Fork, Panel, Copy, TextIcon, Expand } from './components/ui/icons.jsx';
 import { setCustomFavicon } from './lib/favicon.js';
 import BrandMark from './components/ui/BrandMark.jsx';
 import { SKELETON_DELAY } from './lib/skeleton.js';
@@ -334,7 +333,6 @@ export default function App() {
   const [hasSummary, setHasSummary] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [chatPins, setChatPins] = useState([]);
-  const [personasOpen, setPersonasOpen] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
@@ -967,35 +965,6 @@ export default function App() {
       .map(m => (m.role === 'user' ? t('You') : t('Assistant')) + ':\n' + (typeof m.content === 'string' ? m.content : '')).join('\n\n');
     if (await copyText(text)) toast(t('Conversation copied'), { icon: 'copy' });
   }
-  async function saveSavedPrompts(list) {
-    const before = user?.savedPrompts || [];
-    setUser(u => ({ ...u, savedPrompts: list }));
-    try { await api.put('/api/me/prompts', { prompts: list }); }
-    catch { setUser(u => ({ ...u, savedPrompts: before })); warn(); }
-  }
-  function savePromptFromInput(title) {
-    const text = (input || '').trim();
-    if (!text) return;
-    const list = [...(user?.savedPrompts || []), { id: 'p' + Date.now(), title: (title || text.slice(0, 40)).trim(), text }];
-    saveSavedPrompts(list);
-    toast(t('Prompt saved'), { icon: 'star' });
-  }
-  function deleteSavedPrompt(id) { saveSavedPrompts((user?.savedPrompts || []).filter(p => p.id !== id)); }
-  async function savePersonas(list) {
-    const before = user?.personas || [];
-    setUser(u => ({ ...u, personas: list }));
-    try { await api.put('/api/me/personas', { personas: list }); }
-    catch { setUser(u => ({ ...u, personas: before })); warn(); }
-  }
-  async function applyPersona(p) {
-    if (!p) return;
-    if (p.modelId && models.find(m => m.id === p.modelId)) setCurrentId(p.modelId);
-    if (activeId) {
-      try { await api.patch('/api/chats/' + activeId, { instructions: p.instructions || '' }); }
-      catch { warn(); return; }
-    }
-    toast(t('Applied persona: {name}', { name: p.name }), { icon: 'star' });
-  }
   function renameChat(title) {
     const id = activeId;
     const before = chats.find(c => c.id === id)?.title;
@@ -1489,7 +1458,6 @@ export default function App() {
     modelHasBg, bgInChat, onToggleBgInChat: () => updatePref('modelBgInChat', !bgInChat),
     webSearch: webSearchOn, webSearchAvailable, onToggleWebSearch: () => { if (webSearchAvailable) setWebSearch(s => !s); },
     project: currentProject, onClearProject: clearChatProject, onOpenProject: openProjects,
-    savedPrompts: user?.savedPrompts || [], onUsePrompt: (t) => { setInput(t); setFocusTick(x => x + 1); }, onSavePrompt: savePromptFromInput, onDeletePrompt: deleteSavedPrompt,
     onNewChat: () => newChat(), onShortcuts: () => setShowShortcuts(true),
     voiceMic: !!cfg.voiceMic, voiceCall: !!cfg.voiceCall && !incognito, sttEngine: cfg.voiceStt || 'browser',
     callActive: callOpen, onStartCall: () => setCallOpen(o => !o)
@@ -1722,7 +1690,6 @@ export default function App() {
               </button>
             </>}
             items={[
-              { id: 'personas', icon: <Star />, label: t('Personas'), onClick: () => setPersonasOpen(true) },
               user?.isAdmin && !incognito && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => setCtlOpen(o => !o) },
             ]} />
         )}
@@ -1763,7 +1730,6 @@ export default function App() {
               <TopbarActions
                 items={[
                   hasSummary && { id: 'summary', icon: <Compact />, label: t("Conversation memory"), onClick: () => setSummaryOpen(true) },
-                  { id: 'personas', icon: <Star />, label: t('Personas'), onClick: () => setPersonasOpen(true) },
                   messages.length > 0 && { id: 'copyall', icon: <Copy />, label: t('Copy all'), onClick: () => copyConversation() },
                   user?.isAdmin && activeId && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => setCtlOpen(o => !o) },
                   messages.length > 0 && user?.prefs?.threadFind !== false && { id: 'find', icon: <Search />, label: t('Find in conversation'), active: findOpen, onClick: () => (findOpen ? closeFind() : setFindOpen(true)) },
@@ -1841,7 +1807,6 @@ export default function App() {
       )}
       {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} onChatsChanged={() => loadChats()} />}
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} onOpen={(id) => openChat(id)} />}
-      {personasOpen && <PersonasModal personas={user?.personas || []} models={models} currentId={currentId} onApply={applyPersona} onSave={savePersonas} onClose={() => setPersonasOpen(false)} />}
       {ledgerPrompt && activeId && (
         <PromptLedger chatId={activeId} modelId={currentId} onClose={() => setLedgerPrompt(false)} />
       )}

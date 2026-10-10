@@ -105,12 +105,11 @@ const composerProps = {
   models, currentId: 'm2', onSelect: noop, placeholder: 'Ask anything',
   visionSupported: true,
   webSearch: false, webSearchAvailable: true, onToggleWebSearch: noop,
-  styles: [], styleId: 'normal', onSelectStyle: noop, onSaveStyles: noop,
-  savedPrompts: [], onUsePrompt: noop, onSavePrompt: noop, onDeletePrompt: noop
+  styles: [], styleId: 'normal', onSelectStyle: noop, onSaveStyles: noop
 };
 cases.push(['Composer:idle', () => React.createElement(Composer, composerProps)]);
 cases.push(['Composer:streaming', () => React.createElement(Composer, { ...composerProps, streaming: true, canSteer: true, onSteer: noop, onQueue: noop })]);
-cases.push(['Composer:slash', () => React.createElement(Composer, { ...composerProps, value: '/', savedPrompts: [{ id: 'p1', title: 'Review', text: 'Review this' }] })]);
+cases.push(['Composer:slash', () => React.createElement(Composer, { ...composerProps, value: '/' })]);
 
 cases.push(['Playground:cold', () => React.createElement(Playground, { onClose: noop })]);
 

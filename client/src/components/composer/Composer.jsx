@@ -8,12 +8,13 @@ import { toast } from '../../lib/toast.js';
 import { useAttachments, NO_VISION } from '../../lib/attachments.js';
 import { useDictation } from '../../lib/dictation.js';
 import { captureScreenshot, screenshotSupported, isCaptureCancel } from '../../lib/screenshot.js';
-import { Plus, Mic, Wave, Up, Enter, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer, Screenshot, Plug, SkillIcon, ImageIcon, Copy, Folder, ChevDown, Calendar } from '../ui/icons.jsx';
+import { Plus, Mic, Wave, Up, Enter, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, NewChatIcon, Sliders, Steer, Screenshot, Plug, SkillIcon, ImageIcon, Copy, Folder, ChevDown, Calendar } from '../ui/icons.jsx';
 import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
 import { extLabel } from '../../lib/files.js';
 import { t, fmtDate } from '../../i18n.jsx';
 import { useThemeText } from '../../lib/theme/store.jsx';
 import { focusUnlessTouch } from '../../lib/touch.js';
+import { SubItem } from '../ui/Submenu.jsx';
 import { useSubmenus } from '../../lib/submenu.js';
 import { useDismiss } from '../../lib/dismiss.js';
 import { useLayout } from '../../lib/uselayout.js';
@@ -22,41 +23,6 @@ import { useLayout } from '../../lib/uselayout.js';
 // sniffing the bytes, so any format is accepted here and one that turns out to be
 // unreadable is reported to the model as such rather than silently dropped.
 const FILE_ACCEPT = '';
-
-function PmSub({ className = '', children, onMouseEnter, onMouseLeave }) {
-  const ref = useRef(null);
-  const [pos, setPos] = useState({ flipLeft: false, top: -6, maxH: 0, ready: false });
-  useLayoutEffect(() => {
-    const el = ref.current; if (!el) return;
-    const measure = () => {
-      const wrap = el.parentElement; if (!wrap) return;
-      const row = wrap.getBoundingClientRect();
-      const pad = 8;
-      const availH = window.innerHeight - pad * 2;
-      const h = el.scrollHeight;
-      const effH = Math.min(h, availH);
-      const flipLeft = row.right + 4 + el.offsetWidth > window.innerWidth - pad;
-      let top = -6;
-      const over = row.top + top + effH - (window.innerHeight - pad);
-      if (over > 0) top -= over;
-      if (row.top + top < pad) top = pad - row.top;
-      setPos(prev => (prev.ready && prev.flipLeft === flipLeft && prev.top === top && prev.maxH === (h > availH ? availH : 0)) ? prev : { flipLeft, top, maxH: h > availH ? availH : 0, ready: true });
-    };
-    measure();
-    let ro;
-    if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(measure); ro.observe(el); }
-    window.addEventListener('resize', measure);
-    return () => { if (ro) ro.disconnect(); window.removeEventListener('resize', measure); };
-  }, [children]);
-  return (
-    <div ref={ref}
-      className={'pm-sub' + (className ? ' ' + className : '') + (pos.flipLeft ? ' left' : '')}
-      style={{ top: pos.top, maxHeight: pos.maxH || undefined, visibility: pos.ready ? undefined : 'hidden' }}
-      onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
-      {children}
-    </div>
-  );
-}
 
 function DropOverlay() {
   return createPortal(
@@ -87,7 +53,7 @@ function ActiveChip({ icon, label, onRemove }) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, stopping = false, models, modelsReady = true,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, onOpenProject, projects = [], onSetProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, onOpenProject, projects = [], onSetProject, onNewChat, onShortcuts,
   voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall, callActive = false,
   safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
@@ -177,7 +143,7 @@ export default function Composer({
       setPlusDown(window.innerHeight - r.bottom > 320);
     }
   }, [plusMenu]);
-  useDismiss(plusMenu, () => setPlusMenu(false), plusRef);
+  useDismiss(plusMenu, () => setPlusMenu(false), plusRef, { inside: '.pm-flyout' });
 
   const grewOnce = useRef(false);
   const fitWidth = useRef(0);
@@ -290,7 +256,6 @@ export default function Composer({
     if (onNewChat) slashCmds.push({ id: 'new', label: t('New chat'), icon: <NewChatIcon style={{ width: 16 }} />, run: () => { onChange(''); onNewChat(); } });
     if (webSearchAvailable && onToggleWebSearch) slashCmds.push({ id: 'web', label: t('Web search'), sub: webSearch ? t('Disable') : t('Enable'), icon: <Globe style={{ width: 16 }} />, run: () => { onChange(''); onToggleWebSearch(); } });
     if (onShortcuts) slashCmds.push({ id: 'keys', label: t('Keyboard shortcuts'), icon: <Sliders style={{ width: 16 }} />, run: () => { onChange(''); onShortcuts(); } });
-    for (const p of (savedPrompts || [])) slashCmds.push({ id: 'p' + p.id, label: p.title, sub: t('Prompt'), icon: <Star style={{ width: 16 }} />, run: () => { onUsePrompt && onUsePrompt(p.text); } });
   }
   const slashShown = slashCmds.filter(c => c.label.toLowerCase().includes(slashQuery));
   const slashOpen = slashActive && slashShown.length > 0;
@@ -306,29 +271,6 @@ export default function Composer({
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
   }
   const activeModel = models?.find(m => m.id === currentId) || null;
-  const [improving, setImproving] = useState(false);
-  const improvedRef = useRef(null);
-  useEffect(() => {
-    if (improvedRef.current && value !== improvedRef.current.improved) improvedRef.current = null;
-  }, [value]);
-  async function improvePrompt() {
-    if (improving) return;
-    if (improvedRef.current && value === improvedRef.current.improved) {
-      const orig = improvedRef.current.original;
-      improvedRef.current = null;
-      onChange(orig);
-      return;
-    }
-    const text = value.trim();
-    if (!text) return;
-    setImproving(true);
-    try {
-      const r = await api.post('/api/improve-prompt', { text, modelId: currentId });
-      if (r.text) { improvedRef.current = { original: value, improved: r.text }; onChange(r.text); }
-    } catch (e) { toast(e.message || t('Could not improve the prompt.')); }
-    setImproving(false);
-  }
-  const improvedNow = !!(improvedRef.current && value === improvedRef.current.improved);
   const unavailable = !!activeModel?.unavailable;
   const blockSend = (unavailable && !canUseUnavailable) || !!removedModel;
   const sunsetInfo = (() => {
@@ -497,7 +439,6 @@ export default function Composer({
       <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}
         {...(FILE_ACCEPT ? { accept: (visionSupported ? 'image/*,' : '') + FILE_ACCEPT } : {})} />
       {safetyChecking && safetyVerbose && <div className="safety-checking shimmer">{t("Safety check…")}</div>}
-      {improving && <div className="safety-checking shimmer">{t("Improving prompt…")}</div>}
       {compareIds.length > 0 && (
         <div className="queued-chip compare-chip">
           <span className="queued-label">{t("Compare:")}</span>
@@ -529,138 +470,102 @@ export default function Composer({
                   </button>
                 )}
                 {onSetProject && (
-                  <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('project')} onMouseLeave={sub.hoverClose}>
-                    <button className={'pm-item' + (sub.isOpen('project') ? ' active' : '')} onClick={() => sub.toggle('project')}>
-                      <Box />
-                      <span className="pm-label">{t('Add to project')}</span>
-                      <Chevron className="pm-chev" />
-                    </button>
-                    {sub.isOpen('project') && (
-                      <PmSub onMouseEnter={() => sub.hoverOpen('project')} onMouseLeave={sub.hoverClose}>
-                        {projects.length === 0 && <div className="pm-empty">{t('No projects yet')}</div>}
-                        {projects.map(p => (
-                          <button key={p.id} className={'pm-item' + (project && p.id === project.id ? ' active' : '')}
-                            onClick={() => { onSetProject(p); closePlusMenu(); }}>
-                            <Box />
-                            <span className="pm-label">{p.name}</span>
-                          </button>
-                        ))}
-                        {project && onClearProject && (
-                          <button className="pm-item" onClick={() => { onClearProject(); closePlusMenu(); }}>
-                            <span className="pm-label">{t('Remove from project')}</span>
-                          </button>
-                        )}
-                      </PmSub>
+                  <SubItem id="project" sub={sub} wrapClass="pm-subwrap" flyoutClass="plus-menu pm-flyout"
+                    trigger={({ open, onClick }) => (
+                      <button className={'pm-item' + (open ? ' active' : '')} onClick={onClick}>
+                        <Box />
+                        <span className="pm-label">{t('Add to project')}</span>
+                        <Chevron className="pm-chev" />
+                      </button>
+                    )}>
+                    <div className="pm-head">{t('Add to project')}</div>
+                    {projects.length === 0 && <div className="pm-empty">{t('No projects yet')}</div>}
+                    {projects.map(p => (
+                      <button key={p.id} className="pm-item pm-opt" onClick={() => onSetProject(p)}>
+                        <Box />
+                        <span className="pm-label">{p.name}</span>
+                        {project && p.id === project.id && <Check className="pm-check" />}
+                      </button>
+                    ))}
+                    {project && onClearProject && (
+                      <button className="pm-item pm-opt" onClick={() => onClearProject()}>
+                        <span className="pm-label">{t('Remove from project')}</span>
+                      </button>
                     )}
-                  </div>
+                  </SubItem>
                 )}
                 <div className="pm-divider" />
-                <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('prompts')} onMouseLeave={sub.hoverClose}>
-                  <button className={'pm-item' + (sub.isOpen('prompts') ? ' active' : '')} onClick={() => sub.toggle('prompts')}>
-                    <TextIcon />
-                    <span className="pm-label">{t("Saved prompts")}</span>
-                    <Chevron className="pm-chev" />
-                  </button>
-                  {sub.isOpen('prompts') && (
-                    <PmSub onMouseEnter={() => sub.hoverOpen('prompts')} onMouseLeave={sub.hoverClose}>
-                      {(savedPrompts || []).length === 0 && <div className="pm-empty">{t("No saved prompts yet.")}</div>}
-                      {(savedPrompts || []).map(p => (
-                        <div key={p.id} className="pm-prompt">
-                          <button className="pm-prompt-use" data-tip={p.text} onClick={() => { setPlusMenu(false); onUsePrompt && onUsePrompt(p.text); }}>
-                            <Star style={{ width: 13 }} /> <span className="pm-prompt-title">{p.title}</span>
-                          </button>
-                          {onDeletePrompt && <button className="pm-prompt-x" data-tip={t("Delete")} aria-label={t("Delete")} onClick={(e) => { e.stopPropagation(); onDeletePrompt(p.id); }}><X style={{ width: 12 }} /></button>}
-                        </div>
-                      ))}
-                      {onSavePrompt && hasText && (
-                        <button className="pm-save-prompt" onClick={() => { onSavePrompt(); sub.closeAll(); }}>
-                          <Plus style={{ width: 13 }} /> {t('Save current text as prompt')}
-                        </button>
-                      )}
-                    </PmSub>
-                  )}
-                </div>
                 {onSelectStyle && (
-                  <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('styles')} onMouseLeave={sub.hoverClose}>
-                    <button className={'pm-item' + (sub.isOpen('styles') ? ' active' : '')} onClick={() => sub.toggle('styles')}>
-                      <Sliders />
-                      <span className="pm-label">{t("Response style")}</span>
-                      <span className="pm-note">{styleNameFor(styleId, styles)}</span>
-                      <Chevron className="pm-chev" />
-                    </button>
-                    {sub.isOpen('styles') && (
-                      <PmSub className="styles" onMouseEnter={() => sub.hoverOpen('styles')} onMouseLeave={sub.hoverClose}>
-                        <StyleSubmenu styles={styles} stylesReady={modelsReady} styleId={styleId} currentId={currentId} onSaveStyles={onSaveStyles}
-                          onSelect={(id) => { onSelectStyle && onSelectStyle(id); closePlusMenu(); }} />
-                      </PmSub>
-                    )}
-                  </div>
+                  <SubItem id="styles" sub={sub} wrapClass="pm-subwrap" flyoutClass="plus-menu pm-flyout"
+                    trigger={({ open, onClick }) => (
+                      <button className={'pm-item' + (open ? ' active' : '')} onClick={onClick}>
+                        <Sliders />
+                        <span className="pm-label">{t("Response style")}</span>
+                        <span className="pm-note">{styleNameFor(styleId, styles)}</span>
+                        <Chevron className="pm-chev" />
+                      </button>
+                    )}>
+                    <StyleSubmenu styles={styles} stylesReady={modelsReady} styleId={styleId} currentId={currentId} onSaveStyles={onSaveStyles}
+                      onSelect={(id) => onSelectStyle(id)} />
+                  </SubItem>
                 )}
-                <button className="pm-item" disabled={improving || (!hasText && !improvedNow)}
-                  onClick={() => { setPlusMenu(false); improvePrompt(); }}>
-                  <Wand />
-                  <span className="pm-label">{improvedNow ? t('Restore original prompt') : t('Improve prompt')}</span>
-                </button>
                 {onSetCompare && models && models.length > 1 && (
-                  <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('compare')} onMouseLeave={sub.hoverClose}>
-                    <button className={'pm-item' + (sub.isOpen('compare') ? ' active' : '')} onClick={() => sub.toggle('compare')}>
-                      <Cube />
-                      <span className="pm-label">{t("Compare models")}</span>
-                      {compareIds.length > 0 && <span className="pm-note">+{compareIds.length}</span>}
-                      <Chevron className="pm-chev" />
-                    </button>
-                    {sub.isOpen('compare') && (
-                      <PmSub className="styles" onMouseEnter={() => sub.hoverOpen('compare')} onMouseLeave={sub.hoverClose}>
-                        <div className="style-menu-label">{t("Also answer with")}</div>
-                        {models.filter(m => m.id !== currentId).map(m => {
-                          const on = compareIds.includes(m.id);
-                          return (
-                            <button key={m.id} className={'style-item' + (on ? ' active' : '')}
-                              onClick={() => onSetCompare(on ? compareIds.filter(x => x !== m.id) : (compareIds.length < 2 ? [...compareIds, m.id] : compareIds))}>
-                              <span className="style-item-name">{m.displayName || m.id}</span>
-                              {on && <Check style={{ width: 14 }} />}
-                            </button>
-                          );
-                        })}
-                        <div className="style-menu-label" style={{ textTransform: 'none', letterSpacing: 0 }}>{t("Pick up to 2 extra models. Your next message will be answered by each as versions of one response.")}</div>
-                      </PmSub>
-                    )}
-                  </div>
+                  <SubItem id="compare" sub={sub} wrapClass="pm-subwrap" flyoutClass="plus-menu pm-flyout"
+                    trigger={({ open, onClick }) => (
+                      <button className={'pm-item' + (open ? ' active' : '')} onClick={onClick}>
+                        <Cube />
+                        <span className="pm-label">{t("Compare models")}</span>
+                        {compareIds.length > 0 && <span className="pm-note">+{compareIds.length}</span>}
+                        <Chevron className="pm-chev" />
+                      </button>
+                    )}>
+                    <div className="pm-head">{t("Also answer with")}</div>
+                    {models.filter(m => m.id !== currentId).map(m => {
+                      const on = compareIds.includes(m.id);
+                      return (
+                        <button key={m.id} className="pm-item pm-opt"
+                          onClick={() => onSetCompare(on ? compareIds.filter(x => x !== m.id) : (compareIds.length < 2 ? [...compareIds, m.id] : compareIds))}>
+                          <span className="pm-label">{m.displayName || m.id}</span>
+                          {on && <Check className="pm-check" />}
+                        </button>
+                      );
+                    })}
+                    <div className="pm-foot">{t("Pick up to 2 extra models. Your next message will be answered by each as versions of one response.")}</div>
+                  </SubItem>
                 )}
                 <div className="pm-divider" />
-                <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('skills')} onMouseLeave={sub.hoverClose}>
-                  <button className={'pm-item' + (sub.isOpen('skills') ? ' active' : '')} onClick={() => sub.toggle('skills')}>
-                    <SkillIcon />
-                    <span className="pm-label">{t('Skills')}</span>
-                    <Chevron className="pm-chev" />
+                <SubItem id="skills" sub={sub} wrapClass="pm-subwrap" flyoutClass="plus-menu pm-flyout"
+                  trigger={({ open, onClick }) => (
+                    <button className={'pm-item' + (open ? ' active' : '')} onClick={onClick}>
+                      <SkillIcon />
+                      <span className="pm-label">{t('Skills')}</span>
+                      <Chevron className="pm-chev" />
+                    </button>
+                  )}>
+                  <div className="pm-head">{t('Skills')}</div>
+                  {skills.length === 0 && <div className="pm-empty">{t('No skills yet')}</div>}
+                  {skills.map(sk => (
+                    <button key={sk.id} className="pm-item pm-opt" data-tip={sk.description || sk.name}
+                      onClick={() => onToggleSkill && onToggleSkill(sk)}>
+                      <SkillIcon />
+                      <span className="pm-label">{sk.name}</span>
+                      {sk.enabled && <Check className="pm-check" />}
+                    </button>
+                  ))}
+                  <div className="pm-divider" />
+                  <button className="pm-item pm-opt" onClick={() => { closePlusMenu(); onManageSkills && onManageSkills(); }}>
+                    <Sliders />
+                    <span className="pm-label">{t('Manage skills')}</span>
                   </button>
-                  {sub.isOpen('skills') && (
-                    <PmSub onMouseEnter={() => sub.hoverOpen('skills')} onMouseLeave={sub.hoverClose}>
-                      {skills.length === 0 && <div className="pm-empty">{t('No skills yet')}</div>}
-                      {skills.map(sk => (
-                        <button key={sk.id} className="pm-item" data-tip={sk.description || sk.name}
-                          onClick={() => { onToggleSkill && onToggleSkill(sk); closePlusMenu(); }}>
-                          <SkillIcon />
-                          <span className="pm-label">{sk.name}</span>
-                          {sk.enabled && <Check className="pm-check" />}
-                        </button>
-                      ))}
-                      <div className="pm-divider" />
-                      <button className="pm-item" onClick={() => { closePlusMenu(); onManageSkills && onManageSkills(); }}>
-                        <Sliders />
-                        <span className="pm-label">{t('Manage skills')}</span>
-                      </button>
-                      <button className="pm-item" onClick={() => { closePlusMenu(); onManageSkills && onManageSkills('browse'); }}>
-                        <Plus />
-                        <span className="pm-label">{t('Browse skills')}</span>
-                      </button>
-                    </PmSub>
-                  )}
-                </div>
+                  <button className="pm-item pm-opt" onClick={() => { closePlusMenu(); onManageSkills && onManageSkills('browse'); }}>
+                    <Plus />
+                    <span className="pm-label">{t('Browse skills')}</span>
+                  </button>
+                </SubItem>
                 {onManageConnectors && (
                   <button className="pm-item" onClick={() => { closePlusMenu(); onManageConnectors(); }}>
                     <Plug />
-                    <span className="pm-label">{t('Add connector')}</span>
+                    <span className="pm-label">{t('MCP')}</span>
                   </button>
                 )}
                 {webSearchAvailable && <div className="pm-divider" />}

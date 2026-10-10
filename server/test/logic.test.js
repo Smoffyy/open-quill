@@ -2743,10 +2743,8 @@ test('web search only fetches result pages on public addresses', async () => {
 });
 
 test('profile lists from an import are cleaned like the save routes clean them', async () => {
-  const { cleanStyles, cleanPersonas, cleanPrompts, prefsFit } = await import('../lib/profile.js');
+  const { cleanStyles, prefsFit } = await import('../lib/profile.js');
   assert.deepEqual(cleanStyles([null, 'x', { id: 's1', name: { bad: 1 }, prompt: 'p' }, { id: 's2', name: ' Calm ', prompt: ' be calm ' }]).map(s => [s.id, s.name, s.prompt]), [['s1', '[object Object]', 'p'], ['s2', 'Calm', 'be calm']]);
-  assert.equal(cleanPersonas([{ id: 'p', name: 'x'.repeat(100), instructions: 'y'.repeat(9000) }])[0].instructions.length, 8000);
-  assert.equal(cleanPrompts(Array.from({ length: 80 }, (_, i) => ({ id: 'q' + i, title: 't', text: 'x' }))).length, 50);
   assert.equal(prefsFit({ a: 'x'.repeat(300 * 1024) }), false);
   assert.equal(prefsFit([]), false);
   assert.equal(prefsFit({ theme: 'dark' }), true);

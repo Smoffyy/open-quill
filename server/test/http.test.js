@@ -390,8 +390,6 @@ test('a write with no body is a clean no-op, not a 500', async () => {
   const bodyless = [
     ['PATCH', '/api/me'],
     ['PUT', '/api/me/styles'],
-    ['PUT', '/api/me/personas'],
-    ['PUT', '/api/me/prompts'],
     ['PATCH', `/api/chats/${chat.json.id}`],
     ['POST', `/api/chats/${chat.json.id}/branch`],
     ['DELETE', `/api/chats/${chat.json.id}/pins`],

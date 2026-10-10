@@ -9,7 +9,7 @@ import { budgetStatus } from '../lib/budget.js';
 import { presetId } from '../lib/presets.js';
 import { memoriesOf, changeMemory, setMemories } from '../lib/memory.js';
 import { killSessionSockets } from '../lib/ws/index.js';
-import { cleanStyles, cleanPersonas, cleanPrompts, prefsFit } from '../lib/profile.js';
+import { cleanStyles, prefsFit } from '../lib/profile.js';
 
 const isHttps = (req) =>
   !!req.socket?.encrypted || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
@@ -72,7 +72,6 @@ async function passwordMatches(pw, stored) {
 export const USAGE_WINDOWS = new Set([7, 30, 90]);
 
 const DEFAULT_STYLE_GEN_PROMPT ='You create writing-style instructions for an AI assistant. The user will provide a sample of writing they like. Analyze its tone, sentence structure, vocabulary, formality, formatting habits, and personality, then output ONLY a concise instruction paragraph (under 120 words) telling an assistant how to write in that style. Do not mention the sample, do not add a preamble, output only the instruction text.';
-const DEFAULT_IMPROVE_PROMPT = 'You are a prompt engineer. The user will give you a draft prompt they intend to send to an AI assistant. Rewrite it to be clearer, more specific, and more likely to get an excellent result: state the goal explicitly, add helpful structure, specify the desired format or constraints when they are implied, and remove ambiguity. Preserve the user\u2019s intent, language, and any concrete details exactly. Output ONLY the improved prompt text, with no preamble, quotes, or explanation.';
 
 export default function registerAuthRoutes(app) {
   app.get('/api/auth/context', (req, res) => {
@@ -216,19 +215,6 @@ export default function registerAuthRoutes(app) {
     res.json({ memories: [] });
   });
 
-  app.post('/api/improve-prompt', authMiddleware, async (req, res) => {
-    const text = String(req.body?.text || '').slice(0, 16000);
-    if (!text.trim()) return res.status(400).json({ error: 'Nothing to improve.' });
-    const model = resolveModelOrDefault(String(req.body?.modelId || ''), !!req.user.is_admin);
-    if (!model) return res.status(400).json({ error: 'No model available.' });
-    try {
-      const raw = await oneShot(model, [{ role: 'system', content: DEFAULT_IMPROVE_PROMPT }, { role: 'user', content: text }]);
-      const out = stripThink(model, raw || '').trim();
-      if (!out) return res.status(502).json({ error: 'The model returned an empty prompt.' });
-      res.json({ text: out.slice(0, 24000) });
-    } catch { res.status(502).json({ error: 'Could not reach the model.' }); }
-  });
-
   app.post('/api/messages/:id/feedback', authMiddleware, (req, res) => {
     const m = db.messages.byId(req.params.id);
     if (!m) return res.status(404).json({ error: 'not found' });
@@ -246,18 +232,6 @@ export default function registerAuthRoutes(app) {
       });
     }
     res.json({ ok: true, rating });
-  });
-
-  app.put('/api/me/personas', authMiddleware, (req, res) => {
-    const list = cleanPersonas(req.body.personas);
-    db.users.update(req.user.id, { personas: list });
-    res.json({ personas: list });
-  });
-
-  app.put('/api/me/prompts', authMiddleware, (req, res) => {
-    const list = cleanPrompts(req.body.prompts);
-    db.users.update(req.user.id, { saved_prompts: list });
-    res.json({ savedPrompts: list });
   });
 
   app.get('/api/me/usage', authMiddleware, (req, res) => {

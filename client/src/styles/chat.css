@@ -58,22 +58,7 @@
 .action-btn.fb.on.down { color: var(--danger); }
 .pm-note { margin-left: auto; font-size: 13px; color: var(--pop-faint); max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pm-item:disabled { opacity: .45; cursor: default; }
-.pm-sub.styles { width: 300px; max-height: 440px; overflow: hidden auto; }
-.style-menu-label { padding: 4px 10px 5px; font-size: 13px; line-height: 17px; font-weight: 500; color: var(--pop-faint); }
-.style-item { position: relative; width: 100%; display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 6px 10px; border-radius: 8px; text-align: left; color: var(--pop-text); font-size: 14px; line-height: 20px; }
-.style-item:hover { background: var(--pop-hover); }
-.style-item.active { background: color-mix(in srgb, var(--pop-blue) 14%, transparent); }
-.style-item-name { font-weight: 600; }
-.style-item-desc { font-size: 11.5px; color: var(--text-muted); margin-left: auto; padding-right: 4px; }
-.style-item svg { flex-shrink: 0; color: var(--pop-blue); }
-.style-item.create { color: var(--text-muted); font-weight: 600; justify-content: center; }
-.style-item.create:hover { color: var(--text); }
-.style-del { display: none; margin-left: auto; width: 22px; height: 22px; place-items: center; border-radius: 6px; color: var(--text-muted); }
-.style-del svg { color: inherit; }
-.style-item:hover .style-del { display: grid; }
-.style-del:hover { color: var(--danger); background: var(--hover); }
 .style-create { padding: 2px 4px 6px; display: flex; flex-direction: column; gap: 7px; }
-.style-create .style-menu-label { padding: 4px 6px 2px; }
 .style-create input, .style-create textarea { width: 100%; box-sizing: border-box; padding: 7px 9px; border-radius: 9px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12.5px; line-height: 1.45; font-family: var(--font-sans); resize: vertical; }
 .style-create input::placeholder, .style-create textarea::placeholder { font-size: 12.5px; color: var(--text-muted); }
 .style-create input { height: 32px; }
@@ -572,19 +557,16 @@
 .chatctl-default:hover { color: var(--text); border-style: solid; }
 .chatctl-reset { margin-top: 14px; width: 100%; padding: 8px; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: var(--text); background: color-mix(in srgb, var(--text) 9%, transparent); }
 .plus-menu { padding: 4px !important; border-radius: var(--menu-radius) !important; }
-.plus-menu .pm-item, .pm-sub .pm-item {
+.plus-menu .pm-item {
   height: 32px !important; min-height: 32px; border-radius: var(--menu-item-radius) !important; padding: var(--menu-item-padding) !important;
   gap: var(--menu-item-gap) !important; font-size: var(--menu-item-size) !important; line-height: 20px !important; font-weight: 400 !important;
 }
-.plus-menu .pm-item > svg:first-child, .pm-sub .pm-item > svg:first-child { width: 20px !important; height: 20px !important; opacity: 1; }
-.plus-menu .pm-label, .pm-sub .pm-label { flex: 1; min-width: 0; }
-.plus-menu .pm-shortcut, .pm-sub .pm-shortcut { margin: 0 0 0 16px !important; font-size: 14px !important; line-height: 20px; }
-.plus-menu .pm-chev, .pm-sub .pm-chev,
-.plus-menu .pm-check, .pm-sub .pm-check { width: 16px; height: 16px; margin: 0 0 0 16px !important; }
-.plus-menu .pm-note, .pm-sub .pm-note { margin-left: 16px; }
+.plus-menu .pm-item > svg:first-child { width: 20px !important; height: 20px !important; opacity: 1; }
+.plus-menu .pm-label { flex: 1; min-width: 0; }
+.plus-menu .pm-shortcut { margin: 0 0 0 16px !important; font-size: 14px !important; line-height: 20px; }
+.plus-menu .pm-chev, .plus-menu .pm-check { width: 16px; height: 16px; margin: 0 0 0 16px !important; }
+.plus-menu .pm-note { margin-left: 16px; }
 .pm-divider { margin: 4px 10px !important; }
-.pm-sub { border-radius: var(--menu-radius) !important; padding: 0 4px 4px !important; top: -4px !important; }
-.pm-sub > .pm-divider:first-child { margin-top: 0 !important; }
 .topbar-model.tbm-flex { display: inline-flex; align-items: center; gap: 4px; }
 .chat-error { display: flex; align-items: flex-start; gap: 12px; margin: 10px 0 4px; padding: 13px 14px; border-radius: 12px; background: color-mix(in srgb, #e0563f 12%, var(--surface)); border: 1px solid color-mix(in srgb, #e0563f 38%, transparent); }
 .chat-error-main { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
