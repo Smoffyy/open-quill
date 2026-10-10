@@ -260,6 +260,28 @@ test('kwargs: a range default outside its own bounds is corrected on save', () =
   assert.equal(defaultValueOf(none), '10', 'no default starts at the minimum');
 });
 
+test('kwargs: labelled steps show words and send their numbers, and a range wins over them', () => {
+  const levels = normalizeKwarg({ id: 'b', name: 'reasoning_budget_tokens', target: 'body', type: 'number', zeroOff: true, default: '2048',
+    stops: [{ label: 'Off', value: '0' }, { label: 'Low', value: 1024 }, { label: '', value: '2048' }, { label: 'High', value: 'nope' }, { label: 'Max', value: '' }] });
+  assert.deepEqual(levels.values, ['0', '1024', '2048'], 'a step with no usable number is dropped');
+  assert.deepEqual(levels.stops.map(s => s.label), ['Off', 'Low', '2048'], 'a blank label falls back to its number');
+  assert.equal(controlOf(levels), 'slider');
+  assert.equal(levels.zeroOff, false, 'labelled steps use their 0 step instead of the range switch');
+  assert.deepEqual(levels.stops.map(s => s.off), [true, false, false], 'a step saved without an Off flag is off only at 0');
+  const marked = normalizeKwarg({ id: 'm', name: 'x', stops: [{ label: 'Zero', value: '0', off: false }, { label: 'Quiet', value: '512', off: true }] });
+  assert.deepEqual(marked.stops.map(s => s.off), [false, true], 'an explicit Off flag wins over the number');
+  assert.equal(levels.default, '2048');
+
+  const out = applyKwargs({ kwargs: [levels] }, { b: '1024' }, false).resolved_kwargs;
+  assert.equal(out.reasoning_budget_tokens, 1024);
+  assert.equal(typeof out.reasoning_budget_tokens, 'number');
+  assert.equal(applyKwargs({ kwargs: [levels] }, { b: '3000' }, false).resolved_kwargs.reasoning_budget_tokens, 2048, 'a number that is not a step falls back to the default');
+
+  const ranged = normalizeKwarg({ id: 'r', name: 'x', min: 0, max: 10, step: 1, stops: [{ label: 'A', value: '1' }] });
+  assert.equal(isRange(ranged), true);
+  assert.deepEqual(ranged.stops, [], 'a range does not keep a second list of steps');
+});
+
 test('kwargs: a gated kwarg keeps its own value but hides until the gate opens', () => {
   const kwargs = [
     { id: 'think', name: 'enable_thinking', values: ['false', 'true'], default: 'false' },

@@ -19,7 +19,9 @@ import {
   nearestStep,
   kwargChip,
   chipNumber,
-  rangeLabel
+  rangeLabel,
+  kwargValuesArr,
+  stopLabel
 } from '../src/lib/kwargs.js';
 
 // --- kwarg number ranges ---------------------------------------------------
@@ -196,4 +198,26 @@ test('a stored value is kept only when the model still accepts it, for sliders a
   assert.equal(kwargAccepts(budget, null), false);
   assert.equal(kwargAccepts({ values: ['low', 'high'] }, 'high'), true);
   assert.equal(kwargAccepts({ values: ['low', 'high'] }, 'medium'), false);
+});
+
+test('labelled steps show their words in the picker and send their numbers', () => {
+  const levels = KWARG_PRESETS.find(x => x.key === 'reasoning_levels').make();
+  assert.equal(controlOfKwarg(levels), 'slider');
+  assert.deepEqual(kwargValuesArr(levels), ['0', '1024', '2048', '4096']);
+  assert.equal(stopLabel(levels, '2048'), 'Medium');
+  assert.equal(stopLabel(levels, '3000'), '3000', 'a number that is not a step keeps its digits');
+  assert.equal(defaultValueOfKwarg(levels), '2048');
+  assert.equal(kwargChip(levels, '0'), '', 'Off with 0 means off shows no chip');
+  assert.equal(kwargChip(levels, '1024'), 'Low', 'the preset chip is just the word');
+  assert.equal(kwargChip(levels, '0'), '', 'the step marked Off adds no chip');
+  const unmarked = { ...levels, stops: levels.stops.map(s => ({ ...s, off: false })) };
+  assert.equal(kwargChip(unmarked, '0'), 'Off', 'a step at 0 keeps its chip unless it is marked Off');
+  const out = kwargPayload([levels], resolveKwargs([levels], { [levels.id]: '4096' }, false));
+  assert.equal(out.reasoning_budget_tokens, 4096);
+  assert.equal(typeof out.reasoning_budget_tokens, 'number');
+});
+
+test('a chip template fills in its value for every kind of control', () => {
+  assert.equal(kwargChip({ values: ['low', 'high'], chip: 'Level {value}' }, 'high'), 'Level High');
+  assert.equal(kwargChip({ values: ['low', 'high'], chip: 'Level' }, 'high'), 'Level');
 });

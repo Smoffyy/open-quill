@@ -2962,5 +2962,13 @@
   "0 means off": "0 significa desactivado",
   "At 0 the picker says Off and the model name shows no chip.": "En 0, el selector muestra Desactivado y junto al nombre del modelo no aparece ninguna etiqueta.",
   "Shown beside the model name. {value} becomes the current number, as in Thinking · {value} tokens.": "Se muestra junto al nombre del modelo. {value} se sustituye por el número actual, como en Razonamiento · {value} tokens.",
-  "Thinking · {value} tokens": "Razonamiento · {value} tokens"
+  "Thinking · {value} tokens": "Razonamiento · {value} tokens",
+  "Labelled steps always render as a slider.": "Los pasos con etiqueta siempre se muestran como deslizador.",
+  "Labelled steps": "Pasos con etiqueta",
+  "Steps": "Pasos",
+  "Remove step": "Quitar paso",
+  "Add step": "Añadir paso",
+  "{value} becomes the word for the current step.": "{value} se sustituye por la palabra del paso actual.",
+  "Hide from model name": "Ocultar en el nombre del modelo",
+  "Members slide through these in order. Each label is what they see, and its number is what gets sent. A step with Hide from model name ticked still shows its word in the picker, but the model name gets no chip for it.": "Los miembros recorren estos pasos en orden. Ven la etiqueta, y se envía su número. En un paso con «Ocultar en el nombre del modelo» activado, el selector sigue mostrando su palabra, pero el nombre del modelo no recibe distintivo por ese paso."
 }

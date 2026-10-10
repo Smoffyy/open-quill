@@ -2962,5 +2962,13 @@
   "0 means off": "0 означает выкл.",
   "At 0 the picker says Off and the model name shows no chip.": "При 0 в выборе модели написано Выкл., а рядом с названием модели нет метки.",
   "Shown beside the model name. {value} becomes the current number, as in Thinking · {value} tokens.": "Показывается рядом с названием модели. {value} заменяется текущим числом, например Рассуждение · {value} tokens.",
-  "Thinking · {value} tokens": "Рассуждение · {value} tokens"
+  "Thinking · {value} tokens": "Рассуждение · {value} tokens",
+  "Labelled steps always render as a slider.": "Шаги с подписями всегда отображаются как ползунок.",
+  "Labelled steps": "Шаги с подписями",
+  "Steps": "Шаги",
+  "Remove step": "Удалить шаг",
+  "Add step": "Добавить шаг",
+  "{value} becomes the word for the current step.": "{value} заменяется словом текущего шага.",
+  "Hide from model name": "Скрыть в названии модели",
+  "Members slide through these in order. Each label is what they see, and its number is what gets sent. A step with Hide from model name ticked still shows its word in the picker, but the model name gets no chip for it.": "Участники перемещаются по этим шагам по порядку. Они видят подпись, а отправляется её число. У шага с включённым параметром «Скрыть в названии модели» подпись в выборе остаётся, но в названии модели для него значок не появляется."
 }

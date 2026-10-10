@@ -51,6 +51,28 @@ export const isRange = (def) =>
   !!def && def.min != null && def.max != null && def.min !== '' && def.max !== '' &&
   Number.isFinite(Number(def.min)) && Number.isFinite(Number(def.max)) && Number(def.max) > Number(def.min);
 
+export const isSteps = (def) => !!def?.stops?.length;
+
+export const DEFAULT_STEPS = [
+  { label: 'Off', value: '0', off: true },
+  { label: 'Low', value: '1024', off: false },
+  { label: 'Medium', value: '2048', off: false },
+  { label: 'High', value: '4096', off: false }
+];
+
+export const stepFields = (stops) => ({ stops, values: stops.map(s => String(s.value ?? '')).filter(Boolean) });
+
+export const isOffStep = (stop) => stop.off ?? Number(stop.value) === 0;
+
+function stopOf(def, value) {
+  return (def?.stops || []).find(s => String(s.value) === String(value));
+}
+
+export function stopLabel(def, value) {
+  const stop = stopOf(def, value);
+  return stop ? (stop.label || String(stop.value)) : String(value ?? '');
+}
+
 export const rangeStep = (def) => (Number(def?.step) > 0 ? Number(def.step) : 1);
 
 export function stepDecimals(step) {
@@ -98,6 +120,7 @@ export const allNumeric = (values) =>
 
 export function controlOf(def) {
   if (isRange(def)) return 'range';
+  if (isSteps(def)) return 'slider';
   const values = kwargValuesArr(def);
   if (def?.control && def.control !== 'auto') return def.control;
   if (isBoolPair(values)) return 'toggle';
@@ -235,7 +258,7 @@ export function blankKwarg() {
     values: ['false', 'true'], default: 'false', control: 'auto',
     target: 'chat_template_kwargs', type: 'auto',
     visible: true, adminOnly: false, sendWhenHidden: true, parentId: '', showIf: null,
-    min: null, max: null, step: null, unit: '', zeroOff: false, rules: [],
+    min: null, max: null, step: null, unit: '', zeroOff: false, stops: [], rules: [],
     replayWhen: '', replayAs: 'reasoning_content'
   };
 }
@@ -274,6 +297,15 @@ export const KWARG_PRESETS = [
     })
   },
   {
+    key: 'reasoning_levels', label: 'reasoning_budget_tokens (named levels)',
+    note: 'The thinking budget as words, such as Off, Low, Medium and High. Each word sends its number at the top level of the request.',
+    make: () => ({
+      ...blankKwarg(), name: 'reasoning_budget_tokens', label: 'Thinking', chip: '{value}',
+      description: 'How much the model may think before it answers',
+      ...stepFields(DEFAULT_STEPS), default: '2048', target: 'body', type: 'number'
+    })
+  },
+  {
     key: 'preserve_thinking', label: 'preserve_thinking (paired)',
     note: 'Hidden kwarg meant to follow a thinking toggle. Sends past thinking back when true.',
     make: () => ({
@@ -309,13 +341,19 @@ export function kwargChip(def, value) {
   if (value == null || value === '') return '';
   const control = controlOf(def);
   if (control === 'toggle') return /^true$/i.test(String(value)) ? (def.chip || def.label || 'On') : '';
+  if (isSteps(def)) {
+    const stop = stopOf(def, value);
+    if (stop && isOffStep(stop)) return '';
+    const name = stopLabel(def, value);
+    return def.chip ? def.chip.split('{value}').join(name) : name;
+  }
   if (control === 'range') {
     if (def.zeroOff && Number(value) === 0) return '';
     const short = chipNumber(value);
     if (def.chip) return def.chip.split('{value}').join(short);
     return def.unit ? short + ' ' + def.unit : short;
   }
-  if (def.chip) return def.chip;
   const s = String(value);
-  return s.charAt(0).toUpperCase() + s.slice(1);
+  const shown = s.charAt(0).toUpperCase() + s.slice(1);
+  return def.chip ? def.chip.split('{value}').join(shown) : shown;
 }

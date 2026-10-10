@@ -2962,5 +2962,13 @@
   "0 means off": "0 表示关闭",
   "At 0 the picker says Off and the model name shows no chip.": "为 0 时,选择器显示关闭,模型名称旁不显示标签。",
   "Shown beside the model name. {value} becomes the current number, as in Thinking · {value} tokens.": "显示在模型名称旁。{value} 会替换为当前数值,例如 思考 · {value} tokens。",
-  "Thinking · {value} tokens": "思考 · {value} tokens"
+  "Thinking · {value} tokens": "思考 · {value} tokens",
+  "Labelled steps always render as a slider.": "带标签的档位始终以滑块显示。",
+  "Labelled steps": "带标签的档位",
+  "Steps": "档位",
+  "Remove step": "删除档位",
+  "Add step": "添加档位",
+  "{value} becomes the word for the current step.": "{value} 会替换为当前档位的文字。",
+  "Hide from model name": "在模型名称中隐藏",
+  "Members slide through these in order. Each label is what they see, and its number is what gets sent. A step with Hide from model name ticked still shows its word in the picker, but the model name gets no chip for it.": "成员按顺序滑动这些档位。他们看到的是标签，发送的是对应的数字。开启“在模型名称中隐藏”的档位仍会在选择器中显示文字，但模型名称中不会为它显示标签。"
 }

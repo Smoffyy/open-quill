@@ -2962,5 +2962,13 @@
   "0 means off": "0 bedeutet aus",
   "At 0 the picker says Off and the model name shows no chip.": "Bei 0 zeigt die Auswahl Aus an und neben dem Modellnamen erscheint kein Chip.",
   "Shown beside the model name. {value} becomes the current number, as in Thinking · {value} tokens.": "Wird neben dem Modellnamen angezeigt. {value} wird zur aktuellen Zahl, etwa Denken · {value} Tokens.",
-  "Thinking · {value} tokens": "Denken · {value} Tokens"
+  "Thinking · {value} tokens": "Denken · {value} Tokens",
+  "Labelled steps always render as a slider.": "Benannte Stufen werden immer als Schieberegler angezeigt.",
+  "Labelled steps": "Benannte Stufen",
+  "Steps": "Stufen",
+  "Remove step": "Stufe entfernen",
+  "Add step": "Stufe hinzufügen",
+  "{value} becomes the word for the current step.": "{value} wird durch das Wort der aktuellen Stufe ersetzt.",
+  "Hide from model name": "Im Modellnamen ausblenden",
+  "Members slide through these in order. Each label is what they see, and its number is what gets sent. A step with Hide from model name ticked still shows its word in the picker, but the model name gets no chip for it.": "Mitglieder schieben in dieser Reihenfolge durch die Stufen. Sichtbar ist die Bezeichnung, gesendet wird die Zahl. Bei einer Stufe mit aktiviertem „Im Modellnamen ausblenden“ zeigt die Auswahl ihr Wort, der Modellname bekommt dafür aber kein Chip."
 }

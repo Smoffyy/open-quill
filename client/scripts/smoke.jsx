@@ -87,6 +87,7 @@ const kwargModel = {
     { id: 'b', name: 'thinking_budget_tokens', label: 'Thinking budget', target: 'body', type: 'number', min: 1024, max: 8192, step: 1024, default: '1024', values: [], showIf: { id: 'think', value: 'true' } },
     { id: 'think', name: 'enable_thinking', label: 'Extended thinking', values: ['false', 'true'], default: 'false' },
     { id: 'eff', name: 'reasoning_effort', values: ['low', 'medium', 'high'], default: 'medium' },
+    { id: 'levels', name: 'reasoning_budget_tokens', label: 'Thinking', chip: '{value}', target: 'body', type: 'number', default: '2048', values: ['0', '1024', '2048', '4096'], stops: [{ label: 'Off', value: '0', off: true }, { label: 'Low', value: '1024', off: false }, { label: 'Medium', value: '2048', off: false }, { label: 'High', value: '4096', off: false }] },
     { id: 'keep', name: 'preserve_thinking', values: ['false', 'true'], parentId: 'think', rules: [{ when: 'true', value: 'true', send: true }] }
   ]
 };

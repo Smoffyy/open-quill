@@ -69,10 +69,22 @@ export function kwargVisible(defs, values, def) {
   return def.visible !== false && gateOpen(defs, values, def);
 }
 
+function stopsOf(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, MAX_VALUES)
+    .filter(s => s && String(s.value ?? '').trim() !== '' && num(s.value) != null)
+    .map(s => {
+      const value = String(num(s.value));
+      return { label: text(s.label, 40).trim() || value, value, off: s.off == null ? value === '0' : !!s.off };
+    });
+}
+
 export function normalizeKwarg(raw, index = 0) {
   const src = raw && typeof raw === 'object' ? raw : {};
-  const values = (Array.isArray(src.values) ? src.values : String(src.values ?? '').split(','))
+  const stops = stopsOf(src.stops);
+  const list = (Array.isArray(src.values) ? src.values : String(src.values ?? '').split(','))
     .map(v => slug(v, 80)).filter(v => v !== '').slice(0, MAX_VALUES);
+  const values = stops.length ? stops.map(s => s.value) : list;
   const rules = (Array.isArray(src.rules) ? src.rules : []).slice(0, MAX_VALUES).map(r => ({
     when: slug(r && r.when, 80),
     value: text(r && r.value, 200),
@@ -85,6 +97,7 @@ export function normalizeKwarg(raw, index = 0) {
     description: text(src.description, 300),
     chip: text(src.chip, 40),
     values,
+    stops,
     default: slug(src.default, 200),
     control: KWARG_CONTROLS.includes(src.control) ? src.control : 'auto',
     target: KWARG_TARGETS.includes(src.target) ? src.target : 'chat_template_kwargs',
@@ -109,6 +122,7 @@ export function normalizeKwarg(raw, index = 0) {
     // A range is its own source of truth for what may be sent; keeping an
     // enumerated list alongside it would leave two answers to the same question.
     def.values = [];
+    def.stops = [];
     const d = clampToRange(def, def.default);
     def.default = d == null ? '' : String(d);
     return def;
@@ -181,6 +195,7 @@ export function kwargDefs(model) {
 
 export function controlOf(def) {
   if (isRange(def)) return 'range';
+  if (def.stops?.length) return 'slider';
   if (def.control && def.control !== 'auto') return def.control;
   if (isBoolPair(def.values)) return 'toggle';
   if (def.values.length > 5) return 'select';
@@ -319,7 +334,7 @@ export function stripNestedKwargs(payload) {
 export function publicKwargDefs(model) {
   return kwargDefs(model).map(d => ({
     id: d.id, name: d.name, label: d.label, description: d.description, chip: d.chip,
-    values: d.values, default: d.default, control: d.control, type: d.type, target: d.target,
+    values: d.values, stops: d.stops, default: d.default, control: d.control, type: d.type, target: d.target,
     visible: d.visible, adminOnly: d.adminOnly, sendWhenHidden: d.sendWhenHidden,
     parentId: d.parentId, showIf: d.showIf, min: d.min, max: d.max, step: d.step, unit: d.unit, zeroOff: d.zeroOff, rules: d.rules
   }));

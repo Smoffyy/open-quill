@@ -2962,5 +2962,13 @@
   "0 means off": "0 はオフ",
   "At 0 the picker says Off and the model name shows no chip.": "0 のとき、ピッカーにはオフと表示され、モデル名の横にチップは表示されません。",
   "Shown beside the model name. {value} becomes the current number, as in Thinking · {value} tokens.": "モデル名の横に表示されます。{value} は現在の数値に置き換わります(例: 思考 · {value} tokens)。",
-  "Thinking · {value} tokens": "思考 · {value} tokens"
+  "Thinking · {value} tokens": "思考 · {value} tokens",
+  "Labelled steps always render as a slider.": "ラベル付きの段階は常にスライダーで表示されます。",
+  "Labelled steps": "ラベル付きの段階",
+  "Steps": "段階",
+  "Remove step": "段階を削除",
+  "Add step": "段階を追加",
+  "{value} becomes the word for the current step.": "{value} は現在の段階の語に置き換えられます。",
+  "Hide from model name": "モデル名から非表示",
+  "Members slide through these in order. Each label is what they see, and its number is what gets sent. A step with Hide from model name ticked still shows its word in the picker, but the model name gets no chip for it.": "メンバーはこの段階を順番にスライドします。表示されるのはラベルで、送信されるのはその数値です。「モデル名から非表示」にチェックを入れた段階は選択画面に語が表示されますが、その段階についてモデル名にチップは付きません。"
 }

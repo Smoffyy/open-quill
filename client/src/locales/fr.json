@@ -2962,5 +2962,13 @@
   "0 means off": "0 signifie désactivé",
   "At 0 the picker says Off and the model name shows no chip.": "À 0, le sélecteur affiche Désactivé et aucune étiquette n'apparaît à côté du nom du modèle.",
   "Shown beside the model name. {value} becomes the current number, as in Thinking · {value} tokens.": "Affichée à côté du nom du modèle. {value} devient le nombre actuel, comme dans Réflexion · {value} tokens.",
-  "Thinking · {value} tokens": "Réflexion · {value} tokens"
+  "Thinking · {value} tokens": "Réflexion · {value} tokens",
+  "Labelled steps always render as a slider.": "Les paliers libellés s'affichent toujours sous forme de curseur.",
+  "Labelled steps": "Paliers libellés",
+  "Steps": "Paliers",
+  "Remove step": "Supprimer le palier",
+  "Add step": "Ajouter un palier",
+  "{value} becomes the word for the current step.": "{value} est remplacé par le mot du palier actuel.",
+  "Hide from model name": "Masquer du nom du modèle",
+  "Members slide through these in order. Each label is what they see, and its number is what gets sent. A step with Hide from model name ticked still shows its word in the picker, but the model name gets no chip for it.": "Les membres parcourent ces paliers dans l'ordre. Ils voient le libellé, et c'est son nombre qui est envoyé. Pour un palier où « Masquer du nom du modèle » est coché, le sélecteur affiche toujours son mot, mais le nom du modèle n'affiche aucune puce pour lui."
 }

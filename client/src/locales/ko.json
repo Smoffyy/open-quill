@@ -2962,5 +2962,13 @@
   "0 means off": "0은 끄기",
   "At 0 the picker says Off and the model name shows no chip.": "0일 때 선택기에는 끔으로 표시되고 모델 이름 옆에 칩이 표시되지 않습니다.",
   "Shown beside the model name. {value} becomes the current number, as in Thinking · {value} tokens.": "모델 이름 옆에 표시됩니다. {value}는 현재 숫자로 바뀝니다(예: 사고 · {value} tokens).",
-  "Thinking · {value} tokens": "사고 · {value} tokens"
+  "Thinking · {value} tokens": "사고 · {value} tokens",
+  "Labelled steps always render as a slider.": "라벨이 있는 단계는 항상 슬라이더로 표시됩니다.",
+  "Labelled steps": "라벨이 있는 단계",
+  "Steps": "단계",
+  "Remove step": "단계 삭제",
+  "Add step": "단계 추가",
+  "{value} becomes the word for the current step.": "{value}은(는) 현재 단계의 단어로 바뀝니다.",
+  "Hide from model name": "모델 이름에서 숨기기",
+  "Members slide through these in order. Each label is what they see, and its number is what gets sent. A step with Hide from model name ticked still shows its word in the picker, but the model name gets no chip for it.": "멤버는 이 단계들을 순서대로 밀어 봅니다. 보이는 것은 라벨이고, 전송되는 것은 그 숫자입니다. '모델 이름에서 숨기기'를 체크한 단계는 선택기에 그 단어가 보이지만 모델 이름에는 해당 칩이 붙지 않습니다."
 }
