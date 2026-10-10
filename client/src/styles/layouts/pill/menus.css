@@ -11,7 +11,7 @@
 [data-layout="pill"] .effort-rail, [data-layout="pill"] .effort-thumb { border-radius: 999px; }
 [data-layout="pill"] .model-opt .check, [data-layout="pill"] .plus-menu .pm-check { color: var(--text); }
 [data-layout="pill"] .model-trigger { gap: 4px; font-weight: 400; line-height: 20px; }
-[data-layout="pill"] .model-trigger .ext { color: var(--text-faint); font-weight: 400; font-size: 14px; }
+[data-layout="pill"] .model-trigger .ext { color: var(--text-faint); font-weight: 400; font-size: 14px; line-height: 1; }
 
 @media (max-width: 768px) {
   :root[data-layout="pill"] .model-menu {
