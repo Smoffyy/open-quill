@@ -225,7 +225,7 @@ export function ImagePicker({ value, fallback, onChange, hint, state }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button type="button" onClick={() => ref.current?.click()} title={t('Replace')}
+        <button type="button" onClick={() => ref.current?.click()} data-tip={t('Replace')} aria-label={t('Replace')}
           style={{
             width: 48, height: 48, borderRadius: 10, display: 'grid', placeItems: 'center',
             border: '1px solid var(--border-soft)', background: 'var(--surface-2)', overflow: 'hidden', flexShrink: 0
@@ -252,7 +252,7 @@ export function GlyphPicker({ value, onPick }) {
   useDismiss(open, () => setOpen(false), ref);
   return (
     <div style={{ position: 'relative' }} ref={ref}>
-      <Btn size="sm" style={{ width: 26, padding: 0 }} onClick={() => setOpen(o => !o)} title={t('Choose a glyph')} aria-label={t('Choose a glyph')}>
+      <Btn size="sm" style={{ width: 26, padding: 0 }} onClick={() => setOpen(o => !o)} data-tip={t('Choose a glyph')} aria-label={t('Choose a glyph')}>
         {value && value !== 'none' ? <QpIcon name={value} style={{ width: 15, height: 15 }} /> : <span className="cp-hint">—</span>}
       </Btn>
       {open && (
@@ -263,7 +263,7 @@ export function GlyphPicker({ value, onPick }) {
           boxShadow: 'inset 0 0 0 1px var(--pop-border), var(--pop-shadow)'
         }}>
           {QP_ICON_LIST.map(name => (
-            <button type="button" key={name} title={name}
+            <button type="button" key={name} data-tip={name} aria-label={name}
               onClick={() => { onPick(name); setOpen(false); }}
               style={{
                 width: 28, height: 28, borderRadius: 6, display: 'grid', placeItems: 'center',

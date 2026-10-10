@@ -191,7 +191,7 @@ function BashCard({ call, result }) {
         <Terminal style={{ width: 14 }} />
         <span className="tb-label">{result ? t('Terminal') : t('Running')}</span>
         <code className="tb-peek">{oneLine}</code>
-        {cwd && cwd !== '.' && <span className="tb-cwd" title={t('Working directory')}>{cwd}</span>}
+        {cwd && cwd !== '.' && <span className="tb-cwd" data-tip={t('Working directory')}>{cwd}</span>}
         {result && !failed && lines > 0 && <span className="tl-note">{plural(lines, '{n} line', '{n} lines')}</span>}
         {result && !failed && lines === 0 && <span className="tl-note">{t('no output')}</span>}
         {failed && <span className="tb-badge err">{result.exit != null ? t('exit {code}', { code: result.exit }) : t('error')}</span>}
@@ -202,7 +202,7 @@ function BashCard({ call, result }) {
         <div className="tb-inner">
           <div className="tb-cmdrow">
             <pre className="tb-cmd"><span className="tb-prompt">$</span> <code className="hljs" dangerouslySetInnerHTML={{ __html: html }} /></pre>
-            <button className="tb-copy" onClick={copy} title={copied ? t('Copied') : t('Copy')}>{copied ? <Check style={{ width: 13 }} /> : <Copy style={{ width: 13 }} />}</button>
+            <button className="tb-copy" onClick={copy} data-tip={copied ? t('Copied') : t('Copy')} aria-label={copied ? t('Copied') : t('Copy')}>{copied ? <Check style={{ width: 13 }} /> : <Copy style={{ width: 13 }} />}</button>
           </div>
           {result && (
             <div className="tb-out">
@@ -241,7 +241,7 @@ function ToolLine({ call, result, note, diff }) {
       role={openPath ? 'button' : undefined}
       tabIndex={openPath ? 0 : undefined}
       onKeyDown={openPath ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openArtifact(openPath); } } : undefined}
-      title={full || (target && target.text) || undefined}>
+      data-tip={full || (target && target.text) || undefined}>
       <Icon style={{ width: 20 }} className="tl-icon" />
       <span className="tl-verb">{verb}</span>
       {target ? <Target target={target} /> : pending ? <NamePending /> : null}
@@ -304,7 +304,7 @@ function WebSearchCard({ call, result }) {
               ? <div className="ws-results">{results.map((r, i) => {
                   const host = hostOf(r.url);
                   return (
-                    <a key={i} className="ws-result" href={safeUrl(r.url) || undefined} target="_blank" rel="noopener noreferrer" title={[r.title, r.url].filter(Boolean).join('\n')}>
+                    <a key={i} className="ws-result" href={safeUrl(r.url) || undefined} target="_blank" rel="noopener noreferrer" data-tip={[r.title, r.url].filter(Boolean).join('\n')}>
                       <span className="ws-num">{i + 1}</span>
                       <span className="ws-body">
                         <span className="ws-title">{r.title || host || r.url}</span>

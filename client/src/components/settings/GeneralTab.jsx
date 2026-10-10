@@ -5,25 +5,25 @@ import { t, useI18n } from '../../i18n.jsx';
 import { SetRow, SelectRow } from '../ui/controls.jsx';
 import { reopenSettingsAfterReload } from '../../lib/prefs.js';
 
-function Confirmable({ label, desc, action, ask, confirm, danger = true, onConfirm, error }) {
+function Confirmable({ label, desc, action, ask, confirm, onConfirm, error }) {
   const [asking, setAsking] = useState(false);
   if (!asking) {
     return (
-      <div className="field row">
-        <div><label>{label}</label><div className="muted-note">{desc}</div></div>
-        <button className={'btn' + (danger ? ' danger' : ' ghost')} onClick={() => setAsking(true)}>{action}</button>
-      </div>
+      <SetRow label={label} desc={desc}>
+        <button className="btn ghost" onClick={() => setAsking(true)}>{action}</button>
+      </SetRow>
     );
   }
   return (
-    <div className="dz-confirm" role="group" aria-label={label}>
-      <div className="muted-note">{ask}</div>
-      {error && <div className="dz-err" role="alert">{error}</div>}
-      <div className="edit-actions">
-        <button className="btn ghost" onClick={() => setAsking(false)}>{t('Cancel')}</button>
-        <button className={'btn' + (danger ? ' danger' : '')} onClick={async () => { if (await onConfirm() !== false) setAsking(false); }}>{confirm}</button>
-      </div>
-    </div>
+    <>
+      <SetRow label={label} desc={ask}>
+        <div className="set-actions">
+          <button className="btn ghost" onClick={() => setAsking(false)}>{t('Cancel')}</button>
+          <button className="btn primary" onClick={async () => { if (await onConfirm() !== false) setAsking(false); }}>{confirm}</button>
+        </div>
+      </SetRow>
+      {error && <div className="muted-note" role="alert">{error}</div>}
+    </>
   );
 }
 
@@ -73,29 +73,27 @@ export default function GeneralTab({ user, draft, onExportChats, onImportChats, 
         <div className="muted-note count-note">{draft.instructions.length}/8000</div>
       </div>
       <div className="me-section-h">{t("Your data")}</div>
-      <SetRow label={t("Export everything")} desc={t("Download everything (chats, styles, personas, prompts, memory) as one JSON file.")}>
-        <button className="btn ghost" onClick={onExportChats}><Download className="btn-ic" /> {t("Export")}</button>
-      </SetRow>
-      <SetRow label={t("Import")} desc={t("Restore from an exported file. Chats are added and profile data is merged.")}>
-        <button className="btn ghost" onClick={() => importRef.current?.click()}><Upload className="btn-ic" /> {t("Import")}</button>
+      <SetRow label={t("Export and import")} desc={t("Download everything (chats, styles, personas, prompts, memory) as one JSON file, or restore from one. Imported chats are added and profile data is merged.")}>
+        <div className="set-actions">
+          <button className="btn ghost" onClick={onExportChats}><Download className="btn-ic" /> {t("Export")}</button>
+          <button className="btn ghost" onClick={() => importRef.current?.click()}><Upload className="btn-ic" /> {t("Import")}</button>
+        </div>
         <input ref={importRef} type="file" accept="application/json,.json" hidden
           onChange={(e) => { const f = e.target.files?.[0]; if (f) onImportChats(f); e.target.value = ''; }} />
       </SetRow>
-      <div className="danger-zone">
-        <div className="dz-title">{t("Danger zone")}</div>
-        <Confirmable label={t("Delete all saved chats")} desc={t("Removes every chat and its files. Your account stays.")}
-          action={t("Delete all chats")} ask={t("Delete every saved chat? This can't be undone.")}
-          confirm={t("Yes, delete all chats")} onConfirm={clearChats} />
-        {clearMsg && <div className="muted-note" role="status">{clearMsg}</div>}
-        <Confirmable label={t("Reset all settings")} desc={t("Back to defaults for this theme. Chats and account are untouched.")}
-          action={t("Reset all settings")} ask={t("Reset every setting to this theme's defaults?")}
-          confirm={t("Yes, reset settings")} danger={false} onConfirm={() => draft.resetPrefs()} />
-        {!user.isOwner && (
-          <Confirmable label={t("Delete account")} desc={t("Permanently removes your account, all chats, and files. This cannot be undone.")}
-            action={t("Delete account")} ask={t("Are you absolutely sure? This permanently deletes your account and everything in it.")}
-            confirm={t("Yes, delete my account")} onConfirm={deleteAccount} error={delErr} />
-        )}
-      </div>
+      <div className="me-section-h">{t("Danger zone")}</div>
+      <Confirmable label={t("Delete all saved chats")} desc={t("Removes every chat and its files. Your account stays.")}
+        action={t("Delete all chats")} ask={t("Delete every saved chat? This can't be undone.")}
+        confirm={t("Delete")} onConfirm={clearChats} />
+      {clearMsg && <div className="muted-note" role="status">{clearMsg}</div>}
+      <Confirmable label={t("Reset all settings")} desc={t("Back to defaults for this theme. Chats and account are untouched.")}
+        action={t("Reset")} ask={t("Reset every setting to this theme's defaults?")}
+        confirm={t("Reset")} onConfirm={() => draft.resetPrefs()} />
+      {!user.isOwner && (
+        <Confirmable label={t("Delete account")} desc={t("Permanently removes your account, all chats, and files. This cannot be undone.")}
+          action={t("Delete account")} ask={t("Delete your account and everything in it? This cannot be undone.")}
+          confirm={t("Delete")} onConfirm={deleteAccount} error={delErr} />
+      )}
     </>
   );
 }

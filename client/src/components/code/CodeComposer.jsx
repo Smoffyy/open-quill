@@ -33,7 +33,7 @@ function ModelRow({ m, checked, kbd, nested, isAdmin, onPick }) {
   return (
     <button type="button" role="menuitemradio" aria-checked={checked} disabled={noCode || down}
       className={'cx-mi cx-model' + (nested ? ' nested' : '') + (m.unavailable || noCode ? ' unavail' : '')} onClick={onPick}
-      title={noCode ? t('{name} is not available in Code.', { name: m.displayName }) : m.unavailable ? t('{name} is currently unavailable.', { name: m.displayName }) : m.description || undefined}>
+      data-tip={noCode ? t('{name} is not available in Code.', { name: m.displayName }) : m.unavailable ? t('{name} is currently unavailable.', { name: m.displayName }) : m.description || undefined}>
       <span className="cx-mi-main">
         <span className="cx-mi-label">
           {m.displayName}
@@ -141,7 +141,7 @@ export default function CodeComposer({
         {files.length > 0 && (
           <div className="cx-files-row">
             {files.map(f => (
-              <span key={f.id} className="cx-file-chip" title={f.name}>
+              <span key={f.id} className="cx-file-chip" data-tip={f.name}>
                 {f.preview ? <img src={f.preview} alt="" aria-hidden="true" /> : <FileText />}
                 <span className="cx-file-name">{f.name}</span>
                 <button type="button" onClick={() => removeFile(f.id)} aria-label={t('Remove {name}', { name: f.name })}><X /></button>

@@ -133,7 +133,7 @@ export default function ReleasesSection() {
                       <b>{r.note || kindLine(r)}</b>
                       <span>{[r.note ? kindLine(r) : '', r.author, live ? t('live now') : ''].filter(Boolean).join(' · ')}</span>
                     </span>
-                    <span className="rl-when" title={new Date(r.createdAt).toLocaleString()}>{fmtAgo(r.createdAt)}</span>
+                    <span className="rl-when" data-tip={new Date(r.createdAt).toLocaleString()}>{fmtAgo(r.createdAt)}</span>
                   </button>
                   {expanded && (
                     <div className="rl-body">

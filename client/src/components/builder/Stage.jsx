@@ -217,7 +217,7 @@ function SampleChats() {
         <div key={c.id} className={'chat-row' + (c.active ? ' active' : '')} data-oq-sample="">
           <span className="row-ic"><span className="row-dot" aria-hidden="true" /></span>
           <span className="title">{c.title}</span>
-          <button type="button" className="row-ctrl" title={t('Options')} aria-label={t('Options')}
+          <button type="button" className="row-ctrl" data-tip={t('Options')} aria-label={t('Options')}
             onClick={(e) => { e.stopPropagation(); const at = menuAtButton(e.currentTarget); setMenu(m => (m && m.id === c.id ? null : { id: c.id, at })); }}>
             <DotsV />
           </button>
@@ -306,11 +306,11 @@ function SampleAttachment() {
   return createPortal(
     <div className="attach-row" data-oq-sample="">
       <div className="attach-chip">
-        <div className="attach-file" title="release-notes.md">
+        <div className="attach-file" data-tip="release-notes.md">
           <div className="attach-name">release-notes.md</div>
           <div className="attach-foot"><span className="attach-type">MD</span></div>
         </div>
-        <button type="button" className="attach-x" title={t('Remove')} aria-label={t('Remove')}><X /></button>
+        <button type="button" className="attach-x" data-tip={t('Remove')} aria-label={t('Remove')}><X /></button>
       </div>
     </div>, host);
 }

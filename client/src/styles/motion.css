@@ -29,8 +29,6 @@ button:focus:not(:focus-visible), a:focus:not(:focus-visible) { outline: none; }
 /* model dropdown option icon */
 .model-opt .mo-icon { width: 20px; height: 20px; border-radius: 5px; object-fit: contain; flex: none; margin-top: 0; }
 
-/* settings danger zone */
-.danger-zone { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--border); }
 .btn.danger { background: color-mix(in srgb, var(--danger) 16%, transparent); color: color-mix(in srgb, var(--danger) 52%, var(--text)); border: 1px solid color-mix(in srgb, var(--danger) 38%, transparent); }
 .btn.danger:hover { background: color-mix(in srgb, var(--danger) 26%, transparent); }
 

@@ -1708,16 +1708,16 @@ export default function App() {
               {empty && <ModelPickerSlot at="topbar">{modelPicker}</ModelPickerSlot>}
               <div className="incognito-title"><Ghost style={{ width: 18 }} /> {t("Incognito chat")}</div>
             </div>
-            <button className="incognito-close" onClick={toggleIncognito} title={t("Exit incognito")} aria-label={t("Exit incognito")} disabled={streaming || queued}><X style={{ width: 16 }} /></button>
+            <button className="incognito-close" onClick={toggleIncognito} data-tip={t("Exit incognito")} aria-label={t("Exit incognito")} disabled={streaming || queued}><X style={{ width: 16 }} /></button>
           </div>
         )}
         {empty && !codeMode && (
-          <button className="mobile-menu-btn empty-menu" onClick={() => setMobileDrawer(true)} title={t("Menu")} aria-label={t("Menu")}><Menu style={{ width: 20 }} /></button>
+          <button className="mobile-menu-btn empty-menu" onClick={() => setMobileDrawer(true)} data-tip={t("Menu")} aria-label={t("Menu")}><Menu style={{ width: 20 }} /></button>
         )}
         {!incognito && empty && !codeMode && (
           <TopbarActions className="home-actions"
             leading={<>
-              <button className="paper-btn" onClick={toggleIncognito} title={t("Incognito chat, not saved")} aria-label={t("Incognito chat, not saved")} disabled={streaming || queued}>
+              <button className="paper-btn" onClick={toggleIncognito} data-tip={t("Incognito chat, not saved")} aria-label={t("Incognito chat, not saved")} disabled={streaming || queued}>
                 <Ghost />
               </button>
             </>}
@@ -1810,11 +1810,11 @@ export default function App() {
             </div>
             {user?.prefs?.threadRail === true && <ThreadRail items={railList} scrollRef={scrollRef} matches={findMatches} onJump={railJump} />}
             {outlineOpen && outline.length > 0 && user?.prefs?.threadOutline !== false && <Outline items={outline} onJump={outlineJump} onClose={() => setOutlineOpen(false)} />}
-            {showJump && <button className="to-bottom" onClick={jumpDown} title={t('Jump to latest')} aria-label={t('Jump to latest')}><Down style={{ width: 17 }} /></button>}
             <div className={'composer-wrap active-composer' + (layout.floatingComposer ? ' floating' : '')}>
               {user?.prefs?.engineStrip === true && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
               {callDock}
               <Composer {...composerProps} thread focusKey={focusTick}
+                jump={showJump ? <button className="to-bottom" onClick={jumpDown} data-tip={t('Jump to latest')} aria-label={t('Jump to latest')}><Down style={{ width: 17 }} /></button> : null}
                 panel={!incognito && (plans.plan || question) ? <AgentPanel plan={plans.plan} previousPlan={plans.previousPlan} onDismissPlan={dismissPlan} question={question} onAnswer={answerQuestion} onSkip={() => answerQuestion(null)} /> : null}
                 contextRing={contextRing} footer={layout.id === 'card' ? <Disclaimer text={cfg.disclaimer} /> : null} />
               {layout.id !== 'card' && <Disclaimer text={cfg.disclaimer} />}

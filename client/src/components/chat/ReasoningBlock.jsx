@@ -213,7 +213,7 @@ export default function ReasoningBlock({ text, live, durationMs = 0, collapsible
             )}
           </div>
           {!live && (
-            <button className="rb-copy" onClick={doCopy} title={copied ? t('Copied') : t('Copy')} aria-label={t('Copy')}>
+            <button className="rb-copy" onClick={doCopy} data-tip={copied ? t('Copied') : t('Copy')} aria-label={t('Copy')}>
               {copied ? <Check /> : <Copy />}
             </button>
           )}

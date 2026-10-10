@@ -95,7 +95,7 @@ export default function StyleSubmenu({ styles = [], stylesReady = true, styleId 
       {styles.map(x => (
         <button key={x.id} className={'style-item' + (x.id === styleId ? ' active' : '')} onClick={() => onSelect?.(x.id)}>
           <span className="style-item-name">{x.name}</span>
-          <span className="style-del" title={t("Delete style")} onClick={(e) => removeStyle(e, x.id)}><Trash style={{ width: 13 }} /></span>
+          <span className="style-del" data-tip={t("Delete style")} aria-label={t("Delete style")} onClick={(e) => removeStyle(e, x.id)}><Trash style={{ width: 13 }} /></span>
           {x.id === styleId && <Check style={{ width: 14 }} />}
         </button>
       ))}

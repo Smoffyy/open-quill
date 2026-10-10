@@ -21,7 +21,7 @@ export default function NotFound({ appName, appIcon, path, contact, onHome, onSe
         <p className="nf-sub">
           {t('Nothing on {app} answers to that address. It may have been renamed, deleted, or never existed.', { app: appName || 'open-quill' })}
         </p>
-        {!!path && <div className="nf-path" title={path}>{path}</div>}
+        {!!path && <div className="nf-path" data-tip={path}>{path}</div>}
         <div className="nf-actions">
           <button className="nf-primary" onClick={onHome}><NewChatIcon /> {t('Start a new chat')}</button>
           <button className="nf-ghost" onClick={onSearch}><Search /> {t('Search your chats')}</button>

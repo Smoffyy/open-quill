@@ -46,7 +46,7 @@ function Plan({ plan, onDismiss }) {
           <Chevron className="ap-chev" aria-hidden="true" />
         </button>
         {onDismiss && (
-          <button type="button" className="ap-dismiss" title={t('Dismiss plan')} aria-label={t('Dismiss plan')} onClick={onDismiss}><X aria-hidden="true" /></button>
+          <button type="button" className="ap-dismiss" data-tip={t('Dismiss plan')} aria-label={t('Dismiss plan')} onClick={onDismiss}><X aria-hidden="true" /></button>
         )}
       </div>
       {open && plan.items.length > 0 && <Steps items={plan.items} />}
@@ -101,7 +101,7 @@ export default function AgentPanel({ plan, previousPlan, onDismissPlan, question
     <div className="agent-dock">
       {previousPlan && (
         <button type="button" className={'ap-prev-toggle' + (withPrev ? ' open' : '')} aria-expanded={withPrev}
-          aria-label={label} title={label} onClick={() => setShowPrev(v => !v)}>
+          aria-label={label} data-tip={label} onClick={() => setShowPrev(v => !v)}>
           <Chevron aria-hidden="true" />
         </button>
       )}

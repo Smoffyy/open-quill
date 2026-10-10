@@ -20,7 +20,7 @@ function Message({ turn, busy, onEdit, onRole, onDrop }) {
     <div className={'pg-turn pg-msg r-' + turn.role}>
       <div className="pg-turn-bar">
         <button type="button" className={'pg-role r-' + turn.role} disabled={busy}
-          title={t('Change role')} onClick={() => onRole(ROLES[(ROLES.findIndex(r => r.value === turn.role) + 1) % ROLES.length].value)}>
+          data-tip={t('Change role')} onClick={() => onRole(ROLES[(ROLES.findIndex(r => r.value === turn.role) + 1) % ROLES.length].value)}>
           {t(ROLES.find(r => r.value === turn.role)?.label || turn.role)}
         </button>
         <span className="cp-spacer" />

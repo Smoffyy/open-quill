@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 export const SUBMENU_CLOSE_DELAY = 160;
 
 export function useSubmenus(opts = {}) {
+  const openDelay = opts.openDelay ?? 0;
   const closeDelay = opts.closeDelay ?? SUBMENU_CLOSE_DELAY;
   const [open, setOpen] = useState(null);
   const timer = useRef(null);
@@ -17,9 +18,17 @@ export function useSubmenus(opts = {}) {
   return useMemo(() => ({
     open,
     isOpen: (id) => open === id,
-    hoverOpen: (id) => {
+    show: (id) => {
       clear();
       setOpen(id);
+    },
+    hoverOpen: (id) => {
+      clear();
+      if (!openDelay || open !== null) {
+        setOpen(id);
+        return;
+      }
+      timer.current = setTimeout(() => setOpen(id), openDelay);
     },
     hoverClose: () => {
       clear();
@@ -33,5 +42,5 @@ export function useSubmenus(opts = {}) {
       clear();
       setOpen(null);
     }
-  }), [open, closeDelay, clear]);
+  }), [open, openDelay, closeDelay, clear]);
 }

@@ -505,7 +505,7 @@
 .composer-wrap:not(.floating) .call-dock { position: absolute; left: 0; right: 0; bottom: 100%; pointer-events: none; }
 .composer-wrap:not(.floating) .call-dock > * { pointer-events: auto; }
 /* the orb lands where the jump button sits, so lift it by the dock's height */
-.main:has(.call-dock) .to-bottom { transform: translate(-50%, -122px); }
+.composer-wrap:has(.call-dock) .to-bottom { transform: translate(-50%, -122px); }
 .call-orb-wrap { position: relative; width: 92px; height: 92px; display: grid; place-items: center;
   transform: scale(.2); opacity: 0; transform-origin: center; will-change: transform, opacity;
   transition: transform .32s cubic-bezier(.34, 1.3, .64, 1), opacity .22s ease, filter var(--fx-t, .3s) ease; }

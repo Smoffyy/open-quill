@@ -95,7 +95,7 @@ export default function Composer({
   removedModel = null, skills = [], onToggleSkill = null, onManageSkills = null,
   queueCount = 0, onQueue, onSteer, canSteer = false, onManageConnectors = null, attachCombo = '',
   compareIds = [], onSetCompare, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
-  contextRing = null, thread = false, footer = null, draftId, panel = null
+  contextRing = null, thread = false, footer = null, draftId, panel = null, jump = null
 }) {
   const composerPlaceholder = useThemeText('composer.placeholder', t('How can I help you today?'));
   const layout = useLayout();
@@ -362,7 +362,10 @@ export default function Composer({
   const budgetState = budget && budget.cap ? budget.state : 'none';
   const budgetBlock = budgetState === 'over' && budget?.enforce && !canUseUnavailable;
   const showBudgetBanner = budgetState === 'warn' || budgetState === 'over';
-  const sunsetOnly = !!sunsetInfo && !bannerMounted && !showBudgetBanner && !safetyFlagged && !conversationEnded && !removedModel && !panel;
+  const otherBanner = showBudgetBanner || safetyFlagged || conversationEnded || removedModel || panel;
+  const anyBanner = bannerMounted || otherBanner || sunsetInfo;
+  const onlyUnavailable = !otherBanner && !sunsetInfo;
+  const sunsetOnly = !!sunsetInfo && !bannerMounted && !otherBanner;
   const activeTools = [];
   if (webSearchAvailable && webSearch) activeTools.push({ id: 'websearch', icon: <Globe />, label: t("Web search"), off: () => onToggleWebSearch && onToggleWebSearch() });
   for (const sk of skills) if (sk.enabled) activeTools.push({ id: 'skill:' + sk.id, icon: <SkillIcon />, label: sk.name, off: () => onToggleSkill && onToggleSkill(sk) });
@@ -375,10 +378,11 @@ export default function Composer({
   const fmtUsd = (n) => '$' + (Number(n || 0) > 0 && Number(n || 0) < 0.01 ? Number(n).toFixed(4) : Number(n || 0).toFixed(2));
 
   return (
-    <div className={'composer-stack' + ((bannerMounted || showBudgetBanner || safetyFlagged || conversationEnded || removedModel || sunsetInfo || panel) ? ' has-banner' : '')}>
+    <div className={'composer-stack' + (anyBanner ? ' has-banner' : '')}>
     {dragActive && <DropOverlay />}
-    {(bannerMounted || showBudgetBanner || safetyFlagged || conversationEnded || removedModel || sunsetInfo || panel) && (
-      <div className={'unavail-bg' + (bannerOut && !showBudgetBanner && !safetyFlagged && !conversationEnded && !removedModel && !sunsetInfo && !panel ? ' out' : '')}
+    {jump}
+    {anyBanner && (
+      <div className={'unavail-bg' + (bannerOut && onlyUnavailable ? ' out' : '')}
         style={sunsetOnly ? {
           background: `color-mix(in srgb, #e5484d ${sunsetInfo.mix}%, var(--bg))`,
           borderColor: `color-mix(in srgb, #e5484d ${Math.min(70, sunsetInfo.mix + 12)}%, var(--border-soft))`,
@@ -449,14 +453,14 @@ export default function Composer({
               {f.preview
                 ? <img src={f.preview} alt={f.name} />
                 : (
-                  <div className="attach-file" title={f.name}>
+                  <div className="attach-file" data-tip={f.name}>
                     <div className="attach-name">{f.name}</div>
                     <div className="attach-foot">
                       <span className="attach-type">{extLabel(f.name)}</span>
                     </div>
                   </div>
                 )}
-              <button className="attach-x" onClick={() => removeFile(f.id)} title={t("Remove")} aria-label={t("Remove")}><X /></button>
+              <button className="attach-x" onClick={() => removeFile(f.id)} data-tip={t("Remove")} aria-label={t("Remove")}><X /></button>
             </div>
           ))}
         </div>
@@ -477,10 +481,10 @@ export default function Composer({
       {canSteer && (
         <div className="steer-row">
           <div className="steer-seg">
-            <button className={steerMode ? 'on' : ''} onClick={() => setSteerMode(true)} title={t('Correct the reply that is being written right now')}>
+            <button className={steerMode ? 'on' : ''} onClick={() => setSteerMode(true)} data-tip={t('Correct the reply that is being written right now')}>
               <Steer style={{ width: 13 }} /> {t('Steer')}
             </button>
-            <button className={!steerMode ? 'on' : ''} onClick={() => setSteerMode(false)} title={t('Send after this reply finishes')}>
+            <button className={!steerMode ? 'on' : ''} onClick={() => setSteerMode(false)} data-tip={t('Send after this reply finishes')}>
               {t('Queue')}{queueCount > 0 ? ` (${queueCount})` : ''}
             </button>
           </div>
@@ -498,7 +502,7 @@ export default function Composer({
         <div className="queued-chip compare-chip">
           <span className="queued-label">{t("Compare:")}</span>
           <span className="queued-text">{[models?.find(m => m.id === currentId)?.displayName || t('Current'), ...compareIds.map(id => models?.find(m => m.id === id)?.displayName || id)].join(' · ')}</span>
-          <button className="queued-x" title={t("Cancel comparison")} onClick={() => onSetCompare?.([])}><X style={{ width: 12 }} /></button>
+          <button className="queued-x" data-tip={t("Cancel comparison")} aria-label={t("Cancel comparison")} onClick={() => onSetCompare?.([])}><X style={{ width: 12 }} /></button>
         </div>
       )}
       <div className="composer-bar">
@@ -519,7 +523,7 @@ export default function Composer({
                 </button>
                 {captureAvailable && (
                   <button className="pm-item" onClick={onScreenshot} disabled={!canScreenshot || capturing}
-                    title={canScreenshot ? undefined : t("This model can't read images.")}>
+                    data-tip={canScreenshot ? undefined : t("This model can't read images.")}>
                     <Screenshot />
                     <span className="pm-label">{t('Take a screenshot')}</span>
                   </button>
@@ -562,10 +566,10 @@ export default function Composer({
                       {(savedPrompts || []).length === 0 && <div className="pm-empty">{t("No saved prompts yet.")}</div>}
                       {(savedPrompts || []).map(p => (
                         <div key={p.id} className="pm-prompt">
-                          <button className="pm-prompt-use" title={p.text} onClick={() => { setPlusMenu(false); onUsePrompt && onUsePrompt(p.text); }}>
+                          <button className="pm-prompt-use" data-tip={p.text} onClick={() => { setPlusMenu(false); onUsePrompt && onUsePrompt(p.text); }}>
                             <Star style={{ width: 13 }} /> <span className="pm-prompt-title">{p.title}</span>
                           </button>
-                          {onDeletePrompt && <button className="pm-prompt-x" title={t("Delete")} onClick={(e) => { e.stopPropagation(); onDeletePrompt(p.id); }}><X style={{ width: 12 }} /></button>}
+                          {onDeletePrompt && <button className="pm-prompt-x" data-tip={t("Delete")} aria-label={t("Delete")} onClick={(e) => { e.stopPropagation(); onDeletePrompt(p.id); }}><X style={{ width: 12 }} /></button>}
                         </div>
                       ))}
                       {onSavePrompt && hasText && (
@@ -634,7 +638,7 @@ export default function Composer({
                     <PmSub onMouseEnter={() => sub.hoverOpen('skills')} onMouseLeave={sub.hoverClose}>
                       {skills.length === 0 && <div className="pm-empty">{t('No skills yet')}</div>}
                       {skills.map(sk => (
-                        <button key={sk.id} className="pm-item" title={sk.description || sk.name}
+                        <button key={sk.id} className="pm-item" data-tip={sk.description || sk.name}
                           onClick={() => { onToggleSkill && onToggleSkill(sk); closePlusMenu(); }}>
                           <SkillIcon />
                           <span className="pm-label">{sk.name}</span>
@@ -674,17 +678,17 @@ export default function Composer({
           {project && (
             <div className="composer-project">
               {onOpenProject ? (
-                <button type="button" className="cp-open" onClick={() => onOpenProject(project.id)} title={t('Open project {name}', { name: project.name })}>
+                <button type="button" className="cp-open" onClick={() => onOpenProject(project.id)} data-tip={t('Open project {name}', { name: project.name })}>
                   <Box style={{ width: 14 }} />
                   <span className="cp-name">{project.name}</span>
                 </button>
               ) : (
-                <span className="cp-open" title={t('In project: {name}', { name: project.name })}>
+                <span className="cp-open" data-tip={t('In project: {name}', { name: project.name })}>
                   <Box style={{ width: 14 }} />
                   <span className="cp-name">{project.name}</span>
                 </span>
               )}
-              {onClearProject && <button className="cp-x" onClick={onClearProject} title={t("Remove from project")}><X style={{ width: 12 }} /></button>}
+              {onClearProject && <button className="cp-x" onClick={onClearProject} data-tip={t("Remove from project")} aria-label={t("Remove from project")}><X style={{ width: 12 }} /></button>}
             </div>
           )}
         </div>
@@ -710,7 +714,7 @@ export default function Composer({
           {thread && layout.id === 'card' && (voiceMic || voiceCall) && (
             <div className="voice-wrap" ref={voiceRef}>
               <button type="button" className={'voice-trigger' + (voiceMenu ? ' on' : '')} onClick={() => setVoiceMenu(m => !m)}
-                aria-label={t('Voice options')} title={t('Voice options')} aria-haspopup="menu" aria-expanded={voiceMenu}>
+                aria-label={t('Voice options')} data-tip={t('Voice options')} aria-haspopup="menu" aria-expanded={voiceMenu}>
                 <ChevDown style={{ width: 14, height: 14 }} />
               </button>
               {voiceMenu && (
@@ -730,13 +734,13 @@ export default function Composer({
             </div>
           )}
           {steering && hasText && (
-            <button key="steer" className="send steer" onClick={doSend} title={t('Steer this reply')}><Steer style={{ width: 20, height: 20 }} /></button>
+            <button key="steer" className="send steer" onClick={doSend} data-tip={t('Steer this reply')} aria-label={t('Steer this reply')}><Steer style={{ width: 20, height: 20 }} /></button>
           )}
           {streaming ? (
             <button key="stop" className={'send stop' + (stopping ? ' stopping' : '')} onClick={onStop} disabled={stopping}
-              title={stopping ? t('Stopping, finishing the step in progress') : t('Stop generating')} aria-label={t('Stop generating')}><Stop style={{ width: 20, height: 20 }} /></button>
+              data-tip={stopping ? t('Stopping, finishing the step in progress') : t('Stop generating')} aria-label={t('Stop generating')}><Stop style={{ width: 20, height: 20 }} /></button>
           ) : safetyChecking ? (
-            <button key="send" className={'send' + (safetyVerbose ? ' checking' : ' quiet')} disabled aria-label={t('Send message')} title={safetyVerbose ? t('Safety check…') : undefined}><Up style={{ width: 20, height: 20 }} /></button>
+            <button key="send" className={'send' + (safetyVerbose ? ' checking' : ' quiet')} disabled aria-label={t('Send message')} data-tip={safetyVerbose ? t('Safety check…') : undefined}><Up style={{ width: 20, height: 20 }} /></button>
           ) : canSend ? (
             <button key="send" className={'send' + (enterSend ? ' enter' : '')} onClick={doSend} disabled={uploading} aria-label={t('Send message')}>
               {enterSend ? <Enter style={{ width: 20, height: 20 }} /> : <Up style={{ width: 20, height: 20 }} />}

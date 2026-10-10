@@ -129,7 +129,7 @@ export function Btn({ kind, size, icon, className, children, ...rest }) {
 // An icon-only button always carries its name for a screen reader and a tooltip
 // for everyone else, so the two can never drift apart.
 export function IconBtn({ kind, size = 'sm', label, children, ...rest }) {
-  return <Btn kind={kind} size={size} icon title={label} aria-label={label} {...rest}>{children}</Btn>;
+  return <Btn kind={kind} size={size} icon data-tip={label} aria-label={label} {...rest}>{children}</Btn>;
 }
 
 // A stored secret is never sent back to the browser, so the field starts empty and

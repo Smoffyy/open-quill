@@ -116,7 +116,7 @@ export default function ThemesPanel({ compact }) {
                   <b>{th.name}</b>
                   {th.builtin && <span className="bx-tag">{t('Preset')}</span>}
                   {active && <span className="bx-tag live">{t('Active')}</span>}
-                  {th.dirty && <span className="bx-tag" title={t('Changed since the last release')}>{t('edited')}</span>}
+                  {th.dirty && <span className="bx-tag" data-tip={t('Changed since the last release')}>{t('edited')}</span>}
                 </div>
                 <div className="bx-theme-meta">
                   {th.note ? t(th.note) : t('Based on {preset}', { preset: t(presetById(th.basePreset).label) })}
@@ -130,15 +130,15 @@ export default function ThemesPanel({ compact }) {
                 {!active && (
                   <button type="button" className="bx-btn sm" onClick={() => themes.activate(th.id)}>{t('Use this')}</button>
                 )}
-                <button type="button" className="bx-icon" title={t('Rename')} aria-label={t('Rename')}
+                <button type="button" className="bx-icon" data-tip={t('Rename')} aria-label={t('Rename')}
                   onClick={() => setRenaming({ id: th.id, name: th.name })}><Pencil /></button>
-                <button type="button" className="bx-icon" title={t('Duplicate')} aria-label={t('Duplicate')}
+                <button type="button" className="bx-icon" data-tip={t('Duplicate')} aria-label={t('Duplicate')}
                   onClick={() => themes.create({ from: th.id, name: th.name + ' copy' })}><Copy /></button>
-                <button type="button" className="bx-icon" title={t('Version history')} aria-label={t('Version history')}
+                <button type="button" className="bx-icon" data-tip={t('Version history')} aria-label={t('Version history')}
                   onClick={() => setHistoryFor(th)}><Clock /></button>
-                <button type="button" className="bx-icon" title={t('Export')} aria-label={t('Export')}
+                <button type="button" className="bx-icon" data-tip={t('Export')} aria-label={t('Export')}
                   onClick={() => exportTheme(th.id, th.name)}><Download /></button>
-                <button type="button" className="bx-icon" title={t('Reset')} aria-label={t('Reset')}
+                <button type="button" className="bx-icon" data-tip={t('Reset')} aria-label={t('Reset')}
                   onClick={() => setAsk({
                     title: t('Reset “{name}”?', { name: th.name }),
                     message: th.builtin
@@ -149,7 +149,7 @@ export default function ThemesPanel({ compact }) {
                     onConfirm: () => themes.reset(th.id, 'preset')
                   })}><Refresh /></button>
                 {!th.builtin && (
-                  <button type="button" className="bx-icon danger" title={t('Delete')} aria-label={t('Delete')}
+                  <button type="button" className="bx-icon danger" data-tip={t('Delete')} aria-label={t('Delete')}
                     onClick={() => setAsk({
                       title: t('Delete “{name}”?', { name: th.name }),
                       message: t('This cannot be undone. Export it first if you might want it back.'),

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Gear, Chat, Info, Clock, Shield, Brain, Keyboard, Search, SkillIcon, Plug, Palette } from '../ui/icons.jsx';
+import { Gear, Info, Clock, Shield, Brain, Keyboard, Search, SkillIcon, Plug, Palette } from '../ui/icons.jsx';
 import { t, tk } from '../../i18n.jsx';
 import { menuStyleOf, useAnchoredMenu } from '../../lib/anchor.js';
 
@@ -9,7 +9,6 @@ export const NAV_GROUPS = [
     { id: 'general', label: tk('General'), Icon: Gear },
     { id: 'interface', label: tk('Interface'), Icon: Palette },
     { id: 'security', label: tk('Security'), Icon: Shield },
-    { id: 'chat', label: tk('Chat'), Icon: Chat },
     { id: 'keybinds', label: tk('Keybinds'), Icon: Keyboard },
     { id: 'memory', label: tk('Memory'), Icon: Brain },
     { id: 'usage', label: tk('Usage'), Icon: Clock },
@@ -34,13 +33,10 @@ const SETTINGS_INDEX = {
     tk('Colour palette'), tk('Chat font'), tk('Message density'), tk('Reading width'), tk('OLED screen protection'),
     tk('Text reveal'), tk('Reveal speed'), tk('Streaming cursor'), tk('Cursor style'), tk('Blink speed'), tk('Pulse speed'),
     tk('Conversation map'), tk('Find in conversation'), tk('Branch map'), tk('Message shortcuts'),
+    tk('Auto-scroll'), tk('Engine telemetry'), tk('Progress line'), tk('Mid-stream steering'),
+    tk('Speed on each reply'), tk('Web search on by default'),
   ],
   security: [tk('Password'), tk('Two-factor authentication'), tk('Active sessions')],
-  chat: [
-    tk('Auto-scroll'),
-    tk('Web search on by default'), tk('Engine telemetry'),
-    tk('Speed on each reply'), tk('Progress line'), tk('Mid-stream steering'),
-  ],
   memory: [tk('Use memory in chats'), tk('Saved memories'), tk('Forget everything')],
   skills: [tk('Browse'), tk('Add'), tk('Create with the assistant'), tk('Write skill instructions'), tk('Upload a skill')],
   mcp: [tk('Add server'), tk('Server name'), tk('URL'), tk('Headers'), tk('From this workspace')],

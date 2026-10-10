@@ -113,7 +113,7 @@ client/src/
   lib/                          hooks and pure logic, including api, prefs, toast, clipboard
   styles/                       one stylesheet per feature, imported in order by app.css
   components/
-    ui/          shared primitives: icons, Tip, Dialog, CloseButton, controls (rows, switch,
+    ui/          shared primitives: icons, Tip, TipLayer, Dialog, CloseButton, controls (rows, switch,
                  segmented control, select, range), Skeleton, Toaster, ChordHint
     sidebar/     Sidebar, ChatMenu, DocsNav
     chat/        the open conversation: Message, Markdown, ToolCard, ChatTopbar, Greeting,
@@ -174,6 +174,7 @@ The admin panel, playground, model docs, setup guide and build mode are `React.l
 
 - ESLint: `react-hooks/exhaustive-deps` is a warning on purpose (hooks key on a narrower dependency and read the rest through refs, which is what keeps the socket from reconnecting on every render). React Compiler rules are off.
 - Hooks must never sit below an early return. `Message.jsx` returns early for user messages, so assistant-only hooks still go above that branch.
+- Hover text is never the native `title` attribute, because the browser draws its own popup that does not match the app. Put `data-tip="…"` on the element instead. The app-wide `TipLayer` (`components/ui/TipLayer.jsx`, mounted once in `main.jsx`) shows the same bubble for every element that has one, placed bottom-right of the cursor and following it, and `data-tip-keys="Esc"` adds a shortcut hint. Every tooltip waits the same `TIP_DELAY` from `lib/tip.js` before it shows, so change the delay there and never add one per element. An icon-only control also needs an `aria-label`, because the tooltip is not its accessible name. `<Tip label keys tone toggle>` is a thin wrapper that sets the same attributes on a `<span>`, for children that cannot take `data-tip` directly (a component, for example); `toggle` pins the bubble on click, as the docs info icons do. `react/forbid-dom-props` rejects `title` on DOM elements, so lint fails if one slips in. A `title` prop on a component is not a tooltip when the component renders a heading (`Card`, `Dialog`, `Empty`); a shared component that spreads props onto a DOM element forwards `data-tip` the same way `Btn` and `Input` do. Markdown link and image titles are mapped to `data-tip` in `components/chat/Markdown.jsx`.
 - A release needs `release/<major>/` with `release.json` and `notes.md`, a matching `CHANGELOG.md` entry, and identical versions in the root, `server/` and `client/` `package.json` plus their lockfiles. `npm run check:release` verifies all of it; a PR into `main` also fails unless the version was bumped.
 
 ## Adding a feature

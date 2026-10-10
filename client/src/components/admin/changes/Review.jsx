@@ -16,11 +16,11 @@ export function Faces({ people, small, where = false }) {
     <span className="cp-who" role="img" aria-label={t('Also here: {names}', { names })}>
       {shown.map(p => (
         <span key={p.id} className={'cp-who-face' + (small ? ' sm' : '')} aria-hidden="true"
-          title={where && p.section ? p.name + ' · ' + t(sectionMeta(p.section).title) : p.name}>
+          data-tip={where && p.section ? p.name + ' · ' + t(sectionMeta(p.section).title) : p.name}>
           {initialOf(p.name)}
         </span>
       ))}
-      {rest > 0 && <span className={'cp-who-face' + (small ? ' sm' : '')} aria-hidden="true" title={names}>+{rest}</span>}
+      {rest > 0 && <span className={'cp-who-face' + (small ? ' sm' : '')} aria-hidden="true" data-tip={names}>+{rest}</span>}
     </span>
   );
 }
@@ -30,7 +30,7 @@ export function ReviewButton() {
   const n = changes.changes.length;
   return (
     <Btn kind={n ? 'primary' : undefined} className="cp-review" disabled={!changes.ready} onClick={() => setReviewing(true)}
-      title={n ? changeCount(n) : t('Members are running everything in the draft.')}>
+      data-tip={n ? changeCount(n) : t('Members are running everything in the draft.')}>
       {t('Review changes')}
       {n > 0 && <span className="cp-review-n" aria-hidden="true">{n}</span>}
       {n > 0 && <span className="sr-only">{changeCount(n)}</span>}

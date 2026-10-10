@@ -93,7 +93,6 @@
 :root:root .modal-main .hint + :is(.set-row, .field) {
   border-top: 0;
 }
-:root:root .modal-main .danger-zone { border-top: 0; }
 :root:root .modal-main textarea { min-height: 88px; }
 :root:root .set-row-title { font-weight: 400; }
 :root:root .modal-main .field.row > label,

@@ -85,7 +85,7 @@ function Badges() {
           const all = able.length > 0 && shown.length === able.length;
           const [name, hint] = BADGE_TEXT[id];
           return (
-            <button key={id} type="button" disabled={!able.length} title={t(hint)}
+            <button key={id} type="button" disabled={!able.length} data-tip={t(hint)}
               aria-pressed={all ? true : shown.length ? 'mixed' : false}
               className={'mc-chip' + (shown.length && !all ? ' part' : '')}
               onClick={() => edit(m => {

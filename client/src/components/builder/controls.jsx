@@ -35,7 +35,7 @@ export function Field({ label, set, onReset, wide, children }) {
       <label className="bx-label">
         <span>{label}</span>
         {set && onReset && (
-          <button type="button" className="bx-reset" title={t('Reset to default')} aria-label={t('Reset {name}', { name: label })}
+          <button type="button" className="bx-reset" data-tip={t('Reset to default')} aria-label={t('Reset {name}', { name: label })}
             onClick={onReset}><Refresh /></button>
         )}
       </label>
@@ -162,7 +162,7 @@ export function Color({ value, onChange, allowTokens = true, inherited }) {
           <input type="color" className="bx-colorpick" value={hex || '#888888'} onChange={(e) => onChange(e.target.value)} />
           <div className="bx-swatches">
             {SWATCHES.map(s => (
-              <button key={s} type="button" className="bx-sw" style={{ background: s }} title={s}
+              <button key={s} type="button" className="bx-sw" style={{ background: s }} data-tip={s}
                 aria-label={s} onClick={() => onChange(s)} />
             ))}
           </div>
@@ -214,7 +214,7 @@ export function Seg({ value, onChange, options, label, base, allowClear = true }
   return (
     <div className="bx-seg" role="group" aria-label={label}>
       {options.map(o => (
-        <button key={o.value} type="button" title={o.title || o.label}
+        <button key={o.value} type="button" data-tip={o.title || o.label}
           className={'bx-seg-btn' + (value === o.value ? ' on' : (!value && base === o.value ? ' inherited' : ''))}
           onClick={() => onChange(allowClear && value === o.value ? '' : o.value)}>
           {o.icon || o.label}
@@ -238,7 +238,7 @@ export function BoxSides({ label, value, onChange, base, max = 80 }) {
       <div className="bx-box-head">
         <span>{label}</span>
         <button type="button" className={'bx-link' + (linked ? ' on' : '')} onClick={() => setLinked(l => !l)}
-          title={linked ? t('Edit each side separately') : t('Link all sides')}
+          data-tip={linked ? t('Edit each side separately') : t('Link all sides')}
           aria-label={linked ? t('Edit each side separately') : t('Link all sides')} aria-pressed={linked}>
           {linked ? <Link /> : <Unlink />}
         </button>

@@ -113,3 +113,7 @@
   background: linear-gradient(to top, var(--bg), transparent); pointer-events: none;
 }
 :root[data-layout="card"] .active-composer { max-width: var(--reading-max, 808px); }
+:root[data-layout="card"] .unavail-bg { bottom: 40px; }
+@media (max-width: 768px) {
+  :root[data-layout="card"] .unavail-bg { bottom: 64px; }
+}

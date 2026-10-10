@@ -49,7 +49,7 @@ function FileRow({ f, depth, selected, writing, saving, renaming, onOpen, onActi
   const openMenu = (fromRow) => { anchorRef.current = fromRow ? rowRef.current : btnRef.current; setMenu(true); };
   return (
     <div ref={rowRef} className={'cx-frow' + (selected ? ' on' : '') + (writing ? ' writing' : '')} style={{ '--depth': depth }}
-      role="treeitem" aria-selected={selected} tabIndex={0} title={f.path}
+      role="treeitem" aria-selected={selected} tabIndex={0} data-tip={f.path}
       onClick={() => onOpen(f.path)}
       onKeyDown={(e) => { if (e.key === 'Enter') onOpen(f.path); else if (e.key === 'F2') onAction('rename', f.path); else if (e.key === 'Delete') onAction('delete', f.path); }}
       onContextMenu={(e) => { e.preventDefault(); openMenu(true); }}>
@@ -76,7 +76,7 @@ function FolderRow({ node, depth, open, onToggle, onAction }) {
   const [menu, setMenu] = useState(false);
   const btnRef = useRef(null);
   return (
-    <div className="cx-frow folder" style={{ '--depth': depth }} role="treeitem" aria-expanded={open} tabIndex={0} title={node.path}
+    <div className="cx-frow folder" style={{ '--depth': depth }} role="treeitem" aria-expanded={open} tabIndex={0} data-tip={node.path}
       onClick={() => onToggle(node.path)}
       onKeyDown={(e) => { if (e.key === 'Enter') onToggle(node.path); }}
       onContextMenu={(e) => { e.preventDefault(); setMenu(true); }}>
@@ -215,7 +215,7 @@ export default function CodeFiles({ chatId, files, live, pending = {}, busy, foc
               aria-label={showTree ? t('Hide files') : t('Show files')} aria-pressed={showTree}><Menu /></button>
           </Tip>
           {active ? (
-            <span className="cx-crumbs" title={active}>
+            <span className="cx-crumbs" data-tip={active}>
               {crumbs.slice(0, -1).map((c, i) => <span key={i} className="cx-crumb dim">{c}<span className="cx-crumb-sep">/</span></span>)}
               <span className="cx-crumb">{crumbs[crumbs.length - 1]}</span>
             </span>
@@ -290,7 +290,7 @@ export default function CodeFiles({ chatId, files, live, pending = {}, busy, foc
               editable={!busy}
               onSaved={onSaved}
               canBack={!showTree} onBack={() => setActive(null)}
-              headerExtra={<button type="button" className="art-btn icon" onClick={() => setActive(null)} title={t('Close file')} aria-label={t('Close file')}><X style={{ width: 14 }} /></button>} />
+              headerExtra={<button type="button" className="art-btn icon" onClick={() => setActive(null)} data-tip={t('Close file')} aria-label={t('Close file')}><X style={{ width: 14 }} /></button>} />
           </div>
         )}
       </div>

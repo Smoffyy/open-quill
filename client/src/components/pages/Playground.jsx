@@ -389,7 +389,7 @@ function Frame({ scrimRef, workspace, center, acts, onClose, children }) {
           <div className="cp-top-spacer" />
           <div className="cp-top-acts">
             {acts}
-            <button type="button" className="cp-exit" onClick={onClose} title={t('Close')} aria-label={t('Close')}><X /></button>
+            <button type="button" className="cp-exit" onClick={onClose} data-tip={t('Close')} aria-label={t('Close')}><X /></button>
           </div>
         </header>
         {children}

@@ -71,7 +71,7 @@ export default function PromptLedger({ chatId, modelId, onClose }) {
             <>
               {bar.length > 0 && (
                 <div className="pl-bar">
-                  {bar.map((p, i) => <i key={i} style={{ width: p.pct + '%', background: p.color }} title={`${p.label}: ${p.tokens}`} />)}
+                  {bar.map((p, i) => <i key={i} style={{ width: p.pct + '%', background: p.color }} data-tip={`${p.label}: ${p.tokens}`} aria-label={`${p.label}: ${p.tokens}`} />)}
                 </div>
               )}
               <div className="field row pl-summary">

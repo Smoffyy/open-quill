@@ -211,9 +211,9 @@ export default function ThreadFind({ scrollRef, revision, onMatches, onClose }) 
         onKeyDown={onKey}
       />
       <span className="tf-count" aria-live="polite">{status}</span>
-      <button type="button" className="tf-btn" onClick={() => step(-1)} disabled={!total} aria-label={t('Previous match')} title={t('Previous match')}><Up style={{ width: 14 }} /></button>
-      <button type="button" className="tf-btn" onClick={() => step(1)} disabled={!total} aria-label={t('Next match')} title={t('Next match')}><Down style={{ width: 14 }} /></button>
-      <button type="button" className="tf-btn tf-close" onClick={onClose} aria-label={t('Close find')} title={t('Close find')}><X style={{ width: 14 }} /></button>
+      <button type="button" className="tf-btn" onClick={() => step(-1)} disabled={!total} aria-label={t('Previous match')} data-tip={t('Previous match')}><Up style={{ width: 14 }} /></button>
+      <button type="button" className="tf-btn" onClick={() => step(1)} disabled={!total} aria-label={t('Next match')} data-tip={t('Next match')}><Down style={{ width: 14 }} /></button>
+      <button type="button" className="tf-btn tf-close" onClick={onClose} aria-label={t('Close find')} data-tip={t('Close find')}><X style={{ width: 14 }} /></button>
     </div>
   );
 }

@@ -63,7 +63,7 @@ function CodeBlock({ lang, code }) {
   return (
     <div className="code-wrap">
       <div className="code-copy-anchor">
-        <button className="code-copy" title={copied ? t('Copied') : t('Copy')} aria-label={copied ? t('Copied') : t('Copy')}
+        <button className="code-copy" data-tip={copied ? t('Copied') : t('Copy')} aria-label={copied ? t('Copied') : t('Copy')}
           onPointerDown={(e) => { e.preventDefault(); copy(); }}>
           {copied ? <Check key="c" className="copy-pop" /> : <Copy key="o" />}
           <span className="code-copy-label">{copied ? t('Copied') : t('Copy')}</span>

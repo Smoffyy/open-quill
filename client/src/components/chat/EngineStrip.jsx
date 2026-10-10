@@ -54,7 +54,7 @@ export default function EngineStrip({ telemetry, streaming, route }) {
       <div className={'engine-strip' + (streaming ? '' : ' final')} role="status" aria-live="off">
       <span className="es-icon"><Gauge style={{ width: 13 }} /></span>
       {route && (
-        <span className="es-stat es-route" title={t('Chosen by {hub} because of: {via}', { hub: route.hubName, via: route.via })}>
+        <span className="es-stat es-route" data-tip={t('Chosen by {hub} because of: {via}', { hub: route.hubName, via: route.via })}>
           <span className="es-label">{t('via')}</span> {route.modelName}
         </span>
       )}
@@ -63,15 +63,15 @@ export default function EngineStrip({ telemetry, streaming, route }) {
         <Sparkline points={history} />
       </span>
       {promptTps > 0 && (
-        <span className="es-stat" title={t('Prompt evaluation speed')}>
+        <span className="es-stat" data-tip={t('Prompt evaluation speed')}>
           <span className="es-label">{t('prompt')}</span> {rate(promptTps)}
         </span>
       )}
-      <span className="es-stat" title={t('Tokens generated in this response')}>
+      <span className="es-stat" data-tip={t('Tokens generated in this response')}>
         <span className="es-label">{t('out')}</span> {num(genTokens)}
       </span>
       {ctx > 0 && (
-        <span className={'es-stat es-ctx' + level} title={t('Context used of the loaded window')}>
+        <span className={'es-stat es-ctx' + level} data-tip={t('Context used of the loaded window')}>
           <span className="es-label">{t('ctx')}</span>
           <span className="es-bar"><span className="es-fill" style={{ width: pct + '%' }} /></span>
           {pct}%

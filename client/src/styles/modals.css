@@ -48,10 +48,7 @@
 .field.stack input { width: 100%; }
 .btn .btn-spin { display: inline-block; vertical-align: -2px; margin-right: 6px; }
 .modal-main input[aria-invalid="true"] { box-shadow: inset 0 0 0 1px var(--danger); }
-.dz-confirm > .muted-note:first-child { margin-bottom: 10px; }
 .recovery-box > .muted-note:first-child, .sec-block > .muted-note, .sec-block > form > .muted-note:first-child { margin-bottom: 8px; }
-.danger-zone > :is(.field, .dz-confirm, [role="status"]) + :is(.field, .dz-confirm) { margin-top: 14px; }
-.danger-zone > [role="status"] { margin-top: 8px; }
 .usage-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .modal-close { position: absolute; top: 13px; right: 14px; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; color: var(--text-muted); transition: background var(--fx-t, .12s), color var(--fx-t, .12s); }
 .modal-close svg { width: 16px; height: 16px; }

@@ -170,7 +170,7 @@ function ModelIcon({ m, set }) {
   return (
     <span className="mdoc-iconedit">
       <button className="mdoc-iconedit-btn" disabled={busy}
-        title={busy ? t('Uploading…') : t('Upload a reference logo. With none set the model logo is used.')}
+        data-tip={busy ? t('Uploading…') : t('Upload a reference logo. With none set the model logo is used.')}
         aria-label={t('Upload a reference logo')}
         onClick={() => input.current && input.current.click()}>
         {modIcon(m, 'mdoc-mico')}
@@ -178,7 +178,7 @@ function ModelIcon({ m, set }) {
       </button>
       {m.docsIcon && (
         <button className="mdoc-iconedit-clear" aria-label={t('Use the model logo')}
-          title={t('Use the model logo')} onClick={() => set('docsIcon', '')}><X /></button>
+          data-tip={t('Use the model logo')} onClick={() => set('docsIcon', '')}><X /></button>
       )}
       <input ref={input} type="file" accept="image/*" hidden
         onChange={(e) => { pick(e.target.files && e.target.files[0]); e.target.value = ''; }} />
@@ -203,7 +203,7 @@ function CopyPill({ value }) {
     timer.current = setTimeout(() => setDone(false), 1400);
   };
   return (
-    <button className="mdoc-idpill" onClick={copy} title={t('Copy model id')} aria-label={t('Copy model id')}>
+    <button className="mdoc-idpill" onClick={copy} data-tip={t('Copy model id')} aria-label={t('Copy model id')}>
       <code>{value}</code>
       {done ? <Check className="mdoc-idpill-ic" /> : <Copy className="mdoc-idpill-ic" />}
     </button>

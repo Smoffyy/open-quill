@@ -6,7 +6,7 @@ Type in the composer and press **Enter** to send, **Shift+Enter** for a new line
 
 - **Stop** it with the stop button or `Ctrl+.`. If the assistant is in the middle of a tool step, it finishes that step and then stops.
 - **Queue** a follow-up. Type while the reply is running and send it: the message waits above the composer and goes out the moment the reply finishes. Queued messages can be removed before they send.
-- **Steer** the reply, if **Mid-stream steering** is on in **Settings → Chat**. A short correction such as "shorter" or "you misread the file" is applied to the reply in progress. It restarts from where it was cut, so it costs an extra request.
+- **Steer** the reply, if **Mid-stream steering** is on in **Settings → Interface → Streaming text**. A short correction such as "shorter" or "you misread the file" is applied to the reply in progress. It restarts from where it was cut, so it costs an extra request.
 
 The thread follows new text as it arrives. Scroll up to read and it stops following; a button appears to jump back to the latest message (`Alt+↓`).
 

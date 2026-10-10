@@ -25,7 +25,7 @@ function Node({ node, active, onSelect, onMenu }) {
       onClick={() => onSelect(node)}
       onContextMenu={(e) => { e.preventDefault(); onMenu?.(node, e); }}
       aria-current={node.onPath ? 'true' : undefined}
-      title={(node.preview || who) + ' (' + action + ')'}
+      data-tip={(node.preview || who) + ' (' + action + ')'}
     >
       <span className="bt-dot" aria-hidden="true" />
       <span className="bt-who">{who}</span>

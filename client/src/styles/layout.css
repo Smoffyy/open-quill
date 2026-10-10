@@ -151,9 +151,8 @@ a.chat-row, a.nav-item { color: var(--text-soft); text-decoration: none; }
 .chat-menu button.danger:hover { background: color-mix(in srgb, var(--danger) 13%, transparent); }
 .chat-menu svg { width: 20px; height: 20px; flex-shrink: 0; opacity: .85; }
 .cm-sub { position: relative; }
-.cm-sublist { margin: 2px 0 2px 8px; padding: 4px 0 4px 6px; border-left: 1px solid var(--pop-border); max-height: 240px; overflow: hidden auto; }
-.cm-sublist button.on { background: var(--pop-hover); }
-.cm-sublist svg { width: 15px; height: 15px; }
+.cm-flyout button.on { background: var(--pop-hover); }
+.cm-flyout svg { width: 15px; height: 15px; }
 .cm-empty { padding: 6px 10px; font-size: 13px; color: var(--pop-faint); }
 
 /* ---------- profile ---------- */

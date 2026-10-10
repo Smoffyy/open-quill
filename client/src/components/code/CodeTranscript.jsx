@@ -99,10 +99,10 @@ function StepTitle({ call, done, onOpenFile }) {
       {target && (call.tool === 'bash'
         ? <code className="cx-target mono">{target}</code>
         : open
-          ? <span className="cx-target link" role="link" tabIndex={0} title={target}
+          ? <span className="cx-target link" role="link" tabIndex={0} data-tip={target}
               onClick={(e) => { e.stopPropagation(); onOpenFile(open); }}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onOpenFile(open); } }}>{target}</span>
-          : <span className="cx-target" title={target}>{target}</span>)}
+          : <span className="cx-target" data-tip={target}>{target}</span>)}
     </span>
   );
 }
@@ -249,7 +249,7 @@ function ChangesCard({ changes, onOpenFile }) {
       </li>
       {open && changes.map(c => (
         <li key={c.path}>
-          <button type="button" className="cx-ch-row" onClick={() => onOpenFile(c.path)} title={c.path}>
+          <button type="button" className="cx-ch-row" onClick={() => onOpenFile(c.path)} data-tip={c.path}>
             <span className="cx-ch-ic"><FileIcon path={c.path} /></span>
             <span className="cx-ch-name">{baseName(c.path)}</span>
             {c.path.includes('/') && <span className="cx-ch-dir">{c.path.slice(0, c.path.lastIndexOf('/'))}</span>}
@@ -270,14 +270,14 @@ function TurnActions({ msg, onRetry, onContinue }) {
   };
   return (
     <div className="cx-actions">
-      <button type="button" className="cx-act" onClick={copy} aria-label={copied ? t('Copied') : t('Copy')} title={copied ? t('Copied') : t('Copy')}>{copied ? <Check /> : <Copy />}</button>
-      {onRetry && <button type="button" className="cx-act" onClick={() => onRetry(msg.id)} aria-label={t('Retry')} title={t('Retry')}><Retry /></button>}
+      <button type="button" className="cx-act" onClick={copy} aria-label={copied ? t('Copied') : t('Copy')} data-tip={copied ? t('Copied') : t('Copy')}>{copied ? <Check /> : <Copy />}</button>
+      {onRetry && <button type="button" className="cx-act" onClick={() => onRetry(msg.id)} aria-label={t('Retry')} data-tip={t('Retry')}><Retry /></button>}
       {onContinue && (
-        <button type="button" className="cx-act wide" onClick={() => onContinue(msg.id)} title={t('Pick up where this reply stopped')}>
+        <button type="button" className="cx-act wide" onClick={() => onContinue(msg.id)} data-tip={t('Pick up where this reply stopped')}>
           <Retry />{t('Continue')}
         </button>
       )}
-      {msg.created_at && <span className="cx-time" title={new Date(msg.created_at).toLocaleString()}>{fmtRelative(msg.created_at)}</span>}
+      {msg.created_at && <span className="cx-time" data-tip={new Date(msg.created_at).toLocaleString()}>{fmtRelative(msg.created_at)}</span>}
     </div>
   );
 }
@@ -301,7 +301,7 @@ const AssistantTurn = React.memo(function AssistantTurn({ msg, streaming, liveCa
       {streaming && (
         <div className="cx-working">
           <CodeMark icon={modelIcon} className="cx-working-mark" state={phase === 'thinking' ? 'thinking' : 'generating'} />
-          <span className="shimmer" title={statusInfo.show ? statusInfo.detail || undefined : undefined}>
+          <span className="shimmer" data-tip={statusInfo.show ? statusInfo.detail || undefined : undefined}>
             {statusInfo.show ? statusInfo.label : phase === 'thinking' ? t('Thinking…') : t('Working…')}
           </span>
         </div>

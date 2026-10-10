@@ -271,7 +271,7 @@ export const ELEMENTS = [
   { id: 'menuDivider', label: tk('Menu divider'), cat: 'chrome', sel: '.pm-divider, .popover hr', parent: 'menu', caps: BOX },
   { id: 'menuAccount', label: tk('Menu account line'), cat: 'chrome', sel: '.pm-account', parent: 'menu', caps: TEXTY },
   { id: 'chordHint', label: tk('Chord hint'), cat: 'chrome', sel: '.chord-hint', caps: ALL },
-  { id: 'submenu', label: tk('Submenu'), cat: 'chrome', sel: '.model-submenu, .cm-sublist, .pm-subwrap', parent: 'menu', caps: ALL },
+  { id: 'submenu', label: tk('Submenu'), cat: 'chrome', sel: '.model-submenu, .cm-flyout, .pm-subwrap', parent: 'menu', caps: ALL },
   { id: 'modelCard', label: tk('Model card'), cat: 'chrome', sel: '.model-card', parent: 'menu', caps: ALL },
   { id: 'modal', label: tk('Window'), cat: 'chrome', sel: '.modal', caps: ALL },
   { id: 'modalSide', label: tk('Window sidebar'), cat: 'chrome', sel: '.modal-side', parent: 'modal', caps: ALL },

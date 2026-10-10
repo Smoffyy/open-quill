@@ -94,9 +94,9 @@ function BranchNav({ msg, onSelectBranch }) {
   const go = (d) => { const t = msg.siblings?.[i + d]; if (t) onSelectBranch?.(t); };
   return (
     <span className="branch-nav" role="group" aria-label={t("Message versions")}>
-      <button className="branch-arrow" disabled={i <= 0} onClick={() => go(-1)} title={t("Previous version")} aria-label={t("Previous version")}><Chevron style={{ transform: 'scaleX(-1)' }} /></button>
+      <button className="branch-arrow" disabled={i <= 0} onClick={() => go(-1)} data-tip={t("Previous version")} aria-label={t("Previous version")}><Chevron style={{ transform: 'scaleX(-1)' }} /></button>
       <span className="branch-count" aria-live="polite">{i + 1}/{msg.branchCount}</span>
-      <button className="branch-arrow" disabled={i >= msg.branchCount - 1} onClick={() => go(1)} title={t("Next version")} aria-label={t("Next version")}><Chevron /></button>
+      <button className="branch-arrow" disabled={i >= msg.branchCount - 1} onClick={() => go(1)} data-tip={t("Next version")} aria-label={t("Next version")}><Chevron /></button>
     </span>
   );
 }
@@ -110,7 +110,7 @@ function Attachments({ items, pins, onTogglePinFile }) {
         <button key={i} className="att image" onClick={() => openFilePreview(a)} aria-label={t('Open image {name}', { name: a.name })}><img src={a.url} alt={a.name} loading="lazy" decoding="async" /></button>
       ) : (
         <div key={i} className={'att file' + (pinnedUrls.has(a.url) ? ' pinned-file' : '')}>
-          <button type="button" className="att-link" onClick={() => openFilePreview(a)} title={a.name} aria-label={t('Open file {name}', { name: a.name })}>
+          <button type="button" className="att-link" onClick={() => openFilePreview(a)} data-tip={a.name} aria-label={t('Open file {name}', { name: a.name })}>
             <span className="att-name">{a.name}</span>
             <span className="att-foot">
               <FileText style={{ width: 13 }} />
@@ -118,7 +118,7 @@ function Attachments({ items, pins, onTogglePinFile }) {
             </span>
           </button>
           {onTogglePinFile && (
-            <button className={'att-pin' + (pinnedUrls.has(a.url) ? ' on' : '')} title={pinnedUrls.has(a.url) ? t('Unpin from chat') : t('Pin to chat (keep in context)')} aria-label={pinnedUrls.has(a.url) ? t('Unpin from chat') : t('Pin to chat')} aria-pressed={pinnedUrls.has(a.url)} onClick={() => onTogglePinFile(a)}><Pin style={{ width: 13 }} /></button>
+            <button className={'att-pin' + (pinnedUrls.has(a.url) ? ' on' : '')} data-tip={pinnedUrls.has(a.url) ? t('Unpin from chat') : t('Pin to chat (keep in context)')} aria-label={pinnedUrls.has(a.url) ? t('Unpin from chat') : t('Pin to chat')} aria-pressed={pinnedUrls.has(a.url)} onClick={() => onTogglePinFile(a)}><Pin style={{ width: 13 }} /></button>
           )}
         </div>
       ))}
@@ -172,7 +172,7 @@ function StatusCaption({ swapKey, label, detail }) {
   useEffect(() => () => { clearTimeout(hideTimer.current); clearTimeout(swapTimer.current); }, []);
   if (!mounted) return null;
   return (
-    <span className={'msg-icon-status' + (visible ? ' show' : '')} title={title || undefined}>
+    <span className={'msg-icon-status' + (visible ? ' show' : '')} data-tip={title || undefined}>
       {prev && <span className="mis-word out" key={'p' + prev}>{prev}</span>}
       <span className="mis-word" key={'c' + text}>{text}</span>
     </span>
@@ -207,7 +207,7 @@ function SpeedChip({ speed }) {
   const bits = [];
   if (speed.promptTps > 0) bits.push(`${t('prompt')} ${Math.round(speed.promptTps)} tok/s`);
   if (speed.out > 0) bits.push(`${Number(speed.out).toLocaleString()} ${t('tokens out')}`);
-  return <span className="msg-speed" title={bits.join(' · ')}>{rate} tok/s</span>;
+  return <span className="msg-speed" data-tip={bits.join(' · ')}>{rate} tok/s</span>;
 }
 
 function SteerChips({ notes }) {
@@ -215,7 +215,7 @@ function SteerChips({ notes }) {
   return (
     <div className="steer-chips">
       {notes.map((n, i) => (
-        <span key={i} className="steer-chip" title={n}><Steer style={{ width: 11 }} /> {t('steered')}: {n}</span>
+        <span key={i} className="steer-chip" data-tip={n}><Steer style={{ width: 11 }} /> {t('steered')}: {n}</span>
       ))}
     </div>
   );
@@ -410,11 +410,11 @@ function Message({ msg, model, streaming, phase, liveCall, liveCalls = null, can
           )}
           {msg.content && !editing && (
             <div className="actions user-actions">
-              {(() => { const t = fmtTime(msg.created_at); return t ? <span className="msg-time" data-full={t.full}>{t.short}</span> : null; })()}
+              {(() => { const t = fmtTime(msg.created_at); return t ? <span className="msg-time" data-tip={t.full}>{t.short}</span> : null; })()}
               <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
-              {onRegenerate && <button className="action-btn" onClick={() => onRegenerate(msg.id)} title={t("Retry")} aria-label={t("Retry")}><Retry /></button>}
-              {onEdit && <button className="action-btn" onClick={startEdit} title={t("Edit")} aria-label={t("Edit")}><Pencil /></button>}
-              <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
+              {onRegenerate && <button className="action-btn" onClick={() => onRegenerate(msg.id)} data-tip={t("Retry")} aria-label={t("Retry")}><Retry /></button>}
+              {onEdit && <button className="action-btn" onClick={startEdit} data-tip={t("Edit")} aria-label={t("Edit")}><Pencil /></button>}
+              <button className="action-btn" onClick={doCopy} data-tip={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
             </div>
           )}
           {compare && chatId && <BranchCompare chatId={chatId} messageId={msg.id} onSelect={onSelectBranch} onClose={() => setCompare(false)} />}
@@ -477,25 +477,25 @@ function Message({ msg, model, streaming, phase, liveCall, liveCalls = null, can
       )}
       {streaming && msg.content && (
         <div className="actions stream-actions">
-          <button className="action-btn" onClick={doCopy} title={t("Copy what's written so far")} aria-label={t("Copy what's written so far")}>{copied ? <Check /> : <Copy />}</button>
+          <button className="action-btn" onClick={doCopy} data-tip={t("Copy what's written so far")} aria-label={t("Copy what's written so far")}>{copied ? <Check /> : <Copy />}</button>
         </div>
       )}
       {!streaming && (msg.content || msg.truncated) && !editing && (
         <div className={'actions' + (finished ? ' fade-in' : '')}>
-          <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
-          <button className={'action-btn' + (speaking ? ' on' : '')} onClick={toggleSpeak} title={speaking ? t("Stop speaking") : t("Read aloud")} aria-label={speaking ? t("Stop speaking") : t("Read aloud")} aria-pressed={speaking}>{speaking ? <SpeakerOff /> : <Speaker />}</button>
+          <button className="action-btn" onClick={doCopy} data-tip={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
+          <button className={'action-btn' + (speaking ? ' on' : '')} onClick={toggleSpeak} data-tip={speaking ? t("Stop speaking") : t("Read aloud")} aria-label={speaking ? t("Stop speaking") : t("Read aloud")} aria-pressed={speaking}>{speaking ? <SpeakerOff /> : <Speaker />}</button>
           {chatId && !String(msg.id).startsWith('inc-') && (
-            <button className={'action-btn' + (fb === 1 ? ' on' : '')} onClick={() => rate(1)} title={t("Good response")} aria-label={t("Good response")} aria-pressed={fb === 1}><ThumbUp /></button>
+            <button className={'action-btn' + (fb === 1 ? ' on' : '')} onClick={() => rate(1)} data-tip={t("Good response")} aria-label={t("Good response")} aria-pressed={fb === 1}><ThumbUp /></button>
           )}
           {chatId && !String(msg.id).startsWith('inc-') && (
-            <button className={'action-btn' + (fb === -1 ? ' on' : '')} onClick={() => rate(-1)} title={t("Bad response")} aria-label={t("Bad response")} aria-pressed={fb === -1}><ThumbDown /></button>
+            <button className={'action-btn' + (fb === -1 ? ' on' : '')} onClick={() => rate(-1)} data-tip={t("Bad response")} aria-label={t("Bad response")} aria-pressed={fb === -1}><ThumbDown /></button>
           )}
-          {onRegenerate && <button className="action-btn" title={t("Retry")} aria-label={t("Retry")} onClick={() => onRegenerate(msg.id)}><Retry /></button>}
+          {onRegenerate && <button className="action-btn" data-tip={t("Retry")} aria-label={t("Retry")} onClick={() => onRegenerate(msg.id)}><Retry /></button>}
           <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
           {showSpeed && <SpeedChip speed={msg.speed} />}
-          {(() => { const ti = fmtTime(msg.created_at); return ti ? <span className="msg-time" data-full={ti.full}>{ti.short}</span> : null; })()}
+          {(() => { const ti = fmtTime(msg.created_at); return ti ? <span className="msg-time" data-tip={ti.full}>{ti.short}</span> : null; })()}
           {canContinue && onContinue && (
-            <button className="action-btn continue-act" onClick={() => onContinue(msg.id)} title={t("Pick up where this reply stopped")}>
+            <button className="action-btn continue-act" onClick={() => onContinue(msg.id)} data-tip={t("Pick up where this reply stopped")}>
               <Retry style={{ width: 14 }} /> {t("Continue")}
             </button>
           )}

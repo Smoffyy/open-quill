@@ -75,7 +75,7 @@ export function Mixed({ k, flag = false, apply }) {
   return (
     <>
       <button type="button" className="mc-mixed" aria-haspopup="menu" aria-expanded={!!menu}
-        title={t('Models differ here. Pick one value for all of them.')}
+        data-tip={t('Models differ here. Pick one value for all of them.')}
         onClick={(e) => {
           if (menu) { setMenu(null); return; }
           const r = e.currentTarget.getBoundingClientRect();
@@ -132,7 +132,7 @@ export function Revert({ change, label }) {
       ? t('Revert {name} to the published values', { name: label })
       : t('Revert {name} on {n} models to the published values', { name: label, n: change.count });
   return (
-    <button type="button" className="mc-revert" title={tip} aria-label={tip}
+    <button type="button" className="mc-revert" data-tip={tip} aria-label={tip}
       onClick={(e) => { e.stopPropagation(); change.revert(); }}>
       <X />
     </button>
@@ -225,7 +225,7 @@ export function Chips({ label, note, items }) {
           const all = on === models.length;
           const moved = models.some(m => live[m.id] && norm(live[m.id], k) !== norm(m, k));
           return (
-            <button key={k} type="button" aria-pressed={all ? true : on ? 'mixed' : false} title={hint}
+            <button key={k} type="button" aria-pressed={all ? true : on ? 'mixed' : false} data-tip={hint}
               className={'mc-chip' + (on && !all ? ' part' : '') + (moved ? ' moved' : '')}
               onClick={() => edit({ [k]: all ? 0 : 1 })}>
               {name}
@@ -258,7 +258,7 @@ export function ModelPicks({ k, label, note, candidates, empty }) {
             const all = owners.length > 0 && on === owners.length;
             return (
               <button key={c.id} type="button" aria-pressed={all ? true : on ? 'mixed' : false}
-                className={'mc-chip' + (on && !all ? ' part' : '')} title={c.description || undefined}
+                className={'mc-chip' + (on && !all ? ' part' : '')} data-tip={c.description || undefined}
                 onClick={() => toggle(c.id, all)}>
                 {c.display_name || c.internal_name}
               </button>

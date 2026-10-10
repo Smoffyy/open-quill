@@ -124,6 +124,12 @@ const mdComponents = {
   },
   code({ className, children }) {
     return <code className={className}>{children}</code>;
+  },
+  a({ node, title, ...props }) {
+    return <a {...props} data-tip={title || undefined} />;
+  },
+  img({ node, title, ...props }) {
+    return <img {...props} data-tip={title || undefined} />;
   }
 };
 

@@ -355,7 +355,7 @@
   color: inherit; opacity: .85; border-radius: 6px;
 }
 .mdoc-info:hover { opacity: 1; background: none; color: #fff; }
-.tip-pinned .mdoc-info, .tip-pinned .mdoc-info:hover { opacity: 1; background: none !important; color: #fff; }
+[data-tip-pinned] .mdoc-info, [data-tip-pinned] .mdoc-info:hover { opacity: 1; background: none !important; color: #fff; }
 .mdoc-info svg { width: 16px; height: 16px; }
 
 .mdoc-iconedit { position: relative; flex-shrink: 0; line-height: 0; }

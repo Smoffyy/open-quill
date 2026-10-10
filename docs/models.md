@@ -39,7 +39,7 @@ If a model has a showcase backdrop, **Background in chat** keeps it behind the c
 
 ## Readouts
 
-Optional numbers for people who want to see how the model is doing, all under **Settings → Chat**:
+Optional numbers for people who want to see how the model is doing, all under **Settings → Interface**:
 
 | Setting | Shows |
 | --- | --- |

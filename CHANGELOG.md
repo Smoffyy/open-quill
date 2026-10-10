@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [28.0.0] - TBD
+## [28.0.0] - 2026-12-25
 ### Added
 - **Code** - a separate coding interface beside Chat, switched with the Chat/Code control at the top of the sidebar and reached at `/code`. Each session has its own private folder on the server; the assistant creates, edits, renames, runs, debugs and deletes files there with its tools, and the sidebar lists sessions separately from chats.
 - **Files panel** - always open beside a Code session: a folder tree, Go to file, new file, upload, download one file or everything as a zip, rename, copy path, delete files and folders, and an editor with version history. It updates live while the assistant writes, and can be resized, expanded or hidden.

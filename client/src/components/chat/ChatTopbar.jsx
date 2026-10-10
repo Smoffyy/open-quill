@@ -30,7 +30,7 @@ export default function ChatTopbar({
   return (
     <div className="topbar">
       {lead}
-      <button className="mobile-menu-btn" onClick={onOpenMenu} title={t('Menu')} aria-label={t('Menu')}><Menu style={{ width: 20 }} /></button>
+      <button className="mobile-menu-btn" onClick={onOpenMenu} data-tip={t('Menu')} aria-label={t('Menu')}><Menu style={{ width: 20 }} /></button>
       {renaming ? (
         <span className="chat-rename" data-value={draft + ' '}>
           <input autoFocus size={1} value={draft} aria-label={t('Rename chat')}
@@ -50,11 +50,11 @@ export default function ChatTopbar({
               <span className="ct-sep" aria-hidden="true">/</span>
             </>
           )}
-          <button className="chat-name ct-name" disabled={!chatId} title={t('Rename chat')} onClick={startRename}>
+          <button className="chat-name ct-name" disabled={!chatId} data-tip={t('Rename chat')} onClick={startRename}>
             <span className="ct-title">{chat?.title || (booting ? '' : t('New chat'))}</span>
           </button>
           <button className="chat-name ct-caret" ref={caretRef} disabled={!chatId}
-            title={t('Chat options')} aria-label={t('Chat options')} aria-haspopup="menu" aria-expanded={!!menu}
+            data-tip={t('Chat options')} aria-label={t('Chat options')} aria-haspopup="menu" aria-expanded={!!menu}
             onClick={(e) => { const at = menuAtButton(e.currentTarget); setMenu(m => (m ? null : at)); }}>
             <ChevDown />
           </button>

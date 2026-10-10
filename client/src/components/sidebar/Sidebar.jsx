@@ -132,7 +132,7 @@ function SideResize({ targetRef, onCommit, onHide }) {
   };
 
   return (
-    <Tip label={t('Hide sidebar')} keys={t('Drag to resize')} side="right">
+    <Tip label={t('Hide sidebar')} keys={t('Drag to resize')}>
       <div className="side-resize" role="separator" aria-orientation="vertical" aria-label={t('Resize sidebar')}
         tabIndex={0} onPointerDown={start} onKeyDown={nudge}>
         <span className="side-resize-grip" aria-hidden="true" />
@@ -212,7 +212,7 @@ function ChatRow({ c, active, showTrash, projects = [], projectsReady = true, on
       <a className="row-link" href={code ? pathForCode(c.id) : pathForChat(c.id)} aria-current={active ? 'page' : undefined}
         onClick={(e) => { if (!plainClick(e)) return; e.preventDefault(); onOpen(c.id); }}>
         <span className="row-ic">
-          {busy ? <span className="row-busy" role="img" aria-label={t('Still generating')} title={t('Still generating')} />
+          {busy ? <span className="row-busy" role="img" aria-label={t('Still generating')} data-tip={t('Still generating')} />
             : code ? <Laptop className="row-session" aria-hidden="true" />
             : c.projectId ? <Box className="row-project" style={{ width: 15 }} role="img" aria-label={t('In a project')} />
             : <span className="row-dot" aria-hidden="true" />}
@@ -220,9 +220,9 @@ function ChatRow({ c, active, showTrash, projects = [], projectsReady = true, on
         <span className="title">{c.title}</span>
       </a>
       {showTrash ? (
-        <button className="row-ctrl shift-del" onClick={(e) => { e.stopPropagation(); onDelete(c.id); }} title={t("Delete chat")} aria-label={t("Delete chat")}><Trash /></button>
+        <button className="row-ctrl shift-del" onClick={(e) => { e.stopPropagation(); onDelete(c.id); }} data-tip={t("Delete chat")} aria-label={t("Delete chat")}><Trash /></button>
       ) : (
-        <button className="row-ctrl" ref={btnRef} title={t("Options")} aria-label={t("Options")} aria-expanded={!!menu} aria-haspopup="menu"
+        <button className="row-ctrl" ref={btnRef} data-tip={t("Options")} aria-label={t("Options")} aria-expanded={!!menu} aria-haspopup="menu"
           onClick={(e) => { e.stopPropagation(); const at = menuAtButton(e.currentTarget); setMenu(m => m ? null : at); }}><DotsV /></button>
       )}
       {menu && <ChatMenu chat={c} at={menu} projects={projects} projectsReady={projectsReady} busy={busy} anchorRef={btnRef}
@@ -359,31 +359,31 @@ function Sidebar({
             <button className="icon-btn collapse-btn" onClick={onToggle}
               aria-label={collapsed ? t('Expand sidebar') : t('Collapse sidebar')}><Panel /></button>
           </Tip>
-          <button className="icon-btn mobile-close-btn" onClick={onMobileClose} title={t("Close menu")} aria-label={t("Close menu")}><X style={{ width: 18 }} /></button>
+          <button className="icon-btn mobile-close-btn" onClick={onMobileClose} data-tip={t("Close menu")} aria-label={t("Close menu")}><X style={{ width: 18 }} /></button>
         </div>
       </div>
       <ThemeSlot name="sidebar.top" />
       <div className="nav">
         <div className="new-row">
-        <a className={'nav-item new-chat' + (!activeId && !dest ? ' on' : '')} href={code ? '/code' : '/'} title={navNew}
+        <a className={'nav-item new-chat' + (!activeId && !dest ? ' on' : '')} href={code ? '/code' : '/'} data-tip={navNew}
           aria-current={!activeId && !dest ? 'page' : undefined}
           onClick={(e) => { if (!plainClick(e)) return; e.preventDefault(); onNew(); }}><span className="nav-ic new-chat-plus"><Plus /></span> <span className="nav-label">{navNew}</span>
           {newChatCombo && <span className="nav-shortcut">{newChatCombo}</span>}</a>
         {!code && (
-          <button className="new-quick" title={t('Quick task')} aria-label={t('Quick task')}
+          <button className="new-quick" data-tip={t('Quick task')} aria-label={t('Quick task')}
             onClick={(e) => { e.stopPropagation(); (onScheduled || onNew)(); }}><QuickTask /></button>
         )}
         </div>
-        <button data-oq-item="nav.projects" className={'nav-item' + (dest === 'projects' ? ' on' : '')} title={navProjects} aria-current={dest === 'projects' ? 'page' : undefined} onClick={onProjects}><span className="nav-ic"><Box /></span> <span className="nav-label">{navProjects}</span></button>
-        <button data-oq-item="nav.artifacts" className={'nav-item' + (dest === 'artifacts' ? ' on' : '')} title={navArtifacts} aria-current={dest === 'artifacts' ? 'page' : undefined} onClick={() => onArtifacts && onArtifacts()}><span className="nav-ic"><Artifact /></span> <span className="nav-label">{navArtifacts}</span></button>
-        {!code && <button data-oq-item="nav.scheduled" className={'nav-item' + (dest === 'scheduled' ? ' on' : '')} title={navScheduled} aria-current={dest === 'scheduled' ? 'page' : undefined} onClick={() => onScheduled && onScheduled()}><span className="nav-ic"><Clock /></span> <span className="nav-label">{navScheduled}</span></button>}
-        <button data-oq-item="nav.customize" className="nav-item" title={navCustomize} onClick={() => onCustomize && onCustomize()}><span className="nav-ic"><Briefcase /></span> <span className="nav-label">{navCustomize}</span></button>
+        <button data-oq-item="nav.projects" className={'nav-item' + (dest === 'projects' ? ' on' : '')} data-tip={navProjects} aria-current={dest === 'projects' ? 'page' : undefined} onClick={onProjects}><span className="nav-ic"><Box /></span> <span className="nav-label">{navProjects}</span></button>
+        <button data-oq-item="nav.artifacts" className={'nav-item' + (dest === 'artifacts' ? ' on' : '')} data-tip={navArtifacts} aria-current={dest === 'artifacts' ? 'page' : undefined} onClick={() => onArtifacts && onArtifacts()}><span className="nav-ic"><Artifact /></span> <span className="nav-label">{navArtifacts}</span></button>
+        {!code && <button data-oq-item="nav.scheduled" className={'nav-item' + (dest === 'scheduled' ? ' on' : '')} data-tip={navScheduled} aria-current={dest === 'scheduled' ? 'page' : undefined} onClick={() => onScheduled && onScheduled()}><span className="nav-ic"><Clock /></span> <span className="nav-label">{navScheduled}</span></button>}
+        <button data-oq-item="nav.customize" className="nav-item" data-tip={navCustomize} onClick={() => onCustomize && onCustomize()}><span className="nav-ic"><Briefcase /></span> <span className="nav-label">{navCustomize}</span></button>
         <button className={'nav-item nav-more' + (moreOpen ? ' open' : '')} aria-expanded={moreOpen} onClick={() => setMoreOpen(o => !o)}>
           <span className="nav-ic"><ChevDown /></span> <span className="nav-label">{moreOpen ? t('Less') : t('More')}</span>
         </button>
         {moreOpen && <>
-          {!code && <button className={'nav-item' + (dest === 'chats' ? ' on' : '')} title={allChats} onClick={onChatsOverview}><span className="nav-ic"><Compact /></span> <span className="nav-label">{allChats}</span></button>}
-          {showModelDocs && <button className="nav-item" title={t('Model docs')} onClick={() => onModelDocs && onModelDocs()}><span className="nav-ic"><ModelDocs /></span> <span className="nav-label">{t('Model docs')}</span></button>}
+          {!code && <button className={'nav-item' + (dest === 'chats' ? ' on' : '')} data-tip={allChats} onClick={onChatsOverview}><span className="nav-ic"><Compact /></span> <span className="nav-label">{allChats}</span></button>}
+          {showModelDocs && <button className="nav-item" data-tip={t('Model docs')} onClick={() => onModelDocs && onModelDocs()}><span className="nav-ic"><ModelDocs /></span> <span className="nav-label">{t('Model docs')}</span></button>}
         </>}
       </div>
       <div className="chats-wrap">
@@ -399,9 +399,9 @@ function Sidebar({
           <>
             {!code && projects.length > 0 && <>
               <SectionHead id="projects" label={t('Projects')} folded={folded.has('projects')} onToggle={toggleFold}>
-                <button className="rl-group" title={t('All projects')} aria-label={t('All projects')}
+                <button className="rl-group" data-tip={t('All projects')} aria-label={t('All projects')}
                   onClick={onProjects}><ArrowOut /></button>
-                {onNewProject && <button className="rl-group" title={t('New project')} aria-label={t('New project')}
+                {onNewProject && <button className="rl-group" data-tip={t('New project')} aria-label={t('New project')}
                   onClick={onNewProject}><Plus /></button>}
               </SectionHead>
               {!folded.has('projects') && projects.slice(0, SIDEBAR_PROJECT_LIMIT).map(p => (
@@ -431,8 +431,8 @@ function Sidebar({
                 <ChevDown className="sec-head-chev" aria-hidden="true" />
               </button>
               <span className="sec-head-actions">
-              {!code && <button className="rl-group" title={t('All chats')} aria-label={t('All chats')} onClick={onChatsOverview}><ArrowOut /></button>}
-              <button className="rl-group" title={t('Group by')} aria-label={t('Group by')} aria-haspopup="menu" aria-expanded={groupMenu}
+              {!code && <button className="rl-group" data-tip={t('All chats')} aria-label={t('All chats')} onClick={onChatsOverview}><ArrowOut /></button>}
+              <button className="rl-group" data-tip={t('Group by')} aria-label={t('Group by')} aria-haspopup="menu" aria-expanded={groupMenu}
                 onClick={() => setGroupMenu(o => !o)}><Sliders /></button>
               {groupMenu && (
                 <div className="rl-menu" role="menu">
