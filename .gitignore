@@ -29,8 +29,5 @@ Thumbs.db
 # Agents
 /.claude
 
-# Local maintainer scripts
-update-deps-major.mjs
-
 # Editor
 .vs/

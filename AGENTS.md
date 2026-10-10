@@ -20,7 +20,6 @@ Run from the repo root unless noted.
 | `npm run i18n:check` | Missing/orphaned translation keys (`-- --json` for machine output) |
 | `npm run i18n:sync` | Prune orphans, merge a translation patch, scaffold a new language |
 | `npm run check:release` | Version, release folder and changelog entry agree |
-| `npm run check:deps` / `update:deps` | Dependency report / update |
 
 Server tests: `cd server && npm test` runs `node --test`, which auto-discovers every `server/test/*.test.js`. A single file: `cd server && node --test test/logic.test.js`. A single case: `node --test --test-name-pattern "<name>" test/logic.test.js`.
 

@@ -38,7 +38,7 @@
 [data-layout="pill"] .composer-wrap.floating > * { pointer-events: auto; }
 [data-layout="pill"] .composer-wrap.floating .disclaimer { margin: 0 auto; padding: 8px 0 10px; max-width: 768px; }
 [data-layout="pill"] .scroll-area .thread-pad { height: 160px; }
-[data-layout="pill"] .to-bottom { bottom: 130px; }
+[data-layout="pill"] .to-bottom { bottom: 118px; }
 [data-layout="pill"] .disclaimer { font-family: var(--font-sans); font-size: 12px; text-align: center; }
 
 [data-layout="pill"] .composer.has-chips { padding-bottom: 52px; }

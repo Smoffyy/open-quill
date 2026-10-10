@@ -481,7 +481,7 @@
 .code-copy:hover { background: var(--ghost-hover, var(--hover-mid)); color: var(--text); }
 .code-copy svg { width: 16px; height: 16px; }
 .code-copy-label { display: none; }
-.code-wrap pre { margin: 0; padding: 14px; overflow-x: auto; background: var(--code-wrap-bg); }
+.code-wrap pre { margin: 0; padding: 14px; overflow-x: auto; background: transparent; }
 .code-wrap pre code { font-family: monospace; font-size: 14px; line-height: 1.625; background: none; padding: 0; color: var(--code-text, #eaecf0); }
 
 .assistant-body table, .bubble-user table, .art-md table, .doc-body table, .bc-col-body table { display: block; width: max-content; max-width: 100%; overflow-x: auto; border-collapse: collapse; margin: 14px 0; font-size: .9em; line-height: 1.5; font-family: var(--font-sans); }

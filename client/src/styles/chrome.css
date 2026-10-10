@@ -12,7 +12,7 @@
 .disclaimer a:hover { color: var(--text-muted); }
 
 /* ---------- scroll-to-bottom ---------- */
-.to-bottom { position: absolute; left: 50%; transform: translateX(-50%); bottom: 150px; width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(var(--surface-hover), var(--surface-hover)), var(--bg); border: 1px solid var(--border-strong, var(--border)); display: grid; place-items: center; color: var(--text); box-shadow: 0 4px 16px #00000073; z-index: 5; }
+.to-bottom { position: absolute; left: 50%; transform: translateX(-50%); bottom: 120px; width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(var(--surface-hover), var(--surface-hover)), var(--bg); border: 1px solid var(--border-strong, var(--border)); display: grid; place-items: center; color: var(--text); box-shadow: 0 4px 16px #00000073; z-index: 5; }
 .to-bottom:hover { background: linear-gradient(var(--surface-hover), var(--surface-hover)), var(--bg); }
 
 /* ---------- login ---------- */
