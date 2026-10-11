@@ -115,7 +115,7 @@ export function useCatalog({ confirm, features, history, changes }) {
         for (const k of Object.keys(mine)) {
           if (k !== 'id' && cur && !same(cur[k], row[k]) && !same(mine[k], row[k])) clashes.push(row.display_name || row.internal_name || '');
         }
-        next.set(row.id, { ...row, ...mine, id: row.id });
+        next.set(row.id, { ...row, known_ctx: cur?.known_ctx, ...mine, id: row.id });
       }
       const list = [...next.values()].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
       modelsRef.current = list;

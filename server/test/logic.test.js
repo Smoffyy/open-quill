@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import {
   sanitizeKwargs, kwargDefs, applyKwargs, resolveKwargValues, kwargPayload,
   oneShotKwargPayload, controlOf, defaultValueOf, isBoolPair, coerceKwargValue,
-  isRange, clampToRange, normalizeKwarg, gateOpen, kwargVisible
+  isRange, clampToRange, normalizeKwarg, gateOpen, kwargVisible, replayFieldOf
 } from '../lib/kwargs.js';
 import { parseTextToolCalls, parseArgs, toCall, cutOffOf } from '../tools/index.js';
 import { classifyToolError } from '../lib/toolstats.js';
@@ -16,9 +16,11 @@ import { parseParamCount, formatParamCount, modelSize, sizeLabel } from '../lib/
 import { parseSkillFile, buildSkillFile, normalizeName, validate } from '../lib/skillfile.js';
 import { cutOffError } from '../lib/prompts.js';
 import { makeToolTextFilter, makeEmitter } from '../llm/emitter.js';
-import { trimInTurn, compactThreshold, estimateTokens, textTokens, makeTokenCounter, truncateForRollingCtx, FALLBACK_CTX } from '../lib/convo.js';
+import { trimInTurn } from '../lib/convo.js';
 import { scanTools } from '../lib/toolproto.js';
 import { isContextOverflowError } from '../lib/llamacpp.js';
+import { forceAnswer, answerNudge, reasoningTail, tailChars, FORCE_ANSWER_INSTRUCTION } from '../lib/forceanswer.js';
+import { outputReserve, shedBulk } from '../lib/ctxwindow.js';
 import { sanitizeDoc, blankLayoutDoc, normalizeStoreForTest, docDiffCount } from '../lib/theme.js';
 import { diffState, applyState, expandKeys } from '../lib/changes.js';
 import { winTranslate, wsKey, projectKey, isProjectKey, execTool, childEnv } from '../sandbox.js';
@@ -36,13 +38,13 @@ import { badgesOf, sanitizeBadgesOff } from '../lib/badges.js';
 import { cleanClient, memberContext, languageName } from '../lib/memberctx.js';
 import { samplingParams, parseStop } from '../llm/sampling.js';
 import { PROVIDER_TYPES, isProviderType, providerSpec, isLocalType } from '../lib/providers.js';
-import { slideWithCounter, trimMode } from '../lib/ctxwindow.js';
+import { slideWithCounter } from '../lib/ctxwindow.js';
 import { sameOrigin, sameOriginGuard, requestHost } from '../lib/origin.js';
 import { SETTING_FIELDS, coerceSetting } from '../lib/settingfields.js';
-import { localOnlyCsp } from '../lib/localonly.js';
+import { localOnlyCsp, baseCsp } from '../lib/localonly.js';
+import { safeUrl } from '../lib/safeurl.js';
 import { runQueued } from '../lib/queue.js';
 import { isText } from '../sandbox/ignore.js';
-import { announcedMoreWork } from '../lib/continuation.js';
 import { openFence, seamFor, steerInstruction } from '../lib/steer.js';
 import { createLoopGuard } from '../lib/loopguard.js';
 import { stops, beginTurn, endTurn } from '../lib/ws/live.js';
@@ -227,6 +229,19 @@ test('kwargs: a range value is clamped and snapped to the step', () => {
   assert.equal(clampToRange(frac, 0.30000000000000004), 0.3, 'float dust is rounded away');
 });
 
+test('kwargs: the budget message rides beside the thinking budget only while enabled and above zero', () => {
+  const budget = { id: 'b', name: 'reasoning_budget_tokens', target: 'body', type: 'number', min: 1024, max: 16384, step: 1024, default: '4096' };
+  const sent = (kwarg, req) => applyKwargs({ kwargs: [kwarg] }, req, false).resolved_kwargs;
+  assert.deepEqual(sent({ ...budget, budgetMessage: { enabled: true, text: 'Stop thinking.' } }, { b: '4096' }),
+    { reasoning_budget_tokens: 4096, reasoning_budget_message: 'Stop thinking.' });
+  assert.deepEqual(sent({ ...budget, budgetMessage: { enabled: false, text: 'Stop thinking.' } }, { b: '4096' }),
+    { reasoning_budget_tokens: 4096 });
+  assert.deepEqual(sent({ ...budget, budgetMessage: { enabled: true, name: 'stop_note', target: 'chat_template_kwargs', text: 'Stop.' } }, { b: '4096' }),
+    { reasoning_budget_tokens: 4096, chat_template_kwargs: { stop_note: 'Stop.' } });
+  assert.deepEqual(sent({ ...budget, budgetMessage: { enabled: true, name: '', text: 'Stop.' } }, { b: '4096' }),
+    { reasoning_budget_tokens: 4096 }, 'a blank key sends nothing');
+});
+
 test('kwargs: a hand-edited request cannot escape the range the admin set', () => {
   const m = { kwargs: [{ id: 'b', name: 'reasoning_budget', target: 'extra_body', type: 'number', min: 0, max: 2048, step: 256, default: '512' }] };
   const body = (req) => applyKwargs(m, req, false).resolved_kwargs.extra_body.reasoning_budget;
@@ -256,6 +271,28 @@ test('kwargs: a range default outside its own bounds is corrected on save', () =
   assert.equal(d.default, '20');
   const none = normalizeKwarg({ id: 'b', name: 'x', min: 10, max: 20, step: 1, default: '' });
   assert.equal(defaultValueOf(none), '10', 'no default starts at the minimum');
+});
+
+test('kwargs: labelled steps show words and send their numbers, and a range wins over them', () => {
+  const levels = normalizeKwarg({ id: 'b', name: 'reasoning_budget_tokens', target: 'body', type: 'number', zeroOff: true, default: '2048',
+    stops: [{ label: 'Off', value: '0' }, { label: 'Low', value: 1024 }, { label: '', value: '2048' }, { label: 'High', value: 'nope' }, { label: 'Max', value: '' }] });
+  assert.deepEqual(levels.values, ['0', '1024', '2048'], 'a step with no usable number is dropped');
+  assert.deepEqual(levels.stops.map(s => s.label), ['Off', 'Low', '2048'], 'a blank label falls back to its number');
+  assert.equal(controlOf(levels), 'slider');
+  assert.equal(levels.zeroOff, false, 'labelled steps use their 0 step instead of the range switch');
+  assert.deepEqual(levels.stops.map(s => s.off), [true, false, false], 'a step saved without an Off flag is off only at 0');
+  const marked = normalizeKwarg({ id: 'm', name: 'x', stops: [{ label: 'Zero', value: '0', off: false }, { label: 'Quiet', value: '512', off: true }] });
+  assert.deepEqual(marked.stops.map(s => s.off), [false, true], 'an explicit Off flag wins over the number');
+  assert.equal(levels.default, '2048');
+
+  const out = applyKwargs({ kwargs: [levels] }, { b: '1024' }, false).resolved_kwargs;
+  assert.equal(out.reasoning_budget_tokens, 1024);
+  assert.equal(typeof out.reasoning_budget_tokens, 'number');
+  assert.equal(applyKwargs({ kwargs: [levels] }, { b: '3000' }, false).resolved_kwargs.reasoning_budget_tokens, 2048, 'a number that is not a step falls back to the default');
+
+  const ranged = normalizeKwarg({ id: 'r', name: 'x', min: 0, max: 10, step: 1, stops: [{ label: 'A', value: '1' }] });
+  assert.equal(isRange(ranged), true);
+  assert.deepEqual(ranged.stops, [], 'a range does not keep a second list of steps');
 });
 
 test('kwargs: a gated kwarg keeps its own value but hides until the gate opens', () => {
@@ -323,6 +360,45 @@ test('kwargs: paired child sends only on match', () => {
   assert.equal('preserve_thinking' in off, false);
   const on = applyKwargs(m, { think: 'true' }, false).resolved_kwargs.chat_template_kwargs;
   assert.equal(on.preserve_thinking, true);
+});
+
+test('kwargs: any kwarg can switch on replaying past thinking at the value the admin picks', () => {
+  const think = { id: 'think', name: 'enable_thinking', values: ['false', 'true'], default: 'false' };
+  const paired = { kwargs: [think,
+    { id: 'pres', name: 'preserve_thinking', values: ['false', 'true'], visible: false, parentId: 'think',
+      rules: [{ when: 'true', value: 'true', send: true }] }] };
+  assert.equal(applyKwargs(paired, {}, false).replay_thinking, '', 'an omitted kwarg replays nothing');
+  assert.equal(applyKwargs(paired, { think: 'true' }, false).replay_thinking, 'reasoning_content', 'preserve_thinking defaults to true');
+
+  const clear = { kwargs: [{ id: 'c', name: 'clear_thinking', values: ['false', 'true'], default: 'false', visible: false }] };
+  assert.equal(applyKwargs(clear, {}, false).replay_thinking, 'reasoning_content', 'clear_thinking defaults to false');
+
+  const custom = { kwargs: [{ id: 'k', name: 'keep_reasoning', values: ['off', 'on'], default: 'off', replayWhen: 'on', replayAs: 'reasoning' }] };
+  assert.equal(applyKwargs(custom, {}, false).replay_thinking, '');
+  assert.equal(applyKwargs(custom, { k: 'on' }, false).replay_thinking, 'reasoning');
+
+  const optedOut = { kwargs: [{ id: 'p', name: 'preserve_thinking', values: ['false', 'true'], default: 'true', replayWhen: '' }] };
+  assert.equal(applyKwargs(optedOut, {}, false).replay_thinking, '', 'an explicit blank turns the default off');
+
+  const always = { kwargs: [{ id: 'b', name: 'budget', min: 0, max: 100, default: '50', replayWhen: '*', replayAs: 'thinking' }] };
+  assert.equal(replayFieldOf(always), 'thinking', 'any sent value matches *');
+
+  const unsent = { kwargs: [{ id: 'p', name: 'preserve_thinking', values: ['false', 'true'], default: 'true', visible: false, sendWhenHidden: false }] };
+  assert.equal(replayFieldOf(unsent), '', 'a kwarg that is not sent cannot ask for replay');
+  assert.equal(normalizeKwarg({ name: 'x', replayAs: 'bogus' }).replayAs, 'reasoning_content');
+
+  const msgs = [
+    { role: 'user', content: 'pick one', reasoning: 'ignored' },
+    { role: 'assistant', content: 'Okay', reasoning: 'It is 417.' },
+    { role: 'assistant', content: '', reasoning: 'call it', tool_calls: [{ id: 'c', name: 'x', argsText: '{}' }] }
+  ];
+  const wire = normalizeMessages('openai', msgs, 'reasoning_content');
+  assert.equal('reasoning_content' in wire[0], false);
+  assert.equal(wire[1].reasoning_content, 'It is 417.');
+  assert.equal(wire[2].reasoning_content, 'call it');
+  assert.equal(normalizeMessages('openai', msgs, 'reasoning')[1].reasoning, 'It is 417.');
+  assert.equal(normalizeMessages('ollama', msgs, 'reasoning_content')[1].thinking, 'It is 417.', 'Ollama only reads thinking');
+  assert.equal('reasoning_content' in normalizeMessages('openai', msgs)[1], false, 'nothing is replayed without a field');
 });
 
 test('kwargs: multi-level chains resolve', () => {
@@ -502,13 +578,6 @@ test('tool text filter: malformed block becomes a call, prose is untouched', () 
   }
 });
 
-test('compaction: threshold falls back when context is unknown', () => {
-  assert.equal(compactThreshold({ enable_summaries: 0 }, 0), Infinity);
-  const t = compactThreshold({ enable_summaries: 1, summary_padding: 0.125 }, 0);
-  assert.equal(t, Math.floor(FALLBACK_CTX * 0.875));
-  assert.equal(compactThreshold({ enable_summaries: 1, summary_padding: 0.125 }, 4096), 3584);
-});
-
 test('compaction: in-turn trim keeps recent tool results', () => {
   const big = 'x'.repeat(2000);
   const inTurn = [
@@ -524,11 +593,6 @@ test('compaction: in-turn trim keeps recent tool results', () => {
   assert.equal(list[3].content.length, 2000);
   assert.equal(list[0].content, 'a');
   assert.equal(trimInTurn(list, 2).trimmed, 0);
-});
-
-test('compaction: estimate counts roles and tool calls', () => {
-  assert.ok(estimateTokens([{ role: 'user', content: 'hello world' }]) > 0);
-  assert.ok(estimateTokens([{ role: 'assistant', content: '', tool_calls: [{ name: 'bash', argsText: '{"cmd":"ls"}' }] }]) > 8);
 });
 
 test('llamacpp: overflow errors are recognised', () => {
@@ -602,54 +666,6 @@ test('windows: cd is deliberately excluded from the slash fix', () => {
 test('windows: the slash fix reports a note, same as every other auto-correction', () => {
   const r = winTranslate('mkdir a/b');
   assert.equal(r.notes.length, 1);
-});
-
-test('rolling ctx: fits under budget returns the list untouched', () => {
-  const msgs = [{ role: 'system', content: 'sys' }, { role: 'user', content: 'hi' }];
-  const r = truncateForRollingCtx('c1', msgs, 8192);
-  assert.equal(r.msgs, msgs);
-  assert.equal(r.dropped, 0);
-  assert.equal(r.trimmed, false);
-});
-
-test('rolling ctx: drops oldest non-system turns first and keeps every system message', () => {
-  const msgs = [
-    { role: 'system', content: 'S'.repeat(100) },
-    { role: 'user', content: 'a'.repeat(6000) },
-    { role: 'assistant', content: 'b'.repeat(6000) },
-    { role: 'user', content: 'c'.repeat(600) }
-  ];
-  const r = truncateForRollingCtx('c2', msgs, 2048);
-  assert.ok(r.dropped > 0);
-  assert.equal(r.msgs.filter(m => m.role === 'system').length, 1);
-  assert.equal(r.msgs[r.msgs.length - 1].content, 'c'.repeat(600));
-  assert.ok(r.msgs.length < msgs.length);
-});
-
-test('rolling ctx: a single oversized turn is trimmed rather than dropped', () => {
-  const msgs = [{ role: 'system', content: 'S' }, { role: 'user', content: 'x'.repeat(200000) }];
-  const r = truncateForRollingCtx('c3', msgs, 2048);
-  assert.equal(r.dropped, 0);
-  assert.equal(r.trimmed, true);
-  assert.equal(r.msgs.length, 2);
-  assert.ok(r.msgs[1].content.length < 200000);
-});
-
-test('token counter: chunked adds match a whole-string estimate', () => {
-  const text = 'hello world '.repeat(120) + '日本語のテキスト'.repeat(40) + '한국어';
-  const counter = makeTokenCounter();
-  for (let i = 0; i < text.length; i += 7) counter.add(text.slice(i, i + 7));
-  assert.equal(counter.tokens, textTokens(text));
-  const empty = makeTokenCounter();
-  empty.add('');
-  assert.equal(empty.tokens, 0);
-});
-
-test('token estimates are stable across repeat calls on long strings', () => {
-  const long = 'word '.repeat(500);
-  const first = textTokens(long);
-  assert.equal(textTokens(long), first);
-  assert.equal(estimateTokens([{ role: 'user', content: long }]), first + 4);
 });
 
 test('scanTools: prose is never mistaken for a call, real calls still parse', () => {
@@ -818,13 +834,6 @@ test('samplingParams: llama.cpp samplers pass through, unsupported ones are drop
   }
 });
 
-test('trimMode only opts in on the exact value', () => {
-  assert.equal(trimMode({ ctx_trim_mode: 'cache' }), 'cache');
-  assert.equal(trimMode({ ctx_trim_mode: 'retain' }), 'retain');
-  assert.equal(trimMode({}), 'retain');
-  assert.equal(trimMode(null), 'retain');
-});
-
 const stubCount = (list) => list.reduce((n, m) => n + Math.ceil(String(m.content || '').length / 4) + 4, 0);
 const convo = (turns) => {
   const out = [{ role: 'system', content: 'S'.repeat(200) }];
@@ -835,62 +844,30 @@ const convo = (turns) => {
   return out;
 };
 
-test('slideWithCounter: cache mode drops past what is needed, retain mode does not', async () => {
+test('slideWithCounter: drops only as much history as the budget needs', async () => {
   const msgs = convo(40);
   const budget = 4000;
-  const retain = await slideWithCounter(stubCount, msgs, budget, { mode: 'retain' });
-  const cache = await slideWithCounter(stubCount, msgs, budget, { mode: 'cache' });
-  assert.ok(retain.tokens <= budget);
-  assert.ok(cache.tokens <= budget);
-  assert.ok(cache.tokens <= retain.tokens, `cache ${cache.tokens} should not exceed retain ${retain.tokens}`);
-  assert.ok(cache.dropped > retain.dropped, `cache ${cache.dropped} should exceed retain ${retain.dropped}`);
+  const r = await slideWithCounter(stubCount, msgs, budget);
+  assert.ok(r.tokens <= budget);
+  assert.ok(r.tokens > budget - 260, `${r.tokens} leaves more than one turn of slack under ${budget}`);
+  assert.ok(r.dropped > 0);
 });
 
-const firstKept = (r) => {
-  const m = r.msgs.find(x => x.role !== 'system');
-  const hit = String(m && m.content || '').match(/\b([ua]\d+)\b/);
-  return hit ? hit[1] : 'none';
-};
-
-test('slideWithCounter: cache mode holds the prefix still while retain mode moves it every turn', async () => {
-  const budget = 4000;
-  const retainHeads = new Set();
-  const cacheHeads = new Set();
-  for (let turns = 40; turns < 46; turns++) {
-    const msgs = convo(turns);
-    retainHeads.add(firstKept(await slideWithCounter(stubCount, msgs, budget, { mode: 'retain' })));
-    cacheHeads.add(firstKept(await slideWithCounter(stubCount, msgs, budget, { mode: 'cache' })));
-  }
-  assert.equal(retainHeads.size, 6, 'retain mode should move the boundary on every single turn');
-  assert.ok(cacheHeads.size <= 2, `cache mode moved the boundary ${cacheHeads.size} times over six turns`);
-});
-
-test('slideWithCounter: the cache boundary does move once the slack is used up', async () => {
-  const budget = 4000;
-  const heads = new Set();
-  for (let turns = 40; turns < 70; turns++) {
-    heads.add(firstKept(await slideWithCounter(stubCount, convo(turns), budget, { mode: 'cache' })));
-  }
-  assert.ok(heads.size > 1, 'cache mode must still slide, just less often');
-});
-
-test('slideWithCounter: an unreachable cache target still yields a prompt that fits', async () => {
+test('slideWithCounter: a tight budget still yields a prompt that fits', async () => {
   const msgs = convo(3);
   const budget = 420;
-  const r = await slideWithCounter(stubCount, msgs, budget, { mode: 'cache' });
+  const r = await slideWithCounter(stubCount, msgs, budget);
   assert.ok(r.tokens > 0);
   assert.ok(r.tokens <= budget, `${r.tokens} > ${budget}`);
 });
 
-test('slideWithCounter: a prompt already inside the budget is left alone in both modes', async () => {
+test('slideWithCounter: a prompt already inside the budget is left alone', async () => {
   const msgs = convo(2);
   const total = stubCount(msgs);
-  for (const mode of ['retain', 'cache']) {
-    const r = await slideWithCounter(stubCount, msgs, total + 500, { mode });
-    assert.equal(r.dropped, 0, mode);
-    assert.equal(r.trimmed, false, mode);
-    assert.equal(r.msgs, msgs, mode);
-  }
+  const r = await slideWithCounter(stubCount, msgs, total + 500);
+  assert.equal(r.dropped, 0);
+  assert.equal(r.trimmed, false);
+  assert.equal(r.msgs, msgs);
 });
 
 test('sandbox guard: ordinary build and run commands are not blocked', () => {
@@ -1832,40 +1809,6 @@ test('retireLegacyMark moves the retired legacy set to the weave and nothing els
   }
 });
 
-// --- continuing a turn the model ended too early -------------------------
-// A step with no tool call ends the turn. When the model announced the next
-// step and then stopped without taking it, that is a stall, not an answer.
-// The detector must be narrow: stopping is always safe, continuing is not.
-
-test('announcedMoreWork spots a turn that stopped mid-plan', () => {
-  assert.equal(announcedMoreWork("I'll create the remaining files now."), true);
-  assert.equal(announcedMoreWork("Now I'll create all the files with real content."), true);
-  assert.equal(announcedMoreWork('Let me view the test file and show the tree.'), true);
-  assert.equal(announcedMoreWork("Created Cargo.toml.\n\nNext I'll add the source files."), true);
-  assert.equal(announcedMoreWork("I'm going to run the tests."), true);
-});
-
-test('announcedMoreWork leaves a finished or hand-back turn alone', () => {
-  assert.equal(announcedMoreWork('All the files are created. Let me know if you want anything else.'), false);
-  assert.equal(announcedMoreWork('Would you like me to add tests?'), false);
-  assert.equal(announcedMoreWork("That's everything you asked for."), false);
-  assert.equal(announcedMoreWork('Done.'), false);
-  assert.equal(announcedMoreWork('The script sums the integers in a file.'), false);
-  assert.equal(announcedMoreWork(''), false);
-  assert.equal(announcedMoreWork(null), false);
-});
-
-test('announcedMoreWork ignores an intent that was already carried out', () => {
-  // Stated up front, then done — the tail is what decides, not the opening line.
-  const s = "I'll create the config file.\n\nAll three files are created and the tests pass.";
-  assert.equal(announcedMoreWork(s), false);
-});
-
-test('announcedMoreWork treats a trailing question as a hand-back whatever precedes it', () => {
-  assert.equal(announcedMoreWork("I'll add the parser next. Should I also wire up the CLI?"), false);
-});
-
-
 // A stop should not leave a build or a test run grinding away until its timeout.
 // The signal handed to bash kills the child the same way the timeout does, and
 // whatever it printed before dying still comes back so the transcript is honest.
@@ -2224,6 +2167,28 @@ test('the client and server copies of the tool protocol stay byte-identical', ()
   assert.equal(client, server, 'client/src/lib/toolproto.js and server/lib/toolproto.js must be kept identical');
 });
 
+test('client/src/lib/presets.js and server/lib/presets.js are the same file', () => {
+  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  const repo = path.dirname(root);
+  const read = (p) => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
+  const server = read(path.join(root, 'lib', 'presets.js'));
+  const client = read(path.join(repo, 'client', 'src', 'lib', 'presets.js'));
+  assert.equal(client, server, 'client/src/lib/presets.js and server/lib/presets.js must be kept identical');
+});
+
+test('every preset is a complete registry entry', async () => {
+  const { PRESETS, DEFAULT_PRESET, presetId, presetById, isPreset } = await import('../lib/presets.js');
+  assert.ok(isPreset(DEFAULT_PRESET));
+  assert.equal(presetId('nonsense'), DEFAULT_PRESET);
+  assert.equal(presetById(undefined).id, DEFAULT_PRESET);
+  const keys = Object.keys(PRESETS[0]).sort();
+  for (const p of PRESETS) {
+    assert.deepEqual(Object.keys(p).sort(), keys, p.id + ' declares the same fields as every other preset');
+    assert.deepEqual(Object.keys(p.model).sort(), Object.keys(PRESETS[0].model).sort(), p.id + ' model defaults');
+    assert.ok(p.palettes.dark && p.palettes.light, p.id + ' names a dark and a light palette');
+  }
+});
+
 test('client/src/lib/badges.js and server/lib/badges.js are the same file', () => {
   const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
   const repo = path.dirname(root);
@@ -2568,6 +2533,41 @@ test('a host that would break out of the directive is dropped, not escaped', () 
   }
 });
 
+test('with local-only off the page still cannot be framed, rebased or given plugins', () => {
+  const csp = new Map(baseCsp().split('; ').map(d => { const [name, ...sources] = d.split(' '); return [name, sources]; }));
+  assert.deepEqual(csp.get('frame-ancestors'), ["'self'"]);
+  assert.deepEqual(csp.get('object-src'), ["'none'"]);
+  assert.deepEqual(csp.get('base-uri'), ["'self'"]);
+  assert.deepEqual(csp.get('form-action'), ["'self'"]);
+  assert.ok(!csp.has('default-src'), 'a workspace that allows remote content keeps loading it');
+});
+
+test('safeUrl keeps web, mail and relative links and drops every other scheme', () => {
+  for (const ok of ['https://example.com/a?b=1', 'http://example.com', 'mailto:me@example.com', '/docs/models', 'gpt-5', '#top', '']) {
+    assert.equal(safeUrl(ok), ok, `should keep: ${ok}`);
+  }
+  for (const bad of ['javascript:alert(1)', 'JaVaScRiPt:alert(1)', ' javascript:alert(1)', 'java\tscript:alert(1)', 'java\nscript:alert(1)', '\u0001javascript:alert(1)', 'data:text/html,<script>alert(1)</script>', 'vbscript:msgbox(1)', 'blob:https://x/y', 'file:///etc/passwd']) {
+    assert.equal(safeUrl(bad), '', `should drop: ${JSON.stringify(bad)}`);
+  }
+  assert.equal(safeUrl(null), '');
+  assert.equal(safeUrl(undefined), '');
+});
+
+test('client/src/lib/safeurl.js and server/lib/safeurl.js are the same file', () => {
+  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  const repo = path.dirname(root);
+  const read = (p) => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
+  assert.equal(read(path.join(repo, 'client', 'src', 'lib', 'safeurl.js')), read(path.join(root, 'lib', 'safeurl.js')),
+    'what the server stores and what the page renders must agree on a safe link');
+});
+
+test('docs cards and links lose a script address before they are stored', () => {
+  assert.deepEqual(sanitizeCards([{ title: 'T', url: 'javascript:alert(1)' }, { title: 'U', url: 'https://example.com' }]),
+    [{ title: 'T', desc: '', url: '' }, { title: 'U', desc: '', url: 'https://example.com' }]);
+  const cfg = sanitizeDocsConfig({ links: [{ label: 'Bad', url: 'data:text/html,x' }, { label: 'Good', url: '/docs/x' }] });
+  assert.deepEqual(cfg.links.map(l => l.url), ['', '/docs/x']);
+});
+
 // --- the one-model-at-a-time queue -------------------------------------------
 
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
@@ -2756,10 +2756,8 @@ test('web search only fetches result pages on public addresses', async () => {
 });
 
 test('profile lists from an import are cleaned like the save routes clean them', async () => {
-  const { cleanStyles, cleanPersonas, cleanPrompts, prefsFit } = await import('../lib/profile.js');
+  const { cleanStyles, prefsFit } = await import('../lib/profile.js');
   assert.deepEqual(cleanStyles([null, 'x', { id: 's1', name: { bad: 1 }, prompt: 'p' }, { id: 's2', name: ' Calm ', prompt: ' be calm ' }]).map(s => [s.id, s.name, s.prompt]), [['s1', '[object Object]', 'p'], ['s2', 'Calm', 'be calm']]);
-  assert.equal(cleanPersonas([{ id: 'p', name: 'x'.repeat(100), instructions: 'y'.repeat(9000) }])[0].instructions.length, 8000);
-  assert.equal(cleanPrompts(Array.from({ length: 80 }, (_, i) => ({ id: 'q' + i, title: 't', text: 'x' }))).length, 50);
   assert.equal(prefsFit({ a: 'x'.repeat(300 * 1024) }), false);
   assert.equal(prefsFit([]), false);
   assert.equal(prefsFit({ theme: 'dark' }), true);
@@ -2941,4 +2939,77 @@ test('the parameter variables give a ready phrase and the bare counts', () => {
   assert.deepEqual(vars({ docs_total_params: 175, docs_moe: 1 }), ['175B parameters (mixture-of-experts)', '175B', '']);
   assert.deepEqual(vars({ docs_total_params: 175, docs_moe: 0, docs_active_params: 35 }), ['175B parameters', '175B', '']);
   assert.deepEqual(vars({ docs_moe: 1, docs_active_params: 35 }), ['', '', '']);
+});
+
+test('llama.cpp running out of room mid-reply reads as a context overflow', () => {
+  for (const msg of ['Context size has been exceeded.', 'failed to find free space in the KV cache, retrying with smaller batch size']) {
+    assert.equal(isContextOverflowError(new Error(msg)), true, msg);
+  }
+  assert.equal(isContextOverflowError(new Error('model not found')), false);
+});
+
+test('a reasoning model gets more of a small window for its reply', () => {
+  assert.equal(outputReserve({}, 2048), 1024);
+  assert.equal(outputReserve({ has_reasoning: 1 }, 2048), 1228);
+  assert.equal(outputReserve({ has_reasoning: 1 }, 32768), 4096);
+  assert.equal(outputReserve({ has_reasoning: 1, max_tokens: 900 }, 2048), 900);
+});
+
+test('cut reasoning keeps its end and hands it back so the model answers', () => {
+  const long = 'start ' + 'step '.repeat(1000) + 'so the answer is 42';
+  const tail = reasoningTail(long, tailChars(2048));
+  assert.ok(tail.startsWith('…') && tail.endsWith('so the answer is 42'));
+  assert.ok(tail.length <= tailChars(2048) + 1);
+  assert.equal(reasoningTail('short thought', 400), 'short thought');
+
+  const filled = forceAnswer({ think_open: '<reason>', think_close: '</reason>' }, long, 2048, true);
+  assert.equal(filled.role, 'assistant');
+  assert.ok(filled.prefill && filled.held && filled.forced);
+  assert.ok(filled.content.startsWith('<reason>\n…') && filled.content.endsWith('so the answer is 42\n</reason>\n\n'), 'the thought is closed so the model continues with its answer');
+  assert.ok(forceAnswer({}, long, 2048, true).content.endsWith('</think>\n\n'));
+
+  const asked = forceAnswer({}, long, 2048, false);
+  assert.equal(asked.role, 'user');
+  assert.ok(asked.held && asked.forced && !asked.prefill);
+  assert.ok(asked.content.includes('so the answer is 42') && asked.content.startsWith(FORCE_ANSWER_INSTRUCTION.split('{tail}')[0]));
+  assert.deepEqual(answerNudge(filled.tail), { ...asked, tail: filled.tail }, 'a refused prefill falls back to the same instruction');
+});
+
+test('shedBulk thins old images, long code and tool output but leaves the latest turn alone', () => {
+  const code = '```js\n' + Array.from({ length: 60 }, (_, i) => 'line ' + i).join('\n') + '\n```';
+  const msgs = [
+    { role: 'system', content: 'sys' },
+    { role: 'user', content: [{ type: 'text', text: 'look' }, { type: 'image_url', image_url: { url: 'data:x' } }] },
+    { role: 'assistant', content: 'Here:\n' + code },
+    { role: 'tool', content: 'r'.repeat(5000) },
+    { role: 'user', content: 'again\n' + code }
+  ];
+  const r = shedBulk(msgs);
+  assert.equal(r.shed, 3);
+  assert.ok(r.msgs[1].content.every(p => p.type === 'text'));
+  assert.ok(r.msgs[2].content.includes('[... 45 lines removed') && r.msgs[2].content.includes('line 0\n') && r.msgs[2].content.includes('line 59'));
+  assert.ok(r.msgs[3].content.length < 1200);
+  assert.equal(r.msgs[0], msgs[0]);
+  assert.equal(r.msgs[4], msgs[4], 'the newest user message is never thinned');
+  assert.equal(shedBulk([{ role: 'user', content: 'hi' }]).shed, 0);
+});
+
+test('Ollama gets the text in content and the images in their own field', () => {
+  const [m] = normalizeMessages('ollama', [{ role: 'user', content: [
+    { type: 'text', text: 'What is this?' },
+    { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } },
+    { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,BBBB' } }
+  ] }]);
+  assert.deepEqual(m, { role: 'user', content: 'What is this?', images: ['AAAA', 'BBBB'] });
+  const [plain] = normalizeMessages('ollama', [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }]);
+  assert.deepEqual(plain, { role: 'user', content: 'hi' });
+  const [openai] = normalizeMessages('openai', [{ role: 'user', content: [{ type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } }] }]);
+  assert.ok(Array.isArray(openai.content), 'other providers keep the OpenAI image parts');
+});
+
+test('kwargs: a number range keeps its unit and 0 means off, a list drops them', () => {
+  const range = normalizeKwarg({ name: 'reasoning_budget_tokens', min: 0, max: 16384, step: 1024, unit: ' tokens ', zeroOff: true });
+  assert.deepEqual([range.unit, range.zeroOff], ['tokens', true]);
+  const list = normalizeKwarg({ name: 'reasoning_effort', values: ['low', 'high'], unit: 'tokens', zeroOff: true });
+  assert.deepEqual([list.unit, list.zeroOff], ['', false]);
 });

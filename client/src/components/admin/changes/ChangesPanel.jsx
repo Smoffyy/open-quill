@@ -91,7 +91,7 @@ export default function ChangesPanel({ changes, user, scope, layer, onPublished,
         : <span className="ch-confirm"><span>{t('A publisher or the owner ships these to members.')}</span></span>}
       <span className="cp-spacer" />
       <Btn kind={publisher ? 'quiet' : undefined} disabled={busy || !canDiscard}
-        title={canDiscard || !picked.length ? undefined : t('Editors can only discard their own changes.')}
+        data-tip={canDiscard || !picked.length ? undefined : t('Editors can only discard their own changes.')}
         onClick={() => { setError(''); setConfirming(true); }}>{t('Discard')}</Btn>
       {publisher && (
         <Btn kind="primary" disabled={busy || !picked.length} onClick={publish}>

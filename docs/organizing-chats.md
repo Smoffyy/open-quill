@@ -38,6 +38,6 @@ Each run creates a new chat with the result. On each task you can **Run now** to
 
 ## Export and import
 
-**Settings → General → Export everything** downloads one JSON file with your chats, styles, personas, saved prompts, memory and preferences. **Import** reads such a file back: its chats are added, your profile data is merged, and nothing you already have is overwritten.
+**Settings → General → Export everything** downloads one JSON file with your chats, styles, memory and preferences. **Import** reads such a file back: its chats are added, your profile data is merged, and nothing you already have is overwritten.
 
 To save a single chat, use **Export as Markdown** or **Export as JSON** in its menu.

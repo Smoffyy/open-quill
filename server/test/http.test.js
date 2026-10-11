@@ -22,6 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
+import { presetById } from '../lib/presets.js';
 
 const SERVER_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DB_NAME = 'oqhttptest';
@@ -389,8 +390,6 @@ test('a write with no body is a clean no-op, not a 500', async () => {
   const bodyless = [
     ['PATCH', '/api/me'],
     ['PUT', '/api/me/styles'],
-    ['PUT', '/api/me/personas'],
-    ['PUT', '/api/me/prompts'],
     ['PATCH', `/api/chats/${chat.json.id}`],
     ['POST', `/api/chats/${chat.json.id}/branch`],
     ['DELETE', `/api/chats/${chat.json.id}/pins`],
@@ -611,6 +610,11 @@ test('the catalog edits, copies and removes models in batches', async () => {
   assert.equal('badges_off' in row, false, 'switching every badge back on leaves no field behind, so a revert matches the published row');
   assert.deepEqual((await browser('GET', '/api/models')).json.find(m => m.id === a).badges, ['text', 'code']);
 
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: a, docs_notice: 'Heads up', docs_notice_url: 'javascript:alert(1)' }] } });
+  assert.equal((await browser('GET', '/api/admin/models')).json.find(m => m.id === a).docs_notice_url, '', 'a script address never reaches the docs page');
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: a, docs_notice_url: 'https://example.com/x' }] } });
+  assert.equal((await browser('GET', '/api/admin/models')).json.find(m => m.id === a).docs_notice_url, 'https://example.com/x');
+
   await browser('PATCH', '/api/admin/settings', { body: { webSearchEnabled: true } });
   await browser('POST', '/api/admin/changes/publish', { body: {} });
   assert.deepEqual((await browser('GET', '/api/models')).json.find(m => m.id === a).badges, ['text', 'web', 'code'], 'switching web search on for the workspace refreshes the cached badges');
@@ -676,20 +680,56 @@ test('model folders persist on their own, empty or not', async () => {
 
 test('a staged app-config edit can be taken back before it is published', async () => {
   const cfg = (await browser('GET', '/api/app-config')).json;
-  const live = { uiPreset: cfg.uiPreset, appFont: cfg.appFont, appName: cfg.appName };
-  const other = live.uiPreset === 'openai' ? 'anthropic' : 'openai';
+  const live = { appFont: cfg.appFont, appName: cfg.appName };
 
-  await browser('PATCH', '/api/admin/app-config', { body: { appName: 'Typo Name', uiPreset: other, appFont: 'newsreader' } });
+  await browser('PATCH', '/api/admin/app-config', { body: { appName: 'Typo Name', appFont: 'newsreader' } });
   const staged = (await browser('GET', '/api/app-config')).json;
   assert.equal(staged.appName, 'Typo Name', 'the admin previews the staged name');
-  assert.equal(staged.uiPreset, other, 'and the staged preset');
+  assert.equal(staged.appFont, 'newsreader', 'and the staged font');
   assert.ok((await browser('GET', '/api/admin/changes')).json.changes.some(c => c.key === 'setting:app_name'));
 
   await browser('PATCH', '/api/admin/app-config', { body: live });
   const back = (await browser('GET', '/api/app-config')).json;
   assert.equal(back.appName, live.appName, 'the name draft is gone, not still holding the edit');
-  assert.equal(back.uiPreset, live.uiPreset, 'and so is the preset draft');
-  assert.equal(back.appFont, live.appFont);
+  assert.equal(back.appFont, live.appFont, 'and so is the font draft');
+});
+
+test('the base layout follows the active theme and cannot be set on its own', async () => {
+  const cfg = (await browser('GET', '/api/app-config')).json;
+  const store = (await browser('GET', '/api/admin/themes')).json;
+  const start = store.themes.find(t => t.id === store.activeId);
+  const other = store.themes.find(t => t.basePreset !== start.basePreset);
+  const layout = async () => (await browser('GET', '/api/app-config')).json;
+
+  assert.equal(cfg.uiPreset, start.basePreset, 'the layout starts out as the active theme base');
+  await browser('PATCH', '/api/admin/app-config', { body: { uiPreset: other.basePreset } });
+  assert.equal((await layout()).uiPreset, start.basePreset, 'app-config no longer moves the layout');
+
+  await browser('PATCH', '/api/admin/app-config', { body: { appFont: presetById(start.basePreset).font } });
+  await browser('POST', `/api/admin/themes/${other.id}/activate`, { body: {} });
+  let now = await layout();
+  assert.equal(now.uiPreset, other.basePreset, 'activating a theme moves the layout to its base');
+  assert.equal(now.appFont, presetById(other.basePreset).font, 'and an untouched font follows the layout');
+
+  await browser('POST', `/api/admin/themes/${start.id}/activate`, { body: {} });
+  await browser('PATCH', '/api/admin/app-config', { body: { appFont: 'newsreader' } });
+  await browser('POST', `/api/admin/themes/${other.id}/activate`, { body: {} });
+  now = await layout();
+  assert.equal(now.uiPreset, other.basePreset);
+  assert.equal(now.appFont, 'newsreader', 'a font the admin picked is kept');
+
+  const copy = (await browser('POST', '/api/admin/themes', { body: { from: other.id } })).json.id;
+  await browser('POST', `/api/admin/themes/${copy}/activate`, { body: {} });
+  await browser('DELETE', `/api/admin/themes/${copy}`);
+  const left = (await browser('GET', '/api/admin/themes')).json;
+  const fallback = left.themes.find(t => t.id === left.activeId);
+  assert.equal((await layout()).uiPreset, fallback.basePreset, 'deleting the active theme moves the layout to the theme that takes over');
+
+  await browser('POST', `/api/admin/themes/${start.id}/activate`, { body: {} });
+  await browser('PATCH', '/api/admin/app-config', { body: { appFont: cfg.appFont } });
+  now = await layout();
+  assert.equal(now.uiPreset, cfg.uiPreset);
+  assert.equal(now.appFont, cfg.appFont);
 });
 
 test('a release can ship part of the draft, refuses a stale review and rolls back', async () => {
@@ -1259,4 +1299,35 @@ test('MCP header and environment values stay on the server', async () => {
   assert.doesNotMatch(member.text, /mcp-header-secret|mcp-env-secret/);
   await browser('DELETE', `/api/admin/mcp/${id}`);
   await browser('DELETE', `/api/admin/mcp/${stdio.json.server.id}`);
+});
+
+test('a code session keeps its mode and its workspace files can be managed from the panel', async () => {
+  const made = (await browser('POST', '/api/chats', { body: { mode: 'code' } })).json;
+  assert.equal(made.mode, 'code');
+  const listed = (await browser('GET', '/api/chats')).json.find(c => c.id === made.id);
+  assert.equal(listed.mode, 'code', 'the sidebar can tell a session from a chat');
+  assert.equal((await browser('GET', '/api/chats/' + made.id)).json.chat.mode, 'code');
+  assert.equal((await browser('GET', '/api/chats-overview')).json.chats.some(c => c.id === made.id), false, 'all chats lists chats only');
+  const plain = (await browser('POST', '/api/chats', { body: {} })).json;
+  assert.equal(plain.mode, 'chat');
+
+  const base = '/api/chats/' + made.id;
+  const created = await browser('POST', base + '/files/new', { body: { path: 'src/app.py' } });
+  assert.equal(created.status, 200);
+  assert.deepEqual(created.json.files.map(f => f.path), ['src/app.py']);
+  assert.equal((await browser('POST', base + '/files/new', { body: { path: '../escape.txt' } })).status, 400);
+  const renamed = await browser('POST', base + '/files/rename', { body: { path: 'src/app.py', to: 'src/main.py' } });
+  assert.equal(renamed.json.path, 'src/main.py');
+
+  const boundary = 'oqcode' + Date.now();
+  const raw = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="data.csv"\r\nContent-Type: text/csv\r\n\r\na,b\n1,2\n\r\n--${boundary}--\r\n`);
+  const up = await browser('POST', base + '/files', { raw, headers: { 'Content-Type': 'multipart/form-data; boundary=' + boundary } });
+  assert.equal(up.status, 200);
+  assert.deepEqual(up.json.files.map(f => f.path).sort(), ['data.csv', 'src/main.py']);
+  const gone = await browser('DELETE', base + '/files?path=' + encodeURIComponent('data.csv'));
+  assert.deepEqual(gone.json.files.map(f => f.path), ['src/main.py']);
+  await browser('PATCH', base, { body: { projectId: 'anything' } });
+  assert.equal((await browser('GET', base)).json.chat.projectId, null, 'a session never joins a project and its workspace');
+  await browser('DELETE', base);
+  await browser('DELETE', '/api/chats/' + plain.id);
 });

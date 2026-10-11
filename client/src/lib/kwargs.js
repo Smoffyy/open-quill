@@ -17,6 +17,24 @@ export const KWARG_TYPES = [
   ['string', 'String']
 ];
 
+export const REPLAY_FIELDS = [
+  ['reasoning_content', 'reasoning_content (llama.cpp, vLLM, LM Studio)'],
+  ['reasoning', 'reasoning'],
+  ['thinking', 'thinking']
+];
+const REPLAY_DEFAULTS = { __proto__: null, preserve_thinking: 'true', clear_thinking: 'false' };
+
+export function replayWhenOf(def) {
+  if (def?.replayWhen === undefined) return REPLAY_DEFAULTS[String(def?.name || '').trim()] || '';
+  return String(def.replayWhen || '');
+}
+
+export function replayValuesOf(def) {
+  if (!def || isRange(def)) return [];
+  if (def.parentId) return [...new Set((Array.isArray(def.rules) ? def.rules : []).filter(r => r.send !== false && r.value).map(r => String(r.value)))];
+  return kwargValuesArr(def);
+}
+
 const RESERVED_BODY_KEYS = new Set(['model', 'messages', 'stream', 'stream_options', 'tools', 'tool_choice', 'chat_template_kwargs', 'extra_body']);
 
 export const isBoolPair = (values) =>
@@ -32,6 +50,28 @@ export const kwargValuesStr = (def) => kwargValuesArr(def).join(', ');
 export const isRange = (def) =>
   !!def && def.min != null && def.max != null && def.min !== '' && def.max !== '' &&
   Number.isFinite(Number(def.min)) && Number.isFinite(Number(def.max)) && Number(def.max) > Number(def.min);
+
+export const isSteps = (def) => !!def?.stops?.length;
+
+export const DEFAULT_STEPS = [
+  { label: 'Off', value: '0', off: true },
+  { label: 'Low', value: '1024', off: false },
+  { label: 'Medium', value: '2048', off: false },
+  { label: 'High', value: '4096', off: false }
+];
+
+export const stepFields = (stops) => ({ stops, values: stops.map(s => String(s.value ?? '')).filter(Boolean) });
+
+export const isOffStep = (stop) => stop.off ?? Number(stop.value) === 0;
+
+function stopOf(def, value) {
+  return (def?.stops || []).find(s => String(s.value) === String(value));
+}
+
+export function stopLabel(def, value) {
+  const stop = stopOf(def, value);
+  return stop ? (stop.label || String(stop.value)) : String(value ?? '');
+}
 
 export const rangeStep = (def) => (Number(def?.step) > 0 ? Number(def.step) : 1);
 
@@ -54,6 +94,25 @@ export function clampToRange(def, value) {
   return d ? Number(n.toFixed(d)) : Math.round(n);
 }
 
+const MAX_RANGE_STEPS = 400;
+
+export function rangeSteps(def) {
+  const min = Number(def.min), max = Number(def.max), step = rangeStep(def);
+  const count = Math.floor((max - min) / step);
+  const stride = Math.max(1, Math.ceil(count / MAX_RANGE_STEPS));
+  const out = [];
+  for (let i = 0; i <= count; i += stride) out.push(String(clampToRange(def, min + i * step)));
+  out.push(String(max));
+  return [...new Set(out)];
+}
+
+export function nearestStep(steps, value) {
+  const n = Number(value);
+  let best = 0;
+  steps.forEach((s, i) => { if (Math.abs(Number(s) - n) < Math.abs(Number(steps[best]) - n)) best = i; });
+  return best;
+}
+
 // "300" reads as a number; "low" does not. Used by the editor to decide whether a
 // range slider is even offered for what the admin has typed.
 export const allNumeric = (values) =>
@@ -61,6 +120,7 @@ export const allNumeric = (values) =>
 
 export function controlOf(def) {
   if (isRange(def)) return 'range';
+  if (isSteps(def)) return 'slider';
   const values = kwargValuesArr(def);
   if (def?.control && def.control !== 'auto') return def.control;
   if (isBoolPair(values)) return 'toggle';
@@ -77,6 +137,12 @@ export function defaultValueOf(def) {
   if (values.includes(def?.default)) return def.default;
   if (isBoolPair(values)) return values.find(v => /^false$/i.test(v));
   return values[Math.floor(values.length / 2)] ?? values[0] ?? '';
+}
+
+export function kwargAccepts(def, value) {
+  if (value == null) return false;
+  if (isRange(def)) return String(clampToRange(def, value)) === String(value);
+  return kwargValuesArr(def).includes(value);
 }
 
 export function trueValueOf(def) {
@@ -163,20 +229,25 @@ export function coerceKwargValue(value, type) {
   return s;
 }
 
+function placeKwarg(out, target, name, val) {
+  if (target === 'body') {
+    if (!RESERVED_BODY_KEYS.has(name)) out[name] = val;
+    return;
+  }
+  if (!out[target] || typeof out[target] !== 'object') out[target] = {};
+  out[target][name] = val;
+}
+
 export function kwargPayload(defs, values) {
   const out = {};
   for (const d of (Array.isArray(defs) ? defs : [])) {
     const v = values ? values[d.id] : null;
     if (v == null || v === '' || !d.name) continue;
     if (!d.parentId && !kwargVisible(defs, values, d) && d.sendWhenHidden === false) continue;
-    const val = coerceKwargValue(v, d.type);
-    const target = d.target || 'chat_template_kwargs';
-    if (target === 'body') {
-      if (RESERVED_BODY_KEYS.has(d.name)) continue;
-      out[d.name] = val;
-    } else {
-      if (!out[target] || typeof out[target] !== 'object') out[target] = {};
-      out[target][d.name] = val;
+    placeKwarg(out, d.target || 'chat_template_kwargs', d.name, coerceKwargValue(v, d.type));
+    const message = d.budgetMessage;
+    if (isBudgetKwarg(d) && message?.enabled && message.name && message.text && Number(v) > 0) {
+      placeKwarg(out, message.target, message.name, coerceKwargValue(message.text, message.type));
     }
   }
   return out;
@@ -186,13 +257,23 @@ export function newKwargId() {
   return 'kw' + Math.random().toString(36).slice(2, 8);
 }
 
+export const BUDGET_KWARG = 'reasoning_budget_tokens';
+export const BUDGET_MESSAGE_TEXT = 'Thinking budget reached. Stop thinking and write the answer now.';
+
+export const isBudgetKwarg = (def) => def?.name === BUDGET_KWARG;
+
+export function budgetMessageOff() {
+  return { enabled: false, name: 'reasoning_budget_message', target: 'body', type: 'string', text: '' };
+}
+
 export function blankKwarg() {
   return {
     id: newKwargId(), name: '', label: '', description: '', chip: '',
     values: ['false', 'true'], default: 'false', control: 'auto',
     target: 'chat_template_kwargs', type: 'auto',
     visible: true, adminOnly: false, sendWhenHidden: true, parentId: '', showIf: null,
-    min: null, max: null, step: null, rules: []
+    min: null, max: null, step: null, unit: '', zeroOff: false, stops: [], rules: [],
+    replayWhen: '', replayAs: 'reasoning_content', budgetMessage: budgetMessageOff()
   };
 }
 
@@ -220,31 +301,73 @@ export const KWARG_PRESETS = [
     })
   },
   {
-    key: 'thinking_budget_tokens', label: 'thinking_budget_tokens (number slider)',
-    note: 'A draggable slider between a minimum and a maximum you set.',
+    key: 'reasoning_budget_tokens', label: 'reasoning_budget_tokens (number slider)',
+    note: 'Caps how many tokens the model may spend thinking. Sent at the top level of the request, where llama.cpp reads it.',
     make: () => ({
-      ...blankKwarg(), name: 'thinking_budget_tokens', label: 'Thinking budget',
+      ...blankKwarg(), name: 'reasoning_budget_tokens', label: 'Thinking budget', chip: 'Thinking · {value} tokens',
       description: 'How many tokens the model may spend thinking',
-      values: [], default: '1024', min: 1024, max: 8192, step: 1024,
-      target: 'body', type: 'number'
+      values: [], default: '4096', min: 1024, max: 16384, step: 1024,
+      unit: 'tokens', zeroOff: true, target: 'body', type: 'number'
+    })
+  },
+  {
+    key: 'reasoning_levels', label: 'reasoning_budget_tokens (named levels)',
+    note: 'The thinking budget as words, such as Off, Low, Medium and High. Each word sends its number at the top level of the request.',
+    make: () => ({
+      ...blankKwarg(), name: 'reasoning_budget_tokens', label: 'Thinking', chip: '{value}',
+      description: 'How much the model may think before it answers',
+      ...stepFields(DEFAULT_STEPS), default: '2048', target: 'body', type: 'number'
     })
   },
   {
     key: 'preserve_thinking', label: 'preserve_thinking (paired)',
-    note: 'Hidden kwarg meant to follow a thinking toggle.',
+    note: 'Hidden kwarg meant to follow a thinking toggle. Sends past thinking back when true.',
     make: () => ({
       ...blankKwarg(), name: 'preserve_thinking', label: 'Preserve thinking',
-      description: '', values: ['false', 'true'], default: 'false', visible: false
+      description: '', values: ['false', 'true'], default: 'false', visible: false, replayWhen: 'true'
+    })
+  },
+  {
+    key: 'clear_thinking', label: 'clear_thinking (GLM)',
+    note: 'Hidden kwarg that keeps past thinking when false.',
+    make: () => ({
+      ...blankKwarg(), name: 'clear_thinking', label: 'Clear thinking',
+      description: '', values: ['false', 'true'], default: 'false', visible: false, replayWhen: 'false'
     })
   }
 ];
+
+export function chipNumber(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  if (Math.abs(n) >= 1024 && n % 512 === 0) return n / 1024 + 'K';
+  return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(n);
+}
+
+export function rangeLabel(def, value, offText) {
+  const n = Number(value);
+  if (def.zeroOff && n === 0) return offText;
+  const shown = Number.isFinite(n) ? new Intl.NumberFormat(undefined, { maximumFractionDigits: 6 }).format(n) : String(value);
+  return def.unit ? shown + ' ' + def.unit : shown;
+}
 
 export function kwargChip(def, value) {
   if (value == null || value === '') return '';
   const control = controlOf(def);
   if (control === 'toggle') return /^true$/i.test(String(value)) ? (def.chip || def.label || 'On') : '';
-  if (control === 'range') return def.chip ? def.chip + ' ' + value : String(value);
-  if (def.chip) return def.chip;
+  if (isSteps(def)) {
+    const stop = stopOf(def, value);
+    if (stop && isOffStep(stop)) return '';
+    const name = stopLabel(def, value);
+    return def.chip ? def.chip.split('{value}').join(name) : name;
+  }
+  if (control === 'range') {
+    if (def.zeroOff && Number(value) === 0) return '';
+    const short = chipNumber(value);
+    if (def.chip) return def.chip.split('{value}').join(short);
+    return def.unit ? short + ' ' + def.unit : short;
+  }
   const s = String(value);
-  return s.charAt(0).toUpperCase() + s.slice(1);
+  const shown = s.charAt(0).toUpperCase() + s.slice(1);
+  return def.chip ? def.chip.split('{value}').join(shown) : shown;
 }

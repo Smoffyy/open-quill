@@ -63,7 +63,7 @@ export default function StyleSubmenu({ styles = [], stylesReady = true, styleId 
   if (creating) {
     return (
       <div className="style-create">
-        <div className="style-menu-label">{t("New style")}</div>
+        <div className="pm-head">{t("New style")}</div>
         <input placeholder={t("Style name")} value={name} maxLength={50} onChange={(e) => setName(e.target.value)} />
         <textarea placeholder={t("Describe how the assistant should write (tone, length, formatting…)")} rows={4} value={prompt} maxLength={4000} onChange={(e) => setPrompt(e.target.value)} />
         <div className="style-gen">
@@ -82,24 +82,26 @@ export default function StyleSubmenu({ styles = [], stylesReady = true, styleId 
 
   return (
     <>
-      <div className="style-menu-label">{t("Response style")}</div>
+      <div className="pm-head">{t("Response style")}</div>
       {STYLE_PRESETS.map(p => (
-        <button key={p.id} className={'style-item' + (p.id === styleId ? ' active' : '')} onClick={() => onSelect?.(p.id)}>
-          <span className="style-item-name">{p.name}</span>
-          <span className="style-item-desc">{p.desc}</span>
-          {p.id === styleId && <Check style={{ width: 14 }} />}
+        <button key={p.id} className="pm-item pm-opt" onClick={() => onSelect?.(p.id)}>
+          <span className="pm-stack">
+            <span className="pm-label">{p.name}</span>
+            <span className="pm-desc">{p.desc}</span>
+          </span>
+          {p.id === styleId && <Check className="pm-check" />}
         </button>
       ))}
       {!stylesReady && <Skel when><SkelMenu count={2} icons={false} /></Skel>}
-      {stylesReady && styles.length > 0 && <div className="style-menu-label">{t("Your styles")}</div>}
+      {stylesReady && styles.length > 0 && <div className="pm-head">{t("Your styles")}</div>}
       {styles.map(x => (
-        <button key={x.id} className={'style-item' + (x.id === styleId ? ' active' : '')} onClick={() => onSelect?.(x.id)}>
-          <span className="style-item-name">{x.name}</span>
-          <span className="style-del" title={t("Delete style")} onClick={(e) => removeStyle(e, x.id)}><Trash style={{ width: 13 }} /></span>
-          {x.id === styleId && <Check style={{ width: 14 }} />}
+        <button key={x.id} className="pm-item pm-opt" onClick={() => onSelect?.(x.id)}>
+          <span className="pm-stack"><span className="pm-label">{x.name}</span></span>
+          <span className="pm-del" data-tip={t("Delete style")} aria-label={t("Delete style")} onClick={(e) => removeStyle(e, x.id)}><Trash style={{ width: 13 }} /></span>
+          {x.id === styleId && <Check className="pm-check" />}
         </button>
       ))}
-      <button className="style-item create" onClick={() => setCreating(true)}>{t("+ Create a style")}</button>
+      <button className="pm-item pm-create" onClick={() => setCreating(true)}>{t("+ Create a style")}</button>
     </>
   );
 }

@@ -3,7 +3,7 @@ import { Search, X, Up, Down } from '../ui/icons.jsx';
 import { t } from '../../i18n.jsx';
 import { focusUnlessTouch } from '../../lib/touch.js';
 
-const SKIP = 'trail,thread-find,actions,code-bar,code-copy-anchor,msg-time,ctx-row,steer-chips,retry-menu,more-menu,pin-tag';
+const SKIP = 'trail,thread-find,actions,code-bar,code-copy-anchor,msg-time,steer-chips,retry-menu,more-menu,pin-tag';
 const SKIP_SET = new Set(SKIP.split(','));
 const HL_ALL = 'oq-find';
 const HL_ONE = 'oq-find-active';
@@ -211,9 +211,9 @@ export default function ThreadFind({ scrollRef, revision, onMatches, onClose }) 
         onKeyDown={onKey}
       />
       <span className="tf-count" aria-live="polite">{status}</span>
-      <button type="button" className="tf-btn" onClick={() => step(-1)} disabled={!total} aria-label={t('Previous match')} title={t('Previous match')}><Up style={{ width: 14 }} /></button>
-      <button type="button" className="tf-btn" onClick={() => step(1)} disabled={!total} aria-label={t('Next match')} title={t('Next match')}><Down style={{ width: 14 }} /></button>
-      <button type="button" className="tf-btn tf-close" onClick={onClose} aria-label={t('Close find')} title={t('Close find')}><X style={{ width: 14 }} /></button>
+      <button type="button" className="tf-btn" onClick={() => step(-1)} disabled={!total} aria-label={t('Previous match')} data-tip={t('Previous match')}><Up style={{ width: 14 }} /></button>
+      <button type="button" className="tf-btn" onClick={() => step(1)} disabled={!total} aria-label={t('Next match')} data-tip={t('Next match')}><Down style={{ width: 14 }} /></button>
+      <button type="button" className="tf-btn tf-close" onClick={onClose} aria-label={t('Close find')} data-tip={t('Close find')}><X style={{ width: 14 }} /></button>
     </div>
   );
 }

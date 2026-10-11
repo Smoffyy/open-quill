@@ -36,3 +36,10 @@ export function uploadFileOf(url) {
 const subs = new Set();
 export function subscribeFilePreview(fn) { subs.add(fn); return () => subs.delete(fn); }
 export function openFilePreview(file) { subs.forEach(fn => fn(file)); }
+
+const MODEL_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+
+export function needsConversion(type) {
+  const t = String(type || '').toLowerCase();
+  return isVisionImage(t) && !MODEL_IMAGE_TYPES.has(t);
+}

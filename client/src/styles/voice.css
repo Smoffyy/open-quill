@@ -1,0 +1,4 @@
+.voice-wrap { position: relative; }
+.voice-trigger { width: 20px; height: 24px; display: grid; place-items: center; border-radius: 6px; color: var(--text-soft, var(--text-muted)); transition: background var(--fx-t, .15s) ease, color var(--fx-t, .15s) ease; }
+.voice-trigger:hover, .voice-trigger.on { background: var(--composer-hover, var(--surface-hover)); color: var(--text); }
+.plus-menu.voice-menu { left: auto; right: 0; bottom: calc(100% + 6px); width: 172px; min-width: 128px; }

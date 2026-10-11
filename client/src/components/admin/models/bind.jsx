@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useAdmin } from '../store.jsx';
 import { Input, Area, Select, Switch, Btn, PointMenu, MenuItem, clampToViewport } from '../ui.jsx';
 import { ChevDown, X } from '../../ui/icons.jsx';
+import InfoTip from '../../ui/InfoTip.jsx';
 import { t, tk } from '../../../i18n.jsx';
 import {
   shared, variants, flagOn, folderOf, folderPatch, applyText, approxTokens, norm, revertPatch, FLAGS, TEXT_OPS
@@ -74,7 +75,7 @@ export function Mixed({ k, flag = false, apply }) {
   return (
     <>
       <button type="button" className="mc-mixed" aria-haspopup="menu" aria-expanded={!!menu}
-        title={t('Models differ here. Pick one value for all of them.')}
+        data-tip={t('Models differ here. Pick one value for all of them.')}
         onClick={(e) => {
           if (menu) { setMenu(null); return; }
           const r = e.currentTarget.getBoundingClientRect();
@@ -131,28 +132,29 @@ export function Revert({ change, label }) {
       ? t('Revert {name} to the published values', { name: label })
       : t('Revert {name} on {n} models to the published values', { name: label, n: change.count });
   return (
-    <button type="button" className="mc-revert" title={tip} aria-label={tip}
+    <button type="button" className="mc-revert" data-tip={tip} aria-label={tip}
       onClick={(e) => { e.stopPropagation(); change.revert(); }}>
       <X />
     </button>
   );
 }
 
-function Label({ text, k, flag, apply, change, plain }) {
+function Label({ text, k, flag, apply, change, plain, info }) {
   return (
     <span className="mc-label">
       {text}
+      {info && <InfoTip text={info} />}
       {k && !plain && <Mixed k={k} flag={flag} apply={apply} />}
       {change && <Revert change={change} label={typeof text === 'string' ? text : ''} />}
     </span>
   );
 }
 
-export function Slot({ label, k, flag, apply, hint, plain, children }) {
+export function Slot({ label, k, flag, apply, hint, plain, info, children }) {
   const change = useChange(k);
   return (
     <div className={'cp-field' + (change.changed ? ' mc-changed' : '')}>
-      <div className="mc-field-head"><Label text={label} k={k} flag={flag} apply={apply} change={change} plain={plain} /></div>
+      <div className="mc-field-head"><Label text={label} k={k} flag={flag} apply={apply} change={change} plain={plain} info={info} /></div>
       {children}
       {hint && <div className="cp-hint">{hint}</div>}
     </div>
@@ -223,7 +225,7 @@ export function Chips({ label, note, items }) {
           const all = on === models.length;
           const moved = models.some(m => live[m.id] && norm(live[m.id], k) !== norm(m, k));
           return (
-            <button key={k} type="button" aria-pressed={all ? true : on ? 'mixed' : false} title={hint}
+            <button key={k} type="button" aria-pressed={all ? true : on ? 'mixed' : false} data-tip={hint}
               className={'mc-chip' + (on && !all ? ' part' : '') + (moved ? ' moved' : '')}
               onClick={() => edit({ [k]: all ? 0 : 1 })}>
               {name}
@@ -256,7 +258,7 @@ export function ModelPicks({ k, label, note, candidates, empty }) {
             const all = owners.length > 0 && on === owners.length;
             return (
               <button key={c.id} type="button" aria-pressed={all ? true : on ? 'mixed' : false}
-                className={'mc-chip' + (on && !all ? ' part' : '')} title={c.description || undefined}
+                className={'mc-chip' + (on && !all ? ' part' : '')} data-tip={c.description || undefined}
                 onClick={() => toggle(c.id, all)}>
                 {c.display_name || c.internal_name}
               </button>
@@ -273,7 +275,7 @@ export function CardMark({ label, k }) {
   return <Label text={label} k={k} change={change} />;
 }
 
-export function TextField({ k, label, hint, placeholder, mono, type, min, max, step, list, solo, commit, zeroBlank }) {
+export function TextField({ k, label, hint, info, placeholder, mono, type, min, max, step, list, solo, commit, zeroBlank }) {
   const { many, edit, models } = useEditor();
   const { value, mixed } = useField(k);
   const locked = solo && many;
@@ -282,7 +284,7 @@ export function TextField({ k, label, hint, placeholder, mono, type, min, max, s
   const write = (v) => edit(commit ? commit(v) : { [k]: v });
 
   return (
-    <Slot label={label} k={k} plain={locked} hint={locked ? t('Differs per model. Select one model to edit it.') : hint}>
+    <Slot label={label} k={k} plain={locked} info={info} hint={locked ? t('Differs per model. Select one model to edit it.') : hint}>
       <Input mono={mono} type={type} min={min} max={max} step={step} list={list} disabled={locked} aria-label={label}
         value={locked ? '' : shown}
         placeholder={locked ? t('{n} values', { n: models.length }) : mixed ? t('Mixed. Typing sets all {n}.', { n: models.length }) : placeholder}

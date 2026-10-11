@@ -13,7 +13,7 @@ function snippetAround(text, at, len) {
 export default function registerBrowseRoutes(app) {
   app.get('/api/chats', authMiddleware, (req, res) => {
     const list = db.chats.listByUser(req.user.id)
-      .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred, archived: !!c.archived, projectId: c.project_id || null, ended: !!c.ended }));
+      .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred, archived: !!c.archived, projectId: c.project_id || null, ended: !!c.ended, mode: c.mode === 'code' ? 'code' : 'chat' }));
     res.json(list);
   });
 
@@ -21,7 +21,7 @@ export default function registerBrowseRoutes(app) {
     const offset = Math.max(0, parseInt(req.query.offset) || 0);
     const limit = Math.min(60, Math.max(1, parseInt(req.query.limit) || 18));
     const wantArchived = req.query.archived === '1';
-    const all = db.chats.listByUser(req.user.id).filter(c => !!c.archived === wantArchived);
+    const all = db.chats.listByUser(req.user.id).filter(c => !!c.archived === wantArchived && c.mode !== 'code');
     const page = all.slice(offset, offset + limit).map(c => ({
       id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred,
       archived: !!c.archived, ended: !!c.ended,
@@ -51,7 +51,7 @@ export default function registerBrowseRoutes(app) {
       const titleHit = (c.title || '').toLowerCase().includes(q);
       const snippet = titleHit ? '' : hits.get(c.id);
       if (!titleHit && snippet === undefined) continue;
-      results.push({ id: c.id, title: c.title, updated_at: c.updated_at, snippet: snippet || (c.title || ''), starred: !!c.starred });
+      results.push({ id: c.id, title: c.title, updated_at: c.updated_at, snippet: snippet || (c.title || ''), starred: !!c.starred, mode: c.mode === 'code' ? 'code' : 'chat' });
     }
     res.json({ results: results.slice(0, MAX_RESULTS) });
   });

@@ -57,7 +57,7 @@ export default function DocsNav({
   return (
     <div className="dnav">
       <div className="dnav-head">
-        <button className="dnav-brand" onClick={onExit} title={appName || t('Back')}>
+        <button className="dnav-brand" onClick={onExit} data-tip={appName || t('Back')}>
           <Chevron className="dnav-brand-back" aria-hidden="true" />
           <BrandMark className="dnav-brand-ic" src={appIcon} />
           <b className="dnav-brand-name">{appName || 'open-quill'}</b>
@@ -95,7 +95,7 @@ export default function DocsNav({
                 <div className="dnav-heading-edit">
                   <input className="dnav-heading-input" value={s.label} placeholder={t('Tab name')}
                     aria-label={t('Tab name')} onChange={(e) => onRenameTab(s.id, e.target.value)} />
-                  <button className="dnav-iconbtn" aria-label={t('Remove tab')} title={t('Remove tab')}
+                  <button className="dnav-iconbtn" aria-label={t('Remove tab')} data-tip={t('Remove tab')}
                     onClick={() => onRemoveTab(s.id)}><Trash /></button>
                 </div>
               ) : s.label}
@@ -105,7 +105,7 @@ export default function DocsNav({
                 <div className="dnav-editrow" key={p.id}>
                   <Item label={p.title || t('Untitled page')} active={target.kind === 'page' && target.id === p.id}
                     onClick={() => onSelect({ kind: 'page', id: p.id })} />
-                  <button className="dnav-iconbtn" aria-label={t('Remove page')} title={t('Remove page')}
+                  <button className="dnav-iconbtn" aria-label={t('Remove page')} data-tip={t('Remove page')}
                     onClick={() => onRemovePage(s.id, p.id)}><Trash /></button>
                 </div>
               ) : (

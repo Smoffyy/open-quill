@@ -13,7 +13,6 @@ function wsCtx(activeKey = 'c1') {
     refs: {
       activeIdRef: { current: activeKey },
       currentIdRef: { current: 'model-1' },
-      ledgerOpenRef: { current: false },
       compareRef: { current: null },
       nextTurnPending: { current: false },
       refreshSeq: { current: 0 }
@@ -25,6 +24,7 @@ function wsCtx(activeKey = 'c1') {
       },
       peek: (id) => recs.get(id),
       dropRec: (id) => { recs.delete(id); calls.push(['dropRec', id]); },
+      keys: () => [...recs.keys()],
       syncBusy: log('syncBusy'),
       resumeRec: (id, patch) => { recs.set(id, patch); calls.push(['resumeRec', id]); }
     },
@@ -54,8 +54,9 @@ function wsCtx(activeKey = 'c1') {
     actions: {
       finalize: log('finalize'), finalizeBackground: log('finalizeBackground'), syncView: log('syncView'),
       loadModels: log('loadModels'), loadAppConfig: log('loadAppConfig'), loadBudget: log('loadBudget'),
-      loadLedger: log('loadLedger'), taskStarted: log('taskStarted'), setAsk: log('setAsk'),
-      syncConfig: log('syncConfig'), adminDraft: log('adminDraft'), presence: log('presence')
+      taskStarted: log('taskStarted'), setAsk: log('setAsk'), contextChanged: log('contextChanged'),
+      syncConfig: log('syncConfig'), adminDraft: log('adminDraft'), presence: log('presence'),
+      settleStale: log('settleStale')
     }
   };
   return ctx;
@@ -80,7 +81,7 @@ test('every frame the server can send has a handler', () => {
   const SENT = ['session_revoked', 'config', 'resume', 'files', 'tool_live', 'tool_live_delta',
     'tool_exec', 'tool', 'compacting', 'compacted', 'ctx_rolling', 'title', 'chat_ended',
     'routed', 'queued', 'status', 'prompt_size', 'telemetry', 'steered', 'start',
-    'reasoning', 'content', 'rewrite', 'error', 'done', 'task_started', 'hello', 'admin_draft', 'presence'];
+    'reasoning', 'content', 'rewrite', 'error', 'done', 'task_started', 'hello', 'admin_draft', 'presence', 'folded'];
   for (const type of SENT) assert.ok(handlers[type], 'no handler for ' + type);
 });
 
@@ -248,6 +249,17 @@ test('resume rebuilds every turn and only syncs the view when one is on screen',
   assert.equal(did(ctx2, 'setPromptTokens'), true);
 });
 
+test('resume settles a reply that ended while the socket was down, and leaves running and finished ones alone', () => {
+  const ctx = wsCtx('c1');
+  ctx.recs.set('c2', { content: 'partial', done: false });
+  ctx.recs.set('c3', { content: 'running', done: false });
+  ctx.recs.set('c4', { content: 'finished', done: true });
+  ctx.recs.set('incognito', { content: 'private', done: false });
+  dispatchWs({ type: 'resume', turns: [{ chatId: 'c3', content: 'running' }] }, ctx);
+  const settled = ctx.calls.filter(([name]) => name === 'settleStale').map(([, id]) => id);
+  assert.deepEqual(settled, ['c2']);
+});
+
 test('resume ignores a malformed turn instead of throwing away the batch', () => {
   const ctx = wsCtx('c1');
   dispatchWs({ type: 'resume', turns: [null, { chatId: null }, { chatId: 'c1', content: 'ok' }] }, ctx);
@@ -331,4 +343,12 @@ test('a config frame and the connect greeting both hand their version on', () =>
   dispatchWs({ type: 'hello', configVersion: 7 }, ctx);
   const calls = ctx.calls.filter(c => c[0] === 'syncConfig').map(c => c.slice(1));
   assert.deepEqual(calls, [[7, false], [7, true]]);
+});
+
+test('a background summary refreshes the context ring only for the chat on screen', () => {
+  const ctx = wsCtx('c1');
+  dispatchWs({ type: 'folded', chatId: 'c2' }, ctx);
+  assert.equal(did(ctx, 'contextChanged'), false);
+  dispatchWs({ type: 'folded', chatId: 'c1' }, ctx);
+  assert.equal(did(ctx, 'contextChanged'), true);
 });

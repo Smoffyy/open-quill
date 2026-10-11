@@ -1,15 +1,16 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevDown, Chevron, Bulb, Eye, Info, Globe, Terminal, FileText, Wand } from '../ui/icons.jsx';
+import { Check, Chevron, Bulb, Eye, Info, Globe, Terminal, FileText, Wand } from '../ui/icons.jsx';
 import Tip from '../ui/Tip.jsx';
 import { t } from '../../i18n.jsx';
 import { Switch } from '../ui/controls.jsx';
-import { clampPx, overshoot, stretchFor, squashFor, stretchOrigin, slideFor, DRAG_SLOP } from '../../lib/dragsteps.js';
+import { clampPx, overshoot, stretchFor, squashFor, stretchOrigin, slideFor, magnetStep, DRAG_SLOP } from '../../lib/dragsteps.js';
 import { paintCells, fadeTrail, stampTrail, headColumn, CELL, CELL_FPS, CELL_SPEED } from '../../lib/cellfield.js';
-import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues, isRange, clampToRange, rangeStep, kwargVisible, gateSourceIds } from '../../lib/kwargs.js';
+import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues, isRange, isSteps, stopLabel, clampToRange, rangeSteps, nearestStep, rangeLabel, kwargVisible, gateSourceIds } from '../../lib/kwargs.js';
 import { useDismiss } from '../../lib/dismiss.js';
 import { Skel, SkelMenu } from '../ui/Skeleton.jsx';
 import { ModelMark } from '../ui/Weave.jsx';
+import { useLayout } from '../../lib/uselayout.js';
 
 const BADGE_ICONS = {
   __proto__: null,
@@ -54,7 +55,7 @@ function viewport() {
   };
 }
 
-function Badges({ m }) {
+export function Badges({ m }) {
   const shown = (m.badges || []).filter(id => BADGE_ICONS[id]);
   if (!shown.length) return null;
   return (
@@ -96,23 +97,11 @@ export function KwargControl({ def, value, isAdmin, onSet, gated }) {
     );
   }
   if (isRange(def)) {
+    const steps = rangeSteps(def);
     const cur = clampToRange(def, value);
-    const at = cur == null ? Number(defaultValueOf(def)) : cur;
-    const min = Number(def.min), max = Number(def.max), step = rangeStep(def);
-    const pct = max > min ? ((at - min) / (max - min)) * 100 : 0;
     return (
-      <div className={'kw-range' + (locked ? ' locked' : '') + tie}>
-        <div className="kw-head">
-          <span className="mo-name">{label}</span>
-          <span className="kw-cur">{at}{locked ? ' · ' + t('admin set') : ''}</span>
-        </div>
-        {note && <div className="mo-desc" style={{ marginBottom: 8, marginTop: -2 }}>{note}</div>}
-        <input type="range" className="kw-slider" style={{ '--pct': pct + '%' }}
-          min={min} max={max} step={step} value={at} disabled={locked}
-          aria-label={label}
-          onChange={(e) => { if (!locked) onSet(def.id, String(clampToRange(def, e.target.value))); }} />
-        <div className="kw-range-ends"><span>{min}</span><span>{max}</span></div>
-      </div>
+      <EffortSlider label={label} note={note} values={steps} idx={nearestStep(steps, cur == null ? defaultValueOf(def) : cur)}
+        locked={locked} gated={gated} format={(v) => rangeLabel(def, v, t('Off'))} onPick={(v) => onSet(def.id, v)} />
     );
   }
   if (!values.length) return null;
@@ -150,7 +139,7 @@ export function KwargControl({ def, value, isAdmin, onSet, gated }) {
   const idx = Math.max(0, values.indexOf(active));
   return (
     <EffortSlider label={label} note={note} values={values} idx={idx} locked={locked} gated={gated}
-      onPick={(v) => onSet(def.id, v)} />
+      format={isSteps(def) ? (v) => stopLabel(def, v) : undefined} onPick={(v) => onSet(def.id, v)} />
   );
 }
 
@@ -214,7 +203,7 @@ function CellField({ fillRef }) {
 
 const THUMB = 16;
 const glowAt = (fill) => Math.max(0, (fill - 0.25) * 0.86);
-function EffortSlider({ label, note, values, idx, locked, gated, onPick }) {
+function EffortSlider({ label, note, values, idx, locked, gated, format, onPick }) {
   const railRef = useRef(null);
   const fillRef = useRef(null);
   const seen = useRef(idx);
@@ -233,15 +222,16 @@ function EffortSlider({ label, note, values, idx, locked, gated, onPick }) {
     const r = rail.getBoundingClientRect();
     if (!r.width) return null;
     const local = clientX - r.left;
-    const centre = clampPx(local, 0, r.width);
     const travel = Math.max(1, r.width - THUMB);
     const raw = local - THUMB / 2;
     const over = overshoot(raw, 0, travel);
     const stretch = stretchFor(over, THUMB);
+    const along = clampPx(raw, 0, travel) / travel;
+    const pos = magnetStep(along, span);
     return {
-      pos: clampPx(raw, 0, travel) / travel,
-      fill: centre / r.width,
-      i: Math.min(last, Math.max(0, Math.round((centre / r.width) * span))),
+      pos,
+      fill: (pos * travel + THUMB / 2) / r.width,
+      i: Math.min(last, Math.max(0, Math.round(along * span))),
       stretch,
       squash: squashFor(stretch),
       origin: stretchOrigin(over)
@@ -276,7 +266,7 @@ function EffortSlider({ label, note, values, idx, locked, gated, onPick }) {
   };
   const stop = () => { dragging.current = false; setFree(null); };
 
-  const cur = capLevel(values[idx]);
+  const cur = format ? format(values[idx]) : capLevel(values[idx]);
   const rising = idx >= seen.current;
   seen.current = idx;
   const pos = free ? free.pos : idx / span;
@@ -387,6 +377,7 @@ function MoreGroup({ label, items, renderOpt, openKey, setOpenKey }) {
 
 export default function ModelDropdown({ models, modelsReady = true, currentId, onSelect, extended, onToggleExtended, up, modelHasBg, bgInChat, onToggleBgInChat, reasoningEffort, onSetEffort, kwargValues, onSetKwarg, isAdmin = false }) {
   const [open, setOpen] = useState(false);
+  const sheetLayout = useLayout().pickerSheet;
   const [openSub, setOpenSub] = useState(null);
   const [place, setPlace] = useState({ shift: 0, left: null, maxH: 0, sheet: false, ready: false });
   const [listMaxH, setListMaxH] = useState(0);
@@ -403,6 +394,10 @@ export default function ModelDropdown({ models, modelsReady = true, currentId, o
     const measure = () => {
       const wrap = ref.current, menu = menuRef.current;
       if (!wrap || !menu) return;
+      if (sheetLayout && window.matchMedia('(max-width: 768px)').matches) {
+        setPlace(p => (p.ready && p.sheet) ? p : { shift: 0, left: null, maxH: 0, sheet: true, ready: true });
+        return;
+      }
       const trig = wrap.querySelector('.model-trigger') || wrap;
       const r = trig.getBoundingClientRect();
       const wr = wrap.getBoundingClientRect();
@@ -439,7 +434,7 @@ export default function ModelDropdown({ models, modelsReady = true, currentId, o
       window.removeEventListener('resize', measure);
       window.removeEventListener('scroll', measure, true);
     };
-  }, [open, listMaxH, extended]);
+  }, [open, listMaxH, extended, sheetLayout]);
   useLayoutEffect(() => {
     if (!open) { setListMaxH(0); return; }
     const list = listRef.current;
@@ -485,7 +480,7 @@ export default function ModelDropdown({ models, modelsReady = true, currentId, o
 
   const renderOpt = (m) => (
     <button key={m.id} type="button" className={'model-opt' + (m.unavailable ? ' unavail' : '')} onClick={() => { onSelect(m.id); setOpenSub(null); setOpen(false); }}
-      title={m.unavailable ? (m.displayName + ' is currently unavailable.') : undefined}>
+      data-tip={m.unavailable ? (m.displayName + ' is currently unavailable.') : undefined}>
       {m.dropdownIcon !== false && <ModelMark src={m.staticIcon} className="mo-icon" />}
       <div className="mo-main">
         <div className="mo-name">
@@ -519,7 +514,6 @@ export default function ModelDropdown({ models, modelsReady = true, currentId, o
             ? chips.map((c, i) => <span key={c + i} className="ext">{t(c)}</span>)
             : (extended && current?.hasReasoning && <span className="ext">{t("Extended")}</span>)}
         </span>
-        <ChevDown style={{ width: 12, height: 12 }} />
       </button>
       {open && <div className="model-scrim" onClick={() => setOpen(false)} />}
       {open && (

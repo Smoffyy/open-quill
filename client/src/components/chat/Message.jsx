@@ -7,11 +7,14 @@ import ReasoningBlock from './ReasoningBlock.jsx';
 import BranchCompare from './BranchCompare.jsx';
 import ToolCard from './ToolCard.jsx';
 import { ModelMark } from '../ui/Weave.jsx';
-import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash, Dots, Steer, Speaker, SpeakerOff } from '../ui/icons.jsx';
+import Tip from '../ui/Tip.jsx';
+import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Trash, Chevron, Columns, Steer, Speaker, SpeakerOff } from '../ui/icons.jsx';
 import { api } from '../../lib/api.js';
 import { extLabel } from '../../lib/files.js';
 import { useStatusLabel } from '../../lib/status.js';
-import { useAnchoredMenu, menuStyleOf } from '../../lib/anchor.js';
+import { menuStyleOf, scrollInsideMenu, MENU_EDGE } from '../../lib/anchor.js';
+import { useDismiss } from '../../lib/dismiss.js';
+import { useLongPress } from '../../lib/longpress.js';
 import { t } from '../../i18n.jsx';
 
 function UserBubble({ content }) {
@@ -38,10 +41,6 @@ function UserBubble({ content }) {
   );
 }
 
-function Columns(props) {
-  return (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect x="3" y="4" width="7" height="16" rx="1" /><rect x="14" y="4" width="7" height="16" rx="1" /></svg>);
-}
-
 function fmtTime(ts) {
   if (!ts) return null;
   const d = new Date(ts);
@@ -57,26 +56,36 @@ function fmtTime(ts) {
   };
 }
 
-function MoreMenu({ items }) {
-  const [open, setOpen] = useState(false);
-  const btnRef = useRef(null);
+function MessageMenu({ at, items, onClose }) {
   const menuRef = useRef(null);
-  const pos = useAnchoredMenu(open, setOpen, btnRef, menuRef, { align: 'center' });
-  const list = items.filter(Boolean);
-  if (!list.length) return null;
-  return (
-    <span className="retry-wrap">
-      <button ref={btnRef} className={'action-btn' + (open ? ' on' : '')} title={t("More actions")} aria-label={t("More actions")} aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(o => !o)}><Dots /></button>
-      {open && createPortal(
-        <div ref={menuRef} className="retry-menu more-menu portal" role="menu" aria-label={t("More actions")} style={menuStyleOf(pos)}>
-          {list.map((it, i) => (
-            <button key={i} role="menuitem" aria-checked={it.on ? 'true' : undefined} className={(it.on ? 'on' : '') + (it.danger ? ' danger' : '')} onClick={() => { setOpen(false); it.run(); }}>
-              {it.icon}{it.label}
-            </button>
-          ))}
-        </div>, document.body)}
-    </span>
-  );
+  const [pos, setPos] = useState(null);
+  useDismiss(true, onClose, menuRef);
+  useEffect(() => {
+    const onScroll = (e) => { if (!scrollInsideMenu(menuRef.current, e.target)) onClose(); };
+    window.addEventListener('resize', onClose);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      window.removeEventListener('resize', onClose);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [onClose]);
+  useEffect(() => { menuRef.current.querySelector('button')?.focus({ preventScroll: true }); }, []);
+  useLayoutEffect(() => {
+    const r = menuRef.current.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+    const top = at.y + r.height > vh - MENU_EDGE ? Math.max(MENU_EDGE, at.y - r.height) : at.y;
+    const left = Math.min(Math.max(MENU_EDGE, at.x), vw - MENU_EDGE - r.width);
+    setPos({ top, left });
+  }, [at]);
+  return createPortal(
+    <div ref={menuRef} className="retry-menu more-menu portal" role="menu" aria-label={t("More actions")} style={menuStyleOf(pos)}>
+      {items.map((it, i) => (
+        <button key={i} role="menuitem" aria-checked={it.on ? 'true' : undefined} className={(it.on ? 'on' : '') + (it.danger ? ' danger' : '')} onClick={() => { onClose(); it.run(); }}>
+          {it.icon}{it.label}
+        </button>
+      ))}
+    </div>, document.body);
 }
 
 function BranchNav({ msg, onSelectBranch }) {
@@ -85,9 +94,9 @@ function BranchNav({ msg, onSelectBranch }) {
   const go = (d) => { const t = msg.siblings?.[i + d]; if (t) onSelectBranch?.(t); };
   return (
     <span className="branch-nav" role="group" aria-label={t("Message versions")}>
-      <button className="branch-arrow" disabled={i <= 0} onClick={() => go(-1)} title={t("Previous version")} aria-label={t("Previous version")}>‹</button>
+      <button className="branch-arrow" disabled={i <= 0} onClick={() => go(-1)} data-tip={t("Previous version")} aria-label={t("Previous version")}><Chevron style={{ transform: 'scaleX(-1)' }} /></button>
       <span className="branch-count" aria-live="polite">{i + 1}/{msg.branchCount}</span>
-      <button className="branch-arrow" disabled={i >= msg.branchCount - 1} onClick={() => go(1)} title={t("Next version")} aria-label={t("Next version")}>›</button>
+      <button className="branch-arrow" disabled={i >= msg.branchCount - 1} onClick={() => go(1)} data-tip={t("Next version")} aria-label={t("Next version")}><Chevron /></button>
     </span>
   );
 }
@@ -101,7 +110,7 @@ function Attachments({ items, pins, onTogglePinFile }) {
         <button key={i} className="att image" onClick={() => openFilePreview(a)} aria-label={t('Open image {name}', { name: a.name })}><img src={a.url} alt={a.name} loading="lazy" decoding="async" /></button>
       ) : (
         <div key={i} className={'att file' + (pinnedUrls.has(a.url) ? ' pinned-file' : '')}>
-          <button type="button" className="att-link" onClick={() => openFilePreview(a)} title={a.name} aria-label={t('Open file {name}', { name: a.name })}>
+          <button type="button" className="att-link" onClick={() => openFilePreview(a)} data-tip={a.name} aria-label={t('Open file {name}', { name: a.name })}>
             <span className="att-name">{a.name}</span>
             <span className="att-foot">
               <FileText style={{ width: 13 }} />
@@ -109,7 +118,7 @@ function Attachments({ items, pins, onTogglePinFile }) {
             </span>
           </button>
           {onTogglePinFile && (
-            <button className={'att-pin' + (pinnedUrls.has(a.url) ? ' on' : '')} title={pinnedUrls.has(a.url) ? t('Unpin from chat') : t('Pin to chat (keep in context)')} aria-label={pinnedUrls.has(a.url) ? t('Unpin from chat') : t('Pin to chat')} aria-pressed={pinnedUrls.has(a.url)} onClick={() => onTogglePinFile(a)}><Pin style={{ width: 13 }} /></button>
+            <button className={'att-pin' + (pinnedUrls.has(a.url) ? ' on' : '')} data-tip={pinnedUrls.has(a.url) ? t('Unpin from chat') : t('Pin to chat (keep in context)')} aria-label={pinnedUrls.has(a.url) ? t('Unpin from chat') : t('Pin to chat')} aria-pressed={pinnedUrls.has(a.url)} onClick={() => onTogglePinFile(a)}><Pin style={{ width: 13 }} /></button>
           )}
         </div>
       ))}
@@ -163,14 +172,14 @@ function StatusCaption({ swapKey, label, detail }) {
   useEffect(() => () => { clearTimeout(hideTimer.current); clearTimeout(swapTimer.current); }, []);
   if (!mounted) return null;
   return (
-    <span className={'msg-icon-status' + (visible ? ' show' : '')} title={title || undefined}>
+    <span className={'msg-icon-status' + (visible ? ' show' : '')} data-tip={title || undefined}>
       {prev && <span className="mis-word out" key={'p' + prev}>{prev}</span>}
       <span className="mis-word" key={'c' + text}>{text}</span>
     </span>
   );
 }
 
-const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name, nameHoverOnly, statusKey, statusLabel, statusDetail }, ref) {
+const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, name, tip, hideMark, statusKey, statusLabel, statusDetail }, ref) {
   const base = model?.staticIcon || '';
   const map = {
     static: base,
@@ -178,47 +187,27 @@ const ModelIcon = React.forwardRef(function ModelIcon({ model, phase, below, nam
     thinking: model?.thinkingIcon || base
   };
   const src = map[phase] || base;
-  if (!base && !name && !statusLabel) return null;
+  const mark = hideMark ? '' : base;
+  if (!mark && !name && !statusLabel) return null;
   const anim = phase === 'generating' ? (model?.generatingAnim || 'none') : phase === 'thinking' ? (model?.thinkingAnim || 'none') : '';
   const cls = anim === 'none' ? '' : anim;
   const sz = model?.iconSize > 0 ? model.iconSize : 50;
   return (
     <div ref={ref} className={'msg-icon' + (below ? ' below' : '') + (name ? ' with-name' : '')}>
-      {base && <ModelMark src={src} state={phase} className={cls} style={{ width: sz, height: sz }} />}
-      {name && <span className={'msg-icon-name' + (nameHoverOnly ? ' hover-reveal' : '')}>{name}</span>}
+      {mark && <Tip label={tip}><ModelMark src={src} state={phase} className={cls} style={{ width: sz, height: sz }} /></Tip>}
+      {name && <span className="msg-icon-name">{name}</span>}
       <StatusCaption swapKey={statusKey} label={statusLabel} detail={statusDetail} />
     </div>
   );
 });
 
-function LedgerRow({ tokens, pct, state, id, onToggleExclude }) {
-  const excluded = state === 'excluded';
-  const summarized = state === 'summarized';
-  return (
-    <div className={'ctx-row' + (excluded ? ' excluded' : '') + (summarized ? ' summarized' : '')}>
-      <span className="ctx-tokens">{Number(tokens || 0).toLocaleString()} {t('tok')}</span>
-      {pct > 0 && <span className="ctx-bar"><span className="ctx-fill" style={{ width: Math.min(100, pct) + '%' }} /></span>}
-      {pct > 0 && <span className="ctx-pct">{pct}%</span>}
-      {summarized && <span className="ctx-tag">{t('in summary')}</span>}
-      {excluded && <span className="ctx-tag out">{t('not sent')}</span>}
-      {onToggleExclude && !summarized && (
-        <button className="ctx-btn" aria-pressed={excluded} onClick={() => onToggleExclude(id, !excluded)}
-          title={excluded ? t('Send this message to the model again') : t('Stop sending this message to the model')}>
-          {excluded ? t('Restore') : t('Drop')}
-        </button>
-      )}
-    </div>
-  );
-}
-
 function SpeedChip({ speed }) {
-  if (!speed || !(speed.tps > 0)) return null;
+  if (!speed || !(speed.tps > 0) || speed.exact === false) return null;
   const rate = speed.tps >= 100 ? Math.round(speed.tps) : Math.round(speed.tps * 10) / 10;
   const bits = [];
   if (speed.promptTps > 0) bits.push(`${t('prompt')} ${Math.round(speed.promptTps)} tok/s`);
   if (speed.out > 0) bits.push(`${Number(speed.out).toLocaleString()} ${t('tokens out')}`);
-  if (!speed.exact) bits.push(t('Estimated from streamed text, this provider does not report timings.'));
-  return <span className="msg-speed" title={bits.join(' · ')}>{rate} tok/s{!speed.exact && <span className="ms-est">~</span>}</span>;
+  return <span className="msg-speed" data-tip={bits.join(' · ')}>{rate} tok/s</span>;
 }
 
 function SteerChips({ notes }) {
@@ -226,15 +215,15 @@ function SteerChips({ notes }) {
   return (
     <div className="steer-chips">
       {notes.map((n, i) => (
-        <span key={i} className="steer-chip" title={n}><Steer style={{ width: 11 }} /> {t('steered')}: {n}</span>
+        <span key={i} className="steer-chip" data-tip={n}><Steer style={{ width: 11 }} /> {t('steered')}: {n}</span>
       ))}
     </div>
   );
 }
 
-function Message({ msg, model, models, currentId, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onRegenerateWith, onEdit, onEditAssistant, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, ledger = false, ledgerTokens = 0, ledgerPct = 0, ledgerState = '', onToggleExclude, steers = null, status = null, statusDelay = true, showSpeed = false, preset = 'anthropic', fadeWords = false }) {
-  if (chatEnded) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onEditAssistant = null; onFork = null; onDelete = null; }
-  if (!chatId) { onRegenerate = null; onRegenerateWith = null; onEdit = null; onEditAssistant = null; onFork = null; onTogglePin = null; }
+function Message({ msg, model, streaming, phase, liveCall, liveCalls = null, canContinue = false, onContinue, chatId, pins, onTogglePinFile, onRegenerate, onEdit, onEditAssistant, onDelete, onSelectBranch, onFork, onTogglePin, showIcon = true, chatEnded = false, steers = null, status = null, statusDelay = true, showSpeed = false, fadeWords = false, latest = false }) {
+  if (chatEnded) { onRegenerate = null; onEdit = null; onEditAssistant = null; onFork = null; onDelete = null; }
+  if (!chatId) { onRegenerate = null; onEdit = null; onEditAssistant = null; onFork = null; onTogglePin = null; }
   const [typing, setTyping] = useState(false);
   const typingTimer = useRef(null);
   useEffect(() => {
@@ -248,6 +237,12 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   const textEnteredRef = useRef(false);
   if (streaming && msg.content) textEnteredRef.current = true;
   const textEntered = textEnteredRef.current;
+  const [finished, setFinished] = useState(false);
+  const wasStreaming = useRef(streaming);
+  useLayoutEffect(() => {
+    if (wasStreaming.current && !streaming) setFinished(true);
+    wasStreaming.current = streaming;
+  }, [streaming]);
   const [copied, setCopied] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const utterRef = useRef(null);
@@ -269,11 +264,7 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   useEffect(() => () => { if (speaking) window.speechSynthesis.cancel(); }, []);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
-  const [retryMenu, setRetryMenu] = useState(false);
   const [compare, setCompare] = useState(false);
-  const retryRef = useRef(null);
-  const retryMenuRef = useRef(null);
-  const retryPos = useAnchoredMenu(retryMenu, setRetryMenu, retryRef, retryMenuRef, { align: 'center' });
   async function doCopy() {
     const clean = (msg.content || '').replace(/\[\[OQ(?:R:[A-Za-z0-9+/=]+|T:\d+)\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
     if (!(await copyText(clean))) return;
@@ -368,16 +359,39 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
   const segMs = Array.isArray(msg.reasoningSegMs) ? msg.reasoningSegMs : null;
   const segMsKey = segMs ? segMs.join(',') : '';
   const segCtx = useMemo(
-    () => (segs ? { segs, segMs, live: !!(streaming && tailIsMarker), preset, collapsible: model?.reasoningCollapsible !== false } : null),
-    [segs, segMsKey, streaming, tailIsMarker, preset, model]
+    () => (segs ? { segs, segMs, live: !!(streaming && tailIsMarker), collapsible: model?.reasoningCollapsible !== false } : null),
+    [segs, segMsKey, streaming, tailIsMarker, model]
   );
   const statusInfo = useStatusLabel(status, statusDelay);
 
+  const incognito = String(msg.id).startsWith('inc-');
+  const menuItems = [
+    msg.role !== 'user' && onEditAssistant && !incognito && { label: t('Edit'), icon: <Pencil style={{ width: 15 }} />, run: startEdit },
+    msg.branchCount > 1 && chatId && { label: t('Compare versions'), icon: <Columns style={{ width: 15 }} />, run: () => setCompare(true) },
+    onFork && { label: t('Branch'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
+    onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
+    onDelete && chatId && (msg.role === 'user' || !incognito) && { label: t('Delete'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
+  ].filter(Boolean);
+  const [menu, setMenu] = useState(null);
+  const closeMenu = React.useCallback(() => setMenu(null), []);
+  const menuAllowed = (target) => !editing && !streaming && !!(msg.content || msg.truncated) && menuItems.length > 0
+    && !target.closest('a, img, video, textarea, input, [role="dialog"], [role="menu"]');
+  const press = useLongPress((target, x, y) => { if (menuAllowed(target)) setMenu({ x, y }); });
+  const menuProps = {
+    ...press,
+    onContextMenu(e) {
+      if (!menuAllowed(e.target) || String(window.getSelection())) return;
+      e.preventDefault();
+      if (e.clientX || e.clientY) setMenu({ x: e.clientX, y: e.clientY });
+      else { const r = e.target.getBoundingClientRect(); setMenu({ x: r.left, y: r.bottom }); }
+    }
+  };
+  const messageMenu = menu && <MessageMenu at={menu} items={menuItems} onClose={closeMenu} />;
+
   if (msg.role === 'user') {
     return (
-      <div role="article" aria-label={t('Your message')} className={'msg user' + (msg._enter ? ' enter' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
-        <div className="user-col">
-          {ledger && ledgerState && <LedgerRow tokens={ledgerTokens} pct={ledgerPct} state={ledgerState} id={msg.id} onToggleExclude={onToggleExclude} />}
+      <div role="article" aria-label={t('Your message')} className={'msg user' + (msg._enter ? ' enter' : '') + (msg.pinned ? ' pinned' : '')} data-mid={msg.id}>
+        <div className="user-col" {...menuProps}>
           {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> {t("Pinned")}</div>}
           <Attachments items={msg.attachments} pins={pins} onTogglePinFile={onTogglePinFile} />
           {editing ? (
@@ -396,20 +410,15 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
           )}
           {msg.content && !editing && (
             <div className="actions user-actions">
-              {(() => { const t = fmtTime(msg.created_at); return t ? <span className="msg-time" data-full={t.full}>{t.short}</span> : null; })()}
+              {(() => { const t = fmtTime(msg.created_at); return t ? <span className="msg-time" data-tip={t.full}>{t.short}</span> : null; })()}
               <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
-              {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")} aria-label={t("Compare versions")}><Columns /></button>}
-              <MoreMenu items={[
-                onFork && { label: t('Branch'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
-                onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
-                onDelete && chatId && { label: t('Delete'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
-              ]} />
-              {onRegenerate && <button className="action-btn" onClick={() => onRegenerate(msg.id)} title={t("Retry")} aria-label={t("Retry")}><Retry /></button>}
-              {onEdit && <button className="action-btn" onClick={startEdit} title={t("Edit")} aria-label={t("Edit")}><Pencil /></button>}
-              <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
+              {onRegenerate && <button className="action-btn" onClick={() => onRegenerate(msg.id)} data-tip={t("Retry")} aria-label={t("Retry")}><Retry /></button>}
+              {onEdit && <button className="action-btn" onClick={startEdit} data-tip={t("Edit")} aria-label={t("Edit")}><Pencil /></button>}
+              <button className="action-btn" onClick={doCopy} data-tip={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
             </div>
           )}
           {compare && chatId && <BranchCompare chatId={chatId} messageId={msg.id} onSelect={onSelectBranch} onClose={() => setCompare(false)} />}
+          {messageMenu}
         </div>
       </div>
     );
@@ -426,8 +435,8 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
     ? liveCalls
     : (liveCall && liveCall.tool ? [{ index: 0, call: liveCall }] : []);
   const showStatus = streaming && !msg.content && !msg.reasoning && !liveRows.length && statusInfo.show;
-  const icon = showIt ? <ModelIcon ref={iconRef} model={model} phase={iconPhase} below={pos === 'below'} name={pos === 'left' ? null : (hasName ? model.displayName : null)}
-    nameHoverOnly={pos !== 'left' && hasName && !showName}
+  const icon = showIt ? <ModelIcon ref={iconRef} model={model} phase={iconPhase} below={pos === 'below'} name={pos !== 'left' && showName ? model.displayName : null}
+    tip={hasName && !showName ? model.displayName : null} hideMark={model?.showIcon === false}
     statusKey={statusInfo.key} statusLabel={showStatus ? statusInfo.label : null} statusDetail={statusInfo.detail} /> : null;
 
   async function rate(r) {
@@ -438,11 +447,10 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
 
   const inner = (
     <>
-      {ledger && ledgerState && <LedgerRow tokens={ledgerTokens} pct={ledgerPct} state={ledgerState} id={msg.id} onToggleExclude={onToggleExclude} />}
       {msg.pinned && <div className="pin-tag"><Pin style={{ width: 12 }} /> {t("Pinned")}</div>}
-      <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking'} durationMs={msg.reasoningMs || 0} preset={preset} collapsible={model?.reasoningCollapsible !== false} />
+      <ReasoningBlock text={msg.reasoning} live={streaming && phase === 'thinking' && !(segs && segs.length)} durationMs={msg.reasoningMs || 0} collapsible={model?.reasoningCollapsible !== false} />
       {(msg.content || streaming) && (
-        <div className={'assistant-body' + (streaming ? ' streaming' : '') + (streaming && typing ? ' typing' : '') + (streaming && phase === 'thinking' ? ' thinking' : '') + (textEntered ? ' text-enter' : '')}>
+        <div className={'assistant-body' + (streaming ? ' streaming' : '') + (streaming && typing ? ' typing' : '') + (streaming && phase === 'thinking' ? ' thinking' : '') + (textEntered ? ' text-enter' : '') + (fadeWords ? ' fade-words' : '')}>
           {editing ? (
             <>
               <div className="edit-box" data-value={draft + ' '}>
@@ -469,46 +477,25 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
       )}
       {streaming && msg.content && (
         <div className="actions stream-actions">
-          <button className="action-btn" onClick={doCopy} title={t("Copy what's written so far")} aria-label={t("Copy what's written so far")}>{copied ? <Check /> : <Copy />}</button>
+          <button className="action-btn" onClick={doCopy} data-tip={t("Copy what's written so far")} aria-label={t("Copy what's written so far")}>{copied ? <Check /> : <Copy />}</button>
         </div>
       )}
       {!streaming && (msg.content || msg.truncated) && !editing && (
-        <div className="actions">
-          <button className="action-btn" onClick={doCopy} title={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
-          <button className={'action-btn' + (speaking ? ' on' : '')} onClick={toggleSpeak} title={speaking ? t("Stop speaking") : t("Read aloud")} aria-label={speaking ? t("Stop speaking") : t("Read aloud")} aria-pressed={speaking}>{speaking ? <SpeakerOff /> : <Speaker />}</button>
+        <div className={'actions' + (finished ? ' fade-in' : '')}>
+          <button className="action-btn" onClick={doCopy} data-tip={t("Copy")} aria-label={copied ? t("Copied") : t("Copy")}>{copied ? <Check /> : <Copy />}</button>
+          <button className={'action-btn' + (speaking ? ' on' : '')} onClick={toggleSpeak} data-tip={speaking ? t("Stop speaking") : t("Read aloud")} aria-label={speaking ? t("Stop speaking") : t("Read aloud")} aria-pressed={speaking}>{speaking ? <SpeakerOff /> : <Speaker />}</button>
           {chatId && !String(msg.id).startsWith('inc-') && (
-            <button className={'action-btn' + (fb === 1 ? ' on' : '')} onClick={() => rate(1)} title={t("Good response")} aria-label={t("Good response")} aria-pressed={fb === 1}><ThumbUp /></button>
+            <button className={'action-btn' + (fb === 1 ? ' on' : '')} onClick={() => rate(1)} data-tip={t("Good response")} aria-label={t("Good response")} aria-pressed={fb === 1}><ThumbUp /></button>
           )}
           {chatId && !String(msg.id).startsWith('inc-') && (
-            <button className={'action-btn' + (fb === -1 ? ' on' : '')} onClick={() => rate(-1)} title={t("Bad response")} aria-label={t("Bad response")} aria-pressed={fb === -1}><ThumbDown /></button>
+            <button className={'action-btn' + (fb === -1 ? ' on' : '')} onClick={() => rate(-1)} data-tip={t("Bad response")} aria-label={t("Bad response")} aria-pressed={fb === -1}><ThumbDown /></button>
           )}
-          <span className="retry-wrap">
-            {onRegenerate && <button className="action-btn" title={t("Retry")} aria-label={t("Retry")} onClick={() => onRegenerate(msg.id)}><Retry /></button>}
-            {onRegenerateWith && models && models.length > 1 && (
-              <button ref={retryRef} className={'action-caret' + (retryMenu ? ' on' : '')} title={t("Retry with another model")} aria-label={t("Retry with another model")} aria-expanded={retryMenu} aria-haspopup="menu" onClick={() => setRetryMenu(o => !o)}>▾</button>
-            )}
-            {retryMenu && createPortal(
-              <div ref={retryMenuRef} className="retry-menu portal" role="menu" aria-label={t("Retry with another model")} style={menuStyleOf(retryPos)}>
-                <div className="retry-menu-label">{t("Retry with")}</div>
-                {models.map(mm => (
-                  <button key={mm.id} role="menuitem" className={mm.id === currentId ? 'on' : ''} onClick={() => { setRetryMenu(false); onRegenerateWith(msg.id, mm.id); }}>
-                    <ModelMark src={mm.staticIcon} />{mm.displayName}{mm.id === currentId && <Check style={{ width: 13, marginLeft: 'auto' }} />}
-                  </button>
-                ))}
-              </div>, document.body)}
-          </span>
+          {onRegenerate && <button className="action-btn" data-tip={t("Retry")} aria-label={t("Retry")} onClick={() => onRegenerate(msg.id)}><Retry /></button>}
           <BranchNav msg={msg} onSelectBranch={onSelectBranch} />
-          {msg.branchCount > 1 && chatId && <button className="action-btn" onClick={() => setCompare(true)} title={t("Compare versions")} aria-label={t("Compare versions")}><Columns /></button>}
-          <MoreMenu items={[
-            onEditAssistant && !String(msg.id).startsWith('inc-') && { label: t('Edit'), icon: <Pencil style={{ width: 15 }} />, run: startEdit },
-            onFork && { label: t('Branch'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
-            onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
-            onDelete && chatId && !String(msg.id).startsWith('inc-') && { label: t('Delete'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
-          ]} />
           {showSpeed && <SpeedChip speed={msg.speed} />}
-          {(() => { const ti = fmtTime(msg.created_at); return ti ? <span className="msg-time" data-full={ti.full}>{ti.short}</span> : null; })()}
+          {(() => { const ti = fmtTime(msg.created_at); return ti ? <span className="msg-time" data-tip={ti.full}>{ti.short}</span> : null; })()}
           {canContinue && onContinue && (
-            <button className="action-btn continue-act" onClick={() => onContinue(msg.id)} title={t("Pick up where this reply stopped")}>
+            <button className="action-btn continue-act" onClick={() => onContinue(msg.id)} data-tip={t("Pick up where this reply stopped")}>
               <Retry style={{ width: 14 }} /> {t("Continue")}
             </button>
           )}
@@ -516,22 +503,23 @@ function Message({ msg, model, models, currentId, streaming, phase, liveCall, li
       )}
       <SteerChips notes={steers} />
       {compare && chatId && <BranchCompare chatId={chatId} messageId={msg.id} onSelect={onSelectBranch} onClose={() => setCompare(false)} />}
+      {messageMenu}
     </>
   );
 
   if (pos === 'left') {
     const gutter = model?.iconSize > 0 ? model.iconSize : 50;
     return (
-      <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant icon-left' + (streaming ? ' streaming-msg' : '') + (msg._enter ? ' enter' : '') + (!streaming && (msg.content || msg.truncated) ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
-        {icon && <div className="il-avatar" style={{ left: -(gutter + 14) }}>{icon}</div>}
-        {hasName && <div className={'assistant-name' + (showName ? '' : ' hover-reveal')}>{model.displayName}</div>}
+      <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant icon-left' + (streaming ? ' streaming-msg' : '') + (latest ? ' latest' : '') + (msg._enter ? ' enter' : '') + (!streaming && (msg.content || msg.truncated) ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '')} data-mid={msg.id} {...menuProps}>
+        {icon && <div className="il-avatar" style={{ left: -(gutter + 4) }}>{icon}</div>}
+        {showName && <div className="assistant-name">{model.displayName}</div>}
         {inner}
       </div>
     );
   }
 
   return (
-    <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant' + (streaming ? ' streaming-msg' : '') + (msg._enter ? ' enter' : '') + (!streaming && (msg.content || msg.truncated) ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '') + (ledger && ledgerState === 'excluded' ? ' ctx-out' : '')} data-mid={msg.id}>
+    <div role="article" aria-label={model?.displayName || t('Assistant message')} className={'msg assistant' + (streaming ? ' streaming-msg' : '') + (latest ? ' latest' : '') + (msg._enter ? ' enter' : '') + (!streaming && (msg.content || msg.truncated) ? ' has-actions' : '') + (msg.pinned ? ' pinned' : '')} data-mid={msg.id} {...menuProps}>
       {pos === 'above' && icon}
       {inner}
       {pos === 'below' && icon}

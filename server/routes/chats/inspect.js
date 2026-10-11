@@ -1,14 +1,10 @@
 import { db } from '../../db.js';
-import { contextBudget, slideToFit, countExact } from '../../lib/ctxwindow.js';
+import { contextBudget, budgetOf, knownContext, canCount, countExact, countText } from '../../lib/ctxwindow.js';
 import { authMiddleware } from '../../auth.js';
 import { buildMessages } from '../../llm/index.js';
-import * as websearch from '../../lib/websearch.js';
-import { toolState, systemPrompt } from '../../lib/systemprompt.js';
-import { modelCtx } from '../../lib/models.js';
-import {
-  chatHistory, historyRows, estimateTokens, calibratedTokens, calibRatio, messageTokens,
-  tokenCalib, compactThreshold, rollingCtxFor
-} from '../../lib/convo.js';
+import { toolState, systemPrompt, toolsFor } from '../../lib/systemprompt.js';
+import { chatHistory, historyRows } from '../../lib/convo.js';
+import { activePath } from '../../lib/tree.js';
 
 const PART_LABEL = { base: () => 'Model system prompt', tool: (p) => `Tool: ${p.name}`, section: (p) => `Context: ${p.name}` };
 
@@ -24,119 +20,56 @@ function pickModel(modelId) {
   return all.find(m => m.enabled) || all[0] || null;
 }
 
+function textOf(m) {
+  return typeof m.content === 'string' ? m.content : (m.content || []).map(p => p.type === 'text' ? p.text : '[image]').join('\n');
+}
+
 export default function registerInspectRoutes(app) {
   app.get('/api/chats/:id/context', authMiddleware, async (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const model = pickModel(req.query.modelId);
-    if (!model) return res.json({ used: 0, limit: 0, pct: 0, hasSummary: !!c.summary, summaries: !!c.enable_summaries });
-    const convo = buildMessages(model, chatHistory(c, model), false, promptOf(c, model).text);
-    const exact = await countExact(model, convo);
-    const used = exact || calibratedTokens(c.id, convo);
-    const ctx = await modelCtx(model);
-    const limit = ctx || parseInt(model.num_ctx) || 0;
-    const pct = limit ? Math.min(100, Math.round((used / limit) * 100)) : 0;
-    const rolling = !!limit && (await rollingCtxFor(model)) > 0;
-    const bud = await contextBudget(model);
-    res.json({
-      used, limit, pct, exact: !!exact,
-      budget: bud.budget || 0, reserve: bud.reserve || 0,
-      hasSummary: !!c.summary, measured: !!exact || tokenCalib.has(c.id),
-      compacts: model.enable_summaries ? compactThreshold(model, ctx) : 0, rolling
-    });
-  });
-
-  app.get('/api/chats/:id/ledger', authMiddleware, async (req, res) => {
-    const c = db.chats.byId(req.params.id);
-    if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
-    const model = pickModel(req.query.modelId);
-    if (!model) return res.json({ limit: 0, used: 0, overhead: 0, messages: [] });
-    const rows = historyRows(c, model);
-    const active = rows.filter(r => !r.summarized && !r.excluded);
-    const system = promptOf(c, model).text;
-    const convo = buildMessages(model, active.map(r => r.msg), false, system);
-    const ratio = calibRatio(c.id);
-    const exact = await countExact(model, convo);
-    const used = exact || calibratedTokens(c.id, convo);
-    const scaffold = buildMessages(model, [], false, system);
-    const exactHead = exact ? await countExact(model, scaffold) : 0;
-    const overheadTokens = exactHead || Math.round(calibratedTokens(c.id, scaffold) * (exact ? 1 : ratio));
-    const raw = rows.map(r => messageTokens(r.msg));
-    const activeRaw = rows.reduce((n, r, i) => n + (!r.summarized && !r.excluded ? raw[i] : 0), 0);
-    const body = Math.max(0, used - overheadTokens);
-    const scale = exact && activeRaw > 0 ? body / activeRaw : ratio;
-    const messages = rows.map((r, i) => ({
-      id: r.id,
-      role: r.role,
-      tokens: Math.max(1, Math.round(raw[i] * scale)),
-      pinned: r.pinned,
-      excluded: r.excluded,
-      summarized: r.summarized
-    }));
-    const ctx = await modelCtx(model);
-    const bud = await contextBudget(model);
-    let sent = used;
-    let dropped = 0;
-    let trimmed = false;
-    if (exact && bud.budget > 0 && used > bud.budget) {
-      const fit = await slideToFit(model, convo, bud.budget);
-      if (fit.tokens) { sent = fit.tokens; dropped = fit.dropped; trimmed = fit.trimmed; }
+    const path = activePath(c.id);
+    const upto = c.summary && c.summary_upto ? c.summary_upto : 0;
+    const summarized = upto ? path.filter(m => m.created_at <= upto && !m.pinned).length : 0;
+    if (!model) return res.json({ used: 0, limit: 0, budget: 0, summarized, pending: false });
+    const exact = req.query.exact === '1';
+    const { ctx, budget, reserve } = exact ? await contextBudget(model) : budgetOf(model, knownContext(model));
+    if (exact && canCount(model)) {
+      const prompt = promptOf(c, model);
+      const used = await countExact(model, buildMessages(model, chatHistory(c, model), false, prompt.text), toolsFor(prompt.flags));
+      return res.json({ used, limit: ctx, budget, reserve, summarized, pending: !used });
     }
-    const limit = bud.budget || ctx || parseInt(model.num_ctx) || 0;
-    res.json({
-      limit, used: sent, total: used, reserve: bud.reserve, ctx: bud.ctx || ctx,
-      overhead: overheadTokens, messages,
-      dropped, trimmed, windowed: dropped > 0 || trimmed,
-      measured: !!exact || tokenCalib.has(c.id), exact: !!exact, hasSummary: !!c.summary,
-      compacts: model.enable_summaries ? compactThreshold(model, ctx) : 0
-    });
-  });
-
-  app.get('/api/chats/:id/inspect', authMiddleware, async (req, res) => {
-    const c = db.chats.byId(req.params.id);
-    if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
-    const model = pickModel(req.query.modelId);
-    if (!model) return res.json({ segments: [], totalTokens: 0 });
-    const prompt = promptOf(c, model);
-    const convo = buildMessages(model, chatHistory(c, model), false, prompt.text);
-    const segments = convo.map((m, i) => {
-      const txt = typeof m.content === 'string' ? m.content : (m.content || []).map(p => p.type === 'text' ? p.text : '[image]').join('\n');
-      return { index: i, role: m.role, tokens: estimateTokens([m]), chars: txt.length, preview: txt.slice(0, 600), hasImages: Array.isArray(m.content) && m.content.some(p => p.type === 'image_url') };
-    });
-    const limit = (model.enable_summaries && model.num_ctx) ? model.num_ctx : (model.num_ctx || 0);
-    const total = estimateTokens(convo);
-    res.json({
-      segments, totalTokens: total, limit, pct: limit ? Math.min(100, Math.round((total / limit) * 100)) : 0,
-      flags: { memoryBank: prompt.flags.membankOn, webSearch: websearch.webSearchAvailable(), summary: !!c.summary }
-    });
+    let last = null;
+    for (let i = path.length - 1; i >= 0 && !last; i--) if (path[i].role === 'assistant') last = path[i];
+    const used = last && last.model_id === model.id && last.ctx_used > 0 ? last.ctx_used : 0;
+    res.json({ used, limit: ctx, budget, reserve, summarized, pending: !used && path.length > 0 });
   });
 
   app.get('/api/chats/:id/prompt', authMiddleware, async (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const model = pickModel(req.query.modelId);
-    if (!model) return res.json({ sections: [], messages: [], total: 0 });
-    const rows = historyRows(c, model);
+    if (!model) return res.json({ sections: [], messages: [], total: null });
+    const exact = canCount(model);
+    const count = async (text) => (exact ? (await countText(model, text)) || null : null);
     const prompt = promptOf(c, model);
     const convo = buildMessages(model, chatHistory(c, model), false, prompt.text);
-
     const sys = convo.find(m => m.role === 'system');
     const sysText = sys ? String(sys.content || '') : '';
-    const sections = prompt.parts.map(p => ({
-      name: PART_LABEL[p.kind](p), chars: p.text.length, tokens: estimateTokens([{ role: 'system', content: p.text }]), text: p.text
+    const sections = await Promise.all(prompt.parts.map(async p => ({
+      name: PART_LABEL[p.kind](p), chars: p.text.length, tokens: await count(p.text), text: p.text
+    })));
+    const messages = await Promise.all(convo.filter(m => m.role !== 'system').map(async (m, i) => {
+      const txt = textOf(m);
+      return { index: i, role: m.role, tokens: await count(txt), chars: txt.length, text: txt };
     }));
-
-    const messages = convo.filter(m => m.role !== 'system').map((m, i) => {
-      const txt = typeof m.content === 'string' ? m.content : (m.content || []).map(p => p.type === 'text' ? p.text : '[image]').join('\n');
-      return { index: i, role: m.role, tokens: estimateTokens([m]), chars: txt.length, text: txt };
-    });
-    const dropped = rows.filter(r => r.summarized || r.excluded).length;
+    const total = exact ? (await countExact(model, convo, toolsFor(prompt.flags))) || null : null;
     res.json({
       modelId: model.id, modelName: model.display_name || model.internal_name,
-      system: { text: sysText, tokens: sys ? estimateTokens([sys]) : 0, chars: sysText.length },
-      sections, messages, dropped,
-      total: estimateTokens(convo),
-      raw: convo,
+      system: { text: sysText, tokens: await count(sysText), chars: sysText.length },
+      sections, messages, dropped: historyRows(c, model).filter(r => r.summarized).length,
+      total, raw: convo,
     });
   });
 
@@ -150,7 +83,7 @@ export default function registerInspectRoutes(app) {
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const patch = {};
     if ('summary' in req.body) patch.summary = String(req.body.summary || '');
-    if ('clear' in req.body && req.body.clear) { patch.summary = ''; patch.summary_upto = 0; }
+    if ('clear' in req.body && req.body.clear) { patch.summary = ''; patch.summary_upto = 0; patch.summary_images = []; }
     db.chats.update(c.id, patch);
     res.json({ ok: true });
   });

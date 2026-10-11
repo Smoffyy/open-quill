@@ -38,13 +38,15 @@ function textField(v, cap = MAX_CONTENT) {
   return typeof v === 'string' ? v.slice(0, cap) : '';
 }
 
+const UPLOAD_URL = /^\/uploads\/[A-Za-z0-9._-]+$/;
+
 function sanitizeAttachments(list) {
   if (!Array.isArray(list)) return [];
   const out = [];
   for (const a of list) {
     if (!a || typeof a !== 'object') continue;
     const url = textField(a.url, 512);
-    if (!url) continue;
+    if (!UPLOAD_URL.test(url) || url.includes('..')) continue;
     out.push({ url, name: textField(a.name, 256), type: textField(a.type, 128), size: Number(a.size) || 0 });
     if (out.length >= MAX_ATTACHMENTS) break;
   }
@@ -223,16 +225,16 @@ export function initWs(server) {
         const model = applyKwargs(baseModel, requestedKwargs(msg), state.isAdmin);
         if (!model) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'Invalid chat or model.' })); return; }
         if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: (model.unavailable_reason || 'This model is currently unavailable.') })); return; }
+        if (chat.mode === 'code' && model.code_allowed === 0) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'This model is not available in Code. Pick another model.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
         if (chat.ended) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'This conversation was ended by the assistant and can no longer be continued.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
         const bs = budgetStatus(u);
         if (bs.enforce && bs.state === 'over') { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'You have reached your monthly usage budget. It resets at the start of next month.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
         if (live.activeTurn(chat.id)) { safeSend(JSON.stringify({ type: 'error', chatId: chat.id, error: 'A reply is already being generated in this chat. Wait for it to finish, or stop it first.' })); safeSend(JSON.stringify({ type: 'done', chatId: chat.id })); return; }
 
         const sandboxLimit = sandboxCap(u);
-        const userSandbox = !!msg.sandbox;
-        if (!!chat.sandbox !== userSandbox) db.chats.update(chat.id, { sandbox: userSandbox ? 1 : 0 });
-        const sandboxOn = userSandbox || !!chat.project_id;
-        const webSearchOn = !!msg.webSearch && websearch.webSearchAvailable() && model.web_search_allowed !== 0;
+        const codeMode = chat.mode === 'code';
+        const sandboxOn = codeMode || !!chat.project_id;
+        const webSearchOn = (codeMode || !!msg.webSearch) && websearch.webSearchAvailable() && model.web_search_allowed !== 0;
         ensureChain(chat.id);
 
         let resume = null;
@@ -280,7 +282,7 @@ export function initWs(server) {
         try {
           await runQueued(queueOn, model.id,
             () => { liveSend(JSON.stringify({ type: 'queued', chatId: chat.id })); },
-            () => runCompletion(liveWs, liveState, liveSend, chat, model, !!msg.extended, sandboxOn, sandboxLimit, webSearchOn, !!msg.call, { styleText, client, resume }));
+            () => runCompletion(liveWs, liveState, liveSend, chat, model, !!msg.extended, sandboxOn, sandboxLimit, webSearchOn, !!msg.call, { styleText, client, resume, plan: codeMode && !!msg.plan }));
         } finally { live.endTurn(chat.id); }
       } catch (err) {
         console.error('[ws chat]', err);

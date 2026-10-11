@@ -11,7 +11,7 @@ The user guide for Open Quill. It covers what you can do once the app is running
 | [Chatting](chatting.md) | Sending, stopping, steering and queueing, message actions, branching, long threads |
 | [The Composer](composer.md) | Attachments, screenshots, dictation, slash commands, the **+** menu, voice calls |
 | [Models & Reasoning](models.md) | The model picker, badges, extended thinking, request controls, context readouts |
-| [Personas, Styles & Prompts](personas-styles-prompts.md) | Personas, response styles, saved prompts, Improve prompt, instructions |
+| [Styles & Instructions](styles-and-instructions.md) | Response styles, skills, instructions |
 | [Organizing Your Chats](organizing-chats.md) | Stars, projects, grouping, the chats overview, search, scheduled tasks, export |
 | [Artifacts & Sandbox](artifacts-sandbox.md) | The file workspace: viewing, editing, versions, previews, downloads |
 | [Settings](settings.md) | Every tab in the Settings window, including Skills and MCP |

@@ -107,7 +107,7 @@ const listByUserStmt = sdb.prepare(`
   SELECT id, updated_at,
     json_extract(data,'$.title') AS title, json_extract(data,'$.starred') AS starred,
     json_extract(data,'$.archived') AS archived, json_extract(data,'$.project_id') AS project_id,
-    json_extract(data,'$.ended') AS ended
+    json_extract(data,'$.ended') AS ended, json_extract(data,'$.mode') AS mode
   FROM chats WHERE user_id=? ORDER BY updated_at DESC`);
 chatsCol.listByUser = userId => listByUserStmt.all(userId);
 const projectCountsStmt = sdb.prepare(`
@@ -338,13 +338,6 @@ if (!getSetting('seeded')) {
   setSetting('api_key', '');
   const pid = uid();
   setSetting('providers', [{ id: pid, name: 'llama.cpp', type: 'llamacpp', base_url: 'http://localhost:9931', api_key: '' }]);
-  db.models.insert({
-    id: uid(), display_name: 'Quillku 1', description: 'Fastest for quick answers',
-    internal_name: 'local-model', system_prompt: 'You are a helpful assistant.', provider_id: pid,
-    has_reasoning: 0, reasoning_token: '', non_reasoning_token: '',
-    in_more_models: 0, more_models_label: 'More models',
-    static_icon: MODEL_WEAVE, generating_icon: MODEL_WEAVE, thinking_icon: MODEL_WEAVE, icon_position: 'below', sort_order: 0, enabled: 1
-  });
   setSetting('seeded', '1');
 }
 

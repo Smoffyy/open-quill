@@ -15,16 +15,14 @@ export const KEYBIND_ACTIONS = [
   { id: 'focusComposer', group: 'Composer', label: 'Focus the message bar', def: '/', typing: false, overlay: false },
   { id: 'attachFiles', group: 'Composer', label: 'Attach files', def: 'mod+u', typing: true, overlay: false },
   { id: 'toggleWebSearch', group: 'Composer', label: 'Toggle web search', def: 'alt+w', typing: true, overlay: false },
-  { id: 'toggleSandbox', group: 'Composer', label: 'Toggle sandbox', def: 'alt+s', typing: true, overlay: false },
   { id: 'stopGeneration', group: 'Composer', label: 'Stop generating', def: 'mod+.', typing: true, overlay: false },
   { id: 'findInChat', group: 'In this conversation', label: 'Find in conversation', def: 'mod+f', pref: 'threadFind', typing: true, overlay: true },
   { id: 'branchMap', group: 'In this conversation', label: 'Branch map', def: 'b', pref: 'branchMap', typing: false, overlay: false },
   { id: 'msgNext', group: 'In this conversation', label: 'Next message', def: 'j', pref: 'msgKeys', typing: false, overlay: false },
   { id: 'msgPrev', group: 'In this conversation', label: 'Previous message', def: 'k', pref: 'msgKeys', typing: false, overlay: false },
   { id: 'scrollBottom', group: 'In this conversation', label: 'Jump to latest', def: 'alt+ArrowDown', typing: true, overlay: false },
-  { id: 'toggleLedger', group: 'In this conversation', label: 'Context ledger', def: 'alt+l', typing: true, overlay: false },
   { id: 'promptLedger', group: 'In this conversation', label: 'What gets sent', def: 'alt+p', typing: true, overlay: false },
-  { id: 'toggleArtifacts', group: 'In this conversation', label: 'Artifacts panel', def: 'alt+a', typing: true, overlay: false },
+  { id: 'toggleArtifacts', group: 'In this conversation', label: 'Files panel (Code)', def: 'alt+a', typing: true, overlay: false },
   { id: 'toggleOutline', group: 'In this conversation', label: 'Contents', def: 'alt+o', pref: 'threadOutline', typing: true, overlay: false },
   { id: 'focusMode', group: 'In this conversation', label: 'Focus mode', def: 'alt+f', typing: true, overlay: false },
   { id: 'nextChat', group: 'In this conversation', label: 'Next chat in sidebar', def: 'alt+j', typing: true, overlay: false },
@@ -148,13 +146,23 @@ export function isReservedCombo(combo) {
   return RESERVED.has(String(combo || '').toLowerCase());
 }
 
+export function modifierLabel(flag) {
+  const mac = isMacPlatform();
+  if (flag === 'mod') return mac ? '⌘' : 'Ctrl';
+  if (flag === 'alt') return mac ? '⌥' : 'Alt';
+  return mac ? '⇧' : 'Shift';
+}
+
+export function keyLabels(keys) {
+  return keys.map(k => (FLAG_SET.has(k) ? modifierLabel(k) : k));
+}
+
 export function comboKeys(combo) {
   if (!isValidCombo(combo)) return [];
   if (isChord(combo)) return chordParts(combo).flatMap((p, i) => (i ? ['then', ...comboKeys(p)] : comboKeys(p)));
-  const mac = isMacPlatform();
   const parts = combo.split('+');
   const key = parts.pop();
-  const out = parts.map(p => (p === 'mod' ? (mac ? '⌘' : 'Ctrl') : p === 'alt' ? (mac ? '⌥' : 'Alt') : mac ? '⇧' : 'Shift'));
+  const out = parts.map(modifierLabel);
   const lower = key.toLowerCase();
   out.push(KEY_LABELS[lower] || (key.length === 1 ? key.toUpperCase() : key));
   return out;

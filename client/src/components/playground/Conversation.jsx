@@ -20,7 +20,7 @@ function Message({ turn, busy, onEdit, onRole, onDrop }) {
     <div className={'pg-turn pg-msg r-' + turn.role}>
       <div className="pg-turn-bar">
         <button type="button" className={'pg-role r-' + turn.role} disabled={busy}
-          title={t('Change role')} onClick={() => onRole(ROLES[(ROLES.findIndex(r => r.value === turn.role) + 1) % ROLES.length].value)}>
+          data-tip={t('Change role')} onClick={() => onRole(ROLES[(ROLES.findIndex(r => r.value === turn.role) + 1) % ROLES.length].value)}>
           {t(ROLES.find(r => r.value === turn.role)?.label || turn.role)}
         </button>
         <span className="cp-spacer" />
@@ -50,7 +50,7 @@ function Message({ turn, busy, onEdit, onRole, onDrop }) {
   );
 }
 
-function Answer({ turn, busy, anyBusy, preset, onPrefer, onRerun, onRerunReply, onEditReply, onRequest, onDrop }) {
+function Answer({ turn, busy, anyBusy, onPrefer, onRerun, onRerunReply, onEditReply, onRequest, onDrop }) {
   const compare = turn.replies.length > 1;
   return (
     <div className="pg-turn pg-answer">
@@ -62,7 +62,7 @@ function Answer({ turn, busy, anyBusy, preset, onPrefer, onRerun, onRerunReply, 
       </div>
       <div className={'pg-grid' + (compare ? '' : ' solo')}>
         {turn.replies.map((r, i) => (
-          <Reply key={r.key + i} reply={r} compare={compare} preset={preset}
+          <Reply key={r.key + i} reply={r} compare={compare}
             preferred={compare && turn.chosen && (turn.pick || 0) === i}
             onPrefer={compare ? () => onPrefer(i) : null}
             onRerun={anyBusy ? null : () => onRerunReply(i)}
@@ -78,7 +78,7 @@ function Answer({ turn, busy, anyBusy, preset, onPrefer, onRerun, onRerunReply, 
 }
 
 export default function Conversation({
-  thread, busy, preset, input, setInput, role, setRole, canRun, probes,
+  thread, busy, input, setInput, role, setRole, canRun, probes,
   onSubmit, onStop, onEditTurn, onRoleTurn, onDropTurn, onRerunTurn, onRerunReply, onPrefer, onEditReply, onRequest
 }) {
   const scrollRef = useRef(null);
@@ -122,7 +122,7 @@ export default function Conversation({
             </div>
           )}
           {thread.map((turn) => (Array.isArray(turn.replies) ? (
-            <Answer key={turn.id} turn={turn} busy={busy.has(turn.id)} anyBusy={running} preset={preset}
+            <Answer key={turn.id} turn={turn} busy={busy.has(turn.id)} anyBusy={running}
               onPrefer={(i) => onPrefer(turn.id, i)}
               onRerun={() => onRerunTurn(turn.id)}
               onRerunReply={(i) => onRerunReply(turn.id, i)}

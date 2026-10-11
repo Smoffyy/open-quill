@@ -16,7 +16,7 @@ export default function Outline({ items, onJump, onClose }) {
       <div className="outline-head">
         <TextIcon style={{ width: 15 }} />
         <span className="outline-title">{t('Contents')}</span>
-        <button type="button" className="outline-x" onClick={onClose} aria-label={t('Close')} title={t('Close')}>
+        <button type="button" className="outline-x" onClick={onClose} aria-label={t('Close')} data-tip={t('Close')}>
           <X style={{ width: 14 }} />
         </button>
       </div>
@@ -28,7 +28,7 @@ export default function Outline({ items, onJump, onClose }) {
             className={'outline-item lv-' + Math.min(3, Math.max(0, it.level - base))}
             ref={i === 0 ? (el => focusUnlessTouch(el)) : undefined}
             onClick={() => onJump(it)}
-            title={it.text}
+            data-tip={it.text}
           >
             <span className="outline-text">{it.text}</span>
           </button>

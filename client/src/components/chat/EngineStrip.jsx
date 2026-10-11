@@ -45,7 +45,7 @@ export default function EngineStrip({ telemetry, streaming, route }) {
   const data = telemetry || last;
   if (!data) return <div className="es-slot" aria-hidden="true" />;
 
-  const { tps, promptTps, promptTokens, genTokens, ctx, exact } = data;
+  const { tps, promptTps, promptTokens, genTokens, ctx } = data;
   const used = (promptTokens || 0) + (genTokens || 0);
   const pct = ctx > 0 ? Math.min(100, Math.round((used / ctx) * 1000) / 10) : 0;
   const level = pct >= 90 ? ' danger' : pct >= 75 ? ' warn' : '';
@@ -54,25 +54,24 @@ export default function EngineStrip({ telemetry, streaming, route }) {
       <div className={'engine-strip' + (streaming ? '' : ' final')} role="status" aria-live="off">
       <span className="es-icon"><Gauge style={{ width: 13 }} /></span>
       {route && (
-        <span className="es-stat es-route" title={t('Chosen by {hub} because of: {via}', { hub: route.hubName, via: route.via })}>
+        <span className="es-stat es-route" data-tip={t('Chosen by {hub} because of: {via}', { hub: route.hubName, via: route.via })}>
           <span className="es-label">{t('via')}</span> {route.modelName}
         </span>
       )}
       <span className="es-stat es-tps">
         <strong>{rate(tps)}</strong>
         <Sparkline points={history} />
-        {!exact && <span className="es-est" title={t('Estimated from streamed text, this provider does not report timings.')}>est</span>}
       </span>
       {promptTps > 0 && (
-        <span className="es-stat" title={t('Prompt evaluation speed')}>
+        <span className="es-stat" data-tip={t('Prompt evaluation speed')}>
           <span className="es-label">{t('prompt')}</span> {rate(promptTps)}
         </span>
       )}
-      <span className="es-stat" title={t('Tokens generated in this response')}>
+      <span className="es-stat" data-tip={t('Tokens generated in this response')}>
         <span className="es-label">{t('out')}</span> {num(genTokens)}
       </span>
       {ctx > 0 && (
-        <span className={'es-stat es-ctx' + level} title={t('Context used of the loaded window')}>
+        <span className={'es-stat es-ctx' + level} data-tip={t('Context used of the loaded window')}>
           <span className="es-label">{t('ctx')}</span>
           <span className="es-bar"><span className="es-fill" style={{ width: pct + '%' }} /></span>
           {pct}%

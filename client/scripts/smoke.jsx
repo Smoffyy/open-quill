@@ -21,7 +21,9 @@ import ShortcutsModal from '../src/components/dialogs/ShortcutsModal.jsx';
 import KeybindsPanel from '../src/components/settings/KeybindsPanel.jsx';
 import BranchTree from '../src/components/chat/BranchTree.jsx';
 import Login from '../src/components/pages/Login.jsx';
-import ArtifactsPanel from '../src/components/artifacts/ArtifactsPanel.jsx';
+import CodeView from '../src/components/code/CodeView.jsx';
+import CodeFiles from '../src/components/code/CodeFiles.jsx';
+import Sidebar from '../src/components/sidebar/Sidebar.jsx';
 import Viewer from '../src/components/artifacts/Viewer.jsx';
 import Composer from '../src/components/composer/Composer.jsx';
 import ModelDropdown from '../src/components/composer/ModelDropdown.jsx';
@@ -85,6 +87,7 @@ const kwargModel = {
     { id: 'b', name: 'thinking_budget_tokens', label: 'Thinking budget', target: 'body', type: 'number', min: 1024, max: 8192, step: 1024, default: '1024', values: [], showIf: { id: 'think', value: 'true' } },
     { id: 'think', name: 'enable_thinking', label: 'Extended thinking', values: ['false', 'true'], default: 'false' },
     { id: 'eff', name: 'reasoning_effort', values: ['low', 'medium', 'high'], default: 'medium' },
+    { id: 'levels', name: 'reasoning_budget_tokens', label: 'Thinking', chip: '{value}', target: 'body', type: 'number', default: '2048', values: ['0', '1024', '2048', '4096'], stops: [{ label: 'Off', value: '0', off: true }, { label: 'Low', value: '1024', off: false }, { label: 'Medium', value: '2048', off: false }, { label: 'High', value: '4096', off: false }] },
     { id: 'keep', name: 'preserve_thinking', values: ['false', 'true'], parentId: 'think', rules: [{ when: 'true', value: 'true', send: true }] }
   ]
 };
@@ -100,14 +103,13 @@ cases.push(['ModelDropdown:kwargs:gateOpen', () => React.createElement(ModelDrop
 const composerProps = {
   value: '', onChange: noop, onSend: noop, onStop: noop, streaming: false,
   models, currentId: 'm2', onSelect: noop, placeholder: 'Ask anything',
-  visionSupported: true, sandbox: false, onToggleSandbox: noop,
+  visionSupported: true,
   webSearch: false, webSearchAvailable: true, onToggleWebSearch: noop,
-  styles: [], styleId: 'normal', onSelectStyle: noop, onSaveStyles: noop,
-  savedPrompts: [], onUsePrompt: noop, onSavePrompt: noop, onDeletePrompt: noop
+  styles: [], styleId: 'normal', onSelectStyle: noop, onSaveStyles: noop
 };
 cases.push(['Composer:idle', () => React.createElement(Composer, composerProps)]);
 cases.push(['Composer:streaming', () => React.createElement(Composer, { ...composerProps, streaming: true, canSteer: true, onSteer: noop, onQueue: noop })]);
-cases.push(['Composer:slash', () => React.createElement(Composer, { ...composerProps, value: '/', savedPrompts: [{ id: 'p1', title: 'Review', text: 'Review this' }] })]);
+cases.push(['Composer:slash', () => React.createElement(Composer, { ...composerProps, value: '/' })]);
 
 cases.push(['Playground:cold', () => React.createElement(Playground, { onClose: noop })]);
 
@@ -116,11 +118,40 @@ const artFiles = [
   { path: 'README.md', ext: 'md', v: 1, size: 120 },
   { path: 'logo.png', ext: 'png', v: 1, size: 4096 }
 ];
-cases.push(['ArtifactsPanel:empty', () => React.createElement(ArtifactsPanel, { chatId: 'c1', files: [], live: null, onClose: noop })]);
-cases.push(['ArtifactsPanel:tree', () => React.createElement(ArtifactsPanel, { chatId: 'c1', files: artFiles, live: null, onClose: noop })]);
-cases.push(['ArtifactsPanel:writing', () => React.createElement(ArtifactsPanel, {
+cases.push(['CodeFiles:empty', () => React.createElement(CodeFiles, { chatId: 'c1', files: [], live: null, onFilesChanged: noop, onClose: noop })]);
+cases.push(['CodeFiles:tree', () => React.createElement(CodeFiles, { chatId: 'c1', files: artFiles, live: null, onFilesChanged: noop, onClose: noop })]);
+cases.push(['CodeFiles:writing', () => React.createElement(CodeFiles, {
   chatId: 'c1', files: artFiles, live: { path: 'src/new.js', content: 'let a = 1;\n', tool: 'create_file' },
-  pending: { 'src/queued.js': 'pending text' }, onClose: noop
+  pending: { 'src/queued.js': 'pending text' }, busy: true, onFilesChanged: noop, onClose: noop
+})]);
+
+const oqr = (call, result) => '[[OQR:' + Buffer.from(JSON.stringify({ call, result })).toString('base64') + ']]';
+const codeMessages = [
+  { id: 'u1', role: 'user', content: 'Build it', attachments: [{ name: 'spec.md', url: '/u/x' }] },
+  {
+    id: 'a1', role: 'assistant', plan: true, created_at: 1,
+    content: 'Starting.\n\n' + oqr({ tool: 'create_file', path: 'src/app.py' }, { ok: true, adds: 4, dels: 0, v: 1 })
+      + oqr({ tool: 'bash', cmd: 'python src/app.py' }, { ok: false, output: 'boom', exit: 1 }) + '\n\nDone.'
+  }
+];
+const codeProps = {
+  userName: 'Ada', modelIcon: '', chatId: 'c1', chat: { id: 'c1', title: 'Build', mode: 'code' }, messages: codeMessages,
+  live: null, liveCalls: [], phase: 'static', streaming: false, files: artFiles, liveFile: null, pendingFiles: {},
+  onFilesChanged: noop, panelOpen: true, onTogglePanel: noop,
+  scroll: { scrollRef: { current: null }, onScroll: noop, onWheel: noop, onTouchMove: noop, showJump: false, jumpDown: noop },
+  composer: { value: '', onChange: noop, onSend: noop, onStop: noop, models: [kwargModel], currentId: 'm3', onSelect: noop, kwargValues: {}, onSetKwarg: noop, plan: false, onPlan: noop },
+  onRename: noop, onToggleStar: noop, onDelete: noop, onRetry: noop, onOpenFile: noop, onOpenMenu: noop, onBuildPlan: noop
+};
+cases.push(['CodeView:fresh', () => React.createElement(CodeView, { ...codeProps, chatId: null, chat: null, messages: [], panelOpen: false })]);
+cases.push(['CodeView:session', () => React.createElement(CodeView, codeProps)]);
+cases.push(['CodeView:streaming', () => React.createElement(CodeView, {
+  ...codeProps, streaming: true, phase: 'generating',
+  live: { id: 'a2', role: 'assistant', content: 'Working on it', _streaming: true },
+  liveCalls: [{ index: 0, call: { tool: 'str_replace', path: 'src/app.py' } }]
+})]);
+cases.push(['Sidebar:code', () => React.createElement(Sidebar, {
+  user: { email: 'a@b.c', displayName: 'Ada', prefs: {} }, chats: [{ id: 'c1', title: 'Build', mode: 'code' }], mode: 'code', onMode: noop,
+  onNew: noop, onOpen: noop, onDelete: noop, onToggleStar: noop, onToggle: noop, onSearch: noop, onSettings: noop, version: '28.0.0'
 })]);
 cases.push(['ArtifactsViewer:live', () => React.createElement(Viewer, {
   chatId: 'c1', path: 'src/main.js', onBack: noop, canBack: true,

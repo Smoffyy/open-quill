@@ -10,7 +10,8 @@ import {
   KWARG_TARGETS, KWARG_CONTROLS, KWARG_TYPES, KWARG_PRESETS,
   blankKwarg, newKwargId, controlOf, defaultValueOf, isBoolPair,
   kwargValuesArr, kwargValuesStr, resolveKwargValues, kwargPayload,
-  isRange, rangeStep, clampToRange, allNumeric
+  isRange, isSteps, isOffStep, rangeStep, clampToRange, allNumeric, stopLabel, stepFields, DEFAULT_STEPS,
+  REPLAY_FIELDS, replayWhenOf, replayValuesOf, isBudgetKwarg, budgetMessageOff, BUDGET_MESSAGE_TEXT
 } from '../../../../lib/kwargs.js';
 
 const MENU_W = 320;
@@ -19,13 +20,19 @@ const MENU_H = 300;
 const TARGET_NOTE = {
   __proto__: null,
   chat_template_kwargs: tk('Nested under chat_template_kwargs, which is where a chat template reads values it consumes itself, such as enable_thinking.'),
-  body: tk('A plain field beside model and messages. Use this for anything the server reads directly, such as thinking_budget_tokens on llama.cpp.'),
+  body: tk('A plain field beside model and messages. Use this for anything the server reads directly, such as reasoning_budget_tokens on llama.cpp.'),
   extra_body: tk('Nested under a literal extra_body object. Only gateways that unwrap it will see it: llama.cpp and vLLM ignore it, and the OpenAI SDKs flatten extra_body before sending, so match them with the top level instead.')
 };
 
 const CONTROL_TAG = {
   __proto__: null,
   toggle: tk('toggle'), slider: tk('slider'), range: tk('range'), select: tk('dropdown')
+};
+
+const FIXED_CONTROL = {
+  __proto__: null,
+  range: { value: 'range', note: tk('A range always renders as a number slider.') },
+  steps: { value: 'slider', note: tk('Labelled steps always render as a slider.') }
 };
 
 export function legacyKwarg(m) {
@@ -44,6 +51,24 @@ export function legacyKwarg(m) {
     default: levels.includes(m.effort_default) ? m.effort_default : '',
     adminOnly: !!m.effort_admin_only
   };
+}
+
+function shapeOf(def) {
+  if (isRange(def)) return 'range';
+  if (isSteps(def)) return 'steps';
+  return 'list';
+}
+
+function chipHint(shape) {
+  if (shape === 'range') return t('Shown beside the model name. {value} becomes the current number, as in Thinking · {value} tokens.');
+  if (shape === 'steps') return t('{value} becomes the word for the current step.');
+  return undefined;
+}
+
+function chipPlaceholder(shape) {
+  if (shape === 'range') return t('Thinking · {value} tokens');
+  if (shape === 'steps') return '{value}';
+  return t('Thinking');
 }
 
 function gateValues(def) {
@@ -76,6 +101,8 @@ function Summary({ def, defs }) {
       {!parent && def.visible !== false && gate && <Badge tone="warn">{t('only when {name} = {value}', { name: nameOf(gate), value: def.showIf.value })}</Badge>}
       {!parent && def.visible !== false && <Badge>{t(CONTROL_TAG[controlOf(def)] || CONTROL_TAG.select)}</Badge>}
       {!!def.adminOnly && <Badge>{t('admins only')}</Badge>}
+      {!!replayWhenOf(def) && <Badge tone="warn">{t('sends back thinking')}</Badge>}
+      {isBudgetKwarg(def) && !!def.budgetMessage?.enabled && <Badge tone="warn">{t('sends a budget message')}</Badge>}
       {(def.target || 'chat_template_kwargs') !== 'chat_template_kwargs' && <Badge>{def.target}</Badge>}
       <Badge>{isRange(def) ? `${def.min}…${def.max}` : (kwargValuesStr(def) || t('no values'))}</Badge>
     </span>
@@ -92,15 +119,60 @@ function Payload({ defs, requested, label }) {
   );
 }
 
+function BudgetMessage({ def, patch }) {
+  const message = { ...budgetMessageOff(), ...def.budgetMessage };
+  const set = (p) => patch({ budgetMessage: { ...message, ...p } });
+  return (
+    <>
+      <Rows>
+        <Row label={t('Send a message when the budget runs out')}
+          note={t('Injected before the end-of-thinking tag once thinking uses its whole budget. Only sent while the budget is above 0.')} wide>
+          <Switch on={message.enabled} label={t('Send a message when the budget runs out')}
+            onToggle={() => set({ enabled: !message.enabled, text: message.text || BUDGET_MESSAGE_TEXT })} />
+        </Row>
+      </Rows>
+      {message.enabled && (
+        <>
+          <Fields cols={3}>
+            <Field label={t('Key')} hint={t('The exact name the server expects. Blank sends nothing.')}>
+              <Input mono value={message.name} placeholder="reasoning_budget_message" aria-label={t('Key')}
+                onChange={(e) => set({ name: e.target.value })} />
+            </Field>
+            <Field label={t('Sent in')} hint={t(TARGET_NOTE[message.target])}>
+              <Select value={message.target} label={t('Sent in')} onChange={(v) => set({ target: v })}
+                options={KWARG_TARGETS.map(([v, l]) => ({ value: v, label: t(l) }))} />
+            </Field>
+            <Field label={t('Wire type')}>
+              <Select value={message.type} label={t('Wire type')} onChange={(v) => set({ type: v })}
+                options={KWARG_TYPES.map(([v, l]) => ({ value: v, label: t(l) }))} />
+            </Field>
+          </Fields>
+          <Field label={t('Message')} hint={t('Sent as the value of that key. Blank sends nothing.')}>
+            <Input value={message.text} placeholder={BUDGET_MESSAGE_TEXT} aria-label={t('Message')}
+              onChange={(e) => set({ text: e.target.value })} />
+          </Field>
+        </>
+      )}
+    </>
+  );
+}
+
 function DefEditor({ def, defs, patch }) {
   const [text, setText] = useState(null);
   const values = kwargValuesArr(def);
-  const range = isRange(def);
+  const shape = shapeOf(def);
+  const range = shape === 'range';
+  const steps = shape === 'steps';
+  const fixed = FIXED_CONTROL[shape];
+  const stops = def.stops || [];
   const linked = !!def.parentId;
   const parent = linked ? defs.find(d => d.id === def.parentId) : null;
   const parentValues = parent ? (isRange(parent) ? ['*'] : kwargValuesArr(parent)) : [];
   const rules = Array.isArray(def.rules) ? def.rules : [];
   const blocked = descendants(defs, def.id);
+  const replayWhen = replayWhenOf(def);
+  const replayValues = replayValuesOf(def);
+  if (replayWhen && replayWhen !== '*' && !replayValues.includes(replayWhen)) replayValues.push(replayWhen);
 
   function setValues(raw) {
     setText(raw);
@@ -108,17 +180,28 @@ function DefEditor({ def, defs, patch }) {
     patch({ values: arr, default: arr.includes(def.default) ? def.default : '' });
   }
 
-  function setShape(shape) {
+  function setShape(choice) {
     setText(null);
-    if (shape === 'range') {
+    if (choice === 'range') {
       const nums = values.map(Number).filter(Number.isFinite).sort((a, b) => a - b);
       const min = nums.length ? nums[0] : 0;
       const max = nums.length > 1 ? nums[nums.length - 1] : min + 100;
       const gap = nums.length > 1 ? Math.abs(nums[1] - nums[0]) : 0;
-      patch({ min, max, step: gap > 0 ? gap : 1, values: [], default: '' });
+      patch({ min, max, step: gap > 0 ? gap : 1, values: [], default: '', stops: [] });
+    } else if (choice === 'steps') {
+      patch({ min: null, max: null, step: null, default: '', ...stepFields(DEFAULT_STEPS) });
     } else {
-      patch({ min: null, max: null, step: null, values: [], default: '' });
+      patch({ min: null, max: null, step: null, values: [], default: '', stops: [] });
     }
+  }
+
+  function setStops(list) {
+    const next = stepFields(list);
+    patch({ ...next, default: next.values.includes(def.default) ? def.default : '' });
+  }
+
+  function setStop(i, p) {
+    setStops(stops.map((s, j) => (j === i ? { ...s, ...p } : s)));
   }
 
   function setRule(when, p) {
@@ -148,10 +231,10 @@ function DefEditor({ def, defs, patch }) {
 
       <Fields cols={3}>
         <Field label={t('Values')}>
-          <Select value={range ? 'range' : 'list'} label={t('Values')} onChange={setShape}
-            options={[{ value: 'list', label: t('A fixed list') }, { value: 'range', label: t('A number range') }]} />
+          <Select value={shape} label={t('Values')} onChange={setShape}
+            options={[{ value: 'list', label: t('A fixed list') }, { value: 'steps', label: t('Labelled steps') }, { value: 'range', label: t('A number range') }]} />
         </Field>
-        {range ? (
+        {range && (
           <Field label={t('Range')} hint={t('Minimum, maximum, and step. Members drag between them and cannot send anything outside.')}>
             <div className="mc-trio">
               <Input mono type="number" value={def.min ?? ''} placeholder={t('min')} aria-label={t('Minimum')} onChange={(e) => patch({ min: e.target.value })} />
@@ -159,7 +242,8 @@ function DefEditor({ def, defs, patch }) {
               <Input mono type="number" min="0" step="any" value={def.step ?? ''} placeholder={t('step')} aria-label={t('Step')} onChange={(e) => patch({ step: e.target.value })} />
             </div>
           </Field>
-        ) : (
+        )}
+        {shape === 'list' && (
           <Field label={t('List')}
             hint={isBoolPair(values) ? t('Boolean pair detected, so this renders as a toggle.')
               : allNumeric(values) ? t('These are all numbers. A number range may suit them better.')
@@ -178,11 +262,52 @@ function DefEditor({ def, defs, patch }) {
                 onBlur={(e) => { const c = clampToRange(def, e.target.value); patch({ default: c == null ? '' : String(c) }); }} />
             ) : (
               <Select value={values.includes(def.default) ? def.default : ''} label={t('Default')} onChange={(v) => patch({ default: v })}
-                options={[{ value: '', label: t('automatic') }, ...values.map(v => ({ value: v, label: v }))]} />
+                options={[{ value: '', label: t('automatic') }, ...values.map(v => ({ value: v, label: steps ? stopLabel(def, v) : v }))]} />
             )}
           </Field>
         )}
       </Fields>
+
+      {steps && (
+        <Field label={t('Steps')} hint={t('Members slide through these in order. Each label is what they see, and its number is what gets sent. A step with Hide from model name ticked still shows its word in the picker, but the model name gets no chip for it.')}>
+          <Table head={[
+            { label: t('Label') },
+            { label: t('Number'), mono: true },
+            { label: t('Hide from model name'), fit: true },
+            { label: '', fit: true }
+          ]}>
+            {stops.map((s, i) => (
+              <tr key={i}>
+                <td>
+                  <Input value={s.label || ''} placeholder={t('Off')} aria-label={t('Label')} onChange={(e) => setStop(i, { label: e.target.value })} />
+                </td>
+                <td>
+                  <Input mono type="number" step="any" value={s.value ?? ''} placeholder="1024" aria-label={t('Number')} onChange={(e) => setStop(i, { value: e.target.value })} />
+                </td>
+                <td className="fit">
+                  <Switch on={isOffStep(s)} label={t('Hide from model name')} onToggle={() => setStop(i, { off: !isOffStep(s) })} />
+                </td>
+                <td className="fit">
+                  <IconBtn kind="danger" label={t('Remove step')} disabled={stops.length <= 1} onClick={() => setStops(stops.filter((_, j) => j !== i))}><Trash /></IconBtn>
+                </td>
+              </tr>
+            ))}
+          </Table>
+          <div className="cp-acts">
+            <Btn size="sm" onClick={() => setStops([...stops, { label: '', value: '', off: false }])}><Plus /> {t('Add step')}</Btn>
+          </div>
+        </Field>
+      )}
+      {range && (
+        <Fields cols={3}>
+          <Field label={t('Unit')} hint={t('Shown after the number in the picker, such as tokens.')}>
+            <Input value={def.unit || ''} placeholder={t('tokens')} aria-label={t('Unit')} onChange={(e) => patch({ unit: e.target.value })} />
+          </Field>
+          <Field label={t('0 means off')} hint={t('At 0 the picker says Off and the model name shows no chip.')}>
+            <Switch on={!!def.zeroOff} label={t('0 means off')} onToggle={() => patch({ zeroOff: !def.zeroOff })} />
+          </Field>
+        </Fields>
+      )}
 
       <Field label={t('Follows')}
         hint={t('A following kwarg has no control of its own; its value is derived from the one it follows. This is how you pair something like preserve_thinking to a thinking toggle.')}>
@@ -226,8 +351,8 @@ function DefEditor({ def, defs, patch }) {
             <Field label={t('Title')}>
               <Input value={def.label || ''} placeholder={t('Extended thinking')} aria-label={t('Title')} onChange={(e) => patch({ label: e.target.value })} />
             </Field>
-            <Field label={t('Picker chip')}>
-              <Input value={def.chip || ''} placeholder={t('Thinking')} aria-label={t('Picker chip')} onChange={(e) => patch({ chip: e.target.value })} />
+            <Field label={t('Picker chip')} hint={chipHint(shape)}>
+              <Input value={def.chip || ''} placeholder={chipPlaceholder(shape)} aria-label={t('Picker chip')} onChange={(e) => patch({ chip: e.target.value })} />
             </Field>
             <Field label={t('Description')} hint={t('Leave the title and this blank to fall back to the key.')}>
               <Input value={def.description || ''} placeholder={t('Let the model think before answering')} aria-label={t('Description')}
@@ -239,8 +364,8 @@ function DefEditor({ def, defs, patch }) {
               <Switch on={def.visible !== false} label={t('Show in the picker')} onToggle={() => patch({ visible: def.visible === false })} />
             </Row>
             {def.visible !== false && (
-              <Row label={t('Control')} note={range ? t('A range always renders as a number slider.') : undefined} wide>
-                <Select value={range ? 'range' : (def.control || 'auto')} disabled={range} label={t('Control')}
+              <Row label={t('Control')} note={fixed && t(fixed.note)} wide>
+                <Select value={fixed ? fixed.value : (def.control || 'auto')} disabled={!!fixed} label={t('Control')}
                   onChange={(v) => patch({ control: v })}
                   options={KWARG_CONTROLS.map(([v, l]) => ({ value: v, label: t(l) }))} />
               </Row>
@@ -280,6 +405,27 @@ function DefEditor({ def, defs, patch }) {
             )}
           </Rows>
         </>
+      )}
+
+      {!linked && isBudgetKwarg(def) && <BudgetMessage def={def} patch={patch} />}
+
+      {(linked || def.visible === false || !!replayWhen) && (
+        <Rows>
+          <Row label={t('Send back past thinking')}
+            note={t('For a kwarg like preserve_thinking that tells the model to keep its earlier thinking. While it is sent with the value picked here, earlier replies go back to the model together with the thinking behind them, so it remembers what it thought. The second box is the field the server reads that thinking from.')} wide>
+            <div className="mc-pair">
+              <Select value={replayWhen} label={t('Send back past thinking')}
+                onChange={(v) => patch({ replayWhen: v })}
+                options={[{ value: '', label: t('never') }, { value: '*', label: t('whenever it is sent') },
+                  ...replayValues.map(v => ({ value: v, label: t('when it is {value}', { value: v }) }))]} />
+              {!!replayWhen && (
+                <Select value={def.replayAs || 'reasoning_content'} label={t('Sent as')}
+                  onChange={(v) => patch({ replayAs: v })}
+                  options={REPLAY_FIELDS.map(([v, l]) => ({ value: v, label: l }))} />
+              )}
+            </div>
+          </Row>
+        </Rows>
       )}
     </div>
   );

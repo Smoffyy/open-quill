@@ -68,7 +68,7 @@ export function Switch({ on, onToggle, label, title, disabled }) {
       role="switch"
       aria-checked={!!on}
       aria-label={label}
-      title={title}
+      data-tip={title}
       tabIndex={disabled ? -1 : 0}
       onKeyDown={(e) => { if (!disabled && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); onToggle(e); } }}
       {...bind}
@@ -128,7 +128,7 @@ export function SegSlide({ value, options, onPick, label, className }) {
       {at && <span className={'segs-thumb' + (dragging ? ' dragging' : '')}
         style={{ transform: `translateX(${at.x}px) scaleX(${at.stretch || 1}) scaleY(${at.squash || 1})`, width: at.w, transformOrigin: origin }} />}
       {options.map(o => (
-        <button key={o.v} type="button" role="radio" aria-checked={value === o.v} title={o.title} aria-label={o.title}
+        <button key={o.v} type="button" role="radio" aria-checked={value === o.v} data-tip={o.title} aria-label={o.title}
           className={'segs-opt' + (value === o.v ? ' on' : '')} onClick={() => onPick(o.v)}>{o.label}</button>
       ))}
     </div>

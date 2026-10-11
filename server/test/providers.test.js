@@ -422,3 +422,137 @@ test('an Anthropic prefill stays the last turn, without trailing whitespace', ()
   const closed = toAnthropic([{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'Hello. ' }]).messages;
   assert.equal(closed.at(-1).role, 'user', 'an ordinary trailing reply still gets a user turn after it');
 });
+
+test('a llama.cpp error inside the stream fails the step instead of ending it quietly', async () => {
+  const mock = await openai({ key: 'k', respond: () => ({ reasoning: 'Let me think about this for a while.', streamError: 'Context size has been exceeded.' }) });
+  const model = { provider_id: useProvider('llamacpp', mock.url, 'k'), internal_name: 'thinker' };
+  const events = [];
+  await assert.rejects(
+    streamCompletion({ model, messages: [{ role: 'user', content: 'hi' }], onEvent: (e) => events.push(e) }),
+    (err) => isContextOverflowError(err) && /Context size has been exceeded/.test(err.message)
+  );
+  assert.equal(events.filter(e => e.type === 'reasoning').map(e => e.text).join(''), 'Let me think about this for a while.', 'what arrived before the error is still delivered');
+  assert.equal(events.some(e => e.type === 'finish'), false);
+});
+
+test('requests to one llama.cpp model wait their turn unless parallel requests are allowed', async () => {
+  const arrivals = [];
+  const mock = await openai({ key: 'k', respond: () => { arrivals.push(Date.now()); return { text: 'one two three four five six', delayMs: 15 }; } });
+  const model = { provider_id: useProvider('llamacpp', mock.url, 'k'), internal_name: 'slots' };
+  const msgs = [{ role: 'user', content: 'hi' }];
+
+  const both = await Promise.all([run(model, msgs), oneShotFull(model, msgs)]);
+  assert.equal(both[0].text, 'one two three four five six');
+  assert.ok(arrivals[1] - arrivals[0] >= 80, 'the one-shot waited for the streamed reply to finish');
+
+  arrivals.length = 0;
+  await Promise.all([run({ ...model, parallel_requests: 1 }, msgs), run({ ...model, parallel_requests: 1 }, msgs)]);
+  assert.ok(arrivals[1] - arrivals[0] < 60, 'with parallel requests allowed both run at once');
+
+  arrivals.length = 0;
+  const ctl = new AbortController();
+  const busy = run(model, msgs);
+  const waiting = run(model, msgs, { signal: ctl.signal });
+  ctl.abort();
+  await assert.rejects(waiting, { name: 'AbortError' });
+  await busy;
+  assert.equal(arrivals.length, 1, 'a request cancelled while it waits never reaches the backend');
+
+  arrivals.length = 0;
+  const other = { provider_id: useProvider('vllm', mock.url, 'k'), internal_name: 'slots' };
+  await Promise.all([run(other, msgs), run(other, msgs)]);
+  assert.ok(arrivals[1] - arrivals[0] < 60, 'only llama.cpp shares one window between its slots');
+});
+
+test('overflow errors from cloud providers give their exact sizes', () => {
+  const cases = [
+    ["This model's maximum context length is 8192 tokens. However, your messages resulted in 9001 tokens.", { prompt: 9001, ctx: 8192 }],
+    ["This endpoint's maximum context length is 131072 tokens. However, you requested about 140000 tokens", { prompt: 140000, ctx: 131072 }],
+    ['Prompt contains 40000 tokens and 0 draft tokens, too large for model with 32768 maximum context length', { prompt: 40000, ctx: 32768 }],
+    ['The input token count (1200000) exceeds the maximum number of tokens allowed (1048576).', { prompt: 1200000, ctx: 1048576 }]
+  ];
+  for (const [msg, want] of cases) {
+    assert.equal(isContextOverflowError(new Error(msg)), true, msg);
+    assert.deepEqual(parseOverflow(new Error(msg)), want, msg);
+  }
+});
+
+test('a rolling summary folds the oldest turns with the chatting model, and recall finds them word for word', async () => {
+  const { foldStep } = await import('../lib/convo.js');
+  const { runRecall } = await import('../lib/recall.js');
+  const { db } = await import('../db.js');
+  let asked = null;
+  const mock = await openai({ key: 'k', respond: (body) => { asked = body; return { text: '## Goals\nPlan a trip to Lisbon.' }; } });
+  const model = { id: 'm-fold', provider_id: useProvider('openai', mock.url, 'k'), internal_name: 'gpt-mock', recent_window: 2, num_ctx: 8192 };
+  const chatId = 'fold-chat';
+  db.chats.insert({ id: chatId, user_id: null, title: 'Trip', created_at: 1, updated_at: 1 });
+  let parent = null;
+  for (let i = 0; i < 6; i++) {
+    const id = 'fold-m' + i;
+    db.messages.insert({ id, chat_id: chatId, role: i % 2 ? 'assistant' : 'user', content: (i % 2 ? 'Answer about Lisbon ' : 'Question about Lisbon ') + i, parent_id: parent, created_at: 1000 + i });
+    parent = id;
+  }
+  db.chats.update(chatId, { active_leaf: parent });
+
+  assert.equal(await foldStep(null, { id: chatId }, model), true);
+  const chat = db.chats.byId(chatId);
+  assert.equal(chat.summary, '## Goals\nPlan a trip to Lisbon.');
+  assert.equal(chat.summary_upto, 1003, 'everything but the two most recent messages is folded');
+  const sent = asked.messages.at(-1).content;
+  assert.ok(sent.includes('Question about Lisbon 0') && sent.includes('Answer about Lisbon 3') && !sent.includes('Lisbon 4'));
+  assert.equal(asked.max_tokens, 2048, 'the summary is capped to a share of the window');
+  assert.equal(await foldStep(null, { id: chatId }, model), false, 'nothing is left to fold outside the recent window');
+
+  const found = runRecall(chatId, { query: 'question lisbon' });
+  assert.equal(found.ok, true);
+  assert.equal(found.count, 4, 'only folded messages are searched, not the two kept verbatim');
+  assert.deepEqual(found.matches.slice(0, 2).map(m => m.text), ['Question about Lisbon 0', 'Question about Lisbon 2'], 'messages matching more words come first');
+  assert.equal(runRecall(chatId, { query: '' }).ok, false);
+});
+
+test('a folded image is described in full once, kept beside the summary, and recall can show it again', async () => {
+  const { foldStep, summaryText } = await import('../lib/convo.js');
+  const { runRecall } = await import('../lib/recall.js');
+  const { UPLOADS } = await import('../lib/uploads.js');
+  const { db } = await import('../db.js');
+  fs.mkdirSync(UPLOADS, { recursive: true });
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  fs.writeFileSync(path.join(UPLOADS, 'fold-chart.png'), png);
+  const asked = [];
+  const mock = await openai({ key: 'k', respond: (body) => {
+    asked.push(body);
+    const sawImage = body.messages.some(m => Array.isArray(m.content) && m.content.some(p => p.type === 'image_url'));
+    return { text: sawImage ? 'A bar chart titled "Q3 sales" with four bars: 10, 20, 30, 40.' : '## Goals\nReview the sales chart.' };
+  } });
+  const model = { id: 'm-vision', provider_id: useProvider('openai', mock.url, 'k'), internal_name: 'gpt-vision', has_vision: 1, recent_window: 2, num_ctx: 8192 };
+  const chatId = 'fold-image-chat';
+  db.chats.insert({ id: chatId, user_id: null, title: 'Sales', created_at: 1, updated_at: 1 });
+  const rows = [
+    { role: 'user', content: 'Here is the chart', attachments: [{ name: 'chart.png', type: 'image/png', url: '/uploads/fold-chart.png' }] },
+    { role: 'assistant', content: 'Sales grow every month.' },
+    { role: 'user', content: 'Thanks' },
+    { role: 'assistant', content: 'Any time.' }
+  ];
+  let parent = null;
+  rows.forEach((r, i) => {
+    const id = 'fold-img-m' + i;
+    db.messages.insert({ id, chat_id: chatId, parent_id: parent, created_at: 2000 + i, ...r });
+    parent = id;
+  });
+  db.chats.update(chatId, { active_leaf: parent });
+
+  assert.equal(await foldStep(null, { id: chatId }, model), true);
+  const chat = db.chats.byId(chatId);
+  assert.deepEqual(chat.summary_images, [{ url: '/uploads/fold-chart.png', name: 'chart.png', detail: 'A bar chart titled "Q3 sales" with four bars: 10, 20, 30, 40.' }]);
+  assert.equal(db.messages.byId('fold-img-m0').attachments[0].image_detail, chat.summary_images[0].detail, 'the description is saved once on the attachment');
+  assert.equal(asked.filter(b => b.messages.some(m => Array.isArray(m.content))).length, 1, 'the image is described in one request');
+  const text = summaryText(chat, true);
+  assert.ok(text.startsWith('## Goals') && text.includes('## Images from earlier in the conversation') && text.includes('"chart.png": A bar chart titled "Q3 sales"') && text.includes('call recall'));
+
+  const seen = runRecall(chatId, { query: 'chart' }, { vision: true });
+  assert.equal(seen.images.length, 1);
+  assert.equal(seen.images[0].mime, 'image/png');
+  assert.equal(seen.images[0].data, png.toString('base64'), 'recall returns the original image at full quality');
+  assert.equal(runRecall(chatId, { query: 'q3 sales' }, { vision: false }).images.length, 0, 'a model without vision only gets the text');
+  assert.ok(runRecall(chatId, { query: 'q3 sales' }, { vision: false }).matches[0].text.includes('[Image "chart.png": A bar chart'), 'the description itself is searchable and ranks first');
+});

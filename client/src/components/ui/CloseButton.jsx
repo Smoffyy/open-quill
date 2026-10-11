@@ -5,7 +5,7 @@ export default function CloseButton({ onClick, className = '', label, plain = fa
   const name = label || t('Close');
   const cls = [plain ? '' : 'modal-close', className].filter(Boolean).join(' ');
   return (
-    <button type="button" className={cls} onClick={onClick} aria-label={name} title={name}>
+    <button type="button" className={cls} onClick={onClick} aria-label={name} data-tip={name}>
       <X />
     </button>
   );

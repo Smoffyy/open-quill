@@ -36,6 +36,8 @@ export function useGenMirror(getCurrentModelId) {
 
   const peek = useCallback((key) => gen.current.get(key), []);
 
+  const keys = useCallback(() => [...gen.current.keys()], []);
+
   const queueRec = useCallback((key, modelId) => {
     const rec = blankRecord(modelId, 'queued');
     rec.steers = [];
@@ -63,6 +65,6 @@ export function useGenMirror(getCurrentModelId) {
   }, []);
 
   return useMemo(() => ({
-    gen, busyChats, syncBusy, peek, queueRec, dropRec, recFor, resumeRec
-  }), [busyChats, syncBusy, peek, queueRec, dropRec, recFor, resumeRec]);
+    gen, busyChats, syncBusy, peek, keys, queueRec, dropRec, recFor, resumeRec
+  }), [busyChats, syncBusy, peek, keys, queueRec, dropRec, recFor, resumeRec]);
 }

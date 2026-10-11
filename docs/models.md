@@ -4,7 +4,7 @@
 
 The model picker sits at the bottom right of the composer (top left of the chat in the OpenAI layout). It lists every model an admin has published, with its logo, name and a one-line description. Models an admin has grouped together sit in submenus, such as **More models**. The info button on an entry opens that model's page in the model reference.
 
-Changing the model affects the chat from the next message on. Earlier replies keep the model that wrote them. To redo one reply with a different model, use **Retry with** on that reply.
+Changing the model affects the chat from the next message on. Earlier replies keep the model that wrote them. To redo one reply with a different model, pick that model in the picker and press **Retry** on that reply.
 
 Small badges show what a model can do:
 
@@ -39,17 +39,15 @@ If a model has a showcase backdrop, **Background in chat** keeps it behind the c
 
 ## Readouts
 
-Optional numbers for people who want to see how the model is doing, all under **Settings → Chat**:
+Optional numbers for people who want to see how the model is doing, all under **Settings → Interface**:
 
 | Setting | Shows |
 | --- | --- |
 | **Engine telemetry** | Live speed and how full the context is, above the composer while a reply streams |
-| **Context gauge** | How full the context window is, beside the model picker |
 | **Speed on each reply** | The tokens per second each reply ran at, kept beside the reply |
 | **Progress line** | What the model is doing, beside its logo, when a reply takes longer than a few seconds |
-| **Context ledger on open** | Opens chats with the per-message token ledger showing |
 
-Token counts come from the model's own tokenizer, not an estimate, so the gauge and ledger match what the model actually sees.
+Token counts are always exact, never estimated. Local llama.cpp and vLLM backends count the next prompt with the model's own tokenizer before it is sent. Other providers only report counts after a reply, so the ring shows the exact count from the last reply, and "Send a message to load context" before there is one.
 
 ## The model reference
 

@@ -89,14 +89,14 @@ export default function ScheduledTasks({ onSearch, onRunTask }) {
               <span className="sched-item-acts">
                 {onRunTask && (
                   <button className="lib-icon-btn" onClick={() => onRunTask(task)}
-                    aria-label={t('Run now')} title={t('Run now')}><Check /></button>
+                    aria-label={t('Run now')} data-tip={t('Run now')}><Check /></button>
                 )}
                 <button className="lib-icon-btn" onClick={() => toggle(task)}
-                  aria-label={task.enabled ? t('Pause') : t('Resume')} title={task.enabled ? t('Pause') : t('Resume')}>
+                  aria-label={task.enabled ? t('Pause') : t('Resume')} data-tip={task.enabled ? t('Pause') : t('Resume')}>
                   <Clock />
                 </button>
                 <button className="lib-icon-btn danger" onClick={() => remove(task)}
-                  aria-label={t('Delete')} title={t('Delete')}><Trash /></button>
+                  aria-label={t('Delete')} data-tip={t('Delete')}><Trash /></button>
               </span>
             </div>
           ))}

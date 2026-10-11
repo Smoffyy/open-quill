@@ -4,6 +4,8 @@ import { palettesFor, themeValue } from '../../lib/palettes.js';
 import { t, tk } from '../../i18n.jsx';
 import { SetRow, SwitchRow, SegSlide, SelectRow, RangeRow } from '../ui/controls.jsx';
 import { resolveReveal, revealSpeedMs } from '../../lib/reveal.js';
+import { useLayout } from '../../lib/uselayout.js';
+import { STATUS_DELAY_SECS } from '../../lib/status.js';
 
 // No zero stop: "no reveal at all" is the Instant *style*, so offering it here
 // too would be the same state reachable two ways. A pref already stored as 0
@@ -32,10 +34,11 @@ const clampInt = (v, lo, hi, def) => Math.max(lo, Math.min(hi, parseInt(v) || de
 
 export default function InterfaceTab({ prefs, setPref, cfg }) {
   const preset = currentPreset();
+  const layout = useLayout();
   const [userFont, setUserFontState] = useState(getUserFont());
   const rv = revealSpeedMs(prefs.revealMs);
-  const revealAvailable = cfg?.uiPreset !== 'openai';
-  const style = resolveReveal(prefs, 'anthropic');
+  const revealAvailable = !layout.instantReveal;
+  const style = resolveReveal(prefs);
   const styleOpt = REVEAL_STYLE_OPTS.find(o => o.v === style) || REVEAL_STYLE_OPTS[0];
   const cursorStyle = prefs.cursorStyle === 'circle' ? 'circle' : 'block';
   const knownStop = REVEAL_STOPS.some(o => o.v === rv);
@@ -44,8 +47,8 @@ export default function InterfaceTab({ prefs, setPref, cfg }) {
     <>
       <div className="hint">{t("How this app looks on your device. These are your own preferences; the layout itself is set by an administrator.")}</div>
       <div className="me-section-h">{t("Appearance")}</div>
-      <SetRow label={t("Theme")} desc={t("Follow your system, or pick a palette. Colours only, the layout never changes.")}>
-        <SelectRow label={t("Theme")} value={themeValue(prefs.theme, preset)} onPick={(v) => setPref('theme', v)}
+      <SetRow label={t("Colour palette")} desc={t("Follow your system, or pick a palette. Colours only, the layout never changes.")}>
+        <SelectRow label={t("Colour palette")} value={themeValue(prefs.theme, preset)} onPick={(v) => setPref('theme', v)}
           options={[{ v: 'system', label: t('System') }].concat(palettesFor(preset).map(p => ({ v: p.id, label: p.label })))} />
       </SetRow>
       <SetRow label={t("Chat font")} desc={t("Overrides the theme's default font, on this device only.")}>
@@ -63,8 +66,12 @@ export default function InterfaceTab({ prefs, setPref, cfg }) {
       </SetRow>
       <SwitchRow label={t("OLED screen protection")} desc={t("Nudges the interface a few pixels and eases brightness to limit burn-in.")}
         on={prefs.oledShift} onToggle={() => setPref('oledShift', !prefs.oledShift)} />
+      <SwitchRow label={t("Speed on each reply")} desc={t("Keep the tokens per second beside each reply, so models stay comparable.")}
+        on={prefs.msgSpeed} onToggle={() => setPref('msgSpeed', !prefs.msgSpeed)} />
 
       <div className="me-section-h">{t("Streaming text")}</div>
+      <SwitchRow label={t("Auto-scroll")} desc={t("Keep the latest text in view unless you scroll up.")}
+        on={prefs.autoscroll !== false} onToggle={() => setPref('autoscroll', prefs.autoscroll === false)} />
       {revealAvailable && (
         <SetRow label={t("Text reveal")} desc={t(styleOpt.note)}>
           <SegSlide label={t("Text reveal")} value={style} onPick={(v) => setPref('revealStyle', v)}
@@ -97,6 +104,12 @@ export default function InterfaceTab({ prefs, setPref, cfg }) {
             format={(v) => v + ' ms'} onChange={(v) => setPref('cursorPulseMs', v)} />
         </SetRow>
       )}
+      <SwitchRow label={t("Engine telemetry")} desc={t("Live speed and context fill above the message bar while a reply streams.")}
+        on={prefs.engineStrip === true} onToggle={() => setPref('engineStrip', prefs.engineStrip !== true)} />
+      <SwitchRow label={t("Progress line")} desc={t("Shows what the model is doing beside its logo if a reply takes more than {n}s.", { n: STATUS_DELAY_SECS })}
+        on={prefs.statusDelay !== false} onToggle={() => setPref('statusDelay', prefs.statusDelay === false)} />
+      <SwitchRow label={t("Mid-stream steering")} desc={t("Correct a reply mid-stream. Restarts from the cut point and costs an extra request.")}
+        on={prefs.steering} onToggle={() => setPref('steering', !prefs.steering)} />
 
       <div className="me-section-h">{t("Navigation")}</div>
       <div className="sec-note">{t("Tools for moving around a long conversation. Turn any off for a bare view.")}</div>
@@ -110,6 +123,13 @@ export default function InterfaceTab({ prefs, setPref, cfg }) {
         on={prefs.threadOutline !== false} onToggle={() => setPref('threadOutline', prefs.threadOutline === false)} />
       <SwitchRow label={t("Message shortcuts")} desc={t("J and K move between messages; C copies, E edits, R retries, Y branches.")}
         on={prefs.msgKeys !== false} onToggle={() => setPref('msgKeys', prefs.msgKeys === false)} />
+      {cfg?.webSearchAvailable && (
+        <>
+          <div className="me-section-h">{t("Tools and context")}</div>
+          <SwitchRow label={t("Web search on by default")} desc={t("Start every new chat with web search enabled, when the model allows it.")}
+            on={prefs.webSearchDefault} onToggle={() => setPref('webSearchDefault', !prefs.webSearchDefault)} />
+        </>
+      )}
     </>
   );
 }

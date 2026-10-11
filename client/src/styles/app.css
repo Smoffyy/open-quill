@@ -1,4 +1,6 @@
 @import './base.css';
+@import './palettes/anthropic.css';
+@import './palettes/openai.css';
 @import './layout.css';
 @import './chat.css';
 @import './chrome.css';
@@ -23,5 +25,11 @@
 @import './memory.css';
 @import './agenttools.css';
 @import './filepreview.css';
-@import './anthropic.css';
-@import './openai.css';
+@import './code.css';
+@import './sidebar.css';
+@import './library.css';
+@import './skills.css';
+@import './voice.css';
+@import './design.css';
+@import './layouts/card/index.css';
+@import './layouts/pill/index.css';

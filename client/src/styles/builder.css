@@ -422,7 +422,8 @@
 
 .bx-box { border: 1px solid var(--bx-line); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 7px; }
 .bx-box-head { display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--bx-muted); }
-.bx-link { width: 20px; height: 20px; border-radius: 5px; color: var(--bx-muted); }
+.bx-link { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 5px; color: var(--bx-muted); }
+.bx-link svg { width: 13px; height: 13px; }
 .bx-link.on { color: var(--bx-accent); }
 .bx-box-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 .bx-box-cell { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--bx-muted); }

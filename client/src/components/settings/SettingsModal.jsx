@@ -4,7 +4,6 @@ import CloseButton from '../ui/CloseButton.jsx';
 import SettingsNav, { TAB_LABELS } from './SettingsNav.jsx';
 import GeneralTab from './GeneralTab.jsx';
 import InterfaceTab from './InterfaceTab.jsx';
-import ChatTab from './ChatTab.jsx';
 import SecurityTab from './SecurityTab.jsx';
 import UsageTab from './UsageTab.jsx';
 import MemoryTab from './MemoryTab.jsx';
@@ -55,7 +54,6 @@ export default function SettingsModal({ user, cfg, initialTab, browseSkills = fa
   let content = null;
   if (tab === 'general') content = <GeneralTab user={user} draft={draft} onExportChats={onExportChats} onImportChats={onImportChats} onDeleted={onDeleted} />;
   else if (tab === 'interface') content = <InterfaceTab prefs={prefs} setPref={setPref} cfg={cfg} />;
-  else if (tab === 'chat') content = <ChatTab prefs={prefs} setPref={setPref} cfg={cfg} />;
   else if (tab === 'security') content = <SecurityTab user={user} onUpdated={onUpdated} />;
   else if (tab === 'keybinds') content = <KeybindsPanel prefs={prefs} setPref={setPref} />;
   else if (tab === 'memory') content = <MemoryTab prefs={prefs} setPref={setPref} />;

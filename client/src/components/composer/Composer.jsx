@@ -1,60 +1,28 @@
 import { useRef, useEffect, useState, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import ModelDropdown from './ModelDropdown.jsx';
+import ModelPickerSlot from './ModelPickerSlot.jsx';
 import Tip from '../ui/Tip.jsx';
 import { api } from '../../lib/api.js';
 import { toast } from '../../lib/toast.js';
-import { useAttachments } from '../../lib/attachments.js';
+import { useAttachments, NO_VISION } from '../../lib/attachments.js';
 import { useDictation } from '../../lib/dictation.js';
 import { captureScreenshot, screenshotSupported, isCaptureCancel } from '../../lib/screenshot.js';
-import { Plus, Mic, Wave, Up, Enter, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, TextIcon, Star, NewChatIcon, Sliders, Wand, Steer, Screenshot, Plug, SkillIcon, ImageIcon, Copy, Folder } from '../ui/icons.jsx';
+import { Plus, Mic, Wave, Up, Enter, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, NewChatIcon, Sliders, Steer, Screenshot, Plug, SkillIcon, ImageIcon, Copy, Folder, ChevDown, Calendar } from '../ui/icons.jsx';
 import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
 import { extLabel } from '../../lib/files.js';
 import { t, fmtDate } from '../../i18n.jsx';
 import { useThemeText } from '../../lib/theme/store.jsx';
 import { focusUnlessTouch } from '../../lib/touch.js';
+import { SubItem } from '../ui/Submenu.jsx';
 import { useSubmenus } from '../../lib/submenu.js';
 import { useDismiss } from '../../lib/dismiss.js';
+import { useLayout } from '../../lib/uselayout.js';
 
 // The picker no longer advertises a list. The server decides what it can read by
 // sniffing the bytes, so any format is accepted here and one that turns out to be
 // unreadable is reported to the model as such rather than silently dropped.
 const FILE_ACCEPT = '';
-
-function PmSub({ className = '', children, onMouseEnter, onMouseLeave }) {
-  const ref = useRef(null);
-  const [pos, setPos] = useState({ flipLeft: false, top: -6, maxH: 0, ready: false });
-  useLayoutEffect(() => {
-    const el = ref.current; if (!el) return;
-    const measure = () => {
-      const wrap = el.parentElement; if (!wrap) return;
-      const row = wrap.getBoundingClientRect();
-      const pad = 8;
-      const availH = window.innerHeight - pad * 2;
-      const h = el.scrollHeight;
-      const effH = Math.min(h, availH);
-      const flipLeft = row.right + 4 + el.offsetWidth > window.innerWidth - pad;
-      let top = -6;
-      const over = row.top + top + effH - (window.innerHeight - pad);
-      if (over > 0) top -= over;
-      if (row.top + top < pad) top = pad - row.top;
-      setPos(prev => (prev.ready && prev.flipLeft === flipLeft && prev.top === top && prev.maxH === (h > availH ? availH : 0)) ? prev : { flipLeft, top, maxH: h > availH ? availH : 0, ready: true });
-    };
-    measure();
-    let ro;
-    if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(measure); ro.observe(el); }
-    window.addEventListener('resize', measure);
-    return () => { if (ro) ro.disconnect(); window.removeEventListener('resize', measure); };
-  }, [children]);
-  return (
-    <div ref={ref}
-      className={'pm-sub' + (className ? ' ' + className : '') + (pos.flipLeft ? ' left' : '')}
-      style={{ top: pos.top, maxHeight: pos.maxH || undefined, visibility: pos.ready ? undefined : 'hidden' }}
-      onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
-      {children}
-    </div>
-  );
-}
 
 function DropOverlay() {
   return createPortal(
@@ -85,17 +53,20 @@ function ActiveChip({ icon, label, onRemove }) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, stopping = false, models, modelsReady = true,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, sandbox, sandboxAllowed = true, onToggleSandbox, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, onOpenProject, projects = [], onSetProject, savedPrompts = [], onUsePrompt, onSavePrompt, onDeletePrompt, onNewChat, onShortcuts,
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, onOpenProject, projects = [], onSetProject, onNewChat, onShortcuts,
   voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall, callActive = false,
   safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
   conversationEnded = false, endedReason = '',
   removedModel = null, skills = [], onToggleSkill = null, onManageSkills = null,
   queueCount = 0, onQueue, onSteer, canSteer = false, onManageConnectors = null, attachCombo = '',
-  compareIds = [], onSetCompare, hideModelPicker = false, chipsBelow = false, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
-  ctxGauge = null, enterSend = false, draftId, panel = null
+  compareIds = [], onSetCompare, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
+  contextRing = null, thread = false, footer = null, draftId, panel = null, jump = null
 }) {
   const composerPlaceholder = useThemeText('composer.placeholder', t('How can I help you today?'));
+  const layout = useLayout();
+  const chipsBelow = layout.toolChips === 'below';
+  const enterSend = thread && layout.sendIcon === 'enter';
   const ta = useRef(null);
   const fileInput = useRef(null);
   const plusRef = useRef(null);
@@ -113,6 +84,39 @@ export default function Composer({
   const [plusDown, setPlusDown] = useState(false);
   const sub = useSubmenus();
   const { closeAll: closeSubs } = sub;
+  const [voiceMenu, setVoiceMenu] = useState(false);
+  const voiceRef = useRef(null);
+  useDismiss(voiceMenu, () => setVoiceMenu(false), voiceRef);
+  const rootRef = useRef(null);
+  const placeFooter = useCallback(() => {
+    const root = rootRef.current;
+    const foot = root && root.querySelector('.disclaimer');
+    if (!foot) return;
+    if (window.matchMedia('(max-width: 768px)').matches) {
+      foot.style.maxWidth = '';
+      root.style.setProperty('--foot-shift', '0px');
+      return;
+    }
+    const rb = root.getBoundingClientRect();
+    const rightOf = el => el.getBoundingClientRect().right - rb.left;
+    const leftBound = Math.max(0, ...[...root.querySelectorAll('.plus-wrap, .mic, .voice-wrap')].map(rightOf)) + 8;
+    const rightBound = Math.min(rb.width - 8, ...[...root.querySelectorAll('.model-select, .chat-ring')].map(el => el.getBoundingClientRect().left - rb.left)) - 8;
+    const avail = Math.max(0, rightBound - leftBound);
+    foot.style.maxWidth = avail + 'px';
+    const w = Math.min(foot.scrollWidth, avail);
+    const center = rb.width / 2;
+    let c = center;
+    if (c + w / 2 > rightBound) c = rightBound - w / 2;
+    if (c - w / 2 < leftBound) c = leftBound + w / 2;
+    root.style.setProperty('--foot-shift', (c - center) + 'px');
+  }, []);
+  useLayoutEffect(() => { placeFooter(); });
+  useLayoutEffect(() => {
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(placeFooter) : null;
+    if (ro) ro.observe(rootRef.current);
+    window.addEventListener('resize', placeFooter);
+    return () => { if (ro) ro.disconnect(); window.removeEventListener('resize', placeFooter); };
+  }, [placeFooter]);
   useEffect(() => { if (!plusMenu) closeSubs(); }, [plusMenu, closeSubs]);
   // Picking something in a submenu is the end of that errand, so the whole menu goes away.
   const closePlusMenu = useCallback(() => { closeSubs(); setPlusMenu(false); }, [closeSubs]);
@@ -139,7 +143,7 @@ export default function Composer({
       setPlusDown(window.innerHeight - r.bottom > 320);
     }
   }, [plusMenu]);
-  useDismiss(plusMenu, () => setPlusMenu(false), plusRef);
+  useDismiss(plusMenu, () => setPlusMenu(false), plusRef, { inside: '.pm-flyout' });
 
   const grewOnce = useRef(false);
   const fitWidth = useRef(0);
@@ -250,10 +254,8 @@ export default function Composer({
   const slashCmds = [];
   if (slashActive) {
     if (onNewChat) slashCmds.push({ id: 'new', label: t('New chat'), icon: <NewChatIcon style={{ width: 16 }} />, run: () => { onChange(''); onNewChat(); } });
-    if (sandboxAllowed && onToggleSandbox) slashCmds.push({ id: 'sandbox', label: t('Sandbox tools'), sub: sandbox ? t('Disable') : t('Enable'), icon: <Cube style={{ width: 16 }} />, run: () => { onChange(''); onToggleSandbox(); } });
     if (webSearchAvailable && onToggleWebSearch) slashCmds.push({ id: 'web', label: t('Web search'), sub: webSearch ? t('Disable') : t('Enable'), icon: <Globe style={{ width: 16 }} />, run: () => { onChange(''); onToggleWebSearch(); } });
     if (onShortcuts) slashCmds.push({ id: 'keys', label: t('Keyboard shortcuts'), icon: <Sliders style={{ width: 16 }} />, run: () => { onChange(''); onShortcuts(); } });
-    for (const p of (savedPrompts || [])) slashCmds.push({ id: 'p' + p.id, label: p.title, sub: t('Prompt'), icon: <Star style={{ width: 16 }} />, run: () => { onUsePrompt && onUsePrompt(p.text); } });
   }
   const slashShown = slashCmds.filter(c => c.label.toLowerCase().includes(slashQuery));
   const slashOpen = slashActive && slashShown.length > 0;
@@ -269,29 +271,6 @@ export default function Composer({
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
   }
   const activeModel = models?.find(m => m.id === currentId) || null;
-  const [improving, setImproving] = useState(false);
-  const improvedRef = useRef(null);
-  useEffect(() => {
-    if (improvedRef.current && value !== improvedRef.current.improved) improvedRef.current = null;
-  }, [value]);
-  async function improvePrompt() {
-    if (improving) return;
-    if (improvedRef.current && value === improvedRef.current.improved) {
-      const orig = improvedRef.current.original;
-      improvedRef.current = null;
-      onChange(orig);
-      return;
-    }
-    const text = value.trim();
-    if (!text) return;
-    setImproving(true);
-    try {
-      const r = await api.post('/api/improve-prompt', { text, modelId: currentId });
-      if (r.text) { improvedRef.current = { original: value, improved: r.text }; onChange(r.text); }
-    } catch (e) { toast(e.message || t('Could not improve the prompt.')); }
-    setImproving(false);
-  }
-  const improvedNow = !!(improvedRef.current && value === improvedRef.current.improved);
   const unavailable = !!activeModel?.unavailable;
   const blockSend = (unavailable && !canUseUnavailable) || !!removedModel;
   const sunsetInfo = (() => {
@@ -325,9 +304,11 @@ export default function Composer({
   const budgetState = budget && budget.cap ? budget.state : 'none';
   const budgetBlock = budgetState === 'over' && budget?.enforce && !canUseUnavailable;
   const showBudgetBanner = budgetState === 'warn' || budgetState === 'over';
-  const sunsetOnly = !!sunsetInfo && !bannerMounted && !showBudgetBanner && !safetyFlagged && !conversationEnded && !removedModel && !panel;
+  const otherBanner = showBudgetBanner || safetyFlagged || conversationEnded || removedModel || panel;
+  const anyBanner = bannerMounted || otherBanner || sunsetInfo;
+  const onlyUnavailable = !otherBanner && !sunsetInfo;
+  const sunsetOnly = !!sunsetInfo && !bannerMounted && !otherBanner;
   const activeTools = [];
-  if (sandboxAllowed && sandbox) activeTools.push({ id: 'sandbox', icon: <Cube />, label: t("Sandbox tools"), off: () => onToggleSandbox && onToggleSandbox() });
   if (webSearchAvailable && webSearch) activeTools.push({ id: 'websearch', icon: <Globe />, label: t("Web search"), off: () => onToggleWebSearch && onToggleWebSearch() });
   for (const sk of skills) if (sk.enabled) activeTools.push({ id: 'skill:' + sk.id, icon: <SkillIcon />, label: sk.name, off: () => onToggleSkill && onToggleSkill(sk) });
   if (onSelectStyle && styleId && styleId !== 'normal') activeTools.push({ id: 'style', icon: <Sliders />, label: styleNameFor(styleId, styles), off: () => onSelectStyle('normal') });
@@ -339,10 +320,11 @@ export default function Composer({
   const fmtUsd = (n) => '$' + (Number(n || 0) > 0 && Number(n || 0) < 0.01 ? Number(n).toFixed(4) : Number(n || 0).toFixed(2));
 
   return (
-    <div className={'composer-stack' + ((bannerMounted || showBudgetBanner || safetyFlagged || conversationEnded || removedModel || sunsetInfo || panel) ? ' has-banner' : '')}>
+    <div className={'composer-stack' + (anyBanner ? ' has-banner' : '')}>
     {dragActive && <DropOverlay />}
-    {(bannerMounted || showBudgetBanner || safetyFlagged || conversationEnded || removedModel || sunsetInfo || panel) && (
-      <div className={'unavail-bg' + (bannerOut && !showBudgetBanner && !safetyFlagged && !conversationEnded && !removedModel && !sunsetInfo && !panel ? ' out' : '')}
+    {jump}
+    {anyBanner && (
+      <div className={'unavail-bg' + (bannerOut && onlyUnavailable ? ' out' : '')}
         style={sunsetOnly ? {
           background: `color-mix(in srgb, #e5484d ${sunsetInfo.mix}%, var(--bg))`,
           borderColor: `color-mix(in srgb, #e5484d ${Math.min(70, sunsetInfo.mix + 12)}%, var(--border-soft))`,
@@ -360,7 +342,7 @@ export default function Composer({
       <div className={'unavail-banner sunset-banner' + (sunsetOnly ? '' : ' pill')} style={sunsetOnly ? undefined : { background: `color-mix(in srgb, #e5484d ${sunsetInfo.mix}%, transparent)` }}>
         <div className="unavail-row">
           <span className="unavail-msg sunset-msg">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="3.5" y="5" width="17" height="16" rx="2.5" /><path d="M8 3v4M16 3v4M3.5 10h17" /></svg>
+            <Calendar />
             <span><strong>{sunsetInfo.name}</strong> {t('is going away {date}.', { date: sunsetInfo.date })}</span>
           </span>
         </div>
@@ -405,7 +387,7 @@ export default function Composer({
       </div>
     )}
     {panel}
-    <div className={cls} style={{ '--glow': glow }}>
+    <div className={cls} style={{ '--glow': glow }} ref={rootRef}>
       {files.length > 0 && (
         <div className="attach-row">
           {files.map(f => (
@@ -413,19 +395,19 @@ export default function Composer({
               {f.preview
                 ? <img src={f.preview} alt={f.name} />
                 : (
-                  <div className="attach-file" title={f.name}>
+                  <div className="attach-file" data-tip={f.name}>
                     <div className="attach-name">{f.name}</div>
                     <div className="attach-foot">
                       <span className="attach-type">{extLabel(f.name)}</span>
                     </div>
                   </div>
                 )}
-              <button className="attach-x" onClick={() => removeFile(f.id)} title={t("Remove")} aria-label={t("Remove")}><X /></button>
+              <button className="attach-x" onClick={() => removeFile(f.id)} data-tip={t("Remove")} aria-label={t("Remove")}><X /></button>
             </div>
           ))}
         </div>
       )}
-      {upErr && <div className="attach-err">{upErr}</div>}
+      {upErr && <div className="attach-err">{upErr === NO_VISION ? t('This model cannot see images, so they were left out.') : upErr}</div>}
       {slashOpen && (
         <div className="slash-menu">
           <div className="slash-head">{t("Commands")}</div>
@@ -441,10 +423,10 @@ export default function Composer({
       {canSteer && (
         <div className="steer-row">
           <div className="steer-seg">
-            <button className={steerMode ? 'on' : ''} onClick={() => setSteerMode(true)} title={t('Correct the reply that is being written right now')}>
+            <button className={steerMode ? 'on' : ''} onClick={() => setSteerMode(true)} data-tip={t('Correct the reply that is being written right now')}>
               <Steer style={{ width: 13 }} /> {t('Steer')}
             </button>
-            <button className={!steerMode ? 'on' : ''} onClick={() => setSteerMode(false)} title={t('Send after this reply finishes')}>
+            <button className={!steerMode ? 'on' : ''} onClick={() => setSteerMode(false)} data-tip={t('Send after this reply finishes')}>
               {t('Queue')}{queueCount > 0 ? ` (${queueCount})` : ''}
             </button>
           </div>
@@ -457,12 +439,11 @@ export default function Composer({
       <input ref={fileInput} type="file" multiple hidden onChange={pickFiles}
         {...(FILE_ACCEPT ? { accept: (visionSupported ? 'image/*,' : '') + FILE_ACCEPT } : {})} />
       {safetyChecking && safetyVerbose && <div className="safety-checking shimmer">{t("Safety check…")}</div>}
-      {improving && <div className="safety-checking shimmer">{t("Improving prompt…")}</div>}
       {compareIds.length > 0 && (
         <div className="queued-chip compare-chip">
           <span className="queued-label">{t("Compare:")}</span>
           <span className="queued-text">{[models?.find(m => m.id === currentId)?.displayName || t('Current'), ...compareIds.map(id => models?.find(m => m.id === id)?.displayName || id)].join(' · ')}</span>
-          <button className="queued-x" title={t("Cancel comparison")} onClick={() => onSetCompare?.([])}><X style={{ width: 12 }} /></button>
+          <button className="queued-x" data-tip={t("Cancel comparison")} aria-label={t("Cancel comparison")} onClick={() => onSetCompare?.([])}><X style={{ width: 12 }} /></button>
         </div>
       )}
       <div className="composer-bar">
@@ -483,154 +464,111 @@ export default function Composer({
                 </button>
                 {captureAvailable && (
                   <button className="pm-item" onClick={onScreenshot} disabled={!canScreenshot || capturing}
-                    title={canScreenshot ? undefined : t("This model can't read images.")}>
+                    data-tip={canScreenshot ? undefined : t("This model can't read images.")}>
                     <Screenshot />
                     <span className="pm-label">{t('Take a screenshot')}</span>
                   </button>
                 )}
                 {onSetProject && (
-                  <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('project')} onMouseLeave={sub.hoverClose}>
-                    <button className={'pm-item' + (sub.isOpen('project') ? ' active' : '')} onClick={() => sub.toggle('project')}>
-                      <Box />
-                      <span className="pm-label">{t('Add to project')}</span>
-                      <Chevron className="pm-chev" />
-                    </button>
-                    {sub.isOpen('project') && (
-                      <PmSub onMouseEnter={() => sub.hoverOpen('project')} onMouseLeave={sub.hoverClose}>
-                        {projects.length === 0 && <div className="pm-empty">{t('No projects yet')}</div>}
-                        {projects.map(p => (
-                          <button key={p.id} className={'pm-item' + (project && p.id === project.id ? ' active' : '')}
-                            onClick={() => { onSetProject(p); closePlusMenu(); }}>
-                            <Box />
-                            <span className="pm-label">{p.name}</span>
-                          </button>
-                        ))}
-                        {project && onClearProject && (
-                          <button className="pm-item" onClick={() => { onClearProject(); closePlusMenu(); }}>
-                            <span className="pm-label">{t('Remove from project')}</span>
-                          </button>
-                        )}
-                      </PmSub>
+                  <SubItem id="project" sub={sub} wrapClass="pm-subwrap" flyoutClass="plus-menu pm-flyout"
+                    trigger={({ open, onClick }) => (
+                      <button className={'pm-item' + (open ? ' active' : '')} onClick={onClick}>
+                        <Box />
+                        <span className="pm-label">{t('Add to project')}</span>
+                        <Chevron className="pm-chev" />
+                      </button>
+                    )}>
+                    <div className="pm-head">{t('Add to project')}</div>
+                    {projects.length === 0 && <div className="pm-empty">{t('No projects yet')}</div>}
+                    {projects.map(p => (
+                      <button key={p.id} className="pm-item pm-opt" onClick={() => onSetProject(p)}>
+                        <Box />
+                        <span className="pm-label">{p.name}</span>
+                        {project && p.id === project.id && <Check className="pm-check" />}
+                      </button>
+                    ))}
+                    {project && onClearProject && (
+                      <button className="pm-item pm-opt" onClick={() => onClearProject()}>
+                        <span className="pm-label">{t('Remove from project')}</span>
+                      </button>
                     )}
-                  </div>
+                  </SubItem>
                 )}
                 <div className="pm-divider" />
-                <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('prompts')} onMouseLeave={sub.hoverClose}>
-                  <button className={'pm-item' + (sub.isOpen('prompts') ? ' active' : '')} onClick={() => sub.toggle('prompts')}>
-                    <TextIcon />
-                    <span className="pm-label">{t("Saved prompts")}</span>
-                    <Chevron className="pm-chev" />
-                  </button>
-                  {sub.isOpen('prompts') && (
-                    <PmSub onMouseEnter={() => sub.hoverOpen('prompts')} onMouseLeave={sub.hoverClose}>
-                      {(savedPrompts || []).length === 0 && <div className="pm-empty">{t("No saved prompts yet.")}</div>}
-                      {(savedPrompts || []).map(p => (
-                        <div key={p.id} className="pm-prompt">
-                          <button className="pm-prompt-use" title={p.text} onClick={() => { setPlusMenu(false); onUsePrompt && onUsePrompt(p.text); }}>
-                            <Star style={{ width: 13 }} /> <span className="pm-prompt-title">{p.title}</span>
-                          </button>
-                          {onDeletePrompt && <button className="pm-prompt-x" title={t("Delete")} onClick={(e) => { e.stopPropagation(); onDeletePrompt(p.id); }}><X style={{ width: 12 }} /></button>}
-                        </div>
-                      ))}
-                      {onSavePrompt && hasText && (
-                        <button className="pm-save-prompt" onClick={() => { onSavePrompt(); sub.closeAll(); }}>
-                          <Plus style={{ width: 13 }} /> {t('Save current text as prompt')}
-                        </button>
-                      )}
-                    </PmSub>
-                  )}
-                </div>
                 {onSelectStyle && (
-                  <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('styles')} onMouseLeave={sub.hoverClose}>
-                    <button className={'pm-item' + (sub.isOpen('styles') ? ' active' : '')} onClick={() => sub.toggle('styles')}>
-                      <Sliders />
-                      <span className="pm-label">{t("Response style")}</span>
-                      <span className="pm-note">{styleNameFor(styleId, styles)}</span>
-                      <Chevron className="pm-chev" />
-                    </button>
-                    {sub.isOpen('styles') && (
-                      <PmSub className="styles" onMouseEnter={() => sub.hoverOpen('styles')} onMouseLeave={sub.hoverClose}>
-                        <StyleSubmenu styles={styles} stylesReady={modelsReady} styleId={styleId} currentId={currentId} onSaveStyles={onSaveStyles}
-                          onSelect={(id) => { onSelectStyle && onSelectStyle(id); closePlusMenu(); }} />
-                      </PmSub>
-                    )}
-                  </div>
+                  <SubItem id="styles" sub={sub} wrapClass="pm-subwrap" flyoutClass="plus-menu pm-flyout"
+                    trigger={({ open, onClick }) => (
+                      <button className={'pm-item' + (open ? ' active' : '')} onClick={onClick}>
+                        <Sliders />
+                        <span className="pm-label">{t("Response style")}</span>
+                        <span className="pm-note">{styleNameFor(styleId, styles)}</span>
+                        <Chevron className="pm-chev" />
+                      </button>
+                    )}>
+                    <StyleSubmenu styles={styles} stylesReady={modelsReady} styleId={styleId} currentId={currentId} onSaveStyles={onSaveStyles}
+                      onSelect={(id) => onSelectStyle(id)} />
+                  </SubItem>
                 )}
-                <button className="pm-item" disabled={improving || (!hasText && !improvedNow)}
-                  onClick={() => { setPlusMenu(false); improvePrompt(); }}>
-                  <Wand />
-                  <span className="pm-label">{improvedNow ? t('Restore original prompt') : t('Improve prompt')}</span>
-                </button>
                 {onSetCompare && models && models.length > 1 && (
-                  <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('compare')} onMouseLeave={sub.hoverClose}>
-                    <button className={'pm-item' + (sub.isOpen('compare') ? ' active' : '')} onClick={() => sub.toggle('compare')}>
-                      <Cube />
-                      <span className="pm-label">{t("Compare models")}</span>
-                      {compareIds.length > 0 && <span className="pm-note">+{compareIds.length}</span>}
-                      <Chevron className="pm-chev" />
-                    </button>
-                    {sub.isOpen('compare') && (
-                      <PmSub className="styles" onMouseEnter={() => sub.hoverOpen('compare')} onMouseLeave={sub.hoverClose}>
-                        <div className="style-menu-label">{t("Also answer with")}</div>
-                        {models.filter(m => m.id !== currentId).map(m => {
-                          const on = compareIds.includes(m.id);
-                          return (
-                            <button key={m.id} className={'style-item' + (on ? ' active' : '')}
-                              onClick={() => onSetCompare(on ? compareIds.filter(x => x !== m.id) : (compareIds.length < 2 ? [...compareIds, m.id] : compareIds))}>
-                              <span className="style-item-name">{m.displayName || m.id}</span>
-                              {on && <Check style={{ width: 14 }} />}
-                            </button>
-                          );
-                        })}
-                        <div className="style-menu-label" style={{ textTransform: 'none', letterSpacing: 0 }}>{t("Pick up to 2 extra models. Your next message will be answered by each as versions of one response.")}</div>
-                      </PmSub>
-                    )}
-                  </div>
+                  <SubItem id="compare" sub={sub} wrapClass="pm-subwrap" flyoutClass="plus-menu pm-flyout"
+                    trigger={({ open, onClick }) => (
+                      <button className={'pm-item' + (open ? ' active' : '')} onClick={onClick}>
+                        <Cube />
+                        <span className="pm-label">{t("Compare models")}</span>
+                        {compareIds.length > 0 && <span className="pm-note">+{compareIds.length}</span>}
+                        <Chevron className="pm-chev" />
+                      </button>
+                    )}>
+                    <div className="pm-head">{t("Also answer with")}</div>
+                    {models.filter(m => m.id !== currentId).map(m => {
+                      const on = compareIds.includes(m.id);
+                      return (
+                        <button key={m.id} className="pm-item pm-opt"
+                          onClick={() => onSetCompare(on ? compareIds.filter(x => x !== m.id) : (compareIds.length < 2 ? [...compareIds, m.id] : compareIds))}>
+                          <span className="pm-label">{m.displayName || m.id}</span>
+                          {on && <Check className="pm-check" />}
+                        </button>
+                      );
+                    })}
+                    <div className="pm-foot">{t("Pick up to 2 extra models. Your next message will be answered by each as versions of one response.")}</div>
+                  </SubItem>
                 )}
                 <div className="pm-divider" />
-                <div className="pm-subwrap" onMouseEnter={() => sub.hoverOpen('skills')} onMouseLeave={sub.hoverClose}>
-                  <button className={'pm-item' + (sub.isOpen('skills') ? ' active' : '')} onClick={() => sub.toggle('skills')}>
-                    <SkillIcon />
-                    <span className="pm-label">{t('Skills')}</span>
-                    <Chevron className="pm-chev" />
+                <SubItem id="skills" sub={sub} wrapClass="pm-subwrap" flyoutClass="plus-menu pm-flyout"
+                  trigger={({ open, onClick }) => (
+                    <button className={'pm-item' + (open ? ' active' : '')} onClick={onClick}>
+                      <SkillIcon />
+                      <span className="pm-label">{t('Skills')}</span>
+                      <Chevron className="pm-chev" />
+                    </button>
+                  )}>
+                  <div className="pm-head">{t('Skills')}</div>
+                  {skills.length === 0 && <div className="pm-empty">{t('No skills yet')}</div>}
+                  {skills.map(sk => (
+                    <button key={sk.id} className="pm-item pm-opt" data-tip={sk.description || sk.name}
+                      onClick={() => onToggleSkill && onToggleSkill(sk)}>
+                      <SkillIcon />
+                      <span className="pm-label">{sk.name}</span>
+                      {sk.enabled && <Check className="pm-check" />}
+                    </button>
+                  ))}
+                  <div className="pm-divider" />
+                  <button className="pm-item pm-opt" onClick={() => { closePlusMenu(); onManageSkills && onManageSkills(); }}>
+                    <Sliders />
+                    <span className="pm-label">{t('Manage skills')}</span>
                   </button>
-                  {sub.isOpen('skills') && (
-                    <PmSub onMouseEnter={() => sub.hoverOpen('skills')} onMouseLeave={sub.hoverClose}>
-                      {skills.length === 0 && <div className="pm-empty">{t('No skills yet')}</div>}
-                      {skills.map(sk => (
-                        <button key={sk.id} className="pm-item" title={sk.description || sk.name}
-                          onClick={() => { onToggleSkill && onToggleSkill(sk); closePlusMenu(); }}>
-                          <SkillIcon />
-                          <span className="pm-label">{sk.name}</span>
-                          {sk.enabled && <Check className="pm-check" />}
-                        </button>
-                      ))}
-                      <div className="pm-divider" />
-                      <button className="pm-item" onClick={() => { closePlusMenu(); onManageSkills && onManageSkills(); }}>
-                        <Sliders />
-                        <span className="pm-label">{t('Manage skills')}</span>
-                      </button>
-                      <button className="pm-item" onClick={() => { closePlusMenu(); onManageSkills && onManageSkills('browse'); }}>
-                        <Plus />
-                        <span className="pm-label">{t('Browse skills')}</span>
-                      </button>
-                    </PmSub>
-                  )}
-                </div>
+                  <button className="pm-item pm-opt" onClick={() => { closePlusMenu(); onManageSkills && onManageSkills('browse'); }}>
+                    <Plus />
+                    <span className="pm-label">{t('Browse skills')}</span>
+                  </button>
+                </SubItem>
                 {onManageConnectors && (
                   <button className="pm-item" onClick={() => { closePlusMenu(); onManageConnectors(); }}>
                     <Plug />
-                    <span className="pm-label">{t('Add connector')}</span>
+                    <span className="pm-label">{t('MCP')}</span>
                   </button>
                 )}
-                {(sandboxAllowed || webSearchAvailable) && <div className="pm-divider" />}
-                {sandboxAllowed && (
-                  <button className="pm-item" onClick={() => { onToggleSandbox && onToggleSandbox(); closePlusMenu(); }}>
-                    <Cube />
-                    <span className="pm-label">{t("Sandbox tools")}</span>
-                    {sandbox && <Check className="pm-check" />}
-                  </button>
-                )}
+                {webSearchAvailable && <div className="pm-divider" />}
                 {webSearchAvailable && (
                   <button className="pm-item" onClick={() => { onToggleWebSearch && onToggleWebSearch(); closePlusMenu(); }}>
                     <Globe />
@@ -645,27 +583,31 @@ export default function Composer({
           {project && (
             <div className="composer-project">
               {onOpenProject ? (
-                <button type="button" className="cp-open" onClick={() => onOpenProject(project.id)} title={t('Open project {name}', { name: project.name })}>
+                <button type="button" className="cp-open" onClick={() => onOpenProject(project.id)} data-tip={t('Open project {name}', { name: project.name })}>
                   <Box style={{ width: 14 }} />
                   <span className="cp-name">{project.name}</span>
                 </button>
               ) : (
-                <span className="cp-open" title={t('In project: {name}', { name: project.name })}>
+                <span className="cp-open" data-tip={t('In project: {name}', { name: project.name })}>
                   <Box style={{ width: 14 }} />
                   <span className="cp-name">{project.name}</span>
                 </span>
               )}
-              {onClearProject && <button className="cp-x" onClick={onClearProject} title={t("Remove from project")}><X style={{ width: 12 }} /></button>}
+              {onClearProject && <button className="cp-x" onClick={onClearProject} data-tip={t("Remove from project")} aria-label={t("Remove from project")}><X style={{ width: 12 }} /></button>}
             </div>
           )}
         </div>
         <div className="composer-right">
-          {ctxGauge}
-          {!hideModelPicker && <ModelDropdown models={models} modelsReady={modelsReady} currentId={currentId} onSelect={onSelect}
-            extended={extended} onToggleExtended={onToggleExtended} up={modelUp} isAdmin={canUseUnavailable}
-            reasoningEffort={reasoningEffort} onSetEffort={onSetEffort}
-            kwargValues={kwargValues} onSetKwarg={onSetKwarg}
-            modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />}
+          <ModelPickerSlot at="composer">
+            <div className="model-slot">
+              <ModelDropdown models={models} modelsReady={modelsReady} currentId={currentId} onSelect={onSelect}
+                extended={extended} onToggleExtended={onToggleExtended} up={modelUp} isAdmin={canUseUnavailable}
+                reasoningEffort={reasoningEffort} onSetEffort={onSetEffort}
+                kwargValues={kwargValues} onSetKwarg={onSetKwarg}
+                modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />
+              {contextRing}
+            </div>
+          </ModelPickerSlot>
           {voiceMic && (
             <Tip label={dictating ? t('Stop dictation') : transcribing ? t('Transcribing…') : t('Dictate')}>
               <button className={'mic' + (dictating ? ' rec' : '') + (transcribing ? ' busy' : '')} onClick={toggleDictation}
@@ -674,25 +616,48 @@ export default function Composer({
               </button>
             </Tip>
           )}
+          {thread && layout.id === 'card' && (voiceMic || voiceCall) && (
+            <div className="voice-wrap" ref={voiceRef}>
+              <button type="button" className={'voice-trigger' + (voiceMenu ? ' on' : '')} onClick={() => setVoiceMenu(m => !m)}
+                aria-label={t('Voice options')} data-tip={t('Voice options')} aria-haspopup="menu" aria-expanded={voiceMenu}>
+                <ChevDown style={{ width: 14, height: 14 }} />
+              </button>
+              {voiceMenu && (
+                <div className="plus-menu voice-menu" role="menu">
+                  {voiceMic && (
+                    <button type="button" role="menuitemradio" aria-checked="true" className="pm-item" onClick={() => { setVoiceMenu(false); toggleDictation(); }}>
+                      <Mic /><span className="pm-label">{t('Dictate')}</span><Check className="pm-check" />
+                    </button>
+                  )}
+                  {voiceCall && (
+                    <button type="button" role="menuitem" className="pm-item" onClick={() => { setVoiceMenu(false); onStartCall && onStartCall(); }}>
+                      <Wave /><span className="pm-label">{callActive ? t('End call') : t('Voice mode')}</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           {steering && hasText && (
-            <button key="steer" className="send steer" onClick={doSend} title={t('Steer this reply')}><Steer style={{ width: 20, height: 20 }} /></button>
+            <button key="steer" className="send steer" onClick={doSend} data-tip={t('Steer this reply')} aria-label={t('Steer this reply')}><Steer style={{ width: 20, height: 20 }} /></button>
           )}
           {streaming ? (
             <button key="stop" className={'send stop' + (stopping ? ' stopping' : '')} onClick={onStop} disabled={stopping}
-              title={stopping ? t('Stopping, finishing the step in progress') : t('Stop generating')} aria-label={t('Stop generating')}><Stop style={{ width: 20, height: 20 }} /></button>
+              data-tip={stopping ? t('Stopping, finishing the step in progress') : t('Stop generating')} aria-label={t('Stop generating')}><Stop style={{ width: 20, height: 20 }} /></button>
           ) : safetyChecking ? (
-            <button key="send" className={'send' + (safetyVerbose ? ' checking' : ' quiet')} disabled aria-label={t('Send message')} title={safetyVerbose ? t('Safety check…') : undefined}><Up style={{ width: 20, height: 20 }} /></button>
+            <button key="send" className={'send' + (safetyVerbose ? ' checking' : ' quiet')} disabled aria-label={t('Send message')} data-tip={safetyVerbose ? t('Safety check…') : undefined}><Up style={{ width: 20, height: 20 }} /></button>
           ) : canSend ? (
             <button key="send" className={'send' + (enterSend ? ' enter' : '')} onClick={doSend} disabled={uploading} aria-label={t('Send message')}>
               {enterSend ? <Enter style={{ width: 20, height: 20 }} /> : <Up style={{ width: 20, height: 20 }} />}
             </button>
-          ) : voiceCall ? (
+          ) : voiceCall && (!thread || layout.id !== 'card') ? (
             <Tip label={callActive ? t("End call") : t("Start a voice call")}><button key="call" className={'mic call' + (callActive ? ' on' : '')} onClick={onStartCall} aria-label={callActive ? t("End call") : t("Start a voice call")} aria-pressed={callActive}>{callActive ? <X style={{ width: 18, height: 18 }} /> : <Wave style={{ width: 20, height: 20 }} />}</button></Tip>
           ) : (
-            <button key="send" className="send ghost" disabled aria-label={t('Send message')}><Up style={{ width: 20, height: 20 }} /></button>
+            <button key="send" className={enterSend ? 'send enter' : 'send ghost'} disabled aria-label={t('Send message')}>{enterSend ? <Enter style={{ width: 20, height: 20 }} /> : <Up style={{ width: 20, height: 20 }} />}</button>
           )}
         </div>
       </div>
+      {footer}
       {chipsBelow && activeTools.length > 0 && <div className="composer-chips">{chips}</div>}
     </div>
     </div>

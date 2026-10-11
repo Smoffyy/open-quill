@@ -43,6 +43,7 @@ const TABLE_SCANS = [
   { file: 'components/dialogs/ShortcutsModal.jsx', re: /\[\s*'((?:[^'\\]|\\.)*)'\s*,\s*\[/g },
   { file: 'lib/keybinds.js', re: /\b(?:label|group):\s*'((?:[^'\\]|\\.)*)'/g },
   { file: 'lib/playground.js', re: /\b(?:label|hint):\s*'((?:[^'\\]|\\.)*)'/g },
+  { file: 'lib/presets.js', re: /\blabel:\s*'((?:[^'\\]|\\.)*)'/g },
 ];
 
 function walk(dir, keys) {

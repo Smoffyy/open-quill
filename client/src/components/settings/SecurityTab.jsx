@@ -119,7 +119,7 @@ function TwoFactor({ user, onUpdated }) {
             value={password} onChange={(e) => setPassword(e.target.value)} />
           <div className="edit-actions">
             <button className="btn ghost" onClick={regenerate} disabled={!password}>{t("Regenerate recovery codes")}</button>
-            <button className="btn danger" onClick={disable} disabled={!password}>{t("Disable two-factor")}</button>
+            <button className="btn ghost" onClick={disable} disabled={!password}>{t("Disable two-factor")}</button>
           </div>
         </>
       )}
@@ -163,13 +163,13 @@ function Sessions() {
                 .filter(Boolean).join(' · ')}
             </div>
           </div>
-          {!s.current && <button className="btn danger" onClick={() => revoke(s.id)}>{t("Revoke")}</button>}
+          {!s.current && <button className="btn ghost" onClick={() => revoke(s.id)}>{t("Revoke")}</button>}
         </div>
       ))}
       {sessions && sessions.some(s => !s.current) && (
         <div className="field row">
           <div><label>{t("Revoke all other sessions")}</label><div className="muted-note">{t("Keeps this device signed in and ends every other session.")}</div></div>
-          <button className="btn danger" onClick={revokeOthers}>{t("Revoke others")}</button>
+          <button className="btn ghost" onClick={revokeOthers}>{t("Revoke others")}</button>
         </div>
       )}
     </div>

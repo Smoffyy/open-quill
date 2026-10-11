@@ -38,7 +38,7 @@ export function SubjectPicker({ models, subject, changed, onPick }) {
   return (
     <>
       <button type="button" className="pg-subject" aria-haspopup="menu" aria-expanded={!!menu}
-        title={t('Model under test')} onClick={(e) => setMenu(menu ? null : openAt(e))}>
+        data-tip={t('Model under test')} onClick={(e) => setMenu(menu ? null : openAt(e))}>
         {subject?.static_icon ? <ModelMark src={subject.static_icon} className="pg-lane-icon" /> : <span className="pg-lane-icon blank" aria-hidden="true"><Cube /></span>}
         <span className="pg-subject-name">{subject ? (subject.display_name || t('Untitled')) : t('Choose a model')}</span>
         {subject && changed.has(subject.id) && <span className="mc-flag">{t('edited')}</span>}
@@ -107,12 +107,12 @@ function LaneHead({ lane, row, index, wins, live, changes, onChange, onRemove, o
         {row
           ? <LaneName name={row.display_name} icon={row.static_icon} source={lane.source} />
           : <span className="pg-dim">{lane.source === 'live' ? t('Not released yet') : t('Model removed')}</span>}
-        {wins > 0 && <span className="pg-wins" title={t('{n} preferred', { n: wins })}><Check aria-hidden="true" />{wins}<span className="sr-only">{t('{n} preferred', { n: wins })}</span></span>}
+        {wins > 0 && <span className="pg-wins" data-tip={t('{n} preferred', { n: wins })}><Check aria-hidden="true" />{wins}<span className="sr-only">{t('{n} preferred', { n: wins })}</span></span>}
       </div>
       <div className="pg-lane-acts">
         {subject && n > 0 && (
           <Btn size="sm" kind="quiet" className="pg-unreleased" onClick={onReview}
-            title={t('Review and release the changes to this model')}>
+            data-tip={t('Review and release the changes to this model')}>
             {t('{n} unreleased', { n })}
           </Btn>
         )}
@@ -121,7 +121,7 @@ function LaneHead({ lane, row, index, wins, live, changes, onChange, onRemove, o
             {['draft', 'live'].map(s => (
               <button key={s} type="button" aria-pressed={lane.source === s}
                 disabled={s === 'live' && !live}
-                title={s === 'live' && !live ? t('Not released yet') : undefined}
+                data-tip={s === 'live' && !live ? t('Not released yet') : undefined}
                 onClick={() => onChange({ source: s })}>{t(SOURCE_LABEL[s])}</button>
             ))}
           </div>
@@ -165,7 +165,7 @@ export function LaneBar({ lanes, models, live, wins, changes, onLanes, onAdd, on
         ))}
       </div>
       <Btn size="sm" kind="quiet" disabled={full} aria-haspopup="menu" aria-expanded={!!menu}
-        title={full ? t('Up to {n} columns', { n: MAX_LANES }) : t('Run the same input against another version or model')}
+        data-tip={full ? t('Up to {n} columns', { n: MAX_LANES }) : t('Run the same input against another version or model')}
         onClick={(e) => setMenu(menu ? null : openAt(e))}>
         <Plus /> {t('Compare')}
       </Btn>

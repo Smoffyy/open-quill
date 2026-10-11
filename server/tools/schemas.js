@@ -1,3 +1,5 @@
+import { SANDBOX_READONLY } from './aliases.js';
+
 function fn(name, description, properties = {}, required = []) {
   return {
     type: 'function',
@@ -196,12 +198,19 @@ export function consultModelSchema(names = []) {
   }, ['model', 'question']);
 }
 
-export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, memoryOn = false, calculatorOn = false, todoOn = false, askUserOn = false, consultNames = [], hostEnv = null }) {
+export function recallSchema() {
+  return fn('recall', 'Search the earlier part of THIS conversation that is no longer in your context because it was folded into the conversation summary. Returns the matching messages word for word, and any image they contain at full quality. Use it when the summary is not detailed enough, for example to quote what the user said, to get exact names, numbers or code, or to look at an earlier image again (search for its name).', {
+    query: str('Words to look for in the earlier messages (case-insensitive).')
+  }, ['query']);
+}
+
+export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, memoryOn = false, calculatorOn = false, todoOn = false, askUserOn = false, recallOn = false, consultNames = [], hostEnv = null, readOnly = false }) {
   const out = [];
-  if (sandboxOn) out.push(...sandboxToolSchemas(hostEnv));
+  if (sandboxOn) out.push(...sandboxToolSchemas(hostEnv).filter(s => !readOnly || SANDBOX_READONLY.has(s.function.name)));
   if (webSearchOn) out.push(webSearchSchema());
   if (membankOn) out.push(...membankSchemas());
   if (chatSearchOn) out.push(...chatSearchSchemas());
+  if (recallOn) out.push(recallSchema());
   if (skillsOn) out.push(skillSchema());
   if (memoryOn) out.push(memorySchema());
   if (calculatorOn) out.push(calculatorSchema());

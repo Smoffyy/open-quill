@@ -36,7 +36,6 @@ export function railItems(list) {
       branchIndex: m.branchIndex || 0,
       branchCount: m.branchCount || 0,
       pinned: !!m.pinned,
-      excluded: !!m.excluded,
       streaming: !!m._streaming,
       preview: previewOf(m.content)
     });

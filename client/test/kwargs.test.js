@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   isRange,
+  kwargAccepts,
   clampToRange,
   allNumeric,
   kwargPayload,
@@ -11,7 +12,18 @@ import {
   gateOpen,
   kwargVisible,
   gateSourceIds,
-  KWARG_PRESETS
+  KWARG_PRESETS,
+  replayWhenOf,
+  replayValuesOf,
+  rangeSteps,
+  nearestStep,
+  kwargChip,
+  chipNumber,
+  rangeLabel,
+  kwargValuesArr,
+  stopLabel,
+  budgetMessageOff,
+  BUDGET_MESSAGE_TEXT
 } from '../src/lib/kwargs.js';
 
 // --- kwarg number ranges ---------------------------------------------------
@@ -120,14 +132,110 @@ test('an unresolvable or absent gate leaves the kwarg visible', () => {
 });
 
 test('the thinking budget preset matches the shape llama.cpp expects', () => {
-  const p = KWARG_PRESETS.find(x => x.key === 'thinking_budget_tokens').make();
-  assert.equal(p.name, 'thinking_budget_tokens');
+  assert.equal(KWARG_PRESETS.some(x => x.key === 'thinking_budget_tokens'), false);
+  const p = KWARG_PRESETS.find(x => x.key === 'reasoning_budget_tokens').make();
+  assert.equal(p.name, 'reasoning_budget_tokens');
   assert.equal(p.target, 'body', 'top level, not nested under extra_body');
   assert.equal(p.type, 'number');
-  assert.deepEqual([p.min, p.max, p.step, p.default], [1024, 8192, 1024, '1024']);
-  assert.equal(defaultValueOfKwarg(p), '1024');
+  assert.deepEqual([p.min, p.max, p.step, p.default], [1024, 16384, 1024, '4096']);
+  assert.equal(defaultValueOfKwarg(p), '4096');
   assert.equal(controlOfKwarg(p), 'range');
   const out = kwargPayload([p], resolveKwargs([p], { [p.id]: '5000' }, false));
-  assert.equal(out.thinking_budget_tokens, 5120, 'snapped to the 1024 grid');
+  assert.equal(out.reasoning_budget_tokens, 5120, 'snapped to the 1024 grid');
   assert.equal('extra_body' in out, false);
+});
+
+test('the budget message is sent beside the budget only while enabled and the budget is above 0', () => {
+  const budget = KWARG_PRESETS.find(x => x.key === 'reasoning_budget_tokens').make();
+  assert.deepEqual(kwargPayload([budget], resolveKwargs([budget], { [budget.id]: '4096' }, false)), { reasoning_budget_tokens: 4096 });
+  const on = { ...budget, budgetMessage: { ...budgetMessageOff(), enabled: true, text: BUDGET_MESSAGE_TEXT } };
+  const sent = kwargPayload([on], resolveKwargs([on], { [on.id]: '4096' }, false));
+  assert.equal(sent.reasoning_budget_message, BUDGET_MESSAGE_TEXT);
+  assert.equal(sent.reasoning_budget_tokens, 4096);
+  const levels = KWARG_PRESETS.find(x => x.key === 'reasoning_levels').make();
+  const levelsOn = { ...levels, budgetMessage: { ...budgetMessageOff(), enabled: true, text: BUDGET_MESSAGE_TEXT } };
+  assert.equal('reasoning_budget_message' in kwargPayload([levelsOn], resolveKwargs([levelsOn], { [levels.id]: '0' }, false)), false, 'Off sends no message');
+  const renamed = { ...on, budgetMessage: { ...on.budgetMessage, name: 'stop_note', target: 'chat_template_kwargs' } };
+  assert.equal(kwargPayload([renamed], resolveKwargs([renamed], { [renamed.id]: '4096' }, false)).chat_template_kwargs.stop_note, BUDGET_MESSAGE_TEXT);
+  const blank = { ...on, budgetMessage: { ...on.budgetMessage, name: '' } };
+  assert.equal('reasoning_budget_message' in kwargPayload([blank], resolveKwargs([blank], { [blank.id]: '4096' }, false)), false, 'a blank key sends nothing');
+});
+
+test('replay defaults match the server and an explicit blank opts out', () => {
+  assert.equal(replayWhenOf({ name: 'preserve_thinking' }), 'true');
+  assert.equal(replayWhenOf({ name: 'clear_thinking' }), 'false');
+  assert.equal(replayWhenOf({ name: 'enable_thinking' }), '');
+  assert.equal(replayWhenOf({ name: 'preserve_thinking', replayWhen: '' }), '');
+  assert.equal(replayWhenOf({ name: 'keep', replayWhen: 'on' }), 'on');
+  assert.deepEqual(replayValuesOf({ values: ['off', 'on'] }), ['off', 'on']);
+  assert.deepEqual(replayValuesOf({ parentId: 'p', rules: [{ when: 'true', value: 'true' }, { when: 'false', value: 'x', send: false }] }), ['true']);
+  assert.deepEqual(replayValuesOf({ min: 0, max: 10 }), []);
+  assert.equal(KWARG_PRESETS.find(p => p.key === 'preserve_thinking').make().replayWhen, 'true');
+  assert.equal(KWARG_PRESETS.find(p => p.key === 'clear_thinking').make().replayWhen, 'false');
+});
+
+test('a range becomes the step list the effort slider walks', () => {
+  const budget = { min: 512, max: 16384, step: 512 };
+  const steps = rangeSteps(budget);
+  assert.equal(steps.length, 32);
+  assert.deepEqual([steps[0], steps[1], steps[steps.length - 1]], ['512', '1024', '16384']);
+  assert.deepEqual(rangeSteps({ min: 0, max: 10, step: 3 }), ['0', '3', '6', '9', '10'], 'the max stays reachable off the grid');
+  assert.deepEqual(rangeSteps({ min: 0, max: 1, step: 0.25 }), ['0', '0.25', '0.5', '0.75', '1']);
+  assert.ok(rangeSteps({ min: 0, max: 100000, step: 1 }).length <= 402, 'a fine range is thinned so the slider stays usable');
+  assert.equal(nearestStep(steps, '4096'), 7);
+  assert.equal(nearestStep(steps, 5000), 9);
+  assert.equal(nearestStep(steps, 99999), 31);
+});
+
+test('a number slider chip follows the admin template, unit and 0 means off', () => {
+  const budget = KWARG_PRESETS.find(x => x.key === 'reasoning_budget_tokens').make();
+  assert.equal(kwargChip(budget, '0'), '', '0 means off leaves just the model name');
+  assert.equal(kwargChip(budget, '4096'), 'Thinking · 4K tokens');
+  assert.equal(kwargChip({ ...budget, chip: 'Thinking' }, '4096'), 'Thinking', 'no {value} means the word alone');
+  assert.equal(kwargChip({ ...budget, chip: '' }, '16384'), '16K tokens', 'no chip falls back to the number and unit');
+  assert.equal(kwargChip({ min: 0, max: 2, step: 0.1, chip: 'Temp {value}' }, '0'), 'Temp 0', 'without 0 means off, 0 is a value');
+  assert.equal(chipNumber('1536'), '1.5K');
+  assert.equal(chipNumber('512'), '512');
+  assert.equal(kwargChip({ values: ['low', 'medium', 'high'] }, 'medium'), 'Medium', 'step sliders are unchanged');
+});
+
+test('a number slider header reads Off at 0 and the full number with its unit', () => {
+  const budget = { min: 0, max: 16384, step: 1024, unit: 'tokens', zeroOff: true };
+  assert.equal(rangeLabel(budget, '0', 'Off'), 'Off');
+  assert.equal(rangeLabel(budget, '4096', 'Off'), (4096).toLocaleString() + ' tokens');
+  assert.equal(rangeLabel({ min: 0, max: 2, step: 0.1 }, '0', 'Off'), '0');
+  assert.equal(rangeLabel({ min: 0, max: 2, step: 0.1 }, '0.7', 'Off'), (0.7).toLocaleString());
+});
+
+test('a stored value is kept only when the model still accepts it, for sliders and lists alike', () => {
+  const budget = { min: 1024, max: 16384, step: 1024, values: [] };
+  assert.equal(kwargAccepts(budget, '8192'), true);
+  assert.equal(kwargAccepts(budget, '16384'), true);
+  assert.equal(kwargAccepts(budget, '20000'), false, 'above the admin maximum of another model');
+  assert.equal(kwargAccepts(budget, '1500'), false, 'off the step grid is reseeded to the default');
+  assert.equal(kwargAccepts(budget, null), false);
+  assert.equal(kwargAccepts({ values: ['low', 'high'] }, 'high'), true);
+  assert.equal(kwargAccepts({ values: ['low', 'high'] }, 'medium'), false);
+});
+
+test('labelled steps show their words in the picker and send their numbers', () => {
+  const levels = KWARG_PRESETS.find(x => x.key === 'reasoning_levels').make();
+  assert.equal(controlOfKwarg(levels), 'slider');
+  assert.deepEqual(kwargValuesArr(levels), ['0', '1024', '2048', '4096']);
+  assert.equal(stopLabel(levels, '2048'), 'Medium');
+  assert.equal(stopLabel(levels, '3000'), '3000', 'a number that is not a step keeps its digits');
+  assert.equal(defaultValueOfKwarg(levels), '2048');
+  assert.equal(kwargChip(levels, '0'), '', 'Off with 0 means off shows no chip');
+  assert.equal(kwargChip(levels, '1024'), 'Low', 'the preset chip is just the word');
+  assert.equal(kwargChip(levels, '0'), '', 'the step marked Off adds no chip');
+  const unmarked = { ...levels, stops: levels.stops.map(s => ({ ...s, off: false })) };
+  assert.equal(kwargChip(unmarked, '0'), 'Off', 'a step at 0 keeps its chip unless it is marked Off');
+  const out = kwargPayload([levels], resolveKwargs([levels], { [levels.id]: '4096' }, false));
+  assert.equal(out.reasoning_budget_tokens, 4096);
+  assert.equal(typeof out.reasoning_budget_tokens, 'number');
+});
+
+test('a chip template fills in its value for every kind of control', () => {
+  assert.equal(kwargChip({ values: ['low', 'high'], chip: 'Level {value}' }, 'high'), 'Level High');
+  assert.equal(kwargChip({ values: ['low', 'high'], chip: 'Level' }, 'high'), 'Level');
 });

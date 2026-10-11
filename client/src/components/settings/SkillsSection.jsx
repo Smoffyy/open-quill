@@ -86,7 +86,7 @@ function SkillDetail({ skill, onBack, onChanged, onRemoved, onTry }) {
           <div className="sk-detail-id">
             <div className="sk-detail-name">
               <span className="sk-detail-title">{skill.name}</span>
-              <span className="sk-detail-info" title={t('Details')} aria-label={t('Details')}><Info /></span>
+              <span className="sk-detail-info" data-tip={t('Details')} aria-label={t('Details')}><Info /></span>
             </div>
             <div className="sk-detail-by">{t('by {author}', { author: skill.author || t('You') })}</div>
           </div>
@@ -103,9 +103,9 @@ function SkillDetail({ skill, onBack, onChanged, onRemoved, onTry }) {
         <div className="sk-doc">
           <div className="sk-doc-toggle">
             <button className={'sk-doc-btn' + (view === 'preview' ? ' on' : '')} onClick={() => setView('preview')}
-              aria-label={t('Preview')} title={t('Preview')}><Eye /></button>
+              aria-label={t('Preview')} data-tip={t('Preview')}><Eye /></button>
             <button className={'sk-doc-btn' + (view === 'source' ? ' on' : '')} onClick={() => setView('source')}
-              aria-label={t('Source')} title={t('Source')}><CodeTag /></button>
+              aria-label={t('Source')} data-tip={t('Source')}><CodeTag /></button>
           </div>
           <div className="sk-doc-body">
             {view === 'preview'
@@ -196,7 +196,7 @@ function Directory({ installed, onClose, onInstall }) {
                   </div>
                   <button className="sk-card-add" disabled={have.has(s.name)}
                     aria-label={have.has(s.name) ? t('Already added') : t('Add skill')}
-                    title={have.has(s.name) ? t('Already added') : t('Add skill')}
+                    data-tip={have.has(s.name) ? t('Already added') : t('Add skill')}
                     onClick={() => onInstall(s)}>{have.has(s.name) ? <Chevron /> : <Plus />}</button>
                 </div>
               </li>

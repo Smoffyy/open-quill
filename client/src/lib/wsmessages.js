@@ -61,6 +61,12 @@ export const handlers = {
       if (turn.ask) ctx.actions.setAsk?.(turn.chatId, turn.ask);
       if (isActive(ctx, turn.chatId) && turn.promptTokens > 0) ctx.meta.setPromptTokens(turn.promptTokens);
     }
+    const running = new Set(list.map(turn => turn && turn.chatId));
+    for (const key of ctx.mirror.keys()) {
+      const rec = ctx.mirror.peek(key);
+      if (key === 'incognito' || running.has(key) || !rec || rec.done) continue;
+      ctx.actions.settleStale(key);
+    }
     ctx.mirror.syncBusy();
     if (list.some(turn => turn && isActive(ctx, turn.chatId))) ctx.actions.syncView();
   },
@@ -170,6 +176,10 @@ export const handlers = {
     if (isActive(ctx, m.chatId)) ctx.meta.setStatus(rec.status);
   },
 
+  folded(m, ctx) {
+    if (isActive(ctx, m.chatId)) ctx.actions.contextChanged();
+  },
+
   prompt_size(m, ctx) {
     if (isActive(ctx, m.chatId)) ctx.meta.setPromptTokens(m.tokens || 0);
   },
@@ -178,7 +188,7 @@ export const handlers = {
     if (!isActive(ctx, m.chatId)) return;
     ctx.meta.setTelemetry({
       tps: m.tps, promptTps: m.promptTps, promptTokens: m.promptTokens,
-      genTokens: m.genTokens, ctx: m.ctx, exact: !!m.exact
+      genTokens: m.genTokens, ctx: m.ctx
     });
   },
 
@@ -218,6 +228,7 @@ export const handlers = {
     if (m.seg != null) {
       if (!rec.reasonSegs) rec.reasonSegs = [];
       rec.reasonSegs[m.seg] = (rec.reasonSegs[m.seg] || '') + m.text;
+      rec.phase = 'thinking';
       if (isActive(ctx, m.chatId)) ctx.stream.setSegments(rec.reasonSegs.slice());
       return;
     }
@@ -290,7 +301,6 @@ export const handlers = {
     ctx.actions.loadBudget();
     if (!isActive(ctx, m.chatId)) { ctx.actions.finalizeBackground(m.chatId); return; }
     ctx.set.pendingFiles(p => (Object.keys(p).length ? {} : p));
-    if (ctx.refs.ledgerOpenRef.current) ctx.actions.loadLedger();
     ctx.set.canContinue(!!m.truncated);
     // A model comparison fires several regenerations off one message; the first
     // `done` is where its id becomes known.
