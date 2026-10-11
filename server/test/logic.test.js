@@ -2155,25 +2155,14 @@ test('the loop guard ignores a step that made no calls at all', () => {
   assert.equal(g.note({ calls: [], ok: 0, failed: 0, failKinds: [] }), false, 'no calls is not a failing loop');
 });
 
-test('the client and server copies of the tool protocol stay byte-identical', () => {
-  // Both sides parse the same wire format: the server records tool calls with scanTools
-  // and the client renders them with its own copy. If the two drift, a call the model
-  // makes is stored one way and drawn another, so the copies are compared here.
+test('the libraries shared with the client are byte-identical copies', () => {
   const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
   const repo = path.dirname(root);
   const read = (p) => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
-  const server = read(path.join(root, 'lib', 'toolproto.js'));
-  const client = read(path.join(repo, 'client', 'src', 'lib', 'toolproto.js'));
-  assert.equal(client, server, 'client/src/lib/toolproto.js and server/lib/toolproto.js must be kept identical');
-});
-
-test('client/src/lib/presets.js and server/lib/presets.js are the same file', () => {
-  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-  const repo = path.dirname(root);
-  const read = (p) => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
-  const server = read(path.join(root, 'lib', 'presets.js'));
-  const client = read(path.join(repo, 'client', 'src', 'lib', 'presets.js'));
-  assert.equal(client, server, 'client/src/lib/presets.js and server/lib/presets.js must be kept identical');
+  for (const name of ['toolproto', 'promptblocks', 'presets', 'badges', 'safeurl', 'modelsize']) {
+    assert.equal(read(path.join(repo, 'client', 'src', 'lib', name + '.js')), read(path.join(root, 'lib', name + '.js')),
+      `client/src/lib/${name}.js and server/lib/${name}.js must be kept identical`);
+  }
 });
 
 test('every preset is a complete registry entry', async () => {
@@ -2187,14 +2176,6 @@ test('every preset is a complete registry entry', async () => {
     assert.deepEqual(Object.keys(p.model).sort(), Object.keys(PRESETS[0].model).sort(), p.id + ' model defaults');
     assert.ok(p.palettes.dark && p.palettes.light, p.id + ' names a dark and a light palette');
   }
-});
-
-test('client/src/lib/badges.js and server/lib/badges.js are the same file', () => {
-  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-  const repo = path.dirname(root);
-  const read = (p) => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
-  assert.equal(read(path.join(repo, 'client', 'src', 'lib', 'badges.js')), read(path.join(root, 'lib', 'badges.js')),
-    'the picker and the admin panel must agree on which badges a model earns');
 });
 
 test('badges follow what a model supports, minus the ones an admin switched off', () => {
@@ -2553,14 +2534,6 @@ test('safeUrl keeps web, mail and relative links and drops every other scheme', 
   assert.equal(safeUrl(undefined), '');
 });
 
-test('client/src/lib/safeurl.js and server/lib/safeurl.js are the same file', () => {
-  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-  const repo = path.dirname(root);
-  const read = (p) => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
-  assert.equal(read(path.join(repo, 'client', 'src', 'lib', 'safeurl.js')), read(path.join(root, 'lib', 'safeurl.js')),
-    'what the server stores and what the page renders must agree on a safe link');
-});
-
 test('docs cards and links lose a script address before they are stored', () => {
   assert.deepEqual(sanitizeCards([{ title: 'T', url: 'javascript:alert(1)' }, { title: 'U', url: 'https://example.com' }]),
     [{ title: 'T', desc: '', url: '' }, { title: 'U', desc: '', url: 'https://example.com' }]);
@@ -2893,14 +2866,6 @@ test('docs variables read the model page fields the way the docs show them', () 
   assert.equal(v.modelPlatforms, 'API, Local');
   assert.deepEqual(docsVars(null), {});
   assert.equal(docsVars({ docs_badge: '__proto__' }).modelBadge, '');
-});
-
-test('client/src/lib/modelsize.js and server/lib/modelsize.js are the same file', () => {
-  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-  const repo = path.dirname(root);
-  const read = (p) => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
-  assert.equal(read(path.join(repo, 'client', 'src', 'lib', 'modelsize.js')), read(path.join(root, 'lib', 'modelsize.js')),
-    'the model docs and the system prompt must read a parameter count the same way');
 });
 
 test('a parameter count is read in billions and written with its unit', () => {
