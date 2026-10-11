@@ -28,7 +28,7 @@ Each model opens in an editor with these tabs:
 | **Reasoning** | Whether thinking is shown in full, collapsed or as a status line only, the thinking tags the model uses, and prompt tokens that switch thinking on or off |
 | **Context** | The context window (detected from the backend, with an optional override), whether a llama.cpp model may run several requests at once, how many recent turns are kept word for word when older ones are folded into the rolling summary, and conversation length awareness |
 | **Sampling** | Temperature, top P and K, min P, repetition penalties, max tokens, the more experimental samplers and stop sequences. Only what the provider supports is listed, and a blank value uses the backend's default |
-| **Request controls** | Extra request fields, shown to members in the picker as toggles, ranges or lists, with who may change them, conditions for when they appear, and a preview of the request they produce |
+| **Request controls** | Extra request fields, each set by members in the picker, fixed to one hidden value, or derived from another control, with who may change them and when they appear. A live preview lets you use them as a member would and shows the request they produce |
 | **Appearance** | Static, generating and thinking logos and their motion, logo size and position beside replies, whether the name is shown, picker badges, and an optional showcase backdrop |
 | **Routing** | For routers: ordered rules (contains words, matches a regular expression, has an image or file, looks like code, longer or shorter than N characters, always) that send a message to another model, plus a fallback. The first matching rule wins |
 

@@ -6,7 +6,7 @@ import { t } from '../../i18n.jsx';
 import { Switch } from '../ui/controls.jsx';
 import { clampPx, overshoot, stretchFor, squashFor, stretchOrigin, slideFor, magnetStep, DRAG_SLOP } from '../../lib/dragsteps.js';
 import { paintCells, fadeTrail, stampTrail, headColumn, CELL, CELL_FPS, CELL_SPEED } from '../../lib/cellfield.js';
-import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, kwargChip, resolveKwargValues, isRange, isSteps, stopLabel, clampToRange, rangeSteps, nearestStep, rangeLabel, kwargVisible, gateSourceIds } from '../../lib/kwargs.js';
+import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, resolveKwargValues, isRange, isSteps, stopLabel, clampToRange, rangeSteps, nearestStep, rangeLabel, kwargVisible, pickerChips } from '../../lib/kwargs.js';
 import { useDismiss } from '../../lib/dismiss.js';
 import { Skel, SkelMenu } from '../ui/Skeleton.jsx';
 import { ModelMark } from '../ui/Weave.jsx';
@@ -457,13 +457,7 @@ export default function ModelDropdown({ models, modelsReady = true, currentId, o
     if (onSetKwarg) onSetKwarg(id, value);
     else if (id === 'effort' && onSetEffort) onSetEffort(value);
   };
-  const ownKwargs = kwDefs.filter(d => !d.parentId);
-  const gates = gateSourceIds(kwDefs, kwActive);
-  const chips = ownKwargs
-    .filter(d => kwargVisible(kwDefs, kwActive, d) && !gates.has(d.id))
-    .map(d => kwargChip(d, kwActive[d.id]))
-    .filter(Boolean)
-    .slice(0, 2);
+  const chips = pickerChips(kwDefs, kwActive);
   const shownKwargs = open ? kwDefs.filter(d => kwargVisible(kwDefs, kwActive, d)) : EMPTY_ARR;
   const shownIds = open ? new Set(shownKwargs.map(d => d.id)) : EMPTY_SET;
   const main = open ? models.filter(m => !m.inMoreModels) : EMPTY_ARR;

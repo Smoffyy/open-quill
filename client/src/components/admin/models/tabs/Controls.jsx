@@ -1,21 +1,22 @@
 import { useState } from 'react';
 import {
-  Card, Rows, Row, Fields, Field, Input, Select, Switch, Btn, IconBtn, Badge, Empty, Note, Table,
+  Card, Rows, Row, ToggleRow, Fields, Field, Input, Select, Seg, Switch, Btn, IconBtn, Badge, Note, Table, Acts,
   PointMenu, MenuItem, clampToViewport
 } from '../../ui.jsx';
 import { Plus, Copy, Trash, Chevron, Up, Down } from '../../../ui/icons.jsx';
+import { KwargControl } from '../../../composer/ModelDropdown.jsx';
 import { useEditor, useField, useChange, CardMark } from '../bind.jsx';
 import { t, tk } from '../../../../i18n.jsx';
 import {
-  KWARG_TARGETS, KWARG_CONTROLS, KWARG_TYPES, KWARG_PRESETS,
-  blankKwarg, newKwargId, controlOf, defaultValueOf, isBoolPair,
-  kwargValuesArr, kwargValuesStr, resolveKwargValues, kwargPayload,
-  isRange, isSteps, isOffStep, rangeStep, clampToRange, allNumeric, stopLabel, stepFields, DEFAULT_STEPS,
-  REPLAY_FIELDS, replayWhenOf, replayValuesOf, isBudgetKwarg, budgetMessageOff, BUDGET_MESSAGE_TEXT
+  KWARG_PRESETS, REPLAY_FIELDS, blankKwarg, newKwargId, isBoolPair, kwargValuesArr, defaultValueOf,
+  trueValueOf, falseValueOf, isRange, isOffStep, stopLabel, stepFields, clampToRange, rangeStep, rangeLabel,
+  resolveKwargValues, kwargPayload, kwargVisible, replayWhenOf, replayValuesOf, replayFieldFor, pickerChips,
+  isBudgetKwarg, budgetMessageOff, BUDGET_MESSAGE_TEXT, kwargPath, kwargMode, kwargKind, kindPatch, modePatch,
+  fixedValuePatch, followable, followPatch, parentChoices
 } from '../../../../lib/kwargs.js';
 
-const MENU_W = 320;
-const MENU_H = 300;
+const MENU_W = 340;
+const MENU_H = 460;
 
 const TARGET_NOTE = {
   __proto__: null,
@@ -24,15 +25,46 @@ const TARGET_NOTE = {
   extra_body: tk('Nested under a literal extra_body object. Only gateways that unwrap it will see it: llama.cpp and vLLM ignore it, and the OpenAI SDKs flatten extra_body before sending, so match them with the top level instead.')
 };
 
-const CONTROL_TAG = {
+const TARGETS = [
+  { value: 'chat_template_kwargs', label: 'chat_template_kwargs' },
+  { value: 'body', label: tk('Top level of the request') },
+  { value: 'extra_body', label: 'extra_body' }
+];
+
+const TYPES = [
+  { value: 'auto', label: tk('Automatic') },
+  { value: 'boolean', label: tk('Boolean') },
+  { value: 'number', label: tk('Number') },
+  { value: 'string', label: tk('String') }
+];
+
+const REPLAY_LABEL = { __proto__: null, reasoning_content: 'reasoning_content (llama.cpp, vLLM, LM Studio)' };
+
+const MODES = [
+  { value: 'choose', label: tk('Members choose'), note: tk('A control in the model picker.') },
+  { value: 'fixed', label: tk('Always the same'), note: tk('Hidden. One value on every request.') },
+  { value: 'follow', label: tk('Follows another'), note: tk('Derived from another control.') }
+];
+
+const KINDS = [
+  { value: 'toggle', label: tk('On/off toggle'), note: tk('Sends true or false.') },
+  { value: 'list', label: tk('A fixed list'), note: tk('One of the values you list.') },
+  { value: 'steps', label: tk('Labelled steps'), note: tk('Named levels that each send a number.') },
+  { value: 'range', label: tk('A number range'), note: tk('Any number between two limits.') }
+];
+
+const STYLES = {
   __proto__: null,
-  toggle: tk('toggle'), slider: tk('slider'), range: tk('range'), select: tk('dropdown')
+  toggle: [['auto', tk('Automatic')], ['toggle', tk('On/off toggle')], ['slider', tk('Slider')], ['select', tk('Dropdown')]],
+  list: [['auto', tk('Automatic')], ['slider', tk('Slider')], ['select', tk('Dropdown')]]
 };
 
-const FIXED_CONTROL = {
+const CHIP_HINT = {
   __proto__: null,
-  range: { value: 'range', note: tk('A range always renders as a number slider.') },
-  steps: { value: 'slider', note: tk('Labelled steps always render as a slider.') }
+  toggle: tk('Shown beside the model name while it is on.'),
+  list: tk('Shown beside the model name. {value} becomes the chosen value.'),
+  steps: tk('{value} becomes the word for the current step.'),
+  range: tk('Shown beside the model name. {value} becomes the current number, as in Thinking · {value} tokens.')
 };
 
 export function legacyKwarg(m) {
@@ -53,156 +85,262 @@ export function legacyKwarg(m) {
   };
 }
 
-function shapeOf(def) {
-  if (isRange(def)) return 'range';
-  if (isSteps(def)) return 'steps';
-  return 'list';
+const titleOf = (def) => def?.label || def?.name || t('Untitled control');
+
+const gateValues = (def) => (!def || isRange(def) ? [] : kwargValuesArr(def));
+
+function keepDefault(values, wanted) {
+  return values.includes(wanted) ? wanted : '';
 }
 
-function chipHint(shape) {
-  if (shape === 'range') return t('Shown beside the model name. {value} becomes the current number, as in Thinking · {value} tokens.');
-  if (shape === 'steps') return t('{value} becomes the word for the current step.');
-  return undefined;
+function choiceLabel(def, value) {
+  if (value === '*') return t('any value');
+  const label = stopLabel(def, value);
+  return label === value ? value : `${label} (${value})`;
 }
 
-function chipPlaceholder(shape) {
-  if (shape === 'range') return t('Thinking · {value} tokens');
-  if (shape === 'steps') return '{value}';
-  return t('Thinking');
-}
-
-function gateValues(def) {
-  return !def || isRange(def) ? [] : kwargValuesArr(def);
-}
-
-function descendants(defs, id) {
-  const out = new Set();
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const d of defs) {
-      if (d.parentId && (d.parentId === id || out.has(d.parentId)) && !out.has(d.id)) { out.add(d.id); grew = true; }
-    }
+function summaryOf(def, defs) {
+  const mode = kwargMode(def);
+  if (mode === 'follow') return t('Follows {name}', { name: titleOf(defs.find(d => d.id === def.parentId)) });
+  if (mode === 'fixed') {
+    const value = defaultValueOf(def);
+    return value ? t('Always sends {value}', { value }) : t('No value yet');
   }
-  return out;
+  const kind = kwargKind(def);
+  if (kind === 'toggle') return t('On/off switch for members');
+  if (kind === 'range') {
+    return t('Members pick {min} to {max}', { min: rangeLabel(def, def.min, t('Off')), max: rangeLabel(def, def.max, t('Off')) });
+  }
+  const values = kwargValuesArr(def);
+  if (!values.length) return t('No values yet');
+  return t('Members pick {values}', { values: values.map(v => stopLabel(def, v)).join(' · ') });
 }
 
-function nameOf(def) {
-  return def?.name || def?.label || def?.id || '?';
-}
-
-function Summary({ def, defs }) {
-  const parent = def.parentId ? defs.find(d => d.id === def.parentId) : null;
-  const gate = def.showIf?.id ? defs.find(d => d.id === def.showIf.id) : null;
+function Flags({ def, defs }) {
+  const choose = kwargMode(def) === 'choose';
+  const gate = choose && def.showIf?.id ? defs.find(d => d.id === def.showIf.id) : null;
   return (
     <span className="cp-badges">
-      {parent && <Badge tone="warn">{t('follows {name}', { name: nameOf(parent) })}</Badge>}
-      {!parent && def.visible === false && <Badge>{t('hidden')}</Badge>}
-      {!parent && def.visible !== false && gate && <Badge tone="warn">{t('only when {name} = {value}', { name: nameOf(gate), value: def.showIf.value })}</Badge>}
-      {!parent && def.visible !== false && <Badge>{t(CONTROL_TAG[controlOf(def)] || CONTROL_TAG.select)}</Badge>}
-      {!!def.adminOnly && <Badge>{t('admins only')}</Badge>}
-      {!!replayWhenOf(def) && <Badge tone="warn">{t('sends back thinking')}</Badge>}
-      {isBudgetKwarg(def) && !!def.budgetMessage?.enabled && <Badge tone="warn">{t('sends a budget message')}</Badge>}
-      {(def.target || 'chat_template_kwargs') !== 'chat_template_kwargs' && <Badge>{def.target}</Badge>}
-      <Badge>{isRange(def) ? `${def.min}…${def.max}` : (kwargValuesStr(def) || t('no values'))}</Badge>
+      {!def.name && <Badge tone="bad">{t('no key')}</Badge>}
+      {choose && !!def.adminOnly && <Badge>{t('admins only')}</Badge>}
+      {gate && <Badge>{t('only when {name} = {value}', { name: titleOf(gate), value: def.showIf.value })}</Badge>}
+      {!!replayWhenOf(def) && <Badge>{t('sends back thinking')}</Badge>}
+      {isBudgetKwarg(def) && !!def.budgetMessage?.enabled && <Badge>{t('sends a budget message')}</Badge>}
     </span>
   );
 }
 
-function Payload({ defs, requested, label }) {
-  const payload = kwargPayload(defs, resolveKwargValues(defs, requested, true));
-  const json = JSON.stringify({ model: '…', messages: '[ … ]', ...payload }, null, 2);
+function Section({ title, note, children }) {
   return (
-    <Field label={label}>
-      <pre className="mc-code">{Object.keys(payload).length ? json : t('nothing is added to the request')}</pre>
+    <section className="mc-kw-sec">
+      <div className="mc-kw-sec-head">
+        <h4>{title}</h4>
+        {note && <p>{note}</p>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Choice({ value, options, onPick, label }) {
+  return (
+    <div className="mc-choice" role="group" aria-label={label}>
+      {options.map(o => (
+        <button key={o.value} type="button" className="mc-choice-opt" aria-pressed={o.value === value}
+          disabled={o.disabled} data-tip={o.tip} onClick={() => onPick(o.value)}>
+          <b>{t(o.label)}</b>
+          <span>{t(o.note)}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function RequestField({ def, patch }) {
+  const target = def.target || 'chat_template_kwargs';
+  return (
+    <Section title={t('Request field')} note={t('The name the server reads and where it sits in the request.')}>
+      <Fields cols={2}>
+        <Field label={t('Key')} hint={t('The exact name the server expects. Blank sends nothing.')}>
+          <Input mono value={def.name || ''} placeholder="enable_thinking" aria-label={t('Key')}
+            onChange={(e) => patch({ name: e.target.value })} />
+        </Field>
+        <Field label={t('Sent in')} hint={t(TARGET_NOTE[target])}>
+          <Select value={target} label={t('Sent in')} onChange={(v) => patch({ target: v })}
+            options={TARGETS.map(o => ({ value: o.value, label: t(o.label) }))} />
+        </Field>
+      </Fields>
+    </Section>
+  );
+}
+
+function ToggleDefault({ def, patch }) {
+  const on = /^true$/i.test(defaultValueOf(def));
+  return (
+    <Field label={t('Default')} hint={t('Off sends false and on sends true.')}>
+      <Seg value={on ? 'on' : 'off'} label={t('Default')}
+        options={[{ value: 'off', label: t('Off') }, { value: 'on', label: t('On') }]}
+        onChange={(v) => patch({ default: v === 'on' ? trueValueOf(def) : falseValueOf(def) })} />
     </Field>
   );
 }
 
-function BudgetMessage({ def, patch }) {
-  const message = { ...budgetMessageOff(), ...def.budgetMessage };
-  const set = (p) => patch({ budgetMessage: { ...message, ...p } });
+function DefaultSelect({ def, patch, label = (v) => v }) {
+  const values = kwargValuesArr(def);
+  return (
+    <Fields cols={2}>
+      <Field label={t('Default')} hint={values.length ? t('Currently {v}.', { v: label(defaultValueOf(def)) }) : undefined}>
+        <Select value={keepDefault(values, def.default)} label={t('Default')} onChange={(v) => patch({ default: v })}
+          options={[{ value: '', label: t('automatic') }, ...values.map(v => ({ value: v, label: label(v) }))]} />
+      </Field>
+    </Fields>
+  );
+}
+
+function ListEditor({ def, patch }) {
+  const list = Array.isArray(def.values) ? def.values : kwargValuesArr(def);
+
+  function save(next, wanted = def.default) {
+    patch({ values: next, default: keepDefault(next.map(v => String(v).trim()), wanted) });
+  }
+
+  function rename(i, value) {
+    save(list.map((v, j) => (j === i ? value : v)), list[i] === def.default ? value.trim() : def.default);
+  }
+
   return (
     <>
-      <Rows>
-        <Row label={t('Send a message when the budget runs out')}
-          note={t('Injected before the end-of-thinking tag once thinking uses its whole budget. Only sent while the budget is above 0.')} wide>
-          <Switch on={message.enabled} label={t('Send a message when the budget runs out')}
-            onToggle={() => set({ enabled: !message.enabled, text: message.text || BUDGET_MESSAGE_TEXT })} />
-        </Row>
-      </Rows>
-      {message.enabled && (
-        <>
-          <Fields cols={3}>
-            <Field label={t('Key')} hint={t('The exact name the server expects. Blank sends nothing.')}>
-              <Input mono value={message.name} placeholder="reasoning_budget_message" aria-label={t('Key')}
-                onChange={(e) => set({ name: e.target.value })} />
-            </Field>
-            <Field label={t('Sent in')} hint={t(TARGET_NOTE[message.target])}>
-              <Select value={message.target} label={t('Sent in')} onChange={(v) => set({ target: v })}
-                options={KWARG_TARGETS.map(([v, l]) => ({ value: v, label: t(l) }))} />
-            </Field>
-            <Field label={t('Wire type')}>
-              <Select value={message.type} label={t('Wire type')} onChange={(v) => set({ type: v })}
-                options={KWARG_TYPES.map(([v, l]) => ({ value: v, label: t(l) }))} />
-            </Field>
-          </Fields>
-          <Field label={t('Message')} hint={t('Sent as the value of that key. Blank sends nothing.')}>
-            <Input value={message.text} placeholder={BUDGET_MESSAGE_TEXT} aria-label={t('Message')}
-              onChange={(e) => set({ text: e.target.value })} />
-          </Field>
-        </>
-      )}
+      <Field label={t('Values')} hint={t('In order, lowest first. A slider moves through them from left to right.')}>
+        <div className="mc-kw-values">
+          {list.map((v, i) => (
+            <div key={i} className="cp-inline">
+              <Input mono value={v} placeholder="medium" aria-label={t('Value {n}', { n: i + 1 })}
+                onChange={(e) => rename(i, e.target.value)} />
+              <IconBtn kind="quiet" label={t('Remove value')} disabled={list.length <= 1}
+                onClick={() => save(list.filter((_, j) => j !== i))}><Trash /></IconBtn>
+            </div>
+          ))}
+        </div>
+        <Acts><Btn size="sm" onClick={() => save([...list, ''])}><Plus /> {t('Add value')}</Btn></Acts>
+      </Field>
+      <DefaultSelect def={def} patch={patch} />
     </>
   );
 }
 
-function DefEditor({ def, defs, patch }) {
-  const [text, setText] = useState(null);
-  const values = kwargValuesArr(def);
-  const shape = shapeOf(def);
-  const range = shape === 'range';
-  const steps = shape === 'steps';
-  const fixed = FIXED_CONTROL[shape];
+function StepsEditor({ def, patch }) {
   const stops = def.stops || [];
-  const linked = !!def.parentId;
-  const parent = linked ? defs.find(d => d.id === def.parentId) : null;
-  const parentValues = parent ? (isRange(parent) ? ['*'] : kwargValuesArr(parent)) : [];
-  const rules = Array.isArray(def.rules) ? def.rules : [];
-  const blocked = descendants(defs, def.id);
-  const replayWhen = replayWhenOf(def);
-  const replayValues = replayValuesOf(def);
-  if (replayWhen && replayWhen !== '*' && !replayValues.includes(replayWhen)) replayValues.push(replayWhen);
 
-  function setValues(raw) {
-    setText(raw);
-    const arr = raw.split(',').map(x => x.trim()).filter(Boolean);
-    patch({ values: arr, default: arr.includes(def.default) ? def.default : '' });
-  }
-
-  function setShape(choice) {
-    setText(null);
-    if (choice === 'range') {
-      const nums = values.map(Number).filter(Number.isFinite).sort((a, b) => a - b);
-      const min = nums.length ? nums[0] : 0;
-      const max = nums.length > 1 ? nums[nums.length - 1] : min + 100;
-      const gap = nums.length > 1 ? Math.abs(nums[1] - nums[0]) : 0;
-      patch({ min, max, step: gap > 0 ? gap : 1, values: [], default: '', stops: [] });
-    } else if (choice === 'steps') {
-      patch({ min: null, max: null, step: null, default: '', ...stepFields(DEFAULT_STEPS) });
-    } else {
-      patch({ min: null, max: null, step: null, values: [], default: '', stops: [] });
-    }
-  }
-
-  function setStops(list) {
+  function save(list, wanted = def.default) {
     const next = stepFields(list);
-    patch({ ...next, default: next.values.includes(def.default) ? def.default : '' });
+    patch({ ...next, default: keepDefault(next.values, wanted) });
   }
 
   function setStop(i, p) {
-    setStops(stops.map((s, j) => (j === i ? { ...s, ...p } : s)));
+    const moved = 'value' in p && String(stops[i].value) === def.default;
+    save(stops.map((s, j) => (j === i ? { ...s, ...p } : s)), moved ? String(p.value).trim() : def.default);
   }
+
+  return (
+    <>
+      <Field label={t('Steps')} hint={t('Members see the label and the number is what gets sent. Turn off In model name for a step such as Off that should add nothing beside the model name.')}>
+        <Table head={[
+          { label: t('Label') },
+          { label: t('Sends'), mono: true },
+          { label: t('In model name'), fit: true },
+          { label: '', fit: true }
+        ]}>
+          {stops.map((s, i) => (
+            <tr key={i}>
+              <td>
+                <Input value={s.label || ''} placeholder={t('Off')} aria-label={t('Label')} onChange={(e) => setStop(i, { label: e.target.value })} />
+              </td>
+              <td>
+                <Input mono type="number" step="any" value={s.value ?? ''} placeholder="1024" aria-label={t('Sends')} onChange={(e) => setStop(i, { value: e.target.value })} />
+              </td>
+              <td className="fit">
+                <Switch on={!isOffStep(s)} label={t('In model name')} onToggle={() => setStop(i, { off: !isOffStep(s) })} />
+              </td>
+              <td className="fit">
+                <IconBtn kind="quiet" label={t('Remove step')} disabled={stops.length <= 1} onClick={() => save(stops.filter((_, j) => j !== i))}><Trash /></IconBtn>
+              </td>
+            </tr>
+          ))}
+        </Table>
+        <Acts><Btn size="sm" onClick={() => save([...stops, { label: '', value: '', off: false }])}><Plus /> {t('Add step')}</Btn></Acts>
+      </Field>
+      <DefaultSelect def={def} patch={patch} label={(v) => stopLabel(def, v)} />
+    </>
+  );
+}
+
+function RangeEditor({ def, patch }) {
+  const valid = isRange(def);
+  return (
+    <>
+      <Fields cols={4}>
+        <Field label={t('Minimum')}>
+          <Input mono type="number" value={def.min ?? ''} aria-label={t('Minimum')} onChange={(e) => patch({ min: e.target.value })} />
+        </Field>
+        <Field label={t('Maximum')}>
+          <Input mono type="number" value={def.max ?? ''} aria-label={t('Maximum')} onChange={(e) => patch({ max: e.target.value })} />
+        </Field>
+        <Field label={t('Step')}>
+          <Input mono type="number" min="0" step="any" value={def.step ?? ''} placeholder="1" aria-label={t('Step')} onChange={(e) => patch({ step: e.target.value })} />
+        </Field>
+        <Field label={t('Unit')} optional>
+          <Input value={def.unit || ''} placeholder={t('tokens')} aria-label={t('Unit')} onChange={(e) => patch({ unit: e.target.value })} />
+        </Field>
+      </Fields>
+      {!valid && <Note tone="warn">{t('The maximum must be above the minimum.')}</Note>}
+      <Fields cols={2}>
+        <Field label={t('Default')} hint={valid ? t('Currently {v}.', { v: rangeLabel(def, defaultValueOf(def), t('Off')) }) : undefined}>
+          <Input mono type="number" min={def.min} max={def.max} step={rangeStep(def)} aria-label={t('Default')}
+            value={def.default ?? ''} placeholder={t('automatic')}
+            onChange={(e) => patch({ default: e.target.value })}
+            onBlur={(e) => { if (!valid) return; const c = clampToRange(def, e.target.value); patch({ default: c == null ? '' : String(c) }); }} />
+        </Field>
+      </Fields>
+      <Rows>
+        <ToggleRow label={t('0 means off')} note={t('At 0 the picker says Off and the model name shows no chip.')}
+          on={!!def.zeroOff} onToggle={() => patch({ zeroOff: !def.zeroOff })} />
+      </Rows>
+    </>
+  );
+}
+
+function Choices({ def, patch }) {
+  const kind = kwargKind(def);
+  return (
+    <Section title={t('Choices')} note={t('What members can pick from.')}>
+      <Choice value={kind} label={t('Choices')} options={KINDS} onPick={(k) => { if (k !== kind) patch(kindPatch(def, k)); }} />
+      {kind === 'toggle' && <ToggleDefault def={def} patch={patch} />}
+      {kind === 'list' && <ListEditor def={def} patch={patch} />}
+      {kind === 'steps' && <StepsEditor def={def} patch={patch} />}
+      {kind === 'range' && <RangeEditor def={def} patch={patch} />}
+    </Section>
+  );
+}
+
+function FixedValue({ def, patch }) {
+  const [text, setText] = useState(null);
+  return (
+    <Section title={t('Value')} note={t('Sent with every request. Members never see it.')}>
+      <Fields cols={2}>
+        <Field label={t('Value sent')}>
+          <Input mono value={text ?? defaultValueOf(def)} placeholder="true" aria-label={t('Value sent')}
+            onChange={(e) => { setText(e.target.value); patch(fixedValuePatch(e.target.value)); }}
+            onBlur={() => setText(null)} />
+        </Field>
+      </Fields>
+    </Section>
+  );
+}
+
+function Follow({ def, defs, patch }) {
+  const parent = defs.find(d => d.id === def.parentId);
+  const choices = parentChoices(parent);
+  const rules = Array.isArray(def.rules) ? def.rules : [];
 
   function setRule(when, p) {
     const next = rules.slice();
@@ -213,221 +351,268 @@ function DefEditor({ def, defs, patch }) {
   }
 
   return (
-    <div className="mc-kw-body">
-      <Fields cols={3}>
-        <Field label={t('Key')} hint={t('The exact name the server expects. Blank sends nothing.')}>
-          <Input mono value={def.name || ''} placeholder="enable_thinking" aria-label={t('Key')}
-            onChange={(e) => patch({ name: e.target.value })} />
-        </Field>
-        <Field label={t('Sent in')} hint={t(TARGET_NOTE[def.target || 'chat_template_kwargs'])}>
-          <Select value={def.target || 'chat_template_kwargs'} label={t('Sent in')} onChange={(v) => patch({ target: v })}
-            options={KWARG_TARGETS.map(([v, l]) => ({ value: v, label: t(l) }))} />
-        </Field>
-        <Field label={t('Wire type')} hint={t('Automatic sends true and false as booleans, numerals as numbers, everything else as text.')}>
-          <Select value={def.type || 'auto'} label={t('Wire type')} onChange={(v) => patch({ type: v })}
-            options={KWARG_TYPES.map(([v, l]) => ({ value: v, label: t(l) }))} />
+    <Section title={t('Follows')} note={t('Pick the control to follow, then what to send for each of its values.')}>
+      <Fields cols={2}>
+        <Field label={t('Follows')}>
+          <Select value={def.parentId} label={t('Follows')}
+            onChange={(id) => patch(followPatch(def, defs.find(d => d.id === id)))}
+            options={followable(defs, def).map(d => ({ value: d.id, label: titleOf(d) }))} />
         </Field>
       </Fields>
-
-      <Fields cols={3}>
-        <Field label={t('Values')}>
-          <Select value={shape} label={t('Values')} onChange={setShape}
-            options={[{ value: 'list', label: t('A fixed list') }, { value: 'steps', label: t('Labelled steps') }, { value: 'range', label: t('A number range') }]} />
-        </Field>
-        {range && (
-          <Field label={t('Range')} hint={t('Minimum, maximum, and step. Members drag between them and cannot send anything outside.')}>
-            <div className="mc-trio">
-              <Input mono type="number" value={def.min ?? ''} placeholder={t('min')} aria-label={t('Minimum')} onChange={(e) => patch({ min: e.target.value })} />
-              <Input mono type="number" value={def.max ?? ''} placeholder={t('max')} aria-label={t('Maximum')} onChange={(e) => patch({ max: e.target.value })} />
-              <Input mono type="number" min="0" step="any" value={def.step ?? ''} placeholder={t('step')} aria-label={t('Step')} onChange={(e) => patch({ step: e.target.value })} />
-            </div>
-          </Field>
-        )}
-        {shape === 'list' && (
-          <Field label={t('List')}
-            hint={isBoolPair(values) ? t('Boolean pair detected, so this renders as a toggle.')
-              : allNumeric(values) ? t('These are all numbers. A number range may suit them better.')
-                : t('Comma separated, ordered lowest to highest.')}>
-            <Input mono value={text ?? kwargValuesStr(def)} placeholder="false, true" aria-label={t('List')}
-              onChange={(e) => setValues(e.target.value)} onBlur={() => setText(null)} />
-          </Field>
-        )}
-        {!linked && (
-          <Field label={t('Default')}
-            hint={(range || values.length) ? t('Currently {v}.', { v: defaultValueOf(def) }) : undefined}>
-            {range ? (
-              <Input mono type="number" min={def.min} max={def.max} step={rangeStep(def)} aria-label={t('Default')}
-                value={def.default ?? ''} placeholder={t('automatic')}
-                onChange={(e) => patch({ default: e.target.value })}
-                onBlur={(e) => { const c = clampToRange(def, e.target.value); patch({ default: c == null ? '' : String(c) }); }} />
-            ) : (
-              <Select value={values.includes(def.default) ? def.default : ''} label={t('Default')} onChange={(v) => patch({ default: v })}
-                options={[{ value: '', label: t('automatic') }, ...values.map(v => ({ value: v, label: steps ? stopLabel(def, v) : v }))]} />
-            )}
-          </Field>
-        )}
-      </Fields>
-
-      {steps && (
-        <Field label={t('Steps')} hint={t('Members slide through these in order. Each label is what they see, and its number is what gets sent. A step with Hide from model name ticked still shows its word in the picker, but the model name gets no chip for it.')}>
-          <Table head={[
-            { label: t('Label') },
-            { label: t('Number'), mono: true },
-            { label: t('Hide from model name'), fit: true },
-            { label: '', fit: true }
-          ]}>
-            {stops.map((s, i) => (
-              <tr key={i}>
-                <td>
-                  <Input value={s.label || ''} placeholder={t('Off')} aria-label={t('Label')} onChange={(e) => setStop(i, { label: e.target.value })} />
+      {choices.length === 0 ? (
+        <Note>{t('The kwarg it follows has no values yet.')}</Note>
+      ) : (
+        <Table head={[
+          { label: t('When {name} is', { name: titleOf(parent) }), fit: true },
+          { label: t('Send'), fit: true },
+          { label: t('Value') }
+        ]}>
+          {choices.map(pv => {
+            const rule = rules.find(r => r.when === pv);
+            const on = !!rule && rule.send !== false;
+            return (
+              <tr key={pv}>
+                <td className="mono">{choiceLabel(parent, pv)}</td>
+                <td className="fit">
+                  <Switch on={on} label={on ? t('Sent') : t('Omitted')}
+                    onToggle={() => setRule(pv, on ? { send: false } : { send: true, value: rule?.value || (pv === '*' ? 'true' : pv) })} />
                 </td>
                 <td>
-                  <Input mono type="number" step="any" value={s.value ?? ''} placeholder="1024" aria-label={t('Number')} onChange={(e) => setStop(i, { value: e.target.value })} />
-                </td>
-                <td className="fit">
-                  <Switch on={isOffStep(s)} label={t('Hide from model name')} onToggle={() => setStop(i, { off: !isOffStep(s) })} />
-                </td>
-                <td className="fit">
-                  <IconBtn kind="danger" label={t('Remove step')} disabled={stops.length <= 1} onClick={() => setStops(stops.filter((_, j) => j !== i))}><Trash /></IconBtn>
+                  {on ? (
+                    <Input mono value={rule.value || ''} placeholder={t('value to send')} aria-label={t('Value')}
+                      onChange={(e) => setRule(pv, { value: e.target.value })} />
+                  ) : <span className="dim">{t('nothing is sent')}</span>}
                 </td>
               </tr>
-            ))}
-          </Table>
-          <div className="cp-acts">
-            <Btn size="sm" onClick={() => setStops([...stops, { label: '', value: '', off: false }])}><Plus /> {t('Add step')}</Btn>
-          </div>
+            );
+          })}
+        </Table>
+      )}
+    </Section>
+  );
+}
+
+function Picker({ def, defs, patch }) {
+  const kind = kwargKind(def);
+  const styles = STYLES[kind];
+  const gates = defs.filter(d => d.id !== def.id && !d.parentId && gateValues(d).length);
+  const gate = def.showIf?.id ? defs.find(d => d.id === def.showIf.id) : null;
+
+  function setGate(id) {
+    if (!id) return patch({ showIf: null });
+    const opts = gateValues(defs.find(d => d.id === id));
+    return patch({ showIf: { id, value: opts.includes(def.showIf?.value) ? def.showIf.value : (opts[opts.length - 1] || '') } });
+  }
+
+  return (
+    <Section title={t('In the model picker')} note={t('How the control looks to members and who may change it.')}>
+      <Fields cols={2}>
+        <Field label={t('Title')}>
+          <Input value={def.label || ''} placeholder={def.name || t('Extended thinking')} aria-label={t('Title')}
+            onChange={(e) => patch({ label: e.target.value })} />
         </Field>
-      )}
-      {range && (
-        <Fields cols={3}>
-          <Field label={t('Unit')} hint={t('Shown after the number in the picker, such as tokens.')}>
-            <Input value={def.unit || ''} placeholder={t('tokens')} aria-label={t('Unit')} onChange={(e) => patch({ unit: e.target.value })} />
+        <Field label={t('Description')} optional>
+          <Input value={def.description || ''} placeholder={t('Let the model think before answering')} aria-label={t('Description')}
+            onChange={(e) => patch({ description: e.target.value })} />
+        </Field>
+        <Field label={t('Picker chip')} hint={t(CHIP_HINT[kind])} optional>
+          <Input value={def.chip || ''} placeholder={kind === 'range' ? t('Thinking · {value} tokens') : kind === 'steps' ? '{value}' : t('Thinking')}
+            aria-label={t('Picker chip')} onChange={(e) => patch({ chip: e.target.value })} />
+        </Field>
+        {styles && (
+          <Field label={t('Control')}>
+            <Select value={def.control || 'auto'} label={t('Control')} onChange={(v) => patch({ control: v })}
+              options={styles.map(([v, l]) => ({ value: v, label: t(l) }))} />
           </Field>
-          <Field label={t('0 means off')} hint={t('At 0 the picker says Off and the model name shows no chip.')}>
-            <Switch on={!!def.zeroOff} label={t('0 means off')} onToggle={() => patch({ zeroOff: !def.zeroOff })} />
+        )}
+      </Fields>
+      <Rows>
+        <Row label={t('Who can change it')} note={def.adminOnly ? t('Members see it but cannot change it.') : undefined} wide>
+          <Seg value={def.adminOnly ? 'admins' : 'everyone'} label={t('Who can change it')}
+            options={[{ value: 'everyone', label: t('Everyone') }, { value: 'admins', label: t('Admins only') }]}
+            onChange={(v) => patch({ adminOnly: v === 'admins' })} />
+        </Row>
+      </Rows>
+      <Fields cols={2}>
+        <Field label={t('Only show when')} hint={gate ? undefined : t('Keeps its own control but hides it until the chosen kwarg holds the value beside it, so a thinking budget can appear only once thinking is on.')}>
+          <Select value={gate ? def.showIf.id : ''} label={t('Only show when')} onChange={setGate}
+            options={[{ value: '', label: t('always shown') }, ...gates.map(d => ({ value: d.id, label: titleOf(d) }))]} />
+        </Field>
+        {gate && (
+          <Field label={t('Has the value')}>
+            <Select value={def.showIf.value ?? ''} label={t('Has the value')}
+              onChange={(v) => patch({ showIf: { id: def.showIf.id, value: v } })}
+              options={gateValues(gate).map(v => ({ value: v, label: choiceLabel(gate, v) }))} />
           </Field>
-        </Fields>
-      )}
-
-      <Field label={t('Follows')}
-        hint={t('A following kwarg has no control of its own; its value is derived from the one it follows. This is how you pair something like preserve_thinking to a thinking toggle.')}>
-        <Select value={def.parentId || ''} label={t('Follows')}
-          onChange={(v) => patch({ parentId: v, rules: v ? rules : [] })}
-          options={[{ value: '', label: t('nothing, it stands alone') },
-            ...defs.filter(d => d.id !== def.id && !blocked.has(d.id)).map(d => ({ value: d.id, label: nameOf(d) }))]} />
-      </Field>
-
-      {linked ? (
-        parentValues.length === 0
-          ? <Note>{t('The kwarg it follows has no values yet.')}</Note>
-          : (
-            <Table head={[
-              { label: t('When {name} is', { name: nameOf(parent) }), mono: true, fit: true },
-              { label: t('Send') },
-              { label: t('Included'), fit: true }
-            ]}>
-              {parentValues.map(pv => {
-                const rule = rules.find(r => r.when === pv) || { when: pv, value: '', send: false };
-                const on = rule.send !== false && rule.value !== '';
-                return (
-                  <tr key={pv}>
-                    <td className="mono">{pv}</td>
-                    <td>
-                      <Input mono value={rule.value || ''} placeholder={t('value to send')} aria-label={t('Send')}
-                        onChange={(e) => setRule(pv, { value: e.target.value, send: true })} />
-                    </td>
-                    <td className="fit">
-                      <Switch on={on} label={on ? t('Sent') : t('Omitted')}
-                        onToggle={() => setRule(pv, on ? { send: false } : { send: true, value: rule.value || (values[values.length - 1] || 'true') })} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </Table>
-          )
-      ) : (
-        <>
-          <Fields cols={3}>
-            <Field label={t('Title')}>
-              <Input value={def.label || ''} placeholder={t('Extended thinking')} aria-label={t('Title')} onChange={(e) => patch({ label: e.target.value })} />
-            </Field>
-            <Field label={t('Picker chip')} hint={chipHint(shape)}>
-              <Input value={def.chip || ''} placeholder={chipPlaceholder(shape)} aria-label={t('Picker chip')} onChange={(e) => patch({ chip: e.target.value })} />
-            </Field>
-            <Field label={t('Description')} hint={t('Leave the title and this blank to fall back to the key.')}>
-              <Input value={def.description || ''} placeholder={t('Let the model think before answering')} aria-label={t('Description')}
-                onChange={(e) => patch({ description: e.target.value })} />
-            </Field>
-          </Fields>
-          <Rows>
-            <Row label={t('Show in the picker')} note={t('Off, members never see it and it keeps its default.')}>
-              <Switch on={def.visible !== false} label={t('Show in the picker')} onToggle={() => patch({ visible: def.visible === false })} />
-            </Row>
-            {def.visible !== false && (
-              <Row label={t('Control')} note={fixed && t(fixed.note)} wide>
-                <Select value={fixed ? fixed.value : (def.control || 'auto')} disabled={!!fixed} label={t('Control')}
-                  onChange={(v) => patch({ control: v })}
-                  options={KWARG_CONTROLS.map(([v, l]) => ({ value: v, label: t(l) }))} />
-              </Row>
-            )}
-            {def.visible !== false && (
-              <Row label={t('Who can change it')} wide>
-                <Select value={def.adminOnly ? 'admins' : 'everyone'} label={t('Who can change it')}
-                  onChange={(v) => patch({ adminOnly: v === 'admins' })}
-                  options={[{ value: 'everyone', label: t('everyone') }, { value: 'admins', label: t('admins only') }]} />
-              </Row>
-            )}
-            {def.visible !== false && (
-              <Row label={t('Only show when')}
-                note={t('Keeps its own control but hides it until the chosen kwarg holds the value beside it, so a thinking budget can appear only once thinking is on.')} wide>
-                <div className="mc-pair">
-                  <Select value={def.showIf?.id || ''} label={t('Only show when')}
-                    onChange={(id) => {
-                      if (!id) return patch({ showIf: null });
-                      const opts = gateValues(defs.find(d => d.id === id));
-                      return patch({ showIf: { id, value: opts.includes(def.showIf?.value) ? def.showIf.value : (opts[opts.length - 1] || '') } });
-                    }}
-                    options={[{ value: '', label: t('always shown') },
-                      ...defs.filter(d => d.id !== def.id && !d.parentId && gateValues(d).length).map(d => ({ value: d.id, label: nameOf(d) }))]} />
-                  {!!def.showIf?.id && (
-                    <Select value={def.showIf.value ?? ''} label={t('is')}
-                      onChange={(v) => patch({ showIf: { id: def.showIf.id, value: v } })}
-                      options={gateValues(defs.find(d => d.id === def.showIf.id)).map(v => ({ value: v, label: v }))} />
-                  )}
-                </div>
-              </Row>
-            )}
-            {(def.visible === false || def.showIf?.id) && (
-              <Row label={t('Send while hidden')} note={t('Whether its value still goes out while members cannot see it.')}>
-                <Switch on={def.sendWhenHidden !== false} label={t('Send while hidden')}
-                  onToggle={() => patch({ sendWhenHidden: def.sendWhenHidden === false })} />
-              </Row>
-            )}
-          </Rows>
-        </>
-      )}
-
-      {!linked && isBudgetKwarg(def) && <BudgetMessage def={def} patch={patch} />}
-
-      {(linked || def.visible === false || !!replayWhen) && (
+        )}
+      </Fields>
+      {gate && (
         <Rows>
-          <Row label={t('Send back past thinking')}
-            note={t('For a kwarg like preserve_thinking that tells the model to keep its earlier thinking. While it is sent with the value picked here, earlier replies go back to the model together with the thinking behind them, so it remembers what it thought. The second box is the field the server reads that thinking from.')} wide>
-            <div className="mc-pair">
-              <Select value={replayWhen} label={t('Send back past thinking')}
-                onChange={(v) => patch({ replayWhen: v })}
-                options={[{ value: '', label: t('never') }, { value: '*', label: t('whenever it is sent') },
-                  ...replayValues.map(v => ({ value: v, label: t('when it is {value}', { value: v }) }))]} />
-              {!!replayWhen && (
-                <Select value={def.replayAs || 'reasoning_content'} label={t('Sent as')}
-                  onChange={(v) => patch({ replayAs: v })}
-                  options={REPLAY_FIELDS.map(([v, l]) => ({ value: v, label: l }))} />
-              )}
-            </div>
-          </Row>
+          <ToggleRow label={t('Send while hidden')} note={t('Whether its value still goes out while members cannot see it.')}
+            on={def.sendWhenHidden !== false} onToggle={() => patch({ sendWhenHidden: def.sendWhenHidden === false })} />
         </Rows>
       )}
+    </Section>
+  );
+}
+
+function BudgetMessage({ def, patch }) {
+  const message = { ...budgetMessageOff(), ...def.budgetMessage };
+  const set = (p) => patch({ budgetMessage: { ...message, ...p } });
+  return (
+    <Section title={t('When the budget runs out')}>
+      <Rows>
+        <ToggleRow label={t('Send a message when the budget runs out')}
+          note={t('Injected before the end-of-thinking tag once thinking uses its whole budget. Only sent while the budget is above 0.')}
+          on={message.enabled} onToggle={() => set({ enabled: !message.enabled, text: message.text || BUDGET_MESSAGE_TEXT })} />
+      </Rows>
+      {message.enabled && (
+        <>
+          <Field label={t('Message')} hint={t('Sent as the value of that key. Blank sends nothing.')}>
+            <Input value={message.text} placeholder={BUDGET_MESSAGE_TEXT} aria-label={t('Message')}
+              onChange={(e) => set({ text: e.target.value })} />
+          </Field>
+          <Fields cols={3}>
+            <Field label={t('Key')}>
+              <Input mono value={message.name} placeholder="reasoning_budget_message" aria-label={t('Key')}
+                onChange={(e) => set({ name: e.target.value })} />
+            </Field>
+            <Field label={t('Sent in')}>
+              <Select value={message.target} label={t('Sent in')} onChange={(v) => set({ target: v })}
+                options={TARGETS.map(o => ({ value: o.value, label: t(o.label) }))} />
+            </Field>
+            <Field label={t('Wire type')}>
+              <Select value={message.type} label={t('Wire type')} onChange={(v) => set({ type: v })}
+                options={TYPES.map(o => ({ value: o.value, label: t(o.label) }))} />
+            </Field>
+          </Fields>
+        </>
+      )}
+    </Section>
+  );
+}
+
+function Advanced({ def, patch }) {
+  const replayWhen = replayWhenOf(def);
+  const replayValues = replayValuesOf(def);
+  if (replayWhen && replayWhen !== '*' && !replayValues.includes(replayWhen)) replayValues.push(replayWhen);
+  return (
+    <div className="mc-kw-adv">
+      <Fields cols={2}>
+        <Field label={t('Wire type')} hint={t('Automatic sends true and false as booleans, numerals as numbers, everything else as text.')}>
+          <Select value={def.type || 'auto'} label={t('Wire type')} onChange={(v) => patch({ type: v })}
+            options={TYPES.map(o => ({ value: o.value, label: t(o.label) }))} />
+        </Field>
+      </Fields>
+      <Fields cols={2}>
+        <Field label={t('Send back past thinking')}>
+          <Select value={replayWhen} label={t('Send back past thinking')} onChange={(v) => patch({ replayWhen: v })}
+            options={[{ value: '', label: t('never') }, { value: '*', label: t('whenever it is sent') },
+              ...replayValues.map(v => ({ value: v, label: t('when it is {value}', { value: v }) }))]} />
+        </Field>
+        {!!replayWhen && (
+          <Field label={t('Sent as')}>
+            <Select value={def.replayAs || REPLAY_FIELDS[0]} label={t('Sent as')} onChange={(v) => patch({ replayAs: v })}
+              options={REPLAY_FIELDS.map(v => ({ value: v, label: REPLAY_LABEL[v] || v }))} />
+          </Field>
+        )}
+      </Fields>
+      <p className="cp-note-line">
+        {t('For a kwarg like preserve_thinking that tells the model to keep its earlier thinking. While it is sent with the value picked here, earlier replies go back to the model together with the thinking behind them, so it remembers what it thought. The second box is the field the server reads that thinking from.')}
+      </p>
     </div>
+  );
+}
+
+function Editor({ def, defs, patch }) {
+  const mode = kwargMode(def);
+  const [more, setMore] = useState(() => (def.type || 'auto') !== 'auto' || !!replayWhenOf(def));
+  const canFollow = followable(defs, def).length > 0;
+  const modes = MODES.map(o => (o.value === 'follow' && !canFollow ? { ...o, disabled: true, tip: t('Add another control to follow first.') } : o));
+
+  return (
+    <div className="mc-kw-body">
+      <RequestField def={def} patch={patch} />
+      <Section title={t('Who sets the value')}>
+        <Choice value={mode} label={t('Who sets the value')} options={modes}
+          onPick={(m) => { if (m !== mode) patch(modePatch(defs, def, m)); }} />
+      </Section>
+      {mode === 'choose' && <Choices def={def} patch={patch} />}
+      {mode === 'fixed' && <FixedValue def={def} patch={patch} />}
+      {mode === 'follow' && <Follow def={def} defs={defs} patch={patch} />}
+      {mode === 'choose' && <Picker def={def} defs={defs} patch={patch} />}
+      {isBudgetKwarg(def) && <BudgetMessage def={def} patch={patch} />}
+      <div className={'mc-kw-more' + (more ? ' open' : '')}>
+        <button type="button" className="mc-kw-more-toggle" aria-expanded={more} onClick={() => setMore(!more)}>
+          <Chevron />
+          <span>{t('Advanced')}</span>
+          <small>{t('Wire type and earlier thinking')}</small>
+        </button>
+        {more && <Advanced def={def} patch={patch} />}
+      </div>
+    </div>
+  );
+}
+
+function Presets({ onPick }) {
+  return (
+    <div className="mc-kw-start">
+      <p className="cp-note-line">
+        {t('A request control adds a field such as enable_thinking to every request, and can give members a switch or slider for it in the model picker. Start from a common one:')}
+      </p>
+      <div className="mc-kw-presets">
+        {KWARG_PRESETS.map(p => (
+          <button key={p.key} type="button" className="mc-kw-preset" onClick={() => onPick(p)}>
+            <b>{t(p.title)}</b>
+            {p.name && <code>{p.name}</code>}
+            <span>{t(p.note)}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TryIt({ defs, name }) {
+  const [picked, setPicked] = useState({});
+  const [asAdmin, setAsAdmin] = useState(false);
+  const values = resolveKwargValues(defs, picked, asAdmin);
+  const shown = defs.filter(d => kwargVisible(defs, values, d));
+  const shownIds = new Set(shown.map(d => d.id));
+  const chips = pickerChips(defs, values);
+  const payload = kwargPayload(defs, values);
+  const replay = replayFieldFor(defs, values);
+  const json = JSON.stringify({ model: '…', messages: '[ … ]', ...payload }, null, 2);
+
+  return (
+    <Card title={t('Try it')} sub={t('Use the controls the way a member would and see exactly what each request carries.')}
+      actions={(
+        <Seg value={asAdmin ? 'admin' : 'member'} label={t('Preview as')}
+          options={[{ value: 'member', label: t('Member') }, { value: 'admin', label: t('Admin') }]}
+          onChange={(v) => setAsAdmin(v === 'admin')} />
+      )}>
+      <div className="mc-try">
+        <div className="mc-try-side">
+          <span className="mc-try-label">{t('Model picker')}</span>
+          <div className="mc-try-trigger">
+            <b>{name || t('Model')}</b>
+            {chips.map((c, i) => <span key={c + i}>{t(c)}</span>)}
+          </div>
+          <div className="mc-try-menu">
+            {shown.length ? shown.map(d => (
+              <KwargControl key={d.id} def={d} value={values[d.id]} isAdmin={asAdmin}
+                onSet={(id, v) => setPicked(p => ({ ...p, [id]: v }))}
+                gated={!!(d.showIf && d.showIf.id && shownIds.has(d.showIf.id))} />
+            )) : <p className="mc-try-none">{t('Members get no controls for this model.')}</p>}
+          </div>
+        </div>
+        <div className="mc-try-side">
+          <span className="mc-try-label">{t('Request body')}</span>
+          <pre className="mc-code">{json}</pre>
+          {replay && <p className="cp-note-line">{t('Earlier replies go back with their thinking in {field}.', { field: replay })}</p>}
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -444,7 +629,7 @@ export default function Controls() {
 
   function add(preset) {
     setMenu(null);
-    const made = preset.make();
+    const made = preset.make(defs);
     const used = new Set(defs.map(d => d.id));
     while (used.has(made.id)) made.id = newKwargId();
     put([...defs, made]);
@@ -470,28 +655,20 @@ export default function Controls() {
     put(list);
   }
 
-  const highest = {};
-  for (const d of defs) {
-    if (d.parentId) continue;
-    if (isRange(d)) { highest[d.id] = String(d.max); continue; }
-    const vals = kwargValuesArr(d);
-    if (vals.length) highest[d.id] = vals[vals.length - 1];
-  }
-
   const legacy = single && !!single.effort_enabled && !defs.length;
 
   return (
     <>
       <Card title={<CardMark label={t('Request controls')} k="kwargs" />} className={change.changed ? 'mc-changed' : undefined}
-        sub={t('Extra fields merged into each request body, and the controls members get for them.')}
-        actions={!mixed && (
+        sub={t('Extra fields sent with every request to this model, and the controls members get for them in the model picker.')}
+        actions={!mixed && defs.length > 0 && (
           <Btn size="sm" aria-haspopup="menu" aria-expanded={!!menu}
             onClick={(e) => {
               if (menu) { setMenu(null); return; }
               const r = e.currentTarget.getBoundingClientRect();
               setMenu({ at: clampToViewport(r.right - MENU_W, r.bottom + 4, MENU_W, MENU_H), el: e.currentTarget });
             }}>
-            <Plus /> {t('Add kwarg')}
+            <Plus /> {t('Add control')}
           </Btn>
         )}>
         {mixed ? (
@@ -506,11 +683,7 @@ export default function Controls() {
                 </div>
               </Note>
             )}
-            {defs.length === 0 ? (
-              <Empty title={t('No request controls')}>
-                {t('A kwarg is an extra value sent with every request, such as enable_thinking or reasoning_effort. Each one can also surface as a control in the model picker.')}
-              </Empty>
-            ) : (
+            {defs.length === 0 ? <Presets onPick={add} /> : (
               <ul className="mc-kws">
                 {defs.map((def, i) => {
                   const shown = open === def.id;
@@ -520,9 +693,15 @@ export default function Controls() {
                         <button type="button" className="mc-kw-toggle" aria-expanded={shown}
                           onClick={() => setOpen(shown ? null : def.id)}>
                           <Chevron />
-                          <span className="mono">{def.name || t('unnamed')}</span>
+                          <span className="mc-kw-text">
+                            <b>{titleOf(def)}</b>
+                            <span>
+                              {!!def.name && <><code>{kwargPath(def)}</code> · </>}
+                              {summaryOf(def, defs)}
+                            </span>
+                          </span>
                         </button>
-                        <Summary def={def} defs={defs} />
+                        <Flags def={def} defs={defs} />
                         <span className="cp-acts mc-kw-acts">
                           <IconBtn kind="quiet" label={t('Move up')} disabled={i === 0} onClick={() => shift(i, -1)}><Up /></IconBtn>
                           <IconBtn kind="quiet" label={t('Move down')} disabled={i === defs.length - 1} onClick={() => shift(i, 1)}><Down /></IconBtn>
@@ -530,7 +709,7 @@ export default function Controls() {
                           <IconBtn kind="danger" label={t('Delete')} onClick={() => remove(def)}><Trash /></IconBtn>
                         </span>
                       </div>
-                      {shown && <DefEditor def={def} defs={defs} patch={(p) => patch(def.id, p)} />}
+                      {shown && <Editor key={def.id} def={def} defs={defs} patch={(p) => patch(def.id, p)} />}
                     </li>
                   );
                 })}
@@ -540,20 +719,16 @@ export default function Controls() {
         )}
       </Card>
 
-      {!mixed && defs.length > 0 && (
-        <Card title={t('Request preview')} sub={t('The body a request carries, so a nesting target can be checked before members see it.')}>
-          <Fields cols={2}>
-            <Payload defs={defs} requested={{}} label={t('Request at the defaults')} />
-            <Payload defs={defs} requested={highest} label={t('Request with every control at its highest')} />
-          </Fields>
-        </Card>
-      )}
+      {!mixed && defs.length > 0 && <TryIt defs={defs} name={single?.display_name} />}
 
       {menu && (
         <PointMenu at={menu.at} width={MENU_W} anchorEl={menu.el} onClose={() => setMenu(null)}>
           {KWARG_PRESETS.map(p => (
             <MenuItem key={p.key} onClick={() => add(p)}>
-              <span>{t(p.label)}</span>
+              <span className="mc-menu-two">
+                <b>{t(p.title)}{p.name && <code className="mc-menu-key">{p.name}</code>}</b>
+                <small>{t(p.note)}</small>
+              </span>
             </MenuItem>
           ))}
         </PointMenu>

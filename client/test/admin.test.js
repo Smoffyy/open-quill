@@ -18,7 +18,8 @@ import {
 import {
   isRange, kwargAccepts, clampToRange, allNumeric, kwargPayload, controlOf, defaultValueOf, resolveKwargValues,
   gateOpen, kwargVisible, gateSourceIds, KWARG_PRESETS, replayWhenOf, replayValuesOf, rangeSteps, nearestStep,
-  kwargChip, chipNumber, rangeLabel, kwargValuesArr, stopLabel, budgetMessageOff, BUDGET_MESSAGE_TEXT
+  kwargChip, chipNumber, rangeLabel, kwargValuesArr, stopLabel, budgetMessageOff, BUDGET_MESSAGE_TEXT,
+  kwargMode, kwargKind, kwargPath, kindPatch, fixedValuePatch, followPatch, followable, modePatch, pickerChips, replayFieldFor
 } from '../src/lib/kwargs.js';
 import { parseMcpConfig, joinArgs, nameFrom } from '../src/lib/mcpconfig.js';
 import { promptSegments } from '../src/lib/promptview.js';
@@ -561,6 +562,65 @@ test('labelled steps show their words in the picker and send their numbers', () 
   const out = kwargPayload([levels], resolveKwargValues([levels], { [levels.id]: '4096' }, false));
   assert.equal(out.reasoning_budget_tokens, 4096);
   assert.equal(typeof out.reasoning_budget_tokens, 'number');
+});
+
+test('the editor reads a kwarg as a mode and a kind, and a half-typed range stays a range', () => {
+  assert.equal(kwargMode({ visible: true }), 'choose');
+  assert.equal(kwargMode({ visible: false }), 'fixed');
+  assert.equal(kwargMode({ visible: false, parentId: 'p' }), 'follow');
+  assert.equal(kwargKind({ values: ['false', 'true'] }), 'toggle');
+  assert.equal(kwargKind({ values: ['low', 'high'] }), 'list');
+  assert.equal(kwargKind(KWARG_PRESETS.find(p => p.key === 'reasoning_levels').make()), 'steps');
+  assert.equal(kwargKind({ min: 0, max: 100 }), 'range');
+  assert.equal(kwargKind({ min: '', max: '' }), 'range', 'clearing a bound mid-edit keeps the range editor');
+  assert.equal(kwargPath({ name: 'enable_thinking' }), 'chat_template_kwargs.enable_thinking');
+  assert.equal(kwargPath({ name: 'reasoning_budget_tokens', target: 'body' }), 'reasoning_budget_tokens');
+});
+
+test('switching kind gives a working starting point and carries numbers across', () => {
+  const steps = KWARG_PRESETS.find(p => p.key === 'reasoning_levels').make();
+  const range = kindPatch(steps, 'range');
+  assert.deepEqual([range.min, range.max, range.step], [0, 4096, 1024]);
+  assert.deepEqual(range.stops, []);
+  const list = kindPatch(steps, 'list');
+  assert.deepEqual(list.values, ['0', '1024', '2048', '4096']);
+  assert.equal(list.default, '2048');
+  assert.deepEqual(kindPatch({ values: ['false', 'true'] }, 'list').values, ['low', 'medium', 'high']);
+  const toggle = kindPatch(range, 'toggle');
+  assert.deepEqual([toggle.min, toggle.max, toggle.values], [null, null, ['false', 'true']]);
+  assert.deepEqual(fixedValuePatch('true'), { min: null, max: null, step: null, stops: [], values: ['true'], default: 'true' });
+  assert.deepEqual(fixedValuePatch('  ').values, []);
+});
+
+test('following seeds true and false from the parent, and never offers a cycle', () => {
+  const levels = { ...KWARG_PRESETS.find(p => p.key === 'reasoning_levels').make(), id: 'lv' };
+  const keep = { id: 'keep', values: ['false', 'true'], rules: [] };
+  const seeded = followPatch(keep, levels).rules;
+  assert.deepEqual(seeded.map(r => [r.when, r.value]), [['0', 'false'], ['1024', 'true'], ['2048', 'true'], ['4096', 'true']]);
+  const named = followPatch({ id: 'n', values: ['a', 'b'], rules: [] }, { id: 'p', values: ['low', 'high'] }).rules;
+  assert.deepEqual(named.map(r => r.value), ['low', 'high'], 'a non-boolean follower mirrors the parent');
+  const kept = [{ when: '1024', value: 'x', send: true }];
+  assert.equal(followPatch({ ...keep, rules: kept }, levels).rules, kept, 'existing rules that fit are left alone');
+  const defs = [levels, { ...keep, parentId: 'lv' }, { id: 'deep', parentId: 'keep' }];
+  assert.deepEqual(followable(defs, levels).map(d => d.id), [], 'a parent cannot follow its own descendants');
+  assert.deepEqual(modePatch(defs, defs[2], 'fixed'), { visible: false, parentId: '', sendWhenHidden: true });
+  const think = { id: 'think', values: ['false', 'true'] };
+  const preserve = KWARG_PRESETS.find(p => p.key === 'preserve_thinking');
+  assert.equal(preserve.make([think]).parentId, 'think', 'the preset pairs itself with a thinking switch');
+  assert.equal(preserve.make().parentId, '', 'alone it is a fixed true');
+  assert.equal(preserve.make().default, 'true');
+});
+
+test('the admin preview chips and replay field match what the picker and server do', () => {
+  const think = { id: 'think', name: 'enable_thinking', chip: 'Thinking', values: ['false', 'true'], default: 'false' };
+  const keep = { id: 'keep', name: 'preserve_thinking', parentId: 'think', rules: [{ when: 'true', value: 'true', send: true }] };
+  const off = resolveKwargValues([think, keep], {}, false);
+  assert.deepEqual(pickerChips([think, keep], off), []);
+  assert.equal(replayFieldFor([think, keep], off), '');
+  const on = resolveKwargValues([think, keep], { think: 'true' }, false);
+  assert.deepEqual(pickerChips([think, keep], on), ['Thinking']);
+  assert.equal(replayFieldFor([think, keep], on), 'reasoning_content');
+  assert.equal(replayFieldFor([think, { ...keep, replayAs: 'reasoning' }], on), 'reasoning');
 });
 
 test('a Claude Desktop style block becomes one server per entry', () => {

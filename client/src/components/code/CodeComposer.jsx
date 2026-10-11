@@ -7,7 +7,7 @@ import ContextRing from '../chat/ContextRing.jsx';
 import { Plus, Mic, Enter, X, FileText, Laptop, Info, Check } from '../ui/icons.jsx';
 import { useAttachments } from '../../lib/attachments.js';
 import { useDictation } from '../../lib/dictation.js';
-import { resolveKwargValues, kwargVisible, kwargChip, gateSourceIds } from '../../lib/kwargs.js';
+import { resolveKwargValues, kwargVisible, pickerChips } from '../../lib/kwargs.js';
 import { api } from '../../lib/api.js';
 import { toast } from '../../lib/toast.js';
 import { t } from '../../i18n.jsx';
@@ -85,9 +85,7 @@ export default function CodeComposer({
   const kwDefs = Array.isArray(current?.kwargs) ? current.kwargs : [];
   const selected = { ...(reasoningEffort ? { effort: reasoningEffort } : {}), ...(kwargValues || {}) };
   const kwActive = resolveKwargValues(kwDefs, selected, isAdmin);
-  const gates = gateSourceIds(kwDefs, kwActive);
-  const chips = kwDefs.filter(d => !d.parentId && kwargVisible(kwDefs, kwActive, d) && !gates.has(d.id))
-    .map(d => kwargChip(d, kwActive[d.id])).filter(Boolean).slice(0, 2);
+  const chips = pickerChips(kwDefs, kwActive);
   const shownKwargs = menu === 'model' ? kwDefs.filter(d => kwargVisible(kwDefs, kwActive, d)) : [];
   const shownIds = new Set(shownKwargs.map(d => d.id));
   const main = list.filter(m => !m.inMoreModels);

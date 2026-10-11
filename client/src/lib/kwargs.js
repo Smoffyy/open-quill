@@ -1,27 +1,4 @@
-export const KWARG_TARGETS = [
-  ['chat_template_kwargs', 'chat_template_kwargs (nested)'],
-  ['body', 'Top level of the request'],
-  ['extra_body', 'extra_body (nested)']
-];
-export const KWARG_CONTROLS = [
-  ['auto', 'Automatic'],
-  ['toggle', 'On/off toggle'],
-  ['slider', 'Steps'],
-  ['range', 'Number slider'],
-  ['select', 'Dropdown']
-];
-export const KWARG_TYPES = [
-  ['auto', 'Automatic'],
-  ['boolean', 'Boolean'],
-  ['number', 'Number'],
-  ['string', 'String']
-];
-
-export const REPLAY_FIELDS = [
-  ['reasoning_content', 'reasoning_content (llama.cpp, vLLM, LM Studio)'],
-  ['reasoning', 'reasoning'],
-  ['thinking', 'thinking']
-];
+export const REPLAY_FIELDS = ['reasoning_content', 'reasoning', 'thinking'];
 const REPLAY_DEFAULTS = { __proto__: null, preserve_thinking: 'true', clear_thinking: 'false' };
 
 export function replayWhenOf(def) {
@@ -253,6 +230,118 @@ export function kwargPayload(defs, values) {
   return out;
 }
 
+function isSent(defs, values, d) {
+  const v = values ? values[d.id] : null;
+  if (v == null || v === '' || !d.name) return false;
+  return !!d.parentId || kwargVisible(defs, values, d) || d.sendWhenHidden !== false;
+}
+
+export function replayFieldFor(defs, values) {
+  const def = (Array.isArray(defs) ? defs : []).find(d => {
+    const when = replayWhenOf(d);
+    return when && isSent(defs, values, d) && (when === '*' || String(values[d.id]) === when);
+  });
+  return def ? (def.replayAs || REPLAY_FIELDS[0]) : '';
+}
+
+export function pickerChips(defs, values) {
+  const list = Array.isArray(defs) ? defs : [];
+  const gates = gateSourceIds(list, values);
+  return list.filter(d => !d.parentId && kwargVisible(list, values, d) && !gates.has(d.id))
+    .map(d => kwargChip(d, values[d.id]))
+    .filter(Boolean)
+    .slice(0, 2);
+}
+
+export const kwargPath = (def) => {
+  const target = def?.target || 'chat_template_kwargs';
+  const name = def?.name || '';
+  return target === 'body' ? name : target + '.' + name;
+};
+
+export function kwargMode(def) {
+  if (def?.parentId) return 'follow';
+  return def?.visible === false ? 'fixed' : 'choose';
+}
+
+export function kwargKind(def) {
+  if (def?.min != null && def?.max != null) return 'range';
+  if (isSteps(def)) return 'steps';
+  return isBoolPair(kwargValuesArr(def)) ? 'toggle' : 'list';
+}
+
+const EXAMPLE_OPTIONS = ['low', 'medium', 'high'];
+
+export function kindPatch(def, kind) {
+  const clear = { min: null, max: null, step: null, unit: '', zeroOff: false, stops: [], control: 'auto' };
+  if (kind === 'toggle') return { ...clear, values: ['false', 'true'], default: 'false' };
+  if (kind === 'steps') return { ...clear, ...stepFields(DEFAULT_STEPS), default: '' };
+  if (kind === 'range') {
+    const nums = kwargValuesArr(def).map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+    const min = nums.length ? nums[0] : 0;
+    const max = nums.length > 1 ? nums[nums.length - 1] : min + 100;
+    const gap = nums.length > 1 ? nums[1] - nums[0] : 0;
+    return { ...clear, min, max, step: gap > 0 ? gap : 1, values: [], default: '' };
+  }
+  const kept = kwargKind(def) === 'steps' ? kwargValuesArr(def) : EXAMPLE_OPTIONS;
+  return { ...clear, values: kept, default: kept.includes(def?.default) ? def.default : '' };
+}
+
+export function fixedValuePatch(value) {
+  return { min: null, max: null, step: null, stops: [], values: value.trim() ? [value] : [], default: value };
+}
+
+export function descendantIds(defs, id) {
+  const out = new Set();
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const d of defs) {
+      if (d.parentId && (d.parentId === id || out.has(d.parentId)) && !out.has(d.id)) { out.add(d.id); grew = true; }
+    }
+  }
+  return out;
+}
+
+export function followable(defs, def) {
+  const below = descendantIds(defs, def.id);
+  return defs.filter(d => d.id !== def.id && !below.has(d.id));
+}
+
+export const parentChoices = (parent) => (!parent ? [] : isRange(parent) ? ['*'] : kwargValuesArr(parent));
+
+function offChoice(parent, value) {
+  const stop = stopOf(parent, value);
+  return stop ? isOffStep(stop) : /^(false|off|none|0)$/i.test(value);
+}
+
+export function followPatch(def, parent) {
+  const choices = parentChoices(parent);
+  const rules = Array.isArray(def.rules) ? def.rules : [];
+  if (rules.some(r => choices.includes(r.when))) return { parentId: parent.id, rules };
+  const bool = isBoolPair(kwargValuesArr(def));
+  const seeded = choices.filter(v => v !== '*').map(v => ({
+    when: v,
+    value: bool ? (offChoice(parent, v) ? falseValueOf(def) : trueValueOf(def)) : v,
+    send: true
+  }));
+  return { parentId: parent.id, rules: seeded };
+}
+
+export function modePatch(defs, def, mode) {
+  if (mode === 'choose') return { visible: true, parentId: '' };
+  if (mode === 'fixed') return { visible: false, parentId: '', sendWhenHidden: true };
+  const pool = followable(defs, def);
+  const parent = pool.find(d => !d.parentId && kwargKind(d) === 'toggle') || pool[0];
+  return parent ? followPatch(def, parent) : {};
+}
+
+export function highestValue(def) {
+  if (isRange(def)) return String(def.max);
+  const values = kwargValuesArr(def);
+  return values[values.length - 1] ?? '';
+}
+
 export function newKwargId() {
   return 'kw' + Math.random().toString(36).slice(2, 8);
 }
@@ -279,13 +368,8 @@ export function blankKwarg() {
 
 export const KWARG_PRESETS = [
   {
-    key: 'blank', label: 'Blank kwarg',
-    note: 'An empty kwarg you fill in yourself.',
-    make: () => blankKwarg()
-  },
-  {
-    key: 'enable_thinking', label: 'enable_thinking (Qwen)',
-    note: 'On/off thinking toggle with false and true.',
+    key: 'enable_thinking', title: 'Thinking switch', name: 'enable_thinking',
+    note: 'An on/off switch for models such as Qwen 3.',
     make: () => ({
       ...blankKwarg(), name: 'enable_thinking', label: 'Extended thinking',
       description: 'Let the model think before answering', chip: 'Thinking',
@@ -293,16 +377,16 @@ export const KWARG_PRESETS = [
     })
   },
   {
-    key: 'reasoning_effort', label: 'reasoning_effort (gpt-oss)',
-    note: 'A slider through low, medium, and high.',
+    key: 'reasoning_effort', title: 'Reasoning effort', name: 'reasoning_effort',
+    note: 'Low, medium and high, for models such as gpt-oss.',
     make: () => ({
       ...blankKwarg(), name: 'reasoning_effort', label: 'Reasoning effort',
       description: '', chip: '', values: ['low', 'medium', 'high'], default: 'medium'
     })
   },
   {
-    key: 'reasoning_budget_tokens', label: 'reasoning_budget_tokens (number slider)',
-    note: 'Caps how many tokens the model may spend thinking. Sent at the top level of the request, where llama.cpp reads it.',
+    key: 'reasoning_budget_tokens', title: 'Thinking budget slider', name: 'reasoning_budget_tokens',
+    note: 'A token slider that caps thinking, as llama.cpp reads it.',
     make: () => ({
       ...blankKwarg(), name: 'reasoning_budget_tokens', label: 'Thinking budget', chip: 'Thinking · {value} tokens',
       description: 'How many tokens the model may spend thinking',
@@ -311,8 +395,8 @@ export const KWARG_PRESETS = [
     })
   },
   {
-    key: 'reasoning_levels', label: 'reasoning_budget_tokens (named levels)',
-    note: 'The thinking budget as words, such as Off, Low, Medium and High. Each word sends its number at the top level of the request.',
+    key: 'reasoning_levels', title: 'Thinking budget levels', name: 'reasoning_budget_tokens',
+    note: 'Off, Low, Medium and High, each sending a token count.',
     make: () => ({
       ...blankKwarg(), name: 'reasoning_budget_tokens', label: 'Thinking', chip: '{value}',
       description: 'How much the model may think before it answers',
@@ -320,20 +404,29 @@ export const KWARG_PRESETS = [
     })
   },
   {
-    key: 'preserve_thinking', label: 'preserve_thinking (paired)',
-    note: 'Hidden kwarg meant to follow a thinking toggle. Sends past thinking back when true.',
+    key: 'preserve_thinking', title: 'Keep earlier thinking', name: 'preserve_thinking',
+    note: 'Hidden. Follows the thinking switch and sends past thinking back.',
+    make: (defs = []) => {
+      const base = {
+        ...blankKwarg(), name: 'preserve_thinking', label: 'Preserve thinking',
+        values: ['false', 'true'], default: 'true', visible: false, replayWhen: 'true'
+      };
+      const toggle = defs.find(d => !d.parentId && kwargKind(d) === 'toggle');
+      return toggle ? { ...base, ...followPatch(base, toggle) } : base;
+    }
+  },
+  {
+    key: 'clear_thinking', title: 'Keep earlier thinking (GLM)', name: 'clear_thinking',
+    note: 'Hidden. Sends false so past thinking is kept.',
     make: () => ({
-      ...blankKwarg(), name: 'preserve_thinking', label: 'Preserve thinking',
-      description: '', values: ['false', 'true'], default: 'false', visible: false, replayWhen: 'true'
+      ...blankKwarg(), name: 'clear_thinking', label: 'Clear thinking',
+      values: ['false', 'true'], default: 'false', visible: false, replayWhen: 'false'
     })
   },
   {
-    key: 'clear_thinking', label: 'clear_thinking (GLM)',
-    note: 'Hidden kwarg that keeps past thinking when false.',
-    make: () => ({
-      ...blankKwarg(), name: 'clear_thinking', label: 'Clear thinking',
-      description: '', values: ['false', 'true'], default: 'false', visible: false, replayWhen: 'false'
-    })
+    key: 'blank', title: 'Custom field', name: '',
+    note: 'Start empty and set everything yourself.',
+    make: () => blankKwarg()
   }
 ];
 
