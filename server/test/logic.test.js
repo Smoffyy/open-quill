@@ -229,6 +229,19 @@ test('kwargs: a range value is clamped and snapped to the step', () => {
   assert.equal(clampToRange(frac, 0.30000000000000004), 0.3, 'float dust is rounded away');
 });
 
+test('kwargs: the budget message rides beside the thinking budget only while enabled and above zero', () => {
+  const budget = { id: 'b', name: 'reasoning_budget_tokens', target: 'body', type: 'number', min: 1024, max: 16384, step: 1024, default: '4096' };
+  const sent = (kwarg, req) => applyKwargs({ kwargs: [kwarg] }, req, false).resolved_kwargs;
+  assert.deepEqual(sent({ ...budget, budgetMessage: { enabled: true, text: 'Stop thinking.' } }, { b: '4096' }),
+    { reasoning_budget_tokens: 4096, reasoning_budget_message: 'Stop thinking.' });
+  assert.deepEqual(sent({ ...budget, budgetMessage: { enabled: false, text: 'Stop thinking.' } }, { b: '4096' }),
+    { reasoning_budget_tokens: 4096 });
+  assert.deepEqual(sent({ ...budget, budgetMessage: { enabled: true, name: 'stop_note', target: 'chat_template_kwargs', text: 'Stop.' } }, { b: '4096' }),
+    { reasoning_budget_tokens: 4096, chat_template_kwargs: { stop_note: 'Stop.' } });
+  assert.deepEqual(sent({ ...budget, budgetMessage: { enabled: true, name: '', text: 'Stop.' } }, { b: '4096' }),
+    { reasoning_budget_tokens: 4096 }, 'a blank key sends nothing');
+});
+
 test('kwargs: a hand-edited request cannot escape the range the admin set', () => {
   const m = { kwargs: [{ id: 'b', name: 'reasoning_budget', target: 'extra_body', type: 'number', min: 0, max: 2048, step: 256, default: '512' }] };
   const body = (req) => applyKwargs(m, req, false).resolved_kwargs.extra_body.reasoning_budget;

@@ -11,7 +11,7 @@ import {
   blankKwarg, newKwargId, controlOf, defaultValueOf, isBoolPair,
   kwargValuesArr, kwargValuesStr, resolveKwargValues, kwargPayload,
   isRange, isSteps, isOffStep, rangeStep, clampToRange, allNumeric, stopLabel, stepFields, DEFAULT_STEPS,
-  REPLAY_FIELDS, replayWhenOf, replayValuesOf
+  REPLAY_FIELDS, replayWhenOf, replayValuesOf, isBudgetKwarg, budgetMessageOff, BUDGET_MESSAGE_TEXT
 } from '../../../../lib/kwargs.js';
 
 const MENU_W = 320;
@@ -102,6 +102,7 @@ function Summary({ def, defs }) {
       {!parent && def.visible !== false && <Badge>{t(CONTROL_TAG[controlOf(def)] || CONTROL_TAG.select)}</Badge>}
       {!!def.adminOnly && <Badge>{t('admins only')}</Badge>}
       {!!replayWhenOf(def) && <Badge tone="warn">{t('sends back thinking')}</Badge>}
+      {isBudgetKwarg(def) && !!def.budgetMessage?.enabled && <Badge tone="warn">{t('sends a budget message')}</Badge>}
       {(def.target || 'chat_template_kwargs') !== 'chat_template_kwargs' && <Badge>{def.target}</Badge>}
       <Badge>{isRange(def) ? `${def.min}…${def.max}` : (kwargValuesStr(def) || t('no values'))}</Badge>
     </span>
@@ -115,6 +116,44 @@ function Payload({ defs, requested, label }) {
     <Field label={label}>
       <pre className="mc-code">{Object.keys(payload).length ? json : t('nothing is added to the request')}</pre>
     </Field>
+  );
+}
+
+function BudgetMessage({ def, patch }) {
+  const message = { ...budgetMessageOff(), ...def.budgetMessage };
+  const set = (p) => patch({ budgetMessage: { ...message, ...p } });
+  return (
+    <>
+      <Rows>
+        <Row label={t('Send a message when the budget runs out')}
+          note={t('Injected before the end-of-thinking tag once thinking uses its whole budget. Only sent while the budget is above 0.')} wide>
+          <Switch on={message.enabled} label={t('Send a message when the budget runs out')}
+            onToggle={() => set({ enabled: !message.enabled, text: message.text || BUDGET_MESSAGE_TEXT })} />
+        </Row>
+      </Rows>
+      {message.enabled && (
+        <>
+          <Fields cols={3}>
+            <Field label={t('Key')} hint={t('The exact name the server expects. Blank sends nothing.')}>
+              <Input mono value={message.name} placeholder="reasoning_budget_message" aria-label={t('Key')}
+                onChange={(e) => set({ name: e.target.value })} />
+            </Field>
+            <Field label={t('Sent in')} hint={t(TARGET_NOTE[message.target])}>
+              <Select value={message.target} label={t('Sent in')} onChange={(v) => set({ target: v })}
+                options={KWARG_TARGETS.map(([v, l]) => ({ value: v, label: t(l) }))} />
+            </Field>
+            <Field label={t('Wire type')}>
+              <Select value={message.type} label={t('Wire type')} onChange={(v) => set({ type: v })}
+                options={KWARG_TYPES.map(([v, l]) => ({ value: v, label: t(l) }))} />
+            </Field>
+          </Fields>
+          <Field label={t('Message')} hint={t('Sent as the value of that key. Blank sends nothing.')}>
+            <Input value={message.text} placeholder={BUDGET_MESSAGE_TEXT} aria-label={t('Message')}
+              onChange={(e) => set({ text: e.target.value })} />
+          </Field>
+        </>
+      )}
+    </>
   );
 }
 
@@ -367,6 +406,8 @@ function DefEditor({ def, defs, patch }) {
           </Rows>
         </>
       )}
+
+      {!linked && isBudgetKwarg(def) && <BudgetMessage def={def} patch={patch} />}
 
       {(linked || def.visible === false || !!replayWhen) && (
         <Rows>

@@ -2945,5 +2945,9 @@
   "Export as...": "エクスポート形式...",
   "JSON": "JSON",
   "Markdown": "Markdown",
-  "Download everything (chats, styles, memory) as one JSON file, or restore from one. Imported chats are added and profile data is merged.": "すべて（チャット、スタイル、メモリ）を1つの JSON ファイルとしてダウンロードします。または、そのファイルから復元します。インポートしたチャットは追加され、プロフィールデータは統合されます。"
+  "Download everything (chats, styles, memory) as one JSON file, or restore from one. Imported chats are added and profile data is merged.": "すべて（チャット、スタイル、メモリ）を1つの JSON ファイルとしてダウンロードします。または、そのファイルから復元します。インポートしたチャットは追加され、プロフィールデータは統合されます。",
+  "sends a budget message": "予算メッセージを送信",
+  "Send a message when the budget runs out": "予算を使い切ったらメッセージを送信",
+  "Injected before the end-of-thinking tag once thinking uses its whole budget. Only sent while the budget is above 0.": "思考が予算を使い切ると、思考終了タグの前に挿入されます。予算が0より大きい場合にのみ送信されます。",
+  "Sent as the value of that key. Blank sends nothing.": "そのキーの値として送信されます。空欄の場合は何も送信されません。"
 }

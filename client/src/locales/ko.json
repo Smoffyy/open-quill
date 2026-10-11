@@ -2945,5 +2945,9 @@
   "Export as...": "다음 형식으로 내보내기...",
   "JSON": "JSON",
   "Markdown": "Markdown",
-  "Download everything (chats, styles, memory) as one JSON file, or restore from one. Imported chats are added and profile data is merged.": "모든 항목(채팅, 스타일, 메모리)을 하나의 JSON 파일로 내려받거나 이 파일에서 복원합니다. 가져온 채팅은 추가되고 프로필 데이터는 병합됩니다."
+  "Download everything (chats, styles, memory) as one JSON file, or restore from one. Imported chats are added and profile data is merged.": "모든 항목(채팅, 스타일, 메모리)을 하나의 JSON 파일로 내려받거나 이 파일에서 복원합니다. 가져온 채팅은 추가되고 프로필 데이터는 병합됩니다.",
+  "sends a budget message": "예산 메시지 전송",
+  "Send a message when the budget runs out": "예산을 모두 쓰면 메시지 보내기",
+  "Injected before the end-of-thinking tag once thinking uses its whole budget. Only sent while the budget is above 0.": "생각이 예산을 모두 쓰면 생각 종료 태그 앞에 삽입됩니다. 예산이 0보다 클 때만 전송됩니다.",
+  "Sent as the value of that key. Blank sends nothing.": "이 키의 값으로 전송됩니다. 비워 두면 아무것도 전송되지 않습니다."
 }

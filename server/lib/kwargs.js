@@ -3,6 +3,7 @@ export const KWARG_CONTROLS = ['auto', 'toggle', 'slider', 'range', 'select'];
 export const KWARG_TYPES = ['auto', 'string', 'boolean', 'number'];
 export const REPLAY_FIELDS = ['reasoning_content', 'reasoning', 'thinking'];
 const REPLAY_DEFAULTS = { __proto__: null, preserve_thinking: 'true', clear_thinking: 'false' };
+const BUDGET_KWARG = 'reasoning_budget_tokens';
 
 const MAX_KWARGS = 24;
 const MAX_VALUES = 24;
@@ -69,6 +70,17 @@ export function kwargVisible(defs, values, def) {
   return def.visible !== false && gateOpen(defs, values, def);
 }
 
+function budgetMessageOf(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  return {
+    enabled: !!src.enabled,
+    name: slug(src.name ?? 'reasoning_budget_message', 80),
+    target: KWARG_TARGETS.includes(src.target) ? src.target : 'body',
+    type: KWARG_TYPES.includes(src.type) ? src.type : 'string',
+    text: text(src.text, 1000)
+  };
+}
+
 function stopsOf(raw) {
   if (!Array.isArray(raw)) return [];
   return raw.slice(0, MAX_VALUES)
@@ -114,7 +126,8 @@ export function normalizeKwarg(raw, index = 0) {
     zeroOff: !!src.zeroOff,
     rules,
     replayWhen: src.replayWhen === undefined ? (REPLAY_DEFAULTS[slug(src.name, 80)] || '') : slug(src.replayWhen, 80),
-    replayAs: REPLAY_FIELDS.includes(src.replayAs) ? src.replayAs : REPLAY_FIELDS[0]
+    replayAs: REPLAY_FIELDS.includes(src.replayAs) ? src.replayAs : REPLAY_FIELDS[0],
+    budgetMessage: budgetMessageOf(src.budgetMessage)
   };
   if (isRange(def)) {
     const s = num(src.step);
@@ -261,17 +274,23 @@ function isSent(defs, values, d) {
   return !!d.parentId || kwargVisible(defs, values, d) || d.sendWhenHidden;
 }
 
+function placeKwarg(out, target, name, val) {
+  if (target === 'body') {
+    if (!RESERVED_BODY_KEYS.has(name)) out[name] = val;
+    return;
+  }
+  if (!out[target] || typeof out[target] !== 'object') out[target] = {};
+  out[target][name] = val;
+}
+
 export function kwargPayload(defs, values) {
   const out = {};
   for (const d of defs) {
     if (!isSent(defs, values, d)) continue;
-    const val = coerceKwargValue(values[d.id], d.type);
-    if (d.target === 'body') {
-      if (RESERVED_BODY_KEYS.has(d.name)) continue;
-      out[d.name] = val;
-    } else {
-      if (!out[d.target] || typeof out[d.target] !== 'object') out[d.target] = {};
-      out[d.target][d.name] = val;
+    placeKwarg(out, d.target, d.name, coerceKwargValue(values[d.id], d.type));
+    const message = d.budgetMessage;
+    if (d.name === BUDGET_KWARG && message?.enabled && message.name && message.text && Number(values[d.id]) > 0) {
+      placeKwarg(out, message.target, message.name, coerceKwargValue(message.text, message.type));
     }
   }
   return out;

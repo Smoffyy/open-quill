@@ -46,7 +46,7 @@
    step in flight unwinds and the transcript is written. */
 .send.stop.stopping { opacity: .6; cursor: default; animation: toolpulse 1.1s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .send.stop.stopping { animation: none; } }
-.send.ghost { background: transparent; border: 1.5px solid var(--text-muted); color: var(--text-muted); }
+.send.ghost { background: transparent; border: 2px solid color-mix(in srgb, var(--text-muted) 45%, transparent); color: var(--text-muted); }
 .send.ghost:disabled { opacity: .55; }
 .send.checking { animation: sendChecking 1.1s ease-in-out infinite; }
 .send.quiet:disabled { opacity: 1; }

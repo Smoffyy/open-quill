@@ -229,20 +229,25 @@ export function coerceKwargValue(value, type) {
   return s;
 }
 
+function placeKwarg(out, target, name, val) {
+  if (target === 'body') {
+    if (!RESERVED_BODY_KEYS.has(name)) out[name] = val;
+    return;
+  }
+  if (!out[target] || typeof out[target] !== 'object') out[target] = {};
+  out[target][name] = val;
+}
+
 export function kwargPayload(defs, values) {
   const out = {};
   for (const d of (Array.isArray(defs) ? defs : [])) {
     const v = values ? values[d.id] : null;
     if (v == null || v === '' || !d.name) continue;
     if (!d.parentId && !kwargVisible(defs, values, d) && d.sendWhenHidden === false) continue;
-    const val = coerceKwargValue(v, d.type);
-    const target = d.target || 'chat_template_kwargs';
-    if (target === 'body') {
-      if (RESERVED_BODY_KEYS.has(d.name)) continue;
-      out[d.name] = val;
-    } else {
-      if (!out[target] || typeof out[target] !== 'object') out[target] = {};
-      out[target][d.name] = val;
+    placeKwarg(out, d.target || 'chat_template_kwargs', d.name, coerceKwargValue(v, d.type));
+    const message = d.budgetMessage;
+    if (isBudgetKwarg(d) && message?.enabled && message.name && message.text && Number(v) > 0) {
+      placeKwarg(out, message.target, message.name, coerceKwargValue(message.text, message.type));
     }
   }
   return out;
@@ -252,6 +257,15 @@ export function newKwargId() {
   return 'kw' + Math.random().toString(36).slice(2, 8);
 }
 
+export const BUDGET_KWARG = 'reasoning_budget_tokens';
+export const BUDGET_MESSAGE_TEXT = 'Thinking budget reached. Stop thinking and write the answer now.';
+
+export const isBudgetKwarg = (def) => def?.name === BUDGET_KWARG;
+
+export function budgetMessageOff() {
+  return { enabled: false, name: 'reasoning_budget_message', target: 'body', type: 'string', text: '' };
+}
+
 export function blankKwarg() {
   return {
     id: newKwargId(), name: '', label: '', description: '', chip: '',
@@ -259,7 +273,7 @@ export function blankKwarg() {
     target: 'chat_template_kwargs', type: 'auto',
     visible: true, adminOnly: false, sendWhenHidden: true, parentId: '', showIf: null,
     min: null, max: null, step: null, unit: '', zeroOff: false, stops: [], rules: [],
-    replayWhen: '', replayAs: 'reasoning_content'
+    replayWhen: '', replayAs: 'reasoning_content', budgetMessage: budgetMessageOff()
   };
 }
 

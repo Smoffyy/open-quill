@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { placeAtCursor, placeTip, TIP_DELAY } from '../../lib/tip.js';
 
@@ -11,6 +11,14 @@ export default function TipLayer() {
   const pinned = useRef(false);
   const pointer = useRef({ x: 0, y: 0 });
   const source = useRef(null);
+  const [, refresh] = useReducer(n => n + 1, 0);
+
+  useEffect(() => {
+    if (!active) return;
+    const observer = new MutationObserver(() => refresh());
+    observer.observe(active, { attributes: true, attributeFilter: ['data-tip', 'data-tip-keys', 'data-tip-tone'] });
+    return () => observer.disconnect();
+  }, [active]);
 
   useEffect(() => {
     const trigger = (node) => (node && node.closest ? node.closest('[data-tip]') : null);
@@ -104,6 +112,10 @@ export default function TipLayer() {
     };
   }, []);
 
+  const label = active && active.isConnected ? active.getAttribute('data-tip') : null;
+  const keys = label ? active.getAttribute('data-tip-keys') : null;
+  const tone = label ? active.getAttribute('data-tip-tone') : null;
+
   useLayoutEffect(() => {
     const tip = tipRef.current;
     if (!active || !tip) return;
@@ -111,12 +123,9 @@ export default function TipLayer() {
     setPos(source.current === 'pointer'
       ? placeAtCursor({ x: pointer.current.x, y: pointer.current.y, ...size })
       : placeTip({ anchor: active.getBoundingClientRect(), ...size }));
-  }, [active]);
+  }, [active, label, keys, tone]);
 
-  const label = active && active.isConnected ? active.getAttribute('data-tip') : null;
   if (!label) return null;
-  const keys = active.getAttribute('data-tip-keys');
-  const tone = active.getAttribute('data-tip-tone');
   return createPortal(
     <div className={'tip' + (tone ? ' tip-' + tone : '')} role="tooltip" ref={tipRef}
       style={{ top: pos ? pos.top : 0, left: pos ? pos.left : 0, opacity: pos ? undefined : 0, pointerEvents: 'none' }}>

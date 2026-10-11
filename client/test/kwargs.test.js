@@ -21,7 +21,9 @@ import {
   chipNumber,
   rangeLabel,
   kwargValuesArr,
-  stopLabel
+  stopLabel,
+  budgetMessageOff,
+  BUDGET_MESSAGE_TEXT
 } from '../src/lib/kwargs.js';
 
 // --- kwarg number ranges ---------------------------------------------------
@@ -141,6 +143,22 @@ test('the thinking budget preset matches the shape llama.cpp expects', () => {
   const out = kwargPayload([p], resolveKwargs([p], { [p.id]: '5000' }, false));
   assert.equal(out.reasoning_budget_tokens, 5120, 'snapped to the 1024 grid');
   assert.equal('extra_body' in out, false);
+});
+
+test('the budget message is sent beside the budget only while enabled and the budget is above 0', () => {
+  const budget = KWARG_PRESETS.find(x => x.key === 'reasoning_budget_tokens').make();
+  assert.deepEqual(kwargPayload([budget], resolveKwargs([budget], { [budget.id]: '4096' }, false)), { reasoning_budget_tokens: 4096 });
+  const on = { ...budget, budgetMessage: { ...budgetMessageOff(), enabled: true, text: BUDGET_MESSAGE_TEXT } };
+  const sent = kwargPayload([on], resolveKwargs([on], { [on.id]: '4096' }, false));
+  assert.equal(sent.reasoning_budget_message, BUDGET_MESSAGE_TEXT);
+  assert.equal(sent.reasoning_budget_tokens, 4096);
+  const levels = KWARG_PRESETS.find(x => x.key === 'reasoning_levels').make();
+  const levelsOn = { ...levels, budgetMessage: { ...budgetMessageOff(), enabled: true, text: BUDGET_MESSAGE_TEXT } };
+  assert.equal('reasoning_budget_message' in kwargPayload([levelsOn], resolveKwargs([levelsOn], { [levels.id]: '0' }, false)), false, 'Off sends no message');
+  const renamed = { ...on, budgetMessage: { ...on.budgetMessage, name: 'stop_note', target: 'chat_template_kwargs' } };
+  assert.equal(kwargPayload([renamed], resolveKwargs([renamed], { [renamed.id]: '4096' }, false)).chat_template_kwargs.stop_note, BUDGET_MESSAGE_TEXT);
+  const blank = { ...on, budgetMessage: { ...on.budgetMessage, name: '' } };
+  assert.equal('reasoning_budget_message' in kwargPayload([blank], resolveKwargs([blank], { [blank.id]: '4096' }, false)), false, 'a blank key sends nothing');
 });
 
 test('replay defaults match the server and an explicit blank opts out', () => {

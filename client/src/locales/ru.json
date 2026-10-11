@@ -2945,5 +2945,9 @@
   "Export as...": "Экспорт в формат...",
   "JSON": "JSON",
   "Markdown": "Markdown",
-  "Download everything (chats, styles, memory) as one JSON file, or restore from one. Imported chats are added and profile data is merged.": "Скачайте всё (чаты, стили, память) одним JSON-файлом или восстановите данные из такого файла. Импортированные чаты добавляются, данные профиля объединяются."
+  "Download everything (chats, styles, memory) as one JSON file, or restore from one. Imported chats are added and profile data is merged.": "Скачайте всё (чаты, стили, память) одним JSON-файлом или восстановите данные из такого файла. Импортированные чаты добавляются, данные профиля объединяются.",
+  "sends a budget message": "отправляет сообщение о бюджете",
+  "Send a message when the budget runs out": "Отправлять сообщение, когда бюджет исчерпан",
+  "Injected before the end-of-thinking tag once thinking uses its whole budget. Only sent while the budget is above 0.": "Вставляется перед тегом окончания размышлений, когда размышления исчерпывают весь бюджет. Отправляется только при бюджете больше 0.",
+  "Sent as the value of that key. Blank sends nothing.": "Отправляется как значение этого ключа. Пустое поле ничего не отправляет."
 }

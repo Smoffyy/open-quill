@@ -2945,5 +2945,9 @@
   "Export as...": "导出为...",
   "JSON": "JSON",
   "Markdown": "Markdown",
-  "Download everything (chats, styles, memory) as one JSON file, or restore from one. Imported chats are added and profile data is merged.": "将全部内容（聊天、风格、记忆）下载为一个 JSON 文件，或从该文件恢复。导入的聊天会被添加，个人资料数据会合并。"
+  "Download everything (chats, styles, memory) as one JSON file, or restore from one. Imported chats are added and profile data is merged.": "将全部内容（聊天、风格、记忆）下载为一个 JSON 文件，或从该文件恢复。导入的聊天会被添加，个人资料数据会合并。",
+  "sends a budget message": "发送预算消息",
+  "Send a message when the budget runs out": "预算用完时发送一条消息",
+  "Injected before the end-of-thinking tag once thinking uses its whole budget. Only sent while the budget is above 0.": "当思考用尽全部预算时，会插入到思考结束标签之前。仅在预算大于 0 时发送。",
+  "Sent as the value of that key. Blank sends nothing.": "作为该键的值发送。留空则不发送任何内容。"
 }

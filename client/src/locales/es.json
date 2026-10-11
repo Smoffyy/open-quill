@@ -2945,5 +2945,9 @@
   "Export as...": "Exportar como...",
   "JSON": "JSON",
   "Markdown": "Markdown",
-  "Download everything (chats, styles, memory) as one JSON file, or restore from one. Imported chats are added and profile data is merged.": "Descarga todo (chats, estilos, memoria) en un único archivo JSON, o restaura desde uno. Los chats importados se añaden y los datos del perfil se combinan."
+  "Download everything (chats, styles, memory) as one JSON file, or restore from one. Imported chats are added and profile data is merged.": "Descarga todo (chats, estilos, memoria) en un único archivo JSON, o restaura desde uno. Los chats importados se añaden y los datos del perfil se combinan.",
+  "sends a budget message": "envía un mensaje de presupuesto",
+  "Send a message when the budget runs out": "Enviar un mensaje cuando se agote el presupuesto",
+  "Injected before the end-of-thinking tag once thinking uses its whole budget. Only sent while the budget is above 0.": "Se inserta antes de la etiqueta de fin de razonamiento cuando el razonamiento agota todo su presupuesto. Solo se envía mientras el presupuesto sea mayor que 0.",
+  "Sent as the value of that key. Blank sends nothing.": "Se envía como valor de esa clave. En blanco no envía nada."
 }
